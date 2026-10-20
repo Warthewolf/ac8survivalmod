@@ -1,0 +1,4 @@
+LIBRARY UE4SS.dll
+EXPORTS
+??0CppUserModBase@RC@@QEAA@XZ
+??1CppUserModBase@RC@@UEAA@XZ
