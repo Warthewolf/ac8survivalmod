@@ -163,6 +163,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   table's keys unsplit (SV_Up_19, number 0), so flights 10-24's flags didn't exist: never flagged up, never chased.
   Round 1's flights were 19 and 23. Stock tables store such names split (Mission 22: Bool_IsAlive_f15e_0 is
   Bool_IsAlive_f15e, number 1). Also seen: in round 2 one flight lost both aircraft ~6 s after appearing 22 km out.
+  Same run, rounds 3-5 (05:12-05:18): RECYCLING WORKS. Round 3 drew two shot-down flights (07_Air2, 08_Air1): "its last
+  flight was shot down; took it off the phase's list and removed its unit actor", then both came up with 2 aircraft;
+  round 5 recycled four. Rounds 1-5 brought 2, 3, 4, 5, 6 flights and each cleared. The flags match the diagnosis
+  exactly: only pool flights 01-09 were ever counted up (round 4: flights 6, 8, 5 flagged; 22 and 10 not).
 - [ ] Round counter (Lua: D.round; shown on the HUD in a later milestone).
 - [x] Waves: random flights per round from the pool, spawned by Survival's spawner (test 11).
 - [x] Round clear when every flight of the round is down; 45 s intermission timer; next round (test 11).

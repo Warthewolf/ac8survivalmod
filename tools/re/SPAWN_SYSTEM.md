@@ -97,7 +97,8 @@ flight its orders when it appears (air-only search, engage the player), counts S
 - **Aircraft variety**: MissionNpcID must be a row of the world data's NpcMissionDataTable (Mission 22's); the rows
   Mission 22's units use are listed in main.lua's CFG.aircraft. Others need their NPC row and blueprint first.
 - **Despawn / stragglers**: the same UnregisterUnit + Destroy can remove a living flight (not exposed yet: whether
-  destroying the unit actor also removes its living aircraft actors is untested).
+  destroying the unit actor also removes its living aircraft actors is untested; for a shot-down flight it's confirmed
+  safe).
 - **Wingmen (shop)**: separate path - LiveSpawnWingmanExecution, FLiveUnitDesc.WingmanStartDescList and
   ALiveUnitSpawner.WingmanUnitBPClass (+0x2F0). Not reverse-engineered yet.
 - **Portal arrivals**: spawn the special at the portal point with SV_Spawn, VFX from the world data's VFXActorDescList.
@@ -109,8 +110,9 @@ Test 11 (2026-10-21 05:04, runtime 0.6.0):
 - FindPhase's phase for the global world data is &GlobalPhase: every spawn landed on that list.
 - A MissionNpcID change spawns the new aircraft: MiG-29A, F-14D, Su-33 and Su-34 blueprints came up in flights whose
   Mission 22 type is different.
-- Still open: recycling (unregister + destroy, then spawn the same desc again). Round 2 drew only flights that hadn't
-  flown yet.
+- Recycling works: a shot-down flight taken off the list (UnregisterUnit + AActor::Destroy of its unit actor) spawns
+  again from the same desc, with its new type and position (rounds 3 and 5 of the same run; 6 recycles, all came up
+  with 2 aircraft).
 
 Event flags named in event records: the records name a flag by string, and the game turns that into an FName that splits
 a numeric tail ("SV_Up_19" is SV_Up, number 20). The flag asset's keys must be stored the same way, as stock ones are

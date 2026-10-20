@@ -55,6 +55,8 @@ Copy a working stock pattern before inventing a new one.
     called for every Lua mod before its main.lua runs; check the name). Confirmed by test 11 of 2026-10-21.
 15. Setting a world-data AI object's MissionNpcID before spawning changes the aircraft type (any row of the world
     data's NPC table). Confirmed by test 11.
+16. A shot-down flight spawns again only after it's taken off the phase's unit list (UnregisterUnit + AActor::Destroy,
+    what Survival's SV_Spawn does). Confirmed by test 11, rounds 3-5.
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
