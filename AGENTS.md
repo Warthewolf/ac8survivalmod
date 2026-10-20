@@ -57,6 +57,9 @@ Copy a working stock pattern before inventing a new one.
     data's NPC table). Confirmed by test 11.
 16. A shot-down flight spawns again only after it's taken off the phase's unit list (UnregisterUnit + AActor::Destroy,
     what Survival's SV_Spawn does). Confirmed by test 11, rounds 3-5.
+17. Event records name flags (and events) by string, which the game turns into an FName that splits a numeric tail
+    ("SV_Up_19" = SV_Up, number 20). Store the flag asset's keys the same way (survival_events.fname), as stock tables
+    do, or the flag never matches. Test 11: flights 10-24 were never flagged, so never chased; fixed, confirmed by test 12.
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,

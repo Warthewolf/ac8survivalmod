@@ -7,7 +7,7 @@
 -- Milestone 2:
 --   * rounds: random flights, aircraft and bearings each round, spawned through dlls\main.dll's SV_* functions
 
-local VERSION = "0.6.0"
+local VERSION = "0.6.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -294,7 +294,7 @@ local function logPlane(o)
 end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
--- (set while a flight is up, for the chase) are shown as one count.
+-- (set while a flight is up, for the chase) are shown as one count, also returned as the second value.
 local function flagLine()
     local parts, up = {}, 0
     local cs = FindAllOf("LiveEventContainer")
@@ -315,9 +315,24 @@ local function flagLine()
             end)
         end
     end
-    if #parts == 0 then return nil end
+    if #parts == 0 then return nil, up end
     table.sort(parts)
-    return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up
+    return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up, up
+end
+
+-- Where the player is (cm), or nil.
+local function playerLocation()
+    local pc = FindFirstOf("PlayerController")
+    local ok, l = pcall(function()
+        local v = pc.Pawn:K2_GetActorLocation()
+        return { X = v.X, Y = v.Y, Z = v.Z }
+    end)
+    return ok and l or nil
+end
+
+local function km(a, b)
+    local dx, dy, dz = a.X - b.X, a.Y - b.Y, a.Z - b.Z
+    return math.sqrt(dx * dx + dy * dy + dz * dz) / 100000
 end
 
 -- The game's current difficulty (LiveDifficultyManager.CurrentDifficulty: 1 Casual .. 5 Ace).
@@ -369,7 +384,7 @@ math.randomseed(os.time())
 local ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
 local SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
-local D = nil                      -- the run in progress: { round, state, at, now, queue, up }
+local D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
 
 local function nativeReady()
     return type(SV_Spawn) == "function" and type(SV_UnitAlive) == "function" and type(SV_SetAircraft) == "function"
@@ -393,20 +408,36 @@ local function spawnFlight(unit)
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
-    log(string.format("round %d: %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit, ac,
-        tostring(set), dist, bearing, alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r > 0 then D.up[unit] = true end
+    log(string.format("round %d: %s%s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
+        D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if r > 0 then D.up[unit], D.flown[unit] = true, true end
     return r
 end
 
+local function shuffled(t)
+    for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
+    return t
+end
+
+-- A round's flights: those that have flown before come first (the spawner recycles them, which keeps the game's unit
+-- list short); the rest are spares, fresh ones first, for a flight that fails to spawn.
 local function startRound()
     D.round = D.round + 1
-    local free = {}
-    for _, u in ipairs(CFG.pool) do if not D.up[u] then free[#free + 1] = u end end
-    for i = #free, 2, -1 do local j = math.random(i); free[i], free[j] = free[j], free[i] end
-    local want = math.min(CFG.flights_round1 + (D.round - 1) * CFG.flights_per_round, CFG.max_flights, #free)
-    D.queue = {}
-    for i = 1, want do D.queue[i] = free[i] end
+    local flown, fresh = {}, {}
+    for _, u in ipairs(CFG.pool) do
+        if not D.up[u] then
+            if D.flown[u] then flown[#flown + 1] = u else fresh[#fresh + 1] = u end
+        end
+    end
+    shuffled(flown); shuffled(fresh)
+    local want = math.min(CFG.flights_round1 + (D.round - 1) * CFG.flights_per_round, CFG.max_flights, #flown + #fresh)
+    D.queue, D.spare = {}, {}
+    for _, u in ipairs(flown) do if #D.queue < want then D.queue[#D.queue + 1] = u end end
+    for _, u in ipairs(fresh) do
+        if #D.queue < want then D.queue[#D.queue + 1] = u else D.spare[#D.spare + 1] = u end
+    end
+    for i = want + 1, #flown do D.spare[#D.spare + 1] = flown[i] end
     log(string.format("round %d: %d flights", D.round, want))
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive = "spawning", D.now, nil
@@ -424,7 +455,15 @@ local function roundsTick(now)
     elseif D.state == "spawning" then
         if now < D.at then return end
         local u = table.remove(D.queue, 1)
-        if u and spawnFlight(u) == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
+        if u then
+            local r = spawnFlight(u)
+            if r == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
+            if (r == 0 or r == -2 or r == -3) and #D.spare > 0 then        -- this flight can't come: send a spare
+                local s = table.remove(D.spare, 1)
+                log(string.format("round %d: sending %s instead", D.round, s))
+                table.insert(D.queue, 1, s)
+            end
+        end
         D.at = now + CFG.spawn_gap_s
         if #D.queue == 0 then D.state = "fighting" end
     elseif D.state == "fighting" then
@@ -452,7 +491,8 @@ local function probeTick(tick)
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
-        D = { round = 0, state = "wait", at = tick / 4 + CFG.first_round_delay_s, now = tick / 4, queue = {}, up = {} }
+        D = { round = 0, state = "wait", at = tick / 4 + CFG.first_round_delay_s, now = tick / 4, queue = {}, spare = {},
+              up = {}, flown = {} }
     end
     local okR, errR = pcall(roundsTick, tick / 4)
     if not okR then log("rounds: error " .. tostring(errR)) end
@@ -467,18 +507,42 @@ local function probeTick(tick)
     end
     pending = keep
     if tick % 8 ~= 0 or not levelTick then return end                -- the rest every 2 s, in Survival only
-    local fl = flagLine()
+    local fl, flagged = flagLine()
     if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
-    local alive = 0
+    -- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away,
+    -- and every 10 s the nearest enemy's distance: the check that the chase brings them to the player.
+    local you = playerLocation()
+    local alive, nearest = 0, nil
     for _, p in ipairs(planes) do
-        if valid(p.obj) then
-            local ok, h = pcall(function() return p.obj.HealthInternal end)
-            if not ok or type(h) ~= "number" or h > 0 then alive = alive + 1 end
+        if not p.down then
+            local up = valid(p.obj)
+            if up then
+                local ok, h = pcall(function() return p.obj.HealthInternal end)
+                if ok and type(h) == "number" and h <= 0 then up = false end
+            end
+            if up then
+                alive = alive + 1
+                pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                if p.at and you then
+                    local d = km(p.at, you)
+                    if not nearest or d < nearest then nearest = d end
+                end
+            else
+                p.down = true
+                log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
+                    p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
+            end
         end
     end
     if alive ~= lastAlive and #planes > 0 then
         log("round probe: AI aircraft alive " .. alive .. " (created so far " .. #planes .. ")")
         lastAlive = alive
+    end
+    if tick % 40 == 0 and alive > 0 then
+        local flights = 0
+        if D then for _ in pairs(D.up) do flights = flights + 1 end end
+        log(string.format("chase: nearest enemy %s from you; %d of %d flights up are flagged for the chase",
+            nearest and string.format("%.1f km", nearest) or "(player not found)", flagged or 0, flights))
     end
 end
 

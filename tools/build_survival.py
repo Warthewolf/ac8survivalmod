@@ -217,8 +217,12 @@ def build_ef():
     fd = [p for p in v[2] if p[1] == 'FlagData'][0][3]
     ints = [p for p in fd[2] if p[1] == 'IntegerFiled'][0][3]
     for name in survival_events.INT_FLAGS:
-        z.nb.add(name)
-        ints[2].append((('name', name, 0), ('struct', 'LiveEventFlagType_Integer', [(0, 'Value', True, None)])))
+        # The event records name flags by string, which the game turns into an FName that splits a numeric tail
+        # ("SV_Up_19" -> SV_Up, number 20). Keys must be stored the same way or the flag never matches: test of
+        # 2026-10-21 05:07, flights 10-24 were never flagged up, so they were never chased.
+        key = survival_events.fname(name)
+        z.nb.add(key[1])
+        ints[2].append((key, ('struct', 'LiveEventFlagType_Integer', [(0, 'Value', True, None)])))
     z.payloads[0] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, 0, 'LiveEventFlagAsset'); assert chk == v
     save(z, MI + 'EF_SurvivalMode_global')
@@ -253,6 +257,8 @@ def build_ep(part, ef=False):
         z.payloads[0] = bytearray(survival_events.write_records(g, z, head))
         _, _, _, T, E, offs = ep_dump.load_bytes(z)
         assert len(T) == len(g.trig) and len(E) == len(g.ex) and offs[3] == offs[4], (len(T), len(E), offs)
+        declared = {survival_events.fname(n) for n in survival_events.INT_FLAGS}   # build_ef's keys
+        assert {survival_events.fname(n) for n in g.flags} <= declared, g.flags - set(survival_events.INT_FLAGS)
         print(f'  events: {len(T)} triggers, {len(E)} execs')
     save(z, new)
 

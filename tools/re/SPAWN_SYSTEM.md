@@ -117,4 +117,5 @@ Test 11 (2026-10-21 05:04, runtime 0.6.0):
 Event flags named in event records: the records name a flag by string, and the game turns that into an FName that splits
 a numeric tail ("SV_Up_19" is SV_Up, number 20). The flag asset's keys must be stored the same way, as stock ones are
 (Mission 22's Bool_IsAlive_f15e_0 is Bool_IsAlive_f15e, number 1). Test 11's keys weren't, so flags 10-24 never existed
-and those flights were never chased.
+and those flights were never chased. Test 12 (keys fixed): every flight up is flagged and the chase brings it to the
+player (20 km closed in 20-30 s).

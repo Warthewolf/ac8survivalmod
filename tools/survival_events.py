@@ -92,6 +92,7 @@ class Graph:
         self.used_hashes = {struct.unpack('<i', fields(t)['EventHash'][3][2])[0] for t in self.T}
         self.next_shared = 900000
         self.next_exec = 1
+        self.flags = set()      # int flags the records read or write (must all be in INT_FLAGS)
 
     # templates --------------------------------------------------------
     def exec_template(self, cls, event=None, pred=None):
@@ -138,6 +139,7 @@ class Graph:
         c = self.cond_template()
         setf(c, 'SharedID', ('raw', 'Int', struct.pack('<i', self.next_shared))); self.next_shared += 1
         for i, v in enumerate((flag, op, value)): set_arg(c, i, v)
+        self.flags.add(flag)
         return c
 
     def execute(self, template, event, arg_changes=None, delay=None, conds=()):
@@ -167,6 +169,7 @@ def build_events(stock_ep):
     t_move = g.exec_template('LiveUnitMoveActor', '01_E_AreaA_ReinforcementAppearance_0')
 
     def flag(event, name, op, value, **kw):
+        g.flags.add(name)
         return g.execute(t_flag, event, {0: name, 1: op, 2: value}, **kw)
 
     def call(event, target, **kw):
@@ -202,7 +205,7 @@ def build_events(stock_ep):
 def write_records(g, z, prefix_props_bytes):
     """Payload for z (the renamed EP copy): properties + u32 0 + triggers + execs."""
     import uprop
-    for n in g.names: z.nb.add(n)
+    for n in sorted(g.names): z.nb.add(n)       # sorted: the same build twice gives the same bytes
     w = uprop.W(z.names)
     out = bytearray(prefix_props_bytes) + b'\0\0\0\0' + struct.pack('<I', len(g.trig))
     for t in g.trig: out += uprop.write_struct(w, t)

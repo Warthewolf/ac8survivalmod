@@ -167,10 +167,19 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   flight was shot down; took it off the phase's list and removed its unit actor", then both came up with 2 aircraft;
   round 5 recycled four. Rounds 1-5 brought 2, 3, 4, 5, 6 flights and each cleared. The flags match the diagnosis
   exactly: only pool flights 01-09 were ever counted up (round 4: flights 6, 8, 5 flagged; 22 and 10 not).
+- Chase fix (Lua 0.6.1): the flag asset's keys are stored split like the engine's FNames (the build asserts
+  every flag the records use is declared that way); rounds reuse shot-down flights first and send a spare if a spawn
+  fails; the name table is written in sorted order, so the same build gives the same bytes. Lua 0.6.1 logs every 10 s
+  "chase: nearest enemy N km from you; X of Y flights up are flagged for the chase" (X must equal Y now) and, per
+  aircraft lost, its last altitude and distance from the player ("... down, last seen ...").
+- Test 12 (05:23-05:29, runtime 0.6.0 + Lua 0.6.1): THE CHASE WORKS. Every flight up was flagged (1 of 1 ... 4 of 4),
+  and the enemies came for the player: round 1's nearest went 20.6 -> 15.1 -> 3.9 -> 0.6 km in 30 s, round 2's
+  23.9 -> 13.5 -> 1.6 km in 20 s. Every aircraft lost went down 0.2-5.3 km from the player (shot down, not crashed).
+  Rounds 2 and 3 recycled the flights that had flown first, so the game's unit list stayed at 3-4 entries.
 - [ ] Round counter (Lua: D.round; shown on the HUD in a later milestone).
 - [x] Waves: random flights per round from the pool, spawned by Survival's spawner (test 11).
 - [x] Round clear when every flight of the round is down; 45 s intermission timer; next round (test 11).
-- [ ] Fighters: engagement order targeting the player (event package, on appearing).
+- [x] Fighters: engagement order targeting the player, and the chase that brings them to the player (test 12).
 - [x] Enemy variety (user request 2026-10-20): mixed aircraft types, picked at random per flight (SV_SetAircraft;
   test 11). Types outside Mission 22's NPC table need NPC rows, added at run time (never override a shared NPC table).
 - Test: 3 rounds in a row, no double spawns, stragglers despawn at about 2 min.
