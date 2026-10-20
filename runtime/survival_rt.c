@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.4.0"
+#define RT_VERSION           L"0.6.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -51,6 +51,7 @@
 #define CTX_MODE             0xF60
 
 /* ---- freestanding helpers ---------------------------------------------- */
+int   _fltused = 0;              /* the linker wants this marker when floating point is used without a C runtime */
 void* memset(void* dst, int c, size_t n);
 void* memcpy(void* dst, const void* src, size_t n);
 int   memcmp(const void* a, const void* b, size_t n);
@@ -507,14 +508,22 @@ static int Difficulty(void* page)
 static int StartSurvival(void* page, void* from, const wchar_t* why)
 {
     g_chosen = 0;
-    int d = Difficulty(page);
+    /* The game's difficulty page applies the chosen difficulty itself when it's confirmed. Only a difficulty read
+     * from the selected entry's own name is trusted to set it again: the stored-byte and list-position fallbacks
+     * read Casual by the time the next-menu hook runs, and forcing that turned every run into Rookie (test M2). */
+    int d = 0;
+    {
+        const FString* a = SelectedArgs(page, NULL);
+        for (int i = 0; i < 5; ++i) if (ArgsEqual(a, kDiffNames[i])) d = i + 1;
+    }
     if (d) g_setDifficulty(page, (uintptr_t)(uint8_t)d);
-    else Log(L"start: could not tell the chosen difficulty; keeping the game's current one");
+    else Log(L"start: keeping the difficulty the game's page applied (fallback reading would be %s)",
+             Difficulty(page) ? kDiffNames[Difficulty(page) - 1] : L"none");
     uint8_t* ctx = Context(page);
     if (ctx) {
         int mode = g_savedMode >= 0 ? g_savedMode : ctx[CTX_MODE];
-        Log(L"start (%s): difficulty %s, context mode %d -> %d, mission %d -> %d", why,
-            d ? kDiffNames[d - 1] : L"unchanged", (int32_t)ctx[CTX_MODE], (int32_t)mode,
+        Log(L"start (%s): difficulty set %s, context mode %d -> %d, mission %d -> %d", why,
+            d ? kDiffNames[d - 1] : L"by the game (unchanged)", (int32_t)ctx[CTX_MODE], (int32_t)mode,
             *(int32_t*)(ctx + CTX_MISSION_ID), (int32_t)SURVIVAL_MISSION_ID);
         ctx[CTX_MODE] = (uint8_t)mode;
         *(int32_t*)(ctx + CTX_MISSION_ID) = SURVIVAL_MISSION_ID;
@@ -627,6 +636,555 @@ static uintptr_t OnText(void* table, uintptr_t flag, void* keyp, void* found)
     return g_nextText(table, flag, keyp, found);
 }
 
+/* ---- Survival's spawner (Milestone 2) ------------------------------------
+ * How the game spawns (tools/re/SPAWN_SYSTEM.md): LiveReinforcementExecution calls SpawnUnitByName(spawner, name,
+ * world data). That collects the world data's unit descs with that name, skips every desc whose UniqueID is still on
+ * the phase's unit list, spawns the rest (unit actor + one AI object per AIObjectDesc, at the descs' SpawnPoints) and
+ * fires their "reinforcement appeared" events. Nothing takes a shot-down flight off that list (only a phase's end
+ * does), so a destroyed flight could not come back (probe tests 3-10).
+ * Survival's own spawner, called from Scripts\main.lua (Lua globals, see the bridge further down): it takes a
+ * shot-down flight off the list the way a phase end does (unregister + destroy its actor), moves the desc where Lua
+ * wants it, sets its aircraft type, and calls the same SpawnUnitByName. Struct and property offsets come from the
+ * game's reflection data through UE4SS; the two native-only ones are read out of the game's own code.           */
+typedef struct { union { wchar_t buf[8]; wchar_t* ptr; } u; size_t size; size_t cap; } MsvcWString;
+_Static_assert(sizeof(MsvcWString) == 32, "std::wstring layout");
+typedef struct { uint8_t* data; int32_t num; int32_t max; } TArrayRaw;
+typedef struct { const char* p; size_t n; } StrView;                       /* std::string_view  */
+typedef struct { const wchar_t* p; size_t n; } WStrView;                   /* std::wstring_view */
+typedef struct { union { char buf[16]; char* ptr; } u; size_t size; size_t cap; } MsvcString;  /* std::string */
+_Static_assert(sizeof(MsvcString) == 32, "std::string layout");
+typedef int (*LuaFn)(void* lua);
+
+#define SV_ERR_REFUSED    0     /* the game spawned nothing                                    */
+#define SV_ERR_NOT_READY -1     /* no spawner / phase / world data: not in Survival's level     */
+#define SV_ERR_NO_UNIT   -2     /* no unit desc (or aircraft) of that name                      */
+#define SV_ERR_UP        -3     /* that flight is still up                                      */
+#define SV_ERR_BAD_ARGS  -4
+#define SV_ERR_NO_GAME   -5     /* game functions or offsets not found (other game version?)   */
+#define SV_NOT_SPAWNED   -7     /* SV_UnitAlive: the flight isn't on the phase's list           */
+#define WD_NAME          L"WD_SurvivalMode_global"
+#define SPAWNER_UNIT_CLASS 0x2E8 /* ALiveUnitSpawner::UnitBPClass, read by SpawnUnits (0x147e19a40) */
+#define RF_NOT_LIVE      (0x10 | 0x20 | 0x8000 | 0x10000 | 0x40000000)   /* CDO, archetype, being destroyed, garbage */
+
+typedef void*    (*SpawnUnitFn)(void* spawner, const FNameRaw* name, void* worldData);
+typedef void     (*UnregisterUnitFn)(void* phase, void* unit);
+typedef uint8_t  (*DestroyActorFn)(void* actor, uint8_t netForce);
+static SpawnUnitFn      g_spawnUnit;
+static UnregisterUnitFn g_unregisterUnit;
+static DestroyActorFn   g_destroyActor;
+static uint8_t*         g_fUnitIdSpawned;
+
+/* UE4SS 3.0.1 exports, by name: a missing one only turns the spawner off. */
+static struct {
+    void*     (*findObject)(const wchar_t* cls, const wchar_t* name, int32_t required, int32_t banned);
+    void*     (*valuePtr)(void* obj, const wchar_t* prop);
+    void**    (*childProps)(void* ustruct);
+    void*     (*nextField)(void* field);
+    FNameRaw* (*fieldName)(void* field);
+    int32_t*  (*propOffset)(void* prop);
+    int32_t*  (*elemSize)(void* prop);
+    int32_t   (*structSize)(void* ustruct);
+    void*     (*fname)(void* self, const wchar_t* s, int32_t findType, void* fnOverride);
+    void*     (*nameToString)(const FNameRaw* self, MsvcWString* out);
+    void      (*luaRegister)(void* lua, const MsvcString* name, const LuaFn* fn);
+    uint8_t   (*luaIsString)(void* lua, int32_t idx);
+    uint8_t   (*luaIsNumber)(void* lua, int32_t idx);
+    StrView*  (*luaGetString)(void* lua, StrView* out, int32_t idx);
+    double    (*luaGetNumber)(void* lua, int32_t idx);
+    int32_t   (*luaStackSize)(void* lua);
+    void      (*luaSetInteger)(void* lua, int64_t v);
+    void      (*luaSetString)(void* lua, const char* s, size_t n);
+} U;
+static int g_ue4ss;              /* 0 not tried, 1 found, -1 missing */
+
+static int ResolveUE4SS(void)
+{
+    if (g_ue4ss) return g_ue4ss > 0;
+    static const struct { size_t off; const char* name; } kExports[] = {
+#define UX(f, n) { __builtin_offsetof(__typeof__(U), f), n }
+        UX(findObject,   "?FindObject@UObjectGlobals@Unreal@RC@@YAPEAVUObject@23@PEB_W0HH@Z"),
+        UX(valuePtr,     "?GetValuePtrByPropertyNameInChain@UObject@Unreal@RC@@QEAAPEAXPEB_W@Z"),
+        UX(childProps,   "?GetChildProperties@UStruct@Unreal@RC@@QEAAAEAPEAVFField@23@XZ"),
+        UX(nextField,    "?GetNextFFieldUnsafe@FField@Unreal@RC@@AEAAPEAV123@XZ"),
+        UX(fieldName,    "?GetNamePrivate@FField@Unreal@RC@@AEAAAEAVFName@23@XZ"),
+        UX(propOffset,   "?GetOffset_Internal@FProperty@Unreal@RC@@QEAAAEAHXZ"),
+        UX(elemSize,     "?GetElementSize@FProperty@Unreal@RC@@QEAAAEAHXZ"),
+        UX(structSize,   "?GetStructureSize@UStruct@Unreal@RC@@QEBAHXZ"),
+        UX(fname,        "??0FName@Unreal@RC@@QEAA@PEB_WW4EFindName@12@PEAX@Z"),
+        UX(nameToString, "?ToString@FName@Unreal@RC@@QEBA?BV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@XZ"),
+        UX(luaRegister,  "?register_function@Lua@LuaMadeSimple@RC@@QEBAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBQ6AHAEBV123@@Z@Z"),
+        UX(luaIsString,  "?is_string@Lua@LuaMadeSimple@RC@@QEBA_NH@Z"),
+        UX(luaIsNumber,  "?is_number@Lua@LuaMadeSimple@RC@@QEBA_NH@Z"),
+        UX(luaGetString, "?get_string@Lua@LuaMadeSimple@RC@@QEBA?AV?$basic_string_view@DU?$char_traits@D@std@@@std@@H@Z"),
+        UX(luaGetNumber, "?get_number@Lua@LuaMadeSimple@RC@@QEBANH@Z"),
+        UX(luaStackSize, "?get_stack_size@Lua@LuaMadeSimple@RC@@QEBAHXZ"),
+        UX(luaSetInteger,"?set_integer@Lua@LuaMadeSimple@RC@@QEBAX_J@Z"),
+        UX(luaSetString, "?set_string@Lua@LuaMadeSimple@RC@@QEBAXPEBD_K@Z"),
+#undef UX
+    };
+    HANDLE ue4ss = GetModuleHandleW(L"UE4SS.dll");
+    g_ue4ss = ue4ss ? 1 : -1;
+    for (size_t i = 0; ue4ss && i < sizeof(kExports) / sizeof(kExports[0]); ++i) {
+        void* f = GetProcAddress(ue4ss, kExports[i].name);
+        if (!f) { Log(L"UE4SS export missing: %d; Survival's spawner is off", (int32_t)i); g_ue4ss = -1; }
+        *(void**)((uint8_t*)&U + kExports[i].off) = f;
+    }
+    if (ue4ss && !g_findAllOf)
+        g_findAllOf = (FindAllOfFn)GetProcAddress(ue4ss,
+            "?FindAllOf@UObjectGlobals@Unreal@RC@@YAXPEB_WAEAV?$vector@PEAVUObject@Unreal@RC@@V?$allocator@PEAVUObject@Unreal@RC@@@std@@@std@@@Z");
+    if (!g_findAllOf) g_ue4ss = -1;
+    return g_ue4ss > 0;
+}
+
+static int NameEq(const FNameRaw* a, const FNameRaw* b) { return a->index == b->index && a->number == b->number; }
+
+/* An existing FName (FNAME_Find: never adds one). False for a name the game doesn't have. */
+static int MakeName(const wchar_t* s, FNameRaw* out)
+{
+    uint8_t buf[16];            /* room in case UE4SS's FName is wider than the game's 8 bytes */
+    memset(buf, 0, sizeof(buf));
+    U.fname(buf, s, 0, NULL);
+    memcpy(out, buf, sizeof(*out));
+    return out->index != 0 || out->number != 0;
+}
+
+/* The name as text, into out (cap chars). */
+static const wchar_t* NameText(const FNameRaw* n, wchar_t* out, size_t cap)
+{
+    MsvcWString s; memset(&s, 0, sizeof(s));
+    out[0] = 0;
+    U.nameToString(n, &s);
+    const wchar_t* p = s.cap > 7 ? s.u.ptr : s.u.buf;
+    size_t k = s.size < cap - 1 ? s.size : cap - 1;
+    if (p) { memcpy(out, p, k * 2); out[k] = 0; }
+    if (s.cap > 7 && s.u.ptr) free(s.u.ptr);
+    return out;
+}
+
+/* Offset of `field` in the reflected struct `structName` (its own fields), or -1; *size = the field's size. */
+static int32_t StructField(const wchar_t* structName, const wchar_t* field, int32_t* size)
+{
+    void* st = U.findObject(L"ScriptStruct", structName, 0, 0);
+    FNameRaw want;
+    if (!st || !MakeName(field, &want)) return -1;
+    void** head = U.childProps(st);
+    for (void* f = head ? *head : NULL; f; f = U.nextField(f)) {
+        FNameRaw* n = U.fieldName(f);
+        if (n && NameEq(n, &want)) { if (size) *size = *U.elemSize(f); return *U.propOffset(f); }
+    }
+    return -1;
+}
+
+static int32_t StructSize(const wchar_t* structName)
+{
+    void* st = U.findObject(L"ScriptStruct", structName, 0, 0);
+    return st ? U.structSize(st) : -1;
+}
+
+static struct {
+    int     state;                          /* 0 not tried, 1 ok, -1 failed                 */
+    int32_t descSize, aiSize;               /* LiveUnitDesc, LiveAIObjectDesc                */
+    int32_t uniqueId, name;                 /* LiveDescBase                                  */
+    int32_t aiList, uPoint, uRot;           /* LiveUnitDesc                                  */
+    int32_t aiPoint, aiRot, aiNpc;          /* LiveAIObjectDesc                              */
+    int32_t phaseWd;                        /* LivePhase.WorldData                           */
+    int32_t unitList, unitCount;            /* phase: spawned units (FLivePhase::ManipulableObjects) */
+    int32_t idIface, idSlot;                /* unit -> UniqueID: interface offset, vtable slot */
+} LY;
+
+static int ResolveLayout(void)
+{
+    if (LY.state) return LY.state > 0;
+    LY.state = -1;
+    if (!g_fUnitIdSpawned) { Log(L"spawner: the game's unit check was not found (other game version?)"); return 0; }
+    /* IsUnitIdSpawned: mov rbx,[rcx+list]; ... movsxd rax,[rcx+count]; ... add rcx,iface; mov rax,[rcx]; call [rax+slot] */
+    const uint8_t* f = g_fUnitIdSpawned;
+    LY.unitList  = *(const int32_t*)(f + 18);
+    LY.unitCount = *(const int32_t*)(f + 27);
+    for (int i = 35; i < 35 + 48; ++i) {
+        if (f[i] == 0x48 && f[i + 1] == 0x81 && f[i + 2] == 0xC1 && !LY.idIface) LY.idIface = *(const int32_t*)(f + i + 3);
+        if (f[i] == 0xFF && f[i + 1] == 0x50 && LY.idIface && !LY.idSlot) LY.idSlot = f[i + 2];
+    }
+    int32_t ptSize = 0, rotSize = 0, aiPtSize = 0;
+    LY.descSize = StructSize(L"LiveUnitDesc");
+    LY.aiSize   = StructSize(L"LiveAIObjectDesc");
+    LY.uniqueId = StructField(L"LiveDescBase", L"UniqueID", NULL);
+    LY.name     = StructField(L"LiveDescBase", L"Name", NULL);
+    LY.aiList   = StructField(L"LiveUnitDesc", L"AIObjectDescList", NULL);
+    LY.uPoint   = StructField(L"LiveUnitDesc", L"SpawnPoint", &ptSize);
+    LY.uRot     = StructField(L"LiveUnitDesc", L"Rotation", &rotSize);
+    LY.aiPoint  = StructField(L"LiveAIObjectDesc", L"SpawnPoint", &aiPtSize);
+    LY.aiRot    = StructField(L"LiveAIObjectDesc", L"Rotation", NULL);
+    LY.aiNpc    = StructField(L"LiveAIObjectDesc", L"MissionNpcID", NULL);
+    LY.phaseWd  = StructField(L"LivePhase", L"WorldData", NULL);
+    int32_t reflectedList = StructField(L"LivePhase", L"ManipulableObjects", NULL);   /* the same list, by name */
+    Log(L"spawner layout: unit desc %x bytes (UniqueID +%x, Name +%x, AI list +%x, point +%x, rotation +%x), "
+        L"AI desc %x bytes (point +%x, rotation +%x, NPC id +%x), phase world data +%x, phase units +%x/+%x, "
+        L"unit id interface +%x slot +%x, vector %d bytes, LivePhase.ManipulableObjects +%x",
+        (uint32_t)LY.descSize, (uint32_t)LY.uniqueId, (uint32_t)LY.name, (uint32_t)LY.aiList, (uint32_t)LY.uPoint,
+        (uint32_t)LY.uRot, (uint32_t)LY.aiSize, (uint32_t)LY.aiPoint, (uint32_t)LY.aiRot, (uint32_t)LY.aiNpc,
+        (uint32_t)LY.phaseWd, (uint32_t)LY.unitList, (uint32_t)LY.unitCount, (uint32_t)LY.idIface, (uint32_t)LY.idSlot, ptSize,
+        (uint32_t)reflectedList);
+    if (LY.descSize <= 0 || LY.aiSize <= 0 || LY.uniqueId < 0 || LY.name < 0 || LY.aiList < 0 || LY.uPoint < 0 ||
+        LY.uRot < 0 || LY.aiPoint < 0 || LY.aiRot < 0 || LY.aiNpc < 0 || LY.phaseWd < 0 || !LY.idIface || !LY.idSlot ||
+        LY.unitCount != LY.unitList + 8 || reflectedList != LY.unitList) {
+        Log(L"spawner: layout incomplete; Survival's spawner is off");
+        return 0;
+    }
+    if (ptSize != 24 || rotSize != 24 || aiPtSize != 24) {
+        Log(L"spawner: positions are not double vectors (%d bytes); Survival's spawner is off", ptSize);
+        return 0;
+    }
+    LY.state = 1;
+    return 1;
+}
+
+/* The level's spawner, its global phase and Survival's world data (cached until the objects change). */
+static void*    g_spawner;
+static void*    g_spawnerVt;
+static uint8_t* g_phase;
+static void*    g_wd;
+static FNameRaw g_wdName;
+
+static int LiveObject(void* o)
+{
+    return o && Readable(o, 0x28) && !(*(uint32_t*)((uint8_t*)o + 8) & RF_NOT_LIVE);
+}
+
+static void* PhaseWorldData(uint8_t* phase)
+{
+    if (!phase || !Readable(phase + LY.phaseWd, 8)) return NULL;
+    void* wd = *(void**)(phase + LY.phaseWd);
+    return LiveObject(wd) && NameEq((FNameRaw*)((uint8_t*)wd + 0x18), &g_wdName) ? wd : NULL;   /* UObject::NamePrivate */
+}
+
+static int FindSpawner(void)
+{
+    if (!g_wdName.index && !MakeName(WD_NAME, &g_wdName)) return 0;      /* Survival's world data isn't loaded */
+    if (g_spawner && LiveObject(g_spawner) && *(void**)g_spawner == g_spawnerVt && PhaseWorldData(g_phase) == g_wd)
+        return 1;
+    g_spawner = NULL; g_phase = NULL; g_wd = NULL;
+    PtrVector v = { NULL, NULL, NULL };
+    g_findAllOf(L"LiveUnitSpawner", &v);
+    for (void** p = v.first; p && p < v.last && !g_spawner; ++p) {
+        if (!LiveObject(*p)) continue;
+        uint8_t* phase = (uint8_t*)U.valuePtr(*p, L"GlobalPhase");
+        void* wd = PhaseWorldData(phase);
+        if (!wd) continue;
+        uint8_t* cls = (uint8_t*)U.valuePtr(*p, L"UnitBPClass");
+        if (cls != (uint8_t*)*p + SPAWNER_UNIT_CLASS) {
+            Log(L"spawner: LiveUnitSpawner.UnitBPClass is at +%x, the game's spawn code reads +%x; not used",
+                (uint32_t)(cls - (uint8_t*)*p), (uint32_t)SPAWNER_UNIT_CLASS);
+            continue;
+        }
+        g_spawner = *p; g_spawnerVt = *(void**)*p; g_phase = phase; g_wd = wd;
+    }
+    FreeVector(&v);
+    if (g_spawner) Log(L"spawner: LiveUnitSpawner %p, global phase %p, world data %p", g_spawner, g_phase, g_wd);
+    return g_spawner != NULL;
+}
+
+static int SpawnerReady(void)
+{
+    if (!ResolveUE4SS()) return SV_ERR_NO_GAME;
+    if (!g_spawnUnit || !g_unregisterUnit || !g_destroyActor || !ResolveLayout()) return SV_ERR_NO_GAME;
+    return FindSpawner() ? 1 : SV_ERR_NOT_READY;
+}
+
+static uint8_t* FindDesc(const FNameRaw* name)
+{
+    TArrayRaw* a = (TArrayRaw*)U.valuePtr(g_wd, L"UnitDescList");
+    if (!a || !a->data || a->num < 0 || a->num > 4096) return NULL;
+    for (int32_t i = 0; i < a->num; ++i) {
+        uint8_t* d = a->data + (size_t)i * (size_t)LY.descSize;
+        if (NameEq((FNameRaw*)(d + LY.name), name)) return d;
+    }
+    return NULL;
+}
+
+static uint8_t* FindDescById(uint32_t id)
+{
+    TArrayRaw* a = (TArrayRaw*)U.valuePtr(g_wd, L"UnitDescList");
+    if (!a || !a->data || a->num < 0 || a->num > 4096) return NULL;
+    for (int32_t i = 0; i < a->num; ++i) {
+        uint8_t* d = a->data + (size_t)i * (size_t)LY.descSize;
+        if (*(uint32_t*)(d + LY.uniqueId) == id) return d;
+    }
+    return NULL;
+}
+
+static TArrayRaw* PhaseUnits(void)
+{
+    TArrayRaw* a = (TArrayRaw*)(g_phase + LY.unitList);
+    if (!Readable(a, sizeof(*a)) || a->num < 0 || a->num > 4096 || a->num > a->max) return NULL;
+    if (a->num && !Readable(a->data, (size_t)a->num * 8)) return NULL;
+    return a;
+}
+
+static uint32_t UnitId(uint8_t* unit)
+{
+    uint8_t* iface = unit + LY.idIface;
+    void** vt = *(void***)iface;
+    if (!Readable(vt + LY.idSlot / 8, 8)) return 0;
+    return ((uint32_t (*)(void*))vt[LY.idSlot / 8])(iface);
+}
+
+static uint8_t* RegisteredUnit(uint32_t id)
+{
+    TArrayRaw* a = PhaseUnits();
+    for (int32_t i = 0; a && i < a->num; ++i) {
+        uint8_t* u = ((uint8_t**)a->data)[i];
+        if (u && Readable(u, LY.idIface + 8) && UnitId(u) == id) return u;
+    }
+    return NULL;
+}
+
+/* Number of entries in one of the unit's reflected arrays (AliveChildAIGameObjects, ChildAIGameObjects), -1 unknown. */
+static int32_t UnitArrayNum(uint8_t* unit, const wchar_t* prop)
+{
+    TArrayRaw* a = (TArrayRaw*)U.valuePtr(unit, prop);
+    return a && Readable(a, sizeof(*a)) ? a->num : -1;
+}
+
+/* Takes the desc's last flight off the phase's list if it was shot down. 1 removed, 0 none, -1 still up. */
+static int Recycle(uint8_t* desc, const wchar_t* name)
+{
+    uint8_t* unit = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId));
+    if (!unit) return 0;
+    int32_t alive = UnitArrayNum(unit, L"AliveChildAIGameObjects");
+    if (alive != 0) {
+        Log(L"spawn %s: its last flight is still up (%d alive); not spawned again", name, alive);
+        return -1;
+    }
+    g_unregisterUnit(g_phase, unit);
+    g_destroyActor(unit, 0);
+    Log(L"spawn %s: its last flight was shot down; took it off the phase's list and removed its unit actor", name);
+    return 1;
+}
+
+static double Sin(double x)
+{
+    const double PI = 3.14159265358979323846;
+    while (x > PI) x -= 2 * PI;
+    while (x < -PI) x += 2 * PI;
+    if (x > PI / 2) x = PI - x; else if (x < -PI / 2) x = -PI - x;
+    double x2 = x * x, t = x, s = x;
+    for (int k = 1; k < 10; ++k) { t *= -x2 / (double)((2 * k) * (2 * k + 1)); s += t; }
+    return s;
+}
+static double Cos(double x) { return Sin(x + 1.57079632679489661923); }
+
+/* Moves a unit desc and its AI objects' formation to (x, y, z) cm, facing yaw degrees. */
+static void SetPose(uint8_t* desc, const double* pose)
+{
+    double* u = (double*)(desc + LY.uPoint);
+    double* r = (double*)(desc + LY.uRot);                 /* FRotator: pitch, yaw, roll */
+    double turn = pose[3] - r[1], c = Cos(turn * 3.14159265358979323846 / 180.0), s = Sin(turn * 3.14159265358979323846 / 180.0);
+    TArrayRaw* ai = (TArrayRaw*)(desc + LY.aiList);
+    for (int32_t i = 0; ai->data && i < ai->num && i < 64; ++i) {
+        uint8_t* a = ai->data + (size_t)i * (size_t)LY.aiSize;
+        double* p = (double*)(a + LY.aiPoint);
+        double* q = (double*)(a + LY.aiRot);
+        double dx = p[0] - u[0], dy = p[1] - u[1], dz = p[2] - u[2];
+        p[0] = pose[0] + dx * c - dy * s;
+        p[1] = pose[1] + dx * s + dy * c;
+        p[2] = pose[2] + dz;
+        q[1] += turn;
+    }
+    u[0] = pose[0]; u[1] = pose[1]; u[2] = pose[2];
+    r[1] = pose[3];
+}
+
+static int64_t Spawn(const wchar_t* name, const double* pose)
+{
+    int ready = SpawnerReady();
+    if (ready != 1) return ready;
+    FNameRaw fn;
+    uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
+    if (!desc) { Log(L"spawn %s: no unit of that name in %s", name, WD_NAME); return SV_ERR_NO_UNIT; }
+    if (Recycle(desc, name) < 0) return SV_ERR_UP;
+    if (pose) SetPose(desc, pose);
+    uint8_t* unit = (uint8_t*)g_spawnUnit(g_spawner, &fn, g_wd);
+    if (!unit) { Log(L"spawn %s: the game spawned nothing", name); return SV_ERR_REFUSED; }
+    int32_t n = UnitArrayNum(unit, L"ChildAIGameObjects");
+    int listed = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId)) == unit;
+    const double* u = (const double*)(desc + LY.uPoint);
+    Log(L"spawn %s: up, %d aircraft, at (%d, %d) m, %d m high, heading %d%s", name, n, (int32_t)(u[0] / 100),
+        (int32_t)(u[1] / 100), (int32_t)(u[2] / 100), (int32_t)((const double*)(desc + LY.uRot))[1],
+        listed ? L"" : L" (NOT on the phase list read here: shot-down flights can't be recycled)");
+    return n > 0 ? n : 1;
+}
+
+/* Sets the aircraft (NPC table row, e.g. m29a_common) of the unit desc's AI objects: all, or only `index` (0-based). */
+static int64_t SetAircraft(const wchar_t* name, const wchar_t* npc, int index)
+{
+    int ready = SpawnerReady();
+    if (ready != 1) return ready;
+    FNameRaw fn, npcName;
+    uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
+    if (!desc || !MakeName(npc, &npcName)) { Log(L"aircraft %s -> %s: unknown unit or aircraft", name, npc); return SV_ERR_NO_UNIT; }
+    TArrayRaw* ai = (TArrayRaw*)(desc + LY.aiList);
+    int64_t set = 0;
+    for (int32_t i = 0; ai->data && i < ai->num && i < 64; ++i) {
+        if (index >= 0 && i != index) continue;
+        memcpy(ai->data + (size_t)i * (size_t)LY.aiSize + LY.aiNpc, &npcName, sizeof(npcName));
+        ++set;
+    }
+    return set;
+}
+
+static int64_t UnitAlive(const wchar_t* name)
+{
+    int ready = SpawnerReady();
+    if (ready != 1) return ready;
+    FNameRaw fn;
+    uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
+    if (!desc) return SV_ERR_NO_UNIT;
+    uint8_t* unit = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId));
+    return unit ? UnitArrayNum(unit, L"AliveChildAIGameObjects") : SV_NOT_SPAWNED;
+}
+
+/* Logs the phase's unit list (what blocks or allows a spawn); returns its length. */
+static int64_t LogUnits(const wchar_t* why)
+{
+    int ready = SpawnerReady();
+    if (ready != 1) { Log(L"units (%s): spawner not ready (%d)", why, ready); return ready; }
+    TArrayRaw* a = PhaseUnits();
+    if (!a) { Log(L"units (%s): the phase's unit list can't be read", why); return SV_ERR_NO_GAME; }
+    Log(L"units (%s): %d on the phase's list", why, a->num);
+    for (int32_t i = 0; i < a->num; ++i) {
+        uint8_t* unit = ((uint8_t**)a->data)[i];
+        if (!unit || !Readable(unit, LY.idIface + 8)) { Log(L"  #%d: %p (unreadable)", i, unit); continue; }
+        uint32_t id = UnitId(unit);
+        uint8_t* desc = FindDescById(id);
+        wchar_t nm[96];
+        Log(L"  #%d: %s (id %x), %d of %d aircraft alive", i, desc ? NameText((FNameRaw*)(desc + LY.name), nm, 96) : L"?",
+            id, UnitArrayNum(unit, L"AliveChildAIGameObjects"), UnitArrayNum(unit, L"ChildAIGameObjects"));
+    }
+    return a->num;
+}
+
+/* ---- Lua bridge -----------------------------------------------------------
+ * UE4SS calls a C++ mod's on_lua_start(mod_name, lua, ...) whenever a Lua mod starts, before its main.lua runs. In
+ * UE4SS 3.0.1 that is vtable slot 6 (slot 8 is its deprecated twin; 5 and 7 are the no-name overloads, only for a Lua
+ * mod of the same name), traced in UE4SS.dll at 0x180301b60. Rather than trust a slot number, every slot of the mod
+ * object is a small probe: when a call's first argument is a std::wstring_view naming this mod, the second is its
+ * LuaMadeSimple::Lua, and the spawner's functions are registered on it as Lua globals (SV_*). Lua runs them on the
+ * game thread (ExecuteInGameThread), which is where the game's spawn code has to run.                           */
+/* Pops the next argument (always stack index 1: UE4SS's getters remove what they read). */
+static int ArgName(void* lua, wchar_t* out, size_t cap)
+{
+    if (U.luaStackSize(lua) < 1 || !U.luaIsString(lua, 1)) return 0;
+    StrView sv = { NULL, 0 };
+    U.luaGetString(lua, &sv, 1);
+    if (!sv.p || !sv.n || sv.n >= cap) return 0;
+    for (size_t i = 0; i < sv.n; ++i) {
+        if (sv.p[i] < 0x20 || sv.p[i] > 0x7E) return 0;
+        out[i] = (wchar_t)sv.p[i];
+    }
+    out[sv.n] = 0;
+    return 1;
+}
+
+static int ArgNumber(void* lua, double* v)
+{
+    if (U.luaStackSize(lua) < 1 || !U.luaIsNumber(lua, 1)) return 0;
+    *v = U.luaGetNumber(lua, 1);
+    return 1;
+}
+
+static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
+
+/* SV_Version() -> "0.6.0" */
+static int L_Version(void* lua)
+{
+    static const char v[] = "0.6.0";
+    U.luaSetString(lua, v, sizeof(v) - 1);
+    return 1;
+}
+
+/* SV_Spawn(unit [, x, y, z, yaw]) -> aircraft spawned (> 0) or an SV_ERR code; position in cm, yaw in degrees */
+static int L_Spawn(void* lua)
+{
+    wchar_t name[96];
+    double pose[4];
+    if (!ArgName(lua, name, 96)) return Ret(lua, SV_ERR_BAD_ARGS);
+    int n = 0;
+    while (n < 4 && ArgNumber(lua, &pose[n])) ++n;
+    if (n != 0 && n != 4) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, Spawn(name, n ? pose : NULL));
+}
+
+/* SV_SetAircraft(unit, npc [, index]) -> AI objects changed or an SV_ERR code */
+static int L_SetAircraft(void* lua)
+{
+    wchar_t name[96], npc[96];
+    double idx = -1;
+    if (!ArgName(lua, name, 96) || !ArgName(lua, npc, 96)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &idx);
+    return Ret(lua, SetAircraft(name, npc, (int)idx));
+}
+
+/* SV_UnitAlive(unit) -> aircraft alive in its current flight, SV_NOT_SPAWNED, or an SV_ERR code */
+static int L_UnitAlive(void* lua)
+{
+    wchar_t name[96];
+    if (!ArgName(lua, name, 96)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, UnitAlive(name));
+}
+
+/* SV_LogUnits([why]) -> length of the phase's unit list (written to AC8SurvivalMode.log) */
+static int L_LogUnits(void* lua)
+{
+    wchar_t why[64];
+    if (!ArgName(lua, why, 64)) memcpy(why, L"asked by Lua", 13 * 2);
+    return Ret(lua, LogUnits(why));
+}
+
+/* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
+static int L_Reset(void* lua)
+{
+    g_spawner = NULL; g_phase = NULL; g_wd = NULL;
+    return Ret(lua, 1);
+}
+
+static void RegisterLua(void* lua)
+{
+    static const struct { const char* name; LuaFn fn; } kFns[] = {
+        { "SV_Version", L_Version }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
+        { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
+    };
+    if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
+    for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
+        MsvcString s; memset(&s, 0, sizeof(s));
+        size_t n = 0;
+        while (kFns[i].name[n]) ++n;
+        memcpy(s.u.buf, kFns[i].name, n + 1);         /* every name fits the small-string buffer (<= 15) */
+        s.size = n; s.cap = 15;
+        LuaFn fn = kFns[i].fn;
+        U.luaRegister(lua, &s, &fn);
+    }
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset registered");
+}
+
+#define MOD_SLOTS 16
+static int32_t g_slotCalls[MOD_SLOTS];
+
+static void ModSlot(int slot, uintptr_t a, uintptr_t b)
+{
+    int32_t n = g_slotCalls[slot];
+    if (n > 2000) return;                     /* called every frame: not a mod-start slot */
+    g_slotCalls[slot] = n + 1;
+    if (n == 0) Log(L"UE4SS calls mod slot %d", slot);
+    const WStrView* v = (const WStrView*)a;
+    if (!Readable(v, sizeof(*v)) || !v->p || !v->n || v->n > 64 || !Readable(v->p, v->n * 2)) return;
+    static const wchar_t kMe[] = L"AC8SurvivalMode";
+    if (v->n != sizeof(kMe) / 2 - 1 || memcmp(v->p, kMe, sizeof(kMe) - 2) != 0) return;
+    if (!Readable((void*)b, 8)) return;
+    Log(L"UE4SS: Lua mod AC8SurvivalMode started (mod slot %d)", slot);
+    RegisterLua((void*)b);
+}
+
 /* ---- install ------------------------------------------------------------ */
 typedef struct { uint8_t* decide; int wantNext; void** exact; int nExact; void** chained; int nChained; } VtCtx;
 
@@ -672,6 +1230,10 @@ static void FindFunctions(void)
         { kSigGotoMenu,   NULL, sizeof(kSigGotoMenu),   NULL, 0 }, { kSigSetDifficulty, NULL, sizeof(kSigSetDifficulty), NULL, 0 },
         { kSigTransition, NULL, sizeof(kSigTransition), NULL, 0 }, { tp, tm, sizeof(kSigTransition) + sizeof(kSigTransitionTail), NULL, 0 },
         { kSigText,       NULL, sizeof(kSigText),       NULL, 0 }, { xp, xm, sizeof(kSigText), NULL, 0 },
+        { kSigSpawnUnit,      kSigSpawnUnitMask,      sizeof(kSigSpawnUnit),      NULL, 0 },
+        { kSigUnregisterUnit, kSigUnregisterUnitMask, sizeof(kSigUnregisterUnit), NULL, 0 },
+        { kSigUnitIdSpawned,  NULL, sizeof(kSigUnitIdSpawned), NULL, 0 },
+        { kSigDestroyActor,   NULL, sizeof(kSigDestroyActor),  NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -683,9 +1245,15 @@ static void FindFunctions(void)
     g_setDifficulty = (Fn2)p[5].hit;
     g_fTransition   = p[6].hit ? p[6].hit : p[7].hit;
     g_fText         = p[8].hit ? p[8].hit : p[9].hit;
+    g_spawnUnit      = (SpawnUnitFn)p[10].hit;
+    g_unregisterUnit = (UnregisterUnitFn)p[11].hit;
+    g_fUnitIdSpawned = p[12].hit;
+    g_destroyActor   = (DestroyActorFn)p[13].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
+    Log(L"spawn functions: spawn unit %p, unregister unit %p, unit check %p, destroy actor %p",
+        (void*)g_spawnUnit, (void*)g_unregisterUnit, g_fUnitIdSpawned, (void*)g_destroyActor);
 }
 
 static int StonehengeInstalled(void)
@@ -736,8 +1304,6 @@ static DWORD WINAPI Worker(void* arg)
 }
 
 /* ---- the UE4SS mod object (same layout as the AC8 Mod Loader's) ---------- */
-typedef struct { union { wchar_t buf[8]; wchar_t* ptr; } u; size_t size; size_t cap; } MsvcWString;
-_Static_assert(sizeof(MsvcWString) == 32, "std::wstring layout");
 
 static void SetWString(MsvcWString* s, const wchar_t* text)
 {
@@ -764,10 +1330,21 @@ static void* WINAPI Mod_DeletingDtor(void* self, uint32_t flags)
 
 static void* WINAPI Mod_NoOp(void) { return NULL; }
 
+/* Slots 1..15 of CppUserModBase (on_update, on_unreal_init, ..., on_lua_start x4, ...): each one probes its
+ * arguments for this mod's Lua start (ModSlot). */
+#define MOD_SLOT(n) static void* WINAPI Mod_Slot##n(void* self, uintptr_t a, uintptr_t b) { (void)self; ModSlot(n, a, b); return NULL; }
+MOD_SLOT(1)  MOD_SLOT(2)  MOD_SLOT(3)  MOD_SLOT(4)  MOD_SLOT(5)  MOD_SLOT(6)  MOD_SLOT(7)  MOD_SLOT(8)
+MOD_SLOT(9)  MOD_SLOT(10) MOD_SLOT(11) MOD_SLOT(12) MOD_SLOT(13) MOD_SLOT(14) MOD_SLOT(15)
+#undef MOD_SLOT
+
 static void* const g_modVtable[1 + VTABLE_SLOTS] = {
-    [0]                  = NULL,
-    [1]                  = (void*)Mod_DeletingDtor,
-    [2 ... VTABLE_SLOTS] = (void*)Mod_NoOp,
+    [0]                   = NULL,
+    [1]                   = (void*)Mod_DeletingDtor,
+    [2]  = (void*)Mod_Slot1,  [3]  = (void*)Mod_Slot2,  [4]  = (void*)Mod_Slot3,  [5]  = (void*)Mod_Slot4,
+    [6]  = (void*)Mod_Slot5,  [7]  = (void*)Mod_Slot6,  [8]  = (void*)Mod_Slot7,  [9]  = (void*)Mod_Slot8,
+    [10] = (void*)Mod_Slot9,  [11] = (void*)Mod_Slot10, [12] = (void*)Mod_Slot11, [13] = (void*)Mod_Slot12,
+    [14] = (void*)Mod_Slot13, [15] = (void*)Mod_Slot14, [16] = (void*)Mod_Slot15,
+    [17 ... VTABLE_SLOTS] = (void*)Mod_NoOp,
 };
 
 EXPORT void* start_mod(void)
@@ -779,7 +1356,7 @@ EXPORT void* start_mod(void)
     *(void* const**)mod = &g_modVtable[1];
     SetWString((MsvcWString*)(mod + 0x20), L"AC8SurvivalMode");
     SetWString((MsvcWString*)(mod + 0x40), RT_VERSION);
-    SetWString((MsvcWString*)(mod + 0x60), L"Survival Mode: main menu entry and texts");
+    SetWString((MsvcWString*)(mod + 0x60), L"Survival Mode: main menu entry, texts and spawner");
     SetWString((MsvcWString*)(mod + 0x80), L"voidcallsreaper");
     if (g_instances++ == 0) {
         OpenLog();

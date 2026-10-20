@@ -40,7 +40,7 @@ Copy a working stock pattern before inventing a new one.
 6. The first kill of a counted target doesn't register, so event-flag counters start at 1.
 7. New units need their blueprint packages added as imports AND in the container header, including the copy in the data folder.
 
-## Hard rules (learned building Survival Mode, tests 1-5 of 2026-10-20)
+## Hard rules (learned building Survival Mode, from 2026-10-20)
 8. Pad every .ucas so each compression block can be read rounded up to 16 bytes; otherwise the container doesn't mount
    ("Failed reading N bytes at offset ..."). tools/pack.py does it and checks every block.
 9. UE4SS Lua `LoadAsset` can't load a mod's new packages (it goes through the asset registry). Use KismetSystemLibrary
@@ -51,6 +51,21 @@ Copy a working stock pattern before inventing a new one.
 12. Confirming the free-mission difficulty runs transition 7, which asks the page's GetNextMenu (vtable 0x111); that hook,
     with the page it's called on, is where Survival starts. Don't rely on the page's decide or on a FindAllOf lookup.
 13. The hangar level travelled to must be 10 + the mission row's TravelHangarMap, or the hangar loads unlit.
+14. A C++ mod adds Lua functions in `CppUserModBase::on_lua_start(mod_name, lua, ...)` (vtable slot 6 in UE4SS 3.0.1,
+    called for every Lua mod before its main.lua runs; check the name). Confirmed by test 11 of 2026-10-21.
+15. Setting a world-data AI object's MissionNpcID before spawning changes the aircraft type (any row of the world
+    data's NPC table). Confirmed by test 11.
+
+## Spawning (Milestone 2, 2026-10-21)
+- Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
+  SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
+  the game never spawns a desc again while its shot-down flight is still on the phase's unit list
+  (tools/re/SPAWN_SYSTEM.md has the whole pipeline, offsets and signatures).
+- Round settings live in main.lua's CFG. Config hook for Codex: an optional `Scripts/survival_config.lua` that returns a
+  table of CFG overrides (wave sizes, intermission, aircraft list, pool); main.lua loads it if present.
+- The pool's flights must also be in tools/survival_events.py POOL (that's where they get their attack orders and the
+  chase that moves their 6 km unit area onto the player every 6 s).
+- No Lua interpreter on the build machine: run `python tools/checks/lua_check.py <file.lua>` after every Lua edit.
 
 ## User friendliness (top priority)
 - Install through ACE8 Mod Launcher, with Survival Mode as a toggle.

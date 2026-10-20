@@ -4,8 +4,10 @@
 --     tables (DT_SV_MissionRows / DT_SV_MenuRows), so no stock or other-mod table file is overridden
 --   * the main-menu entry opens the game's difficulty page; dlls\main.dll then starts Survival's mission
 --   * dev shortcut: Ctrl+F8 on the main menu opens PL_SurvivalMode directly
+-- Milestone 2:
+--   * rounds: random flights, aircraft and bearings each round, spawned through dlls\main.dll's SV_* functions
 
-local VERSION = "0.3.2"
+local VERSION = "0.6.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -155,12 +157,15 @@ local function pin(o, what)
     if pinned[a] ~= nil then return pinned[a] end
     local gi = gameInstance()
     if not gi then return false end                   -- not created yet: try again next pass
+    local sizes = ""
     local ok, err = pcall(function()
         local arr = gi.ReferencedObjects
+        local n0, m0 = arr:GetArrayNum(), arr:GetArrayMax()
         arr[#arr + 1] = o
+        sizes = string.format(" [ReferencedObjects num %d -> %d, max %d -> %d]", n0, arr:GetArrayNum(), m0, arr:GetArrayMax())
     end)
     pinned[a] = ok
-    log("rows: " .. what .. (ok and " pinned (kept loaded)" or (" could not be pinned (" .. tostring(err) .. ")")))
+    log("rows: " .. what .. (ok and " pinned (kept loaded)" or (" could not be pinned (" .. tostring(err) .. ")")) .. sizes)
     return ok
 end
 
@@ -259,58 +264,244 @@ local function watchRows()
     return true
 end
 
--- Runs on the game thread; the loop only schedules it (one at a time). It keeps running: the menu table can be
--- reloaded every time the main menu is built.
-local stopped, queued = false, false
-LoopAsync(250, function()
-    if stopped then return true end
-    if queued then return false end
-    queued = true
-    ExecuteInGameThread(function()
-        local ok, r = pcall(watchRows)
-        if not ok then log("rows: error " .. tostring(r)) end
-        if ok and r == false then stopped = true end
-        queued = false
-    end)
-    return false
-end)
+---------------------------------------------------------------------------------------------------- round diagnostics
+-- Milestone 2 round probe: logs every AI aircraft created in Survival's level (with where it appeared), the number
+-- still alive when it changes, Survival's SV_* flags when they change, and the game's difficulty at mission start.
+local planes = {}                  -- created AI aircraft in this level: { obj, name }
+local pending = {}                 -- AI aircraft just created, logged on a later tick (position is set by then)
+local AIRFIELD = { X = 1609639.0, Y = -436414.0 }   -- Comona Airport runway (cm), the spawn anchor
+local lastAlive, lastFlags = nil, nil
 
----------------------------------------------------------------------------------------------------- menu diagnostics
--- Logs every new copy of the menu table and, shortly after a command list is built, the entries it shows.
-pcall(NotifyOnNewObject, "/Script/Engine.DataTable", function(o)
+local function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~= nil end
+
+-- Callbacks only record: all logging runs in the one game-thread tick below.
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pending + 1] = { obj = o, age = 0 } end)
+
+local function logPlane(o)
+    if not valid(o) or not inSurvival(o) then return end
     local n = nameOf(o)
-    if n:find("DT_LiveMenuMainTopCommands", 1, true) then log("menu: table object created " .. n .. " at " .. hex(addrOf(o))) end
+    local short = n:match("([^%.:]+)$") or n
+    local wing = n:find("Wingman", 1, true) and " (wingman)" or ""
+    planes[#planes + 1] = { obj = o, name = short }
+    local where = ""
+    pcall(function()
+        local l = o:K2_GetActorLocation()
+        local dx, dy = l.X - AIRFIELD.X, l.Y - AIRFIELD.Y
+        where = string.format(" at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield",
+            l.X / 100000, l.Y / 100000, l.Z / 100000, math.sqrt(dx * dx + dy * dy) / 100000)
+    end)
+    log("round probe: AI aircraft created #" .. #planes .. ": " .. short .. wing .. where)
+end
+
+-- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
+-- (set while a flight is up, for the chase) are shown as one count.
+local function flagLine()
+    local parts, up = {}, 0
+    local cs = FindAllOf("LiveEventContainer")
+    if not cs then return nil end
+    for _, c in ipairs(cs) do
+        if valid(c) then
+            pcall(function()
+                c.FlagData.IntegerFiled:ForEach(function(k, v)
+                    local okK, name = pcall(function() return k:get():ToString() end)
+                    if okK and name:sub(1, 6) == "SV_Up_" then
+                        local okV, val = pcall(function() return v:get().Value end)
+                        if okV and type(val) == "number" and val >= 1 then up = up + 1 end
+                    elseif okK and name:sub(1, 3) == "SV_" then
+                        local okV, val = pcall(function() return v:get().Value end)
+                        parts[#parts + 1] = name .. "=" .. (okV and tostring(val) or "?")
+                    end
+                end)
+            end)
+        end
+    end
+    if #parts == 0 then return nil end
+    table.sort(parts)
+    return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up
+end
+
+-- The game's current difficulty (LiveDifficultyManager.CurrentDifficulty: 1 Casual .. 5 Ace).
+local DIFFICULTY = { [0] = "None", "Casual", "Easy", "Normal", "Hard", "Ace", "FreeFlight" }
+local function logDifficulty(when)
+    local dm = FindFirstOf("LiveDifficultyManager")
+    local ok, d = pcall(function() return dm.CurrentDifficulty end)
+    log("difficulty " .. when .. ": " .. ((ok and type(d) == "number") and (DIFFICULTY[d] or tostring(d)) or "unknown"))
+end
+
+local levelTick = nil              -- tick count when Survival's level was loaded
+pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
+    if nameOf(w):find("PL_SurvivalMode", 1, true) then levelTick = -1 end      -- picked up by the next tick
 end)
 
-local lastTableLine = nil          -- the table's rows are logged again only when they change
+---------------------------------------------------------------------------------------------------- rounds
+-- Survival's own spawner. The game never spawns a world-data unit again while its shot-down flight is still on the
+-- phase's unit list (tools/re/SPAWN_SYSTEM.md), so rounds don't use its reinforcement events: dlls\main.dll
+-- (runtime 0.6.0) registers these globals when this script starts, and the rounds below call them:
+--   SV_Spawn(unit, x, y, z, yaw)   spawns the world-data unit there (cm, degrees); a shot-down flight is recycled first
+--   SV_SetAircraft(unit, npc)      sets the aircraft (NPC table row) of every plane in the flight
+--   SV_UnitAlive(unit)             planes still alive in the flight's current spawn (-7: not up)
+--   SV_LogUnits(why)               writes the game's spawned-unit list to AC8SurvivalMode.log
+-- The event package gives each flight its orders when it appears (air-only search, engage the player) and counts
+-- SV_Alive / SV_Kills for this log. Must run on the game thread (the one tick below).
+local CFG = {
+    first_round_delay_s = 15,
+    intermission_s      = 45,
+    spawn_gap_s         = 3,                    -- between two flights of a round
+    flights_round1      = 2,
+    flights_per_round   = 1,                    -- added every round
+    max_flights         = 8,                    -- flights in one round
+    distance_km         = { 18, 25 },           -- from the airfield, random bearing
+    altitude_m          = { 2000, 4500 },
+    aircraft            = { "f16c_common", "f18e_common", "f15e_common", "f14d_common", "m21b_common",
+                            "m29a_common", "m31b_common", "su33_common", "su34_common" },   -- NPC rows in Mission 22's table
+    pool                = {},                   -- Mission 22's 24 "kokatu" flights (tools/survival_events.py POOL)
+}
+for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
+do  -- optional overrides: Scripts/survival_config.lua returning a table with any of the keys above
+    local ok, user = pcall(require, "survival_config")
+    if ok and type(user) == "table" then
+        for k, v in pairs(user) do CFG[k] = v end
+        log("config: survival_config.lua loaded")
+    end
+end
+math.randomseed(os.time())
 
-local function dumpList(w)
-    if not valid(w) then return end
-    local items = {}
-    local okA, err = pcall(function()
-        local cds = w.CommandDatas
-        for i = 1, #cds do
-            local cd = cds[i]
-            local okT, txt = pcall(function() return cd.TextWidget:GetText():ToString() end)
-            items[#items + 1] = okT and txt or nameOf(cd.CommandWidget)
+local ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
+local SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
+                 [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
+local D = nil                      -- the run in progress: { round, state, at, now, queue, up }
+
+local function nativeReady()
+    return type(SV_Spawn) == "function" and type(SV_UnitAlive) == "function" and type(SV_SetAircraft) == "function"
+end
+
+-- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
+local function spawnPoint()
+    local lo, hi = CFG.distance_km[1], CFG.distance_km[2]
+    for _ = 1, 30 do
+        local b, d = math.random() * 360, lo + math.random() * (hi - lo)
+        local x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
+        local y = AIRFIELD.Y + d * 100000 * math.sin(math.rad(b))
+        if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b end
+    end
+    return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
+end
+
+local function spawnFlight(unit)
+    local ac = CFG.aircraft[math.random(#CFG.aircraft)]
+    local set = SV_SetAircraft(unit, ac)
+    local x, y, dist, bearing = spawnPoint()
+    local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
+    log(string.format("round %d: %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit, ac,
+        tostring(set), dist, bearing, alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if r > 0 then D.up[unit] = true end
+    return r
+end
+
+local function startRound()
+    D.round = D.round + 1
+    local free = {}
+    for _, u in ipairs(CFG.pool) do if not D.up[u] then free[#free + 1] = u end end
+    for i = #free, 2, -1 do local j = math.random(i); free[i], free[j] = free[j], free[i] end
+    local want = math.min(CFG.flights_round1 + (D.round - 1) * CFG.flights_per_round, CFG.max_flights, #free)
+    D.queue = {}
+    for i = 1, want do D.queue[i] = free[i] end
+    log(string.format("round %d: %d flights", D.round, want))
+    if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
+    D.state, D.at, D.lastAlive = "spawning", D.now, nil
+end
+
+local function roundsTick(now)
+    if not D then return end
+    D.now = now
+    if not nativeReady() then
+        if not D.warned then log("rounds: the native spawner (dlls\\main.dll 0.6.0) did not register SV_Spawn: no enemies"); D.warned = true end
+        return
+    end
+    if D.state == "wait" then
+        if now >= D.at then startRound() end
+    elseif D.state == "spawning" then
+        if now < D.at then return end
+        local u = table.remove(D.queue, 1)
+        if u and spawnFlight(u) == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
+        D.at = now + CFG.spawn_gap_s
+        if #D.queue == 0 then D.state = "fighting" end
+    elseif D.state == "fighting" then
+        if now < D.at then return end
+        D.at = now + 1
+        local alive, flights = 0, 0
+        for u in pairs(D.up) do
+            local n = SV_UnitAlive(u)
+            if n > 0 then alive, flights = alive + n, flights + 1 else D.up[u] = nil end
         end
-    end)
-    -- only lists that show something (empty ones are widget templates; test 5 had hundreds of those lines)
-    if #items == 0 and okA then return end
-    log("menu: list " .. nameOf(w) .. " shows " .. #items .. " entries: " .. table.concat(items, " | ") ..
-        (okA and "" or (" (read error: " .. tostring(err) .. ")")))
-    local game = StaticFindObject(TABLES[2].game)
-    if valid(game) then
-        local line = "menu: the table at " .. hex(addrOf(game)) .. " has rows: " .. rowNames(game)
-        if line ~= lastTableLine then log(line); lastTableLine = line end
+        if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
+        if flights == 0 then
+            log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
+            if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
+            D.state, D.at = "wait", now + CFG.intermission_s
+        end
     end
 end
 
-pcall(NotifyOnNewObject, "/Script/Live.LiveMenuCommandListWidget", function(w)
-    if type(ExecuteWithDelay) ~= "function" then return end
-    ExecuteWithDelay(1500, function()
-        ExecuteInGameThread(function() pcall(dumpList, w) end)
+local function probeTick(tick)
+    if levelTick == -1 then
+        levelTick = tick
+        log("level loaded: PL_SurvivalMode")
+        planes, lastAlive, lastFlags = {}, nil, nil
+        if type(SV_Reset) == "function" then SV_Reset() end
+        log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
+            "; round 1 in " .. CFG.first_round_delay_s .. " s")
+        D = { round = 0, state = "wait", at = tick / 4 + CFG.first_round_delay_s, now = tick / 4, queue = {}, up = {} }
+    end
+    local okR, errR = pcall(roundsTick, tick / 4)
+    if not okR then log("rounds: error " .. tostring(errR)) end
+    if levelTick then
+        if tick - levelTick == 8 then logDifficulty("at mission start") end
+        if tick - levelTick == 48 then logDifficulty("10 s into the mission") end
+    end
+    local keep = {}
+    for _, p in ipairs(pending) do
+        p.age = p.age + 1
+        if p.age >= 2 then pcall(logPlane, p.obj) else keep[#keep + 1] = p end
+    end
+    pending = keep
+    if tick % 8 ~= 0 or not levelTick then return end                -- the rest every 2 s, in Survival only
+    local fl = flagLine()
+    if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
+    local alive = 0
+    for _, p in ipairs(planes) do
+        if valid(p.obj) then
+            local ok, h = pcall(function() return p.obj.HealthInternal end)
+            if not ok or type(h) ~= "number" or h > 0 then alive = alive + 1 end
+        end
+    end
+    if alive ~= lastAlive and #planes > 0 then
+        log("round probe: AI aircraft alive " .. alive .. " (created so far " .. #planes .. ")")
+        lastAlive = alive
+    end
+end
+
+---------------------------------------------------------------------------------------------------- the one tick
+-- Everything runs from this single game-thread pass every 250 ms. UE4SS 3.0.1 crashed with heap corruption inside its
+-- Lua (test M2-8) while this script ran many ExecuteWithDelay timers (one per menu widget) next to two loops; one
+-- loop that queues one game-thread job at a time keeps all Lua work in one place.
+local tick, rowsStopped, queued = 0, false, false
+LoopAsync(250, function()
+    if queued then return false end
+    queued = true
+    ExecuteInGameThread(function()
+        tick = tick + 1
+        if not rowsStopped then
+            local ok, r = pcall(watchRows)
+            if not ok then log("rows: error " .. tostring(r)) end
+            if ok and r == false then rowsStopped = true end
+        end
+        local ok, err = pcall(probeTick, tick)
+        if not ok then log("round probe: error " .. tostring(err)) end
+        queued = false
     end)
+    return false
 end)
 
 ---------------------------------------------------------------------------------------------------- dev shortcut
@@ -344,11 +535,6 @@ local function openSurvival()
         log("launch: console command failed (" .. tostring(err) .. ")")
     end
 end
-
-pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
-    local n = nameOf(w)
-    if n:find("PL_SurvivalMode", 1, true) then log("level loaded: " .. n) end
-end)
 
 if type(RegisterKeyBind) == "function" and Key and Key.F8 then
     local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}

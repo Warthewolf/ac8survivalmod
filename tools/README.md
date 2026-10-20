@@ -18,13 +18,13 @@ Also `build/install/AC8SurvivalMode` (the UE4SS runtime: `Scripts/main.lua` from
 | --- | --- |
 | `build_all.sh` | get_stock -> runtime/build.sh -> build_survival -> pack -> stage `build/install/` |
 | `../runtime/build.sh` | Native runtime `survival_rt.c` -> `build/runtime/main.dll` (clang + lld-link, no SDK/CRT) |
-| `re/` | Reverse-engineering helpers: `xrefs.py`, `fn.py`, `peinfo.py`, `sigfind.py`; notes in `re/STONEHENGE_MAIN_DLL.md` |
+| `re/` | Reverse-engineering: `exe.py` (PE reader: xrefs, .pdata function bounds, disassembly), `mksig.py <va>` (unique masked signature for runtime/sigs.h), `minidump_stack.py` (crash dumps), plus the Milestone 1 helpers `xrefs.py`, `fn.py`, `peinfo.py`, `sigfind.py`; notes: `re/SPAWN_SYSTEM.md` (how the game spawns units, Survival's spawner), `re/EVENT_NOTES.md` (event package records), `re/STONEHENGE_MAIN_DLL.md` (menu hooks) |
 | `get_stock.sh <path>...` | Pulls stock zen packages out of the game Paks into `build/stock/` (e.g. `Maps/Ingame/Mission022/PL_Mission022.umap`) |
 | `build_survival.py` | Writes Survival's packages into `mod/Content` from stock game templates only (see its docstring) |
 | `pack.py` | Packs `mod/Content` into `SurvivalMode_P` with retoc `pack-raw`; container header imports come from each package's own import list |
 | `zenpkg.py` | Zen package editor that handles wide (Japanese) names; `python zenpkg.py <pkgs>` checks round-trips |
 | `make_scriptobjs.py` | Builds `scriptobjs.pkl` for `scripts/zen_ep.py` from `retoc print-script-objects` (inspection only) |
-| `checks/` | Inspectors: `dump_props.py`, `dump_export.py`, `imp_pkgs.py`, `wd_find.py`, `verify_headers.py` |
+| `checks/` | Inspectors: `dump_props.py`, `dump_export.py`, `imp_pkgs.py`, `wd_find.py`, `verify_headers.py`, `ep_dump.py` (any event package's triggers/execs); `lua_check.py <file.lua>` (Lua 5.4 syntax + unknown-global check; there is no Lua on the build machine, run it after every main.lua change) |
 | `scripts/` | Zen package / property / container format libraries (`uprop.py`, `eprec.py`, `zen.py`, `chdr.py`, ...) |
 
 Git Bash rewrites `/Game/...` arguments into Windows paths; `export MSYS_NO_PATHCONV=1` first (build_all.sh does).
@@ -45,3 +45,6 @@ Git Bash rewrites `/Game/...` arguments into Windows paths; `export MSYS_NO_PATH
 - UE4SS 3.0.1's Lua `LoadAsset` looks assets up in the game's asset registry, which never lists a mod's new packages,
   so it can't load them even when the container is mounted (Test 2, 2026-10-20). Load mod packages with
   KismetSystemLibrary MakeSoftObjectPath -> Conv_SoftObjPathToSoftObjRef -> LoadAsset_Blocking (as Stonehenge's DLL does).
+- In unversioned properties an absent field means the class default, not zero/false. To set a field to false or 0,
+  keep it as an explicit zero entry (uprop `(idx, name, True, None)`). Removing LiveUnitDesc.bIsSpawnFromStart
+  (default true) spawned every unit in the world data (Milestone 2 probe, 2026-10-20).

@@ -21,6 +21,7 @@ tools/get_stock.sh \
   Maps/Ingame/Mission022/EP_Mission022_phase02.uasset \
   Datatables/Information/DT_LiveMissionTable.uasset \
   Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.uasset
+python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py

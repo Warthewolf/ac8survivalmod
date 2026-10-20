@@ -18,6 +18,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
 from zenpkg import ZenPkg, export_hash
 import uprop, eprec
+sys.path.insert(0, os.path.join(HERE, "checks"))
+import survival_events, ep_dump
 
 STOCK = os.path.join(ROOT, 'build', 'stock')
 OUT = os.path.join(ROOT, 'mod', 'Content')
@@ -155,42 +157,54 @@ def build_wd_phase(n):
     save(z, new)
 
 
-def mission22_combat_zones():
-    """Mission 22's CombatZoneDescList (one 80 x 80 km zone around Comona). The minimap frames itself on the
-    combat zone; without one it is offset from the world (test 6)."""
-    z = ZenPkg(stock(M22 + 'WD_Mission022_global'))
-    i = z.export_index('WD_Mission022_global')
-    v, _ = props_of(z, i, 'LiveWorldData')
-    zones = [p for p in v[2] if p[1] == 'CombatZoneDescList'][0]
-    assert len(zones[3][1]) == 1, zones
-    return zones
-
-
 def build_wd_global():
-    """Mission 22's phase-2 world data without its player start, plus Mission 22's combat zone."""
-    old, new = M22 + 'WD_Mission022_phase02', MI + 'WD_SurvivalMode_global'
+    """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
+    itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
+    old, new = M22 + 'WD_Mission022_global', MI + 'WD_SurvivalMode_global'
     z = ZenPkg(stock(old))
-    rename_package(z, old, new)
-    v, rest = props_of(z, 0, 'LiveWorldData')
-    v[2][:] = [p for p in v[2] if p[1] != 'PlayerStartDescList']
-    assert not v[2], v[2]
-    idx, name, zero, (kind, items) = mission22_combat_zones()
-    wd_name = new.rsplit('/', 1)[1]
-    zones = []
-    for item in items:
-        props = [(pi, pn, pz, ('name', wd_name, 0) if pn == 'WorldDataName' else pv) for pi, pn, pz, pv in item[2]]
-        zones.append((item[0], item[1], props))
-    for n in names_in(zones):
-        z.nb.add(n)
-    v[2].append((idx, name, zero, (kind, zones)))
-    z.payloads[0] = bytearray(write_props(z, v) + rest)
-    chk, _ = props_of(z, 0, 'LiveWorldData')
-    assert chk == v
+    rename_package(z, old, new)               # also renames every WorldDataName value (same FName)
+    i = z.export_index(new.rsplit('/', 1)[1])
+    v, rest = props_of(z, i, 'LiveWorldData')
+    units = [p for p in v[2] if p[1] == 'UnitDescList'][0][3][1]
+    # An absent property means the class default, and bIsSpawnFromStart defaults to true (test M2-1: removing it
+    # spawned all 71 units, 135 aircraft). Mission 22's own reinforcements carry it as an explicit zero: do the same.
+    idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
+    sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'SpawnPoint'][0]
+    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    POOL_UNITS = set(survival_events.POOL)
+    turned_off = 0
+    for u in units:
+        name = [p for p in u[2] if p[1] == 'Name'][0][3][1]
+        keep = name in survival_events.KEEP_AT_START
+        point = survival_events.KEEP_AT_START.get(name)
+        cur = [p for p in u[2] if p[1] == 'bIsSpawnFromStart']
+        if not keep and not (cur and cur[0][2]): turned_off += 1
+        on = (idx, 'bIsSpawnFromStart', False, ('raw', 'Bool', b'\x01')) if keep else (idx, 'bIsSpawnFromStart', True, None)
+        rest_props = [p for p in u[2] if p[1] != 'bIsSpawnFromStart' and not (point and p[1] == 'SpawnPoint')]
+        if point:
+            # the unit's SpawnPoint alone left the anchor at the map origin (probe test 7): its AI object has a
+            # SpawnPoint of its own, which is where it actually stands, so both get the point
+            rest_props.append((sp_idx, 'SpawnPoint', False, ('native', 'Vector', struct.pack('<3d', *point))))
+            for k, p in enumerate(rest_props):
+                if p[1] == 'AIObjectDescList':
+                    for obj in p[3][1]:
+                        obj[2][:] = [(q[0], q[1], False, ('native', 'Vector', struct.pack('<3d', *point)))
+                                     if q[1] == 'SpawnPoint' else q for q in obj[2]]
+        if name in POOL_UNITS and survival_events.AREA_RADIUS_M:   # the spawner's pool, without chase: an area over the whole zone
+            rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
+                (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))]
+        u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
+    names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
+    assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
+    assert any(p[1] == 'CombatZoneDescList' for p in v[2])
+    z.payloads[i] = bytearray(write_props(z, v) + rest)
+    chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
+    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}')
     save(z, new)
 
 
 def build_ef():
-    """Mission 22's event flag asset with every integer, bool and timer flag removed."""
+    """Mission 22's event flag asset with every flag removed, then Survival's int flags (value 0) added."""
     old = M22 + 'EF_Mission022_global'
     z = ZenPkg(stock(old))
     rename_package(z, old, MI + 'EF_SurvivalMode_global')
@@ -200,7 +214,13 @@ def build_ef():
             if val and val[0] == 'map': s[2][k] = (pi, pn, False, ('map', 0, []))
             elif val and val[0] == 'struct': clear(val)
     clear(v)
+    fd = [p for p in v[2] if p[1] == 'FlagData'][0][3]
+    ints = [p for p in fd[2] if p[1] == 'IntegerFiled'][0][3]
+    for name in survival_events.INT_FLAGS:
+        z.nb.add(name)
+        ints[2].append((('name', name, 0), ('struct', 'LiveEventFlagType_Integer', [(0, 'Value', True, None)])))
     z.payloads[0] = bytearray(write_props(z, v) + rest)
+    chk, _ = props_of(z, 0, 'LiveEventFlagAsset'); assert chk == v
     save(z, MI + 'EF_SurvivalMode_global')
 
 
@@ -218,7 +238,8 @@ def empty_ep(z, new_path):
 
 
 def build_ep(part, ef=False):
-    """Mission 22's event package for `part` (global / phase01 / phase02) with every trigger and exec removed."""
+    """Mission 22's event package for `part` (global / phase01 / phase02) with every trigger and exec removed;
+    the global one then gets Survival's event graph (tools/survival_events.py)."""
     old, new = M22 + 'EP_Mission022_' + part, MI + 'EP_SurvivalMode_' + part
     z = ZenPkg(stock(old))
     rename_package(z, old, new)
@@ -226,6 +247,13 @@ def build_ep(part, ef=False):
     if ef:
         retarget_import(z, M22 + 'EF_Mission022_global', MI + 'EF_SurvivalMode_global')
     empty_ep(z, new)
+    if part == 'global':
+        g = survival_events.build_events(stock(old))
+        head = bytes(z.payloads[0])[:-12]         # empty_ep left: properties + u32 0 + u32 0 + u32 0
+        z.payloads[0] = bytearray(survival_events.write_records(g, z, head))
+        _, _, _, T, E, offs = ep_dump.load_bytes(z)
+        assert len(T) == len(g.trig) and len(E) == len(g.ex) and offs[3] == offs[4], (len(T), len(E), offs)
+        print(f'  events: {len(T)} triggers, {len(E)} execs')
     save(z, new)
 
 
