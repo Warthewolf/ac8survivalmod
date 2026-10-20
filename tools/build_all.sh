@@ -14,6 +14,7 @@ tools/get_stock.sh \
   Maps/Ingame/Mission022/MC_Mission022.uasset \
   Maps/Ingame/Mission022/WD_Mission022_phase01.uasset \
   Maps/Ingame/Mission022/WD_Mission022_phase02.uasset \
+  Maps/Ingame/Mission022/WD_Mission022_global.uasset \
   Maps/Ingame/Mission022/EF_Mission022_global.uasset \
   Maps/Ingame/Mission022/EP_Mission022_global.uasset \
   Maps/Ingame/Mission022/EP_Mission022_phase01.uasset \

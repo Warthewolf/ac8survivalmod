@@ -59,6 +59,11 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   travelled to Hangar 02 while the row (Mission 22's) carries Hangar 004's lighting and sublevels. Fix (runtime 0.4.0):
   travel to Hangar 04 (level 0x0F = 10 + the row's TravelHangarMap 5); build_survival.py checks the two match.
   Lua 0.3.2 only logs command lists that show entries.
+- Test 5 follow-up: hangar lighting confirmed fixed with runtime 0.4.0 (Hangar 04); the Mission 16 sky over Comona and
+  landing at Comona airport confirmed by the user.
+- Test 6: minimap offset from the world. Survival's global world data had no combat zone (the minimap frames itself on
+  it). Fixed and confirmed in-game: WD_SurvivalMode_global gets Mission 22's CombatZone0 (centre -707336, -261895; 80 x 80 km,
+  40 km high).
 - [x] Milestone 1 closed on the user's call after test 5 (2026-10-20). Still to confirm on the next run: the hangar is
   lit with runtime 0.4.0, the sky over Comona (sun, fog, sea colour, screenshot), and both Stonehenge's and Survival's
   entries working together (Stonehenge has to be reinstalled for that).

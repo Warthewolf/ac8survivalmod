@@ -155,16 +155,38 @@ def build_wd_phase(n):
     save(z, new)
 
 
+def mission22_combat_zones():
+    """Mission 22's CombatZoneDescList (one 80 x 80 km zone around Comona). The minimap frames itself on the
+    combat zone; without one it is offset from the world (test 6)."""
+    z = ZenPkg(stock(M22 + 'WD_Mission022_global'))
+    i = z.export_index('WD_Mission022_global')
+    v, _ = props_of(z, i, 'LiveWorldData')
+    zones = [p for p in v[2] if p[1] == 'CombatZoneDescList'][0]
+    assert len(zones[3][1]) == 1, zones
+    return zones
+
+
 def build_wd_global():
-    """An empty world data: Mission 22's phase-2 world data without its player start."""
-    old = M22 + 'WD_Mission022_phase02'
+    """Mission 22's phase-2 world data without its player start, plus Mission 22's combat zone."""
+    old, new = M22 + 'WD_Mission022_phase02', MI + 'WD_SurvivalMode_global'
     z = ZenPkg(stock(old))
-    rename_package(z, old, MI + 'WD_SurvivalMode_global')
+    rename_package(z, old, new)
     v, rest = props_of(z, 0, 'LiveWorldData')
     v[2][:] = [p for p in v[2] if p[1] != 'PlayerStartDescList']
     assert not v[2], v[2]
+    idx, name, zero, (kind, items) = mission22_combat_zones()
+    wd_name = new.rsplit('/', 1)[1]
+    zones = []
+    for item in items:
+        props = [(pi, pn, pz, ('name', wd_name, 0) if pn == 'WorldDataName' else pv) for pi, pn, pz, pv in item[2]]
+        zones.append((item[0], item[1], props))
+    for n in names_in(zones):
+        z.nb.add(n)
+    v[2].append((idx, name, zero, (kind, zones)))
     z.payloads[0] = bytearray(write_props(z, v) + rest)
-    save(z, MI + 'WD_SurvivalMode_global')
+    chk, _ = props_of(z, 0, 'LiveWorldData')
+    assert chk == v
+    save(z, new)
 
 
 def build_ef():

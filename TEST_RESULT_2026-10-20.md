@@ -142,3 +142,10 @@ So the aircraft IS spawned in the hangar and the sortie animation runs. The hang
   per mission (cf. DataViewer "SelectHangarSituation"). With no situation for 9101 it loads the hangar with no light.
 - Fix: give 9101 the same hangar situation/lighting as Mission022 (or any stock mission). Check which table maps
   mission -> hangar situation, and add 9101 there at runtime the same way as the other rows.
+
+## Test 5 final (user, 21:00): full flow works except hangar lighting
+- Menu -> difficulty -> hangar -> sortie -> Comona map: WORKS.
+- Landing at Comona airport: WORKS.
+- Mission 16 sky over Comona: user confirms it looks CORRECT.
+- Remaining for Milestone 1: hangar lighting for mission 9101 (see update above). Then commit to git
+  (no commits yet) and mark Milestone 1 done in BUILD_PLAN.md.
