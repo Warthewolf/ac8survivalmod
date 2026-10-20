@@ -96,7 +96,7 @@ flight its orders when it appears (air-only search, engage the player), counts S
   rule 7) and their NPC rows at run time (never override a shared NPC table).
 - **Aircraft variety**: MissionNpcID must be a row of the world data's NpcMissionDataTable (Mission 22's); the rows
   Mission 22's units use are listed in main.lua's CFG.aircraft. Others need their NPC row and blueprint first.
-- **Despawn / stragglers**: the same UnregisterUnit + Destroy can remove a living flight (not exposed yet: whether
+- **Despawn** (not planned: the user wants every enemy shot down): the same UnregisterUnit + Destroy can remove a living flight (not exposed yet: whether
   destroying the unit actor also removes its living aircraft actors is untested; for a shot-down flight it's confirmed
   safe).
 - **Wingmen (shop)**: separate path - LiveSpawnWingmanExecution, FLiveUnitDesc.WingmanStartDescList and

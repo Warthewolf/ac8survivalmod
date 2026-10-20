@@ -40,6 +40,14 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Fighters engage the player directly: LiveAIEngagementOrder / LiveAIChangeEnemySearchType set to target the player.
 - Radio callout when bombers appear, so the player knows to defend.
 
+## 6. Round HUD (user request 2026-10-21)
+- The round number is always on the HUD.
+- Round countdown timer: it starts only once a round is complete and shows how long until the next round starts
+  (the intermission). Nothing counts down while a round is being fought.
+- "Round Complete" callout when a round is cleared.
+- A callout just as a round is about to start.
+- No timed despawn of enemies that drag on: they're chased and have to be shot down.
+
 ## Open decisions
 - Does airfield HP carry over between rounds, or reset each round? (Suggest: carries over; repair costs credits.)
 - Does losing the airfield end the run, or only close the shop?

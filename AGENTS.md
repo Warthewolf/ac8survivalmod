@@ -35,7 +35,7 @@ Copy a working stock pattern before inventing a new one.
 1. PathPointReceive triggers copied from stock missions never fire. Use PathFinish triggers and exec delays.
 2. A stock exit path with a different control type "finishes" instantly. Reuse the inbound path's settings and start new paths a little ahead of the aircraft.
 3. Make every ported or spawn trigger one-shot, and turn path warp off. Mission 25's appearance trigger re-fires and warps.
-4. Despawn on a timer (about 2 minutes), not at the end of an exit path.
+4. Despawn on a timer (about 2 minutes), not at the end of an exit path. (Survival doesn't despawn enemies: they're chased.)
 5. Keep ported events in stock order, e.g. release the carried unit before giving it its drop path.
 6. The first kill of a counted target doesn't register, so event-flag counters start at 1.
 7. New units need their blueprint packages added as imports AND in the container header, including the copy in the data folder.

@@ -176,13 +176,20 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   and the enemies came for the player: round 1's nearest went 20.6 -> 15.1 -> 3.9 -> 0.6 km in 30 s, round 2's
   23.9 -> 13.5 -> 1.6 km in 20 s. Every aircraft lost went down 0.2-5.3 km from the player (shot down, not crashed).
   Rounds 2 and 3 recycled the flights that had flown first, so the game's unit list stayed at 3-4 entries.
-- [ ] Round counter (Lua: D.round; shown on the HUD in a later milestone).
+- [ ] Round HUD (user request 2026-10-21, SURVIVAL_SPEC.md section 6; PAUSED by the user mid-design, nothing built
+  yet): round number always shown; countdown to the next round only after a round is complete; "Round Complete"
+  callout on clear; callout just before a round starts. Findings so far are in tools/re/HUD_NOTES.md. Planned
+  approach: a Lua overlay widget (UserWidget + WidgetTree + CanvasPanel + TextBlocks, AddToViewport) styled with the
+  HUD's own font; rounds switched from tick counts to the game clock (GameplayStatics GetTimeSeconds) so the timer and
+  the rounds stop while the game is paused (today they keep running).
 - [x] Waves: random flights per round from the pool, spawned by Survival's spawner (test 11).
 - [x] Round clear when every flight of the round is down; 45 s intermission timer; next round (test 11).
 - [x] Fighters: engagement order targeting the player, and the chase that brings them to the player (test 12).
 - [x] Enemy variety (user request 2026-10-20): mixed aircraft types, picked at random per flight (SV_SetAircraft;
   test 11). Types outside Mission 22's NPC table need NPC rows, added at run time (never override a shared NPC table).
-- Test: 3 rounds in a row, no double spawns, stragglers despawn at about 2 min.
+- Test: 3 rounds in a row, no double spawns (done: tests 11-12, 5 rounds).
+- No timed despawn of enemies that drag on (user decision 2026-10-21): with the chase every enemy comes for the player
+  and has to be shot down. Add a safety net only if a test shows a round that can't be finished.
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
