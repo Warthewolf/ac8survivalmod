@@ -10,7 +10,7 @@
 --   * rounds run on the game clock, so the countdown and the rounds stop while the game is paused
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.7.0"
+local VERSION = "0.7.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -377,13 +377,17 @@ local CFG = {
     hud = {
         enabled          = true,
         x                = 190,                 -- left edge, lined up with the game's TIME / SCORE stack
-        y                = nil,                 -- nil: just below the game's mission info stack; a number pins it
-        y_fallback       = 470,                 -- used when the mission info stack isn't found
-        gap              = 12,                  -- below the mission info stack
-        line             = 48,                  -- between the two rows
-        font_size        = 37,                  -- the mission info panel's text: HUD typeface 37, white, opacity 0.55
+        y                = 244,                 -- the row after SCORE (TIME 108, SCORE 176 on screen; test 13 screenshot)
+        line             = 68,                  -- row pitch of the game's stack
+        font_size        = 37,                  -- the mission info panel's text: HUD typeface 37, spacing -70
         letter_spacing   = -70,
-        opacity          = 0.55,
+        banner_letter_spacing = -35,
+        -- The game draws its HUD white and tints it in a post-process (green by default, plus a glow); ours is a
+        -- plain widget, so it gets the measured green (linear RGB) and a faint outline in place of the glow.
+        color            = { 0.26, 1.0, 0.33 },
+        opacity          = 0.9,
+        glow_size        = 2,                   -- outline width; 0 = none
+        glow_alpha       = 0.25,
         banner_y         = 894,                 -- centre of the callout banner (the game's MessageLayerOne)
         callout_s        = 4,                   -- how long a callout stays up
         start_callout_lead_s = 3,               -- "ROUND n" this long before the round's first flight
@@ -479,26 +483,55 @@ local function slotIn(canvas, w, a0, a1, off, align, auto)
     return s
 end
 
-local function newText(name, justify)
+-- Font for one of our texts: `stock` (a live game TextBlock's Font) when given, else UI_FontSet_ja; then the HUD
+-- typeface, size, spacing and glow outline are written into the text's own Font and pushed with SetFont. Test 13:
+-- the table alone gave the set's default (proportional) face instead of the monospaced HUD one.
+local function styleText(t, spacing, stock)
+    local hc = CFG.hud
+    if stock ~= nil then t:SetFont(stock)
+    elseif H.font then t:SetFont({ FontObject = H.font, TypefaceFontName = FName("HUD"), Size = hc.font_size, LetterSpacing = spacing })
+    else pcall(function() t.Font.Size = hc.font_size end) end
+    local ok, err = pcall(function()
+        local f = t.Font
+        f.TypefaceFontName = FName("HUD"); f.Size = hc.font_size; f.LetterSpacing = spacing
+        t:SetFont(f)
+    end)
+    if not ok then hudLog("fontfields", "could not set the font fields (" .. tostring(err) .. ")") end
+    if hc.glow_size > 0 then
+        ok, err = pcall(function()
+            local o = t.Font.OutlineSettings
+            o.OutlineSize = hc.glow_size
+            o.OutlineColor = { R = hc.color[1], G = hc.color[2], B = hc.color[3], A = hc.glow_alpha }
+            t:SetFont(t.Font)
+        end)
+        if not ok then hudLog("glow", "could not set the glow outline (" .. tostring(err) .. ")") end
+    end
+end
+
+local function newText(name, justify, spacing)
     local t = newWidget("TextBlock", name)
     local hc = CFG.hud
-    if H.font then
-        t:SetFont({ FontObject = H.font, TypefaceFontName = FName("HUD"), Size = hc.font_size, LetterSpacing = hc.letter_spacing })
-    else
-        pcall(function() t.Font.Size = hc.font_size end)
-    end
-    t:SetColorAndOpacity({ SpecifiedColor = { R = 1, G = 1, B = 1, A = 1 }, ColorUseRule = 0 })
+    spacing = spacing or hc.letter_spacing
+    styleText(t, spacing)
+    t:SetColorAndOpacity({ SpecifiedColor = { R = hc.color[1], G = hc.color[2], B = hc.color[3], A = 1 }, ColorUseRule = 0 })
     t:SetRenderOpacity(hc.opacity)
     t:SetJustification(justify or 0)                 -- ETextJustify: 0 left, 1 centre
     t:SetText(toText(""))
+    H.texts[#H.texts + 1] = { w = t, spacing = spacing }
     return t
 end
 
 local function newBar(canvas, a0, a1, off)
     local b = newWidget("Image", "Bar")
-    b:SetColorAndOpacity({ R = 1, G = 1, B = 1, A = 1 })   -- no brush texture: a plain white quad, as the game's bars
+    local c = CFG.hud.color
+    b:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })   -- no brush texture: a plain quad, as the game's bars
     b:SetRenderOpacity(CFG.hud.opacity)
     slotIn(canvas, b, a0, a1, off, { 0, 0 }, false)
+end
+
+local function fontFace(t)         -- typeface name a text actually has (for the log)
+    local ok, s = pcall(function() return t.Font.TypefaceFontName:ToString() end)
+    return ok and s or "?"
 end
 
 local function hudBuild(pc)
@@ -508,7 +541,7 @@ local function hudBuild(pc)
     if not cls then error("base widget class not loaded (" .. tostring(why) .. ")") end
     local w = wbl:Create(pc, cls, pc)
     if not valid(w) then error("WidgetBlueprintLibrary.Create returned nothing") end
-    H = { widget = w, tree = w.WidgetTree, shown = nil }
+    H = { widget = w, tree = w.WidgetTree, shown = nil, texts = {} }
     local root = H.tree.RootWidget
     for i = root:GetChildrenCount() - 1, 0, -1 do root:GetChildAt(i):SetVisibility(VIS.Collapsed) end   -- its own banner
     local font
@@ -528,8 +561,8 @@ local function hudBuild(pc)
 
     local hc = CFG.hud
     H.round = newText("Round"); H.next = newText("Next")
-    H.roundSlot = slotIn(canvas, H.round, { 0, 0 }, { 0, 0 }, { hc.x, hc.y_fallback, 0, 0 }, { 0, 0 }, true)
-    H.nextSlot = slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y_fallback + hc.line, 0, 0 }, { 0, 0 }, true)
+    slotIn(canvas, H.round, { 0, 0 }, { 0, 0 }, { hc.x, hc.y, 0, 0 }, { 0, 0 }, true)
+    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
 
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
     local banner = newWidget("CanvasPanel", "Banner")
@@ -538,57 +571,41 @@ local function hudBuild(pc)
     newBar(banner, { 0, 1 }, { 1, 1 }, { 0, -4, 0, 4 })       -- bottom
     newBar(banner, { 0, 0 }, { 0, 1 }, { 0, 0, 4, 0 })        -- left
     newBar(banner, { 1, 0 }, { 1, 1 }, { -4, 0, 4, 0 })       -- right
-    H.bannerText = newText("BannerText", 1)
+    H.bannerText = newText("BannerText", 1, hc.banner_letter_spacing)
     slotIn(banner, H.bannerText, { 0.5, 0.5 }, { 0.5, 0.5 }, { 0, 0.5, 0, 0 }, { 0.5, 0.5 }, true)
     H.banner = banner
-    H.sub = newText("BannerSub", 1)
+    H.sub = newText("BannerSub", 1, hc.banner_letter_spacing)
     slotIn(canvas, H.sub, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y + 34 + 40, 0, 0 }, { 0.5, 0 }, true)
     banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed)
 
     w:AddToViewport(hc.zorder)
     w:SetVisibility(VIS.HitTestInvisible)
     H.shown = true
-    log(string.format("hud: built (base %s, font %s, %d widgets)", nameOf(w):match("[^%.:]+$") or "?",
-        font and "HUD" or "default", hudGen))
+    log(string.format("hud: built (base %s, font %s, typeface %s, %d widgets)", nameOf(w):match("[^%.:]+$") or "?",
+        font and "UI_FontSet_ja" or "default", fontFace(H.round), hudGen))
 end
 
--- Bottom edge (design units) of the game's mission info stack (TIME / SCORE / TARGET at 190,108), or nil.
-local function infoBottom()
-    local slib = cdo("/Script/UMG.Default__SlateBlueprintLibrary")
-    if not slib then return nil end
+-- The live SCORE label's Font (the game's own HUD font settings), or nil until the info panel exists.
+local function stockFont()
     for _, cn in ipairs(INFO_CLASSES) do
         for _, wd in ipairs(FindAllOf(cn) or {}) do
-            local ok, bottom = pcall(function()
-                if not (valid(wd) and wd:IsVisible()) then return nil end
-                local box = wd.WidgetTree.RootWidget:GetChildAt(0)
-                local pos = box.Slot:GetPosition()
-                local sz = slib:GetLocalSize(box:GetCachedGeometry())
-                if sz.Y > 0 then return pos.Y + sz.Y end
-                return nil
+            local ok, f = pcall(function()
+                local t = wd.WidgetTree:FindWidget(FName("PrivateScore"))
+                return valid(t) and t.Font or nil
             end)
-            if ok and bottom then return bottom, cn end
+            if ok and f ~= nil then return f, cn end
         end
     end
     return nil
 end
 
-local function hudPlace()
-    local hc = CFG.hud
-    local y = hc.y
-    if not y then
-        local bottom, cn = infoBottom()
-        if bottom then
-            y = bottom + hc.gap
-            if H.placedAt ~= y then log(string.format("hud: rows at y %.0f, below %s", y, cn)) end
-        else
-            y = hc.y_fallback
-            if H.placedAt ~= y then log("hud: mission info stack not found; rows at y " .. y) end
-        end
-    end
-    if H.placedAt == y then return end
-    H.placedAt = y
-    H.roundSlot:SetPosition({ X = hc.x, Y = y })
-    H.nextSlot:SetPosition({ X = hc.x, Y = y + hc.line })
+-- Restyles our texts with the game's own font once its info panel is up (tried every 2 s until it works).
+local function hudRestyle()
+    local f, cn = stockFont()
+    if f == nil then return false end
+    for _, x in ipairs(H.texts) do styleText(x.w, x.spacing, f) end
+    log("hud: font copied from " .. cn .. ".PrivateScore; typeface now " .. fontFace(H.round))
+    return true
 end
 
 local pendingCallout = nil
@@ -635,7 +652,13 @@ local function hudTick(now, paused, pc)
         H.shown = show
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
     end
-    if (H.placeAge or 0) <= 0 then hudPlace(); H.placeAge = 8 else H.placeAge = H.placeAge - 1 end   -- every 2 s
+    if not H.restyled then
+        if (H.styleAge or 0) <= 0 then
+            local ok, r = pcall(hudRestyle)
+            if not ok then hudLog("restyle", "font copy failed (" .. tostring(r) .. "); keeping UI_FontSet_ja") end
+            H.restyled = (not ok) or r; H.styleAge = 8                                 -- every 2 s until it works
+        else H.styleAge = H.styleAge - 1 end
+    end
 
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
@@ -700,7 +723,8 @@ local function hudDump(why)
             local p, a, l = slib:LocalToAbsolute(g, { X = 0, Y = 0 }), slib:GetAbsoluteSize(g), slib:GetLocalSize(g)
             return string.format("abs (%.0f,%.0f) %.0fx%.0f px, local %.0fx%.0f", p.X, p.Y, a.X, a.Y, l.X, l.Y)
         end)
-        return ok and s or "geometry ?"
+        local okD, dsz = pcall(function() local d = w:GetDesiredSize(); return string.format(", desired %.0fx%.0f", d.X, d.Y) end)
+        return (ok and s or "geometry ?") .. (okD and dsz or "")
     end
     local lines = 0
     local function walk(w, depth)

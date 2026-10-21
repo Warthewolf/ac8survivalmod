@@ -67,3 +67,15 @@ Run-time check: Ctrl+F9 in game (Lua 0.7.0+) writes the live HUD tree with on-sc
   (8 and 17 bytes), not tagged properties.
 - A widget-blueprint instance inside another blueprint has its blueprint's own variables first in the property index;
   its UserWidget fields are found by trying index shifts until its `Slot` points back at the slot holding it.
+
+## Matching the look (test 13 screenshot, 2560x1440)
+- On screen the stack rows are 68 design units apart (TIME top 108, SCORE top 176), more than the widget paddings
+  suggest; Survival's rows use y 244 / 312 and pitch 68.
+- The HUD widgets are white; the green comes from the post-process tint (+ glow, `PostProcessHUDGlow*`). Measured text
+  core sRGB (140,255,156) ~ linear (0.26,1,0.33). The exe has wide-string colour names `HUD_ColorMain`,
+  `HUD_ColorText`, `HUD_ColorMainText_NonGlow`, ... and `LiveHUDColor` (not in MPC_InGame_Common_000, which holds
+  Main_Green (0,1,0.27), Main_Red, Text_Ally/Enemy/Wingman/Important): where the player's HUD colour option lives is
+  still to be found, so Survival's colour is a config value for now.
+- The mission info text is UI_FontSet_ja's `HUD` typeface (0710_AcesSleipnirTextHUD-Regular, monospaced, slashed
+  zero). A SetFont table with TypefaceFontName "HUD" still rendered the set's default proportional face; 0.7.1 writes
+  the typeface into the TextBlock's own Font and copies the live PrivateScore label's Font once the panel exists.
