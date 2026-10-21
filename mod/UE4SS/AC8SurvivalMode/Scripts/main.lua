@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.10.0"
+local VERSION = "0.10.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -581,6 +581,24 @@ local function probeAircraft(round)
         end
     end
     return nil
+end
+
+-- Did the game's Lua build our behaviour script? Its Ctor appends its name to %TEMP%\AC8SurvivalMode_probe_ctor.txt
+-- (when the game's Lua has io/os; test 16 showed no barrel rolls). The file is cleared when the level loads; the
+-- names in it are logged whenever they change.
+local PROBE_CTOR_FILE = (os.getenv("TEMP") or ".") .. "\\AC8SurvivalMode_probe_ctor.txt"
+local function probeCtorCheck()
+    local line = "none (file not written)"
+    local f = io.open(PROBE_CTOR_FILE, "r")
+    if f then
+        local counts, parts = {}, {}
+        for l in f:lines() do counts[l] = (counts[l] or 0) + 1 end
+        f:close()
+        for k, n in pairs(counts) do parts[#parts + 1] = k .. " x" .. n end
+        table.sort(parts)
+        line = table.concat(parts, ", ")
+    end
+    if line ~= PR.ctorLine then log("probe: behaviour scripts built by the game's Lua so far: " .. line); PR.ctorLine = line end
 end
 
 ---------------------------------------------------------------------------------------------------- enemy search
@@ -1257,6 +1275,7 @@ local function probeTick(tick)
         D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
+        os.remove(PROBE_CTOR_FILE); PR.ctorLine = nil
         SR.usable = {}
         local nS = 0
         for a, sv in pairs(SR.ready) do SR.usable[a], nS = sv, nS + 1 end
@@ -1269,6 +1288,10 @@ local function probeTick(tick)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
+    end
+    if D and tick % 40 == 20 and CFG.probe.enabled and CFG.probe.behaviour then
+        local okC, errC = pcall(probeCtorCheck)
+        if not okC then log("probe: script check error " .. tostring(errC)) end
     end
     if D then
         if not valid(survivalPC) then survivalPC = playerControllerHere() end
