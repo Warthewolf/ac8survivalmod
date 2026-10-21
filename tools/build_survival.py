@@ -377,6 +377,10 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
 ]
+# Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
+# copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
+SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
+                   'm29a_common', 'm31b_common', 'su33_common', 'su34_common']
 
 
 def build_npc_table():
@@ -387,7 +391,12 @@ def build_npc_table():
     assert o == len(p), (o, len(p))
     rows = dict(dt['rows'])
     npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
-    for new_row, src, npc in NPC_EXTRA:
+    extra = list(NPC_EXTRA)
+    for src in SEARCH_AIRCRAFT:
+        npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]          # ('name', base, number)
+        base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
+        extra.append((src + '_sv', src, base + '_SV'))
+    for new_row, src, npc in extra:
         assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
         row = copy.deepcopy(rows[(src, 0)])
         set_prop(row[2], npc_idx, 'NpcId', ('name', npc, 0))
@@ -396,7 +405,7 @@ def build_npc_table():
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
     assert chk['rows'] == dt['rows']
-    print(f'  {len(dt["rows"])} rows ({len(NPC_EXTRA)} Survival rows)')
+    print(f'  {len(dt["rows"])} rows ({len(extra)} Survival rows)')
     save(z, NPC_TABLE)
 
 

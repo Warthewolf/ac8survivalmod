@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.9.1"
+local VERSION = "0.10.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -299,7 +299,7 @@ local function logPlane(o)
 end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
--- (set while a flight is up, for the chase) are shown as one count, also returned as the second value.
+-- (set while a flight is up) are shown as one count, also returned as the second value.
 local function flagLine()
     local parts, up = {}, 0
     local cs = FindAllOf("LiveEventContainer")
@@ -382,15 +382,20 @@ local CFG = {
         gun_unlimited    = true,
         free_restock     = false,               -- the game refills missiles over time unless this is off
         presets          = {
-            casual   = { missiles = 24, special = 8, flares = 6 },
-            standard = { missiles = 16, special = 4, flares = 4 },
-            ace      = { missiles = 10, special = 2, flares = 3 },
+            casual   = { missiles = 72, special = 56, flares = 6 },
+            standard = { missiles = 48, special = 28, flares = 4 },
+            ace      = { missiles = 30, special = 14, flares = 3 },
         },
         by_difficulty    = { "casual", "standard", "standard", "standard", "ace" },
     },
     -- Behaviour probe (learning-AI step 1, see the "behaviour probe" section): own behaviour script on each round's
     -- first flight, live PilotRank write on every enemy, kill attribution in the log.
     probe = { enabled = true, behaviour = true, rank = 5, kills = true },
+    -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
+    -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
+    -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
+    -- The flights' unit area (activation) is set at build time: tools/survival_events.py AREA_RADIUS_M.
+    search = { enabled = true, radius_m = 25000, lose_in_clouds = false },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
         enabled          = true,
@@ -462,6 +467,7 @@ local PROBE_TABLES = {
 local PROBE_MISSION_ROW = { Pkg = "sv_probe_pkg", Rt = "sv_probe_rt" }   -- in DT_SV_NpcMission (build time)
 local PROBE_PKG_SCRIPT = "/Game/Mods/SurvivalMode/AI/LA_SV_ProbePursue.LA_SV_ProbePursue"
 local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- rows stay in the tables across levels
+local SR = { ready = {}, usable = {}, tries = 0 }   -- enemy search rows (section "enemy search" below)
 
 local function scriptDir() return debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "" end
 
@@ -515,7 +521,10 @@ local function probeVariant(tables, v, script)
     local names = { luaset = PROBE_TABLES[1].row .. v, npc = PROBE_TABLES[2].row .. v, mission = PROBE_MISSION_ROW[v] }
     local steps = {
         { tables.luaset, PROBE_TABLES[1].src, names.luaset, function(r) r.LuaAsetts.PursueTargetLua.LuaScript = script end },
-        { tables.npc, PROBE_TABLES[2].src, names.npc, function(r) r.LuaSetId = FName(names.luaset) end },
+        { tables.npc, PROBE_TABLES[2].src, names.npc, function(r)
+            r.LuaSetId = FName(names.luaset)
+            if SR.module then r.NpcAIModuleId = FName(SR.module) end            -- the enemy search range too
+        end },
     }
     for _, s in ipairs(steps) do
         local ok, why = cloneRow(s[1], s[2], s[3], s[4])
@@ -534,6 +543,7 @@ end
 local function probeSetup()
     if not CFG.probe.enabled or not CFG.probe.behaviour or (PR.ready.Pkg and PR.ready.Rt) or PR.tries >= 20 then return end
     if not gameInstance() then return end                  -- the run-time script's outer, and where tables get pinned
+    if CFG.search.enabled and not SR.done then return end  -- the probe's NPC rows take the search module row
     PR.tries = PR.tries + 1
     local tables = {}
     for _, t in ipairs(PROBE_TABLES) do
@@ -571,6 +581,70 @@ local function probeAircraft(round)
         end
     end
     return nil
+end
+
+---------------------------------------------------------------------------------------------------- enemy search
+-- CFG.search: Survival's AI module row NPC_AIModule_SV_Search (a copy of NPC_AIModule_Plane000 with CFG.search's
+-- radius and cloud rule) is added to DT_NPC_AIModule, and for every aircraft in CFG.aircraft a copy of its DT_NPC row
+-- (<NpcId>_SV) that uses it. Survival's NPC table has a mission row <aircraft>_sv pointing at each copy
+-- (tools/build_survival.py SEARCH_AIRCRAFT), because the spawner caches that table when the level starts; as with the
+-- probe, an aircraft only flies its _sv row when the rows were in before the level loaded.
+local SEARCH_MODULE = { path = "/Game/Datatables/AI/NPC/AIModule/DT_NPC_AIModule.DT_NPC_AIModule",
+                        src = "NPC_AIModule_Plane000", row = "NPC_AIModule_SV_Search" }
+local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
+
+-- Called every second from the start (main menu included) until done (or 20 tries failed).
+local function searchSetup()
+    if SR.done then return end
+    if not CFG.search.enabled then SR.done = true; return end
+    if not gameInstance() then return end
+    SR.tries = SR.tries + 1
+    local function giveUp(why) log("search: " .. why .. "; enemies keep the stock 6 km search"); SR.done = true end
+    local mod, why1 = loadObject(SEARCH_MODULE.path)
+    local npc, why2 = loadObject(PROBE_TABLES[2].path)
+    local mission, why3 = loadObject(SV_NPC_MISSION)
+    if not (mod and npc and mission) then
+        if SR.tries >= 20 then giveUp("tables not loaded (" .. tostring(why1 or why2 or why3) .. ")") end
+        return
+    end
+    for _, t in ipairs({ mod, npc, mission }) do pin(t, nameOf(t)) end
+    local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
+        r.Radius = CFG.search.radius_m
+        r.bEnableLostTargetInClouds = CFG.search.lose_in_clouds
+    end)
+    if not ok then return giveUp("module row not added: " .. tostring(why)) end
+    SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
+    local n = 0
+    for _, a in ipairs(CFG.aircraft) do
+        local okA, err = pcall(function()
+            local _, mrow = dtCall(mission, "FindRow", a .. "_sv")
+            local _, base = dtCall(mission, "FindRow", a)
+            if mrow == nil or base == nil then error("no mission row " .. a .. "_sv in DT_SV_NpcMission") end
+            local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
+            local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r) r.NpcAIModuleId = FName(SR.module) end)
+            if not okR then error(svNpc .. ": " .. tostring(whyR)) end
+            SR.ready[a], SR.npcRow[a], n = a .. "_sv", svNpc, n + 1
+        end)
+        if not okA then log("search: " .. a .. " keeps the stock search (" .. tostring(err) .. ")") end
+    end
+    local check = "?"
+    pcall(function()
+        local _, r = dtCall(mod, "FindRow", SEARCH_MODULE.row)
+        check = string.format("radius %.0f m, lose target in clouds %s", r.Radius, tostring(r.bEnableLostTargetInClouds))
+    end)
+    log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #CFG.aircraft))
+    SR.done = true
+end
+
+-- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
+local function searchAircraft(a)
+    local sv = SR.usable[a]
+    if not (sv and SR.tables) then return a end
+    local _, have = dtCall(SR.tables.npc, "FindRow", SR.npcRow[a])
+    if have ~= nil then return sv end
+    log("search: DT_NPC row " .. SR.npcRow[a] .. " is gone (the table was reloaded?); " .. a .. " flies stock this level")
+    SR.usable[a], SR.ready[a], SR.done, SR.tries = nil, nil, false, 0
+    return a
 end
 
 -- Question 2: PilotRank on each enemy (p from the plane list), called every 2 s while it is up.
@@ -961,7 +1035,7 @@ local function spawnPoint()
 end
 
 local function spawnFlight(unit)
-    local ac = CFG.aircraft[math.random(#CFG.aircraft)]
+    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)])
     if D.probeRound ~= D.round then                                           -- the round's first flight: probe aircraft
         D.probeRound = D.round
         local pa, how = probeAircraft(D.round)
@@ -1183,9 +1257,16 @@ local function probeTick(tick)
         D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
+        SR.usable = {}
+        local nS = 0
+        for a, sv in pairs(SR.ready) do SR.usable[a], nS = sv, nS + 1 end
+        log(string.format("search: at level load, %d of %d aircraft fly with the %s m search", nS, #CFG.aircraft,
+            tostring(CFG.search.radius_m)))
         H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
     end
-    if tick % 4 == 0 and containerState then                 -- behaviour probe rows, from the main menu on
+    if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
+        local okS, errS = pcall(searchSetup)
+        if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
     end
@@ -1216,7 +1297,7 @@ local function probeTick(tick)
     local fl, flagged = flagLine()
     if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
     -- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away,
-    -- and every 10 s the nearest enemy's distance: the check that the chase brings them to the player.
+    -- and every 10 s the nearest enemy's distance: the check that they come for the player.
     local you = playerLocation()
     local alive, nearest = 0, nil
     for _, p in ipairs(planes) do
@@ -1249,8 +1330,8 @@ local function probeTick(tick)
     if tick % 40 == 0 and alive > 0 then
         local flights = 0
         if D then for _ in pairs(D.up) do flights = flights + 1 end end
-        log(string.format("chase: nearest enemy %s from you; %d of %d flights up are flagged for the chase",
-            nearest and string.format("%.1f km", nearest) or "(player not found)", flagged or 0, flights))
+        log(string.format("enemies: nearest %s from you; %d flights up (%d flagged up)",
+            nearest and string.format("%.1f km", nearest) or "(player not found)", flights, flagged or 0))
     end
 end
 

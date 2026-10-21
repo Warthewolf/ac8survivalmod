@@ -29,11 +29,14 @@ POOL = [f'ERA_Unit_{n:02d}_Dep_Air{k}' for n in range(1, 9) for k in range(3)]
 # dummy Unit_dummyN0 is teleported onto the player and every flight that is up gets its area moved onto it
 # (LiveUnitMoveActor, as Mission 22 moves its waves; the player dummy is Missions 006/023's pattern). Probe tests 7-8
 # blamed the moves for flights not respawning; the real cause was the phase's unit list (re/SPAWN_SYSTEM.md).
-CHASE = True
+# Chase OFF (user, 2026-10-22): flights seemed to break off fights to fly to the moved area. Instead every flight gets
+# a 25 km area and (Scripts/main.lua CFG.search) a 25 km AI search radius that doesn't lose the player in cloud; the
+# 80 km area alone (test 9) failed because the stock search radius was only 6 km.
+CHASE = False
 CHASE_UNIT = 'Unit_dummyN0'
 CHASE_OBJECT = 'A_Obj_01_dummyN0'
 CHASE_S = 6.0
-AREA_RADIUS_M = None if CHASE else 80000.0   # pool flights' RadiusInMeter (None: Mission 22's own)
+AREA_RADIUS_M = None if CHASE else 25000.0   # pool flights' RadiusInMeter (None: Mission 22's own 6000)
 KEEP_AT_START = {CHASE_UNIT: None} if CHASE else {}   # units spawned at mission start (name -> spawn point or None)
 # Mission 8's music; it sits in the shared campaign BGM bank (DA_SoundDB_AKB_BGM_Campaign) with Mission 22's.
 MUSIC = 'AKE_Bgm_Ms08A_Play'
