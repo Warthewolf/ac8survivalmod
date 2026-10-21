@@ -198,6 +198,9 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 
 - [ ] (user 2026-10-21) Ammo cap at spawn: set player ammo right after spawn (LiveSetWeaponAmmoCount, M015;
   fallback: Lua on player plane spawn). Casual 24 msl / 8 SPW / 6 flr; Standard 16/4/4; Ace 10/2/3. Gun unlimited. Values in config.
+  Test 14 (Lua 0.8.0): the reflected FCS module AmmoCount has no live instances (weapon definitions only), no cap.
+  BUILT in runtime 0.7.0 + Lua 0.8.1 (2026-10-22), waiting for test 15: native SV_Ammo / SV_SetAmmo copied from the
+  stock node's own code (tools/re/AMMO.md); CFG.ammo presets by difficulty, gun kept full.
 - [ ] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
   AttackAvoidance _gun/_msl_s/_msl_m/_spw/_CP, EscapeFromPursuer, MoveAwayFromTarget, ace moves); work out what
   0000/0011/0041/0211/0400/1000 mean; escalate per round with stock tiers + LiveAIChangePilotRankExecution. Write AI_BEHAVIOURS.md.
@@ -261,6 +264,31 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 airfield shop  5. HUD widgets (round/credits/airfield HP/banners)  6. Radio tables  7. Debriefing screen  8. Save game
 (ace memory, best runs)  9. OnlineMode (Helios)  10. VFX (portal, Helios)  11. Unlock tables  12. M19 launch + M9 LCACs
 13. M23 drone formation + flight-input path  14. Pause-menu music player + event-camera node.
+
+Research pass 2026-10-22 (all 14 items researched from game files and the exe; nothing below is tested in game yet
+unless it says so). Notes in tools/re/:
+- 1, 2 AI tiers + NPC data -> AI_BEHAVIOURS.md, NPC_DATA.md. Behaviour = plain-Lua LuaScript trees (LA_*) picked per
+  aircraft by its NPC row's LuaSet (15 slots); 0000 base fighter, 0011 light, 0041 Shadow, 0400 aces, 1000 large
+  aircraft; PilotRank 1-5 weights every script; difficulty -1/0/+1. Plan: Survival's own NPC table, rank 2->5 by
+  round, Shadow sets on special rounds, Named aces later. User idea 2026-10-22: custom learning enemy behaviour
+  (own LA_SV_* scripts + a player profile that picks counters); first a probe build (own script loads? live PilotRank
+  write? kill details?).
+- 3 Fire control / ammo -> AMMO.md. Live counts are native; runtime 0.7.0 SV_Ammo / SV_SetAmmo / SV_FreeRestock.
+- 4, 7, 8, 11 Shop UI, debriefing, saves, unlocks -> UI_SHOP_SAVE.md. NUI/Shop is the online store (don't use); build
+  the shop and the end-of-run summary at run time like the HUD; menu input from the game's INP_Menu* actions.
+  Never fire a mission clear (a clear writes the mission into Campaign.sav for good: Stonehenge's 9001 is there,
+  Survival's 9101 is not); own data file in %LOCALAPPDATA%\AC8SurvivalMode\; award nothing to real progression.
+- 5 HUD -> HUD_LAYOUT.md (done, tests 13/13b).
+- 6, 14 Radio, music, pause music player, event camera -> MUSIC_RADIO_CAMERA.md. BGM nodes are in M22's EP; per-round
+  track switch through remote events (needs a native SV_Event); pause music row exists hidden (hook its validity
+  check); LiveEventFocusCameraExecution (M22 RE_ShuttleFocusCamera) for ace/boss spawns.
+- 9, 10 Helios + VFX -> HELIOS_VFX.md. Helios = online-mode bombardment object (LiveFireHelios, 6-9 heat-bomb blasts
+  walking from the target); offline code paths look clean (one unchecked manager pointer). Portal: Lua
+  NiagaraFunctionLibrary.SpawnSystemAtLocation with the Alicorn barrier set (omen/loop/reverb).
+- 12, 13 Special rounds -> SPECIAL_ROUNDS.md. Comona Defense = Mission 22's own live shuttle launch (already in
+  Survival's world data). Amphibious: copy M13's enemy LCAC pattern (M9's LCACs are allies), beaches still to be
+  mapped. Anomaly ace: M26 x40a formation for the guards; flight input hook at 0x147d689b0 (pitch +0xff8, roll
+  +0xff4; signature unique) for a native SV_SetControlInvert.
 
 ## Dropped by the user
 Weather/night rounds, sky selection (time of day can't change at runtime), buying a wingman in the shop.
