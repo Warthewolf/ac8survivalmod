@@ -199,6 +199,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - [ ] (user 2026-10-21) Ammo cap at spawn: set player ammo right after spawn (LiveSetWeaponAmmoCount, M015;
   fallback: Lua on player plane spawn). Casual 24 msl / 8 SPW / 6 flr; Standard 16/4/4; Ace 10/2/3. Gun unlimited. Values in config.
   Test 14 (Lua 0.8.0): the reflected FCS module AmmoCount has no live instances (weapon definitions only), no cap.
+  (2026-10-22: user raised the presets to Ace 30/14/3, Standard 48/28/4, Casual 72/56/6, scaled by the old ratios.)
   BUILT in runtime 0.7.0 + Lua 0.8.1 (2026-10-22), waiting for test 15: native SV_Ammo / SV_SetAmmo copied from the
   stock node's own code (tools/re/AMMO.md); CFG.ammo presets by difficulty, gun kept full.
   Test 16 (2026-10-22, Lua 0.9.0, Ace): caps WORK (144/32/4 -> 10/2/3, no free restock, gun full). But landing at the
@@ -229,6 +230,13 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
 - [ ] Health bar on the HUD (LiveUnitHealthDisplaySwitch, Missions 006 / 025_2).
 - [ ] Bombers on paths ending at the airport (copy Mission 004's BaseAttack paths).
+- [ ] (user 2026-10-22) Bomber types: Tu-160 and Tu-95 alongside Su-34 and F-15E; bombers ONLY attack the airfield.
+  Rows: copy DT_NPC_Mission004's `t160_common` (OP0012_t160_01, PlaneBomb002) and `tu95_common` (OP0011_tu95_01,
+  PlaneBomb002) into DT_SV_NpcMission at build time (route A, tools/re/EVENTS_AIRCRAFT.md: no blueprint imports
+  needed; the blueprints are soft-loaded from pakchunk0). Su-34 / F-15E bombers use the STOCK rows (6 km search,
+  not the fighters' _sv rows). Pool: Mission 22's `ERB_Unit_01_Air2` strike desc + copies, outside POOL; on appearance
+  GROUND_ONLY search + LiveAIEngagementOrder Normal on `AB_Unit_01_Ground2`, AIOnly, unit area onto AreaB_MarkActor0
+  (Mission 22 records 1686/1694/2037; tools/re/AIRFIELD_SUPPLY.md section 2).
 - [ ] At 0: flag "AirfieldDown", radio callout, shop closed next round, back online at 50 after.
 - Test: let bombers hit it to 0; confirm the run continues and the shop flag clears a round later.
 
