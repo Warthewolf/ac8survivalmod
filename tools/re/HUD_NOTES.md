@@ -1,4 +1,6 @@
-# HUD notes (for Survival's round HUD, 2026-10-21; work paused, nothing built yet)
+# HUD notes (for Survival's round HUD, 2026-10-21)
+
+The layout of the whole HUD and how Survival builds its own HUD at run time: HUD_LAYOUT.md (2026-10-22).
 
 Tools: `tools/re/execvt.py <Class>` (vtable + Execute, slot 87, of an event-node class: class registry ->
 StaticClass -> constructor -> vtable; checked on LiveReinforcementExecution = 0x1473e0ee0), `tools/re/refl.py`

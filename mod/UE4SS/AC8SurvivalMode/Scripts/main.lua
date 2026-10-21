@@ -6,8 +6,11 @@
 --   * dev shortcut: Ctrl+F8 on the main menu opens PL_SurvivalMode directly
 -- Milestone 2:
 --   * rounds: random flights, aircraft and bearings each round, spawned through dlls\main.dll's SV_* functions
+--   * round HUD: Survival's own HUD layer, built at run time (round, countdown to the next round, callouts)
+--   * rounds run on the game clock, so the countdown and the rounds stop while the game is paused
+--   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.6.1"
+local VERSION = "0.7.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -370,12 +373,44 @@ local CFG = {
     aircraft            = { "f16c_common", "f18e_common", "f15e_common", "f14d_common", "m21b_common",
                             "m29a_common", "m31b_common", "su33_common", "su34_common" },   -- NPC rows in Mission 22's table
     pool                = {},                   -- Mission 22's 24 "kokatu" flights (tools/survival_events.py POOL)
+    -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
+    hud = {
+        enabled          = true,
+        x                = 190,                 -- left edge, lined up with the game's TIME / SCORE stack
+        y                = nil,                 -- nil: just below the game's mission info stack; a number pins it
+        y_fallback       = 470,                 -- used when the mission info stack isn't found
+        gap              = 12,                  -- below the mission info stack
+        line             = 48,                  -- between the two rows
+        font_size        = 37,                  -- the mission info panel's text: HUD typeface 37, white, opacity 0.55
+        letter_spacing   = -70,
+        opacity          = 0.55,
+        banner_y         = 894,                 -- centre of the callout banner (the game's MessageLayerOne)
+        callout_s        = 4,                   -- how long a callout stays up
+        start_callout_lead_s = 3,               -- "ROUND n" this long before the round's first flight
+        zorder           = 0,
+        text = {
+            round        = "ROUND: %d",
+            next_round   = "NEXT ROUND: %s",
+            first_round  = "ROUND 1 IN: %s",
+            complete     = "ROUND %d COMPLETE",
+            complete_sub = "NEXT ROUND IN %d SECONDS",
+            start        = "ROUND %d",
+            start_sub    = "HOSTILES INBOUND",
+        },
+    },
 }
 for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
-do  -- optional overrides: Scripts/survival_config.lua returning a table with any of the keys above
+do  -- optional overrides: Scripts/survival_config.lua returning a table with any of the keys above. Lists (aircraft,
+    -- pool, ...) are replaced whole; keyed tables (hud, hud.text) are merged, so one field can be changed alone.
+    local function merge(into, from)
+        for k, v in pairs(from) do
+            if type(v) == "table" and type(into[k]) == "table" and #into[k] == 0 and next(into[k]) ~= nil then merge(into[k], v)
+            else into[k] = v end
+        end
+    end
     local ok, user = pcall(require, "survival_config")
     if ok and type(user) == "table" then
-        for k, v in pairs(user) do CFG[k] = v end
+        merge(CFG, user)
         log("config: survival_config.lua loaded")
     end
 end
@@ -388,6 +423,330 @@ local D = nil                      -- the run in progress: { round, state, at, n
 
 local function nativeReady()
     return type(SV_Spawn) == "function" and type(SV_UnitAlive) == "function" and type(SV_SetAircraft) == "function"
+end
+
+---------------------------------------------------------------------------------------------------- round HUD
+-- Survival's own HUD layer, built at run time (no widget asset). The game's HUD is laid out on a 3840x2160 canvas
+-- (tools/re/HUD_LAYOUT.md), so ours is too: a stock widget blueprint with no script of its own
+-- (WBP_HUD_NonGlowMessage_000, its parts collapsed) -> its root canvas -> ScaleBox (scale to fit) -> SizeBox
+-- 3840x2160 -> our canvas. The rows copy the mission info panel (HUD typeface 37, spacing -70, white, opacity 0.55) and
+-- sit under its TIME / SCORE stack; the callout copies the MessageLayerOne banner (text in a frame of 4 px bars).
+-- UUserWidget is Abstract (constructing one directly is fatal in a shipping build), so the widget comes from
+-- WidgetBlueprintLibrary.Create, the engine's CreateWidget; TextBlock / Image / CanvasPanel / ScaleBox / SizeBox are
+-- concrete and made with StaticConstructObject in its WidgetTree. All of it runs in the one game-thread tick.
+local HUD_BASE = "/Game/Blueprints/UI/WBP/HUD4K/Campaign/WBP_HUD_NonGlowMessage_000.WBP_HUD_NonGlowMessage_000_C"
+local HUD_FONT = "/Game/UI/Font/UI_FontSet_ja.UI_FontSet_ja"
+local DESIGN_W, DESIGN_H = 3840, 2160
+local VIS = { Visible = 0, Collapsed = 1, Hidden = 2, HitTestInvisible = 3, SelfHitTestInvisible = 4 }
+local INFO_CLASSES = { "WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C", "WBP_HUD_SubWidgets_Parts_FreeFlightInfo_000_C" }
+local H = nil                      -- the HUD layer: { widget, tree, font, rowSlots, round, next, banner, ... }
+local hudGen, hudTries, hudOff = 0, 0, false
+local hudSaid = {}
+
+local function hudLog(key, msg)    -- once per key per level
+    if hudSaid[key] then return end
+    hudSaid[key] = true
+    log("hud: " .. msg)
+end
+
+local function cdo(path) local o = StaticFindObject(path); return valid(o) and o or nil end
+
+local function toText(s)
+    local tl = cdo("/Script/Engine.Default__KismetTextLibrary")
+    if tl then
+        local ok, t = pcall(function() return tl:Conv_StringToText(s) end)
+        if ok and t ~= nil then return t end
+    end
+    return FText(s)
+end
+
+local function newWidget(cls, name)
+    local c = StaticFindObject("/Script/UMG." .. cls)
+    if not valid(c) then error("class UMG." .. cls .. " not found") end
+    hudGen = hudGen + 1
+    local w = StaticConstructObject(c, H.tree, FName(string.format("SV_%s_%d", name, hudGen)))
+    if not valid(w) then error("could not create a " .. cls) end
+    return w
+end
+
+-- Puts w on a canvas: anchors a0..a1, offsets {left, top, right, bottom}, alignment; auto = size from the content.
+local function slotIn(canvas, w, a0, a1, off, align, auto)
+    local s = canvas:AddChildToCanvas(w)
+    s:SetAnchors({ Minimum = { X = a0[1], Y = a0[2] }, Maximum = { X = a1[1], Y = a1[2] } })
+    s:SetAlignment({ X = align[1], Y = align[2] })
+    s:SetAutoSize(auto and true or false)
+    s:SetOffsets({ Left = off[1], Top = off[2], Right = off[3], Bottom = off[4] })
+    return s
+end
+
+local function newText(name, justify)
+    local t = newWidget("TextBlock", name)
+    local hc = CFG.hud
+    if H.font then
+        t:SetFont({ FontObject = H.font, TypefaceFontName = FName("HUD"), Size = hc.font_size, LetterSpacing = hc.letter_spacing })
+    else
+        pcall(function() t.Font.Size = hc.font_size end)
+    end
+    t:SetColorAndOpacity({ SpecifiedColor = { R = 1, G = 1, B = 1, A = 1 }, ColorUseRule = 0 })
+    t:SetRenderOpacity(hc.opacity)
+    t:SetJustification(justify or 0)                 -- ETextJustify: 0 left, 1 centre
+    t:SetText(toText(""))
+    return t
+end
+
+local function newBar(canvas, a0, a1, off)
+    local b = newWidget("Image", "Bar")
+    b:SetColorAndOpacity({ R = 1, G = 1, B = 1, A = 1 })   -- no brush texture: a plain white quad, as the game's bars
+    b:SetRenderOpacity(CFG.hud.opacity)
+    slotIn(canvas, b, a0, a1, off, { 0, 0 }, false)
+end
+
+local function hudBuild(pc)
+    local wbl = cdo("/Script/UMG.Default__WidgetBlueprintLibrary")
+    if not wbl then error("WidgetBlueprintLibrary not found") end
+    local cls, why = loadObject(HUD_BASE)
+    if not cls then error("base widget class not loaded (" .. tostring(why) .. ")") end
+    local w = wbl:Create(pc, cls, pc)
+    if not valid(w) then error("WidgetBlueprintLibrary.Create returned nothing") end
+    H = { widget = w, tree = w.WidgetTree, shown = nil }
+    local root = H.tree.RootWidget
+    for i = root:GetChildrenCount() - 1, 0, -1 do root:GetChildAt(i):SetVisibility(VIS.Collapsed) end   -- its own banner
+    local font
+    font, why = loadObject(HUD_FONT)
+    H.font = font
+    if not font then hudLog("font", "HUD font not loaded (" .. tostring(why) .. "); using the default font") end
+
+    local scale = newWidget("ScaleBox", "Scale")
+    scale:SetStretch(2)                                     -- EStretch::ScaleToFit
+    slotIn(root, scale, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+    local size = newWidget("SizeBox", "Size")
+    size:SetWidthOverride(DESIGN_W); size:SetHeightOverride(DESIGN_H)
+    scale:SetContent(size)
+    local canvas = newWidget("CanvasPanel", "Canvas")
+    size:SetContent(canvas)
+    H.canvas = canvas
+
+    local hc = CFG.hud
+    H.round = newText("Round"); H.next = newText("Next")
+    H.roundSlot = slotIn(canvas, H.round, { 0, 0 }, { 0, 0 }, { hc.x, hc.y_fallback, 0, 0 }, { 0, 0 }, true)
+    H.nextSlot = slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y_fallback + hc.line, 0, 0 }, { 0, 0 }, true)
+
+    -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
+    local banner = newWidget("CanvasPanel", "Banner")
+    H.bannerSlot = slotIn(canvas, banner, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y, 390, 69 }, { 0.5, 0.5 }, false)
+    newBar(banner, { 0, 0 }, { 1, 0 }, { 0, 0, 0, 4 })        -- top
+    newBar(banner, { 0, 1 }, { 1, 1 }, { 0, -4, 0, 4 })       -- bottom
+    newBar(banner, { 0, 0 }, { 0, 1 }, { 0, 0, 4, 0 })        -- left
+    newBar(banner, { 1, 0 }, { 1, 1 }, { -4, 0, 4, 0 })       -- right
+    H.bannerText = newText("BannerText", 1)
+    slotIn(banner, H.bannerText, { 0.5, 0.5 }, { 0.5, 0.5 }, { 0, 0.5, 0, 0 }, { 0.5, 0.5 }, true)
+    H.banner = banner
+    H.sub = newText("BannerSub", 1)
+    slotIn(canvas, H.sub, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y + 34 + 40, 0, 0 }, { 0.5, 0 }, true)
+    banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed)
+
+    w:AddToViewport(hc.zorder)
+    w:SetVisibility(VIS.HitTestInvisible)
+    H.shown = true
+    log(string.format("hud: built (base %s, font %s, %d widgets)", nameOf(w):match("[^%.:]+$") or "?",
+        font and "HUD" or "default", hudGen))
+end
+
+-- Bottom edge (design units) of the game's mission info stack (TIME / SCORE / TARGET at 190,108), or nil.
+local function infoBottom()
+    local slib = cdo("/Script/UMG.Default__SlateBlueprintLibrary")
+    if not slib then return nil end
+    for _, cn in ipairs(INFO_CLASSES) do
+        for _, wd in ipairs(FindAllOf(cn) or {}) do
+            local ok, bottom = pcall(function()
+                if not (valid(wd) and wd:IsVisible()) then return nil end
+                local box = wd.WidgetTree.RootWidget:GetChildAt(0)
+                local pos = box.Slot:GetPosition()
+                local sz = slib:GetLocalSize(box:GetCachedGeometry())
+                if sz.Y > 0 then return pos.Y + sz.Y end
+                return nil
+            end)
+            if ok and bottom then return bottom, cn end
+        end
+    end
+    return nil
+end
+
+local function hudPlace()
+    local hc = CFG.hud
+    local y = hc.y
+    if not y then
+        local bottom, cn = infoBottom()
+        if bottom then
+            y = bottom + hc.gap
+            if H.placedAt ~= y then log(string.format("hud: rows at y %.0f, below %s", y, cn)) end
+        else
+            y = hc.y_fallback
+            if H.placedAt ~= y then log("hud: mission info stack not found; rows at y " .. y) end
+        end
+    end
+    if H.placedAt == y then return end
+    H.placedAt = y
+    H.roundSlot:SetPosition({ X = hc.x, Y = y })
+    H.nextSlot:SetPosition({ X = hc.x, Y = y + hc.line })
+end
+
+local pendingCallout = nil
+
+local function hudCallout(text, sub)   -- shown on the next HUD tick (callers are in roundsTick)
+    pendingCallout = { text = text, sub = sub }
+    log("hud: callout '" .. text .. "'" .. (sub and (" / '" .. sub .. "'") or ""))
+end
+
+local function setText(w, key, s)
+    if H[key] == s then return end
+    H[key] = s
+    w:SetText(toText(s))
+end
+
+local function clock(s)
+    s = math.max(0, math.ceil(s))
+    return string.format("%d:%02d", s // 60, s % 60)
+end
+
+-- One HUD pass: build when needed, show/hide with the game's HUD, update the rows and the callout.
+local function hudTick(now, paused, pc)
+    if hudOff or not CFG.hud.enabled or not D then return end
+    if not (H and valid(H.widget)) then
+        H = nil
+        if not valid(pc) then return end
+        hudTries = hudTries + 1
+        local ok, err = pcall(hudBuild, pc)
+        if not ok then
+            log("hud: build failed (try " .. hudTries .. "): " .. tostring(err))
+            if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end
+            H = nil
+            if hudTries >= 3 then hudOff = true; log("hud: giving up for this level; rounds go on without the HUD") end
+            return
+        end
+    end
+    local pawnOk = false
+    pcall(function() pawnOk = valid(pc.Pawn) end)
+    local gameHud = true
+    pcall(function() local hud = pc:GetHUD(); if valid(hud) then gameHud = hud.bShowHUD end end)
+    local show = (not paused) and pawnOk and gameHud
+    if show ~= H.shown then
+        H.widget:SetVisibility(show and VIS.HitTestInvisible or VIS.Collapsed)
+        H.shown = show
+        log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
+    end
+    if (H.placeAge or 0) <= 0 then hudPlace(); H.placeAge = 8 else H.placeAge = H.placeAge - 1 end   -- every 2 s
+
+    local t = CFG.hud.text
+    setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
+    if D.state == "wait" then
+        setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif H.nextShown ~= false then
+        H.next:SetVisibility(VIS.Collapsed); H.nextShown = false
+    end
+
+    if pendingCallout then
+        local c = pendingCallout; pendingCallout = nil
+        setText(H.bannerText, "bannerStr", c.text)
+        H.bannerSlot:SetSize({ X = math.max(390, #c.text * 24 + 96), Y = 69 })   -- ~24 units a character at size 37
+        setText(H.sub, "subStr", c.sub or "")
+        H.banner:SetRenderOpacity(1); H.sub:SetRenderOpacity(CFG.hud.opacity)
+        H.banner:SetVisibility(VIS.HitTestInvisible)
+        H.sub:SetVisibility(c.sub and VIS.HitTestInvisible or VIS.Collapsed)
+        H.calloutUntil = now + CFG.hud.callout_s
+    end
+    if H.calloutUntil then
+        local left = H.calloutUntil - now
+        if left <= 0 then
+            H.banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed); H.calloutUntil = nil
+        else
+            local a = CFG.hud.opacity * math.min(1, left / 0.75)                     -- fades over the last 0.75 s
+            H.banner:SetRenderOpacity(a / CFG.hud.opacity); H.sub:SetRenderOpacity(a)
+        end
+    end
+end
+
+-- The game clock (seconds, stops while paused), or nil.
+local function gameClock(pc)
+    local gs = cdo("/Script/Engine.Default__GameplayStatics")
+    if not (gs and valid(pc)) then return nil end
+    local ok, t = pcall(function() return gs:GetTimeSeconds(pc) end)
+    return (ok and type(t) == "number") and t or nil
+end
+
+local function gamePaused(pc)
+    local gs = cdo("/Script/Engine.Default__GameplayStatics")
+    local ok, p = pcall(function() return gs:IsGamePaused(pc) end)
+    return ok and p == true
+end
+
+-- Runtime HUD reverse engineering: the live HUD's widget tree with each widget's on-screen geometry, to check the
+-- static layout (tools/re/hud_layout.py) against the screen. Written to hud_dump.txt in the mod folder.
+local DUMP_ROOTS = { "WBP_HUD_Chronicle_MainFlight_000_C" }
+
+local function hudDump(why)
+    local pc = FindFirstOf("PlayerController")
+    local slib = cdo("/Script/UMG.Default__SlateBlueprintLibrary")
+    local wll = cdo("/Script/UMG.Default__WidgetLayoutLibrary")
+    local out = { "Survival Mode HUD dump (" .. why .. "), Lua " .. VERSION .. ", " .. os.date() }
+    pcall(function()
+        local vs = wll:GetViewportSize(pc)
+        out[#out + 1] = string.format("viewport %.0f x %.0f px, UI scale %.3f", vs.X, vs.Y, wll:GetViewportScale(pc))
+    end)
+    local function geom(w)
+        local ok, s = pcall(function()
+            local g = w:GetCachedGeometry()
+            local p, a, l = slib:LocalToAbsolute(g, { X = 0, Y = 0 }), slib:GetAbsoluteSize(g), slib:GetLocalSize(g)
+            return string.format("abs (%.0f,%.0f) %.0fx%.0f px, local %.0fx%.0f", p.X, p.Y, a.X, a.Y, l.X, l.Y)
+        end)
+        return ok and s or "geometry ?"
+    end
+    local lines = 0
+    local function walk(w, depth)
+        if lines > 3000 or depth > 16 or not valid(w) then return end
+        lines = lines + 1
+        local cls = "?"
+        pcall(function() cls = w:GetClass():GetFName():ToString() end)
+        local name = nameOf(w):match("([^%.:]+)$") or "?"
+        local vis = "?"
+        pcall(function() vis = tostring(w:GetVisibility()) end)
+        local text = ""
+        pcall(function() text = "  text='" .. w:GetText():ToString() .. "'" end)
+        out[#out + 1] = string.rep("  ", depth) .. cls .. " " .. name .. "  vis " .. vis .. "  " .. geom(w) .. text
+        local okT, tree = pcall(function() return w.WidgetTree end)
+        if okT and valid(tree) then
+            local okR, r = pcall(function() return tree.RootWidget end)
+            if okR then walk(r, depth + 1) end
+            return
+        end
+        local okN, n = pcall(function() return w:GetChildrenCount() end)
+        if okN and type(n) == "number" then
+            for i = 0, n - 1 do
+                local okC, c = pcall(function() return w:GetChildAt(i) end)
+                if okC then walk(c, depth + 1) end
+            end
+        end
+    end
+    local roots = {}
+    for _, cn in ipairs(DUMP_ROOTS) do for _, w in ipairs(FindAllOf(cn) or {}) do roots[#roots + 1] = w end end
+    if H and valid(H.widget) then roots[#roots + 1] = H.widget end
+    for _, w in ipairs(roots) do
+        local inVp = "?"
+        pcall(function() inVp = tostring(w:IsInViewport()) end)
+        out[#out + 1] = "--- " .. nameOf(w) .. "  in viewport: " .. inVp
+        walk(w, 0)
+    end
+    if #roots == 0 then out[#out + 1] = "no HUD widgets found (classes: " .. table.concat(DUMP_ROOTS, ", ") .. ")" end
+    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\"
+    local f = io.open(dir .. "hud_dump.txt", "w")
+    if f then
+        f:write(table.concat(out, "\n"), "\n"); f:close()
+        log("hud dump (" .. why .. "): " .. lines .. " widgets written to " .. dir .. "hud_dump.txt")
+    else
+        log("hud dump (" .. why .. "): could not write the file, logging it instead")
+        for _, l in ipairs(out) do log("hud dump: " .. l) end
+    end
 end
 
 -- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
@@ -451,6 +810,10 @@ local function roundsTick(now)
         return
     end
     if D.state == "wait" then
+        if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
+            D.announced = true
+            hudCallout(string.format(CFG.hud.text.start, D.round + 1), CFG.hud.text.start_sub)
+        end
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
@@ -478,9 +841,36 @@ local function roundsTick(now)
         if flights == 0 then
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
             if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
-            D.state, D.at = "wait", now + CFG.intermission_s
+            D.state, D.at, D.announced = "wait", now + CFG.intermission_s, false
+            hudCallout(string.format(CFG.hud.text.complete, D.round),
+                       string.format(CFG.hud.text.complete_sub, CFG.intermission_s))
         end
     end
+end
+
+local survivalPC = nil             -- the player controller in Survival's level
+
+local function playerControllerHere()
+    for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
+        if valid(pc) and inSurvival(pc) then return pc end
+    end
+    return nil
+end
+
+-- This pass's round time and whether the game is paused. The game clock (GetTimeSeconds) stops while paused, so the
+-- rounds and the countdown do too; if it can't be read within 5 s of loading, real time is used (and logged).
+local function roundClock(tick)
+    local t = gameClock(survivalPC)
+    if D.clock == nil then
+        if t then D.clock = "game"; log("rounds: on the game clock (stops while paused)")
+        elseif tick - levelTick >= 20 then
+            D.clock = "ticks"; log("rounds: the game clock can't be read; using real time (rounds keep running while paused)")
+        else return nil end
+        D.at = (D.clock == "game" and t or tick / 4) + CFG.first_round_delay_s
+    end
+    if D.clock == "ticks" then return tick / 4, false end
+    if not t then return D.now, true end                    -- not readable this pass: hold still
+    return t, (D.now ~= nil and t == D.now) or gamePaused(survivalPC)
 end
 
 local function probeTick(tick)
@@ -491,14 +881,23 @@ local function probeTick(tick)
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
-        D = { round = 0, state = "wait", at = tick / 4 + CFG.first_round_delay_s, now = tick / 4, queue = {}, spare = {},
-              up = {}, flown = {} }
+        D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
+        H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC = nil, 0, false, {}, nil, nil
     end
-    local okR, errR = pcall(roundsTick, tick / 4)
-    if not okR then log("rounds: error " .. tostring(errR)) end
+    if D then
+        if not valid(survivalPC) then survivalPC = playerControllerHere() end
+        local now, paused = roundClock(tick)
+        if now then
+            local okR, errR = pcall(roundsTick, now)
+            if not okR then log("rounds: error " .. tostring(errR)) end
+            local okH, errH = pcall(hudTick, now, paused, survivalPC)
+            if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
+        end
+    end
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
         if tick - levelTick == 48 then logDifficulty("10 s into the mission") end
+        if tick - levelTick == 60 then pcall(hudDump, "15 s into the mission") end
     end
     local keep = {}
     for _, p in ipairs(pending) do
@@ -608,6 +1007,14 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             if not ok then log("launch: error " .. tostring(err)) end
         end)
     end)
+    if Key.F9 then                 -- Ctrl+F9: write the live HUD's layout to hud_dump.txt (any screen)
+        pcall(RegisterKeyBind, Key.F9, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(hudDump, "Ctrl+F9")
+                if not ok then log("hud dump: error " .. tostring(err)) end
+            end)
+        end)
+    end
 end
 
 log("loaded, version " .. VERSION)

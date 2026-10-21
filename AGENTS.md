@@ -60,6 +60,11 @@ Copy a working stock pattern before inventing a new one.
 17. Event records name flags (and events) by string, which the game turns into an FName that splits a numeric tail
     ("SV_Up_19" = SV_Up, number 20). Store the flag asset's keys the same way (survival_events.fname), as stock tables
     do, or the flag never matches. Test 11: flights 10-24 were never flagged, so never chased; fixed, confirmed by test 12.
+18. Survival's HUD is built at run time in Lua (tools/re/HUD_LAYOUT.md). UUserWidget is Abstract: create the base with
+    WidgetBlueprintLibrary.Create on a stock widget blueprint, then StaticConstructObject concrete widgets (TextBlock,
+    Image, CanvasPanel, ScaleBox, SizeBox) in its WidgetTree. The game's own HUD is not in the viewport (drawn to a
+    render texture), and GetCachedGeometry reads back 0x0 from Lua, so place things from the static layout.
+    Confirmed by test 13 (2026-10-22).
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,

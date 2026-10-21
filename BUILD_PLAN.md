@@ -176,12 +176,17 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   and the enemies came for the player: round 1's nearest went 20.6 -> 15.1 -> 3.9 -> 0.6 km in 30 s, round 2's
   23.9 -> 13.5 -> 1.6 km in 20 s. Every aircraft lost went down 0.2-5.3 km from the player (shot down, not crashed).
   Rounds 2 and 3 recycled the flights that had flown first, so the game's unit list stayed at 3-4 entries.
-- [ ] Round HUD (user request 2026-10-21, SURVIVAL_SPEC.md section 6; PAUSED by the user mid-design, nothing built
-  yet): round number always shown; countdown to the next round only after a round is complete; "Round Complete"
-  callout on clear; callout just before a round starts. Findings so far are in tools/re/HUD_NOTES.md. Planned
-  approach: a Lua overlay widget (UserWidget + WidgetTree + CanvasPanel + TextBlocks, AddToViewport) styled with the
-  HUD's own font; rounds switched from tick counts to the game clock (GameplayStatics GetTimeSeconds) so the timer and
-  the rounds stop while the game is paused (today they keep running).
+- [x] Round HUD (user request 2026-10-21, SURVIVAL_SPEC.md section 6): round number always shown; countdown to the
+  next round only after a round is complete; "Round Complete" callout on clear; callout just before a round starts.
+  WORKS in Lua 0.7.0 (test 13, 2026-10-22: built with the HUD font, ROUND 1 callout 3 s before spawning, ROUND 1
+  COMPLETE on clear, hidden while paused, rounds on the game clock). Open: the rows used the fixed y 470 because the
+  mission info stack's height can't be read through cached geometry (see HUD_LAYOUT.md). The game's HUD layout was reverse-engineered
+  (tools/re/HUD_LAYOUT.md, tools/re/hud_layout.py; user request: "make our own custom one that starts at runtime"):
+  Survival builds its own HUD layer at run time on the game's 3840x2160 design canvas. ROUND: n and NEXT ROUND: m:ss
+  sit under the game's TIME/SCORE stack in its style; callouts copy the MISSILE ALERT banner. Rounds now run on the
+  game clock, so they and the countdown stop while paused; the HUD hides while paused. Ctrl+F9 dumps the live HUD.
+  Test 13 checks: HUD built (UE4SS.log "hud: built"), rows placed below the stack, callouts, pause stops the
+  countdown, hud_dump.txt written. Same layer later carries credits and airfield health.
 - [x] Waves: random flights per round from the pool, spawned by Survival's spawner (test 11).
 - [x] Round clear when every flight of the round is down; 45 s intermission timer; next round (test 11).
 - [x] Fighters: engagement order targeting the player, and the chase that brings them to the player (test 12).
@@ -190,6 +195,16 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - Test: 3 rounds in a row, no double spawns (done: tests 11-12, 5 rounds).
 - No timed despawn of enemies that drag on (user decision 2026-10-21): with the chase every enemy comes for the player
   and has to be shot down. Add a safety net only if a test shows a round that can't be finished.
+
+- [ ] (user 2026-10-21) Ammo cap at spawn: set player ammo right after spawn (LiveSetWeaponAmmoCount, M015;
+  fallback: Lua on player plane spawn). Casual 24 msl / 8 SPW / 6 flr; Standard 16/4/4; Ace 10/2/3. Gun unlimited. Values in config.
+- [ ] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
+  AttackAvoidance _gun/_msl_s/_msl_m/_spw/_CP, EscapeFromPursuer, MoveAwayFromTarget, ace moves); work out what
+  0000/0011/0041/0211/0400/1000 mean; escalate per round with stock tiers + LiveAIChangePilotRankExecution. Write AI_BEHAVIOURS.md.
+- [ ] (user 2026-10-21) Music: music stops around round 5 (mission BGM ends). Trigger music each round start;
+  rotate stock combat tracks, bigger track on special rounds; In/OutSupplyBGM (M024/M026) on landing.
+- [ ] (user 2026-10-21) Pause-menu music player (as in free flight): add the entry to Survival's pause menu
+  (runtime row like the main menu) or flag the mission like free flight. If the player picks music, stop round music switching.
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
@@ -201,8 +216,9 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 ## Milestone 4: landing + shop (CC logic, CX config)
 - [ ] Landing/takeoff at the airport (Mission 022's LiveSetTakeoffAndLandingEventExecution + Supply event).
 - [ ] Rearm with LiveSetWeaponAmmoCount (Mission 015); repair with LiveSetHealth.
+- [ ] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
 - [ ] CX: `config/survival.ini`: prices, credits per kill, intermission length, wave tables, special rotation, with comments.
-- Test: land, buy missiles, take off, ammo is full.
+- Test: land, buy missiles, take off, ammo is refilled up to the cap (not past it).
 
 ## Milestone 5: difficulty presets (CC + CX)
 - [ ] Casual / Standard / Ace presets on top of the game's difficulty, plus the advanced config (see AGENTS.md).
@@ -211,3 +227,40 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - [ ] Special round every 5th round (ace squadron, Ladon, Podarge drop, ECM towers, stealth wing).
 - [ ] Portal spawn effect for specials (stock teleport nodes + VFX burst).
 - [ ] CX: ACE8 Mod Launcher toggle, readme, credits (@voidcallsreaper), release zip.
+- [ ] (user 2026-10-21) Event camera: the stock camera prompt that swings the view toward an event; find the node.
+  Use for ace/boss spawns, the shuttle launch and Helios barrages.
+- [ ] (user 2026-10-21) Ace intro using the user's replay-camera code (location TBD from user): slow-down, tracking shot,
+  letterbox, name card, radio line.
+- [ ] (user 2026-10-21) Ace learns from your fights: log how the player kills aces (missile/gun/tail/SPW/altitude), save
+  across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
+
+## Milestone 7: new special rounds (CC) - user requests 2026-10-21. NO allied aircraft or ships in any of them.
+- [ ] Comona Defense: port Mission 19's IN-GAME shuttle launch (shuttle, pad, launch event, ms19 smoke/explosion VFX)
+  + enemy waves at the spaceport. Player watches the launch live while flying. Strip all dialogue except key callouts
+  (countdown, pad under attack, liftoff). Strip M19 allies (ally ships/wingmen, wingman HUD/radio).
+  Fail = shuttle lost -> airfield/shop closed for ONE round (same rule as airfield at 0).
+- [ ] Amphibious assault: enemy fleet offshore launches LCAC waves (Mission 9 Lcac_*_Landing units/behaviour) at Comona's
+  beaches. M9 is a different map: draw NEW paths to Comona's shoreline. No M9 allies.
+- [ ] Anomaly ace (boss special round): floating ace (tiny slow path or Lua position pin; check LiveAIGroundDummy M011/019/030).
+  5 guards orbit it in a sphere (start from Mission 23's drone formation / Barrier UAV; else Lua positions them on a rotating sphere).
+  Player gets close (~5 km) -> guards switch to engagement order and attack (portal burst + radio line).
+  Inside the ace's radius (~3 km) the player's PITCH AND ROLL invert (fade in ~2 s, HUD warning, radar noise
+  LiveStartHUDRaderMapNoise + LiveActivateGlassesEffect from M015) until the ace dies. Config: on/off, pitch/roll/both (default both).
+  Research first: where AC8 reads flight input, so UE4SS/native can flip it.
+- [ ] Helios missile barrages on RANDOM rounds, targeting the PLAYER only (not the airfield). Find Helios in Content/OnlineMode;
+  check it works offline; else rebuild from offline launchers (M010/M020/M030). Never touch online services.
+
+## Milestone 8: Discord leaderboard (after release)
+- [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
+  mod's own native runtime (NOT the Mod Launcher). Sends to a small relay (e.g. Cloudflare Worker) which sanity-checks and
+  posts to a Discord #survival-runs channel and keeps a pinned top 10 per difficulty. Offline: queue and send next launch.
+  Never contacts Bandai services.
+
+## Research backlog (user 2026-10-21), in order
+1. AI behaviour tiers (above)  2. Enemy unit data DT_NPC_Mission##  3. Fire control / weapon data  4. Store UI (NUI/Shop) for the
+airfield shop  5. HUD widgets (round/credits/airfield HP/banners)  6. Radio tables  7. Debriefing screen  8. Save game
+(ace memory, best runs)  9. OnlineMode (Helios)  10. VFX (portal, Helios)  11. Unlock tables  12. M19 launch + M9 LCACs
+13. M23 drone formation + flight-input path  14. Pause-menu music player + event-camera node.
+
+## Dropped by the user
+Weather/night rounds, sky selection (time of day can't change at runtime), buying a wingman in the shop.
