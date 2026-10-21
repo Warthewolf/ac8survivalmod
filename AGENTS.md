@@ -65,6 +65,10 @@ Copy a working stock pattern before inventing a new one.
     Image, CanvasPanel, ScaleBox, SizeBox) in its WidgetTree. The game's own HUD is not in the viewport (drawn to a
     render texture), and GetCachedGeometry reads back 0x0 from Lua, so place things from the static layout.
     Confirmed by test 13 (2026-10-22).
+19. The player's ammo counts are native (the reflected FCS module AmmoCount is only the weapon definition): read and
+    set them with SV_Ammo / SV_SetAmmo (runtime 0.7.0, copied from LiveSetWeaponAmmoCount, tools/re/AMMO.md), and turn
+    free restock off with SV_FreeRestock(0). The airfield rearm reloads the stock full count, so caps must be
+    re-enforced after it, not set once. Confirmed by test 16 (2026-10-22).
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
