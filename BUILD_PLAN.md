@@ -196,7 +196,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - No timed despawn of enemies that drag on (user decision 2026-10-21): with the chase every enemy comes for the player
   and has to be shot down. Add a safety net only if a test shows a round that can't be finished.
 
-- [ ] (user 2026-10-21) Ammo cap at spawn: set player ammo right after spawn (LiveSetWeaponAmmoCount, M015;
+- [x] (user 2026-10-21) Ammo cap at spawn: set player ammo right after spawn (LiveSetWeaponAmmoCount, M015;
   fallback: Lua on player plane spawn). Casual 24 msl / 8 SPW / 6 flr; Standard 16/4/4; Ace 10/2/3. Gun unlimited. Values in config.
   Test 14 (Lua 0.8.0): the reflected FCS module AmmoCount has no live instances (weapon definitions only), no cap.
   (2026-10-22: user raised the presets to Ace 30/14/3, Standard 48/28/4, Casual 72/56/6, scaled by the old ratios.)
@@ -205,6 +205,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Test 16 (2026-10-22, Lua 0.9.0, Ace): caps WORK (144/32/4 -> 10/2/3, no free restock, gun full). But landing at the
   airfield rearmed to the stock full load (144/32/4). Fixed in Lua 0.9.1, waiting for a test: any count above its cap is
   put back to the cap every 0.5 s (log "ammo: refilled above the ... caps"), so a rearm fills up to the cap.
+  Test 17 (2026-10-22): landing rearm refills to the caps - WORKS (user).
   (Test 15 never ran: main.lua had an invalid "\m" escape and didn't load; lua_check.py now rejects bad escapes.)
 - [ ] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
   AttackAvoidance _gun/_msl_s/_msl_m/_spw/_CP, EscapeFromPursuer, MoveAwayFromTarget, ace moves); work out what
@@ -230,6 +231,8 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   /Game/Mods/SurvivalMode/AI. Lua 0.10.2: packaged script moved to /Game/LuaSource/SurvivalMode/AI/, run-time script
   put in an in-memory package at the same path; also the barrel roll's 9th arg (a 5 m gate) dropped. Waiting for test.
   Test 17 also: 25 km search set up for 9/9 aircraft; enemies closed from 18 km to 9 km in 10 s (they come for you).
+  Lua 0.11.0 (user: more aggressive, 40 km): search + unit area 40 km; the fighters' _SV rows fly the aces' set
+  NLID_0400_CP (keeps pursuing after a pass instead of MoveAwayFromTarget_0011's ~13 s extend-away). Waiting for test.
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).

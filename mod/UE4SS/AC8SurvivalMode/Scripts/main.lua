@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.10.2"
+local VERSION = "0.11.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -395,7 +395,10 @@ local CFG = {
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
     -- The flights' unit area (activation) is set at build time: tools/survival_events.py AREA_RADIUS_M.
-    search = { enabled = true, radius_m = 25000, lose_in_clouds = false },
+    -- luaset: the behaviour set those copies fly (DT_NPC_LuaSet row; nil keeps each aircraft's own). NLID_0400_CP is
+    -- the campaign aces' set: after an attack pass it keeps pursuing, where Mission 22's sets extend away for ~13 s
+    -- (MoveAwayFromTarget_0011); it also has the aces' pursuit, evasion and cobra/kulbit gun defence.
+    search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_0400_CP" },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
         enabled          = true,
@@ -653,7 +656,10 @@ local function searchSetup()
             local _, base = dtCall(mission, "FindRow", a)
             if mrow == nil or base == nil then error("no mission row " .. a .. "_sv in DT_SV_NpcMission") end
             local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
-            local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r) r.NpcAIModuleId = FName(SR.module) end)
+            local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
+                r.NpcAIModuleId = FName(SR.module)
+                if CFG.search.luaset then r.LuaSetId = FName(CFG.search.luaset) end
+            end)
             if not okR then error(svNpc .. ": " .. tostring(whyR)) end
             SR.ready[a], SR.npcRow[a], n = a .. "_sv", svNpc, n + 1
         end)
@@ -663,6 +669,11 @@ local function searchSetup()
     pcall(function()
         local _, r = dtCall(mod, "FindRow", SEARCH_MODULE.row)
         check = string.format("radius %.0f m, lose target in clouds %s", r.Radius, tostring(r.bEnableLostTargetInClouds))
+    end)
+    pcall(function()
+        local a = CFG.aircraft[1]
+        local _, r = dtCall(npc, "FindRow", SR.npcRow[a])
+        check = check .. string.format("; %s flies behaviour set %s", SR.npcRow[a], r.LuaSetId:ToString())
     end)
     log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #CFG.aircraft))
     SR.done = true
