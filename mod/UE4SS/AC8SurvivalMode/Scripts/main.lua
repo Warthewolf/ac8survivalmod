@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.2"
+local VERSION = "0.11.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -273,6 +273,7 @@ end
 -- Milestone 2 round probe: logs every AI aircraft created in Survival's level (with where it appeared), the number
 -- still alive when it changes, Survival's SV_* flags when they change, and the game's difficulty at mission start.
 local planes = {}                  -- created AI aircraft in this level: { obj, name }
+local treeMark = { probe = 0, compared = false }   -- next N m29a planes are the probe flight; one stock plane to compare
 local pending = {}                 -- AI aircraft just created, logged on a later tick (position is set by then)
 local AIRFIELD = { X = 1609639.0, Y = -436414.0 }   -- Comona Airport runway (cm), the spawn anchor
 local lastAlive, lastFlags = nil, nil
@@ -287,7 +288,10 @@ local function logPlane(o)
     local n = nameOf(o)
     local short = n:match("([^%.:]+)$") or n
     local wing = n:find("Wingman", 1, true) and " (wingman)" or ""
-    planes[#planes + 1] = { obj = o, name = short }
+    local rec = { obj = o, name = short }
+    if treeMark.probe > 0 and short:find("_m29a_", 1, true) then rec.probe, treeMark.probe = true, treeMark.probe - 1
+    elseif not treeMark.compared then rec.probe, treeMark.compared = true, true end   -- a stock-set plane, to compare
+    planes[#planes + 1] = rec
     local where = ""
     pcall(function()
         local l = o:K2_GetActorLocation()
@@ -748,6 +752,76 @@ local function enemyManeuvers(p)
     end
 end
 
+-- Question 1, read from the game's side (test 19: the Ctor marker file is never written, so it can't tell "not built"
+-- from "no io in the game's Lua"). Each plane's built behaviours sit in a LiveAIBehaviorDataAccessor (one
+-- LiveAIBehavior per slot: RootNode / CurrentNode, nodes are LiveAINodeBase {Parent, ChildList}); it is found by its
+-- outer chain. probeTree logs the PursuerTarget slot's tree once (our script's tree has LiveAITaskManeuverBarrelRoll
+-- nodes; the stock PursueTarget_0011 has none) and, while the plane flies, every node that was current.
+local function addr(o) local ok, a = pcall(function() return o:GetAddress() end); return ok and a or nil end
+local function shortClass(o)
+    local ok, c = pcall(function() return o:GetClass():GetFName():ToString() end)
+    return ok and c or "?"
+end
+
+local function accessorOf(plane)
+    local want = { [addr(plane) or -1] = true }
+    pcall(function() want[addr(plane.Controller) or -1] = true end)
+    local first
+    for _, a in ipairs(FindAllOf("LiveAIBehaviorDataAccessor") or {}) do
+        if valid(a) then
+            first = first or a
+            local o, n = a, 0
+            while n < 6 do
+                local ok, outer = pcall(function() return o:GetOuter() end)
+                if not ok or not valid(outer) then break end
+                if want[addr(outer)] then return a end
+                o, n = outer, n + 1
+            end
+        end
+    end
+    return nil, first
+end
+
+local function treeLines(node, depth, out)
+    if not valid(node) or depth > 6 or #out >= 30 then return end
+    out[#out + 1] = string.rep("  ", depth) .. shortClass(node) .. " " .. nameOf(node):match("([^%.:]+)$")
+    pcall(function()
+        node.ChildList:ForEach(function(_, e) treeLines(e:get(), depth + 1, out) end)
+    end)
+end
+
+local function probeTree(p)
+    if not p.probe then return end
+    if not p.treeDone then
+        p.treeDone = true
+        local acc, other = accessorOf(p.obj)
+        if not acc then
+            local chain = {}
+            pcall(function()
+                local o = other
+                for _ = 1, 6 do o = o:GetOuter(); if not valid(o) then break end; chain[#chain + 1] = shortClass(o) end
+            end)
+            log("probe: " .. p.name .. ": no behaviour accessor found (" .. (other and ("one accessor's outers: " ..
+                table.concat(chain, " < ")) or "no LiveAIBehaviorDataAccessor at all") .. ")")
+            return
+        end
+        p.acc = acc
+        local out = {}
+        pcall(function() treeLines(acc.PursuerTarget.RootNode, 0, out) end)
+        log("probe: " .. p.name .. " PursuerTarget tree (" .. #out .. " nodes):\n    " .. table.concat(out, "\n    "))
+    end
+    if p.acc and valid(p.acc) then
+        pcall(function()
+            local cur = p.acc.PursuerTarget.CurrentNode
+            if valid(cur) then
+                local k = shortClass(cur) .. " " .. nameOf(cur):match("([^%.:]+)$")
+                p.seen = p.seen or {}
+                if not p.seen[k] then p.seen[k] = true; log("probe: " .. p.name .. " pursue node now: " .. k) end
+            end
+        end)
+    end
+end
+
 -- Question 3: called every 2 s while an enemy is up (records), and once when it goes down (logs).
 local function probeTrack(p)
     pcall(function()
@@ -1133,6 +1207,7 @@ local function spawnFlight(unit)
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 then D.up[unit], D.flown[unit] = true, true end
+    if r > 0 and ac:sub(1, 9) == "sv_probe_" then treeMark.probe = r end
     return r
 end
 
@@ -1334,6 +1409,7 @@ local function probeTick(tick)
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
         planes, lastAlive, lastFlags = {}, nil, nil
+        treeMark.probe, treeMark.compared = 0, false
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
@@ -1398,7 +1474,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(enemyManeuvers, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
+                pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
