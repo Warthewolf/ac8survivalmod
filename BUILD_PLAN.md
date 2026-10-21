@@ -246,6 +246,11 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Test 20: CRASH in UE4SS.dll (read 0x23) 1 s into the hangar load, before the level: the run-time variant's
   StaticConstructObject(Package, nil, ...) returned a half-made object and was retried every second. 0.11.4: run-time
   variant off (CFG.probe.runtime = false), failed variants never retried. Don't make packages from UE4SS Lua.
+  Test 21 (0.11.4): no crash; probe flew; no LiveAIBehaviorDataAccessor objects exist (tree not readable that way).
+  User: "go for broke". RE (tools/re/GAME_LUA.md): the exe exports the whole Lua 5.3 C API; slot -> LuaInitializePath
+  -> Ctor(classpath) -> require -> StaticLoadObject(/Game/LuaSource/...); script errors are silent in shipping.
+  Runtime 0.8.0 + Lua 0.12.0: SV_GameLua / SV_GameLuaState run code in the game's Lua; main.lua logs diagnostics,
+  tests the asset route, injects scripts into package.loaded, and counts builds/errors (SV_Report). Waiting for test.
 - [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep

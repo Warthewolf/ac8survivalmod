@@ -275,7 +275,7 @@ KNOWN_GLOBALS = {
     'ModifierKey', 'FName', 'FText', 'LoadAsset', 'RegisterHook', 'UnregisterHook', 'RegisterCustomEvent',
     'StaticConstructObject', 'CreateInvalidObject', 'IterateGameDirectories', 'DumpAllObjects', 'GenerateSDK',
     # dlls\main.dll (runtime 0.7.0)
-    'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock',
+    'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock', 'SV_GameLua', 'SV_GameLuaState',
 }
 
 

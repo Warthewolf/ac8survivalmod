@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.7.0"
+#define RT_VERSION           L"0.8.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1222,6 +1222,107 @@ static int64_t SetFreeRestock(int on)
     return old;
 }
 
+/* ---- the game's own Lua (behaviour scripts; tools/re/GAME_LUA.md) ----------------------------------------------
+ * AceCombat8.exe embeds Lua 5.3 for its AI behaviour scripts and exports the whole C API by name (lua_pcallk,
+ * luaL_loadbufferx, ...). Its one state lives in the plugin's SingleGameluaContext; GetGameLuaState() returns it
+ * (and creates the context if it is missing, so it is never called here: the static slot is decoded and read).
+ * SV_GameLua(code [, name]) runs a chunk in that state under pcall with a traceback handler and returns
+ * "<status>\t<result>": status 0 = ok (result = the chunk's first return value as text), a Lua error code (2 run
+ * time, 3 syntax, 4 memory, 6 handler) with the message, or -1 not ready / -5 game code not found. Errors in the
+ * game's own behaviour scripts are swallowed by the plugin (its log is stripped from the shipping game), so this is
+ * Survival's only window into that Lua. Runs on the game thread (main.lua's tick), never inside a game Lua call.  */
+typedef int (*Lua53CFn)(void* L);
+static uint8_t* g_fGameLuaState;
+static struct {
+    int          state;            /* 0 not tried, 1 ok, -1 failed */
+    void**       slot;             /* &SingleGameluaContext*        */
+    int         (*loadbufferx)(void* L, const char* buf, size_t n, const char* name, const char* mode);
+    int         (*pcallk)(void* L, int nargs, int nresults, int errfunc, intptr_t ctx, void* k);
+    int         (*gettop)(void* L);
+    void        (*settop)(void* L, int idx);
+    int         (*type)(void* L, int idx);
+    const char* (*typename_)(void* L, int tp);
+    const char* (*tolstring)(void* L, int idx, size_t* len);
+    void        (*pushcclosure)(void* L, Lua53CFn fn, int n);
+    void        (*traceback)(void* L, void* L1, const char* msg, int level);
+    int         (*checkstack)(void* L, int n);
+} GL;
+
+static int ResolveGameLua(void)
+{
+    if (GL.state) return GL.state > 0;
+    GL.state = -1;
+    HANDLE exe = (HANDLE)g_exe;
+    static const struct { size_t off; const char* name; } kApi[] = {
+#define GX(f, n) { __builtin_offsetof(__typeof__(GL), f), n }
+        GX(loadbufferx, "luaL_loadbufferx"), GX(pcallk, "lua_pcallk"), GX(gettop, "lua_gettop"),
+        GX(settop, "lua_settop"), GX(type, "lua_type"), GX(typename_, "lua_typename"),
+        GX(tolstring, "lua_tolstring"), GX(pushcclosure, "lua_pushcclosure"), GX(traceback, "luaL_traceback"),
+        GX(checkstack, "lua_checkstack"),
+#undef GX
+    };
+    for (size_t i = 0; i < sizeof(kApi) / sizeof(kApi[0]); ++i) {
+        void* f = exe ? (void*)GetProcAddress(exe, kApi[i].name) : NULL;
+        if (!f) { Log(L"game Lua: export %d missing (other game version?); no game Lua bridge", (int32_t)i); return 0; }
+        *(void**)((uint8_t*)&GL + kApi[i].off) = f;
+    }
+    uint8_t* g = g_fGameLuaState;
+    if (!g || g[6] != 0xE8) { Log(L"game Lua: GetGameLuaState not found; no game Lua bridge"); return 0; }
+    uint8_t* slotFn = Rel32(g + 6);
+    uint8_t* lea = slotFn + 0x20;
+    if (!InGame(lea) || lea[0] != 0x48 || lea[1] != 0x8D || lea[2] != 0x05) {
+        Log(L"game Lua: context slot code changed (%p); no game Lua bridge", slotFn);
+        return 0;
+    }
+    GL.slot = (void**)(lea + 7 + *(int32_t*)(lea + 3));
+    if (!InGame(GL.slot)) { Log(L"game Lua: context slot %p outside the game; no game Lua bridge", (void*)GL.slot); return 0; }
+    Log(L"game Lua: Lua 5.3 API from the game's exports (pcallk %p), context slot %p", (void*)GL.pcallk, (void*)GL.slot);
+    GL.state = 1;
+    return 1;
+}
+
+/* The game's lua_State, or NULL while the plugin hasn't made its context. */
+static void* GameLuaState(void)
+{
+    if (!ResolveGameLua()) return NULL;
+    void* ctx = *GL.slot;
+    if (!ctx || !Readable(ctx, 8)) return NULL;
+    void* L = *(void**)ctx;
+    return L && Readable(L, 0x40) ? L : NULL;
+}
+
+static int GameLuaHandler(void* L)            /* message handler: the error plus a traceback */
+{
+    const char* msg = GL.tolstring(L, 1, NULL);
+    GL.traceback(L, L, msg ? msg : "(error is not a string)", 1);
+    return 1;
+}
+
+/* Runs code in the game's Lua; writes the first result (or the error) to out. Returns the status (see above). */
+static int GameLuaRun(const char* code, size_t n, const char* name, char* out, size_t cap)
+{
+    out[0] = 0;
+    if (!ResolveGameLua()) return SV_ERR_NO_GAME;
+    void* L = GameLuaState();
+    if (!L) return SV_ERR_NOT_READY;
+    if (!GL.checkstack(L, 8)) { memcpy(out, "no stack space", 15); return 4; }
+    int top = GL.gettop(L);
+    GL.pushcclosure(L, GameLuaHandler, 0);
+    int st = GL.loadbufferx(L, code, n, name, "t");
+    if (st == 0) st = GL.pcallk(L, 0, 1, top + 1, 0, NULL);
+    int t = GL.type(L, -1);
+    size_t len = 0;
+    const char* s = NULL;
+    if (t == 3 || t == 4) s = GL.tolstring(L, -1, &len);           /* number / string */
+    else { s = GL.typename_(L, t); while (s && s[len]) ++len; }
+    if (!s) len = 0;
+    if (len > cap - 1) len = cap - 1;
+    memcpy(out, s, len);
+    out[len] = 0;
+    GL.settop(L, top);
+    return st;
+}
+
 /* ---- Lua bridge -----------------------------------------------------------
  * UE4SS calls a C++ mod's on_lua_start(mod_name, lua, ...) whenever a Lua mod starts, before its main.lua runs. In
  * UE4SS 3.0.1 that is vtable slot 6 (slot 8 is its deprecated twin; 5 and 7 are the no-name overloads, only for a Lua
@@ -1253,10 +1354,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.7.0" */
+/* SV_Version() -> "0.8.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.7.0";
+    static const char v[] = "0.8.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1325,6 +1426,57 @@ static int L_SetFreeRestock(void* lua)
     return Ret(lua, SetFreeRestock(on != 0));
 }
 
+/* SV_GameLua(code [, chunkname]) -> "<status>\t<result>" from the game's own Lua (see "the game's own Lua") */
+static int L_GameLua(void* lua)
+{
+    static char out[32768];
+    if (U.luaStackSize(lua) < 1 || !U.luaIsString(lua, 1)) { U.luaSetString(lua, "-4\tno code", 9); return 1; }
+    StrView sv = { NULL, 0 };
+    U.luaGetString(lua, &sv, 1);
+    char* code = (char*)malloc(sv.n + 1);
+    if (!code) { U.luaSetString(lua, "4\tout of memory", 15); return 1; }
+    memcpy(code, sv.p, sv.n);
+    code[sv.n] = 0;
+    size_t n = sv.n;
+    char name[96] = "=SurvivalMode";
+    if (U.luaStackSize(lua) >= 1 && U.luaIsString(lua, 1)) {
+        StrView nv = { NULL, 0 };
+        U.luaGetString(lua, &nv, 1);
+        if (nv.p && nv.n && nv.n < sizeof(name) - 1) { name[0] = '='; memcpy(name + 1, nv.p, nv.n); name[nv.n + 1] = 0; }
+    }
+    int st = GameLuaRun(code, n, name, out + 8, sizeof(out) - 8);
+    free(code);
+    char head[8]; int h = 0, v = st < 0 ? -st : st;
+    if (st < 0) head[h++] = '-';
+    char t[4]; int k = 0;
+    do { t[k++] = (char)('0' + v % 10); v /= 10; } while (v && k < 3);
+    while (k) head[h++] = t[--k];
+    head[h++] = '\t';
+    char* res = out + 8 - h;                     /* the status goes right in front of the result */
+    memcpy(res, head, h);
+    size_t len = h;
+    while (res[len]) ++len;
+    U.luaSetString(lua, res, len);
+    return 1;
+}
+
+/* SV_GameLuaState([create]) -> the game's lua_State address (changes if the game makes a new one), 0 while there is
+ * none. create = 1 makes it the way the game does on its first AI spawn (GetGameLuaState), for Survival's level only. */
+typedef void* (*GetGameLuaStateFn)(void);
+static int L_GameLuaState(void* lua)
+{
+    double create = 0;
+    ArgNumber(lua, &create);
+    void* L = GameLuaState();
+    if (!L && create != 0 && GL.state > 0) {
+        Log(L"game Lua: no state yet; asking the plugin to make it (GetGameLuaState)");
+        ((GetGameLuaStateFn)g_fGameLuaState)();
+        L = GameLuaState();
+        Log(L"game Lua: state now %p", L);
+    }
+    return Ret(lua, (int64_t)(uintptr_t)L);
+}
+
 /* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
 static int L_Reset(void* lua)
 {
@@ -1338,6 +1490,7 @@ static void RegisterLua(void* lua)
         { "SV_Version", L_Version }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
+        { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -1349,7 +1502,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState registered");
 }
 
 #define MOD_SLOTS 16
@@ -1423,6 +1576,7 @@ static void FindFunctions(void)
         { kSigAmmoFlare,      kSigAmmoFlareMask,   sizeof(kSigAmmoFlare),   NULL, 0 },
         { kSigAmmoWeapons,    NULL, sizeof(kSigAmmoWeapons),   NULL, 0 },
         { kSigFreeRestock,    kSigFreeRestockMask, sizeof(kSigFreeRestock), NULL, 0 },
+        { kSigGameLuaState,   kSigGameLuaStateMask, sizeof(kSigGameLuaState), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1442,12 +1596,14 @@ static void FindFunctions(void)
     g_fAmmoFlare     = p[15].hit;
     g_fAmmoWeapons   = p[16].hit;
     g_fFreeRestock   = p[17].hit;
+    g_fGameLuaState  = p[18].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
     Log(L"spawn functions: spawn unit %p, unregister unit %p, unit check %p, destroy actor %p",
         (void*)g_spawnUnit, (void*)g_unregisterUnit, g_fUnitIdSpawned, (void*)g_destroyActor);
     Log(L"ammo functions: node execute %p, flare lambda %p, weapons lambda %p, free restock %p", g_fAmmoExecute, g_fAmmoFlare, g_fAmmoWeapons, g_fFreeRestock);
+    Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
 }
 
 static int StonehengeInstalled(void)

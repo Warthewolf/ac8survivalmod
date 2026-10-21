@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.5"
+local VERSION = "0.12.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -394,9 +394,9 @@ local CFG = {
     },
     -- Behaviour probe (learning-AI step 1, see the "behaviour probe" section): own behaviour script on each round's
     -- first flight, live PilotRank write on every enemy, kill attribution in the log.
-    -- runtime: also try the LuaScript made at run time (route 2). Off: making its in-memory package from UE4SS left a
-    -- half-made object, retried every second, and the game crashed inside UE4SS on the next level load (test 20).
-    probe = { enabled = true, behaviour = true, runtime = false, rank = 5, kills = true },
+    -- runtime: also fly the LuaScript made at run time (route 2), put into the game's Lua by dlls/main.dll 0.8.0.
+    -- (Test 20: making an in-memory package for it from UE4SS crashed the game; that is gone.)
+    probe = { enabled = true, behaviour = true, runtime = true, rank = 5, kills = true },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
@@ -480,42 +480,158 @@ local PROBE_TABLES = {
 }
 local PROBE_MISSION_ROW = { Pkg = "sv_probe_pkg", Rt = "sv_probe_rt" }   -- in DT_SV_NpcMission (build time)
 -- The game's require("A.B.C") loads the LuaScript at /Game/LuaSource/A/B/C with StaticLoadObject and runs its Code
--- (AceCombat8.exe 0x144eb8c00), so a script must sit at the path its LuaInitializePath names. Test 17: the script
--- at /Game/Mods/SurvivalMode/AI was never run. StaticLoadObject looks in memory first, so the run-time script goes
--- into an in-memory package at /Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt.
+-- (AceCombat8.exe 0x144eb8ce0), so the packaged script sits at that path. The run-time one is put straight into the
+-- game's Lua (package.loaded, section "the game's own Lua"), so its LuaScript object only carries the module name.
 local PROBE_PKG_SCRIPT = "/Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursue.LA_SV_ProbePursue"
-local PROBE_RT_PACKAGE = "/Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt"
+local PROBE_PKG_MODULE = "SurvivalMode.AI.LA_SV_ProbePursue"
+local PROBE_RT_MODULE  = "SurvivalMode.AI.LA_SV_ProbePursueRt"
 local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- rows stay in the tables across levels
 local SR = { ready = {}, usable = {}, tries = 0 }   -- enemy search rows (section "enemy search" below)
 
 local function scriptDir() return debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "" end
 
--- Route 2: a LuaScript object made at run time from the script file (renamed so it can't collide with route 1).
+local function readScript(file)
+    local f = io.open(scriptDir() .. "ai\\" .. file, "r")
+    if not f then return nil, "Scripts\\ai\\" .. file .. " not found" end
+    local code = f:read("a"); f:close()
+    return code
+end
+
+---------------------------------------------------------------------------------------------------- the game's own Lua
+-- dlls/main.dll 0.8.0 (tools/re/GAME_LUA.md): SV_GameLua(code, name) runs a chunk in the game's Lua 5.3, the state
+-- its AI behaviour scripts are built in, and returns "<status>\t<result>"; SV_GameLuaState() its address (0 while
+-- the game has none). The plugin swallows every error in a behaviour script (its log is stripped from the shipping
+-- game), so Survival installs a small helper there (SV_Instrument / SV_Report) that wraps a behaviour class's Ctor:
+-- each build is counted and each error kept with its traceback (then raised as before). Run-time scripts are put in
+-- package.loaded under their module name, which require() returns before it looks for an asset at all.
+local GLS = { L = 0, injected = {}, report = nil, created = false }
+local GAME_LUA_HELPER = [=[
+SV_B = SV_B or { built = {}, errors = {}, nerr = 0 }
+function SV_Instrument(name, C)
+    if type(C) ~= "table" or rawget(C, "__sv_wrapped") then return C end
+    local ctor = rawget(C, "Ctor")
+    if type(ctor) == "function" then
+        rawset(C, "Ctor", function(self, ...)
+            SV_B.built[name] = (SV_B.built[name] or 0) + 1
+            local ok, err = xpcall(ctor, debug and debug.traceback or tostring, self, ...)
+            if not ok then
+                SV_B.nerr = SV_B.nerr + 1
+                if #SV_B.errors < 20 then SV_B.errors[#SV_B.errors + 1] = name .. ": " .. tostring(err) end
+                error(err, 0)
+            end
+        end)
+    end
+    rawset(C, "__sv_wrapped", true)
+    return C
+end
+function SV_Report()
+    local t = {}
+    for k, v in pairs(SV_B.built) do t[#t + 1] = k .. " x" .. v end
+    table.sort(t)
+    local s = "built " .. (#t > 0 and table.concat(t, ", ") or "nothing yet") .. "; errors " .. SV_B.nerr
+    for i, e in ipairs(SV_B.errors) do s = s .. "\n    [" .. i .. "] " .. e end
+    return s
+end
+return "helper in"
+]=]
+local GAME_LUA_DIAG = [=[
+local function ty(f) local ok, v = pcall(f); return ok and type(v) or ("error: " .. tostring(v)) end
+local n, ai = 0, 0
+for k in pairs(package.loaded) do n = n + 1; if type(k) == "string" and k:find("^Chronicle%.AI%.") then ai = ai + 1 end end
+return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .. type(debug),
+    "Inherit " .. ty(function() return Inherit end), "CppObjectBase " .. ty(function() return CppObjectBase end),
+    "ELiveAIManeuverSpeedType " .. ty(function() return ELiveAIManeuverSpeedType end),
+    "modules loaded " .. n .. " (" .. ai .. " Chronicle.AI)" }, ", ")
+]=]
+-- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
+local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400" }
+local REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
+                         "return tostring(ok) .. ' ' .. tostring(C)"
+
+local function gameLua(code, name)
+    if type(SV_GameLua) ~= "function" then return false, "no SV_GameLua (dlls/main.dll older than 0.8.0)", -5 end
+    local r = SV_GameLua(code, name or "SurvivalMode")
+    local st, res = tostring(r):match("^(%-?%d+)\t(.*)$")
+    st = tonumber(st)
+    return st == 0, res or tostring(r), st
+end
+
+-- Puts a behaviour script into the game's Lua as module `mod` (instrumented). true, or false and the error.
+local function gameLuaInject(mod, code)
+    local short = mod:match("([^%.]+)$")
+    local chunk = "local C = (function(...)\n" .. code .. "\nend)(...)\n" ..
+        string.format("package.loaded[%q] = SV_Instrument(%q, C)\nreturn tostring(package.loaded[%q])", mod, short, mod)
+    local ok, res = gameLua(chunk, mod)
+    if ok then GLS.injected[mod] = true end
+    return ok, res
+end
+
+-- Sets Survival up in a (new) game Lua state: diagnostics, the helper, the stock scripts wrapped, and our scripts.
+local function gameLuaSetup()
+    local ok, res = gameLua(GAME_LUA_DIAG, "SurvivalDiag")
+    log("game Lua: " .. (ok and "" or "diagnostics failed: ") .. tostring(res))
+    ok, res = gameLua(GAME_LUA_HELPER, "SurvivalHelper")
+    log("game Lua: " .. tostring(res))
+    if not ok then return end
+    for _, m in ipairs(GAME_LUA_STOCK) do
+        local _, resS = gameLua(string.format(REQUIRE_AND_WRAP, m, m:match("([^%.]+)$")), "SurvivalStock")
+        log("game Lua: stock " .. m .. ": " .. tostring(resS))
+    end
+    -- The packaged script through the game's own loader (the asset route); put in directly if that fails.
+    local okP, resP = gameLua(string.format(REQUIRE_AND_WRAP, PROBE_PKG_MODULE, "LA_SV_ProbePursue"), "SurvivalPkg")
+    log("game Lua: packaged script via the game's require: " .. tostring(resP))
+    local code = readScript("LA_SV_ProbePursue.lua")
+    if okP and tostring(resP):sub(1, 5) == "true " then GLS.injected[PROBE_PKG_MODULE] = true
+    elseif code then
+        local okI, resI = gameLuaInject(PROBE_PKG_MODULE, code)
+        log("game Lua: packaged script put in directly instead: " .. tostring(resI) .. (okI and "" or " (FAILED)"))
+    end
+    if code then
+        local okR, resR = gameLuaInject(PROBE_RT_MODULE, (code:gsub("LA_SV_ProbePursue", "LA_SV_ProbePursueRt")))
+        log("game Lua: run-time script " .. PROBE_RT_MODULE .. ": " .. tostring(resR) .. (okR and "" or " (FAILED)"))
+    end
+end
+
+-- From the main menu on (every second; levelSince = ticks since Survival's level loaded, or nil): notices the game's
+-- Lua state, sets Survival up in it, and in the level logs the helper's report when it changes (every 10 s).
+local function gameLuaTick(tick, levelSince)
+    if type(SV_GameLuaState) ~= "function" then
+        if not GLS.warned then GLS.warned = true; log("game Lua: dlls/main.dll older than 0.8.0; no bridge") end
+        return
+    end
+    local L = SV_GameLuaState()
+    if L == 0 and levelSince and levelSince >= 12 and not GLS.created then   -- 3 s into Survival's level, still none
+        GLS.created = true
+        L = SV_GameLuaState(1)
+    end
+    if L ~= GLS.L then
+        GLS.L, GLS.injected, GLS.report = L, {}, nil
+        if L == 0 then log("game Lua: no state"); return end
+        log(string.format("game Lua: state %X%s", L, levelSince and " (in Survival's level)" or ""))
+        gameLuaSetup()
+    end
+    if L ~= 0 and levelSince and tick % 40 == 0 then
+        local ok, res = gameLua("return SV_Report and SV_Report() or 'no helper'", "SurvivalReport")
+        if res ~= GLS.report then GLS.report = res; log("game Lua: " .. (ok and "" or "report failed: ") .. tostring(res)) end
+    end
+end
+
+-- Route 2: a LuaScript object made at run time; it only has to carry the module name (LuaInitializePath), which the
+-- game's require finds in package.loaded (gameLuaInject). Its outer is the GameInstance (test 20: making a package
+-- from UE4SS crashed the game).
 local function runtimeScript()
     if valid(PR.scripts.rt) then return PR.scripts.rt end
-    local f = io.open(scriptDir() .. "ai\\LA_SV_ProbePursue.lua", "r")
-    if not f then return nil, "Scripts\\ai\\LA_SV_ProbePursue.lua not found" end
-    local code = f:read("a"); f:close()
+    local code, why = readScript("LA_SV_ProbePursue.lua")
+    if not code then return nil, why end
     code = code:gsub("LA_SV_ProbePursue", "LA_SV_ProbePursueRt")
     local cls = StaticFindObject("/Script/LuaPluginRuntime.LuaScript")
     if not valid(cls) then return nil, "class /Script/LuaPluginRuntime.LuaScript not found" end
-    local _, pkg = pcall(StaticFindObject, PROBE_RT_PACKAGE)   -- UE4SS throws on a path without ".Object" (test 18)
-    if not valid(pkg) then
-        local pcls = StaticFindObject("/Script/CoreUObject.Package")
-        local okP, p = pcall(StaticConstructObject, pcls, nil, FName(PROBE_RT_PACKAGE))
-        if not (okP and valid(p)) then return nil, "package " .. PROBE_RT_PACKAGE .. " not made: " .. tostring(p) end
-        pkg = p
-    end
-    local o = StaticConstructObject(cls, pkg, FName("LA_SV_ProbePursueRt"))
+    local o = StaticConstructObject(cls, gameInstance(), FName("SV_LA_ProbePursueRt"))
     if not valid(o) then return nil, "StaticConstructObject(LuaScript) returned nothing" end
     o.Code = code
     o.ImportPath = "../../AssetWork/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt.lua"
-    o.LuaInitializePath = "SurvivalMode.AI.LA_SV_ProbePursueRt"
-    local back = ""
-    pcall(function() back = o.Code:ToString() end)
-    local _, byPath = pcall(StaticFindObject, PROBE_RT_PACKAGE .. ".LA_SV_ProbePursueRt")   -- what the game's require looks up
-    log(string.format("probe: run-time LuaScript %s made, code %d chars (read back %d); found by its path: %s",
-        nameOf(o), #code, #back, tostring(valid(byPath))))
+    o.LuaInitializePath = PROBE_RT_MODULE
+    log(string.format("probe: run-time LuaScript %s made (module %s)", nameOf(o), PROBE_RT_MODULE))
     pin(o, "probe LuaScript (run time)")
     PR.scripts.rt = o
     return o
@@ -608,7 +724,9 @@ local function probeAircraft(round)
     local want = round % 2 == 1 and "Pkg" or "Rt"
     local order = { want, want == "Pkg" and "Rt" or "Pkg" }
     for _, v in ipairs(order) do
-        if PR.usable[v] and PR.tables then
+        if v == "Rt" and not GLS.injected[PROBE_RT_MODULE] then
+            -- the run-time script isn't in the game's Lua (yet): flying it would fall back to stock behaviour
+        elseif PR.usable[v] and PR.tables then
             local _, have = dtCall(PR.tables.npc, "FindRow", PROBE_TABLES[2].row .. v)
             if have ~= nil then return PR.usable[v], v end
             log("probe: DT_NPC row " .. PROBE_TABLES[2].row .. v .. " is gone (the table was reloaded?); not flown this level")
@@ -616,24 +734,6 @@ local function probeAircraft(round)
         end
     end
     return nil
-end
-
--- Did the game's Lua build our behaviour script? Its Ctor appends its name to %TEMP%\AC8SurvivalMode_probe_ctor.txt
--- (when the game's Lua has io/os; test 16 showed no barrel rolls). The file is cleared when the level loads; the
--- names in it are logged whenever they change.
-local PROBE_CTOR_FILE = (os.getenv("TEMP") or ".") .. "\\AC8SurvivalMode_probe_ctor.txt"
-local function probeCtorCheck()
-    local line = "none (file not written)"
-    local f = io.open(PROBE_CTOR_FILE, "r")
-    if f then
-        local counts, parts = {}, {}
-        for l in f:lines() do counts[l] = (counts[l] or 0) + 1 end
-        f:close()
-        for k, n in pairs(counts) do parts[#parts + 1] = k .. " x" .. n end
-        table.sort(parts)
-        line = table.concat(parts, ", ")
-    end
-    if line ~= PR.ctorLine then log("probe: behaviour scripts built by the game's Lua so far: " .. line); PR.ctorLine = line end
 end
 
 ---------------------------------------------------------------------------------------------------- enemy search
@@ -1448,7 +1548,6 @@ local function probeTick(tick)
         D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
-        os.remove(PROBE_CTOR_FILE); PR.ctorLine = nil
         SR.usable = {}
         local nS = 0
         for a, sv in pairs(SR.ready) do SR.usable[a], nS = sv, nS + 1 end
@@ -1457,14 +1556,14 @@ local function probeTick(tick)
         H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
     end
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
+        local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
+        if not okG then log("game Lua: error " .. tostring(errG)) end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
     end
     if D and tick % 40 == 20 and CFG.probe.enabled and CFG.probe.behaviour then
-        local okC, errC = pcall(probeCtorCheck)
-        if not okC then log("probe: script check error " .. tostring(errC)) end
         local okB, errB = pcall(behaviourCensus)
         if not okB then log("behaviour census error " .. tostring(errB)) end
     end

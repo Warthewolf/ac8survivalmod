@@ -128,6 +128,18 @@ static const uint8_t kSigFreeRestockMask[39] = {
     1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1,
 };
 
+/* The Lua plugin's GetGameLuaState(): `push rdi; sub rsp, 0x30; call ContextSlot; mov rdi, rax; cmp [rax], 0`.
+ * ContextSlot (+0x06 call) returns the address of the static that holds the SingleGameluaContext; the context's
+ * first member is the game's lua_State. GetGameLuaState itself creates the context when it is missing, so Survival
+ * never calls it: it only decodes the slot (`lea rax, [rip+disp32]` at ContextSlot+0x20) and reads it.            */
+static const uint8_t kSigGameLuaState[18] = {
+    0x40, 0x57, 0x48, 0x83, 0xEC, 0x30, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48,
+    0x8B, 0xF8, 0x48, 0x83, 0x38, 0x00,
+};
+static const uint8_t kSigGameLuaStateMask[18] = {
+    1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+};
+
 /* bool AActor::Destroy(AActor*, bool bNetForce) */
 static const uint8_t kSigDestroyActor[25] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0x48,

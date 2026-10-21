@@ -1,10 +1,5 @@
 local LA_SV_ProbePursue = Inherit(CppObjectBase)
 function LA_SV_ProbePursue:Ctor()
-if pcall then pcall(function()
-local f = io.open(os.getenv("TEMP") .. "\\AC8SurvivalMode_probe_ctor.txt", "a")
-f:write("LA_SV_ProbePursue\n")
-f:close()
-end) end
 self:GenerateBehavior()
 self:AddRootComposite("LaxSequencer", self:InstanceLaxSequencer())
 self:AddTask("LaxSequencer", "SV_RollRight", self:InstanceManeuverBarrelRoll(1, 1.0, 1.0, "TargetActor", ELiveAIManeuverSpeedType.SpdConstant, 1550.0, 2.5, false))
