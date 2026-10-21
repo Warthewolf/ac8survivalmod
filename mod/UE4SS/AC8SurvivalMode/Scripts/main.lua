@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.4"
+local VERSION = "0.11.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -825,6 +825,35 @@ local function probeTree(p)
     end
 end
 
+-- Test 21: no LiveAIBehaviorDataAccessor exists at all, so also count the behaviour objects by class every 10 s
+-- (logged when the counts change) and name every barrel-roll node with its outers: our script's tasks are called
+-- SV_RollRight / SV_RollLeft, so those names mean the game built our tree.
+local BEHAVIOUR_CLASSES = { "LiveAIBehavior", "LiveAIBehaviorDataAccessor", "LiveAINodeBase", "LiveAICompositeLaxSequencer",
+                            "LiveAITaskPursuerTarget", "LiveAITaskManeuverBarrelRoll", "LiveAIBehaviorWork", "LuaScript" }
+local function behaviourCensus()
+    local parts = {}
+    for _, c in ipairs(BEHAVIOUR_CLASSES) do
+        local ok, all = pcall(FindAllOf, c)
+        parts[#parts + 1] = c .. " " .. ((ok and all) and #all or 0)
+    end
+    local line = table.concat(parts, ", ")
+    if line == PR.censusLine then return end
+    PR.censusLine = line
+    log("behaviour census: " .. line)
+    local ok, rolls = pcall(FindAllOf, "LiveAITaskManeuverBarrelRoll")
+    if ok and rolls then
+        for i, r in ipairs(rolls) do
+            if i > 8 then break end
+            local chain = { nameOf(r):match("([^%.:]+)$") }
+            pcall(function()
+                local o = r
+                for _ = 1, 5 do o = o:GetOuter(); if not valid(o) then break end; chain[#chain + 1] = nameOf(o):match("([^%.:]+)$") end
+            end)
+            log("  barrel roll node: " .. table.concat(chain, " < "))
+        end
+    end
+end
+
 -- Question 3: called every 2 s while an enemy is up (records), and once when it goes down (logs).
 local function probeTrack(p)
     pcall(function()
@@ -1436,6 +1465,8 @@ local function probeTick(tick)
     if D and tick % 40 == 20 and CFG.probe.enabled and CFG.probe.behaviour then
         local okC, errC = pcall(probeCtorCheck)
         if not okC then log("probe: script check error " .. tostring(errC)) end
+        local okB, errB = pcall(behaviourCensus)
+        if not okB then log("behaviour census error " .. tostring(errB)) end
     end
     if D then
         if not valid(survivalPC) then survivalPC = playerControllerHere() end
