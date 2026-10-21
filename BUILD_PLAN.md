@@ -209,6 +209,14 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - [ ] (user 2026-10-21) Pause-menu music player (as in free flight): add the entry to Survival's pause menu
   (runtime row like the main menu) or flag the mission like free flight. If the player picks music, stop round music switching.
 
+- [ ] (user 2026-10-22) Custom, learning enemy behaviour: Survival's own LA_SV_* behaviour scripts + a player profile
+  (how you kill / evade / fly) that picks counters per flight and adjusts PilotRank; memory across runs in Survival's
+  own file. Step 1 = behaviour probe, BUILT in Lua 0.9.0 (2026-10-22), waiting for test 16: (1) each round's first
+  flight flies a MiG-29 copy whose pursue slot is LA_SV_ProbePursue (barrel rolls each attack run; odd rounds the
+  packaged script /Game/Mods/SurvivalMode/AI/LA_SV_ProbePursue, even rounds a LuaScript made at run time), rows added
+  at run time to DT_NPC_LuaSet / DT_NPC / DT_NPC_Mission022; (2) PilotRank written live on every enemy (5) and re-read;
+  (3) "probe kill:" log lines with last attacker, aspect, altitude and the player's ammo spent.
+
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
 - [ ] Health bar on the HUD (LiveUnitHealthDisplaySwitch, Missions 006 / 025_2).
@@ -289,6 +297,20 @@ unless it says so). Notes in tools/re/:
   Survival's world data). Amphibious: copy M13's enemy LCAC pattern (M9's LCACs are allies), beaches still to be
   mapped. Anomaly ace: M26 x40a formation for the guards; flight input hook at 0x147d689b0 (pitch +0xff8, roll
   +0xff4; signature unique) for a native SV_SetControlInvert.
+
+Research pass 2 (2026-10-22, user: "reverse engineer anything else you think you might need"):
+- Kills, score, health, death -> KILLS_HEALTH_DEATH.md. Health on LiveGameObject (HealthInternal = HP x 10, MaxHealth,
+  GetDamagePercentage); repair = copy LiveRestorePlayerPlaneExecution natively (SetHealth vfunc + armour pool); the
+  game keeps the last damage causer + damage type + DamageHistoryMap (kill attribution); death = MissionFinishReason
+  2/3 + LiveCampaignPlaneDeathMissionEndSequence; end a run with LiveMissionFinishExecution MissionFailed (M015),
+  never MissionClear. Credits from the NPC row's BaseScore, not the game's score.
+- Airfield, bombers, landing -> AIRFIELD_SUPPLY.md. Template = Mission 22's own Su-34 strike on Comona Airport
+  (4 invincible dummies, MissedWeapon triggers) counted into an SV_AirfieldDmg flag; bombers via SV_Spawn, out of the
+  chase pool; landing is on by default, closed/opened with LiveSetTakeoffAndLandingEventExecution; re-apply the ammo
+  cap after FinishInGameHangar.
+- SV_Event + more aircraft -> EVENTS_AIRCRAFT.md. Remote-event layout/lifetime verified, one signature; aircraft
+  outside Mission 22's table need rows in Survival's own NPC table (DT_SV_NpcMission, built since Lua 0.9.0 /
+  2026-10-22) because the spawner caches the table's aircraft at level start.
 
 ## Dropped by the user
 Weather/night rounds, sky selection (time of day can't change at runtime), buying a wingman in the shop.
