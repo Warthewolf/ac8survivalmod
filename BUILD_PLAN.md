@@ -236,6 +236,11 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Lua 0.11.1: post-stall per model (CFG.maneuvers): every stock cobra/kulbit/Pugachev is behind DecoratorCanCobra /
   CanKulbit, i.e. the plane's reflected bCanManeuverPugachevsCobra / bCanManeuverKulbit, set on each enemy when it
   appears: on only for su33/su35/su37/su47/su57/f22a. Waiting for test ("maneuvers:" log lines).
+  Test 18 (2026-10-22, Lua 0.11.1): 40 km search + NLID_0400_CP on 9/9 aircraft; enemies closed 21.8 -> 3.2 km in
+  20 s. Post-stall flags read/write live: su34/m21b/m31b blueprints were already cobra false, kulbit false; su33
+  cobra true, kulbit false (0.11.1 wrongly turned its kulbit on; 0.11.2 only turns flags off). Probe: NOT flown -
+  StaticFindObject threw "GetPackageNameFromLongName: Name wasn't long" on the run-time package path, and that error
+  also skipped saving the probe tables, so round 1's package probe never flew. 0.11.2: pcall + variants independent.
 - [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep

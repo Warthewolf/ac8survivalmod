@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.1"
+local VERSION = "0.11.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -400,9 +400,9 @@ local CFG = {
     -- (MoveAwayFromTarget_0011); it also has the aces' pursuit, evasion and cobra/kulbit gun defence.
     search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_0400_CP" },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
-    -- bCanManeuverPugachevsCobra / bCanManeuverKulbit, which are set on each enemy when it appears: on only for the
-    -- models listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
-    -- airframes), so early fighters never post-stall.
+    -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
+    -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
+    -- airframes; those keep their blueprint's own, e.g. su33 cobra but no kulbit), so early fighters never post-stall.
     maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a" } },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
@@ -493,7 +493,7 @@ local function runtimeScript()
     code = code:gsub("LA_SV_ProbePursue", "LA_SV_ProbePursueRt")
     local cls = StaticFindObject("/Script/LuaPluginRuntime.LuaScript")
     if not valid(cls) then return nil, "class /Script/LuaPluginRuntime.LuaScript not found" end
-    local pkg = StaticFindObject(PROBE_RT_PACKAGE)
+    local _, pkg = pcall(StaticFindObject, PROBE_RT_PACKAGE)   -- UE4SS throws on a path without ".Object" (test 18)
     if not valid(pkg) then
         local pcls = StaticFindObject("/Script/CoreUObject.Package")
         local okP, p = pcall(StaticConstructObject, pcls, nil, FName(PROBE_RT_PACKAGE))
@@ -507,7 +507,7 @@ local function runtimeScript()
     o.LuaInitializePath = "SurvivalMode.AI.LA_SV_ProbePursueRt"
     local back = ""
     pcall(function() back = o.Code:ToString() end)
-    local byPath = StaticFindObject(PROBE_RT_PACKAGE .. ".LA_SV_ProbePursueRt")      -- what the game's require looks up
+    local _, byPath = pcall(StaticFindObject, PROBE_RT_PACKAGE .. ".LA_SV_ProbePursueRt")   -- what the game's require looks up
     log(string.format("probe: run-time LuaScript %s made, code %d chars (read back %d); found by its path: %s",
         nameOf(o), #code, #back, tostring(valid(byPath))))
     pin(o, "probe LuaScript (run time)")
@@ -577,16 +577,22 @@ local function probeSetup()
         pin(dt, nameOf(dt))
         tables[t.key] = dt
     end
+    PR.tables = tables
+    -- Each variant on its own (test 18: an error making the run-time script also kept the package one from flying).
+    PR.failed = PR.failed or {}
     for _, v in ipairs({ "Pkg", "Rt" }) do
-        if not PR.ready[v] then
-            local script, why = (v == "Pkg" and packageScript or runtimeScript)()
-            if script then
-                local ok, res = probeVariant(tables, v, script)
-                if ok then PR.ready[v] = res else log("probe: " .. v .. " rows not added: " .. tostring(res)); PR.tries = 20 end
-            elseif PR.tries == 1 then log("probe: " .. v .. " script not available: " .. tostring(why)) end
+        if not PR.ready[v] and not PR.failed[v] then
+            local okV, err = pcall(function()
+                local script, why = (v == "Pkg" and packageScript or runtimeScript)()
+                if script then
+                    local ok, res = probeVariant(tables, v, script)
+                    if ok then PR.ready[v] = res else log("probe: " .. v .. " rows not added: " .. tostring(res)); PR.failed[v] = true end
+                elseif PR.tries == 1 then log("probe: " .. v .. " script not available: " .. tostring(why)) end
+            end)
+            if not okV then log("probe: " .. v .. " setup error " .. tostring(err)); PR.failed[v] = true end
         end
     end
-    PR.tables = tables
+    if (PR.ready.Pkg or PR.failed.Pkg) and (PR.ready.Rt or PR.failed.Rt) then PR.tries = 20 end
 end
 
 -- The probe aircraft for this round's first flight (odd rounds: package script, even rounds: run-time script).
@@ -728,10 +734,13 @@ local function enemyManeuvers(p)
         return string.format("cobra %s, kulbit %s", okC and tostring(c) or "?", okK and tostring(k) or "?")
     end
     local before = read()
-    local ok, err = pcall(function()
-        p.obj.bCanManeuverPugachevsCobra = allow
-        p.obj.bCanManeuverKulbit = allow
-    end)
+    local ok, err = true, nil
+    if not allow then                       -- allowed models keep their blueprint's own (test 18: su33 cobra only)
+        ok, err = pcall(function()
+            p.obj.bCanManeuverPugachevsCobra = false
+            p.obj.bCanManeuverKulbit = false
+        end)
+    end
     if not maneuversSaid[model] then
         maneuversSaid[model] = true
         log(string.format("maneuvers: %s (%s) post-stall %s: was %s, now %s%s", model, p.name, allow and "allowed" or "off",
