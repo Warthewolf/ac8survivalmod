@@ -241,6 +241,11 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   cobra true, kulbit false (0.11.1 wrongly turned its kulbit on; 0.11.2 only turns flags off). Probe: NOT flown -
   StaticFindObject threw "GetPackageNameFromLongName: Name wasn't long" on the run-time package path, and that error
   also skipped saving the probe tables, so round 1's package probe never flew. 0.11.2: pcall + variants independent.
+  Test 19 (0.11.2): package probe MiGs flew, no barrel roll, no Ctor marker (can't tell "not built" from "no io").
+  0.11.3 reads the built tree from the game (LiveAIBehaviorDataAccessor.PursuerTarget.RootNode / CurrentNode).
+  Test 20: CRASH in UE4SS.dll (read 0x23) 1 s into the hangar load, before the level: the run-time variant's
+  StaticConstructObject(Package, nil, ...) returned a half-made object and was retried every second. 0.11.4: run-time
+  variant off (CFG.probe.runtime = false), failed variants never retried. Don't make packages from UE4SS Lua.
 - [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep

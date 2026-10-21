@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.3"
+local VERSION = "0.11.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -394,7 +394,9 @@ local CFG = {
     },
     -- Behaviour probe (learning-AI step 1, see the "behaviour probe" section): own behaviour script on each round's
     -- first flight, live PilotRank write on every enemy, kill attribution in the log.
-    probe = { enabled = true, behaviour = true, rank = 5, kills = true },
+    -- runtime: also try the LuaScript made at run time (route 2). Off: making its in-memory package from UE4SS left a
+    -- half-made object, retried every second, and the game crashed inside UE4SS on the next level load (test 20).
+    probe = { enabled = true, behaviour = true, runtime = false, rank = 5, kills = true },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
@@ -585,13 +587,14 @@ local function probeSetup()
     -- Each variant on its own (test 18: an error making the run-time script also kept the package one from flying).
     PR.failed = PR.failed or {}
     for _, v in ipairs({ "Pkg", "Rt" }) do
+        if v == "Rt" and not CFG.probe.runtime then PR.failed[v] = true end
         if not PR.ready[v] and not PR.failed[v] then
             local okV, err = pcall(function()
                 local script, why = (v == "Pkg" and packageScript or runtimeScript)()
                 if script then
                     local ok, res = probeVariant(tables, v, script)
                     if ok then PR.ready[v] = res else log("probe: " .. v .. " rows not added: " .. tostring(res)); PR.failed[v] = true end
-                elseif PR.tries == 1 then log("probe: " .. v .. " script not available: " .. tostring(why)) end
+                else log("probe: " .. v .. " script not available: " .. tostring(why)); PR.failed[v] = true end
             end)
             if not okV then log("probe: " .. v .. " setup error " .. tostring(err)); PR.failed[v] = true end
         end
