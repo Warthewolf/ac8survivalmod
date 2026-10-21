@@ -224,7 +224,12 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Test 16 (2026-10-22): both probe rows were ready at level load and spawned (round 1 package script, round 2
   run-time script); every aircraft spawns through DT_SV_NpcMission; PilotRank 4 -> 5 sticks (re-read 10 s later);
   probe kill lines logged, but "last hit by ?" (K2_GetLastDamagedByAttacker gives nothing; use the native damage
-  history from KILLS_HEALTH_DEATH.md). Barrel rolls: not yet confirmed by eye.
+  history from KILLS_HEALTH_DEATH.md). Barrel rolls: not seen (user).
+  Test 17 (2026-10-22, Lua 0.10.1): the script's Ctor marker was never written, so the game never ran our script.
+  Cause (RE): the game's require("A.B.C") StaticLoadObject's /Game/LuaSource/A/B/C (exe 0x144eb8c00); ours was at
+  /Game/Mods/SurvivalMode/AI. Lua 0.10.2: packaged script moved to /Game/LuaSource/SurvivalMode/AI/, run-time script
+  put in an in-memory package at the same path; also the barrel roll's 9th arg (a 5 m gate) dropped. Waiting for test.
+  Test 17 also: 25 km search set up for 9/9 aircraft; enemies closed from 18 km to 9 km in 10 s (they come for you).
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).

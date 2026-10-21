@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.10.1"
+local VERSION = "0.10.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -448,7 +448,7 @@ math.randomseed(os.time())
 -- three questions (CFG.probe):
 --  1. Does an enemy run our own behaviour script? The first flight of every round flies a copy of Mission 22's MiG-29
 --     whose pursue slot is LA_SV_ProbePursue (barrel roll right, then left, then the stock pursuit, every attack run):
---     odd rounds the script from Survival's package (/Game/Mods/SurvivalMode/AI), even rounds a LuaScript object made
+--     odd rounds the script from Survival's package (/Game/LuaSource/SurvivalMode/AI), even rounds a LuaScript object made
 --     here at run time from Scripts/ai/LA_SV_ProbePursue.lua. Rows: DT_NPC_LuaSet NLID_SV_ProbePkg/Rt (copies of
 --     NLID_0000_CP) and DT_NPC SV_m29a_ProbePkg/Rt (OP1020_m29a_01) are added here at run time, as early as the main
 --     menu; the mission rows sv_probe_pkg/rt are in Survival's own NPC table (tools/build_survival.py NPC_EXTRA),
@@ -465,7 +465,12 @@ local PROBE_TABLES = {
       src = "OP1020_m29a_01", row = "SV_m29a_Probe" },
 }
 local PROBE_MISSION_ROW = { Pkg = "sv_probe_pkg", Rt = "sv_probe_rt" }   -- in DT_SV_NpcMission (build time)
-local PROBE_PKG_SCRIPT = "/Game/Mods/SurvivalMode/AI/LA_SV_ProbePursue.LA_SV_ProbePursue"
+-- The game's require("A.B.C") loads the LuaScript at /Game/LuaSource/A/B/C with StaticLoadObject and runs its Code
+-- (AceCombat8.exe 0x144eb8c00), so a script must sit at the path its LuaInitializePath names. Test 17: the script
+-- at /Game/Mods/SurvivalMode/AI was never run. StaticLoadObject looks in memory first, so the run-time script goes
+-- into an in-memory package at /Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt.
+local PROBE_PKG_SCRIPT = "/Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursue.LA_SV_ProbePursue"
+local PROBE_RT_PACKAGE = "/Game/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt"
 local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- rows stay in the tables across levels
 local SR = { ready = {}, usable = {}, tries = 0 }   -- enemy search rows (section "enemy search" below)
 
@@ -480,14 +485,23 @@ local function runtimeScript()
     code = code:gsub("LA_SV_ProbePursue", "LA_SV_ProbePursueRt")
     local cls = StaticFindObject("/Script/LuaPluginRuntime.LuaScript")
     if not valid(cls) then return nil, "class /Script/LuaPluginRuntime.LuaScript not found" end
-    local o = StaticConstructObject(cls, gameInstance(), FName("SV_LA_ProbePursueRt"))
+    local pkg = StaticFindObject(PROBE_RT_PACKAGE)
+    if not valid(pkg) then
+        local pcls = StaticFindObject("/Script/CoreUObject.Package")
+        local okP, p = pcall(StaticConstructObject, pcls, nil, FName(PROBE_RT_PACKAGE))
+        if not (okP and valid(p)) then return nil, "package " .. PROBE_RT_PACKAGE .. " not made: " .. tostring(p) end
+        pkg = p
+    end
+    local o = StaticConstructObject(cls, pkg, FName("LA_SV_ProbePursueRt"))
     if not valid(o) then return nil, "StaticConstructObject(LuaScript) returned nothing" end
     o.Code = code
     o.ImportPath = "../../AssetWork/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt.lua"
     o.LuaInitializePath = "SurvivalMode.AI.LA_SV_ProbePursueRt"
     local back = ""
     pcall(function() back = o.Code:ToString() end)
-    log(string.format("probe: run-time LuaScript %s made, code %d chars (read back %d)", nameOf(o), #code, #back))
+    local byPath = StaticFindObject(PROBE_RT_PACKAGE .. ".LA_SV_ProbePursueRt")      -- what the game's require looks up
+    log(string.format("probe: run-time LuaScript %s made, code %d chars (read back %d); found by its path: %s",
+        nameOf(o), #code, #back, tostring(valid(byPath))))
     pin(o, "probe LuaScript (run time)")
     PR.scripts.rt = o
     return o

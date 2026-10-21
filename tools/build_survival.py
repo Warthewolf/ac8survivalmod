@@ -418,10 +418,17 @@ LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'
 LUA_SCRIPTS = ['LA_SV_ProbePursue']
 
 
+# The game's Lua require() (AceCombat8.exe 0x144eb8c00) loads module "A.B.C" with StaticLoadObject from
+# /Game/LuaSource/A/B/C and runs that LuaScript's Code, so a behaviour script must live at the path its
+# LuaInitializePath names: /Game/LuaSource/SurvivalMode/AI/<name> (a folder only Survival uses). Test 17: at
+# /Game/Mods/SurvivalMode/AI it was never found and the probe MiGs flew stock.
+LUA_DIR = '/Game/LuaSource/SurvivalMode/AI/'
+
+
 def build_lua_scripts():
     for name in LUA_SCRIPTS:
         code = open(os.path.join(AI_SRC, name + '.lua'), encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
-        new_path = MOD + '/AI/' + name
+        new_path = LUA_DIR + name
         z = ZenPkg(stock(LUA_TEMPLATE))
         rename_package(z, LUA_TEMPLATE, new_path)
         props, rest = props_of(z, 0, 'LuaScript')
