@@ -8,9 +8,11 @@
 --   * rounds: random flights, aircraft and bearings each round, spawned through dlls\main.dll's SV_* functions
 --   * round HUD: Survival's own HUD layer, built at run time (round, countdown to the next round, callouts)
 --   * rounds run on the game clock, so the countdown and the rounds stop while the game is paused
+--   * ammo cap: missiles, special weapons and flares capped per difficulty preset at spawn (dlls\main.dll SV_SetAmmo); gun unlimited
+--   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.7.1"
+local VERSION = "0.9.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -363,7 +365,7 @@ end)
 -- SV_Alive / SV_Kills for this log. Must run on the game thread (the one tick below).
 local CFG = {
     first_round_delay_s = 15,
-    intermission_s      = 45,
+    intermission_s      = 20,
     spawn_gap_s         = 3,                    -- between two flights of a round
     flights_round1      = 2,
     flights_per_round   = 1,                    -- added every round
@@ -373,6 +375,22 @@ local CFG = {
     aircraft            = { "f16c_common", "f18e_common", "f15e_common", "f14d_common", "m21b_common",
                             "m29a_common", "m31b_common", "su33_common", "su34_common" },   -- NPC rows in Mission 22's table
     pool                = {},                   -- Mission 22's 24 "kokatu" flights (tools/survival_events.py POOL)
+    -- Ammo cap at spawn (BUILD_PLAN Milestone 2): missiles / each special weapon / flares per preset; the gun is
+    -- unlimited. The preset follows the game's difficulty (1 Casual, 2 Easy, 3 Normal, 4 Hard, 5 Ace).
+    ammo = {
+        enabled          = true,
+        gun_unlimited    = true,
+        free_restock     = false,               -- the game refills missiles over time unless this is off
+        presets          = {
+            casual   = { missiles = 24, special = 8, flares = 6 },
+            standard = { missiles = 16, special = 4, flares = 4 },
+            ace      = { missiles = 10, special = 2, flares = 3 },
+        },
+        by_difficulty    = { "casual", "standard", "standard", "standard", "ace" },
+    },
+    -- Behaviour probe (learning-AI step 1, see the "behaviour probe" section): own behaviour script on each round's
+    -- first flight, live PilotRank write on every enemy, kill attribution in the log.
+    probe = { enabled = true, behaviour = true, rank = 5, kills = true },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
         enabled          = true,
@@ -420,6 +438,197 @@ do  -- optional overrides: Scripts/survival_config.lua returning a table with an
 end
 math.randomseed(os.time())
 
+---------------------------------------------------------------------------------------------------- behaviour probe
+-- First step towards Survival's own (learning) enemy behaviour (BUILD_PLAN; tools/re/AI_BEHAVIOURS.md). One test,
+-- three questions (CFG.probe):
+--  1. Does an enemy run our own behaviour script? The first flight of every round flies a copy of Mission 22's MiG-29
+--     whose pursue slot is LA_SV_ProbePursue (barrel roll right, then left, then the stock pursuit, every attack run):
+--     odd rounds the script from Survival's package (/Game/Mods/SurvivalMode/AI), even rounds a LuaScript object made
+--     here at run time from Scripts/ai/LA_SV_ProbePursue.lua. Rows: DT_NPC_LuaSet NLID_SV_ProbePkg/Rt (copies of
+--     NLID_0000_CP) and DT_NPC SV_m29a_ProbePkg/Rt (OP1020_m29a_01) are added here at run time, as early as the main
+--     menu; the mission rows sv_probe_pkg/rt are in Survival's own NPC table (tools/build_survival.py NPC_EXTRA),
+--     because the spawner caches that table's aircraft when the level starts. A variant is only flown when its rows
+--     were in before the level loaded.
+--  2. Does a live write to an enemy's PilotRank stick? Each enemy's rank is logged, set to CFG.probe.rank, and read
+--     again 10 s later.
+--  3. Can a kill be attributed? Each enemy's last attacker (K2_GetLastDamagedByAttacker), the aspect and the player's
+--     ammo use in the seconds before it went down are logged.
+local PROBE_TABLES = {
+    { key = "luaset",  path = "/Game/Datatables/AI/NPC/LuaSet/DT_NPC_LuaSet.DT_NPC_LuaSet",
+      src = "NLID_0000_CP",   row = "NLID_SV_Probe" },
+    { key = "npc",     path = "/Game/Datatables/AI/NPC/DT_NPC.DT_NPC",
+      src = "OP1020_m29a_01", row = "SV_m29a_Probe" },
+}
+local PROBE_MISSION_ROW = { Pkg = "sv_probe_pkg", Rt = "sv_probe_rt" }   -- in DT_SV_NpcMission (build time)
+local PROBE_PKG_SCRIPT = "/Game/Mods/SurvivalMode/AI/LA_SV_ProbePursue.LA_SV_ProbePursue"
+local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- rows stay in the tables across levels
+
+local function scriptDir() return debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "" end
+
+-- Route 2: a LuaScript object made at run time from the script file (renamed so it can't collide with route 1).
+local function runtimeScript()
+    if valid(PR.scripts.rt) then return PR.scripts.rt end
+    local f = io.open(scriptDir() .. "ai\\LA_SV_ProbePursue.lua", "r")
+    if not f then return nil, "Scripts\\ai\\LA_SV_ProbePursue.lua not found" end
+    local code = f:read("a"); f:close()
+    code = code:gsub("LA_SV_ProbePursue", "LA_SV_ProbePursueRt")
+    local cls = StaticFindObject("/Script/LuaPluginRuntime.LuaScript")
+    if not valid(cls) then return nil, "class /Script/LuaPluginRuntime.LuaScript not found" end
+    local o = StaticConstructObject(cls, gameInstance(), FName("SV_LA_ProbePursueRt"))
+    if not valid(o) then return nil, "StaticConstructObject(LuaScript) returned nothing" end
+    o.Code = code
+    o.ImportPath = "../../AssetWork/LuaSource/SurvivalMode/AI/LA_SV_ProbePursueRt.lua"
+    o.LuaInitializePath = "SurvivalMode.AI.LA_SV_ProbePursueRt"
+    local back = ""
+    pcall(function() back = o.Code:ToString() end)
+    log(string.format("probe: run-time LuaScript %s made, code %d chars (read back %d)", nameOf(o), #code, #back))
+    pin(o, "probe LuaScript (run time)")
+    PR.scripts.rt = o
+    return o
+end
+
+local function packageScript()
+    if valid(PR.scripts.pkg) then return PR.scripts.pkg end
+    local o, why = loadObject(PROBE_PKG_SCRIPT)
+    if not o then return nil, why end
+    pin(o, "probe LuaScript (package)")
+    PR.scripts.pkg = o
+    return o
+end
+
+-- Adds row `new` to dt as a copy of `src` and lets edit(row) change the copy (in place: FindRow returns the row).
+local function cloneRow(dt, src, new, edit)
+    local _, have = dtCall(dt, "FindRow", new)
+    if have ~= nil then return true end
+    local okS, srow = dtCall(dt, "FindRow", src)
+    if not okS or srow == nil then return false, "no row " .. src end
+    dtCall(dt, "AddRow", new, srow)
+    local _, row = dtCall(dt, "FindRow", new)
+    if row == nil then return false, "AddRow did not add " .. new end
+    local ok, err = pcall(edit, row)
+    if not ok then dtCall(dt, "RemoveRow", new); return false, tostring(err) end
+    return true
+end
+
+-- One variant ("Pkg" / "Rt"): LuaSet row -> NPC row (the mission row pointing at it is built in). true when in.
+local function probeVariant(tables, v, script)
+    local names = { luaset = PROBE_TABLES[1].row .. v, npc = PROBE_TABLES[2].row .. v, mission = PROBE_MISSION_ROW[v] }
+    local steps = {
+        { tables.luaset, PROBE_TABLES[1].src, names.luaset, function(r) r.LuaAsetts.PursueTargetLua.LuaScript = script end },
+        { tables.npc, PROBE_TABLES[2].src, names.npc, function(r) r.LuaSetId = FName(names.luaset) end },
+    }
+    for _, s in ipairs(steps) do
+        local ok, why = cloneRow(s[1], s[2], s[3], s[4])
+        if not ok then return false, s[3] .. ": " .. tostring(why) end
+    end
+    local check = "?"
+    pcall(function()
+        local _, r = dtCall(tables.luaset, "FindRow", names.luaset)
+        check = nameOf(r.LuaAsetts.PursueTargetLua.LuaScript)
+    end)
+    log("probe: rows " .. names.luaset .. " / " .. names.npc .. " / " .. names.mission .. " in; pursue slot = " .. check)
+    return true, names.mission
+end
+
+-- Called every second from the start (main menu included) until both variants are in (or 20 tries failed).
+local function probeSetup()
+    if not CFG.probe.enabled or not CFG.probe.behaviour or (PR.ready.Pkg and PR.ready.Rt) or PR.tries >= 20 then return end
+    if not gameInstance() then return end                  -- the run-time script's outer, and where tables get pinned
+    PR.tries = PR.tries + 1
+    local tables = {}
+    for _, t in ipairs(PROBE_TABLES) do
+        local dt, why = loadObject(t.path)
+        if not dt then
+            if PR.tries == 20 then log("probe: table " .. t.path .. " not loaded (" .. tostring(why) .. "); no behaviour probe") end
+            return
+        end
+        pin(dt, nameOf(dt))
+        tables[t.key] = dt
+    end
+    for _, v in ipairs({ "Pkg", "Rt" }) do
+        if not PR.ready[v] then
+            local script, why = (v == "Pkg" and packageScript or runtimeScript)()
+            if script then
+                local ok, res = probeVariant(tables, v, script)
+                if ok then PR.ready[v] = res else log("probe: " .. v .. " rows not added: " .. tostring(res)); PR.tries = 20 end
+            elseif PR.tries == 1 then log("probe: " .. v .. " script not available: " .. tostring(why)) end
+        end
+    end
+    PR.tables = tables
+end
+
+-- The probe aircraft for this round's first flight (odd rounds: package script, even rounds: run-time script).
+local function probeAircraft(round)
+    if not (CFG.probe.enabled and CFG.probe.behaviour) then return nil end
+    local want = round % 2 == 1 and "Pkg" or "Rt"
+    local order = { want, want == "Pkg" and "Rt" or "Pkg" }
+    for _, v in ipairs(order) do
+        if PR.usable[v] and PR.tables then
+            local _, have = dtCall(PR.tables.npc, "FindRow", PROBE_TABLES[2].row .. v)
+            if have ~= nil then return PR.usable[v], v end
+            log("probe: DT_NPC row " .. PROBE_TABLES[2].row .. v .. " is gone (the table was reloaded?); not flown this level")
+            PR.usable[v] = nil; PR.ready[v] = nil; PR.tries = 0
+        end
+    end
+    return nil
+end
+
+-- Question 2: PilotRank on each enemy (p from the plane list), called every 2 s while it is up.
+local function probeRank(p, tick)
+    if not (CFG.probe.enabled and CFG.probe.rank) then return end
+    if not p.rank0 then
+        local ok, r = pcall(function() return p.obj.PilotRank end)
+        p.rank0 = ok and r or "?"
+        local okW, err = pcall(function() p.obj.PilotRank = CFG.probe.rank end)
+        local _, r1 = pcall(function() return p.obj.PilotRank end)
+        p.rankAt = tick
+        log(string.format("probe: %s PilotRank %s -> set %d -> reads %s%s", p.name, tostring(p.rank0), CFG.probe.rank,
+            tostring(r1), okW and "" or (" (write failed: " .. tostring(err) .. ")")))
+    elseif p.rankAt and tick - p.rankAt >= 40 then
+        p.rankAt = nil
+        local _, r = pcall(function() return p.obj.PilotRank end)
+        log(string.format("probe: %s PilotRank 10 s later: %s", p.name, tostring(r)))
+    end
+end
+
+-- Question 3: called every 2 s while an enemy is up (records), and once when it goes down (logs).
+local function probeTrack(p)
+    pcall(function()
+        local a = p.obj:K2_GetLastDamagedByAttacker()
+        if valid(a) then p.attacker = nameOf(a):match("([^%.:]+)$") end
+    end)
+    pcall(function() local f = p.obj:GetActorForwardVector(); p.fwd = { X = f.X, Y = f.Y, Z = f.Z } end)
+end
+
+local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
+
+local function probeKill(p, you)
+    if not (CFG.probe.enabled and CFG.probe.kills) then return end
+    local aspect, dz = "?", "?"
+    if p.at and you and p.fwd then
+        local tx, ty, tz = you.X - p.at.X, you.Y - p.at.Y, you.Z - p.at.Z
+        local len = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if len > 0 then
+            local c = (p.fwd.X * tx + p.fwd.Y * ty + p.fwd.Z * tz) / len      -- 1: you were ahead of it, -1: on its tail
+            aspect = string.format("%.0f deg off its nose", math.deg(math.acos(math.max(-1, math.min(1, c)))))
+        end
+        dz = string.format("%+.1f km", (you.Z - p.at.Z) / 100000)
+    end
+    local used = {}                                                           -- ammo spent in the last ~6 s
+    local h = PR.ammo
+    for k = 0, 4 do
+        local spent = 0
+        for i = 2, #h do
+            local a, b = h[i - 1][k], h[i][k]
+            if a and b and a >= 0 and b >= 0 and b < a then spent = spent + (a - b) end
+        end
+        if spent > 0 then used[#used + 1] = AMMO_SHORT[k] .. " x" .. spent end
+    end
+    log(string.format("probe kill: %s, last hit by %s; you were %s away, %s, altitude %s; you fired %s in the last 6 s",
+        p.name, tostring(p.attacker or "?"), p.at and you and string.format("%.1f km", km(p.at, you)) or "?",
+        aspect, dz, #used > 0 and table.concat(used, ", ") or "nothing seen"))
+end
+
 local ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
 local SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
@@ -442,7 +651,6 @@ local HUD_BASE = "/Game/Blueprints/UI/WBP/HUD4K/Campaign/WBP_HUD_NonGlowMessage_
 local HUD_FONT = "/Game/UI/Font/UI_FontSet_ja.UI_FontSet_ja"
 local DESIGN_W, DESIGN_H = 3840, 2160
 local VIS = { Visible = 0, Collapsed = 1, Hidden = 2, HitTestInvisible = 3, SelfHitTestInvisible = 4 }
-local INFO_CLASSES = { "WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C", "WBP_HUD_SubWidgets_Parts_FreeFlightInfo_000_C" }
 local H = nil                      -- the HUD layer: { widget, tree, font, rowSlots, round, next, banner, ... }
 local hudGen, hudTries, hudOff = 0, 0, false
 local hudSaid = {}
@@ -483,13 +691,11 @@ local function slotIn(canvas, w, a0, a1, off, align, auto)
     return s
 end
 
--- Font for one of our texts: `stock` (a live game TextBlock's Font) when given, else UI_FontSet_ja; then the HUD
--- typeface, size, spacing and glow outline are written into the text's own Font and pushed with SetFont. Test 13:
--- the table alone gave the set's default (proportional) face instead of the monospaced HUD one.
-local function styleText(t, spacing, stock)
+-- Font for one of our texts: UI_FontSet_ja, then the HUD typeface, size, spacing and glow outline written into the
+-- text's own Font and pushed with SetFont (test 13b: that gives the game's HUD face; the SetFont table alone may not).
+local function styleText(t, spacing)
     local hc = CFG.hud
-    if stock ~= nil then t:SetFont(stock)
-    elseif H.font then t:SetFont({ FontObject = H.font, TypefaceFontName = FName("HUD"), Size = hc.font_size, LetterSpacing = spacing })
+    if H.font then t:SetFont({ FontObject = H.font, TypefaceFontName = FName("HUD"), Size = hc.font_size, LetterSpacing = spacing })
     else pcall(function() t.Font.Size = hc.font_size end) end
     local ok, err = pcall(function()
         local f = t.Font
@@ -585,29 +791,6 @@ local function hudBuild(pc)
         font and "UI_FontSet_ja" or "default", fontFace(H.round), hudGen))
 end
 
--- The live SCORE label's Font (the game's own HUD font settings), or nil until the info panel exists.
-local function stockFont()
-    for _, cn in ipairs(INFO_CLASSES) do
-        for _, wd in ipairs(FindAllOf(cn) or {}) do
-            local ok, f = pcall(function()
-                local t = wd.WidgetTree:FindWidget(FName("PrivateScore"))
-                return valid(t) and t.Font or nil
-            end)
-            if ok and f ~= nil then return f, cn end
-        end
-    end
-    return nil
-end
-
--- Restyles our texts with the game's own font once its info panel is up (tried every 2 s until it works).
-local function hudRestyle()
-    local f, cn = stockFont()
-    if f == nil then return false end
-    for _, x in ipairs(H.texts) do styleText(x.w, x.spacing, f) end
-    log("hud: font copied from " .. cn .. ".PrivateScore; typeface now " .. fontFace(H.round))
-    return true
-end
-
 local pendingCallout = nil
 
 local function hudCallout(text, sub)   -- shown on the next HUD tick (callers are in roundsTick)
@@ -652,14 +835,6 @@ local function hudTick(now, paused, pc)
         H.shown = show
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
     end
-    if not H.restyled then
-        if (H.styleAge or 0) <= 0 then
-            local ok, r = pcall(hudRestyle)
-            if not ok then hudLog("restyle", "font copy failed (" .. tostring(r) .. "); keeping UI_FontSet_ja") end
-            H.restyled = (not ok) or r; H.styleAge = 8                                 -- every 2 s until it works
-        else H.styleAge = H.styleAge - 1 end
-    end
-
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
     if D.state == "wait" then
@@ -787,6 +962,12 @@ end
 
 local function spawnFlight(unit)
     local ac = CFG.aircraft[math.random(#CFG.aircraft)]
+    if D.probeRound ~= D.round then                                           -- the round's first flight: probe aircraft
+        D.probeRound = D.round
+        local pa, how = probeAircraft(D.round)
+        if pa then ac = pa; log(string.format("probe: round %d's first flight %s flies %s (%s script)", D.round, unit, pa,
+            how == "Pkg" and "package" or "run-time")) end
+    end
     local set = SV_SetAircraft(unit, ac)
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
@@ -872,6 +1053,100 @@ local function roundsTick(now)
     end
 end
 
+---------------------------------------------------------------------------------------------------- ammo cap
+-- The player's ammo counts live in native memory (no reflected property holds them; Lua 0.8.0 found no module
+-- objects), so dlls\main.dll (runtime 0.7.0) reads and sets them the way the stock LiveSetWeaponAmmoCount node does
+-- (tools/re/AMMO.md): SV_Ammo(kind [, max]) and SV_SetAmmo(kind, count), kind 0 gun, 1 missiles, 2 special 1,
+-- 3 special 2, 4 flares; a count above the weapon's maximum is capped at it. Shortly after the player's aircraft
+-- appears the preset's caps are set; the gun is kept full (unlimited); every count is logged every 10 s, which
+-- also shows that missiles no longer restock on their own (SV_FreeRestock, as the stock node Mission 015 uses).
+local AMMO_KINDS = { [0] = "gun", "missiles", "special 1", "special 2", "flares" }
+local A = nil                      -- this level's loadout state: { pawn, seenAt, applied, tries, lastLine }
+
+local function ammoReady() return type(SV_Ammo) == "function" and type(SV_SetAmmo) == "function" end
+
+local function presetName()
+    local dm = FindFirstOf("LiveDifficultyManager")
+    local ok, d = pcall(function() return dm.CurrentDifficulty end)
+    return (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
+end
+
+local function ammoLine()
+    local parts = {}
+    for k = 0, 4 do
+        local n, max = SV_Ammo(k), SV_Ammo(k, 1)
+        if n >= 0 then parts[#parts + 1] = string.format("%s %d/%d", AMMO_KINDS[k], n, max) end
+    end
+    return table.concat(parts, ", ")
+end
+
+local function applyAmmoCaps()
+    local probe = SV_Ammo(1)
+    if probe < 0 and probe ~= -7 then return false, probe end                  -- not ready yet (or no game code)
+    local pname, diff = presetName()
+    local p = CFG.ammo.presets[pname] or CFG.ammo.presets.standard
+    local want = { [1] = p.missiles, [2] = p.special, [3] = p.special, [4] = p.flares }
+    local before = ammoLine()
+    for k = 1, 4 do
+        if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
+    end
+    A.caps, A.preset = want, pname
+    if CFG.ammo.gun_unlimited then SV_SetAmmo(0, -1) end
+    local restock = type(SV_FreeRestock) == "function" and SV_FreeRestock(CFG.ammo.free_restock and 1 or 0) or "n/a"
+    log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s", pname, tostring(diff),
+        before, ammoLine(), tostring(restock), CFG.ammo.free_restock and "on" or "off"))
+    return true
+end
+
+local function ammoTick(tick, pc)
+    if not CFG.ammo.enabled then return end
+    if not ammoReady() then
+        if not (A and A.warned) then A = { warned = true }; log("ammo: dlls/main.dll 0.7.0 did not register SV_Ammo; no ammo cap") end
+        return
+    end
+    local pawn = nil
+    pcall(function() pawn = pc.Pawn end)
+    if not valid(pawn) then return end
+    local pname = nameOf(pawn)
+    if not A or A.pawn ~= pname then A = { pawn = pname, seenAt = tick, applied = false, tries = 0 } end
+    if not A.applied and tick - A.seenAt >= 8 and (tick - A.seenAt) % 8 == 0 and A.tries < 10 then   -- 2 s in, retried
+        A.tries = A.tries + 1
+        local ok, r, code = pcall(applyAmmoCaps)
+        if not ok then log("ammo: error " .. tostring(r))
+        elseif not r and A.tries == 10 then log("ammo: the player's weapons could not be read (" .. tostring(code) .. "); no ammo cap") end
+        A.applied = ok and r
+    end
+    if not A.applied then return end
+    if tick % 2 == 0 then                                                      -- every 0.5 s: counts for the kill probe
+        local s = {}
+        for k = 0, 4 do s[k] = SV_Ammo(k) end
+        PR.ammo[#PR.ammo + 1] = s
+        if #PR.ammo > 12 then table.remove(PR.ammo, 1) end
+        -- The airfield's rearm (and anything else the game refills) loads the aircraft's full stock count: a count
+        -- above the preset's cap is put back to the cap, so landing rearms up to the cap and no further.
+        local over = {}
+        for k = 1, 4 do
+            local cap = A.caps and A.caps[k]
+            if cap and s[k] > cap then
+                SV_SetAmmo(k, cap)
+                over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
+            end
+        end
+        if #over > 0 then
+            if type(SV_FreeRestock) == "function" and not CFG.ammo.free_restock then SV_FreeRestock(0) end
+            log("ammo: refilled above the " .. A.preset .. " caps (rearm?): " .. table.concat(over, ", "))
+        end
+    end
+    if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
+        local n, max = SV_Ammo(0), SV_Ammo(0, 1)
+        if n >= 0 and n < max then SV_SetAmmo(0, -1) end
+    end
+    if tick % 40 == 0 then                                                     -- every 10 s: the counts, when they change
+        local line = ammoLine()
+        if line ~= A.lastLine then log("ammo: now " .. line); A.lastLine = line end
+    end
+end
+
 local survivalPC = nil             -- the player controller in Survival's level
 
 local function playerControllerHere()
@@ -906,7 +1181,13 @@ local function probeTick(tick)
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
         D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
-        H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC = nil, 0, false, {}, nil, nil
+        PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
+        log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
+        H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
+    end
+    if tick % 4 == 0 and containerState then                 -- behaviour probe rows, from the main menu on
+        local okP, errP = pcall(probeSetup)
+        if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
     end
     if D then
         if not valid(survivalPC) then survivalPC = playerControllerHere() end
@@ -917,6 +1198,8 @@ local function probeTick(tick)
             local okH, errH = pcall(hudTick, now, paused, survivalPC)
             if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
         end
+        local okA, errA = pcall(ammoTick, tick, survivalPC)
+        if not okA then log("ammo: error " .. tostring(errA)) end
     end
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
@@ -946,6 +1229,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                pcall(probeTrack, p); pcall(probeRank, p, tick)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
@@ -954,6 +1238,7 @@ local function probeTick(tick)
                 p.down = true
                 log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
                     p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
+                pcall(probeKill, p, you)
             end
         end
     end

@@ -12,7 +12,7 @@ Templates:
 Every template is a stock game file: Survival Mode uses nothing from another mod.
 Stock packages are pulled with tools/get_stock.sh into build/stock first.
 """
-import os, sys, struct, zlib, subprocess
+import copy, os, sys, struct, zlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
@@ -200,6 +200,7 @@ def build_wd_global():
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
     print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}')
+    retarget_import(z, NPC_TABLE_STOCK, NPC_TABLE)        # Survival's own NPC mission table (build_npc_table)
     save(z, new)
 
 
@@ -361,7 +362,69 @@ def build_rows():
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
 
 
+# ---------------------------------------------------------------- NPC mission table
+# The spawner caches the aircraft of every row of the world data's NPC table once, when the level starts, and a
+# spawn only looks there (tools/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
+# data points at its own copy of Mission 22's table, with Survival's rows added here. A row's NpcId (a DT_NPC row)
+# may be one that main.lua adds to DT_NPC at run time, as long as that happens before the level loads.
+NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
+NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
+NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
+    ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
+    ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
+]
+
+
+def build_npc_table():
+    z = ZenPkg(stock(NPC_TABLE_STOCK))
+    rename_package(z, NPC_TABLE_STOCK, NPC_TABLE)
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveNpcMissionDataTable')
+    assert o == len(p), (o, len(p))
+    rows = dict(dt['rows'])
+    npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
+    for new_row, src, npc in NPC_EXTRA:
+        assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
+        row = copy.deepcopy(rows[(src, 0)])
+        set_prop(row[2], npc_idx, 'NpcId', ('name', npc, 0))
+        for n in (new_row, npc): z.nb.add(n)
+        dt['rows'].append(((new_row, 0), row))
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
+    assert chk['rows'] == dt['rows']
+    print(f'  {len(dt["rows"])} rows ({len(NPC_EXTRA)} Survival rows)')
+    save(z, NPC_TABLE)
+
+
+# ---------------------------------------------------------------- AI behaviour scripts
+# Survival's own enemy behaviour trees (LuaScript assets: Code / ImportPath / LuaInitializePath, see
+# tools/re/AI_BEHAVIOURS.md). Source in mod/UE4SS/AC8SurvivalMode/Scripts/ai/<name>.lua (the Lua runtime reads the
+# same file); the package is a copy of a stock LA_ script package with our source and our own module name.
+AI_SRC = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'ai')
+LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'
+LUA_SCRIPTS = ['LA_SV_ProbePursue']
+
+
+def build_lua_scripts():
+    for name in LUA_SCRIPTS:
+        code = open(os.path.join(AI_SRC, name + '.lua'), encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
+        new_path = MOD + '/AI/' + name
+        z = ZenPkg(stock(LUA_TEMPLATE))
+        rename_package(z, LUA_TEMPLATE, new_path)
+        props, rest = props_of(z, 0, 'LuaScript')
+        vals = props[2]                                          # LuaScript: 0 Code, 1 ImportPath, 2 LuaInitializePath
+        set_prop(vals, 0, 'Code', s(code))
+        set_prop(vals, 1, 'ImportPath', s('../../AssetWork/LuaSource/SurvivalMode/AI/' + name + '.lua'))
+        set_prop(vals, 2, 'LuaInitializePath', s('SurvivalMode.AI.' + name))
+        z.payloads[0] = bytearray(write_props(z, props) + rest)
+        chk, _ = props_of(z, 0, 'LuaScript')
+        assert dict((p[1], p[3]) for p in chk[2])['LuaInitializePath'] == s('SurvivalMode.AI.' + name)
+        save(z, new_path)
+
+
 if __name__ == '__main__':
+    build_lua_scripts()
+    build_npc_table()
     build_rows()
     build_pl()
     build_mc()

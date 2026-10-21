@@ -55,7 +55,14 @@ def tokenize(src):
                         j += 2
                         while j < n and src[j] in ' \t\r\n': line += src[j] == '\n'; j += 1
                         continue
-                    if src[j + 1:j + 2] == '\n': line += 1
+                    e = src[j + 1:j + 2]
+                    if e == '\n': line += 1
+                    elif e == 'x' and not re.match(r'[0-9a-fA-F]{2}', src[j + 2:j + 4]):
+                        raise LuaSyntaxError(f'line {line}: hexadecimal digit expected in \\x escape')
+                    elif e == 'u' and not re.match(r'\{[0-9a-fA-F]+\}', src[j + 2:]):
+                        raise LuaSyntaxError(f'line {line}: invalid \\u escape')
+                    elif e not in 'abfnrtv\\"\'\rxu' and not e.isdigit():
+                        raise LuaSyntaxError(f'line {line}: invalid escape sequence \\{e}')
                     j += 2; continue
                 if src[j] == '\n': raise LuaSyntaxError(f'line {line}: unfinished string')
                 j += 1
@@ -267,8 +274,8 @@ KNOWN_GLOBALS = {
     'ExecuteInGameThread', 'ExecuteWithDelay', 'ExecuteAsync', 'RegisterKeyBind', 'IsKeyBindRegistered', 'Key',
     'ModifierKey', 'FName', 'FText', 'LoadAsset', 'RegisterHook', 'UnregisterHook', 'RegisterCustomEvent',
     'StaticConstructObject', 'CreateInvalidObject', 'IterateGameDirectories', 'DumpAllObjects', 'GenerateSDK',
-    # dlls\main.dll (runtime 0.6.0)
-    'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset',
+    # dlls\main.dll (runtime 0.7.0)
+    'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock',
 }
 
 

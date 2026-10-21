@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.6.0"
+#define RT_VERSION           L"0.7.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1064,6 +1064,164 @@ static int64_t LogUnits(const wchar_t* why)
     return a->num;
 }
 
+/* ---- player ammo (Milestone 2 ammo cap; tools/re/AMMO.md) --------------------------------------------------
+ * Copied from the stock LiveSetWeaponAmmoCount node: PlayerOwner(world) -> +0x16a8 = the player's weapon object W.
+ * Gun / missiles / special 1 / special 2 are W's weapon slots ([W+0x2e8]: data +0x28, count +0x30, 0xa0 bytes each,
+ * max +0x8, current +0xc) and are set together by SetWeaponAmmo(W, gun, main, sp1, sp2) (-1 for a missing slot);
+ * flares are [W+0x2e0]+0xc4 (max W+0x27c), followed by FlareChanged([W+0x2e0]+0xb8). Every offset is read from the
+ * node's own code at run time, so a patch that moves them is followed (or refused, with a log line).              */
+#define AMMO_KINDS 5                /* 0 gun, 1 missiles, 2 special 1, 3 special 2, 4 flares (the node's enum)      */
+typedef void* (*PlayerOwnerFn)(void* world);
+typedef void  (*SetWeaponAmmoFn)(void* weapons, int32_t gun, int32_t main, int32_t sp1, int32_t sp2);
+typedef void  (*FlareChangedFn)(void* p);
+static uint8_t* g_fAmmoExecute;
+static uint8_t* g_fAmmoFlare;
+static uint8_t* g_fAmmoWeapons;
+static uint8_t* g_fFreeRestock;
+
+static struct {
+    int             state;          /* 0 not tried, 1 ok, -1 failed */
+    PlayerOwnerFn   owner;
+    SetWeaponAmmoFn setFour;
+    FlareChangedFn  flareChanged;
+    int32_t weapons;                /* owner -> W                     */
+    int32_t slots, slotData, slotNum, slotCur, slotStride;
+    int32_t flareObj, flareCur, flareMax, flareNotify;
+    int32_t restock;                /* free-restock flag on the flare object, -1 unknown */
+} AM;
+
+static uint8_t* Rel32(uint8_t* insn) { return insn + 5 + *(int32_t*)(insn + 1); }   /* call / jmp rel32 target */
+
+static int ResolveAmmo(void)
+{
+    if (AM.state) return AM.state > 0;
+    AM.state = -1;
+    uint8_t *ex = g_fAmmoExecute, *fl = g_fAmmoFlare, *wl = g_fAmmoWeapons;
+    if (!ex || !fl || !wl) { Log(L"ammo: the game's ammo node was not found (other game version?)"); return 0; }
+    if (ex[0x52] != 0xE8 || memcmp(ex + 0x60, "\x48\x8B\x80", 3) || wl[0x5f] != 0xE8 || fl[0x11] != 0xE8 ||
+        fl[0x40] != 0xE9 || memcmp(fl + 0x16, "\x8B\x8A", 2) || memcmp(fl + 0x21, "\x48\x8B\x82", 3) ||
+        memcmp(fl + 0x28, "\x89\x88", 2) || memcmp(fl + 0x35, "\x48\x81\xC1", 3)) {
+        Log(L"ammo: the ammo node's code is not the expected shape; ammo control is off");
+        return 0;
+    }
+    uint8_t* h = Rel32(fl + 0x11);                              /* count helper: weapon-slot layout */
+    if (!InGame(h) || memcmp(h + 0x2d, "\x48\x8B\x82", 3) || h[0x34] != 0x83 || h[0x35] != 0x78 ||
+        memcmp(h + 0x3a, "\x48\x8B\x40", 3) || h[0x3e] != 0x8B || h[0x3f] != 0x48 || h[0x5d] != 0x8B || h[0x5e] != 0x88) {
+        Log(L"ammo: the ammo count helper is not the expected shape; ammo control is off");
+        return 0;
+    }
+    AM.owner        = (PlayerOwnerFn)Rel32(ex + 0x52);
+    AM.weapons      = *(int32_t*)(ex + 0x63);
+    AM.setFour      = (SetWeaponAmmoFn)Rel32(wl + 0x5f);
+    AM.flareMax     = *(int32_t*)(fl + 0x18);
+    AM.flareObj     = *(int32_t*)(fl + 0x24);
+    AM.flareCur     = *(int32_t*)(fl + 0x2a);
+    AM.flareNotify  = *(int32_t*)(fl + 0x38);
+    AM.flareChanged = (FlareChangedFn)Rel32(fl + 0x40);
+    AM.slots        = *(int32_t*)(h + 0x30);
+    AM.slotNum      = h[0x36];
+    AM.slotData     = h[0x3d];
+    AM.slotCur      = h[0x40];
+    AM.slotStride   = *(int32_t*)(h + 0x5f) - AM.slotCur;      /* slot 1's current count minus slot 0's */
+    uint8_t* rs = g_fFreeRestock;                               /* optional: only SV_SetFreeRestock needs it */
+    AM.restock = rs && !memcmp(rs + 0x27, "\x48\x8B\x80", 3) && *(int32_t*)(rs + 0x2a) == AM.weapons &&
+                 !memcmp(rs + 0x2e, "\x48\x8B\x88", 3) && *(int32_t*)(rs + 0x31) == AM.flareObj &&
+                 rs[0x3e] == 0x88 && rs[0x3f] == 0x81 ? *(int32_t*)(rs + 0x40) : -1;
+    Log(L"ammo layout: owner fn %p, weapons +%x, slots +%x (data +%x, count +%x, current +%x, max +%x, %x bytes each), "
+        L"flares +%x (count +%x, max +%x, notify +%x, free restock +%x), set fn %p, flare fn %p",
+        (void*)AM.owner, (uint32_t)AM.weapons, (uint32_t)AM.slots, (uint32_t)AM.slotData, (uint32_t)AM.slotNum,
+        (uint32_t)AM.slotCur, (uint32_t)(AM.slotCur - 4), (uint32_t)AM.slotStride, (uint32_t)AM.flareObj,
+        (uint32_t)AM.flareCur, (uint32_t)AM.flareMax, (uint32_t)AM.flareNotify, (uint32_t)AM.restock, (void*)AM.setFour,
+        (void*)AM.flareChanged);
+    if (!InGame((void*)AM.owner) || !InGame((void*)AM.setFour) || !InGame((void*)AM.flareChanged) ||
+        AM.slotStride <= 0 || AM.slotStride > 0x400 || AM.slotCur < 4) {
+        Log(L"ammo: layout implausible; ammo control is off");
+        return 0;
+    }
+    AM.state = 1;
+    return 1;
+}
+
+/* The player's weapon object W, or NULL (not in Survival's level, no player aircraft yet). */
+static uint8_t* PlayerWeapons(void)
+{
+    if (!ResolveAmmo() || SpawnerReady() != 1) return NULL;
+    void* world = VCall(g_spawner, VF_WORLD);
+    if (!LiveObject(world)) return NULL;
+    uint8_t* owner = (uint8_t*)AM.owner(world);
+    if (!owner || !Readable(owner + AM.weapons, 8)) return NULL;
+    uint8_t* w = *(uint8_t**)(owner + AM.weapons);
+    if (!w || !Readable(w, AM.flareMax + 8) || !Readable(w + AM.slots, 8) || !Readable(w + AM.flareObj, 8)) return NULL;
+    return w;
+}
+
+/* The weapon slot array: data and count, or NULL. */
+static uint8_t* AmmoSlots(uint8_t* w, int32_t* num)
+{
+    uint8_t* s = *(uint8_t**)(w + AM.slots);
+    if (!s || !Readable(s + AM.slotData, 8) || !Readable(s + AM.slotNum, 4)) return NULL;
+    *num = *(int32_t*)(s + AM.slotNum);
+    uint8_t* data = *(uint8_t**)(s + AM.slotData);
+    if (*num < 0 || *num > 16 || (*num && !Readable(data, (size_t)*num * (size_t)AM.slotStride))) return NULL;
+    return data;
+}
+
+/* Current (wantMax 0) or maximum (1) count of one kind; SV_NOT_SPAWNED for a slot the aircraft doesn't have. */
+static int64_t AmmoGet(int kind, int wantMax)
+{
+    if (kind < 0 || kind >= AMMO_KINDS) return SV_ERR_BAD_ARGS;
+    uint8_t* w = PlayerWeapons();
+    if (!w) return AM.state < 0 ? SV_ERR_NO_GAME : SV_ERR_NOT_READY;
+    if (kind == 4) {
+        uint8_t* f = *(uint8_t**)(w + AM.flareObj);
+        if (wantMax) return *(int32_t*)(w + AM.flareMax);
+        return f && Readable(f + AM.flareCur, 4) ? *(int32_t*)(f + AM.flareCur) : SV_NOT_SPAWNED;
+    }
+    int32_t num = 0;
+    uint8_t* data = AmmoSlots(w, &num);
+    if (!data || kind >= num) return SV_NOT_SPAWNED;
+    return *(int32_t*)(data + (size_t)kind * AM.slotStride + AM.slotCur - (wantMax ? 4 : 0));
+}
+
+/* Sets one kind's count to min(value, max); value < 0 = full. Returns the new count or an SV_ERR code. */
+static int64_t AmmoSet(int kind, int32_t value)
+{
+    if (kind < 0 || kind >= AMMO_KINDS) return SV_ERR_BAD_ARGS;
+    uint8_t* w = PlayerWeapons();
+    if (!w) return AM.state < 0 ? SV_ERR_NO_GAME : SV_ERR_NOT_READY;
+    if (kind == 4) {
+        uint8_t* f = *(uint8_t**)(w + AM.flareObj);
+        if (!f || !Readable(f + AM.flareCur, 4) || !Readable(f + AM.flareNotify, 8)) return SV_NOT_SPAWNED;
+        int32_t max = *(int32_t*)(w + AM.flareMax);
+        int32_t v = value < 0 || value > max ? max : value;
+        *(int32_t*)(f + AM.flareCur) = v;
+        AM.flareChanged(f + AM.flareNotify);
+        return v;
+    }
+    int32_t num = 0, v4[4] = { -1, -1, -1, -1 };
+    uint8_t* data = AmmoSlots(w, &num);
+    if (!data || kind >= num) return SV_NOT_SPAWNED;
+    for (int i = 0; i < 4 && i < num; ++i) v4[i] = *(int32_t*)(data + (size_t)i * AM.slotStride + AM.slotCur);
+    int32_t max = *(int32_t*)(data + (size_t)kind * AM.slotStride + AM.slotCur - 4);
+    v4[kind] = value < 0 || value > max ? max : value;
+    AM.setFour(w, v4[0], v4[1], v4[2], v4[3]);
+    return *(int32_t*)(data + (size_t)kind * AM.slotStride + AM.slotCur);
+}
+
+/* Turns the missiles' free restock on (1) or off (0), as LiveSetMissileFreeRestockEnabled does; returns the old value
+ * or an SV_ERR code. */
+static int64_t SetFreeRestock(int on)
+{
+    uint8_t* w = PlayerWeapons();
+    if (!w) return AM.state < 0 ? SV_ERR_NO_GAME : SV_ERR_NOT_READY;
+    if (AM.restock < 0) return SV_ERR_NO_GAME;
+    uint8_t* f = *(uint8_t**)(w + AM.flareObj);
+    if (!f || !Readable(f + AM.restock, 1)) return SV_NOT_SPAWNED;
+    int64_t old = f[AM.restock];
+    f[AM.restock] = on ? 1 : 0;
+    return old;
+}
+
 /* ---- Lua bridge -----------------------------------------------------------
  * UE4SS calls a C++ mod's on_lua_start(mod_name, lua, ...) whenever a Lua mod starts, before its main.lua runs. In
  * UE4SS 3.0.1 that is vtable slot 6 (slot 8 is its deprecated twin; 5 and 7 are the no-name overloads, only for a Lua
@@ -1095,10 +1253,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.6.0" */
+/* SV_Version() -> "0.7.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.6.0";
+    static const char v[] = "0.7.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1141,6 +1299,32 @@ static int L_LogUnits(void* lua)
     return Ret(lua, LogUnits(why));
 }
 
+/* SV_Ammo(kind [, max]) -> the player's current (or, with max = 1, maximum) count; kind 0 gun, 1 missiles,
+ * 2 special 1, 3 special 2, 4 flares. SV_NOT_SPAWNED for a slot the aircraft doesn't have, or an SV_ERR code. */
+static int L_Ammo(void* lua)
+{
+    double kind = -1, wantMax = 0;
+    if (!ArgNumber(lua, &kind)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &wantMax);
+    return Ret(lua, AmmoGet((int)kind, wantMax != 0));
+}
+
+/* SV_SetAmmo(kind, count) -> the new count (capped at the weapon's maximum; count < 0 = full) or an SV_ERR code */
+static int L_SetAmmo(void* lua)
+{
+    double kind = -1, value = 0;
+    if (!ArgNumber(lua, &kind) || !ArgNumber(lua, &value)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, AmmoSet((int)kind, (int32_t)value));
+}
+
+/* SV_FreeRestock(on) -> the old setting (1 on, 0 off) or an SV_ERR code; on = 0 stops missiles refilling over time */
+static int L_SetFreeRestock(void* lua)
+{
+    double on = 0;
+    if (!ArgNumber(lua, &on)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, SetFreeRestock(on != 0));
+}
+
 /* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
 static int L_Reset(void* lua)
 {
@@ -1153,6 +1337,7 @@ static void RegisterLua(void* lua)
     static const struct { const char* name; LuaFn fn; } kFns[] = {
         { "SV_Version", L_Version }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
+        { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -1164,7 +1349,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock registered");
 }
 
 #define MOD_SLOTS 16
@@ -1234,6 +1419,10 @@ static void FindFunctions(void)
         { kSigUnregisterUnit, kSigUnregisterUnitMask, sizeof(kSigUnregisterUnit), NULL, 0 },
         { kSigUnitIdSpawned,  NULL, sizeof(kSigUnitIdSpawned), NULL, 0 },
         { kSigDestroyActor,   NULL, sizeof(kSigDestroyActor),  NULL, 0 },
+        { kSigAmmoExecute,    kSigAmmoExecuteMask, sizeof(kSigAmmoExecute), NULL, 0 },
+        { kSigAmmoFlare,      kSigAmmoFlareMask,   sizeof(kSigAmmoFlare),   NULL, 0 },
+        { kSigAmmoWeapons,    NULL, sizeof(kSigAmmoWeapons),   NULL, 0 },
+        { kSigFreeRestock,    kSigFreeRestockMask, sizeof(kSigFreeRestock), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1249,11 +1438,16 @@ static void FindFunctions(void)
     g_unregisterUnit = (UnregisterUnitFn)p[11].hit;
     g_fUnitIdSpawned = p[12].hit;
     g_destroyActor   = (DestroyActorFn)p[13].hit;
+    g_fAmmoExecute   = p[14].hit;
+    g_fAmmoFlare     = p[15].hit;
+    g_fAmmoWeapons   = p[16].hit;
+    g_fFreeRestock   = p[17].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
     Log(L"spawn functions: spawn unit %p, unregister unit %p, unit check %p, destroy actor %p",
         (void*)g_spawnUnit, (void*)g_unregisterUnit, g_fUnitIdSpawned, (void*)g_destroyActor);
+    Log(L"ammo functions: node execute %p, flare lambda %p, weapons lambda %p, free restock %p", g_fAmmoExecute, g_fAmmoFlare, g_fAmmoWeapons, g_fFreeRestock);
 }
 
 static int StonehengeInstalled(void)

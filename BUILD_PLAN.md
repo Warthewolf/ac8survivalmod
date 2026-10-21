@@ -201,6 +201,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Test 14 (Lua 0.8.0): the reflected FCS module AmmoCount has no live instances (weapon definitions only), no cap.
   BUILT in runtime 0.7.0 + Lua 0.8.1 (2026-10-22), waiting for test 15: native SV_Ammo / SV_SetAmmo copied from the
   stock node's own code (tools/re/AMMO.md); CFG.ammo presets by difficulty, gun kept full.
+  Test 16 (2026-10-22, Lua 0.9.0, Ace): caps WORK (144/32/4 -> 10/2/3, no free restock, gun full). But landing at the
+  airfield rearmed to the stock full load (144/32/4). Fixed in Lua 0.9.1, waiting for a test: any count above its cap is
+  put back to the cap every 0.5 s (log "ammo: refilled above the ... caps"), so a rearm fills up to the cap.
+  (Test 15 never ran: main.lua had an invalid "\m" escape and didn't load; lua_check.py now rejects bad escapes.)
 - [ ] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
   AttackAvoidance _gun/_msl_s/_msl_m/_spw/_CP, EscapeFromPursuer, MoveAwayFromTarget, ace moves); work out what
   0000/0011/0041/0211/0400/1000 mean; escalate per round with stock tiers + LiveAIChangePilotRankExecution. Write AI_BEHAVIOURS.md.
@@ -216,6 +220,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   packaged script /Game/Mods/SurvivalMode/AI/LA_SV_ProbePursue, even rounds a LuaScript made at run time), rows added
   at run time to DT_NPC_LuaSet / DT_NPC / DT_NPC_Mission022; (2) PilotRank written live on every enemy (5) and re-read;
   (3) "probe kill:" log lines with last attacker, aspect, altitude and the player's ammo spent.
+  Test 16 (2026-10-22): both probe rows were ready at level load and spawned (round 1 package script, round 2
+  run-time script); every aircraft spawns through DT_SV_NpcMission; PilotRank 4 -> 5 sticks (re-read 10 s later);
+  probe kill lines logged, but "last hit by ?" (K2_GetLastDamagedByAttacker gives nothing; use the native damage
+  history from KILLS_HEALTH_DEATH.md). Barrel rolls: not yet confirmed by eye.
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
