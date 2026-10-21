@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.11.0"
+local VERSION = "0.11.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -399,6 +399,11 @@ local CFG = {
     -- the campaign aces' set: after an attack pass it keeps pursuing, where Mission 22's sets extend away for ~13 s
     -- (MoveAwayFromTarget_0011); it also has the aces' pursuit, evasion and cobra/kulbit gun defence.
     search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_0400_CP" },
+    -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
+    -- bCanManeuverPugachevsCobra / bCanManeuverKulbit, which are set on each enemy when it appears: on only for the
+    -- models listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
+    -- airframes), so early fighters never post-stall.
+    maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a" } },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
         enabled          = true,
@@ -705,6 +710,32 @@ local function probeRank(p, tick)
         p.rankAt = nil
         local _, r = pcall(function() return p.obj.PilotRank end)
         log(string.format("probe: %s PilotRank 10 s later: %s", p.name, tostring(r)))
+    end
+end
+
+-- CFG.maneuvers: post-stall permission for this enemy (p from the plane list), set once when it is first seen up.
+-- The first plane of each model logs what its blueprint had and what it reads after the write.
+local maneuversSaid = {}
+local function enemyManeuvers(p)
+    if p.maneuvers or not CFG.maneuvers.enabled then return end
+    p.maneuvers = true
+    local model = p.name:match("^BP_OP%d+_(%w+)_") or "?"
+    local allow = false
+    for _, m in ipairs(CFG.maneuvers.post_stall) do if m == model then allow = true end end
+    local function read()
+        local okC, c = pcall(function() return p.obj.bCanManeuverPugachevsCobra end)
+        local okK, k = pcall(function() return p.obj.bCanManeuverKulbit end)
+        return string.format("cobra %s, kulbit %s", okC and tostring(c) or "?", okK and tostring(k) or "?")
+    end
+    local before = read()
+    local ok, err = pcall(function()
+        p.obj.bCanManeuverPugachevsCobra = allow
+        p.obj.bCanManeuverKulbit = allow
+    end)
+    if not maneuversSaid[model] then
+        maneuversSaid[model] = true
+        log(string.format("maneuvers: %s (%s) post-stall %s: was %s, now %s%s", model, p.name, allow and "allowed" or "off",
+            before, read(), ok and "" or (" (write failed: " .. tostring(err) .. ")")))
     end
 end
 
@@ -1358,7 +1389,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(probeTrack, p); pcall(probeRank, p, tick)
+                pcall(enemyManeuvers, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end

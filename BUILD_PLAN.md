@@ -233,6 +233,19 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Test 17 also: 25 km search set up for 9/9 aircraft; enemies closed from 18 km to 9 km in 10 s (they come for you).
   Lua 0.11.0 (user: more aggressive, 40 km): search + unit area 40 km; the fighters' _SV rows fly the aces' set
   NLID_0400_CP (keeps pursuing after a pass instead of MoveAwayFromTarget_0011's ~13 s extend-away). Waiting for test.
+  Lua 0.11.1: post-stall per model (CFG.maneuvers): every stock cobra/kulbit/Pugachev is behind DecoratorCanCobra /
+  CanKulbit, i.e. the plane's reflected bCanManeuverPugachevsCobra / bCanManeuverKulbit, set on each enemy when it
+  appears: on only for su33/su35/su37/su47/su57/f22a. Waiting for test ("maneuvers:" log lines).
+- [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
+  - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
+    (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep
+    stock scripts.
+  - Sets: DT_NPC_LuaSet rows NLID_SV_<Tier> added at run time (copy of NLID_0000_CP, slots repointed), like the probe.
+  - Tiers (first cut): Rookie = extends away after passes, weak evasion, few flares, no post-stall; Veteran = stays
+    on target, normal evasion, flares; Ace = KDS pursuit, strong evasion, post-stall only on capable models. Later: roles
+    (bomber, interceptor, escort) and the learning layer picking counters per flight.
+  - Selection: DT_NPC copies per aircraft x tier (<NpcId>_SV_<Tier>) + build-time mission rows <aircraft>_sv_<tier>;
+    main.lua picks the tier by round (config: tier start rounds) and difficulty.
 
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
