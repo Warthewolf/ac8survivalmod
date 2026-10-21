@@ -38,11 +38,13 @@ _yaw = math.radians(RUNWAY_YAW)
 START = (RUNWAY[0] - START_BACK_CM * math.cos(_yaw), RUNWAY[1] - START_BACK_CM * math.sin(_yaw), START_ALT_CM)
 START_ROT = (0.0, RUNWAY_YAW, 0.0)   # pitch, yaw, roll
 
-# Mission 16's sky: its lighting sublevel plus the world-settings values PL_Mission016 uses with it.
+# Mission 4's sky: its lighting sublevel (sky light, sun, height fog, post process and the LiveCloudlyActor cloud
+# layer) plus the world-settings values PL_Mission004 uses with it. Mission 4 leaves CloudDensityScale at its default
+# and sets CloudDensityScaleBySound. (Until 2026-10-22: Mission 16's Map14 sky, clock 08:00, CloudDensityScale 0.9.)
 LIT_OLD = '/Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Lit_Cloudly01'
-LIT_NEW = '/Game/Maps/MapCommon/Map14/Mission016/Mission016_Common_Lit_Cloudly01'
-CLOCK = (8, 0)
-CLOUD_DENSITY = 0.9
+LIT_NEW = '/Game/Maps/MapCommon/Map05/Mission004/Mission004_Common_Lit_Cloudly01'
+CLOCK = (10, 10)
+CLOUD_DENSITY_BY_SOUND = struct.unpack('<f', b'\x8b\x6c\xa7\x3f')[0]   # PL_Mission004's value, bit for bit (1.308)
 MISSION_TIME_LIMIT = 3600.0   # seconds; Mission 22 uses 900
 
 
@@ -112,13 +114,13 @@ def drop_prop(props, idx):
 def build_pl():
     z = ZenPkg(stock(M22 + 'PL_Mission022'))
     rename_package(z, M22 + 'PL_Mission022', PL)
-    # Lighting: Mission 16's sky/cloud level instead of Mission 22's.
+    # Lighting: Mission 4's sky/cloud level instead of Mission 22's.
     z.rename(LIT_OLD, LIT_NEW); z.rename(LIT_OLD.rsplit('/', 1)[1], LIT_NEW.rsplit('/', 1)[1])
     # Mission files
     for n in ('MC_Mission022', 'WD_Mission022_global', 'WD_Mission022_phase01', 'WD_Mission022_phase02',
               'EP_Mission022_global', 'EP_Mission022_phase01', 'EP_Mission022_phase02'):
         retarget_import(z, M22 + n, MI + n.replace('Mission022', 'SurvivalMode'))
-    # World settings: Mission 16's clock and cloud density; drop Mission 22's shuttle-launch cloud light.
+    # World settings: Mission 4's clock and cloud values; drop Mission 22's shuttle-launch cloud light.
     i = z.export_index('ChronicleWorldSettings')
     v, rest = props_of(z, i, 'LiveWorldSettings')
     props = v[2]
@@ -126,7 +128,9 @@ def build_pl():
     idx = {nm: k for k, (nm, t) in sc.items()}
     set_prop(props, idx['ClockHour'], 'ClockHour', ('raw', 'Int', struct.pack('<i', CLOCK[0])))
     set_prop(props, idx['ClockMin'], 'ClockMin', ('raw', 'Int', struct.pack('<i', CLOCK[1])))
-    set_prop(props, idx['CloudDensityScale'], 'CloudDensityScale', ('raw', 'Float', struct.pack('<f', CLOUD_DENSITY)))
+    drop_prop(props, idx['CloudDensityScale'])
+    set_prop(props, idx['CloudDensityScaleBySound'], 'CloudDensityScaleBySound',
+             ('raw', 'Float', struct.pack('<f', CLOUD_DENSITY_BY_SOUND)))
     drop_prop(props, idx['CloudLightSettings'])
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldSettings'); assert chk == v

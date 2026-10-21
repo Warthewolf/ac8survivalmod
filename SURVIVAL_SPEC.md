@@ -19,9 +19,11 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Mission 22 already has takeoff/landing (LiveSetTakeoffAndLandingEventExecution) and the Supply event at this
   airstrip. That is the base for landing and rearming.
 
-## 3. Sky and clouds: Mission 16
-- Replace Mission022_Common_Lit_Cloudly01 with /Game/Maps/MapCommon/Map14/Mission016/Mission016_Common_Lit_Cloudly01.
-- RISK: that lighting level was authored for Map14. Check sun direction, fog height and sea colour over Comona.
+## 3. Sky and clouds: Mission 4 (user, 2026-10-22; was Mission 16)
+- Replace Mission022_Common_Lit_Cloudly01 with /Game/Maps/MapCommon/Map05/Mission004/Mission004_Common_Lit_Cloudly01
+  (sky light, sun, height fog, post process and the LiveCloudlyActor cloud layer), with PL_Mission004's clock 10:10
+  and CloudDensityScaleBySound 1.308.
+- RISK: that lighting level was authored for Map05. Check sun direction, fog height and sea colour over Comona.
   If the clouds sit wrong, copy only the Cloudly sky/cloud actor into a new Map17 lighting level.
 
 ## 4. Airfield health bar
