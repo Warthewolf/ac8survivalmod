@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.36.3"
+local VERSION = "0.36.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -814,6 +814,10 @@ local CFG = {
                                 strike_every_s = 0.3, strike_m = 350, burst_strikes = 8,
                                 aura = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
                                 aura_every_s = 2.0, aura_scale = 3.0,
+                                -- every system it spawns is switched off fx_life_s after it starts (the burst where it
+                                -- falls: death_fx_s), and all of them at once when it's shot down (user, 2026-10-23:
+                                -- "make sure that the electric discharge despawns after the kill")
+                                fx_life_s = 3.0, death_fx_s = 4.0,
                                 open = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
                                          "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning" },
                                 burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
@@ -2636,7 +2640,32 @@ end
 -- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o` (offset: cm in its frame; scale:
 -- the portal's by default); how many came up.
 local niagaraSaid = false
-local function portalFx(list, o, offset, scale)
+-- Every system the Anomaly spawns, so none outlives it: { comp, offAt, goneAt }.
+ANOM.fx = {}
+local function keepFx(comp, life)
+    if comp and comp:IsValid() then
+        ANOM.fx[#ANOM.fx + 1] = { comp = comp, offAt = ((D and D.now) or 0) + life }
+    end
+end
+-- Each tick (any special state): switch off what's had its time, then take it away; at the kill (`all`), every one.
+function ANOM.cleanFx(now, all)
+    local keep = {}
+    for _, e in ipairs(ANOM.fx) do
+        if all and not e.goneAt then e.offAt = now end
+        if not e.goneAt and now >= e.offAt then
+            pcall(function() e.comp:Deactivate() end)               -- stops spawning; what's out fades
+            e.goneAt = now + 2
+        end
+        if e.goneAt and now >= e.goneAt then
+            if not pcall(function() e.comp:K2_DestroyComponent(e.comp) end) then pcall(function() e.comp:DestroyComponent() end) end
+        else
+            keep[#keep + 1] = e
+        end
+    end
+    ANOM.fx = keep
+end
+
+local function portalFx(list, o, offset, scale, life)
     local pc = CFG.specials.anomaly.portal
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     if not (valid(lib) and valid(o)) then return 0 end
@@ -2648,6 +2677,7 @@ local function portalFx(list, o, offset, scale)
             local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), offset or { X = 0, Y = 0, Z = 0 },
                 { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
             if comp and comp:IsValid() then comp:SetWorldScale3D({ X = sc, Y = sc, Z = sc }) end
+            keepFx(comp, life or pc.fx_life_s)
         end)
         if ok and sys then n = n + 1
         elseif not niagaraSaid then niagaraSaid = true; log("special: portal system " .. name .. " failed: " .. tostring(err)) end
@@ -2672,8 +2702,9 @@ local function fxAt(list, at, scale)
         local name = path:match("[^/]+$")
         local sys = loadObject(path .. "." .. name)
         if sys and pcall(function()
-            lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = scale, Y = scale, Z = scale },
-                true, true, 0, true)
+            local comp = lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
+                { X = scale, Y = scale, Z = scale }, true, true, 0, true)
+            keepFx(comp, CFG.specials.anomaly.portal.death_fx_s)
         end) then n = n + 1 end
     end
     return n
@@ -2732,6 +2763,9 @@ function ANOM.tick(now, s)
         s.state = "done"
         setField(false, s)
         if type(SV_Event) == "function" then SV_Event("RE_SV_AnomalyEnd") end
+        local live = #ANOM.fx
+        ANOM.cleanFx(now, true)                                               -- every system on it off now
+        log(string.format("special: %s down: its %d lightning systems switched off", c.name, live))
         local nb = fxAt(c.portal.burst, s.lastAt, c.portal.scale)             -- the lightning again where it fell
         log(string.format("special: %s's last burst (%d systems)", c.name, nb))
         addCredits(c.reward, c.name .. " down")
@@ -2768,6 +2802,7 @@ local function specialTick(now)
         log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
     end
     local s = D.special
+    if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
     if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
@@ -3825,7 +3860,7 @@ local function probeTick(tick)
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
-        ANOM.on, ANOM.pawn = false, nil
+        ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
         do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
             local an, got, want = CFG.specials.anomaly, 0, 0
             local function keep(path)
