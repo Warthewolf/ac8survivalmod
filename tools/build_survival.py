@@ -122,6 +122,7 @@ def build_pl():
     for n in ('MC_Mission022', 'WD_Mission022_global', 'WD_Mission022_phase01', 'WD_Mission022_phase02',
               'EP_Mission022_global', 'EP_Mission022_phase01', 'EP_Mission022_phase02'):
         retarget_import(z, M22 + n, MI + n.replace('Mission022', 'SurvivalMode'))
+    retarget_import(z, RADIO_STOCK, RADIO)                 # Survival's copy of Mission 22's radio lines (build_radio)
     # World settings: Mission 4's clock and cloud values; drop Mission 22's shuttle-launch cloud light.
     i = z.export_index('ChronicleWorldSettings')
     v, rest = props_of(z, i, 'LiveWorldSettings')
@@ -548,6 +549,51 @@ def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit):
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, row_struct)
     assert chk['rows'] == dt['rows']
     save(z, new_path)
+
+
+# Radio (tools/re/MUSIC_RADIO_CAMERA.md C): the level's radio table (ChronicleWorldSettings.RadioSettings, a hard
+# import) is Survival's copy of Mission 22's, with only these changes (the voices are in the global AKB_Voice bank, the
+# speakers in the global DT_SpeakerTable):
+RADIO_STOCK = '/Game/Datatables/Radio/DT_Rdo_ST_ms022'
+RADIO = DATA + 'DT_SV_Radio'
+# MOONCHILD's takeoff (01_Wave1_Ally_Take_Off): Mission 25 part 2's Savian mercenary leader, "Our economy relies on mercs
+# like us." (v2501_0054), in place of "This is Singleton Flight. Providing support." (user, 2026-10-23)
+RADIO_REPLACE = {('01_Wave1_Ally_Take_Off', 'v2216_0007'): ('v2501_0054', 'ms25_Savia_Mercenary_Leader')}
+# The shuttle round keeps Nagase's lines and drops the Professor's (Baxter) and Tasha's (user, 2026-10-23); groups left
+# empty aren't played (survival_events.SHUTTLE_RADIO)
+RADIO_DROP_SPEAKERS = ('LIVE_Baxter', 'LIVE_Tasha')
+RADIO_DROP_IN = ('01_Countdown_intermission_1st', '01_Countdown_mainEngine', '01_All_Wave_Hit_Shuttle_First')
+
+
+def build_radio():
+    z = ZenPkg(stock(RADIO_STOCK))
+    rename_package(z, RADIO_STOCK, RADIO)
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveRadioTable')
+    assert o == len(p), (o, len(p))
+    def field(row, n): return [q for q in row[2] if q[1] == n][0][3]
+    def setf(row, n, v): row[2][:] = [(q[0], q[1], q[2], v) if q[1] == n else q for q in row[2]]
+    keep, done, dropped = [], set(), 0
+    for k, row in dt['rows']:
+        group, text, speaker = field(row, 'RadioGroupID')[1], field(row, 'TextID')[1], field(row, 'SpeakerID')[1]
+        if group in RADIO_DROP_IN and speaker in RADIO_DROP_SPEAKERS:
+            dropped += 1
+            continue
+        new = RADIO_REPLACE.get((group, text))
+        if new:
+            setf(row, 'TextID', ('name', new[0], 0))
+            setf(row, 'SpeakerID', ('str', new[1]))
+            z.nb.add(new[0]); z.nb.add(new[1])
+            done.add((group, text))
+        keep.append((k, row))
+    assert done == set(RADIO_REPLACE), done
+    assert dropped == 5, dropped                       # Baxter x3 + Tasha x1 in the countdown, Baxter on the first hit
+    dt['rows'] = keep
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
+    assert chk['rows'] == dt['rows']
+    save(z, RADIO)
+    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced)')
 
 
 # The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).
@@ -994,6 +1040,7 @@ def build_lua_scripts():
 
 
 if __name__ == '__main__':
+    build_radio()
     build_lua_scripts()
     build_npc_table()
     build_shop_rows()

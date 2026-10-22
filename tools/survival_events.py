@@ -85,12 +85,14 @@ SHUTTLE_HP = 175.0                          # Mission 22's
 SHUTTLE_COUNTDOWN_S = 150.0
 SHUTTLE_REMOVE_S = 180.0                    # = Scripts/main.lua CFG.specials.shuttle.remove_s
 # Mission 22's countdown radio, as seconds before liftoff (its lines count down in seconds), and its countdown sound
-# flags; Mission 22 drives them off its mission timer, Survival off delays from the shuttle's appearance.
+# flags; Mission 22 drives them off its mission timer, Survival off delays from the shuttle's appearance. Nagase's lines
+# only (user, 2026-10-23): the Professor's and Tasha's groups (28 s intermission, 10 s main engine) are left out, and
+# build_survival.py RADIO_DROP_* takes their rows out of Survival's radio table.
 SHUTTLE_RADIO = [(SHUTTLE_COUNTDOWN_S - 3, '01_Wave5_Countdown_Start'), (33, '01_Countdown_Shuttle33'),
-                 (32, '01_Countdown_Shuttle32'), (31, '01_Countdown_Shuttle31'), (28, '01_Countdown_intermission_1st'),
+                 (32, '01_Countdown_Shuttle32'), (31, '01_Countdown_Shuttle31'),
                  (23, '01_Countdown_Shuttle23'), (22, '01_Countdown_Shuttle22'), (21, '01_Countdown_Shuttle21'),
                  (20, '01_Countdown_Shuttle20'), (19, '01_Countdown_Shuttle19'), (15, '01_Countdown_intermission_2nd'),
-                 (11, '01_Countdown_Ignistion'), (10, '01_Countdown_mainEngine'), (8, '01_Countdown_Shuttle8'),
+                 (11, '01_Countdown_Ignistion'), (8, '01_Countdown_Shuttle8'),
                  (7, '01_Countdown_Shuttle7'), (2, '01_Countdown_Shuttle2and1')]
 SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_Set'),
                        (23, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_23sec_Set'),

@@ -505,6 +505,11 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   Freedoms sailed included); their weapons fly <FCS>_SVA_Aegis: allies.fcs and then arming / lock x lock_x 0.5, shot
   interval / rest x fire_x 0.5 (CFG.allies.ships.Aegis.fcs; stock x0.25 overall, twice the other allies' rate);
   0.39.1: lock-on range 2x stock (range_x 2.0, in place of the allies' 1.6).
+- Radio (user, 2026-10-23): the level's radio table is Survival's own copy of ms022's (DT_SV_Radio, build_survival.py
+  build_radio; PL_SurvivalMode's hard import retargeted). MOONCHILD's takeoff plays M25-2's Savian mercenary leader
+  "Our economy relies on mercs like us." (v2501_0054) in place of Singleton's "Providing support" line; the shuttle
+  countdown keeps Nagase only (the Professor / Baxter and Tasha rows dropped, their 28 s and 10 s groups not played),
+  and the first-hit group loses Baxter's line. Untested.
 - MOONCHILD: 2 flights of 2 F-22s (copies of M22's parked scramble F/A-18s, AB_Unit_01_Air1, not invincible), spawned
   once the player is airborne, 45 s apart; M22's own scramble chain (hold, taxi, roll, climb; PathFinish triggers);
   airborne: gear up, Normal / Default, AIR_ONLY, 40 km search module. Kept out of `planes` (no kill credit, no tiers).
