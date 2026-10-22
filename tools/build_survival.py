@@ -441,6 +441,12 @@ def edit_mission_row(props):
         setv(props, k, s(v))
     setv(props, 'MissionClearConditionIDs', ('arr', [s('SV_Mission_Objective'), s('SV_Mission_Objective')]))
     setv(props, 'CheckpointTextIndices', ('arr', []))                         # Mission 22's checkpoints
+    # No wingmen in the hangar (Survival flies none). Mission 22's row offers Tasha and Coster with the save's plane and
+    # skin; on a friend's save that skin list was empty and the hangar's "Wingman1 Info" panel crashed reading it
+    # (minidump of 2026-10-22: 0x1479a4153, a null read of entry n-1). WingmanType None x3, as Mission 015's row.
+    for k in ('HangarSelectWingman1st', 'HangarSelectWingman2nd', 'HangarSelectWingman3rd'):
+        st = [p for p in props if p[1] == k][0][3]
+        st[2][:] = [(q[0], q[1], True, None) if q[1] == 'WingmanType' else q for q in st[2]]
 
 
 def edit_menu_row(props):
