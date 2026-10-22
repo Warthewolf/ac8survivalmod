@@ -235,6 +235,10 @@ def build_events(stock_ep):
     t_bgm = g.exec_template('LivePlayBGMExecution', 'MissionStart')
     t_search = g.exec_template('LiveAIChangeEnemySearchType', '01_E_AreaA_ReinforcementAppearance_0')
     t_engage = g.exec_template('LiveAIEngagementOrder', '01_E_Wave03_ReinforcementAppearance_0')
+    # Mission 22's order says PlayerFirst, which let fighters pick the airfield's target points once those existed (AI
+    # watch, 2026-10-22: an F-15E pursued BP_GR000_dummy at the runway). PlayerOnlyNoLimit, as Mission 24 orders its
+    # pursuers (RE_SilverProtect602_0): the player only, at any range.
+    assert arg_values(t_engage)[4] == 'Player' and arg_values(t_engage)[6] == 'PlayerFirst'
     t_call = g.exec_template('LiveCallRemoteEventExecution', 'MissionStart')
     t_tp_unit = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[8] == 'Unit_dummyN0')
     t_tp_obj = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
@@ -277,7 +281,7 @@ def build_events(stock_ep):
         flag(up, 'SV_Alive', 'Add', 1)
         flag(up, f'SV_Up_{k + 1:02d}', 'Set', 1)
         g.execute(t_search, up, {1: unit}, delay=2.0)
-        g.execute(t_engage, up, {1: unit}, delay=2.0)
+        g.execute(t_engage, up, {1: unit, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
         g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: unit})
         flag(down, 'SV_Alive', 'Sub', 1)
         flag(down, 'SV_Kills', 'Add', 1)

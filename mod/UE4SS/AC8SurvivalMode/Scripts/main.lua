@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.19.2"
+local VERSION = "0.19.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -431,7 +431,9 @@ local CFG = {
     -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
     -- script) first flight, never in the normal rotation.
     ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
-    probe = { enabled = true, behaviour = true, runtime = true, kills = true,
+    -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
+    -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
+    probe = { enabled = true, behaviour = false, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
@@ -1071,8 +1073,8 @@ local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 
 -- AI watch (CFG.ai_watch; user, 2026-10-22: "they fly towards the airfield instead of targeting the player"): every
 -- 2 s each enemy's AI state (blackboard key AIState, ELiveAIState) and target (blackboard key TargetActor), logged
--- when either changes, with its distance to the player and to the airfield; once per plane, the move-away script its
--- behaviour set gave it (shows the set really applied).
+-- when either changes, with its distance to the player and to the airfield. (AIStateComponent.LuaAssets is not the set
+-- in use: it read LA_MoveAwayFromTarget_0000 on planes whose set was built with LA_SV_MoveAway.)
 local AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
                    "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
                    "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
@@ -1086,11 +1088,6 @@ local function aiWatch(p, you)
         local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
         if okT then tgt = valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none" end
     end)
-    if not p.setSaid then
-        p.setSaid = true
-        local ok, l = pcall(function() return nameOf(p.obj.AIStateComponent.LuaAssets.MoveAwayFromTargetLua.LuaScript):match("([^%.:]+)$") end)
-        log("ai: " .. p.name .. " flies move-away script " .. tostring(ok and l or "?"))
-    end
     if st .. "|" .. tgt == p.aiKey then return end
     p.aiKey = st .. "|" .. tgt
     local air = p.at and math.sqrt((p.at.X - AIRFIELD.X) ^ 2 + (p.at.Y - AIRFIELD.Y) ^ 2) / 100000
