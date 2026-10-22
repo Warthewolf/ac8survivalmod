@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.0"
+local VERSION = "0.37.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -757,6 +757,8 @@ local CFG = {
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
                      -- (removed after it, tools/survival_events.py PAD_REMOVE_LOST_S / SHUTTLE_REMOVE_S)
+                     -- remove_s: liftoff to the shuttle and pad being taken off; = SHUTTLE_REMOVE_S (its flags reset after it)
+                     remove_s = 180,
                      pad_allies = true, dummies = "SV_Unit_PadDummies",
                      shop_closed_rounds = 1, unit = "SV_Unit_Shuttle", pad = "AA_Unit_01_Ground0",
                      name_key = "SV_Shuttle_Name", npc_row = "OP0057_sstb_01_SV",
@@ -2847,7 +2849,7 @@ local function specialTick(now)
             D.round, now - s.at, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
     elseif launched or over then
         s.state = "done"
-        D.shuttleRemoveAt = now + 60                    -- it and the pad's allies, once it's well up
+        D.shuttleRemoveAt = now + c.remove_s            -- it and the pad's allies, once it's well up
         addCredits(c.reward, "shuttle launched")
         hudCallout(t.launched, string.format(t.launched_sub, c.reward))
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,

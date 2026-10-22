@@ -83,7 +83,7 @@ SHUTTLE_NPC = 'OP0057_sstb_01_SV'           # DT_SV_NpcRows row, added to DT_NPC
 SHUTTLE_PATH = '01_Ground0_shuttle_0_Path0'
 SHUTTLE_HP = 175.0                          # Mission 22's
 SHUTTLE_COUNTDOWN_S = 150.0
-SHUTTLE_REMOVE_S = 60.0
+SHUTTLE_REMOVE_S = 180.0                    # = Scripts/main.lua CFG.specials.shuttle.remove_s
 # Mission 22's countdown radio, as seconds before liftoff (its lines count down in seconds), and its countdown sound
 # flags; Mission 22 drives them off its mission timer, Survival off delays from the shuttle's appearance.
 SHUTTLE_RADIO = [(SHUTTLE_COUNTDOWN_S - 3, '01_Wave5_Countdown_Start'), (33, '01_Countdown_Shuttle33'),
@@ -570,7 +570,7 @@ def build_shuttle(g, flag):
     # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
     # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions
     # when the event fires, not when it runs: then a loss left in SV_ShuttleLost would silence the next special
-    after = T + SHUTTLE_REMOVE_S + 5
+    after = T + SHUTTLE_REMOVE_S + 30                # (well after Lua's removal: it counts from when it sees liftoff)
     for name in resets:
         flag(up, name, 'Set', 0, delay=after)
     # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.

@@ -425,7 +425,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   (own unit SV_Unit_Shuttle, NPC row OP0057_sstb_01_SV named "EMBDIR Shuttle - CORRIS" via SV_Shuttle_Name) in place;
   its appearance runs Mission 22's countdown radio, ignition, path and liftoff records on delays (150 s); strike
   flights (40% of the round) get the shuttle as target (SV_ShuttleRound flag), fighters the player. HUD: LAUNCH IN /
-  SHUTTLE n%. Launched: +3000 zollars. Lost: shop closed through the next round. Removed 60 s after liftoff.
+  SHUTTLE n%. Launched: +3000 zollars. Lost: shop closed through the next round. Removed 180 s after liftoff (user, 2026-10-23).
   Framework done with it: specialFor (rotation), "SPECIAL ROUND n" callout, round clear waits for the special.
   Test: "special:" lines; radio lines play; strikers attack the pad; name shows; liftoff path; next special respawns.
   Removal, 2nd report (2026-10-23, shuttle still up after liftoff): LiveDestroyUnitExecution kills through
