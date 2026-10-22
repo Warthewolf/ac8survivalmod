@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.22.1"
+local VERSION = "0.22.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2290,6 +2290,27 @@ end
 -- cap (the rearm fills up to it; the gun is left alone).
 local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "AmmoTextRTop", "AmmoTextRCenter", "AmmoTextRBottom" }
 local AMMO_SLOT_KIND = { AmmoTextLCenter = 1, AmmoTextLBottom = 4, AmmoTextRTop = 2, AmmoTextRCenter = 3, AmmoTextRBottom = 3 }
+-- A named child widget (GetWidgetFromName, else the blueprint variable) and a text widget's text (GetText, else its
+-- Text property): on the landing menu the variables read back as TrivialObjects (test of 2026-10-22).
+local function childWidget(w, n)
+    local ok, x = pcall(function() return w:GetWidgetFromName(FName(n)) end)
+    if ok and valid(x) then return x end
+    ok, x = pcall(function() return w[n] end)
+    if ok and valid(x) then return x end
+    return nil
+end
+local function widgetText(t)
+    local ok, v = pcall(function() return t:GetText():ToString() end)
+    if ok and type(v) == "string" then return v end
+    ok, v = pcall(function() return t.Text:ToString() end)
+    if ok and type(v) == "string" then return v end
+    return nil
+end
+local function slotTexts(panel, slot)                 -- the slot's name and count widgets
+    local w = childWidget(panel, slot)
+    return w and childWidget(w, "Text_Body"), w and childWidget(w, "Text_Body_1")
+end
+
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
     if not playerOnAirfield() then SH.panels = nil; return end   -- the landing menu only exists down there
@@ -2306,10 +2327,9 @@ local function hangarAmmoTick(tick)
             SH.panelSaid = true                      -- once: what the panel holds (test of 2026-10-22: no rewrite seen)
             local parts = {}
             for _, slot in ipairs(AMMO_SLOTS) do
-                local ok, txt = pcall(function()
-                    return panel[slot].Text_Body:GetText():ToString() .. " " .. panel[slot].Text_Body_1:GetText():ToString()
-                end)
-                parts[#parts + 1] = slot .. " '" .. (ok and txt or ("? " .. tostring(txt))) .. "'"
+                local name, count = slotTexts(panel, slot)
+                parts[#parts + 1] = string.format("%s '%s' '%s'", slot, tostring(name and widgetText(name)),
+                    tostring(count and widgetText(count)))
             end
             local mx = {}
             for k = 0, 4 do mx[#mx + 1] = tostring(A.max[k]) end
@@ -2321,9 +2341,9 @@ local function hangarAmmoTick(tick)
                     local kind = AMMO_SLOT_KIND[slot]
                     local cap = kind and A.caps[kind]
                     if not cap then return end
-                    local t = panel[slot].Text_Body_1
-                    local now = t:GetText():ToString()
-                    local m = tonumber(now:match("^%s*(%d+)%s*$"))               -- an empty special slot shows "---"
+                    local _, t = slotTexts(panel, slot)
+                    local now = t and widgetText(t)
+                    local m = now and tonumber(now:match("^%s*(%d+)%s*$"))               -- an empty special slot shows "---"
                     if not m then return end
                     local want = tostring(math.min(cap, m))
                     if now ~= want then
