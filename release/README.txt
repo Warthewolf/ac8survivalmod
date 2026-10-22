@@ -46,7 +46,7 @@ Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite,
 Phantom and Reaper from round 16). Rounds 8, 15 and 22 are difficulty spikes. Better pilots sit on your tail, break,
 flare, and from Mercenary up use cobra / kulbit baits and scissors.
 
-Named aces (round 16 on; those rounds have only the ace squadrons, no bomber raids): each rank flies its own squadron - F-15C, Su-35, Typhoon, Su-47, Rafale, F-22A, Su-57 and,
+Named aces (ace rounds: 16, 19, 22, ... - only ace squadrons, no bomber raids; the rounds between are normal): each rank flies its own squadron - F-15C, Su-35, Typhoon, Su-47, Rafale, F-22A, Su-57 and,
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
 an "ACE INBOUND" callout names each one the first time it shows up.
 

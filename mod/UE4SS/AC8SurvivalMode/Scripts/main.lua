@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.0"
+local VERSION = "0.35.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -554,8 +554,12 @@ local CFG = {
     -- Su-35, Savia Rafale, Ares Su-57, Shadow Su-57 / Typhoon / Su-47, the named aces' own), its wingmen under the
     -- squadron's name and its lead, when that ace isn't already up, under the ace's own. These are only the names:
     -- [aces.<tier>] in survival.ini renames them; which airframe a name flies is fixed (tools/build_survival.py ACES).
+    -- Ace rounds come on a cycle (user, 2026-10-22: "Ace Rounds on a Cycle"): from first_round, every `every`th round is
+    -- an ace round, all of it the round's tier's squadrons (no ordinary flights, no bomber raid); the rounds between are
+    -- normal ones, ordinary aircraft flown at the same tier (its AI level, fire control and reactions).
     aces = {
         enabled = true,
+        first_round = 16, every = 3,
         callout = true,                            -- "ACE INBOUND" the first time each ace shows up in a run
         -- airframes only Online Mode has (the ADFX-02: its model and blueprint come from Online Mode's tables, ACE.models).
         -- false leaves them out (if one ever misbehaves offline); their tier flies the rest of its line-up.
@@ -1076,13 +1080,17 @@ local function spikeLevel(round)
 end
 local function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
 -- The tier index (CFG.tiers.list) a flight spawning in round `round` flies: the round's, one higher at promote_chance.
--- noAce: never promoted into a tier that flies named-ace squadrons (CFG.aces: those come as whole rounds).
-local function pickTier(round, noAce)
+local function pickTier(round)
     local tc, i = CFG.tiers, 1
     for k, t in ipairs(tc.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
-    if i < #tc.list and math.random() < tc.promote_chance
-        and not (noAce and CFG.aces.enabled and ACE.roster[tc.list[i + 1].name:lower()]) then i = i + 1 end
+    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
     return i
+end
+-- An ace round (CFG.aces first_round / every): the round's tier's squadrons only.
+local function aceRound(round)
+    local a = CFG.aces
+    return a.enabled and CFG.tiers.enabled and round >= a.first_round
+        and (round - a.first_round) % math.max(1, math.floor(a.every)) == 0
 end
 local function withLevel(base, over)                    -- a copy of `base` with `over`'s fields
     local t = {}
@@ -2279,13 +2287,13 @@ end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ti = CFG.tiers.enabled and (D.roundTier or pickTier(D.round, true)) or nil
+    local ti = CFG.tiers.enabled and (D.roundTier or pickTier(D.round)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
     local fcsLevel = math.max(spikeLevel(D.round), tier.fcs or 0)
     local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], fcsLevel)
-    local ace = tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)
+    local ace = D.roundTier and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
     if ace then ac = ace.wing end
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
@@ -2643,11 +2651,14 @@ local function startRound()
     local special = specialFor(D.round)
     D.special = special and { kind = special, state = "pending" } or nil
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
-    -- spawn"): a round whose tier flies ace squadrons is that tier throughout, with no bomber raid
+    -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
     D.roundTier = nil
-    if CFG.tiers.enabled and CFG.aces.enabled then
-        local ti = pickTier(D.round)
+    if aceRound(D.round) then
+        local ti = D.nextTier or pickTier(D.round)      -- (the one its callout named)
         local tn = CFG.tiers.list[ti].name
+        if not ACE.roster[tn:lower()] then             -- (a tier without squadrons: the first one with them)
+            for k, t in ipairs(CFG.tiers.list) do if ACE.roster[t.name:lower()] and k > ti then ti, tn = k, t.name; break end end
+        end
         if ACE.roster[tn:lower()] then
             D.roundTier = ti
             local c = CFG.aces[tn:lower()] or {}
@@ -2657,6 +2668,7 @@ local function startRound()
             end
         end
     end
+    D.nextTier = nil
     local anomalyOnly = special == "anomaly" and CFG.specials.anomaly.only
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
@@ -2762,6 +2774,11 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             elseif specialFor(D.round + 1) == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
+            elseif aceRound(D.round + 1) then
+                D.nextTier = pickTier(D.round + 1)          -- startRound flies this one
+                local tn = CFG.tiers.list[D.nextTier].name:lower()
+                local c = CFG.aces[tn] or {}
+                hudCallout(string.format(t.start, D.round + 1), string.format(t.aces_round, tostring(c.squadron or tn):upper()))
             else
                 hudCallout(string.format(t.start, D.round + 1), t.start_sub)
             end
