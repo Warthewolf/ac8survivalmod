@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.3"
+local VERSION = "0.35.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2701,7 +2701,8 @@ local function startRound()
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
         CFG.max_aircraft + (sk.max_add or 0))
     local b = CFG.airfield.bombers
-    local special = specialFor(D.round)
+    local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+F11: the Anomaly next, for testing)
+    D.forceSpecial = nil
     D.special = special and { kind = special, state = "pending" } or nil
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
     -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
@@ -2902,9 +2903,10 @@ local function roundsTick(now)
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
             local t = CFG.hud.text
-            if specialFor(D.round + 1) == "shuttle" then
+            local nextSpecial = D.forceSpecial or specialFor(D.round + 1)
+            if nextSpecial == "shuttle" then
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
-            elseif specialFor(D.round + 1) == "anomaly" then
+            elseif nextSpecial == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
             elseif aceRound(D.round + 1) then
                 D.nextTier = pickTier(D.round + 1)          -- startRound flies this one
@@ -3886,6 +3888,22 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             if not ok then log("launch: error " .. tostring(err)) end
         end)
     end)
+    if Key.F11 then                -- Ctrl+F11 in a run: the next round is the Anomaly (in the break: it starts now)
+        pcall(RegisterKeyBind, Key.F11, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now then log("test: Ctrl+F11 outside a Survival run"); return end
+                    D.forceSpecial = "anomaly"
+                    local soon = D.state == "wait"
+                    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+                    hudCallout("TEST: THE ANOMALY", soon and "STARTING NOW" or "NEXT ROUND")
+                    log(string.format("test: Ctrl+F11, round %d is the Anomaly (%s)", D.round + 1,
+                        soon and "starting in 3 s" or "after this round"))
+                end)
+                if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
+            end)
+        end)
+    end
     if Key.F10 then                -- Ctrl+F10: a beach mark (the amphibious assault's landing points)
         pcall(RegisterKeyBind, Key.F10, mods, function()
             ExecuteInGameThread(function()
