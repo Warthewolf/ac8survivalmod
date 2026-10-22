@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.8"
+local VERSION = "0.35.9"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -784,7 +784,9 @@ local CFG = {
                      -- game draws an ECM carrier's area on the radar itself; it also makes your missiles miss near it)
                      weapons = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_ECM000" },
                      -- its arrival camera (tools/survival_events.py ANOMALY_CAMERAS; the shuttle's ms22-01 was too close)
-                     camera = "LookAt_Event_Camera",
+                     -- (still too close at ~20 km: the game zooms in harder the farther the target is) the Celaeno's
+                     -- camera, made for a huge airship, and the portal spawn_km from you, any direction (nil: anywhere)
+                     camera = "LookAt_Event_Camera_ms23-01", spawn_km = { 8, 12 },
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
                      -- the Celaeno's death sounds (Mission 23's sound events, played by the event package when it's
                      -- down: tools/survival_events.py ANOMALY_DOWN_SOUNDS), loaded with the level so they can play
@@ -2565,6 +2567,19 @@ function ANOM.spawn()
     end
     local level = #SPIKE_SUFFIX
     local x, y, dist, bearing = spawnPoint()
+    local you = c.spawn_km and playerLocation()
+    if you then                                    -- spawn_km from the player, inside the combat zone
+        for _ = 1, 30 do
+            local b, d = math.random() * 360, c.spawn_km[1] + math.random() * (c.spawn_km[2] - c.spawn_km[1])
+            local px, py = you.X + d * 100000 * math.cos(math.rad(b)), you.Y + d * 100000 * math.sin(math.rad(b))
+            if math.abs(px - ZONE.X) < ZONE.HALF and math.abs(py - ZONE.Y) < ZONE.HALF then
+                x, y, bearing = px, py, b
+                local dx, dy = px - AIRFIELD.X, py - AIRFIELD.Y
+                dist = math.sqrt(dx * dx + dy * dy) / 100000
+                break
+            end
+        end
+    end
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     local top = #CFG.tiers.list
     D.flightTier = D.flightTier or {}
