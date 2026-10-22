@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.31.0"
+local VERSION = "0.31.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1476,7 +1476,7 @@ local function searchSetup()
         local _, r = dtCall(npc, "FindRow", SR.npcRow[a])
         check = check .. string.format("; %s flies behaviour set %s", SR.npcRow[a], r.LuaSetId:ToString())
     end)
-    log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #list))
+    log(string.format("search: module %s (%s); %d of %d aircraft and ace rows use it", SEARCH_MODULE.row, check, n, #list))
     local nl = 0
     for _, t in pairs(SR.levels) do nl = nl + #t end
     log(string.format("spikes: %d difficulty-spike rows made (%d levels)", nl, nLevels))
@@ -3140,11 +3140,15 @@ local function probeTick(tick)
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
         SR.usable = {}
         local nS = 0
-        for a, sv in pairs(SR.ready) do SR.usable[a], nS = sv, nS + 1 end
+        local nA = 0                               -- the aces' rows (CFG.aces) count apart from the aircraft
+        for a, sv in pairs(SR.ready) do
+            SR.usable[a] = sv
+            if a:find("^sv_ace_") then nA = nA + 1 else nS = nS + 1 end
+        end
         SR.usableLevels = {}                       -- spike rows in before this level loaded (the spawner cached them)
         for a, t in pairs(SR.levels or {}) do SR.usableLevels[a] = t end
-        log(string.format("search: at level load, %d of %d aircraft fly with the %s m search", nS, #CFG.aircraft,
-            tostring(CFG.search.radius_m)))
+        log(string.format("search: at level load, %d of %d aircraft (and %d ace rows) fly with the %s m search", nS,
+            #CFG.aircraft, nA, tostring(CFG.search.radius_m)))
         if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end   -- a restart keeps the level
         H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
         flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
