@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.23.0"
+local VERSION = "0.24.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -561,9 +561,13 @@ local CFG = {
     -- changing the music for the rest of the run.
     -- enabled = false (user, 2026-10-22): no round music at all, the Music Player is the only music (the mission-start
     -- track played over it; tools/survival_events.py MUSIC is None too). true brings the round rotation back.
+    -- hold_clock: the Music Player ends each track by its own clock, which ran on through pauses, so every pause cut the
+    -- track short (user, 2026-10-22: "music skipped on round change"); dlls/main.dll 0.12.0 holds it while the BGM is
+    -- paused (SV_MusicClock, tools/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival").
     music = {
         enabled      = false,
         pause_player = true,
+        hold_clock   = true,
         start_track  = "AKE_Bgm_Ms08A_Play",
         restart_s    = 15,
         tracks  = { "AKE_Bgm_Ms02A_Play", "AKE_Bgm_Ms04A_Play", "AKE_Bgm_Ms05a_Play", "AKE_Bgm_Ms07A_Play",
@@ -624,6 +628,95 @@ local CFG = {
     },
 }
 for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
+-- The player's settings: config/survival.ini (BUILD_PLAN Milestone 4). Releases ship config/survival.default.ini; the
+-- first run copies it to survival.ini, which an update never overwrites. A [section] names a CFG table (dots for
+-- nested ones, any case; INI_ALIAS gives the friendly names), `key = value` sets a field that exists there: a number,
+-- true / false, text, or a comma list for a list field. [squadrons] keys are squadron sizes (value: from_round).
+-- Read once at start (the main menu builds Survival's NPC rows from CFG), so changes need a game restart.
+local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bombers", skill = "tiers",
+                    ["skill.difficulty"] = "tiers.rank_add", enemy_missiles = "missiles", enemy_guns = "guns",
+                    ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
+                    ["ammo.ace"] = "ammo.presets.ace" }
+local function iniSection(name)
+    local path = name:lower()
+    path = INI_ALIAS[path] or path:gsub("^shop%.", "shop.items.")
+    local t = CFG
+    for part in path:gmatch("[^%.]+") do
+        local found = nil
+        for k, v in pairs(t) do if type(k) == "string" and k:lower() == part and type(v) == "table" then found = v end end
+        if not found then return nil end
+        t = found
+    end
+    return t
+end
+local function iniValue(old, s)
+    if type(old) == "boolean" then
+        local b = ({ ["true"] = true, yes = true, on = true, ["1"] = true, ["false"] = false, no = false, off = false, ["0"] = false })[s:lower()]
+        return b, b ~= nil
+    elseif type(old) == "number" then
+        local n = tonumber(s); return n, n ~= nil
+    elseif type(old) == "string" then
+        return s, true
+    elseif type(old) == "table" and #old > 0 and type(old[1]) ~= "table" then
+        local list = {}
+        for item in s:gmatch("[^,]+") do
+            item = item:match("^%s*(.-)%s*$")
+            if type(old[1]) == "number" then item = tonumber(item); if not item then return nil, false end end
+            list[#list + 1] = item
+        end
+        return list, #list > 0
+    end
+    return nil, false
+end
+local function loadIni()
+    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\"
+    local f = io.open(dir .. "survival.ini", "r")
+    if not f then
+        local d = io.open(dir .. "survival.default.ini", "r")
+        if not d then return end
+        local text = d:read("a"); d:close()
+        local out = io.open(dir .. "survival.ini", "w")
+        if out then out:write(text); out:close(); log("config: made config\\survival.ini from survival.default.ini") end
+        f = io.open(dir .. "survival.ini", "r")
+        if not f then return end
+    end
+    local t, section, set, bad, n = nil, nil, 0, {}, 0
+    for line in f:lines() do
+        n = n + 1
+        line = line:gsub("^\239\187\191", ""):gsub("%s*[;#].*$", ""):match("^%s*(.-)%s*$")
+        local sec = line:match("^%[%s*(.-)%s*%]$")
+        if sec then
+            section, t = sec, iniSection(sec)
+            if not t then bad[#bad + 1] = string.format("line %d: no section [%s]", n, sec) end
+        elseif line ~= "" then
+            local key, val = line:match("^([^=]-)%s*=%s*(.*)$")
+            if not key then
+                bad[#bad + 1] = string.format("line %d: not 'key = value'", n)
+            elseif t then
+                local ok = false
+                if t == CFG.squadrons then
+                    for _, q in ipairs(t) do
+                        if tostring(q.size) == key then local v = tonumber(val); if v then q.from_round, ok = v, true end end
+                    end
+                else
+                    local field = nil
+                    for k in pairs(t) do if type(k) == "string" and k:lower() == key:lower() then field = k end end
+                    if field then
+                        local v; v, ok = iniValue(t[field], val)
+                        if ok then t[field] = v end
+                    end
+                end
+                if ok then set = set + 1 else bad[#bad + 1] = string.format("line %d: [%s] %s = %s not used", n, section, key, val) end
+            end
+        end
+    end
+    f:close()
+    log(string.format("config: survival.ini, %d settings%s", set, #bad > 0 and ("; " .. table.concat(bad, "; ")) or ""))
+end
+do
+    local ok, err = pcall(loadIni)
+    if not ok then log("config: survival.ini could not be read: " .. tostring(err)) end
+end
 do  -- optional overrides: Scripts/survival_config.lua returning a table with any of the keys above. Lists (aircraft,
     -- pool, ...) are replaced whole; keyed tables (hud, hud.text) are merged, so one field can be changed alone.
     local function merge(into, from)
@@ -2443,6 +2536,11 @@ local function probeTick(tick)
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
                 or (CFG.music.pause_player and "on" or "off")))
+        end
+        if type(SV_MusicClock) == "function" then
+            local old = SV_MusicClock(CFG.music.hold_clock and 1 or 0)
+            log("music: music player track clock " .. (old < 0 and "not hooked (tracks may end early after a pause)"
+                or (CFG.music.hold_clock and "held while the BGM is paused" or "stock")))
         end
     end
     local okSR, errSR = pcall(shopRowsTick, tick)

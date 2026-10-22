@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.11.1"
+#define RT_VERSION           L"0.12.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1505,6 +1505,72 @@ static int InSurvivalMission(void* obj)
     return ctx && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID;
 }
 
+/* ---- the music player's track clock (tools/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival") -------------------
+ * A ULiveMenuMusicControlObject (the music player's SoundController) times its track itself: its tickable's Tick adds the
+ * real frame time to +0x58 and plays the next track once that reaches the track's length +0x5C. The engine ticks it while
+ * the game is paused, when the BGM channel (and with it the track) is paused too; free flight re-posts the track at the
+ * clock when its pause menu closes, other modes don't, so in Survival every pause cut the playing track short by the time
+ * paused (user, 2026-10-22: "music skipped on round change"). While Survival's mission runs and LiveSoundManager's BGM
+ * channel is paused, the clock is held. PlayNext is logged with its caller and the clock, to confirm it in a test. */
+#define UOBJ_OUTER        0x20
+#define GI_SOUND_MANAGER  0x908          /* LiveSoundManager                                                     */
+#define SM_CHANNELS       0x78           /* its channel data: 8 bytes each (SFX, Voice, BGM), +7 = paused now     */
+#define SM_BGM_PAUSED     0x17
+#define MPM_CONTROLLER    0x100          /* ULiveMusicPlayerSoundManager.SoundController                          */
+#define MPC_CLOCK         0x58           /* float seconds into the track                                          */
+#define MPC_LENGTH        0x5C           /* float seconds                                                         */
+typedef void (*MusicTickFn)(void* tickable, float dt);
+typedef void (*MusicNextFn)(void* manager);
+static uint8_t*     g_fMusicTick;
+static uint8_t*     g_fMusicNext;
+static MusicTickFn  g_nextMusicTick;
+static MusicNextFn  g_nextMusicNext;
+static volatile int32_t g_musicClockHold = 1;     /* SV_MusicClock(on) */
+static int32_t      g_musicHeldMs;                /* clock held since the last track change                        */
+static int32_t      g_musicHolding;               /* the SoundController's clock is held now                       */
+
+static uint8_t* PtrAt(uint8_t* p, size_t off)
+{
+    return p && Readable(p + off, 8) ? *(uint8_t**)(p + off) : NULL;
+}
+
+static int32_t Ms(float s) { return (int32_t)(s * 1000.0f); }
+
+static void OnMusicTick(void* tickable, float dt)
+{
+    if (g_musicClockHold) {
+        uint8_t* co = (uint8_t*)tickable - 0x28;
+        uint8_t* mgr = PtrAt(co, UOBJ_OUTER);             /* the music player manager, a GameInstance subsystem */
+        uint8_t* gi = PtrAt(mgr, UOBJ_OUTER);
+        uint8_t* ctx = PtrAt(gi, GI_CAMPAIGN_CONTEXT);
+        uint8_t* ch = PtrAt(PtrAt(gi, GI_SOUND_MANAGER), SM_CHANNELS);
+        int hold = ctx && Readable(ctx + CTX_MISSION_ID, 4) && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID &&
+                   ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED];
+        if (PtrAt(mgr, MPM_CONTROLLER) == co && hold != g_musicHolding && Readable(co + MPC_CLOCK, 8)) {
+            g_musicHolding = hold;
+            Log(L"music player: BGM %s, track clock %s at %d of %d ms", hold ? L"paused" : L"playing again",
+                hold ? L"held" : L"running", Ms(*(float*)(co + MPC_CLOCK)), Ms(*(float*)(co + MPC_LENGTH)));
+        }
+        if (hold) {
+            if (PtrAt(mgr, MPM_CONTROLLER) == co) g_musicHeldMs += Ms(dt);
+            return;
+        }
+    }
+    g_nextMusicTick(tickable, dt);
+}
+
+static void OnMusicNext(void* manager)
+{
+    uint8_t* ret = (uint8_t*)__builtin_return_address(0);
+    uint8_t* co = PtrAt((uint8_t*)manager, MPM_CONTROLLER);
+    int32_t clock = -1, length = -1;
+    if (co && Readable(co + MPC_CLOCK, 8)) { clock = Ms(*(float*)(co + MPC_CLOCK)); length = Ms(*(float*)(co + MPC_LENGTH)); }
+    Log(L"music player: next track (caller %p = exe+%x; clock %d of %d ms; clock held %d ms during this track)",
+        ret, (uint32_t)(ret - g_exe), clock, length, g_musicHeldMs);
+    g_musicHeldMs = 0;
+    g_nextMusicNext(manager);
+}
+
 static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
 {
     if (g_musicPlayer && !(grayout & 0xFF) && list && list->num > 0 && list->num <= 16 &&
@@ -1678,10 +1744,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.11.1" */
+/* SV_Version() -> "0.12.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.11.1";
+    static const char v[] = "0.12.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1862,6 +1928,18 @@ static int L_MusicPlayer(void* lua)
     return Ret(lua, old);
 }
 
+/* SV_MusicClock([on]) -> the old setting (1: the music player's track clock is held while Survival's BGM is paused,
+ * 0: the stock clock), or SV_ERR_NO_GAME when the clock wasn't hooked */
+static int L_MusicClock(void* lua)
+{
+    double on = -1;
+    ArgNumber(lua, &on);
+    if (!g_nextMusicTick) return Ret(lua, SV_ERR_NO_GAME);
+    int64_t old = g_musicClockHold;
+    if (on >= 0) g_musicClockHold = on != 0;
+    return Ret(lua, old);
+}
+
 /* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 24 keys already): the text the game shows for text key `key`
  * (menu rows and help lines that name it), ASCII; longer than 255 characters is cut there */
 static int L_SetText(void* lua)
@@ -1907,7 +1985,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
@@ -1920,7 +1998,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
 }
 
 #define MOD_SLOTS 16
@@ -2001,6 +2079,7 @@ static void FindFunctions(void)
         { kSigRemoteEvent,    kSigRemoteEventMask, sizeof(kSigRemoteEvent), NULL, 0 },
         { kSigPauseValidity,  NULL, sizeof(kSigPauseValidity), NULL, 0 }, { vp, vm, sizeof(kSigPauseValidity), NULL, 0 },
         { kSigHangarDecide,   NULL, sizeof(kSigHangarDecide),  NULL, 0 }, { hp, hm, sizeof(kSigHangarDecide),  NULL, 0 },
+        { kSigMusicTick,      NULL, sizeof(kSigMusicTick),     NULL, 0 }, { kSigMusicNext, NULL, sizeof(kSigMusicNext), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -2025,6 +2104,8 @@ static void FindFunctions(void)
     g_fRemoteEvent   = p[20].hit;
     g_fPauseValidity = p[21].hit ? p[21].hit : p[22].hit;
     g_fHangarDecide  = p[23].hit ? p[23].hit : p[24].hit;
+    g_fMusicTick     = p[25].hit;
+    g_fMusicNext     = p[26].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -2034,6 +2115,7 @@ static void FindFunctions(void)
     Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
     Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
         g_fPauseValidity, g_fHangarDecide);
+    Log(L"music player: track clock tick %p, next track %p", g_fMusicTick, g_fMusicNext);
     g_scanned = 1;
 }
 
@@ -2051,6 +2133,10 @@ static int Install(void)
     else Log(L"pause menu list not found; no music player in Survival's pause menu");
     if (g_fHangarDecide && HookInline(g_fHangarDecide, 15, (void*)OnHangarDecide, (void**)&g_nextHangarDecide, L"landing menu decide")) {}
     else Log(L"landing menu decide not found; the airfield shop rows do nothing");
+    if (g_fMusicTick && HookInline(g_fMusicTick, 15, (void*)OnMusicTick, (void**)&g_nextMusicTick, L"music player clock")) {}
+    else Log(L"music player clock not found; its tracks can still end early after a pause");
+    if (g_fMusicNext && HookInline(g_fMusicNext, 16, (void*)OnMusicNext, (void**)&g_nextMusicNext, L"music player next track")) {}
+    else Log(L"music player next track not found (log only)");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");

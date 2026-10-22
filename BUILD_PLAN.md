@@ -3,18 +3,19 @@
 Work top to bottom. Each milestone is one test build. Commit after each one works in-game.
 Owner: CC = Claude Code, CX = Codex. Never work on the same files at the same time.
 
-## Status (2026-10-22, Lua 0.22.1 / runtime 0.11.0)
+## Status (2026-10-22, Lua 0.24.0 / runtime 0.12.0)
 Legend: [x] confirmed in a test, [~] built and installed but not confirmed yet, [ ] not started.
 - Milestone 0-1: done.
 - Milestone 2 (rounds): spawner, rounds, intermission, variety, ammo caps, HUD, clock / score cleanup, pause-menu
   music player (+ QUIT GAME still shown), own fighter behaviour, player-only targeting, skill tiers, lag fix: confirmed.
   Squadrons 2/4/6 + aircraft budget, harder enemy weapons (missiles, guns, special weapons): built, untested.
-  Open: Music Player track skips on kills (BGM name logging in place). Learning behaviour layer: not started.
+  Music Player track skips: cause found (its track clock ran on through pauses), clock held while the BGM is paused
+  (runtime 0.12.0): built, untested. Learning behaviour layer: not started.
 - Milestone 3 (airfield + bombers): health, HUD bar, hit counting, strike flights spawning: confirmed. Raids every
   3rd round, low strike approach, Tu-95 / Tu-160 bomb runs, airfield down / reopen: built, untested.
-- Milestone 4 (landing + shop): rearm to caps, credits, shop purchases: confirmed. Landing-menu ammo panel showing
-  the caps, airfield repair purchase: untested. Aircraft repair, config/survival.ini (Codex): not started.
-- Milestone 5: ammo presets and skill offset by difficulty done; no preset menu / advanced config UI yet.
+- Milestone 4 (landing + shop): rearm to caps, credits (shown as ZOLLARS), shop purchases: confirmed. Landing-menu
+  ammo panel showing the caps, airfield repair purchase, config/survival.ini: untested. Aircraft repair: dropped.
+- Milestone 5: parked by the user (ammo presets and skill offset by difficulty exist).
 - Milestone 6 (special rounds): not started. Framework, portal, event camera and ten specials listed (ace squadron,
   Ladon, Podarge, ECM towers, stealth wing, Comona Defense shuttle, amphibious assault, anomaly ace, Helios); research
   done for the shuttle, LCACs, anomaly ace and Helios.
@@ -362,9 +363,12 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 
 ## Milestone 4: landing + shop (CC logic, CX config)
 - [x] Landing/takeoff at the airport (works with Mission 22's minigame level; confirmed).
-- [~] Rearm: the stock rearm, clamped to the caps (confirmed). Aircraft repair purchase: not started.
+- [x] Rearm: the stock rearm, clamped to the caps (confirmed). Aircraft repair purchase: dropped (user, 2026-10-22).
 - [x] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
-- [ ] CX: `config/survival.ini`: prices, credits per kill, intermission length, wave tables, special rotation, with comments.
+- [~] `config/survival.ini` (done by CC, user 2026-10-22: finish Milestone 4): releases ship
+  `config/survival.default.ini`, the first run copies it to `survival.ini` (never overwritten by an update); Scripts/main.lua
+  reads it at start, before survival_config.lua. Rounds, squadrons, zollars, shop prices, ammo presets, airfield, bombers,
+  skill, enemy missiles / guns, HUD, music. Special rotation joins it with Milestone 6. Test: the "config:" log line.
 - BUILT 2026-10-22 (Lua 0.15.0, runtime 0.10.0), waiting for a test: credits (CFG.credits: per kill by type, round
   bonus), CREDITS HUD row; shop = 4 rows (DT_SV_ShopRows) added to the landing menu's table
   (DT_LiveMenuIngameHangarCommands, under Yes / No) only while Survival's level is loaded; texts by SV_SetText
@@ -376,7 +380,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   repair.
 - Test: land, buy missiles, take off, ammo is refilled up to the cap (not past it).
 
-## Milestone 5: difficulty presets (CC + CX)
+## Milestone 5: difficulty presets (CC + CX) - parked (user, 2026-10-22: "don't worry about milestone 5")
 - [~] Casual / Standard / Ace presets on top of the game's difficulty, plus the advanced config (see AGENTS.md).
   Done: ammo caps by difficulty (72/56/6, 48/28/4, 30/14/3), skill tiers shifted -1/0/+1, every setting overridable in
   Scripts/survival_config.lua. Not done: a preset choice of its own, an advanced config UI.

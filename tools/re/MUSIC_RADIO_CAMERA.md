@@ -157,6 +157,82 @@ Scratch: `build/research/audio/pause/`. Static analysis only.
   BGM nodes override it (if they do, Survival's own BGM events must also check the flag); (b) what the +0x220 byte is
   (it greys the entry out); (c) are tracks the player hasn't unlocked (`LiveMusicPlayerSaveData.OwnedMusicList`) hidden in the in-mission player.
 
+### Track skips in Survival (research 2026-10-22)
+Static only. Scratch: `build/research/audio/musicplayer/` (`mgr.txt` manager code, `mp_all.txt` 0x147b28000-0x147b3b440,
+`sm.txt` LiveSoundManager 0x1478a0000-0x1478c0000). Signatures from `mksig.py`, all unique, none checked in game yet.
+
+**The music player doesn't use the BGM controller.** That is why SV_BGMNames saw nothing. The chain:
+- `ULiveMusicPlayerSoundManager` (`/Script/Live`, 0x160 bytes, a GameInstance subsystem; getter 0x147b3b340(obj->vfunc 0x188())).
+  Reflected: `SoundController` +0x100 (the track) and `EnvironmentalBGMController` +0x150 (menu ambience). Both are
+  `ULiveMenuMusicControlObject` (0x68 bytes, vtable 0x14c823e70, FTickableGameObject vtable at +0x28 = 0x14c823e28).
+  Vtable: +0x308 Initialize 0x147b39bc0 (binds PlayNext to SoundController's "track finished" delegate +0x30),
+  +0x328 0x147b39cb0, +0x338 Tick 0x147b382e0 -> 0x147b38450. GameInstance tick 0x1478deee0 calls that Tick (vfunc +0x338)
+  every frame with the real delta.
+- Posting: control object Play 0x147b28210(co, FString* event, bool) -> `LiveSoundManager` (GI+0x908) post 0x1478a8f70 on
+  the sound manager's **BGM game object +0x1C8** (marker callback 0x147b28630, flags 4). It also sets: playing id +0x40,
+  event name FString +0x48 (Num +0x50), **position +0x58 = 0**, **duration +0x5C** (event length from the loaded bank
+  databases, 0x1478a3820 on 0x1471e5390()+0x348; 60 s when the entry is flagged at +0xC, -1 = never ends when the bool is set),
+  stopped +0x64 = 0, tickable +0x65 = 1. Stop 0x147b284f0 (stop by name 0x1478aac20, +0x64 = 1). Replay-with-fade 0x147b283b0
+  queues task 0x1478aa570 (vtable 0x14cbc2330): `AKE_Bgm_MUSICPLAYER_Fade_Out_100ms`, 0.1 s, the event at position +0x58
+  (0x1478b9010, the LivePlayBGMWithPosition post), 0.1 s, `..._Fade_In_100ms`. Resume 0x147b38850(mgr) = Play(same name)
+  with +0x58 kept, then Replay-with-fade, then broadcast mgr+0x80 (the HUD "now playing" notice, bound at 0x14726b690).
+- **The track ends by the control object's own clock, not by Wwise.** Tick 0x147b28560 (tickable slot 0, `this` = co+0x28):
+  while not stopped and not seeking, `pos += dt`. When `pos >= duration`, Stop + broadcast +0x30 -> **PlayNext 0x147b3a230**
+  (loop type mgr+0x108: 0 NoneLoop, 1 SingleLoop, 2 AllLoop; play type +0x109 InOrder/Random; index +0x10C, next +0x110)
+  -> PlayIndex 0x147b3a1a0 -> Stop + 0x147b38740 (Play of the next row). The tickable reports no world (slot +0x40 returns
+  null), so the engine ticks it with the **real** delta, including while the game is paused.
+- **Pausing pauses the audio, not the clock.** LiveSoundManager 0x1478a6c00 updates three channels (data at +0x78, 8 bytes
+  each: +6 request, +7 current; SFX, Voice, BGM). A channel is paused when its request byte, +0x1D8 or +0x1D9 is set, and it
+  posts `AKE_System_{SFX,Voice,BGM}_Pause_On/Off` (FNames 0x14e34d688.. / 0x14e34d6a0..) on the same +0x1C8 object. The
+  game-pause handler 0x1478a69c0 takes that path unless a music-player page is open (0x1471e5390()+0x1D7, set by the
+  page's construct 0x147b28640 and cleared by its destruct 0x147b28d80, vtable 0x14c824230 +0x530/+0x538). Then it calls
+  the mute path 0x1478a6a80 instead, so the track keeps playing while you browse.
+- **Free flight compensates, other modes don't.** The pause widget's close 0x147b57c10 (ULiveMenuPauseWidget vtable entry
+  0x14c83d680, the one that removes `BackgroundBlur_258`) ends with `if IsFreeFlight (0x147edb650): Resume(mgr)`
+  (0x147b57e2a / 0x147b57e60), which re-posts the track at the clock's position. In Survival that call is skipped.
+  So after every pause with the page closed, the audio is N seconds behind the clock, and PlayNext cuts the track N seconds
+  before its real end (N = total time paused since the track began, summed over pauses).
+- Manager state machine (Tick 0x147b38450 -> UpdateState 0x147b382f0, state byte +0x60, jump table 0x147b38724):
+  +0x146 a music page is open, +0x141/+0x140 set by PlayNext in NoneLoop, +0x142/+0x143 game paused now / last frame
+  (`ULivePauseManager` GI+0x870, byte +0x30; GetPauseManager 0x147edfea0; request bits +0x28, dirty +0x38: 0x80 network,
+  0x200 menu widgets 0x147a3b660/0x147a3b5e0, 0x400 controller lost, 0x800 system out, 0x1000 cinematic pause),
+  +0x145 "stopped by a pause". States: 0/2 idle, 1 paused (Stop the track and set +0x145), 3 ambience timer, 4 unpaused
+  in NoneLoop (play the next track, or replay), 5 unpaused after state 1 (Resume). Only active while a page is open or
+  in NoneLoop, so it doesn't explain skips during normal play.
+
+**Best-supported cause (medium confidence):** the clock-vs-audio drift above. Each pause menu (and any other BGM
+pause) makes the current track end early and the next one start: a "skip". Rounds don't post anything. If the skips
+line up with round changes, that's because of when the player paused or landed, not because of the round itself.
+Unverified: (1) the engine ticks world-less tickables while paused (standard UE5 `UGameEngine::Tick`); (2) BGM_Pause_On
+pauses the MUSICPLAYER events (they're posted on the same game object); (3) whether the landing (supply) menu pauses
+the BGM channel or stops the track (the game posts `AKE_Bgm_Ms22A_SupplyOut_Stop` when you leave it, and nobody knows
+what that Wwise stop targets); (4) what else sets a channel's request byte (kill / impact cameras?).
+
+**Logging for one test** (survival_rt.c, chain like the other hooks, log `_ReturnAddress()` and a timestamp; values from
+the manager `m`, its SoundController `co`, and LiveSoundManager `s` = GI+0x908):
+| hook | address | signature |
+| --- | --- | --- |
+| PlayNext | 0x147b3a230 | `40 53 48 83 EC 70 80 B9 44 01 00 00 00 48 8B D9` |
+| PlayIndex | 0x147b3a1a0 | `40 53 48 83 EC 20 8B 81 10 01 00 00 48 8B D9 85 C0` |
+| co Play (log the FString in rdx) | 0x147b28210 | `40 53 55 56 57 41 56 48 83 EC 50 48 8B F9 41 0F B6 E8` |
+| co Stop | 0x147b284f0 | `40 57 48 83 EC 20 83 79 50 01 48 8B F9 7E 59 48 8B 01` |
+| co Replay-with-fade | 0x147b283b0 | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 56 48 83 EC 30 48 8B 01 48 8B F1 0F 29 74 24 20` |
+| Resume | 0x147b38850 | `40 57 48 83 EC 30 48 8B 81 00 01 00 00 48 8B F9` |
+| sound channel pause update | 0x1478a6c00 | `48 8B C4 53 48 83 EC 40 80 3D ?? ?? ?? ?? 00 48 8B D9` |
+Log `co+0x58` pos, `co+0x5C` duration, `co+0x64` stopped, `m+0x60` state, `m+0x140..0x147`, `m+0x108/0x109/0x10C/0x110`,
+the BGM channel's current byte (`s+0x78` data `+0x17`), `s+0x1D8/0x1D9`, PauseManager `+0x28/+0x30`.
+Return addresses: PlayNext from the tickable loop = clock ran out (0x147b28615 tail-jumps, so the caller is the engine);
+from 0x147b31217 = the player's skip button. PlayIndex returning to 0x147b3a35a = PlayNext (its other two paths
+tail-jump, so the caller shown is PlayNext's own), 0x147b38673 = state 4. Replay returning to 0x147b386d5 = state 4,
+0x147b388a3 = Resume (Resume returning to 0x147b38711 = state 5, 0x147b57e65 = free-flight pause close), 0x147b310cd = seeking.
+If PlayNext fires from the clock while `pos` is well short of the track's real playing time, the drift is confirmed.
+
+**Fix (if confirmed):** hook the control object's Tick 0x147b28560
+(`40 53 48 83 EC 20 F3 0F 10 51 38 48 8D 59 D8 0F 28 C2`, `this` = co+0x28). While Survival's mission runs and the BGM channel
+is paused (`s+0x78` data `+0x17` != 0), return without calling the original. The clock then stops while the audio is
+paused, and the track ends on time and resumes where it paused. Don't copy free flight's Resume-on-close instead: it
+jumps the audio forward by the paused time. Lua can't do either: pos/duration aren't reflected.
+
 ## C. Radio (backlog 6)
 Scratch: `build/research/audio/radio/` (`ms022_rows.tsv` = all 667 rows of Mission 22's table, `radio_execs.txt` =
 every radio exec in the M06/08/13/15/22/23 EPs, `pbyp_cp_rows.tsv`).

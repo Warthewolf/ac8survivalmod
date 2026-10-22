@@ -276,7 +276,7 @@ KNOWN_GLOBALS = {
     'StaticConstructObject', 'CreateInvalidObject', 'IterateGameDirectories', 'DumpAllObjects', 'GenerateSDK',
     # dlls\main.dll (runtime 0.10.0)
     'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock', 'SV_GameLua', 'SV_GameLuaState',
-    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
+    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_MusicClock', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
 }
 
 

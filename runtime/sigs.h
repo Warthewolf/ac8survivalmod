@@ -190,4 +190,17 @@ static const uint8_t kSigHangarDecide[39] = {
     0x00, 0x00, 0x00,
 };
 
+/* The music player's track clock: ULiveMenuMusicControlObject's tickable Tick (0x147b28560, this = object + 0x28,
+ * xmm1 = delta). Prologue: push rbx; sub rsp, 0x20; movss xmm2, [rcx+0x38]; lea rbx, [rcx-0x28] (15 bytes, no
+ * RIP-relative operands), then movaps xmm0, xmm2 (tools/re/MUSIC_RADIO_CAMERA.md "Track skips"). */
+static const uint8_t kSigMusicTick[18] = {
+    0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0xF3, 0x0F, 0x10, 0x51, 0x38, 0x48, 0x8D, 0x59, 0xD8, 0x0F, 0x28, 0xC2,
+};
+
+/* ULiveMusicPlayerSoundManager PlayNext (0x147b3a230, rcx = the manager), run when a track's clock reaches its length
+ * or the player skips. Prologue: push rbx; sub rsp, 0x70; cmp byte [rcx+0x144], 0; mov rbx, rcx (16 bytes). */
+static const uint8_t kSigMusicNext[16] = {
+    0x40, 0x53, 0x48, 0x83, 0xEC, 0x70, 0x80, 0xB9, 0x44, 0x01, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD9,
+};
+
 #endif

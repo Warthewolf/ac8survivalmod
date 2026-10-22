@@ -87,8 +87,9 @@ Copy a working stock pattern before inventing a new one.
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
   the game never spawns a desc again while its shot-down flight is still on the phase's unit list
   (tools/re/SPAWN_SYSTEM.md has the whole pipeline, offsets and signatures).
-- Round settings live in main.lua's CFG. Config hook for Codex: an optional `Scripts/survival_config.lua` that returns a
-  table of CFG overrides (wave sizes, intermission, aircraft list, pool); main.lua loads it if present.
+- Round settings live in main.lua's CFG. Players edit `config/survival.ini` (made from `config/survival.default.ini` on the
+  first run; main.lua's INI_ALIAS maps its sections onto CFG). An optional `Scripts/survival_config.lua` returning a table
+  of CFG overrides is loaded after it, for advanced changes.
 - The pool's flights must also be in tools/survival_events.py POOL (that's where they get their attack orders and the
   chase that moves their 6 km unit area onto the player every 6 s).
 - No Lua interpreter on the build machine: run `python tools/checks/lua_check.py <file.lua>` after every Lua edit.
