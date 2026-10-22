@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.5"
+local VERSION = "0.35.6"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -774,6 +774,10 @@ local CFG = {
                      -- damage at half the spread; every special weapon it has room for; it reacts to you `aggression`
                      -- times quicker (provoke) and sits closer on your tail (surround_m).
                      aggression = 5, provoke_cone_deg = 30, surround_m = { 20, 60 },
+                     -- its weapon slots after the gun and missiles: two special weapons and the E-18G ace's ECM pod
+                     -- (user, 2026-10-22: "a warning to the minimap for MINDRIPPER, similar to what the ECM uses": the
+                     -- game draws an ECM carrier's area on the radar itself; it also makes your missiles miss near it)
+                     weapons = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_ECM000" },
                      -- its arrival camera (tools/survival_events.py ANOMALY_CAMERAS; the shuttle's ms22-01 was too close)
                      camera = "LookAt_Event_Camera",
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
@@ -1637,10 +1641,11 @@ local function searchSetup()
                             end)
                         end
                         local fcsList = CFG.special.fcs
-                        if mind and CFG.special.enabled then            -- every special weapon it has room for
+                        if mind then                    -- its own (CFG.specials.anomaly.weapons: specials and the ECM pod)
                             local got = {}
                             for k, slot in ipairs(frees) do
-                                if fcsList[k] then r["NpcFCSId" .. slot] = FName(fcsList[k]); got[#got + 1] = fcsList[k] end
+                                local w = AN.weapons[k]
+                                if w then r["NpcFCSId" .. slot] = FName(w); got[#got + 1] = w end
                             end
                             if level == 0 then log("weapons: " .. svNpc .. " (MINDRIPPER) carries " .. table.concat(got, ", ")) end
                             free = nil
