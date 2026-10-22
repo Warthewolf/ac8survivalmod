@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.31.1"
+local VERSION = "0.32.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -657,17 +657,19 @@ local CFG = {
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
     },
     -- The airfield shop: rows on the landing menu (the in-game hangar's list, under Yes / No), added while Survival's
-    -- level is loaded. Landing already reloads to the difficulty's caps for free; the shop raises a cap for the rest of
-    -- the run (kind: 1 missiles, 2 special weapons, 4 flares) or repairs the airfield. Every purchase of an item makes
-    -- its next one `raise` times dearer. The item names must match tools/build_survival.py SHOP_ITEMS.
+    -- level is loaded. Landing rearms nothing (user, 2026-10-22: "landing at the airfield is still refilling your ammo
+    -- regardless of buying it"): the ammo you fly with is what you took off with, less what you fired, plus what you
+    -- bought (kind: 1 missiles, 2 special weapons, 4 flares; up to the aircraft's full load), or the shop repairs the
+    -- airfield. Every purchase of an item makes its next one `raise` times dearer (1: the same price every time).
+    -- The item names must match tools/build_survival.py SHOP_ITEMS.
     shop = {
         enabled = true,
         items = {
-            -- economy check (2026-10-22): x1.5 a purchase outgrew a round's income by the 6th buy (5130 Z for the 8th
-            -- missile pack), so the caps grow cheaper (x1.35-1.4) and missile packs hold 6
-            Missiles = { kind = 1, step = 6, price = 300, raise = 1.35, label = "MISSILES", what = "missile" },
-            Special  = { kind = 2, step = 2, price = 400, raise = 1.4, label = "SPECIAL WEAPON", what = "special weapon" },
-            Flares   = { kind = 4, step = 2, price = 150, raise = 1.35, label = "FLARES", what = "flare" },
+            -- ammo is used up now (no free rearm), so a pack costs the same every time: 25 Z a missile against 100 Z a
+            -- fighter (about two missiles a kill), 100 Z a special weapon round, 75 Z a flare
+            Missiles = { kind = 1, step = 12, price = 300, raise = 1.0, label = "MISSILES", what = "missiles" },
+            Special  = { kind = 2, step = 4, price = 400, raise = 1.0, label = "SPECIAL WEAPON", what = "special weapon rounds" },
+            Flares   = { kind = 4, step = 2, price = 150, raise = 1.0, label = "FLARES", what = "flares" },
             -- the landing menu has room for 4 shop rows, so this one repairs the airfield while it's damaged and, once
             -- it's whole, builds its defences (user, 2026-10-22: "purchase AA guns ... or SAM sites. Make them
             -- expensive"): Mission 22's airport AA guns and SAM sites, one unit each (tools/survival_events.py
@@ -1693,9 +1695,9 @@ local ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22'
 local SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
 local D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
--- The run's money and purchases: { credits, earned, spent, bonus = { [kind] = cap raise }, bought = { [item] = n },
+-- The run's money and purchases: { credits, earned, spent, bought = { [item] = n },
 -- msg = { [item] = last result }, dirty (shop texts need updating) }. Reset when Survival's level loads.
-local RUN = { credits = 0, earned = 0, spent = 0, bonus = {}, bought = {}, msg = {} }
+local RUN = { credits = 0, earned = 0, spent = 0, bought = {}, msg = {} }
 
 local function addCredits(n, why)
     if n <= 0 then return end
@@ -2732,9 +2734,7 @@ local function applyAmmoCaps()
     if probe < 0 and probe ~= -7 then return false, probe end                  -- not ready yet (or no game code)
     local pname, diff = presetName()
     local p = CFG.ammo.presets[pname] or CFG.ammo.presets.standard
-    local bonus = RUN.bonus or {}                   -- the shop's cap raises for this run
-    local want = { [1] = p.missiles + (bonus[1] or 0), [2] = p.special + (bonus[2] or 0),
-                   [3] = p.special + (bonus[2] or 0), [4] = p.flares + (bonus[4] or 0) }
+    local want = { [1] = p.missiles, [2] = p.special, [3] = p.special, [4] = p.flares }
     local before = ammoLine()
     for k = 1, 4 do
         if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
@@ -2772,19 +2772,28 @@ local function ammoTick(tick, pc)
         for k = 0, 4 do s[k] = SV_Ammo(k) end
         PR.ammo[#PR.ammo + 1] = s
         if #PR.ammo > 12 then table.remove(PR.ammo, 1) end
-        -- The airfield's rearm (and anything else the game refills) loads the aircraft's full stock count: a count
-        -- above the preset's cap is put back to the cap, so landing rearms up to the cap and no further.
-        local over = {}
+        -- A.caps[k] is what the player may hold: the preset's load at spawn, less what was fired, plus what was
+        -- bought. The airfield's rearm (and anything else the game refills) loads the aircraft's full stock count, so a
+        -- count above it is put back: landing rearms nothing. Firing lowers it, read only away from the airfield (a
+        -- rearm in progress must never pass for shots).
+        local over, ground = {}, playerOnAirfield()
         for k = 1, 4 do
             local cap = A.caps and A.caps[k]
+            if cap and s[k] >= 0 and A.owed and A.owed[k] then  -- bought while the count couldn't be read: load it now
+                A.owed[k] = nil
+                if s[k] < cap then SV_SetAmmo(k, cap); s[k] = cap end
+            end
             if cap and s[k] > cap then
                 SV_SetAmmo(k, cap)
                 over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
+            elseif cap and s[k] >= 0 and s[k] < cap and not ground then
+                A.caps[k] = s[k]
+                RUN.dirty = true                    -- the shop's help lines show the counts
             end
         end
         if #over > 0 then
             if type(SV_FreeRestock) == "function" and not CFG.ammo.free_restock then SV_FreeRestock(0) end
-            log("ammo: refilled above the " .. A.preset .. " caps (rearm?): " .. table.concat(over, ", "))
+            log("ammo: refilled by the game, put back to what you had (" .. A.preset .. "): " .. table.concat(over, ", "))
         end
     end
     if tick % 8 == 4 then                                                      -- every 2 s: maxima, for the shop
@@ -2934,8 +2943,8 @@ function shopTexts()
         if it.kind then
             local cap = A and A.caps and A.caps[it.kind]
             label = string.format("%s +%d   %d Z", it.label, it.step, price)
-            help = string.format("%s load +%d for the rest of the run%s.", it.what:gsub("^%l", string.upper), it.step,
-                cap and string.format(" (now %d)", cap) or "")
+            help = string.format("%d more %s. Landing doesn't rearm: you fly with what you buy%s.", it.step, it.what,
+                cap and string.format(" (you have %d)", cap) or "")
         elseif airfieldNeedsRepair() or not it.defences then
             label = string.format("%s +%d   %d Z", it.label, it.repair, price)
             help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
@@ -2991,12 +3000,12 @@ function shopBuy(name)
             price = math.ceil(price * gain / it.step / 10) * 10
             if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
         end
-        RUN.bonus[k] = (RUN.bonus[k] or 0) + gain
         for _, kk in ipairs(k == 2 and { 2, 3 } or { k }) do
             if A.caps[kk] then
                 A.caps[kk] = A.caps[kk] + gain
                 local n = SV_Ammo(kk)
-                if n >= 0 then SV_SetAmmo(kk, math.min(n + gain, A.caps[kk])) end
+                if n >= 0 then SV_SetAmmo(kk, math.min(n + gain, A.caps[kk]))
+                else A.owed = A.owed or {}; A.owed[kk] = true end      -- unreadable now: ammoTick loads it
             end
         end
     else
@@ -3155,7 +3164,7 @@ local function probeTick(tick)
         SHUTTLE.obj, SHUTTLE.lookAt = nil, nil
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
-        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bonus = {}, bought = {}, msg = {}, dirty = true }
+        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true }
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"

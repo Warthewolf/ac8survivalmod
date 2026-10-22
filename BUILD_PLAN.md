@@ -373,7 +373,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 
 ## Milestone 4: landing + shop (CC logic, CX config)
 - [x] Landing/takeoff at the airport (works with Mission 22's minigame level; confirmed).
-- [x] Rearm: the stock rearm, clamped to the caps (confirmed). Aircraft repair purchase: dropped (user, 2026-10-22).
+- [x] Rearm: NO free rearm since Lua 0.32.0 (user, 2026-10-22: "landing at the airfield is still refilling your ammo
+regardless of buying it"): the stock rearm is put back to what the player had (spawn load - fired + bought); shop
+packs are consumable, flat price (missiles 12 / 300 Z, special 4 / 400 Z, flares 2 / 150 Z). Untested.
+  (Before: the stock rearm, clamped to the caps (confirmed).) Aircraft repair purchase: dropped (user, 2026-10-22).
 - [x] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
 - [~] `config/survival.ini` (done by CC, user 2026-10-22: finish Milestone 4): releases ship
   `config/survival.default.ini`, the first run copies it to `survival.ini` (never overwritten by an update); Scripts/main.lua
