@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.38.1"
+local VERSION = "0.38.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -500,7 +500,7 @@ local CFG = {
     -- a squadron size joins the draw from its from_round.
     aircraft_round1     = 4,
     aircraft_per_round  = 2,                    -- added every round
-    max_aircraft        = 24,                   -- in one round
+    max_aircraft        = 60,                   -- in one round, difficulty spikes included (user, 2026-10-23: 60)
     squadrons           = { { size = 2, from_round = 1 }, { size = 4, from_round = 4 }, { size = 6, from_round = 8 } },
     distance_km         = { 18, 25 },           -- from the airfield, random bearing
     altitude_m          = { 2000, 4500 },
@@ -768,7 +768,7 @@ local CFG = {
     --   provoke_cone_deg / provoke_time_s   when the player is behind them: a narrower cone (Shadow squadrons fly 60)
     --                    and a quicker decision, so they turn on you sooner (live write, untested)
     --   surround_m       their pursuit sits this close behind the target (stock 100-300 m; live write, untested)
-    --   aircraft_add / max_add   more aircraft each round, and a higher cap
+    --   aircraft_add     more aircraft each round (never above max_aircraft)
     spikes = {
         enabled = true,
         every   = 7,
@@ -776,15 +776,15 @@ local CFG = {
             { missiles = { capture_m = 4500, angle_deg = 70, lock_s = 1.2, interval_s = 1.6, rest_s = 4.0 },
               guns = { range_m = 2200, angle_deg = 45, aim_s = 0.6, burst = 18, rest_s = 0.5, spread_deg = 1.1 },
               rank_min = 4, post_stall_all = true, provoke_cone_deg = 70, provoke_time_s = 2.0, surround_m = { 80, 220 },
-              aircraft_add = 2, max_add = 4 },
+              aircraft_add = 2 },
             { missiles = { capture_m = 5000, angle_deg = 80, lock_s = 0.9, interval_s = 1.3, rest_s = 3.0 },
               guns = { range_m = 2400, angle_deg = 50, aim_s = 0.45, burst = 20, rest_s = 0.4, spread_deg = 0.8 },
               rank_min = 5, post_stall_all = true, provoke_cone_deg = 60, provoke_time_s = 1.5, surround_m = { 60, 160 },
-              aircraft_add = 4, max_add = 8 },
+              aircraft_add = 4 },
             { missiles = { capture_m = 5500, angle_deg = 90, lock_s = 0.7, interval_s = 1.0, rest_s = 2.0 },
               guns = { range_m = 2600, angle_deg = 55, aim_s = 0.3, burst = 24, rest_s = 0.3, spread_deg = 0.5, damage_x = 1.8 },
               rank_min = 5, post_stall_all = true, provoke_cone_deg = 50, provoke_time_s = 1.0, surround_m = { 50, 120 },
-              aircraft_add = 6, max_add = 12 },
+              aircraft_add = 6 },
         },
     },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
@@ -2924,7 +2924,7 @@ local function startRound()
     D.round = D.round + 1
     local sk = spikeCfg(spikeLevel(D.round))
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
-        CFG.max_aircraft + (sk.max_add or 0))
+        CFG.max_aircraft)
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+F11: the Anomaly next, for testing)
     D.forceSpecial = nil

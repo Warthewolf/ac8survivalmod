@@ -517,6 +517,8 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   FLR 4, QAAM 32): GetWidgetFromName found none of its texts, so its TextBlocks are found by full name under the panel
   and show what you take off with (A.caps); a menu beep on every STORE press (BaseResupply_Decide when bought, General
   Reject when not; PostEventByName). TEST ONLY: Ctrl+F9 +5000 zollars, out of every release zip.
+- Lua 0.38.2 (user, 2026-10-23: "increase the max targets on the map to 60"): max_aircraft 60 a round, a hard
+  ceiling (difficulty spikes' max_add removed: they still add aircraft_add a round below it).
 
 ## Research backlog (user 2026-10-21), in order
 1. AI behaviour tiers (above)  2. Enemy unit data DT_NPC_Mission##  3. Fire control / weapon data  4. Store UI (NUI/Shop) for the
