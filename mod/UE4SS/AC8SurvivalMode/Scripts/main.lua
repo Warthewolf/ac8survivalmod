@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.27.2"
+local VERSION = "0.27.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -28,15 +28,16 @@ local TABLES = {
 
 -- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
 -- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
-local LOG_FILE = nil
+local log
 do
+    local LOG_FILE = nil
     local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\"
     local ok, f = pcall(io.open, dir .. "AC8SurvivalMode_lua.log", "w")
     if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
-end
-local function log(s)
-    print(TAG .. s .. "\n")
-    if LOG_FILE then pcall(function() LOG_FILE:write(os.date("%H:%M:%S ") .. s .. "\n") end) end
+    function log(s)
+        print(TAG .. s .. "\n")
+        if LOG_FILE then pcall(function() LOG_FILE:write(os.date("%H:%M:%S ") .. s .. "\n") end) end
+    end
 end
 
 local function valid(o)
@@ -731,6 +732,7 @@ for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Uni
 -- nested ones, any case; INI_ALIAS gives the friendly names), `key = value` sets a field that exists there: a number,
 -- true / false, text, or a comma list for a list field. [squadrons] keys are squadron sizes (value: from_round).
 -- Read once at start (the main menu builds Survival's NPC rows from CFG), so changes need a game restart.
+do                                 -- (its helpers stay inside: the main chunk's 200-local limit)
 local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bombers", skill = "tiers",
                     ["skill.difficulty"] = "tiers.rank_add", enemy_missiles = "missiles", enemy_guns = "guns",
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
@@ -828,7 +830,6 @@ local function loadIni()
     f:close()
     log(string.format("config: survival.ini, %d settings%s", set, #bad > 0 and ("; " .. table.concat(bad, "; ")) or ""))
 end
-do
     local ok, err = pcall(loadIni)
     if not ok then log("config: survival.ini could not be read: " .. tostring(err)) end
 end
@@ -1358,8 +1359,10 @@ end
 
 -- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
 -- A difficulty spike's pursuit on an enemy (CFG.spikes: provoke_cone_deg / provoke_time_s / surround_m), once.
+local enemySpike
+do
 local spikeSaid = {}
-local function enemySpike(p, round)
+function enemySpike(p, round)
     if p.spiked ~= nil or not round then return end
     local level = spikeLevel(round)
     p.spiked = level
@@ -1381,6 +1384,7 @@ local function enemySpike(p, round)
         log(string.format("spikes: level %d on %s: was %s; now %s", level, p.name, table.concat(before, ", "), table.concat(writes, ", ")))
     end
 end
+end
 
 local function searchAircraft(a, level)
     local sv = SR.usable[a]
@@ -1397,8 +1401,10 @@ end
 
 -- Question 2: PilotRank on each enemy (p from the plane list), called every 2 s while it is up.
 -- CFG.tiers: this enemy's tier (by the round, sometimes one higher) and PilotRank, set once when it is first seen up.
+local enemyTier
+do
 local tierSaid = {}
-local function enemyTier(p, round)
+function enemyTier(p, round)
     local tc = CFG.tiers
     if p.tier ~= nil or not tc.enabled or not round then return end
     local i = 1
@@ -1419,12 +1425,15 @@ local function enemyTier(p, round)
             want, okW and "" or (" (write failed: " .. tostring(err) .. ")")))
     end
 end
+end
 
 -- CFG.maneuvers: post-stall permission for this enemy (p from the plane list), set once when it is first seen up:
 -- its model must be listed and its tier (enemyTier, run first) must allow post-stall at all.
 -- The first plane of each model logs what its blueprint had and what it reads after the write.
+local enemyManeuvers
+do
 local maneuversSaid = {}
-local function enemyManeuvers(p, round)
+function enemyManeuvers(p, round)
     if p.maneuvers or not CFG.maneuvers.enabled then return end
     p.maneuvers = true
     local model = p.name:match("^BP_OP%d+_(%w+)_") or "?"
@@ -1457,6 +1466,7 @@ local function enemyManeuvers(p, round)
         log(string.format("maneuvers: %s (%s) post-stall %s: was %s, now %s%s", model, p.name, allow and "allowed" or "off",
             before, read(), ok and "" or (" (write failed: " .. tostring(err) .. ")")))
     end
+end
 end
 
 -- Kill log (for the learning layer later): every 2 s while an enemy is up its heading is kept, and when it goes down
@@ -2182,6 +2192,8 @@ local function playerOnAirfield()
     return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
 end
 
+local ordersTick
+do
 -- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and RE_SV_FlightOrders_NN event).
 local function poolIndex(unit)
     local n, k = unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
@@ -2191,7 +2203,7 @@ end
 -- A fighter flight's orders (player only, air search) come from its appearance trigger, which also sets SV_Up_NN. One
 -- that appeared while the landing menu was up never got them (test of 2026-10-22: two F-16 flights attacked the
 -- airfield), so a flight still unflagged CFG.orders_check_s after spawning gets them from RE_SV_FlightOrders_NN.
-local function ordersTick(now)
+function ordersTick(now)
     for u, o in pairs(D.orders) do
         if now >= o.at then
             local i, t = poolIndex(u), svFlags()
@@ -2214,6 +2226,7 @@ local function ordersTick(now)
             end
         end
     end
+end
 end
 
 local function roundsTick(now)
@@ -2665,6 +2678,8 @@ local function shopRowsTick(tick)
     end
 end
 
+local shopTexts, shopBuy             -- (the shop's helpers stay inside the block: the 200-local limit)
+do
 local function shopPrice(name)
     local it = CFG.shop.items[name]
     return math.floor(it.price * it.raise ^ (RUN.bought[name] or 0) / 10 + 0.5) * 10
@@ -2709,7 +2724,7 @@ local function defencesUp(kind)
     return n, #units
 end
 
-local function shopTexts()
+function shopTexts()
     if type(SV_SetText) ~= "function" then return end
     for name, it in pairs(CFG.shop.items) do
         local price, label, help = shopPrice(name)
@@ -2743,7 +2758,7 @@ local function shopTexts()
 end
 
 -- One purchase; the result goes into the item's help line and the log.
-local function shopBuy(name)
+function shopBuy(name)
     local it = CFG.shop.items[name]
     if not it then log("shop: unknown item " .. tostring(name)); return end
     local price = shopPrice(name)
@@ -2790,6 +2805,7 @@ local function shopBuy(name)
     RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
     RUN.bought[name] = (RUN.bought[name] or 0) + 1
     done(string.format("BOUGHT for %d.", price))
+end
 end
 
 local function shopTick(tick)

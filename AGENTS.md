@@ -82,6 +82,11 @@ Copy a working stock pattern before inventing a new one.
     phases (IsKDSP1/IsKDSP2 decorators), which they never enter, so they fly around without attacking (test of
     2026-10-22, the first build where the set really applied). Survival's fighters fly its own set NLID_SV_Fighter.
 
+23. A Lua function (main.lua's main chunk too) may hold at most 200 locals in scope at once: past that the script
+    doesn't load at all (UE4SS.log "too many local variables (limit is 200) in main function"; Lua 0.27.2 lost the menu
+    entry that way). Put helper groups in `do ... end` blocks that export only what the rest calls. lua_check.py counts
+    them and fails over 200. Confirmed 2026-10-22.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

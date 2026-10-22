@@ -88,6 +88,10 @@ class Parser:
     def __init__(self, toks):
         self.t, self.k = toks, 0
         self.scopes = [set()]
+        # Lua's limit: at most 200 locals in scope at once in one function (the main chunk too; MAXVARS). One entry per
+        # function, one count per open block. A 0.27.2 main.lua with 205 failed to load in game ("too many local variables").
+        self.frames = [[0]]
+        self.max_locals = 0
         self.globals_set = {}
         self.used = []
 
@@ -107,7 +111,15 @@ class Parser:
         self.k += 1; return tk[1]
 
     # scopes
-    def declare(self, n): self.scopes[-1].add(n)
+    def declare(self, n, slots=1):
+        self.scopes[-1].add(n)
+        self.frames[-1][-1] += slots
+        active = sum(self.frames[-1])
+        if len(self.frames) == 1: self.max_locals = max(self.max_locals, active)
+        if active > 200:
+            raise LuaSyntaxError(f"line {self.peek()[2]}: too many local variables (limit is 200) in "
+                                 f"{'the main chunk' if len(self.frames) == 1 else 'a function'}: declare fewer "
+                                 f"(e.g. put helpers in a do ... end block)")
     def is_local(self, n): return any(n in s for s in self.scopes)
     def use(self, n, line):
         if not self.is_local(n): self.used.append((n, line))
@@ -119,6 +131,7 @@ class Parser:
 
     def block(self):
         self.scopes.append(set())
+        self.frames[-1].append(0)
         while not self.block_follow():
             if self.check('return'):
                 self.k += 1
@@ -127,6 +140,7 @@ class Parser:
                 break
             self.statement()
         self.scopes.pop()
+        self.frames[-1].pop()
 
     def statement(self):
         tk = self.peek(); line = tk[2]
@@ -147,17 +161,20 @@ class Parser:
         if self.accept('for'):
             n1 = self.name()
             self.scopes.append(set())
+            self.frames[-1].append(0)
             if self.accept('='):
                 self.expr(); self.expect(','); self.expr()
                 if self.accept(','): self.expr()
+                self.declare('(for state)', 3)              # the loop's hidden control slots
                 self.declare(n1)
             else:
                 names = [n1]
                 while self.accept(','): names.append(self.name())
                 self.expect('in'); self.explist()
+                self.declare('(for state)', 4)
                 for n in names: self.declare(n)
             self.expect('do'); self.block(); self.expect('end', f' (to close for at line {line})')
-            self.scopes.pop(); return
+            self.scopes.pop(); self.frames[-1].pop(); return
         if self.accept('function'):
             n = self.name(); full = n; method = False
             self.use(n, line)
@@ -189,6 +206,7 @@ class Parser:
 
     def funcbody(self, line, method=False):
         self.scopes.append({'self'} if method else set())
+        self.frames.append([1 if method else 0])
         self.expect('(')
         if not self.check(')'):
             while True:
@@ -199,6 +217,7 @@ class Parser:
         self.block()
         self.expect('end', f' (to close function at line {line})')
         self.scopes.pop()
+        self.frames.pop()
 
     def explist(self):
         self.expr()
@@ -276,7 +295,7 @@ KNOWN_GLOBALS = {
     'StaticConstructObject', 'CreateInvalidObject', 'IterateGameDirectories', 'DumpAllObjects', 'GenerateSDK',
     # dlls\main.dll (runtime 0.10.0)
     'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock', 'SV_GameLua', 'SV_GameLuaState',
-    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_MusicClock', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
+    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_MusicClock', 'Inherit', 'CppObjectBase', 'FVector', 'ELiveAIManeuverSpeedType', 'EArithmeticKeyOperation', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
 }
 
 
@@ -290,7 +309,7 @@ def check(path):
     except LuaSyntaxError as e:
         print(f'{path}: SYNTAX ERROR {e}')
         return False
-    print(f'{path}: syntax ok')
+    print(f'{path}: syntax ok (main chunk: at most {p.max_locals} of 200 locals in scope)')
     for n, line in sorted(p.globals_set.items(), key=lambda kv: kv[1]):
         print(f'  note: global assigned: {n} (line {line})')
     seen = set()
