@@ -202,7 +202,7 @@ def build_wd_global():
                 if p[1] == 'AIObjectDescList':
                     objs = p[3][1]
                     assert len(objs) >= survival_events.BOMBER_FLIGHT, name
-                    assert any(q[1] == 'bGroupLead' and q[3] for q in objs[0][2]), name
+                    assert any(q[1] == 'bGroupLead' and q[3] == ('raw', 'Bool', b'\x01') for q in objs[0][2]), name
                     del objs[survival_events.BOMBER_FLIGHT:]
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}

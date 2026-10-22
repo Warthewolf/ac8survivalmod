@@ -182,6 +182,7 @@ static int Readable(const void* p, size_t n)
 }
 
 static uint8_t* g_exe;            /* game image */
+static volatile int32_t g_scanned; /* FindFunctions (Worker thread) has set every g_f* pointer */
 static size_t   g_exeSize;
 
 static int InGame(const void* p)
@@ -673,19 +674,24 @@ static uintptr_t OnText(void* table, uintptr_t flag, void* keyp, void* found)
 /* The landing menu (in-game hangar, LiveMenuIngameHangarWidget): Survival adds its shop rows to the page's command
  * table at run time (Scripts/main.lua), with StringArgs "SV_Buy_<item>". The stock decide would read those as page 0
  * (_wtoi), so the hook takes them: the request waits for Lua (SV_ShopRequest) and the page stays where it is. */
+#define SHOP_QUEUE 8
 static uint8_t* g_fHangarDecide;
 static Fn1      g_nextHangarDecide;
-static wchar_t  g_shopRequest[32];
-static volatile int32_t g_shopRequests;
+static wchar_t  g_shopQueue[SHOP_QUEUE][32];        /* picks waiting for Lua; both ends run on the game thread */
+static int32_t  g_shopHead, g_shopCount;
 
 static uintptr_t OnHangarDecide(void* page)
 {
     const FString* a = SelectedArgs(page, NULL);
     if (a && a->num > 8 && a->num <= 32 && !memcmp(a->data, L"SV_Buy_", 7 * 2)) {
-        memcpy(g_shopRequest, a->data, (size_t)a->num * 2);
-        g_shopRequest[a->num - 1] = 0;
-        ++g_shopRequests;
-        Log(L"shop: %s picked on the landing menu", g_shopRequest);
+        if (g_shopCount < SHOP_QUEUE) {
+            wchar_t* q = g_shopQueue[(g_shopHead + g_shopCount++) % SHOP_QUEUE];
+            memcpy(q, a->data, (size_t)a->num * 2);
+            q[a->num - 1] = 0;
+            Log(L"shop: %s picked on the landing menu", q);
+        } else {
+            Log(L"shop: %d picks already waiting; this one is dropped", (int32_t)SHOP_QUEUE);
+        }
         return 1;
     }
     return g_nextHangarDecide(page);
@@ -850,6 +856,7 @@ static struct {
 static int ResolveLayout(void)
 {
     if (LY.state) return LY.state > 0;
+    if (!g_scanned) return 0;                       /* the signature scan is still running: ask again later */
     LY.state = -1;
     if (!g_fUnitIdSpawned) { Log(L"spawner: the game's unit check was not found (other game version?)"); return 0; }
     /* IsUnitIdSpawned: mov rbx,[rcx+list]; ... movsxd rax,[rcx+count]; ... add rcx,iface; mov rax,[rcx]; call [rax+slot] */
@@ -1150,6 +1157,7 @@ static uint8_t* Rel32(uint8_t* insn) { return insn + 5 + *(int32_t*)(insn + 1); 
 static int ResolveAmmo(void)
 {
     if (AM.state) return AM.state > 0;
+    if (!g_scanned) return 0;                       /* the signature scan is still running: ask again later */
     AM.state = -1;
     uint8_t *ex = g_fAmmoExecute, *fl = g_fAmmoFlare, *wl = g_fAmmoWeapons;
     if (!ex || !fl || !wl) { Log(L"ammo: the game's ammo node was not found (other game version?)"); return 0; }
@@ -1309,6 +1317,7 @@ static uint8_t* RipRel(uint8_t* insn, int len) { return insn + len + *(int32_t*)
 static int ResolveBgm(void)
 {
     if (BG.state) return BG.state > 0;
+    if (!g_scanned) return 0;                       /* the signature scan is still running: ask again later */
     BG.state = -1;
     uint8_t* e = g_fBgmPlay;
     if (!e) { Log(L"music: the game's BGM node was not found (other game version?)"); return 0; }
@@ -1414,6 +1423,7 @@ typedef struct { void* vtable; uint8_t* data; int32_t num, max; FNameRaw name; u
 static int ResolveEvent(void)
 {
     if (EV.state) return EV.state > 0;
+    if (!g_scanned) return 0;                       /* the signature scan is still running: ask again later */
     EV.state = -1;
     uint8_t* e = g_fRemoteEvent;
     if (!e) { Log(L"events: the game's remote-event node was not found (other game version?)"); return 0; }
@@ -1543,6 +1553,7 @@ static struct {
 static int ResolveGameLua(void)
 {
     if (GL.state) return GL.state > 0;
+    if (!g_scanned) return 0;                       /* the signature scan is still running: ask again later */
     GL.state = -1;
     HANDLE exe = (HANDLE)g_exe;
     static const struct { size_t off; const char* name; } kApi[] = {
@@ -1566,7 +1577,7 @@ static int ResolveGameLua(void)
         Log(L"game Lua: context slot code changed (%p); no game Lua bridge", slotFn);
         return 0;
     }
-    GL.slot = (void**)(lea + 7 + *(int32_t*)(lea + 3));
+    GL.slot = (void**)RipRel(lea, 7);
     if (!InGame(GL.slot)) { Log(L"game Lua: context slot %p outside the game; no game Lua bridge", (void*)GL.slot); return 0; }
     Log(L"game Lua: Lua 5.3 API from the game's exports (pcallk %p), context slot %p", (void*)GL.pcallk, (void*)GL.slot);
     GL.state = 1;
@@ -1722,7 +1733,7 @@ static int L_SetFreeRestock(void* lua)
 static int L_GameLua(void* lua)
 {
     static char out[32768];
-    if (U.luaStackSize(lua) < 1 || !U.luaIsString(lua, 1)) { U.luaSetString(lua, "-4\tno code", 9); return 1; }
+    if (U.luaStackSize(lua) < 1 || !U.luaIsString(lua, 1)) { U.luaSetString(lua, "-4\tno code", 10); return 1; }
     StrView sv = { NULL, 0 };
     U.luaGetString(lua, &sv, 1);
     char* code = (char*)malloc(sv.n + 1);
@@ -1809,25 +1820,30 @@ static int L_MusicPlayer(void* lua)
 }
 
 /* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 24 keys already): the text the game shows for text key `key`
- * (menu rows and help lines that name it), ASCII, up to 255 characters */
+ * (menu rows and help lines that name it), ASCII; longer than 255 characters is cut there */
 static int L_SetText(void* lua)
 {
-    wchar_t key[DYN_KEY], text[DYN_CAP];
+    static wchar_t text[1024];                     /* longer than a slot: SetDynText keeps the first 255 */
+    wchar_t key[DYN_KEY];
     if (!ArgName(lua, key, DYN_KEY)) return Ret(lua, SV_ERR_BAD_ARGS);
-    if (!ArgName(lua, text, DYN_CAP)) { text[0] = L' '; text[1] = 0; }        /* "" is refused by ArgName */
+    if (!ArgName(lua, text, 1024)) { text[0] = L' '; text[1] = 0; }           /* "" (or longer) is refused by ArgName */
     return Ret(lua, SetDynText(key, text));
 }
 
-/* SV_ShopRequest() -> the StringArgs of the shop row picked on the landing menu since the last call ("SV_Buy_..."),
- * or "" (none, or the landing menu hook isn't installed) */
+/* SV_ShopRequest() -> the StringArgs of the oldest shop row picked on the landing menu and not yet taken
+ * ("SV_Buy_..."), or "" when none is waiting. SV_ShopRequest(1) -> 1 if the landing menu hook is installed, else 0
+ * (without the hook a shop row would reach the stock decide, which reads it as a page number). */
 static int L_ShopRequest(void* lua)
 {
-    static int32_t taken;
+    double query = 0;
+    if (ArgNumber(lua, &query) && query != 0) return Ret(lua, g_nextHangarDecide ? 1 : 0);
     char out[32];
     size_t n = 0;
-    if (g_shopRequests != taken) {
-        taken = g_shopRequests;
-        while (n < 31 && g_shopRequest[n]) { out[n] = (char)g_shopRequest[n]; ++n; }
+    if (g_shopCount > 0) {
+        const wchar_t* q = g_shopQueue[g_shopHead];
+        while (n < 31 && q[n]) { out[n] = (char)q[n]; ++n; }
+        g_shopHead = (g_shopHead + 1) % SHOP_QUEUE;
+        --g_shopCount;
     }
     out[n] = 0;
     U.luaSetString(lua, out, n);
@@ -1975,6 +1991,7 @@ static void FindFunctions(void)
     Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
     Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
         g_fPauseValidity, g_fHangarDecide);
+    g_scanned = 1;
 }
 
 static int StonehengeInstalled(void)

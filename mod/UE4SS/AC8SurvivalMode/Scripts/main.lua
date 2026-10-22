@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.16.0"
+local VERSION = "0.16.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -304,24 +304,41 @@ end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
 -- (set while a flight is up) are shown as one count, also returned as the second value.
-local function flagLine()
-    local parts, up = {}, 0
+-- Every SV_* int flag: { name = value }, read at most once every 0.2 s (several callers share one walk), or nil
+-- while there is no event container.
+local flagCache = { at = -1, t = nil }
+local function svFlags()
+    local now = os.clock()
+    if now - flagCache.at < 0.2 then return flagCache.t end
     local cs = FindAllOf("LiveEventContainer")
-    if not cs then return nil end
-    for _, c in ipairs(cs) do
+    local t = nil
+    for _, c in ipairs(cs or {}) do
         if valid(c) then
+            t = t or {}
             pcall(function()
                 c.FlagData.IntegerFiled:ForEach(function(k, v)
                     local okK, name = pcall(function() return k:get():ToString() end)
-                    if okK and name:sub(1, 6) == "SV_Up_" then
+                    if okK and name:sub(1, 3) == "SV_" then
                         local okV, val = pcall(function() return v:get().Value end)
-                        if okV and type(val) == "number" and val >= 1 then up = up + 1 end
-                    elseif okK and name:sub(1, 3) == "SV_" then
-                        local okV, val = pcall(function() return v:get().Value end)
-                        parts[#parts + 1] = name .. "=" .. (okV and tostring(val) or "?")
+                        if okV and type(val) == "number" then t[name] = val end
                     end
                 end)
             end)
+        end
+    end
+    flagCache.at, flagCache.t = now, t
+    return t
+end
+
+local function flagLine()
+    local t = svFlags()
+    if not t then return nil end
+    local parts, up = {}, 0
+    for name, val in pairs(t) do
+        if name:sub(1, 6) == "SV_Up_" then
+            if val >= 1 then up = up + 1 end
+        else
+            parts[#parts + 1] = name .. "=" .. tostring(val)
         end
     end
     if #parts == 0 then return nil, up end
@@ -452,8 +469,9 @@ local CFG = {
             drop_km = 1.5, run_cooldown_s = 20, bomb_damage = 12, damage_delay_s = 5,
         },
     },
-    -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by type: `models` names the bomber
-    -- types, the rest are fighters) and for every round cleared (round_bonus x the round), spent in the airfield shop.
+    -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
+    -- bomber / heavy, the rest fighter; `models` is only used when a plane's flight can't be read) and for every round
+    -- cleared (round_bonus x the round), spent in the airfield shop.
     credits = {
         start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 50,
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
@@ -553,6 +571,13 @@ do  -- optional overrides: Scripts/survival_config.lua returning a table with an
     end
 end
 math.randomseed(os.time())
+
+-- The difficulty preset (casual / standard / ace, CFG.ammo.by_difficulty) and the game's difficulty number.
+local function presetName()
+    local dm = FindFirstOf("LiveDifficultyManager")
+    local ok, d = pcall(function() return dm.CurrentDifficulty end)
+    return (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
+end
 
 ---------------------------------------------------------------------------------------------------- behaviour probe
 -- First step towards Survival's own (learning) enemy behaviour (BUILD_PLAN; tools/re/AI_BEHAVIOURS.md). One test,
@@ -933,9 +958,7 @@ local function enemyTier(p, round)
     if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
     local t = tc.list[i]
     p.tier = t
-    local dm = FindFirstOf("LiveDifficultyManager")
-    local okD, d = pcall(function() return dm.CurrentDifficulty end)
-    local add = tc.rank_add[(okD and CFG.ammo.by_difficulty[d]) or "standard"] or 0
+    local add = tc.rank_add[presetName()] or 0
     local want = math.max(1, math.min(5, t.rank + add))
     local ok0, r0 = pcall(function() return p.obj.PilotRank end)
     local okW, err = pcall(function() p.obj.PilotRank = want end)
@@ -1658,29 +1681,24 @@ end
 -- repair, so nothing has to write the flag. SV_Event (dlls/main.dll 0.9.0) fires RE_SV_AirfieldClose / Open, which
 -- switch landing off and on (Mission 22's LiveSetTakeoffAndLandingEventExecution).
 local function intFlag(name)
-    local val
-    for _, c in ipairs(FindAllOf("LiveEventContainer") or {}) do
-        if valid(c) then
-            pcall(function()
-                c.FlagData.IntegerFiled:ForEach(function(k, v)
-                    if val ~= nil then return end
-                    local okK, n = pcall(function() return k:get():ToString() end)
-                    if okK and n == name then
-                        local okV, x = pcall(function() return v:get().Value end)
-                        if okV and type(x) == "number" then val = x end
-                    end
-                end)
-            end)
-        end
-        if val ~= nil then break end
-    end
-    return val
+    local t = svFlags()
+    return t and t[name]
 end
 
 local function airfieldEvent(name)
     if type(SV_Event) ~= "function" then return " (no SV_Event: dlls/main.dll older than 0.9.0)" end
     local r = SV_Event(name)
     return r == 1 and (" (" .. name .. ")") or (" (" .. name .. " not fired: " .. (SV_ERR[r] or tostring(r)) .. ")")
+end
+
+-- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
+-- under 100 m, or nowhere to be read (the landing menu may hide the aircraft). Landing isn't closed under a player
+-- who may be down there, so they can always take off again.
+local function playerOnAirfield()
+    local you = playerLocation()
+    if not you then return true end
+    local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
+    return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
 end
 
 local function airfieldTick(tick)
@@ -1697,27 +1715,50 @@ local function airfieldTick(tick)
     if hits ~= AF.hits or hp ~= AF.hp then
         AF.hits = hits
         if hp ~= AF.hp then
-            AF.hp = hp
+            AF.hp, RUN.dirty = hp, true
             log(string.format("airfield: hit (%d hits, %d bomb damage), health %d", hits, AF.bomb, hp))
             if hp <= 0 and not AF.down then
-                AF.down, AF.downRound = true, D.round
+                AF.down, AF.downRound, AF.closePending = true, D.round, true
                 hudCallout(t.airfield_down, t.airfield_down_sub)
-                log("airfield: down, landing closed" .. airfieldEvent("RE_SV_AirfieldClose"))
+                log("airfield: down")
             elseif hp > 0 and AF.attackRound ~= D.round then
                 AF.attackRound = D.round
                 hudCallout(t.under_attack, nil)
             end
         end
     end
+    if AF.closePending then
+        if playerOnAirfield() then
+            if not AF.closeHeld then AF.closeHeld = true; log("airfield: down, landing stays open until you take off") end
+        else
+            AF.closePending, AF.closed = false, true
+            log("airfield: landing closed" .. airfieldEvent("RE_SV_AirfieldClose"))
+        end
+    end
     if AF.down and D.state == "wait" and D.round > AF.downRound then
+        local reopen = AF.closed
         AF.down, AF.full, AF.base, AF.bombBase, AF.hp = false, ac.repair_hp, hits, AF.bomb, ac.repair_hp
+        AF.closePending, AF.closeHeld, AF.closed, RUN.dirty = false, false, false, true
         hudCallout(t.airfield_up, t.airfield_up_sub)
-        log("airfield: repaired to " .. ac.repair_hp .. ", landing open" .. airfieldEvent("RE_SV_AirfieldOpen"))
+        log("airfield: repaired to " .. ac.repair_hp .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
     end
 end
 
+-- The world-data unit (flight) an AI plane belongs to, from its GetUnitName(); cached in p.unit, false if unreadable.
+local unitWarned = false
+local function planeUnit(p)
+    if p.unit ~= nil then return p.unit end
+    local ok, u = pcall(function() local v = p.obj:GetUnitName(); return type(v) == "string" and v or v:ToString() end)
+    p.unit = (ok and type(u) == "string" and u ~= "") and u or false
+    if not p.unit and not unitWarned then
+        unitWarned = true
+        log("planes: GetUnitName unreadable (" .. p.name .. ": " .. tostring(u) .. "); credits and bomb runs go by model")
+    end
+    return p.unit
+end
+
 -- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
--- damage. A plane's flight comes from its GetUnitName(); if that can't be read, every heavy flight that is up drops.
+-- damage. If a plane's flight can't be read, every heavy flight that is up drops.
 local function bombTick(tick)
     local b = CFG.airfield.bombers
     if not CFG.airfield.enabled or not D or not D.heavy or tick % 4 ~= 2 or type(SV_Event) ~= "function" then return end
@@ -1730,13 +1771,10 @@ local function bombTick(tick)
             local ok, l = pcall(function() return p.obj:K2_GetActorLocation() end)
             local dx, dy = ok and l and (l.X - AIRFIELD.X), ok and l and (l.Y - AIRFIELD.Y)
             if dx and math.sqrt(dx * dx + dy * dy) <= b.drop_km * 100000 then
-                if p.unit == nil then
-                    local okU, u = pcall(function() local v = p.obj:GetUnitName(); return type(v) == "string" and v or v:ToString() end)
-                    p.unit = (okU and BOMBER_UNIT[u]) and u or false
-                    log("bombers: " .. p.name .. " over the airfield, flight " .. (p.unit or ("unknown (" .. tostring(u) .. ")")))
-                end
+                local unit = planeUnit(p)
+                if not p.overSaid then p.overSaid = true; log("bombers: " .. p.name .. " over the airfield, flight " .. tostring(unit)) end
                 local runs = {}
-                if p.unit then runs[1] = p.unit else for u in pairs(D.heavy) do if D.up[u] then runs[#runs + 1] = u end end end
+                if unit and BOMBER_UNIT[unit] then runs[1] = unit else for u in pairs(D.heavy) do if D.up[u] then runs[#runs + 1] = u end end end
                 for _, u in ipairs(runs) do
                     if not D.bombAt[u] or tick - D.bombAt[u] >= b.run_cooldown_s * 4 then
                         D.bombAt[u] = tick
@@ -1765,7 +1803,7 @@ local function musicNext(special)
     for _ = 1, #list + 1 do
         if #bag == 0 then
             for _, t in ipairs(list) do if not M.dropped[t] then bag[#bag + 1] = t end end
-            if #bag == 0 then log("music: no playable tracks left in CFG.music." .. key); return end
+            if #bag == 0 then log("music: no playable tracks left in CFG.music." .. key); return true end
             shuffled(bag)
             if #bag > 1 and bag[#bag] == M.track then bag[1], bag[#bag] = bag[#bag], bag[1] end   -- no repeat
         end
@@ -1775,13 +1813,16 @@ local function musicNext(special)
             M.dropped[t] = true
             log("music: " .. t .. " is not a BGM event the game has loaded; dropped")
         elseif r < 0 then
-            log("music: " .. t .. " not posted (" .. tostring(r) .. ")"); return
-        else
-            M.track, M.silent = t, nil
+            table.insert(bag, t)                       -- not ready (or no game code): the same track next try
+            log("music: " .. t .. " not posted (" .. tostring(r) .. "); trying again shortly")
+            return false
+        else                                           -- id 0 = queued by the game's delay table, or refused:
+            M.track, M.silent, M.restarted = t, nil, nil   -- the silence check below finds out which
             log(string.format("music: round %d%s -> %s (playing id %d)", D.round, special and " (special)" or "", t, r))
-            return
+            return true
         end
     end
+    return true
 end
 
 local function musicTick(tick, now, paused)
@@ -1791,19 +1832,21 @@ local function musicTick(tick, now, paused)
         if not M.warned then M.warned = true; log("music: dlls/main.dll older than 0.9.0; the mission track plays all run") end
         return
     end
-    if paused then        -- the pause menu: has the player opened the music player?
+    if paused then        -- the pause menu: has the player opened the music player (its page shown, not just made)?
         if tick % 4 == 0 then
-            local w = FindFirstOf("WBP_Menu_PauseMusicPlayer_000_C")
-            if valid(w) and not nameOf(w):find("Default__", 1, true) then
-                M.player = true
-                log("music: the pause menu's music player was opened; Survival leaves the music to the player")
+            for _, w in ipairs(FindAllOf("WBP_Menu_PauseMusicPlayer_000_C") or {}) do
+                local okV, vis = pcall(function() return w:IsVisible() end)
+                if valid(w) and okV and vis and not nameOf(w):find("Default__", 1, true) then
+                    M.player = true
+                    log("music: the pause menu's music player was opened; Survival leaves the music to the player")
+                    break
+                end
             end
         end
         return
     end
-    if D.round >= 2 and D.round ~= M.round then
-        M.round = D.round
-        musicNext(D.round % 5 == 0)
+    if D.round >= 2 and D.round ~= M.round and (not M.retryAt or now >= M.retryAt) then
+        if musicNext(D.round % 5 == 0) then M.round, M.retryAt = D.round, nil else M.retryAt = now + 5 end
     end
     if tick % 4 ~= 0 then return end
     local id = SV_BGM(0)
@@ -1812,11 +1855,19 @@ local function musicTick(tick, now, paused)
         M.silent = M.silent or now
         if now - M.silent >= mc.restart_s then
             M.silent = nil
-            log(string.format("music: nothing playing for %d s; %s again (%s)", mc.restart_s, M.track,
-                tostring(SV_PlayBGM(M.track))))
+            if M.restarted == M.track then         -- posted again and still silent: the game won't play it
+                M.dropped[M.track], M.restarted = true, nil
+                log(string.format("music: %s stays silent; dropped, next track", M.track))
+                musicNext(false)
+            else
+                M.restarted = M.track
+                log(string.format("music: nothing playing for %d s; %s again (%s)", mc.restart_s, M.track,
+                    tostring(SV_PlayBGM(M.track))))
+            end
         end
     else
         M.silent = nil
+        if id ~= 0 then M.restarted = nil end
     end
 end
 
@@ -1832,11 +1883,6 @@ local A = nil                      -- this level's loadout state: { pawn, seenAt
 
 local function ammoReady() return type(SV_Ammo) == "function" and type(SV_SetAmmo) == "function" end
 
-local function presetName()
-    local dm = FindFirstOf("LiveDifficultyManager")
-    local ok, d = pcall(function() return dm.CurrentDifficulty end)
-    return (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
-end
 
 local function ammoLine()
     local parts = {}
@@ -1860,6 +1906,7 @@ local function applyAmmoCaps()
         if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
     end
     A.caps, A.preset = want, pname
+    RUN.dirty = true                                -- the shop's help lines show the caps
     if CFG.ammo.gun_unlimited then SV_SetAmmo(0, -1) end
     local restock = type(SV_FreeRestock) == "function" and SV_FreeRestock(CFG.ammo.free_restock and 1 or 0) or "n/a"
     log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s", pname, tostring(diff),
@@ -1963,6 +2010,11 @@ local function shopRowsTick(tick)
     if not CFG.shop.enabled or tick % 4 ~= 1 or containerState ~= true then return end
     local pc = FindFirstOf("PlayerController")
     if valid(pc) and inSurvival(pc) then
+        -- without the native landing-menu hook a shop row would reach the stock decide, which reads it as a page number
+        if type(SV_ShopRequest) ~= "function" or type(SV_SetText) ~= "function" or SV_ShopRequest(1) ~= 1 then
+            shopWarn("hook", "dlls/main.dll's landing menu hook is not installed (runtime 0.10.0+); no shop rows")
+            return
+        end
         local game = loadObject(SHOP.game)
         if not valid(game) then shopWarn("load", "could not load the landing menu's table"); return end
         local a = addrOf(game)
@@ -2031,19 +2083,24 @@ local function shopBuy(name)
         local max = SV_Ammo(k, 1)
         if max < 0 then return done("THIS AIRCRAFT HAS NONE.") end
         if A.caps[k] >= max then return done("ALREADY AT FULL LOAD.") end
-        RUN.bonus[k] = (RUN.bonus[k] or 0) + it.step
+        local gain = math.min(it.step, max - A.caps[k])   -- the last step up to the aircraft's full load costs less
+        if gain < it.step then
+            price = math.ceil(price * gain / it.step / 10) * 10
+            if RUN.credits < price then return done(string.format("NOT ENOUGH CREDITS (%d needed).", price)) end
+        end
+        RUN.bonus[k] = (RUN.bonus[k] or 0) + gain
         for _, kk in ipairs(k == 2 and { 2, 3 } or { k }) do
             if A.caps[kk] then
-                A.caps[kk] = A.caps[kk] + it.step
+                A.caps[kk] = A.caps[kk] + gain
                 local n = SV_Ammo(kk)
-                if n >= 0 then SV_SetAmmo(kk, math.min(n + it.step, A.caps[kk])) end
+                if n >= 0 then SV_SetAmmo(kk, math.min(n + gain, A.caps[kk])) end
             end
         end
     else
         if not AF.hp or AF.down then return done("THE AIRFIELD IS DOWN.") end
         if AF.hp >= CFG.airfield.hp then return done("THE AIRFIELD IS NOT DAMAGED.") end
         AF.full, AF.base, AF.bombBase = math.min(CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
-        AF.hp = AF.full
+        AF.hp = AF.full                             -- airfieldTick works health out from these from now on
     end
     RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
     RUN.bought[name] = (RUN.bought[name] or 0) + 1
@@ -2067,11 +2124,19 @@ local function shopTick(tick)
     end
 end
 
--- Credits for an enemy aircraft that went down (probeTick's plane watch).
+-- Credits for an enemy aircraft that went down (probeTick's plane watch), by its flight's role: a bomber flight pays
+-- bomber (heavy for CFG.airfield.bombers.heavy models), any other flight fighter. Only when the plane's flight
+-- couldn't be read does its model decide (CFG.credits.models).
 local function creditKill(p)
     local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
-    local kind = CFG.credits.models[model] or "fighter"
-    addCredits(CFG.credits[kind] or 0, model .. " down")
+    local kind = "fighter"
+    if p.unit and BOMBER_UNIT[p.unit] then
+        kind = "bomber"
+        for _, h in ipairs(CFG.airfield.bombers.heavy) do if (h:match("^(%w+)_") or h) == model then kind = "heavy" end end
+    elseif p.unit == false then
+        kind = CFG.credits.models[model] or "fighter"
+    end
+    addCredits(CFG.credits[kind] or 0, model .. " down (" .. kind .. ")")
 end
 
 local function probeTick(tick)
@@ -2163,7 +2228,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
+                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
