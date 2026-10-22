@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.4"
+local VERSION = "0.37.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3686,11 +3686,8 @@ function SHOP.menuSetup()
             local okR, r = dtCall(mine, "FindRow", m.row)
             steps[#steps + 1] = "in DT_SV_MenuClassRows: " .. (okR and (r ~= nil and type(r) or "no") or ("error " .. tostring(r)))
             if okR and r ~= nil then
-                pcall(function()
-                    local ref = r.MenuWidgetReference
-                    steps[#steps + 1] = "MenuID " .. tostring(r.MenuID and r.MenuID:ToString()) .. ", widget "
-                        .. type(ref) .. " " .. tostring(ref)
-                end)
+                -- (never read r.MenuWidgetReference from Lua: UE4SS's copy of a soft class reference crashed the game
+                -- at the main menu, test of 2026-10-23, in FSoftObjectPath::operator= -> FString::operator=)
                 local okA, e = dtCall(game, "AddRow", m.row, r)
                 steps[#steps + 1] = "AddRow " .. (okA and "ran" or ("error " .. tostring(e)))
                 local okF, now = dtCall(game, "FindRow", m.row)
