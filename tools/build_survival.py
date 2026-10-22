@@ -193,6 +193,37 @@ def set_flight_size(objs, size, unit, point, used_ids, top_number):
                     for q in ob[2]]
 
 
+def split_shuttle(units, used_ids, z):
+    """Comona Defense (survival_events.SHUTTLE_*): the shuttle leaves Mission 22's pad unit for a unit of its own, a copy
+    of the pad's desc (same faction, point and area) holding only the shuttle, which flies Survival's NPC row. The pad
+    keeps its dummies, AA guns, SAMs and tower and is spawned once a run; the shuttle every special."""
+    dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
+    pad = [u for u in units if unit_name(u) == survival_events.PAD_UNIT][0]
+    assert survival_events.SHUTTLE_UNIT not in {unit_name(u) for u in units}
+    objs = [p for p in pad[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    obj_name = lambda ob: dn([q for q in ob[2] if q[1] == 'Name'][0][3])
+    shuttle = [ob for ob in objs if obj_name(ob) == survival_events.SHUTTLE]
+    assert len(shuttle) == 1, survival_events.SHUTTLE
+    objs.remove(shuttle[0])                  # (no ground object of Mission 22's leads its unit: bGroupLead is 0)
+    new = copy.deepcopy(pad)
+    sh = shuttle[0]
+    sh[2][:] = [(q[0], q[1], False, ('name', survival_events.SHUTTLE_NPC_ROW, 0)) if q[1] == 'MissionNpcID' else q
+                for q in sh[2]]
+    assert any(q[1] == 'MissionNpcID' for q in sh[2])
+    z.nb.add(survival_events.SHUTTLE_NPC_ROW); z.nb.add(survival_events.SHUTTLE_UNIT)
+    ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
+    h = zlib.crc32(b'AC8SurvivalMode:' + survival_events.SHUTTLE_UNIT.encode())
+    while struct.pack('<I', h) in ids: h = (h + 1) & 0xffffffff
+    assert any(q[1] == 'UniqueID' for q in new[2]), 'unit desc without UniqueID'
+    new[2][:] = [(q[0], q[1], False, ('name', survival_events.SHUTTLE_UNIT, 0)) if q[1] == 'Name' else
+                 (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
+    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = [sh]
+    units.append(new)
+    print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}); '
+          f'{survival_events.PAD_UNIT} keeps {len(objs)} objects')
+
+
 def build_wd_global():
     """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
     itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
@@ -258,6 +289,7 @@ def build_wd_global():
                     set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
                     sized[size] = sized.get(size, 0) + 1
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
+    split_shuttle(units, used_ids, z)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -460,9 +492,20 @@ def edit_menu_row(props):
         if hit: drop_prop(props, hit[0][0])
 
 
+def edit_shuttle_npc(props):
+    """The shuttle's DT_NPC row (Mission 22's OP0057_sstb_01) under Survival's name key: the text hook shows
+    main.lua CFG.specials.shuttle.name for it (user, 2026-10-22: "EMBDIR Shuttle - CORRIS", not Spruce Goose)."""
+    assert dict((p[1], p[3]) for p in props)['GameObjectDisplayName02'] == s('ContainerAircraft_Name_SpruceGoose')
+    idx = [p[0] for p in props if p[1] == 'GameObjectDisplayName02'][0]
+    set_prop(props, idx, 'GameObjectDisplayName02', s('SV_Shuttle_Name'))
+
+
 def build_rows():
     build_rows_table('/Game/Datatables/Information/DT_LiveMissionTable', DATA + 'DT_SV_MissionRows',
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
+    # main.lua adds this row to DT_NPC at the main menu (before the level loads: the spawner reads it then)
+    build_rows_table('/Game/Datatables/AI/NPC/DT_NPC', DATA + 'DT_SV_NpcRows',
+                     'LiveNpcDataTable', 'OP0057_sstb_01', survival_events.SHUTTLE_NPC, edit_shuttle_npc)
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
 
@@ -481,6 +524,7 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
+    (survival_events.SHUTTLE_NPC_ROW, 'sstb_common', survival_events.SHUTTLE_NPC),   # Comona Defense's shuttle (its name)
 ]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.

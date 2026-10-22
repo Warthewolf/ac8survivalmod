@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.24.1"
+local VERSION = "0.25.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -303,10 +303,20 @@ local function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~
 local spawningUnit = nil
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pending + 1] = { obj = o, age = 0, unit = spawningUnit } end)
 
+-- Comona Defense's shuttle (special rounds): its actor, for its health on the HUD. It may come as a LiveAIPlane
+-- (OP0057_sstb); it's then kept out of `planes`, so it never counts, tiers or pays as an enemy.
+local SHUTTLE = { obj = nil }
+local shuttleHealth            -- (section "special rounds"; the HUD shows it)
+
 local function logPlane(o, unit)
     if not valid(o) or not inSurvival(o) then return end
     local n = nameOf(o)
     local short = n:match("([^%.:]+)$") or n
+    if short:find("_sstb_", 1, true) then
+        SHUTTLE.obj = o
+        log("special: shuttle actor " .. short .. (unit and (" (" .. unit .. ")") or ""))
+        return
+    end
     local wing = n:find("Wingman", 1, true) and " (wingman)" or ""
     local rec = { obj = o, name = short, unit = unit }
     planes[#planes + 1] = rec
@@ -566,6 +576,22 @@ local CFG = {
             Airfield = { repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD" },
         },
     },
+    -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
+    -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
+    -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
+    -- it, lifts off countdown_s after it appears. The round's fighters come for the player; strike_share of its aircraft
+    -- are strike flights (no heavies) sent at the shuttle. Launched: `reward` zollars. Lost: the shop is closed for the
+    -- next shop_closed_rounds rounds. countdown_s is built into the event package (SHUTTLE_COUNTDOWN_S): keep it equal.
+    specials = {
+        enabled  = true,
+        first    = 5,
+        every    = 5,
+        rotation = { "shuttle" },
+        shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, strike_share = 0.4,
+                     shop_closed_rounds = 1, unit = "SV_Unit_Shuttle", pad = "AA_Unit_01_Ground0",
+                     name_key = "SV_Shuttle_Name", npc_row = "OP0057_sstb_01_SV",
+                     npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
+    },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
     -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
@@ -638,6 +664,14 @@ local CFG = {
             airfield_up_sub   = "CLEARED TO LAND",
             start        = "ROUND %d",
             start_sub    = "HOSTILES INBOUND",
+            special      = "SPECIAL ROUND %d",
+            shuttle_sub  = "DEFEND THE %s",
+            launch_row   = "LAUNCH IN: %s  SHUTTLE %d%%",
+            launched     = "SHUTTLE LAUNCHED",
+            launched_sub = "+%d ZOLLARS",
+            shuttle_lost = "SHUTTLE LOST",
+            shuttle_lost_sub = "SHOP CLOSED NEXT ROUND",
+            shop_closed  = "SHOP CLOSED: THE SHUTTLE WAS LOST.",
         },
     },
 }
@@ -1196,6 +1230,34 @@ local function searchSetup()
     SR.done = true
 end
 
+-- Comona Defense's shuttle row: DT_SV_NpcRows' OP0057_sstb_01_SV (Mission 22's shuttle with Survival's name key,
+-- tools/build_survival.py) goes into DT_NPC from the main menu on, before a level loads (the spawner reads it then),
+-- and the name key gets CFG.specials.shuttle.name through the text hook.
+local SPS = { done = false, tries = 0 }
+local function specialSetup()
+    if SPS.done or not gameInstance() then return end
+    local c = CFG.specials.shuttle
+    SPS.tries = SPS.tries + 1
+    local npc, why1 = loadObject(PROBE_TABLES[2].path)
+    local mine, why2 = loadObject(c.npc_rows)
+    if not (npc and mine) then
+        if SPS.tries >= 20 then SPS.done = true; log("special: shuttle row tables not loaded (" .. tostring(why1 or why2) .. ")") end
+        return
+    end
+    pin(npc, nameOf(npc)); pin(mine, nameOf(mine))
+    SPS.done = true
+    local _, have = dtCall(npc, "FindRow", c.npc_row)
+    if have == nil then
+        local _, row = dtCall(mine, "FindRow", c.npc_row)
+        if row == nil then log("special: " .. c.npc_row .. " missing from DT_SV_NpcRows"); return end
+        dtCall(npc, "AddRow", c.npc_row, row)
+        _, have = dtCall(npc, "FindRow", c.npc_row)
+    end
+    local named = type(SV_SetText) == "function" and SV_SetText(c.name_key, c.name) == 1
+    log(string.format("special: shuttle row %s %s; its name '%s' %s", c.npc_row, have ~= nil and "in DT_NPC" or "NOT added",
+        c.name, named and "set" or "not set (no text slot)"))
+end
+
 -- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
 local function searchAircraft(a)
     local sv = SR.usable[a]
@@ -1614,8 +1676,13 @@ local function hudTick(now, paused, pc)
             H.airFill:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })
         end
     end
+    local sp = D.special and D.special.state == "countdown" and D.special
     if D.state == "wait" then
         setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif sp then                                  -- Comona Defense: the countdown and the shuttle's health
+        local hp = shuttleHealth()
+        setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif H.nextShown ~= false then
         H.next:SetVisibility(VIS.Collapsed); H.nextShown = false
@@ -1772,7 +1839,7 @@ local function spawnBomber(unit)
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
-        if D.bomberCallout ~= D.round then
+        if D.bomberCallout ~= D.round and not D.special then      -- (a special's strike flights: its own callout)
             D.bomberCallout = D.round
             hudCallout(CFG.hud.text.bombers, CFG.hud.text.bombers_sub)
         end
@@ -1851,15 +1918,90 @@ local function pickFlights(units, budget, skip)
     return out, budget - left
 end
 
+---------------------------------------------------------------------------------------------------- special rounds
+-- The special round `round` is (CFG.specials), or nil for a normal round.
+local function specialFor(round)
+    local sp = CFG.specials
+    if not sp.enabled or #sp.rotation == 0 or round < sp.first or (round - sp.first) % sp.every ~= 0 then return nil end
+    return sp.rotation[((round - sp.first) // sp.every) % #sp.rotation + 1]
+end
+
+-- Comona Defense: the pad (once a run: its guns and SAMs stay up between specials) and the shuttle, both where the
+-- world data puts them (SV_Spawn without a position). The shuttle's appearance starts the event package's countdown.
+local function spawnShuttle()
+    local c = CFG.specials.shuttle
+    if SV_UnitAlive(c.pad) <= 0 then
+        local p = SV_Spawn(c.pad)
+        log("special: pad " .. c.pad .. ": " .. (p > 0 and (p .. " objects up") or ("not spawned (" .. (SV_ERR[p] or tostring(p)) .. ")")))
+    end
+    SHUTTLE.obj = nil
+    spawningUnit = c.unit
+    local r = SV_Spawn(c.unit)
+    spawningUnit = nil
+    log("special: shuttle " .. c.unit .. ": " .. (r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if r <= 0 then D.special = nil; return r end            -- a normal round, then
+    D.special.state, D.special.at = "countdown", D.now
+    return r
+end
+
+-- The shuttle's health in % (its actor's HealthInternal is health x 10), or nil when it can't be read.
+function shuttleHealth()                  -- the local declared with SHUTTLE
+    if not valid(SHUTTLE.obj) then
+        SHUTTLE.obj = nil
+        if D and D.special and D.now and (SHUTTLE.lookAt or -100) + 2 <= D.now then
+            SHUTTLE.lookAt = D.now
+            local o = FindFirstOf("BP_OP0057_sstb_CP_C")
+            if valid(o) and not nameOf(o):find("Default__", 1, true) then SHUTTLE.obj = o end
+        end
+        if not SHUTTLE.obj then return nil end
+    end
+    local ok, pct = pcall(function()
+        local max = SHUTTLE.obj.MaxHealth
+        return max > 0 and math.max(0, math.floor(SHUTTLE.obj.HealthInternal / 10 / max * 100 + 0.5)) or nil
+    end)
+    return ok and pct or nil
+end
+
+-- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
+-- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
+local function specialTick(now)
+    local s = D.special
+    if not s or s.state ~= "countdown" then return end
+    local c, t = CFG.specials.shuttle, CFG.hud.text
+    local f = svFlags() or {}
+    local alive = SV_UnitAlive(c.unit)
+    local over = now - s.at >= c.countdown_s + 3
+    if (f.SV_ShuttleLost or 0) >= 1 or (alive == 0 and (f.SV_ShuttleLaunched or 0) < 1 and not over) then
+        s.state = "done"
+        RUN.shopClosedUntil = D.round + c.shop_closed_rounds
+        RUN.dirty = true
+        hudCallout(t.shuttle_lost, t.shuttle_lost_sub)
+        log(string.format("special: round %d, the shuttle was lost %.0f s into the countdown (%d hits); shop closed through round %d",
+            D.round, now - s.at, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
+    elseif (f.SV_ShuttleLaunched or 0) >= 1 or (over and alive > 0) then
+        s.state = "done"
+        addCredits(c.reward, "shuttle launched")
+        hudCallout(t.launched, string.format(t.launched_sub, c.reward))
+        log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
+            (f.SV_ShuttleLaunched or 0) >= 1 and "event package" or "countdown over", f.SV_ShuttleHits or -1,
+            tostring(shuttleHealth())))
+    end
+end
+
 local function startRound()
     D.round = D.round + 1
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round, CFG.max_aircraft)
     local b = CFG.airfield.bombers
-    local raid = CFG.airfield.enabled and D.round >= b.first_raid and (D.round - b.first_raid) % b.raid_every == 0
+    local special = specialFor(D.round)
+    D.special = special and { kind = special, state = "pending" } or nil
+    local raid = not special and CFG.airfield.enabled and D.round >= b.first_raid and (D.round - b.first_raid) % b.raid_every == 0
     local bombers, nBombers = {}, 0
     if raid then
         local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
+    elseif special == "shuttle" then             -- strike flights at the shuttle (heavies only bomb the airfield)
+        local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
+        bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
     end
     local fighters, nFighters = pickFlights(CFG.pool, budget - nBombers, function(u) return PROBE_OF[u] end)
     D.queue, D.spare = {}, {}
@@ -1880,8 +2022,10 @@ local function startRound()
         if #D.queue > want then D.spare[#D.spare + 1] = table.remove(D.queue) end
     end
     for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
+    if special == "shuttle" then table.insert(D.queue, 1, "@shuttle") end     -- the shuttle first: it sets their orders
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
-        #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers) or ""))
+        #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
+        or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or ""))
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive = "spawning", D.now, nil
 end
@@ -1942,7 +2086,12 @@ local function roundsTick(now)
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
-            hudCallout(string.format(CFG.hud.text.start, D.round + 1), CFG.hud.text.start_sub)
+            local t = CFG.hud.text
+            if specialFor(D.round + 1) == "shuttle" then
+                hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
+            else
+                hudCallout(string.format(t.start, D.round + 1), t.start_sub)
+            end
         end
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
@@ -1954,7 +2103,9 @@ local function roundsTick(now)
         end
         if D.held == D.round then D.held = nil; log(string.format("round %d: you took off, spawns go on", D.round)) end
         local u = table.remove(D.queue, 1)
-        if u then
+        if u == "@shuttle" then
+            spawnShuttle()
+        elseif u then
             local r = spawnFlight(u)
             if r == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
             if (r == 0 or r == -2 or r == -3) and #D.spare > 0 then        -- this flight can't come: send a spare
@@ -1968,13 +2119,16 @@ local function roundsTick(now)
     elseif D.state == "fighting" then
         if now < D.at then return end
         D.at = now + 1
+        specialTick(now)
         local alive, flights = 0, 0
         for u in pairs(D.up) do
             local n = SV_UnitAlive(u)
             if n > 0 then alive, flights = alive + n, flights + 1 else D.up[u] = nil end
         end
         if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
-        if flights == 0 then
+        if flights == 0 and D.special and D.special.state == "countdown" then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the shuttle's countdown goes on", D.round)) end
+        elseif flights == 0 then
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
@@ -2362,20 +2516,28 @@ local function shopPrice(name)
     return math.floor(it.price * it.raise ^ (RUN.bought[name] or 0) / 10 + 0.5) * 10
 end
 
+-- The shop is closed after a lost special (CFG.specials.shuttle.shop_closed_rounds): through round RUN.shopClosedUntil,
+-- including the break before it, and open again in the break after it.
+local function shopClosed()
+    local u = RUN.shopClosedUntil
+    return u ~= nil and D ~= nil and (D.round < u or (D.round == u and D.state ~= "wait"))
+end
+
 local function shopTexts()
     if type(SV_SetText) ~= "function" then return end
     for name, it in pairs(CFG.shop.items) do
         local price, label, help = shopPrice(name)
         if it.kind then
             local cap = A and A.caps and A.caps[it.kind]
-            label = string.format("%s +%d   %d CR", it.label, it.step, price)
+            label = string.format("%s +%d   %d Z", it.label, it.step, price)
             help = string.format("%s load +%d for the rest of the run%s.", it.what:gsub("^%l", string.upper), it.step,
                 cap and string.format(" (now %d)", cap) or "")
         else
-            label = string.format("%s +%d   %d CR", it.label, it.repair, price)
+            label = string.format("%s +%d   %d Z", it.label, it.repair, price)
             help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
                 AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
         end
+        if shopClosed() then help = CFG.hud.text.shop_closed end
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
@@ -2388,6 +2550,7 @@ local function shopBuy(name)
     if not it then log("shop: unknown item " .. tostring(name)); return end
     local price = shopPrice(name)
     local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
+    if shopClosed() then return done("CLOSED.") end
     if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
     if it.kind then
         local k = it.kind
@@ -2566,6 +2729,8 @@ local function probeTick(tick)
         if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
+        local okSp, errSp = pcall(specialSetup)
+        if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
     end

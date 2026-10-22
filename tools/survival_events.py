@@ -65,6 +65,38 @@ BOMBERS = list(BOMBER_SIZES)
 # heavies and fires the flight's bomb run over the airfield, then applies the damage itself.
 BOMB_COUNT = 6
 BOMB_GAP_S = 0.4
+# Special round "Comona Defense" (Milestone 6, tools/re/SPECIAL_ROUNDS.md 12a): Mission 22's shuttle on its pad, a
+# countdown, liftoff. Mission 22's pad stays as it is (PAD_UNIT: near-miss dummies, 6 AA guns, 4 SAMs, the control
+# tower; user, 2026-10-22: "you can leave the AA guns in", "SAMs too and tower"), spawned at the first special and kept;
+# build_survival.py moves the shuttle into a unit of its own (SHUTTLE_UNIT, spawned every special: a unit with
+# anything still alive can't be spawned again) and gives it Survival's NPC row, for its name SV_Shuttle_Name.
+# Scripts/main.lua spawns both in place (SV_Spawn without a position); the shuttle's appearance runs the chain on
+# exec delays: SHUTTLE_COUNTDOWN_S after it appears the shuttle lifts off (main.lua CFG.specials.shuttle.countdown_s
+# must be the same), SHUTTLE_REMOVE_S after liftoff it is taken off (LiveDestroyUnitExecution) so the next special can
+# spawn it again. Flags for Lua: SV_ShuttleRound 1 while it's on the pad (strike flights go for it instead of the
+# airfield), SV_ShuttleLaunched / SV_ShuttleLost, SV_ShuttleHits.
+PAD_UNIT = 'AA_Unit_01_Ground0'
+SHUTTLE_UNIT = 'SV_Unit_Shuttle'
+SHUTTLE = 'AA_Obj_01_Ground0_Shuttle_0'
+SHUTTLE_NPC_ROW = 'sstb_common_sv'          # DT_SV_NpcMission row (NpcId SHUTTLE_NPC)
+SHUTTLE_NPC = 'OP0057_sstb_01_SV'           # DT_SV_NpcRows row, added to DT_NPC by main.lua
+SHUTTLE_PATH = '01_Ground0_shuttle_0_Path0'
+SHUTTLE_HP = 175.0                          # Mission 22's
+SHUTTLE_COUNTDOWN_S = 150.0
+SHUTTLE_REMOVE_S = 60.0
+# Mission 22's countdown radio, as seconds before liftoff (its lines count down in seconds), and its countdown sound
+# flags; Mission 22 drives them off its mission timer, Survival off delays from the shuttle's appearance.
+SHUTTLE_RADIO = [(SHUTTLE_COUNTDOWN_S - 3, '01_Wave5_Countdown_Start'), (33, '01_Countdown_Shuttle33'),
+                 (32, '01_Countdown_Shuttle32'), (31, '01_Countdown_Shuttle31'), (28, '01_Countdown_intermission_1st'),
+                 (23, '01_Countdown_Shuttle23'), (22, '01_Countdown_Shuttle22'), (21, '01_Countdown_Shuttle21'),
+                 (20, '01_Countdown_Shuttle20'), (19, '01_Countdown_Shuttle19'), (15, '01_Countdown_intermission_2nd'),
+                 (11, '01_Countdown_Ignistion'), (10, '01_Countdown_mainEngine'), (8, '01_Countdown_Shuttle8'),
+                 (7, '01_Countdown_Shuttle7'), (2, '01_Countdown_Shuttle2and1')]
+SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_Set'),
+                       (23, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_23sec_Set'),
+                       (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
+                       (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
+SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
 # Behaviour rows (test of 2026-10-22): the game builds every AI aircraft's behaviour trees when the level loads, one
 # set per world-data AI object desc, from the NPC row the desc names at that moment (127 aircraft x 15 slots = the
 # 1915 behaviours the census counted before anything spawned; each stock script was built once, ours never).
@@ -100,7 +132,8 @@ if CHASE: KEEP_AT_START[CHASE_UNIT] = None
 # music there). Was Mission 8's 'AKE_Bgm_Ms08A_Play' (the shared campaign BGM bank, DA_SoundDB_AKB_BGM_Campaign).
 MUSIC = None
 # SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (chase).
-INT_FLAGS = ['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
+INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
+             + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -308,9 +341,14 @@ def build_events(stock_ep):
     for k, unit in enumerate(BOMBERS):
         up = f'SV_BomberUp_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        g.execute(t_bmove, up, {0: unit}, delay=1.0)
+        on_airfield = lambda: [g.cond('SV_ShuttleRound', 'Leq', 0)]
+        on_shuttle = lambda: [g.cond('SV_ShuttleRound', 'Geq', 1)]
+        g.execute(t_bmove, up, {0: unit}, delay=1.0, conds=on_airfield())
         g.execute(t_bsearch, up, {1: unit}, delay=2.0)
-        g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0)
+        g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0, conds=on_airfield())
+        # Comona Defense: while the shuttle is on its pad the strike flights go for it (Mission 22's waves' order)
+        g.execute(t_move, up, {0: unit, 1: SHUTTLE, 3: 'NoneSelect'}, delay=1.0, conds=on_shuttle())
+        g.execute(t_bengage, up, {1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
     for k, dummy in enumerate(AIRFIELD_DUMMIES):
         hit = f'SV_AirfieldHit_{k + 1}'
         t = g.trigger(f'MissedWeapon_AreaB_{k}', hit, arg_changes={4: dummy})      # LifeCount cleared: every hit
@@ -328,7 +366,84 @@ def build_events(stock_ep):
     for ev, on in (('RE_SV_AirfieldClose', 'false'), ('RE_SV_AirfieldOpen', 'true')):
         g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
         g.execute(t_landing, ev, {0: on})
+    build_shuttle(g, flag)
     return g
+
+
+def build_shuttle(g, flag):
+    """Comona Defense (see SHUTTLE_*): Mission 22's shuttle records, copied with their exact arguments, on delays
+    from the shuttle's appearance instead of Mission 22's mission timer."""
+    T = SHUTTLE_COUNTDOWN_S
+    tpl = lambda cls, ev, pred=None: g.exec_template(cls, ev, pred)
+    t_maxhp = tpl('LiveSetMaxHealthExecution', 'MissionStart')
+    t_minhp = tpl('LiveSetMinHealthExecution', 'RE_SetGroundObjMinHP1')
+    t_sound = tpl('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
+    t_sflag = tpl('LiveSoundGeneralPostEventExecution', 'CompositeEvent_CountDown_1')
+    t_radio = tpl('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
+    t_vfx_on = tpl('LiveSetActiveVFXExecution', 'RE_Shuttle_Boost_On')
+    t_vfx_off = tpl('LiveSetActiveVFXExecution', 'RE_Shuttle_Boost_Off')
+    t_fire = tpl('LiveAIPathExecution', 'RE_Shuttle_Fire_On')
+    t_climb = tpl('LiveAIPathExecution', 'RE_Shuttle_Launch', lambda a, e: a[4] == '4000.0')
+    t_climb2 = tpl('LiveAIPathExecution', 'RE_Shuttle_Launch', lambda a, e: a[4] == '5000.0')
+    t_cam_on = tpl('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
+    t_cam_off = tpl('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
+    t_remove = tpl('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    for t in (t_fire, t_climb, t_climb2):
+        assert arg_values(t)[0] == SHUTTLE and arg_values(t)[2] == SHUTTLE_PATH
+    assert arg_values(t_remove)[2] == SHUTTLE and arg_values(t_maxhp)[0] == SHUTTLE
+    standing = lambda: [g.cond('SV_ShuttleLost', 'Leq', 0)]          # nothing more once it's been shot down
+    up = 'SV_ShuttleUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: SHUTTLE_UNIT})
+    for name, value in (('SV_ShuttleLost', 0), ('SV_ShuttleLaunched', 0), ('SV_ShuttleHits', 0), ('SV_ShuttleRound', 1)):
+        flag(up, name, 'Set', value)
+    g.execute(t_maxhp, up, {3: f'{SHUTTLE_HP}'})
+    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
+    for before, key in SHUTTLE_RADIO:
+        g.execute(t_radio, up, {0: key}, delay=T - before, conds=standing())
+    for before, key in SHUTTLE_SOUND_FLAGS:
+        g.execute(t_sflag, up, {0: key}, delay=T - before, conds=standing())
+    g.execute(t_minhp, up, {0: SHUTTLE, 3: '1.0'}, delay=T - 20, conds=standing())   # the last 20 s it can't die
+    g.execute(t_vfx_on, up, delay=T - 14, conds=standing())                         # ignition (RE_Shuttle_Boost_On)
+    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Play', 1: SHUTTLE}, delay=T - 14, conds=standing())
+    g.execute(t_fire, up, delay=T - 4, conds=standing())                            # on its path, engines lit
+    g.execute(t_cam_on, up, delay=T - 2, conds=standing())
+    # liftoff (RE_Shuttle_Launch, without Mission 22's wave cleanup)
+    g.execute(t_climb, up, delay=T, conds=standing())
+    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE}, delay=T, conds=standing())
+    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'LiftOff_Play', 1: SHUTTLE}, delay=T, conds=standing())
+    flag(up, 'SV_ShuttleLaunched', 'Set', 1, delay=T, conds=standing())
+    flag(up, 'SV_ShuttleRound', 'Set', 0, delay=T, conds=standing())
+    g.execute(t_climb2, up, delay=T + 13, conds=standing())
+    g.execute(t_cam_off, up, delay=T + 7)
+    g.execute(t_vfx_off, up, delay=T + 30)
+    g.execute(t_remove, up, delay=T + SHUTTLE_REMOVE_S, conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
+    # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock conditions
+    hit = 'SV_ShuttleHit'
+    g.trigger('ObjectDamage_Shuttle', hit)
+    g.execute(t_radio, hit, {0: '01_All_Wave_Hit_Shuttle_First'}, conds=[g.cond('SV_ShuttleHits', 'Leq', 0)])
+    flag(hit, 'SV_ShuttleHits', 'Add', 1)
+    for k, (stage, line) in enumerate(((1, 'Durability50'), (2, 'Durability30'), (3, 'Durability_Limit')), 1):
+        t = tpl('LiveCallRemoteEventExecution', 'ObjectDamage_Shuttle', lambda a, e, n=stage: a[0] == f'RE_Shuttle_Damage_Phase{n}')
+        ev = f'RE_SV_ShuttleDamage{"ABC"[k - 1]}'                    # no numeric tail (hard rule 17)
+        g.execute(t, hit, {0: ev}, conds=fields(t)['ConditionalStatementTables'][3][1])
+        g.trigger('RE_Shuttle_Damage_Phase1', ev, life=1)
+        g.execute(t_radio, ev, {0: f'01_All_Wave_{line}_Shuttle'})
+    near = 'SV_ShuttleNear'
+    g.trigger('VolumeEvent_Shuttle_Near_1st', near, life=1)
+    g.execute(t_radio, near, {0: '01_All_Wave_Close_Shuttle_First'}, conds=standing())
+    # shot down on the pad (Mission 22's ObjectDestroy / ObjectDestroy_1, any attacker or a system kill)
+    for src, ev in (('ObjectDestroy', 'SV_ShuttleDown'), ('ObjectDestroy_1', 'SV_ShuttleDownSys')):
+        assert arg_values(g.trig_template(src))[16] == SHUTTLE
+        g.trigger(src, ev)
+        on_pad = lambda: [g.cond('SV_ShuttleLaunched', 'Leq', 0)]
+        flag(ev, 'SV_ShuttleLost', 'Set', 1, conds=on_pad())
+        flag(ev, 'SV_ShuttleRound', 'Set', 0, conds=on_pad())
+    g.execute(t_radio, 'SV_ShuttleDown', {0: '01_Mission_Failure_Destroy_Shuttle'},
+              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
+    g.execute(t_sflag, 'SV_ShuttleDown', {0: 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_Interrupted_Set'},
+              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
+    for k in range(3):
+        g.execute(t_vfx_on, 'SV_ShuttleDown', {0: f'VFX_ShuttleDummy{k}'}, conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
 
 
 def write_records(g, z, prefix_props_bytes):

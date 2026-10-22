@@ -389,7 +389,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 Every 5th round is a special round (rotation in config; a special that fails to build falls back to a normal round).
 Research: tools/re/SPECIAL_ROUNDS.md (shuttle, LCACs, anomaly ace), tools/re/HELIOS_VFX.md (Helios, portal VFX),
 tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's podarge_build (Podarge / Land Aegis).
-- [ ] Framework: round type picked by Lua (every 5th round, CFG.specials.rotation), "SPECIAL ROUND" banner + its name,
+- [~] Framework (built with the shuttle, untested): round type picked by Lua (every 5th round, CFG.specials.rotation), "SPECIAL ROUND" banner + its name,
   own spawn list per special, its own clear condition (e.g. boss down, shuttle launched), and fail effects (airfield /
   shop closed one round, as at airfield 0). Specials never award real progression.
 - [ ] Portal spawn effect for specials: stock teleport nodes + VFX burst (HELIOS_VFX.md 4: run-time spawning from Lua).
@@ -400,7 +400,15 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
 - [ ] Podarge drop / Land Aegis: port the drop chain the way Stonehenge's podarge_build did (from Mission 25).
 - [ ] ECM towers: ground units that jam (radar noise, LiveStartHUDRaderMapNoise) until destroyed.
 - [ ] Stealth wing: f22a / su57 / x40a style flight, hidden from radar until close.
-- [ ] Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
+- [~] Comona Defense BUILT 2026-10-22 (Lua 0.25.0), untested: round 5 (then every 5th; CFG.specials) spawns Mission 22's
+  pad (AA guns, SAMs, tower: user, "you can leave the AA guns in" / "SAMs too and tower") once a run and the shuttle
+  (own unit SV_Unit_Shuttle, NPC row OP0057_sstb_01_SV named "EMBDIR Shuttle - CORRIS" via SV_Shuttle_Name) in place;
+  its appearance runs Mission 22's countdown radio, ignition, path and liftoff records on delays (150 s); strike
+  flights (40% of the round) get the shuttle as target (SV_ShuttleRound flag), fighters the player. HUD: LAUNCH IN /
+  SHUTTLE n%. Launched: +3000 zollars. Lost: shop closed through the next round. Removed 60 s after liftoff.
+  Framework done with it: specialFor (rotation), "SPECIAL ROUND n" callout, round clear waits for the special.
+  Test: "special:" lines; radio lines play; strikers attack the pad; name shows; liftoff path; next special respawns.
+- [ ] (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
   launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
   Mission 19's pad VFX. Key callouts only (countdown, pad under attack, liftoff); no allies. Fail = shuttle lost ->
