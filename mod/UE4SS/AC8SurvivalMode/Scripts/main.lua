@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.34.1"
+local VERSION = "0.35.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -358,6 +358,9 @@ local SHUTTLE = { obj = nil }
 local shuttleHealth            -- (section "special rounds"; the HUD shows it)
 -- The Anomaly (section "special rounds"): its field's state, for the HUD and the level reset.
 local ANOM = { on = false }
+-- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
+local ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
+                          "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
 
 local function logPlane(o, unit)
     if not valid(o) or not inSurvival(o) then return end
@@ -673,11 +676,14 @@ local CFG = {
             Missiles = { kind = 1, step = 12, price = 300, raise = 1.0, label = "MISSILES", what = "missiles" },
             Special  = { kind = 2, step = 4, price = 400, raise = 1.0, label = "SPECIAL WEAPON", what = "special weapon rounds" },
             Flares   = { kind = 4, step = 2, price = 150, raise = 1.0, label = "FLARES", what = "flares" },
-            -- the landing menu has room for 4 shop rows, so this one repairs the airfield while it's damaged and, once
-            -- it's whole, builds its defences (user, 2026-10-22: "purchase AA guns ... or SAM sites. Make them
-            -- expensive"): Mission 22's airport AA guns and SAM sites, one unit each (tools/survival_events.py
+            -- The landing menu has room for 4 shop rows (its list holds 6, 2 are stock), so this one does three jobs in
+            -- turn: it repairs your aircraft while it's damaged (user, 2026-10-22: "add the ability to buy repairs for
+            -- your aircraft"; `aircraft`: the stock full repair, price x the damage, at least min_price), then the
+            -- airfield while that's damaged, then builds its defences (user: "purchase AA guns ... or SAM sites. Make
+            -- them expensive"): Mission 22's airport AA guns and SAM sites, one unit each (tools/survival_events.py
             -- DEFENCES), built in `order`; a destroyed one can be built again. Each kind's price rises `raise` times.
             Airfield = { repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
+                         aircraft = { label = "REPAIR AIRCRAFT", price = 600, min_price = 100 },
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
                              aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.25,
@@ -738,19 +744,28 @@ local CFG = {
         -- "anomaly" = The Anomaly (tools/survival_events.py ANOMALY_*; user, 2026-10-22): the ace `name` in an F-4E
         -- (the campaign named-ace skin) with `guards` escorts under `guards_name`, both at the top skill tier and AI
         -- level ai_level. Within field_km of it the player's controls invert (`invert`: "both", "pitch" or "roll",
-        -- fading over fade_s; dlls/main.dll SV_SetControlInvert), with the stock glasses effect and radar noise; its
+        -- fading over fade_s; dlls/main.dll SV_Invert), with the stock glasses effect and radar noise; its
         -- round starts with the stock MISSION UPDATE beep, a forced WARNING and the focus camera on it. Shot down:
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
         anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.0, invert = "both",
                      fade_s = 1.5, reward = 4000, ai_level = 5, guard_offset_m = 800,
+                     -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
+                     -- to those levels should spawn")
+                     only = true,
+                     -- stronger (user: "make the F-4 more stronger"): the F-4E has 60 HP and turns slowly (pitch 30,
+                     -- roll 90); its DT_NPC rows get health_add HP and turn_add degrees/s (MaxHealthDifference,
+                     -- Pitch/Roll/YawSpeedDifference). hover: it floats (user: "didn't hover in place"): its speeds
+                     -- times hover_speed (Speed*Coefficient), so it hangs in the air and turns on the spot.
+                     health_add = 440, turn_add = { pitch = 45, roll = 100, yaw = 5 }, hover = true, hover_speed = 0.06,
+                     -- its arrival camera (tools/survival_events.py ANOMALY_CAMERAS; the shuttle's ms22-01 was too close)
+                     camera = "LookAt_Event_Camera",
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
                      -- the Celaeno's death sounds (Mission 23's sound events, played by the event package when it's
                      -- down: tools/survival_events.py ANOMALY_DOWN_SOUNDS), loaded with the level so they can play
                      down_sounds = "/Game/WwiseAssets/Events/CS_AceLive_SE/MissionSpecific/Events_Ms23/EXP/SKY/SE_Ms23_EXP_SKY_OP0049_cleo/",
                      down_sound_names = { "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play",
                                           "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play",
-                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play",
-                                          "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play" },
+                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play" },
                      -- (and the Celaeno's control-unit crackle on MINDRIPPER while it's up)
                      hum_sounds = "/Game/WwiseAssets/Events/CS_AceLive_SE/MissionSpecific/Events_Ms23/ARMS/SKY/SE_Ms23_ARMS_SKY_OP0049_cleo/",
                      hum_sound_names = { "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Play",
@@ -761,7 +776,14 @@ local CFG = {
                      -- event package's focus camera swings onto MINDRIPPER, open_at_s later the `open` systems crackle
                      -- on it for open_s, then the `burst` systems fire and they appear. Niagara systems, attached to
                      -- MINDRIPPER, `scale` times their size (they're made for one aircraft).
-                     portal = { enabled = true, open_at_s = 1.0, open_s = 1.8, scale = 4.0,
+                     -- (user: "effects could be better"): lightning strikes all round it while it opens (strike, one
+                     -- every strike_every_s within strike_m), the burst with more of them, a crackle on MINDRIPPER every
+                     -- aura_every_s while it's up, and the burst again where it's shot down.
+                     portal = { enabled = true, open_at_s = 1.0, open_s = 3.0, scale = 6.0,
+                                strike = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning",
+                                strike_every_s = 0.3, strike_m = 350, burst_strikes = 8,
+                                aura = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
+                                aura_every_s = 2.0, aura_scale = 3.0,
                                 open = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
                                          "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning" },
                                 burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
@@ -861,6 +883,7 @@ local CFG = {
             anomaly_row_field = "ANOMALY FIELD: CONTROLS INVERTED",
             anomaly_down      = "%s DOWN",
             anomaly_down_sub  = "+%d ZOLLARS",
+            aces_round   = "ACE SQUADRONS: %s",
             ace_sub      = "%s SQUADRON (%s)",
         },
     },
@@ -1053,10 +1076,12 @@ local function spikeLevel(round)
 end
 local function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
 -- The tier index (CFG.tiers.list) a flight spawning in round `round` flies: the round's, one higher at promote_chance.
-local function pickTier(round)
+-- noAce: never promoted into a tier that flies named-ace squadrons (CFG.aces: those come as whole rounds).
+local function pickTier(round, noAce)
     local tc, i = CFG.tiers, 1
     for k, t in ipairs(tc.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
-    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
+    if i < #tc.list and math.random() < tc.promote_chance
+        and not (noAce and CFG.aces.enabled and ACE.roster[tc.list[i + 1].name:lower()]) then i = i + 1 end
     return i
 end
 local function withLevel(base, over)                    -- a copy of `base` with `over`'s fields
@@ -1482,6 +1507,24 @@ local function searchSetup()
                 local svNpc = mrow.NpcId:ToString()
                 local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
                     r.NpcAIModuleId = FName(SR.module)
+                    if a == ACE.row("anomaly", "f04e", "l") then          -- MINDRIPPER (CFG.specials.anomaly)
+                        local an = CFG.specials.anomaly
+                        local okE, errE = pcall(function()           -- (a failure keeps the row, as stock)
+                            r.MaxHealthDifference = an.health_add
+                            r.PitchSpeedDifference, r.RollSpeedDifference = an.turn_add.pitch, an.turn_add.roll
+                            r.YawSpeedDifference = an.turn_add.yaw
+                            if an.hover then
+                                r.SpeedNormalCoefficient, r.SpeedMaxCoefficient = an.hover_speed, an.hover_speed
+                                r.SpeedMinCoefficient, r.SpeedTurnCoefficient = an.hover_speed, an.hover_speed
+                            end
+                        end)
+                        if level == 0 then
+                            log(string.format("special: %s's row %s: +%d HP, turn +%d/+%d/+%d, %s%s", an.name, svNpc,
+                                an.health_add, an.turn_add.pitch, an.turn_add.roll, an.turn_add.yaw,
+                                an.hover and string.format("hovers (speed x%.2f)", an.hover_speed) or "flies",
+                                okE and "" or ("; NOT applied: " .. tostring(errE))))
+                        end
+                    end
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free
                         for i = 0, 5 do
@@ -2236,7 +2279,7 @@ end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ti = CFG.tiers.enabled and pickTier(D.round) or nil
+    local ti = CFG.tiers.enabled and (D.roundTier or pickTier(D.round, true)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
@@ -2369,7 +2412,7 @@ end
 
 -- The Anomaly (CFG.specials.anomaly; tools/survival_events.py ANOMALY_*): MINDRIPPER and its guards, spawned as one
 -- special ("@anomaly" in the queue), and its field: within field_km the player's controls invert (dlls/main.dll
--- SV_SetControlInvert on the player's plane) and RE_SV_AnomalyFieldOn / Off switch the stock glasses effect and radar
+-- SV_Invert on the player's plane) and RE_SV_AnomalyFieldOn / Off switch the stock glasses effect and radar
 -- noise; the event package does the start (MISSION UPDATE beep, WARNING, focus camera) and the end when it's down.
 do
 local function inverted(c, axis) return c.invert == "both" or c.invert == axis end
@@ -2378,13 +2421,13 @@ local function setField(on, s)
     ANOM.on = on
     local c, t = CFG.specials.anomaly, CFG.hud.text
     local r = "no runtime"
-    if type(SV_SetControlInvert) == "function" then        -- off keeps the plane, so the controls fade back
-        r = SV_SetControlInvert(on and inverted(c, "pitch") and 1 or 0, on and inverted(c, "roll") and 1 or 0, c.fade_s,
+    if type(SV_Invert) == "function" then        -- off keeps the plane, so the controls fade back
+        r = SV_Invert(on and inverted(c, "pitch") and 1 or 0, on and inverted(c, "roll") and 1 or 0, c.fade_s,
                                 ANOM.pawn or 0)
     end
     if type(SV_Event) == "function" then SV_Event(on and "RE_SV_AnomalyFieldOn" or "RE_SV_AnomalyFieldOff") end
     if s and s.state == "hunt" then hudCallout(on and t.anomaly_field or t.anomaly_clear, on and t.anomaly_field_sub or nil) end
-    log(string.format("special: anomaly field %s (%s, %.1f km; SV_SetControlInvert %s)", on and "ON" or "off",
+    log(string.format("special: anomaly field %s (%s, %.1f km; SV_Invert %s)", on and "ON" or "off",
         on and c.invert or "controls back", s and s.dist or -1, tostring(r)))
 end
 ANOM.setField = setField
@@ -2421,26 +2464,57 @@ function ANOM.spawn()
     local pawn = valid(survivalPC) and survivalPC.Pawn
     ANOM.pawn = pawn and addrOf(pawn) or nil
     ANOM.hidden = {}                               -- the portal hides them until its burst (ANOM.tick)
+    -- the camera first (it looks at the hidden MINDRIPPER), then the portal opens on it, then it shows
+    local cam = 1
+    for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
+    local ev = "RE_SV_AnomalyCam_" .. string.char(64 + cam)
+    local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+    log(string.format("special: anomaly camera %s (%s): %s", ANOMALY_CAMERAS[cam], ev, tostring(r)))
     return true
 end
 
--- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o`; how many came up.
+-- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o` (offset: cm in its frame; scale:
+-- the portal's by default); how many came up.
 local niagaraSaid = false
-local function portalFx(list, o)
+local function portalFx(list, o, offset, scale)
     local pc = CFG.specials.anomaly.portal
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     if not (valid(lib) and valid(o)) then return 0 end
-    local n = 0
+    local n, sc = 0, scale or pc.scale
     for _, path in ipairs(list) do
         local name = path:match("[^/]+$")
         local sys = loadObject(path .. "." .. name)
         local ok, err = pcall(function()
-            local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+            local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), offset or { X = 0, Y = 0, Z = 0 },
                 { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
-            if comp and comp:IsValid() then comp:SetWorldScale3D({ X = pc.scale, Y = pc.scale, Z = pc.scale }) end
+            if comp and comp:IsValid() then comp:SetWorldScale3D({ X = sc, Y = sc, Z = sc }) end
         end)
         if ok and sys then n = n + 1
         elseif not niagaraSaid then niagaraSaid = true; log("special: portal system " .. name .. " failed: " .. tostring(err)) end
+    end
+    return n
+end
+
+-- One lightning strike on `o` at a random point within strike_m (cm offsets in its frame).
+local function strike(o)
+    local pc = CFG.specials.anomaly.portal
+    local r = pc.strike_m * 100
+    return portalFx({ pc.strike }, o, { X = (math.random() * 2 - 1) * r, Y = (math.random() * 2 - 1) * r,
+                                         Z = (math.random() * 2 - 1) * r * 0.5 })
+end
+
+-- The same systems at a world location (where MINDRIPPER was shot down).
+local function fxAt(list, at, scale)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    if not (valid(lib) and valid(survivalPC) and at) then return 0 end
+    local n = 0
+    for _, path in ipairs(list) do
+        local name = path:match("[^/]+$")
+        local sys = loadObject(path .. "." .. name)
+        if sys and pcall(function()
+            lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = scale, Y = scale, Z = scale },
+                true, true, 0, true)
+        end) then n = n + 1 end
     end
     return n
 end
@@ -2468,11 +2542,16 @@ local function portalTick(now, s, c)
         if q.unit == c.unit then lead = q.obj end
     end
     if not s.opened and now - s.at >= pc.open_at_s then
-        s.opened = true
+        s.opened, s.nextStrike = true, now
         log(string.format("special: anomaly portal opens (%d systems)", lead and portalFx(pc.open, lead) or 0))
+    end
+    if s.opened and lead and now >= (s.nextStrike or now) then            -- lightning all round it while it opens
+        s.nextStrike = now + pc.strike_every_s
+        strike(lead)
     end
     if now - s.at >= pc.open_at_s + pc.open_s then
         local n = lead and portalFx(pc.burst, lead) or 0
+        for _ = 1, pc.burst_strikes do if lead then strike(lead) end end
         local shown = 0
         for _, o in pairs(ANOM.hidden) do
             if valid(o) and pcall(function() o:SetActorHiddenInGame(false) end) then shown = shown + 1 end
@@ -2493,6 +2572,8 @@ function ANOM.tick(now, s)
         s.state = "done"
         setField(false, s)
         if type(SV_Event) == "function" then SV_Event("RE_SV_AnomalyEnd") end
+        local nb = fxAt(c.portal.burst, s.lastAt, c.portal.scale)             -- the lightning again where it fell
+        log(string.format("special: %s's last burst (%d systems)", c.name, nb))
         addCredits(c.reward, c.name .. " down")
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, c.reward))
         log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
@@ -2504,7 +2585,12 @@ function ANOM.tick(now, s)
     if not (p and you) then return end
     local ok, l = pcall(function() local v = p.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
     if not ok then return end
-    s.dist = km(l, you)
+    s.dist, s.lastAt = km(l, you), l
+    if c.portal.enabled and now >= (s.nextAura or 0) then                  -- it crackles while it's up
+        s.nextAura = now + c.portal.aura_every_s
+        portalFx({ c.portal.aura }, p.obj, nil, c.portal.aura_scale)
+        if math.random() < 0.35 then strike(p.obj) end
+    end
     local pawn = valid(survivalPC) and survivalPC.Pawn
     local a = pawn and addrOf(pawn)
     if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end   -- a new plane: switch again
@@ -2516,6 +2602,11 @@ end
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
+    if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then            -- (tools/survival_events.py RE_SV_ShuttleRemove)
+        D.shuttleRemoveAt = nil
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
+        log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
+    end
     local s = D.special
     if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
     if not s or s.state ~= "countdown" then return end
@@ -2526,6 +2617,7 @@ local function specialTick(now)
     local launched = (f.SV_ShuttleLaunched or 0) >= 1
     if (f.SV_ShuttleLost or 0) >= 1 or (alive <= 0 and not launched and not over) or (over and not launched and alive <= 0) then
         s.state = "done"
+        D.shuttleRemoveAt = now + 30                    -- the pad's allies (the shuttle is gone)
         RUN.shopClosedUntil = D.round + c.shop_closed_rounds
         RUN.dirty = true
         hudCallout(t.shuttle_lost, t.shuttle_lost_sub)
@@ -2533,6 +2625,7 @@ local function specialTick(now)
             D.round, now - s.at, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
     elseif launched or over then
         s.state = "done"
+        D.shuttleRemoveAt = now + 60                    -- it and the pad's allies, once it's well up
         addCredits(c.reward, "shuttle launched")
         hudCallout(t.launched, string.format(t.launched_sub, c.reward))
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
@@ -2549,7 +2642,23 @@ local function startRound()
     local b = CFG.airfield.bombers
     local special = specialFor(D.round)
     D.special = special and { kind = special, state = "pending" } or nil
-    local raid = not special and CFG.airfield.enabled and D.round >= b.first_raid
+    -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
+    -- spawn"): a round whose tier flies ace squadrons is that tier throughout, with no bomber raid
+    D.roundTier = nil
+    if CFG.tiers.enabled and CFG.aces.enabled then
+        local ti = pickTier(D.round)
+        local tn = CFG.tiers.list[ti].name
+        if ACE.roster[tn:lower()] then
+            D.roundTier = ti
+            local c = CFG.aces[tn:lower()] or {}
+            if D.aceRoundSaid ~= D.round then
+                D.aceRoundSaid = D.round
+                log(string.format("aces: round %d is a %s round (%s squadron only)", D.round, tn, tostring(c.squadron)))
+            end
+        end
+    end
+    local anomalyOnly = special == "anomaly" and CFG.specials.anomaly.only
+    local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
     if raid then
@@ -2561,7 +2670,7 @@ local function startRound()
         local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
     end
-    local fighters, nFighters = pickFlights(CFG.pool, budget - nBombers, function(u) return PROBE_OF[u] end)
+    local fighters, nFighters = pickFlights(CFG.pool, anomalyOnly and 0 or (budget - nBombers), function(u) return PROBE_OF[u] end)
     D.queue, D.spare = {}, {}
     for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
     for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
@@ -3143,6 +3252,24 @@ local function airfieldNeedsRepair()
     return not AF.hp or AF.down or AF.hp < CFG.airfield.hp
 end
 
+-- The player's aircraft health in % (its HealthInternal is health x 10), the last one read when it can't be now.
+local function aircraftHealth()
+    local ok, pct = pcall(function()
+        local pawn = survivalPC.Pawn
+        local m = pawn.MaxHealth
+        return m > 0 and math.max(0, math.min(100, math.floor(pawn.HealthInternal / 10 / m * 100 + 0.5))) or nil
+    end)
+    if ok and pct then RUN.acHp = pct end
+    return RUN.acHp
+end
+
+-- The aircraft repair's price for `pct` health (CFG.shop.items.Airfield.aircraft), or nil when it's whole.
+local function aircraftRepairPrice(pct)
+    local a = CFG.shop.items.Airfield.aircraft
+    if not (a and pct and pct < 100) then return nil end
+    return math.max(a.min_price, math.ceil(a.price * (100 - pct) / 100 / 10) * 10)
+end
+
 local function defencesUp(kind)
     local def = CFG.shop.items.Airfield.defences[kind]
     local units, n = def and def.units or {}, 0
@@ -3159,6 +3286,10 @@ function shopTexts()
             label = string.format("%s +%d   %d Z", it.label, it.step, price)
             help = string.format("%d more %s. Landing doesn't rearm: you fly with what you buy%s.", it.step, it.what,
                 cap and string.format(" (you have %d)", cap) or "")
+        elseif it.aircraft and aircraftRepairPrice(aircraftHealth()) then
+            local hp = aircraftHealth()
+            label = string.format("%s   %d Z", it.aircraft.label, aircraftRepairPrice(hp))
+            help = string.format("Repairs your aircraft to full health (now %d%%).", hp)
         elseif airfieldNeedsRepair() or not it.defences then
             label = string.format("%s +%d   %d Z", it.label, it.repair, price)
             help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
@@ -3190,6 +3321,16 @@ function shopBuy(name)
     local price = shopPrice(name)
     local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
     if shopClosed() then return done("CLOSED.") end
+    local acPrice = not it.kind and it.aircraft and aircraftRepairPrice(aircraftHealth())
+    if acPrice then                                  -- your aircraft first, while it's damaged
+        if RUN.credits < acPrice then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", acPrice)) end
+        local before = aircraftHealth()
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
+        if r ~= 1 then return done("COULD NOT REPAIR IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
+        RUN.credits, RUN.spent = RUN.credits - acPrice, RUN.spent + acPrice
+        RUN.acHp = 100                               -- (read again on the next text update)
+        return done(string.format("AIRCRAFT REPAIRED (%d%% -> full) for %d.", before, acPrice))
+    end
     if not it.kind and it.defences and not airfieldNeedsRepair() then        -- the airfield is whole: a defence
         local o = defenceOffer()
         if not o then return done("ALL DEFENCES BUILT.") end
@@ -3353,7 +3494,7 @@ local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
-        if type(SV_SetControlInvert) == "function" then SV_SetControlInvert(0, 0, 0, 0) end   -- (the Anomaly's field)
+        if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn = false, nil
         do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
             local an, got, want = CFG.specials.anomaly, 0, 0
@@ -3365,7 +3506,9 @@ local function probeTick(tick)
             end
             for _, n in ipairs(an.down_sound_names) do keep(an.down_sounds .. n) end
             for _, n in ipairs(an.hum_sound_names) do keep(an.hum_sounds .. n) end
-            for _, part in ipairs({ an.portal.open, an.portal.burst }) do for _, p in ipairs(part) do keep(p) end end
+            for _, part in ipairs({ an.portal.open, an.portal.burst, { an.portal.strike, an.portal.aura } }) do
+                for _, p in ipairs(part) do keep(p) end
+            end
             log(string.format("special: anomaly sounds and portal systems loaded: %d of %d", got, want))
         end
         planes, lastAlive, lastFlags = {}, nil, nil

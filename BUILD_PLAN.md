@@ -440,7 +440,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   camera on it. Specials rotate shuttle (5, 15, ...) / anomaly (10, 20, ...). Units SV_Unit_Anomaly (SV_Obj_Mindripper)
   and SV_Unit_AnomalyGuards (4, PHANTASM), copies of a pool flight on the F-4E rows (build_survival.py copy_unit).
   Start (event package): Mission 22's MISSION UPDATE message + focus camera, Mission 15's forced WARNING + radar noise
-  (Graph.foreign_template adds their script imports). Field (Lua): within 3 km SV_SetControlInvert (BuildFlightInput
+  (Graph.foreign_template adds their script imports). Field (Lua): within 3 km SV_Invert (BuildFlightInput
   detour) inverts pitch/roll with a 1.5 s fade, RE_SV_AnomalyFieldOn/Off = glasses effect + harder noise; HUD row
   "MINDRIPPER: n KM" / "ANOMALY FIELD: CONTROLS INVERTED". Down: +4000 Z, everything off (SV_AnomalyDown /
   RE_SV_AnomalyEnd). Death: the Celaeno's body-explosion sequence + control-unit collapse (Mission 23 sound events,
@@ -499,7 +499,7 @@ unless it says so). Notes in tools/re/:
 - 12, 13 Special rounds -> SPECIAL_ROUNDS.md. Comona Defense = Mission 22's own live shuttle launch (already in
   Survival's world data). Amphibious: copy M13's enemy LCAC pattern (M9's LCACs are allies), beaches still to be
   mapped. Anomaly ace: M26 x40a formation for the guards; flight input hook at 0x147d689b0 (pitch +0xff8, roll
-  +0xff4; signature unique) for a native SV_SetControlInvert.
+  +0xff4; signature unique) for a native SV_Invert.
 
 Research pass 2 (2026-10-22, user: "reverse engineer anything else you think you might need"):
 - Kills, score, health, death -> KILLS_HEALTH_DEATH.md. Health on LiveGameObject (HealthInternal = HP x 10, MaxHealth,

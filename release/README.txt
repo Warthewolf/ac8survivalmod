@@ -37,7 +37,7 @@ Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start o
 - Ammo: you take off with your difficulty's load, and landing does NOT refill it. Buy more at the airfield.
 - Land at Comona Airport between rounds. The landing menu has the shop rows:
     MISSILES +12 / SPECIAL WEAPON +4 / FLARES +2   loaded straight onto your aircraft (same price every time)
-    REPAIR AIRFIELD                                 while the airfield is damaged
+    REPAIR AIRCRAFT / REPAIR AIRFIELD               one row: your aircraft first while it's damaged, then the airfield
     BUILD AA GUN / BUILD SAM SITE                   the same row once the airfield is at full health: defences that
                                                     fire at enemies on their own (5 AA guns, 2 SAM sites; expensive)
 - Pause menu -> Music Player picks your music.
@@ -46,7 +46,7 @@ Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite,
 Phantom and Reaper from round 16). Rounds 8, 15 and 22 are difficulty spikes. Better pilots sit on your tail, break,
 flare, and from Mercenary up use cobra / kulbit baits and scissors.
 
-Named aces (round 16 on): each rank flies its own squadron - F-15C, Su-35, Typhoon, Su-47, Rafale, F-22A, Su-57 and,
+Named aces (round 16 on; those rounds have only the ace squadrons, no bomber raids): each rank flies its own squadron - F-15C, Su-35, Typhoon, Su-47, Rafale, F-22A, Su-57 and,
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
 an "ACE INBOUND" callout names each one the first time it shows up.
 
@@ -54,7 +54,8 @@ Special rounds (round 5, then every 5th, in turn):
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown. Liftoff pays 3000 zollars; if it's destroyed the shop is closed through the next round.
 - THE ANOMALY (round 10, 20, ...): the ace MINDRIPPER comes through a lightning portal in an F-4E with four PHANTASM
-  guards. Within 3 km of it your pitch and roll invert. Shoot it down for 4000 zollars and your controls come back.
+  guards, hovering in place. It's tough. Within 3 km of it your pitch and roll invert. Shoot it down for 4000
+  zollars and your controls come back. Nothing else flies in its round.
 
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the

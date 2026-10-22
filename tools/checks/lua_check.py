@@ -295,7 +295,7 @@ KNOWN_GLOBALS = {
     'StaticConstructObject', 'CreateInvalidObject', 'IterateGameDirectories', 'DumpAllObjects', 'GenerateSDK',
     # dlls\main.dll (runtime 0.10.0)
     'SV_Version', 'SV_Spawn', 'SV_SetAircraft', 'SV_UnitAlive', 'SV_LogUnits', 'SV_Reset', 'SV_Ammo', 'SV_SetAmmo', 'SV_FreeRestock', 'SV_GameLua', 'SV_GameLuaState',
-    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_MusicClock', 'SV_SetLevel', 'SV_PlaneLevel', 'SV_SetControlInvert', 'Inherit', 'CppObjectBase', 'FVector', 'ELiveAIManeuverSpeedType', 'EArithmeticKeyOperation', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
+    'SV_PlayBGM', 'SV_BGM', 'SV_Event', 'SV_MusicPlayer', 'SV_MusicClock', 'SV_SetLevel', 'SV_PlaneLevel', 'SV_Invert', 'Inherit', 'CppObjectBase', 'FVector', 'ELiveAIManeuverSpeedType', 'EArithmeticKeyOperation', 'SV_SetText', 'SV_ShopRequest', 'SV_BGMNames',
 }
 
 
@@ -319,6 +319,17 @@ def check(path):
     return True
 
 
+def check_runtime_names():
+    """The native runtime registers its Lua functions through a small-string buffer: a name over 15 characters is
+    skipped at run time (runtime 0.14.0's SV_SetControlInvert never registered, test of 2026-10-22). Fail the build."""
+    import os, re
+    c = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'runtime', 'survival_rt.c')
+    if not os.path.exists(c): return True
+    long = [n for n in re.findall(r'\{\s*"(SV_\w+)",\s*L_\w+\s*\}', open(c, encoding='utf-8').read()) if len(n) > 15]
+    for n in long: print(f'runtime/survival_rt.c: Lua function name {n} is {len(n)} characters (15 at most): it would never register')
+    return not long
+
+
 if __name__ == '__main__':
-    ok = all([check(f) for f in sys.argv[1:]])
+    ok = all([check(f) for f in sys.argv[1:]]) and check_runtime_names()
     sys.exit(0 if ok else 1)

@@ -1604,7 +1604,7 @@ static void OnMusicNext(void* manager)
 typedef void (*BuildInputFn)(uint8_t* plane, float* out);
 static uint8_t*      g_fBuildInput;
 static BuildInputFn  g_nextBuildInput;
-static uint8_t* volatile g_invPlane;                /* the player's plane (SV_SetControlInvert), or NULL */
+static uint8_t* volatile g_invPlane;                /* the player's plane (SV_Invert), or NULL */
 static volatile int32_t  g_invWant[2];              /* pitch, roll: 1 = inverted */
 static volatile int32_t  g_invFadeMs = 1500;
 static float         g_invScale[2] = { 1.0f, 1.0f };
@@ -2018,7 +2018,7 @@ static int L_MusicClock(void* lua)
     return Ret(lua, old);
 }
 
-/* SV_SetControlInvert(pitch, roll, fade_s, plane) -> the factor pitch had (x100: 100 normal, -100 inverted), or
+/* SV_Invert(pitch, roll, fade_s, plane) -> the factor pitch had (x100: 100 normal, -100 inverted), or
  * SV_ERR_NO_GAME when BuildFlightInput wasn't hooked. pitch / roll 1 = invert that axis, 0 = normal; the change fades
  * over fade_s; plane = the player's ALivePlayerPlane address (only that plane's input is touched; 0 = none). Turning
  * the axes back to normal keeps the plane until the fade is over. */
@@ -2083,7 +2083,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_SetControlInvert", L_SetControlInvert },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
@@ -2097,7 +2097,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_SetControlInvert, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
 }
 
 #define MOD_SLOTS 16

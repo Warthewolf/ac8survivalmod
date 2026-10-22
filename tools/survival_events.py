@@ -101,7 +101,7 @@ SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
 # MINDRIPPER; its own HUD warning; the mission-update beep when its round starts; the shuttle's zoom-in camera on it).
 # build_survival.py copies pool flight ANOMALY_SOURCE (Survival's fighter behaviour, 40 km area) into MINDRIPPER's own
 # one-aircraft unit and a guard unit; Scripts/main.lua spawns both, gives MINDRIPPER its NPC row and flies the field
-# (inside 3 km the player's pitch and roll invert: dlls/main.dll SV_SetControlInvert). The records here are the stock
+# (inside 3 km the player's pitch and roll invert: dlls/main.dll SV_Invert). The records here are the stock
 # presentation: Mission 22's MISSION UPDATE message (its beep) and focus camera, and Mission 15's forced WARNING
 # message, radar noise and glasses effect (Graph.foreign_template: classes Mission 22's package doesn't import).
 ANOMALY_SOURCE = 'ERA_Unit_01_Dep_Air1'     # a 4-ship of the pool
@@ -112,8 +112,12 @@ ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set b
 # The arrival (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER"): it spawns hidden
 # (Scripts/main.lua CFG.specials.anomaly.portal) and the focus camera swings onto it at once; Lua opens the portal on it
 # and shows it ~3 s in, so the camera holds on through the burst.
-ANOMALY_CAMERA_AT_S = 0.3
 ANOMALY_CAMERA_S = 9.0                      # (Mission 22's shuttle camera: 9 s)
+# Its camera settings (BP_InGameCameraParameter names): RE_SV_AnomalyCam_<n> focuses on it with the nth, then lets go;
+# Scripts/main.lua fires the one CFG.specials.anomaly.camera names (user, 2026-10-22: ms22-01, the shuttle's, was
+# "far too zoomed in"; the game zooms harder the farther the target is). Keep in step with main.lua ANOMALY_CAMERAS.
+ANOMALY_CAMERAS = ['LookAt_Event_Camera', 'LookAt_Event_Camera_ms08-01', 'LookAt_Event_Camera_ms04-01',
+                   'LookAt_Event_Camera_ms23-01', 'LookAt_Event_Camera_ms22-01']
 ANOMALY_HUM = 'AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_'   # + Play / Stop: the Celaeno core's crackle
 # its death plays the Celaeno's (Mission 23; user, 2026-10-22: "the celaeno has this special sound when its destroyed,
 # add that when MINDRIPPER is destroyed"): the airship's three-part body explosion, on its wreck, seconds after the
@@ -409,7 +413,17 @@ def build_events(stock_ep):
         g.execute(t_landing, ev, {0: on})
     build_shuttle(g, flag)
     build_anomaly(g, flag, stock_ep, t_search, t_engage)
+    build_repair(g, stock_ep)
     return g
+
+
+def build_repair(g, stock_ep):
+    """RE_SV_RepairAircraft: the player's aircraft back to full health (LiveRestorePlayerPlaneExecution, Training001's
+    node: SetHealth(Max) and the armour pool refilled; tools/re/KILLS_HEALTH_DEATH.md). The airfield shop fires it."""
+    tr = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Training001', 'EP_Training001_global.uasset')
+    t_restore = g.foreign_template(tr, 'LiveRestorePlayerPlaneExecution')
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_RepairAircraft')
+    g.execute(t_restore, 'RE_SV_RepairAircraft')
 
 
 def build_anomaly(g, flag, stock_ep, t_search, t_engage):
@@ -439,8 +453,12 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage):
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
     g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
     g.execute(t_noise, up, delay=1.0)
-    g.execute(t_cam_on, up, {0: ANOMALY_OBJ}, delay=ANOMALY_CAMERA_AT_S)
-    g.execute(t_cam_off, up, delay=ANOMALY_CAMERA_AT_S + ANOMALY_CAMERA_S)
+    assert arg_values(t_cam_on)[4] == 'LookAt_Event_Camera_ms22-01', arg_values(t_cam_on)
+    for k, cam in enumerate(ANOMALY_CAMERAS):
+        ev = f'RE_SV_AnomalyCam_{chr(65 + k)}'                                  # letters: hard rule 17
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_cam_on, ev, {0: ANOMALY_OBJ, 4: cam})
+        g.execute(t_cam_off, ev, delay=ANOMALY_CAMERA_S)
     g.execute(t_sound, up, {0: ANOMALY_HUM + 'Play', 1: ANOMALY_OBJ}, delay=1.0)   # crackles from the portal on
     for name in ('RE_SV_AnomalyFieldOn', 'RE_SV_AnomalyFieldOff', 'RE_SV_AnomalyEnd'):
         g.trigger('RE_SpawnEnemy_kokatu_1st', name)                           # remote events Lua fires (SV_Event)
@@ -507,10 +525,13 @@ def build_shuttle(g, flag):
     g.execute(t_climb2, up, delay=T + 13, conds=standing())
     g.execute(t_cam_off, up, delay=T + 7)
     g.execute(t_vfx_off, up, delay=T + 30)
-    g.execute(t_remove, up, delay=T + SHUTTLE_REMOVE_S, conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
+    # Taking it and the pad's allies off after liftoff: Scripts/main.lua fires RE_SV_ShuttleRemove SHUTTLE_REMOVE_S after
+    # it (test of 2026-10-22: records here on a delay gated on SV_ShuttleLaunched never ran, both units stayed up to
+    # round 9: a delayed record's conditions are checked when its event fires, at the shuttle's appearance).
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
+    g.execute(t_remove, 'RE_SV_ShuttleRemove')
+    g.execute(t_remove, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'})
     # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
-    g.execute(t_remove, up, {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'}, delay=T + SHUTTLE_REMOVE_S,
-              conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
     # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions
     # when the event fires, not when it runs: then a loss left in SV_ShuttleLost would silence the next special
     after = T + SHUTTLE_REMOVE_S + 5

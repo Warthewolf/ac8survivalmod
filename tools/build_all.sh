@@ -25,6 +25,8 @@ tools/get_stock.sh \
   Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset \
   Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset \
   Datatables/AI/NPC/DT_NPC.uasset \
+  Maps/Ingame/Mission015/EP_Mission015_global.uasset \
+  Maps/Ingame/Training001/EP_Training001_global.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
   Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check

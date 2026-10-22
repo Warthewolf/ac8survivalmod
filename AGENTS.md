@@ -93,6 +93,15 @@ Copy a working stock pattern before inventing a new one.
     an empty wingman list). main.lua's infoMapsTick adds Survival's row to both. Confirmed 2026-10-22 ("info maps: ...
     was missing 9101 ... added", hangar lit).
 
+25. The native runtime's Lua function names must be 15 characters or fewer: they're registered through a small-string
+    buffer and a longer one is skipped (log "function N's name is longer than 15 characters; not registered").
+    SV_SetControlInvert never registered (test of 2026-10-22), now SV_Invert. lua_check.py fails the build on one.
+
+26. An event record's conditions are checked when its event fires, not when its delay runs out: records on a delay
+    gated on a flag set later never run. Test of 2026-10-22: the shuttle's removal (delay 60 s after liftoff, gated
+    on SV_ShuttleLaunched) never ran, so the shuttle and pad stayed up. Fire a remote event from Lua at the right
+    time instead (RE_SV_ShuttleRemove).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

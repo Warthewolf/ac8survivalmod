@@ -275,7 +275,7 @@ RIP-relative code in the first 16 bytes, instruction boundaries 0/2/6/13/16, so 
   itself (engine convention) and zeroes all when flag bit 0 is set.
 **Recommended hook (native runtime):** inline-detour BuildFlightInput; call the original, then if the anomaly field is
 active and `plane` is the local player plane: `out->Pitch *= s; out->Roll *= s` with s going 1 -> -1 over ~2 s
-(s = 1 - 2t). Config pitch/roll/both picks which. Expose `SV_SetControlInvert(pitch, roll, fade_s)` to Lua like the
+(s = 1 - 2t). Config pitch/roll/both picks which. Expose `SV_Invert(pitch, roll, fade_s)` to Lua like the
 spawner functions; Lua decides when (distance to the ace < 3 km, ace alive). Advantages: the out struct is rebuilt every
 call (no double-flip), clamps already applied, and replays record the same values the engine used.
 Alternatives (weaker):
