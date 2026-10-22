@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.14.0"
+local VERSION = "0.15.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -429,6 +429,29 @@ local CFG = {
             distance_km = { 28, 36 },
             altitude_m = { 1500, 3000 },
             pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
+            -- Heavies never bomb on their own (no stock mission lets them): when one is within drop_km of the runway
+            -- its flight's bomb run is fired (RE_SV_BombRun_NN: both aircraft drop 6 bombs), at most once every
+            -- run_cooldown_s, and bomb_damage is taken off the airfield damage_delay_s later (as the bombs land).
+            drop_km = 1.5, run_cooldown_s = 20, bomb_damage = 12, damage_delay_s = 5,
+        },
+    },
+    -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by type: `models` names the bomber
+    -- types, the rest are fighters) and for every round cleared (round_bonus x the round), spent in the airfield shop.
+    credits = {
+        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 50,
+        models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
+    },
+    -- The airfield shop: rows on the landing menu (the in-game hangar's list, under Yes / No), added while Survival's
+    -- level is loaded. Landing already reloads to the difficulty's caps for free; the shop raises a cap for the rest of
+    -- the run (kind: 1 missiles, 2 special weapons, 4 flares) or repairs the airfield. Every purchase of an item makes
+    -- its next one `raise` times dearer. The item names must match tools/build_survival.py SHOP_ITEMS.
+    shop = {
+        enabled = true,
+        items = {
+            Missiles = { kind = 1, step = 4, price = 300, raise = 1.5, label = "MISSILES", what = "missile" },
+            Special  = { kind = 2, step = 2, price = 400, raise = 1.5, label = "SPECIAL WEAPON", what = "special weapon" },
+            Flares   = { kind = 4, step = 2, price = 150, raise = 1.5, label = "FLARES", what = "flare" },
+            Airfield = { repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD" },
         },
     },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
@@ -482,6 +505,7 @@ local CFG = {
             first_round  = "ROUND 1 IN: %s",
             complete     = "ROUND %d COMPLETE",
             complete_sub = "NEXT ROUND IN %d SECONDS",
+            credits      = "CREDITS: %d",
             airfield     = "AIRFIELD:",
             airfield_down_row = "AIRFIELD: DOWN",
             bombers      = "BOMBERS INBOUND",
@@ -1052,6 +1076,15 @@ local ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22'
 local SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
 local D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
+-- The run's money and purchases: { credits, earned, spent, bonus = { [kind] = cap raise }, bought = { [item] = n },
+-- msg = { [item] = last result }, dirty (shop texts need updating) }. Reset when Survival's level loads.
+local RUN = { credits = 0, earned = 0, spent = 0, bonus = {}, bought = {}, msg = {} }
+
+local function addCredits(n, why)
+    if n <= 0 then return end
+    RUN.credits, RUN.earned, RUN.dirty = RUN.credits + n, RUN.earned + n, true
+    log(string.format("credits: +%d (%s), now %d", n, why, RUN.credits))
+end
 
 local function nativeReady()
     return type(SV_Spawn) == "function" and type(SV_UnitAlive) == "function" and type(SV_SetAircraft) == "function"
@@ -1186,15 +1219,20 @@ local function hudBuild(pc)
     H.canvas = canvas
 
     local hc = CFG.hud
+    -- rows: ROUND, CREDITS, AIRFIELD (with its bar), NEXT ROUND (between rounds)
     H.round = newText("Round"); H.next = newText("Next")
     slotIn(canvas, H.round, { 0, 0 }, { 0, 0 }, { hc.x, hc.y, 0, 0 }, { 0, 0 }, true)
-    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line * (CFG.airfield.enabled and 2 or 1), 0, 0 }, { 0, 0 }, true)
+    local rowY = hc.y + hc.line
+    H.credits = newText("Credits")
+    slotIn(canvas, H.credits, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true)
+    rowY = rowY + hc.line
     if CFG.airfield.enabled then       -- AIRFIELD: [=====     ] 85
-        local ab = hc.airfield_bar
+        local ab, airY = hc.airfield_bar, rowY
+        rowY = rowY + hc.line
         H.air = newText("Airfield")
-        slotIn(canvas, H.air, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
+        slotIn(canvas, H.air, { 0, 0 }, { 0, 0 }, { hc.x, airY, 0, 0 }, { 0, 0 }, true)
         local bar = newWidget("CanvasPanel", "AirBar")
-        slotIn(canvas, bar, { 0, 0 }, { 0, 0 }, { hc.x + ab.x, hc.y + hc.line + ab.dy, ab.w, ab.h }, { 0, 0 }, false)
+        slotIn(canvas, bar, { 0, 0 }, { 0, 0 }, { hc.x + ab.x, airY + ab.dy, ab.w, ab.h }, { 0, 0 }, false)
         newBar(bar, { 0, 0 }, { 1, 0 }, { 0, 0, 0, ab.frame })
         newBar(bar, { 0, 1 }, { 1, 1 }, { 0, -ab.frame, 0, ab.frame })
         newBar(bar, { 0, 0 }, { 0, 1 }, { 0, 0, ab.frame, 0 })
@@ -1208,8 +1246,9 @@ local function hudBuild(pc)
         H.airFillSlot = slotIn(bar, fill, { 0, 0 }, { 0, 0 }, { inset, inset, H.airFillW, H.airFillH }, { 0, 0 }, false)
         H.airFill, H.airBar = fill, bar
         H.airNum = newText("AirfieldHP")
-        slotIn(canvas, H.airNum, { 0, 0 }, { 0, 0 }, { hc.x + ab.x + ab.w + 20, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
+        slotIn(canvas, H.airNum, { 0, 0 }, { 0, 0 }, { hc.x + ab.x + ab.w + 20, airY, 0, 0 }, { 0, 0 }, true)
     end
+    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true)
 
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
     local banner = newWidget("CanvasPanel", "Banner")
@@ -1298,6 +1337,7 @@ local function hudTick(now, paused, pc)
     pcall(hideGameTimer, now)
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
+    setText(H.credits, "creditsStr", string.format(t.credits, RUN.credits))
     if H.air and AF.hp then
         setText(H.air, "airStr", AF.down and t.airfield_down_row or t.airfield)
         setText(H.airNum, "airNumStr", AF.down and "" or tostring(AF.hp))
@@ -1448,6 +1488,9 @@ local function spawnBomber(unit)
     log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
         unit, ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    D.heavy = D.heavy or {}
+    D.heavy[unit] = nil
+    for _, h in ipairs(b.heavy) do if h == ac then D.heavy[unit] = true end end
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.bomberCallout ~= D.round then
@@ -1458,8 +1501,8 @@ local function spawnBomber(unit)
     return r
 end
 
-local BOMBER_UNIT = {}
-for _, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u] = true end
+local BOMBER_UNIT, BOMBER_INDEX = {}, {}           -- BOMBER_INDEX: the flight's RE_SV_BombRun_NN
+for i, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u], BOMBER_INDEX[u] = true, i end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
@@ -1556,6 +1599,7 @@ local function roundsTick(now)
         if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
         if flights == 0 then
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
+            addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
             D.state, D.at, D.announced = "wait", now + CFG.intermission_s, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
@@ -1602,12 +1646,15 @@ local function airfieldTick(tick)
     local hits = intFlag("SV_AirHits")
     if hits == nil then return end
     if AF.base == nil then AF.base, AF.hits = hits, hits; log("airfield: health " .. AF.hp .. " (hits so far " .. hits .. ")") end
-    if hits ~= AF.hits then
+    for i = #AF.pending, 1, -1 do                   -- heavy bombers' bomb runs (bombTick), as the bombs land
+        if tick >= AF.pending[i].due then AF.bomb = AF.bomb + AF.pending[i].dmg; table.remove(AF.pending, i) end
+    end
+    local hp = math.max(0, AF.full - (hits - AF.base) * ac.hit_damage - (AF.bomb - AF.bombBase))
+    if hits ~= AF.hits or hp ~= AF.hp then
         AF.hits = hits
-        local hp = math.max(0, AF.full - (hits - AF.base) * ac.hit_damage)
         if hp ~= AF.hp then
             AF.hp = hp
-            log(string.format("airfield: hit (%d hits), health %d", hits, hp))
+            log(string.format("airfield: hit (%d hits, %d bomb damage), health %d", hits, AF.bomb, hp))
             if hp <= 0 and not AF.down then
                 AF.down, AF.downRound = true, D.round
                 hudCallout(t.airfield_down, t.airfield_down_sub)
@@ -1619,9 +1666,44 @@ local function airfieldTick(tick)
         end
     end
     if AF.down and D.state == "wait" and D.round > AF.downRound then
-        AF.down, AF.full, AF.base, AF.hp = false, ac.repair_hp, hits, ac.repair_hp
+        AF.down, AF.full, AF.base, AF.bombBase, AF.hp = false, ac.repair_hp, hits, AF.bomb, ac.repair_hp
         hudCallout(t.airfield_up, t.airfield_up_sub)
         log("airfield: repaired to " .. ac.repair_hp .. ", landing open" .. airfieldEvent("RE_SV_AirfieldOpen"))
+    end
+end
+
+-- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
+-- damage. A plane's flight comes from its GetUnitName(); if that can't be read, every heavy flight that is up drops.
+local function bombTick(tick)
+    local b = CFG.airfield.bombers
+    if not CFG.airfield.enabled or not D or not D.heavy or tick % 4 ~= 2 or type(SV_Event) ~= "function" then return end
+    local heavy = {}
+    for _, a in ipairs(b.heavy) do heavy[a:match("^(%w+)_") or a] = true end      -- "tu95_common" -> tu95
+    D.bombAt = D.bombAt or {}
+    for _, p in ipairs(planes) do
+        local model = not p.down and p.name:match("BP_OP%d+_(%w+)_")
+        if model and heavy[model] and valid(p.obj) then
+            local ok, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+            local dx, dy = ok and l and (l.X - AIRFIELD.X), ok and l and (l.Y - AIRFIELD.Y)
+            if dx and math.sqrt(dx * dx + dy * dy) <= b.drop_km * 100000 then
+                if p.unit == nil then
+                    local okU, u = pcall(function() local v = p.obj:GetUnitName(); return type(v) == "string" and v or v:ToString() end)
+                    p.unit = (okU and BOMBER_UNIT[u]) and u or false
+                    log("bombers: " .. p.name .. " over the airfield, flight " .. (p.unit or ("unknown (" .. tostring(u) .. ")")))
+                end
+                local runs = {}
+                if p.unit then runs[1] = p.unit else for u in pairs(D.heavy) do if D.up[u] then runs[#runs + 1] = u end end end
+                for _, u in ipairs(runs) do
+                    if not D.bombAt[u] or tick - D.bombAt[u] >= b.run_cooldown_s * 4 then
+                        D.bombAt[u] = tick
+                        local ev = string.format("RE_SV_BombRun_%02d", BOMBER_INDEX[u])
+                        local r = SV_Event(ev)
+                        if r == 1 then AF.pending[#AF.pending + 1] = { due = tick + b.damage_delay_s * 4, dmg = b.bomb_damage } end
+                        log(string.format("bombers: %s bomb run (%s): %s", u, ev, r == 1 and "fired" or ("not fired, " .. tostring(r))))
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -1726,7 +1808,9 @@ local function applyAmmoCaps()
     if probe < 0 and probe ~= -7 then return false, probe end                  -- not ready yet (or no game code)
     local pname, diff = presetName()
     local p = CFG.ammo.presets[pname] or CFG.ammo.presets.standard
-    local want = { [1] = p.missiles, [2] = p.special, [3] = p.special, [4] = p.flares }
+    local bonus = RUN.bonus or {}                   -- the shop's cap raises for this run
+    local want = { [1] = p.missiles + (bonus[1] or 0), [2] = p.special + (bonus[2] or 0),
+                   [3] = p.special + (bonus[2] or 0), [4] = p.flares + (bonus[4] or 0) }
     local before = ammoLine()
     for k = 1, 4 do
         if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
@@ -1813,6 +1897,139 @@ local function roundClock(tick)
     return t, (D.now ~= nil and t == D.now) or gamePaused(survivalPC)
 end
 
+---------------------------------------------------------------------------------------------------- airfield shop
+-- Survival's rows (DT_SV_ShopRows) go into the landing menu's command table (the in-game hangar's list) while
+-- Survival's level is loaded, and come out again when it isn't, so stock missions never show them. Their texts are
+-- set through dlls/main.dll's text hook (SV_SetText) and kept up to date with credits and prices; picking one is
+-- caught by its landing-menu hook and handed over here by SV_ShopRequest (runtime 0.10.0).
+local SHOP = {
+    mine = "/Game/Mods/SurvivalMode/Data/DT_SV_ShopRows.DT_SV_ShopRows",
+    game = "/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.DT_LiveMenuIngameHangarCommands",
+    rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
+}
+local SH = { added = false, addr = nil, warned = {} }
+
+local function shopWarn(key, msg)
+    if SH.warned[key] then return end
+    SH.warned[key] = true
+    log("shop: " .. msg)
+end
+
+local function shopRowsTick(tick)
+    if not CFG.shop.enabled or tick % 4 ~= 1 or containerState ~= true then return end
+    local pc = FindFirstOf("PlayerController")
+    if valid(pc) and inSurvival(pc) then
+        local game = loadObject(SHOP.game)
+        if not valid(game) then shopWarn("load", "could not load the landing menu's table"); return end
+        local a = addrOf(game)
+        if SH.addr ~= a then SH.addr, SH.added = a, false; pin(game, nameOf(game)) end
+        if SH.added then return end
+        local mine = loadObject(SHOP.mine)
+        if not valid(mine) then shopWarn("mine", "could not load DT_SV_ShopRows"); return end
+        pin(mine, nameOf(mine))
+        local n = 0
+        for _, r in ipairs(SHOP.rows) do
+            local _, have = dtCall(game, "FindRow", r)
+            if have == nil then
+                local _, src = dtCall(mine, "FindRow", r)
+                if src ~= nil then dtCall(game, "AddRow", r, src) end
+            end
+            local _, now = dtCall(game, "FindRow", r)
+            if now ~= nil then n = n + 1 end
+        end
+        SH.added = n == #SHOP.rows
+        log(string.format("shop: %d of %d rows in the landing menu (%s)", n, #SHOP.rows, rowNames(game)))
+    elseif SH.addr then
+        local game = StaticFindObject(SHOP.game)
+        if valid(game) then
+            for _, r in ipairs(SHOP.rows) do dtCall(game, "RemoveRow", r) end
+            log("shop: rows taken out of the landing menu (not in Survival's level)")
+        end
+        SH.added, SH.addr = false, nil
+    end
+end
+
+local function shopPrice(name)
+    local it = CFG.shop.items[name]
+    return math.floor(it.price * it.raise ^ (RUN.bought[name] or 0) / 10 + 0.5) * 10
+end
+
+local function shopTexts()
+    if type(SV_SetText) ~= "function" then return end
+    for name, it in pairs(CFG.shop.items) do
+        local price, label, help = shopPrice(name)
+        if it.kind then
+            local cap = A and A.caps and A.caps[it.kind]
+            label = string.format("%s +%d   %d CR", it.label, it.step, price)
+            help = string.format("%s load +%d for the rest of the run%s.", it.what:gsub("^%l", string.upper), it.step,
+                cap and string.format(" (now %d)", cap) or "")
+        else
+            label = string.format("%s +%d   %d CR", it.label, it.repair, price)
+            help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
+                AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
+        end
+        help = string.format("CREDITS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
+        SV_SetText("SV_Shop_" .. name, label)
+        SV_SetText("SV_Shop_" .. name .. "_Help", help)
+    end
+end
+
+-- One purchase; the result goes into the item's help line and the log.
+local function shopBuy(name)
+    local it = CFG.shop.items[name]
+    if not it then log("shop: unknown item " .. tostring(name)); return end
+    local price = shopPrice(name)
+    local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
+    if RUN.credits < price then return done(string.format("NOT ENOUGH CREDITS (%d needed).", price)) end
+    if it.kind then
+        local k = it.kind
+        if not (A and A.applied and A.caps and A.caps[k]) then return done("NOT AVAILABLE YET.") end
+        local max = SV_Ammo(k, 1)
+        if max < 0 then return done("THIS AIRCRAFT HAS NONE.") end
+        if A.caps[k] >= max then return done("ALREADY AT FULL LOAD.") end
+        RUN.bonus[k] = (RUN.bonus[k] or 0) + it.step
+        for _, kk in ipairs(k == 2 and { 2, 3 } or { k }) do
+            if A.caps[kk] then
+                A.caps[kk] = A.caps[kk] + it.step
+                local n = SV_Ammo(kk)
+                if n >= 0 then SV_SetAmmo(kk, math.min(n + it.step, A.caps[kk])) end
+            end
+        end
+    else
+        if not AF.hp or AF.down then return done("THE AIRFIELD IS DOWN.") end
+        if AF.hp >= CFG.airfield.hp then return done("THE AIRFIELD IS NOT DAMAGED.") end
+        AF.full, AF.base, AF.bombBase = math.min(CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
+        AF.hp = AF.full
+    end
+    RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+    RUN.bought[name] = (RUN.bought[name] or 0) + 1
+    done(string.format("BOUGHT for %d.", price))
+end
+
+local function shopTick(tick)
+    if not CFG.shop.enabled or not D then return end
+    if type(SV_ShopRequest) == "function" then
+        local r = SV_ShopRequest()
+        if r and r ~= "" then
+            local item = r:gsub("^SV_Buy_", "")
+            local ok, err = pcall(shopBuy, item)
+            if not ok then log("shop: error " .. tostring(err)) end
+        end
+    end
+    if RUN.dirty and tick % 4 == 0 then
+        RUN.dirty = false
+        local ok, err = pcall(shopTexts)
+        if not ok then log("shop: text error " .. tostring(err)) end
+    end
+end
+
+-- Credits for an enemy aircraft that went down (probeTick's plane watch).
+local function creditKill(p)
+    local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
+    local kind = CFG.credits.models[model] or "fighter"
+    addCredits(CFG.credits[kind] or 0, model .. " down")
+end
+
 local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
@@ -1832,13 +2049,16 @@ local function probeTick(tick)
             tostring(CFG.search.radius_m)))
         H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
-        AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false }
+        AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
+        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bonus = {}, bought = {}, msg = {}, dirty = true }
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
                 or (CFG.music.pause_player and "on" or "off")))
         end
     end
+    local okSR, errSR = pcall(shopRowsTick, tick)
+    if not okSR then log("shop: rows error " .. tostring(errSR)) end
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
         if not okG then log("game Lua: error " .. tostring(errG)) end
@@ -1863,6 +2083,10 @@ local function probeTick(tick)
             if not okM then log("music: error " .. tostring(errM)) end
             local okF, errF = pcall(airfieldTick, tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
+            local okB, errB = pcall(bombTick, tick)
+            if not okB then log("bombers: error " .. tostring(errB)) end
+            local okS, errS = pcall(shopTick, tick)
+            if not okS then log("shop: error " .. tostring(errS)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
@@ -1905,6 +2129,7 @@ local function probeTick(tick)
                 log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
                     p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
                 pcall(probeKill, p, you)
+                pcall(creditKill, p)
             end
         end
     end

@@ -284,6 +284,21 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   GROUND_ONLY search + LiveAIEngagementOrder Normal on `AB_Unit_01_Ground2`, AIOnly, unit area onto AreaB_MarkActor0
   (Mission 22 records 1686/1694/2037; tools/re/AIRFIELD_SUPPLY.md section 2).
 - [ ] At 0: flag "AirfieldDown", radio callout, shop closed next round, back online at 50 after.
+- BUILT 2026-10-22 (Lua 0.14.0-0.15.0, runtime 0.10.0), waiting for a test:
+  - Target AB_Unit_01_Ground2 (4 invincible dummies) spawned at mission start; SV_AirfieldHit_1..4 (Mission 22's
+    MissedWeapon_AreaB_0..3, unlimited, retargeted to Dummy4..7, weapon NormalMissile) add to int flag SV_AirHits and
+    light Mission 22's VFX. Lua: health = hp - hits x hit_damage - heavy bomb damage, HUD row AIRFIELD with a bar.
+  - At 0: HUD callout, RE_SV_AirfieldClose (landing off) via SV_Event; reopened at repair_hp after the next round.
+    Radio: not used (Mission 22's airport lines are tied to its story; subtitles unread).
+  - Bomber flights: ERB_Unit_01_Air2 + EA_Unit_01_Air0..2, cut to 2 aircraft; SV_BomberUp_NN = unit area onto
+    AreaB_MarkActor0, GROUND_ONLY, engagement Normal on AB_Unit_01_Ground2 AIOnly (Mission 22 1686/2037/1694).
+    From round 3, one more flight every 3 rounds (max 3); aircraft su34 / f15e, + tu95 / t160 from round 5
+    (rows copied from DT_NPC_Mission004 into DT_SV_NpcMission).
+  - Heavies never bomb on their own (research 2026-10-22, build/research/bombers: every stock Tu-95/Tu-160 drop is a
+    scripted LiveFireOneShotWeapon WN_WEAPON_4). Lua fires RE_SV_BombRun_NN (both aircraft, 6 bombs) when one is
+    within 1.5 km of the runway (20 s cooldown) and takes bomb_damage off 5 s later.
+  - Test: log lines "airfield:", "bombers:", "round N: bomber flight"; does MissedWeapon count the Su-34/F-15E
+    missiles; do Tu-95/Tu-160 spawn from a fighter desc (their wing/turret child descs are missing); do the bombs fall.
 - Test: let bombers hit it to 0; confirm the run continues and the shop flag clears a round later.
 
 ## Milestone 4: landing + shop (CC logic, CX config)
@@ -291,6 +306,12 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - [ ] Rearm with LiveSetWeaponAmmoCount (Mission 015); repair with LiveSetHealth.
 - [ ] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
 - [ ] CX: `config/survival.ini`: prices, credits per kill, intermission length, wave tables, special rotation, with comments.
+- BUILT 2026-10-22 (Lua 0.15.0, runtime 0.10.0), waiting for a test: credits (CFG.credits: per kill by type, round
+  bonus), CREDITS HUD row; shop = 4 rows (DT_SV_ShopRows) added to the landing menu's table
+  (DT_LiveMenuIngameHangarCommands, under Yes / No) only while Survival's level is loaded; texts by SV_SetText
+  (runtime text hook), picks caught by the inline hook on the landing menu's decide (StringArgs SV_Buy_*) and read by
+  Lua (SV_ShopRequest). Items raise the missile / special / flare caps for the run, or repair the airfield.
+  Test: "shop:" log lines; do the rows show with their texts; does a pick register; does the help line update.
 - Test: land, buy missiles, take off, ammo is refilled up to the cap (not past it).
 
 ## Milestone 5: difficulty presets (CC + CX)

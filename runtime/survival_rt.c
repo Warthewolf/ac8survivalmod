@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.9.0"
+#define RT_VERSION           L"0.10.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -621,6 +621,33 @@ static void InitText(void)
     }
 }
 
+/* Texts Lua sets at run time (SV_SetText: the shop's rows and prices). Fixed buffers, rewritten in place on the game
+ * thread, so an FString the game was handed never points at freed memory. */
+#define DYN_TEXTS 24
+#define DYN_KEY   48
+#define DYN_CAP   256
+static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
+static int g_ndyn;
+
+/* 1 = set; 0 = not an SV_ key, or the table is full */
+static int SetDynText(const wchar_t* key, const wchar_t* text)
+{
+    size_t kn = WLen(key), tn = WLen(text);
+    if (kn < 4 || kn >= DYN_KEY || key[0] != L'S' || key[1] != L'V' || key[2] != L'_') return 0;
+    if (tn >= DYN_CAP) tn = DYN_CAP - 1;
+    int i = 0;
+    while (i < g_ndyn && !(WLen(g_dyn[i].key) == kn && !memcmp(g_dyn[i].key, key, kn * 2))) ++i;
+    if (i == g_ndyn) {
+        if (g_ndyn == DYN_TEXTS) return 0;
+        memcpy(g_dyn[i].key, key, (kn + 1) * 2);
+        ++g_ndyn;
+    }
+    memcpy(g_dyn[i].text, text, tn * 2);
+    g_dyn[i].text[tn] = 0;
+    g_dyn[i].fs = (FString){ g_dyn[i].text, (int32_t)tn + 1, DYN_CAP };
+    return 1;
+}
+
 static uintptr_t OnText(void* table, uintptr_t flag, void* keyp, void* found)
 {
     const FString* key = (const FString*)keyp;
@@ -632,8 +659,36 @@ static uintptr_t OnText(void* table, uintptr_t flag, void* keyp, void* found)
                 return (uintptr_t)&g_text[i].fs;
             }
         }
+        for (int i = 0; i < g_ndyn; ++i) {
+            size_t n = WLen(g_dyn[i].key);
+            if ((size_t)key->num == n + 1 && memcmp(key->data, g_dyn[i].key, n * 2) == 0) {
+                if (found) *(uint8_t*)found = 1;
+                return (uintptr_t)&g_dyn[i].fs;
+            }
+        }
     }
     return g_nextText(table, flag, keyp, found);
+}
+
+/* The landing menu (in-game hangar, LiveMenuIngameHangarWidget): Survival adds its shop rows to the page's command
+ * table at run time (Scripts/main.lua), with StringArgs "SV_Buy_<item>". The stock decide would read those as page 0
+ * (_wtoi), so the hook takes them: the request waits for Lua (SV_ShopRequest) and the page stays where it is. */
+static uint8_t* g_fHangarDecide;
+static Fn1      g_nextHangarDecide;
+static wchar_t  g_shopRequest[32];
+static volatile int32_t g_shopRequests;
+
+static uintptr_t OnHangarDecide(void* page)
+{
+    const FString* a = SelectedArgs(page, NULL);
+    if (a && a->num > 8 && a->num <= 32 && !memcmp(a->data, L"SV_Buy_", 7 * 2)) {
+        memcpy(g_shopRequest, a->data, (size_t)a->num * 2);
+        g_shopRequest[a->num - 1] = 0;
+        ++g_shopRequests;
+        Log(L"shop: %s picked on the landing menu", g_shopRequest);
+        return 1;
+    }
+    return g_nextHangarDecide(page);
 }
 
 /* ---- Survival's spawner (Milestone 2) ------------------------------------
@@ -1591,10 +1646,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.9.0" */
+/* SV_Version() -> "0.10.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.9.0";
+    static const char v[] = "0.10.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1753,6 +1808,32 @@ static int L_MusicPlayer(void* lua)
     return Ret(lua, old);
 }
 
+/* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 24 keys already): the text the game shows for text key `key`
+ * (menu rows and help lines that name it), ASCII, up to 255 characters */
+static int L_SetText(void* lua)
+{
+    wchar_t key[DYN_KEY], text[DYN_CAP];
+    if (!ArgName(lua, key, DYN_KEY)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!ArgName(lua, text, DYN_CAP)) { text[0] = L' '; text[1] = 0; }        /* "" is refused by ArgName */
+    return Ret(lua, SetDynText(key, text));
+}
+
+/* SV_ShopRequest() -> the StringArgs of the shop row picked on the landing menu since the last call ("SV_Buy_..."),
+ * or "" (none, or the landing menu hook isn't installed) */
+static int L_ShopRequest(void* lua)
+{
+    static int32_t taken;
+    char out[32];
+    size_t n = 0;
+    if (g_shopRequests != taken) {
+        taken = g_shopRequests;
+        while (n < 31 && g_shopRequest[n]) { out[n] = (char)g_shopRequest[n]; ++n; }
+    }
+    out[n] = 0;
+    U.luaSetString(lua, out, n);
+    return 1;
+}
+
 /* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
 static int L_Reset(void* lua)
 {
@@ -1768,6 +1849,7 @@ static void RegisterLua(void* lua)
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer },
+        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -1779,7 +1861,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_SetText, SV_ShopRequest registered");
 }
 
 #define MOD_SLOTS 16
@@ -1836,10 +1918,11 @@ static void** FindVtable(uint8_t* decide, int wantNext)
 /* One pass over the game's code for every signature (as shipped, or behind another mod's jump). */
 static void FindFunctions(void)
 {
-    static uint8_t tp[64], tm[64], xp[64], xm[64], vp[64], vm[64];
+    static uint8_t tp[64], tm[64], xp[64], xm[64], vp[64], vm[64], hp[64], hm[64];
     HookedPattern(tp, tm, sizeof(kSigTransition), kSigTransitionTail, sizeof(kSigTransitionTail));
     HookedPattern(xp, xm, 15, kSigText + 15, sizeof(kSigText) - 15);
     HookedPattern(vp, vm, 15, kSigPauseValidity + 15, sizeof(kSigPauseValidity) - 15);
+    HookedPattern(hp, hm, 15, kSigHangarDecide + 15, sizeof(kSigHangarDecide) - 15);
     Pattern p[] = {
         { kSigBase,       NULL, sizeof(kSigBase),       NULL, 0 }, { kSigMainDecide,    NULL, sizeof(kSigMainDecide),    NULL, 0 },
         { kSigDiffDecide, NULL, sizeof(kSigDiffDecide), NULL, 0 }, { kSigDiffNext,      NULL, sizeof(kSigDiffNext),      NULL, 0 },
@@ -1858,6 +1941,7 @@ static void FindFunctions(void)
         { kSigBgmPlay,        kSigBgmPlayMask,     sizeof(kSigBgmPlay),     NULL, 0 },
         { kSigRemoteEvent,    kSigRemoteEventMask, sizeof(kSigRemoteEvent), NULL, 0 },
         { kSigPauseValidity,  NULL, sizeof(kSigPauseValidity), NULL, 0 }, { vp, vm, sizeof(kSigPauseValidity), NULL, 0 },
+        { kSigHangarDecide,   NULL, sizeof(kSigHangarDecide),  NULL, 0 }, { hp, hm, sizeof(kSigHangarDecide),  NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1881,6 +1965,7 @@ static void FindFunctions(void)
     g_fBgmPlay       = p[19].hit;
     g_fRemoteEvent   = p[20].hit;
     g_fPauseValidity = p[21].hit ? p[21].hit : p[22].hit;
+    g_fHangarDecide  = p[23].hit ? p[23].hit : p[24].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -1888,7 +1973,8 @@ static void FindFunctions(void)
         (void*)g_spawnUnit, (void*)g_unregisterUnit, g_fUnitIdSpawned, (void*)g_destroyActor);
     Log(L"ammo functions: node execute %p, flare lambda %p, weapons lambda %p, free restock %p", g_fAmmoExecute, g_fAmmoFlare, g_fAmmoWeapons, g_fFreeRestock);
     Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
-    Log(L"music and events: BGM node %p, remote-event node %p, pause list %p", g_fBgmPlay, g_fRemoteEvent, g_fPauseValidity);
+    Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
+        g_fPauseValidity, g_fHangarDecide);
 }
 
 static int StonehengeInstalled(void)
@@ -1903,6 +1989,8 @@ static int Install(void)
     else Log(L"text lookup not found; the menu entry shows its text key instead of its name");
     if (g_fPauseValidity && HookInline(g_fPauseValidity, 15, (void*)OnPauseValidity, (void**)&g_nextPauseValidity, L"pause menu list")) {}
     else Log(L"pause menu list not found; no music player in Survival's pause menu");
+    if (g_fHangarDecide && HookInline(g_fHangarDecide, 15, (void*)OnHangarDecide, (void**)&g_nextHangarDecide, L"landing menu decide")) {}
+    else Log(L"landing menu decide not found; the airfield shop rows do nothing");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");

@@ -305,6 +305,39 @@ def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit):
     save(z, new_path)
 
 
+# The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).
+# Scripts/main.lua adds them to the game's table at run time while Survival's level is loaded and removes them after;
+# their texts (SV_Shop_*) are set by Lua through the native text hook (SV_SetText), and picking one is caught by the
+# native landing-menu hook (StringArgs SV_Buy_<item>), so the stock page never sees them.
+SHOP_TABLE_STOCK = '/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands'
+SHOP_TABLE = DATA + 'DT_SV_ShopRows'
+SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/main.lua CFG.shop.items, same names
+
+
+def build_shop_rows():
+    z = ZenPkg(stock(SHOP_TABLE_STOCK))
+    rename_package(z, SHOP_TABLE_STOCK, SHOP_TABLE)
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveMenuCommandsDataTable')
+    assert o == len(p), (o, len(p))
+    yes = dict(dt['rows'])[('1', 0)]
+    rows = []
+    for item in SHOP_ITEMS:
+        row = copy.deepcopy(yes)
+        assert dict((q[1], q[3]) for q in row[2])['StringArgs'] == s('-1')    # the take-off row
+        setv(row[2], 'TitleTextID', s('SV_Shop_' + item))
+        setv(row[2], 'HelpTextID', s('SV_Shop_' + item + '_Help'))
+        setv(row[2], 'StringArgs', s('SV_Buy_' + item))
+        name = 'SVShop' + item
+        z.nb.add(name)
+        rows.append(((name, 0), row))
+    dt['rows'] = rows
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveMenuCommandsDataTable')
+    assert chk['rows'] == dt['rows']
+    save(z, SHOP_TABLE)
+
+
 def names_in(v):
     """Every FName string a property value uses."""
     out = []
@@ -468,6 +501,7 @@ def build_lua_scripts():
 if __name__ == '__main__':
     build_lua_scripts()
     build_npc_table()
+    build_shop_rows()
     build_rows()
     build_pl()
     build_mc()

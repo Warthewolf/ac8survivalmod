@@ -20,6 +20,8 @@ desc again while its shot-down flight is still on the phase's unit list. The eve
   SV_AirfieldHit_N    (one per airfield dummy) a weapon an enemy fired at it ended there: SV_AirHits += 1 and
                       Mission 22's explosion VFX on that dummy; Scripts/main.lua turns SV_AirHits into airfield health
   RE_SV_AirfieldClose / RE_SV_AirfieldOpen   landing off / on (fired by Scripts/main.lua with SV_Event)
+  RE_SV_BombRun_NN    (one per bomber flight) both aircraft drop BOMB_COUNT bombs (weapon slot 4); Scripts/main.lua
+                      fires it when a Tu-95 / Tu-160 of that flight is over the airfield
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +56,12 @@ AIRFIELD_DUMMIES = [f'AB_Obj_01_Dummy{k}' for k in range(4, 8)]      # Mission 2
 AIRFIELD_MARK = 'AreaB_MarkActor0'
 BOMBERS = ['ERB_Unit_01_Air2', 'EA_Unit_01_Air0', 'EA_Unit_01_Air1', 'EA_Unit_01_Air2']
 BOMBER_FLIGHT = 2
+# Heavy bombers never bomb on their own: in every stock mission (M003/004/009/013/028) a Tu-95 / Tu-160 drop is a
+# scripted LiveFireOneShotWeapon on weapon slot 4 (WN_WEAPON_4: PlaneBomb002, unguided, no AI capture distance), and
+# the damage is counted by script too (build/research/bombers, 2026-10-22). Survival does the same: Lua watches the
+# heavies and fires the flight's bomb run over the airfield, then applies the damage itself.
+BOMB_COUNT = 6
+BOMB_GAP_S = 0.4
 KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
 if CHASE: KEEP_AT_START[CHASE_UNIT] = None
 # Mission 8's music; it sits in the shared campaign BGM bank (DA_SoundDB_AKB_BGM_Campaign) with Mission 22's.
@@ -163,18 +171,39 @@ class Graph:
         self.flags.add(flag)
         return c
 
-    def execute(self, template, event, arg_changes=None, delay=None, conds=()):
+    def execute(self, template, event, arg_changes=None, delay=None, conds=(), loop=None):
         e = copy.deepcopy(template)
         setf(e, 'ConnectionEventName', fname(event)); self.names.add(fname(event)[1])
         for i, v in (arg_changes or {}).items(): set_arg(e, i, v)
         if delay: setf(e, 'Delay', ('raw', 'Float', struct.pack('<f', delay)))
         else: clearf(e, 'Delay')
+        if loop: setf(e, 'LoopCount', ('raw', 'Int', struct.pack('<i', loop)))
         setf(e, 'ConditionalStatementTables', ('arr', list(conds)))
         eid = f'SV_Exec_{self.next_exec}'
         setf(e, 'ExecutionID', fname(eid)); self.names.add(fname(eid)[1])
         setf(e, 'ExecutionNumber', ('raw', 'Int', struct.pack('<i', self.next_exec))); self.next_exec += 1
         self.ex.append(e)
         return e
+
+
+def unit_objects(stock_ep, units):
+    """{unit: [AI object names]} from the stock world data next to the EP (as event args write them: 'X_0')."""
+    import uprop
+    from zenpkg import ZenPkg
+    wd = os.path.join(os.path.dirname(stock_ep), os.path.basename(stock_ep).replace('EP_', 'WD_'))
+    z = ZenPkg(wd)
+    i = max(range(len(z.payloads)), key=lambda k: len(z.payloads[k]))
+    v, _ = uprop.read_struct(uprop.Ctx(bytes(z.payloads[i]), z.names), 4, 'LiveWorldData')
+    out = {}
+    for u in [p for p in v[2] if p[1] == 'UnitDescList'][0][3][1]:
+        f = {p[1]: p[3] for p in u[2]}
+        if f['Name'][1] not in units: continue
+        names = []
+        for ob in f['AIObjectDescList'][1]:
+            n = {p[1]: p[3] for p in ob[2]}['Name']
+            names.append(n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}')
+        out[f['Name'][1]] = names
+    return out
 
 
 def build_events(stock_ep):
@@ -193,6 +222,7 @@ def build_events(stock_ep):
     t_bsearch = g.exec_template('LiveAIChangeEnemySearchType', 'Default_CompositeEvent_98')   # GROUND_ONLY
     t_bengage = g.exec_template('LiveAIEngagementOrder', 'Default_CompositeEvent_98')         # Normal, target unit, AIOnly
     t_landing = g.exec_template('LiveSetTakeoffAndLandingEventExecution', 'Default_Campaign_ExterminationBattleSuccess')
+    t_fire = g.exec_template('LiveFireOneShotWeapon', '01_A_Wave03_ReinforcementAppearance_0')   # WN_WEAPON_4, no target
     t_pause = g.exec_template('LiveSetPauseTimerExecution', 'Default_CompositeEvent_106')   # pause: true
     t_hide = g.exec_template('LiveHideRemainingTimerExecution', 'Default_CompositeEvent_106')
 
@@ -244,6 +274,13 @@ def build_events(stock_ep):
         assert arg_values(t)[0] == 'EnemyNPC'
         flag(hit, 'SV_AirHits', 'Add', 1)
         g.execute(g.exec_template('LiveSetActiveVFXExecution', f'MissedWeapon_AreaB_{k}'), hit)
+    assert arg_values(t_fire)[0] == 'WN_WEAPON_4' and arg_values(t_fire)[2] == arg_values(t_fire)[3] == 'NoneSelect'
+    objs = unit_objects(stock_ep, BOMBERS)
+    for k, unit in enumerate(BOMBERS):
+        run = f'RE_SV_BombRun_{k + 1:02d}'
+        g.trigger('RE_Wave2_AreaB_PathSet', run)
+        for obj in objs[unit][:BOMBER_FLIGHT]:      # build_survival.py keeps these first BOMBER_FLIGHT aircraft
+            g.execute(t_fire, run, {1: obj}, delay=BOMB_GAP_S, loop=BOMB_COUNT)
     assert arg_values(t_landing)[0] == 'false'
     for ev, on in (('RE_SV_AirfieldClose', 'false'), ('RE_SV_AirfieldOpen', 'true')):
         g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
