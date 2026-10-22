@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.27.3"
+local VERSION = "0.27.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -286,6 +286,54 @@ local function watchRows()
         end
     end
     return true
+end
+
+-- The game's InformationManager_ (GameInstance +0x878, LiveInformationManager) keeps its own maps built from the data
+-- tables: MissionDataMap_ (MissionID -> mission data) and LevelDataMap_ (level id -> level data). The hangar and its
+-- wingman panel look Survival's mission up there, not in DT_LiveMissionTable. When the manager built them before
+-- Survival's row was in, 9101 was missing: a black hangar (no lighting sublevels) and a crash at sortie in the wingman
+-- panel (an empty list read at AceCombat8.exe+0x79a4153; friend's test and user's test of 2026-10-22, a race at start).
+-- So once the row is in, 9101 / level 70 go into those maps too (Survival's row as the value; only where Mission 22's
+-- key is there too, so the map is the kind that holds rows), checked again every few seconds in case they're built anew.
+local infoMapsTick
+do
+    local IM = { said = {}, gave = {} }
+    local MAPS = { { field = "MissionDataMap_", stock = 22, ours = 9101 },     -- tools/build_survival.py MISSION_ID
+                   { field = "LevelDataMap_",   stock = 40, ours = 70 } }      -- LEVEL_ID (Mission 22: 40)
+    local function say(key, text) if IM.said[key] ~= text then IM.said[key] = text; log("info maps: " .. text) end end
+    local function has(map, key)
+        local ok, v = pcall(function() return map:Contains(key) end)
+        if ok and type(v) == "boolean" then return v end
+        local found = false                                  -- no Contains in this UE4SS: walk it
+        pcall(function() map:ForEach(function(k) local okK, kv = pcall(function() return k:get() end)
+            if okK and kv == key then found = true end end) end)
+        return found
+    end
+    function infoMapsTick()
+        if not ready[1] then return end                      -- Survival's mission row first
+        local gi = gameInstance()
+        local im
+        pcall(function() im = gi.InformationManager_ end)
+        if not valid(im) then say("im", "the game's InformationManager_ is not there yet"); return end
+        local _, src = pcall(function() return StaticFindObject(TABLES[1].game) end)
+        local row = nil
+        if valid(src) then local okR, r = dtCall(src, "FindRow", ROW); if okR then row = r end end
+        for _, m in ipairs(MAPS) do
+            local okM, err = pcall(function()
+                local map = im[m.field]
+                if has(map, m.ours) then say(m.field, string.format("%s has %d", m.field, m.ours)); return end
+                if not has(map, m.stock) then say(m.field, string.format("%s has neither %d nor %d; left alone", m.field, m.ours, m.stock)); return end
+                -- Survival's own row only: a copy of Mission 22's value under 9101 would send the sortie to Mission 22's map
+                if row == nil then say(m.field, m.field .. " is missing " .. m.ours .. ", and Survival's row can't be read"); return end
+                local okA, errA = pcall(function() map:Add(m.ours, row) end)
+                local now = has(map, m.ours)
+                IM.gave[m.field] = (IM.gave[m.field] or 0) + 1
+                say(m.field .. "add", string.format("%s was missing %d (the race at start): added %s%s", m.field, m.ours,
+                    now and "and it is in now" or "but it is still not in", okA and "" or (" (" .. tostring(errA) .. ")")))
+            end)
+            if not okM then say(m.field .. "err", m.field .. ": " .. tostring(err)) end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------------------------- round diagnostics
@@ -3093,6 +3141,10 @@ LoopAsync(250, function()
             local ok, r = pcall(watchRows)
             if not ok then log("rows: error " .. tostring(r)) end
             if ok and r == false then rowsStopped = true end
+        end
+        if tick % 8 == 2 then
+            local okI, errI = pcall(infoMapsTick)
+            if not okI then log("info maps: error " .. tostring(errI)) end
         end
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
