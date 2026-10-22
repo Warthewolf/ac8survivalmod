@@ -607,7 +607,7 @@ def build_npc_table():
 # same file); the package is a copy of a stock LA_ script package with our source and our own module name.
 AI_SRC = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'ai')
 LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'
-LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway']
+LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway', 'LA_SV_TailChase']
 
 
 # The game's Lua require() (AceCombat8.exe 0x144eb8c00) loads module "A.B.C" with StaticLoadObject from

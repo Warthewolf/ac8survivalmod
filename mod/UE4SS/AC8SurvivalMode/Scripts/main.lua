@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.27.4"
+local VERSION = "0.28.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -561,9 +561,15 @@ local CFG = {
     -- NLID_SV_Fighter: Mission 22's light-fighter set (0012_CP) with LA_SV_MoveAway, a ~1.5 s break after each attack
     -- pass instead of 12.5 s. The pursuit stays the stock one: its closing SetMoveAwayFromTarget is what starts the
     -- next attack run (Lua 0.18.x dropped it and the fighters drifted between runs: test of 2026-10-22).
+    -- NLID_SV_Fighter's pursuit: LA_SV_TailChase (tools/re/BEHAVIOUR_GUIDE.md), the stock fighter pursuit plus a
+    -- "sit on the target's tail" branch (PursuerTarget with its own-offset flag: 250 m behind the target, KDS blocked)
+    -- that its pilot rank weighs: rank 1 never, 2 10 %, 3 30 %, 4 70 %, 5 always. The skill tiers and difficulty spikes
+    -- raise the rank, so the tail chasing grows with the rounds. ai.tail_chase = false keeps the stock pursuit.
     behaviour_sets = {
-        NLID_SV_Fighter = { base = "NLID_0012_CP", slots = { MoveAwayFromTargetLua = "LA_SV_MoveAway" } },
+        NLID_SV_Fighter = { base = "NLID_0012_CP", slots = { MoveAwayFromTargetLua = "LA_SV_MoveAway",
+                                                             PursueTargetLua = "LA_SV_TailChase" } },
     },
+    ai = { tail_chase = true },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
@@ -1011,7 +1017,7 @@ return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .
 ]=]
 -- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
 local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400",
-                         "SurvivalMode.AI.LA_SV_MoveAway" }   -- ours too: builds and errors
+                         "SurvivalMode.AI.LA_SV_MoveAway", "SurvivalMode.AI.LA_SV_TailChase" }   -- ours too: builds and errors
 local REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
                          "return tostring(ok) .. ' ' .. tostring(C)"
 
@@ -1220,8 +1226,10 @@ local function setsSetup()
     for name, def in pairs(CFG.behaviour_sets) do
         local scripts, missing = {}, nil
         for slot, sname in pairs(def.slots) do
-            local sc = loadObject("/Game/LuaSource/SurvivalMode/AI/" .. sname .. "." .. sname)
-            if valid(sc) then pin(sc, "behaviour script " .. sname); scripts[slot] = sc else missing = sname end
+            if sname ~= "LA_SV_TailChase" or CFG.ai.tail_chase then          -- (ai.tail_chase false: the stock pursuit)
+                local sc = loadObject("/Game/LuaSource/SurvivalMode/AI/" .. sname .. "." .. sname)
+                if valid(sc) then pin(sc, "behaviour script " .. sname); scripts[slot] = sc else missing = sname end
+            end
         end
         if missing then
             log("behaviour: set " .. name .. " not made (script " .. missing .. " not in the container)")
@@ -1232,7 +1240,7 @@ local function setsSetup()
             if ok then
                 BS.ready[name] = true
                 local parts = {}
-                for slot, sname in pairs(def.slots) do parts[#parts + 1] = slot .. " = " .. sname end
+                for slot in pairs(scripts) do parts[#parts + 1] = slot .. " = " .. def.slots[slot] end
                 table.sort(parts)
                 log("behaviour: set " .. name .. " in (" .. def.base .. " with " .. table.concat(parts, ", ") .. ")")
             else
