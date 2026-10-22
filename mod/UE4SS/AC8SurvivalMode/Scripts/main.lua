@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.4"
+local VERSION = "0.35.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -626,7 +626,8 @@ local CFG = {
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
     -- airframes; those keep their blueprint's own, e.g. su33 cobra but no kulbit), so early fighters never post-stall.
-    maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a" } },
+    maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a",
+                                                 "f04e" } },          -- (f04e: only the Anomaly's flies one)
     -- Airfield and bombers (Milestone 3; tools/survival_events.py AIRFIELD_* / BOMBERS, tools/re/AIRFIELD_SUPPLY.md).
     -- The airfield starts at `hp`; every enemy weapon that reaches one of its 4 target points (the event package
     -- counts them in SV_AirHits) takes hit_damage. At 0 it is down: landing closes (no rearming) until the end of the
@@ -766,7 +767,13 @@ local CFG = {
                      -- roll 90); its DT_NPC rows get health_add HP and turn_add degrees/s (MaxHealthDifference,
                      -- Pitch/Roll/YawSpeedDifference). hover: it floats (user: "didn't hover in place"): its speeds
                      -- times hover_speed (Speed*Coefficient), so it hangs in the air and turns on the spot.
-                     health_add = 440, turn_add = { pitch = 45, roll = 100, yaw = 5 }, hover = true, hover_speed = 0.06,
+                     health_add = 440, turn_add = { pitch = 120, roll = 270, yaw = 25 }, hover = true, hover_speed = 0.06,
+                     -- (user, 2026-10-22: "make MINDRIPPER 5x more aggressive with everything"): its own fire control
+                     -- from the top difficulty spike's, `aggression` times quicker (arm, lock, time on target, between
+                     -- shots, rests; gun bursts that many times longer), half again the reach and cone, gun rounds x2
+                     -- damage at half the spread; every special weapon it has room for; it reacts to you `aggression`
+                     -- times quicker (provoke) and sits closer on your tail (surround_m).
+                     aggression = 5, provoke_cone_deg = 30, surround_m = { 20, 60 },
                      -- its arrival camera (tools/survival_events.py ANOMALY_CAMERAS; the shuttle's ms22-01 was too close)
                      camera = "LookAt_Event_Camera",
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
@@ -1502,6 +1509,34 @@ local function searchSetup()
         end, string.format("gun: within %d m / %d deg, %.1f s on target, %d-round bursts, rest %.1f s", g.range_m, g.angle_deg,
             g.aim_s, g.burst, g.rest_s), SPIKE_SUFFIX[level])
     end
+    -- MINDRIPPER's own (CFG.specials.anomaly.aggression): the top spike level's, that many times quicker (rows _SVX)
+    local AN = CFG.specials.anomaly
+    local AGG = math.max(1, AN.aggression or 1)
+    local function anomFcs(src)
+        local m = withLevel(CFG.missiles, spikeCfg(#SPIKE_SUFFIX).missiles)
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.CaptureAngleRange = m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5)
+            r.ActivationTime, r.TriggeringTime = m.arm_s / AGG, m.lock_s / AGG
+            r.ShotIntervalTime, r.RestingTime = m.interval_s / AGG, m.rest_s / AGG
+        end, string.format("MINDRIPPER's missiles: lock within %d m / %d deg, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s",
+            m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5), m.arm_s / AGG, m.lock_s / AGG, m.interval_s / AGG,
+            m.rest_s / AGG), "x")
+    end
+    local function anomGun(src)
+        local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.CaptureAngleRange = g.range_m * 1.5, math.min(180, g.angle_deg * 1.5)
+            r.TriggeringTime, r.TriggerCount, r.RestingTime = g.aim_s / AGG, math.min(200, g.burst * AGG), g.rest_s / AGG
+            if wpn then
+                local rounds = copy(wpn, r.NpcWeaponId:ToString(), function(x)
+                    x.damage = x.damage * g.damage_x * 2
+                    x.MaxSpawnAngle = g.spread_deg / 2
+                end, string.format("MINDRIPPER's gun rounds: damage x%.1f, spread %.2f deg", g.damage_x * 2, g.spread_deg / 2), "x")
+                if rounds then r.NpcWeaponId = FName(rounds) end
+            end
+        end, string.format("MINDRIPPER's gun: within %d m / %d deg, %.2f s on target, %d-round bursts, rest %.2f s",
+            g.range_m * 1.5, math.min(180, g.angle_deg * 1.5), g.aim_s / AGG, math.min(200, g.burst * AGG), g.rest_s / AGG), "x")
+    end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
         r.Radius = CFG.search.radius_m
@@ -1586,19 +1621,30 @@ local function searchSetup()
                                 okE and "" or ("; NOT applied: " .. tostring(errE))))
                         end
                     end
+                    local mind = a == ACE.row("anomaly", "f04e", "l")       -- MINDRIPPER: its own, every level
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
-                        local free
+                        local free, frees = nil, {}
                         for i = 0, 5 do
                             pcall(function()
                                 local id = r["NpcFCSId" .. i]:ToString()
                                 local new
-                                if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then new = svFcs(id, level)
-                                elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then new = svGun(id, level)
-                                elseif (id == "None" or id == "") and i >= 3 and not free then free = i end
+                                if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
+                                    new = mind and anomFcs(id) or svFcs(id, level)
+                                elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
+                                    new = mind and anomGun(id) or svGun(id, level)
+                                elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
                                 if new then r["NpcFCSId" .. i] = FName(new) end
                             end)
                         end
                         local fcsList = CFG.special.fcs
+                        if mind and CFG.special.enabled then            -- every special weapon it has room for
+                            local got = {}
+                            for k, slot in ipairs(frees) do
+                                if fcsList[k] then r["NpcFCSId" .. slot] = FName(fcsList[k]); got[#got + 1] = fcsList[k] end
+                            end
+                            if level == 0 then log("weapons: " .. svNpc .. " (MINDRIPPER) carries " .. table.concat(got, ", ")) end
+                            free = nil
+                        end
                         if CFG.special.enabled and free and #fcsList > 0 then
                             spw = spw or fcsList[math.random(#fcsList)]
                             r["NpcFCSId" .. free] = FName(spw)
@@ -3796,7 +3842,11 @@ local function probeTick(tick)
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
                 pcall(planeUnit, p); pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round)
-                pcall(enemySpike, p, D and D.round, ft and CFG.tiers.list[ft]); pcall(probeTrack, p); pcall(aiWatch, p, you)
+                local an = CFG.specials.anomaly
+                local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
+                    provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
+                    or (ft and CFG.tiers.list[ft])
+                pcall(enemySpike, p, D and D.round, tierFor); pcall(probeTrack, p); pcall(aiWatch, p, you)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
