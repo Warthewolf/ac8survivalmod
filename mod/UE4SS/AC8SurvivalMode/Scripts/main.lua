@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.17.1"
+local VERSION = "0.18.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -442,10 +442,21 @@ local CFG = {
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
     -- The flights' unit area (activation) is set at build time: tools/survival_events.py AREA_RADIUS_M.
-    -- luaset: the behaviour set those copies fly (DT_NPC_LuaSet row; nil keeps each aircraft's own). NLID_0400_CP is
-    -- the campaign aces' set: after an attack pass it keeps pursuing, where Mission 22's sets extend away for ~13 s
-    -- (MoveAwayFromTarget_0011); it also has the aces' pursuit, evasion and cobra/kulbit gun defence.
-    search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_0400_CP" },
+    -- luaset: the behaviour set those copies fly (a DT_NPC_LuaSet row, or one of CFG.behaviour_sets; nil keeps each
+    -- aircraft's own); fallback_luaset when an own set couldn't be made. NLID_0400_CP (the campaign aces' set) is NOT
+    -- usable: its pursuit only attacks in KDS phases, which these fighters never get (test of 2026-10-22: "the
+    -- aircraft aren't attacking the player anymore").
+    search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_SV_Fighter",
+               fallback_luaset = "NLID_0012_CP" },
+    -- Survival's own behaviour sets: a DT_NPC_LuaSet row copied from `base`, with `slots` pointing at Survival's
+    -- scripts (Scripts/ai/<name>.lua, packaged at /Game/LuaSource/SurvivalMode/AI/<name> by tools/build_survival.py
+    -- LUA_SCRIPTS). Made from the main menu on: the game builds a flight's behaviour when the level loads.
+    -- NLID_SV_Fighter: Mission 22's light-fighter set (0012_CP evasion) with LA_SV_Pursue (Mission 22's pursuit
+    -- without the extend-away after every pass) and LA_SV_MoveAway (a 2.5 s break instead of 12.5 s).
+    behaviour_sets = {
+        NLID_SV_Fighter = { base = "NLID_0012_CP",
+                            slots = { PursueTargetLua = "LA_SV_Pursue", MoveAwayFromTargetLua = "LA_SV_MoveAway" } },
+    },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
@@ -679,7 +690,8 @@ return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .
     "modules loaded " .. n .. " (" .. ai .. " Chronicle.AI)" }, ", ")
 ]=]
 -- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
-local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400" }
+local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400",
+                         "SurvivalMode.AI.LA_SV_Pursue", "SurvivalMode.AI.LA_SV_MoveAway" }   -- ours too: builds and errors
 local REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
                          "return tostring(ok) .. ' ' .. tostring(C)"
 
@@ -870,9 +882,47 @@ local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcM
 -- here even when CFG.search is off or CFG.aircraft leaves that aircraft out.
 local BEHAVIOUR_AIRCRAFT = "f16c_common"
 
+-- Survival's own behaviour sets (CFG.behaviour_sets) into DT_NPC_LuaSet. BS.ready[name] once a set is in.
+local BS = { done = false, ready = {}, tries = 0 }
+local function setsSetup()
+    if BS.done then return end
+    if not gameInstance() then return end
+    BS.tries = BS.tries + 1
+    local ls, why = loadObject(PROBE_TABLES[1].path)
+    if not ls then
+        if BS.tries >= 20 then BS.done = true; log("behaviour: DT_NPC_LuaSet not loaded (" .. tostring(why) .. "); no own sets") end
+        return
+    end
+    pin(ls, nameOf(ls))
+    for name, def in pairs(CFG.behaviour_sets) do
+        local scripts, missing = {}, nil
+        for slot, sname in pairs(def.slots) do
+            local sc = loadObject("/Game/LuaSource/SurvivalMode/AI/" .. sname .. "." .. sname)
+            if valid(sc) then pin(sc, "behaviour script " .. sname); scripts[slot] = sc else missing = sname end
+        end
+        if missing then
+            log("behaviour: set " .. name .. " not made (script " .. missing .. " not in the container)")
+        else
+            local ok, err = cloneRow(ls, def.base, name, function(r)
+                for slot, sc in pairs(scripts) do r.LuaAsetts[slot].LuaScript = sc end
+            end)
+            if ok then
+                BS.ready[name] = true
+                local parts = {}
+                for slot, sname in pairs(def.slots) do parts[#parts + 1] = slot .. " = " .. sname end
+                table.sort(parts)
+                log("behaviour: set " .. name .. " in (" .. def.base .. " with " .. table.concat(parts, ", ") .. ")")
+            else
+                log("behaviour: set " .. name .. " not made (" .. tostring(err) .. ")")
+            end
+        end
+    end
+    BS.done = true
+end
+
 local function searchSetup()
     if SR.done then return end
-    if not gameInstance() then return end
+    if not gameInstance() or not BS.done then return end      -- the own sets first: the search rows name them
     SR.tries = SR.tries + 1
     local function giveUp(why) log("search: " .. why .. "; enemies keep the stock 6 km search"); SR.done = true end
     local mod, why1 = loadObject(SEARCH_MODULE.path)
@@ -900,7 +950,9 @@ local function searchSetup()
             local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
             local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
                 r.NpcAIModuleId = FName(SR.module)
-                if CFG.search.luaset then r.LuaSetId = FName(CFG.search.luaset) end
+                local set = CFG.search.luaset
+                if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
+                if set then r.LuaSetId = FName(set) end
             end)
             if not okR then error(svNpc .. ": " .. tostring(whyR)) end
             SR.ready[a], SR.npcRow[a], n = a .. "_sv", svNpc, n + 1
@@ -2171,6 +2223,19 @@ local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "Ammo
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
     for _, panel in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
+        if valid(panel) and not nameOf(panel):find("Default__", 1, true) and not SH.panelSaid then
+            SH.panelSaid = true                      -- once: what the panel holds (test of 2026-10-22: no rewrite seen)
+            local parts = {}
+            for _, slot in ipairs(AMMO_SLOTS) do
+                local ok, txt = pcall(function()
+                    return panel[slot].Text_Body:GetText():ToString() .. " " .. panel[slot].Text_Body_1:GetText():ToString()
+                end)
+                parts[#parts + 1] = slot .. " '" .. (ok and txt or ("? " .. tostring(txt))) .. "'"
+            end
+            local mx = {}
+            for k = 0, 4 do mx[#mx + 1] = tostring(A.max[k]) end
+            log("shop: ammo panel " .. nameOf(panel) .. ": " .. table.concat(parts, ", ") .. "; maxima " .. table.concat(mx, "/"))
+        end
         if valid(panel) and not nameOf(panel):find("Default__", 1, true) then
             for _, slot in ipairs(AMMO_SLOTS) do
                 pcall(function()
@@ -2242,6 +2307,8 @@ local function probeTick(tick)
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
         if not okG then log("game Lua: error " .. tostring(errG)) end
+        local okB, errB = pcall(setsSetup)
+        if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
         local okP, errP = pcall(probeSetup)

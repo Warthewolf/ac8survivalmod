@@ -78,6 +78,9 @@ Copy a working stock pattern before inventing a new one.
 21. The game's own Lua (Lua 5.3, SingleGameluaContext) exists from the main menu, and its require() loads a
     /Game/LuaSource/<A>/<B>/<C> LuaScript from Survival's container: SV_GameLua (runtime 0.8.0) runs code in it.
     Confirmed by the same test ("packaged script via the game's require: true").
+22. Don't give ordinary enemies the campaign aces' set NLID_0400_CP: LA_PursueTarget_0400 only attacks inside KDS
+    phases (IsKDSP1/IsKDSP2 decorators), which they never enter, so they fly around without attacking (test of
+    2026-10-22, the first build where the set really applied). Survival's fighters fly its own set NLID_SV_Fighter.
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,

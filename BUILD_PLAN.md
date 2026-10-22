@@ -270,6 +270,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   unreadable on the landing menu (shop used the last max seen), landing menu ammo panel shows the caps, pause list
   hides restart checkpoint / select difficulty (QUIT GAME had no row widget), score shown without "/32000", TIME
   row taken from the live panel (the earlier hide found the blueprint's template).
+- Test of 2026-10-22 (Lua 0.17.0): "built LA_SV_ProbePursue x1, LA_SV_ProbePursueRt x1; errors 0" - our scripts run.
+  But with NLID_0400_CP really applied the fighters stopped attacking (its pursuit needs KDS phases: AGENTS.md rule 22).
+  Lua 0.18.0: Survival's own set NLID_SV_Fighter (CFG.behaviour_sets) = NLID_0012_CP + LA_SV_Pursue (Mission 22's
+  pursuit without the extend-away after each pass) + LA_SV_MoveAway (2.5 s break instead of 12.5 s). Waiting for a test.
 - BUILT 2026-10-22 (Lua 0.16.0), waiting for a test: skill tiers on proven parts (CFG.tiers): Rookie (round 1, rank 1,
   no post-stall), Regular (4, rank 2, no post-stall), Veteran (7, 3), Elite (11, 4), Ace (15, 5); 20 % of pilots
   one tier up; difficulty adds -1 / 0 / +1. PilotRank written live on each enemy (log "tiers:"); post-stall needs
