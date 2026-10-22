@@ -110,6 +110,12 @@ ANOMALY_GUARD_UNIT = 'SV_Unit_AnomalyGuards'
 ANOMALY_GUARDS = 4
 ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
 ANOMALY_CAMERA_S = 8.0                      # the focus camera on it (Mission 22's shuttle camera: 9 s)
+# its death plays the Celaeno's (Mission 23; user, 2026-10-22: "the celaeno has this special sound when its destroyed,
+# add that when MINDRIPPER is destroyed"): the airship's three-part body explosion, on its wreck, seconds after the
+# kill. Mission 23's sound events: Scripts/main.lua loads their assets when the level starts (CFG.specials.anomaly).
+ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play'),
+                       (1.5, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play'),
+                       (3.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play')]
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -415,6 +421,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage):
     t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
     t_glass_on = g.foreign_template(m15, 'LiveActivateGlassesEffectExecution')
     t_glass_off = g.foreign_template(m15, 'LiveDeactivateGlassesEffectExecution')
+    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
     assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false'], (arg_values(t_warn_on), arg_values(t_warn_off))
     up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})
@@ -435,6 +442,8 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage):
     g.execute(t_glass_off, 'RE_SV_AnomalyFieldOff')
     g.execute(t_noise, 'RE_SV_AnomalyFieldOff')
     g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: ANOMALY_UNIT})
+    for delay, key in ANOMALY_DOWN_SOUNDS:
+        g.execute(t_sound, down, {0: key, 1: ANOMALY_OBJ}, delay=delay)
     for ev in (down, 'RE_SV_AnomalyEnd'):
         flag(ev, 'SV_AnomalyUp', 'Set', 0)
         g.execute(t_warn_off, ev)

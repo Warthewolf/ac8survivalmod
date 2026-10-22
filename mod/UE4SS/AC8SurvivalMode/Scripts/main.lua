@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.33.0"
+local VERSION = "0.33.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -742,7 +742,13 @@ local CFG = {
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
         anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.0, invert = "both",
                      fade_s = 1.5, reward = 4000, ai_level = 5, guard_offset_m = 800,
-                     unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards" },
+                     unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
+                     -- the Celaeno's death sounds (Mission 23's sound events, played by the event package when it's
+                     -- down: tools/survival_events.py ANOMALY_DOWN_SOUNDS), loaded with the level so they can play
+                     down_sounds = "/Game/WwiseAssets/Events/CS_AceLive_SE/MissionSpecific/Events_Ms23/EXP/SKY/SE_Ms23_EXP_SKY_OP0049_cleo/",
+                     down_sound_names = { "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play",
+                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play",
+                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play" } },
     },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
@@ -3263,6 +3269,14 @@ local function probeTick(tick)
         log("level loaded: PL_SurvivalMode")
         if type(SV_SetControlInvert) == "function" then SV_SetControlInvert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn = false, nil
+        do                                         -- the Anomaly's death sounds (Mission 23's), loaded and kept
+            local an, got = CFG.specials.anomaly, {}
+            for _, n in ipairs(an.down_sound_names) do
+                local o = loadObject(an.down_sounds .. n .. "." .. n)
+                if o then pin(o, n); got[#got + 1] = n end
+            end
+            log(string.format("special: anomaly death sounds loaded: %d of %d", #got, #an.down_sound_names))
+        end
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
