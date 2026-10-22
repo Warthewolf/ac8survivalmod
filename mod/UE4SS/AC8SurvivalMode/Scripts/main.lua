@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.19.0"
+local VERSION = "0.19.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -36,6 +36,13 @@ end
 local function nameOf(o)
     local ok, s = pcall(function() return o:GetFullName() end)
     return ok and s or "?"
+end
+
+-- A widget the game made at run time (they live under /Engine/Transient). FindAllOf on a widget blueprint's class
+-- also returns the copies stored inside other blueprints' WidgetTrees ("..._C:WidgetTree.X"), which are never on
+-- screen (test of 2026-10-22: the landing menu's ammo panel and the TIME row were first found that way).
+local function liveWidget(w)
+    return valid(w) and nameOf(w):find("/Engine/Transient", 1, true) ~= nil
 end
 
 -- calls a data table method; false when this UE4SS build cannot do it
@@ -1321,8 +1328,7 @@ local function hideGameInfo(now)
     if not have and (not H.infoAt or now >= H.infoAt) then      -- look again only while they aren't found
         H.infoAt, H.info, H.infoSaid = now + 2, {}, H.infoSaid or {}
         for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C") or {}) do
-            local short = nameOf(w):match("([^%.:]+)$") or ""
-            if valid(w) and short:find("_C_%d+$") then             -- a live panel, not the class's template
+            if liveWidget(w) then                                    -- a live panel, not a blueprint's template
                 local function part(n, vis, what)
                     local ok, x = pcall(function() return w:GetWidgetFromName(FName(n)) end)
                     if not (ok and valid(x)) then ok, x = pcall(function() return w[n] end) end   -- the blueprint's variable
@@ -1830,7 +1836,7 @@ local function musicTick(tick, now, paused)
         if tick % 4 == 0 then
             for _, w in ipairs(FindAllOf("WBP_Menu_PauseMusicPlayer_000_C") or {}) do
                 local okV, vis = pcall(function() return w:IsVisible() end)
-                if valid(w) and okV and vis and not nameOf(w):find("Default__", 1, true) then
+                if okV and vis and liveWidget(w) then
                     M.player = true
                     log("music: the pause menu's music player was opened; Survival leaves the music to the player")
                     break
@@ -2133,9 +2139,14 @@ local function hangarAmmoTick(tick)
     if not playerOnAirfield() then SH.panels = nil; return end   -- the landing menu only exists down there
     local live = SH.panels and #SH.panels > 0
     for _, panel in ipairs(SH.panels or {}) do if not valid(panel) then live = false end end
-    if not live and tick % 8 == 1 then SH.panels = FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {} end
+    if not live and tick % 8 == 1 then
+        SH.panels = {}
+        for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
+            if liveWidget(w) then SH.panels[#SH.panels + 1] = w end
+        end
+    end
     for _, panel in ipairs(SH.panels or {}) do
-        if valid(panel) and not nameOf(panel):find("Default__", 1, true) and not SH.panelSaid then
+        if liveWidget(panel) and not SH.panelSaid then
             SH.panelSaid = true                      -- once: what the panel holds (test of 2026-10-22: no rewrite seen)
             local parts = {}
             for _, slot in ipairs(AMMO_SLOTS) do
@@ -2148,7 +2159,7 @@ local function hangarAmmoTick(tick)
             for k = 0, 4 do mx[#mx + 1] = tostring(A.max[k]) end
             log("shop: ammo panel " .. nameOf(panel) .. ": " .. table.concat(parts, ", ") .. "; maxima " .. table.concat(mx, "/"))
         end
-        if valid(panel) and not nameOf(panel):find("Default__", 1, true) then
+        if liveWidget(panel) then
             for _, slot in ipairs(AMMO_SLOTS) do
                 pcall(function()
                     local kind = AMMO_SLOT_KIND[slot]
