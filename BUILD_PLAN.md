@@ -435,7 +435,17 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   airfield / shop closed one round. (A shuttle script from another Claude session never reached this repo; 2026-10-22.)
 - [ ] Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
   (Mission 13's enemy LCAC pattern; Mission 9's are allies on another map); new paths to Comona's shoreline.
-- [ ] Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
+- [~] The Anomaly BUILT 2026-10-22 (Lua 0.33.0, runtime 0.14.0), untested. User's spec: MINDRIPPER in an F-4E
+  (OP1003_f04e_Named skin, Survival name key), own HUD warning, mission-update beep at its start, the shuttle's focus
+  camera on it. Specials rotate shuttle (5, 15, ...) / anomaly (10, 20, ...). Units SV_Unit_Anomaly (SV_Obj_Mindripper)
+  and SV_Unit_AnomalyGuards (4, PHANTASM), copies of a pool flight on the F-4E rows (build_survival.py copy_unit).
+  Start (event package): Mission 22's MISSION UPDATE message + focus camera, Mission 15's forced WARNING + radar noise
+  (Graph.foreign_template adds their script imports). Field (Lua): within 3 km SV_SetControlInvert (BuildFlightInput
+  detour) inverts pitch/roll with a 1.5 s fade, RE_SV_AnomalyFieldOn/Off = glasses effect + harder noise; HUD row
+  "MINDRIPPER: n KM" / "ANOMALY FIELD: CONTROLS INVERTED". Down: +4000 Z, everything off (SV_AnomalyDown /
+  RE_SV_AnomalyEnd). Not yet: floating, orbiting guards, portal + electric effect (which Mission 22 effect: ask user).
+  Test: [rounds] start_round = 10; "special: anomaly" lines; beep, WARNING, camera; inversion inside 3 km; kill.
+- [ ] (original) Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
   within ~5 km; inside ~3 km the player's pitch and roll invert (HUD warning, radar noise, glasses effect) until it dies.
   Config: on/off, pitch / roll / both. Research first: where AC8 reads flight input (native flip).
 - [ ] Helios barrages on RANDOM rounds (HELIOS_VFX.md 3), targeting the player only, never the airfield. Offline only:

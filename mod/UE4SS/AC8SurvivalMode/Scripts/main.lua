@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.32.1"
+local VERSION = "0.33.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -356,6 +356,8 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pendin
 -- (OP0057_sstb); it's then kept out of `planes`, so it never counts, tiers or pays as an enemy.
 local SHUTTLE = { obj = nil }
 local shuttleHealth            -- (section "special rounds"; the HUD shows it)
+-- The Anomaly (section "special rounds"): its field's state, for the HUD and the level reset.
+local ANOM = { on = false }
 
 local function logPlane(o, unit)
     if not valid(o) or not inSurvival(o) then return end
@@ -724,7 +726,7 @@ local CFG = {
         enabled  = true,
         first    = 5,
         every    = 5,
-        rotation = { "shuttle" },
+        rotation = { "shuttle", "anomaly" },
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
                      -- (removed after it, tools/survival_events.py PAD_REMOVE_LOST_S / SHUTTLE_REMOVE_S)
@@ -732,6 +734,15 @@ local CFG = {
                      shop_closed_rounds = 1, unit = "SV_Unit_Shuttle", pad = "AA_Unit_01_Ground0",
                      name_key = "SV_Shuttle_Name", npc_row = "OP0057_sstb_01_SV",
                      npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
+        -- "anomaly" = The Anomaly (tools/survival_events.py ANOMALY_*; user, 2026-10-22): the ace `name` in an F-4E
+        -- (the campaign named-ace skin) with `guards` escorts under `guards_name`, both at the top skill tier and AI
+        -- level ai_level. Within field_km of it the player's controls invert (`invert`: "both", "pitch" or "roll",
+        -- fading over fade_s; dlls/main.dll SV_SetControlInvert), with the stock glasses effect and radar noise; its
+        -- round starts with the stock MISSION UPDATE beep, a forced WARNING and the focus camera on it. Shot down:
+        -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
+        anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.0, invert = "both",
+                     fade_s = 1.5, reward = 4000, ai_level = 5, guard_offset_m = 800,
+                     unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards" },
     },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
@@ -816,6 +827,16 @@ local CFG = {
             spike        = "DIFFICULTY UP",
             spike_sub    = "ENEMY PILOTS GROW SHARPER",
             ace          = "ACE INBOUND: %s",
+            anomaly_sub  = "ANOMALY DETECTED",
+            anomaly_warn = "WARNING: %s",
+            anomaly_warn_sub = "ITS FIELD INVERTS YOUR CONTROLS",
+            anomaly_field     = "ANOMALY FIELD",
+            anomaly_field_sub = "CONTROLS INVERTED",
+            anomaly_clear     = "CONTROLS RESTORED",
+            anomaly_row       = "%s: %.1f KM",
+            anomaly_row_field = "ANOMALY FIELD: CONTROLS INVERTED",
+            anomaly_down      = "%s DOWN",
+            anomaly_down_sub  = "+%d ZOLLARS",
             ace_sub      = "%s SQUADRON (%s)",
         },
     },
@@ -992,7 +1013,8 @@ local SPIKE_SUFFIX = { [0] = "", "b", "c", "d" }      -- tools/build_survival.py
 -- (DT_SV_NpcRows, added at the main menu) and text keys SV_Ace_<tier>_<key> (the ace) / SV_Sqn_<tier> (the squadron).
 local ACE = {
     roster = { mercenary = { "f15c", "su35", "typhoon" }, legend = { "su47", "rafale" }, demon = { "f22a", "su57" },
-               phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale", "adfx02" } },
+               phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale", "adfx02" },
+               anomaly = { "f04e" } },             -- the Anomaly's MINDRIPPER and guards (not a tier: never a flight's)
     row = function(tier, key, part) return "sv_ace_" .. tier .. "_" .. key .. "_" .. part end,
     -- airframes from Online Mode (tools/build_survival.py ACE_MODELS): their model row (DT_SV_ModelRows) goes into the
     -- campaign's DT_NPC_Model first, and their name (the model's GameObjectDisplayName01) is Survival's text
@@ -1379,7 +1401,7 @@ local function searchSetup()
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
-    if CFG.aces.enabled then                       -- CFG.aces: their DT_NPC rows (from DT_SV_NpcRows) and names
+    do      -- CFG.aces and the Anomaly's: DT_NPC rows (DT_SV_NpcRows), names. The Anomaly's always: the world data names them
         local mine = loadObject(CFG.specials.shuttle.npc_rows)
         local nAces, names, lost = 0, 0, {}
         if mine then pin(mine, nameOf(mine)) end
@@ -1400,7 +1422,9 @@ local function searchSetup()
             end
         end
         for tier, keys in pairs(ACE.roster) do
-            local c = CFG.aces[tier] or {}
+            local an = CFG.specials.anomaly
+            local c = tier == "anomaly" and { squadron = an.guards_name, f04e = an.name } or CFG.aces[tier] or {}
+            if tier ~= "anomaly" and not CFG.aces.enabled then keys = {} end
             if type(SV_SetText) == "function" and SV_SetText("SV_Sqn_" .. tier, tostring(c.squadron or tier)) == 1 then names = names + 1 end
             for _, k in ipairs(keys) do
                 if type(SV_SetText) == "function" and SV_SetText("SV_Ace_" .. tier .. "_" .. k, tostring(c[k] or k)) == 1 then names = names + 1 end
@@ -1992,6 +2016,10 @@ local function hudTick(now, paused, pc)
         local hp = shuttleHealth()
         setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif D.special and D.special.kind == "anomaly" and D.special.state == "hunt" and D.special.dist then
+        local an = CFG.specials.anomaly
+        setText(H.next, "nextStr", ANOM.on and t.anomaly_row_field or string.format(t.anomaly_row, an.name:upper(), D.special.dist))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif H.nextShown ~= false then
         H.next:SetVisibility(VIS.Collapsed); H.nextShown = false
     end
@@ -2315,10 +2343,97 @@ function shuttleHealth()                  -- the local declared with SHUTTLE
     return ok and pct or nil
 end
 
+-- The Anomaly (CFG.specials.anomaly; tools/survival_events.py ANOMALY_*): MINDRIPPER and its guards, spawned as one
+-- special ("@anomaly" in the queue), and its field: within field_km the player's controls invert (dlls/main.dll
+-- SV_SetControlInvert on the player's plane) and RE_SV_AnomalyFieldOn / Off switch the stock glasses effect and radar
+-- noise; the event package does the start (MISSION UPDATE beep, WARNING, focus camera) and the end when it's down.
+do
+local function inverted(c, axis) return c.invert == "both" or c.invert == axis end
+local function setField(on, s)
+    if ANOM.on == on then return end
+    ANOM.on = on
+    local c, t = CFG.specials.anomaly, CFG.hud.text
+    local r = "no runtime"
+    if type(SV_SetControlInvert) == "function" then        -- off keeps the plane, so the controls fade back
+        r = SV_SetControlInvert(on and inverted(c, "pitch") and 1 or 0, on and inverted(c, "roll") and 1 or 0, c.fade_s,
+                                ANOM.pawn or 0)
+    end
+    if type(SV_Event) == "function" then SV_Event(on and "RE_SV_AnomalyFieldOn" or "RE_SV_AnomalyFieldOff") end
+    if s and s.state == "hunt" then hudCallout(on and t.anomaly_field or t.anomaly_clear, on and t.anomaly_field_sub or nil) end
+    log(string.format("special: anomaly field %s (%s, %.1f km; SV_SetControlInvert %s)", on and "ON" or "off",
+        on and c.invert or "controls back", s and s.dist or -1, tostring(r)))
+end
+ANOM.setField = setField
+
+-- MINDRIPPER on its row (the F-4E, at the top fire-control level), its guards beside it; false if it can't come.
+function ANOM.spawn()
+    local c = CFG.specials.anomaly
+    local lead, wing = ACE.row("anomaly", "f04e", "l"), ACE.row("anomaly", "f04e", "w")
+    if not (SR.usable[lead] and SR.usable[wing]) then
+        log("special: anomaly rows weren't in before this level loaded; a normal round instead")
+        return false
+    end
+    local level = #SPIKE_SUFFIX
+    local x, y, dist, bearing = spawnPoint()
+    local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local top = #CFG.tiers.list
+    D.flightTier = D.flightTier or {}
+    for k, part in ipairs({ { c.unit, lead }, { c.guard_unit, wing } }) do
+        local unit, row = part[1], part[2]
+        local set = SV_SetAircraft(unit, searchAircraft(row, level))
+        if type(SV_SetLevel) == "function" then SV_SetLevel(unit, c.ai_level * 100) end
+        local off = (k - 1) * c.guard_offset_m * 100
+        spawningUnit = unit
+        local r = SV_Spawn(unit, x + off, y + off, alt * 100, (bearing + 180) % 360)
+        spawningUnit = nil
+        log(string.format("special: anomaly %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", unit, row,
+            tostring(set), dist, bearing, alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        if r > 0 then
+            D.up[unit], D.flown[unit], D.flightTier[unit] = true, true, top
+        elseif k == 1 then
+            return false
+        end
+    end
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    ANOM.pawn = pawn and addrOf(pawn) or nil
+    local t = CFG.hud.text
+    hudCallout(string.format(t.anomaly_warn, c.name:upper()), t.anomaly_warn_sub)
+    return true
+end
+
+-- Every tick of a running Anomaly: its distance (the field) and its end.
+function ANOM.tick(now, s)
+    if s.state ~= "hunt" then return end
+    local c, t = CFG.specials.anomaly, CFG.hud.text
+    if SV_UnitAlive(c.unit) <= 0 then
+        s.state = "done"
+        setField(false, s)
+        if type(SV_Event) == "function" then SV_Event("RE_SV_AnomalyEnd") end
+        addCredits(c.reward, c.name .. " down")
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, c.reward))
+        log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
+        return
+    end
+    local p
+    for _, q in ipairs(planes) do if q.unit == c.unit and valid(q.obj) then p = q end end
+    local you = playerLocation()
+    if not (p and you) then return end
+    local ok, l = pcall(function() local v = p.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not ok then return end
+    s.dist = km(l, you)
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    local a = pawn and addrOf(pawn)
+    if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end   -- a new plane: switch again
+    if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
+    elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end      -- (0.3 km: no flicker)
+end
+end
+
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
     local s = D.special
+    if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
@@ -2356,6 +2471,8 @@ local function startRound()
     if raid then
         local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
+    elseif special == "anomaly" then              -- MINDRIPPER and its guards take that many of the round's aircraft
+        nBombers = 1 + CFG.specials.anomaly.guards
     elseif special == "shuttle" then             -- strike flights at the shuttle (heavies only bomb the airfield)
         local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
@@ -2380,6 +2497,7 @@ local function startRound()
     end
     for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
     if special == "shuttle" then table.insert(D.queue, 1, "@shuttle") end     -- the shuttle first: it sets their orders
+    if special == "anomaly" then table.insert(D.queue, 1, "@anomaly") end
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
         or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or ""))
@@ -2449,6 +2567,8 @@ local function roundsTick(now)
             local t = CFG.hud.text
             if specialFor(D.round + 1) == "shuttle" then
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
+            elseif specialFor(D.round + 1) == "anomaly" then
+                hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
             else
                 hudCallout(string.format(t.start, D.round + 1), t.start_sub)
             end
@@ -2471,6 +2591,8 @@ local function roundsTick(now)
         local u = table.remove(D.queue, 1)
         if u == "@shuttle" then
             spawnShuttle()
+        elseif u == "@anomaly" then
+            if ANOM.spawn() then D.special.state, D.special.at = "hunt", now else D.special = nil end
         elseif u then
             local r = spawnFlight(u)
             if r == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
@@ -3139,6 +3261,8 @@ local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
+        if type(SV_SetControlInvert) == "function" then SV_SetControlInvert(0, 0, 0, 0) end   -- (the Anomaly's field)
+        ANOM.on, ANOM.pawn = false, nil
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end

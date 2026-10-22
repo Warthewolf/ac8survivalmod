@@ -230,7 +230,42 @@ def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
     return len(objs)
 
 
-def split_units(units, used_ids, z):
+def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
+    """A new unit `new_unit`: a copy of `src_unit`'s desc (faction, point, area, tags) holding its first `size` AI
+    objects, named obj_name (numbered _0, _1, ... when more than one) with new UniqueIDs, on NPC row `npc_row` (their
+    airframe and, built at level load, their behaviour: hard rule 20). Returns the objects' names as event args write them."""
+    unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
+    src = [u for u in units if unit_name(u) == src_unit][0]
+    assert new_unit not in {unit_name(u) for u in units} and not new_unit[-1].isdigit(), new_unit   # hard rule 17
+    new = copy.deepcopy(src)
+    objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    assert len(objs) >= size, (src_unit, len(objs), size)
+    del objs[size:]
+    assert obj_name not in top_number and not obj_name[-1].isdigit(), obj_name
+    names = []
+    for k, ob in enumerate(objs):
+        num = 0 if size == 1 else k + 1                       # FName number: 0 = no suffix, n = "_<n-1>"
+        h = zlib.crc32(f'AC8SurvivalMode:{new_unit}:{k}'.encode())
+        while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
+        used_ids.add(struct.pack('<I', h))
+        assert any(q[1] == 'MissionNpcID' for q in ob[2]), new_unit
+        ob[2][:] = [(q[0], q[1], False, ('name', obj_name, num)) if q[1] == 'Name' else
+                    (q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else
+                    (q[0], q[1], False, ('raw', 'UInt32', struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in ob[2]]
+        names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
+    top_number[obj_name] = len(objs)
+    assert npc_row in NPC_ROWS, npc_row
+    for n in (new_unit, obj_name, npc_row): z.nb.add(n)
+    ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
+    h = zlib.crc32(b'AC8SurvivalMode:' + new_unit.encode())
+    while struct.pack('<I', h) in ids: h = (h + 1) & 0xffffffff
+    new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
+                 (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
+    units.append(new)
+    return names
+
+
+def split_units(units, used_ids, z, top_number):
     """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special, and the
     pad's invincible dummies one of theirs (PAD_DUMMY_UNIT, spawned once a run: a unit with anything alive can't be
     spawned again), so Mission 22's pad unit keeps only what can be destroyed (AA guns, SAMs, tower: removed after
@@ -244,6 +279,15 @@ def split_units(units, used_ids, z):
     for new_unit, obj in survival_events.DEFENCES:
         move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit)
     print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')
+    # The Anomaly (survival_events.ANOMALY_*): MINDRIPPER alone, and its guards
+    # (user, 2026-10-22: "make mindripper an F-4": its NPC row is the F-4E one in the world data too, not only at spawn)
+    (lead, _, _), (wing, _, _) = ace_rows('anomaly', 'f04e')
+    ace = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.ANOMALY_UNIT, 1, top_number,
+                    'SV_Obj_Mindripper', lead + '_sv')
+    guards = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.ANOMALY_GUARD_UNIT,
+                       survival_events.ANOMALY_GUARDS, top_number, 'SV_Obj_AnomalyGuard', wing + '_sv')
+    survival_events.ANOMALY_OBJ = ace[0]
+    print(f'  anomaly: {ace[0]} in {survival_events.ANOMALY_UNIT}, guards {guards} in {survival_events.ANOMALY_GUARD_UNIT}')
 
 
 def build_wd_global():
@@ -313,7 +357,7 @@ def build_wd_global():
                     set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
                     sized[size] = sized.get(size, 0) + 1
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
-    split_units(units, used_ids, z)
+    split_units(units, used_ids, z, top_number)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -376,6 +420,9 @@ def build_ep(part, ef=False):
     empty_ep(z, new)
     if part == 'global':
         g = survival_events.build_events(stock(old))
+        # exec classes Mission 22's package doesn't import (Graph.foreign_template): the same imports, in the same order
+        assert len(z.imports) + len(g.added_imports) == len(g.z.imports), (len(z.imports), len(g.added_imports))
+        z.imports += g.added_imports
         head = bytes(z.payloads[0])[:-12]         # empty_ep left: properties + u32 0 + u32 0 + u32 0
         z.payloads[0] = bytearray(survival_events.write_records(g, z, head))
         _, _, _, T, E, offs = ep_dump.load_bytes(z)
@@ -545,6 +592,8 @@ ACES = [  # (tier, key, lead DT_NPC row, wing DT_NPC row)
     ('reaper',    'typhoon', 'OP1011_typn_Named',      'OP1011_typn_Shadow_37'),
     ('reaper',    'rafale',  'OP1014_rflm_Named',      'OP1011_typn_Shadow_39'),
     ('reaper',    'adfx02',  'OP1021_su57_Named',      'OP1021_su57_Named'),        # model: ACE_MODELS
+    # the Anomaly's MINDRIPPER (lead) and its guards (wing): main.lua CFG.specials.anomaly names them
+    ('anomaly',   'f04e',    'OP1003_f04e_Named',      'OP1003_f04e_Named'),
 ]
 # Airframes only Online Mode has (user, 2026-10-22: "ADFX-02 appears in the Online Mode"): their model rows are in
 # DT_NPC_Model_ON, not the campaign's DT_NPC_Model, so DT_SV_ModelRows carries copies (GameObjectId 1 like every

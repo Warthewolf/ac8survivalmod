@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.13.1"
+#define RT_VERSION           L"0.14.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1597,6 +1597,38 @@ static void OnMusicNext(void* manager)
     g_nextMusicNext(manager);
 }
 
+/* The Anomaly's field (tools/re/SPECIAL_ROUNDS.md 13): BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) packs the
+ * plane's stick into the flight engine's input every frame (out+0x0 pitch, +0x8 roll, already clamped to -1..1). The
+ * detour runs it, then scales pitch / roll of the plane Lua named by a factor that moves from 1 to -1 (inverted) over
+ * the fade time and back. The struct is rebuilt every call, so nothing can flip twice. */
+typedef void (*BuildInputFn)(uint8_t* plane, float* out);
+static uint8_t*      g_fBuildInput;
+static BuildInputFn  g_nextBuildInput;
+static uint8_t* volatile g_invPlane;                /* the player's plane (SV_SetControlInvert), or NULL */
+static volatile int32_t  g_invWant[2];              /* pitch, roll: 1 = inverted */
+static volatile int32_t  g_invFadeMs = 1500;
+static float         g_invScale[2] = { 1.0f, 1.0f };
+static uint64_t      g_invLastMs;
+
+static void OnBuildInput(uint8_t* plane, float* out)
+{
+    g_nextBuildInput(plane, out);
+    if (!plane || plane != g_invPlane || !out) return;
+    uint64_t now = GetTickCount64();
+    float step = g_invLastMs && now > g_invLastMs ? (float)(now - g_invLastMs) * 2.0f / (float)(g_invFadeMs > 0 ? g_invFadeMs : 1) : 0.0f;
+    if (now - g_invLastMs > 1000) step = 0.0f;           /* first frame after a pause: no jump */
+    g_invLastMs = now;
+    for (int a = 0; a < 2; ++a) {
+        float want = g_invWant[a] ? -1.0f : 1.0f, s = g_invScale[a];
+        if (g_invFadeMs <= 0) s = want;
+        else if (s < want) { s += step; if (s > want) s = want; }
+        else if (s > want) { s -= step; if (s < want) s = want; }
+        g_invScale[a] = s;
+    }
+    out[0] *= g_invScale[0];
+    out[2] *= g_invScale[1];
+}
+
 static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
 {
     if (g_musicPlayer && !(grayout & 0xFF) && list && list->num > 0 && list->num <= 16 &&
@@ -1770,10 +1802,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.13.1" */
+/* SV_Version() -> "0.14.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.13.1";
+    static const char v[] = "0.14.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1986,6 +2018,25 @@ static int L_MusicClock(void* lua)
     return Ret(lua, old);
 }
 
+/* SV_SetControlInvert(pitch, roll, fade_s, plane) -> the factor pitch had (x100: 100 normal, -100 inverted), or
+ * SV_ERR_NO_GAME when BuildFlightInput wasn't hooked. pitch / roll 1 = invert that axis, 0 = normal; the change fades
+ * over fade_s; plane = the player's ALivePlayerPlane address (only that plane's input is touched; 0 = none). Turning
+ * the axes back to normal keeps the plane until the fade is over. */
+static int L_SetControlInvert(void* lua)
+{
+    double pitch = 0, roll = 0, fade = 1.5, addr = 0;
+    ArgNumber(lua, &pitch); ArgNumber(lua, &roll); ArgNumber(lua, &fade); ArgNumber(lua, &addr);
+    if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
+    int64_t old = (int64_t)(g_invScale[0] * 100.0f);
+    uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)(addr > 0 ? addr : 0);
+    if (plane && !LiveObject(plane)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (plane != g_invPlane) { g_invScale[0] = g_invScale[1] = 1.0f; g_invLastMs = 0; }
+    g_invFadeMs = (int32_t)(fade * 1000.0);
+    g_invWant[0] = pitch != 0; g_invWant[1] = roll != 0;
+    g_invPlane = plane;
+    return Ret(lua, old);
+}
+
 /* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 64 keys already): the text the game shows for text key `key`
  * (menu rows and help lines that name it), ASCII; longer than 255 characters is cut there */
 static int L_SetText(void* lua)
@@ -2032,7 +2083,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_SetControlInvert", L_SetControlInvert },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
@@ -2046,7 +2097,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_SetControlInvert, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
 }
 
 #define MOD_SLOTS 16
@@ -2103,11 +2154,12 @@ static void** FindVtable(uint8_t* decide, int wantNext)
 /* One pass over the game's code for every signature (as shipped, or behind another mod's jump). */
 static void FindFunctions(void)
 {
-    static uint8_t tp[64], tm[64], xp[64], xm[64], vp[64], vm[64], hp[64], hm[64];
+    static uint8_t tp[64], tm[64], xp[64], xm[64], vp[64], vm[64], hp[64], hm[64], ip[64], im[64];
     HookedPattern(tp, tm, sizeof(kSigTransition), kSigTransitionTail, sizeof(kSigTransitionTail));
     HookedPattern(xp, xm, 15, kSigText + 15, sizeof(kSigText) - 15);
     HookedPattern(vp, vm, 15, kSigPauseValidity + 15, sizeof(kSigPauseValidity) - 15);
     HookedPattern(hp, hm, 15, kSigHangarDecide + 15, sizeof(kSigHangarDecide) - 15);
+    HookedPattern(ip, im, 16, kSigBuildInput + 16, sizeof(kSigBuildInput) - 16);
     Pattern p[] = {
         { kSigBase,       NULL, sizeof(kSigBase),       NULL, 0 }, { kSigMainDecide,    NULL, sizeof(kSigMainDecide),    NULL, 0 },
         { kSigDiffDecide, NULL, sizeof(kSigDiffDecide), NULL, 0 }, { kSigDiffNext,      NULL, sizeof(kSigDiffNext),      NULL, 0 },
@@ -2128,6 +2180,7 @@ static void FindFunctions(void)
         { kSigPauseValidity,  NULL, sizeof(kSigPauseValidity), NULL, 0 }, { vp, vm, sizeof(kSigPauseValidity), NULL, 0 },
         { kSigHangarDecide,   NULL, sizeof(kSigHangarDecide),  NULL, 0 }, { hp, hm, sizeof(kSigHangarDecide),  NULL, 0 },
         { kSigMusicTick,      NULL, sizeof(kSigMusicTick),     NULL, 0 }, { kSigMusicNext, NULL, sizeof(kSigMusicNext), NULL, 0 },
+        { kSigBuildInput,     NULL, sizeof(kSigBuildInput),    NULL, 0 }, { ip, im, sizeof(kSigBuildInput), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -2154,6 +2207,7 @@ static void FindFunctions(void)
     g_fHangarDecide  = p[23].hit ? p[23].hit : p[24].hit;
     g_fMusicTick     = p[25].hit;
     g_fMusicNext     = p[26].hit;
+    g_fBuildInput    = p[27].hit ? p[27].hit : p[28].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -2164,6 +2218,7 @@ static void FindFunctions(void)
     Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
         g_fPauseValidity, g_fHangarDecide);
     Log(L"music player: track clock tick %p, next track %p", g_fMusicTick, g_fMusicNext);
+    Log(L"flight input: BuildFlightInput %p", g_fBuildInput);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
@@ -2185,6 +2240,8 @@ static int Install(void)
     else Log(L"music player clock not found; its tracks can still end early after a pause");
     if (g_fMusicNext && HookInline(g_fMusicNext, 16, (void*)OnMusicNext, (void**)&g_nextMusicNext, L"music player next track")) {}
     else Log(L"music player next track not found (log only)");
+    if (g_fBuildInput && HookInline(g_fBuildInput, 16, (void*)OnBuildInput, (void**)&g_nextBuildInput, L"flight input")) {}
+    else Log(L"flight input not found; the Anomaly's field can't invert the controls");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");

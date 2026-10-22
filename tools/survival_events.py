@@ -97,6 +97,19 @@ SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_
                        (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
                        (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
 SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
+# Special round "The Anomaly" (tools/re/SPECIAL_ROUNDS.md 13; user, 2026-10-22: the ace flies an F-4 and is named
+# MINDRIPPER; its own HUD warning; the mission-update beep when its round starts; the shuttle's zoom-in camera on it).
+# build_survival.py copies pool flight ANOMALY_SOURCE (Survival's fighter behaviour, 40 km area) into MINDRIPPER's own
+# one-aircraft unit and a guard unit; Scripts/main.lua spawns both, gives MINDRIPPER its NPC row and flies the field
+# (inside 3 km the player's pitch and roll invert: dlls/main.dll SV_SetControlInvert). The records here are the stock
+# presentation: Mission 22's MISSION UPDATE message (its beep) and focus camera, and Mission 15's forced WARNING
+# message, radar noise and glasses effect (Graph.foreign_template: classes Mission 22's package doesn't import).
+ANOMALY_SOURCE = 'ERA_Unit_01_Dep_Air1'     # a 4-ship of the pool
+ANOMALY_UNIT = 'SV_Unit_Anomaly'
+ANOMALY_GUARD_UNIT = 'SV_Unit_AnomalyGuards'
+ANOMALY_GUARDS = 4
+ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
+ANOMALY_CAMERA_S = 8.0                      # the focus camera on it (Mission 22's shuttle camera: 9 s)
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -142,7 +155,7 @@ KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission
 # came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
 INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
              + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
-             + [f'SV_ShuttleDmg{c}' for c in 'ABC'])
+             + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -197,6 +210,8 @@ class Graph:
         self.next_shared = 900000
         self.next_exec = 1
         self.flags = set()      # int flags the records read or write (must all be in INT_FLAGS)
+        self.foreign = {}       # other stock EPs read for templates
+        self.added_imports = [] # script imports (exec classes) appended to the EP's import map, in order
 
     # templates --------------------------------------------------------
     def exec_template(self, cls, event=None, pred=None):
@@ -207,6 +222,30 @@ class Graph:
             if pred and not pred(arg_values(e), e): continue
             return copy.deepcopy(e)
         raise LookupError((cls, event))
+
+    def foreign_template(self, stock_ep, cls, event=None, pred=None):
+        """An exec record of another stock EP, for a class Mission 22's package doesn't import (Mission 15's HUD
+        warning, radar noise, glasses). Its class is a script import: it's appended to this EP's import map (build_ep
+        appends the same to the package it writes) and the record points at it."""
+        if stock_ep not in self.foreign: self.foreign[stock_ep] = ep_dump.load(stock_ep)
+        fz, _, _, _, fE, _ = self.foreign[stock_ep]
+        for e in fE:
+            f = fields(e)
+            if ep_dump.show(f['ExecutionClass'][3], fz) != cls: continue
+            if event and ep_dump.show(f['ConnectionEventName'][3], fz) != event: continue
+            if pred and not pred(arg_values(e), e): continue
+            e = copy.deepcopy(e)
+            ref = f['ExecutionClass'][3]
+            assert ref[0] == 'obj' and ref[1] < 0, ref
+            x = fz.imports[-ref[1] - 1]
+            assert x >> 62 == 1, (cls, hex(x))                       # a script import: no package to add
+            if x not in self.z.imports:
+                self.z.imports.append(x)
+                self.added_imports.append(x)
+            setf(e, 'ExecutionClass', ('obj', -(self.z.imports.index(x) + 1)))
+            setf(e, 'ConditionalStatementTables', ('arr', []))
+            return e
+        raise LookupError((stock_ep, cls, event))
 
     def trig_template(self, event):
         for t in self.T:
@@ -357,7 +396,50 @@ def build_events(stock_ep):
         g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
         g.execute(t_landing, ev, {0: on})
     build_shuttle(g, flag)
+    build_anomaly(g, flag, stock_ep, t_search, t_engage)
     return g
+
+
+def build_anomaly(g, flag, stock_ep, t_search, t_engage):
+    """The Anomaly (see ANOMALY_*): MINDRIPPER's appearance, its guards' orders, its death, and the field's effects
+    Scripts/main.lua switches with RE_SV_AnomalyFieldOn / RE_SV_AnomalyFieldOff (RE_SV_AnomalyEnd: everything off)."""
+    assert ANOMALY_OBJ, 'build_survival.py build_wd_global sets ANOMALY_OBJ first'
+    m15 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission015', 'EP_Mission015_global.uasset')
+    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')                  # {0e MISSION_ACCOMPLISHED}
+    t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
+    t_cam_off = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
+    t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
+    t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
+    t_noise = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_01')       # 4 / 3 / 6
+    t_noise_hard = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_02')  # 5 / 5 / 8
+    t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
+    t_glass_on = g.foreign_template(m15, 'LiveActivateGlassesEffectExecution')
+    t_glass_off = g.foreign_template(m15, 'LiveDeactivateGlassesEffectExecution')
+    assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false'], (arg_values(t_warn_on), arg_values(t_warn_off))
+    up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', guards, arg_changes={0: ANOMALY_GUARD_UNIT})
+    for ev, unit in ((up, ANOMALY_UNIT), (guards, ANOMALY_GUARD_UNIT)):      # the pool's orders: the player, air search
+        g.execute(t_search, ev, {1: unit}, delay=2.0)
+        g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+    flag(up, 'SV_AnomalyUp', 'Set', 1)
+    g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
+    g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
+    g.execute(t_noise, up, delay=1.0)
+    g.execute(t_cam_on, up, {0: ANOMALY_OBJ}, delay=1.5)
+    g.execute(t_cam_off, up, delay=1.5 + ANOMALY_CAMERA_S)
+    for name in ('RE_SV_AnomalyFieldOn', 'RE_SV_AnomalyFieldOff', 'RE_SV_AnomalyEnd'):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', name)                           # remote events Lua fires (SV_Event)
+    g.execute(t_glass_on, 'RE_SV_AnomalyFieldOn')
+    g.execute(t_noise_hard, 'RE_SV_AnomalyFieldOn')
+    g.execute(t_glass_off, 'RE_SV_AnomalyFieldOff')
+    g.execute(t_noise, 'RE_SV_AnomalyFieldOff')
+    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: ANOMALY_UNIT})
+    for ev in (down, 'RE_SV_AnomalyEnd'):
+        flag(ev, 'SV_AnomalyUp', 'Set', 0)
+        g.execute(t_warn_off, ev)
+        g.execute(t_noise_off, ev)
+        g.execute(t_glass_off, ev)
 
 
 def build_shuttle(g, flag):
