@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.36.4"
+local VERSION = "0.36.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1164,10 +1164,15 @@ local function pickTier(round)
     return i
 end
 -- An ace round (CFG.aces first_round / every): the round's tier's squadrons only.
-local function aceRound(round)
+-- An ace round (CFG.aces first_round / every; never a special round): the tier index whose squadrons fly it (the
+-- round's tier, or the first one above it that has squadrons), or nil.
+local function aceRound(round, special)
     local a = CFG.aces
-    return a.enabled and CFG.tiers.enabled and round >= a.first_round
-        and (round - a.first_round) % math.max(1, math.floor(a.every)) == 0
+    if special or not (a.enabled and CFG.tiers.enabled and round >= a.first_round
+        and (round - a.first_round) % math.max(1, math.floor(a.every)) == 0) then return nil end
+    local ti = pickTier(round)
+    for k = ti, #CFG.tiers.list do if ACE.roster[CFG.tiers.list[k].name:lower()] then return k end end
+    return nil
 end
 local function withLevel(base, over)                    -- a copy of `base` with `over`'s fields
     local t = {}
@@ -2650,11 +2655,15 @@ function ANOM.cleanFx(now, all)
     local keep = {}
     for _, e in ipairs(ANOM.fx) do
         if all and not e.goneAt then e.offAt = now end
-        if not e.goneAt and now >= e.offAt then
+        local alive = false
+        pcall(function() alive = e.comp:IsValid() end)               -- (a one-shot may have destroyed itself)
+        if alive and not e.goneAt and now >= e.offAt then
             pcall(function() e.comp:Deactivate() end)               -- stops spawning; what's out fades
             e.goneAt = now + 2
         end
-        if e.goneAt and now >= e.goneAt then
+        if not alive then
+            -- gone already
+        elseif e.goneAt and now >= e.goneAt then
             if not pcall(function() e.comp:K2_DestroyComponent(e.comp) end) then pcall(function() e.comp:DestroyComponent() end) end
         else
             keep[#keep + 1] = e
@@ -2841,12 +2850,10 @@ local function startRound()
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
     -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
     D.roundTier = nil
-    if aceRound(D.round) then
-        local ti = D.nextTier or pickTier(D.round)      -- (the one its callout named)
+    local aceTi = (D.nextTierRound == D.round and D.nextTier) or aceRound(D.round, special)   -- (the one its callout named)
+    if aceTi then
+        local ti = aceTi
         local tn = CFG.tiers.list[ti].name
-        if not ACE.roster[tn:lower()] then             -- (a tier without squadrons: the first one with them)
-            for k, t in ipairs(CFG.tiers.list) do if ACE.roster[t.name:lower()] and k > ti then ti, tn = k, t.name; break end end
-        end
         if ACE.roster[tn:lower()] then
             D.roundTier = ti
             local c = CFG.aces[tn:lower()] or {}
@@ -2856,7 +2863,8 @@ local function startRound()
             end
         end
     end
-    D.nextTier = nil
+    D.nextTier, D.nextTierRound = nil, nil
+    D.budget = budget
     local anomalyOnly = special == "anomaly" and CFG.specials.anomaly.only
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
@@ -3113,17 +3121,22 @@ local function roundsTick(now)
     end
     D.orders = D.orders or {}
     ordersTick(now)
+    -- every tick, whatever the round's state (code review of 2026-10-23: in the break it never ran, so the shuttle's
+    -- removal and the Anomaly's lightning clean-up waited for the next round, and while fighting it ran once a second,
+    -- which rounded the portal's timing)
+    specialTick(now)
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
             local t = CFG.hud.text
             local nextSpecial = D.forceSpecial or specialFor(D.round + 1)
+            local nextAce = aceRound(D.round + 1, nextSpecial)          -- (once: it picks the tier)
             if nextSpecial == "shuttle" then
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             elseif nextSpecial == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
-            elseif aceRound(D.round + 1) then
-                D.nextTier = pickTier(D.round + 1)          -- startRound flies this one
+            elseif nextAce then
+                D.nextTier, D.nextTierRound = nextAce, D.round + 1   -- startRound flies this one
                 local tn = CFG.tiers.list[D.nextTier].name:lower()
                 local c = CFG.aces[tn] or {}
                 hudCallout(string.format(t.start, D.round + 1), string.format(t.aces_round, tostring(c.squadron or tn):upper()))
@@ -3138,7 +3151,6 @@ local function roundsTick(now)
         end
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
-        specialTick(now)                         -- (spawns may be held while the countdown runs)
         if now < D.at then return end
         if playerOnAirfield() then                 -- the landing menu may be up, and a flight that appears then gets no orders
             if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end
@@ -3153,7 +3165,10 @@ local function roundsTick(now)
             if ANOM.spawn() then
                 D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
             else
-                D.special = nil
+                D.special = nil                    -- a normal round instead: its fighters (an Anomaly round had none)
+                local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
+                for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
+                log(string.format("round %d: no Anomaly; %d fighter flights instead", D.round, #f))
             end
         elseif u then
             local r = spawnFlight(u)
@@ -3169,7 +3184,6 @@ local function roundsTick(now)
     elseif D.state == "fighting" then
         if now < D.at then return end
         D.at = now + 1
-        specialTick(now)
         local alive, flights = 0, 0
         for u in pairs(D.up) do
             local n = SV_UnitAlive(u)
@@ -3629,6 +3643,12 @@ local function aircraftHealth()
 end
 
 -- The aircraft repair's price for `pct` health (CFG.shop.items.Airfield.aircraft), or nil when it's whole.
+-- (the shop's texts again when the aircraft's health changes: shopTick calls it)
+function SHOP.healthCheck()
+    local hp = aircraftHealth()
+    if hp ~= RUN.acHpShown then RUN.acHpShown, RUN.dirty = hp, true end
+end
+
 local function aircraftRepairPrice(pct)
     local a = CFG.shop.items.Airfield.aircraft
     if not (a and pct and pct < 100) then return nil end
@@ -3653,13 +3673,16 @@ function shopTexts()
                 cap and string.format(" (you have %d)", cap) or "")
         elseif it.aircraft and aircraftRepairPrice(aircraftHealth()) then
             local hp = aircraftHealth()
+            RUN.airOffer = "aircraft"
             label = string.format("%s   %d Z", it.aircraft.label, aircraftRepairPrice(hp))
             help = string.format("Repairs your aircraft to full health (now %d%%).", hp)
         elseif airfieldNeedsRepair() or not it.defences then
+            if it.aircraft then RUN.airOffer = "airfield" end
             label = string.format("%s +%d   %d Z", it.label, it.repair, price)
             help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
                 AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
         else
+            if it.aircraft then RUN.airOffer = "defence" end
             local o = defenceOffer()
             local aa, aaMax = defencesUp("aa")
             local sam, samMax = defencesUp("sam")
@@ -3686,6 +3709,11 @@ function shopBuy(name)
     local price = shopPrice(name)
     local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
     if shopClosed() then return done("CLOSED.") end
+    if it.aircraft then                              -- the row must still offer what it showed
+        local now = aircraftRepairPrice(aircraftHealth()) and "aircraft" or ((airfieldNeedsRepair() or not it.defences)
+            and "airfield" or "defence")
+        if RUN.airOffer and now ~= RUN.airOffer then return done("THIS ROW CHANGED: CHECK IT AND PRESS AGAIN.") end
+    end
     local acPrice = not it.kind and it.aircraft and aircraftRepairPrice(aircraftHealth())
     if acPrice then                                  -- your aircraft first, while it's damaged
         if RUN.credits < acPrice then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", acPrice)) end
@@ -3760,6 +3788,7 @@ local function shopTick(tick)
             end
         end
     end
+    if tick % 4 == 3 then pcall(SHOP.healthCheck) end
     if RUN.dirty then
         RUN.dirty = false
         local ok, err = pcall(shopTexts)

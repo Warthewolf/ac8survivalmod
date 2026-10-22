@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.14.1"
+#define RT_VERSION           L"0.14.2"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1802,10 +1802,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.14.1" */
+/* SV_Version() -> "0.14.2" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.14.1";
+    static const char v[] = "0.14.2";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2087,6 +2087,8 @@ static void RegisterLua(void* lua)
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
+    static wchar_t list[640];                                    /* the names registered, for the log */
+    size_t used = 0;
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
         MsvcString s; memset(&s, 0, sizeof(s));
         size_t n = 0;
@@ -2096,8 +2098,12 @@ static void RegisterLua(void* lua)
         s.size = n; s.cap = 15;
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
+        for (size_t c = 0; c < n && used + 3 < sizeof(list) / sizeof(list[0]); ++c) list[used++] = (wchar_t)kFns[i].name[c];
+        if (used + 3 < sizeof(list) / sizeof(list[0])) { list[used++] = L','; list[used++] = L' '; }
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
+    if (used >= 2) used -= 2;                                    /* the last ", " */
+    list[used] = 0;
+    Log(L"Lua bridge: %s registered", list);                     /* the ones that were, not a fixed list */
 }
 
 #define MOD_SLOTS 16
