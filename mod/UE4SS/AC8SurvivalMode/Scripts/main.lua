@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.34.0"
+local VERSION = "0.34.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2741,7 +2741,10 @@ local function airfieldTick(tick)
     for i = #AF.pending, 1, -1 do                   -- heavy bombers' bomb runs (bombTick), as the bombs land
         if tick >= AF.pending[i].due then AF.bomb = AF.bomb + AF.pending[i].dmg; table.remove(AF.pending, i) end
     end
-    local hp = math.max(0, AF.full - (hits - AF.base) * ac.hit_damage - (AF.bomb - AF.bombBase))
+    -- a hit count below the last one is a mission restart (the flags start over; the restart check resets the run a
+    -- tick later): no damage from it (log of 2026-10-22: "health 116" and an AIRFIELD UNDER ATTACK callout on a retry)
+    if hits < AF.hits then return end
+    local hp = math.max(0, math.min(CFG.airfield.hp, AF.full - (hits - AF.base) * ac.hit_damage - (AF.bomb - AF.bombBase)))
     if hits ~= AF.hits or hp ~= AF.hp then
         AF.hits = hits
         if hp ~= AF.hp then
