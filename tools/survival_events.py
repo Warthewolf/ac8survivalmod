@@ -15,6 +15,11 @@ desc again while its shot-down flight is still on the phase's unit list. The eve
   SV_FlightDown_NN    (one per pool flight, destroyed) SV_Alive -= 1, SV_Kills += 1 (for the Lua log), SV_Up_NN = 0
   RE_SV_Chase         every 6 s: teleport the chase dummy onto the player; for each flight that is up call
                       RE_SV_Chase_NN, which moves that flight's area onto the dummy
+  SV_BomberUp_NN      (one per bomber flight, BOMBERS) Mission 22's Comona Airport strike: unit area onto the airport,
+                      ground-only search, engagement order on the airfield unit (AIRFIELD_UNIT)
+  SV_AirfieldHit_N    (one per airfield dummy) a weapon an enemy fired at it ended there: SV_AirHits += 1 and
+                      Mission 22's explosion VFX on that dummy; Scripts/main.lua turns SV_AirHits into airfield health
+  RE_SV_AirfieldClose / RE_SV_AirfieldOpen   landing off / on (fired by Scripts/main.lua with SV_Event)
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,11 +43,23 @@ CHASE_UNIT = 'Unit_dummyN0'
 CHASE_OBJECT = 'A_Obj_01_dummyN0'
 CHASE_S = 6.0
 AREA_RADIUS_M = None if CHASE else 40000.0   # pool flights' RadiusInMeter (None: Mission 22's own 6000)
-KEEP_AT_START = {CHASE_UNIT: None} if CHASE else {}   # units spawned at mission start (name -> spawn point or None)
+# Milestone 3 (user, 2026-10-22: bombers that only attack the airfield). Mission 22's own Comona Airport strike
+# (tools/re/AIRFIELD_SUPPLY.md 2b): its Su-34s get the airport unit as their engagement target with a ground-only search
+# and fire at its invincible dummies; a MissedWeapon trigger on each dummy counts what reaches it. The target is
+# AB_Unit_01_Ground2 (the 4 dummies alone, Mission 22's landing-time target), spawned at mission start. The bomber
+# flights are Mission 22's strike desc and its three idle enemy fighter descs, cut to BOMBER_FLIGHT aircraft by
+# build_survival.py; Scripts/main.lua (CFG.airfield) picks their aircraft: Su-34, F-15E, Tu-95, Tu-160.
+AIRFIELD_UNIT = 'AB_Unit_01_Ground2'
+AIRFIELD_DUMMIES = [f'AB_Obj_01_Dummy{k}' for k in range(4, 8)]      # Mission 22's MissedWeapon_AreaB_0..3 dummies' twins
+AIRFIELD_MARK = 'AreaB_MarkActor0'
+BOMBERS = ['ERB_Unit_01_Air2', 'EA_Unit_01_Air0', 'EA_Unit_01_Air1', 'EA_Unit_01_Air2']
+BOMBER_FLIGHT = 2
+KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
+if CHASE: KEEP_AT_START[CHASE_UNIT] = None
 # Mission 8's music; it sits in the shared campaign BGM bank (DA_SoundDB_AKB_BGM_Campaign) with Mission 22's.
 MUSIC = 'AKE_Bgm_Ms08A_Play'
 # SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (chase).
-INT_FLAGS = ['SV_Alive', 'SV_Kills'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
+INT_FLAGS = ['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -171,6 +188,11 @@ def build_events(stock_ep):
     t_tp_unit = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[8] == 'Unit_dummyN0')
     t_tp_obj = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
     t_move = g.exec_template('LiveUnitMoveActor', '01_E_AreaA_ReinforcementAppearance_0')
+    # Mission 22's airport strike (records 1686, 1694, 2037) and its landing switch (2099)
+    t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
+    t_bsearch = g.exec_template('LiveAIChangeEnemySearchType', 'Default_CompositeEvent_98')   # GROUND_ONLY
+    t_bengage = g.exec_template('LiveAIEngagementOrder', 'Default_CompositeEvent_98')         # Normal, target unit, AIOnly
+    t_landing = g.exec_template('LiveSetTakeoffAndLandingEventExecution', 'Default_Campaign_ExterminationBattleSuccess')
     t_pause = g.exec_template('LiveSetPauseTimerExecution', 'Default_CompositeEvent_106')   # pause: true
     t_hide = g.exec_template('LiveHideRemainingTimerExecution', 'Default_CompositeEvent_106')
 
@@ -208,6 +230,24 @@ def build_events(stock_ep):
         flag(down, 'SV_Alive', 'Sub', 1)
         flag(down, 'SV_Kills', 'Add', 1)
         flag(down, f'SV_Up_{k + 1:02d}', 'Set', 0)
+    assert arg_values(t_bmove)[3] == AIRFIELD_MARK and arg_values(t_bsearch)[3] == 'GROUND_ONLY'
+    assert arg_values(t_bengage)[3] == 'Normal' and arg_values(t_bengage)[5] == 'AB_Unit_01_Ground0'
+    for k, unit in enumerate(BOMBERS):
+        up = f'SV_BomberUp_{k + 1:02d}'
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
+        g.execute(t_bmove, up, {0: unit}, delay=1.0)
+        g.execute(t_bsearch, up, {1: unit}, delay=2.0)
+        g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0)
+    for k, dummy in enumerate(AIRFIELD_DUMMIES):
+        hit = f'SV_AirfieldHit_{k + 1}'
+        t = g.trigger(f'MissedWeapon_AreaB_{k}', hit, arg_changes={4: dummy})      # LifeCount cleared: every hit
+        assert arg_values(t)[0] == 'EnemyNPC'
+        flag(hit, 'SV_AirHits', 'Add', 1)
+        g.execute(g.exec_template('LiveSetActiveVFXExecution', f'MissedWeapon_AreaB_{k}'), hit)
+    assert arg_values(t_landing)[0] == 'false'
+    for ev, on in (('RE_SV_AirfieldClose', 'false'), ('RE_SV_AirfieldOpen', 'true')):
+        g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
+        g.execute(t_landing, ev, {0: on})
     return g
 
 

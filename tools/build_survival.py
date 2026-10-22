@@ -197,9 +197,17 @@ def build_wd_global():
         if name in POOL_UNITS and survival_events.AREA_RADIUS_M:   # the spawner's pool, without chase: an area over the whole zone
             rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
                 (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))]
+        if name in survival_events.BOMBERS:    # bomber flights: their first BOMBER_FLIGHT aircraft (the first is a lead)
+            for p in rest_props:
+                if p[1] == 'AIObjectDescList':
+                    objs = p[3][1]
+                    assert len(objs) >= survival_events.BOMBER_FLIGHT, name
+                    assert any(q[1] == 'bGroupLead' and q[3] for q in objs[0][2]), name
+                    del objs[survival_events.BOMBER_FLIGHT:]
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
+    assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
     assert any(p[1] == 'CombatZoneDescList' for p in v[2])
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
@@ -373,6 +381,9 @@ def build_rows():
 # may be one that main.lua adds to DT_NPC at run time, as long as that happens before the level loads.
 NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
 NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
+# Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
+# of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
+NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common'])]
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
@@ -402,6 +413,18 @@ def build_npc_table():
         set_prop(row[2], npc_idx, 'NpcId', ('name', npc, 0))
         for n in (new_row, npc): z.nb.add(n)
         dt['rows'].append(((new_row, 0), row))
+    for table, wanted in NPC_IMPORT:
+        zs = ZenPkg(stock(table))
+        ds, os_ = dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')
+        assert os_ == len(zs.payloads[0])
+        srows = dict(ds['rows'])
+        for r in wanted:
+            assert (r, 0) not in rows, r
+            row = copy.deepcopy(srows[(r, 0)])
+            assert not any(p[3] and p[3][0] == 'obj' for p in row[2]), r              # names and values only
+            for n in names_in(row) + [r]: z.nb.add(n)
+            dt['rows'].append(((r, 0), row))
+            extra.append((r, table.rsplit('/', 1)[1], None))
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
     assert chk['rows'] == dt['rows']

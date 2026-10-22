@@ -22,7 +22,8 @@ tools/get_stock.sh \
   Datatables/Information/DT_LiveMissionTable.uasset \
   Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.uasset \
   LuaSource/Chronicle/AI/LA_PursueTarget_0011.uasset \
-  Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset
+  Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset \
+  Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py

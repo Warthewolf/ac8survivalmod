@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.13.0"
+local VERSION = "0.14.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -410,6 +410,27 @@ local CFG = {
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
     -- airframes; those keep their blueprint's own, e.g. su33 cobra but no kulbit), so early fighters never post-stall.
     maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a" } },
+    -- Airfield and bombers (Milestone 3; tools/survival_events.py AIRFIELD_* / BOMBERS, tools/re/AIRFIELD_SUPPLY.md).
+    -- The airfield starts at `hp`; every enemy weapon that reaches one of its 4 target points (the event package
+    -- counts them in SV_AirHits) takes hit_damage. At 0 it is down: landing closes (no rearming) until the end of the
+    -- round after, then it reopens at repair_hp. Bomber flights (2 aircraft, Mission 22's airport strike: they only
+    -- go for the airfield) join rounds from bombers.from_round, one more flight every `every` rounds, up to `max`;
+    -- Tu-95s and Tu-160s (`heavy`) from heavy_from_round. bombers.pool must match survival_events.BOMBERS.
+    airfield = {
+        enabled    = true,
+        hp         = 100,
+        hit_damage = 4,
+        repair_hp  = 50,
+        bombers = {
+            from_round = 3, every = 3, max = 3,
+            aircraft = { "su34_common", "f15e_common" },
+            heavy = { "tu95_common", "t160_common" },
+            heavy_from_round = 5,
+            distance_km = { 28, 36 },
+            altitude_m = { 1500, 3000 },
+            pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
+        },
+    },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
     -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
@@ -437,6 +458,10 @@ local CFG = {
         -- when the player locks on and covered ROUND at 244 (user screenshot, 2026-10-22).
         y                = 312,
         hide_game_timer  = true,                -- hide the stack's TIME row (Survival's mission clock is paused)
+        -- AIRFIELD row (under ROUND): health bar after the label (offsets from the row's left / top), then its number
+        airfield_bar     = { x = 270, dy = 15, w = 300, h = 24, frame = 3 },
+        warn_color       = { 1.0, 0.3, 0.2 },   -- the bar at or under warn_hp
+        warn_hp          = 25,
         line             = 68,                  -- row pitch of the game's stack
         font_size        = 37,                  -- the mission info panel's text: HUD typeface 37, spacing -70
         letter_spacing   = -70,
@@ -457,6 +482,15 @@ local CFG = {
             first_round  = "ROUND 1 IN: %s",
             complete     = "ROUND %d COMPLETE",
             complete_sub = "NEXT ROUND IN %d SECONDS",
+            airfield     = "AIRFIELD:",
+            airfield_down_row = "AIRFIELD: DOWN",
+            bombers      = "BOMBERS INBOUND",
+            bombers_sub  = "PROTECT THE AIRFIELD",
+            under_attack = "AIRFIELD UNDER ATTACK",
+            airfield_down     = "AIRFIELD DOWN",
+            airfield_down_sub = "NO REARMING UNTIL IT IS REPAIRED",
+            airfield_up       = "AIRFIELD REPAIRED",
+            airfield_up_sub   = "CLEARED TO LAND",
             start        = "ROUND %d",
             start_sub    = "HOSTILES INBOUND",
         },
@@ -1037,6 +1071,7 @@ local HUD_FONT = "/Game/UI/Font/UI_FontSet_ja.UI_FontSet_ja"
 local DESIGN_W, DESIGN_H = 3840, 2160
 local VIS = { Visible = 0, Collapsed = 1, Hidden = 2, HitTestInvisible = 3, SelfHitTestInvisible = 4 }
 local H = nil                      -- the HUD layer: { widget, tree, font, rowSlots, round, next, banner, ... }
+local AF = {}                      -- the airfield: { full, base, hits, hp, down, downRound, attackRound } (section "airfield")
 local hudGen, hudTries, hudOff = 0, 0, false
 local hudSaid = {}
 
@@ -1153,7 +1188,28 @@ local function hudBuild(pc)
     local hc = CFG.hud
     H.round = newText("Round"); H.next = newText("Next")
     slotIn(canvas, H.round, { 0, 0 }, { 0, 0 }, { hc.x, hc.y, 0, 0 }, { 0, 0 }, true)
-    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
+    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line * (CFG.airfield.enabled and 2 or 1), 0, 0 }, { 0, 0 }, true)
+    if CFG.airfield.enabled then       -- AIRFIELD: [=====     ] 85
+        local ab = hc.airfield_bar
+        H.air = newText("Airfield")
+        slotIn(canvas, H.air, { 0, 0 }, { 0, 0 }, { hc.x, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
+        local bar = newWidget("CanvasPanel", "AirBar")
+        slotIn(canvas, bar, { 0, 0 }, { 0, 0 }, { hc.x + ab.x, hc.y + hc.line + ab.dy, ab.w, ab.h }, { 0, 0 }, false)
+        newBar(bar, { 0, 0 }, { 1, 0 }, { 0, 0, 0, ab.frame })
+        newBar(bar, { 0, 1 }, { 1, 1 }, { 0, -ab.frame, 0, ab.frame })
+        newBar(bar, { 0, 0 }, { 0, 1 }, { 0, 0, ab.frame, 0 })
+        newBar(bar, { 1, 0 }, { 1, 1 }, { -ab.frame, 0, ab.frame, 0 })
+        local fill = newWidget("Image", "AirFill")
+        local c = CFG.hud.color
+        fill:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })
+        fill:SetRenderOpacity(CFG.hud.opacity)
+        local inset = ab.frame * 2
+        H.airFillW, H.airFillH = ab.w - inset * 2, ab.h - inset * 2
+        H.airFillSlot = slotIn(bar, fill, { 0, 0 }, { 0, 0 }, { inset, inset, H.airFillW, H.airFillH }, { 0, 0 }, false)
+        H.airFill, H.airBar = fill, bar
+        H.airNum = newText("AirfieldHP")
+        slotIn(canvas, H.airNum, { 0, 0 }, { 0, 0 }, { hc.x + ab.x + ab.w + 20, hc.y + hc.line, 0, 0 }, { 0, 0 }, true)
+    end
 
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
     local banner = newWidget("CanvasPanel", "Banner")
@@ -1242,6 +1298,18 @@ local function hudTick(now, paused, pc)
     pcall(hideGameTimer, now)
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
+    if H.air and AF.hp then
+        setText(H.air, "airStr", AF.down and t.airfield_down_row or t.airfield)
+        setText(H.airNum, "airNumStr", AF.down and "" or tostring(AF.hp))
+        local shown = not AF.down
+        if H.airBarShown ~= shown then H.airBar:SetVisibility(shown and VIS.HitTestInvisible or VIS.Collapsed); H.airBarShown = shown end
+        if H.airHp ~= AF.hp then
+            H.airHp = AF.hp
+            H.airFillSlot:SetSize({ X = math.max(0, H.airFillW * AF.hp / CFG.airfield.hp), Y = H.airFillH })
+            local c = AF.hp <= CFG.hud.warn_hp and CFG.hud.warn_color or CFG.hud.color
+            H.airFill:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })
+        end
+    end
     if D.state == "wait" then
         setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
@@ -1354,8 +1422,9 @@ local function hudDump(why)
 end
 
 -- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
-local function spawnPoint()
-    local lo, hi = CFG.distance_km[1], CFG.distance_km[2]
+local function spawnPoint(range)
+    range = range or CFG.distance_km
+    local lo, hi = range[1], range[2]
     for _ = 1, 30 do
         local b, d = math.random() * 360, lo + math.random() * (hi - lo)
         local x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
@@ -1365,7 +1434,35 @@ local function spawnPoint()
     return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
 end
 
+-- A bomber flight (CFG.airfield.bombers): its event-package orders send it at the airfield only.
+local function spawnBomber(unit)
+    local b = CFG.airfield.bombers
+    local list = {}
+    for _, a in ipairs(b.aircraft) do list[#list + 1] = a end
+    if D.round >= b.heavy_from_round then for _, a in ipairs(b.heavy) do list[#list + 1] = a end end
+    local ac = list[math.random(#list)]
+    local set = SV_SetAircraft(unit, ac)
+    local x, y, dist, bearing = spawnPoint(b.distance_km)
+    local alt = b.altitude_m[1] + math.random() * (b.altitude_m[2] - b.altitude_m[1])
+    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)
+    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
+        unit, ac, tostring(set), dist, bearing, alt / 1000,
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if r > 0 then
+        D.up[unit], D.flown[unit] = true, true
+        if D.bomberCallout ~= D.round then
+            D.bomberCallout = D.round
+            hudCallout(CFG.hud.text.bombers, CFG.hud.text.bombers_sub)
+        end
+    end
+    return r
+end
+
+local BOMBER_UNIT = {}
+for _, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u] = true end
+
 local function spawnFlight(unit)
+    if BOMBER_UNIT[unit] then return spawnBomber(unit) end
     local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)])
     if D.probeRound ~= D.round then                                           -- the round's first flight: probe aircraft
         D.probeRound = D.round
@@ -1408,7 +1505,15 @@ local function startRound()
         if #D.queue < want then D.queue[#D.queue + 1] = u else D.spare[#D.spare + 1] = u end
     end
     for i = want + 1, #flown do D.spare[#D.spare + 1] = flown[i] end
-    log(string.format("round %d: %d flights", D.round, want))
+    local b, nb = CFG.airfield.bombers, 0          -- bomber flights come last, after the fighters
+    if CFG.airfield.enabled and D.round >= b.from_round then
+        local free = {}
+        for _, u in ipairs(b.pool) do if not D.up[u] then free[#free + 1] = u end end
+        shuffled(free)
+        nb = math.min(1 + (D.round - b.from_round) // b.every, b.max, #free)
+        for i = 1, nb do D.queue[#D.queue + 1] = free[i] end
+    end
+    log(string.format("round %d: %d flights%s", D.round, want, nb > 0 and (" + " .. nb .. " bomber flights") or ""))
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive = "spawning", D.now, nil
 end
@@ -1456,6 +1561,67 @@ local function roundsTick(now)
             hudCallout(string.format(CFG.hud.text.complete, D.round),
                        string.format(CFG.hud.text.complete_sub, CFG.intermission_s))
         end
+    end
+end
+
+---------------------------------------------------------------------------------------------------- airfield
+-- Survival's event package counts every enemy weapon that ends on one of the airfield's 4 target points in the int
+-- flag SV_AirHits (tools/survival_events.py); the airfield's health is worked out here from the hits since the last
+-- repair, so nothing has to write the flag. SV_Event (dlls/main.dll 0.9.0) fires RE_SV_AirfieldClose / Open, which
+-- switch landing off and on (Mission 22's LiveSetTakeoffAndLandingEventExecution).
+local function intFlag(name)
+    local val
+    for _, c in ipairs(FindAllOf("LiveEventContainer") or {}) do
+        if valid(c) then
+            pcall(function()
+                c.FlagData.IntegerFiled:ForEach(function(k, v)
+                    if val ~= nil then return end
+                    local okK, n = pcall(function() return k:get():ToString() end)
+                    if okK and n == name then
+                        local okV, x = pcall(function() return v:get().Value end)
+                        if okV and type(x) == "number" then val = x end
+                    end
+                end)
+            end)
+        end
+        if val ~= nil then break end
+    end
+    return val
+end
+
+local function airfieldEvent(name)
+    if type(SV_Event) ~= "function" then return " (no SV_Event: dlls/main.dll older than 0.9.0)" end
+    local r = SV_Event(name)
+    return r == 1 and (" (" .. name .. ")") or (" (" .. name .. " not fired: " .. (SV_ERR[r] or tostring(r)) .. ")")
+end
+
+local function airfieldTick(tick)
+    local ac = CFG.airfield
+    if not ac.enabled or not D or tick % 4 ~= 0 then return end
+    local t = CFG.hud.text
+    local hits = intFlag("SV_AirHits")
+    if hits == nil then return end
+    if AF.base == nil then AF.base, AF.hits = hits, hits; log("airfield: health " .. AF.hp .. " (hits so far " .. hits .. ")") end
+    if hits ~= AF.hits then
+        AF.hits = hits
+        local hp = math.max(0, AF.full - (hits - AF.base) * ac.hit_damage)
+        if hp ~= AF.hp then
+            AF.hp = hp
+            log(string.format("airfield: hit (%d hits), health %d", hits, hp))
+            if hp <= 0 and not AF.down then
+                AF.down, AF.downRound = true, D.round
+                hudCallout(t.airfield_down, t.airfield_down_sub)
+                log("airfield: down, landing closed" .. airfieldEvent("RE_SV_AirfieldClose"))
+            elseif hp > 0 and AF.attackRound ~= D.round then
+                AF.attackRound = D.round
+                hudCallout(t.under_attack, nil)
+            end
+        end
+    end
+    if AF.down and D.state == "wait" and D.round > AF.downRound then
+        AF.down, AF.full, AF.base, AF.hp = false, ac.repair_hp, hits, ac.repair_hp
+        hudCallout(t.airfield_up, t.airfield_up_sub)
+        log("airfield: repaired to " .. ac.repair_hp .. ", landing open" .. airfieldEvent("RE_SV_AirfieldOpen"))
     end
 end
 
@@ -1666,6 +1832,7 @@ local function probeTick(tick)
             tostring(CFG.search.radius_m)))
         H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
+        AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false }
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
@@ -1694,6 +1861,8 @@ local function probeTick(tick)
             if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
             local okM, errM = pcall(musicTick, tick, now, paused)
             if not okM then log("music: error " .. tostring(errM)) end
+            local okF, errF = pcall(airfieldTick, tick)
+            if not okF then log("airfield: error " .. tostring(errF)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
