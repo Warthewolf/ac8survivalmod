@@ -510,6 +510,10 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   "Our economy relies on mercs like us." (v2501_0054) in place of Singleton's "Providing support" line; the shuttle
   countdown keeps Nagase only (the Professor / Baxter and Tasha rows dropped, their 28 s and 10 s groups not played),
   and the first-hit group loses Baxter's line. Untested.
+  Then (user): the takeoff is the mercenary's line alone (Singleton's v2216_0002 and Tasha's v0003_1682 dropped), and
+  he speaks as an ally: the level's speaker table is Survival's copy too (DT_SV_Speakers), his row without the enemy
+  ColorType and on Ally_Fighter_Mob processing (was Enemy_Fighter_Mob). Line IDs ending in digits without a leading
+  zero are stored split (v0003_1682 = ('v0003', 1683)): build_radio compares full names.
 - Economy check (user, 2026-10-23: "edit the rewards and check the economy again"; model: income per round against
   typical spending on missiles ~2-4 a kill by tier, special rounds, flares, aircraft and airfield repairs). Before:
   ordinary rounds broke even from round 8 and lost money from 16, and the airfield repair's x1.25 per purchase

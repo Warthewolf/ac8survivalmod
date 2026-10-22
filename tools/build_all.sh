@@ -24,7 +24,7 @@ tools/get_stock.sh \
   LuaSource/Chronicle/AI/LA_PursueTarget_0011.uasset \
   Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset \
   Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset \
-  Datatables/AI/NPC/DT_NPC.uasset   Datatables/Radio/DT_Rdo_ST_ms022.uasset \
+  Datatables/AI/NPC/DT_NPC.uasset   Datatables/Radio/DT_Rdo_ST_ms022.uasset Datatables/Radio/DT_SpeakerTable.uasset \
   Maps/Ingame/Mission015/EP_Mission015_global.uasset \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
