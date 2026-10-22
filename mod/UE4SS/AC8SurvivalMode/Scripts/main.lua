@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.22.2"
+local VERSION = "0.23.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -402,6 +402,7 @@ local CFG = {
     first_round_delay_s = 15,
     intermission_s      = 20,
     spawn_gap_s         = 3,                    -- between two flights of a round
+    orders_check_s      = 4,                    -- a fighter flight without its SV_Up_NN flag by then gets its orders again
     -- A round's size is an aircraft budget, filled with squadrons of 2, 4 and 6 (user, 2026-10-22): the world data's
     -- fighter flights are ERA_Unit_NN_Dep_Air0 2 aircraft, _Air1 4, _Air2 6 (tools/survival_events.py flight_size);
     -- a squadron size joins the draw from its from_round.
@@ -607,7 +608,7 @@ local CFG = {
             first_round  = "ROUND 1 IN: %s",
             complete     = "ROUND %d COMPLETE",
             complete_sub = "NEXT ROUND IN %d SECONDS",
-            credits      = "CREDITS: %d",
+            credits      = "ZOLLARS: %d",
             airfield     = "AIRFIELD:",
             airfield_down_row = "AIRFIELD: DOWN",
             bombers      = "BOMBERS INBOUND",
@@ -1224,7 +1225,7 @@ local RUN = { credits = 0, earned = 0, spent = 0, bonus = {}, bought = {}, msg =
 local function addCredits(n, why)
     if n <= 0 then return end
     RUN.credits, RUN.earned, RUN.dirty = RUN.credits + n, RUN.earned + n, true
-    RUN.msg = {}            -- a shop result ("NOT ENOUGH CREDITS ...") is stale once the credits change
+    RUN.msg = {}            -- a shop result ("NOT ENOUGH ZOLLARS ...") is stale once the credits change
     log(string.format("credits: +%d (%s), now %d", n, why, RUN.credits))
 end
 
@@ -1696,7 +1697,11 @@ local function spawnFlight(unit)
     log(string.format("round %d: %s%s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r > 0 then D.up[unit], D.flown[unit] = true, true end
+    if r > 0 then
+        D.up[unit], D.flown[unit] = true, true
+        D.orders = D.orders or {}
+        D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
+    end
     return r
 end
 
@@ -1774,6 +1779,50 @@ local function startRound()
     D.state, D.at, D.lastAlive = "spawning", D.now, nil
 end
 
+-- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
+-- under 100 m, or nowhere to be read (the landing menu may hide the aircraft). Landing isn't closed under a player
+-- who may be down there, so they can always take off again.
+local function playerOnAirfield()
+    local you = playerLocation()
+    if not you then return true end
+    local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
+    return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
+end
+
+-- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and RE_SV_FlightOrders_NN event).
+local function poolIndex(unit)
+    local n, k = unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
+    return n and (tonumber(n) - 1) * 3 + tonumber(k) + 1
+end
+
+-- A fighter flight's orders (player only, air search) come from its appearance trigger, which also sets SV_Up_NN. One
+-- that appeared while the landing menu was up never got them (test of 2026-10-22: two F-16 flights attacked the
+-- airfield), so a flight still unflagged CFG.orders_check_s after spawning gets them from RE_SV_FlightOrders_NN.
+local function ordersTick(now)
+    for u, o in pairs(D.orders) do
+        if now >= o.at then
+            local i, t = poolIndex(u), svFlags()
+            if not i or SV_UnitAlive(u) <= 0 then
+                D.orders[u] = nil
+            elseif not t or playerOnAirfield() then      -- grounded: the landing menu may be up
+                o.at = now + 1
+            elseif (t[string.format("SV_Up_%02d", i)] or 0) >= 1 then
+                if o.tries > 0 then log("orders: " .. u .. " has its orders now") end
+                D.orders[u] = nil
+            elseif o.tries >= 3 or type(SV_Event) ~= "function" then
+                log("orders: " .. u .. " never got its orders (SV_Up_" .. string.format("%02d", i) .. " still 0)")
+                D.orders[u] = nil
+            else
+                o.tries, o.at = o.tries + 1, now + 5
+                local ev = string.format("RE_SV_FlightOrders_%02d", i)
+                local r = SV_Event(ev)
+                log(string.format("orders: %s appeared without its orders; %s %s", u, ev,
+                    r == 1 and "fired" or ("not fired (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+            end
+        end
+    end
+end
+
 local function roundsTick(now)
     if not D then return end
     D.now = now
@@ -1781,6 +1830,8 @@ local function roundsTick(now)
         if not D.warned then log("rounds: the native spawner (dlls\\main.dll 0.6.0) did not register SV_Spawn: no enemies"); D.warned = true end
         return
     end
+    D.orders = D.orders or {}
+    ordersTick(now)
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
@@ -1789,6 +1840,12 @@ local function roundsTick(now)
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
+        if playerOnAirfield() then                 -- the landing menu may be up, and a flight that appears then gets no orders
+            if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end
+            D.at = now + 1
+            return
+        end
+        if D.held == D.round then D.held = nil; log(string.format("round %d: you took off, spawns go on", D.round)) end
         local u = table.remove(D.queue, 1)
         if u then
             local r = spawnFlight(u)
@@ -1835,16 +1892,6 @@ local function airfieldEvent(name)
     if type(SV_Event) ~= "function" then return " (no SV_Event: dlls/main.dll older than 0.9.0)" end
     local r = SV_Event(name)
     return r == 1 and (" (" .. name .. ")") or (" (" .. name .. " not fired: " .. (SV_ERR[r] or tostring(r)) .. ")")
-end
-
--- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
--- under 100 m, or nowhere to be read (the landing menu may hide the aircraft). Landing isn't closed under a player
--- who may be down there, so they can always take off again.
-local function playerOnAirfield()
-    local you = playerLocation()
-    if not you then return true end
-    local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
-    return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
 end
 
 local function airfieldTick(tick)
@@ -2222,7 +2269,7 @@ local function shopTexts()
             help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
                 AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
         end
-        help = string.format("CREDITS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
+        help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
     end
@@ -2234,7 +2281,7 @@ local function shopBuy(name)
     if not it then log("shop: unknown item " .. tostring(name)); return end
     local price = shopPrice(name)
     local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
-    if RUN.credits < price then return done(string.format("NOT ENOUGH CREDITS (%d needed).", price)) end
+    if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
     if it.kind then
         local k = it.kind
         if not (A and A.applied and A.caps and A.caps[k]) then return done("NOT AVAILABLE YET.") end
@@ -2245,7 +2292,7 @@ local function shopBuy(name)
         local gain = math.min(it.step, max - A.caps[k])   -- the last step up to the aircraft's full load costs less
         if gain < it.step then
             price = math.ceil(price * gain / it.step / 10) * 10
-            if RUN.credits < price then return done(string.format("NOT ENOUGH CREDITS (%d needed).", price)) end
+            if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
         end
         RUN.bonus[k] = (RUN.bonus[k] or 0) + gain
         for _, kk in ipairs(k == 2 and { 2, 3 } or { k }) do

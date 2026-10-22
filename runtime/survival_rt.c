@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.11.0"
+#define RT_VERSION           L"0.11.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -611,7 +611,7 @@ static TextRow g_text[] = {
     { L"SV_Mission_Location",  L"Comona Island", { 0 } },
     { L"SV_Mission_Objective", L"Survive as many rounds as you can. Protect the airfield.", { 0 } },
     { L"SV_Mission_Briefing",  L"Enemy waves grow every round, with a special attack every fifth. "
-                               L"Earn credits for kills and spend them at Comona Airport between rounds.", { 0 } },
+                               L"Earn zollars for kills and spend them at Comona Airport between rounds.", { 0 } },
 };
 
 static void InitText(void)
@@ -1678,10 +1678,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.11.0" */
+/* SV_Version() -> "0.11.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.11.0";
+    static const char v[] = "0.11.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

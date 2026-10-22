@@ -286,13 +286,19 @@ def build_events(stock_ep):
             call('RE_SV_Chase', ev, delay=0.5, conds=[g.cond(f'SV_Up_{k + 1:02d}', 'Geq', 1)])
             g.execute(t_move, ev, {0: unit, 1: CHASE_OBJECT, 3: 'NoneSelect'})
         call('RE_SV_Chase', 'RE_SV_Chase', delay=CHASE_S)
+    # RE_SV_FlightOrders_NN gives a flight the same orders as its appearance: a flight that appears while the player
+    # is in the landing menu never gets its appearance trigger (test of 2026-10-22: two F-16 flights spawned during a
+    # rearm kept Mission 22's PlayerFirst and attacked the airfield), so Scripts/main.lua fires it for an unflagged flight.
     for k, unit in enumerate(POOL):
         up, down = f'SV_FlightUp_{k + 1:02d}', f'SV_FlightDown_{k + 1:02d}'
+        orders = f'RE_SV_FlightOrders_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        flag(up, 'SV_Alive', 'Add', 1)
-        flag(up, f'SV_Up_{k + 1:02d}', 'Set', 1)
-        g.execute(t_search, up, {1: unit}, delay=2.0)
-        g.execute(t_engage, up, {1: unit, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', orders)                  # a remote-event trigger, as the chase's (tested)
+        for ev in (up, orders):
+            flag(ev, 'SV_Alive', 'Add', 1)
+            flag(ev, f'SV_Up_{k + 1:02d}', 'Set', 1)
+            g.execute(t_search, ev, {1: unit}, delay=2.0)
+            g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
         g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: unit})
         flag(down, 'SV_Alive', 'Sub', 1)
         flag(down, 'SV_Kills', 'Add', 1)
