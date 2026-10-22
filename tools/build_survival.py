@@ -469,30 +469,111 @@ def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit):
 SHOP_TABLE_STOCK = '/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands'
 SHOP_TABLE = DATA + 'DT_SV_ShopRows'
 SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/main.lua CFG.shop.items, same names
+# The STORE (user, 2026-10-23: "a special tab in there for the store items"; tools/re/AIRFIELD_SHOP_UI.md): the landing
+# menu's page list is the in-game menu table, and a landing row whose StringArgs is a number opens that menu. Survival
+# adds two pages of its own (DT_SV_MenuClassRows -> DT_IngameMenuSettingData at the main menu: indexes 20 and 21),
+# copies of the landing page (WBP_SV_Store*, with their own settings asset and command table), and one landing row,
+# STORE ("20"). Lua checks the game's menu list for them; without them it falls back to the 4 SHOP_ITEMS rows.
+STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
+    ('SV_Store', 'Store', 'SV_Store_Title',
+     ['Missiles', 'Special', 'Flares', 'RepairAircraft', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
+    ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
+     ['RepairAirfield', 'AAGun', 'SAM', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
+]
+STORE_ROW = ('SVShopStore', 'SV_Shop_Store', '20')      # the landing page's row that opens the first page
+LANDING_PAGE = '/Game/Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000'
+LANDING_SETTINGS = '/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings'
+MENU_TABLE = '/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData'
+UI = MOD + '/UI/'
 
 
-def build_shop_rows():
+def command_rows(z, dt, items, extra=()):
+    """LiveMenuCommandsDataTable rows: an item name -> SV_Buy_<item> with SV_Shop_<item> texts; 'takeoff' -> the stock
+    take-off row; (row name, title key, StringArgs) -> a page-change row. All copies of the stock take-off row."""
+    yes = dict(dt['rows'])[('1', 0)]
+    assert dict((q[1], q[3]) for q in yes[2])['StringArgs'] == s('-1')    # the take-off row
+    rows = []
+    for item in list(items) + list(extra):
+        row = copy.deepcopy(yes)
+        if item == 'takeoff':
+            name = 'SVTakeOff'
+        elif isinstance(item, tuple):
+            name, key, args = item
+            setv(row[2], 'TitleTextID', s(key))
+            setv(row[2], 'HelpTextID', s(key + '_Help'))
+            setv(row[2], 'StringArgs', s(args))
+        else:
+            name = 'SVShop' + item
+            setv(row[2], 'TitleTextID', s('SV_Shop_' + item))
+            setv(row[2], 'HelpTextID', s('SV_Shop_' + item + '_Help'))
+            setv(row[2], 'StringArgs', s('SV_Buy_' + item))
+        z.nb.add(name)
+        rows.append(((name, 0), row))
+    return rows
+
+
+def commands_table(new_path, items, extra=()):
     z = ZenPkg(stock(SHOP_TABLE_STOCK))
-    rename_package(z, SHOP_TABLE_STOCK, SHOP_TABLE)
+    rename_package(z, SHOP_TABLE_STOCK, new_path)
     p = bytes(z.payloads[0])
     dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveMenuCommandsDataTable')
     assert o == len(p), (o, len(p))
-    yes = dict(dt['rows'])[('1', 0)]
-    rows = []
-    for item in SHOP_ITEMS:
-        row = copy.deepcopy(yes)
-        assert dict((q[1], q[3]) for q in row[2])['StringArgs'] == s('-1')    # the take-off row
-        setv(row[2], 'TitleTextID', s('SV_Shop_' + item))
-        setv(row[2], 'HelpTextID', s('SV_Shop_' + item + '_Help'))
-        setv(row[2], 'StringArgs', s('SV_Buy_' + item))
-        name = 'SVShop' + item
-        z.nb.add(name)
-        rows.append(((name, 0), row))
-    dt['rows'] = rows
+    dt['rows'] = command_rows(z, dt, items, extra)
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveMenuCommandsDataTable')
     assert chk['rows'] == dt['rows']
-    save(z, SHOP_TABLE)
+    save(z, new_path)
+
+
+def build_shop_rows():
+    # the landing page's rows: the fallback items and STORE (Lua adds one or the other)
+    commands_table(SHOP_TABLE, SHOP_ITEMS, [STORE_ROW])
+    menu_rows = []
+    for menu_id, page, title, items in STORE_PAGES:
+        table, settings, widget = DATA + 'DT_SV_' + page + 'Commands', UI + 'DA_SV_' + page + 'Settings', UI + 'WBP_SV_' + page
+        commands_table(table, [i for i in items if not isinstance(i, tuple) and i != 'takeoff'],
+                       [i for i in items if isinstance(i, tuple)] + ['takeoff'])
+        # its settings asset: the landing page's, pointing at its own command table
+        z = ZenPkg(stock(LANDING_SETTINGS))
+        rename_package(z, LANDING_SETTINGS, settings)
+        old_t = SHOP_TABLE_STOCK
+        z.rename(old_t, table); z.rename(old_t.rsplit('/', 1)[1], table.rsplit('/', 1)[1])
+        assert table in z.names and old_t not in z.names
+        save(z, settings)
+        # the page: the landing page's widget blueprint under Survival's path (its objects keep their names: a zen
+        # package's export hashes are package-relative), its settings import retargeted, its title key renamed
+        z = ZenPkg(stock(LANDING_PAGE))
+        z.rename(LANDING_PAGE, widget)
+        retarget_import(z, LANDING_SETTINGS, settings)
+        z.rename('CampaignReturnTitle_Name_Resupply', title)
+        assert widget in z.names and LANDING_PAGE not in z.names
+        save(z, widget)
+        menu_rows.append((menu_id, widget))
+    # the menu-class rows: in-game menus Survival's landing rows open by number
+    z = ZenPkg(stock(MENU_TABLE))
+    rename_package(z, MENU_TABLE, DATA + 'DT_SV_MenuClassRows')
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveMenuClassTable')
+    assert o == len(p), (o, len(p))
+    rows = dict(dt['rows'])
+    hangar = [r for k, r in dt['rows'] if dict((q[1], q[3]) for q in r[2])['MenuID'] == ('name', 'IngameHagarMenu', 0)][0]
+    out = []
+    cls = LANDING_PAGE.rsplit('/', 1)[1] + '_C'
+    mc = {n: k for k, (n, t) in uprop.U.schema('LiveMenuClassTable').items()}      # (setv knows other schemas)
+    for menu_id, widget in menu_rows:
+        row = copy.deepcopy(hangar)
+        set_prop(row[2], mc['MenuID'], 'MenuID', ('name', menu_id, 0))
+        ref = dict((q[1], q[3]) for q in row[2])['MenuWidgetReference']
+        assert ref[0] == 'soft' and ref[1][1] == LANDING_PAGE and ref[2][1] == cls, ref
+        set_prop(row[2], mc['MenuWidgetReference'], 'MenuWidgetReference', ('soft', ('name', widget, 0), ('name', cls, 0), ref[3]))
+        name = menu_id.replace('_', '')
+        for n in (menu_id, widget, name): z.nb.add(n)
+        out.append(((name, 0), row))
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveMenuClassTable')
+    assert chk['rows'] == dt['rows']
+    save(z, DATA + 'DT_SV_MenuClassRows')
 
 
 def names_in(v):

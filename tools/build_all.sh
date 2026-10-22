@@ -29,7 +29,7 @@ tools/get_stock.sh \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
-  Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset
+  Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset   Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings.uasset   Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.uasset   Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000.uasset
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py

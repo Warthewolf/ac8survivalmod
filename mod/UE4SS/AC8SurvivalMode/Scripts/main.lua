@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.36.6"
+local VERSION = "0.37.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -695,8 +695,15 @@ local CFG = {
             -- airfield while that's damaged, then builds its defences (user: "purchase AA guns ... or SAM sites. Make
             -- them expensive"): Mission 22's airport AA guns and SAM sites, one unit each (tools/survival_events.py
             -- DEFENCES), built in `order`; a destroyed one can be built again. Each kind's price rises `raise` times.
-            Airfield = { repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
-                         aircraft = { label = "REPAIR AIRCRAFT", price = 600, min_price = 100 },
+            -- The STORE's own rows (user, 2026-10-23: "a special tab ... for the store items with their own icons";
+            -- tools/re/AIRFIELD_SHOP_UI.md): one per job on its two pages, SUPPLIES (missiles, special weapon, flares,
+            -- aircraft repair) and AIRFIELD (airfield repair, AA gun, SAM site). Without the STORE pages the four rows
+            -- above stand in, with Airfield doing three jobs in turn.
+            RepairAircraft = { role = "aircraft", label = "REPAIR AIRCRAFT", price = 600, min_price = 100, raise = 1.0 },
+            RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 25, price = 250, raise = 1.25 },
+            AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
+            SAM            = { role = "sam", label = "BUILD SAM SITE" },
+            Airfield = { role = "combined", repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
                              aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.25,
@@ -3554,9 +3561,30 @@ end
 local SHOP = {
     mine = "/Game/Mods/SurvivalMode/Data/DT_SV_ShopRows.DT_SV_ShopRows",
     game = "/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.DT_LiveMenuIngameHangarCommands",
+    -- the landing page's rows: STORE when Survival's store pages are in the game's menu list, else the four old ones
+    store = { "SVShopStore" },
     rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
+    all = { "SVShopStore", "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
+    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20 and 21 (STORE / AIRFIELD > rows "20",
+    -- "21"), added to the in-game menu table at the main menu, before a level builds its menu list from it
+    menuMine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows",
+    menuGame = "/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData",
+    menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 } },
+    -- each row's icon (stock textures; the aircraft repair shows the player's own plane when the game has its icon)
+    icons = {
+        Missiles = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
+        Special  = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_qaam_a0",
+        Flares   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
+        RepairAircraft = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP004_f15c",
+        RepairAirfield = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
+        Airfield = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
+        AAGun    = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
+        SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
+        ["20"]   = "/Game/NUI/Common/Texture/IconMenu/T_Menu_Common_IconMenu_Shop_000",          -- STORE, < SUPPLIES
+        ["21"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",                         -- AIRFIELD >
+    },
 }
-local SH = { added = false, addr = nil, warned = {} }
+local SH = { added = false, addr = nil, warned = {}, decor = {} }
 
 local function shopWarn(key, msg)
     if SH.warned[key] then return end
@@ -3578,11 +3606,19 @@ local function shopRowsTick(tick)
         local a = addrOf(game)
         if SH.addr ~= a then SH.addr, SH.added = a, false; pin(game, nameOf(game)) end
         if SH.added then return end
+        local store = SHOP.storeCheck()
+        if store == nil then return end                  -- (the game's menu list isn't readable yet)
+        local rows = store and SHOP.store or SHOP.rows
         local mine = loadObject(SHOP.mine)
         if not valid(mine) then shopWarn("mine", "could not load DT_SV_ShopRows"); return end
         pin(mine, nameOf(mine))
         local n = 0
-        for _, r in ipairs(SHOP.rows) do
+        for _, r in ipairs(SHOP.all) do                  -- the other set out (a level before had the other)
+            local keep = false
+            for _, k in ipairs(rows) do if k == r then keep = true end end
+            if not keep then dtCall(game, "RemoveRow", r) end
+        end
+        for _, r in ipairs(rows) do
             local _, have = dtCall(game, "FindRow", r)
             if have == nil then
                 local _, src = dtCall(mine, "FindRow", r)
@@ -3591,16 +3627,152 @@ local function shopRowsTick(tick)
             local _, now = dtCall(game, "FindRow", r)
             if now ~= nil then n = n + 1 end
         end
-        SH.added = n == #SHOP.rows
-        log(string.format("shop: %d of %d rows in the landing menu (%s)", n, #SHOP.rows, rowNames(game)))
+        SH.added = n == #rows
+        log(string.format("shop: %s: %d of %d rows in the landing menu (%s)", store and "the STORE" or "the shop rows",
+            n, #rows, rowNames(game)))
     elseif SH.addr then
         local game = StaticFindObject(SHOP.game)
         if valid(game) then
-            for _, r in ipairs(SHOP.rows) do dtCall(game, "RemoveRow", r) end
+            for _, r in ipairs(SHOP.all) do dtCall(game, "RemoveRow", r) end
             log("shop: rows taken out of the landing menu (not in Survival's level)")
         end
         SH.added, SH.addr = false, nil
     end
+end
+
+-- The store's pages into the in-game menu table, from the main menu on (the menu list is built when a level starts).
+-- SH.menuOk: both rows sit at the indexes the landing rows name (another mod's rows in that table would move them).
+function SHOP.menuSetup()
+    if SH.menuDone or not CFG.shop.enabled or not gameInstance() then return end
+    SH.menuTries = (SH.menuTries or 0) + 1
+    local game, mine = loadObject(SHOP.menuGame), loadObject(SHOP.menuMine)
+    if not (valid(game) and valid(mine)) then
+        if SH.menuTries >= 20 then SH.menuDone = true; log("shop: the store's menu tables didn't load; the shop rows stand in") end
+        return
+    end
+    pin(game, nameOf(game)); pin(mine, nameOf(mine))
+    for _, m in ipairs(SHOP.menuRows) do
+        local _, have = dtCall(game, "FindRow", m.row)
+        if have == nil then
+            local _, r = dtCall(mine, "FindRow", m.row)
+            if r ~= nil then dtCall(game, "AddRow", m.row, r) end
+        end
+    end
+    local at = {}
+    pcall(function()
+        local _, names = dtCall(game, "GetRowNames")
+        for i, n in ipairs(names) do at[n:ToString()] = i - 1 end
+    end)
+    SH.menuOk = true
+    for _, m in ipairs(SHOP.menuRows) do if at[m.row] ~= m.index then SH.menuOk = false end end
+    SH.menuDone = true
+    log(string.format("shop: the store's pages in the in-game menu table at %s / %s (want %d / %d)%s",
+        tostring(at[SHOP.menuRows[1].row]), tostring(at[SHOP.menuRows[2].row]), SHOP.menuRows[1].index,
+        SHOP.menuRows[2].index, SH.menuOk and "" or ": the shop rows stand in"))
+end
+
+-- In Survival's level: are the store's pages in the game's menu list (LiveMenuManager.MenuWidgetClassList, built from
+-- the table when the level started)? true / false, or nil while it can't be read yet.
+function SHOP.storeCheck()
+    if SH.store ~= nil then return SH.store end
+    if not SH.menuOk then SH.store = false; return false end
+    SH.storeTries = (SH.storeTries or 0) + 1
+    local ok, got = pcall(function()
+        local m = FindFirstOf("LiveMenuManager")
+        if not valid(m) then return nil end
+        local list = m.MenuWidgetClassList
+        local n = list:GetArrayNum()
+        local ids = {}
+        for _, e in ipairs(SHOP.menuRows) do
+            ids[#ids + 1] = e.index < n and list[e.index + 1].MenuIDName:ToString() or "-"
+        end
+        return { n = n, ids = ids }
+    end)
+    if ok and got then
+        SH.store = got.ids[1] == SHOP.menuRows[1].id and got.ids[2] == SHOP.menuRows[2].id
+        log(string.format("shop: the game's menu list has %d menus; 20 = %s, 21 = %s: %s", got.n, got.ids[1], got.ids[2],
+            SH.store and "the STORE is in" or "the shop rows stand in"))
+    elseif SH.storeTries >= 10 then
+        SH.store = false
+        log("shop: the game's menu list couldn't be read (" .. tostring(got) .. "); the shop rows stand in")
+    end
+    return SH.store
+end
+
+-- Icons on the landing menu's rows (any page of it: the landing page, the STORE pages): an Image in each row's own
+-- canvas, its label moved over (tools/re/AIRFIELD_SHOP_UI.md rank 2). Rows are reused, so each row's icon follows the
+-- StringArgs of the command it shows now.
+do
+local texCache = {}
+local function texture(path)
+    if texCache[path] == nil then
+        local name = path:match("[^/]+$")
+        texCache[path] = loadObject(path .. "." .. name) or false
+    end
+    return texCache[path] or nil
+end
+-- the player's own plane's icon (T_HUD_acIcon_PP<nnn>_<model>, from its BP_PlayerPlane_PP<nnnn>_<model>), if any
+local function planeIcon()
+    local ok, n = pcall(function() return nameOf(survivalPC.Pawn) end)
+    local num, model = ok and n and n:match("PP0*(%d+)_(%w+)")
+    if not num then return nil end
+    return texture(string.format("/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP%03d_%s", tonumber(num), model))
+end
+local function child(w, n)                           -- (childWidget, declared further down)
+    local ok, x = pcall(function() return w:GetWidgetFromName(FName(n)) end)
+    if ok and valid(x) then return x end
+    ok, x = pcall(function() return w[n] end)
+    return ok and valid(x) and x or nil
+end
+local function argsOf(list, k)
+    local ok, a = pcall(function() return list.CommandDatas[k].StringArgs:ToString() end)
+    return ok and a or nil
+end
+function SHOP.decorTick(tick)
+    if not CFG.shop.enabled or tick % 2 ~= 0 or not playerOnAirfield() then return end
+    local imgClass = StaticFindObject("/Script/UMG.Image")
+    if not valid(imgClass) then return end
+    for _, win in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
+        if liveWidget(win) then
+            local list = child(win, "WBP_Menu_Pause_List_000")
+            for k = 1, 6 do
+                local row = list and child(list, string.format("WBP_Menu_Text_Focus_000_%02d", k))
+                local args = row and argsOf(list, k)
+                local item = args and (args:match("^SV_Buy_(.+)$") or ((args == "20" or args == "21") and args))
+                local a = row and addrOf(row)
+                if a and item then
+                    local d = SH.decor[a]
+                    if not d or not valid(d.img) then
+                        local ok, err = pcall(function()
+                            local canvas = child(row, "CanvasPanel_79")
+                            if not canvas then error("no CanvasPanel_79 in the row") end
+                            local img = StaticConstructObject(imgClass, row.WidgetTree, FName(string.format("SV_StoreIcon_%d", k)))
+                            local slot = canvas:AddChildToCanvas(img)
+                            slot:SetPosition({ X = 92, Y = 20 }); slot:SetSize({ X = 48, Y = 48 })
+                            local hb = child(row, "HorizontalBox_59")         -- the label, moved right of the icon
+                            if hb then pcall(function() hb.Slot:SetPosition({ X = 152, Y = 0 }) end) end
+                            d = { img = img }
+                            SH.decor[a] = d
+                        end)
+                        if not ok and not SH.decorSaid then SH.decorSaid = true; log("shop: row icons failed: " .. tostring(err)) end
+                    end
+                    if d and d.item ~= item and valid(d.img) then
+                        local tex = (item == "RepairAircraft" and planeIcon()) or texture(SHOP.icons[item] or SHOP.icons.Airfield)
+                        if tex then pcall(function() d.img:SetBrushFromTexture(tex, false) end) end
+                        d.item = item
+                        if not SH.decorDone then SH.decorDone = true; log("shop: row icons on the landing menu") end
+                    end
+                elseif a and SH.decor[a] and valid(SH.decor[a].img) then     -- a stock row now: no icon
+                    pcall(function() SH.decor[a].img:SetVisibility(1) end)
+                    SH.decor[a].item, SH.decor[a].hidden = nil, true
+                end
+                if a and item and SH.decor[a] and SH.decor[a].hidden then
+                    pcall(function() SH.decor[a].img:SetVisibility(4) end); SH.decor[a].hidden = nil
+                end
+            end
+        end
+    end
+end
 end
 
 local shopTexts, shopBuy             -- (the shop's helpers stay inside the block: the 200-local limit)
@@ -3653,15 +3825,15 @@ local function aircraftHealth()
     return RUN.acHp
 end
 
--- The aircraft repair's price for `pct` health (CFG.shop.items.Airfield.aircraft), or nil when it's whole.
 -- (the shop's texts again when the aircraft's health changes: shopTick calls it)
 function SHOP.healthCheck()
     local hp = aircraftHealth()
     if hp ~= RUN.acHpShown then RUN.acHpShown, RUN.dirty = hp, true end
 end
 
+-- The aircraft repair's price for `pct` health (CFG.shop.items.RepairAircraft), or nil when it's whole.
 local function aircraftRepairPrice(pct)
-    local a = CFG.shop.items.Airfield.aircraft
+    local a = CFG.shop.items.RepairAircraft
     if not (a and pct and pct < 100) then return nil end
     return math.max(a.min_price, math.ceil(a.price * (100 - pct) / 100 / 10) * 10)
 end
@@ -3673,81 +3845,114 @@ local function defencesUp(kind)
     return n, #units
 end
 
+-- A free unit of defence `kind` and its price now (each one built makes the next of its kind dearer), or nil.
+local function defenceFor(kind)
+    local d = CFG.shop.items.Airfield.defences
+    local def = d and d[kind]
+    if not (def and D and nativeReady()) then return nil end
+    RUN.defences = RUN.defences or { built = 0, bought = {} }
+    for _, u in ipairs(def.units) do
+        if SV_UnitAlive(u) <= 0 then
+            return { kind = kind, unit = u, def = def,
+                     price = math.floor(def.price * def.raise ^ (RUN.defences.bought[kind] or 0) / 10 + 0.5) * 10 }
+        end
+    end
+    return nil
+end
+
+-- What item `name`'s row offers now: { role, label, help, price (nil: nothing to buy now), why (when there isn't),
+-- plus the defence's unit for aa / sam }. The texts, the purchases and the STORE's checks all go through it.
+local function offer(name)
+    local it = CFG.shop.items[name]
+    local o = { role = it.kind and "ammo" or it.role }
+    if o.role == "combined" then                     -- the old fourth row: aircraft, then airfield, then defences
+        o.role = aircraftRepairPrice(aircraftHealth()) and "aircraft" or (airfieldNeedsRepair() and "airfield" or "defence")
+    end
+    if o.role == "ammo" then
+        local cap = A and A.caps and A.caps[it.kind]
+        local max = A and A.max and A.max[it.kind]
+        o.label = string.format("%s +%d", it.label, it.step)
+        o.help = string.format("%d more %s. Landing doesn't rearm: you fly with what you buy%s.", it.step, it.what,
+            cap and string.format(" (you have %d)", cap) or "")
+        if cap and max and cap >= max then o.why = "ALREADY AT FULL LOAD." else o.price = shopPrice(name) end
+    elseif o.role == "aircraft" then
+        local hp = aircraftHealth()
+        o.label, o.price = CFG.shop.items.RepairAircraft.label, aircraftRepairPrice(hp)
+        o.help = string.format("Repairs your aircraft to full health (now %s%%).", tostring(hp or "?"))
+        if not o.price then o.why = "YOUR AIRCRAFT ISN'T DAMAGED." end
+    elseif o.role == "airfield" then
+        o.label = string.format("%s +%d", CFG.shop.items.RepairAirfield.label, it.repair)
+        o.help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
+            AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
+        if not AF.hp or AF.down then o.why = "THE AIRFIELD IS DOWN."
+        elseif AF.hp >= CFG.airfield.hp then o.why = "THE AIRFIELD IS NOT DAMAGED."
+        else o.price = shopPrice(name) end
+    else                                             -- a defence: aa / sam, or the old row's next one in turn
+        local aa, aaMax = defencesUp("aa")
+        local sam, samMax = defencesUp("sam")
+        local up = string.format(" (AA guns %d of %d, SAM sites %d of %d up)", aa, aaMax, sam, samMax)
+        local f = (o.role == "defence") and defenceOffer() or defenceFor(o.role)
+        local def = CFG.shop.items.Airfield.defences[o.role] or (f and f.def)
+        o.label = f and ("BUILD " .. f.def.label) or ((o.role == "defence" and "AIRFIELD DEFENCES" or ("BUILD " .. def.label)) .. ": ALL BUILT")
+        o.help = f and string.format("Builds %s at the airfield for the rest of the run%s.", f.def.what, up)
+            or ("Every one is up" .. up .. ".")
+        if f then o.price, o.unit, o.kind, o.def = f.price, f.unit, f.kind, f.def else o.why = "ALL BUILT." end
+    end
+    return o
+end
+
 function shopTexts()
     if type(SV_SetText) ~= "function" then return end
-    for name, it in pairs(CFG.shop.items) do
-        local price, label, help = shopPrice(name)
-        if it.kind then
-            local cap = A and A.caps and A.caps[it.kind]
-            label = string.format("%s +%d   %d Z", it.label, it.step, price)
-            help = string.format("%d more %s. Landing doesn't rearm: you fly with what you buy%s.", it.step, it.what,
-                cap and string.format(" (you have %d)", cap) or "")
-        elseif it.aircraft and aircraftRepairPrice(aircraftHealth()) then
-            local hp = aircraftHealth()
-            RUN.airOffer = "aircraft"
-            label = string.format("%s   %d Z", it.aircraft.label, aircraftRepairPrice(hp))
-            help = string.format("Repairs your aircraft to full health (now %d%%).", hp)
-        elseif airfieldNeedsRepair() or not it.defences then
-            if it.aircraft then RUN.airOffer = "airfield" end
-            label = string.format("%s +%d   %d Z", it.label, it.repair, price)
-            help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
-                AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
-        else
-            if it.aircraft then RUN.airOffer = "defence" end
-            local o = defenceOffer()
-            local aa, aaMax = defencesUp("aa")
-            local sam, samMax = defencesUp("sam")
-            local up = string.format(" (AA guns %d of %d, SAM sites %d of %d up)", aa, aaMax, sam, samMax)
-            if o then
-                label = string.format("BUILD %s   %d Z", o.def.label, o.price)
-                help = string.format("Builds %s at the airfield for the rest of the run%s.", o.def.what, up)
-            else
-                label = "AIRFIELD DEFENCES: ALL BUILT"
-                help = "Every AA gun and SAM site is up" .. up .. "."
-            end
-        end
-        if shopClosed() then help = CFG.hud.text.shop_closed end
+    RUN.offerShown = RUN.offerShown or {}
+    for name in pairs(CFG.shop.items) do
+        local o = offer(name)
+        RUN.offerShown[name] = o.role
+        local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
+        local help = shopClosed() and CFG.hud.text.shop_closed or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
     end
+    -- the STORE's own texts: its row on the landing page, its page titles and the rows between its pages
+    local z = string.format("ZOLLARS %d", RUN.credits)
+    SV_SetText("SV_Shop_Store", "STORE")
+    SV_SetText("SV_Shop_Store_Help", z .. ". Missiles, special weapons, flares, repairs and airfield defences.")
+    SV_SetText("SV_Store_Title", "AIRFIELD STORE: SUPPLIES   " .. z)
+    SV_SetText("SV_Store_TitleAirfield", "AIRFIELD STORE: AIRFIELD   " .. z)
+    SV_SetText("SV_Store_ToAirfield", "AIRFIELD >")
+    SV_SetText("SV_Store_ToAirfield_Help", z .. ". Airfield repairs, AA guns and SAM sites.")
+    SV_SetText("SV_Store_ToSupplies", "< SUPPLIES")
+    SV_SetText("SV_Store_ToSupplies_Help", z .. ". Missiles, special weapons, flares and aircraft repairs.")
 end
 
 -- One purchase; the result goes into the item's help line and the log.
 function shopBuy(name)
     local it = CFG.shop.items[name]
     if not it then log("shop: unknown item " .. tostring(name)); return end
-    local price = shopPrice(name)
     local function done(msg) RUN.msg[name] = msg; RUN.dirty = true; log("shop: " .. name .. ": " .. msg) end
     if shopClosed() then return done("CLOSED.") end
-    if it.aircraft then                              -- the row must still offer what it showed
-        local now = aircraftRepairPrice(aircraftHealth()) and "aircraft" or ((airfieldNeedsRepair() or not it.defences)
-            and "airfield" or "defence")
-        if RUN.airOffer and now ~= RUN.airOffer then return done("THIS ROW CHANGED: CHECK IT AND PRESS AGAIN.") end
+    local o = offer(name)
+    if RUN.offerShown and RUN.offerShown[name] and RUN.offerShown[name] ~= o.role then
+        return done("THIS ROW CHANGED: CHECK IT AND PRESS AGAIN.")       -- (the old fourth row's job moved on)
     end
-    local acPrice = not it.kind and it.aircraft and aircraftRepairPrice(aircraftHealth())
-    if acPrice then                                  -- your aircraft first, while it's damaged
-        if RUN.credits < acPrice then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", acPrice)) end
+    if not o.price then return done(o.why or "NOT AVAILABLE RIGHT NOW.") end
+    local price = o.price
+    if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
+    if o.role == "aircraft" then
         local before = aircraftHealth()
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
         if r ~= 1 then return done("COULD NOT REPAIR IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
-        RUN.credits, RUN.spent = RUN.credits - acPrice, RUN.spent + acPrice
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.acHp = 100                               -- (read again on the next text update)
-        return done(string.format("AIRCRAFT REPAIRED (%d%% -> full) for %d.", before, acPrice))
-    end
-    if not it.kind and it.defences and not airfieldNeedsRepair() then        -- the airfield is whole: a defence
-        local o = defenceOffer()
-        if not o then return done("ALL DEFENCES BUILT.") end
-        if RUN.credits < o.price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", o.price)) end
+        return done(string.format("AIRCRAFT REPAIRED (%s%% -> full) for %d.", tostring(before), price))
+    elseif o.unit then                               -- a defence
         local r = SV_Spawn(o.unit)
         if r <= 0 then return done("COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
-        RUN.credits, RUN.spent = RUN.credits - o.price, RUN.spent + o.price
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.defences.built = RUN.defences.built + 1
         RUN.defences.bought[o.kind] = (RUN.defences.bought[o.kind] or 0) + 1
-        return done(string.format("%s BUILT for %d (%s).", o.def.label, o.price, o.unit))
-    end
-    if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
-    if it.kind then
+        return done(string.format("%s BUILT for %d (%s).", o.def.label, price, o.unit))
+    elseif o.role == "ammo" then
         local k = it.kind
         if not (A and A.applied and A.caps and A.caps[k]) then return done("NOT AVAILABLE YET.") end
         local max = SV_Ammo(k, 1)                    -- unreadable on the landing menu: the last one seen in flight
@@ -3767,9 +3972,7 @@ function shopBuy(name)
                 else A.owed = A.owed or {}; A.owed[kk] = true end      -- unreadable now: ammoTick loads it
             end
         end
-    else
-        if not AF.hp or AF.down then return done("THE AIRFIELD IS DOWN.") end
-        if AF.hp >= CFG.airfield.hp then return done("THE AIRFIELD IS NOT DAMAGED.") end
+    else                                             -- the airfield
         AF.full, AF.base, AF.bombBase = math.min(CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
         AF.hp = AF.full                             -- airfieldTick works health out from these from now on
     end
@@ -3901,6 +4104,7 @@ local function probeTick(tick)
         log("level loaded: PL_SurvivalMode")
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
+        SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
         do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
             local an, got, want = CFG.specials.anomaly, 0, 0
             local function keep(path)
@@ -3966,6 +4170,8 @@ local function probeTick(tick)
         if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
+        local okM, errM = pcall(SHOP.menuSetup)
+        if not okM then log("shop: store setup error " .. tostring(errM)); SH.menuDone = true end
     end
     if D then
         if not valid(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
@@ -4013,6 +4219,8 @@ local function probeTick(tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
             local okS, errS = pcall(shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
+            local okI, errI = pcall(SHOP.decorTick, tick)
+            if not okI and not SH.decorErr then SH.decorErr = true; log("shop: row icons error " .. tostring(errI)) end
             local okA2, errA2 = pcall(hangarAmmoTick, tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end

@@ -35,11 +35,13 @@ Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start o
 - Bomber raids (every 3rd round) go for the airfield. At 0 health it's down: no landing for the rest of that round
   and the next one, then it comes back at half health.
 - Ammo: you take off with your difficulty's load, and landing does NOT refill it. Buy more at the airfield.
-- Land at Comona Airport between rounds. The landing menu has the shop rows:
-    MISSILES +12 / SPECIAL WEAPON +4 / FLARES +2   loaded straight onto your aircraft (same price every time)
-    REPAIR AIRCRAFT / REPAIR AIRFIELD               one row: your aircraft first while it's damaged, then the airfield
-    BUILD AA GUN / BUILD SAM SITE                   the same row once the airfield is at full health: defences that
-                                                    fire at enemies on their own (5 AA guns, 2 SAM sites; expensive)
+- Land at Comona Airport between rounds and pick STORE on the landing menu. It has two pages:
+    SUPPLIES: MISSILES +12 / SPECIAL WEAPON +4 / FLARES +2 (loaded straight onto your aircraft, same price every
+              time), REPAIR AIRCRAFT (to full health), AIRFIELD > and TAKE OFF
+    AIRFIELD: REPAIR AIRFIELD, BUILD AA GUN, BUILD SAM SITE (defences that fire at enemies on their own: 5 AA guns,
+              2 SAM sites; expensive), < SUPPLIES and TAKE OFF
+  Each item has its icon; the bottom line says what it does and how many zollars you have. (If the STORE can't be
+  added on your setup, the landing menu shows the four shop rows instead.)
 - Pause menu -> Music Player picks your music.
 
 Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite, Ace, then Mercenary, Legend, Demon,
