@@ -433,9 +433,14 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
   Mission 19's pad VFX. Key callouts only (countdown, pad under attack, liftoff); no allies. Fail = shuttle lost ->
   airfield / shop closed one round. (A shuttle script from another Claude session never reached this repo; 2026-10-22.)
-- [ ] Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
+- [~] Amphibious assault (user's pick, 2026-10-22): research done (SPECIAL_ROUNDS.md 12b: Mission 13's enemy LCAC
+  chain). Beaches: Lua traces see terrain only near the player (hard rule 27), so the user marks beaches with Ctrl+F10
+  (5 marks round Comona Airport, build/research/coast/), and the ground round each mark is sampled with what each trace
+  hit (config/coast_rings2.txt) to find the open water. Next: LCAC units (port M13 E_Unit02_02_Ship0 descs, NPC rows
+  lcac_common), lanes fleet -> beaches, landing -> troops, the round's rules.
+- [ ] (original) Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
   (Mission 13's enemy LCAC pattern; Mission 9's are allies on another map); new paths to Comona's shoreline.
-- [~] The Anomaly BUILT 2026-10-22 (Lua 0.33.0, runtime 0.14.0), untested. User's spec: MINDRIPPER in an F-4E
+- [~] The Anomaly BUILT 2026-10-22, TESTED (inversion, portal, kill confirmed; Lua 0.36.4, runtime 0.14.1). User's spec: MINDRIPPER in an F-4E
   (OP1003_f04e_Named skin, Survival name key), own HUD warning, mission-update beep at its start, the shuttle's focus
   camera on it. Specials rotate shuttle (5, 15, ...) / anomaly (10, 20, ...). Units SV_Unit_Anomaly (SV_Obj_Mindripper)
   and SV_Unit_AnomalyGuards (4, PHANTASM), copies of a pool flight on the F-4E rows (build_survival.py copy_unit).
@@ -447,7 +452,13 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   loaded by Lua at level load). Arrival (Lua 0.34.0; user: "the zoom in camera appears, then the portal, then
   MINDRIPPER"): spawned hidden, focus camera at 0.3 s, portal open at 1 s (NS_ElectricSign001 + NS_CloudLightning
   attached, x4), burst at 2.8 s (NS_ElectricDischargeM001 + NS_ms23FarFlash + M27 CoreElectricPlasma), shown; the
-  Celaeno core's electricity crackle on MINDRIPPER while it lives. Not yet: floating, orbiting guards.
+  Celaeno core's electricity crackle on MINDRIPPER while it lives. Later (from the user's tests): hidden straight after
+  SV_Spawn (it flashed for a tick); hovers (speed coefficients x0.06), +440 HP, turns +120/+270/+25; x5 aggression (own
+  _SVX fire control, specials too, pairs of missiles, provoke 0.2 s / 30 deg, surround 20-60 m); E-18G ECM pod (radar
+  area); guards on a 2 km unit area following it with a 5 km search module, loosed when it dies; the game's attack
+  throttle 8 missiles / 10 attackers / cooldowns 0.5-5 s while it's up (Mission 22 wave-3 values otherwise); its
+  lightning systems switched off after their time and at the kill; shuttle camera, ~20 km out (spawn_km optional).
+  Ctrl+F11 = Anomaly next round (testing). Open: true orbit of the guards if the area leash isn't enough.
   Test: [rounds] start_round = 10; "special: anomaly" lines; beep, WARNING, camera; inversion inside 3 km; kill.
 - [ ] (original) Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
   within ~5 km; inside ~3 km the player's pitch and roll invert (HUD warning, radar noise, glasses effect) until it dies.

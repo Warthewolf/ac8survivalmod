@@ -53,8 +53,9 @@ an "ACE INBOUND" callout names each one the first time it shows up.
 Special rounds (round 5, then every 5th, in turn):
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown. Liftoff pays 3000 zollars; if it's destroyed the shop is closed through the next round.
-- THE ANOMALY (round 10, 20, ...): the ace MINDRIPPER comes through a lightning portal in an F-4E with four PHANTASM
-  guards, hovering in place. It's tough. Within 3 km of it your pitch and roll invert. Shoot it down for 4000
+- THE ANOMALY (round 10, 20, ...): the ace MINDRIPPER comes through a lightning portal in an F-4E, hovering in place,
+  with four PHANTASM guards circling it. It's tough and very aggressive, and it carries an ECM pod (its area shows on
+  the radar; your missiles miss more near it). Within 3 km of it your pitch and roll invert. Shoot it down for 4000
   zollars and your controls come back. Nothing else flies in its round.
 
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
@@ -63,6 +64,14 @@ game after a change. Delete the file to get a fresh one.
 - To try the later rounds straight away, find [rounds] and add the line  start_round = 10  (the Anomaly),
   16 (the named aces) or 28 (the Reapers). Take it out again for a normal run.
 - Rename the aces under [aces.mercenary] ... [aces.reaper], and MINDRIPPER under [specials.anomaly].
+- After an update, new settings are added at the end of your survival.ini (switched off), with their notes.
+
+
+Test keys (in a Survival run)
+-----------------------------
+- Ctrl+F11: the next round is THE ANOMALY (between rounds it starts at once).
+- Ctrl+F10: mark a beach (fly low over it): the coming amphibious-assault round will land there. Marks go into
+  AC8SurvivalMode\config\coast_marks.txt - please send that file too.
 
 
 If something goes wrong

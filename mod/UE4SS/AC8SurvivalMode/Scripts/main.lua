@@ -2637,8 +2637,6 @@ function ANOM.spawn()
     return true
 end
 
--- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o` (offset: cm in its frame; scale:
--- the portal's by default); how many came up.
 local niagaraSaid = false
 -- Every system the Anomaly spawns, so none outlives it: { comp, offAt, goneAt }.
 ANOM.fx = {}
@@ -2665,6 +2663,8 @@ function ANOM.cleanFx(now, all)
     ANOM.fx = keep
 end
 
+-- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o` (offset: cm in its frame; scale:
+-- the portal's by default; life: seconds until it's switched off); how many came up.
 local function portalFx(list, o, offset, scale, life)
     local pc = CFG.specials.anomaly.portal
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
