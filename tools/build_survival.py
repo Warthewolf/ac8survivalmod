@@ -544,7 +544,18 @@ ACES = [  # (tier, key, lead DT_NPC row, wing DT_NPC row)
     ('reaper',    'f22a',    'OP1005_f22a_Named',      'OP1005_f22a_Shadow_99'),
     ('reaper',    'typhoon', 'OP1011_typn_Named',      'OP1011_typn_Shadow_37'),
     ('reaper',    'rafale',  'OP1014_rflm_Named',      'OP1011_typn_Shadow_39'),
+    ('reaper',    'adfx02',  'OP1021_su57_Named',      'OP1021_su57_Named'),        # model: ACE_MODELS
 ]
+# Airframes only Online Mode has (user, 2026-10-22: "ADFX-02 appears in the Online Mode"): their model rows are in
+# DT_NPC_Model_ON, not the campaign's DT_NPC_Model, so DT_SV_ModelRows carries copies (GameObjectId 1 like every
+# campaign model, Survival's text key for the aircraft name) that main.lua adds to DT_NPC_Model at the main menu, and
+# the ace rows above (copies of a campaign row, for its fire-control and weapon ids) are given that model, no skin.
+# Their blueprints (/Game/OnlineMode/Blueprint/AI/Actors/Plane/...) derive from the campaign's BP_AIPlane_Pawn.
+# (tier, key) -> (DT_SV_ModelRows row, DT_NPC_Model_ON row, text key). Keep in step with main.lua ACE.models.
+ACE_MODELS = {
+    ('reaper', 'adfx02'): ('SV_Model_adfx', 'OP1038_adfx02_L001', 'SV_Ac_adfx'),
+}
+MODEL_ON = '/Game/OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON'
 
 
 def ace_rows(tier, key):
@@ -567,11 +578,17 @@ def build_npc_rows():
     shuttle = copy.deepcopy(rows[('OP0057_sstb_01', 0)])
     edit_shuttle_npc(shuttle[2])
     out = [((survival_events.SHUTTLE_NPC, 0), shuttle)]
+    schema = uprop.U.schema('LiveNpcDataTable')
+    model_idx = [k for k, (n, t) in schema.items() if n == 'ModelId'][0]
+    skin_idx = [k for k, (n, t) in schema.items() if n == 'AirframeSkinId'][0]
     for tier, key, lead, wing in ACES:
         for src, (_, npc, text) in zip((lead, wing), ace_rows(tier, key)):
             f = survival_events.fname(src)
             row = copy.deepcopy(rows[(f[1], f[2])])
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+            if (tier, key) in ACE_MODELS:
+                set_prop(row[2], model_idx, 'ModelId', ('name', ACE_MODELS[(tier, key)][0], 0))
+                drop_prop(row[2], skin_idx)                               # the model's own look
             out.append(((npc, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
@@ -583,10 +600,38 @@ def build_npc_rows():
     save(z, DATA + 'DT_SV_NpcRows')
 
 
+def build_model_rows():
+    """DT_SV_ModelRows: ACE_MODELS' copies of Online Mode model rows, for main.lua to add to DT_NPC_Model."""
+    z = ZenPkg(stock(MODEL_ON))
+    rename_package(z, MODEL_ON, DATA + 'DT_SV_ModelRows')
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveModelDataTable')
+    assert o == len(p), (o, len(p))
+    rows = dict(dt['rows'])
+    schema = uprop.U.schema('LiveModelDataTable')
+    idx = {n: k for k, (n, t) in schema.items()}
+    out = []
+    for new, src, text in ACE_MODELS.values():
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(text))
+        set_prop(row[2], idx['GameObjectId'], 'GameObjectId', ('raw', 'Int', struct.pack('<i', 1)))
+        out.append(((new, 0), row))
+    for k, row in out:
+        for n in names_in(row) + [k[0]]: z.nb.add(n)
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveModelDataTable')
+    assert chk['rows'] == dt['rows']
+    print(f'  DT_SV_ModelRows: {len(out)} rows')
+    save(z, DATA + 'DT_SV_ModelRows')
+
+
 def build_rows():
     build_rows_table('/Game/Datatables/Information/DT_LiveMissionTable', DATA + 'DT_SV_MissionRows',
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
     build_npc_rows()
+    build_model_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
 

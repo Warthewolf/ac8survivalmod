@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.30.1"
+local VERSION = "0.31.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -551,11 +551,15 @@ local CFG = {
     aces = {
         enabled = true,
         callout = true,                            -- "ACE INBOUND" the first time each ace shows up in a run
+        -- airframes only Online Mode has (the ADFX-02: its model and blueprint come from Online Mode's tables, ACE.models).
+        -- false leaves them out (if one ever misbehaves offline); their tier flies the rest of its line-up.
+        online_aircraft = true,
         mercenary = { squadron = "Bounty",   f15c = "Ledger",   su35 = "Wager",    typhoon = "Payday" },
         legend    = { squadron = "Valkyrie", su47 = "Sigrun",   rafale = "Brynhild" },
         demon     = { squadron = "Inferno",  f22a = "Mephisto", su57 = "Belial" },
         phantom   = { squadron = "Wraith",   su57 = "Specter",  typhoon = "Revenant", su47 = "Banshee" },
-        reaper    = { squadron = "Harvest",  su57 = "Grim",     f22a = "Scythe",   typhoon = "Charon", rafale = "Nightfall" },
+        reaper    = { squadron = "Harvest",  su57 = "Grim",     f22a = "Scythe",   typhoon = "Charon", rafale = "Nightfall",
+                      adfx02 = "Oblivion" },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
@@ -986,8 +990,13 @@ local SPIKE_SUFFIX = { [0] = "", "b", "c", "d" }      -- tools/build_survival.py
 -- (DT_SV_NpcRows, added at the main menu) and text keys SV_Ace_<tier>_<key> (the ace) / SV_Sqn_<tier> (the squadron).
 local ACE = {
     roster = { mercenary = { "f15c", "su35", "typhoon" }, legend = { "su47", "rafale" }, demon = { "f22a", "su57" },
-               phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale" } },
+               phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale", "adfx02" } },
     row = function(tier, key, part) return "sv_ace_" .. tier .. "_" .. key .. "_" .. part end,
+    -- airframes from Online Mode (tools/build_survival.py ACE_MODELS): their model row (DT_SV_ModelRows) goes into the
+    -- campaign's DT_NPC_Model first, and their name (the model's GameObjectDisplayName01) is Survival's text
+    models = { adfx02 = { row = "SV_Model_adfx", key = "SV_Ac_adfx", name = "ADFX-02" } },
+    model_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_ModelRows.DT_SV_ModelRows",
+    model_table = "/Game/Datatables/AI/NPC/Model/DT_NPC_Model.DT_NPC_Model",
 }
 local function spikeLevel(round)
     local sp = CFG.spikes
@@ -1372,12 +1381,28 @@ local function searchSetup()
         local mine = loadObject(CFG.specials.shuttle.npc_rows)
         local nAces, names, lost = 0, 0, {}
         if mine then pin(mine, nameOf(mine)) end
+        local models = {}                          -- ACE.models key -> its model row is in DT_NPC_Model
+        if CFG.aces.online_aircraft then
+            local mt, mr = loadObject(ACE.model_table), loadObject(ACE.model_rows)
+            for _, t in ipairs({ mt, mr }) do if t then pin(t, nameOf(t)) end end
+            for k, m in pairs(ACE.models) do
+                local have = nil
+                if mt then local _; _, have = dtCall(mt, "FindRow", m.row) end
+                if have == nil and mt and mr then
+                    local _, r = dtCall(mr, "FindRow", m.row)
+                    if r ~= nil then dtCall(mt, "AddRow", m.row, r); _, have = dtCall(mt, "FindRow", m.row) end
+                end
+                models[k] = have ~= nil
+                if have ~= nil and type(SV_SetText) == "function" then SV_SetText(m.key, m.name) end
+                log("aces: model " .. m.row .. " (" .. m.name .. ") " .. (have ~= nil and "in DT_NPC_Model" or "NOT added; its aces sit out"))
+            end
+        end
         for tier, keys in pairs(ACE.roster) do
             local c = CFG.aces[tier] or {}
             if type(SV_SetText) == "function" and SV_SetText("SV_Sqn_" .. tier, tostring(c.squadron or tier)) == 1 then names = names + 1 end
             for _, k in ipairs(keys) do
                 if type(SV_SetText) == "function" and SV_SetText("SV_Ace_" .. tier .. "_" .. k, tostring(c[k] or k)) == 1 then names = names + 1 end
-                for _, part in ipairs({ "L", "W" }) do
+                for _, part in ipairs(ACE.models[k] and not models[k] and {} or { "L", "W" }) do
                     local row = "SV_Ace_" .. tier .. "_" .. k .. "_" .. part
                     local _, have = dtCall(npc, "FindRow", row)
                     if have == nil and mine then
