@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.30.0"
+local VERSION = "0.30.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -472,6 +472,7 @@ end)
 -- The event package gives each flight its orders when it appears (air-only search, engage the player) and counts
 -- SV_Alive / SV_Kills for this log. Must run on the game thread (the one tick below).
 local CFG = {
+    start_round         = 1,                    -- the run's first round (testing: e.g. 16 for the named aces)
     first_round_delay_s = 15,
     intermission_s      = 20,
     spawn_gap_s         = 3,                    -- between two flights of a round
@@ -1958,7 +1959,7 @@ local function hudTick(now, paused, pc)
     end
     local sp = D.special and D.special.state == "countdown" and D.special
     if D.state == "wait" then
-        setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))
+        setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))   -- (start_round > 1: NEXT ROUND)
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif sp then                                  -- Comona Defense: the countdown and the shuttle's health
         local hp = shuttleHealth()
@@ -3109,7 +3110,7 @@ local function probeTick(tick)
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
-        D = { round = 0, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
+        D = { round = math.max(1, math.floor(CFG.start_round)) - 1, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
         SR.usable = {}

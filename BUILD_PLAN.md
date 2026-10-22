@@ -411,7 +411,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   DT_NPC copy whose GameObjectDisplayName02 is a Survival text key (SV_Ace_<tier>_<key>, SV_Sqn_<tier>), texts from
   main.lua CFG.aces ([aces.<tier>] in survival.ini) through SV_SetText; the lead (index 0) is the ace when that ace
   isn't up already. They keep Survival's behaviour (world data), AI module, fire control and tier, not NLID_0400_CP.
-  Test: "aces:" lines; Su-57 / F-22A etc. arrive from round 16 (start = 16 to test sooner); the names show on the
+  Test: "aces:" lines; Su-57 / F-22A etc. arrive from round 16 ([rounds] start_round = 16 to test sooner); the names show on the
   target boxes; "ACE INBOUND" callout.
 - [ ] Ladon: the heavy boss (OP0045_ladn_01, 1200 HP, 16 child parts = ChildAIObjectDescs; EVENTS_AIRCRAFT.md).
 - [ ] Podarge drop / Land Aegis: port the drop chain the way Stonehenge's podarge_build did (from Mission 25).
