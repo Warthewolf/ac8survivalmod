@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.32.0"
+local VERSION = "0.32.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -800,7 +800,7 @@ local CFG = {
             bombers_sub  = "PROTECT THE AIRFIELD",
             under_attack = "AIRFIELD UNDER ATTACK",
             airfield_down     = "AIRFIELD DOWN",
-            airfield_down_sub = "NO REARMING UNTIL IT IS REPAIRED",
+            airfield_down_sub = "NO LANDING UNTIL AFTER ROUND %d",
             airfield_up       = "AIRFIELD REPAIRED",
             airfield_up_sub   = "CLEARED TO LAND",
             start        = "ROUND %d",
@@ -2539,7 +2539,7 @@ local function airfieldTick(tick)
             log(string.format("airfield: hit (%d hits, %d bomb damage), health %d", hits, AF.bomb, hp))
             if hp <= 0 and not AF.down then
                 AF.down, AF.downRound, AF.closePending = true, D.round, true
-                hudCallout(t.airfield_down, t.airfield_down_sub)
+                hudCallout(t.airfield_down, string.format(t.airfield_down_sub, D.round + 1))   -- airfieldTick reopens it then
                 log("airfield: down")
             elseif hp > 0 and AF.attackRound ~= D.round then
                 AF.attackRound = D.round
