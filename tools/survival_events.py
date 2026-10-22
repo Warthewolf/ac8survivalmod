@@ -448,6 +448,9 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
     t_glass_on = g.foreign_template(m15, 'LiveActivateGlassesEffectExecution')
     t_glass_off = g.foreign_template(m15, 'LiveDeactivateGlassesEffectExecution')
+    # its health bar on the HUD (Mission 6's LCAC records: tools/re/MINIMAP_MARKERS.md), from the portal's burst on
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_hp = g.foreign_template(m06, 'LiveUnitHealthDisplaySwitch', pred=lambda a, e: a[1] == 'All' and a[2] == 'true')
     t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
     t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')     # [BOTH_MISSILE, n, false]
     t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')   # 4 floats
@@ -475,6 +478,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
                                10: 'true'}, delay=2.5)
     flag(up, 'SV_AnomalyUp', 'Set', 1)
     attack(up, ANOMALY_ATTACK)
+    g.execute(t_hp, up, {0: ANOMALY_UNIT, 1: 'All', 2: 'true'}, delay=3.0)        # (Lua shows it at ~2.8 s)
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
     g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
     g.execute(t_noise, up, delay=1.0)
@@ -497,6 +501,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
         g.execute(t_sound, down, {0: key, 1: ANOMALY_OBJ}, delay=delay)
     for ev in (down, 'RE_SV_AnomalyEnd'):
         attack(ev, ATTACK_BASE)
+        g.execute(t_hp, ev, {0: ANOMALY_UNIT, 1: 'All', 2: 'false'})
         g.execute(t_engage, ev, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnlyNoLimit'})     # the guards, loose
         g.execute(t_move, ev, {0: ANOMALY_GUARD_UNIT, 5: f'{AREA_RADIUS_M}'})        # (Mission 22's mark, the whole zone)
         flag(ev, 'SV_AnomalyUp', 'Set', 0)

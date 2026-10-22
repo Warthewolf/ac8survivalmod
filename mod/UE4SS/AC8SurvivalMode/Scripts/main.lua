@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.36.5"
+local VERSION = "0.36.6"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -760,7 +760,8 @@ local CFG = {
         -- fading over fade_s; dlls/main.dll SV_Invert), with the stock glasses effect and radar noise; its
         -- round starts with the stock MISSION UPDATE beep, a forced WARNING and the focus camera on it. Shot down:
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
-        anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.0, invert = "both",
+        -- field_km 3.2: the ECM pod's ring on the radar is 3.2 km (BP_wp_ecm_a0), so the ring shows the field
+        anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "both",
                      fade_s = 1.5, reward = 4000, ai_level = 5, guard_offset_m = 800,
                      -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
                      -- to those levels should spawn")
@@ -1545,6 +1546,15 @@ local function searchSetup()
             m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5), m.arm_s / AGG, m.lock_s / AGG, m.interval_s / AGG,
             m.rest_s / AGG), "x")
     end
+    -- its ECM pod held up (tools/re/MINIMAP_MARKERS.md 3a: the stock row rests 30 s after each 15 s, so the radar ring
+    -- comes and goes): no rest, a new pod as the last one's 15 s run out, and up from 20 km so the ring is there first
+    local function anomEcm(src)
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.ActivationTime = 20000, 0.5
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 0.5, 14.0, 0
+            r.MagazineCapacity = 999
+        end, "MINDRIPPER's ECM pod: always up (no rest, every 14 s, from 20 km)", "x")
+    end
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
         return copy(fcs, src, function(r)
@@ -1670,7 +1680,8 @@ local function searchSetup()
                             local got = {}
                             for k, slot in ipairs(frees) do
                                 local w = AN.weapons[k]
-                                if w and not w:find("ECM") then w = anomFcs(w) or w end   -- its special weapons quicker too
+                                if w and w:find("ECM") then w = anomEcm(w) or w             -- its pod held up
+                                elseif w then w = anomFcs(w) or w end                       -- its special weapons quicker too
                                 if w then r["NpcFCSId" .. slot] = FName(w); got[#got + 1] = w end
                             end
                             if level == 0 then log("weapons: " .. svNpc .. " (MINDRIPPER) carries " .. table.concat(got, ", ")) end
