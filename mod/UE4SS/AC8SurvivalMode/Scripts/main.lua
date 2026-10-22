@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.3"
+local VERSION = "0.37.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -152,9 +152,11 @@ end
 
 local function hex(a) return a and string.format("%X", a) or "?" end
 
-local function rowNames(dt)
+-- A DataTable's row names in table order, as strings (nil when they can't be read). GetRowNames may hand back FNames
+-- or plain strings: a plain string has no ToString (test of 2026-10-23: the STORE's index check read nothing).
+local function rowList(dt)
     local ok, names = dtCall(dt, "GetRowNames")
-    if not ok or names == nil then return "?" end
+    if not ok or names == nil then return nil end
     local out = {}
     pcall(function()
         for _, n in ipairs(names) do
@@ -162,7 +164,12 @@ local function rowNames(dt)
             out[#out + 1] = okS and str or tostring(n)
         end
     end)
-    return table.concat(out, ", ")
+    return out
+end
+
+local function rowNames(dt)
+    local l = rowList(dt)
+    return l and table.concat(l, ", ") or "?"
 end
 
 local function gameInstance()
@@ -3694,10 +3701,7 @@ function SHOP.menuSetup()
     end
     log("shop: in-game menu table rows: " .. rowNames(game) .. " | DT_SV_MenuClassRows: " .. rowNames(mine))
     local at = {}
-    pcall(function()
-        local _, names = dtCall(game, "GetRowNames")
-        for i, n in ipairs(names) do at[n:ToString()] = i - 1 end
-    end)
+    for i, n in ipairs(rowList(game) or {}) do at[n] = i - 1 end
     SH.menuOk = true
     for _, m in ipairs(SHOP.menuRows) do if at[m.row] ~= m.index then SH.menuOk = false end end
     SH.menuDone = true
@@ -3719,7 +3723,8 @@ function SHOP.storeCheck()
         local n = list:GetArrayNum()
         local ids = {}
         for _, e in ipairs(SHOP.menuRows) do
-            ids[#ids + 1] = e.index < n and list[e.index + 1].MenuIDName:ToString() or "-"
+            local v = e.index < n and list[e.index + 1].MenuIDName
+            ids[#ids + 1] = not v and "-" or type(v) == "string" and v or v:ToString()
         end
         return { n = n, ids = ids }
     end)
