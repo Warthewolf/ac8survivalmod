@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.2"
+local VERSION = "0.35.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -517,6 +517,12 @@ local CFG = {
     ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
+    -- Comona's coastline for the amphibious-assault special (tools/re/SPECIAL_ROUNDS.md 12b: no stock mission lands
+    -- craft on this island, so the beaches aren't in any data). Once (while config\coast_scan.txt doesn't exist), at
+    -- the start of a run, straight-down traces on a step_km grid over the combat zone record the height each one hits,
+    -- per_tick at a time; tools/build_survival.py lays the landing paths from the file. Ctrl+F10 in flight adds a beach
+    -- mark (your position and the ground under you) to config\coast_marks.txt.
+    coast_scan = { enabled = true, step_km = 0.5, per_tick = 400 },
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
@@ -2804,6 +2810,85 @@ function ordersTick(now)
 end
 end
 
+-- The coast scan (CFG.coast_scan): heights in metres on the grid, "-" where a trace hit nothing.
+local coastTick, coastMark
+do
+local COAST = { i = 0 }
+local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
+-- the height (cm) a straight-down trace at x, y hits, or nil; the first call logs what the trace gave back
+local function groundAt(ks, x, y)
+    local hit = {}
+    local ok, r = pcall(function()
+        return ks:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
+            hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
+    end)
+    local z
+    pcall(function()
+        local h = hit.OutHit or hit
+        local l = h.ImpactPoint or h.Location
+        if l and l.Z then z = l.Z end
+    end)
+    if not COAST.said then
+        COAST.said = true
+        local keys = {}
+        for k in pairs(hit) do keys[#keys + 1] = tostring(k) end
+        log(string.format("coast: first trace: ok %s, returned %s, out fields {%s}, height %s", tostring(ok), tostring(r),
+            table.concat(keys, ", "), tostring(z)))
+    end
+    if ok and r then return z end
+    return nil
+end
+function coastTick()
+    local c = CFG.coast_scan
+    if not c.enabled or COAST.done or not valid(survivalPC) then return end
+    if COAST.i == 0 then
+        local f = io.open(configDir() .. "coast_scan.txt", "r")
+        if f then f:close(); COAST.done = true; return end
+        COAST.n = math.floor(2 * ZONE.HALF / (c.step_km * 100000))
+        COAST.rows, COAST.row, COAST.land, COAST.miss = {}, {}, 0, 0
+        log(string.format("coast: scanning %d x %d points (%.1f km apart) for the amphibious assault", COAST.n, COAST.n, c.step_km))
+    end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(ks) then return end
+    local n, step = COAST.n, c.step_km * 100000
+    for _ = 1, c.per_tick do
+        local i = COAST.i
+        if i >= n * n then
+            local f = io.open(configDir() .. "coast_scan.txt", "w")
+            if f then
+                f:write(string.format("# Survival coast scan %s: origin x %.0f y %.0f cm, step %.0f cm, %d x %d; rows = y, columns = x; height m\n",
+                    VERSION, ZONE.X - ZONE.HALF, ZONE.Y - ZONE.HALF, step, n, n))
+                f:write(table.concat(COAST.rows, "\n") .. "\n")
+                f:close()
+            end
+            COAST.done = true
+            log(string.format("coast: scan written to config\\coast_scan.txt (%d points above 3 m, %d with no hit)", COAST.land, COAST.miss))
+            return
+        end
+        local gx, gy = i % n, i // n
+        local z = groundAt(ks, ZONE.X - ZONE.HALF + (gx + 0.5) * step, ZONE.Y - ZONE.HALF + (gy + 0.5) * step)
+        COAST.row[#COAST.row + 1] = z and string.format("%.0f", z / 100) or "-"
+        if not z then COAST.miss = COAST.miss + 1 elseif z > 300 then COAST.land = COAST.land + 1 end
+        if gx == n - 1 then COAST.rows[#COAST.rows + 1] = table.concat(COAST.row, " "); COAST.row = {} end
+        COAST.i = i + 1
+    end
+end
+-- Ctrl+F10: a beach mark where the player is
+function coastMark()
+    local you = playerLocation()
+    if not you then return end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    local z = valid(ks) and groundAt(ks, you.X, you.Y)
+    local f = io.open(configDir() .. "coast_marks.txt", "a")
+    if f then
+        f:write(string.format("%.0f %.0f %.0f ground %s\n", you.X, you.Y, you.Z, z and string.format("%.0f", z) or "?"))
+        f:close()
+    end
+    hudCallout("BEACH MARKED", string.format("%.1f, %.1f KM", you.X / 100000, you.Y / 100000))
+    log(string.format("coast: mark at %.0f, %.0f, %.0f cm (ground %s)", you.X, you.Y, you.Z, tostring(z)))
+end
+end
+
 local function roundsTick(now)
     if not D then return end
     D.now = now
@@ -3677,6 +3762,8 @@ local function probeTick(tick)
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
+        local okC, errC = pcall(coastTick)
+        if not okC then log("coast: error " .. tostring(errC)); CFG.coast_scan.enabled = false end
     end
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
@@ -3799,6 +3886,14 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             if not ok then log("launch: error " .. tostring(err)) end
         end)
     end)
+    if Key.F10 then                -- Ctrl+F10: a beach mark (the amphibious assault's landing points)
+        pcall(RegisterKeyBind, Key.F10, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(coastMark)
+                if not ok then log("coast: mark error " .. tostring(err)) end
+            end)
+        end)
+    end
     if Key.F9 then                 -- Ctrl+F9: write the live HUD's layout to hud_dump.txt (any screen)
         pcall(RegisterKeyBind, Key.F9, mods, function()
             ExecuteInGameThread(function()
