@@ -561,8 +561,11 @@ def build_shuttle(g, flag):
     # Taking it and the pad's allies off after liftoff: Scripts/main.lua fires RE_SV_ShuttleRemove SHUTTLE_REMOVE_S after
     # it (test of 2026-10-22: records here on a delay gated on SV_ShuttleLaunched never ran, both units stayed up to
     # round 9: a delayed record's conditions are checked when its event fires, at the shuttle's appearance).
+    # LiveDestroyUnitExecution kills through TakeDamage(FLT_MAX), which is clamped at the object's MinHealth: the 1.0
+    # set before liftoff has to go back to 0 first (as M019/M021/M026 do), or the shuttle stays up with 1 HP.
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
-    g.execute(t_remove, 'RE_SV_ShuttleRemove')
+    g.execute(t_minhp, 'RE_SV_ShuttleRemove', {0: SHUTTLE, 3: '0.0'})
+    g.execute(t_remove, 'RE_SV_ShuttleRemove', delay=1.0)
     g.execute(t_remove, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'})
     # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
     # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions

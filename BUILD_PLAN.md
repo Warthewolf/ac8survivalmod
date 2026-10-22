@@ -428,6 +428,10 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   SHUTTLE n%. Launched: +3000 zollars. Lost: shop closed through the next round. Removed 60 s after liftoff.
   Framework done with it: specialFor (rotation), "SPECIAL ROUND n" callout, round clear waits for the special.
   Test: "special:" lines; radio lines play; strikers attack the pad; name shows; liftoff path; next special respawns.
+  Removal, 2nd report (2026-10-23, shuttle still up after liftoff): LiveDestroyUnitExecution kills through
+  TakeDamage(FLT_MAX) (Execute 0x1473e22c0 -> 0x1473e2840, vfunc +0xa38), and ModifyHealthInternal clamps health at
+  MinHealth, so the 1.0 set 20 s before liftoff kept it alive. Fix (untested): RE_SV_ShuttleRemove sets its MinHealth
+  back to 0.0 first (as M019/M021/M026 do), then destroys it 1 s later. The pad's objects have no floor in Survival's EP.
 - [ ] (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
   launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
