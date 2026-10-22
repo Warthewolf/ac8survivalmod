@@ -36,6 +36,8 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   - Mission 13: Call_BeforeTakeoff_BaseMinHealth (base minimum health before takeoff).
 - Show the bar as 0–100 regardless of the real HP value underneath.
 - Airfield HP carries over from round to round until it's repaired (user, 2026-10-23); repairs are bought at the STORE.
+- At 0 it's down: landing (and so the STORE) closes, and after the next round it comes back on its own at 50 HP
+  (user, 2026-10-23: keep). Losing it doesn't end the run.
 
 ## 5. Enemy roles
 - Bombers attack the airfield: spawn on paths that end at Comona Airport and drop on it (Mission 4 base-attack paths;
@@ -64,4 +66,3 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   config/coast_marks.txt are start points).
 
 ## Open decisions
-- Does losing the airfield end the run, or only close the shop?
