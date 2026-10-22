@@ -510,6 +510,13 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   "Our economy relies on mercs like us." (v2501_0054) in place of Singleton's "Providing support" line; the shuttle
   countdown keeps Nagase only (the Professor / Baxter and Tasha rows dropped, their 28 s and 10 s groups not played),
   and the first-hit group loses Baxter's line. Untested.
+- Economy check (user, 2026-10-23: "edit the rewards and check the economy again"; model: income per round against
+  typical spending on missiles ~2-4 a kill by tier, special rounds, flares, aircraft and airfield repairs). Before:
+  ordinary rounds broke even from round 8 and lost money from 16, and the airfield repair's x1.25 per purchase
+  compounded (the 20th 21700 Z): ~10000 by round 10, ~1600 by round 28. Lua 0.40.0: kill pay x the enemy's tier
+  (CFG.credits.tier_pay Rookie 1.0 ... Reaper 2.0), round_bonus 100 (was 50), shuttle 3000 + 100 x round, Anomaly
+  4000 + 150 x round, airfield repair 300 per 25 HP flat (raise 1.0). Model: ~18000 by round 10 (first ally),
+  ~64000 by 20, ~156000 by 30.
 - MOONCHILD: 2 flights of 2 F-22s (copies of M22's parked scramble F/A-18s, AB_Unit_01_Air1, not invincible), spawned
   once the player is airborne, 45 s apart; M22's own scramble chain (hold, taxi, roll, climb; PathFinish triggers);
   airborne: gear up, Normal / Default, AIR_ONLY, 40 km search module. Kept out of `planes` (no kill credit, no tiers).

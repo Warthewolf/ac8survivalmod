@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.39.1"
+local VERSION = "0.40.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -682,10 +682,15 @@ local CFG = {
         },
     },
     -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
-    -- bomber / heavy, the rest fighter; `models` is only used when a plane's flight can't be read) and for every round
-    -- cleared (round_bonus x the round), spent in the airfield shop.
+    -- bomber / heavy, the rest fighter; `models` is only used when a plane's flight can't be read), times tier_pay of
+    -- the enemy's skill tier (CFG.tiers.list order: Rookie x1.0 ... Reaper x2.0), and for every round cleared
+    -- (round_bonus x the round), spent in the STORE. Economy check of 2026-10-23 (user: "edit the rewards and check the
+    -- economy again"): with flat kill pay and round_bonus 50, ordinary rounds about broke even on ammo and repairs
+    -- from round 8 and lost money from 16 (the enemies take more missiles a kill, the pay stayed 100), so allies at
+    -- 15000-20000 were out of reach. Now (model): ~18000 by round 10, ~64000 by 20, ~156000 by 30.
     credits = {
-        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 50,
+        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 100,
+        tier_pay = { 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0 },
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
     },
     -- The airfield shop: rows on the landing menu (the in-game hangar's list, under Yes / No), added while Survival's
@@ -715,14 +720,15 @@ local CFG = {
             -- aircraft repair) and AIRFIELD (airfield repair, AA gun, SAM site). Without the STORE pages the four rows
             -- above stand in, with Airfield doing three jobs in turn.
             RepairAircraft = { role = "aircraft", label = "REPAIR AIRCRAFT", price = 600, min_price = 100, raise = 1.0 },
-            RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 25, price = 250, raise = 1.25 },
+            -- (raise 1.0, was 1.25: airfield repairs are upkeep every raid, and 1.25 compounding made the 20th one 21700)
+            RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 25, price = 300, raise = 1.0 },
             AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
             -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
             -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
             Moonchild      = { role = "ally_air",  label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
             ShipAegis      = { role = "ally_ship", ship = "Aegis", label = "AEGIS DESTROYER", price = 20000, raise = 1.25 },
-            Airfield = { role = "combined", repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
+            Airfield = { role = "combined", repair = 25, price = 300, raise = 1.0, label = "REPAIR AIRFIELD",
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
                              aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.25,
@@ -800,7 +806,8 @@ local CFG = {
         first    = 5,
         every    = 5,
         rotation = { "shuttle", "anomaly" },
-        shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, strike_share = 0.4,
+        -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
+        shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, reward_per_round = 100, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
                      -- (removed after it, tools/survival_events.py PAD_REMOVE_LOST_S / SHUTTLE_REMOVE_S)
                      -- remove_s: liftoff to the shuttle and pad being taken off; = SHUTTLE_REMOVE_S (its flags reset after it)
@@ -817,7 +824,7 @@ local CFG = {
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
         -- field_km 3.2: the ECM pod's ring on the radar is 3.2 km (BP_wp_ecm_a0), so the ring shows the field
         anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "both",
-                     fade_s = 1.5, reward = 4000, ai_level = 5, guard_offset_m = 800,
+                     fade_s = 1.5, reward = 4000, reward_per_round = 150, ai_level = 5, guard_offset_m = 800,
                      -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
                      -- to those levels should spawn")
                      only = true,
@@ -2848,8 +2855,9 @@ function ANOM.tick(now, s)
         log(string.format("special: %s down: its %d lightning systems switched off", c.name, live))
         local nb = fxAt(c.portal.burst, s.lastAt, c.portal.scale)             -- the lightning again where it fell
         log(string.format("special: %s's last burst (%d systems)", c.name, nb))
-        addCredits(c.reward, c.name .. " down")
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, c.reward))
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, c.name .. " down")
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
         log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
         return
     end
@@ -2918,8 +2926,9 @@ local function specialTick(now)
     elseif launched or over then
         s.state = "done"
         D.shuttleRemoveAt = now + c.remove_s            -- it and the pad's allies, once it's well up
-        addCredits(c.reward, "shuttle launched")
-        hudCallout(t.launched, string.format(t.launched_sub, c.reward))
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, "shuttle launched")
+        hudCallout(t.launched, string.format(t.launched_sub, pay))
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
             launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
             tostring(shuttleHealth())))
@@ -4487,7 +4496,16 @@ local function creditKill(p)
     elseif p.unit == false then
         kind = CFG.credits.models[model] or "fighter"
     end
-    addCredits(CFG.credits[kind] or 0, model .. " down (" .. kind .. ")")
+    -- its skill tier's pay (the tier it was given, else the round's own)
+    local list, ti = CFG.tiers.list, nil
+    for i, t in ipairs(list) do if t == p.tier then ti = i end end
+    if not ti then
+        for i, t in ipairs(list) do if D and D.round and D.round >= t.from_round then ti = i end end
+    end
+    local tp = CFG.credits.tier_pay or {}
+    local x = (ti and (tp[ti] or tp[#tp])) or 1
+    local pay = math.floor((CFG.credits[kind] or 0) * x / 10 + 0.5) * 10
+    addCredits(pay, string.format("%s down (%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or ""))
 end
 
 local function probeTick(tick)
