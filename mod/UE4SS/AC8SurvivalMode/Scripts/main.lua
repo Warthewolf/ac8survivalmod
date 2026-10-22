@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.39.0"
+local VERSION = "0.39.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -740,7 +740,8 @@ local CFG = {
     -- weapon they carry gets fire control of its own (rows <FCS>_SVA, made at the main menu): lock-on range x range_x,
     -- its cone x angle_x, arming, lock, aim and reload times x time_x, gun spread x spread_x. A ship type's own `fcs`
     -- goes further (rows <FCS>_SVA_<key>): arming and lock x lock_x, time between shots and rest x fire_x (user,
-    -- 2026-10-23: "make the Aegis Lock On faster and Fire Rate increase"). Enemies go for them: once MOONCHILD is airborne hunt_share of the enemy fighter
+    -- 2026-10-23: "make the Aegis Lock On faster and Fire Rate increase"), and range_x in place of the allies' (user:
+    -- the Aegis locks on and fires from 2x the stock range). Enemies go for them: once MOONCHILD is airborne hunt_share of the enemy fighter
     -- flights prefer it to you, and while ships are at sea strike_share of a normal round's aircraft (no specials, no
     -- raids) are strike flights sent at one of them.
     allies = {
@@ -751,7 +752,7 @@ local CFG = {
         aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
                          units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" } },
         ships        = {
-            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5 },
+            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0 },
                       units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD" } },
         },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
@@ -4193,15 +4194,15 @@ function ALLY.setup()
         local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
         if made[new] == nil then
             made[new] = cloneRow(fcs, src, new, function(r)
-                pcall(function() r.CaptureDistance = r.CaptureDistance * c.range_x end)
+                pcall(function() r.CaptureDistance = r.CaptureDistance * (sf and sf.range_x or c.range_x) end)
                 pcall(function() r.CaptureAngleRange = math.min(180, r.CaptureAngleRange * c.angle_x) end)
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
                 end
                 if sf then
                     pcall(function()
-                        shipSaid[#shipSaid + 1] = string.format("%s (arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s)",
-                            new, r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime, r.RestingTime)
+                        shipSaid[#shipSaid + 1] = string.format("%s (within %d m, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s)",
+                            new, math.floor(r.CaptureDistance), r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime, r.RestingTime)
                     end)
                 end
                 pcall(function()                     -- a gun's rounds: a tighter spread (a weapon row without one stays)
