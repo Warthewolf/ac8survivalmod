@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.6"
+local VERSION = "0.35.7"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -776,6 +776,9 @@ local CFG = {
                      -- damage at half the spread; every special weapon it has room for; it reacts to you `aggression`
                      -- times quicker (provoke) and sits closer on your tail (surround_m).
                      aggression = 5, provoke_cone_deg = 30, surround_m = { 20, 60 },
+                     -- its guards' search range: they see you only this close, so they stay circling it and jump you
+                     -- when you come near (test of 2026-10-22: with the 40 km search they left it for you and the airfield)
+                     guard_search_m = 5000,
                      -- its weapon slots after the gun and missiles: two special weapons and the E-18G ace's ECM pod
                      -- (user, 2026-10-22: "a warning to the minimap for MINDRIPPER, similar to what the ECM uses": the
                      -- game draws an ECM carrier's area on the radar itself; it also makes your missiles miss near it)
@@ -1549,6 +1552,12 @@ local function searchSetup()
         r.bEnableLostTargetInClouds = CFG.search.lose_in_clouds
     end)
     if not ok then return giveUp("module row not added: " .. tostring(why)) end
+    local guardModule = SEARCH_MODULE.row .. "_Guard"           -- the Anomaly's guards' (CFG.specials.anomaly.guard_search_m)
+    local okG = cloneRow(mod, SEARCH_MODULE.src, guardModule, function(r)
+        r.Radius = AN.guard_search_m
+        r.bEnableLostTargetInClouds = false
+    end)
+    log(string.format("special: the Anomaly's guards search %d m (%s)", AN.guard_search_m, okG and guardModule or "module NOT made"))
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
@@ -1608,7 +1617,7 @@ local function searchSetup()
                 if mrow == nil then error("no mission row " .. mname .. " in DT_SV_NpcMission") end
                 local svNpc = mrow.NpcId:ToString()
                 local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
-                    r.NpcAIModuleId = FName(SR.module)
+                    r.NpcAIModuleId = FName((a == ACE.row("anomaly", "f04e", "w") and okG) and guardModule or SR.module)
                     if a == ACE.row("anomaly", "f04e", "l") then          -- MINDRIPPER (CFG.specials.anomaly)
                         local an = CFG.specials.anomaly
                         local okE, errE = pcall(function()           -- (a failure keeps the row, as stock)
@@ -2865,7 +2874,7 @@ end
 end
 
 -- The coast scan (CFG.coast_scan): heights in metres on the grid, "-" where a trace hit nothing.
-local coastTick, coastMark
+local COASTF = {}                    -- tick, rings, mark (one local: the main chunk's 200-local limit)
 do
 local COAST = { i = 0 }
 local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
@@ -2892,7 +2901,7 @@ local function groundAt(ks, x, y)
     if ok and r then return z end
     return nil
 end
-function coastTick()
+function COASTF.tick()
     local c = CFG.coast_scan
     if not c.enabled or COAST.done or not valid(survivalPC) then return end
     if COAST.i == 0 then
@@ -2927,8 +2936,61 @@ function coastTick()
         COAST.i = i + 1
     end
 end
+-- Around each beach mark, once, when the player is within 2 km of it (the terrain's collision is only there near the
+-- player: the long-range scan only found sea planes): the ground in 8 directions at 0.5, 1, 2 and 3 km, written to
+-- config\coast_rings.txt, so tools/build_survival.py can tell which way the open water is.
+function COASTF.rings()
+    if COAST.ringsDone or not valid(survivalPC) then return end
+    COAST.marks = COAST.marks or {}
+    if not COAST.marksRead then
+        COAST.marksRead = true
+        local f = io.open(configDir() .. "coast_marks.txt", "r")
+        if f then
+            for line in f:lines() do
+                local x, y = line:match("^(%-?[%d.]+) (%-?[%d.]+)")
+                if x then COAST.marks[#COAST.marks + 1] = { X = tonumber(x), Y = tonumber(y) } end
+            end
+            f:close()
+        end
+        local r = io.open(configDir() .. "coast_rings.txt", "r")
+        COAST.ringed = {}
+        if r then
+            for line in r:lines() do local k = line:match("^mark (%d+)"); if k then COAST.ringed[tonumber(k)] = true end end
+            r:close()
+        end
+    end
+    local you = playerLocation()
+    if not you then return end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(ks) then return end
+    local left = 0
+    for k, m in ipairs(COAST.marks) do
+        if not COAST.ringed[k] then
+            left = left + 1
+            local dx, dy = you.X - m.X, you.Y - m.Y
+            if math.sqrt(dx * dx + dy * dy) < 200000 then
+                local parts = {}
+                for d = 0, 7 do
+                    local a = math.rad(d * 45)
+                    local hs = {}
+                    for _, km in ipairs({ 0.5, 1, 2, 3 }) do
+                        local z = groundAt(ks, m.X + math.cos(a) * km * 100000, m.Y + math.sin(a) * km * 100000)
+                        hs[#hs + 1] = z and string.format("%.0f", z / 100) or "-"
+                    end
+                    parts[#parts + 1] = (d * 45) .. ":" .. table.concat(hs, ",")
+                end
+                local f = io.open(configDir() .. "coast_rings.txt", "a")
+                if f then f:write(string.format("mark %d %.0f %.0f %s\n", k, m.X, m.Y, table.concat(parts, " "))); f:close() end
+                COAST.ringed[k] = true
+                log(string.format("coast: ground round beach mark %d sampled (deg:0.5,1,2,3 km heights m) %s", k, table.concat(parts, " ")))
+            end
+        end
+    end
+    if #COAST.marks > 0 and left == 0 then COAST.ringsDone = true end
+end
+
 -- Ctrl+F10: a beach mark where the player is
-function coastMark()
+function COASTF.mark()
     local you = playerLocation()
     if not you then return end
     local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
@@ -2940,6 +3002,7 @@ function coastMark()
     end
     hudCallout("BEACH MARKED", string.format("%.1f, %.1f KM", you.X / 100000, you.Y / 100000))
     log(string.format("coast: mark at %.0f, %.0f, %.0f cm (ground %s)", you.X, you.Y, you.Z, tostring(z)))
+    COAST.marksRead, COAST.ringsDone = false, false            -- (its ring is sampled while you're still near it)
 end
 end
 
@@ -3817,8 +3880,12 @@ local function probeTick(tick)
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
-        local okC, errC = pcall(coastTick)
+        local okC, errC = pcall(COASTF.tick)
         if not okC then log("coast: error " .. tostring(errC)); CFG.coast_scan.enabled = false end
+        if tick % 8 == 6 then
+            local okR, errR = pcall(COASTF.rings)
+            if not okR then log("coast: rings error " .. tostring(errR)) end
+        end
     end
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
@@ -3964,7 +4031,7 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
     if Key.F10 then                -- Ctrl+F10: a beach mark (the amphibious assault's landing points)
         pcall(RegisterKeyBind, Key.F10, mods, function()
             ExecuteInGameThread(function()
-                local ok, err = pcall(coastMark)
+                local ok, err = pcall(COASTF.mark)
                 if not ok then log("coast: mark error " .. tostring(err)) end
             end)
         end)
