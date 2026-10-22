@@ -108,6 +108,7 @@ ANOMALY_SOURCE = 'ERA_Unit_01_Dep_Air1'     # a 4-ship of the pool
 ANOMALY_UNIT = 'SV_Unit_Anomaly'
 ANOMALY_GUARD_UNIT = 'SV_Unit_AnomalyGuards'
 ANOMALY_GUARDS = 4
+ANOMALY_GUARD_RADIUS_M = 2000.0             # its guards' unit area, on it: they circle inside it
 ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
 # The arrival (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER"): it spawns hidden
 # (Scripts/main.lua CFG.specials.anomaly.portal) and the focus camera swings onto it at once; Lua opens the portal on it
@@ -412,7 +413,7 @@ def build_events(stock_ep):
         g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
         g.execute(t_landing, ev, {0: on})
     build_shuttle(g, flag)
-    build_anomaly(g, flag, stock_ep, t_search, t_engage)
+    build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
     build_repair(g, stock_ep)
     return g
 
@@ -426,7 +427,7 @@ def build_repair(g, stock_ep):
     g.execute(t_restore, 'RE_SV_RepairAircraft')
 
 
-def build_anomaly(g, flag, stock_ep, t_search, t_engage):
+def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     """The Anomaly (see ANOMALY_*): MINDRIPPER's appearance, its guards' orders, its death, and the field's effects
     Scripts/main.lua switches with RE_SV_AnomalyFieldOn / RE_SV_AnomalyFieldOff (RE_SV_AnomalyEnd: everything off)."""
     assert ANOMALY_OBJ, 'build_survival.py build_wd_global sets ANOMALY_OBJ first'
@@ -446,9 +447,17 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage):
     up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', guards, arg_changes={0: ANOMALY_GUARD_UNIT})
-    for ev, unit in ((up, ANOMALY_UNIT), (guards, ANOMALY_GUARD_UNIT)):      # the pool's orders: the player, air search
-        g.execute(t_search, ev, {1: unit}, delay=2.0)
-        g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+    g.execute(t_search, up, {1: ANOMALY_UNIT}, delay=2.0)                    # MINDRIPPER: the pool's orders
+    g.execute(t_engage, up, {1: ANOMALY_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+    # Its guards circle it (user, 2026-10-22: "they need to circle MINDRIPPER, currently they leave mindripper alone
+    # after they sight the player"): Mission 26's escort pattern, their unit area on it (ANOMALY_GUARD_RADIUS_M,
+    # following it: arg 10 true, as Start_WaveI_UAV_Setting keeps the UAVs on the x40a), and PlayerOnly instead of the
+    # pool's PlayerOnlyNoLimit, so they attack the player near it and go back to it. Once it's down they hunt the player.
+    assert arg_values(t_move)[1] == 'NoneSelect' and arg_values(t_move)[10] == 'false', arg_values(t_move)
+    g.execute(t_search, guards, {1: ANOMALY_GUARD_UNIT}, delay=2.0)
+    g.execute(t_engage, guards, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnly'}, delay=2.0)
+    g.execute(t_move, guards, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}',
+                               10: 'true'}, delay=2.5)
     flag(up, 'SV_AnomalyUp', 'Set', 1)
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
     g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
@@ -471,6 +480,8 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage):
     for delay, key in ANOMALY_DOWN_SOUNDS:
         g.execute(t_sound, down, {0: key, 1: ANOMALY_OBJ}, delay=delay)
     for ev in (down, 'RE_SV_AnomalyEnd'):
+        g.execute(t_engage, ev, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnlyNoLimit'})     # the guards, loose
+        g.execute(t_move, ev, {0: ANOMALY_GUARD_UNIT, 5: f'{AREA_RADIUS_M}'})        # (Mission 22's mark, the whole zone)
         flag(ev, 'SV_AnomalyUp', 'Set', 0)
         g.execute(t_warn_off, ev)
         g.execute(t_noise_off, ev)
