@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.7"
+local VERSION = "0.35.8"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2568,6 +2568,21 @@ function ANOM.spawn()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     local top = #CFG.tiers.list
     D.flightTier = D.flightTier or {}
+    -- hidden the moment they exist (user, 2026-10-22: "MINDRIPPER spawned in for a singular moment before it actually
+    -- goes into hidden mode"): the planes are created inside SV_Spawn (NotifyOnNewObject queues them in `pending`), so
+    -- they're hidden right after it returns, before a frame is drawn, not on the next tick
+    ANOM.hidden = {}
+    local portal = c.portal.enabled
+    local function hideNew(unit)
+        local n = 0
+        for _, q in ipairs(pending) do
+            local a = q.unit == unit and valid(q.obj) and addrOf(q.obj)
+            if a and not ANOM.hidden[a] and pcall(function() q.obj:SetActorHiddenInGame(true) end) then
+                ANOM.hidden[a], n = q.obj, n + 1
+            end
+        end
+        return n
+    end
     for k, part in ipairs({ { c.unit, lead }, { c.guard_unit, wing } }) do
         local unit, row = part[1], part[2]
         local set = SV_SetAircraft(unit, searchAircraft(row, level))
@@ -2576,6 +2591,10 @@ function ANOM.spawn()
         spawningUnit = unit
         local r = SV_Spawn(unit, x + off, y + off, alt * 100, (bearing + 180) % 360)
         spawningUnit = nil
+        if portal and r > 0 then
+            local h = hideNew(unit)
+            if h < r then log(string.format("special: anomaly %s: %d of %d hidden at once (the rest on the next tick)", unit, h, r)) end
+        end
         log(string.format("special: anomaly %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", unit, row,
             tostring(set), dist, bearing, alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
         if r > 0 then
@@ -2586,7 +2605,6 @@ function ANOM.spawn()
     end
     local pawn = valid(survivalPC) and survivalPC.Pawn
     ANOM.pawn = pawn and addrOf(pawn) or nil
-    ANOM.hidden = {}                               -- the portal hides them until its burst (ANOM.tick)
     -- the camera first (it looks at the hidden MINDRIPPER), then the portal opens on it, then it shows
     local cam = 1
     for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
