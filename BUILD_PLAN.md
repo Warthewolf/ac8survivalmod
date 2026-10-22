@@ -432,6 +432,11 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   TakeDamage(FLT_MAX) (Execute 0x1473e22c0 -> 0x1473e2840, vfunc +0xa38), and ModifyHealthInternal clamps health at
   MinHealth, so the 1.0 set 20 s before liftoff kept it alive. Fix (untested): RE_SV_ShuttleRemove sets its MinHealth
   back to 0.0 first (as M019/M021/M026 do), then destroys it 1 s later. The pad's objects have no floor in Survival's EP.
+  Report 2026-10-23: the shuttle never took damage. It's an AI plane (Blueprints/Vehicle/AI/Plane/OP0057_sstb; its
+  durability row NPC_WPDur_001_MS22 takes full damage), and its strike flights got the airport strike's GROUND_ONLY
+  search. Fix (Lua 0.37.2, untested): in a shuttle round they search AIR_AND_GROUND with Mission 22's own order on its
+  attackers (RE_Wave02_TargetUpdate: AttackOnly, AIOnly) on SV_Unit_Shuttle; Lua logs health / hits / nearest strike
+  aircraft every 10 s of the countdown ("special: shuttle N s in").
 - [ ] (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
   launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with

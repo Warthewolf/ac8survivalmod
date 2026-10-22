@@ -358,6 +358,8 @@ def build_events(stock_ep):
     t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
     t_bsearch = g.exec_template('LiveAIChangeEnemySearchType', 'Default_CompositeEvent_98')   # GROUND_ONLY
     t_bengage = g.exec_template('LiveAIEngagementOrder', 'Default_CompositeEvent_98')         # Normal, target unit, AIOnly
+    # Mission 22's order on its shuttle attackers (RE_Wave02_TargetUpdate): AttackOnly on the pad unit, AIOnly
+    t_sengage = g.exec_template('LiveAIEngagementOrder', 'RE_Wave02_TargetUpdate')
     t_landing = g.exec_template('LiveSetTakeoffAndLandingEventExecution', 'Default_Campaign_ExterminationBattleSuccess')
     t_fire = g.exec_template('LiveFireOneShotWeapon', '01_A_Wave03_ReinforcementAppearance_0')   # WN_WEAPON_4, no target
     t_pause = g.exec_template('LiveSetPauseTimerExecution', 'Default_CompositeEvent_106')   # pause: true
@@ -390,17 +392,22 @@ def build_events(stock_ep):
         flag(down, f'SV_Up_{k + 1:02d}', 'Set', 0)
     assert arg_values(t_bmove)[3] == AIRFIELD_MARK and arg_values(t_bsearch)[3] == 'GROUND_ONLY'
     assert arg_values(t_bengage)[3] == 'Normal' and arg_values(t_bengage)[5] == 'AB_Unit_01_Ground0'
+    assert arg_values(t_sengage)[3] == 'AttackOnly' and arg_values(t_sengage)[5] == PAD_UNIT and arg_values(t_sengage)[6] == 'AIOnly'
     on_airfield = lambda: [g.cond('SV_ShuttleRound', 'Leq', 0)]
     on_shuttle = lambda: [g.cond('SV_ShuttleRound', 'Geq', 1)]
     for k, unit in enumerate(BOMBERS):
         up = f'SV_BomberUp_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
         g.execute(t_bmove, up, {0: unit}, delay=1.0, conds=on_airfield())
-        g.execute(t_bsearch, up, {1: unit}, delay=2.0)
+        g.execute(t_bsearch, up, {1: unit}, delay=2.0, conds=on_airfield())
         g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0, conds=on_airfield())
         # Comona Defense: while the shuttle is on its pad the strike flights go for it (Mission 22's waves' order)
         g.execute(t_move, up, {0: unit, 1: SHUTTLE, 3: 'NoneSelect'}, delay=1.0, conds=on_shuttle())
-        g.execute(t_bengage, up, {1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
+        # The shuttle is an AI plane (Blueprints/Vehicle/AI/Plane/OP0057_sstb): GROUND_ONLY, the airport strike's search,
+        # let the strike flights fly past it (report of 2026-10-23: never damaged). Air and ground, and Mission 22's
+        # AttackOnly order on it, so they go for nothing else.
+        g.execute(t_bsearch, up, {1: unit, 3: 'AIR_AND_GROUND'}, delay=2.0, conds=on_shuttle())
+        g.execute(t_sengage, up, {0: 'NoneSelect', 1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
     for k, dummy in enumerate(AIRFIELD_DUMMIES):
         hit = f'SV_AirfieldHit_{k + 1}'
         t = g.trigger(f'MissedWeapon_AreaB_{k}', hit, arg_changes={4: dummy})      # LifeCount cleared: every hit

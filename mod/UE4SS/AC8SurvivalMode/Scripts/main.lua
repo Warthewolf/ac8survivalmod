@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.1"
+local VERSION = "0.37.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2839,6 +2839,23 @@ local function specialTick(now)
     local alive = SV_UnitAlive(c.unit)
     local over = now - s.at >= c.countdown_s + 3
     local launched = (f.SV_ShuttleLaunched or 0) >= 1
+    if now >= (s.logAt or 0) then                   -- every 10 s: is anything getting at it (report of 2026-10-23)
+        s.logAt = now + 10
+        local hp, near, at = shuttleHealth(), nil, nil       -- (finds the shuttle's actor first)
+        pcall(function() local v = SHUTTLE.obj:K2_GetActorLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
+        for _, q in ipairs(planes) do
+            if D.strikeUnits and D.strikeUnits[q.unit] and valid(q.obj) and at then
+                pcall(function()
+                    local v = q.obj:K2_GetActorLocation()
+                    local d = km({ X = v.X, Y = v.Y, Z = v.Z }, at)
+                    if not near or d < near then near = d end
+                end)
+            end
+        end
+        log(string.format("special: shuttle %.0f s in: health %s%%, %d hits, nearest strike aircraft %s, %d alive in its unit",
+            now - s.at, tostring(hp), f.SV_ShuttleHits or -1, near and string.format("%.1f km", near) or "none",
+            alive))
+    end
     if (f.SV_ShuttleLost or 0) >= 1 or (alive <= 0 and not launched and not over) or (over and not launched and alive <= 0) then
         s.state = "done"
         D.shuttleRemoveAt = now + 30                    -- the pad's allies (the shuttle is gone)
@@ -2898,6 +2915,8 @@ local function startRound()
         local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
     end
+    D.strikeUnits = {}                              -- (for the shuttle's countdown log)
+    if special == "shuttle" then for _, u in ipairs(bombers) do D.strikeUnits[u] = true end end
     local fighters, nFighters = pickFlights(CFG.pool, anomalyOnly and 0 or (budget - nBombers), function(u) return PROBE_OF[u] end)
     D.queue, D.spare = {}, {}
     for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
