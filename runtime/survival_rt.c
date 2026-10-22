@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.10.0"
+#define RT_VERSION           L"0.11.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1678,10 +1678,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.10.0" */
+/* SV_Version() -> "0.11.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.10.0";
+    static const char v[] = "0.11.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1820,6 +1820,28 @@ static int L_BGM(void* lua)
     return Ret(lua, BgmState((int)field));
 }
 
+/* SV_BGMNames() -> "<track>|<last stop>|<last event>": the BGM controller's FNames at +0x120 (the track Play posted:
+ * 0x1478bdbc0 "lea rsi,[rdi+0x120]; mov [rsi],rbx"), +0x13C (LiveStopBGMExecution: "mov [rbx+0x13c],rcx") and +0x14C
+ * (LiveEventBGMExecution: "mov [rdi+0x14c],rcx"), or "" when there is no controller. For finding what interrupts the
+ * pause menu's music player (user, 2026-10-22: the track skips when a kill happens). */
+static int L_BGMNames(void* lua)
+{
+    static const int32_t kOff[3] = { 0x120, 0x13C, 0x14C };
+    char out[400];
+    size_t n = 0;
+    uint8_t* bgm = BgmController(0);
+    for (int i = 0; bgm && i < 3; ++i) {
+        wchar_t w[120];
+        if (!Readable(bgm + kOff[i], 8)) break;
+        NameText((const FNameRaw*)(bgm + kOff[i]), w, 120);
+        if (i) out[n++] = '|';
+        for (size_t k = 0; w[k] && n < sizeof(out) - 2; ++k) out[n++] = w[k] < 0x80 ? (char)w[k] : '?';
+    }
+    out[n] = 0;
+    U.luaSetString(lua, out, n);
+    return 1;
+}
+
 /* SV_Event(name) -> 1 once remote event `name` is dispatched in Survival's level, or an SV_ERR code */
 static int L_Event(void* lua)
 {
@@ -1886,7 +1908,7 @@ static void RegisterLua(void* lua)
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer },
-        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest },
+        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -1898,7 +1920,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_SetText, SV_ShopRequest registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
 }
 
 #define MOD_SLOTS 16

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.22.0"
+local VERSION = "0.22.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1978,6 +1978,10 @@ local function musicTick(tick, now, paused)
         -- player's track skips mid-play), so a change can be matched to what happened then
         local id = SV_BGM(0)
         if id ~= M.id then M.id = id; log(string.format("music: the game's BGM controller now plays id %d (status %d)", id, SV_BGM(1))) end
+        if type(SV_BGMNames) == "function" then           -- track | last stop | last event the controller was given
+            local names = SV_BGMNames()
+            if names ~= M.names then M.names = names; log("music: the game's BGM controller: track|stop|event = " .. names) end
+        end
     end
     if not mc.enabled or not D or M.player then return end
     if type(SV_PlayBGM) ~= "function" then
