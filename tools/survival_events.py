@@ -109,6 +109,12 @@ ANOMALY_UNIT = 'SV_Unit_Anomaly'
 ANOMALY_GUARD_UNIT = 'SV_Unit_AnomalyGuards'
 ANOMALY_GUARDS = 4
 ANOMALY_GUARD_RADIUS_M = 2000.0             # its guards' unit area, on it: they circle inside it
+# The game's throttle on how hard enemies may press the player (Mission 22 sets it per wave): how many missiles may be
+# aimed at the player at once, how many enemies may attack at once, and its attack cooldowns. Survival never set it, so
+# it ran on the game's defaults; ATTACK_BASE (Mission 22's wave 3) from the mission start and after the Anomaly, and
+# while MINDRIPPER is up ANOMALY_ATTACK (user, 2026-10-22: "mindripper still wasn't aggressive enough").
+ATTACK_BASE = {'missiles': 4, 'attackers': 6, 'cooldown': (4.0, 8.0, 15.0, 20.0)}
+ANOMALY_ATTACK = {'missiles': 8, 'attackers': 10, 'cooldown': (0.5, 1.0, 3.0, 5.0)}
 ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
 # The arrival (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER"): it spawns hidden
 # (Scripts/main.lua CFG.specials.anomaly.portal) and the focus camera swings onto it at once; Lua opens the portal on it
@@ -443,6 +449,15 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     t_glass_on = g.foreign_template(m15, 'LiveActivateGlassesEffectExecution')
     t_glass_off = g.foreign_template(m15, 'LiveDeactivateGlassesEffectExecution')
     t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
+    t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')     # [BOTH_MISSILE, n, false]
+    t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')   # 4 floats
+    t_ma = g.exec_template('LiveChangePlayerMaxAttackersNumExecution', '01_Wave03_RemainingTime_0')    # [n]
+    assert arg_values(t_mm)[0] == 'BOTH_MISSILE' and len(arg_values(t_cd)) == 4 and len(arg_values(t_ma)) == 1
+    def attack(ev, a, delay=None):
+        g.execute(t_mm, ev, {1: a['missiles']}, delay=delay)
+        g.execute(t_ma, ev, {0: a['attackers']}, delay=delay)
+        g.execute(t_cd, ev, {i: f'{v}' for i, v in enumerate(a['cooldown'])}, delay=delay)
+    attack('MissionStart', ATTACK_BASE)
     assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false'], (arg_values(t_warn_on), arg_values(t_warn_off))
     up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})
@@ -459,6 +474,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     g.execute(t_move, guards, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}',
                                10: 'true'}, delay=2.5)
     flag(up, 'SV_AnomalyUp', 'Set', 1)
+    attack(up, ANOMALY_ATTACK)
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
     g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
     g.execute(t_noise, up, delay=1.0)
@@ -480,6 +496,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     for delay, key in ANOMALY_DOWN_SOUNDS:
         g.execute(t_sound, down, {0: key, 1: ANOMALY_OBJ}, delay=delay)
     for ev in (down, 'RE_SV_AnomalyEnd'):
+        attack(ev, ATTACK_BASE)
         g.execute(t_engage, ev, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnlyNoLimit'})     # the guards, loose
         g.execute(t_move, ev, {0: ANOMALY_GUARD_UNIT, 5: f'{AREA_RADIUS_M}'})        # (Mission 22's mark, the whole zone)
         flag(ev, 'SV_AnomalyUp', 'Set', 0)

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.9"
+local VERSION = "0.36.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1529,6 +1529,7 @@ local function searchSetup()
             r.CaptureDistance, r.CaptureAngleRange = m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5)
             r.ActivationTime, r.TriggeringTime = m.arm_s / AGG, m.lock_s / AGG
             r.ShotIntervalTime, r.RestingTime = m.interval_s / AGG, m.rest_s / AGG
+            r.TriggerCount = math.max(2, r.TriggerCount or 1)             -- salvos of two
         end, string.format("MINDRIPPER's missiles: lock within %d m / %d deg, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s",
             m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5), m.arm_s / AGG, m.lock_s / AGG, m.interval_s / AGG,
             m.rest_s / AGG), "x")
@@ -1658,6 +1659,7 @@ local function searchSetup()
                             local got = {}
                             for k, slot in ipairs(frees) do
                                 local w = AN.weapons[k]
+                                if w and not w:find("ECM") then w = anomFcs(w) or w end   -- its special weapons quicker too
                                 if w then r["NpcFCSId" .. slot] = FName(w); got[#got + 1] = w end
                             end
                             if level == 0 then log("weapons: " .. svNpc .. " (MINDRIPPER) carries " .. table.concat(got, ", ")) end
@@ -2918,21 +2920,41 @@ local function groundAt(ks, x, y)
         return ks:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
             hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
     end)
-    local z
+    local z, what
     pcall(function()
         local h = hit.OutHit or hit
         local l = h.ImpactPoint or h.Location
         if l and l.Z then z = l.Z end
     end)
+    -- what it hit: the component's (or its physical material's) name, so sea and flat land can be told apart (they're
+    -- 3-4 m and 4-5 m round the airport's beaches: test of 2026-10-22)
+    for _, field in ipairs({ "Component", "PhysMaterial" }) do
+        if not what then
+            pcall(function()
+                local o = (hit.OutHit or hit)[field]
+                if o and o.Get then o = o:Get() end
+                local n = o and o:GetFullName()
+                if n and n ~= "" then what = n:match("([^%.:/]+)$") or n end
+            end)
+        end
+    end
     if not COAST.said then
         COAST.said = true
         local keys = {}
         for k in pairs(hit) do keys[#keys + 1] = tostring(k) end
-        log(string.format("coast: first trace: ok %s, returned %s, out fields {%s}, height %s", tostring(ok), tostring(r),
-            table.concat(keys, ", "), tostring(z)))
+        log(string.format("coast: first trace: ok %s, returned %s, out fields {%s}, height %s, hit %s", tostring(ok), tostring(r),
+            table.concat(keys, ", "), tostring(z), tostring(what)))
     end
-    if ok and r then return z end
+    if ok and r then return z, what end
     return nil
+end
+-- "S" sea, "L" land, "?" unknown, from what a trace hit
+local function surface(what)
+    if not what then return "?" end
+    local w = what:lower()
+    if w:find("sea") or w:find("water") or w:find("ocean") then return "S" end
+    if w:find("landscape") or w:find("terrain") or w:find("ter_") then return "L" end
+    return "?"
 end
 function COASTF.tick()
     local c = CFG.coast_scan
@@ -2985,7 +3007,7 @@ function COASTF.rings()
             end
             f:close()
         end
-        local r = io.open(configDir() .. "coast_rings.txt", "r")
+        local r = io.open(configDir() .. "coast_rings2.txt", "r")      -- (2: with what each trace hit)
         COAST.ringed = {}
         if r then
             for line in r:lines() do local k = line:match("^mark (%d+)"); if k then COAST.ringed[tonumber(k)] = true end end
@@ -3007,12 +3029,17 @@ function COASTF.rings()
                     local a = math.rad(d * 45)
                     local hs = {}
                     for _, km in ipairs({ 0.5, 1, 2, 3 }) do
-                        local z = groundAt(ks, m.X + math.cos(a) * km * 100000, m.Y + math.sin(a) * km * 100000)
-                        hs[#hs + 1] = z and string.format("%.0f", z / 100) or "-"
+                        local z, what = groundAt(ks, m.X + math.cos(a) * km * 100000, m.Y + math.sin(a) * km * 100000)
+                        hs[#hs + 1] = (z and string.format("%.0f", z / 100) or "-") .. surface(what)
+                        COAST.whats = COAST.whats or {}
+                        if what and not COAST.whats[what] then
+                            COAST.whats[what] = true
+                            log("coast: a trace hit " .. what)
+                        end
                     end
                     parts[#parts + 1] = (d * 45) .. ":" .. table.concat(hs, ",")
                 end
-                local f = io.open(configDir() .. "coast_rings.txt", "a")
+                local f = io.open(configDir() .. "coast_rings2.txt", "a")
                 if f then f:write(string.format("mark %d %.0f %.0f %s\n", k, m.X, m.Y, table.concat(parts, " "))); f:close() end
                 COAST.ringed[k] = true
                 log(string.format("coast: ground round beach mark %d sampled (deg:0.5,1,2,3 km heights m) %s", k, table.concat(parts, " ")))
@@ -3027,14 +3054,15 @@ function COASTF.mark()
     local you = playerLocation()
     if not you then return end
     local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-    local z = valid(ks) and groundAt(ks, you.X, you.Y)
+    local z, what = nil, nil
+    if valid(ks) then z, what = groundAt(ks, you.X, you.Y) end
     local f = io.open(configDir() .. "coast_marks.txt", "a")
     if f then
         f:write(string.format("%.0f %.0f %.0f ground %s\n", you.X, you.Y, you.Z, z and string.format("%.0f", z) or "?"))
         f:close()
     end
     hudCallout("BEACH MARKED", string.format("%.1f, %.1f KM", you.X / 100000, you.Y / 100000))
-    log(string.format("coast: mark at %.0f, %.0f, %.0f cm (ground %s)", you.X, you.Y, you.Z, tostring(z)))
+    log(string.format("coast: mark at %.0f, %.0f, %.0f cm (ground %s, %s)", you.X, you.Y, you.Z, tostring(z), tostring(what)))
     COAST.marksRead, COAST.ringsDone = false, false            -- (its ring is sampled while you're still near it)
 end
 end
