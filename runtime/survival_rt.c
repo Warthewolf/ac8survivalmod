@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.12.0"
+#define RT_VERSION           L"0.12.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -349,7 +349,7 @@ static int HookInline(uint8_t* fn, size_t prologue, void* detour, void** orig, c
     if (IsJump(fn)) {
         void* prev; memcpy(&prev, fn + 6, 8);
         *orig = prev;
-        if (!WriteMem(fn + 6, &detour, 8, 1)) return 0;
+        if (!WriteMem(fn + 6, &detour, 8, 1)) { *orig = NULL; return 0; }
         Log(L"%s: chained onto another mod's hook at %p (next: %p)", what, fn, prev);
         return 1;
     }
@@ -951,6 +951,7 @@ static int FindSpawner(void)
 static int SpawnerReady(void)
 {
     if (!ResolveUE4SS()) return SV_ERR_NO_GAME;
+    if (!g_scanned) return SV_ERR_NOT_READY;       /* the signature scan is still running */
     if (!g_spawnUnit || !g_unregisterUnit || !g_destroyActor || !ResolveLayout()) return SV_ERR_NO_GAME;
     return FindSpawner() ? 1 : SV_ERR_NOT_READY;
 }
@@ -1546,13 +1547,14 @@ static void OnMusicTick(void* tickable, float dt)
         uint8_t* ch = PtrAt(PtrAt(gi, GI_SOUND_MANAGER), SM_CHANNELS);
         int hold = ctx && Readable(ctx + CTX_MISSION_ID, 4) && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID &&
                    ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED];
-        if (PtrAt(mgr, MPM_CONTROLLER) == co && hold != g_musicHolding && Readable(co + MPC_CLOCK, 8)) {
+        int track = PtrAt(mgr, MPM_CONTROLLER) == co;     /* the SoundController; the ambience controller is held too */
+        if (track && hold != g_musicHolding && Readable(co + MPC_CLOCK, 8)) {
             g_musicHolding = hold;
             Log(L"music player: BGM %s, track clock %s at %d of %d ms", hold ? L"paused" : L"playing again",
                 hold ? L"held" : L"running", Ms(*(float*)(co + MPC_CLOCK)), Ms(*(float*)(co + MPC_LENGTH)));
         }
         if (hold) {
-            if (PtrAt(mgr, MPM_CONTROLLER) == co) g_musicHeldMs += Ms(dt);
+            if (track) g_musicHeldMs += Ms(dt);
             return;
         }
     }
@@ -1744,10 +1746,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.12.0" */
+/* SV_Version() -> "0.12.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.12.0";
+    static const char v[] = "0.12.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1975,6 +1977,7 @@ static int L_ShopRequest(void* lua)
 static int L_Reset(void* lua)
 {
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
+    g_shopHead = g_shopCount = 0;                  /* a pick made as the level ended isn't bought in the next run */
     return Ret(lua, 1);
 }
 
@@ -1993,7 +1996,8 @@ static void RegisterLua(void* lua)
         MsvcString s; memset(&s, 0, sizeof(s));
         size_t n = 0;
         while (kFns[i].name[n]) ++n;
-        memcpy(s.u.buf, kFns[i].name, n + 1);         /* every name fits the small-string buffer (<= 15) */
+        if (n > 15) { Log(L"Lua bridge: function %d's name is longer than 15 characters; not registered", (int32_t)i); continue; }
+        memcpy(s.u.buf, kFns[i].name, n + 1);         /* fits the small-string buffer (<= 15 characters) */
         s.size = n; s.cap = 15;
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
@@ -2116,7 +2120,7 @@ static void FindFunctions(void)
     Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
         g_fPauseValidity, g_fHangarDecide);
     Log(L"music player: track clock tick %p, next track %p", g_fMusicTick, g_fMusicNext);
-    g_scanned = 1;
+    __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
 static int StonehengeInstalled(void)

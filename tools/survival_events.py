@@ -5,23 +5,23 @@ unit/flag arguments, delays and conditions changed, so the node classes, argumen
 game's own. EP_SurvivalMode_global is a copy of EP_Mission022_global, so its import and name tables already hold every
 node class and most names these records use. Record format: tools/re/EVENT_NOTES.md.
 
-Milestone 2: rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, tools/re/SPAWN_SYSTEM.md),
-not by events. The probe graph that spawned with LiveReinforcement* (tests 2-10) showed why: the game never spawns a
-desc again while its shot-down flight is still on the phase's unit list. The events left here:
-  MissionStart        (no music: MUSIC is None) the mission clock paused and hidden (Mission 22's own pair, run when its
-                      battle ends): Survival is endless, so no 60-minute countdown and no time-up
+Rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, tools/re/SPAWN_SYSTEM.md), not
+by events: the game never spawns a desc again while its shot-down flight is still on the phase's unit list. The events:
+  MissionStart        the mission clock paused and hidden (Mission 22's own pair): Survival is endless (no music: the
+                      pause menu's Music Player is the only music)
   SV_FlightUp_NN      (one per pool flight, "reinforcement appeared", fires for any spawn of it) SV_Alive += 1,
-                      SV_Up_NN = 1; 2 s later: air-only enemy search + engage the player (Mission 22's own orders)
+                      SV_Up_NN = 1; 2 s later: air-only enemy search + engage the player only (PlayerOnlyNoLimit)
+  RE_SV_FlightOrders_NN  the same, fired by Scripts/main.lua for a flight whose appearance didn't fire (landing menu)
   SV_FlightDown_NN    (one per pool flight, destroyed) SV_Alive -= 1, SV_Kills += 1 (for the Lua log), SV_Up_NN = 0
-  RE_SV_Chase         every 6 s: teleport the chase dummy onto the player; for each flight that is up call
-                      RE_SV_Chase_NN, which moves that flight's area onto the dummy
   SV_BomberUp_NN      (one per bomber flight, BOMBERS) Mission 22's Comona Airport strike: unit area onto the airport,
-                      ground-only search, engagement order on the airfield unit (AIRFIELD_UNIT)
+                      ground-only search, engagement order on the airfield unit (AIRFIELD_UNIT); on the shuttle while
+                      SV_ShuttleRound is 1
   SV_AirfieldHit_N    (one per airfield dummy) a weapon an enemy fired at it ended there: SV_AirHits += 1 and
                       Mission 22's explosion VFX on that dummy; Scripts/main.lua turns SV_AirHits into airfield health
   RE_SV_AirfieldClose / RE_SV_AirfieldOpen   landing off / on (fired by Scripts/main.lua with SV_Event)
   RE_SV_BombRun_NN    (one per bomber flight) both aircraft drop BOMB_COUNT bombs (weapon slot 4); Scripts/main.lua
                       fires it when a Tu-95 / Tu-160 of that flight is over the airfield
+  SV_Shuttle*         Comona Defense (build_shuttle, SHUTTLE_*): countdown, liftoff, hits, loss
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,19 +32,11 @@ import ep_dump
 # Scripts/main.lua has the same list (CFG.pool); a flight outside it would spawn without its orders.
 POOL = [f'ERA_Unit_{n:02d}_Dep_Air{k}' for n in range(1, 9) for k in range(3)]
 # A flight only works inside its unit area (Mission 22's: 6000 m, 0.5 patrol ratio): it loitered near its spawn until
-# the player came within ~3 km, and an 80 km area (probe test 9) didn't make it come either. Chase (user request,
-# 2026-10-21: "enemies didn't go after the player until they were close" without it): every CHASE_S seconds Mission 22's
-# dummy Unit_dummyN0 is teleported onto the player and every flight that is up gets its area moved onto it
-# (LiveUnitMoveActor, as Mission 22 moves its waves; the player dummy is Missions 006/023's pattern). Probe tests 7-8
-# blamed the moves for flights not respawning; the real cause was the phase's unit list (re/SPAWN_SYSTEM.md).
-# Chase OFF (user, 2026-10-22): flights seemed to break off fights to fly to the moved area. Instead every flight gets
-# a 40 km area and (Scripts/main.lua CFG.search) a 40 km AI search radius that doesn't lose the player in cloud; the
-# 80 km area alone (test 9) failed because the stock search radius was only 6 km.
-CHASE = False
-CHASE_UNIT = 'Unit_dummyN0'
-CHASE_OBJECT = 'A_Obj_01_dummyN0'
-CHASE_S = 6.0
-AREA_RADIUS_M = None if CHASE else 40000.0   # pool flights' RadiusInMeter (None: Mission 22's own 6000)
+# the player came within ~3 km. Every pool flight gets a 40 km area and (Scripts/main.lua CFG.search) a 40 km AI search
+# radius that doesn't lose the player in cloud, so it comes for the player from anywhere in the zone. (The 2026-10-21
+# chase, which moved each flight's area onto the player every 6 s, was turned off on 2026-10-22: flights broke off
+# fights to fly to the moved area; it is in git history.)
+AREA_RADIUS_M = 40000.0                      # pool flights' RadiusInMeter (None: Mission 22's own 6000)
 # Milestone 3 (user, 2026-10-22: bombers that only attack the airfield). Mission 22's own Comona Airport strike
 # (tools/re/AIRFIELD_SUPPLY.md 2b): its Su-34s get the airport unit as their engagement target with a ground-only search
 # and fire at its invincible dummies; a MissedWeapon trigger on each dummy counts what reaches it. The target is
@@ -97,13 +89,20 @@ SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_
                        (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
                        (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
 SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
+# Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
+# them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
+# moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
+# one at a time where Mission 22 placed them. Allied, so they fire at enemies by themselves; no event records.
+DEFENCE_SOURCE = 'AB_Unit_01_Ground0'
+DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}') for k, c in enumerate('ABCDE')] +
+            [(f'SV_Unit_SAM_{c}', f'AB_Obj_01_Ground0_SAM{k}') for k, c in enumerate('AB')])
 # Behaviour rows (test of 2026-10-22): the game builds every AI aircraft's behaviour trees when the level loads, one
 # set per world-data AI object desc, from the NPC row the desc names at that moment (127 aircraft x 15 slots = the
 # 1915 behaviours the census counted before anything spawned; each stock script was built once, ours never).
 # SV_SetAircraft at spawn changes the airframe and the AI module (search radius), not the behaviour, so every flight
 # Survival flies gets its behaviour row here, in the world data (tools/build_survival.py):
 POOL_BEHAVIOUR_ROW = 'f16c_common_sv'      # its DT_NPC row is made by Scripts/main.lua at the main menu, with the
-                                           # behaviour set CFG.search.luaset (NLID_0400_CP: keeps pursuing)
+                                           # behaviour set CFG.search.luaset (NLID_SV_Fighter; hard rule 22)
 PROBE_UNITS = {'Pkg': 'ERA_Unit_08_Dep_Air2', 'Rt': 'ERA_Unit_08_Dep_Air1'}   # main.lua CFG.probe.units
 PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # build_survival.py NPC_EXTRA
 HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
@@ -127,13 +126,11 @@ def behaviour_row(unit):
     if unit in POOL: return POOL_BEHAVIOUR_ROW
     return None
 KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
-if CHASE: KEEP_AT_START[CHASE_UNIT] = None
-# Music at mission start: none (user, 2026-10-22: it played over the pause menu's Music Player; the player picks the
-# music there). Was Mission 8's 'AKE_Bgm_Ms08A_Play' (the shared campaign BGM bank, DA_SoundDB_AKB_BGM_Campaign).
-MUSIC = None
-# SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (chase).
+# SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (its orders
+# came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
 INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
-             + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits'])
+             + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
+             + [f'SV_ShuttleDmg{c}' for c in 'ABC'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -276,16 +273,12 @@ def build_events(stock_ep):
     g = Graph(stock_ep)
     # templates, all from Mission 22
     t_flag = g.exec_template('LiveFlagOperation_IntExecution', pred=lambda a, e: a[1] == 'Set')
-    t_bgm = g.exec_template('LivePlayBGMExecution', 'MissionStart')
     t_search = g.exec_template('LiveAIChangeEnemySearchType', '01_E_AreaA_ReinforcementAppearance_0')
     t_engage = g.exec_template('LiveAIEngagementOrder', '01_E_Wave03_ReinforcementAppearance_0')
     # Mission 22's order says PlayerFirst, which let fighters pick the airfield's target points once those existed (AI
     # watch, 2026-10-22: an F-15E pursued BP_GR000_dummy at the runway). PlayerOnlyNoLimit, as Mission 24 orders its
     # pursuers (RE_SilverProtect602_0): the player only, at any range.
     assert arg_values(t_engage)[4] == 'Player' and arg_values(t_engage)[6] == 'PlayerFirst'
-    t_call = g.exec_template('LiveCallRemoteEventExecution', 'MissionStart')
-    t_tp_unit = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[8] == 'Unit_dummyN0')
-    t_tp_obj = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
     t_move = g.exec_template('LiveUnitMoveActor', '01_E_AreaA_ReinforcementAppearance_0')
     # Mission 22's airport strike (records 1686, 1694, 2037) and its landing switch (2099)
     t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
@@ -300,25 +293,10 @@ def build_events(stock_ep):
         g.flags.add(name)
         return g.execute(t_flag, event, {0: name, 1: op, 2: value}, **kw)
 
-    def call(event, target, **kw):
-        return g.execute(t_call, event, {0: target}, **kw)
-
     g.trigger('MissionStart', 'MissionStart')
-    if MUSIC: g.execute(t_bgm, 'MissionStart', {0: MUSIC})
     g.execute(t_pause, 'MissionStart')
     g.execute(t_hide, 'MissionStart')
     g.execute(t_hide, 'MissionStart', delay=3.0)   # again once the HUD is up (Mission 8 hides 3 s late)
-    if CHASE:
-        call('MissionStart', 'RE_SV_Chase', delay=3.0)
-        g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_Chase')
-        g.execute(t_tp_unit, 'RE_SV_Chase', {5: 0, 8: CHASE_UNIT})          # onto the player, no offset
-        g.execute(t_tp_obj, 'RE_SV_Chase', {1: CHASE_OBJECT, 5: 0})
-        for k, unit in enumerate(POOL):
-            ev = f'RE_SV_Chase_{k + 1:02d}'
-            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-            call('RE_SV_Chase', ev, delay=0.5, conds=[g.cond(f'SV_Up_{k + 1:02d}', 'Geq', 1)])
-            g.execute(t_move, ev, {0: unit, 1: CHASE_OBJECT, 3: 'NoneSelect'})
-        call('RE_SV_Chase', 'RE_SV_Chase', delay=CHASE_S)
     # RE_SV_FlightOrders_NN gives a flight the same orders as its appearance: a flight that appears while the player
     # is in the landing menu never gets its appearance trigger (test of 2026-10-22: two F-16 flights spawned during a
     # rearm kept Mission 22's PlayerFirst and attacked the airfield), so Scripts/main.lua fires it for an unflagged flight.
@@ -326,7 +304,7 @@ def build_events(stock_ep):
         up, down = f'SV_FlightUp_{k + 1:02d}', f'SV_FlightDown_{k + 1:02d}'
         orders = f'RE_SV_FlightOrders_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        g.trigger('RE_SpawnEnemy_kokatu_1st', orders)                  # a remote-event trigger, as the chase's (tested)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', orders)                  # a remote-event trigger (the 2026-10-21 chase's)
         for ev in (up, orders):
             flag(ev, 'SV_Alive', 'Add', 1)
             flag(ev, f'SV_Up_{k + 1:02d}', 'Set', 1)
@@ -338,11 +316,11 @@ def build_events(stock_ep):
         flag(down, f'SV_Up_{k + 1:02d}', 'Set', 0)
     assert arg_values(t_bmove)[3] == AIRFIELD_MARK and arg_values(t_bsearch)[3] == 'GROUND_ONLY'
     assert arg_values(t_bengage)[3] == 'Normal' and arg_values(t_bengage)[5] == 'AB_Unit_01_Ground0'
+    on_airfield = lambda: [g.cond('SV_ShuttleRound', 'Leq', 0)]
+    on_shuttle = lambda: [g.cond('SV_ShuttleRound', 'Geq', 1)]
     for k, unit in enumerate(BOMBERS):
         up = f'SV_BomberUp_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        on_airfield = lambda: [g.cond('SV_ShuttleRound', 'Leq', 0)]
-        on_shuttle = lambda: [g.cond('SV_ShuttleRound', 'Geq', 1)]
         g.execute(t_bmove, up, {0: unit}, delay=1.0, conds=on_airfield())
         g.execute(t_bsearch, up, {1: unit}, delay=2.0)
         g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0, conds=on_airfield())
@@ -394,8 +372,10 @@ def build_shuttle(g, flag):
     standing = lambda: [g.cond('SV_ShuttleLost', 'Leq', 0)]          # nothing more once it's been shot down
     up = 'SV_ShuttleUp'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: SHUTTLE_UNIT})
-    for name, value in (('SV_ShuttleLost', 0), ('SV_ShuttleLaunched', 0), ('SV_ShuttleHits', 0), ('SV_ShuttleRound', 1)):
-        flag(up, name, 'Set', value)
+    resets = ['SV_ShuttleLost', 'SV_ShuttleLaunched', 'SV_ShuttleHits', 'SV_ShuttleNearSaid'] + [f'SV_ShuttleDmg{c}' for c in 'ABC']
+    for name in resets:
+        flag(up, name, 'Set', 0)
+    flag(up, 'SV_ShuttleRound', 'Set', 1)
     g.execute(t_maxhp, up, {3: f'{SHUTTLE_HP}'})
     g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
     for before, key in SHUTTLE_RADIO:
@@ -417,25 +397,41 @@ def build_shuttle(g, flag):
     g.execute(t_cam_off, up, delay=T + 7)
     g.execute(t_vfx_off, up, delay=T + 30)
     g.execute(t_remove, up, delay=T + SHUTTLE_REMOVE_S, conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
-    # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock conditions
+    # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions
+    # when the event fires, not when it runs: then a loss left in SV_ShuttleLost would silence the next special
+    after = T + SHUTTLE_REMOVE_S + 5
+    for name in resets:
+        flag(up, name, 'Set', 0, delay=after)
+    # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
+    # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag
+    # asset doesn't have: that check is replaced by an int flag of Survival's, set when the line plays and reset when the
+    # shuttle appears, so the callouts come again every special (a life-1 trigger would fire once a level).
     hit = 'SV_ShuttleHit'
     g.trigger('ObjectDamage_Shuttle', hit)
     g.execute(t_radio, hit, {0: '01_All_Wave_Hit_Shuttle_First'}, conds=[g.cond('SV_ShuttleHits', 'Leq', 0)])
     flag(hit, 'SV_ShuttleHits', 'Add', 1)
-    for k, (stage, line) in enumerate(((1, 'Durability50'), (2, 'Durability30'), (3, 'Durability_Limit')), 1):
+    for c, stage, line in (('A', 1, 'Durability50'), ('B', 2, 'Durability30'), ('C', 3, 'Durability_Limit')):
         t = tpl('LiveCallRemoteEventExecution', 'ObjectDamage_Shuttle', lambda a, e, n=stage: a[0] == f'RE_Shuttle_Damage_Phase{n}')
-        ev = f'RE_SV_ShuttleDamage{"ABC"[k - 1]}'                    # no numeric tail (hard rule 17)
-        g.execute(t, hit, {0: ev}, conds=fields(t)['ConditionalStatementTables'][3][1])
-        g.trigger('RE_Shuttle_Damage_Phase1', ev, life=1)
+        stock = fields(t)['ConditionalStatementTables'][3][1]
+        cls = [ep_dump.show(fields(x)['StatementClass'][3], g.z) for x in stock]
+        health = [x for x, c in zip(stock, cls) if c == 'LiveIsLowHealthStatement']     # its band, e.g. < 61 and >= 31 %
+        assert health and set(cls) == {'LiveIsLowHealthStatement', 'LiveCheck_FlagBoolStatement'}, (stage, cls)
+        said = f'SV_ShuttleDmg{c}'
+        ev = f'RE_SV_ShuttleDamage{c}'                               # no numeric tail (hard rule 17)
+        g.execute(t, hit, {0: ev}, conds=health + [g.cond(said, 'Leq', 0)])
+        g.trigger('RE_Shuttle_Damage_Phase1', ev)
         g.execute(t_radio, ev, {0: f'01_All_Wave_{line}_Shuttle'})
+        flag(ev, said, 'Set', 1)
     near = 'SV_ShuttleNear'
-    g.trigger('VolumeEvent_Shuttle_Near_1st', near, life=1)
-    g.execute(t_radio, near, {0: '01_All_Wave_Close_Shuttle_First'}, conds=standing())
+    g.trigger('VolumeEvent_Shuttle_Near_1st', near)
+    g.execute(t_radio, near, {0: '01_All_Wave_Close_Shuttle_First'},
+              conds=standing() + [g.cond('SV_ShuttleNearSaid', 'Leq', 0), g.cond('SV_ShuttleRound', 'Geq', 1)])
+    flag(near, 'SV_ShuttleNearSaid', 'Set', 1, conds=[g.cond('SV_ShuttleRound', 'Geq', 1)])
     # shot down on the pad (Mission 22's ObjectDestroy / ObjectDestroy_1, any attacker or a system kill)
+    on_pad = lambda: [g.cond('SV_ShuttleLaunched', 'Leq', 0)]
     for src, ev in (('ObjectDestroy', 'SV_ShuttleDown'), ('ObjectDestroy_1', 'SV_ShuttleDownSys')):
         assert arg_values(g.trig_template(src))[16] == SHUTTLE
         g.trigger(src, ev)
-        on_pad = lambda: [g.cond('SV_ShuttleLaunched', 'Leq', 0)]
         flag(ev, 'SV_ShuttleLost', 'Set', 1, conds=on_pad())
         flag(ev, 'SV_ShuttleRound', 'Set', 0, conds=on_pad())
     g.execute(t_radio, 'SV_ShuttleDown', {0: '01_Mission_Failure_Destroy_Shuttle'},

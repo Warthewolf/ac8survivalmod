@@ -13,6 +13,11 @@ Legend: [x] confirmed in a test, [~] built and installed but not confirmed yet, 
   (runtime 0.12.0): built, untested. Learning behaviour layer: not started.
 - Milestone 3 (airfield + bombers): health, HUD bar, hit counting, strike flights spawning: confirmed. Raids every
   3rd round, low strike approach, Tu-95 / Tu-160 bomb runs, airfield down / reopen: built, untested.
+- Review + cleanup 2026-10-22 (Lua 0.26.1, runtime 0.12.1), untested: shop presses all taken each tick and texts at
+  once (the ~1 s lag looked like missed presses); economy (missiles +6 x1.35, special x1.4, flares x1.35); airfield row
+  builds AA guns (4000 Z) / SAM sites (8000 Z) once the airfield is whole (Mission 22's airport defences, one unit each);
+  config/survival.ini format 2 (settings listed switched off; an old file is kept as .ini.old); the run ends when the
+  level is left; callouts queue; shuttle callouts on Survival's own flags; chase / music dead code removed.
 - Milestone 4 (landing + shop): rearm to caps, credits (shown as ZOLLARS), shop purchases: confirmed. Landing-menu
   ammo panel showing the caps, airfield repair purchase, config/survival.ini: untested. Aircraft repair: dropped.
 - Milestone 5: parked by the user (ammo presets and skill offset by difficulty exist).

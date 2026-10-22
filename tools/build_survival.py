@@ -1,18 +1,21 @@
-"""build_survival.py : generate Survival Mode's zen packages into mod/Content.
+"""build_survival.py : generate Survival Mode's zen packages into mod/Content (run by tools/build_all.sh).
 
-Milestone 1 (fly at Comona): PL_SurvivalMode + a minimal mission (player start over Comona Airport, no events).
-Templates:
-  - PL_SurvivalMode            <- stock PL_Mission022 (Map17/Comona sublevels), lighting swapped to Mission 16's
-  - MC_SurvivalMode            <- stock MC_Mission022
-  - WD_SurvivalMode_phase01/02 <- stock WD_Mission022_phase01/02 (one player start each)
-  - WD_SurvivalMode_global     <- stock WD_Mission022_phase02 without its player start (an empty world data)
-  - EP_SurvivalMode_*          <- stock EP_Mission022_* with every trigger/exec removed
-  - EF_SurvivalMode_global     <- stock EF_Mission022_global with no flags (flags come in Milestone 2)
-  - DT_SV_MissionRows / DT_SV_MenuRows <- one row each from the stock mission and main-menu tables
-Every template is a stock game file: Survival Mode uses nothing from another mod.
+Every package is a stock game file with Survival's changes (Survival Mode uses nothing from another mod):
+  - PL_SurvivalMode            <- PL_Mission022 (Map17 / Comona sublevels), Mission 4's sky (LIT_NEW)
+  - MC_SurvivalMode            <- MC_Mission022
+  - WD_SurvivalMode_global     <- WD_Mission022_global: no unit spawns at start but the airfield's targets, pool and bomber
+                                  flights sized and given Survival's behaviour rows, the shuttle and the airport's AA guns /
+                                  SAM sites in units of their own (split_units), Survival's NPC table
+  - WD_SurvivalMode_phase01/02 <- WD_Mission022_phase01/02 (one player start each)
+  - EP_SurvivalMode_global     <- EP_Mission022_global with only Survival's records (tools/survival_events.py)
+  - EP_SurvivalMode_phase01/02 <- the phase EPs with every record removed
+  - EF_SurvivalMode_global     <- EF_Mission022_global holding Survival's int flags (survival_events.INT_FLAGS)
+  - DT_SV_MissionRows / DT_SV_MenuRows / DT_SV_ShopRows / DT_SV_NpcRows <- one-table copies of stock rows, added to the
+                                  game's tables at run time by Scripts/main.lua; DT_SV_NpcMission <- DT_NPC_Mission022
+  - /Game/LuaSource/SurvivalMode/AI/*  <- Survival's behaviour scripts (Scripts/ai)
 Stock packages are pulled with tools/get_stock.sh into build/stock first.
 """
-import copy, os, sys, struct, zlib, subprocess
+import copy, math, os, sys, struct, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
@@ -31,7 +34,6 @@ M22 = '/Game/Maps/Ingame/Mission022/'
 
 # Player start: 6 km out on the approach to Comona Airport's runway, 1500 m up, flying at the airport.
 # Runway centre and heading from Mission 22's VolumeBox_LandingArea0: (1609574, -435747, 0), yaw -23.
-import math
 RUNWAY = (1609574.0, -435747.0); RUNWAY_YAW = -23.0
 START_BACK_CM, START_ALT_CM = 600000.0, 150000.0
 _yaw = math.radians(RUNWAY_YAW)
@@ -193,35 +195,48 @@ def set_flight_size(objs, size, unit, point, used_ids, top_number):
                     for q in ob[2]]
 
 
-def split_shuttle(units, used_ids, z):
-    """Comona Defense (survival_events.SHUTTLE_*): the shuttle leaves Mission 22's pad unit for a unit of its own, a copy
-    of the pad's desc (same faction, point and area) holding only the shuttle, which flies Survival's NPC row. The pad
-    keeps its dummies, AA guns, SAMs and tower and is spawned once a run; the shuttle every special."""
+def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
+    """Moves AI object `obj` out of world-data unit `src_unit` into a new unit `new_unit`: a copy of the source's desc
+    (same faction, point, area and tags) with a new UniqueID, holding only that object (optionally on NPC row
+    `npc_row`). SV_Spawn(new_unit) without a position then puts it where the stock mission placed it. No ground object
+    of Mission 22's leads its unit (bGroupLead 0), so a one-object unit needs no leader."""
     dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
     unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
-    pad = [u for u in units if unit_name(u) == survival_events.PAD_UNIT][0]
-    assert survival_events.SHUTTLE_UNIT not in {unit_name(u) for u in units}
-    objs = [p for p in pad[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    obj_name = lambda ob: dn([q for q in ob[2] if q[1] == 'Name'][0][3])
-    shuttle = [ob for ob in objs if obj_name(ob) == survival_events.SHUTTLE]
-    assert len(shuttle) == 1, survival_events.SHUTTLE
-    objs.remove(shuttle[0])                  # (no ground object of Mission 22's leads its unit: bGroupLead is 0)
-    new = copy.deepcopy(pad)
-    sh = shuttle[0]
-    sh[2][:] = [(q[0], q[1], False, ('name', survival_events.SHUTTLE_NPC_ROW, 0)) if q[1] == 'MissionNpcID' else q
-                for q in sh[2]]
-    assert any(q[1] == 'MissionNpcID' for q in sh[2])
-    z.nb.add(survival_events.SHUTTLE_NPC_ROW); z.nb.add(survival_events.SHUTTLE_UNIT)
+    src = [u for u in units if unit_name(u) == src_unit][0]
+    assert new_unit not in {unit_name(u) for u in units} and not new_unit[-1].isdigit(), new_unit   # hard rule 17
+    objs = [p for p in src[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    hit = [ob for ob in objs if dn([q for q in ob[2] if q[1] == 'Name'][0][3]) == obj]
+    assert len(hit) == 1, obj
+    ob = hit[0]
+    objs.remove(ob)
+    new = copy.deepcopy(src)
+    if npc_row:
+        assert any(q[1] == 'MissionNpcID' for q in ob[2]), obj
+        ob[2][:] = [(q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else q for q in ob[2]]
+        z.nb.add(npc_row)
+    z.nb.add(new_unit)
     ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
-    h = zlib.crc32(b'AC8SurvivalMode:' + survival_events.SHUTTLE_UNIT.encode())
+    h = zlib.crc32(b'AC8SurvivalMode:' + new_unit.encode())
     while struct.pack('<I', h) in ids: h = (h + 1) & 0xffffffff
     assert any(q[1] == 'UniqueID' for q in new[2]), 'unit desc without UniqueID'
-    new[2][:] = [(q[0], q[1], False, ('name', survival_events.SHUTTLE_UNIT, 0)) if q[1] == 'Name' else
+    new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
                  (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
-    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = [sh]
+    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = [ob]
     units.append(new)
+    return len(objs)
+
+
+def split_units(units, used_ids, z):
+    """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special; Mission 22's
+    pad keeps its dummies, AA guns, SAMs and tower and is spawned once a run. Airfield defences (survival_events.DEFENCES):
+    each of Mission 22's airport AA guns and SAM sites becomes a one-object unit the shop can build."""
+    left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.SHUTTLE, survival_events.SHUTTLE_UNIT,
+                       survival_events.SHUTTLE_NPC_ROW)
     print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}); '
-          f'{survival_events.PAD_UNIT} keeps {len(objs)} objects')
+          f'{survival_events.PAD_UNIT} keeps {left} objects')
+    for new_unit, obj in survival_events.DEFENCES:
+        move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit)
+    print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')
 
 
 def build_wd_global():
@@ -289,7 +304,7 @@ def build_wd_global():
                     set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
                     sized[size] = sized.get(size, 0) + 1
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
-    split_shuttle(units, used_ids, z)
+    split_units(units, used_ids, z)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
