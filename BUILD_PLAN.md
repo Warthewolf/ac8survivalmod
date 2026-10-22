@@ -289,6 +289,12 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   - Selection: DT_NPC copies per aircraft x tier (<NpcId>_SV_<Tier>) + build-time mission rows <aircraft>_sv_<tier>;
     main.lua picks the tier by round (config: tier start rounds) and difficulty.
 
+- Lua 0.19.0 (2026-10-22, user: "a bit of lag"): FindAllOf walks every object in the game, and the script ran several
+  a second plus a census of ~8000 AI node objects every 10 s. Removed: behaviour census, tree reader, rank probe, the
+  dead attacker read, the automatic HUD dump at 15 s (Ctrl+F9 keeps it). Cached: event containers, info panel widgets,
+  player controller (searched 1/s at most), difficulty preset; landing-menu ammo panel searched only on the ground at
+  the airfield; shop rows every 4 s; menu rows 1/s once in. Waiting for a test.
+
 ## Milestone 3: airfield health + bombers (CC)
 - [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
 - [ ] Health bar on the HUD (LiveUnitHealthDisplaySwitch, Missions 006 / 025_2).

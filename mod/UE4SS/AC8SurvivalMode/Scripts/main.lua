@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.18.2"
+local VERSION = "0.19.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -273,7 +273,6 @@ end
 -- Milestone 2 round probe: logs every AI aircraft created in Survival's level (with where it appeared), the number
 -- still alive when it changes, Survival's SV_* flags when they change, and the game's difficulty at mission start.
 local planes = {}                  -- created AI aircraft in this level: { obj, name }
-local treeMark = { probe = 0, compared = false }   -- next N m29a planes are the probe flight; one stock plane to compare
 local pending = {}                 -- AI aircraft just created, logged on a later tick (position is set by then)
 local AIRFIELD = { X = 1609639.0, Y = -436414.0 }   -- Comona Airport runway (cm), the spawn anchor
 local lastAlive, lastFlags = nil, nil
@@ -292,8 +291,6 @@ local function logPlane(o, unit)
     local short = n:match("([^%.:]+)$") or n
     local wing = n:find("Wingman", 1, true) and " (wingman)" or ""
     local rec = { obj = o, name = short, unit = unit }
-    if treeMark.probe > 0 and short:find("_m29a_", 1, true) then rec.probe, treeMark.probe = true, treeMark.probe - 1
-    elseif not treeMark.compared then rec.probe, treeMark.compared = true, true end   -- a stock-set plane, to compare
     planes[#planes + 1] = rec
     local where = ""
     pcall(function()
@@ -309,13 +306,18 @@ end
 -- (set while a flight is up) are shown as one count, also returned as the second value.
 -- Every SV_* int flag: { name = value }, read at most once every 0.2 s (several callers share one walk), or nil
 -- while there is no event container.
-local flagCache = { at = -1, t = nil }
+-- The event containers are looked up again only when one has gone (a new level) or every 30 s; FindAllOf walks every
+-- object in the game, which several times a second was a visible hitch (user, 2026-10-22: "a bit of lag").
+local flagCache = { at = -1, t = nil, cs = nil, found = -100 }
 local function svFlags()
     local now = os.clock()
     if now - flagCache.at < 0.2 then return flagCache.t end
-    local cs = FindAllOf("LiveEventContainer")
+    local cs = flagCache.cs
+    local stale = not cs or now - flagCache.found > 30
+    for _, c in ipairs(cs or {}) do if not valid(c) then stale = true end end
+    if stale then cs, flagCache.found = FindAllOf("LiveEventContainer") or {}, now; flagCache.cs = cs end
     local t = nil
-    for _, c in ipairs(cs or {}) do
+    for _, c in ipairs(cs) do
         if valid(c) then
             t = t or {}
             pcall(function()
@@ -349,9 +351,11 @@ local function flagLine()
     return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up, up
 end
 
+local survivalPC = nil             -- the player controller in Survival's level (found by probeTick, then reused)
+
 -- Where the player is (cm), or nil.
 local function playerLocation()
-    local pc = FindFirstOf("PlayerController")
+    local pc = valid(survivalPC) and survivalPC or FindFirstOf("PlayerController")
     local ok, l = pcall(function()
         local v = pc.Pawn:K2_GetActorLocation()
         return { X = v.X, Y = v.Y, Z = v.Z }
@@ -419,7 +423,7 @@ local CFG = {
     -- units: the probe's own flights (tools/survival_events.py PROBE_UNITS: their world data names the probe rows, as
     -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
     -- script) first flight, never in the normal rotation.
-    probe = { enabled = true, behaviour = true, runtime = true, rank = false, kills = true,
+    probe = { enabled = true, behaviour = true, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
@@ -599,10 +603,15 @@ end
 math.randomseed(os.time())
 
 -- The difficulty preset (casual / standard / ace, CFG.ammo.by_difficulty) and the game's difficulty number.
+local presetCache = { at = -100 }
 local function presetName()
-    local dm = FindFirstOf("LiveDifficultyManager")
-    local ok, d = pcall(function() return dm.CurrentDifficulty end)
-    return (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
+    local now = os.clock()
+    if now - presetCache.at > 30 then           -- kept 30 s (Select Difficulty is hidden in Survival's pause menu)
+        local dm = FindFirstOf("LiveDifficultyManager")
+        local ok, d = pcall(function() return dm.CurrentDifficulty end)
+        presetCache.at, presetCache.name, presetCache.d = now, (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
+    end
+    return presetCache.name, presetCache.d
 end
 
 ---------------------------------------------------------------------------------------------------- behaviour probe
@@ -990,23 +999,6 @@ local function searchAircraft(a)
 end
 
 -- Question 2: PilotRank on each enemy (p from the plane list), called every 2 s while it is up.
-local function probeRank(p, tick)
-    if not (CFG.probe.enabled and CFG.probe.rank) then return end
-    if not p.rank0 then
-        local ok, r = pcall(function() return p.obj.PilotRank end)
-        p.rank0 = ok and r or "?"
-        local okW, err = pcall(function() p.obj.PilotRank = CFG.probe.rank end)
-        local _, r1 = pcall(function() return p.obj.PilotRank end)
-        p.rankAt = tick
-        log(string.format("probe: %s PilotRank %s -> set %d -> reads %s%s", p.name, tostring(p.rank0), CFG.probe.rank,
-            tostring(r1), okW and "" or (" (write failed: " .. tostring(err) .. ")")))
-    elseif p.rankAt and tick - p.rankAt >= 40 then
-        p.rankAt = nil
-        local _, r = pcall(function() return p.obj.PilotRank end)
-        log(string.format("probe: %s PilotRank 10 s later: %s", p.name, tostring(r)))
-    end
-end
-
 -- CFG.tiers: this enemy's tier (by the round, sometimes one higher) and PilotRank, set once when it is first seen up.
 local tierSaid = {}
 local function enemyTier(p, round)
@@ -1061,111 +1053,9 @@ local function enemyManeuvers(p)
     end
 end
 
--- Question 1, read from the game's side (test 19: the Ctor marker file is never written, so it can't tell "not built"
--- from "no io in the game's Lua"). Each plane's built behaviours sit in a LiveAIBehaviorDataAccessor (one
--- LiveAIBehavior per slot: RootNode / CurrentNode, nodes are LiveAINodeBase {Parent, ChildList}); it is found by its
--- outer chain. probeTree logs the PursuerTarget slot's tree once (our script's tree has LiveAITaskManeuverBarrelRoll
--- nodes; the stock PursueTarget_0011 has none) and, while the plane flies, every node that was current.
-local function addr(o) local ok, a = pcall(function() return o:GetAddress() end); return ok and a or nil end
-local function shortClass(o)
-    local ok, c = pcall(function() return o:GetClass():GetFName():ToString() end)
-    return ok and c or "?"
-end
-
-local function accessorOf(plane)
-    local want = { [addr(plane) or -1] = true }
-    pcall(function() want[addr(plane.Controller) or -1] = true end)
-    local first
-    for _, a in ipairs(FindAllOf("LiveAIBehaviorDataAccessor") or {}) do
-        if valid(a) then
-            first = first or a
-            local o, n = a, 0
-            while n < 6 do
-                local ok, outer = pcall(function() return o:GetOuter() end)
-                if not ok or not valid(outer) then break end
-                if want[addr(outer)] then return a end
-                o, n = outer, n + 1
-            end
-        end
-    end
-    return nil, first
-end
-
-local function treeLines(node, depth, out)
-    if not valid(node) or depth > 6 or #out >= 30 then return end
-    out[#out + 1] = string.rep("  ", depth) .. shortClass(node) .. " " .. nameOf(node):match("([^%.:]+)$")
-    pcall(function()
-        node.ChildList:ForEach(function(_, e) treeLines(e:get(), depth + 1, out) end)
-    end)
-end
-
-local function probeTree(p)
-    if not p.probe then return end
-    if not p.treeDone then
-        p.treeDone = true
-        local acc, other = accessorOf(p.obj)
-        if not acc then
-            local chain = {}
-            pcall(function()
-                local o = other
-                for _ = 1, 6 do o = o:GetOuter(); if not valid(o) then break end; chain[#chain + 1] = shortClass(o) end
-            end)
-            log("probe: " .. p.name .. ": no behaviour accessor found (" .. (other and ("one accessor's outers: " ..
-                table.concat(chain, " < ")) or "no LiveAIBehaviorDataAccessor at all") .. ")")
-            return
-        end
-        p.acc = acc
-        local out = {}
-        pcall(function() treeLines(acc.PursuerTarget.RootNode, 0, out) end)
-        log("probe: " .. p.name .. " PursuerTarget tree (" .. #out .. " nodes):\n    " .. table.concat(out, "\n    "))
-    end
-    if p.acc and valid(p.acc) then
-        pcall(function()
-            local cur = p.acc.PursuerTarget.CurrentNode
-            if valid(cur) then
-                local k = shortClass(cur) .. " " .. nameOf(cur):match("([^%.:]+)$")
-                p.seen = p.seen or {}
-                if not p.seen[k] then p.seen[k] = true; log("probe: " .. p.name .. " pursue node now: " .. k) end
-            end
-        end)
-    end
-end
-
--- Test 21: no LiveAIBehaviorDataAccessor exists at all, so also count the behaviour objects by class every 10 s
--- (logged when the counts change) and name every barrel-roll node with its outers: our script's tasks are called
--- SV_RollRight / SV_RollLeft, so those names mean the game built our tree.
-local BEHAVIOUR_CLASSES = { "LiveAIBehavior", "LiveAIBehaviorDataAccessor", "LiveAINodeBase", "LiveAICompositeLaxSequencer",
-                            "LiveAITaskPursuerTarget", "LiveAITaskManeuverBarrelRoll", "LiveAIBehaviorWork", "LuaScript" }
-local function behaviourCensus()
-    local parts = {}
-    for _, c in ipairs(BEHAVIOUR_CLASSES) do
-        local ok, all = pcall(FindAllOf, c)
-        parts[#parts + 1] = c .. " " .. ((ok and all) and #all or 0)
-    end
-    local line = table.concat(parts, ", ")
-    if line == PR.censusLine then return end
-    PR.censusLine = line
-    log("behaviour census: " .. line)
-    local ok, rolls = pcall(FindAllOf, "LiveAITaskManeuverBarrelRoll")
-    if ok and rolls then
-        for i, r in ipairs(rolls) do
-            if i > 8 then break end
-            local chain = { nameOf(r):match("([^%.:]+)$") }
-            pcall(function()
-                local o = r
-                for _ = 1, 5 do o = o:GetOuter(); if not valid(o) then break end; chain[#chain + 1] = nameOf(o):match("([^%.:]+)$") end
-            end)
-            log("  barrel roll node: " .. table.concat(chain, " < "))
-        end
-    end
-end
-
--- Question 3: called every 2 s while an enemy is up (records), and once when it goes down (logs).
+-- Kill log (for the learning layer later): every 2 s while an enemy is up its heading is kept, and when it goes down
+-- the player's aspect, altitude and recent ammo use are logged. (K2_GetLastDamagedByAttacker never named anyone.)
 local function probeTrack(p)
-    pcall(function()
-        local a = p.obj:K2_GetLastDamagedByAttacker()
-        if valid(a) then p.attacker = nameOf(a):match("([^%.:]+)$") end
-    end)
     pcall(function() local f = p.obj:GetActorForwardVector(); p.fwd = { X = f.X, Y = f.Y, Z = f.Z } end)
 end
 
@@ -1193,8 +1083,8 @@ local function probeKill(p, you)
         end
         if spent > 0 then used[#used + 1] = AMMO_SHORT[k] .. " x" .. spent end
     end
-    log(string.format("probe kill: %s, last hit by %s; you were %s away, %s, altitude %s; you fired %s in the last 6 s",
-        p.name, tostring(p.attacker or "?"), p.at and you and string.format("%.1f km", km(p.at, you)) or "?",
+    log(string.format("kill: %s; you were %s away, %s, altitude %s; you fired %s in the last 6 s",
+        p.name, p.at and you and string.format("%.1f km", km(p.at, you)) or "?",
         aspect, dz, #used > 0 and table.concat(used, ", ") or "nothing seen"))
 end
 
@@ -1426,7 +1316,9 @@ end
 local function hideGameInfo(now)
     local hc = CFG.hud
     if not (hc.hide_game_timer or hc.hide_score_limit) then return end
-    if not H.infoAt or now >= H.infoAt then
+    local have = H.info and #H.info > 0
+    for _, e in ipairs(H.info or {}) do if not valid(e.w) then have = false end end
+    if not have and (not H.infoAt or now >= H.infoAt) then      -- look again only while they aren't found
         H.infoAt, H.info, H.infoSaid = now + 2, {}, H.infoSaid or {}
         for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C") or {}) do
             local short = nameOf(w):match("([^%.:]+)$") or ""
@@ -1676,7 +1568,6 @@ local function spawnFlight(unit)
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 then D.up[unit], D.flown[unit] = true, true end
-    if r > 0 and ac:sub(1, 9) == "sv_probe_" then treeMark.probe = r end
     return r
 end
 
@@ -2070,8 +1961,6 @@ local function ammoTick(tick, pc)
     end
 end
 
-local survivalPC = nil             -- the player controller in Survival's level
-
 local function playerControllerHere()
     for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
         if valid(pc) and inSurvival(pc) then return pc end
@@ -2114,9 +2003,9 @@ local function shopWarn(key, msg)
 end
 
 local function shopRowsTick(tick)
-    if not CFG.shop.enabled or tick % 4 ~= 1 or containerState ~= true then return end
-    local pc = FindFirstOf("PlayerController")
-    if valid(pc) and inSurvival(pc) then
+    if not CFG.shop.enabled or tick % 16 ~= 1 or containerState ~= true then return end
+    local pc = valid(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
+    if pc and valid(pc) and inSurvival(pc) then
         -- without the native landing-menu hook a shop row would reach the stock decide, which reads it as a page number
         if type(SV_ShopRequest) ~= "function" or type(SV_SetText) ~= "function" or SV_ShopRequest(1) ~= 1 then
             shopWarn("hook", "dlls/main.dll's landing menu hook is not installed (runtime 0.10.0+); no shop rows")
@@ -2241,7 +2130,11 @@ local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "Ammo
 local AMMO_SLOT_KIND = { AmmoTextLCenter = 1, AmmoTextLBottom = 4, AmmoTextRTop = 2, AmmoTextRCenter = 3, AmmoTextRBottom = 3 }
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
-    for _, panel in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
+    if not playerOnAirfield() then SH.panels = nil; return end   -- the landing menu only exists down there
+    local live = SH.panels and #SH.panels > 0
+    for _, panel in ipairs(SH.panels or {}) do if not valid(panel) then live = false end end
+    if not live and tick % 8 == 1 then SH.panels = FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {} end
+    for _, panel in ipairs(SH.panels or {}) do
         if valid(panel) and not nameOf(panel):find("Default__", 1, true) and not SH.panelSaid then
             SH.panelSaid = true                      -- once: what the panel holds (test of 2026-10-22: no rewrite seen)
             local parts = {}
@@ -2296,7 +2189,7 @@ local function probeTick(tick)
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
         planes, lastAlive, lastFlags = {}, nil, nil
-        treeMark.probe, treeMark.compared = 0, false
+        presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
@@ -2330,12 +2223,8 @@ local function probeTick(tick)
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
     end
-    if D and tick % 40 == 20 and CFG.probe.enabled and CFG.probe.behaviour then
-        local okB, errB = pcall(behaviourCensus)
-        if not okB then log("behaviour census error " .. tostring(errB)) end
-    end
     if D then
-        if not valid(survivalPC) then survivalPC = playerControllerHere() end
+        if not valid(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
         local now, paused = roundClock(tick)
         if now then
             local okR, errR = pcall(roundsTick, now)
@@ -2359,7 +2248,6 @@ local function probeTick(tick)
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
         if tick - levelTick == 48 then logDifficulty("10 s into the mission") end
-        if tick - levelTick == 60 then pcall(hudDump, "15 s into the mission") end
     end
     local keep = {}
     for _, p in ipairs(pending) do
@@ -2384,7 +2272,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
+                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTrack, p)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
@@ -2420,7 +2308,7 @@ LoopAsync(250, function()
     queued = true
     ExecuteInGameThread(function()
         tick = tick + 1
-        if not rowsStopped then
+        if not rowsStopped and (tick % 4 == 0 or not (ready[1] and ready[2])) then   -- watching for reloads: 1/s
             local ok, r = pcall(watchRows)
             if not ok then log("rows: error " .. tostring(r)) end
             if ok and r == false then rowsStopped = true end
