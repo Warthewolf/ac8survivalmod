@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.18.1"
+local VERSION = "0.18.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1209,6 +1209,7 @@ local RUN = { credits = 0, earned = 0, spent = 0, bonus = {}, bought = {}, msg =
 local function addCredits(n, why)
     if n <= 0 then return end
     RUN.credits, RUN.earned, RUN.dirty = RUN.credits + n, RUN.earned + n, true
+    RUN.msg = {}            -- a shop result ("NOT ENOUGH CREDITS ...") is stale once the credits change
     log(string.format("credits: +%d (%s), now %d", n, why, RUN.credits))
 end
 
@@ -1923,6 +1924,12 @@ end
 
 local function musicTick(tick, now, paused)
     local mc = CFG.music
+    if D and tick % 4 == 0 and type(SV_BGM) == "function" and (not mc.enabled or M.player) then
+        -- Survival leaves the music alone; log what the game's BGM controller plays (user, 2026-10-22: the music
+        -- player's track skips mid-play), so a change can be matched to what happened then
+        local id = SV_BGM(0)
+        if id ~= M.id then M.id = id; log(string.format("music: the game's BGM controller now plays id %d (status %d)", id, SV_BGM(1))) end
+    end
     if not mc.enabled or not D or M.player then return end
     if type(SV_PlayBGM) ~= "function" then
         if not M.warned then M.warned = true; log("music: dlls/main.dll older than 0.9.0; the mission track plays all run") end
@@ -2225,11 +2232,13 @@ local function shopTick(tick)
     end
 end
 
--- The landing menu's ammo panel (WBP_Menu_IngameHangar_WeaponDetail_002: six slots AmmoText{L,R}{Top,Center,Bottom},
--- each WBP_Hangar_Detail_Text_000 with the weapon's name in Text_Body and "count/max" in Text_Body_1) shows the
--- aircraft's stock full load (user, 2026-10-22). While Survival's caps apply, a slot whose max is a capped weapon's
--- shows what the player takes off with instead: the cap (the rearm fills up to it; the gun is left alone).
+-- The landing menu's ammo panel ([WEAPONS AMMO], WBP_Menu_IngameHangar_WeaponDetail_002: six slots
+-- AmmoText{L,R}{Top,Center,Bottom}, each WBP_Hangar_Detail_Text_000 with the weapon's name in Text_Body and its stock
+-- full load in Text_Body_1, e.g. "MSL" "144"; user screenshot of 2026-10-22: GUN / MSL / FLR on the left, the special
+-- weapons on the right). While Survival's caps apply, each capped weapon shows what the player takes off with: the
+-- cap (the rearm fills up to it; the gun is left alone).
 local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "AmmoTextRTop", "AmmoTextRCenter", "AmmoTextRBottom" }
+local AMMO_SLOT_KIND = { AmmoTextLCenter = 1, AmmoTextLBottom = 4, AmmoTextRTop = 2, AmmoTextRCenter = 3, AmmoTextRBottom = 3 }
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
     for _, panel in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
@@ -2249,17 +2258,14 @@ local function hangarAmmoTick(tick)
         if valid(panel) and not nameOf(panel):find("Default__", 1, true) then
             for _, slot in ipairs(AMMO_SLOTS) do
                 pcall(function()
-                    local t = panel[slot].Text_Body_1
-                    local now = t:GetText():ToString()
-                    local n, m = now:match("^%s*(%d+)%s*/%s*(%d+)%s*$")
-                    m = tonumber(m)
-                    if not m then return end
-                    local kind
-                    if m == A.max[1] then kind = 1 elseif m == A.max[4] then kind = 4
-                    elseif m ~= A.max[0] then kind = 2 end           -- any other weapon is a special weapon
+                    local kind = AMMO_SLOT_KIND[slot]
                     local cap = kind and A.caps[kind]
                     if not cap then return end
-                    local want = string.format("%d/%d", math.min(cap, m), math.min(cap, m))
+                    local t = panel[slot].Text_Body_1
+                    local now = t:GetText():ToString()
+                    local m = tonumber(now:match("^%s*(%d+)%s*$"))               -- an empty special slot shows "---"
+                    if not m then return end
+                    local want = tostring(math.min(cap, m))
                     if now ~= want then
                         t:SetText(toText(want))
                         if not SH.ammoSaid then SH.ammoSaid = true; log("shop: landing menu ammo shows the caps (" .. now .. " -> " .. want .. ")") end

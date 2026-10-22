@@ -683,6 +683,8 @@ static int32_t  g_shopHead, g_shopCount;
 static uintptr_t OnHangarDecide(void* page)
 {
     const FString* a = SelectedArgs(page, NULL);
+    /* every press on the landing menu (test of 2026-10-22: a second landing's shop picks never showed up) */
+    Log(L"landing menu: decide on %p, row '%s'", page, a && a->data && a->num > 0 ? a->data : L"?");
     if (a && a->num > 8 && a->num <= 32 && !memcmp(a->data, L"SV_Buy_", 7 * 2)) {
         if (g_shopCount < SHOP_QUEUE) {
             wchar_t* q = g_shopQueue[(g_shopHead + g_shopCount++) % SHOP_QUEUE];
