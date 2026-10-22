@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.17.0"
+local VERSION = "0.17.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -506,8 +506,10 @@ local CFG = {
     -- bank Survival's level loads (tools/re/MUSIC_RADIO_CAMERA.md); a name the game doesn't have is dropped.
     -- pause_player: free flight's Music Player row in Survival's pause menu; once the player opens it, Survival stops
     -- changing the music for the rest of the run.
+    -- enabled = false (user, 2026-10-22): no round music at all, the Music Player is the only music (the mission-start
+    -- track played over it; tools/survival_events.py MUSIC is None too). true brings the round rotation back.
     music = {
-        enabled      = true,
+        enabled      = false,
         pause_player = true,
         start_track  = "AKE_Bgm_Ms08A_Play",
         restart_s    = 15,

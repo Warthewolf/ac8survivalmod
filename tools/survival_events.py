@@ -8,7 +8,7 @@ node class and most names these records use. Record format: tools/re/EVENT_NOTES
 Milestone 2: rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, tools/re/SPAWN_SYSTEM.md),
 not by events. The probe graph that spawned with LiveReinforcement* (tests 2-10) showed why: the game never spawns a
 desc again while its shot-down flight is still on the phase's unit list. The events left here:
-  MissionStart        Mission 8's music; the mission clock paused and hidden (Mission 22's own pair, run when its
+  MissionStart        (no music: MUSIC is None) the mission clock paused and hidden (Mission 22's own pair, run when its
                       battle ends): Survival is endless, so no 60-minute countdown and no time-up
   SV_FlightUp_NN      (one per pool flight, "reinforcement appeared", fires for any spawn of it) SV_Alive += 1,
                       SV_Up_NN = 1; 2 s later: air-only enemy search + engage the player (Mission 22's own orders)
@@ -85,8 +85,9 @@ def behaviour_row(unit):
     return None
 KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
 if CHASE: KEEP_AT_START[CHASE_UNIT] = None
-# Mission 8's music; it sits in the shared campaign BGM bank (DA_SoundDB_AKB_BGM_Campaign) with Mission 22's.
-MUSIC = 'AKE_Bgm_Ms08A_Play'
+# Music at mission start: none (user, 2026-10-22: it played over the pause menu's Music Player; the player picks the
+# music there). Was Mission 8's 'AKE_Bgm_Ms08A_Play' (the shared campaign BGM bank, DA_SoundDB_AKB_BGM_Campaign).
+MUSIC = None
 # SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (chase).
 INT_FLAGS = ['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
 
@@ -255,7 +256,7 @@ def build_events(stock_ep):
         return g.execute(t_call, event, {0: target}, **kw)
 
     g.trigger('MissionStart', 'MissionStart')
-    g.execute(t_bgm, 'MissionStart', {0: MUSIC})
+    if MUSIC: g.execute(t_bgm, 'MissionStart', {0: MUSIC})
     g.execute(t_pause, 'MissionStart')
     g.execute(t_hide, 'MissionStart')
     g.execute(t_hide, 'MissionStart', delay=3.0)   # again once the HUD is up (Mission 8 hides 3 s late)
