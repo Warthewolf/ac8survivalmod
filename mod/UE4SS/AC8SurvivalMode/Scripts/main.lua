@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.24.0"
+local VERSION = "0.24.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -26,7 +26,18 @@ local TABLES = {
       above = "QuitGame" },
 }
 
-local function log(s) print(TAG .. s .. "\n") end
+-- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
+-- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
+local LOG_FILE = nil
+do
+    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\"
+    local ok, f = pcall(io.open, dir .. "AC8SurvivalMode_lua.log", "w")
+    if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
+end
+local function log(s)
+    print(TAG .. s .. "\n")
+    if LOG_FILE then pcall(function() LOG_FILE:write(os.date("%H:%M:%S "), s, "\n") end) end
+end
 
 local function valid(o)
     local ok, v = pcall(function() return o ~= nil and o:IsValid() end)
@@ -385,7 +396,10 @@ end
 
 local levelTick = nil              -- tick count when Survival's level was loaded
 pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
-    if nameOf(w):find("PL_SurvivalMode", 1, true) then levelTick = -1 end      -- picked up by the next tick
+    local n = nameOf(w)
+    if n:find("PL_SurvivalMode", 1, true) then levelTick = -1 end      -- picked up by the next tick
+    -- every level and sublevel the game makes, so a crash while loading shows the last one (AC8SurvivalMode_lua.log)
+    log("world: " .. (n:match("(/Game/[^%.:]+)") or n))
 end)
 
 ---------------------------------------------------------------------------------------------------- rounds
