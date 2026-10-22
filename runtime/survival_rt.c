@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.12.1"
+#define RT_VERSION           L"0.13.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1098,6 +1098,30 @@ static int64_t SetAircraft(const wchar_t* name, const wchar_t* npc, int index)
     return set;
 }
 
+/* Sets the AI level (LiveAIObjectDesc.LevelId, u16 at desc +0x78: 200 = level 2, every Mission 22 object's) of the
+ * unit desc's AI objects, read by the planes it spawns as their AILevel (plane +0x1048, the value behaviour trees'
+ * InstanceWeightProbabilityAILevel weigh: tools/re/BEHAVIOUR_NATIVE_LOGIC.md 6). Survival's ranks 6-10 use 3-5. */
+#define AI_DESC_LEVEL 0x78
+#define PLANE_AI_LEVEL 0x1048
+static int64_t SetLevel(const wchar_t* name, int32_t level)
+{
+    int ready = SpawnerReady();
+    if (ready != 1) return ready;
+    FNameRaw fn;
+    uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
+    if (!desc) return SV_ERR_NO_UNIT;
+    if (level < 0 || level > 65535) return SV_ERR_BAD_ARGS;
+    TArrayRaw* ai = (TArrayRaw*)(desc + LY.aiList);
+    int64_t set = 0;
+    for (int32_t i = 0; ai->data && i < ai->num && i < 64; ++i) {
+        uint8_t* a = ai->data + (size_t)i * (size_t)LY.aiSize;
+        if (AI_DESC_LEVEL + 2 > LY.aiSize || !Readable(a + AI_DESC_LEVEL, 2)) break;
+        *(uint16_t*)(a + AI_DESC_LEVEL) = (uint16_t)level;
+        ++set;
+    }
+    return set;
+}
+
 static int64_t UnitAlive(const wchar_t* name)
 {
     int ready = SpawnerReady();
@@ -1746,10 +1770,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.12.1" */
+/* SV_Version() -> "0.13.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.12.1";
+    static const char v[] = "0.13.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1764,6 +1788,26 @@ static int L_Spawn(void* lua)
     while (n < 4 && ArgNumber(lua, &pose[n])) ++n;
     if (n != 0 && n != 4) return Ret(lua, SV_ERR_BAD_ARGS);
     return Ret(lua, Spawn(name, n ? pose : NULL));
+}
+
+/* SV_SetLevel(unit, level) -> AI objects changed (their LevelId: 100 x the AI level) or an SV_ERR code */
+static int L_SetLevel(void* lua)
+{
+    wchar_t name[96];
+    double level = -1;
+    if (!ArgName(lua, name, 96) || !ArgNumber(lua, &level)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (level < 0 || level > 65535) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, SetLevel(name, (int32_t)level));
+}
+
+/* SV_PlaneLevel(address) -> a spawned plane's AILevel value (u16 at plane +0x1048), or SV_ERR_BAD_ARGS; for the log */
+static int L_PlaneLevel(void* lua)
+{
+    double addr = 0;
+    if (!ArgNumber(lua, &addr) || addr <= 0) return Ret(lua, SV_ERR_BAD_ARGS);
+    uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)addr;
+    if (!LiveObject(plane) || !Readable(plane + PLANE_AI_LEVEL, 2)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, *(uint16_t*)(plane + PLANE_AI_LEVEL));
 }
 
 /* SV_SetAircraft(unit, npc [, index]) -> AI objects changed or an SV_ERR code */
@@ -1988,7 +2032,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
@@ -2002,7 +2046,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_SetLevel, SV_PlaneLevel, SV_SetText, SV_ShopRequest, SV_BGMNames registered");
 }
 
 #define MOD_SLOTS 16

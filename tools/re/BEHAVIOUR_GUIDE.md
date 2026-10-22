@@ -71,6 +71,13 @@ on KDS for ordinary enemies; Survival's pursuits block it (`blockKDS`).
 |---|---|---|---|
 | LA_SV_MoveAway | MoveAwayFromTargetLua | ~1.5 s break after an attack pass (stock 12.5 s) | confirmed in game |
 | LA_SV_TailChase | PursueTargetLua | the stock fighter pursuit (PursueTarget_0011) plus a tail-chase branch: two 10 s pursuits 250 m behind the target (`useOffset`, ace lead 10, head-on break, KDS blocked) joined by a re-acquire turn; weighted by pilot rank (1: never, 2: 10 %, 3: 30 %, 4: 70 %, 5: always), so it grows with Survival's skill tiers and difficulty spikes. CFG.ai.tail_chase | built, untested |
+| LA_SV_ProvokeNear | ProvokeNearLua | player close behind: break turn (all), brake-and-turn overshoot (rank 2+), flare break (rank 3+), cobra bait (AI level 3+, CanCobra), kulbit bait and scissors (AI level 4+). CFG.ai.reactions | built, untested |
+| LA_SV_Escape | EscapeFromPursuerLua | rank-weighted: the stock 8 s level-and-straight run (rookies) or the aces' 2 s break up / down / sideways by altitude (EscapeFromPursuer_0400). CFG.ai.reactions | built, untested |
+
+The AI level (AILevel, `InstanceWeightProbabilityAILevel`) is the flight's world-data LevelId / 100 (stock 200 = 2),
+written by `SV_SetLevel(unit, level)` before Survival spawns it; Survival's ranks 6-10 (Mercenary, Legend, Demon,
+Phantom, Reaper: main.lua CFG.tiers) use 3-5, so every AI-level-weighted branch above is off for ranks 1-5.
+
 Patterns ready to adapt (BEHAVIOUR_SCRIPTS.md 6): quick-reaction provoke (Provoke_0400_s layout, pair with
 EscapeFromPursuer_0400), short extend.
 

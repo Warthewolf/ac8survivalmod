@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.28.0"
+local VERSION = "0.29.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -528,6 +528,18 @@ local CFG = {
             { name = "Veteran", from_round = 7,  rank = 4, post_stall = true },
             { name = "Elite",   from_round = 10, rank = 5, post_stall = true },
             { name = "Ace",     from_round = 13, rank = 5, post_stall = true },
+            -- Beyond Ace (user, 2026-10-22: "make more of these pilot ranks"). The game clamps PilotRank to 1-5, so these
+            -- stay at 5 and raise the AI level instead (the flight's LevelId, 100 x ai_level, written before it spawns:
+            -- dlls/main.dll SV_SetLevel; stock is 2). Survival's behaviours weigh their tight tail chase, cobra / kulbit
+            -- bait and scissors by it (tools/re/BEHAVIOUR_GUIDE.md 6). fcs: fire control at least that difficulty-spike
+            -- level's; provoke / surround: as CFG.spikes' (react quicker when tailed, sit closer when pursuing).
+            { name = "Mercenary", from_round = 16, rank = 5, post_stall = true, ai_level = 3, fcs = 1 },
+            { name = "Legend",    from_round = 19, rank = 5, post_stall = true, ai_level = 4, fcs = 2 },
+            { name = "Demon",     from_round = 22, rank = 5, post_stall = true, ai_level = 5, fcs = 2 },
+            { name = "Phantom",   from_round = 25, rank = 5, post_stall = true, ai_level = 5, fcs = 3,
+                                  provoke_cone_deg = 50, provoke_time_s = 1.0 },
+            { name = "Reaper",    from_round = 28, rank = 5, post_stall = true, ai_level = 5, fcs = 3,
+                                  provoke_cone_deg = 45, provoke_time_s = 0.8, surround_m = { 40, 100 } },
         },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
@@ -567,9 +579,14 @@ local CFG = {
     -- raise the rank, so the tail chasing grows with the rounds. ai.tail_chase = false keeps the stock pursuit.
     behaviour_sets = {
         NLID_SV_Fighter = { base = "NLID_0012_CP", slots = { MoveAwayFromTargetLua = "LA_SV_MoveAway",
-                                                             PursueTargetLua = "LA_SV_TailChase" } },
+                                                             PursueTargetLua = "LA_SV_TailChase",
+                                                             ProvokeNearLua = "LA_SV_ProvokeNear",
+                                                             EscapeFromPursuerLua = "LA_SV_Escape" } },
     },
-    ai = { tail_chase = true },
+    -- reactions (user, 2026-10-22: "come up with some new reactions"): LA_SV_ProvokeNear when the player is close on
+    -- their tail (break turn, brake-and-turn overshoot, flare break; AI level 3+ cobra bait, 4+ kulbit bait and
+    -- scissors), LA_SV_Escape (low ranks the stock 8 s run, higher ranks the aces' 2 s break). false: the stock ones.
+    ai = { tail_chase = true, reactions = true },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
@@ -953,6 +970,13 @@ local function spikeLevel(round)
     return math.min(#sp.levels, #SPIKE_SUFFIX, (round - 1) // math.max(1, math.floor(sp.every)))
 end
 local function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
+-- The tier index (CFG.tiers.list) a flight spawning in round `round` flies: the round's, one higher at promote_chance.
+local function pickTier(round)
+    local tc, i = CFG.tiers, 1
+    for k, t in ipairs(tc.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
+    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
+    return i
+end
 local function withLevel(base, over)                    -- a copy of `base` with `over`'s fields
     local t = {}
     for k, v in pairs(base) do t[k] = v end
@@ -1017,7 +1041,8 @@ return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .
 ]=]
 -- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
 local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400",
-                         "SurvivalMode.AI.LA_SV_MoveAway", "SurvivalMode.AI.LA_SV_TailChase" }   -- ours too: builds and errors
+                         "SurvivalMode.AI.LA_SV_MoveAway", "SurvivalMode.AI.LA_SV_TailChase",
+                         "SurvivalMode.AI.LA_SV_ProvokeNear", "SurvivalMode.AI.LA_SV_Escape" }   -- ours too: builds and errors
 local REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
                          "return tostring(ok) .. ' ' .. tostring(C)"
 
@@ -1226,7 +1251,9 @@ local function setsSetup()
     for name, def in pairs(CFG.behaviour_sets) do
         local scripts, missing = {}, nil
         for slot, sname in pairs(def.slots) do
-            if sname ~= "LA_SV_TailChase" or CFG.ai.tail_chase then          -- (ai.tail_chase false: the stock pursuit)
+            local on = (sname ~= "LA_SV_TailChase" or CFG.ai.tail_chase)
+                and ((sname ~= "LA_SV_ProvokeNear" and sname ~= "LA_SV_Escape") or CFG.ai.reactions)
+            if on then                                      -- (ai.tail_chase / ai.reactions false: the stock scripts)
                 local sc = loadObject("/Game/LuaSource/SurvivalMode/AI/" .. sname .. "." .. sname)
                 if valid(sc) then pin(sc, "behaviour script " .. sname); scripts[slot] = sc else missing = sname end
             end
@@ -1418,12 +1445,13 @@ end
 local enemySpike
 do
 local spikeSaid = {}
-function enemySpike(p, round)
+function enemySpike(p, round, tier)
     if p.spiked ~= nil or not round then return end
     local level = spikeLevel(round)
     p.spiked = level
-    local sk = spikeCfg(level)
-    if level == 0 then return end
+    local sk = withLevel(spikeCfg(level), tier and { provoke_cone_deg = tier.provoke_cone_deg,
+        provoke_time_s = tier.provoke_time_s, surround_m = tier.surround_m } or nil)
+    if level == 0 and not (tier and tier.provoke_cone_deg) then return end
     local before, writes = {}, {}
     local function set(field, value)
         if value == nil then return end
@@ -1460,12 +1488,10 @@ end
 local enemyTier
 do
 local tierSaid = {}
-function enemyTier(p, round)
+function enemyTier(p, round, flightTier)
     local tc = CFG.tiers
     if p.tier ~= nil or not tc.enabled or not round then return end
-    local i = 1
-    for k, t in ipairs(tc.list) do if math.max(round, 1) >= t.from_round then i = k end end
-    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
+    local i = flightTier or pickTier(round)                 -- a fighter flight's was picked at its spawn
     local t = tc.list[i]
     p.tier = t
     local add = tc.rank_add[presetName()] or 0
@@ -1477,8 +1503,13 @@ function enemyTier(p, round)
     local key = round .. t.name
     if not tierSaid[key] or not okW then
         tierSaid[key] = true
-        log(string.format("tiers: round %d %s (%s): PilotRank %s -> %d%s", round, t.name, p.name, ok0 and tostring(r0) or "?",
-            want, okW and "" or (" (write failed: " .. tostring(err) .. ")")))
+        local lv = ""
+        if t.ai_level and type(SV_PlaneLevel) == "function" then     -- the AI level the plane took from its desc
+            local okL, l = pcall(function() return SV_PlaneLevel(addrOf(p.obj)) end)
+            lv = string.format(", AI level %s (wanted %d)", okL and tostring(l) or "?", t.ai_level * 100)
+        end
+        log(string.format("tiers: round %d %s (%s): PilotRank %s -> %d%s%s", round, t.name, p.name, ok0 and tostring(r0) or "?",
+            want, lv, okW and "" or (" (write failed: " .. tostring(err) .. ")")))
     end
 end
 end
@@ -2056,7 +2087,11 @@ for v, u in pairs(CFG.probe.units) do PROBE_OF[u] = v end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], spikeLevel(D.round))
+    local ti = CFG.tiers.enabled and pickTier(D.round) or nil
+    local tier = ti and CFG.tiers.list[ti] or {}
+    D.flightTier = D.flightTier or {}
+    D.flightTier[unit] = ti
+    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], math.max(spikeLevel(D.round), tier.fcs or 0))
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
         ac = PROBE_MISSION_ROW[pv]
@@ -2064,13 +2099,14 @@ local function spawnFlight(unit)
             pv == "Pkg" and "package" or "run-time"))
     end
     local set = SV_SetAircraft(unit, ac)
+    if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     spawningUnit = unit
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
     spawningUnit = nil
-    log(string.format("round %d: %s%s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
-        D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
+    log(string.format("round %d: %s%s as %s (%s set, %s), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
+        D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), tier.name or "no tier", dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
@@ -3109,7 +3145,9 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p, D and D.round); pcall(enemySpike, p, D and D.round); pcall(probeTrack, p); pcall(aiWatch, p, you)
+                local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
+                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round)
+                pcall(enemySpike, p, D and D.round, ft and CFG.tiers.list[ft]); pcall(probeTrack, p); pcall(aiWatch, p, you)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
