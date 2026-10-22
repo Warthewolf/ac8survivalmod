@@ -512,6 +512,10 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
 - Test: "allies:" log lines (rows at the main menu, taxiing out, airborne count, losses, hunts / strikes fired).
 - Aircraft repair (same build): health written directly too and read back; charged only when it reads full (test of
   2026-10-23: four repairs charged, health stayed 63%).
+- Lua 0.38.1 (user, 2026-10-23, screenshots): the landing menu's ammo panel still showed the stock loads (GUN 800, MSL 144,
+  FLR 4, QAAM 32): GetWidgetFromName found none of its texts, so its TextBlocks are found by full name under the panel
+  and show what you take off with (A.caps); a menu beep on every STORE press (BaseResupply_Decide when bought, General
+  Reject when not; PostEventByName). TEST ONLY: Ctrl+F9 +5000 zollars, out of every release zip.
 
 ## Research backlog (user 2026-10-21), in order
 1. AI behaviour tiers (above)  2. Enemy unit data DT_NPC_Mission##  3. Fire control / weapon data  4. Store UI (NUI/Shop) for the

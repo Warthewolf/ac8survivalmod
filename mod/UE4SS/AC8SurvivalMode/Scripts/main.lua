@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.38.0"
+local VERSION = "0.38.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -696,6 +696,8 @@ local CFG = {
     -- The item names must match tools/build_survival.py SHOP_ITEMS.
     shop = {
         enabled = true,
+        -- the beep on every STORE press (Wwise events of the always-loaded game-SE bank): bought, or nothing bought
+        sounds  = { bought = "AKE_GEN_UI_INGAME_BaseResupply_Decide_Play", refused = "AKE_GEN_UI_OUTGAME_General_Reject_Play" },
         items = {
             -- ammo is used up now (no free rearm), so a pack costs the same every time: 25 Z a missile against 100 Z a
             -- fighter (about two missiles a kill), 100 Z a special weapon round, 75 Z a flare
@@ -4111,6 +4113,16 @@ function shopBuy(name)
 end
 end
 
+-- A menu sound by its Wwise event name (the game-SE bank, always loaded; tools/re/MUSIC_RADIO_CAMERA.md).
+function SHOP.sound(name)
+    local ok, err = pcall(function()
+        local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
+        if not valid(lib) then error("LiveSoundBlueprintLibrary not found") end
+        lib:PostEventByName(valid(survivalPC) and survivalPC or FindFirstOf("PlayerController"), FName(name))
+    end)
+    if not ok and not SH.soundSaid then SH.soundSaid = true; log("shop: menu sound " .. name .. " failed: " .. tostring(err)) end
+end
+
 local function shopTick(tick)
     if not CFG.shop.enabled or not D then return end
     if type(SV_ShopRequest) == "function" then
@@ -4126,8 +4138,11 @@ local function shopTick(tick)
                 log("shop: " .. item .. " pressed again within a tick; once is bought")
             else
                 seen[item] = true
+                local spent = RUN.spent
                 local ok, err = pcall(shopBuy, item)
                 if not ok then log("shop: error " .. tostring(err)) end
+                -- (user, 2026-10-23: "add a menu beep for everytime you press one of the buttons")
+                SHOP.sound(RUN.spent > spent and CFG.shop.sounds.bought or CFG.shop.sounds.refused)
             end
         end
     end
@@ -4369,14 +4384,40 @@ local function widgetText(t)
     if ok and type(v) == "string" then return v end
     return nil
 end
-local function slotTexts(panel, slot)                 -- the slot's name and count widgets
-    local w = childWidget(panel, slot)
-    return w and childWidget(w, "Text_Body"), w and childWidget(w, "Text_Body_1")
+-- The slot's name and count TextBlocks. Found by their full names under the panel (<panel>.WidgetTree_N.AmmoText<slot>.
+-- WidgetTree_N.<text>): GetWidgetFromName gave nothing on the live panel (test of 2026-10-23: every slot 'nil'). The
+-- count is the text that reads as a number (or "---", an empty special slot), the name the other; the count widget is
+-- kept once found, as Survival's own number then shows in it.
+local function slotTexts(panel, slot)
+    SH.slotCache = SH.slotCache or {}
+    local key = addrOf(panel)
+    local c = SH.slotCache[key]
+    if not c or (not c.found and os.clock() - c.at > 2) then   -- (none yet: looked for again every 2 s, not every call)
+        c = { slots = {}, at = os.clock() }
+        local base = nameOf(panel):match("^%S+%s+(.+)$") or nameOf(panel)
+        for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+            local n = nameOf(t)
+            local at = n:find(base, 1, true)
+            local sl, leaf = at and n:sub(at + #base):match("^%.WidgetTree[_%d]*%.(AmmoText%a+)%.WidgetTree[_%d]*%.([%w_]+)$")
+            if sl then c.slots[sl] = c.slots[sl] or { all = {} }; c.slots[sl].all[leaf] = t; c.found = true end
+        end
+        SH.slotCache[key] = c
+    end
+    local e = c.slots[slot]
+    if not e then return nil, nil end
+    if not (e.count and valid(e.count)) then
+        for _, t in pairs(e.all) do
+            local v = widgetText(t)
+            if v and (v:match("^%s*%d+%s*$") or v:match("^%s*%-+%s*$")) then e.count = t
+            elseif v and v:match("%a") then e.name = t end
+        end
+    end
+    return e.name, e.count
 end
 
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
-    if not playerOnAirfield() then SH.panels = nil; return end   -- the landing menu only exists down there
+    if not playerOnAirfield() then SH.panels, SH.slotCache = nil, nil; return end   -- the landing menu only exists down there
     local live = SH.panels and #SH.panels > 0
     for _, panel in ipairs(SH.panels or {}) do if not valid(panel) then live = false end end
     if not live and tick % 8 == 1 then
@@ -4406,9 +4447,8 @@ local function hangarAmmoTick(tick)
                     if not cap then return end
                     local _, t = slotTexts(panel, slot)
                     local now = t and widgetText(t)
-                    local m = now and tonumber(now:match("^%s*(%d+)%s*$"))               -- an empty special slot shows "---"
-                    if not m then return end
-                    local want = tostring(math.min(cap, m))
+                    if not (now and now:match("^%s*%d+%s*$")) then return end              -- an empty special slot shows "---"
+                    local want = tostring(math.min(cap, A.max[kind] or cap))              -- what you take off with
                     if now ~= want then
                         t:SetText(toText(want))
                         if not SH.ammoSaid then SH.ammoSaid = true; log("shop: landing menu ammo shows the caps (" .. now .. " -> " .. want .. ")") end
@@ -4700,6 +4740,20 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             if not ok then log("launch: error " .. tostring(err)) end
         end)
     end)
+    -- TEST ONLY, take out of every release / test zip (user, 2026-10-23): Ctrl+F9 in a run gives 5000 zollars
+    if Key.F9 then
+        pcall(RegisterKeyBind, Key.F9, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D then log("test: Ctrl+F9 outside a Survival run"); return end
+                    addCredits(5000, "test key Ctrl+F9")
+                    RUN.dirty = true
+                    hudCallout("TEST: +5000 ZOLLARS", string.format("NOW %d", RUN.credits))
+                end)
+                if not ok then log("test: Ctrl+F9 error " .. tostring(err)) end
+            end)
+        end)
+    end
     if Key.F11 then                -- Ctrl+F11 in a run: the next round is the Anomaly (in the break: it starts now)
         pcall(RegisterKeyBind, Key.F11, mods, function()
             ExecuteInGameThread(function()
