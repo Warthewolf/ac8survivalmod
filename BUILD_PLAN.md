@@ -261,6 +261,10 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   -> Ctor(classpath) -> require -> StaticLoadObject(/Game/LuaSource/...); script errors are silent in shipping.
   Runtime 0.8.0 + Lua 0.12.0: SV_GameLua / SV_GameLuaState run code in the game's Lua; main.lua logs diagnostics,
   tests the asset route, injects scripts into package.loaded, and counts builds/errors (SV_Report). Waiting for test.
+- BUILT 2026-10-22 (Lua 0.16.0), waiting for a test: skill tiers on proven parts (CFG.tiers): Rookie (round 1, rank 1,
+  no post-stall), Regular (4, rank 2, no post-stall), Veteran (7, 3), Elite (11, 4), Ace (15, 5); 20 % of pilots
+  one tier up; difficulty adds -1 / 0 / +1. PilotRank written live on each enemy (log "tiers:"); post-stall needs
+  both the model (CFG.maneuvers) and the tier. The probe's blanket rank 5 is off. Own scripts per tier: below.
 - [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.15.0"
+local VERSION = "0.16.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -396,7 +396,24 @@ local CFG = {
     -- first flight, live PilotRank write on every enemy, kill attribution in the log.
     -- runtime: also fly the LuaScript made at run time (route 2), put into the game's Lua by dlls/main.dll 0.8.0.
     -- (Test 20: making an in-memory package for it from UE4SS crashed the game; that is gone.)
-    probe = { enabled = true, behaviour = true, runtime = true, rank = 5, kills = true },
+    probe = { enabled = true, behaviour = true, runtime = true, rank = false, kills = true },
+    -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
+    -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
+    -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
+    -- uses the cobra / kulbit, even on a model CFG.maneuvers allows. The round picks the tier; promote_chance of the
+    -- pilots fly one tier higher. Survival's own behaviour scripts per tier come later (the game-Lua bridge first).
+    tiers = {
+        enabled = true,
+        promote_chance = 0.2,
+        rank_add = { casual = -1, standard = 0, ace = 1 },
+        list = {
+            { name = "Rookie",  from_round = 1,  rank = 1, post_stall = false },
+            { name = "Regular", from_round = 4,  rank = 2, post_stall = false },
+            { name = "Veteran", from_round = 7,  rank = 3, post_stall = true },
+            { name = "Elite",   from_round = 11, rank = 4, post_stall = true },
+            { name = "Ace",     from_round = 15, rank = 5, post_stall = true },
+        },
+    },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
@@ -906,7 +923,32 @@ local function probeRank(p, tick)
     end
 end
 
--- CFG.maneuvers: post-stall permission for this enemy (p from the plane list), set once when it is first seen up.
+-- CFG.tiers: this enemy's tier (by the round, sometimes one higher) and PilotRank, set once when it is first seen up.
+local tierSaid = {}
+local function enemyTier(p, round)
+    local tc = CFG.tiers
+    if p.tier ~= nil or not tc.enabled or not round then return end
+    local i = 1
+    for k, t in ipairs(tc.list) do if math.max(round, 1) >= t.from_round then i = k end end
+    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
+    local t = tc.list[i]
+    p.tier = t
+    local dm = FindFirstOf("LiveDifficultyManager")
+    local okD, d = pcall(function() return dm.CurrentDifficulty end)
+    local add = tc.rank_add[(okD and CFG.ammo.by_difficulty[d]) or "standard"] or 0
+    local want = math.max(1, math.min(5, t.rank + add))
+    local ok0, r0 = pcall(function() return p.obj.PilotRank end)
+    local okW, err = pcall(function() p.obj.PilotRank = want end)
+    local key = round .. t.name
+    if not tierSaid[key] or not okW then
+        tierSaid[key] = true
+        log(string.format("tiers: round %d %s (%s): PilotRank %s -> %d%s", round, t.name, p.name, ok0 and tostring(r0) or "?",
+            want, okW and "" or (" (write failed: " .. tostring(err) .. ")")))
+    end
+end
+
+-- CFG.maneuvers: post-stall permission for this enemy (p from the plane list), set once when it is first seen up:
+-- its model must be listed and its tier (enemyTier, run first) must allow post-stall at all.
 -- The first plane of each model logs what its blueprint had and what it reads after the write.
 local maneuversSaid = {}
 local function enemyManeuvers(p)
@@ -915,6 +957,7 @@ local function enemyManeuvers(p)
     local model = p.name:match("^BP_OP%d+_(%w+)_") or "?"
     local allow = false
     for _, m in ipairs(CFG.maneuvers.post_stall) do if m == model then allow = true end end
+    if p.tier and not p.tier.post_stall then allow = false end
     local function read()
         local okC, c = pcall(function() return p.obj.bCanManeuverPugachevsCobra end)
         local okK, k = pcall(function() return p.obj.bCanManeuverKulbit end)
@@ -928,8 +971,9 @@ local function enemyManeuvers(p)
             p.obj.bCanManeuverKulbit = false
         end)
     end
-    if not maneuversSaid[model] then
-        maneuversSaid[model] = true
+    local said = model .. (allow and "+" or "-")
+    if not maneuversSaid[said] then
+        maneuversSaid[said] = true
         log(string.format("maneuvers: %s (%s) post-stall %s: was %s, now %s%s", model, p.name, allow and "allowed" or "off",
             before, read(), ok and "" or (" (write failed: " .. tostring(err) .. ")")))
     end
@@ -2119,7 +2163,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
+                pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTree, p); pcall(probeTrack, p); pcall(probeRank, p, tick)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
