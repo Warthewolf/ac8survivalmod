@@ -520,7 +520,8 @@ local CFG = {
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
     -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
     -- uses the cobra / kulbit, even on a model CFG.maneuvers allows. The round picks the tier; promote_chance of the
-    -- pilots fly one tier higher. Survival's own behaviour scripts per tier come later (the game-Lua bridge first).
+    -- pilots fly one tier higher. Survival's behaviour scripts (CFG.behaviour_sets) weigh their moves by the rank
+    -- and the AI level these set; ranks 6-10 fly the named aces' squadrons (CFG.aces).
     tiers = {
         enabled = true,
         promote_chance = 0.2,
