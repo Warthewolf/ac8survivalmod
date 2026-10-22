@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.35.1"
+local VERSION = "0.35.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -936,8 +936,55 @@ local function iniValue(old, s)
     end
     return nil, false
 end
+-- Settings an update added to survival.default.ini (a key or a section survival.ini doesn't have, switched on or off)
+-- are appended to survival.ini, switched off, with the comment lines above them, so players find them there (user,
+-- 2026-10-22: "I couldn't find it in the ini"). Nothing the player wrote is changed.
+local function mergeDefaults(dir)
+    local d = io.open(dir .. "survival.default.ini", "r")
+    local u = io.open(dir .. "survival.ini", "r")
+    if not (d and u) then if d then d:close() end; if u then u:close() end; return end
+    local have, sec = {}, ""
+    for line in u:lines() do
+        local h = line:match("^%s*%[%s*(.-)%s*%]")
+        if h then sec = h:lower()
+        else
+            local k = line:match("^%s*;?%s*([%w_]+)%s*=")
+            if k then have[sec .. "/" .. k:lower()] = true end
+        end
+    end
+    u:close()
+    local out, comments, cur, curShown = {}, {}, "", false
+    for line in d:lines() do
+        local h = line:match("^%s*%[%s*(.-)%s*%]")
+        local k = not h and line:match("^%s*;?%s*([%w_]+)%s*=")
+        if h then
+            cur, curShown, comments = h, false, {}
+        elseif k then
+            if cur ~= "" and not have[cur:lower() .. "/" .. k:lower()] then
+                if not curShown then out[#out + 1] = ""; out[#out + 1] = "[" .. cur .. "]"; curShown = true end
+                for _, c in ipairs(comments) do out[#out + 1] = c end
+                out[#out + 1] = line:match("^%s*;") and line or (";" .. line)
+            end
+            comments = {}
+        elseif line:match("^%s*;") then
+            comments[#comments + 1] = line
+        else
+            comments = {}
+        end
+    end
+    d:close()
+    if #out == 0 then return end
+    local w = io.open(dir .. "survival.ini", "a")
+    if not w then return end
+    w:write("\n; ---- settings added by Survival Mode " .. VERSION .. " (from survival.default.ini) ----\n")
+    w:write(table.concat(out, "\n") .. "\n")
+    w:close()
+    log("config: added the new settings to survival.ini (" .. #out .. " lines)")
+end
+
 local function loadIni()
     local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\"
+    pcall(mergeDefaults, dir)
     local f = io.open(dir .. "survival.ini", "r")
     if f then
         -- format 1 (Lua 0.24-0.25) copied every default as a live setting, which pinned them: a later default change never
