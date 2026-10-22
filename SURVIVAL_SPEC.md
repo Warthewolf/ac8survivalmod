@@ -65,4 +65,8 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Start points on the water: the user marks them with Ctrl+F10 (marks after the five beach marks in
   config/coast_marks.txt are start points).
 
+## 8. Allies (user, 2026-10-23)
+- Enemies shot down by bought allies (MOONCHILD, the DOCKS ships) pay the player as if the player had shot them down
+  ("allied kills should still pay me yeah"). Every enemy aircraft that goes down pays, whoever downed it.
+
 ## Open decisions
