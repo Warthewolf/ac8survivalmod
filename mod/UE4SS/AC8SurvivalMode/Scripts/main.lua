@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.40.1"
+local VERSION = "0.41.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -758,7 +758,14 @@ local CFG = {
         aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
                          units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" } },
         ships        = {
-            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0 },
+            -- search_m: its turrets' AI module (a copy of NPC_AIModule_Turret000, 6000 m, made NPC_AIModule_SV_<key>),
+            -- the farthest they see anything, and no losing targets in cloud. missile: its homing missiles' own weapon
+            -- row (VLS_Vessel_000: 9 s of flight from 500 km/h, +300 km/h a second to 3000, ~4 km, so 6 km locks fell
+            -- short; user, 2026-10-23: "aegis ships still don't engage far enough"): lock-on at range_m, life_s of
+            -- flight, acceleration x accel_x, top speed speed_max_kmph, turn rate x turn_x.
+            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
+                                                  missile = { range_m = 20000, life_s = 30, accel_x = 2.0,
+                                                              speed_max_kmph = 3600, turn_x = 1.5 } },
                       units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD" } },
         },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
@@ -4196,7 +4203,24 @@ function ALLY.setup()
     local wpn = loadObject(WEAPON_TABLE)
     for _, t in ipairs({ npc, mine, fcs, wpn }) do if t then pin(t, nameOf(t)) end end
     local c, made, boosted, lost = CFG.allies.fcs, {}, 0, {}
-    local shipSaid = {}
+    local shipSaid, shipModule = {}, {}
+    local modules = loadObject(SEARCH_MODULE.path)
+    if modules then
+        pin(modules, nameOf(modules))
+        for key, sh in pairs(CFG.allies.ships) do
+            local sf = sh.fcs
+            if sf and sf.search_m then
+                local row = "NPC_AIModule_SV_" .. key
+                if cloneRow(modules, "NPC_AIModule_Turret000", row, function(r)
+                    r.Radius = sf.search_m
+                    pcall(function() r.bEnableLostTargetInClouds = false end)
+                end) then
+                    shipModule[key] = row
+                    log(string.format("allies: %s's turrets search %d m (%s)", key, sf.search_m, row))
+                end
+            end
+        end
+    end
     local function allyFcs(src, key)                 -- src .. "_SVA[_<ship>]": farther, wider, quicker, tighter
         local sf = key and CFG.allies.ships[key] and CFG.allies.ships[key].fcs
         local new = src .. "_SVA" .. (sf and ("_" .. key) or "")
@@ -4208,19 +4232,43 @@ function ALLY.setup()
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
                 end
-                if sf then
-                    pcall(function()
-                        shipSaid[#shipSaid + 1] = string.format("%s (within %d m, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s)",
-                            new, math.floor(r.CaptureDistance), r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime, r.RestingTime)
-                    end)
+                if sf and shipModule[key] then        -- the ship type's own turret module: farther, not lost in cloud
+                    pcall(function() r.NpcAIModuleId = FName(shipModule[key]) end)
+                    pcall(function() r.bEnableLostTargetInClouds = false end)
                 end
+                local what = ""
                 pcall(function()                     -- a gun's rounds: a tighter spread (a weapon row without one stays)
                     local w = r.NpcWeaponId:ToString()
-                    if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, w .. "_SVA", function(x)
-                        x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x end) then
-                        r.NpcWeaponId = FName(w .. "_SVA")
+                    local wn = w .. "_SVA" .. (sf and ("_" .. key) or "")
+                    local mc, missile = sf and sf.missile, false
+                    if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, wn, function(x)
+                        pcall(function() x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x end)
+                        local homing = false
+                        pcall(function() homing = x.bIsHoming == true end)
+                        if mc and homing then        -- a homing missile: flies long enough to reach range_m
+                            missile = true
+                            pcall(function() x.LifeTime = math.max(x.LifeTime, mc.life_s) end)
+                            pcall(function() x.AccelerationKmph = x.AccelerationKmph * mc.accel_x end)
+                            pcall(function() x.SpeedMaxKmph = math.max(x.SpeedMaxKmph, mc.speed_max_kmph) end)
+                            pcall(function() x.MaxRotationAngle = x.MaxRotationAngle * mc.turn_x end)
+                            pcall(function() x.HomingReductionInCloud = 0 end)
+                            pcall(function()
+                                what = string.format(", missile %s: %.0f s at up to %.0f km/h (+%.0f km/h a second), turns %.0f",
+                                    wn, x.LifeTime, x.SpeedMaxKmph, x.AccelerationKmph, x.MaxRotationAngle)
+                            end)
+                        end
+                    end) then
+                        r.NpcWeaponId = FName(wn)
+                        if missile then pcall(function() r.CaptureDistance = mc.range_m end) end
                     end
                 end)
+                if sf then
+                    pcall(function()
+                        shipSaid[#shipSaid + 1] = string.format("%s (within %d m, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s%s)",
+                            new, math.floor(r.CaptureDistance), r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime,
+                            r.RestingTime, what)
+                    end)
+                end
             end) and true or false
         end
         return made[new] and new or nil
@@ -4245,6 +4293,9 @@ function ALLY.setup()
             end
             if row == ROWS[1] and SR.module then      -- MOONCHILD searches as far as the enemies do
                 pcall(function() have.NpcAIModuleId = FName(SR.module) end)
+            end
+            if ROW_SHIP[row] and shipModule[ROW_SHIP[row]] then   -- a ship's hull and turrets: its own module
+                pcall(function() have.NpcAIModuleId = FName(shipModule[ROW_SHIP[row]]) end)
             end
         else
             lost[#lost + 1] = row

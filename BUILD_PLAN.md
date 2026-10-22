@@ -505,6 +505,11 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   Freedoms sailed included); their weapons fly <FCS>_SVA_Aegis: allies.fcs and then arming / lock x lock_x 0.5, shot
   interval / rest x fire_x 0.5 (CFG.allies.ships.Aegis.fcs; stock x0.25 overall, twice the other allies' rate);
   0.39.1: lock-on range 2x stock (range_x 2.0, in place of the allies' 1.6).
+  0.41.0 (user: "aegis ships still don't engage far enough"; test of 2026-10-23: VLS lock 6000 m): two limits besides
+  the lock-on. Every Aegis weapon's FCS row names NPC_AIModule_Turret000 (Radius 6000 m, lost in clouds), so nothing
+  past 6 km is seen; and VLS_Vessel_000 flies 9 s from 500 km/h (+300/s to 3000), ~4 km. Now: NPC_AIModule_SV_Aegis
+  (25 km, clouds off) on its FCS rows, hull and turret DT_NPC rows; its homing missiles on <weapon>_SVA_Aegis (30 s,
+  accel x2, 3600 km/h, turn x1.5, no cloud homing loss) with lock-on 20 km (CFG.allies.ships.Aegis.fcs.missile).
 - Radio (user, 2026-10-23): the level's radio table is Survival's own copy of ms022's (DT_SV_Radio, build_survival.py
   build_radio; PL_SurvivalMode's hard import retargeted). MOONCHILD's takeoff plays M25-2's Savian mercenary leader
   "Our economy relies on mercs like us." (v2501_0054) in place of Singleton's "Providing support" line; the shuttle
