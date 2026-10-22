@@ -788,7 +788,7 @@ local CFG = {
                      -- is; the Celaeno's ms23-01 at 8-12 km was too far out: user, 2026-10-22, "go back to the
                      -- shuttle's") the shuttle's camera, with the portal spawn_km from you, any direction (nil: anywhere)
                      -- (spawn_km 8-12 put back to the ~20 km out it was: user, 2026-10-22, "put it back to 20km")
-                     camera = "LookAt_Event_Camera_ms22-01", spawn_km = nil,
+                     camera = "LookAt_Event_Camera_ms22-01", spawn_km = { 0, 0 },     -- (0, 0: off)
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
                      -- the Celaeno's death sounds (Mission 23's sound events, played by the event package when it's
                      -- down: tools/survival_events.py ANOMALY_DOWN_SOUNDS), loaded with the level so they can play
@@ -2571,7 +2571,7 @@ function ANOM.spawn()
     end
     local level = #SPIKE_SUFFIX
     local x, y, dist, bearing = spawnPoint()
-    local you = c.spawn_km and playerLocation()
+    local you = c.spawn_km and (c.spawn_km[2] or 0) > 0 and playerLocation()
     if you then                                    -- spawn_km from the player, inside the combat zone
         for _ = 1, 30 do
             local b, d = math.random() * 360, c.spawn_km[1] + math.random() * (c.spawn_km[2] - c.spawn_km[1])
