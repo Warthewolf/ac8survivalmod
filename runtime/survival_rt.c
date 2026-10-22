@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.14.0"
+#define RT_VERSION           L"0.14.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1802,10 +1802,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.14.0" */
+/* SV_Version() -> "0.14.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.14.0";
+    static const char v[] = "0.14.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
