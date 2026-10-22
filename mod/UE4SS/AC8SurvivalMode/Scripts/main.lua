@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.36.1"
+local VERSION = "0.36.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -784,9 +784,10 @@ local CFG = {
                      -- game draws an ECM carrier's area on the radar itself; it also makes your missiles miss near it)
                      weapons = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_ECM000" },
                      -- its arrival camera (tools/survival_events.py ANOMALY_CAMERAS; the shuttle's ms22-01 was too close)
-                     -- (still too close at ~20 km: the game zooms in harder the farther the target is) the Celaeno's
-                     -- camera, made for a huge airship, and the portal spawn_km from you, any direction (nil: anywhere)
-                     camera = "LookAt_Event_Camera_ms23-01", spawn_km = { 8, 12 },
+                     -- (the shuttle's ms22-01 was too close at ~20 km: the game zooms in harder the farther the target
+                     -- is; the Celaeno's ms23-01 at 8-12 km was too far out: user, 2026-10-22, "go back to the
+                     -- shuttle's") the shuttle's camera, with the portal spawn_km from you, any direction (nil: anywhere)
+                     camera = "LookAt_Event_Camera_ms22-01", spawn_km = { 8, 12 },
                      unit = "SV_Unit_Anomaly", guard_unit = "SV_Unit_AnomalyGuards",
                      -- the Celaeno's death sounds (Mission 23's sound events, played by the event package when it's
                      -- down: tools/survival_events.py ANOMALY_DOWN_SOUNDS), loaded with the level so they can play
