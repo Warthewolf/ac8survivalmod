@@ -3,6 +3,20 @@
 Work top to bottom. Each milestone is one test build. Commit after each one works in-game.
 Owner: CC = Claude Code, CX = Codex. Never work on the same files at the same time.
 
+## Status (2026-10-22, Lua 0.22.1 / runtime 0.11.0)
+Legend: [x] confirmed in a test, [~] built and installed but not confirmed yet, [ ] not started.
+- Milestone 0-1: done.
+- Milestone 2 (rounds): spawner, rounds, intermission, variety, ammo caps, HUD, clock / score cleanup, pause-menu
+  music player (+ QUIT GAME still shown), own fighter behaviour, player-only targeting, skill tiers, lag fix: confirmed.
+  Squadrons 2/4/6 + aircraft budget, harder enemy weapons (missiles, guns, special weapons): built, untested.
+  Open: Music Player track skips on kills (BGM name logging in place). Learning behaviour layer: not started.
+- Milestone 3 (airfield + bombers): health, HUD bar, hit counting, strike flights spawning: confirmed. Raids every
+  3rd round, low strike approach, Tu-95 / Tu-160 bomb runs, airfield down / reopen: built, untested.
+- Milestone 4 (landing + shop): rearm to caps, credits, shop purchases: confirmed. Landing-menu ammo panel showing
+  the caps, airfield repair purchase: untested. Aircraft repair, config/survival.ini (Codex): not started.
+- Milestone 5: ammo presets and skill offset by difficulty done; no preset menu / advanced config UI yet.
+- Milestones 6-8: not started (a friend test zip exists, no release packaging).
+
 ## Milestone 0: setup (CC)
 - [x] Unzip the Stonehenge Returns source into `source/stonehenge/` and read its Tools notes.
 - [x] Confirm the build script repacks an unchanged copy of Stonehenge Returns and it still loads in-game.
@@ -207,25 +221,39 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   put back to the cap every 0.5 s (log "ammo: refilled above the ... caps"), so a rearm fills up to the cap.
   Test 17 (2026-10-22): landing rearm refills to the caps - WORKS (user).
   (Test 15 never ran: main.lua had an invalid "\m" escape and didn't load; lua_check.py now rejects bad escapes.)
-- [ ] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
+- [x] (user 2026-10-21) AI behaviour tiers: map LA_* families in LuaSource/Chronicle/AI (Provoke, PursueTarget,
   AttackAvoidance _gun/_msl_s/_msl_m/_spw/_CP, EscapeFromPursuer, MoveAwayFromTarget, ace moves); work out what
   0000/0011/0041/0211/0400/1000 mean; escalate per round with stock tiers + LiveAIChangePilotRankExecution. Write AI_BEHAVIOURS.md.
-- [ ] (user 2026-10-21) Music: music stops around round 5 (mission BGM ends). Trigger music each round start;
+- [x] (user 2026-10-21) Music: music stops around round 5 (mission BGM ends). Superseded 2026-10-22 (user): no
+  mission-start or round music (Lua 0.17.1, survival_events.MUSIC None, CFG.music.enabled false); the pause menu's
+  Music Player is the only music. Open: its track skips on kills (Lua 0.22.1 logs the BGM controller's names). Trigger music each round start;
   rotate stock combat tracks, bigger track on special rounds; In/OutSupplyBGM (M024/M026) on landing.
   BUILT 2026-10-22 (runtime 0.9.0 + Lua 0.13.0), waiting for a test: SV_PlayBGM = LivePlayBGMExecution's own call
   (the controller fades the old track out); CFG.music rotation from round 2, special list every 5th round, re-post
   after 15 s of silence (SV_BGM(0) = playing id). Log lines "music:". Supply BGM not done.
-- [ ] (user 2026-10-21) Pause-menu music player (as in free flight): add the entry to Survival's pause menu
+- [x] (user 2026-10-21) Pause-menu music player (as in free flight): add the entry to Survival's pause menu
   (runtime row like the main menu) or flag the mission like free flight. If the player picks music, stop round music switching.
   BUILT 2026-10-22 (runtime 0.9.0), waiting for a test: hook on the pause list's UpdateCommandValidity drops
   "PauseMusicPlayer" from the invalid list while mission 9101 runs (log "pause menu: the music player row shown");
   Lua stops round music once WBP_Menu_PauseMusicPlayer_000 exists ("music: the pause menu's music player was opened").
-- [ ] (user 2026-10-22) HUD: ROUND row moved to y 312 (the game's TARGET row at 244 covered it on lock-on); the info
+  Confirmed (test of 2026-10-22). The list has 6 row widgets: QUIT GAME fell off; restart checkpoint and select
+  difficulty are now hidden too, as in free flight - QUIT GAME shows again (user, 2026-10-22).
+- [x] (user 2026-10-22) HUD: ROUND row moved to y 312 (the game's TARGET row at 244 covered it on lock-on); the info
   stack's TIME row hidden (clock paused). Lua 0.13.0. TIME row hidden: confirmed by the user (2026-10-22).
-- [ ] Runtime 0.9.0 SV_Event(name): fires an EP remote event (LiveCallRemoteEventExecution's own dispatch), for radio /
-  health bar / sound nodes placed in Survival's EP. Built, not used by a test yet.
+- [x] Runtime 0.9.0 SV_Event(name): fires an EP remote event (LiveCallRemoteEventExecution's own dispatch), for radio /
+  health bar / sound nodes placed in Survival's EP. Used by the airfield close / open and the heavy bomb runs.
+- [x] (user 2026-10-22) Score shown without "/32000"; callout box sized to its text (Lua 0.18.x).
+- [x] (user 2026-10-22) Lag: object searches cached or throttled, finished probe diagnostics removed (Lua 0.19.0).
+- [x] (user 2026-10-22) Fighters attack the player only (PlayerOnlyNoLimit; with PlayerFirst they took the airfield's
+  target points), own behaviour set NLID_SV_Fighter (stock pursuit + 1.5 s break-away). AI watch "ai:" lines.
+- [~] (user 2026-10-22) Harder enemies (Lua 0.20.0-0.21.0): Survival fire-control copies for missiles (4 km / 60 deg,
+  1.5 s lock, 5 s rest) and guns (2 km / 40 deg, 0.8 s aim, 15-round bursts, x1.5 damage, 1.5 deg spread), a special
+  weapon per fighter type (QAAM / 2AAM / LAAM / HCAA), tiers one rank up. Untested.
+- [~] (user 2026-10-22) Squadrons of 2, 4, 6 (Lua 0.22.0): fighter flights sized in the world data
+  (survival_events.flight_size, standard formation), an aircraft budget per round (4 + 2 a round, max 24), 4-ships
+  from round 4, 6-ships from round 8. Untested.
 
-- [ ] (user 2026-10-22) Custom, learning enemy behaviour: Survival's own LA_SV_* behaviour scripts + a player profile
+- [~] (user 2026-10-22) Custom, learning enemy behaviour: Survival's own LA_SV_* behaviour scripts + a player profile
   (how you kill / evade / fly) that picks counters per flight and adjusts PilotRank; memory across runs in Survival's
   own file. Step 1 = behaviour probe, BUILT in Lua 0.9.0 (2026-10-22), waiting for test 16: (1) each round's first
   flight flies a MiG-29 copy whose pursue slot is LA_SV_ProbePursue (barrel rolls each attack run; odd rounds the
@@ -278,7 +306,8 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   no post-stall), Regular (4, rank 2, no post-stall), Veteran (7, 3), Elite (11, 4), Ace (15, 5); 20 % of pilots
   one tier up; difficulty adds -1 / 0 / +1. PilotRank written live on each enemy (log "tiers:"); post-stall needs
   both the model (CFG.maneuvers) and the tier. The probe's blanket rank 5 is off. Own scripts per tier: below.
-- [ ] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load):
+- [~] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load): first one,
+  NLID_SV_Fighter, built and confirmed (Lua 0.19.x); per-tier sets and the learning layer not started.
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep
     stock scripts.
@@ -296,17 +325,21 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   the airfield; shop rows every 4 s; menu rows 1/s once in. Waiting for a test.
 
 ## Milestone 3: airfield health + bombers (CC)
-- [ ] Airfield target at ComonaAirport with max health set to 100 (copy Mission 004's base + RE_BaseHP_* setup).
-- [ ] Health bar on the HUD (LiveUnitHealthDisplaySwitch, Missions 006 / 025_2).
-- [ ] Bombers on paths ending at the airport (copy Mission 004's BaseAttack paths).
-- [ ] (user 2026-10-22) Bomber types: Tu-160 and Tu-95 alongside Su-34 and F-15E; bombers ONLY attack the airfield.
+- [x] Airfield target at ComonaAirport with health 100 (Mission 22's dummies + hit counter; confirmed: 100 -> 96).
+- [x] Health bar on the HUD (Survival's own AIRFIELD row + bar; confirmed on screen).
+- [x] Bombers attack the airport (Mission 22's strike orders instead of Mission 4's paths; Su-34 hit confirmed).
+- [~] (user 2026-10-22) Bomber types: Tu-160 and Tu-95 alongside Su-34 and F-15E; bombers ONLY attack the airfield.
+  Su-34 / F-15E spawning confirmed; low approach (500-900 m, Lua 0.20.1) and Tu-95 / Tu-160 bomb runs untested.
+- [~] (user 2026-10-22) Bomber raids (Lua 0.22.0): every 3rd round from round 3, ~65% of the round's aircraft are
+  bombers in squadrons of 2/4/6 (pool 2/2/4/4/6 incl. EB_Unit_01_Air0), the rest escort. Untested.
   Rows: copy DT_NPC_Mission004's `t160_common` (OP0012_t160_01, PlaneBomb002) and `tu95_common` (OP0011_tu95_01,
   PlaneBomb002) into DT_SV_NpcMission at build time (route A, tools/re/EVENTS_AIRCRAFT.md: no blueprint imports
   needed; the blueprints are soft-loaded from pakchunk0). Su-34 / F-15E bombers use the STOCK rows (6 km search,
   not the fighters' _sv rows). Pool: Mission 22's `ERB_Unit_01_Air2` strike desc + copies, outside POOL; on appearance
   GROUND_ONLY search + LiveAIEngagementOrder Normal on `AB_Unit_01_Ground2`, AIOnly, unit area onto AreaB_MarkActor0
   (Mission 22 records 1686/1694/2037; tools/re/AIRFIELD_SUPPLY.md section 2).
-- [ ] At 0: flag "AirfieldDown", radio callout, shop closed next round, back online at 50 after.
+- [~] At 0: landing closed (held while the player is on the ground), HUD callout, back online at 50 after the next
+  round. Untested.
 - BUILT 2026-10-22 (Lua 0.14.0-0.15.0, runtime 0.10.0), waiting for a test:
   - Target AB_Unit_01_Ground2 (4 invincible dummies) spawned at mission start; SV_AirfieldHit_1..4 (Mission 22's
     MissedWeapon_AreaB_0..3, unlimited, retargeted to Dummy4..7, weapon NormalMissile) add to int flag SV_AirHits and
@@ -325,9 +358,9 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 - Test: let bombers hit it to 0; confirm the run continues and the shop flag clears a round later.
 
 ## Milestone 4: landing + shop (CC logic, CX config)
-- [ ] Landing/takeoff at the airport (Mission 022's LiveSetTakeoffAndLandingEventExecution + Supply event).
-- [ ] Rearm with LiveSetWeaponAmmoCount (Mission 015); repair with LiveSetHealth.
-- [ ] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
+- [x] Landing/takeoff at the airport (works with Mission 22's minigame level; confirmed).
+- [~] Rearm: the stock rearm, clamped to the caps (confirmed). Aircraft repair purchase: not started.
+- [x] (user 2026-10-21) Shop refills to a CAP, not a full load: Casual full load, Standard 32 msl, Ace 20. NO wingman purchase (dropped by user).
 - [ ] CX: `config/survival.ini`: prices, credits per kill, intermission length, wave tables, special rotation, with comments.
 - BUILT 2026-10-22 (Lua 0.15.0, runtime 0.10.0), waiting for a test: credits (CFG.credits: per kill by type, round
   bonus), CREDITS HUD row; shop = 4 rows (DT_SV_ShopRows) added to the landing menu's table
@@ -335,10 +368,15 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   (runtime text hook), picks caught by the inline hook on the landing menu's decide (StringArgs SV_Buy_*) and read by
   Lua (SV_ShopRequest). Items raise the missile / special / flare caps for the run, or repair the airfield.
   Test: "shop:" log lines; do the rows show with their texts; does a pick register; does the help line update.
+  Confirmed (tests of 2026-10-22): rows and texts show, picks register, missile / special purchases raise the caps
+  (30 -> 38, 14 -> 16), prices rise. Untested: the landing menu's ammo panel showing the caps (Lua 0.19.1), airfield
+  repair.
 - Test: land, buy missiles, take off, ammo is refilled up to the cap (not past it).
 
 ## Milestone 5: difficulty presets (CC + CX)
-- [ ] Casual / Standard / Ace presets on top of the game's difficulty, plus the advanced config (see AGENTS.md).
+- [~] Casual / Standard / Ace presets on top of the game's difficulty, plus the advanced config (see AGENTS.md).
+  Done: ammo caps by difficulty (72/56/6, 48/28/4, 30/14/3), skill tiers shifted -1/0/+1, every setting overridable in
+  Scripts/survival_config.lua. Not done: a preset choice of its own, an advanced config UI.
 
 ## Milestone 6: specials, polish, release (CC + CX)
 - [ ] Special round every 5th round (ace squadron, Ladon, Podarge drop, ECM towers, stealth wing).
