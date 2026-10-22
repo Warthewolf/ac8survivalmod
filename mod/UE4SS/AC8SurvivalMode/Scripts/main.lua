@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.20.0"
+local VERSION = "0.20.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -496,9 +496,12 @@ local CFG = {
             from_round = 3, every = 3, max = 3,
             aircraft = { "su34_common", "f15e_common" },
             heavy = { "tu95_common", "t160_common" },
-            heavy_from_round = 5,
+            heavy_from_round = 3,               -- heavy flights can come in every bomber round
             distance_km = { 28, 36 },
-            altitude_m = { 1500, 3000 },
+            -- Strike aircraft come in low, as Mission 22's Su-34s do (600 m): from 1.7 km the F-15Es flipped between
+            -- PursueTarget on the airfield and ReturnToWorld and never fired (AI watch, 2026-10-22).
+            altitude_m = { 1500, 3000 },        -- heavies
+            strike_altitude_m = { 500, 900 },
             pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
             -- the flights built with large-aircraft behaviour (survival_events.HEAVY_BOMBERS): they fly the heavies,
             -- the others the strike aircraft
@@ -1590,11 +1593,16 @@ for _, u in ipairs(CFG.airfield.bombers.heavy_units) do HEAVY_UNIT[u] = true end
 -- A bomber flight (CFG.airfield.bombers): its event-package orders send it at the airfield only.
 local function spawnBomber(unit)
     local b = CFG.airfield.bombers
-    local list = HEAVY_UNIT[unit] and b.heavy or b.aircraft
+    local heavy = HEAVY_UNIT[unit]
+    local list = heavy and b.heavy or b.aircraft
     local ac = list[math.random(#list)]
+    -- strike aircraft spawn on their Survival row (search range + Survival's missile fire control); their behaviour
+    -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
+    if not heavy then ac = searchAircraft(ac) end
     local set = SV_SetAircraft(unit, ac)
     local x, y, dist, bearing = spawnPoint(b.distance_km)
-    local alt = b.altitude_m[1] + math.random() * (b.altitude_m[2] - b.altitude_m[1])
+    local band = heavy and b.altitude_m or b.strike_altitude_m
+    local alt = band[1] + math.random() * (band[2] - band[1])
     spawningUnit = unit
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)
     spawningUnit = nil
