@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.2"
+local VERSION = "0.37.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3672,13 +3672,27 @@ function SHOP.menuSetup()
         return
     end
     pin(game, nameOf(game)); pin(mine, nameOf(mine))
-    for _, m in ipairs(SHOP.menuRows) do
-        local _, have = dtCall(game, "FindRow", m.row)
+    for _, m in ipairs(SHOP.menuRows) do            -- (each step logged: test of 2026-10-23 got nil / nil, no error)
+        local okH, have = dtCall(game, "FindRow", m.row)
+        local steps = { "in the game's table: " .. (okH and (have ~= nil and "yes" or "no") or ("error " .. tostring(have))) }
         if have == nil then
-            local _, r = dtCall(mine, "FindRow", m.row)
-            if r ~= nil then dtCall(game, "AddRow", m.row, r) end
+            local okR, r = dtCall(mine, "FindRow", m.row)
+            steps[#steps + 1] = "in DT_SV_MenuClassRows: " .. (okR and (r ~= nil and type(r) or "no") or ("error " .. tostring(r)))
+            if okR and r ~= nil then
+                pcall(function()
+                    local ref = r.MenuWidgetReference
+                    steps[#steps + 1] = "MenuID " .. tostring(r.MenuID and r.MenuID:ToString()) .. ", widget "
+                        .. type(ref) .. " " .. tostring(ref)
+                end)
+                local okA, e = dtCall(game, "AddRow", m.row, r)
+                steps[#steps + 1] = "AddRow " .. (okA and "ran" or ("error " .. tostring(e)))
+                local okF, now = dtCall(game, "FindRow", m.row)
+                steps[#steps + 1] = "now " .. (okF and (now ~= nil and "in" or "not in") or ("error " .. tostring(now)))
+            end
         end
+        log("shop: store page " .. m.row .. ": " .. table.concat(steps, "; "))
     end
+    log("shop: in-game menu table rows: " .. rowNames(game) .. " | DT_SV_MenuClassRows: " .. rowNames(mine))
     local at = {}
     pcall(function()
         local _, names = dtCall(game, "GetRowNames")
