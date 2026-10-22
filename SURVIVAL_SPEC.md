@@ -35,6 +35,7 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   - LiveSetMaxHealthExecution / LiveSetHealth: set the base to 100 at start; refill on a repair purchase if wanted.
   - Mission 13: Call_BeforeTakeoff_BaseMinHealth (base minimum health before takeoff).
 - Show the bar as 0–100 regardless of the real HP value underneath.
+- Airfield HP carries over from round to round until it's repaired (user, 2026-10-23); repairs are bought at the STORE.
 
 ## 5. Enemy roles
 - Bombers attack the airfield: spawn on paths that end at Comona Airport and drop on it (Mission 4 base-attack paths;
@@ -63,5 +64,4 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   config/coast_marks.txt are start points).
 
 ## Open decisions
-- Does airfield HP carry over between rounds, or reset each round? (Suggest: carries over; repair costs credits.)
 - Does losing the airfield end the run, or only close the shop?
