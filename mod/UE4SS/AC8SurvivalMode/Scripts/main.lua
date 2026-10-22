@@ -10,9 +10,9 @@
 --   * rounds run on the game clock, so the countdown and the rounds stop while the game is paused
 --   * ammo cap: missiles, special weapons and flares capped per difficulty preset at spawn (dlls\main.dll SV_SetAmmo); gun unlimited
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
---   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
+--   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.38.2"
+local VERSION = "0.38.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -986,7 +986,9 @@ do                                 -- (its helpers stay inside: the main chunk's
 local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bombers", skill = "tiers",
                     ["skill.difficulty"] = "tiers.rank_add", enemy_missiles = "missiles", enemy_guns = "guns",
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
-                    ["ammo.ace"] = "ammo.presets.ace" }
+                    ["ammo.ace"] = "ammo.presets.ace",
+                    -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
+                    ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }
 local function iniSection(name)
     local path = name:lower()
     path = INI_ALIAS[path] or path:gsub("^shop%.", "shop.items.")
@@ -4390,7 +4392,7 @@ end
 -- kept once found, as Survival's own number then shows in it.
 local function slotTexts(panel, slot)
     SH.slotCache = SH.slotCache or {}
-    local key = addrOf(panel)
+    local key = addrOf(panel) or nameOf(panel)   -- (the address read back nil on the live panel: test of 2026-10-23)
     local c = SH.slotCache[key]
     if not c or (not c.found and os.clock() - c.at > 2) then   -- (none yet: looked for again every 2 s, not every call)
         c = { slots = {}, at = os.clock() }
@@ -4778,10 +4780,10 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             end)
         end)
     end
-    if Key.F9 then                 -- Ctrl+F9: write the live HUD's layout to hud_dump.txt (any screen)
-        pcall(RegisterKeyBind, Key.F9, mods, function()
+    if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen; was Ctrl+F9, now the test key)
+        pcall(RegisterKeyBind, Key.F7, mods, function()
             ExecuteInGameThread(function()
-                local ok, err = pcall(hudDump, "Ctrl+F9")
+                local ok, err = pcall(hudDump, "Ctrl+F7")
                 if not ok then log("hud dump: error " .. tostring(err)) end
             end)
         end)

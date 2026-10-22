@@ -212,7 +212,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   (tools/re/HUD_LAYOUT.md, tools/re/hud_layout.py; user request: "make our own custom one that starts at runtime"):
   Survival builds its own HUD layer at run time on the game's 3840x2160 design canvas. ROUND: n and NEXT ROUND: m:ss
   sit under the game's TIME/SCORE stack in its style; callouts copy the MISSILE ALERT banner. Rounds now run on the
-  game clock, so they and the countdown stop while paused; the HUD hides while paused. Ctrl+F9 dumps the live HUD.
+  game clock, so they and the countdown stop while paused; the HUD hides while paused. Ctrl+F7 dumps the live HUD.
   Test 13 checks: HUD built (UE4SS.log "hud: built"), rows placed below the stack, callouts, pause stops the
   countdown, hud_dump.txt written. Same layer later carries credits and airfield health.
 - [x] Waves: random flights per round from the pool, spawned by Survival's spawner (test 11).
@@ -334,7 +334,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
 
 - Lua 0.19.0 (2026-10-22, user: "a bit of lag"): FindAllOf walks every object in the game, and the script ran several
   a second plus a census of ~8000 AI node objects every 10 s. Removed: behaviour census, tree reader, rank probe, the
-  dead attacker read, the automatic HUD dump at 15 s (Ctrl+F9 keeps it). Cached: event containers, info panel widgets,
+  dead attacker read, the automatic HUD dump at 15 s (Ctrl+F7 keeps it). Cached: event containers, info panel widgets,
   player controller (searched 1/s at most), difficulty preset; landing-menu ammo panel searched only on the ground at
   the airfield; shop rows every 4 s; menu rows 1/s once in. Waiting for a test.
 

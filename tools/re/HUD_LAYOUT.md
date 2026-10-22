@@ -4,7 +4,7 @@ Tool: `python tools/re/hud_layout.py <zen widget pkg>...` prints a widget bluepr
 offsets, alignment and the resulting rectangle on the design canvas, plus texts (default string, font, colour),
 images (brush, size) and embedded widget blueprints. Pull packages first with `tools/get_stock.sh`
 (the 110 HUD widgets: `build/scan/hud_wbp.txt`; full dump of all of them: `build/scan/hud_layout_all.txt`).
-Run-time check: Ctrl+F9 in game (Lua 0.7.0+) writes the live HUD tree with on-screen geometry to
+Run-time check: Ctrl+F7 in game (Ctrl+F9 before Lua 0.38.3) writes the live HUD tree with on-screen geometry to
 `Mods/AC8SurvivalMode/hud_dump.txt` (also written automatically 15 s into Survival).
 
 ## Design canvas
