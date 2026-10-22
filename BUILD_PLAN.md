@@ -500,6 +500,10 @@ around on the water ... expensive ... boost their FCS ... enemies can target the
 Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-10-23 (Lua 0.38.0), untested:
 - STORE pages in a ring (6 rows a page): SUPPLIES (20) > AIRFIELD (21: + MOONCHILD 15000 Z) > DOCKS (22: Freedom-class
   LCS 12000 Z, Aegis destroyer 20000 Z) > SUPPLIES. Each purchase of one x1.25.
+- 0.39.0 (user, 2026-10-23: "remove the LCS Freedom and make it another Aegis, also make the Aegis Lock On faster and
+  Fire Rate increase"): DOCKS sells only the Aegis, four of them (A-D, one per M22 fleet lane, the udal lanes the
+  Freedoms sailed included); their weapons fly <FCS>_SVA_Aegis: allies.fcs and then arming / lock x lock_x 0.5, shot
+  interval / rest x fire_x 0.5 (CFG.allies.ships.Aegis.fcs; stock x0.25 overall, twice the other allies' rate).
 - MOONCHILD: 2 flights of 2 F-22s (copies of M22's parked scramble F/A-18s, AB_Unit_01_Air1, not invincible), spawned
   once the player is airborne, 45 s apart; M22's own scramble chain (hold, taxi, roll, climb; PathFinish triggers);
   airborne: gear up, Normal / Default, AIR_ONLY, 40 km search module. Kept out of `planes` (no kill credit, no tiers).

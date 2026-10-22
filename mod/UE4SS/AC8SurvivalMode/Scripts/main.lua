@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.38.3"
+local VERSION = "0.39.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -721,7 +721,6 @@ local CFG = {
             -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
             -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
             Moonchild      = { role = "ally_air",  label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
-            ShipFreedom    = { role = "ally_ship", ship = "Freedom", label = "LCS (FREEDOM CLASS)", price = 12000, raise = 1.25 },
             ShipAegis      = { role = "ally_ship", ship = "Aegis", label = "AEGIS DESTROYER", price = 20000, raise = 1.25 },
             Airfield = { role = "combined", repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
                          defences = {
@@ -736,10 +735,12 @@ local CFG = {
     },
     -- Allies the STORE sells (user, 2026-10-23; tools/survival_events.py ALLY_*): MOONCHILD, two-ships of F-22s that
     -- take off from the airfield once you're airborne (up to two flights at once, takeoff_gap_s apart: both park on one
-    -- spot), and allied ships sailing lanes south and north of the airfield (two of each type). They fight until shot
-    -- down or sunk; a lost one can be bought again. Every weapon they carry gets fire control of its own (rows
-    -- <FCS>_SVA, made at the main menu): lock-on range x range_x, its cone x angle_x, arming, lock, aim and reload times
-    -- x time_x, gun spread x spread_x. Enemies go for them: once MOONCHILD is airborne hunt_share of the enemy fighter
+    -- spot), and allied ships sailing lanes south and north of the airfield (four Aegis destroyers, one per lane; the
+    -- LCS Freedom is gone, user 2026-10-23). They fight until shot down or sunk; a lost one can be bought again. Every
+    -- weapon they carry gets fire control of its own (rows <FCS>_SVA, made at the main menu): lock-on range x range_x,
+    -- its cone x angle_x, arming, lock, aim and reload times x time_x, gun spread x spread_x. A ship type's own `fcs`
+    -- goes further (rows <FCS>_SVA_<key>): arming and lock x lock_x, time between shots and rest x fire_x (user,
+    -- 2026-10-23: "make the Aegis Lock On faster and Fire Rate increase"). Enemies go for them: once MOONCHILD is airborne hunt_share of the enemy fighter
     -- flights prefer it to you, and while ships are at sea strike_share of a normal round's aircraft (no specials, no
     -- raids) are strike flights sent at one of them.
     allies = {
@@ -750,8 +751,8 @@ local CFG = {
         aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
                          units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" } },
         ships        = {
-            Freedom = { name = "LCS FREEDOM", units = { "SV_Unit_ShipFreedomA", "SV_Unit_ShipFreedomB" } },
-            Aegis   = { name = "DDG AEGIS",   units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB" } },
+            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5 },
+                      units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD" } },
         },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
                  air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
@@ -989,6 +990,8 @@ local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bomber
                     ["ammo.ace"] = "ammo.presets.ace",
                     -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
                     ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }
+-- sections of things since taken out, still in older survival.ini files: skipped without a warning
+local INI_RETIRED = { ["shop.shipfreedom"] = true, ["allies.ships.freedom"] = true }
 local function iniSection(name)
     local path = name:lower()
     path = INI_ALIAS[path] or path:gsub("^shop%.", "shop.items.")
@@ -1103,7 +1106,7 @@ local function loadIni()
         local sec = line:match("^%[%s*(.-)%s*%]$")
         if sec then
             section, t = sec, iniSection(sec)
-            if not t then bad[#bad + 1] = string.format("line %d: no section [%s]", n, sec) end
+            if not t and not INI_RETIRED[sec:lower()] then bad[#bad + 1] = string.format("line %d: no section [%s]", n, sec) end
         elseif line ~= "" then
             local key, val = line:match("^([^=]-)%s*=%s*(.*)$")
             if not key then
@@ -3663,8 +3666,7 @@ local SHOP = {
         AAGun    = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
         Moonchild   = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
-        ShipFreedom = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                  -- (no ship icon in
-        ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                  -- the game: an ally's)
+        ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",   -- (no ship icon in the game: an ally's)
         ["20"]   = "/Game/NUI/Common/Texture/IconMenu/T_Menu_Common_IconMenu_Shop_000",          -- STORE, SUPPLIES >
         ["21"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",                         -- AIRFIELD >
         ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",                        -- DOCKS >
@@ -3999,7 +4001,7 @@ local function offer(name)
             or string.format("The %s sails the waters by the airfield and fights until sunk (%d of %d at sea).",
                 c.ships[it.ship].name, up, #units)
         if not c.enabled or not ALLY.ready then o.why = "NOT AVAILABLE."
-        elseif not free then o.why = o.role == "ally_air" and "BOTH FLIGHTS ARE UP." or "BOTH ARE AT SEA."
+        elseif not free then o.why = o.role == "ally_air" and "BOTH FLIGHTS ARE UP." or string.format("ALL %d ARE AT SEA.", #units)
         else o.price, o.unit = shopPrice(name), free end
     else                                             -- a defence: aa / sam, or the old row's next one in turn
         local aa, aaMax = defencesUp("aa")
@@ -4164,10 +4166,11 @@ end
 -- queued, price }, and the enemy orders waiting to be fired (events).
 do
 -- DT_SV_NpcRows' ally rows (tools/build_survival.py build_npc_rows: the F-22, the hulls and their turrets)
-local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Freedom", "SV_Ally_Aegis",
-               "SV_Turret_free_Ally_mk110_Ally", "SV_Turret_free_Ally_mk46_R_Ally", "SV_Turret_free_Ally_mk46_L_Ally",
+local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Aegis",
                "SV_Turret_aegs_mk15_Ally", "SV_Turret_aegs_mk41_Ally", "SV_Turret_aegs_mk45_Ally",
                "SV_Turret_aegs_artillery_Ally" }
+local ROW_SHIP = { SV_Ally_Aegis = "Aegis", SV_Turret_aegs_mk15_Ally = "Aegis", SV_Turret_aegs_mk41_Ally = "Aegis",
+                   SV_Turret_aegs_mk45_Ally = "Aegis", SV_Turret_aegs_artillery_Ally = "Aegis" }   -- (its ship type's fcs)
 for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
 for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
 
@@ -4183,14 +4186,23 @@ function ALLY.setup()
     local wpn = loadObject(WEAPON_TABLE)
     for _, t in ipairs({ npc, mine, fcs, wpn }) do if t then pin(t, nameOf(t)) end end
     local c, made, boosted, lost = CFG.allies.fcs, {}, 0, {}
-    local function allyFcs(src)                      -- src .. "_SVA": farther, wider, quicker, tighter
-        local new = src .. "_SVA"
+    local shipSaid = {}
+    local function allyFcs(src, key)                 -- src .. "_SVA[_<ship>]": farther, wider, quicker, tighter
+        local sf = key and CFG.allies.ships[key] and CFG.allies.ships[key].fcs
+        local new = src .. "_SVA" .. (sf and ("_" .. key) or "")
+        local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
         if made[new] == nil then
             made[new] = cloneRow(fcs, src, new, function(r)
                 pcall(function() r.CaptureDistance = r.CaptureDistance * c.range_x end)
                 pcall(function() r.CaptureAngleRange = math.min(180, r.CaptureAngleRange * c.angle_x) end)
-                for _, f in ipairs({ "ActivationTime", "TriggeringTime", "ShotIntervalTime", "RestingTime" }) do
-                    pcall(function() r[f] = r[f] * c.time_x end)
+                for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
+                    pcall(function() r[f] = r[f] * x end)
+                end
+                if sf then
+                    pcall(function()
+                        shipSaid[#shipSaid + 1] = string.format("%s (arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s)",
+                            new, r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime, r.RestingTime)
+                    end)
                 end
                 pcall(function()                     -- a gun's rounds: a tighter spread (a weapon row without one stays)
                     local w = r.NpcWeaponId:ToString()
@@ -4215,8 +4227,8 @@ function ALLY.setup()
             for i = 0, 5 do
                 pcall(function()
                     local id = have["NpcFCSId" .. i]:ToString()
-                    if id ~= "None" and id ~= "" and not id:find("_SVA$") then
-                        local new = allyFcs(id)
+                    if id ~= "None" and id ~= "" and not id:find("_SVA") then
+                        local new = allyFcs(id, ROW_SHIP[row])
                         if new then have["NpcFCSId" .. i] = FName(new); boosted = boosted + 1 end
                     end
                 end)
@@ -4234,6 +4246,7 @@ function ALLY.setup()
         for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
     end
     ALLY.ready = n == #ROWS
+    if #shipSaid > 0 then log("allies: the ships' own fire control: " .. table.concat(shipSaid, ", ")) end
     log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
 end

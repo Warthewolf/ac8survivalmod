@@ -570,7 +570,7 @@ STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, titl
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
      ['RepairAirfield', 'AAGun', 'SAM', 'Moonchild', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
     ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
-     ['ShipFreedom', 'ShipAegis', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
+     ['ShipAegis', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
 ]
 STORE_ROW = ('SVShopStore', 'SV_Shop_Store', '20')      # the landing page's row that opens the first page
 LANDING_PAGE = '/Game/Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000'

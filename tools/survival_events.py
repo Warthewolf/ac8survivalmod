@@ -161,24 +161,24 @@ TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_
 TAKEOFF_WING_FIRST = '01_Air0_f18e_0_Path0_Sub0'     # the wing's taxi onto the lead's start; then the lead's three
 # Ships: Mission 22's own allied hulls, the only ones its world data describes turret by turret (ChildAIObjectDescs:
 # mission row, hull component and turret blueprint class each; other hulls would need their turret blueprints
-# imported, hard rule 7). Two of each, each sailing one of Mission 22's enemy-fleet lanes (Survival has no fleet)
+# imported, hard rule 7). One ship per lane, each sailing one of Mission 22's enemy-fleet lanes (Survival has no fleet)
 # south and north of the airfield, back and forth: the end of its lane starts the lane again (a PathFinish trigger:
 # hard rule 1). Its turrets fly Survival's copies of their mission rows (sv_<row>_ally -> SV_Turret_<row>_Ally).
+# Aegis destroyers only (user, 2026-10-23: "remove the LCS Freedom and make it another Aegis"): four, one per lane.
 ALLY_SHIPS = [  # (key, Mission 22 source unit, its hull's mission row, lanes) - main.lua CFG.allies.ships, same keys
-    ('Freedom', 'AC_Unit_01_Ship0', 'free_Ally_common', ['01_Ship1_udal_0_Path0', '01_Ship0_udal_0_Path0']),
-    ('Aegis',   'AC_Unit_01_Ship1', 'aegs_common',      ['01_Ship1_grig_0_Path0', '01_Ship2_gors_0_Path0']),
+    ('Aegis', 'AC_Unit_01_Ship1', 'aegs_common', ['01_Ship1_grig_0_Path0', '01_Ship2_gors_0_Path0',
+                                                  '01_Ship1_udal_0_Path0', '01_Ship0_udal_0_Path0']),
 ]
 ALLY_TURRETS = {   # each hull's turret mission rows in Mission 22's world data (build_survival.py checks them)
-    'Freedom': ['free_Ally_mk110', 'free_Ally_mk46_R', 'free_Ally_mk46_L'],
     'Aegis': ['aegs_mk15', 'aegs_mk41', 'aegs_mk45', 'aegs_artillery'],
 }
 ALLY_SHIP_SPEED = '80'                      # Mission 22's allied ships'
 
 
 def ally_ships():
-    """(key, n, unit, object, lane) for every ship the STORE sells: SV_Unit_Ship<key><A|B>."""
+    """(key, n, unit, object, lane) for every ship the STORE sells: SV_Unit_Ship<key><A|B|C|D>."""
     return [(key, n, f'SV_Unit_Ship{key}{c}', f'SV_Obj_Ship{key}{c}', lane)
-            for key, _, _, lanes in ALLY_SHIPS for n, (c, lane) in enumerate(zip('AB', lanes))]
+            for key, _, _, lanes in ALLY_SHIPS for n, (c, lane) in enumerate(zip('ABCD', lanes))]
 
 
 def ally_ship_rows(key):
