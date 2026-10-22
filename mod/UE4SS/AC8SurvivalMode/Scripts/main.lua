@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.27.0"
+local VERSION = "0.27.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -553,7 +553,9 @@ local CFG = {
             -- Heavies never bomb on their own (no stock mission lets them): when one is within drop_km of the runway
             -- its flight's bomb run is fired (RE_SV_BombRun_NN: both aircraft drop 6 bombs), at most once every
             -- run_cooldown_s, and bomb_damage is taken off the airfield damage_delay_s later (as the bombs land).
-            drop_km = 1.5, run_cooldown_s = 20, bomb_damage = 12, damage_delay_s = 5,
+            -- drop_km 3 (was 1.5: the Tu-160s of the test of 2026-10-22 never came that close; their orbit is now 1.5 km,
+            -- tools/survival_events.py HEAVY_AREA_RADIUS_M); every heavy's distance is logged every 10 s ("bombers:")
+            drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 12, damage_delay_s = 5,
         },
     },
     -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
@@ -2365,7 +2367,13 @@ local function bombTick(tick)
         if model and heavy[model] and valid(p.obj) then
             local ok, l = pcall(function() return p.obj:K2_GetActorLocation() end)
             local dx, dy = ok and l and (l.X - AIRFIELD.X), ok and l and (l.Y - AIRFIELD.Y)
-            if dx and math.sqrt(dx * dx + dy * dy) <= b.drop_km * 100000 then
+            local dist = dx and math.sqrt(dx * dx + dy * dy)
+            if dist and (not p.closest or dist < p.closest) then p.closest = dist end
+            if dist and tick % 40 == 2 then
+                log(string.format("bombers: %s %.1f km from the airfield, %.1f km up (closest %.1f km; drop within %.1f km)",
+                    p.name, dist / 100000, l.Z / 100000, p.closest / 100000, b.drop_km))
+            end
+            if dist and dist <= b.drop_km * 100000 then
                 local unit = planeUnit(p)
                 if not p.overSaid then p.overSaid = true; log("bombers: " .. p.name .. " over the airfield, flight " .. tostring(unit)) end
                 local runs = {}

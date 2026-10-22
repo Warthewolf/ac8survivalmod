@@ -282,9 +282,11 @@ def build_wd_global():
                     for obj in p[3][1]:
                         obj[2][:] = [(q[0], q[1], False, ('native', 'Vector', struct.pack('<3d', *point)))
                                      if q[1] == 'SpawnPoint' else q for q in obj[2]]
-        if name in POOL_UNITS and survival_events.AREA_RADIUS_M:   # the spawner's pool, without chase: an area over the whole zone
+        radius = (survival_events.AREA_RADIUS_M if name in POOL_UNITS else       # the pool: an area over the whole zone
+                  survival_events.HEAVY_AREA_RADIUS_M if name in survival_events.HEAVY_BOMBERS else None)
+        if radius:
             rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
-                (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))]
+                (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', radius)))]
         row = survival_events.behaviour_row(name)       # the flight's behaviour (survival_events: built at level load)
         if row:
             assert row in NPC_ROWS, (name, row)

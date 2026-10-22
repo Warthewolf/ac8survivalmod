@@ -106,6 +106,10 @@ POOL_BEHAVIOUR_ROW = 'f16c_common_sv'      # its DT_NPC row is made by Scripts/m
 PROBE_UNITS = {'Pkg': 'ERA_Unit_08_Dep_Air2', 'Rt': 'ERA_Unit_08_Dep_Air1'}   # main.lua CFG.probe.units
 PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # build_survival.py NPC_EXTRA
 HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
+# Their unit area (RadiusInMeter, moved onto the airfield by SV_BomberUp_NN): Tu-95s / Tu-160s circle inside it, and
+# with Mission 22's 6 km they circled 8-12 km out and never crossed the runway, so the scripted bomb run never fired
+# (test of 2026-10-22: "TU160's didn't do anything when reaching the airfield"). 1.5 km keeps their orbit over it.
+HEAVY_AREA_RADIUS_M = 1500.0
 STRIKE_BEHAVIOUR_ROW = 'su34_common'       # Mission 22's strike Su-34s (0021_CP)
 HEAVY_BEHAVIOUR_ROW = 't160_common'        # Mission 4's Tu-160 (NLID_1000: large aircraft, no dogfighting)
 
