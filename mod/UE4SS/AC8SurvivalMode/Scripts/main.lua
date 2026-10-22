@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.26.1"
+local VERSION = "0.27.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -590,6 +590,35 @@ local CFG = {
                          } },
         },
     },
+    -- Difficulty spikes (user, 2026-10-22: "every 7 rounds we should have a difficulty spike that's across the board,
+    -- enemies react quicker, have more accuracy and will always try to get behind you, even start post stalling").
+    -- Level L (rounds 1 + L x every on; the last level stays) on top of the round's skill tier and growth:
+    --   missiles / guns  that level's fire control (copies of CFG.missiles / CFG.guns with these fields changed), on
+    --                    rows of its own (<row>_sv<b|c|d>: tools/build_survival.py SPIKE_SUFFIXES)
+    --   rank_min         every pilot at least this PilotRank (after the difficulty's rank_add)
+    --   post_stall_all   cobra and kulbit on every airframe, not only CFG.maneuvers.post_stall's
+    --   provoke_cone_deg / provoke_time_s   when the player is behind them: a narrower cone (Shadow squadrons fly 60)
+    --                    and a quicker decision, so they turn on you sooner (live write, untested)
+    --   surround_m       their pursuit sits this close behind the target (stock 100-300 m; live write, untested)
+    --   aircraft_add / max_add   more aircraft each round, and a higher cap
+    spikes = {
+        enabled = true,
+        every   = 7,
+        levels  = {
+            { missiles = { capture_m = 4500, angle_deg = 70, lock_s = 1.2, interval_s = 1.6, rest_s = 4.0 },
+              guns = { range_m = 2200, angle_deg = 45, aim_s = 0.6, burst = 18, rest_s = 0.5, spread_deg = 1.1 },
+              rank_min = 4, post_stall_all = true, provoke_cone_deg = 70, provoke_time_s = 2.0, surround_m = { 80, 220 },
+              aircraft_add = 2, max_add = 4 },
+            { missiles = { capture_m = 5000, angle_deg = 80, lock_s = 0.9, interval_s = 1.3, rest_s = 3.0 },
+              guns = { range_m = 2400, angle_deg = 50, aim_s = 0.45, burst = 20, rest_s = 0.4, spread_deg = 0.8 },
+              rank_min = 5, post_stall_all = true, provoke_cone_deg = 60, provoke_time_s = 1.5, surround_m = { 60, 160 },
+              aircraft_add = 4, max_add = 8 },
+            { missiles = { capture_m = 5500, angle_deg = 90, lock_s = 0.7, interval_s = 1.0, rest_s = 2.0 },
+              guns = { range_m = 2600, angle_deg = 55, aim_s = 0.3, burst = 24, rest_s = 0.3, spread_deg = 0.5, damage_x = 1.8 },
+              rank_min = 5, post_stall_all = true, provoke_cone_deg = 50, provoke_time_s = 1.0, surround_m = { 50, 120 },
+              aircraft_add = 6, max_add = 12 },
+        },
+    },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
@@ -686,6 +715,8 @@ local CFG = {
             shuttle_lost = "SHUTTLE LOST",
             shuttle_lost_sub = "SHOP CLOSED NEXT ROUND",
             shop_closed  = "SHOP CLOSED: THE SHUTTLE WAS LOST.",
+            spike        = "DIFFICULTY UP",
+            spike_sub    = "ENEMY PILOTS GROW SHARPER",
         },
     },
 }
@@ -854,6 +885,20 @@ local PROBE_PKG_MODULE = "SurvivalMode.AI.LA_SV_ProbePursue"
 local PROBE_RT_MODULE  = "SurvivalMode.AI.LA_SV_ProbePursueRt"
 local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- rows stay in the tables across levels
 local SR = { ready = {}, usable = {}, tries = 0 }   -- enemy search rows (section "enemy search" below)
+-- Difficulty spikes (CFG.spikes): the level of round `round` (0 = none yet), its settings, and its rows' suffix.
+local SPIKE_SUFFIX = { [0] = "", "b", "c", "d" }      -- tools/build_survival.py SPIKE_SUFFIXES
+local function spikeLevel(round)
+    local sp = CFG.spikes
+    if not sp.enabled or not round or round < 1 or #sp.levels == 0 then return 0 end
+    return math.min(#sp.levels, #SPIKE_SUFFIX, (round - 1) // math.max(1, math.floor(sp.every)))
+end
+local function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
+local function withLevel(base, over)                    -- a copy of `base` with `over`'s fields
+    local t = {}
+    for k, v in pairs(base) do t[k] = v end
+    for k, v in pairs(over or {}) do t[k] = v end
+    return t
+end
 
 local function scriptDir() return debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "" end
 
@@ -1165,8 +1210,8 @@ local function searchSetup()
     local wpn = CFG.guns.enabled and loadObject(WEAPON_TABLE) or nil
     if wpn then pin(wpn, nameOf(wpn)) end
     local made = {}
-    local function copy(tbl, src, edit, what)              -- src .. "_SV" in tbl, edited; its name, or nil
-        local new = src .. "_SV"
+    local function copy(tbl, src, edit, what, suf)         -- src .. "_SV" .. suf in tbl, edited; its name, or nil
+        local new = src .. "_SV" .. (suf or ""):upper()
         if made[new] == nil then
             local ok, why = cloneRow(tbl, src, new, edit)
             made[new] = ok
@@ -1174,17 +1219,17 @@ local function searchSetup()
         end
         return made[new] and new or nil
     end
-    local function svFcs(src)
-        local m = CFG.missiles
+    local function svFcs(src, level)
+        local m = withLevel(CFG.missiles, spikeCfg(level).missiles)
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.CaptureAngleRange = m.capture_m, m.angle_deg
             r.ActivationTime, r.TriggeringTime = m.arm_s, m.lock_s
             r.ShotIntervalTime, r.RestingTime = m.interval_s, m.rest_s
         end, string.format("missile: lock within %d m / %d deg, arm %.1f s, lock %.1f s, %.1f s between, rest %.1f s",
-            m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s))
+            m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s), SPIKE_SUFFIX[level])
     end
-    local function svGun(src)
-        local g = CFG.guns
+    local function svGun(src, level)
+        local g = withLevel(CFG.guns, spikeCfg(level).guns)
         local rounds
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.CaptureAngleRange = g.range_m, g.angle_deg
@@ -1194,11 +1239,11 @@ local function searchSetup()
                 rounds = copy(wpn, w, function(x)
                     x.damage = x.damage * g.damage_x
                     x.MaxSpawnAngle = g.spread_deg
-                end, string.format("gun rounds: damage x%.1f, spread %.1f deg", g.damage_x, g.spread_deg))
+                end, string.format("gun rounds: damage x%.1f, spread %.1f deg", g.damage_x, g.spread_deg), SPIKE_SUFFIX[level])
                 if rounds then r.NpcWeaponId = FName(rounds) end
             end
         end, string.format("gun: within %d m / %d deg, %.1f s on target, %d-round bursts, rest %.1f s", g.range_m, g.angle_deg,
-            g.aim_s, g.burst, g.rest_s))
+            g.aim_s, g.burst, g.rest_s), SPIKE_SUFFIX[level])
     end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
@@ -1209,39 +1254,52 @@ local function searchSetup()
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
+    SR.levels = SR.levels or {}
+    local nLevels = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
     for _, a in ipairs(list) do
+        local spw                                          -- its special weapon: the same at every level
         local okA, err = pcall(function()
-            local _, mrow = dtCall(mission, "FindRow", a .. "_sv")
             local _, base = dtCall(mission, "FindRow", a)
-            if mrow == nil or base == nil then error("no mission row " .. a .. "_sv in DT_SV_NpcMission") end
-            local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
-            local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
-                r.NpcAIModuleId = FName(SR.module)
-                if fcs then                          -- its weapon slots onto Survival's fire control
-                    local free
-                    for i = 0, 5 do
-                        pcall(function()
-                            local id = r["NpcFCSId" .. i]:ToString()
-                            local new
-                            if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then new = svFcs(id)
-                            elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then new = svGun(id)
-                            elseif (id == "None" or id == "") and i >= 3 and not free then free = i end
-                            if new then r["NpcFCSId" .. i] = FName(new) end
-                        end)
+            if base == nil then error("no mission row " .. a .. " in DT_SV_NpcMission") end
+            local srcNpc = base.NpcId:ToString()
+            for level = 0, nLevels do
+                local mname = a .. "_sv" .. SPIKE_SUFFIX[level]
+                local _, mrow = dtCall(mission, "FindRow", mname)
+                if mrow == nil then error("no mission row " .. mname .. " in DT_SV_NpcMission") end
+                local svNpc = mrow.NpcId:ToString()
+                local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
+                    r.NpcAIModuleId = FName(SR.module)
+                    if fcs then                      -- its weapon slots onto Survival's fire control for this level
+                        local free
+                        for i = 0, 5 do
+                            pcall(function()
+                                local id = r["NpcFCSId" .. i]:ToString()
+                                local new
+                                if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then new = svFcs(id, level)
+                                elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then new = svGun(id, level)
+                                elseif (id == "None" or id == "") and i >= 3 and not free then free = i end
+                                if new then r["NpcFCSId" .. i] = FName(new) end
+                            end)
+                        end
+                        local fcsList = CFG.special.fcs
+                        if CFG.special.enabled and free and #fcsList > 0 then
+                            spw = spw or fcsList[math.random(#fcsList)]
+                            r["NpcFCSId" .. free] = FName(spw)
+                            if level == 0 then log("weapons: " .. svNpc .. " carries " .. spw .. " (slot " .. free .. ")") end
+                        end
                     end
-                    local list = CFG.special.fcs
-                    if CFG.special.enabled and free and #list > 0 then
-                        local spw = list[math.random(#list)]
-                        r["NpcFCSId" .. free] = FName(spw)
-                        log("weapons: " .. svNpc .. " carries " .. spw .. " (slot " .. free .. ")")
-                    end
+                    local set = CFG.search.luaset
+                    if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
+                    if set then r.LuaSetId = FName(set) end
+                end)
+                if not okR then error(svNpc .. ": " .. tostring(whyR)) end
+                if level == 0 then
+                    SR.ready[a], SR.npcRow[a], n = mname, svNpc, n + 1
+                else
+                    SR.levels[a] = SR.levels[a] or {}
+                    SR.levels[a][level] = mname
                 end
-                local set = CFG.search.luaset
-                if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
-                if set then r.LuaSetId = FName(set) end
-            end)
-            if not okR then error(svNpc .. ": " .. tostring(whyR)) end
-            SR.ready[a], SR.npcRow[a], n = a .. "_sv", svNpc, n + 1
+            end
         end)
         if not okA then log("search: " .. a .. " keeps the stock search (" .. tostring(err) .. ")") end
     end
@@ -1256,6 +1314,9 @@ local function searchSetup()
         check = check .. string.format("; %s flies behaviour set %s", SR.npcRow[a], r.LuaSetId:ToString())
     end)
     log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #list))
+    local nl = 0
+    for _, t in pairs(SR.levels) do nl = nl + #t end
+    log(string.format("spikes: %d difficulty-spike rows made (%d levels)", nl, nLevels))
     if not SR.ready[BEHAVIOUR_AIRCRAFT] then
         log("search: WARNING the fighters' behaviour row " .. BEHAVIOUR_AIRCRAFT .. "_sv has no DT_NPC row; don't start a run")
     end
@@ -1291,11 +1352,39 @@ local function specialSetup()
 end
 
 -- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
-local function searchAircraft(a)
+-- A difficulty spike's pursuit on an enemy (CFG.spikes: provoke_cone_deg / provoke_time_s / surround_m), once.
+local spikeSaid = {}
+local function enemySpike(p, round)
+    if p.spiked ~= nil or not round then return end
+    local level = spikeLevel(round)
+    p.spiked = level
+    local sk = spikeCfg(level)
+    if level == 0 then return end
+    local before, writes = {}, {}
+    local function set(field, value)
+        if value == nil then return end
+        local okR, v = pcall(function() return p.obj[field] end)
+        before[#before + 1] = field .. " " .. (okR and tostring(v) or "?")
+        local okW, e = pcall(function() p.obj[field] = value end)
+        writes[#writes + 1] = okW and (field .. " " .. tostring(value)) or (field .. " FAILED: " .. tostring(e))
+    end
+    set("ProvokeConditionConeAngle", sk.provoke_cone_deg)
+    set("ProvokeDeterminationTime", sk.provoke_time_s)
+    if sk.surround_m then set("SurroundPursuitMinRange", sk.surround_m[1] * 100); set("SurroundPursuitMaxRange", sk.surround_m[2] * 100) end
+    if not spikeSaid[level] then
+        spikeSaid[level] = true
+        log(string.format("spikes: level %d on %s: was %s; now %s", level, p.name, table.concat(before, ", "), table.concat(writes, ", ")))
+    end
+end
+
+local function searchAircraft(a, level)
     local sv = SR.usable[a]
     if not (sv and SR.tables) then return a end
     local _, have = dtCall(SR.tables.npc, "FindRow", SR.npcRow[a])
-    if have ~= nil then return sv end
+    if have ~= nil then
+        local lv = level and level > 0 and SR.usableLevels and SR.usableLevels[a] and SR.usableLevels[a][level]
+        return lv or sv
+    end
     log("search: DT_NPC row " .. SR.npcRow[a] .. " is gone (the table was reloaded?); " .. a .. " flies stock this level")
     SR.usable[a], SR.ready[a], SR.done, SR.tries = nil, nil, false, 0
     return a
@@ -1313,7 +1402,9 @@ local function enemyTier(p, round)
     local t = tc.list[i]
     p.tier = t
     local add = tc.rank_add[presetName()] or 0
-    local want = math.max(1, math.min(5, t.rank + add))
+    local want = math.max(1, math.min(5, t.rank + add, 5))
+    local sk = spikeCfg(spikeLevel(round))
+    if sk.rank_min then want = math.max(want, math.min(5, sk.rank_min)) end
     local ok0, r0 = pcall(function() return p.obj.PilotRank end)
     local okW, err = pcall(function() p.obj.PilotRank = want end)
     local key = round .. t.name
@@ -1328,13 +1419,14 @@ end
 -- its model must be listed and its tier (enemyTier, run first) must allow post-stall at all.
 -- The first plane of each model logs what its blueprint had and what it reads after the write.
 local maneuversSaid = {}
-local function enemyManeuvers(p)
+local function enemyManeuvers(p, round)
     if p.maneuvers or not CFG.maneuvers.enabled then return end
     p.maneuvers = true
     local model = p.name:match("^BP_OP%d+_(%w+)_") or "?"
     local allow = false
     for _, m in ipairs(CFG.maneuvers.post_stall) do if m == model then allow = true end end
     if p.tier and not p.tier.post_stall then allow = false end
+    local all = spikeCfg(spikeLevel(round)).post_stall_all      -- a difficulty spike: every airframe
     local function read()
         local okC, c = pcall(function() return p.obj.bCanManeuverPugachevsCobra end)
         local okK, k = pcall(function() return p.obj.bCanManeuverKulbit end)
@@ -1342,13 +1434,19 @@ local function enemyManeuvers(p)
     end
     local before = read()
     local ok, err = true, nil
-    if not allow then                       -- allowed models keep their blueprint's own (test 18: su33 cobra only)
+    if all then
+        allow = true
+        ok, err = pcall(function()
+            p.obj.bCanManeuverPugachevsCobra = true
+            p.obj.bCanManeuverKulbit = true
+        end)
+    elseif not allow then                   -- allowed models keep their blueprint's own (test 18: su33 cobra only)
         ok, err = pcall(function()
             p.obj.bCanManeuverPugachevsCobra = false
             p.obj.bCanManeuverKulbit = false
         end)
     end
-    local said = model .. (allow and "+" or "-")
+    local said = model .. (allow and "+" or "-") .. (all and "!" or "")
     if not maneuversSaid[said] then
         maneuversSaid[said] = true
         log(string.format("maneuvers: %s (%s) post-stall %s: was %s, now %s%s", model, p.name, allow and "allowed" or "off",
@@ -1856,7 +1954,7 @@ local function spawnBomber(unit)
     local ac = list[math.random(#list)]
     -- strike aircraft spawn on their Survival row (search range + Survival's missile fire control); their behaviour
     -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
-    if not heavy then ac = searchAircraft(ac) end
+    if not heavy then ac = searchAircraft(ac, spikeLevel(D.round)) end
     local set = SV_SetAircraft(unit, ac)
     local x, y, dist, bearing = spawnPoint(b.distance_km)
     local band = heavy and b.altitude_m or b.strike_altitude_m
@@ -1887,7 +1985,7 @@ for v, u in pairs(CFG.probe.units) do PROBE_OF[u] = v end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)])
+    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], spikeLevel(D.round))
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
         ac = PROBE_MISSION_ROW[pv]
@@ -2024,7 +2122,9 @@ end
 
 local function startRound()
     D.round = D.round + 1
-    local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round, CFG.max_aircraft)
+    local sk = spikeCfg(spikeLevel(D.round))
+    local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
+        CFG.max_aircraft + (sk.max_add or 0))
     local b = CFG.airfield.bombers
     local special = specialFor(D.round)
     D.special = special and { kind = special, state = "pending" } or nil
@@ -2126,6 +2226,11 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             else
                 hudCallout(string.format(t.start, D.round + 1), t.start_sub)
+            end
+            local level = spikeLevel(D.round + 1)
+            if level > spikeLevel(D.round) then
+                hudCallout(t.spike, t.spike_sub)
+                log(string.format("spikes: round %d, difficulty level %d", D.round + 1, level))
             end
         end
         if now >= D.at then startRound() end
@@ -2804,6 +2909,8 @@ local function probeTick(tick)
         SR.usable = {}
         local nS = 0
         for a, sv in pairs(SR.ready) do SR.usable[a], nS = sv, nS + 1 end
+        SR.usableLevels = {}                       -- spike rows in before this level loaded (the spawner cached them)
+        for a, t in pairs(SR.levels or {}) do SR.usableLevels[a] = t end
         log(string.format("search: at level load, %d of %d aircraft fly with the %s m search", nS, #CFG.aircraft,
             tostring(CFG.search.radius_m)))
         H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
@@ -2897,7 +3004,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTrack, p); pcall(aiWatch, p, you)
+                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p, D and D.round); pcall(enemySpike, p, D and D.round); pcall(probeTrack, p); pcall(aiWatch, p, you)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end

@@ -545,6 +545,10 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
 SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
                    'm29a_common', 'm31b_common', 'su33_common', 'su34_common']
+# Difficulty spikes (main.lua CFG.spikes; user, 2026-10-22: "every 7 rounds ... a difficulty spike across the board"):
+# each level after the first gets its own rows, <row>_sv<letter> -> <NpcId>_SV<LETTER>, whose DT_NPC copies main.lua
+# gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
+SPIKE_SUFFIXES = ['b', 'c', 'd']
 
 
 def build_npc_table():
@@ -560,6 +564,8 @@ def build_npc_table():
         npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]          # ('name', base, number)
         base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
         extra.append((src + '_sv', src, base + '_SV'))
+        for suf in SPIKE_SUFFIXES:
+            extra.append((src + '_sv' + suf, src, base + '_SV' + suf.upper()))
     for new_row, src, npc in extra:
         assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
         row = copy.deepcopy(rows[(src, 0)])

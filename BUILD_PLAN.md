@@ -13,6 +13,11 @@ Legend: [x] confirmed in a test, [~] built and installed but not confirmed yet, 
   (runtime 0.12.0): built, untested. Learning behaviour layer: not started.
 - Milestone 3 (airfield + bombers): health, HUD bar, hit counting, strike flights spawning: confirmed. Raids every
   3rd round, low strike approach, Tu-95 / Tu-160 bomb runs, airfield down / reopen: built, untested.
+- Difficulty spikes BUILT 2026-10-22 (Lua 0.27.0), not installed / untested: every 7 rounds (8, 15, 22; CFG.spikes)
+  a level of own fire-control rows (<row>_sv<b|c|d>: faster locks / aim, more shots, tighter spread), PilotRank floor
+  4 / 5 / 5, post-stall on every airframe, provoke cone 70 / 60 / 50 deg and decision 2.0 / 1.5 / 1.0 s, surround
+  pursuit 80-220 / 60-160 / 50-120 m (live writes, untested), +2 / +4 / +6 aircraft a round; "DIFFICULTY UP" callout.
+  Test: "spikes:" log lines (rows made at the main menu; level writes on the first enemy of a spike round).
 - Review + cleanup 2026-10-22 (Lua 0.26.1, runtime 0.12.1), untested: shop presses all taken each tick and texts at
   once (the ~1 s lag looked like missed presses); economy (missiles +6 x1.35, special x1.4, flares x1.35); airfield row
   builds AA guns (4000 Z) / SAM sites (8000 Z) once the airfield is whole (Mission 22's airport defences, one unit each);
