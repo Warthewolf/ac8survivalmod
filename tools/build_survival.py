@@ -161,6 +161,38 @@ def build_wd_phase(n):
     save(z, new)
 
 
+FORMATION_CM = 30000.0     # 300 m: pairs side by side, each pair this far behind the one ahead
+
+
+def unit_point(u):
+    sp = [p for p in u[2] if p[1] == 'SpawnPoint']
+    return struct.unpack('<3d', sp[0][3][2]) if sp and sp[0][3] else (0.0, 0.0, 0.0)
+
+
+def set_flight_size(objs, size, unit, point, used_ids, top_number):
+    """Cut or grow a flight's AI object list to `size` (copies of the lead / wingman pair with new UniqueIDs and the next
+    free number of their name: Mission 22 numbers one name across several flights, so top_number is world-wide), and
+    lay it out: lead on the unit point, wingman beside it, each further pair FORMATION_CM back."""
+    del objs[size:]
+    while len(objs) < size:
+        k = len(objs)
+        ob = copy.deepcopy(objs[k % 2])
+        name = [q for q in ob[2] if q[1] == 'Name'][0][3]
+        top_number[name[1]] += 1
+        top = top_number[name[1]] - 1
+        h = zlib.crc32(f'AC8SurvivalMode:{unit}:{k}'.encode())
+        while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
+        used_ids.add(struct.pack('<I', h))
+        ob[2][:] = [(q[0], q[1], False, ('name', name[1], top + 1)) if q[1] == 'Name' else
+                    (q[0], q[1], False, ('raw', 'UInt32', struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in ob[2]]
+        objs.append(ob)
+    for k, ob in enumerate(objs):
+        at = (point[0] - FORMATION_CM * (k // 2), point[1] + (FORMATION_CM if k % 2 else 0.0), point[2])
+        assert any(q[1] == 'SpawnPoint' for q in ob[2]), unit
+        ob[2][:] = [(q[0], q[1], False, ('native', 'Vector', struct.pack('<3d', *at))) if q[1] == 'SpawnPoint' else q
+                    for q in ob[2]]
+
+
 def build_wd_global():
     """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
     itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
@@ -177,7 +209,16 @@ def build_wd_global():
     r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
     POOL_UNITS = set(survival_events.POOL)
     turned_off = 0
-    behaviours = {}
+    behaviours, sized = {}, {}
+    used_ids = {q[3][2] for u in units for p in u[2] if p[1] == 'AIObjectDescList' and p[3]
+                for ob in p[3][1] for q in ob[2] if q[1] == 'UniqueID' and q[3]}
+    top_number = {}                            # AI object name -> highest number used anywhere in the world data
+    for u in units:
+        for p in u[2]:
+            if p[1] == 'AIObjectDescList' and p[3]:
+                for ob in p[3][1]:
+                    for q in ob[2]:
+                        if q[1] == 'Name' and q[3]: top_number[q[3][1]] = max(top_number.get(q[3][1], 0), q[3][2])
     for u in units:
         name = [p for p in u[2] if p[1] == 'Name'][0][3][1]
         keep = name in survival_events.KEEP_AT_START
@@ -208,13 +249,14 @@ def build_wd_global():
                         assert any(q[1] == 'MissionNpcID' for q in obj[2]), name
                         obj[2][:] = [(q[0], q[1], False, ('name', row, 0)) if q[1] == 'MissionNpcID' else q for q in obj[2]]
             behaviours[row] = behaviours.get(row, 0) + 1
-        if name in survival_events.BOMBERS:    # bomber flights: their first BOMBER_FLIGHT aircraft (the first is a lead)
+        size = survival_events.flight_size(name)
+        if size:                               # Survival's flights: 2, 4 or 6 aircraft in a standard formation
             for p in rest_props:
                 if p[1] == 'AIObjectDescList':
                     objs = p[3][1]
-                    assert len(objs) >= survival_events.BOMBER_FLIGHT, name
                     assert any(q[1] == 'bGroupLead' and q[3] == ('raw', 'Bool', b'\x01') for q in objs[0][2]), name
-                    del objs[survival_events.BOMBER_FLIGHT:]
+                    set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
+                    sized[size] = sized.get(size, 0) + 1
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
@@ -222,7 +264,8 @@ def build_wd_global():
     assert any(p[1] == 'CombatZoneDescList' for p in v[2])
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
-    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}')
+    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}; '
+          f'flight sizes: {sized}')
     retarget_import(z, NPC_TABLE_STOCK, NPC_TABLE)        # Survival's own NPC mission table (build_npc_table)
     save(z, new)
 

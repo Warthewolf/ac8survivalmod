@@ -49,13 +49,16 @@ AREA_RADIUS_M = None if CHASE else 40000.0   # pool flights' RadiusInMeter (None
 # (tools/re/AIRFIELD_SUPPLY.md 2b): its Su-34s get the airport unit as their engagement target with a ground-only search
 # and fire at its invincible dummies; a MissedWeapon trigger on each dummy counts what reaches it. The target is
 # AB_Unit_01_Ground2 (the 4 dummies alone, Mission 22's landing-time target), spawned at mission start. The bomber
-# flights are Mission 22's strike desc and its three idle enemy fighter descs, cut to BOMBER_FLIGHT aircraft by
+# flights are Mission 22's strike desc and its four idle enemy fighter descs, sized by BOMBER_SIZES in
 # build_survival.py; Scripts/main.lua (CFG.airfield) picks their aircraft: Su-34, F-15E, Tu-95, Tu-160.
 AIRFIELD_UNIT = 'AB_Unit_01_Ground2'
 AIRFIELD_DUMMIES = [f'AB_Obj_01_Dummy{k}' for k in range(4, 8)]      # Mission 22's MissedWeapon_AreaB_0..3 dummies' twins
 AIRFIELD_MARK = 'AreaB_MarkActor0'
-BOMBERS = ['ERB_Unit_01_Air2', 'EA_Unit_01_Air0', 'EA_Unit_01_Air1', 'EA_Unit_01_Air2']
-BOMBER_FLIGHT = 2
+# Bomber flights and their sizes (user, 2026-10-22: squadrons of 2, 4 and 6). The order is RE_SV_BombRun_NN's and
+# Scripts/main.lua CFG.airfield.bombers.pool's.
+BOMBER_SIZES = {'ERB_Unit_01_Air2': 4, 'EA_Unit_01_Air0': 2, 'EA_Unit_01_Air1': 2, 'EA_Unit_01_Air2': 4,
+                'EB_Unit_01_Air0': 6}
+BOMBERS = list(BOMBER_SIZES)
 # Heavy bombers never bomb on their own: in every stock mission (M003/004/009/013/028) a Tu-95 / Tu-160 drop is a
 # scripted LiveFireOneShotWeapon on weapon slot 4 (WN_WEAPON_4: PlaneBomb002, unguided, no AI capture distance), and
 # the damage is counted by script too (build/research/bombers, 2026-10-22). Survival does the same: Lua watches the
@@ -74,6 +77,14 @@ PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # 
 HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
 STRIKE_BEHAVIOUR_ROW = 'su34_common'       # Mission 22's strike Su-34s (0021_CP)
 HEAVY_BEHAVIOUR_ROW = 't160_common'        # Mission 4's Tu-160 (NLID_1000: large aircraft, no dogfighting)
+
+
+def flight_size(unit):
+    """Aircraft in a flight Survival flies (build_survival.py adds or removes AI objects), or None to leave it.
+    Fighter pool: ERA_Unit_NN_Dep_Air0 2, _Air1 4, _Air2 6 (Scripts/main.lua flightSize, same rule)."""
+    if unit in BOMBER_SIZES: return BOMBER_SIZES[unit]
+    if unit in POOL: return {'0': 2, '1': 4, '2': 6}[unit[-1]]
+    return None
 
 
 def behaviour_row(unit):
@@ -305,7 +316,7 @@ def build_events(stock_ep):
     for k, unit in enumerate(BOMBERS):
         run = f'RE_SV_BombRun_{k + 1:02d}'
         g.trigger('RE_Wave2_AreaB_PathSet', run)
-        for obj in objs[unit][:BOMBER_FLIGHT]:      # build_survival.py keeps these first BOMBER_FLIGHT aircraft
+        for obj in objs[unit][:BOMBER_SIZES[unit]]:   # build_survival.py keeps these first aircraft
             g.execute(t_fire, run, {1: obj}, delay=BOMB_GAP_S, loop=BOMB_COUNT)
     assert arg_values(t_landing)[0] == 'false'
     for ev, on in (('RE_SV_AirfieldClose', 'false'), ('RE_SV_AirfieldOpen', 'true')):

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.21.0"
+local VERSION = "0.22.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -402,9 +402,13 @@ local CFG = {
     first_round_delay_s = 15,
     intermission_s      = 20,
     spawn_gap_s         = 3,                    -- between two flights of a round
-    flights_round1      = 2,
-    flights_per_round   = 1,                    -- added every round
-    max_flights         = 8,                    -- flights in one round
+    -- A round's size is an aircraft budget, filled with squadrons of 2, 4 and 6 (user, 2026-10-22): the world data's
+    -- fighter flights are ERA_Unit_NN_Dep_Air0 2 aircraft, _Air1 4, _Air2 6 (tools/survival_events.py flight_size);
+    -- a squadron size joins the draw from its from_round.
+    aircraft_round1     = 4,
+    aircraft_per_round  = 2,                    -- added every round
+    max_aircraft        = 24,                   -- in one round
+    squadrons           = { { size = 2, from_round = 1 }, { size = 4, from_round = 4 }, { size = 6, from_round = 8 } },
     distance_km         = { 18, 25 },           -- from the airfield, random bearing
     altitude_m          = { 2000, 4500 },
     aircraft            = { "f16c_common", "f18e_common", "f15e_common", "f14d_common", "m21b_common",
@@ -503,7 +507,12 @@ local CFG = {
         hit_damage = 4,
         repair_hp  = 50,
         bombers = {
-            from_round = 3, every = 3, max = 3,
+            -- Bomber raids (user, 2026-10-22: "in bomber rounds bombers primarily spawn"): from first_raid, every
+            -- raid_every rounds; raid_share of that round's aircraft are bombers (squadrons of 2, 4, 6 by the same
+            -- from_round rule), the rest fighter escort. Other rounds have no bombers.
+            first_raid = 3, raid_every = 3, raid_share = 0.65,
+            -- flight sizes; must match tools/survival_events.py BOMBER_SIZES (EB_Unit_01_Air0 too)
+            sizes = { ERB_Unit_01_Air2 = 4, EA_Unit_01_Air0 = 2, EA_Unit_01_Air1 = 2, EA_Unit_01_Air2 = 4, EB_Unit_01_Air0 = 6 },
             aircraft = { "su34_common", "f15e_common" },
             heavy = { "tu95_common", "t160_common" },
             heavy_from_round = 3,               -- heavy flights can come in every bomber round
@@ -512,7 +521,7 @@ local CFG = {
             -- PursueTarget on the airfield and ReturnToWorld and never fired (AI watch, 2026-10-22).
             altitude_m = { 1500, 3000 },        -- heavies
             strike_altitude_m = { 500, 900 },
-            pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
+            pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2", "EB_Unit_01_Air0" },
             -- the flights built with large-aircraft behaviour (survival_events.HEAVY_BOMBERS): they fly the heavies,
             -- the others the strike aircraft
             heavy_units = { "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
@@ -1698,22 +1707,59 @@ end
 
 -- A round's flights: those that have flown before come first (the spawner recycles them, which keeps the game's unit
 -- list short); the rest are spares, fresh ones first, for a flight that fails to spawn.
-local function startRound()
-    D.round = D.round + 1
-    local flown, fresh = {}, {}
-    for _, u in ipairs(CFG.pool) do
-        if not D.up[u] and not PROBE_OF[u] then
-            if D.flown[u] then flown[#flown + 1] = u else fresh[#fresh + 1] = u end
+-- A flight's aircraft count (tools/survival_events.py flight_size: bombers by table, fighters by their _AirN suffix).
+local function flightSize(unit)
+    return CFG.airfield.bombers.sizes[unit] or ({ ["0"] = 2, ["1"] = 4, ["2"] = 6 })[unit:sub(-1)] or 2
+end
+
+-- Up to `budget` aircraft from `units` (free ones only), in squadrons of the sizes allowed this round, flights that
+-- have flown before first within a size (the spawner recycles them, which keeps the game's unit list short).
+-- Returns the flights and the aircraft they hold.
+local function pickFlights(units, budget, skip)
+    local allowed, bySize = {}, {}
+    for _, q in ipairs(CFG.squadrons) do if D.round >= q.from_round then allowed[q.size] = true end end
+    for _, u in ipairs(units) do
+        local n = flightSize(u)
+        if allowed[n] and not D.up[u] and not (skip and skip(u)) then
+            bySize[n] = bySize[n] or { flown = {}, fresh = {} }
+            local t = D.flown[u] and bySize[n].flown or bySize[n].fresh
+            t[#t + 1] = u
         end
     end
-    shuffled(flown); shuffled(fresh)
-    local want = math.min(CFG.flights_round1 + (D.round - 1) * CFG.flights_per_round, CFG.max_flights, #flown + #fresh)
-    D.queue, D.spare = {}, {}
-    for _, u in ipairs(flown) do if #D.queue < want then D.queue[#D.queue + 1] = u end end
-    for _, u in ipairs(fresh) do
-        if #D.queue < want then D.queue[#D.queue + 1] = u else D.spare[#D.spare + 1] = u end
+    for _, b in pairs(bySize) do shuffled(b.flown); shuffled(b.fresh) end
+    local out, left = {}, budget
+    while left >= 2 do
+        local options = {}
+        for n, b in pairs(bySize) do if n <= left and #b.flown + #b.fresh > 0 then options[#options + 1] = n end end
+        if #options == 0 then break end
+        local b = bySize[options[math.random(#options)]]
+        out[#out + 1] = table.remove(#b.flown > 0 and b.flown or b.fresh)
+        left = left - flightSize(out[#out])
     end
-    for i = want + 1, #flown do D.spare[#D.spare + 1] = flown[i] end
+    return out, budget - left
+end
+
+local function startRound()
+    D.round = D.round + 1
+    local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round, CFG.max_aircraft)
+    local b = CFG.airfield.bombers
+    local raid = CFG.airfield.enabled and D.round >= b.first_raid and (D.round - b.first_raid) % b.raid_every == 0
+    local bombers, nBombers = {}, 0
+    if raid then
+        local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
+        bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
+    end
+    local fighters, nFighters = pickFlights(CFG.pool, budget - nBombers, function(u) return PROBE_OF[u] end)
+    D.queue, D.spare = {}, {}
+    for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
+    for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
+        if not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 then
+            local queued = false
+            for _, q in ipairs(D.queue) do if q == u then queued = true end end
+            if not queued then D.spare[#D.spare + 1] = u end
+        end
+    end
+    local want = #D.queue
     -- the behaviour probe: round 1's first flight flies the package script, round 2's the run-time one
     local pv = CFG.probe.enabled and CFG.probe.behaviour and ((D.round == 1 and "Pkg") or (D.round == 2 and "Rt"))
     local pu = pv and CFG.probe.units[pv]
@@ -1721,17 +1767,9 @@ local function startRound()
         table.insert(D.queue, 1, pu)
         if #D.queue > want then D.spare[#D.spare + 1] = table.remove(D.queue) end
     end
-    local b, nb = CFG.airfield.bombers, 0          -- bomber flights come last, after the fighters
-    if CFG.airfield.enabled and D.round >= b.from_round then
-        local free = {}
-        for _, u in ipairs(b.pool) do
-            if not D.up[u] and (D.round >= b.heavy_from_round or not HEAVY_UNIT[u]) then free[#free + 1] = u end
-        end
-        shuffled(free)
-        nb = math.min(1 + (D.round - b.from_round) // b.every, b.max, #free)
-        for i = 1, nb do D.queue[#D.queue + 1] = free[i] end
-    end
-    log(string.format("round %d: %d flights%s", D.round, want, nb > 0 and (" + " .. nb .. " bomber flights") or ""))
+    for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
+    log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
+        #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers) or ""))
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive = "spawning", D.now, nil
 end
