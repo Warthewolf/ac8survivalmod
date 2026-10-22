@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.18.0"
+local VERSION = "0.18.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -555,6 +555,8 @@ local CFG = {
         glow_size        = 2,                   -- outline width; 0 = none
         glow_alpha       = 0.25,
         banner_y         = 894,                 -- centre of the callout banner (the game's MessageLayerOne)
+        banner_char_w    = 32,                  -- estimated width of a banner letter (design units)
+        banner_pad       = 70,                  -- space between the banner's text and its box, each side
         callout_s        = 4,                   -- how long a callout stays up
         start_callout_lead_s = 3,               -- "ROUND n" this long before the round's first flight
         zorder           = 0,
@@ -1497,7 +1499,15 @@ local function hudTick(now, paused, pc)
     if pendingCallout then
         local c = pendingCallout; pendingCallout = nil
         setText(H.bannerText, "bannerStr", c.text)
-        H.bannerSlot:SetSize({ X = math.max(390, #c.text * 24 + 96), Y = 69 })   -- ~24 units a character at size 37
+        -- box width: the text's own width when the game can lay it out now, else ~32 units a letter (measured on the
+        -- user's screenshot of 2026-10-22: "BOMBERS INBOUND" overran a 24-a-letter box), plus banner_pad each side
+        local hc, w = CFG.hud, #c.text * CFG.hud.banner_char_w
+        pcall(function()
+            H.bannerText:ForceLayoutPrepass()
+            local d = H.bannerText:GetDesiredSize()
+            if d and d.X and d.X > 0 then w = math.max(w, d.X) end
+        end)
+        H.bannerSlot:SetSize({ X = math.max(390, w + 2 * hc.banner_pad), Y = 69 })
         setText(H.sub, "subStr", c.sub or "")
         H.banner:SetRenderOpacity(1); H.sub:SetRenderOpacity(CFG.hud.opacity)
         H.banner:SetVisibility(VIS.HitTestInvisible)
