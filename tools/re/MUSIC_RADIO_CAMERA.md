@@ -101,6 +101,14 @@ system BGM event; (3) the game's own BGM stop on some mission event. Rotating th
   Both nodes and both trigger types are in Mission 22's EP.
 - Music player in use (topic B): skip the per-round switch when Lua sees the player chose music.
 
+### Built (runtime 0.9.0, survival_rt.c "music and remote events")
+Route 2 above: `SV_PlayBGM(event [, delay])` decodes LivePlayBGMExecution::Execute (signature kSigBgmPlay): game
+instance +0x1D8 (class-checked as the node does), BGM manager +0x908 (byte +0x1D5 cleared), controller +0x170,
+Play 0x1478bdad0. Play's inner function (0x1478bdbc0) stops the playing id with the settings' fade (+0x170 of the BGM
+setting asset) before posting, and returns early for the track already playing, so no `_Stop` is needed. Controller:
++0x128 playing id, +0x148 status (2 playing, 3 post failed / stopped), +0x138 last id (`SV_BGM(0/1/2)`).
+`SV_Event(name)` is LiveCallRemoteEventExecution::Execute's dispatch (kSigRemoteEvent).
+
 ## B. Pause-menu music player
 Scratch: `build/research/audio/pause/`. Static analysis only.
 

@@ -212,8 +212,18 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   0000/0011/0041/0211/0400/1000 mean; escalate per round with stock tiers + LiveAIChangePilotRankExecution. Write AI_BEHAVIOURS.md.
 - [ ] (user 2026-10-21) Music: music stops around round 5 (mission BGM ends). Trigger music each round start;
   rotate stock combat tracks, bigger track on special rounds; In/OutSupplyBGM (M024/M026) on landing.
+  BUILT 2026-10-22 (runtime 0.9.0 + Lua 0.13.0), waiting for a test: SV_PlayBGM = LivePlayBGMExecution's own call
+  (the controller fades the old track out); CFG.music rotation from round 2, special list every 5th round, re-post
+  after 15 s of silence (SV_BGM(0) = playing id). Log lines "music:". Supply BGM not done.
 - [ ] (user 2026-10-21) Pause-menu music player (as in free flight): add the entry to Survival's pause menu
   (runtime row like the main menu) or flag the mission like free flight. If the player picks music, stop round music switching.
+  BUILT 2026-10-22 (runtime 0.9.0), waiting for a test: hook on the pause list's UpdateCommandValidity drops
+  "PauseMusicPlayer" from the invalid list while mission 9101 runs (log "pause menu: the music player row shown");
+  Lua stops round music once WBP_Menu_PauseMusicPlayer_000 exists ("music: the pause menu's music player was opened").
+- [ ] (user 2026-10-22) HUD: ROUND row moved to y 312 (the game's TARGET row at 244 covered it on lock-on); the info
+  stack's TIME row hidden (clock paused). Lua 0.13.0, waiting for a test.
+- [ ] Runtime 0.9.0 SV_Event(name): fires an EP remote event (LiveCallRemoteEventExecution's own dispatch), for radio /
+  health bar / sound nodes placed in Survival's EP. Built, not used by a test yet.
 
 - [ ] (user 2026-10-22) Custom, learning enemy behaviour: Survival's own LA_SV_* behaviour scripts + a player profile
   (how you kill / evade / fly) that picks counters per flight and adjusts PilotRank; memory across runs in Survival's

@@ -147,4 +147,36 @@ static const uint8_t kSigDestroyActor[25] = {
     0xF9,
 };
 
+/* ULivePlayBGMExecution::Execute (0x1473df1f0): GetWorld -> game instance (class-checked) -> +0x908 BGM manager ->
+ * +0x170 BGM controller; Play(controller, &playingId, &node->EventName, node->Delay). tools/re/MUSIC_RADIO_CAMERA.md */
+static const uint8_t kSigBgmPlay[37] = {
+    0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x30, 0x48, 0x8B,
+    0xF9, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x07, 0x48, 0x8B, 0xCF,
+    0xFF, 0x90, 0x88, 0x01, 0x00, 0x00, 0x48, 0x8B, 0x98, 0xD8, 0x01, 0x00,
+    0x00,
+};
+static const uint8_t kSigBgmPlayMask[37] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
+/* ULiveCallRemoteEventExecution::Execute (0x1473f86b0): builds an event {vtable, TArray<uint8> {0x4F}, FName} on
+ * the stack and dispatches it to the world's event manager (tools/re/HUD_NOTES.md). */
+static const uint8_t kSigRemoteEvent[19] = {
+    0x40, 0x53, 0x48, 0x83, 0xEC, 0x40, 0x48, 0x8B, 0xD9, 0xE8, 0x00, 0x00,
+    0x00, 0x00, 0x48, 0x83, 0x7B, 0x58, 0x00,
+};
+static const uint8_t kSigRemoteEventMask[19] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1,
+};
+
+/* The pause menu's UpdateCommandValidity(ctx = &widget, TArray<FString>* invalidStringArgs, bool grayout)
+ * (0x147b575d0): outside free flight the pause list is built with {"PauseMusicPlayer"} invalid, which hides the
+ * music player's row. Prologue: three movs (15 bytes, no RIP-relative operands), then the pushes. */
+static const uint8_t kSigPauseValidity[30] = {
+    0x48, 0x89, 0x5C, 0x24, 0x10, 0x44, 0x88, 0x44, 0x24, 0x18, 0x48, 0x89,
+    0x4C, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56,
+    0x41, 0x57, 0x48, 0x83, 0xEC, 0x30,
+};
+
 #endif

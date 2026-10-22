@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.8.0"
+#define RT_VERSION           L"0.9.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1222,6 +1222,243 @@ static int64_t SetFreeRestock(int on)
     return old;
 }
 
+/* ---- music and remote events (tools/re/MUSIC_RADIO_CAMERA.md, HUD_NOTES.md) ------------------------------------
+ * SV_PlayBGM(event [, delay]) does what LivePlayBGMExecution does: the game's BGM controller fades out the track that
+ * is playing and posts the new one (a track that is already playing is left alone), so rounds can change the music
+ * and the game's pause / mute / supply handling keeps working. SV_Event(name) does what LiveCallRemoteEventExecution
+ * does: it fires a remote event of Survival's event package, so Lua can run any stock node placed there (radio,
+ * sounds, health bars). Both are decoded from the stock nodes' Execute bytes and work only in Survival's level.     */
+typedef void*     (*ClassFn)(void);
+typedef uint32_t* (*BgmPlayFn)(void* bgm, uint32_t* playingId, const FNameRaw* event, float delay);
+typedef void      (*ArrayGrowFn)(void* array, int32_t oldNum);
+typedef void*     (*EventManagerFn)(void* world);
+typedef uint8_t   (*EventCheckFn)(void* event);
+typedef void      (*EventDispatchFn)(void* manager, void* event, int32_t flags);
+typedef void      (*VoidFn)(void);
+typedef void      (*MallocFreeFn)(void* gmalloc, void* p);
+static uint8_t* g_fBgmPlay;
+static uint8_t* g_fRemoteEvent;
+
+static struct {
+    int       state;                /* 0 not tried, 1 ok, -1 failed */
+    int32_t   gameInstance;         /* world -> game instance        */
+    ClassFn   gameInstanceClass;    /* the class the node checks it against */
+    int32_t   manager, quiet;       /* game instance -> BGM manager; manager byte the node clears */
+    int32_t   controller;           /* manager -> BGM controller     */
+    BgmPlayFn play;
+    int32_t   lastId, playingId, status;   /* controller: id of the last post, id playing, status byte */
+} BG;
+
+static uint8_t* RipRel(uint8_t* insn, int len) { return insn + len + *(int32_t*)(insn + len - 4); }
+
+static int ResolveBgm(void)
+{
+    if (BG.state) return BG.state > 0;
+    BG.state = -1;
+    uint8_t* e = g_fBgmPlay;
+    if (!e) { Log(L"music: the game's BGM node was not found (other game version?)"); return 0; }
+    if (e[0x2a] != 0xE8 || memcmp(e + 0x2f, "\x48\x8B\x53\x10\x4C\x8D\x40\x30\x48\x63\x40\x38\x3B\x42\x38\x7F", 16) ||
+        memcmp(e + 0x40, "\x48\x8B\xC8\x48\x8B\x42\x30\x4C\x39\x04\xC8\x74\x02\x33\xDB", 15) ||
+        memcmp(e + 0x4f, "\x48\x8B\x8B", 3) || memcmp(e + 0x64, "\xC6\x81", 2) || e[0x6a] != 0 ||
+        memcmp(e + 0x6b, "\x48\x8B\x89", 3) || e[0x72] != 0xE8) {
+        Log(L"music: the BGM node's code is not the expected shape; music control is off");
+        return 0;
+    }
+    BG.gameInstance      = *(int32_t*)(e + 0x21);
+    BG.gameInstanceClass = (ClassFn)Rel32(e + 0x2a);
+    BG.manager           = *(int32_t*)(e + 0x52);
+    BG.quiet             = *(int32_t*)(e + 0x66);
+    BG.controller        = *(int32_t*)(e + 0x6e);
+    BG.play              = (BgmPlayFn)Rel32(e + 0x72);
+    uint8_t* p = (uint8_t*)BG.play;                       /* optional: the controller's state, for SV_BGM */
+    uint8_t* in = InGame(p) && p[0x6c] == 0xE8 ? Rel32(p + 0x6c) : NULL;
+    BG.lastId    = InGame(p) && !memcmp(p + 0x73, "\x89\x8B", 2) ? *(int32_t*)(p + 0x75) : -1;
+    BG.status    = in && InGame(in) && !memcmp(in + 0x7a, "\x80\xBF", 2) ? *(int32_t*)(in + 0x7c) : -1;
+    BG.playingId = in && InGame(in) && !memcmp(in + 0x274, "\x8B\x97", 2) ? *(int32_t*)(in + 0x276) : -1;
+    Log(L"music layout: game instance +%x (class fn %p), BGM manager +%x (flag +%x), controller +%x, play %p; "
+        L"controller ids +%x / +%x, status +%x", (uint32_t)BG.gameInstance, (void*)BG.gameInstanceClass,
+        (uint32_t)BG.manager, (uint32_t)BG.quiet, (uint32_t)BG.controller, (void*)BG.play, (uint32_t)BG.lastId,
+        (uint32_t)BG.playingId, (uint32_t)BG.status);
+    if (!InGame((void*)BG.gameInstanceClass) || !InGame((void*)BG.play)) {
+        Log(L"music: layout implausible; music control is off");
+        return 0;
+    }
+    BG.state = 1;
+    return 1;
+}
+
+/* The BGM controller of Survival's level, or NULL; play = 1 clears the manager byte as the node does before a post. */
+static uint8_t* BgmController(int play)
+{
+    if (!ResolveBgm() || SpawnerReady() != 1) return NULL;
+    uint8_t* world = (uint8_t*)VCall(g_spawner, VF_WORLD);
+    if (!LiveObject(world) || !Readable(world + BG.gameInstance, 8)) return NULL;
+    uint8_t* gi = *(uint8_t**)(world + BG.gameInstance);
+    if (!gi || !Readable(gi + 0x10, 8) || !Readable(gi + BG.manager, 8)) return NULL;
+    uint8_t* cls = *(uint8_t**)(gi + 0x10);                         /* the node's IsA check, as it does it */
+    uint8_t* want = (uint8_t*)BG.gameInstanceClass();
+    if (!cls || !want || !Readable(cls + 0x30, 0xC) || !Readable(want + 0x30, 0xC)) return NULL;
+    int32_t depth = *(int32_t*)(want + 0x38);
+    uint8_t** chain = *(uint8_t***)(cls + 0x30);
+    if (depth < 0 || depth > *(int32_t*)(cls + 0x38) || !Readable(chain + depth, 8) || chain[depth] != want + 0x30) {
+        static int logged;
+        if (!logged) { logged = 1; Log(L"music: the game instance is not the class the BGM node expects"); }
+        return NULL;
+    }
+    uint8_t* mgr = *(uint8_t**)(gi + BG.manager);
+    if (!mgr || !Readable(mgr + BG.quiet, 1) || !Readable(mgr + BG.controller, 8)) return NULL;
+    uint8_t* bgm = *(uint8_t**)(mgr + BG.controller);
+    if (!bgm || !Readable(bgm, 0x200)) return NULL;
+    if (play) mgr[BG.quiet] = 0;
+    return bgm;
+}
+
+/* Posts a BGM event (e.g. AKE_Bgm_Ms24A_Play) through the game's controller; delay 0 = the game's own delay table.
+ * Returns the Wwise playing id (0: refused, already playing, or queued) or an SV_ERR code. */
+static int64_t PlayBgm(const wchar_t* event, float delay)
+{
+    if (!ResolveBgm()) return SV_ERR_NO_GAME;
+    FNameRaw n;
+    if (!MakeName(event, &n)) return SV_ERR_NO_UNIT;              /* no such name: not a loaded Wwise event */
+    uint8_t* bgm = BgmController(1);
+    if (!bgm) return SV_ERR_NOT_READY;
+    uint32_t id = 0;
+    BG.play(bgm, &id, &n, delay);
+    Log(L"music: %s posted (playing id %u)", event, id);
+    return id;
+}
+
+/* SV_BGM(field): 0 = playing id, 1 = status byte, 2 = id of the last post; or an SV_ERR code. */
+static int64_t BgmState(int field)
+{
+    int32_t off = field == 0 ? BG.playingId : field == 1 ? BG.status : field == 2 ? BG.lastId : -1;
+    if (!ResolveBgm()) return SV_ERR_NO_GAME;
+    if (off < 0) return SV_ERR_BAD_ARGS;
+    uint8_t* bgm = BgmController(0);
+    if (!bgm || !Readable(bgm + off, 4)) return SV_ERR_NOT_READY;
+    return field == 1 ? (int64_t)bgm[off] : (int64_t)*(uint32_t*)(bgm + off);
+}
+
+static struct {
+    int             state;
+    void*           vtable;         /* the remote event's vtable    */
+    void*           baseVtable;     /* put back before freeing       */
+    ArrayGrowFn     grow;           /* TArray<uint8> allocation      */
+    uint8_t         type;           /* the event's one type byte     */
+    EventManagerFn  manager;        /* world -> event manager        */
+    void*           defaultCheck;   /* vtable slot that needs no call */
+    int32_t         checkSlot;
+    EventDispatchFn dispatch;
+    void**          gmalloc;
+    VoidFn          createMalloc;
+    int32_t         freeSlot;
+} EV;
+
+typedef struct { void* vtable; uint8_t* data; int32_t num, max; FNameRaw name; uint8_t spare[0x20]; } RemoteEventRaw;
+
+static int ResolveEvent(void)
+{
+    if (EV.state) return EV.state > 0;
+    EV.state = -1;
+    uint8_t* e = g_fRemoteEvent;
+    if (!e) { Log(L"events: the game's remote-event node was not found (other game version?)"); return 0; }
+    if (memcmp(e + 0x19, "\x48\x8D\x05", 3) || e[0x49] != 0xE8 || memcmp(e + 0x56, "\xC6\x00", 2) ||
+        memcmp(e + 0x65, "\xFF\x90\x88\x01\x00\x00", 6) || e[0x6e] != 0xE8 || memcmp(e + 0x7b, "\x48\x8D\x05", 3) ||
+        memcmp(e + 0x82, "\x48\x8B\x51", 3) || e[0xaa] != 0xE8 || memcmp(e + 0xb4, "\x48\x8D\x05", 3) ||
+        memcmp(e + 0xca, "\x48\x8B\x0D", 3) || e[0xd6] != 0xE8 || memcmp(e + 0xe8, "\xFF\x50", 2)) {
+        Log(L"events: the remote-event node's code is not the expected shape; SV_Event is off");
+        return 0;
+    }
+    EV.vtable       = RipRel(e + 0x19, 7);
+    EV.grow         = (ArrayGrowFn)Rel32(e + 0x49);
+    EV.type         = e[0x58];
+    EV.manager      = (EventManagerFn)Rel32(e + 0x6e);
+    EV.defaultCheck = RipRel(e + 0x7b, 7);
+    EV.checkSlot    = e[0x85];
+    EV.dispatch     = (EventDispatchFn)Rel32(e + 0xaa);
+    EV.baseVtable   = RipRel(e + 0xb4, 7);
+    EV.gmalloc      = (void**)RipRel(e + 0xca, 7);
+    EV.createMalloc = (VoidFn)Rel32(e + 0xd6);
+    EV.freeSlot     = e[0xea];
+    Log(L"events layout: event vtable %p (type %x, check slot +%x), manager fn %p, dispatch %p, GMalloc %p (free +%x)",
+        EV.vtable, (uint32_t)EV.type, (uint32_t)EV.checkSlot, (void*)EV.manager, (void*)EV.dispatch, (void*)EV.gmalloc,
+        (uint32_t)EV.freeSlot);
+    if (!InGame(EV.vtable) || !InGame((void*)EV.grow) || !InGame((void*)EV.manager) || !InGame((void*)EV.dispatch) ||
+        !InGame(EV.gmalloc) || !Readable((void**)EV.vtable + EV.checkSlot / 8, 8)) {
+        Log(L"events: layout implausible; SV_Event is off");
+        return 0;
+    }
+    EV.state = 1;
+    return 1;
+}
+
+/* Fires remote event `name` in Survival's level. 1 = dispatched (whether or not any trigger listens), or an SV_ERR. */
+static int64_t FireEvent(const wchar_t* name)
+{
+    if (!ResolveEvent()) return SV_ERR_NO_GAME;
+    FNameRaw n;
+    if (!MakeName(name, &n)) return SV_ERR_NO_UNIT;              /* no trigger can have a name the game doesn't */
+    if (SpawnerReady() != 1) return SV_ERR_NOT_READY;
+    void* world = VCall(g_spawner, VF_WORLD);
+    if (!LiveObject(world)) return SV_ERR_NOT_READY;
+    void* mgr = EV.manager(world);
+    if (!mgr) return SV_ERR_NOT_READY;
+    RemoteEventRaw ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.vtable = EV.vtable;
+    ev.num = 1;
+    EV.grow(&ev.data, 0);
+    if (!ev.data) return SV_ERR_NO_GAME;
+    ev.data[0] = EV.type;
+    ev.name = n;
+    void* check = ((void**)ev.vtable)[EV.checkSlot / 8];
+    int32_t flags = check == EV.defaultCheck ? 0 : (((EventCheckFn)check)(&ev) ? 0 : 2);
+    EV.dispatch(mgr, &ev, flags);
+    ev.vtable = EV.baseVtable;
+    void** gm = (void**)*EV.gmalloc;
+    if (!gm) { EV.createMalloc(); gm = (void**)*EV.gmalloc; }
+    if (gm && ev.data) ((MallocFreeFn)(*(void***)gm)[EV.freeSlot / 8])(gm, ev.data);
+    return 1;
+}
+
+/* ---- the pause menu's music player (tools/re/MUSIC_RADIO_CAMERA.md section B) ----------------------------------
+ * The stock pause list has free flight's Music Player row; outside free flight the game builds it with
+ * {"PauseMusicPlayer"} invalid, which hides it. While Survival's mission runs, the hook passes the same list without
+ * that entry (a copy: the function only reads it), so the row shows. A grey-out call (grayout = 1) is left alone.  */
+typedef void (*PauseValidityFn)(void* ctx, TArrayRaw* invalid, uintptr_t grayout);
+static uint8_t*        g_fPauseValidity;
+static PauseValidityFn g_nextPauseValidity;
+static volatile int32_t g_musicPlayer = 1;          /* SV_PauseMusicPlayer(on) */
+static volatile int32_t g_musicPlayerShown;
+
+static int InSurvivalMission(void* obj)
+{
+    uint8_t* ctx = Context(obj);
+    return ctx && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID;
+}
+
+static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
+{
+    if (g_musicPlayer && !(grayout & 0xFF) && list && list->num > 0 && list->num <= 16 &&
+        Readable(list->data, (size_t)list->num * sizeof(FString)) && Readable(ctx, 8) && InSurvivalMission(*(void**)ctx)) {
+        static const wchar_t kMusic[] = L"PauseMusicPlayer";
+        FString kept[16];
+        int32_t n = 0, removed = 0;
+        const FString* a = (const FString*)list->data;
+        for (int32_t i = 0; i < list->num; ++i) {
+            if (a[i].data && a[i].num == 17 && Readable(a[i].data, 34) && !memcmp(a[i].data, kMusic, 34)) ++removed;
+            else kept[n++] = a[i];
+        }
+        if (removed) {
+            TArrayRaw tmp = { (uint8_t*)kept, n, n };
+            if (!g_musicPlayerShown) { g_musicPlayerShown = 1; Log(L"pause menu: the music player row shown (Survival's mission)"); }
+            g_nextPauseValidity(ctx, &tmp, grayout);
+            return;
+        }
+    }
+    g_nextPauseValidity(ctx, list, grayout);
+}
+
 /* ---- the game's own Lua (behaviour scripts; tools/re/GAME_LUA.md) ----------------------------------------------
  * AceCombat8.exe embeds Lua 5.3 for its AI behaviour scripts and exports the whole C API by name (lua_pcallk,
  * luaL_loadbufferx, ...). Its one state lives in the plugin's SingleGameluaContext; GetGameLuaState() returns it
@@ -1354,10 +1591,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.8.0" */
+/* SV_Version() -> "0.9.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.8.0";
+    static const char v[] = "0.9.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1477,6 +1714,45 @@ static int L_GameLuaState(void* lua)
     return Ret(lua, (int64_t)(uintptr_t)L);
 }
 
+/* SV_PlayBGM(event [, delay]) -> the Wwise playing id (0: refused, already playing, or queued by a delay) or an
+ * SV_ERR code (SV_ERR_NO_UNIT: the game has no such name); see "music and remote events" */
+static int L_PlayBGM(void* lua)
+{
+    wchar_t name[128];
+    double delay = 0;
+    if (!ArgName(lua, name, 128)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &delay);
+    return Ret(lua, PlayBgm(name, (float)delay));
+}
+
+/* SV_BGM([field]) -> the BGM controller's playing id (0), status byte (1) or last posted id (2), or an SV_ERR code */
+static int L_BGM(void* lua)
+{
+    double field = 0;
+    ArgNumber(lua, &field);
+    return Ret(lua, BgmState((int)field));
+}
+
+/* SV_Event(name) -> 1 once remote event `name` is dispatched in Survival's level, or an SV_ERR code */
+static int L_Event(void* lua)
+{
+    wchar_t name[128];
+    if (!ArgName(lua, name, 128)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, FireEvent(name));
+}
+
+/* SV_MusicPlayer([on]) -> the old setting (1 shown, 0 not), or SV_ERR_NO_GAME when the pause list wasn't hooked;
+ * on = 0 keeps the stock pause menu (no music player row) in Survival */
+static int L_MusicPlayer(void* lua)
+{
+    double on = -1;
+    ArgNumber(lua, &on);
+    if (!g_nextPauseValidity) return Ret(lua, SV_ERR_NO_GAME);
+    int64_t old = g_musicPlayer;
+    if (on >= 0) g_musicPlayer = on != 0;
+    return Ret(lua, old);
+}
+
 /* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
 static int L_Reset(void* lua)
 {
@@ -1491,6 +1767,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -1502,7 +1779,7 @@ static void RegisterLua(void* lua)
         LuaFn fn = kFns[i].fn;
         U.luaRegister(lua, &s, &fn);
     }
-    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState registered");
+    Log(L"Lua bridge: SV_Version, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer registered");
 }
 
 #define MOD_SLOTS 16
@@ -1559,9 +1836,10 @@ static void** FindVtable(uint8_t* decide, int wantNext)
 /* One pass over the game's code for every signature (as shipped, or behind another mod's jump). */
 static void FindFunctions(void)
 {
-    static uint8_t tp[64], tm[64], xp[64], xm[64];
+    static uint8_t tp[64], tm[64], xp[64], xm[64], vp[64], vm[64];
     HookedPattern(tp, tm, sizeof(kSigTransition), kSigTransitionTail, sizeof(kSigTransitionTail));
     HookedPattern(xp, xm, 15, kSigText + 15, sizeof(kSigText) - 15);
+    HookedPattern(vp, vm, 15, kSigPauseValidity + 15, sizeof(kSigPauseValidity) - 15);
     Pattern p[] = {
         { kSigBase,       NULL, sizeof(kSigBase),       NULL, 0 }, { kSigMainDecide,    NULL, sizeof(kSigMainDecide),    NULL, 0 },
         { kSigDiffDecide, NULL, sizeof(kSigDiffDecide), NULL, 0 }, { kSigDiffNext,      NULL, sizeof(kSigDiffNext),      NULL, 0 },
@@ -1577,6 +1855,9 @@ static void FindFunctions(void)
         { kSigAmmoWeapons,    NULL, sizeof(kSigAmmoWeapons),   NULL, 0 },
         { kSigFreeRestock,    kSigFreeRestockMask, sizeof(kSigFreeRestock), NULL, 0 },
         { kSigGameLuaState,   kSigGameLuaStateMask, sizeof(kSigGameLuaState), NULL, 0 },
+        { kSigBgmPlay,        kSigBgmPlayMask,     sizeof(kSigBgmPlay),     NULL, 0 },
+        { kSigRemoteEvent,    kSigRemoteEventMask, sizeof(kSigRemoteEvent), NULL, 0 },
+        { kSigPauseValidity,  NULL, sizeof(kSigPauseValidity), NULL, 0 }, { vp, vm, sizeof(kSigPauseValidity), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1597,6 +1878,9 @@ static void FindFunctions(void)
     g_fAmmoWeapons   = p[16].hit;
     g_fFreeRestock   = p[17].hit;
     g_fGameLuaState  = p[18].hit;
+    g_fBgmPlay       = p[19].hit;
+    g_fRemoteEvent   = p[20].hit;
+    g_fPauseValidity = p[21].hit ? p[21].hit : p[22].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -1604,6 +1888,7 @@ static void FindFunctions(void)
         (void*)g_spawnUnit, (void*)g_unregisterUnit, g_fUnitIdSpawned, (void*)g_destroyActor);
     Log(L"ammo functions: node execute %p, flare lambda %p, weapons lambda %p, free restock %p", g_fAmmoExecute, g_fAmmoFlare, g_fAmmoWeapons, g_fFreeRestock);
     Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
+    Log(L"music and events: BGM node %p, remote-event node %p, pause list %p", g_fBgmPlay, g_fRemoteEvent, g_fPauseValidity);
 }
 
 static int StonehengeInstalled(void)
@@ -1616,6 +1901,8 @@ static int Install(void)
     InitText();
     if (g_fText && HookInline(g_fText, 15, (void*)OnText, (void**)&g_nextText, L"text lookup")) {}
     else Log(L"text lookup not found; the menu entry shows its text key instead of its name");
+    if (g_fPauseValidity && HookInline(g_fPauseValidity, 15, (void*)OnPauseValidity, (void**)&g_nextPauseValidity, L"pause menu list")) {}
+    else Log(L"pause menu list not found; no music player in Survival's pause menu");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");

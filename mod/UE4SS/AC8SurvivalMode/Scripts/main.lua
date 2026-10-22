@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.12.0"
+local VERSION = "0.13.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -410,11 +410,33 @@ local CFG = {
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
     -- airframes; those keep their blueprint's own, e.g. su33 cobra but no kulbit), so early fighters never post-stall.
     maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a" } },
+    -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
+    -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
+    -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
+    -- for restart_s (user, 2026-10-21: the music stopped around round 5). All are looping campaign tracks of the BGM
+    -- bank Survival's level loads (tools/re/MUSIC_RADIO_CAMERA.md); a name the game doesn't have is dropped.
+    -- pause_player: free flight's Music Player row in Survival's pause menu; once the player opens it, Survival stops
+    -- changing the music for the rest of the run.
+    music = {
+        enabled      = true,
+        pause_player = true,
+        start_track  = "AKE_Bgm_Ms08A_Play",
+        restart_s    = 15,
+        tracks  = { "AKE_Bgm_Ms02A_Play", "AKE_Bgm_Ms04A_Play", "AKE_Bgm_Ms05a_Play", "AKE_Bgm_Ms07A_Play",
+                    "AKE_Bgm_Ms11A_Play", "AKE_Bgm_Ms12a_Play", "AKE_Bgm_Ms14A_Play", "AKE_Bgm_Ms17A_Play",
+                    "AKE_Bgm_Ms18A_Play", "AKE_Bgm_Ms20A_Play", "AKE_Bgm_Ms21A_Play", "AKE_Bgm_Ms22A_Play",
+                    "AKE_Bgm_Ms24A_Play" },
+        special = { "AKE_Bgm_Ms09B_Play", "AKE_Bgm_Ms20D_Play", "AKE_Bgm_Ms23B_Play", "AKE_Bgm_Ms27A_Play",
+                    "AKE_Bgm_Ms28C_Play", "AKE_Bgm_Ms30A_Play" },
+    },
     -- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
     hud = {
         enabled          = true,
         x                = 190,                 -- left edge, lined up with the game's TIME / SCORE stack
-        y                = 244,                 -- the row after SCORE (TIME 108, SCORE 176 on screen; test 13 screenshot)
+        -- Below the game's stack: TIME 108, SCORE 176 (test 13 screenshot) and the TARGET row at 244, which appears
+        -- when the player locks on and covered ROUND at 244 (user screenshot, 2026-10-22).
+        y                = 312,
+        hide_game_timer  = true,                -- hide the stack's TIME row (Survival's mission clock is paused)
         line             = 68,                  -- row pitch of the game's stack
         font_size        = 37,                  -- the mission info panel's text: HUD typeface 37, spacing -70
         letter_spacing   = -70,
@@ -1173,6 +1195,25 @@ local function clock(s)
 end
 
 -- One HUD pass: build when needed, show/hide with the game's HUD, update the rows and the callout.
+-- The mission info stack's TIME row (WBP_HUD_SubWidgets_Parts_TimerAndGauge_000): Survival pauses the mission clock
+-- (EP MissionStart), so the row would sit at 60:00:00. Hidden, not collapsed, so SCORE and TARGET keep their rows.
+local function hideGameTimer(now)
+    if not CFG.hud.hide_game_timer then return end
+    if not (H.timerRow and valid(H.timerRow)) then
+        H.timerRow = nil
+        if H.timerLook and now < H.timerLook then return end
+        H.timerLook = now + 2
+        for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_TimerAndGauge_000_C") or {}) do
+            if valid(w) and not nameOf(w):find("Default__", 1, true) then H.timerRow = w; break end
+        end
+        if not H.timerRow then return end
+    end
+    if H.timerRow:GetVisibility() ~= VIS.Hidden then
+        H.timerRow:SetVisibility(VIS.Hidden)
+        if not H.timerLogged then H.timerLogged = true; log("hud: the game's TIME row hidden (" .. nameOf(H.timerRow) .. ")") end
+    end
+end
+
 local function hudTick(now, paused, pc)
     if hudOff or not CFG.hud.enabled or not D then return end
     if not (H and valid(H.widget)) then
@@ -1198,6 +1239,7 @@ local function hudTick(now, paused, pc)
         H.shown = show
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
     end
+    pcall(hideGameTimer, now)
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
     if D.state == "wait" then
@@ -1417,6 +1459,75 @@ local function roundsTick(now)
     end
 end
 
+---------------------------------------------------------------------------------------------------- music
+-- SV_PlayBGM(event) posts a BGM event through the game's controller (it fades the playing track out and ignores a
+-- track that is already playing); SV_BGM(0) reads the id it is playing (0 = nothing). See CFG.music.
+local M = {}
+
+local function musicNext(special)
+    local mc = CFG.music
+    local key = (special and #mc.special > 0) and "special" or "tracks"
+    local list = mc[key]
+    M.bags[key] = M.bags[key] or {}
+    local bag = M.bags[key]
+    for _ = 1, #list + 1 do
+        if #bag == 0 then
+            for _, t in ipairs(list) do if not M.dropped[t] then bag[#bag + 1] = t end end
+            if #bag == 0 then log("music: no playable tracks left in CFG.music." .. key); return end
+            shuffled(bag)
+            if #bag > 1 and bag[#bag] == M.track then bag[1], bag[#bag] = bag[#bag], bag[1] end   -- no repeat
+        end
+        local t = table.remove(bag)
+        local r = SV_PlayBGM(t)
+        if r == -2 then
+            M.dropped[t] = true
+            log("music: " .. t .. " is not a BGM event the game has loaded; dropped")
+        elseif r < 0 then
+            log("music: " .. t .. " not posted (" .. tostring(r) .. ")"); return
+        else
+            M.track, M.silent = t, nil
+            log(string.format("music: round %d%s -> %s (playing id %d)", D.round, special and " (special)" or "", t, r))
+            return
+        end
+    end
+end
+
+local function musicTick(tick, now, paused)
+    local mc = CFG.music
+    if not mc.enabled or not D or M.player then return end
+    if type(SV_PlayBGM) ~= "function" then
+        if not M.warned then M.warned = true; log("music: dlls/main.dll older than 0.9.0; the mission track plays all run") end
+        return
+    end
+    if paused then        -- the pause menu: has the player opened the music player?
+        if tick % 4 == 0 then
+            local w = FindFirstOf("WBP_Menu_PauseMusicPlayer_000_C")
+            if valid(w) and not nameOf(w):find("Default__", 1, true) then
+                M.player = true
+                log("music: the pause menu's music player was opened; Survival leaves the music to the player")
+            end
+        end
+        return
+    end
+    if D.round >= 2 and D.round ~= M.round then
+        M.round = D.round
+        musicNext(D.round % 5 == 0)
+    end
+    if tick % 4 ~= 0 then return end
+    local id = SV_BGM(0)
+    if id ~= M.id then M.id = id; log(string.format("music: playing id %d, status %d", id, SV_BGM(1))) end
+    if id == 0 and M.track then
+        M.silent = M.silent or now
+        if now - M.silent >= mc.restart_s then
+            M.silent = nil
+            log(string.format("music: nothing playing for %d s; %s again (%s)", mc.restart_s, M.track,
+                tostring(SV_PlayBGM(M.track))))
+        end
+    else
+        M.silent = nil
+    end
+end
+
 ---------------------------------------------------------------------------------------------------- ammo cap
 -- The player's ammo counts live in native memory (no reflected property holds them; Lua 0.8.0 found no module
 -- objects), so dlls\main.dll (runtime 0.7.0) reads and sets them the way the stock LiveSetWeaponAmmoCount node does
@@ -1554,6 +1665,12 @@ local function probeTick(tick)
         log(string.format("search: at level load, %d of %d aircraft fly with the %s m search", nS, #CFG.aircraft,
             tostring(CFG.search.radius_m)))
         H, hudTries, hudOff, hudSaid, pendingCallout, survivalPC, A = nil, 0, false, {}, nil, nil, nil
+        M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
+        if type(SV_MusicPlayer) == "function" then
+            local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
+            log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
+                or (CFG.music.pause_player and "on" or "off")))
+        end
     end
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
@@ -1575,6 +1692,8 @@ local function probeTick(tick)
             if not okR then log("rounds: error " .. tostring(errR)) end
             local okH, errH = pcall(hudTick, now, paused, survivalPC)
             if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
+            local okM, errM = pcall(musicTick, tick, now, paused)
+            if not okM then log("music: error " .. tostring(errM)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
