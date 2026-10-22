@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.20.1"
+local VERSION = "0.21.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -467,6 +467,16 @@ local CFG = {
     -- 10 s between shots (aces: 60 deg, 5 s). Each fighter's Survival NPC row gets a copy (<row>_SV in DT_NPC_FCS)
     -- with these values: range (m), cone (deg), arm / lock / between-missiles / rest (s).
     missiles = { enabled = true, capture_m = 4000, angle_deg = 60, arm_s = 0.5, lock_s = 1.5, interval_s = 2.0, rest_s = 5.0 },
+    -- The fighters' gun (user, 2026-10-22: "increase their guns too and accuracy"). Every enemy gun, aces included, is
+    -- NPC_FCS_PlaneGun000: fires within 1.5 km and 30 deg after 1.5 s on target, 10-round bursts, 1 s rest; its rounds
+    -- (GUN_000 in DT_NPC_Weapon) do 1 damage and spread up to 3 deg. Survival's copies (<row>_SV): range (m), cone (deg),
+    -- time on target before firing (s), rounds a burst, rest (s), damage multiplier, spread (deg).
+    guns = { enabled = true, range_m = 2000, angle_deg = 40, aim_s = 0.8, burst = 15, rest_s = 0.6, damage_x = 1.5, spread_deg = 1.5 },
+    -- Special weapons (user, 2026-10-22): each fighter type gets one of these stock ace fire-control rows (QAAM, 2AAM,
+    -- LAAM, HCAA, as the Shadow aces carry theirs) in its first free weapon slot, picked at random once a session; its
+    -- fire control fires it by itself when the player is in its range and cone.
+    special = { enabled = true,
+                fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" } },
     -- Survival's own behaviour sets: a DT_NPC_LuaSet row copied from `base`, with `slots` pointing at Survival's
     -- scripts (Scripts/ai/<name>.lua, packaged at /Game/LuaSource/SurvivalMode/AI/<name> by tools/build_survival.py
     -- LUA_SCRIPTS). Made from the main menu on: the game builds a flight's behaviour when the level loads.
@@ -911,6 +921,7 @@ local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcM
 -- here even when CFG.search is off or CFG.aircraft leaves that aircraft out.
 local BEHAVIOUR_AIRCRAFT = "f16c_common"
 local FCS_TABLE = "/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS.DT_NPC_FCS"
+local WEAPON_TABLE = "/Game/Datatables/AI/NPC/Weapon/DT_NPC_Weapon.DT_NPC_Weapon"
 
 -- Survival's own behaviour sets (CFG.behaviour_sets) into DT_NPC_LuaSet. BS.ready[name] once a set is in.
 local BS = { done = false, ready = {}, tries = 0 }
@@ -963,25 +974,48 @@ local function searchSetup()
         return
     end
     for _, t in ipairs({ mod, npc, mission }) do pin(t, nameOf(t)) end
-    -- CFG.missiles: a Survival copy of each missile fire-control row the fighters use (made once, then shared)
-    local fcs = CFG.missiles.enabled and loadObject(FCS_TABLE) or nil
-    if fcs then pin(fcs, nameOf(fcs)) elseif CFG.missiles.enabled then log("missiles: DT_NPC_FCS not loaded; stock fire control") end
-    local fcsMade = {}
-    local function svFcs(src)
+    -- CFG.missiles / guns / special: Survival copies of the fire-control (and gun weapon) rows the fighters use, made
+    -- once and shared by every aircraft that uses the same stock row
+    local wantFcs = CFG.missiles.enabled or CFG.guns.enabled or CFG.special.enabled
+    local fcs = wantFcs and loadObject(FCS_TABLE) or nil
+    if fcs then pin(fcs, nameOf(fcs)) elseif wantFcs then log("weapons: DT_NPC_FCS not loaded; stock fire control") end
+    local wpn = CFG.guns.enabled and loadObject(WEAPON_TABLE) or nil
+    if wpn then pin(wpn, nameOf(wpn)) end
+    local made = {}
+    local function copy(tbl, src, edit, what)              -- src .. "_SV" in tbl, edited; its name, or nil
         local new = src .. "_SV"
-        if fcsMade[new] == nil then
-            local m = CFG.missiles
-            local ok, why = cloneRow(fcs, src, new, function(r)
-                r.CaptureDistance, r.CaptureAngleRange = m.capture_m, m.angle_deg
-                r.ActivationTime, r.TriggeringTime = m.arm_s, m.lock_s
-                r.ShotIntervalTime, r.RestingTime = m.interval_s, m.rest_s
-            end)
-            fcsMade[new] = ok
-            log(string.format("missiles: %s -> %s %s", src, new, ok and string.format("(lock within %d m / %d deg, arm %.1f s, " ..
-                "lock %.1f s, %.1f s between, rest %.1f s)", m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s)
-                or ("not made: " .. tostring(why))))
+        if made[new] == nil then
+            local ok, why = cloneRow(tbl, src, new, edit)
+            made[new] = ok
+            log("weapons: " .. src .. " -> " .. new .. " " .. (ok and ("(" .. what .. ")") or ("not made: " .. tostring(why))))
         end
-        return fcsMade[new] and new or nil
+        return made[new] and new or nil
+    end
+    local function svFcs(src)
+        local m = CFG.missiles
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.CaptureAngleRange = m.capture_m, m.angle_deg
+            r.ActivationTime, r.TriggeringTime = m.arm_s, m.lock_s
+            r.ShotIntervalTime, r.RestingTime = m.interval_s, m.rest_s
+        end, string.format("missile: lock within %d m / %d deg, arm %.1f s, lock %.1f s, %.1f s between, rest %.1f s",
+            m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s))
+    end
+    local function svGun(src)
+        local g = CFG.guns
+        local rounds
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.CaptureAngleRange = g.range_m, g.angle_deg
+            r.TriggeringTime, r.TriggerCount, r.RestingTime = g.aim_s, g.burst, g.rest_s
+            if wpn then
+                local w = r.NpcWeaponId:ToString()
+                rounds = copy(wpn, w, function(x)
+                    x.damage = x.damage * g.damage_x
+                    x.MaxSpawnAngle = g.spread_deg
+                end, string.format("gun rounds: damage x%.1f, spread %.1f deg", g.damage_x, g.spread_deg))
+                if rounds then r.NpcWeaponId = FName(rounds) end
+            end
+        end, string.format("gun: within %d m / %d deg, %.1f s on target, %d-round bursts, rest %.1f s", g.range_m, g.angle_deg,
+            g.aim_s, g.burst, g.rest_s))
     end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
@@ -1000,15 +1034,23 @@ local function searchSetup()
             local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
             local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
                 r.NpcAIModuleId = FName(SR.module)
-                if fcs then                          -- its missile slot(s) onto Survival's fire control
+                if fcs then                          -- its weapon slots onto Survival's fire control
+                    local free
                     for i = 0, 5 do
                         pcall(function()
                             local id = r["NpcFCSId" .. i]:ToString()
-                            if id:find("^NPC_FCS_PlaneMsl") then
-                                local new = svFcs(id)
-                                if new then r["NpcFCSId" .. i] = FName(new) end
-                            end
+                            local new
+                            if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then new = svFcs(id)
+                            elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then new = svGun(id)
+                            elseif (id == "None" or id == "") and i >= 3 and not free then free = i end
+                            if new then r["NpcFCSId" .. i] = FName(new) end
                         end)
+                    end
+                    local list = CFG.special.fcs
+                    if CFG.special.enabled and free and #list > 0 then
+                        local spw = list[math.random(#list)]
+                        r["NpcFCSId" .. free] = FName(spw)
+                        log("weapons: " .. svNpc .. " carries " .. spw .. " (slot " .. free .. ")")
                     end
                 end
                 local set = CFG.search.luaset
