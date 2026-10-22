@@ -443,7 +443,11 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   (Graph.foreign_template adds their script imports). Field (Lua): within 3 km SV_SetControlInvert (BuildFlightInput
   detour) inverts pitch/roll with a 1.5 s fade, RE_SV_AnomalyFieldOn/Off = glasses effect + harder noise; HUD row
   "MINDRIPPER: n KM" / "ANOMALY FIELD: CONTROLS INVERTED". Down: +4000 Z, everything off (SV_AnomalyDown /
-  RE_SV_AnomalyEnd). Not yet: floating, orbiting guards, portal + electric effect (which Mission 22 effect: ask user).
+  RE_SV_AnomalyEnd). Death: the Celaeno's body-explosion sequence + control-unit collapse (Mission 23 sound events,
+  loaded by Lua at level load). Arrival (Lua 0.34.0; user: "the zoom in camera appears, then the portal, then
+  MINDRIPPER"): spawned hidden, focus camera at 0.3 s, portal open at 1 s (NS_ElectricSign001 + NS_CloudLightning
+  attached, x4), burst at 2.8 s (NS_ElectricDischargeM001 + NS_ms23FarFlash + M27 CoreElectricPlasma), shown; the
+  Celaeno core's electricity crackle on MINDRIPPER while it lives. Not yet: floating, orbiting guards.
   Test: [rounds] start_round = 10; "special: anomaly" lines; beep, WARNING, camera; inversion inside 3 km; kill.
 - [ ] (original) Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
   within ~5 km; inside ~3 km the player's pitch and roll invert (HUD warning, radar noise, glasses effect) until it dies.

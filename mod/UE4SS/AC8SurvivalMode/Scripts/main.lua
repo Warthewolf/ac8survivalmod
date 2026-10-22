@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.33.1"
+local VERSION = "0.34.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -748,7 +748,24 @@ local CFG = {
                      down_sounds = "/Game/WwiseAssets/Events/CS_AceLive_SE/MissionSpecific/Events_Ms23/EXP/SKY/SE_Ms23_EXP_SKY_OP0049_cleo/",
                      down_sound_names = { "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play",
                                           "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play",
-                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play" } },
+                                          "AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play",
+                                          "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play" },
+                     -- (and the Celaeno's control-unit crackle on MINDRIPPER while it's up)
+                     hum_sounds = "/Game/WwiseAssets/Events/CS_AceLive_SE/MissionSpecific/Events_Ms23/ARMS/SKY/SE_Ms23_ARMS_SKY_OP0049_cleo/",
+                     hum_sound_names = { "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Play",
+                                         "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Stop",
+                                         "AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play" },
+                     -- The portal (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER";
+                     -- lightning from the game's own electric effects). MINDRIPPER and its guards spawn hidden, the
+                     -- event package's focus camera swings onto MINDRIPPER, open_at_s later the `open` systems crackle
+                     -- on it for open_s, then the `burst` systems fire and they appear. Niagara systems, attached to
+                     -- MINDRIPPER, `scale` times their size (they're made for one aircraft).
+                     portal = { enabled = true, open_at_s = 1.0, open_s = 1.8, scale = 4.0,
+                                open = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
+                                         "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning" },
+                                burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
+                                          "/Game/VFX/Mission/Mission023/NS_ms23FarFlash",
+                                          "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma" } } },
     },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
@@ -2402,15 +2419,75 @@ function ANOM.spawn()
     end
     local pawn = valid(survivalPC) and survivalPC.Pawn
     ANOM.pawn = pawn and addrOf(pawn) or nil
-    local t = CFG.hud.text
-    hudCallout(string.format(t.anomaly_warn, c.name:upper()), t.anomaly_warn_sub)
+    ANOM.hidden = {}                               -- the portal hides them until its burst (ANOM.tick)
     return true
+end
+
+-- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o`; how many came up.
+local niagaraSaid = false
+local function portalFx(list, o)
+    local pc = CFG.specials.anomaly.portal
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    if not (valid(lib) and valid(o)) then return 0 end
+    local n = 0
+    for _, path in ipairs(list) do
+        local name = path:match("[^/]+$")
+        local sys = loadObject(path .. "." .. name)
+        local ok, err = pcall(function()
+            local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+                { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
+            if comp and comp:IsValid() then comp:SetWorldScale3D({ X = pc.scale, Y = pc.scale, Z = pc.scale }) end
+        end)
+        if ok and sys then n = n + 1
+        elseif not niagaraSaid then niagaraSaid = true; log("special: portal system " .. name .. " failed: " .. tostring(err)) end
+    end
+    return n
+end
+
+-- MINDRIPPER's and its guards' actors (just created ones too: they're hidden before they're logged)
+local function anomalyActors(c)
+    local out = {}
+    for _, list in ipairs({ planes, pending }) do
+        for _, q in ipairs(list) do
+            if (q.unit == c.unit or q.unit == c.guard_unit) and valid(q.obj) then out[#out + 1] = q end
+        end
+    end
+    return out
+end
+
+-- The portal: hidden on arrival, the opening crackle on MINDRIPPER, then the burst and they appear.
+local function portalTick(now, s, c)
+    local pc, lead = c.portal, nil
+    for _, q in ipairs(anomalyActors(c)) do
+        local a = addrOf(q.obj)
+        if a and not ANOM.hidden[a] then
+            ANOM.hidden[a] = q.obj
+            pcall(function() q.obj:SetActorHiddenInGame(true) end)
+        end
+        if q.unit == c.unit then lead = q.obj end
+    end
+    if not s.opened and now - s.at >= pc.open_at_s then
+        s.opened = true
+        log(string.format("special: anomaly portal opens (%d systems)", lead and portalFx(pc.open, lead) or 0))
+    end
+    if now - s.at >= pc.open_at_s + pc.open_s then
+        local n = lead and portalFx(pc.burst, lead) or 0
+        local shown = 0
+        for _, o in pairs(ANOM.hidden) do
+            if valid(o) and pcall(function() o:SetActorHiddenInGame(false) end) then shown = shown + 1 end
+        end
+        s.state = "hunt"
+        local t = CFG.hud.text
+        hudCallout(string.format(t.anomaly_warn, c.name:upper()), t.anomaly_warn_sub)
+        log(string.format("special: anomaly portal burst (%d systems), %d aircraft through", n, shown))
+    end
 end
 
 -- Every tick of a running Anomaly: its distance (the field) and its end.
 function ANOM.tick(now, s)
-    if s.state ~= "hunt" then return end
     local c, t = CFG.specials.anomaly, CFG.hud.text
+    if s.state == "portal" then return portalTick(now, s, c) end
+    if s.state ~= "hunt" then return end
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
         setField(false, s)
@@ -2598,7 +2675,11 @@ local function roundsTick(now)
         if u == "@shuttle" then
             spawnShuttle()
         elseif u == "@anomaly" then
-            if ANOM.spawn() then D.special.state, D.special.at = "hunt", now else D.special = nil end
+            if ANOM.spawn() then
+                D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
+            else
+                D.special = nil
+            end
         elseif u then
             local r = spawnFlight(u)
             if r == -1 then log("rounds: left Survival's level, rounds stopped"); D = nil; return end
@@ -2620,8 +2701,9 @@ local function roundsTick(now)
             if n > 0 then alive, flights = alive + n, flights + 1 else D.up[u] = nil end
         end
         if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
-        if flights == 0 and D.special and D.special.state == "countdown" then
-            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the shuttle's countdown goes on", D.round)) end
+        if flights == 0 and D.special and (D.special.state == "countdown" or D.special.state == "portal") then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round,
+                D.special.state == "portal" and "Anomaly's portal" or "shuttle's countdown")) end
         elseif flights == 0 then
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
@@ -3269,13 +3351,18 @@ local function probeTick(tick)
         log("level loaded: PL_SurvivalMode")
         if type(SV_SetControlInvert) == "function" then SV_SetControlInvert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn = false, nil
-        do                                         -- the Anomaly's death sounds (Mission 23's), loaded and kept
-            local an, got = CFG.specials.anomaly, {}
-            for _, n in ipairs(an.down_sound_names) do
-                local o = loadObject(an.down_sounds .. n .. "." .. n)
-                if o then pin(o, n); got[#got + 1] = n end
+        do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
+            local an, got, want = CFG.specials.anomaly, 0, 0
+            local function keep(path)
+                local n = path:match("[^/]+$")
+                want = want + 1
+                local o = loadObject(path .. "." .. n)
+                if o then pin(o, n); got = got + 1 else log("special: anomaly asset not loaded: " .. path) end
             end
-            log(string.format("special: anomaly death sounds loaded: %d of %d", #got, #an.down_sound_names))
+            for _, n in ipairs(an.down_sound_names) do keep(an.down_sounds .. n) end
+            for _, n in ipairs(an.hum_sound_names) do keep(an.hum_sounds .. n) end
+            for _, part in ipairs({ an.portal.open, an.portal.burst }) do for _, p in ipairs(part) do keep(p) end end
+            log(string.format("special: anomaly sounds and portal systems loaded: %d of %d", got, want))
         end
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
