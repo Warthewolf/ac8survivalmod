@@ -196,23 +196,27 @@ def set_flight_size(objs, size, unit, point, used_ids, top_number):
 
 
 def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
-    """Moves AI object `obj` out of world-data unit `src_unit` into a new unit `new_unit`: a copy of the source's desc
-    (same faction, point, area and tags) with a new UniqueID, holding only that object (optionally on NPC row
-    `npc_row`). SV_Spawn(new_unit) without a position then puts it where the stock mission placed it. No ground object
-    of Mission 22's leads its unit (bGroupLead 0), so a one-object unit needs no leader."""
+    """Moves AI object `obj` (a name, or a list of names) out of world-data unit `src_unit` into a new unit `new_unit`:
+    a copy of the source's desc (same faction, point, area and tags) with a new UniqueID, holding only those objects
+    (optionally on NPC row `npc_row`). SV_Spawn(new_unit) without a position then puts them where the stock mission
+    placed them. No ground object of Mission 22's leads its unit (bGroupLead 0), so such a unit needs no leader."""
     dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
     unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
     src = [u for u in units if unit_name(u) == src_unit][0]
     assert new_unit not in {unit_name(u) for u in units} and not new_unit[-1].isdigit(), new_unit   # hard rule 17
     objs = [p for p in src[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    hit = [ob for ob in objs if dn([q for q in ob[2] if q[1] == 'Name'][0][3]) == obj]
-    assert len(hit) == 1, obj
-    ob = hit[0]
-    objs.remove(ob)
+    wanted = [obj] if isinstance(obj, str) else list(obj)
+    moved = []
+    for name in wanted:
+        hit = [ob for ob in objs if dn([q for q in ob[2] if q[1] == 'Name'][0][3]) == name]
+        assert len(hit) == 1, name
+        objs.remove(hit[0])
+        moved.append(hit[0])
     new = copy.deepcopy(src)
     if npc_row:
-        assert any(q[1] == 'MissionNpcID' for q in ob[2]), obj
-        ob[2][:] = [(q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else q for q in ob[2]]
+        for ob in moved:
+            assert any(q[1] == 'MissionNpcID' for q in ob[2]), obj
+            ob[2][:] = [(q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else q for q in ob[2]]
         z.nb.add(npc_row)
     z.nb.add(new_unit)
     ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
@@ -221,19 +225,22 @@ def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
     assert any(q[1] == 'UniqueID' for q in new[2]), 'unit desc without UniqueID'
     new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
                  (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
-    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = [ob]
+    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = moved
     units.append(new)
     return len(objs)
 
 
 def split_units(units, used_ids, z):
-    """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special; Mission 22's
-    pad keeps its dummies, AA guns, SAMs and tower and is spawned once a run. Airfield defences (survival_events.DEFENCES):
-    each of Mission 22's airport AA guns and SAM sites becomes a one-object unit the shop can build."""
-    left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.SHUTTLE, survival_events.SHUTTLE_UNIT,
-                       survival_events.SHUTTLE_NPC_ROW)
-    print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}); '
-          f'{survival_events.PAD_UNIT} keeps {left} objects')
+    """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special, and the
+    pad's invincible dummies one of theirs (PAD_DUMMY_UNIT, spawned once a run: a unit with anything alive can't be
+    spawned again), so Mission 22's pad unit keeps only what can be destroyed (AA guns, SAMs, tower: removed after
+    each special). Airfield defences (survival_events.DEFENCES): each of Mission 22's airport AA guns and SAM sites
+    becomes a one-object unit the shop can build."""
+    move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.SHUTTLE, survival_events.SHUTTLE_UNIT,
+                survival_events.SHUTTLE_NPC_ROW)
+    left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.PAD_DUMMIES, survival_events.PAD_DUMMY_UNIT)
+    print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}), '
+          f'{len(survival_events.PAD_DUMMIES)} dummies in {survival_events.PAD_DUMMY_UNIT}; {survival_events.PAD_UNIT} keeps {left} objects')
     for new_unit, obj in survival_events.DEFENCES:
         move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit)
     print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')

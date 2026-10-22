@@ -69,6 +69,14 @@ BOMB_GAP_S = 0.4
 # airfield), SV_ShuttleLaunched / SV_ShuttleLost, SV_ShuttleHits.
 PAD_UNIT = 'AA_Unit_01_Ground0'
 SHUTTLE_UNIT = 'SV_Unit_Shuttle'
+# the pad's invincible near-miss / tower dummies: a unit of their own, spawned once a run and kept, so the pad's guns,
+# SAMs and tower can be removed after each special (user, 2026-10-22: "we have to despawn the allies that spawned with
+# the shuttle") and spawned again for the next (a unit with anything still alive can't be)
+PAD_DUMMY_UNIT = 'SV_Unit_PadDummies'
+PAD_DUMMIES = (['AA_Obj_01_Ground0_Shuttle_Dummy_Point0'] + [f'AA_Obj_01_Ground0_Shuttle_Dummy_{k}' for k in range(5)]
+               + [f'AA_Obj_01_Ground0_Tower_Dummy{k}' for k in range(3)])
+PAD_REMOVE_LOST_S = 30.0                    # the pad's allies go this long after the shuttle is lost (after liftoff:
+                                            # SHUTTLE_REMOVE_S, with the shuttle)
 SHUTTLE = 'AA_Obj_01_Ground0_Shuttle_0'
 SHUTTLE_NPC_ROW = 'sstb_common_sv'          # DT_SV_NpcMission row (NpcId SHUTTLE_NPC)
 SHUTTLE_NPC = 'OP0057_sstb_01_SV'           # DT_SV_NpcRows row, added to DT_NPC by main.lua
@@ -401,6 +409,9 @@ def build_shuttle(g, flag):
     g.execute(t_cam_off, up, delay=T + 7)
     g.execute(t_vfx_off, up, delay=T + 30)
     g.execute(t_remove, up, delay=T + SHUTTLE_REMOVE_S, conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
+    # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
+    g.execute(t_remove, up, {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'}, delay=T + SHUTTLE_REMOVE_S,
+              conds=[g.cond('SV_ShuttleLaunched', 'Geq', 1)])
     # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions
     # when the event fires, not when it runs: then a loss left in SV_ShuttleLost would silence the next special
     after = T + SHUTTLE_REMOVE_S + 5
@@ -444,6 +455,8 @@ def build_shuttle(g, flag):
               conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
     for k in range(3):
         g.execute(t_vfx_on, 'SV_ShuttleDown', {0: f'VFX_ShuttleDummy{k}'}, conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
+    g.execute(t_remove, 'SV_ShuttleDown', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'}, delay=PAD_REMOVE_LOST_S,
+              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
 
 
 def write_records(g, z, prefix_props_bytes):

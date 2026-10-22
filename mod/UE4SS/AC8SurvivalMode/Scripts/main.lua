@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.27.1"
+local VERSION = "0.27.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -633,6 +633,9 @@ local CFG = {
         every    = 5,
         rotation = { "shuttle" },
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, strike_share = 0.4,
+                     -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
+                     -- (removed after it, tools/survival_events.py PAD_REMOVE_LOST_S / SHUTTLE_REMOVE_S)
+                     pad_allies = true, dummies = "SV_Unit_PadDummies",
                      shop_closed_rounds = 1, unit = "SV_Unit_Shuttle", pad = "AA_Unit_01_Ground0",
                      name_key = "SV_Shuttle_Name", npc_row = "OP0057_sstb_01_SV",
                      npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
@@ -2063,9 +2066,11 @@ end
 -- world data puts them (SV_Spawn without a position). The shuttle's appearance starts the event package's countdown.
 local function spawnShuttle()
     local c = CFG.specials.shuttle
-    if SV_UnitAlive(c.pad) <= 0 then
-        local p = SV_Spawn(c.pad)
-        log("special: pad " .. c.pad .. ": " .. (p > 0 and (p .. " objects up") or ("not spawned (" .. (SV_ERR[p] or tostring(p)) .. ")")))
+    for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
+        if u and SV_UnitAlive(u) <= 0 then
+            local p = SV_Spawn(u)
+            log("special: pad " .. u .. ": " .. (p > 0 and (p .. " objects up") or ("not spawned (" .. (SV_ERR[p] or tostring(p)) .. ")")))
+        end
     end
     SHUTTLE.obj = nil
     spawningUnit = c.unit
@@ -2921,6 +2926,7 @@ local function probeTick(tick)
         for a, t in pairs(SR.levels or {}) do SR.usableLevels[a] = t end
         log(string.format("search: at level load, %d of %d aircraft fly with the %s m search", nS, #CFG.aircraft,
             tostring(CFG.search.radius_m)))
+        if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end   -- a restart keeps the level
         H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
         flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
         SHUTTLE.obj, SHUTTLE.lookAt = nil, nil
@@ -2958,6 +2964,25 @@ local function probeTick(tick)
         -- on at the main menu and in stock missions, rewriting their ammo panels and paying vanished planes as kills)
         if valid(survivalPC) then D.pcSeen, D.pcLost = true, 0
         elseif D.pcSeen and tick % 4 == 0 then D.pcLost = (D.pcLost or 0) + 1 end
+        -- a mission restart from the pause menu reloads the mission in the same level (no new World, so the reset below
+        -- never ran and the run kept its round: user, 2026-10-22), but it sets the event package's flags back to 0: Survival's
+        -- counters only grow during a run, so one that drops means the mission started again
+        if tick % 8 == 4 then
+            local f = svFlags()
+            if f then
+                D.maxFlags = D.maxFlags or {}
+                for _, k in ipairs({ "SV_Kills", "SV_AirHits" }) do
+                    local v = f[k]
+                    if v then
+                        if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
+                            log(string.format("mission restarted in round %d (%s %d -> %d): the run starts over", D.round, k, D.maxFlags[k], v))
+                            levelTick = -1         -- the level-load reset below, on the next tick
+                        end
+                        D.maxFlags[k] = math.max(D.maxFlags[k] or 0, v)
+                    end
+                end
+            end
+        end
         if (D.pcLost or 0) >= 8 then
             log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
