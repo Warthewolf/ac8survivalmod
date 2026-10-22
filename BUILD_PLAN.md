@@ -450,6 +450,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   (5 marks round Comona Airport, build/research/coast/), and the ground round each mark is sampled with what each trace
   hit (config/coast_rings2.txt) to find the open water. Next: LCAC units (port M13 E_Unit02_02_Ship0 descs, NPC rows
   lcac_common), lanes fleet -> beaches, landing -> troops, the round's rules.
+  Failure (user, 2026-10-23): the airfield is captured for 2 rounds (SURVIVAL_SPEC.md section 7).
 - [ ] (original) Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
   (Mission 13's enemy LCAC pattern; Mission 9's are allies on another map); new paths to Comona's shoreline.
 - [~] The Anomaly BUILT 2026-10-22, TESTED (inversion, portal, kill confirmed; Lua 0.36.4, runtime 0.14.1). User's spec: MINDRIPPER in an F-4E

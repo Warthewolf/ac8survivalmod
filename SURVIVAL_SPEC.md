@@ -50,6 +50,13 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - A callout just as a round is about to start.
 - No timed despawn of enemies that drag on: they're chased and have to be shot down.
 
+## 7. Amphibious assault special round (user, 2026-10-23)
+- Enemy LCACs land troops on Comona's beaches by the airport (Mission 13's enemy LCAC pattern).
+- Failure: "the airfield being captured and it lasts for 2 rounds" (it is taken while troops get ashore; it is back
+  after two rounds).
+- Still open: what counts as "troops got ashore" (one craft landing, or a share of them), whether the player can
+  retake it sooner by destroying the troops, and the start points on the water.
+
 ## Open decisions
 - Does airfield HP carry over between rounds, or reset each round? (Suggest: carries over; repair costs credits.)
 - Does losing the airfield end the run, or only close the shop?
