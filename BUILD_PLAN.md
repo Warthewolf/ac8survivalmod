@@ -261,6 +261,15 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   -> Ctor(classpath) -> require -> StaticLoadObject(/Game/LuaSource/...); script errors are silent in shipping.
   Runtime 0.8.0 + Lua 0.12.0: SV_GameLua / SV_GameLuaState run code in the game's Lua; main.lua logs diagnostics,
   tests the asset route, injects scripts into package.loaded, and counts builds/errors (SV_Report). Waiting for test.
+- Test of 2026-10-22 (runtime 0.10.0, Lua 0.16.1), user: "enemy behaviour unchanged". Log: the game's Lua works (state
+  at the main menu, our packaged script loaded by the game's require), but behaviour is built at level load per world-
+  data desc (AGENTS.md hard rule 20), so neither the probe set nor NLID_0400_CP ever applied. Lua 0.17.0: behaviour
+  rows in the world data (survival_events.behaviour_row), probe flights ERA_Unit_08_Dep_Air2 / Air1, heavies only on
+  the large-aircraft flights EA_Unit_01_Air1 / Air2. Same test: shop picks, Special purchase (cap 14 -> 16), music
+  rotation, pause music player row, tiers (rank 4 -> 2) all worked. Fixed in 0.17.0 / runtime 0.10.0: missiles
+  unreadable on the landing menu (shop used the last max seen), landing menu ammo panel shows the caps, pause list
+  hides restart checkpoint / select difficulty (QUIT GAME had no row widget), score shown without "/32000", TIME
+  row taken from the live panel (the earlier hide found the blueprint's template).
 - BUILT 2026-10-22 (Lua 0.16.0), waiting for a test: skill tiers on proven parts (CFG.tiers): Rookie (round 1, rank 1,
   no post-stall), Regular (4, rank 2, no post-stall), Veteran (7, 3), Elite (11, 4), Ace (15, 5); 20 % of pilots
   one tier up; difficulty adds -1 / 0 / +1. PilotRank written live on each enemy (log "tiers:"); post-stall needs

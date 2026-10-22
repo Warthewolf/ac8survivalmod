@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.16.1"
+local VERSION = "0.17.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -280,15 +280,18 @@ local lastAlive, lastFlags = nil, nil
 
 local function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~= nil end
 
--- Callbacks only record: all logging runs in the one game-thread tick below.
-pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pending + 1] = { obj = o, age = 0 } end)
+-- Callbacks only record: all logging runs in the one game-thread tick below. A plane made during an SV_Spawn call is
+-- tagged with the flight being spawned (spawningUnit, set around the call): GetUnitName() reads back empty (test of
+-- 2026-10-22), and the world data's object names don't follow their flights' names.
+local spawningUnit = nil
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pending + 1] = { obj = o, age = 0, unit = spawningUnit } end)
 
-local function logPlane(o)
+local function logPlane(o, unit)
     if not valid(o) or not inSurvival(o) then return end
     local n = nameOf(o)
     local short = n:match("([^%.:]+)$") or n
     local wing = n:find("Wingman", 1, true) and " (wingman)" or ""
-    local rec = { obj = o, name = short }
+    local rec = { obj = o, name = short, unit = unit }
     if treeMark.probe > 0 and short:find("_m29a_", 1, true) then rec.probe, treeMark.probe = true, treeMark.probe - 1
     elseif not treeMark.compared then rec.probe, treeMark.compared = true, true end   -- a stock-set plane, to compare
     planes[#planes + 1] = rec
@@ -299,7 +302,7 @@ local function logPlane(o)
         where = string.format(" at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield",
             l.X / 100000, l.Y / 100000, l.Z / 100000, math.sqrt(dx * dx + dy * dy) / 100000)
     end)
-    log("round probe: AI aircraft created #" .. #planes .. ": " .. short .. wing .. where)
+    log("round probe: AI aircraft created #" .. #planes .. ": " .. short .. wing .. (unit and (" (" .. unit .. ")") or "") .. where)
 end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
@@ -413,7 +416,11 @@ local CFG = {
     -- first flight, live PilotRank write on every enemy, kill attribution in the log.
     -- runtime: also fly the LuaScript made at run time (route 2), put into the game's Lua by dlls/main.dll 0.8.0.
     -- (Test 20: making an in-memory package for it from UE4SS crashed the game; that is gone.)
-    probe = { enabled = true, behaviour = true, runtime = true, rank = false, kills = true },
+    -- units: the probe's own flights (tools/survival_events.py PROBE_UNITS: their world data names the probe rows, as
+    -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
+    -- script) first flight, never in the normal rotation.
+    probe = { enabled = true, behaviour = true, runtime = true, rank = false, kills = true,
+              units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
     -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
@@ -463,6 +470,9 @@ local CFG = {
             distance_km = { 28, 36 },
             altitude_m = { 1500, 3000 },
             pool = { "ERB_Unit_01_Air2", "EA_Unit_01_Air0", "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
+            -- the flights built with large-aircraft behaviour (survival_events.HEAVY_BOMBERS): they fly the heavies,
+            -- the others the strike aircraft
+            heavy_units = { "EA_Unit_01_Air1", "EA_Unit_01_Air2" },
             -- Heavies never bomb on their own (no stock mission lets them): when one is within drop_km of the runway
             -- its flight's bomb run is fired (RE_SV_BombRun_NN: both aircraft drop 6 bombs), at most once every
             -- run_cooldown_s, and bomb_damage is taken off the airfield damage_delay_s later (as the bombs land).
@@ -516,6 +526,7 @@ local CFG = {
         -- when the player locks on and covered ROUND at 244 (user screenshot, 2026-10-22).
         y                = 312,
         hide_game_timer  = true,                -- hide the stack's TIME row (Survival's mission clock is paused)
+        hide_score_limit = true,                -- SCORE shows the score alone, without the mission's "/32000"
         -- AIRFIELD row (under ROUND): health bar after the label (offsets from the row's left / top), then its number
         airfield_bar     = { x = 270, dy = 15, w = 300, h = 24, frame = 3 },
         warn_color       = { 1.0, 0.3, 0.2 },   -- the bar at or under warn_hp
@@ -841,23 +852,6 @@ local function probeSetup()
 end
 
 -- The probe aircraft for this round's first flight (odd rounds: package script, even rounds: run-time script).
-local function probeAircraft(round)
-    if not (CFG.probe.enabled and CFG.probe.behaviour) then return nil end
-    local want = round % 2 == 1 and "Pkg" or "Rt"
-    local order = { want, want == "Pkg" and "Rt" or "Pkg" }
-    for _, v in ipairs(order) do
-        if v == "Rt" and not GLS.injected[PROBE_RT_MODULE] then
-            -- the run-time script isn't in the game's Lua (yet): flying it would fall back to stock behaviour
-        elseif PR.usable[v] and PR.tables then
-            local _, have = dtCall(PR.tables.npc, "FindRow", PROBE_TABLES[2].row .. v)
-            if have ~= nil then return PR.usable[v], v end
-            log("probe: DT_NPC row " .. PROBE_TABLES[2].row .. v .. " is gone (the table was reloaded?); not flown this level")
-            PR.usable[v] = nil; PR.ready[v] = nil; PR.tries = 0
-        end
-    end
-    return nil
-end
-
 ---------------------------------------------------------------------------------------------------- enemy search
 -- CFG.search: Survival's AI module row NPC_AIModule_SV_Search (a copy of NPC_AIModule_Plane000 with CFG.search's
 -- radius and cloud rule) is added to DT_NPC_AIModule, and for every aircraft in CFG.aircraft a copy of its DT_NPC row
@@ -869,9 +863,13 @@ local SEARCH_MODULE = { path = "/Game/Datatables/AI/NPC/AIModule/DT_NPC_AIModule
 local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
 
 -- Called every second from the start (main menu included) until done (or 20 tries failed).
+-- The fighter flights' behaviour row (tools/survival_events.py POOL_BEHAVIOUR_ROW = BEHAVIOUR_AIRCRAFT .. "_sv"): the
+-- world data names it, and the game builds their behaviour from it when the level loads, so its DT_NPC row is made
+-- here even when CFG.search is off or CFG.aircraft leaves that aircraft out.
+local BEHAVIOUR_AIRCRAFT = "f16c_common"
+
 local function searchSetup()
     if SR.done then return end
-    if not CFG.search.enabled then SR.done = true; return end
     if not gameInstance() then return end
     SR.tries = SR.tries + 1
     local function giveUp(why) log("search: " .. why .. "; enemies keep the stock 6 km search"); SR.done = true end
@@ -884,13 +882,15 @@ local function searchSetup()
     end
     for _, t in ipairs({ mod, npc, mission }) do pin(t, nameOf(t)) end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
+        if not CFG.search.enabled then return end   -- off: the stock module's values
         r.Radius = CFG.search.radius_m
         r.bEnableLostTargetInClouds = CFG.search.lose_in_clouds
     end)
     if not ok then return giveUp("module row not added: " .. tostring(why)) end
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
-    local n = 0
-    for _, a in ipairs(CFG.aircraft) do
+    local n, list = 0, { BEHAVIOUR_AIRCRAFT }
+    for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
+    for _, a in ipairs(list) do
         local okA, err = pcall(function()
             local _, mrow = dtCall(mission, "FindRow", a .. "_sv")
             local _, base = dtCall(mission, "FindRow", a)
@@ -915,7 +915,10 @@ local function searchSetup()
         local _, r = dtCall(npc, "FindRow", SR.npcRow[a])
         check = check .. string.format("; %s flies behaviour set %s", SR.npcRow[a], r.LuaSetId:ToString())
     end)
-    log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #CFG.aircraft))
+    log(string.format("search: module %s (%s); %d of %d aircraft use it", SEARCH_MODULE.row, check, n, #list))
+    if not SR.ready[BEHAVIOUR_AIRCRAFT] then
+        log("search: WARNING the fighters' behaviour row " .. BEHAVIOUR_AIRCRAFT .. "_sv has no DT_NPC row; don't start a run")
+    end
     SR.done = true
 end
 
@@ -1357,22 +1360,35 @@ local function clock(s)
 end
 
 -- One HUD pass: build when needed, show/hide with the game's HUD, update the rows and the callout.
--- The mission info stack's TIME row (WBP_HUD_SubWidgets_Parts_TimerAndGauge_000): Survival pauses the mission clock
--- (EP MissionStart), so the row would sit at 60:00:00. Hidden, not collapsed, so SCORE and TARGET keep their rows.
-local function hideGameTimer(now)
-    if not CFG.hud.hide_game_timer then return end
-    if not (H.timerRow and valid(H.timerRow)) then
-        H.timerRow = nil
-        if H.timerLook and now < H.timerLook then return end
-        H.timerLook = now + 2
-        for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_TimerAndGauge_000_C") or {}) do
-            if valid(w) and not nameOf(w):find("Default__", 1, true) then H.timerRow = w; break end
+-- The mission info stack (WBP_HUD_SubWidgets_Parts_CampaignInfo_000): its TIME row (TimerAndGauge) and the score's
+-- "/limit" (BorderScoreText). Survival pauses the mission clock (EP MissionStart), so the row would sit at 60:00:00,
+-- and the score has no target (user, 2026-10-22: just the score). The TIME row is hidden, not collapsed, so SCORE
+-- and TARGET keep their rows; the limit is collapsed, so the score reads on its own. Both are taken from the live
+-- panel (FindAllOf also returns the blueprint's template, "..._C:WidgetTree.TimerAndGauge", which isn't on screen),
+-- looked up every 2 s and kept that way every pass in case the game shows them again.
+local function hideGameInfo(now)
+    local hc = CFG.hud
+    if not (hc.hide_game_timer or hc.hide_score_limit) then return end
+    if not H.infoAt or now >= H.infoAt then
+        H.infoAt, H.info, H.infoSaid = now + 2, {}, H.infoSaid or {}
+        for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C") or {}) do
+            local short = nameOf(w):match("([^%.:]+)$") or ""
+            if valid(w) and short:find("_C_%d+$") then             -- a live panel, not the class's template
+                local function part(n, vis, what)
+                    local ok, x = pcall(function() return w:GetWidgetFromName(FName(n)) end)
+                    if not (ok and valid(x)) then ok, x = pcall(function() return w[n] end) end   -- the blueprint's variable
+                    if ok and valid(x) then H.info[#H.info + 1] = { w = x, vis = vis, what = what } end
+                end
+                if hc.hide_game_timer then part("TimerAndGauge", VIS.Hidden, "TIME row") end
+                if hc.hide_score_limit then part("BorderScoreText", VIS.Collapsed, "score limit") end
+            end
         end
-        if not H.timerRow then return end
     end
-    if H.timerRow:GetVisibility() ~= VIS.Hidden then
-        H.timerRow:SetVisibility(VIS.Hidden)
-        if not H.timerLogged then H.timerLogged = true; log("hud: the game's TIME row hidden (" .. nameOf(H.timerRow) .. ")") end
+    for _, e in ipairs(H.info) do
+        if valid(e.w) and e.w:GetVisibility() ~= e.vis then
+            e.w:SetVisibility(e.vis)
+            if not H.infoSaid[e.what] then H.infoSaid[e.what] = true; log("hud: the game's " .. e.what .. " hidden (" .. nameOf(e.w) .. ")") end
+        end
     end
 end
 
@@ -1401,7 +1417,7 @@ local function hudTick(now, paused, pc)
         H.shown = show
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
     end
-    pcall(hideGameTimer, now)
+    pcall(hideGameInfo, now)
     local t = CFG.hud.text
     setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
     setText(H.credits, "creditsStr", string.format(t.credits, RUN.credits))
@@ -1541,23 +1557,25 @@ local function spawnPoint(range)
     return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
 end
 
+local HEAVY_UNIT = {}
+for _, u in ipairs(CFG.airfield.bombers.heavy_units) do HEAVY_UNIT[u] = true end
+
 -- A bomber flight (CFG.airfield.bombers): its event-package orders send it at the airfield only.
 local function spawnBomber(unit)
     local b = CFG.airfield.bombers
-    local list = {}
-    for _, a in ipairs(b.aircraft) do list[#list + 1] = a end
-    if D.round >= b.heavy_from_round then for _, a in ipairs(b.heavy) do list[#list + 1] = a end end
+    local list = HEAVY_UNIT[unit] and b.heavy or b.aircraft
     local ac = list[math.random(#list)]
     local set = SV_SetAircraft(unit, ac)
     local x, y, dist, bearing = spawnPoint(b.distance_km)
     local alt = b.altitude_m[1] + math.random() * (b.altitude_m[2] - b.altitude_m[1])
+    spawningUnit = unit
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)
+    spawningUnit = nil
     log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
         unit, ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     D.heavy = D.heavy or {}
-    D.heavy[unit] = nil
-    for _, h in ipairs(b.heavy) do if h == ac then D.heavy[unit] = true end end
+    D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.bomberCallout ~= D.round then
@@ -1571,19 +1589,24 @@ end
 local BOMBER_UNIT, BOMBER_INDEX = {}, {}           -- BOMBER_INDEX: the flight's RE_SV_BombRun_NN
 for i, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u], BOMBER_INDEX[u] = true, i end
 
+local PROBE_OF = {}                           -- probe flight -> "Pkg" / "Rt"
+for v, u in pairs(CFG.probe.units) do PROBE_OF[u] = v end
+
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
     local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)])
-    if D.probeRound ~= D.round then                                           -- the round's first flight: probe aircraft
-        D.probeRound = D.round
-        local pa, how = probeAircraft(D.round)
-        if pa then ac = pa; log(string.format("probe: round %d's first flight %s flies %s (%s script)", D.round, unit, pa,
-            how == "Pkg" and "package" or "run-time")) end
+    local pv = PROBE_OF[unit]
+    if pv then                                     -- its behaviour was built from the probe row at level load
+        ac = PROBE_MISSION_ROW[pv]
+        log(string.format("probe: round %d's first flight %s flies %s (%s script)", D.round, unit, ac,
+            pv == "Pkg" and "package" or "run-time"))
     end
     local set = SV_SetAircraft(unit, ac)
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    spawningUnit = unit
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
+    spawningUnit = nil
     log(string.format("round %d: %s%s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
@@ -1603,7 +1626,7 @@ local function startRound()
     D.round = D.round + 1
     local flown, fresh = {}, {}
     for _, u in ipairs(CFG.pool) do
-        if not D.up[u] then
+        if not D.up[u] and not PROBE_OF[u] then
             if D.flown[u] then flown[#flown + 1] = u else fresh[#fresh + 1] = u end
         end
     end
@@ -1615,10 +1638,19 @@ local function startRound()
         if #D.queue < want then D.queue[#D.queue + 1] = u else D.spare[#D.spare + 1] = u end
     end
     for i = want + 1, #flown do D.spare[#D.spare + 1] = flown[i] end
+    -- the behaviour probe: round 1's first flight flies the package script, round 2's the run-time one
+    local pv = CFG.probe.enabled and CFG.probe.behaviour and ((D.round == 1 and "Pkg") or (D.round == 2 and "Rt"))
+    local pu = pv and CFG.probe.units[pv]
+    if pu and not D.up[pu] and PR.usable[pv] and (pv == "Pkg" or (CFG.probe.runtime and GLS.injected[PROBE_RT_MODULE])) then
+        table.insert(D.queue, 1, pu)
+        if #D.queue > want then D.spare[#D.spare + 1] = table.remove(D.queue) end
+    end
     local b, nb = CFG.airfield.bombers, 0          -- bomber flights come last, after the fighters
     if CFG.airfield.enabled and D.round >= b.from_round then
         local free = {}
-        for _, u in ipairs(b.pool) do if not D.up[u] then free[#free + 1] = u end end
+        for _, u in ipairs(b.pool) do
+            if not D.up[u] and (D.round >= b.heavy_from_round or not HEAVY_UNIT[u]) then free[#free + 1] = u end
+        end
         shuffled(free)
         nb = math.min(1 + (D.round - b.from_round) // b.every, b.max, #free)
         for i = 1, nb do D.queue[#D.queue + 1] = free[i] end
@@ -1953,6 +1985,10 @@ local function ammoTick(tick, pc)
             log("ammo: refilled above the " .. A.preset .. " caps (rearm?): " .. table.concat(over, ", "))
         end
     end
+    if tick % 8 == 4 then                                                      -- every 2 s: maxima, for the shop
+        A.max = A.max or {}
+        for k = 0, 4 do local m = SV_Ammo(k, 1); if m >= 0 then A.max[k] = m end end
+    end
     if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
         local n, max = SV_Ammo(0), SV_Ammo(0, 1)
         if n >= 0 and n < max then SV_SetAmmo(0, -1) end
@@ -2080,8 +2116,9 @@ local function shopBuy(name)
     if it.kind then
         local k = it.kind
         if not (A and A.applied and A.caps and A.caps[k]) then return done("NOT AVAILABLE YET.") end
-        local max = SV_Ammo(k, 1)
-        if max < 0 then return done("THIS AIRCRAFT HAS NONE.") end
+        local max = SV_Ammo(k, 1)                    -- unreadable on the landing menu: the last one seen in flight
+        if max < 0 then max = A.max and A.max[k] end
+        if not max then return done("NOT AVAILABLE RIGHT NOW.") end
         if A.caps[k] >= max then return done("ALREADY AT FULL LOAD.") end
         local gain = math.min(it.step, max - A.caps[k])   -- the last step up to the aircraft's full load costs less
         if gain < it.step then
@@ -2121,6 +2158,38 @@ local function shopTick(tick)
         RUN.dirty = false
         local ok, err = pcall(shopTexts)
         if not ok then log("shop: text error " .. tostring(err)) end
+    end
+end
+
+-- The landing menu's ammo panel (WBP_Menu_IngameHangar_WeaponDetail_002: six slots AmmoText{L,R}{Top,Center,Bottom},
+-- each WBP_Hangar_Detail_Text_000 with the weapon's name in Text_Body and "count/max" in Text_Body_1) shows the
+-- aircraft's stock full load (user, 2026-10-22). While Survival's caps apply, a slot whose max is a capped weapon's
+-- shows what the player takes off with instead: the cap (the rearm fills up to it; the gun is left alone).
+local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "AmmoTextRTop", "AmmoTextRCenter", "AmmoTextRBottom" }
+local function hangarAmmoTick(tick)
+    if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
+    for _, panel in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
+        if valid(panel) and not nameOf(panel):find("Default__", 1, true) then
+            for _, slot in ipairs(AMMO_SLOTS) do
+                pcall(function()
+                    local t = panel[slot].Text_Body_1
+                    local now = t:GetText():ToString()
+                    local n, m = now:match("^%s*(%d+)%s*/%s*(%d+)%s*$")
+                    m = tonumber(m)
+                    if not m then return end
+                    local kind
+                    if m == A.max[1] then kind = 1 elseif m == A.max[4] then kind = 4
+                    elseif m ~= A.max[0] then kind = 2 end           -- any other weapon is a special weapon
+                    local cap = kind and A.caps[kind]
+                    if not cap then return end
+                    local want = string.format("%d/%d", math.min(cap, m), math.min(cap, m))
+                    if now ~= want then
+                        t:SetText(toText(want))
+                        if not SH.ammoSaid then SH.ammoSaid = true; log("shop: landing menu ammo shows the caps (" .. now .. " -> " .. want .. ")") end
+                    end
+                end)
+            end
+        end
     end
 end
 
@@ -2196,6 +2265,8 @@ local function probeTick(tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
             local okS, errS = pcall(shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
+            local okA2, errA2 = pcall(hangarAmmoTick, tick)
+            if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
@@ -2208,7 +2279,7 @@ local function probeTick(tick)
     local keep = {}
     for _, p in ipairs(pending) do
         p.age = p.age + 1
-        if p.age >= 2 then pcall(logPlane, p.obj) else keep[#keep + 1] = p end
+        if p.age >= 2 then pcall(logPlane, p.obj, p.unit) else keep[#keep + 1] = p end
     end
     pending = keep
     if tick % 8 ~= 0 or not levelTick then return end                -- the rest every 2 s, in Survival only

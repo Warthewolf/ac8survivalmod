@@ -177,6 +177,7 @@ def build_wd_global():
     r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
     POOL_UNITS = set(survival_events.POOL)
     turned_off = 0
+    behaviours = {}
     for u in units:
         name = [p for p in u[2] if p[1] == 'Name'][0][3][1]
         keep = name in survival_events.KEEP_AT_START
@@ -197,6 +198,16 @@ def build_wd_global():
         if name in POOL_UNITS and survival_events.AREA_RADIUS_M:   # the spawner's pool, without chase: an area over the whole zone
             rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
                 (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))]
+        row = survival_events.behaviour_row(name)       # the flight's behaviour (survival_events: built at level load)
+        if row:
+            assert row in NPC_ROWS, (name, row)
+            z.nb.add(row)
+            for p in rest_props:
+                if p[1] == 'AIObjectDescList':
+                    for obj in p[3][1]:
+                        assert any(q[1] == 'MissionNpcID' for q in obj[2]), name
+                        obj[2][:] = [(q[0], q[1], False, ('name', row, 0)) if q[1] == 'MissionNpcID' else q for q in obj[2]]
+            behaviours[row] = behaviours.get(row, 0) + 1
         if name in survival_events.BOMBERS:    # bomber flights: their first BOMBER_FLIGHT aircraft (the first is a lead)
             for p in rest_props:
                 if p[1] == 'AIObjectDescList':
@@ -211,7 +222,7 @@ def build_wd_global():
     assert any(p[1] == 'CombatZoneDescList' for p in v[2])
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
-    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}')
+    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}')
     retarget_import(z, NPC_TABLE_STOCK, NPC_TABLE)        # Survival's own NPC mission table (build_npc_table)
     save(z, new)
 
@@ -414,6 +425,7 @@ def build_rows():
 # may be one that main.lua adds to DT_NPC at run time, as long as that happens before the level loads.
 NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
 NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
+NPC_ROWS = set()           # its row names, filled by build_npc_table
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
 NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common'])]
@@ -461,6 +473,7 @@ def build_npc_table():
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
     assert chk['rows'] == dt['rows']
+    NPC_ROWS.update(k[0] for k, _ in dt['rows'])          # build_wd_global checks the flights' behaviour rows
     print(f'  {len(dt["rows"])} rows ({len(extra)} Survival rows)')
     save(z, NPC_TABLE)
 

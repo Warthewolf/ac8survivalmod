@@ -1388,7 +1388,7 @@ static int64_t PlayBgm(const wchar_t* event, float delay)
     if (!bgm) return SV_ERR_NOT_READY;
     uint32_t id = 0;
     BG.play(bgm, &id, &n, delay);
-    Log(L"music: %s posted (playing id %u)", event, id);
+    Log(L"music: %s posted (playing id %d)", event, (int32_t)id);
     return id;
 }
 
@@ -1489,7 +1489,8 @@ static int64_t FireEvent(const wchar_t* name)
 /* ---- the pause menu's music player (tools/re/MUSIC_RADIO_CAMERA.md section B) ----------------------------------
  * The stock pause list has free flight's Music Player row; outside free flight the game builds it with
  * {"PauseMusicPlayer"} invalid, which hides it. While Survival's mission runs, the hook passes the same list without
- * that entry (a copy: the function only reads it), so the row shows. A grey-out call (grayout = 1) is left alone.  */
+ * that entry and with free flight's two (restart checkpoint, select difficulty) instead (a copy: the function only
+ * reads it), so the row shows and the list still fits its 6 row widgets. A grey-out call (grayout = 1) is left alone. */
 typedef void (*PauseValidityFn)(void* ctx, TArrayRaw* invalid, uintptr_t grayout);
 static uint8_t*        g_fPauseValidity;
 static PauseValidityFn g_nextPauseValidity;
@@ -1515,8 +1516,26 @@ static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
             else kept[n++] = a[i];
         }
         if (removed) {
+            /* The pause list has 6 row widgets: a 7th row (QUIT GAME under the music player) stays selectable but isn't
+             * drawn (test of 2026-10-22). Free flight hides these two to make room; Survival has no checkpoints, and a
+             * difficulty change mid-run would change its ammo preset, so it hides them too. */
+            static const wchar_t kCheckpoint[] = L"PauseRestartCheckPoint", kDifficulty[] = L"PauseSelectDifficulty";
+            static const FString kHide[2] = {
+                { (wchar_t*)kCheckpoint, (int32_t)(sizeof(kCheckpoint) / 2), (int32_t)(sizeof(kCheckpoint) / 2) },
+                { (wchar_t*)kDifficulty, (int32_t)(sizeof(kDifficulty) / 2), (int32_t)(sizeof(kDifficulty) / 2) },
+            };
+            for (int h = 0; h < 2 && n < 16; ++h) {
+                int have = 0;
+                for (int32_t i = 0; i < n; ++i)
+                    if (kept[i].data && kept[i].num == kHide[h].num && Readable(kept[i].data, (size_t)kHide[h].num * 2) &&
+                        !memcmp(kept[i].data, kHide[h].data, (size_t)kHide[h].num * 2)) have = 1;
+                if (!have) kept[n++] = kHide[h];
+            }
             TArrayRaw tmp = { (uint8_t*)kept, n, n };
-            if (!g_musicPlayerShown) { g_musicPlayerShown = 1; Log(L"pause menu: the music player row shown (Survival's mission)"); }
+            if (!g_musicPlayerShown) {
+                g_musicPlayerShown = 1;
+                Log(L"pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)");
+            }
             g_nextPauseValidity(ctx, &tmp, grayout);
             return;
         }

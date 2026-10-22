@@ -45,3 +45,14 @@ into that Lua (dlls/main.dll 0.8.0).
   script into `package.loaded`. In the level it logs `SV_Report()` every 10 s when it changes.
 - Run-time scripts therefore need no package at all: a LuaScript object (any outer) whose LuaInitializePath is the
   module name, in the LuaSet slot, plus the module in package.loaded.
+
+## Test of 2026-10-22 (runtime 0.10.0, Lua 0.16.1)
+- The state exists at the main menu; diagnostics: Lua 5.3, io / os / debug present, Inherit, CppObjectBase,
+  ELiveAIManeuverSpeedType, 40 modules loaded (20 Chronicle.AI). The helper and the wraps went in.
+- The asset route works: require("SurvivalMode.AI.LA_SV_ProbePursue") loaded Survival's packaged script.
+- In the level: "built LA_AIPlane x1, LA_PursueTarget_0011 x1, LA_PursueTarget_0400 x1" before anything spawned, and
+  the census stayed at 1915 LiveAIBehavior objects through the spawns: behaviours are built at level load, per
+  world-data AI object desc (127 aircraft x 15 slots), from the NPC row each desc names then; a module's Ctor runs
+  once (cached by module name). The probe flights had their row set at spawn (SV_SetAircraft), so the probe set was
+  never built. Fix (Lua 0.17.0): survival_events.behaviour_row puts each flight's behaviour row in the world data
+  (fighters f16c_common_sv -> NLID_0400_CP, probe flights sv_probe_pkg / sv_probe_rt, bombers su34 / t160).

@@ -62,6 +62,27 @@ BOMBER_FLIGHT = 2
 # heavies and fires the flight's bomb run over the airfield, then applies the damage itself.
 BOMB_COUNT = 6
 BOMB_GAP_S = 0.4
+# Behaviour rows (test of 2026-10-22): the game builds every AI aircraft's behaviour trees when the level loads, one
+# set per world-data AI object desc, from the NPC row the desc names at that moment (127 aircraft x 15 slots = the
+# 1915 behaviours the census counted before anything spawned; each stock script was built once, ours never).
+# SV_SetAircraft at spawn changes the airframe and the AI module (search radius), not the behaviour, so every flight
+# Survival flies gets its behaviour row here, in the world data (tools/build_survival.py):
+POOL_BEHAVIOUR_ROW = 'f16c_common_sv'      # its DT_NPC row is made by Scripts/main.lua at the main menu, with the
+                                           # behaviour set CFG.search.luaset (NLID_0400_CP: keeps pursuing)
+PROBE_UNITS = {'Pkg': 'ERA_Unit_08_Dep_Air2', 'Rt': 'ERA_Unit_08_Dep_Air1'}   # main.lua CFG.probe.units
+PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # build_survival.py NPC_EXTRA
+HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
+STRIKE_BEHAVIOUR_ROW = 'su34_common'       # Mission 22's strike Su-34s (0021_CP)
+HEAVY_BEHAVIOUR_ROW = 't160_common'        # Mission 4's Tu-160 (NLID_1000: large aircraft, no dogfighting)
+
+
+def behaviour_row(unit):
+    """The NPC row a flight's AI objects name in the world data (its behaviour), or None to leave Mission 22's."""
+    for v, u in PROBE_UNITS.items():
+        if u == unit: return PROBE_ROWS[v]
+    if unit in BOMBERS: return HEAVY_BEHAVIOUR_ROW if unit in HEAVY_BOMBERS else STRIKE_BEHAVIOUR_ROW
+    if unit in POOL: return POOL_BEHAVIOUR_ROW
+    return None
 KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
 if CHASE: KEEP_AT_START[CHASE_UNIT] = None
 # Mission 8's music; it sits in the shared campaign BGM bank (DA_SoundDB_AKB_BGM_Campaign) with Mission 22's.

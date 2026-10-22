@@ -69,6 +69,15 @@ Copy a working stock pattern before inventing a new one.
     set them with SV_Ammo / SV_SetAmmo (runtime 0.7.0, copied from LiveSetWeaponAmmoCount, tools/re/AMMO.md), and turn
     free restock off with SV_FreeRestock(0). The airfield rearm reloads the stock full count, so caps must be
     re-enforced after it, not set once. Confirmed by test 16 (2026-10-22).
+20. An AI aircraft's behaviour trees are built when the level loads, one set per world-data AI object desc, from the
+    NPC row (-> DT_NPC LuaSetId) that desc names then: 127 aircraft x 15 slots = the 1915 LiveAIBehavior objects
+    counted before anything spawned, and each LA_ script's Ctor ran once. SV_SetAircraft at spawn changes the airframe
+    and the AI module (search radius), NOT the behaviour, so a flight's behaviour row goes into the world data at build
+    time (survival_events.behaviour_row) and its DT_NPC / LuaSet rows must exist before the level loads.
+    Confirmed by the test of 2026-10-22 (our probe script loaded but was never built; NLID_0400_CP never applied).
+21. The game's own Lua (Lua 5.3, SingleGameluaContext) exists from the main menu, and its require() loads a
+    /Game/LuaSource/<A>/<B>/<C> LuaScript from Survival's container: SV_GameLua (runtime 0.8.0) runs code in it.
+    Confirmed by the same test ("packaged script via the game's require: true").
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
