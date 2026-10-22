@@ -8,7 +8,8 @@ node class and most names these records use. Record format: tools/re/EVENT_NOTES
 Milestone 2: rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, tools/re/SPAWN_SYSTEM.md),
 not by events. The probe graph that spawned with LiveReinforcement* (tests 2-10) showed why: the game never spawns a
 desc again while its shot-down flight is still on the phase's unit list. The events left here:
-  MissionStart        Mission 8's music
+  MissionStart        Mission 8's music; the mission clock paused and hidden (Mission 22's own pair, run when its
+                      battle ends): Survival is endless, so no 60-minute countdown and no time-up
   SV_FlightUp_NN      (one per pool flight, "reinforcement appeared", fires for any spawn of it) SV_Alive += 1,
                       SV_Up_NN = 1; 2 s later: air-only enemy search + engage the player (Mission 22's own orders)
   SV_FlightDown_NN    (one per pool flight, destroyed) SV_Alive -= 1, SV_Kills += 1 (for the Lua log), SV_Up_NN = 0
@@ -170,6 +171,8 @@ def build_events(stock_ep):
     t_tp_unit = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[8] == 'Unit_dummyN0')
     t_tp_obj = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
     t_move = g.exec_template('LiveUnitMoveActor', '01_E_AreaA_ReinforcementAppearance_0')
+    t_pause = g.exec_template('LiveSetPauseTimerExecution', 'Default_CompositeEvent_106')   # pause: true
+    t_hide = g.exec_template('LiveHideRemainingTimerExecution', 'Default_CompositeEvent_106')
 
     def flag(event, name, op, value, **kw):
         g.flags.add(name)
@@ -180,6 +183,9 @@ def build_events(stock_ep):
 
     g.trigger('MissionStart', 'MissionStart')
     g.execute(t_bgm, 'MissionStart', {0: MUSIC})
+    g.execute(t_pause, 'MissionStart')
+    g.execute(t_hide, 'MissionStart')
+    g.execute(t_hide, 'MissionStart', delay=3.0)   # again once the HUD is up (Mission 8 hides 3 s late)
     if CHASE:
         call('MissionStart', 'RE_SV_Chase', delay=3.0)
         g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_Chase')
