@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.19.1"
+local VERSION = "0.19.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -430,6 +430,7 @@ local CFG = {
     -- units: the probe's own flights (tools/survival_events.py PROBE_UNITS: their world data names the probe rows, as
     -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
     -- script) first flight, never in the normal rotation.
+    ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
     probe = { enabled = true, behaviour = true, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
@@ -462,11 +463,11 @@ local CFG = {
     -- Survival's own behaviour sets: a DT_NPC_LuaSet row copied from `base`, with `slots` pointing at Survival's
     -- scripts (Scripts/ai/<name>.lua, packaged at /Game/LuaSource/SurvivalMode/AI/<name> by tools/build_survival.py
     -- LUA_SCRIPTS). Made from the main menu on: the game builds a flight's behaviour when the level loads.
-    -- NLID_SV_Fighter: Mission 22's light-fighter set (0012_CP evasion) with LA_SV_Pursue (Mission 22's pursuit
-    -- without the extend-away after every pass) and LA_SV_MoveAway (a 2.5 s break instead of 12.5 s).
+    -- NLID_SV_Fighter: Mission 22's light-fighter set (0012_CP) with LA_SV_MoveAway, a ~1.5 s break after each attack
+    -- pass instead of 12.5 s. The pursuit stays the stock one: its closing SetMoveAwayFromTarget is what starts the
+    -- next attack run (Lua 0.18.x dropped it and the fighters drifted between runs: test of 2026-10-22).
     behaviour_sets = {
-        NLID_SV_Fighter = { base = "NLID_0012_CP",
-                            slots = { PursueTargetLua = "LA_SV_Pursue", MoveAwayFromTargetLua = "LA_SV_MoveAway" } },
+        NLID_SV_Fighter = { base = "NLID_0012_CP", slots = { MoveAwayFromTargetLua = "LA_SV_MoveAway" } },
     },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
@@ -709,7 +710,7 @@ return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .
 ]=]
 -- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
 local GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400",
-                         "SurvivalMode.AI.LA_SV_Pursue", "SurvivalMode.AI.LA_SV_MoveAway" }   -- ours too: builds and errors
+                         "SurvivalMode.AI.LA_SV_MoveAway" }   -- ours too: builds and errors
 local REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
                          "return tostring(ok) .. ' ' .. tostring(C)"
 
@@ -1067,6 +1068,35 @@ local function probeTrack(p)
 end
 
 local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
+
+-- AI watch (CFG.ai_watch; user, 2026-10-22: "they fly towards the airfield instead of targeting the player"): every
+-- 2 s each enemy's AI state (blackboard key AIState, ELiveAIState) and target (blackboard key TargetActor), logged
+-- when either changes, with its distance to the player and to the airfield; once per plane, the move-away script its
+-- behaviour set gave it (shows the set really applied).
+local AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
+                   "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
+                   "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
+local function aiWatch(p, you)
+    if not CFG.ai_watch then return end
+    local st, tgt = "?", "?"
+    pcall(function()
+        local bb = p.obj.AIStateComponent.BlackboardComponent
+        local okS, v = pcall(function() return bb:GetValueAsEnum(FName("AIState")) end)
+        if okS and type(v) == "number" then st = AI_STATE[v] or tostring(v) end
+        local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
+        if okT then tgt = valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none" end
+    end)
+    if not p.setSaid then
+        p.setSaid = true
+        local ok, l = pcall(function() return nameOf(p.obj.AIStateComponent.LuaAssets.MoveAwayFromTargetLua.LuaScript):match("([^%.:]+)$") end)
+        log("ai: " .. p.name .. " flies move-away script " .. tostring(ok and l or "?"))
+    end
+    if st .. "|" .. tgt == p.aiKey then return end
+    p.aiKey = st .. "|" .. tgt
+    local air = p.at and math.sqrt((p.at.X - AIRFIELD.X) ^ 2 + (p.at.Y - AIRFIELD.Y) ^ 2) / 100000
+    log(string.format("ai: %s (%s) %s, target %s; %s km from you, %s km from the airfield", p.name, tostring(p.unit or "?"),
+        st, tgt, (p.at and you) and string.format("%.1f", km(p.at, you)) or "?", air and string.format("%.1f", air) or "?"))
+end
 
 local function probeKill(p, you)
     if not (CFG.probe.enabled and CFG.probe.kills) then return end
@@ -2283,7 +2313,7 @@ local function probeTick(tick)
             if up then
                 alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTrack, p)
+                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round); pcall(enemyManeuvers, p); pcall(probeTrack, p); pcall(aiWatch, p, you)
                 if p.at and you then
                     local d = km(p.at, you)
                     if not nearest or d < nearest then nearest = d end
