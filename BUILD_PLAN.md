@@ -221,7 +221,7 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   "PauseMusicPlayer" from the invalid list while mission 9101 runs (log "pause menu: the music player row shown");
   Lua stops round music once WBP_Menu_PauseMusicPlayer_000 exists ("music: the pause menu's music player was opened").
 - [ ] (user 2026-10-22) HUD: ROUND row moved to y 312 (the game's TARGET row at 244 covered it on lock-on); the info
-  stack's TIME row hidden (clock paused). Lua 0.13.0, waiting for a test.
+  stack's TIME row hidden (clock paused). Lua 0.13.0. TIME row hidden: confirmed by the user (2026-10-22).
 - [ ] Runtime 0.9.0 SV_Event(name): fires an EP remote event (LiveCallRemoteEventExecution's own dispatch), for radio /
   health bar / sound nodes placed in Survival's EP. Built, not used by a test yet.
 
