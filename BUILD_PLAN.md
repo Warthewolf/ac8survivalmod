@@ -15,7 +15,10 @@ Legend: [x] confirmed in a test, [~] built and installed but not confirmed yet, 
 - Milestone 4 (landing + shop): rearm to caps, credits, shop purchases: confirmed. Landing-menu ammo panel showing
   the caps, airfield repair purchase: untested. Aircraft repair, config/survival.ini (Codex): not started.
 - Milestone 5: ammo presets and skill offset by difficulty done; no preset menu / advanced config UI yet.
-- Milestones 6-8: not started (a friend test zip exists, no release packaging).
+- Milestone 6 (special rounds): not started. Framework, portal, event camera and ten specials listed (ace squadron,
+  Ladon, Podarge, ECM towers, stealth wing, Comona Defense shuttle, amphibious assault, anomaly ace, Helios); research
+  done for the shuttle, LCACs, anomaly ace and Helios.
+- Milestones 7-8 (polish / release, leaderboard): not started (a friend test zip exists, no release packaging).
 
 ## Milestone 0: setup (CC)
 - [x] Unzip the Stonehenge Returns source into `source/stonehenge/` and read its Tools notes.
@@ -378,32 +381,42 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   Done: ammo caps by difficulty (72/56/6, 48/28/4, 30/14/3), skill tiers shifted -1/0/+1, every setting overridable in
   Scripts/survival_config.lua. Not done: a preset choice of its own, an advanced config UI.
 
-## Milestone 6: specials, polish, release (CC + CX)
-- [ ] Special round every 5th round (ace squadron, Ladon, Podarge drop, ECM towers, stealth wing).
-- [ ] Portal spawn effect for specials (stock teleport nodes + VFX burst).
-- [ ] CX: ACE8 Mod Launcher toggle, readme, credits (@voidcallsreaper), release zip.
-- [ ] (user 2026-10-21) Event camera: the stock camera prompt that swings the view toward an event; find the node.
-  Use for ace/boss spawns, the shuttle launch and Helios barrages.
+## Milestone 6: special rounds (CC) - user requests 2026-10-20 / 21 / 22. NO allied aircraft or ships in any of them.
+Every 5th round is a special round (rotation in config; a special that fails to build falls back to a normal round).
+Research: tools/re/SPECIAL_ROUNDS.md (shuttle, LCACs, anomaly ace), tools/re/HELIOS_VFX.md (Helios, portal VFX),
+tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's podarge_build (Podarge / Land Aegis).
+- [ ] Framework: round type picked by Lua (every 5th round, CFG.specials.rotation), "SPECIAL ROUND" banner + its name,
+  own spawn list per special, its own clear condition (e.g. boss down, shuttle launched), and fail effects (airfield /
+  shop closed one round, as at airfield 0). Specials never award real progression.
+- [ ] Portal spawn effect for specials: stock teleport nodes + VFX burst (HELIOS_VFX.md 4: run-time spawning from Lua).
+- [ ] Event camera on special spawns: the stock camera prompt that swings the view toward an event (node still to find).
+- [ ] Ace squadron: a named squadron (DT_NPC _Named / Shadow rows, rank 5). Check first how campaign aces get KDS
+  phases: their LuaSet NLID_0400_CP only attacks inside them (AGENTS.md rule 22).
+- [ ] Ladon: the heavy boss (OP0045_ladn_01, 1200 HP, 16 child parts = ChildAIObjectDescs; EVENTS_AIRCRAFT.md).
+- [ ] Podarge drop / Land Aegis: port the drop chain the way Stonehenge's podarge_build did (from Mission 25).
+- [ ] ECM towers: ground units that jam (radar noise, LiveStartHUDRaderMapNoise) until destroyed.
+- [ ] Stealth wing: f22a / su57 / x40a style flight, hidden from radar until close.
+- [ ] Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
+  launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
+  (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
+  Mission 19's pad VFX. Key callouts only (countdown, pad under attack, liftoff); no allies. Fail = shuttle lost ->
+  airfield / shop closed one round. (A shuttle script from another Claude session never reached this repo; 2026-10-22.)
+- [ ] Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
+  (Mission 13's enemy LCAC pattern; Mission 9's are allies on another map); new paths to Comona's shoreline.
+- [ ] Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
+  within ~5 km; inside ~3 km the player's pitch and roll invert (HUD warning, radar noise, glasses effect) until it dies.
+  Config: on/off, pitch / roll / both. Research first: where AC8 reads flight input (native flip).
+- [ ] Helios barrages on RANDOM rounds (HELIOS_VFX.md 3), targeting the player only, never the airfield. Offline only:
+  never touch online services.
+- [~] Bomber raids every 3rd round (Milestone 3, Lua 0.22.0): the regular raid, not a special; listed for the rotation.
+
+## Milestone 7: polish, release (CC + CX)
+- [ ] CX: ACE8 Mod Launcher toggle, readme, credits (@voidcallsreaper), release zip. (A test zip for a friend exists.)
 - [ ] (user 2026-10-21) Ace intro using the user's replay-camera code (location TBD from user): slow-down, tracking shot,
   letterbox, name card, radio line.
 - [ ] (user 2026-10-21) Ace learns from your fights: log how the player kills aces (missile/gun/tail/SPW/altitude), save
   across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
-
-## Milestone 7: new special rounds (CC) - user requests 2026-10-21. NO allied aircraft or ships in any of them.
-- [ ] Comona Defense: port Mission 19's IN-GAME shuttle launch (shuttle, pad, launch event, ms19 smoke/explosion VFX)
-  + enemy waves at the spaceport. Player watches the launch live while flying. Strip all dialogue except key callouts
-  (countdown, pad under attack, liftoff). Strip M19 allies (ally ships/wingmen, wingman HUD/radio).
-  Fail = shuttle lost -> airfield/shop closed for ONE round (same rule as airfield at 0).
-- [ ] Amphibious assault: enemy fleet offshore launches LCAC waves (Mission 9 Lcac_*_Landing units/behaviour) at Comona's
-  beaches. M9 is a different map: draw NEW paths to Comona's shoreline. No M9 allies.
-- [ ] Anomaly ace (boss special round): floating ace (tiny slow path or Lua position pin; check LiveAIGroundDummy M011/019/030).
-  5 guards orbit it in a sphere (start from Mission 23's drone formation / Barrier UAV; else Lua positions them on a rotating sphere).
-  Player gets close (~5 km) -> guards switch to engagement order and attack (portal burst + radio line).
-  Inside the ace's radius (~3 km) the player's PITCH AND ROLL invert (fade in ~2 s, HUD warning, radar noise
-  LiveStartHUDRaderMapNoise + LiveActivateGlassesEffect from M015) until the ace dies. Config: on/off, pitch/roll/both (default both).
-  Research first: where AC8 reads flight input, so UE4SS/native can flip it.
-- [ ] Helios missile barrages on RANDOM rounds, targeting the PLAYER only (not the airfield). Find Helios in Content/OnlineMode;
-  check it works offline; else rebuild from offline launchers (M010/M020/M030). Never touch online services.
+- [ ] End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
 
 ## Milestone 8: Discord leaderboard (after release)
 - [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
