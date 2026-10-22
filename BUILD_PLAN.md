@@ -437,6 +437,9 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   search. Fix (Lua 0.37.2, untested): in a shuttle round they search AIR_AND_GROUND with Mission 22's own order on its
   attackers (RE_Wave02_TargetUpdate: AttackOnly, AIOnly) on SV_Unit_Shuttle; Lua logs health / hits / nearest strike
   aircraft every 10 s of the countdown ("special: shuttle N s in").
+  Test 2026-10-23 (Lua 0.37.5): strike F-15Es circled 1.4-3.3 km from it for 150 s, 0 hits: Mission 22's shuttle desc
+  is an attack-target exception (bIsAttackTargetsException; M22's attacks on it are scripted near misses). Fix (Lua
+  0.38.0, untested): cleared on Survival's copy. Same test: liftoff paid, RE_SV_ShuttleRemove fired 182 s after it.
 - [ ] (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
   launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
@@ -489,6 +492,26 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   mod's own native runtime (NOT the Mod Launcher). Sends to a small relay (e.g. Cloudflare Worker) which sanity-checks and
   posts to a Discord #survival-runs channel and keeps a pinned top 10 per difficulty. Offline: queue and send next launch.
   Never contacts Bandai services.
+
+## Allies in the STORE (CC, user 2026-10-23)
+"Buy Allied Aircraft from the Store from the Airfield Page ... a Docks Page ... Different Allied Ships that will cruise
+around on the water ... expensive ... boost their FCS ... enemies can target these ... F-22's ... spawn in at the
+Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-10-23 (Lua 0.38.0), untested:
+- STORE pages in a ring (6 rows a page): SUPPLIES (20) > AIRFIELD (21: + MOONCHILD 15000 Z) > DOCKS (22: Freedom-class
+  LCS 12000 Z, Aegis destroyer 20000 Z) > SUPPLIES. Each purchase of one x1.25.
+- MOONCHILD: 2 flights of 2 F-22s (copies of M22's parked scramble F/A-18s, AB_Unit_01_Air1, not invincible), spawned
+  once the player is airborne, 45 s apart; M22's own scramble chain (hold, taxi, roll, climb; PathFinish triggers);
+  airborne: gear up, Normal / Default, AIR_ONLY, 40 km search module. Kept out of `planes` (no kill credit, no tiers).
+- Ships: two each of M22's own allied hulls (the only ones its WD describes turret by turret; Maya / Ford would need
+  their turret blueprints imported, hard rule 7), each on one of M22's enemy-fleet lanes near the airfield, the lane
+  restarted at its end; not attack-target exceptions; turrets on Survival's mission rows.
+- Fire control: every ally weapon on its own row <FCS>_SVA (CFG.allies.fcs: range x1.6, cone x1.5, times x0.5, gun
+  spread x0.4), made at the main menu with the rows.
+- Enemies: once MOONCHILD is airborne, half the fighter flights get RE_SV_Hunt_NN (Normal, AIFirst); while ships sail,
+  25% of a normal round is strike flights sent at one (RE_SV_Strike<ship>_NN: AttackOnly, AIR_AND_GROUND).
+- Test: "allies:" log lines (rows at the main menu, taxiing out, airborne count, losses, hunts / strikes fired).
+- Aircraft repair (same build): health written directly too and read back; charged only when it reads full (test of
+  2026-10-23: four repairs charged, health stayed 63%).
 
 ## Research backlog (user 2026-10-21), in order
 1. AI behaviour tiers (above)  2. Enemy unit data DT_NPC_Mission##  3. Fire control / weapon data  4. Store UI (NUI/Shop) for the

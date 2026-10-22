@@ -140,6 +140,55 @@ ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Pla
 DEFENCE_SOURCE = 'AB_Unit_01_Ground0'
 DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}') for k, c in enumerate('ABCDE')] +
             [(f'SV_Unit_SAM_{c}', f'AB_Obj_01_Ground0_SAM{k}') for k, c in enumerate('AB')])
+# Allies the STORE sells (user, 2026-10-23: "buy Allied Aircraft from the Store from the Airfield Page ... a Docks Page
+# ... Different Allied Ships that will cruise around on the water ... expensive ... boost their FCS ... enemies can
+# target these ... Allied Aircraft are F-22's and they spawn in at the Airfield, Take Off from the airfield and their
+# Squadron ID is MOONCHILD"). build_survival.py copies the units (enemies may target and kill them: Mission 22's
+# scramble jets are invincible and its allied ships attack-target exceptions, both cleared); Scripts/main.lua
+# (CFG.allies) sells and spawns them, adds their DT_NPC rows and gives them fire control of their own (<FCS>_SVA).
+# MOONCHILD: Mission 22's two F/A-18Es parked at Comona Airport (AB_Unit_01_Air1), as F-22 two-ships. Their appearance
+# runs Mission 22's own scramble: hold (gear down, invincible), taxi (the wing 5 s behind, onto the lead's start),
+# takeoff roll, climb out; airborne (end of the climb path): gear up, no longer invincible, normal combat orders, an
+# air-only search. SV_AllyAir<X> counts the flight's aircraft airborne (main.lua sends enemies after them then).
+ALLY_AIR_SOURCE = 'AB_Unit_01_Air1'
+ALLY_AIR_UNITS = ['SV_Unit_MoonchildA', 'SV_Unit_MoonchildB']   # main.lua CFG.allies.aircraft.units
+ALLY_AIR_ROW = 'sv_ally_moonchild'          # DT_SV_NpcMission row -> NpcId ALLY_AIR_NPC
+ALLY_AIR_NPC = 'SV_Ally_Moonchild'          # DT_SV_NpcRows: ALLY_AIR_SOURCE_NPC under name key ALLY_AIR_NAME_KEY
+ALLY_AIR_SOURCE_NPC = 'OP1005_f22a_01'
+ALLY_AIR_NAME_KEY = 'SV_Moonchild'
+ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names, set by build_survival.py
+TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_Path2']   # taxi, roll, climb
+TAKEOFF_WING_FIRST = '01_Air0_f18e_0_Path0_Sub0'     # the wing's taxi onto the lead's start; then the lead's three
+# Ships: Mission 22's own allied hulls, the only ones its world data describes turret by turret (ChildAIObjectDescs:
+# mission row, hull component and turret blueprint class each; other hulls would need their turret blueprints
+# imported, hard rule 7). Two of each, each sailing one of Mission 22's enemy-fleet lanes (Survival has no fleet)
+# south and north of the airfield, back and forth: the end of its lane starts the lane again (a PathFinish trigger:
+# hard rule 1). Its turrets fly Survival's copies of their mission rows (sv_<row>_ally -> SV_Turret_<row>_Ally).
+ALLY_SHIPS = [  # (key, Mission 22 source unit, its hull's mission row, lanes) - main.lua CFG.allies.ships, same keys
+    ('Freedom', 'AC_Unit_01_Ship0', 'free_Ally_common', ['01_Ship1_udal_0_Path0', '01_Ship0_udal_0_Path0']),
+    ('Aegis',   'AC_Unit_01_Ship1', 'aegs_common',      ['01_Ship1_grig_0_Path0', '01_Ship2_gors_0_Path0']),
+]
+ALLY_TURRETS = {   # each hull's turret mission rows in Mission 22's world data (build_survival.py checks them)
+    'Freedom': ['free_Ally_mk110', 'free_Ally_mk46_R', 'free_Ally_mk46_L'],
+    'Aegis': ['aegs_mk15', 'aegs_mk41', 'aegs_mk45', 'aegs_artillery'],
+}
+ALLY_SHIP_SPEED = '80'                      # Mission 22's allied ships'
+
+
+def ally_ships():
+    """(key, n, unit, object, lane) for every ship the STORE sells: SV_Unit_Ship<key><A|B>."""
+    return [(key, n, f'SV_Unit_Ship{key}{c}', f'SV_Obj_Ship{key}{c}', lane)
+            for key, _, _, lanes in ALLY_SHIPS for n, (c, lane) in enumerate(zip('AB', lanes))]
+
+
+def ally_ship_rows(key):
+    """(DT_SV_NpcMission hull row, DT_SV_NpcRows hull row, text key) of ship type `key`."""
+    return f'sv_ally_{key.lower()}', f'SV_Ally_{key}', f'SV_Ship_{key}'
+
+
+def ally_turret_rows(mission_row):
+    """(DT_SV_NpcMission row, DT_SV_NpcRows row) of a turret: copies of Mission 22's, no numeric tail (hard rule 17)."""
+    return f'sv_{mission_row}_ally', f'SV_Turret_{mission_row}_Ally'
 # Behaviour rows (test of 2026-10-22): the game builds every AI aircraft's behaviour trees when the level loads, one
 # set per world-data AI object desc, from the NPC row the desc names at that moment (127 aircraft x 15 slots = the
 # 1915 behaviours the census counted before anything spawned; each stock script was built once, ours never).
@@ -178,7 +227,8 @@ KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission
 # came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
 INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
              + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
-             + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp'])
+             + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
+             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -428,7 +478,97 @@ def build_events(stock_ep):
     build_shuttle(g, flag)
     build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
     build_repair(g, stock_ep)
+    build_allies(g, flag, t_search, t_move, t_bsearch)
     return g
+
+
+def build_allies(g, flag, t_search, t_move, t_bsearch):
+    """The STORE's allies (ALLY_*): MOONCHILD's scramble, the ships' lanes, and the enemy orders Scripts/main.lua fires
+    at them: RE_SV_Hunt_NN (pool flight NN prefers AI targets: allied aircraft over the player) and
+    RE_SV_Strike<ship unit>_NN (bomber flight NN attacks that ship only)."""
+    tpl = lambda cls, ev, pred=None: g.exec_template(cls, ev, pred)
+    lead = lambda i: (lambda a, e: a[i] == 'AB_Obj_01_Air1_f18e_0')
+    t_hold = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lead(0))                   # Path0 at speed 0
+    t_taxi = tpl('LiveAIPathExecution', '01_Wave01_CheckDistanceEvent', lead(0))      # Path0 at 50
+    t_roll = tpl('LiveAIPathExecution', '01_A_Air1_f18e_PathFinish')                  # Path1 at 600
+    t_climb = tpl('LiveAIPathExecution', '01_A_Air1_f18e_PathFinish_1')               # Path2 at 800
+    t_gear_dn = tpl('LiveEnableLandingGear', 'RE_Wave01_Start', lead(0))
+    t_gear_up = tpl('LiveEnableLandingGear', '01_A_Air1_f18e_PathFinish_3')
+    t_attr_hold = tpl('LiveSetCommonAttribute', 'RE_Wave01_Start', lead(1))
+    t_attr_taxi = tpl('LiveSetCommonAttribute', '01_Wave01_CheckDistanceEvent', lead(1))
+    t_attr_air = tpl('LiveSetCommonAttribute', '01_A_Air1_f18e_PathFinish_3')
+    t_eng_hold = tpl('LiveAIEngagementOrder', 'RE_Wave01_Start', lead(0))             # None: no fighting on the ground
+    t_eng_air = tpl('LiveAIEngagementOrder', '01_A_Air1_f18e_PathFinish_3')           # Normal, Default
+    t_radio = tpl('LiveRadioPlayExecution', '01_Wave01_CheckDistanceEvent')           # allies taking off
+    assert [arg_values(t)[2] for t in (t_hold, t_taxi, t_roll, t_climb)] == TAKEOFF_LEAD[:1] * 2 + TAKEOFF_LEAD[1:]
+    assert arg_values(t_hold)[4] in ('0', '0.0') and arg_values(t_taxi)[4] == '50'
+    assert arg_values(t_gear_dn)[3] == 'true' and arg_values(t_gear_up)[3] == 'false'
+    assert arg_values(t_attr_hold)[3:5] == ['false', 'true'] and arg_values(t_attr_air)[3:5] == ['true', 'false']
+    assert arg_values(t_eng_air)[3] == 'Normal' and arg_values(t_eng_air)[6] == 'Default'
+    assert arg_values(t_radio)[0] == '01_Wave1_Ally_Take_Off'
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    assert arg_values(g.trig_template(finish))[2] == TAKEOFF_LEAD[0]
+    for unit in ALLY_AIR_UNITS:
+        x = unit[-1]
+        o_lead, o_wing = ALLY_AIR_OBJS[unit]
+        up, air = f'SV_AllyUp{x}', f'SV_AllyAir{x}'
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
+        flag(up, air, 'Set', 0)
+        for o, path in ((o_lead, TAKEOFF_LEAD[0]), (o_wing, TAKEOFF_WING_FIRST)):
+            g.execute(t_hold, up, {0: o, 2: path})
+            g.execute(t_gear_dn, up, {0: o})
+            g.execute(t_attr_hold, up, {1: o})
+            g.execute(t_eng_hold, up, {0: o})
+        g.execute(t_taxi, up, {0: o_lead}, delay=3.0)
+        g.execute(t_taxi, up, {0: o_wing, 2: TAKEOFF_WING_FIRST}, delay=8.0)
+        for o in (o_lead, o_wing):
+            g.execute(t_attr_taxi, up, {1: o}, delay=3.0)
+        g.execute(t_radio, up, delay=3.0)
+        # the chain, one PathFinish trigger per aircraft and path: wing onto the lead's start first
+        chain = [(o_lead, TAKEOFF_LEAD[0], t_roll, 'L1'), (o_wing, TAKEOFF_WING_FIRST, t_taxi, 'W0'),
+                 (o_wing, TAKEOFF_LEAD[0], t_roll, 'W1'), (o_lead, TAKEOFF_LEAD[1], t_climb, 'L2'),
+                 (o_wing, TAKEOFF_LEAD[1], t_climb, 'W2')]
+        for o, path, nxt, tag in chain:
+            ev = f'SV_AllyTakeoff{x}{tag}'
+            g.trigger(finish, ev, arg_changes={0: o, 2: path})
+            g.execute(nxt, ev, {0: o})
+        for o, tag in ((o_lead, 'L'), (o_wing, 'W')):
+            ev = f'SV_AllyAirborne{x}{tag}'                  # the end of the climb out: a fighter now
+            g.trigger(finish, ev, arg_changes={0: o, 2: TAKEOFF_LEAD[2]})
+            g.execute(t_gear_up, ev, {0: o})
+            g.execute(t_attr_air, ev, {1: o})
+            g.execute(t_eng_air, ev, {0: o})
+            g.execute(t_search, ev, {0: o, 1: 'NoneSelect'})
+            flag(ev, air, 'Add', 1)
+    # ships: on their lane at once, and again from its start whenever they reach its end; turrets fire at will
+    t_spath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
+    t_upath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
+    t_seng = tpl('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
+    assert arg_values(t_spath)[4] == ALLY_SHIP_SPEED and arg_values(t_seng)[3] == 'Normal'
+    for key, n, unit, obj, lane in ally_ships():
+        up, lap = f'SV_ShipUp{key}{unit[-1]}', f'SV_ShipLap{key}{unit[-1]}'
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
+        g.trigger(finish, lap, arg_changes={0: obj, 2: lane})
+        for ev, delay in ((up, 1.0), (lap, 2.0)):
+            g.execute(t_spath, ev, {0: obj, 2: lane}, delay=delay)
+            g.execute(t_upath, ev, {1: unit, 2: lane}, delay=delay)
+        g.execute(t_seng, up, {0: 'NoneSelect', 1: unit}, delay=2.0)
+    # enemy orders on them: a fighter flight that prefers AI targets (Mission 22's AIFirst order, no target: the allied
+    # aircraft first, else the player; still air-only), and a strike flight on one ship (as on the shuttle)
+    t_hunt = g.exec_template('LiveAIEngagementOrder', pred=lambda a, e: a[3] == 'Normal' and a[6] == 'AIFirst')
+    t_strike = tpl('LiveAIEngagementOrder', 'RE_Wave02_TargetUpdate')
+    assert arg_values(t_strike)[3] == 'AttackOnly' and arg_values(t_strike)[6] == 'AIOnly'
+    for k, unit in enumerate(POOL):
+        ev = f'RE_SV_Hunt_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_hunt, ev, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 4: 'NoneSelect', 5: 'NoneSelect'})
+    for key, n, ship, obj, lane in ally_ships():
+        for k, unit in enumerate(BOMBERS):
+            ev = f'RE_SV_Strike{key}{ship[-1]}_{k + 1:02d}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_move, ev, {0: unit, 1: obj, 3: 'NoneSelect'})
+            g.execute(t_bsearch, ev, {1: unit, 3: 'AIR_AND_GROUND'})
+            g.execute(t_strike, ev, {0: 'NoneSelect', 1: unit, 5: ship})
 
 
 def build_repair(g, stock_ep):

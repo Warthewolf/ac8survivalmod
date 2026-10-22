@@ -230,6 +230,88 @@ def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
     return len(objs)
 
 
+def new_unique_id(used_ids, seed):
+    h = zlib.crc32(seed.encode())
+    while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
+    used_ids.add(struct.pack('<I', h))
+    return struct.pack('<I', h)
+
+
+def path_start(v, path):
+    """The world position (cm) of AI path `path`'s first point."""
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    for el in paths:
+        f = {p[1]: p[3] for p in el[2]}
+        if f['Name'][1:3] == (path, 0):
+            pos = {p[1]: p[3] for p in f['BeginPointDesc'][2]}['Pos']
+            return struct.unpack('<3d', pos[2])
+    raise LookupError(path)
+
+
+def set_unit_point(u, point):
+    """Unit desc `u` and its AI objects (and so their turrets) at `point` (cm)."""
+    vec = ('native', 'Vector', struct.pack('<3d', *point))
+    u[2][:] = [(q[0], q[1], False, vec) if q[1] == 'SpawnPoint' else q for q in u[2]]
+    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
+        ob[2][:] = [(q[0], q[1], False, vec) if q[1] == 'SpawnPoint' else q for q in ob[2]]
+
+
+def clear_flags(u, flags):
+    """Every AI object of unit desc `u` with these bool properties written as an explicit false."""
+    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
+        ob[2][:] = [(q[0], q[1], True, None) if q[1] in flags else q for q in ob[2]]
+
+
+def retag_turrets(children, owner, rows, used_ids, z):
+    """A copied ship's turret descs (ChildAIObjectDescs / GrandChildrens): named after their new owner as Mission 22
+    names them (<owner>_<component>), new UniqueIDs, and Survival's mission rows (`rows`: stock row -> Survival's)."""
+    for ch in children:
+        d = {p[1]: p for p in ch[2]}
+        data = d['Data'][3][2]
+        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
+        stock_row = [q for q in data if q[1] == 'MissionNpcID'][0][3][1]
+        assert stock_row in rows, (owner, stock_row)
+        data[:] = [(q[0], q[1], False, ('name', rows[stock_row], 0)) if q[1] == 'MissionNpcID' else q for q in data]
+        name = f'{owner}_{comp}'
+        assert not name.rpartition('_')[2].isdigit(), name                  # no _<digits> tail: hard rule 17
+        uid = new_unique_id(used_ids, 'AC8SurvivalMode:' + name)
+        ch[2][:] = [(q[0], q[1], False, ('name', name, 0)) if q[1] == 'Name' else
+                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else q for q in ch[2]]
+        for n in (name, rows[stock_row]): z.nb.add(n)
+        grand = d.get('GrandChildrens')
+        if grand and grand[3]: retag_turrets(grand[3][1], name, rows, used_ids, z)
+
+
+def ally_units(units, used_ids, z, top_number, v):
+    """The STORE's allies (survival_events.ALLY_*): MOONCHILD's two-ships, parked where Mission 22 parks its scramble
+    jets, and the ships, each at the start of its lane. Both may be targeted and killed (Mission 22's jets are
+    invincible and its allied ships attack-target exceptions)."""
+    unit_by = lambda n: [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == n][0]
+    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    for unit in survival_events.ALLY_AIR_UNITS:
+        names = copy_unit(units, used_ids, z, survival_events.ALLY_AIR_SOURCE, unit, 2, top_number,
+                          'SV_Obj_' + unit[len('SV_Unit_'):], survival_events.ALLY_AIR_ROW)
+        survival_events.ALLY_AIR_OBJS[unit] = names
+        u = unit_by(unit)
+        clear_flags(u, ('bIsInvincible',))
+        u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                         ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+    hulls = {key: (src, hull) for key, src, hull, _ in survival_events.ALLY_SHIPS}
+    for key, n, unit, obj, lane in survival_events.ally_ships():
+        src, hull = hulls[key]
+        rows = {t: survival_events.ally_turret_rows(t)[0] for t in survival_events.ALLY_TURRETS[key]}
+        names = copy_unit(units, used_ids, z, src, unit, 1, top_number, obj, survival_events.ally_ship_rows(key)[0])
+        assert names == [obj], names
+        u = unit_by(unit)
+        clear_flags(u, ('bIsAttackTargetsException',))
+        ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+        retag_turrets([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], obj, rows, used_ids, z)
+        x, y, _ = path_start(v, lane)
+        set_unit_point(u, (x, y, 300.0))
+    print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
+          f'{len(survival_events.ally_ships())} ships')
+
+
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
     """A new unit `new_unit`: a copy of `src_unit`'s desc (faction, point, area, tags) holding its first `size` AI
     objects, named obj_name (numbered _0, _1, ... when more than one) with new UniqueIDs, on NPC row `npc_row` (their
@@ -273,6 +355,11 @@ def split_units(units, used_ids, z, top_number):
     becomes a one-object unit the shop can build."""
     move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.SHUTTLE, survival_events.SHUTTLE_UNIT,
                 survival_events.SHUTTLE_NPC_ROW)
+    # Mission 22's shuttle is an attack-target exception (bIsAttackTargetsException): no AI ever aims at it (its
+    # "attacks" are scripted near misses), so Survival's strike flights circled it without a shot (test of 2026-10-23:
+    # 0 hits in 150 s, 1.4-3.3 km out). Survival's copy can be attacked.
+    clear_flags([u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.SHUTTLE_UNIT][0],
+                ('bIsAttackTargetsException',))
     left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.PAD_DUMMIES, survival_events.PAD_DUMMY_UNIT)
     print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}), '
           f'{len(survival_events.PAD_DUMMIES)} dummies in {survival_events.PAD_DUMMY_UNIT}; {survival_events.PAD_UNIT} keeps {left} objects')
@@ -358,6 +445,7 @@ def build_wd_global():
                     sized[size] = sized.get(size, 0) + 1
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     split_units(units, used_ids, z, top_number)
+    ally_units(units, used_ids, z, top_number, v)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -471,14 +559,18 @@ SHOP_TABLE = DATA + 'DT_SV_ShopRows'
 SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/main.lua CFG.shop.items, same names
 # The STORE (user, 2026-10-23: "a special tab in there for the store items"; tools/re/AIRFIELD_SHOP_UI.md): the landing
 # menu's page list is the in-game menu table, and a landing row whose StringArgs is a number opens that menu. Survival
-# adds two pages of its own (DT_SV_MenuClassRows -> DT_IngameMenuSettingData at the main menu: indexes 20 and 21),
+# adds pages of its own (DT_SV_MenuClassRows -> DT_IngameMenuSettingData at the main menu: indexes 20, 21, 22),
 # copies of the landing page (WBP_SV_Store*, with their own settings asset and command table), and one landing row,
 # STORE ("20"). Lua checks the game's menu list for them; without them it falls back to the 4 SHOP_ITEMS rows.
+# A page lists 6 rows at most, so the pages link in a ring (SUPPLIES > AIRFIELD > DOCKS > SUPPLIES; user, 2026-10-23:
+# "add a Docks Page too"), each with TAKE OFF.
 STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
     ('SV_Store', 'Store', 'SV_Store_Title',
      ['Missiles', 'Special', 'Flares', 'RepairAircraft', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
-     ['RepairAirfield', 'AAGun', 'SAM', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
+     ['RepairAirfield', 'AAGun', 'SAM', 'Moonchild', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
+    ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
+     ['ShipFreedom', 'ShipAegis', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
 ]
 STORE_ROW = ('SVShopStore', 'SV_Shop_Store', '20')      # the landing page's row that opens the first page
 LANDING_PAGE = '/Game/Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000'
@@ -720,14 +812,35 @@ def build_npc_rows():
                 set_prop(row[2], model_idx, 'ModelId', ('name', ACE_MODELS[(tier, key)][0], 0))
                 drop_prop(row[2], skin_idx)                               # the model's own look
             out.append(((npc, 0), row))
+    # the STORE's allies (survival_events.ALLY_*): MOONCHILD (an F-22 under its squadron's name key), each ship's hull
+    # (under its name key) and turrets (as they are: main.lua gives every one of them fire control of its own)
+    m22 = mission_npc_ids()
+    allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY)]
+    for key, _, hull, _ in survival_events.ALLY_SHIPS:
+        _, npc, text = survival_events.ally_ship_rows(key)
+        allies.append((m22[hull], npc, text))
+        allies += [(m22[t], survival_events.ally_turret_rows(t)[1], None) for t in survival_events.ALLY_TURRETS[key]]
+    for src, npc, text in allies:
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+        out.append(((npc, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcDataTable')
     assert chk['rows'] == dt['rows']
-    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings)')
+    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies)')
     save(z, DATA + 'DT_SV_NpcRows')
+
+
+def mission_npc_ids():
+    """Mission 22's NPC mission rows -> the DT_NPC row each names (NpcId), as plain strings."""
+    z = ZenPkg(stock(NPC_TABLE_STOCK))
+    dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
+    plain = lambda n, k: n if k == 0 else f'{n}_{k - 1}'
+    return {plain(*k): plain(*dict((q[1], q[3]) for q in r[2])['NpcId'][1:3]) for k, r in dt['rows']}
 
 
 def build_model_rows():
@@ -813,6 +926,14 @@ def build_npc_table():
             extra.append((row, 'f16c_common', npc))
             for suf in [''] + SPIKE_SUFFIXES:
                 extra.append((row + '_sv' + suf, 'f16c_common', npc + '_SV' + suf.upper()))
+    # the STORE's allies (survival_events.ALLY_*): MOONCHILD on Mission 22's allied F/A-18 row, each ship's hull and
+    # turrets on copies of Mission 22's rows, all pointing at DT_SV_NpcRows copies (their names, their fire control)
+    extra.append((survival_events.ALLY_AIR_ROW, 'f18e_common', survival_events.ALLY_AIR_NPC))
+    for key, _, hull, _ in survival_events.ALLY_SHIPS:
+        row, npc, _ = survival_events.ally_ship_rows(key)
+        extra.append((row, hull, npc))
+        for t in survival_events.ALLY_TURRETS[key]:
+            extra.append(survival_events.ally_turret_rows(t)[:1] + (t,) + survival_events.ally_turret_rows(t)[1:])
     for new_row, src, npc in extra:
         assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
         row = copy.deepcopy(rows[(src, 0)])

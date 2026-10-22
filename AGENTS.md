@@ -110,6 +110,15 @@ Copy a working stock pattern before inventing a new one.
     camera zooms by distance: the farther its target, the tighter the shot (MINDRIPPER at ~20 km very close, 8-12 km
     wide with ms23-01). Confirmed by the tests of 2026-10-22.
 
+29. Never read a struct field that holds a soft class / object reference from UE4SS Lua (e.g. a menu row's
+    MenuWidgetReference): UE4SS copies it through its FSoftObjectPath::operator= and crashed the game at the main menu
+    (access violation in FString::operator=, test of 2026-10-23). FindRow + AddRow of such a row without touching the
+    field is fine (STORE pages, 20 / 21 in the game's menu list in the same test).
+
+30. GetRowNames from UE4SS Lua may hand back plain strings, not FNames: read names through main.lua's rowList (ToString
+    in a pcall, else tostring). A bare n:ToString() errored, the pcall swallowed it, and the STORE fell back to the
+    shop rows although its pages were in (test of 2026-10-23).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

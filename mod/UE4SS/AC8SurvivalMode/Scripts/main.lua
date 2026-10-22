@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.37.5"
+local VERSION = "0.38.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -363,6 +363,8 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pendin
 -- (OP0057_sstb); it's then kept out of `planes`, so it never counts, tiers or pays as an enemy.
 local SHUTTLE = { obj = nil }
 local shuttleHealth            -- (section "special rounds"; the HUD shows it)
+-- The STORE's allies (section "allies"): its functions, the run's state (ALLY.run) and which units are allies.
+local ALLY = { unit = {} }
 -- The Anomaly (section "special rounds"): its field's state, for the HUD and the level reset.
 local ANOM = { on = false }
 -- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
@@ -376,6 +378,10 @@ local function logPlane(o, unit)
     if short:find("_sstb_", 1, true) then
         SHUTTLE.obj = o
         log("special: shuttle actor " .. short .. (unit and (" (" .. unit .. ")") or ""))
+        return
+    end
+    if unit and ALLY.unit[unit] then                 -- MOONCHILD: no kill credit, no enemy skill or spikes on it
+        log("allies: " .. short .. " (" .. unit .. ") is an ally, not an enemy")
         return
     end
     if n:find("Wingman", 1, true) then log("planes: wingman " .. short .. " (not an enemy)"); return end
@@ -710,6 +716,11 @@ local CFG = {
             RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 25, price = 250, raise = 1.25 },
             AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
+            -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
+            -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
+            Moonchild      = { role = "ally_air",  label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
+            ShipFreedom    = { role = "ally_ship", ship = "Freedom", label = "LCS (FREEDOM CLASS)", price = 12000, raise = 1.25 },
+            ShipAegis      = { role = "ally_ship", ship = "Aegis", label = "AEGIS DESTROYER", price = 20000, raise = 1.25 },
             Airfield = { role = "combined", repair = 25, price = 250, raise = 1.25, label = "REPAIR AIRFIELD",
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
@@ -720,6 +731,30 @@ local CFG = {
                                      units = { "SV_Unit_SAM_A", "SV_Unit_SAM_B" } },
                          } },
         },
+    },
+    -- Allies the STORE sells (user, 2026-10-23; tools/survival_events.py ALLY_*): MOONCHILD, two-ships of F-22s that
+    -- take off from the airfield once you're airborne (up to two flights at once, takeoff_gap_s apart: both park on one
+    -- spot), and allied ships sailing lanes south and north of the airfield (two of each type). They fight until shot
+    -- down or sunk; a lost one can be bought again. Every weapon they carry gets fire control of its own (rows
+    -- <FCS>_SVA, made at the main menu): lock-on range x range_x, its cone x angle_x, arming, lock, aim and reload times
+    -- x time_x, gun spread x spread_x. Enemies go for them: once MOONCHILD is airborne hunt_share of the enemy fighter
+    -- flights prefer it to you, and while ships are at sea strike_share of a normal round's aircraft (no specials, no
+    -- raids) are strike flights sent at one of them.
+    allies = {
+        enabled      = true,
+        hunt_share   = 0.5,
+        strike_share = 0.25,
+        fcs          = { range_x = 1.6, angle_x = 1.5, time_x = 0.5, spread_x = 0.4 },
+        aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
+                         units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" } },
+        ships        = {
+            Freedom = { name = "LCS FREEDOM", units = { "SV_Unit_ShipFreedomA", "SV_Unit_ShipFreedomB" } },
+            Aegis   = { name = "DDG AEGIS",   units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB" } },
+        },
+        text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
+                 air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
+                 sunk = "%s SUNK", lost_sub = "THE STORE CAN SEND ANOTHER",
+                 strike = "STRIKE FLIGHTS INBOUND", strike_sub = "HEADING FOR OUR SHIPS" },
     },
     -- Difficulty spikes (user, 2026-10-22: "every 7 rounds we should have a difficulty spike that's across the board,
     -- enemies react quicker, have more accuracy and will always try to get behind you, even start post stalling").
@@ -2407,7 +2442,8 @@ local function spawnBomber(unit)
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
-        if D.bomberCallout ~= D.round and not D.special then      -- (a special's strike flights: its own callout)
+        if D.shipStrike and D.shipStrike[unit] then ALLY.strike(unit, D.shipStrike[unit]) end   -- (its own callout)
+        if D.bomberCallout ~= D.round and not D.special and not (D.shipStrike and D.shipStrike[unit]) then
             D.bomberCallout = D.round
             hudCallout(CFG.hud.text.bombers, CFG.hud.text.bombers_sub)
         end
@@ -2924,6 +2960,18 @@ local function startRound()
     end
     D.strikeUnits = {}                              -- (for the shuttle's countdown log)
     if special == "shuttle" then for _, u in ipairs(bombers) do D.strikeUnits[u] = true end end
+    -- allied ships at sea (CFG.allies): a normal round's strike flights at them, each at one ship (ace rounds are their
+    -- squadron only)
+    D.shipStrike = {}
+    local ships = (not raid and not special and not D.roundTier and CFG.allies.enabled and ALLY.shipsAtSea)
+        and ALLY.shipsAtSea() or {}
+    if #ships > 0 then
+        local share = math.floor(budget * CFG.allies.strike_share / 2 + 0.5) * 2
+        local sb, sn = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
+        for _, u in ipairs(sb) do bombers[#bombers + 1] = u; D.shipStrike[u] = ships[math.random(#ships)] end
+        nBombers = nBombers + sn
+        if #sb > 0 then log(string.format("round %d: %d strike aircraft in %d squadrons go for the allied ships", D.round, sn, #sb)) end
+    end
     local fighters, nFighters = pickFlights(CFG.pool, anomalyOnly and 0 or (budget - nBombers), function(u) return PROBE_OF[u] end)
     D.queue, D.spare = {}, {}
     for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
@@ -3593,11 +3641,13 @@ local SHOP = {
     store = { "SVShopStore" },
     rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
     all = { "SVShopStore", "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
-    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20 and 21 (STORE / AIRFIELD > rows "20",
-    -- "21"), added to the in-game menu table at the main menu, before a level builds its menu list from it
+    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20, 21 and 22 (SUPPLIES, AIRFIELD, DOCKS:
+    -- rows "20", "21", "22" open them), added to the in-game menu table at the main menu, before a level builds its menu
+    -- list from it
     menuMine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows",
     menuGame = "/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData",
-    menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 } },
+    menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 },
+                 { row = "SVStoreDocks", id = "SV_StoreDocks", index = 22 } },
     -- each row's icon (stock textures; the aircraft repair shows the player's own plane when the game has its icon)
     icons = {
         Missiles = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
@@ -3608,8 +3658,12 @@ local SHOP = {
         Airfield = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
         AAGun    = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
-        ["20"]   = "/Game/NUI/Common/Texture/IconMenu/T_Menu_Common_IconMenu_Shop_000",          -- STORE, < SUPPLIES
+        Moonchild   = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
+        ShipFreedom = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                  -- (no ship icon in
+        ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                  -- the game: an ally's)
+        ["20"]   = "/Game/NUI/Common/Texture/IconMenu/T_Menu_Common_IconMenu_Shop_000",          -- STORE, SUPPLIES >
         ["21"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",                         -- AIRFIELD >
+        ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",                        -- DOCKS >
     },
 }
 local SH = { added = false, addr = nil, warned = {}, decor = {} }
@@ -3702,9 +3756,10 @@ function SHOP.menuSetup()
     SH.menuOk = true
     for _, m in ipairs(SHOP.menuRows) do if at[m.row] ~= m.index then SH.menuOk = false end end
     SH.menuDone = true
-    log(string.format("shop: the store's pages in the in-game menu table at %s / %s (want %d / %d)%s",
-        tostring(at[SHOP.menuRows[1].row]), tostring(at[SHOP.menuRows[2].row]), SHOP.menuRows[1].index,
-        SHOP.menuRows[2].index, SH.menuOk and "" or ": the shop rows stand in"))
+    local where = {}
+    for _, m in ipairs(SHOP.menuRows) do where[#where + 1] = string.format("%s at %s (want %d)", m.row, tostring(at[m.row]), m.index) end
+    log("shop: the store's pages in the in-game menu table: " .. table.concat(where, ", ")
+        .. (SH.menuOk and "" or ": the shop rows stand in"))
 end
 
 -- In Survival's level: are the store's pages in the game's menu list (LiveMenuManager.MenuWidgetClassList, built from
@@ -3726,8 +3781,13 @@ function SHOP.storeCheck()
         return { n = n, ids = ids }
     end)
     if ok and got then
-        SH.store = got.ids[1] == SHOP.menuRows[1].id and got.ids[2] == SHOP.menuRows[2].id
-        log(string.format("shop: the game's menu list has %d menus; 20 = %s, 21 = %s: %s", got.n, got.ids[1], got.ids[2],
+        SH.store = true
+        local parts = {}
+        for k, e in ipairs(SHOP.menuRows) do
+            if got.ids[k] ~= e.id then SH.store = false end
+            parts[#parts + 1] = string.format("%d = %s", e.index, got.ids[k])
+        end
+        log(string.format("shop: the game's menu list has %d menus; %s: %s", got.n, table.concat(parts, ", "),
             SH.store and "the STORE is in" or "the shop rows stand in"))
     elseif SH.storeTries >= 10 then
         SH.store = false
@@ -3775,7 +3835,7 @@ function SHOP.decorTick(tick)
             for k = 1, 6 do
                 local row = list and child(list, string.format("WBP_Menu_Text_Focus_000_%02d", k))
                 local args = row and argsOf(list, k)
-                local item = args and (args:match("^SV_Buy_(.+)$") or ((args == "20" or args == "21") and args))
+                local item = args and (args:match("^SV_Buy_(.+)$") or (SHOP.icons[args] and args:match("^%d+$") and args))
                 local a = row and addrOf(row)
                 if a and item then
                     local d = SH.decor[a]
@@ -3924,6 +3984,19 @@ local function offer(name)
         if not AF.hp or AF.down then o.why = "THE AIRFIELD IS DOWN."
         elseif AF.hp >= CFG.airfield.hp then o.why = "THE AIRFIELD IS NOT DAMAGED."
         else o.price = shopPrice(name) end
+    elseif o.role == "ally_air" or o.role == "ally_ship" then          -- CFG.allies
+        local c = CFG.allies
+        local units = o.role == "ally_air" and c.aircraft.units or c.ships[it.ship].units
+        local up, free = ALLY.status(units)
+        o.label = it.label
+        o.help = o.role == "ally_air"
+            and string.format("Squadron %s, two F-22s: they take off from the airfield once you're airborne and fight until shot down (%d of %d flights up).",
+                c.aircraft.name, up, #units)
+            or string.format("The %s sails the waters by the airfield and fights until sunk (%d of %d at sea).",
+                c.ships[it.ship].name, up, #units)
+        if not c.enabled or not ALLY.ready then o.why = "NOT AVAILABLE."
+        elseif not free then o.why = o.role == "ally_air" and "BOTH FLIGHTS ARE UP." or "BOTH ARE AT SEA."
+        else o.price, o.unit = shopPrice(name), free end
     else                                             -- a defence: aa / sam, or the old row's next one in turn
         local aa, aaMax = defencesUp("aa")
         local sam, samMax = defencesUp("sam")
@@ -3953,12 +4026,15 @@ function shopTexts()
     -- the STORE's own texts: its row on the landing page, its page titles and the rows between its pages
     local z = string.format("ZOLLARS %d", RUN.credits)
     SV_SetText("SV_Shop_Store", "STORE")
-    SV_SetText("SV_Shop_Store_Help", z .. ". Missiles, special weapons, flares, repairs and airfield defences.")
+    SV_SetText("SV_Shop_Store_Help", z .. ". Missiles, special weapons, flares, repairs, airfield defences, allied aircraft and ships.")
     SV_SetText("SV_Store_Title", "AIRFIELD STORE: SUPPLIES   " .. z)
     SV_SetText("SV_Store_TitleAirfield", "AIRFIELD STORE: AIRFIELD   " .. z)
+    SV_SetText("SV_Store_TitleDocks", "AIRFIELD STORE: DOCKS   " .. z)
     SV_SetText("SV_Store_ToAirfield", "AIRFIELD >")
-    SV_SetText("SV_Store_ToAirfield_Help", z .. ". Airfield repairs, AA guns and SAM sites.")
-    SV_SetText("SV_Store_ToSupplies", "< SUPPLIES")
+    SV_SetText("SV_Store_ToAirfield_Help", z .. ". Airfield repairs, AA guns, SAM sites and " .. CFG.allies.aircraft.name .. "'s F-22s.")
+    SV_SetText("SV_Store_ToDocks", "DOCKS >")
+    SV_SetText("SV_Store_ToDocks_Help", z .. ". Allied ships for the waters by the airfield.")
+    SV_SetText("SV_Store_ToSupplies", "SUPPLIES >")
     SV_SetText("SV_Store_ToSupplies_Help", z .. ". Missiles, special weapons, flares and aircraft repairs.")
 end
 
@@ -3976,12 +4052,28 @@ function shopBuy(name)
     local price = o.price
     if RUN.credits < price then return done(string.format("NOT ENOUGH ZOLLARS (%d needed).", price)) end
     if o.role == "aircraft" then
+        -- the stock repair (RE_SV_RepairAircraft: health and armour pool) and the health written straight onto the
+        -- aircraft, then read back: paid only once it reads full (test of 2026-10-23: the event alone left it at 63%
+        -- and four presses charged four times)
         local before = aircraftHealth()
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
-        if r ~= 1 then return done("COULD NOT REPAIR IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
+        local okW, errW = pcall(function()
+            local pawn = survivalPC.Pawn
+            pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5)
+        end)
+        RUN.acHp = nil
+        local after = aircraftHealth()
+        log(string.format("shop: aircraft repair: %s%% -> %s%% (event %s, health written %s)", tostring(before), tostring(after),
+            r == 1 and "fired" or (SV_ERR[r] or tostring(r)), okW and "yes" or ("no: " .. tostring(errW))))
+        if not (after and after >= 99) then return done("COULD NOT REPAIR IT (NOTHING CHARGED).") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
-        RUN.acHp = 100                               -- (read again on the next text update)
-        return done(string.format("AIRCRAFT REPAIRED (%s%% -> full) for %d.", tostring(before), price))
+        return done(string.format("AIRCRAFT REPAIRED (%s%% -> %d%%) for %d.", tostring(before), after, price))
+    elseif o.role == "ally_air" or o.role == "ally_ship" then
+        local ok, msg = ALLY.buy(o.role, o.unit, it.ship, price)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        RUN.bought[name] = (RUN.bought[name] or 0) + 1
+        return done(string.format("%s for %d.", msg, price))
     elseif o.unit then                               -- a defence
         local r = SV_Spawn(o.unit)
         if r <= 0 then return done("COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
@@ -4045,6 +4137,213 @@ local function shopTick(tick)
         local ok, err = pcall(shopTexts)
         if not ok then log("shop: text error " .. tostring(err)) end
     end
+end
+
+---------------------------------------------------------------------------------------------------- allies
+-- The STORE's allies (CFG.allies; tools/survival_events.py ALLY_*). Their DT_NPC rows (DT_SV_NpcRows) go into DT_NPC at
+-- the main menu, before a level loads (the spawner reads them then), each weapon on fire control of its own (<FCS>_SVA);
+-- a ship sails when bought, a MOONCHILD flight spawns once you're airborne and the runway is clear (both flights park
+-- on one spot) and the event package flies its takeoff. ALLY.run: the run's allies, up[unit] = { kind, key, at,
+-- queued, price }, and the enemy orders waiting to be fired (events).
+do
+-- DT_SV_NpcRows' ally rows (tools/build_survival.py build_npc_rows: the F-22, the hulls and their turrets)
+local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Freedom", "SV_Ally_Aegis",
+               "SV_Turret_free_Ally_mk110_Ally", "SV_Turret_free_Ally_mk46_R_Ally", "SV_Turret_free_Ally_mk46_L_Ally",
+               "SV_Turret_aegs_mk15_Ally", "SV_Turret_aegs_mk41_Ally", "SV_Turret_aegs_mk45_Ally",
+               "SV_Turret_aegs_artillery_Ally" }
+for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
+for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
+
+function ALLY.setup()
+    if ALLY.setupDone or not CFG.allies.enabled or not gameInstance() or not SR.done then return end
+    ALLY.tries = (ALLY.tries or 0) + 1
+    local npc, mine, fcs = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows), loadObject(FCS_TABLE)
+    if not (npc and mine and fcs) then
+        if ALLY.tries >= 20 then ALLY.setupDone = true; log("allies: their tables didn't load; the STORE sells none") end
+        return
+    end
+    ALLY.setupDone = true
+    local wpn = loadObject(WEAPON_TABLE)
+    for _, t in ipairs({ npc, mine, fcs, wpn }) do if t then pin(t, nameOf(t)) end end
+    local c, made, boosted, lost = CFG.allies.fcs, {}, 0, {}
+    local function allyFcs(src)                      -- src .. "_SVA": farther, wider, quicker, tighter
+        local new = src .. "_SVA"
+        if made[new] == nil then
+            made[new] = cloneRow(fcs, src, new, function(r)
+                pcall(function() r.CaptureDistance = r.CaptureDistance * c.range_x end)
+                pcall(function() r.CaptureAngleRange = math.min(180, r.CaptureAngleRange * c.angle_x) end)
+                for _, f in ipairs({ "ActivationTime", "TriggeringTime", "ShotIntervalTime", "RestingTime" }) do
+                    pcall(function() r[f] = r[f] * c.time_x end)
+                end
+                pcall(function()                     -- a gun's rounds: a tighter spread (a weapon row without one stays)
+                    local w = r.NpcWeaponId:ToString()
+                    if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, w .. "_SVA", function(x)
+                        x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x end) then
+                        r.NpcWeaponId = FName(w .. "_SVA")
+                    end
+                end)
+            end) and true or false
+        end
+        return made[new] and new or nil
+    end
+    local n = 0
+    for _, row in ipairs(ROWS) do
+        local _, have = dtCall(npc, "FindRow", row)
+        if have == nil then
+            local _, r = dtCall(mine, "FindRow", row)
+            if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
+        end
+        if have ~= nil then
+            n = n + 1
+            for i = 0, 5 do
+                pcall(function()
+                    local id = have["NpcFCSId" .. i]:ToString()
+                    if id ~= "None" and id ~= "" and not id:find("_SVA$") then
+                        local new = allyFcs(id)
+                        if new then have["NpcFCSId" .. i] = FName(new); boosted = boosted + 1 end
+                    end
+                end)
+            end
+            if row == ROWS[1] and SR.module then      -- MOONCHILD searches as far as the enemies do
+                pcall(function() have.NpcAIModuleId = FName(SR.module) end)
+            end
+        else
+            lost[#lost + 1] = row
+        end
+    end
+    local names = 0
+    if type(SV_SetText) == "function" then
+        if SV_SetText(CFG.allies.aircraft.name_key, CFG.allies.aircraft.name) == 1 then names = names + 1 end
+        for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
+    end
+    ALLY.ready = n == #ROWS
+    log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
+        n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
+end
+
+function ALLY.state()
+    ALLY.run = ALLY.run or { up = {}, events = {}, hunted = {}, seen = {}, nextTakeoff = 0 }
+    return ALLY.run
+end
+
+-- Of `units`: how many are bought (at sea, flying or waiting to take off), and a free one, or nil.
+function ALLY.status(units)
+    local R, up, free = ALLY.state(), 0, nil
+    for _, u in ipairs(units) do
+        if R.up[u] then up = up + 1
+        elseif not free and nativeReady() and SV_UnitAlive(u) <= 0 then free = u end
+    end
+    return up, free
+end
+
+function ALLY.shipsAtSea()
+    local out = {}
+    for u, s in pairs(ALLY.state().up) do if s.kind == "ship" then out[#out + 1] = u end end
+    table.sort(out)
+    return out
+end
+
+-- A purchase (the shop takes the zollars when it succeeds): true and its message, or false and why not.
+function ALLY.buy(role, unit, key, price)
+    local R, t, now = ALLY.state(), CFG.allies.text, D and D.now or 0
+    if role == "ally_ship" then
+        local sh = CFG.allies.ships[key]
+        spawningUnit = unit
+        local r = SV_Spawn(unit)
+        spawningUnit = nil
+        log(string.format("allies: %s (%s): %s", sh.name, unit, r > 0 and "at sea" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        if r <= 0 then return false, "COULD NOT SEND IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
+        R.up[unit] = { kind = "ship", key = key, at = now, price = price }
+        hudCallout(string.format(t.ship, sh.name), t.ship_sub)
+        return true, sh.name .. " AT SEA"
+    end
+    R.up[unit] = { kind = "air", queued = true, at = now, price = price }
+    log(string.format("allies: %s (%s) bought; it takes off once you're airborne", CFG.allies.aircraft.name, unit))
+    return true, CFG.allies.aircraft.name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
+end
+
+-- Strike flight `bomber` (a normal round's, sent at allied ship unit `ship`): RE_SV_Strike<ship>_NN once its own
+-- orders (the airfield's, from its appearance) are in.
+function ALLY.strike(bomber, ship)
+    local i = BOMBER_INDEX[bomber]
+    if not i then return end
+    local R = ALLY.state()
+    R.events[#R.events + 1] = { at = D.now + 4, name = string.format("RE_SV_Strike%s_%02d", (ship:gsub("^SV_Unit_Ship", "")), i),
+                                why = bomber .. " at " .. ship }
+    if D.strikeSaid ~= D.round then
+        D.strikeSaid = D.round
+        hudCallout(CFG.allies.text.strike, CFG.allies.text.strike_sub)
+    end
+end
+
+function ALLY.tick(now)
+    if not (CFG.allies.enabled and D and nativeReady()) then return end
+    local R, c, t = ALLY.state(), CFG.allies, CFG.allies.text
+    for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
+        local s = R.up[u]
+        if s and s.queued and now >= R.nextTakeoff and not playerOnAirfield() then
+            spawningUnit = u
+            local r = SV_Spawn(u)
+            spawningUnit = nil
+            if r > 0 then
+                s.queued, s.at, R.nextTakeoff = nil, now, now + c.aircraft.takeoff_gap_s
+                hudCallout(string.format(t.takeoff, c.aircraft.name), t.takeoff_sub)
+                log(string.format("allies: %s (%s) taxiing out: %d aircraft", c.aircraft.name, u, r))
+            else
+                s.tries, R.nextTakeoff = (s.tries or 0) + 1, now + 5
+                log(string.format("allies: %s (%s) not spawned (%s)", c.aircraft.name, u, SV_ERR[r] or tostring(r)))
+                if s.tries >= 3 then                 -- never came: the zollars back
+                    R.up[u] = nil
+                    RUN.credits, RUN.spent, RUN.dirty = RUN.credits + (s.price or 0), RUN.spent - (s.price or 0), true
+                    log(string.format("allies: %s (%s) couldn't take off; %d zollars back", c.aircraft.name, u, s.price or 0))
+                end
+            end
+        end
+    end
+    if now >= (R.checkAt or 0) then                  -- every 2 s: losses, and the enemies' orders on MOONCHILD
+        R.checkAt = now + 2
+        local f, airborne = svFlags() or {}, 0
+        for u, s in pairs(R.up) do
+            if not s.queued then
+                local n = SV_UnitAlive(u)
+                if n <= 0 and now - s.at > 5 then
+                    R.up[u], RUN.dirty = nil, true
+                    local name = s.kind == "air" and c.aircraft.name or c.ships[s.key].name
+                    hudCallout(string.format(s.kind == "air" and t.air_lost or t.sunk, name), t.lost_sub)
+                    log(string.format("allies: %s (%s) lost %.0f s after it %s", name, u, now - s.at,
+                        s.kind == "air" and "spawned" or "sailed"))
+                elseif s.kind == "air" and n > 0 then
+                    airborne = airborne + math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
+                end
+            end
+        end
+        if airborne ~= (R.airborne or 0) then log(string.format("allies: %d %s aircraft airborne", airborne, c.aircraft.name)) end
+        R.airborne = airborne
+        -- an enemy fighter flight that's had its own orders (4 s up) while MOONCHILD flies: hunt_share of them prefer it
+        for u in pairs(R.seen) do if not D.up[u] then R.seen[u], R.hunted[u] = nil, nil end end
+        for u in pairs(D.up) do
+            local fn, fk = u:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")      -- (tools/survival_events.py POOL order)
+            if fn then
+                R.seen[u] = R.seen[u] or now
+                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 then
+                    R.hunted[u] = true
+                    if math.random() < c.hunt_share then
+                        R.events[#R.events + 1] = { at = now, why = u .. " goes for " .. c.aircraft.name,
+                            name = string.format("RE_SV_Hunt_%02d", (tonumber(fn) - 1) * 3 + tonumber(fk) + 1) }
+                    end
+                end
+            end
+        end
+    end
+    for i = #R.events, 1, -1 do
+        local e = R.events[i]
+        if now >= e.at then
+            table.remove(R.events, i)
+            local r = type(SV_Event) == "function" and SV_Event(e.name) or -5
+            log(string.format("allies: %s (%s) %s", e.name, e.why, r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+        end
+    end
+end
 end
 
 -- The landing menu's ammo panel ([WEAPONS AMMO], WBP_Menu_IngameHangar_WeaponDetail_002: six slots
@@ -4183,6 +4482,7 @@ local function probeTick(tick)
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
         RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true }
+        ALLY.run = nil                             -- (a new level: no allies up)
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
@@ -4205,6 +4505,8 @@ local function probeTick(tick)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
         local okSp, errSp = pcall(specialSetup)
         if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
+        local okAs, errAs = pcall(ALLY.setup)
+        if not okAs then log("allies: setup error " .. tostring(errAs)); ALLY.setupDone = true end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
         local okM, errM = pcall(SHOP.menuSetup)
@@ -4239,6 +4541,7 @@ local function probeTick(tick)
             log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
+            ALLY.run = nil
         end
     end
     if D then
@@ -4256,6 +4559,8 @@ local function probeTick(tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
             local okS, errS = pcall(shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
+            local okAl, errAl = pcall(ALLY.tick, now)
+            if not okAl then log("allies: error " .. tostring(errAl)) end
             local okI, errI = pcall(SHOP.decorTick, tick)
             if not okI and not SH.decorErr then SH.decorErr = true; log("shop: row icons error " .. tostring(errI)) end
             local okA2, errA2 = pcall(hangarAmmoTick, tick)
