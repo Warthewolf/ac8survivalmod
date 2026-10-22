@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.29.0"
+local VERSION = "0.30.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -542,6 +542,20 @@ local CFG = {
                                   provoke_cone_deg = 45, provoke_time_s = 0.8, surround_m = { 40, 100 } },
         },
     },
+    -- Named aces (user, 2026-10-22: "build it with this line up, but custom names"). From Mercenary on, a fighter flight
+    -- flies its tier's squadron: one airframe of the tier's line-up (ACE.roster; stock skins: Shark / Ventus F-15C and
+    -- Su-35, Savia Rafale, Ares Su-57, Shadow Su-57 / Typhoon / Su-47, the named aces' own), its wingmen under the
+    -- squadron's name and its lead, when that ace isn't already up, under the ace's own. These are only the names:
+    -- [aces.<tier>] in survival.ini renames them; which airframe a name flies is fixed (tools/build_survival.py ACES).
+    aces = {
+        enabled = true,
+        callout = true,                            -- "ACE INBOUND" the first time each ace shows up in a run
+        mercenary = { squadron = "Bounty",   f15c = "Ledger",   su35 = "Wager",    typhoon = "Payday" },
+        legend    = { squadron = "Valkyrie", su47 = "Sigrun",   rafale = "Brynhild" },
+        demon     = { squadron = "Inferno",  f22a = "Mephisto", su57 = "Belial" },
+        phantom   = { squadron = "Wraith",   su57 = "Specter",  typhoon = "Revenant", su47 = "Banshee" },
+        reaper    = { squadron = "Harvest",  su57 = "Grim",     f22a = "Scythe",   typhoon = "Charon", rafale = "Nightfall" },
+    },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
     -- Survival's own module row (a copy with these values) is given to copies of the aircraft's DT_NPC rows.
@@ -794,6 +808,8 @@ local CFG = {
             shop_closed  = "SHOP CLOSED: THE SHUTTLE WAS LOST.",
             spike        = "DIFFICULTY UP",
             spike_sub    = "ENEMY PILOTS GROW SHARPER",
+            ace          = "ACE INBOUND: %s",
+            ace_sub      = "%s SQUADRON (%s)",
         },
     },
 }
@@ -964,6 +980,14 @@ local PR = { ready = {}, usable = {}, scripts = {}, tries = 0, ammo = {} }   -- 
 local SR = { ready = {}, usable = {}, tries = 0 }   -- enemy search rows (section "enemy search" below)
 -- Difficulty spikes (CFG.spikes): the level of round `round` (0 = none yet), its settings, and its rows' suffix.
 local SPIKE_SUFFIX = { [0] = "", "b", "c", "d" }      -- tools/build_survival.py SPIKE_SUFFIXES
+-- CFG.aces' airframes per tier (tools/build_survival.py ACES, same keys) and their rows: a lead and a wing mission row
+-- (sv_ace_<tier>_<key>_l / _w, with _sv[b|c|d] copies like the search aircraft), DT_NPC rows SV_Ace_<tier>_<key>_L / _W
+-- (DT_SV_NpcRows, added at the main menu) and text keys SV_Ace_<tier>_<key> (the ace) / SV_Sqn_<tier> (the squadron).
+local ACE = {
+    roster = { mercenary = { "f15c", "su35", "typhoon" }, legend = { "su47", "rafale" }, demon = { "f22a", "su57" },
+               phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale" } },
+    row = function(tier, key, part) return "sv_ace_" .. tier .. "_" .. key .. "_" .. part end,
+}
 local function spikeLevel(round)
     local sp = CFG.spikes
     if not sp.enabled or not round or round < 1 or #sp.levels == 0 then return 0 end
@@ -1343,6 +1367,30 @@ local function searchSetup()
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
+    if CFG.aces.enabled then                       -- CFG.aces: their DT_NPC rows (from DT_SV_NpcRows) and names
+        local mine = loadObject(CFG.specials.shuttle.npc_rows)
+        local nAces, names, lost = 0, 0, {}
+        if mine then pin(mine, nameOf(mine)) end
+        for tier, keys in pairs(ACE.roster) do
+            local c = CFG.aces[tier] or {}
+            if type(SV_SetText) == "function" and SV_SetText("SV_Sqn_" .. tier, tostring(c.squadron or tier)) == 1 then names = names + 1 end
+            for _, k in ipairs(keys) do
+                if type(SV_SetText) == "function" and SV_SetText("SV_Ace_" .. tier .. "_" .. k, tostring(c[k] or k)) == 1 then names = names + 1 end
+                for _, part in ipairs({ "L", "W" }) do
+                    local row = "SV_Ace_" .. tier .. "_" .. k .. "_" .. part
+                    local _, have = dtCall(npc, "FindRow", row)
+                    if have == nil and mine then
+                        local _, r = dtCall(mine, "FindRow", row)
+                        if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
+                    end
+                    if have ~= nil then list[#list + 1] = ACE.row(tier, k, part:lower()); nAces = nAces + 1
+                    else lost[#lost + 1] = row end
+                end
+            end
+        end
+        log(string.format("aces: %d rows in DT_NPC, %d names set%s", nAces, names,
+            #lost > 0 and ("; missing from DT_SV_NpcRows: " .. table.concat(lost, ", ")) or ""))
+    end
     SR.levels = SR.levels or {}
     local nLevels = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
     for _, a in ipairs(list) do
@@ -2085,13 +2133,37 @@ for i, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u], BOMBER_INDEX[u]
 local PROBE_OF = {}                           -- probe flight -> "Pkg" / "Rt"
 for v, u in pairs(CFG.probe.units) do PROBE_OF[u] = v end
 
+-- CFG.aces: tier `tk`'s squadron for flight `unit` (its wing row, and the lead row of an ace that isn't up already), or
+-- nil (no line-up for this tier, or its rows weren't in before this level loaded: the spawner only knows those).
+function ACE.flight(unit, tk, level)
+    local keys = ACE.roster[tk]
+    if not (keys and CFG.aces.enabled) then return nil end
+    D.aceOf = D.aceOf or {}
+    D.aceOf[unit] = nil                                         -- what this flight flew last time is down or recycled
+    local opts = {}
+    for _, k in ipairs(keys) do if SR.usable[ACE.row(tk, k, "w")] then opts[#opts + 1] = k end end
+    if #opts == 0 then return nil end
+    local k = opts[math.random(#opts)]
+    local f, id = { wing = searchAircraft(ACE.row(tk, k, "w"), level), tier = tk, key = k }, tk .. "_" .. k
+    for u, a in pairs(D.aceOf) do
+        if a == id and (SV_UnitAlive(u) or 0) > 0 then return f end   -- that ace is up: wingmen only
+    end
+    if SR.usable[ACE.row(tk, k, "l")] then
+        f.lead, f.id, D.aceOf[unit] = searchAircraft(ACE.row(tk, k, "l"), level), id, id
+    end
+    return f
+end
+
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
     local ti = CFG.tiers.enabled and pickTier(D.round) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
-    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], math.max(spikeLevel(D.round), tier.fcs or 0))
+    local fcsLevel = math.max(spikeLevel(D.round), tier.fcs or 0)
+    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], fcsLevel)
+    local ace = tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)
+    if ace then ac = ace.wing end
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
         ac = PROBE_MISSION_ROW[pv]
@@ -2099,6 +2171,7 @@ local function spawnFlight(unit)
             pv == "Pkg" and "package" or "run-time"))
     end
     local set = SV_SetAircraft(unit, ac)
+    if ace and ace.lead then SV_SetAircraft(unit, ace.lead, 0) end        -- the first aircraft: the ace
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
@@ -2112,6 +2185,18 @@ local function spawnFlight(unit)
         D.up[unit], D.flown[unit] = true, true
         D.orders = D.orders or {}
         D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
+        if ace then
+            local c = CFG.aces[ace.tier] or {}
+            local name = ace.lead and tostring(c[ace.key] or ace.key)
+            log(string.format("aces: %s is %s squadron (%s)%s", unit, tostring(c.squadron), ace.key,
+                name and (", led by " .. name .. " (" .. ace.lead .. ")") or ", no ace (already up)"))
+            D.aceSaid = D.aceSaid or {}
+            if name and CFG.aces.callout and not D.aceSaid[ace.id] then
+                D.aceSaid[ace.id] = true
+                local t = CFG.hud.text
+                hudCallout(string.format(t.ace, name:upper()), string.format(t.ace_sub, tostring(c.squadron):upper(), tier.name:upper()))
+            end
+        end
     end
     return r
 end

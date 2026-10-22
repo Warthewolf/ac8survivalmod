@@ -524,12 +524,69 @@ def edit_shuttle_npc(props):
     set_prop(props, idx, 'GameObjectDisplayName02', s('SV_Shuttle_Name'))
 
 
+# Named aces and squadrons of skill tiers 6-10 (main.lua CFG.aces; user, 2026-10-22: "build it with this line up, but
+# custom names"). For each tier and airframe key: a lead row (a flight's first aircraft: the ace, under its own name) and
+# a wing row (the rest: the squadron's name), DT_NPC copies of the stock rows below (their skins come along) with
+# Survival's text key as callsign (GameObjectDisplayName02, as the shuttle's): main.lua sets the texts from CFG.aces
+# through the text hook, so players rename them in survival.ini. Keep in step with main.lua ACE_ROSTER.
+ACES = [  # (tier, key, lead DT_NPC row, wing DT_NPC row)
+    ('mercenary', 'f15c',    'OP1004_f15c_Shark_01',   'OP1004_f15c_Shark_02'),
+    ('mercenary', 'su35',    'OP1028_su35_Ventus_01',  'OP1028_su35_Ventus_02'),
+    ('mercenary', 'typhoon', 'OP1011_typn_01',         'OP1011_typn_01'),
+    ('legend',    'su47',    'OP1026_su47_01',         'OP1026_su47_01'),
+    ('legend',    'rafale',  'OP1014_rflm_Savia_01',   'OP1014_rflm_Savia_01'),
+    ('demon',     'f22a',    'OP1005_f22a_01',         'OP1005_f22a_01'),
+    ('demon',     'su57',    'OP1021_su57_02',         'OP1021_su57_02'),
+    ('phantom',   'su57',    'OP1021_su57_Shadow_24',  'OP1021_su57_Shadow_25'),
+    ('phantom',   'typhoon', 'OP1011_typn_Shadow_33',  'OP1011_typn_Shadow_32'),
+    ('phantom',   'su47',    'OP1026_su47_Shadow_144', 'OP1026_su47_Shadow_145'),
+    ('reaper',    'su57',    'OP1021_su57_Named',      'OP1021_su57_Shadow_26'),
+    ('reaper',    'f22a',    'OP1005_f22a_Named',      'OP1005_f22a_Shadow_99'),
+    ('reaper',    'typhoon', 'OP1011_typn_Named',      'OP1011_typn_Shadow_37'),
+    ('reaper',    'rafale',  'OP1014_rflm_Named',      'OP1011_typn_Shadow_39'),
+]
+
+
+def ace_rows(tier, key):
+    """(lead, wing), each (DT_SV_NpcMission row, DT_NPC row, text key); no numeric tails (hard rule 17)."""
+    b = f'{tier}_{key}'
+    return ((f'sv_ace_{b}_l', f'SV_Ace_{b}_L', f'SV_Ace_{b}'), (f'sv_ace_{b}_w', f'SV_Ace_{b}_W', f'SV_Sqn_{tier}'))
+
+
+def build_npc_rows():
+    """DT_SV_NpcRows: the shuttle's row and the aces' rows, which main.lua adds to DT_NPC at the main menu (before the
+    level loads: the spawner reads them then)."""
+    path = '/Game/Datatables/AI/NPC/DT_NPC'
+    z = ZenPkg(stock(path))
+    rename_package(z, path, DATA + 'DT_SV_NpcRows')
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveNpcDataTable')
+    assert o == len(p), (o, len(p))
+    rows = dict(dt['rows'])
+    name_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcDataTable').items() if n == 'GameObjectDisplayName02'][0]
+    shuttle = copy.deepcopy(rows[('OP0057_sstb_01', 0)])
+    edit_shuttle_npc(shuttle[2])
+    out = [((survival_events.SHUTTLE_NPC, 0), shuttle)]
+    for tier, key, lead, wing in ACES:
+        for src, (_, npc, text) in zip((lead, wing), ace_rows(tier, key)):
+            f = survival_events.fname(src)
+            row = copy.deepcopy(rows[(f[1], f[2])])
+            set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+            out.append(((npc, 0), row))
+    for k, row in out:
+        for n in names_in(row) + [k[0]]: z.nb.add(n)
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcDataTable')
+    assert chk['rows'] == dt['rows']
+    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings)')
+    save(z, DATA + 'DT_SV_NpcRows')
+
+
 def build_rows():
     build_rows_table('/Game/Datatables/Information/DT_LiveMissionTable', DATA + 'DT_SV_MissionRows',
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
-    # main.lua adds this row to DT_NPC at the main menu (before the level loads: the spawner reads it then)
-    build_rows_table('/Game/Datatables/AI/NPC/DT_NPC', DATA + 'DT_SV_NpcRows',
-                     'LiveNpcDataTable', 'OP0057_sstb_01', survival_events.SHUTTLE_NPC, edit_shuttle_npc)
+    build_npc_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
 
@@ -575,6 +632,12 @@ def build_npc_table():
         extra.append((src + '_sv', src, base + '_SV'))
         for suf in SPIKE_SUFFIXES:
             extra.append((src + '_sv' + suf, src, base + '_SV' + suf.upper()))
+    # the aces (ACES): <row> -> its DT_SV_NpcRows row, and like the search aircraft <row>_sv[b|c|d] -> <that>_SV[B|C|D]
+    for tier, key, _, _ in ACES:
+        for row, npc, _ in ace_rows(tier, key):
+            extra.append((row, 'f16c_common', npc))
+            for suf in [''] + SPIKE_SUFFIXES:
+                extra.append((row + '_sv' + suf, 'f16c_common', npc + '_SV' + suf.upper()))
     for new_row, src, npc in extra:
         assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
         row = copy.deepcopy(rows[(src, 0)])

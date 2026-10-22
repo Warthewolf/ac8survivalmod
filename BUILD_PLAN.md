@@ -404,8 +404,15 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   shop closed one round, as at airfield 0). Specials never award real progression.
 - [ ] Portal spawn effect for specials: stock teleport nodes + VFX burst (HELIOS_VFX.md 4: run-time spawning from Lua).
 - [ ] Event camera on special spawns: the stock camera prompt that swings the view toward an event (node still to find).
-- [ ] Ace squadron: a named squadron (DT_NPC _Named / Shadow rows, rank 5). Check first how campaign aces get KDS
-  phases: their LuaSet NLID_0400_CP only attacks inside them (AGENTS.md rule 22).
+- [~] Named aces BUILT 2026-10-22 (Lua 0.30.0, runtime 0.13.1), untested: from skill tier Mercenary (round 16) on a
+  fighter flight flies its tier's squadron (tools/build_survival.py ACES: Shark / Ventus F-15C and Su-35, Typhoon;
+  Su-47, Savia Rafale; F-22A, Ares Su-57; Shadow Su-57 / Typhoon / Su-47; named-ace Su-57 / F-22A / Typhoon / Rafale
+  with Shadow wings). Custom names (user: "build it with this line up, but custom names"): each lead / wing row is a
+  DT_NPC copy whose GameObjectDisplayName02 is a Survival text key (SV_Ace_<tier>_<key>, SV_Sqn_<tier>), texts from
+  main.lua CFG.aces ([aces.<tier>] in survival.ini) through SV_SetText; the lead (index 0) is the ace when that ace
+  isn't up already. They keep Survival's behaviour (world data), AI module, fire control and tier, not NLID_0400_CP.
+  Test: "aces:" lines; Su-57 / F-22A etc. arrive from round 16 (start = 16 to test sooner); the names show on the
+  target boxes; "ACE INBOUND" callout.
 - [ ] Ladon: the heavy boss (OP0045_ladn_01, 1200 HP, 16 child parts = ChildAIObjectDescs; EVENTS_AIRCRAFT.md).
 - [ ] Podarge drop / Land Aegis: port the drop chain the way Stonehenge's podarge_build did (from Mission 25).
 - [ ] ECM towers: ground units that jam (radar noise, LiveStartHUDRaderMapNoise) until destroyed.

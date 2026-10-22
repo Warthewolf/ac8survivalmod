@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.13.0"
+#define RT_VERSION           L"0.13.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -622,9 +622,9 @@ static void InitText(void)
     }
 }
 
-/* Texts Lua sets at run time (SV_SetText: the shop's rows and prices). Fixed buffers, rewritten in place on the game
- * thread, so an FString the game was handed never points at freed memory. */
-#define DYN_TEXTS 24
+/* Texts Lua sets at run time (SV_SetText: the shop's rows and prices, the shuttle's and the aces' names). Fixed
+ * buffers, rewritten in place on the game thread, so an FString the game was handed never points at freed memory. */
+#define DYN_TEXTS 64           /* used: shop 8, shuttle 1, aces and squadrons 19 */
 #define DYN_KEY   48
 #define DYN_CAP   256
 static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
@@ -1770,10 +1770,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.13.0" */
+/* SV_Version() -> "0.13.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.13.0";
+    static const char v[] = "0.13.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1986,7 +1986,7 @@ static int L_MusicClock(void* lua)
     return Ret(lua, old);
 }
 
-/* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 24 keys already): the text the game shows for text key `key`
+/* SV_SetText(key, text) -> 1, or 0 (not an SV_ key, or 64 keys already): the text the game shows for text key `key`
  * (menu rows and help lines that name it), ASCII; longer than 255 characters is cut there */
 static int L_SetText(void* lua)
 {
