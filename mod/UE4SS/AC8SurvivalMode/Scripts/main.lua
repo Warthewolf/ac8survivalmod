@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.40.0"
+local VERSION = "0.40.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1006,7 +1006,7 @@ local function iniSection(name)
     local t = CFG
     for part in path:gmatch("[^%.]+") do
         local found = nil
-        for k, v in pairs(t) do if type(k) == "string" and k:lower() == part and type(v) == "table" then found = v end end
+        for k, v in pairs(t) do if type(k) == "string" and k:lower() == part:lower() and type(v) == "table" then found = v end end
         if not found then return nil end
         t = found
     end
@@ -4423,7 +4423,8 @@ local function slotTexts(panel, slot)
         for _, t in ipairs(FindAllOf("TextBlock") or {}) do
             local n = nameOf(t)
             local at = n:find(base, 1, true)
-            local sl, leaf = at and n:sub(at + #base):match("^%.WidgetTree[_%d]*%.(AmmoText%a+)%.WidgetTree[_%d]*%.([%w_]+)$")
+            local sl, leaf = nil, nil         -- (not `at and s:match(...)`: `and` keeps only the first capture)
+            if at then sl, leaf = n:sub(at + #base):match("^%.WidgetTree[_%d]*%.(AmmoText%a+)%.WidgetTree[_%d]*%.([%w_]+)$") end
             if sl then c.slots[sl] = c.slots[sl] or { all = {} }; c.slots[sl].all[leaf] = t; c.found = true end
         end
         SH.slotCache[key] = c
