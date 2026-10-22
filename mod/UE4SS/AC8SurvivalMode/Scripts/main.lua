@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F9 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.19.3"
+local VERSION = "0.20.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -445,11 +445,11 @@ local CFG = {
         promote_chance = 0.2,
         rank_add = { casual = -1, standard = 0, ace = 1 },
         list = {
-            { name = "Rookie",  from_round = 1,  rank = 1, post_stall = false },
-            { name = "Regular", from_round = 4,  rank = 2, post_stall = false },
-            { name = "Veteran", from_round = 7,  rank = 3, post_stall = true },
-            { name = "Elite",   from_round = 11, rank = 4, post_stall = true },
-            { name = "Ace",     from_round = 15, rank = 5, post_stall = true },
+            { name = "Rookie",  from_round = 1,  rank = 2, post_stall = false },   -- one rank up (user, 2026-10-22:
+            { name = "Regular", from_round = 4,  rank = 3, post_stall = false },   -- "still felt very easy")
+            { name = "Veteran", from_round = 7,  rank = 4, post_stall = true },
+            { name = "Elite",   from_round = 10, rank = 5, post_stall = true },
+            { name = "Ace",     from_round = 13, rank = 5, post_stall = true },
         },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
@@ -462,6 +462,11 @@ local CFG = {
     -- aircraft aren't attacking the player anymore").
     search = { enabled = true, radius_m = 40000, lose_in_clouds = false, luaset = "NLID_SV_Fighter",
                fallback_luaset = "NLID_0012_CP" },
+    -- The fighters' missiles (user, 2026-10-22: "it takes them forever to get a missile lock"). Every stock enemy
+    -- missile is fire-control row NPC_FCS_PlaneMsl000: lock only within 2.5 km and 45 deg, 2 s to arm, 2.5 s to lock,
+    -- 10 s between shots (aces: 60 deg, 5 s). Each fighter's Survival NPC row gets a copy (<row>_SV in DT_NPC_FCS)
+    -- with these values: range (m), cone (deg), arm / lock / between-missiles / rest (s).
+    missiles = { enabled = true, capture_m = 4000, angle_deg = 60, arm_s = 0.5, lock_s = 1.5, interval_s = 2.0, rest_s = 5.0 },
     -- Survival's own behaviour sets: a DT_NPC_LuaSet row copied from `base`, with `slots` pointing at Survival's
     -- scripts (Scripts/ai/<name>.lua, packaged at /Game/LuaSource/SurvivalMode/AI/<name> by tools/build_survival.py
     -- LUA_SCRIPTS). Made from the main menu on: the game builds a flight's behaviour when the level loads.
@@ -902,6 +907,7 @@ local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcM
 -- world data names it, and the game builds their behaviour from it when the level loads, so its DT_NPC row is made
 -- here even when CFG.search is off or CFG.aircraft leaves that aircraft out.
 local BEHAVIOUR_AIRCRAFT = "f16c_common"
+local FCS_TABLE = "/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS.DT_NPC_FCS"
 
 -- Survival's own behaviour sets (CFG.behaviour_sets) into DT_NPC_LuaSet. BS.ready[name] once a set is in.
 local BS = { done = false, ready = {}, tries = 0 }
@@ -954,6 +960,26 @@ local function searchSetup()
         return
     end
     for _, t in ipairs({ mod, npc, mission }) do pin(t, nameOf(t)) end
+    -- CFG.missiles: a Survival copy of each missile fire-control row the fighters use (made once, then shared)
+    local fcs = CFG.missiles.enabled and loadObject(FCS_TABLE) or nil
+    if fcs then pin(fcs, nameOf(fcs)) elseif CFG.missiles.enabled then log("missiles: DT_NPC_FCS not loaded; stock fire control") end
+    local fcsMade = {}
+    local function svFcs(src)
+        local new = src .. "_SV"
+        if fcsMade[new] == nil then
+            local m = CFG.missiles
+            local ok, why = cloneRow(fcs, src, new, function(r)
+                r.CaptureDistance, r.CaptureAngleRange = m.capture_m, m.angle_deg
+                r.ActivationTime, r.TriggeringTime = m.arm_s, m.lock_s
+                r.ShotIntervalTime, r.RestingTime = m.interval_s, m.rest_s
+            end)
+            fcsMade[new] = ok
+            log(string.format("missiles: %s -> %s %s", src, new, ok and string.format("(lock within %d m / %d deg, arm %.1f s, " ..
+                "lock %.1f s, %.1f s between, rest %.1f s)", m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s)
+                or ("not made: " .. tostring(why))))
+        end
+        return fcsMade[new] and new or nil
+    end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
         r.Radius = CFG.search.radius_m
@@ -971,6 +997,17 @@ local function searchSetup()
             local svNpc, srcNpc = mrow.NpcId:ToString(), base.NpcId:ToString()
             local okR, whyR = cloneRow(npc, srcNpc, svNpc, function(r)
                 r.NpcAIModuleId = FName(SR.module)
+                if fcs then                          -- its missile slot(s) onto Survival's fire control
+                    for i = 0, 5 do
+                        pcall(function()
+                            local id = r["NpcFCSId" .. i]:ToString()
+                            if id:find("^NPC_FCS_PlaneMsl") then
+                                local new = svFcs(id)
+                                if new then r["NpcFCSId" .. i] = FName(new) end
+                            end
+                        end)
+                    end
+                end
                 local set = CFG.search.luaset
                 if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
                 if set then r.LuaSetId = FName(set) end
