@@ -87,6 +87,12 @@ Copy a working stock pattern before inventing a new one.
     entry that way). Put helper groups in `do ... end` blocks that export only what the rest calls. lua_check.py counts
     them and fails over 200. Confirmed 2026-10-22.
 
+24. The hangar (and its wingman panel) look a mission up in the GameInstance's InformationManager_ maps
+    (MissionDataMap_ by MissionID, LevelDataMap_ by level id), built from DT_LiveMissionTable at start, not in the table.
+    A row added after they were built is missing there: black hangar, then a crash at sortie (AceCombat8.exe+0x79a4153,
+    an empty wingman list). main.lua's infoMapsTick adds Survival's row to both. Confirmed 2026-10-22 ("info maps: ...
+    was missing 9101 ... added", hangar lit).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
