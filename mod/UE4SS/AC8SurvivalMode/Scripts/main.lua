@@ -522,7 +522,9 @@ local CFG = {
     -- the start of a run, straight-down traces on a step_km grid over the combat zone record the height each one hits,
     -- per_tick at a time; tools/build_survival.py lays the landing paths from the file. Ctrl+F10 in flight adds a beach
     -- mark (your position and the ground under you) to config\coast_marks.txt.
-    coast_scan = { enabled = true, step_km = 0.5, per_tick = 400 },
+    -- (test of 2026-10-22: the traces only found flat sea planes, 3-4 m everywhere: the terrain's collision isn't
+    -- there far from the player. Off; the beaches come from Ctrl+F10 marks.)
+    coast_scan = { enabled = false, step_km = 0.5, per_tick = 400 },
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
