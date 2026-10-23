@@ -628,7 +628,7 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   lane / its troops can come again.
 - main.lua: rotation shuttle / anomaly / amphibious (round 15 first); its fighters as a normal round plus a 40 % chance
   of a bomber raid; troops alive 30 s after landing capture the airfield (landing closed, STORE closed, HUD row) for 2
-  rounds or until all are destroyed; craft 150 / troops 150 x tier pay, 2000 + 80 x round when repelled (0.49.0; was 300 / 200, 3000 + 120: round 7 paid 16,160 in the test of 2026-10-23, 3-6k for the rounds round it). Ctrl+F12:
+  rounds or until all are destroyed; craft 150 / troops 150 x tier pay, 3000 + 120 x round when repelled, every kill x1.5 in a special (0.49.3; 0.49.0: 2000 + 80; was 300 / 200, 3000 + 120: round 7 paid 16,160 in the test of 2026-10-23, 3-6k for the rounds round it). Ctrl+F12:
   next round amphibious (test key, out of release zips with Ctrl+F9).
 - Test of 2026-10-23 (0.42.0, Ctrl+F12 at round 1): both lanes spawned (B, A), lane B's craft shot down, lane A's two
   craft reached the beach 2 min 15 s after spawning, both BTRs ashore, the airfield captured 30 s later and landing
