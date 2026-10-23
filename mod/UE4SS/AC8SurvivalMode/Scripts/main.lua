@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.60.0"
+local VERSION = "0.60.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1054,6 +1054,9 @@ local CFG = {
                      -- its gun on top of that (user, 2026-10-24: "increase its gun accuracy and distance 20x"): spread
                      -- / gun_accuracy_x, firing range and its rounds' life (how far they fly) x gun_reach_x
                      gun_accuracy_x = 20, gun_reach_x = 20,
+                     -- and it leads you (user, 2026-10-24: "make MINDRIPPER lead targets with its gun"): it aims where
+                     -- you'll be gun_lead_s ahead (PredictionOffsetTime; its rounds fly 833 m/s, so 1 s suits ~0.8 km)
+                     gun_lead_s = 1.0,
                      -- its guards' search range: they see you only this close, so they stay circling it and jump you
                      -- when you come near (test of 2026-10-22: with the 40 km search they left it for you and the airfield)
                      guard_search_m = 5000,
@@ -1860,11 +1863,13 @@ local function searchSetup()
             m.capture_m, m.angle_deg, m.arm_s, m.lock_s, m.interval_s, m.rest_s), SPIKE_SUFFIX[level])
     end
     -- a gun's fire-control row and its rounds' weapon row, copied under suffix `suf` (o: range, angle, aim, burst,
-    -- rest, damage_x, spread; `what` names it in the log)
+    -- rest, damage_x, spread, optional life_x and lead; `what` names it in the log). lead: PredictionOffsetTime, the
+    -- seconds ahead of the target it aims (the stock AA guns' 0.8; every aircraft gun 0, so they aim where you are)
     local function gunRow(src, o, what, suf)
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.CaptureAngleRange = o.range, o.angle
             r.TriggeringTime, r.TriggerCount, r.RestingTime = o.aim, o.burst, o.rest
+            if o.lead then r.PredictionOffsetTime = o.lead end
             if wpn then
                 local rounds = copy(wpn, r.NpcWeaponId:ToString(), function(x)
                     x.damage = x.damage * o.damage_x
@@ -1874,8 +1879,8 @@ local function searchSetup()
                     o.life_x and string.format(", life x%.0f", o.life_x) or ""), suf)
                 if rounds then r.NpcWeaponId = FName(rounds) end
             end
-        end, string.format("%sgun: within %.0f m / %.0f deg, %.2f s on target, %.0f-round bursts, rest %.2f s", what, o.range, o.angle,
-            o.aim, o.burst, o.rest), suf)
+        end, string.format("%sgun: within %.0f m / %.0f deg, %.2f s on target, %.0f-round bursts, rest %.2f s%s", what, o.range,
+            o.angle, o.aim, o.burst, o.rest, o.lead and string.format(", leads %.2f s", o.lead) or ""), suf)
     end
     local function svGun(src, level)
         local g = withLevel(CFG.guns, spikeCfg(level).guns)
@@ -1912,7 +1917,7 @@ local function searchSetup()
         local reach, acc = AN.gun_reach_x or 1, AN.gun_accuracy_x or 1
         return gunRow(src, { range = g.range_m * 1.5 * reach, angle = math.min(180, g.angle_deg * 1.5), aim = g.aim_s / AGG,
                              burst = math.min(200, g.burst * AGG), rest = g.rest_s / AGG, damage_x = g.damage_x * 2,
-                             spread = g.spread_deg / 2 / acc, life_x = reach }, "MINDRIPPER's ", "x")
+                             spread = g.spread_deg / 2 / acc, life_x = reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
     end
     -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
     local function glitchGun(src)
