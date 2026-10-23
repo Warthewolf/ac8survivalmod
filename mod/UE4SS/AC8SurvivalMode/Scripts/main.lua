@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.43.2"
+local VERSION = "0.44.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -401,14 +401,16 @@ end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
 -- (set while a flight is up) are shown as one count, also returned as the second value.
--- Every SV_* int flag: { name = value }, read at most once every 0.2 s (several callers share one walk), or nil
+-- Every SV_* int flag: { name = value }, read at most once a second (several callers share one walk), or nil
 -- while there is no event container.
 -- The event containers are looked up again only when one has gone (a new level) or every 30 s; FindAllOf walks every
 -- object in the game, which several times a second was a visible hitch (user, 2026-10-22: "a bit of lag").
 local flagCache = { at = -1, t = nil, cs = nil, found = -100 }
 local function svFlags()
     local now = os.clock()
-    if now - flagCache.at < 0.2 then return flagCache.t end
+    -- (was 0.2 s: with the 250 ms tick that walked every flag of the event package each tick, hundreds of map
+    -- entries through two pcalls each; user, 2026-10-23: "the custom HUD ... seems a bit laggy")
+    if now - flagCache.at < 1.0 then return flagCache.t end
     local cs = flagCache.cs
     local stale = not cs or now - flagCache.found > 30 or (#cs == 0 and now - flagCache.found > 2)
     for _, c in ipairs(cs or {}) do if not valid(c) then stale = true end end
@@ -532,14 +534,6 @@ local CFG = {
     ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
-    -- Comona's coastline for the amphibious-assault special (tools/re/SPECIAL_ROUNDS.md 12b: no stock mission lands
-    -- craft on this island, so the beaches aren't in any data). Once (while config\coast_scan.txt doesn't exist), at
-    -- the start of a run, straight-down traces on a step_km grid over the combat zone record the height each one hits,
-    -- per_tick at a time; tools/build_survival.py lays the landing paths from the file. Ctrl+F10 in flight adds a beach
-    -- mark (your position and the ground under you) to config\coast_marks.txt.
-    -- (test of 2026-10-22: the traces only found flat sea planes, 3-4 m everywhere: the terrain's collision isn't
-    -- there far from the player. Off; the beaches come from Ctrl+F10 marks.)
-    coast_scan = { enabled = false, step_km = 0.5, per_tick = 400 },
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
@@ -765,11 +759,18 @@ local CFG = {
             -- row (VLS_Vessel_000: 9 s of flight from 500 km/h, +300 km/h a second to 3000, ~4 km, so 6 km locks fell
             -- short; user, 2026-10-23: "aegis ships still don't engage far enough"): lock-on at range_m, life_s of
             -- flight, acceleration x accel_x, top speed speed_max_kmph, turn rate x turn_x.
-            Aegis = { name = "DDG AEGIS", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
+            Aegis = { name = "DDG AEGIS", turrets = "aegs", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
                                                   missile = { range_m = 20000, life_s = 30, accel_x = 2.0,
                                                               speed_max_kmph = 3600, turn_x = 1.5 } },
                       units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD" } },
         },
+        -- Speakers who talk as allies during a Survival run (user, 2026-10-23: the Savian mercenary leader's line at
+        -- MOONCHILD's takeoff showed as an enemy's). The game reads speakers from the game instance's own
+        -- DT_SpeakerTable, not the level's (a build-time copy for the level changed nothing), so the row is changed
+        -- while a run is on and put back after it: ColorType 0 (ally), ProcessID `process` (Mission 22's allied
+        -- fighters' radio).
+        ally_speakers = { { table = "/Game/Datatables/Radio/DT_SpeakerTable.DT_SpeakerTable", row = "826",
+                            id = "ms25_Savia_Mercenary_Leader", process = "Ally_Fighter_Mob" } },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
                  air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
                  sunk = "%s SUNK", lost_sub = "THE STORE CAN SEND ANOTHER",
@@ -1268,11 +1269,23 @@ local function spikeLevel(round)
 end
 local function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
 -- The tier index (CFG.tiers.list) a flight spawning in round `round` flies: the round's, one higher at promote_chance.
-local function pickTier(round)
-    local tc, i = CFG.tiers, 1
-    for k, t in ipairs(tc.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
+-- The skill tiers (CFG.tiers): TIER.index(round) the round's own tier, TIER.pick(round) that or (promote_chance) the
+-- one above it, TIER.pay(base, i) a kill's zollars at tier i (CFG.credits.tier_pay, rounded to 10) and its multiplier.
+local TIER = {}
+function TIER.index(round)
+    local i = 1
+    for k, t in ipairs(CFG.tiers.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
+    return i
+end
+function TIER.pick(round)
+    local tc, i = CFG.tiers, TIER.index(round)
     if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
     return i
+end
+function TIER.pay(base, i)
+    local tp = CFG.credits.tier_pay or {}
+    local x = (i and (tp[i] or tp[#tp])) or 1
+    return math.floor(base * x / 10 + 0.5) * 10, x
 end
 -- An ace round (CFG.aces first_round / every): the round's tier's squadrons only.
 -- An ace round (CFG.aces first_round / every; never a special round): the tier index whose squadrons fly it (the
@@ -1281,7 +1294,7 @@ local function aceRound(round, special)
     local a = CFG.aces
     if special or not (a.enabled and CFG.tiers.enabled and round >= a.first_round
         and (round - a.first_round) % math.max(1, math.floor(a.every)) == 0) then return nil end
-    local ti = pickTier(round)
+    local ti = TIER.pick(round)
     for k = ti, #CFG.tiers.list do if ACE.roster[CFG.tiers.list[k].name:lower()] then return k end end
     return nil
 end
@@ -1917,7 +1930,7 @@ local tierSaid = {}
 function enemyTier(p, round, flightTier)
     local tc = CFG.tiers
     if p.tier ~= nil or not tc.enabled or not round then return end
-    local i = flightTier or pickTier(round)                 -- a fighter flight's was picked at its spawn
+    local i = flightTier or TIER.pick(round)                 -- a fighter flight's was picked at its spawn
     local t = tc.list[i]
     p.tier = t
     local add = tc.rank_add[presetName()] or 0
@@ -2549,7 +2562,7 @@ end
 
 local function spawnFlight(unit)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ti = CFG.tiers.enabled and (D.roundTier or pickTier(D.round)) or nil
+    local ti = CFG.tiers.enabled and (D.roundTier or TIER.pick(D.round)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
@@ -2999,6 +3012,10 @@ local function startRound()
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+F11: the Anomaly next, for testing)
     D.forceSpecial = nil
+    if special == "amphibious" and not AMPH.ready() then          -- no lane can come: a normal round
+        log(string.format("round %d: no landing craft can come; a normal round", D.round))
+        special = nil
+    end
     D.special = special and { kind = special, state = "pending" } or nil
     if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
         budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), CFG.max_aircraft)
@@ -3125,165 +3142,6 @@ function ordersTick(now)
             end
         end
     end
-end
-end
-
--- The coast scan (CFG.coast_scan): heights in metres on the grid, "-" where a trace hit nothing.
-local COASTF = {}                    -- tick, rings, mark (one local: the main chunk's 200-local limit)
-do
-local COAST = { i = 0 }
-local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
--- the height (cm) a straight-down trace at x, y hits, or nil; the first call logs what the trace gave back
-local function groundAt(ks, x, y)
-    local hit = {}
-    local ok, r = pcall(function()
-        return ks:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
-            hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
-    end)
-    local z, what
-    pcall(function()
-        local h = hit.OutHit or hit
-        local l = h.ImpactPoint or h.Location
-        if l and l.Z then z = l.Z end
-    end)
-    -- what it hit: the component's (or its physical material's) name, so sea and flat land can be told apart (they're
-    -- 3-4 m and 4-5 m round the airport's beaches: test of 2026-10-22)
-    for _, field in ipairs({ "Component", "PhysMaterial" }) do
-        if not what then
-            pcall(function()
-                local o = (hit.OutHit or hit)[field]
-                if o and o.Get then o = o:Get() end
-                local n = o and o:GetFullName()
-                if n and n ~= "" then what = n:match("([^%.:/]+)$") or n end
-            end)
-        end
-    end
-    if not COAST.said then
-        COAST.said = true
-        local keys = {}
-        for k in pairs(hit) do keys[#keys + 1] = tostring(k) end
-        log(string.format("coast: first trace: ok %s, returned %s, out fields {%s}, height %s, hit %s", tostring(ok), tostring(r),
-            table.concat(keys, ", "), tostring(z), tostring(what)))
-    end
-    if ok and r then return z, what end
-    return nil
-end
--- "S" sea, "L" land, "?" unknown, from what a trace hit
-local function surface(what)
-    if not what then return "?" end
-    local w = what:lower()
-    if w:find("sea") or w:find("water") or w:find("ocean") then return "S" end
-    if w:find("landscape") or w:find("terrain") or w:find("ter_") then return "L" end
-    return "?"
-end
-function COASTF.tick()
-    local c = CFG.coast_scan
-    if not c.enabled or COAST.done or not valid(survivalPC) then return end
-    if COAST.i == 0 then
-        local f = io.open(configDir() .. "coast_scan.txt", "r")
-        if f then f:close(); COAST.done = true; return end
-        COAST.n = math.floor(2 * ZONE.HALF / (c.step_km * 100000))
-        COAST.rows, COAST.row, COAST.land, COAST.miss = {}, {}, 0, 0
-        log(string.format("coast: scanning %d x %d points (%.1f km apart) for the amphibious assault", COAST.n, COAST.n, c.step_km))
-    end
-    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-    if not valid(ks) then return end
-    local n, step = COAST.n, c.step_km * 100000
-    for _ = 1, c.per_tick do
-        local i = COAST.i
-        if i >= n * n then
-            local f = io.open(configDir() .. "coast_scan.txt", "w")
-            if f then
-                f:write(string.format("# Survival coast scan %s: origin x %.0f y %.0f cm, step %.0f cm, %d x %d; rows = y, columns = x; height m\n",
-                    VERSION, ZONE.X - ZONE.HALF, ZONE.Y - ZONE.HALF, step, n, n))
-                f:write(table.concat(COAST.rows, "\n") .. "\n")
-                f:close()
-            end
-            COAST.done = true
-            log(string.format("coast: scan written to config\\coast_scan.txt (%d points above 3 m, %d with no hit)", COAST.land, COAST.miss))
-            return
-        end
-        local gx, gy = i % n, i // n
-        local z = groundAt(ks, ZONE.X - ZONE.HALF + (gx + 0.5) * step, ZONE.Y - ZONE.HALF + (gy + 0.5) * step)
-        COAST.row[#COAST.row + 1] = z and string.format("%.0f", z / 100) or "-"
-        if not z then COAST.miss = COAST.miss + 1 elseif z > 300 then COAST.land = COAST.land + 1 end
-        if gx == n - 1 then COAST.rows[#COAST.rows + 1] = table.concat(COAST.row, " "); COAST.row = {} end
-        COAST.i = i + 1
-    end
-end
--- Around each beach mark, once, when the player is within 2 km of it (the terrain's collision is only there near the
--- player: the long-range scan only found sea planes): the ground in 8 directions at 0.5, 1, 2 and 3 km, written to
--- config\coast_rings.txt, so tools/build_survival.py can tell which way the open water is.
-function COASTF.rings()
-    if COAST.ringsDone or not valid(survivalPC) then return end
-    COAST.marks = COAST.marks or {}
-    if not COAST.marksRead then
-        COAST.marksRead = true
-        local f = io.open(configDir() .. "coast_marks.txt", "r")
-        if f then
-            for line in f:lines() do
-                local x, y = line:match("^(%-?[%d.]+) (%-?[%d.]+)")
-                if x then COAST.marks[#COAST.marks + 1] = { X = tonumber(x), Y = tonumber(y) } end
-            end
-            f:close()
-        end
-        local r = io.open(configDir() .. "coast_rings2.txt", "r")      -- (2: with what each trace hit)
-        COAST.ringed = {}
-        if r then
-            for line in r:lines() do local k = line:match("^mark (%d+)"); if k then COAST.ringed[tonumber(k)] = true end end
-            r:close()
-        end
-    end
-    local you = playerLocation()
-    if not you then return end
-    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-    if not valid(ks) then return end
-    local left = 0
-    for k, m in ipairs(COAST.marks) do
-        if not COAST.ringed[k] then
-            left = left + 1
-            local dx, dy = you.X - m.X, you.Y - m.Y
-            if math.sqrt(dx * dx + dy * dy) < 200000 then
-                local parts = {}
-                for d = 0, 7 do
-                    local a = math.rad(d * 45)
-                    local hs = {}
-                    for _, km in ipairs({ 0.5, 1, 2, 3 }) do
-                        local z, what = groundAt(ks, m.X + math.cos(a) * km * 100000, m.Y + math.sin(a) * km * 100000)
-                        hs[#hs + 1] = (z and string.format("%.0f", z / 100) or "-") .. surface(what)
-                        COAST.whats = COAST.whats or {}
-                        if what and not COAST.whats[what] then
-                            COAST.whats[what] = true
-                            log("coast: a trace hit " .. what)
-                        end
-                    end
-                    parts[#parts + 1] = (d * 45) .. ":" .. table.concat(hs, ",")
-                end
-                local f = io.open(configDir() .. "coast_rings2.txt", "a")
-                if f then f:write(string.format("mark %d %.0f %.0f %s\n", k, m.X, m.Y, table.concat(parts, " "))); f:close() end
-                COAST.ringed[k] = true
-                log(string.format("coast: ground round beach mark %d sampled (deg:0.5,1,2,3 km heights m) %s", k, table.concat(parts, " ")))
-            end
-        end
-    end
-    if #COAST.marks > 0 and left == 0 then COAST.ringsDone = true end
-end
-
--- Ctrl+F10: a beach mark where the player is
-function COASTF.mark()
-    local you = playerLocation()
-    if not you then return end
-    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-    local z, what = nil, nil
-    if valid(ks) then z, what = groundAt(ks, you.X, you.Y) end
-    local f = io.open(configDir() .. "coast_marks.txt", "a")
-    if f then
-        f:write(string.format("%.0f %.0f %.0f ground %s\n", you.X, you.Y, you.Z, z and string.format("%.0f", z) or "?"))
-        f:close()
-    end
-    hudCallout("BEACH MARKED", string.format("%.1f, %.1f KM", you.X / 100000, you.Y / 100000))
-    log(string.format("coast: mark at %.0f, %.0f, %.0f cm (ground %s, %s)", you.X, you.Y, you.Z, tostring(z), tostring(what)))
-    COAST.marksRead, COAST.ringsDone = false, false            -- (its ring is sampled while you're still near it)
 end
 end
 
@@ -3453,16 +3311,30 @@ end
 
 ---------------------------------------------------------------------------------------------------- amphibious assault
 -- CFG.specials.amphibious; tools/survival_events.py LCAC_* builds the units, paths and records. A lane L is unit
--- SV_Unit_Lcac<L> (two craft), its craft L and R; a craft that reaches the beach sets SV_LcacLand<L><craft> and its
--- troops are SV_Unit_LcacTroops<L><craft>. RUN.amph.troops: every troop unit put ashore this run that may still be up;
--- RUN.captured: { untilRound, closePending, closed } while the airfield is taken.
+-- SV_Unit_Lcac<L> (four craft, W X Y Z); a craft that reaches the beach sets SV_LcacLand<L><craft> and its troops are
+-- SV_Unit_LcacTroops<L><craft>, whose arrival at the runway sets SV_LcacRunway<L><craft>. RUN.amph.troops: the troop
+-- units put ashore this run that are still up; RUN.captured: { untilRound, closePending, closed } while the airfield is
+-- taken.
 do
 local function amph() RUN.amph = RUN.amph or { count = 0, troops = {}, capture = 0 }; return RUN.amph end
 
-local function tierPay(base)          -- a kill's pay at the round's skill tier (creditKill's x)
-    local tp, ti = CFG.credits.tier_pay or {}, nil
-    for i, t in ipairs(CFG.tiers.list) do if D and D.round and D.round >= t.from_round then ti = i end end
-    return math.floor(base * ((ti and (tp[ti] or tp[#tp])) or 1) / 10 + 0.5) * 10
+local function tierPay(base) return (TIER.pay(base, D and D.round and TIER.index(D.round))) end
+
+-- A unit's vehicles alive: SV_UnitAlive, 0 for a unit that's off the list, nil for an error (not counted as kills).
+local function aliveOf(unit)
+    local n = SV_UnitAlive(unit)
+    if n == -7 then return 0 end
+    return n >= 0 and n or nil
+end
+
+-- Whether a landing can come now (native spawner, a lane not still afloat): startRound asks before it adds the
+-- round's extras, so a landing that can't come is a plain normal round.
+function AMPH.ready()
+    if not nativeReady() then return false end
+    for _, l in ipairs(CFG.specials.amphibious.lanes) do
+        if (aliveOf("SV_Unit_Lcac" .. l) or 1) <= 0 then return true end
+    end
+    return false
 end
 
 -- Landing craft still on their way in, and troop vehicles ashore and alive.
@@ -3473,7 +3345,9 @@ function AMPH.counts()
         for _, l in pairs(s.lanes) do
             local landed = 0
             for _ in pairs(l.landed) do landed = landed + 1 end
-            craft = craft + math.max(0, l.alive - landed)
+            -- the craft not landed yet, at most those alive (code review of 2026-10-23: alive - landed undercounted
+            -- once a landed craft was shot on its way out)
+            craft = craft + math.max(0, math.min(l.alive, (l.n or l.alive) - landed))
         end
     end
     for _, t in ipairs(amph().troops) do ashore = ashore + math.max(0, t.alive) end
@@ -3509,7 +3383,7 @@ function AMPH.spawn(now)
             local r = SV_Spawn(unit)
             log(string.format("special: landing craft lane %s (%s): %s", l, unit, r > 0 and (r .. " craft") or
                 ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-            if r > 0 then s.lanes[l] = { alive = r, landed = {}, removed = false, at = now }; n = n + 1 end
+            if r > 0 then s.lanes[l] = { n = r, alive = r, landed = {}, removed = false, at = now }; n = n + 1 end
         end
     end
     if n == 0 then log("special: no landing craft could come; a normal round"); return false end
@@ -3527,7 +3401,7 @@ function AMPH.tick(now, s)
     local f = svFlags() or {}
     for l, lane in pairs(s.lanes) do
         local unit = "SV_Unit_Lcac" .. l
-        local alive = lane.removed and 0 or math.max(0, SV_UnitAlive(unit))
+        local alive = lane.removed and 0 or (aliveOf(unit) or lane.alive)
         if alive < lane.alive and not lane.removed then
             local pay = tierPay(c.craft_pay) * (lane.alive - alive)
             addCredits(pay, string.format("landing craft down (lane %s)", l))
@@ -3608,7 +3482,7 @@ function AMPH.runTick(now)
     local A, ashore, f = amph(), 0, nil
     for _, tr in ipairs(A.troops) do
         if tr.alive > 0 then
-            local n = math.max(0, SV_UnitAlive(tr.unit))
+            local n = aliveOf(tr.unit) or tr.alive
             if n < tr.alive then
                 addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle down (" .. tr.unit .. ")")
                 log(string.format("special: troops %s: %d left", tr.unit, n))
@@ -3618,7 +3492,7 @@ function AMPH.runTick(now)
         end
         -- at the runway (the end of its drive path): its share of the capture, once (troops spawned in the first 2 s
         -- may still read last time's flag, reset by their appearance)
-        if not tr.reached and not tr.removed and now - tr.at >= 2 then
+        if tr.alive > 0 and not tr.reached and now - tr.at >= 2 then
             f = f or svFlags() or {}
             if (f["SV_LcacRunway" .. tr.lane .. tr.craft] or 0) >= 1 then
                 tr.reached = true
@@ -3631,6 +3505,9 @@ function AMPH.runTick(now)
             end
         end
     end
+    local up = {}                                         -- the dead ones out: a later assault's troops on the same
+    for _, tr in ipairs(A.troops) do if tr.alive > 0 then up[#up + 1] = tr end end   -- lane / craft can't count them again
+    A.troops = up
     if (A.capture or 0) >= 100 and not RUN.captured then
         RUN.captured, RUN.dirty = { untilRound = D.round + c.captured_rounds, closePending = true }, true
         A.capture = 0                                     -- (the meter starts over once it's back in our hands)
@@ -4461,8 +4338,14 @@ do
 local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Aegis",
                "SV_Turret_aegs_mk15_Ally", "SV_Turret_aegs_mk41_Ally", "SV_Turret_aegs_mk45_Ally",
                "SV_Turret_aegs_artillery_Ally" }
-local ROW_SHIP = { SV_Ally_Aegis = "Aegis", SV_Turret_aegs_mk15_Ally = "Aegis", SV_Turret_aegs_mk41_Ally = "Aegis",
-                   SV_Turret_aegs_mk45_Ally = "Aegis", SV_Turret_aegs_artillery_Ally = "Aegis" }   -- (its ship type's fcs)
+local ROW_SHIP = {}            -- a ship type's hull and turret rows (its fcs and module): SV_Ally_<key>, SV_Turret_<turrets>_*
+for _, row in ipairs(ROWS) do
+    for key, sh in pairs(CFG.allies.ships) do
+        if row == "SV_Ally_" .. key or (sh.turrets and row:find("SV_Turret_" .. sh.turrets .. "_", 1, true) == 1) then
+            ROW_SHIP[row] = key
+        end
+    end
+end
 for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
 for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
 
@@ -4516,7 +4399,7 @@ function ALLY.setup()
                     local w = r.NpcWeaponId:ToString()
                     local wn = w .. "_SVA" .. (sf and ("_" .. key) or "")
                     local mc, missile = sf and sf.missile, false
-                    if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, wn, function(x)
+                    if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, wn, function(x)  -- (edit: a new row only)
                         pcall(function() x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x end)
                         local homing = false
                         pcall(function() homing = x.bIsHoming == true end)
@@ -4534,6 +4417,11 @@ function ALLY.setup()
                         end
                     end) then
                         r.NpcWeaponId = FName(wn)
+                        -- a homing missile by its row, made now or before (code review of 2026-10-23: cloneRow skips
+                        -- the edit for a row that's already there, and the range stayed the stock one)
+                        if mc and not missile then
+                            pcall(function() local _, wr = dtCall(wpn, "FindRow", wn); missile = wr ~= nil and wr.bIsHoming == true end)
+                        end
                         if missile then pcall(function() r.CaptureDistance = mc.range_m end) end
                     end
                 end)
@@ -4585,6 +4473,35 @@ function ALLY.setup()
     if #shipSaid > 0 then log("allies: the ships' own fire control: " .. table.concat(shipSaid, ", ")) end
     log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
+end
+
+-- CFG.allies.ally_speakers: on while a run is on (`want`), back to the game's values after it.
+function ALLY.speakerTick(want)
+    local st = ALLY.spk or { on = false, orig = {} }
+    ALLY.spk = st
+    if st.on == want then return end
+    st.on = want
+    for _, sp in ipairs(CFG.allies.ally_speakers or {}) do
+        local ok, err = pcall(function()
+            local dt = loadObject(sp.table)
+            if not dt then error("no " .. sp.table) end
+            local _, r = dtCall(dt, "FindRow", sp.row)
+            if r == nil then error("no row " .. sp.row) end
+            local id = r.SpeakerID:ToString()
+            if id ~= sp.id then error("row " .. sp.row .. " is " .. id) end
+            if want then
+                st.orig[sp.row] = { color = r.ColorType, process = r.ProcessID:ToString() }
+                r.ColorType, r.ProcessID = 0, FName(sp.process)
+                log(string.format("allies: speaker %s talks as an ally (was colour %s, %s)", sp.id,
+                    tostring(st.orig[sp.row].color), st.orig[sp.row].process))
+            elseif st.orig[sp.row] then
+                local o = st.orig[sp.row]
+                r.ColorType, r.ProcessID = o.color, FName(o.process)
+                log(string.format("allies: speaker %s back to colour %s, %s", sp.id, tostring(o.color), o.process))
+            end
+        end)
+        if not ok then log("allies: speaker " .. tostring(sp.id) .. ": " .. tostring(err)) end
+    end
 end
 
 function ALLY.state()
@@ -4642,63 +4559,8 @@ function ALLY.strike(bomber, ship)
     end
 end
 
--- The ships' launches (report of 2026-10-23: "aegis's didn't seem to fire all that much better"). Missiles are pooled
--- actors, reused (0.42.1 watched for new ones and saw none in a whole round with four Aegis at sea), so every 5 s this
--- looks at the LiveMissile actors whose owner is an Aegis part and counts those that moved since the last look (in
--- flight), with the nearest enemy aircraft to each; once a run, the missiles' owners (to check the "aegs" match).
-function ALLY.missileTick(now)
-    if now < (ALLY.missileAt or 0) then return end
-    ALLY.missileAt = now + 5
-    local list = FindAllOf("LiveMissile") or {}
-    local last, seen = ALLY.missileLast or {}, {}
-    local owners, flying, near, parts = {}, 0, {}, {}
-    for _, o in ipairs(list) do
-        pcall(function()
-            if not valid(o) then return end
-            local owner = o:GetOwner()
-            local on = valid(owner) and (nameOf(owner):match("([%w_]+)_C_%d+") or nameOf(owner):match("[%w_]+$") or "?") or "none"
-            owners[on] = (owners[on] or 0) + 1
-            if not on:lower():find("aegs", 1, true) then return end
-            local v = o:K2_GetActorLocation()
-            local at = { X = v.X, Y = v.Y, Z = v.Z }
-            local key = addrOf(o) or nameOf(o)
-            seen[key] = at
-            local was = last[key]
-            if was and km(was, at) > 0.1 then          -- moved more than 100 m in 5 s: in flight
-                flying = flying + 1
-                local part = on:match("aegs_(%w+)") or "?"
-                parts[part] = (parts[part] or 0) + 1
-                local best = nil
-                for _, p in ipairs(planes) do
-                    if not p.down and not ALLY.unit[p.unit or ""] and valid(p.obj) then
-                        local w = p.obj:K2_GetActorLocation()
-                        local d = km({ X = w.X, Y = w.Y, Z = w.Z }, at)
-                        if not best or d < best then best = d end
-                    end
-                end
-                near[#near + 1] = best and string.format("%.1f", best) or "?"
-            end
-        end)
-    end
-    ALLY.missileLast = seen
-    if not ALLY.ownersSaid and #list > 0 and ALLY.shipsAtSea and #(ALLY.shipsAtSea() or {}) > 0 then
-        ALLY.ownersSaid = true
-        local o = {}
-        for k, n in pairs(owners) do o[#o + 1] = k .. " x" .. n end
-        table.sort(o)
-        log(string.format("allies: %d missile actors, owners: %s", #list, table.concat(o, ", ")))
-    end
-    if flying > 0 then
-        local by = {}
-        for k, n in pairs(parts) do by[#by + 1] = k .. " x" .. n end
-        log(string.format("allies: Aegis missiles in flight: %d (%s), nearest enemy to each (km) %s", flying,
-            table.concat(by, ", "), table.concat(near, " ")))
-    end
-end
-
 function ALLY.tick(now)
     if not (CFG.allies.enabled and D and nativeReady()) then return end
-    pcall(ALLY.missileTick, now)
     local R, c, t = ALLY.state(), CFG.allies, CFG.allies.text
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
@@ -4825,17 +4687,19 @@ end
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
     if not playerOnAirfield() then SH.panels, SH.slotCache = nil, nil; return end   -- the landing menu only exists down there
-    local live = SH.panels and #SH.panels > 0
-    for _, panel in ipairs(SH.panels or {}) do if not valid(panel) then live = false end end
-    if not live and tick % 8 == 1 then
+    -- every 2 s, all of them: the STORE pages show their own panel, made when the page opens, while the landing
+    -- page's stays valid (report of 2026-10-23: the STORE still showed the stock counts)
+    if tick % 8 == 1 or not SH.panels then
         SH.panels = {}
         for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
             if liveWidget(w) then SH.panels[#SH.panels + 1] = w end
         end
     end
     for _, panel in ipairs(SH.panels or {}) do
-        if liveWidget(panel) and not SH.panelSaid then
-            SH.panelSaid = true                      -- once: what the panel holds (test of 2026-10-22: no rewrite seen)
+        local pkey = addrOf(panel) or nameOf(panel)
+        SH.panelSaid = SH.panelSaid or {}
+        if liveWidget(panel) and not SH.panelSaid[pkey] then
+            SH.panelSaid[pkey] = true                -- once a panel: what it holds (test of 2026-10-22: no rewrite seen)
             local parts = {}
             for _, slot in ipairs(AMMO_SLOTS) do
                 local name, count = slotTexts(panel, slot)
@@ -4858,7 +4722,8 @@ local function hangarAmmoTick(tick)
                     local want = tostring(math.min(cap, A.max[kind] or cap))              -- what you take off with
                     if now ~= want then
                         t:SetText(toText(want))
-                        if not SH.ammoSaid then SH.ammoSaid = true; log("shop: landing menu ammo shows the caps (" .. now .. " -> " .. want .. ")") end
+                        SH.ammoSaid = SH.ammoSaid or {}
+                        if not SH.ammoSaid[pkey] then SH.ammoSaid[pkey] = true; log("shop: ammo panel " .. (nameOf(panel):match("([%w_]+)$") or "?") .. " shows the caps (" .. now .. " -> " .. want .. ")") end
                     end
                 end)
             end
@@ -4881,16 +4746,24 @@ local function creditKill(p)
     -- its skill tier's pay (the tier it was given, else the round's own)
     local list, ti = CFG.tiers.list, nil
     for i, t in ipairs(list) do if t == p.tier then ti = i end end
-    if not ti then
-        for i, t in ipairs(list) do if D and D.round and D.round >= t.from_round then ti = i end end
-    end
-    local tp = CFG.credits.tier_pay or {}
-    local x = (ti and (tp[ti] or tp[#tp])) or 1
-    local pay = math.floor((CFG.credits[kind] or 0) * x / 10 + 0.5) * 10
+    ti = ti or (D and D.round and TIER.index(D.round))
+    local pay, x = TIER.pay(CFG.credits[kind] or 0, ti)
     addCredits(pay, string.format("%s down (%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or ""))
 end
 
 local function probeTick(tick)
+    local function timed(name, fn, ...)            -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
+        local t0 = os.clock()
+        local ok, err = pcall(fn, ...)
+        local pf = D and D.perf
+        if pf then
+            local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
+            pf.parts[name] = e
+            local dt = (os.clock() - t0) * 1000
+            e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
+        end
+        return ok, err
+    end
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
@@ -5003,33 +4876,27 @@ local function probeTick(tick)
     if D then
         local now, paused = roundClock(tick)
         if now then
-            local okR, errR = pcall(roundsTick, now)
+            local okR, errR = timed("rounds", roundsTick, now)
             if not okR then log("rounds: error " .. tostring(errR)) end
-            local okH, errH = pcall(hudTick, now, paused, survivalPC)
+            local okH, errH = timed("hud", hudTick, now, paused, survivalPC)
             if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
-            local okM, errM = pcall(musicTick, tick, now, paused)
+            local okM, errM = timed("music", musicTick, tick, now, paused)
             if not okM then log("music: error " .. tostring(errM)) end
-            local okF, errF = pcall(airfieldTick, tick)
+            local okF, errF = timed("airfield", airfieldTick, tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
             local okB, errB = pcall(bombTick, tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
-            local okS, errS = pcall(shopTick, tick)
+            local okS, errS = timed("shop", shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
-            local okAl, errAl = pcall(ALLY.tick, now)
+            local okAl, errAl = timed("allies", ALLY.tick, now)
             if not okAl then log("allies: error " .. tostring(errAl)) end
-            local okI, errI = pcall(SHOP.decorTick, tick)
+            local okI, errI = timed("icons", SHOP.decorTick, tick)
             if not okI and not SH.decorErr then SH.decorErr = true; log("shop: row icons error " .. tostring(errI)) end
-            local okA2, errA2 = pcall(hangarAmmoTick, tick)
+            local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
-        local okC, errC = pcall(COASTF.tick)
-        if not okC then log("coast: error " .. tostring(errC)); CFG.coast_scan.enabled = false end
-        if tick % 8 == 6 then
-            local okR, errR = pcall(COASTF.rings)
-            if not okR then log("coast: rings error " .. tostring(errR)) end
-        end
     end
     if levelTick then
         if tick - levelTick == 8 then logDifficulty("at mission start") end
@@ -5041,22 +4908,21 @@ local function probeTick(tick)
         if p.age >= 2 then pcall(logPlane, p.obj, p.unit) else keep[#keep + 1] = p end
     end
     pending = keep
-    if tick % 8 ~= 0 or not levelTick then return end                -- the rest every 2 s, in Survival only
-    local fl, flagged = flagLine()
-    if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
+    if not levelTick then return end                                -- the rest in Survival only
     -- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away,
-    -- and every 10 s the nearest enemy's distance: the check that they come for the player.
-    local you = playerLocation()
-    local alive, nearest = 0, nil
-    for _, p in ipairs(planes) do
-        if not p.down then
+    -- and every 10 s the nearest enemy's distance: the check that they come for the player. Each aircraft every 2 s,
+    -- an eighth of them each tick (all of them on one tick every 2 s was a hitch with 60 aircraft up: user,
+    -- 2026-10-23, "the custom HUD ... seems a bit laggy").
+    local slot, you = tick % 8, nil
+    for i, p in ipairs(planes) do
+        if not p.down and i % 8 == slot then
+            if you == nil then you = playerLocation() or false end
             local up = valid(p.obj)
             if up then
                 local ok, h = pcall(function() return p.obj.HealthInternal end)
                 if ok and type(h) == "number" and h <= 0 then up = false end
             end
             if up then
-                alive = alive + 1
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
                 pcall(planeUnit, p); pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round)
@@ -5064,18 +4930,25 @@ local function probeTick(tick)
                 local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
-                pcall(enemySpike, p, D and D.round, tierFor); pcall(probeTrack, p); pcall(aiWatch, p, you)
-                if p.at and you then
-                    local d = km(p.at, you)
-                    if not nearest or d < nearest then nearest = d end
-                end
+                pcall(enemySpike, p, D and D.round, tierFor); pcall(probeTrack, p); pcall(aiWatch, p, you or nil)
+                p.dist = (p.at and you) and km(p.at, you) or nil
             else
                 p.down = true
                 log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
                     p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
-                pcall(probeKill, p, you)
+                pcall(probeKill, p, you or nil)
                 pcall(creditKill, p)
             end
+        end
+    end
+    if slot ~= 0 then return end                                    -- every 2 s: the summaries
+    local fl, flagged = flagLine()
+    if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
+    local alive, nearest = 0, nil
+    for _, p in ipairs(planes) do
+        if not p.down then
+            alive = alive + 1
+            if p.dist and (not nearest or p.dist < nearest) then nearest = p.dist end
         end
     end
     if alive ~= lastAlive and #planes > 0 then
@@ -5109,8 +4982,28 @@ LoopAsync(250, function()
             local okI, errI = pcall(infoMapsTick)
             if not okI then log("info maps: error " .. tostring(errI)) end
         end
+        local t0 = os.clock()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
+        if D then                                   -- (report of 2026-10-23: "the custom HUD ... seems a bit laggy")
+            local pf = D.perf or { n = 0, sum = 0, max = 0, parts = {}, at = tick }
+            D.perf = pf
+            local dt = (os.clock() - t0) * 1000
+            pf.n, pf.sum, pf.max = pf.n + 1, pf.sum + dt, math.max(pf.max, dt)
+            if tick - pf.at >= 240 then
+                local parts = {}
+                for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v } end
+                table.sort(parts, function(a, b) return a[2].max > b[2].max end)
+                local top = {}
+                for i = 1, math.min(4, #parts) do
+                    top[#top + 1] = string.format("%s %.1f/%.1f", parts[i][1], parts[i][2].sum / math.max(1, parts[i][2].n), parts[i][2].max)
+                end
+                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts avg/worst ms: %s", pf.sum / pf.n,
+                    pf.max, pf.n, table.concat(top, ", ")))
+                D.perf = nil
+            end
+        end
+        if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
         queued = false
     end)
     return false
@@ -5199,14 +5092,6 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
                         soon and "starting in 3 s" or "after this round"))
                 end)
                 if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
-            end)
-        end)
-    end
-    if Key.F10 then                -- Ctrl+F10: a beach mark (the amphibious assault's landing points)
-        pcall(RegisterKeyBind, Key.F10, mods, function()
-            ExecuteInGameThread(function()
-                local ok, err = pcall(COASTF.mark)
-                if not ok then log("coast: mark error " .. tostring(err)) end
             end)
         end)
     end

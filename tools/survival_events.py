@@ -100,7 +100,7 @@ SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_
                        (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
 SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
 # Special round "Amphibious Assault" (SURVIVAL_SPEC.md 7; tools/re/SPECIAL_ROUNDS.md 12b): Mission 13's enemy LCAC
-# pattern on Comona. Each lane: a unit of two landing craft (a copy of Mission 13's E_Unit02_02_Ship0, NPC row
+# pattern on Comona. Each lane: a unit of four landing craft (LCAC_CRAFT; a copy of Mission 13's E_Unit02_02_Ship0, NPC row
 # lcac_common) that Scripts/main.lua spawns at the lane's start point at sea; its appearance sends each craft along
 # its own path (side by side, LCAC_GAP_CM apart) onto the beach; at the end of it the craft leaves its path, the
 # event package sets SV_LcacLand<lane><craft> and main.lua spawns that craft's troops (a copy of Mission 13's

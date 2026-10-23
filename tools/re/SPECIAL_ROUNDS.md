@@ -191,8 +191,15 @@ the pop-in.
 - The WD trailer after the properties is an editor-style folder tree (`tools/scripts/wdtrail.py` parses/writes it:
   "Unit/Wave1..", "Path/..", "Marker", "Volume"). Adding descs without updating it worked so far for spawns; keep in
   mind if a new desc is "not found".
-- Beach coordinates: unknown from data (no Comona landing paths in any mission). Get them in game: fly the shoreline
-  and log the player position (Lua), or sample Map17 terrain heights. Open.
+- Beach coordinates: unknown from data (no Comona landing paths in any mission). Got from the user's Ctrl+F10 marks
+  (traces far from the player hit the sea planes: hard rule 27).
+### Built (Lua 0.42-0.43, 2026-10-23; tested end to end the same day)
+`survival_events.LCAC_*` + `build_survival.lcac_units` + main.lua "amphibious assault": 4 lanes from the user's sea marks
+to 4 beaches, 4 craft a lane (M13's unit, copies of its objects), paths in / back out, a BTR-90 unit per craft on the
+beach with a drive path to its own spot on the runway; M13's record order; Lua spawns craft and troops, reads
+SV_LcacLand / SV_LcacRunway flags, pays per kill, fills the capture meter (25 % per BTR at the runway), captures and
+frees the airfield, and removes away / leftover units with RE_SV_LcacRemove* (LiveDestroyUnitExecution). No ship
+launches them (they appear at sea), no splash VFX yet.
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 13. Anomaly ace boss

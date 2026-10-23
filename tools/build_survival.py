@@ -123,7 +123,6 @@ def build_pl():
               'EP_Mission022_global', 'EP_Mission022_phase01', 'EP_Mission022_phase02'):
         retarget_import(z, M22 + n, MI + n.replace('Mission022', 'SurvivalMode'))
     retarget_import(z, RADIO_STOCK, RADIO)                 # Survival's copy of Mission 22's radio lines (build_radio)
-    retarget_import(z, SPEAKER_STOCK, SPEAKERS)            # and of the speaker table
     # World settings: Mission 4's clock and cloud values; drop Mission 22's shuttle-launch cloud light.
     i = z.export_index('ChronicleWorldSettings')
     v, rest = props_of(z, i, 'LiveWorldSettings')
@@ -369,8 +368,8 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
             sc = uprop.U.schema('LiveAIObjectDesc')
             ix = {n: k for k, (n, t) in sc.items() if n in ('TargetMarkType', 'bShowHUDBox')}
             ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
-                (ix['TargetMarkType'], 'TargetMarkType', False, ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b''))),
-                (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b''))], key=lambda q: q[0])
+                (ix['TargetMarkType'], 'TargetMarkType', False, ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01'))),
+                (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01'))], key=lambda q: q[0])
         names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
     top_number[obj_name] = len(points)
     uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
@@ -420,7 +419,7 @@ def make_path(z, used_ids, template, name, pts):
 
 
 def lcac_units(units, used_ids, z, top_number, v):
-    """The amphibious assault (survival_events.LCAC_*): per lane a unit of two landing craft at its start, each
+    """The amphibious assault (survival_events.LCAC_*): per lane a unit of four landing craft (LCAC_CRAFT) at its start, each
     craft's path in and back out, and per craft a troop unit (one BTR-90) on the beach where it lands."""
     m13 = stock_wd(M13 + 'WD_Mission013_global')
     src_craft = desc_named(m13, 'UnitDescList', survival_events.LCAC_SOURCE_UNIT)
@@ -706,13 +705,9 @@ RADIO_DROP_IN = ('01_Countdown_intermission_1st', '01_Countdown_mainEngine', '01
 # and MOONCHILD's takeoff is the mercenary's line alone (user, 2026-10-23): Singleton's "We're joining the fight in
 # aircraft we took back from Sotoa." and Tasha's "Okay!" go
 RADIO_DROP_LINES = {('01_Wave1_Ally_Take_Off', 'v2216_0002'), ('01_Wave1_Ally_Take_Off', 'v0003_1682')}
-# Speakers: the level's speaker table (RadioSettings.RadioSpeakerTables, a hard import) is Survival's copy, where the
-# Savian mercenary leader speaks as an ally (user, 2026-10-23: "change the savian merc leaders line from enemy to
-# ally"): no enemy ColorType (red), and Mission 22's allied fighters' radio processing (Singleton's) in place of
-# Enemy_Fighter_Mob. Only Survival's level reads this copy; Mission 25 keeps the stock table.
-SPEAKER_STOCK = '/Game/Datatables/Radio/DT_SpeakerTable'
-SPEAKERS = DATA + 'DT_SV_Speakers'
-SPEAKER_ALLY = {'ms25_Savia_Mercenary_Leader': 'Ally_Fighter_Mob'}
+# Speakers aren't the level's to change: the game reads them from the game instance's own DT_SpeakerTable (a copy for
+# the level, 2026-10-23, changed nothing), so Scripts/main.lua switches the Savian mercenary leader to ally colours at
+# run time (CFG.allies.ally_speakers).
 
 
 def build_radio():
@@ -745,27 +740,6 @@ def build_radio():
     assert chk['rows'] == dt['rows']
     save(z, RADIO)
     print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced)')
-    # the speakers
-    z = ZenPkg(stock(SPEAKER_STOCK))
-    rename_package(z, SPEAKER_STOCK, SPEAKERS)
-    p = bytes(z.payloads[0])
-    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveRadioSpeakerTable')
-    assert o == len(p), (o, len(p))
-    done = set()
-    for k, row in dt['rows']:
-        sid = field(row, 'SpeakerID')[1]
-        if sid in SPEAKER_ALLY:
-            assert field(row, 'ProcessID')[1] == 'Enemy_Fighter_Mob', sid
-            row[2][:] = [(q[0], q[1], True, None) if q[1] == 'ColorType' else q for q in row[2]]   # zero: Singleton's
-            setf(row, 'ProcessID', ('name', SPEAKER_ALLY[sid], 0))
-            z.nb.add(SPEAKER_ALLY[sid])
-            done.add(sid)
-    assert done == set(SPEAKER_ALLY), done
-    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
-    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioSpeakerTable')
-    assert chk['rows'] == dt['rows']
-    save(z, SPEAKERS)
-    print(f'  speakers: {sorted(done)} speak as allies')
 
 
 # The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).

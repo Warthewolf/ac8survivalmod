@@ -633,3 +633,17 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
 - Aegis: 4 at sea through the round, not one "Aegis launches" line: LiveMissile actors are pooled (no new objects), so
   0.43.2 polls FindAllOf("LiveMissile") every 5 s (Aegis-owned ones that moved = in flight, nearest enemy each) and
   logs the missiles' owners once.
+
+## Code review and clean-up (2026-10-23, Lua 0.44.x)
+- Review of e87ddbc..HEAD (10 findings, all fixed): dead troop entries could count again on the runway (now dropped
+  once dead); inbound craft = not landed, at most those alive; SV_UnitAlive errors no longer paid as kills; the Aegis
+  missile range decided from its weapon row; one tier lookup / pay formula (TIER.index / pick / pay); a landing that
+  can't come is a normal round before its extras; ROW_SHIP from CFG.allies.ships (turrets prefix); stale comments;
+  explicit b'' in build_survival.py; the Aegis launch log removed (user: parked).
+- Fixes from the test: the merc leader's ally colours are switched at run time in the game instance's DT_SpeakerTable
+  (CFG.allies.ally_speakers; the level's copy DT_SV_Speakers did nothing and is gone); the ammo panel looks for
+  panels every 2 s (the STORE pages' own panel was never found) and logs each once.
+- HUD lag (user: "the custom HUD ... seems a bit laggy"): svFlags walked every flag of the event package each 250 ms
+  tick (cache 0.2 s -> 1 s); the per-aircraft pass ran for every enemy on one tick every 2 s (now an eighth each tick);
+  a "perf:" line every 60 s gives the tick's average / worst and its slowest parts.
+- Clean-up: the coast grid scan, the rings round each mark and Ctrl+F10 marks are gone (no more lanes to lay).

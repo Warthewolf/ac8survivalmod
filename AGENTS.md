@@ -119,6 +119,23 @@ Copy a working stock pattern before inventing a new one.
     in a pcall, else tostring). A bare n:ToString() errored, the pcall swallowed it, and the STORE fell back to the
     shop rows although its pages were in (test of 2026-10-23).
 
+31. A unit from another mission's world data can be copied whole into Survival's (build_survival.py port_unit: new
+    names / UniqueIDs, no tags, our WorldDataName) when its AI objects have no ChildAIObjectDescs: its NPC rows come over
+    with NPC_IMPORT and the spawner loads the blueprint from the DT_NPC row, no import needed (Mission 13's LCACs and
+    BTR-90s, test of 2026-10-23). New AI paths (make_path, an existing path desc as the template) work for sea craft and
+    for ground vehicles over Comona's terrain, and their PathFinish triggers fire, without updating the WD trailer.
+
+32. Ported descs keep their mission's display: Mission 13's LCAC / BTR descs have no bShowHUDBox (no target box in
+    Survival, test of 2026-10-23). Set bShowHUDBox and TargetMarkType (ELiveTargetMarkType 1 = TGT) on the AI objects
+    (port_unit tgt=True): boxes and TGT marks showed (user, 2026-10-23).
+
+33. Radio lines come from the level's RadioSettings (a hard import in PL_SurvivalMode): Survival's level points it at
+    its own copy (DT_SV_Radio; build_radio), and a Mission 25 line played there with its voice (user, 2026-10-23).
+    Speakers don't: the game instance holds its own DT_SpeakerTable (BP_LiveGameInstance imports it) and a copy for the
+    level changed nothing. A speaker's enemy look is its row's ColorType / ProcessID (Enemy_Fighter_Mob): main.lua
+    switches the row at run time while a run is on (CFG.allies.ally_speakers; not yet confirmed). Line IDs ending in
+    digits without a leading zero are stored split (v0003_1682 = ('v0003', 1683)), as hard rule 17.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
