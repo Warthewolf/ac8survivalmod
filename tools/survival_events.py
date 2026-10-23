@@ -199,6 +199,14 @@ LADON_AREA = ((-9.0, 2.0), 80000.0)          # (centre x, y km), radius m
 # hatch and fires each VLS at its target with LiveFireOneShotWeapon, so RE_SV_LadonVolley<Key> does that at the
 # player, and Scripts/main.lua fires it while the player is in range (CFG.specials.ladon.volley_*).
 LADON_CIWS = ['LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
+# ... which carry the Arsenal Bird's pulse cannons (user, 2026-10-23: "put the Pulse Lasers that the Arsenal Bird uses
+# online, and Replace the Ladon's CIWS with them"): Online Mode boss BA001 (aias) fires them from its PC_L / PC_R pods,
+# AITurret pawns whose blueprint carries the weapon (AIAS_CannonPod -> BP_wp_pulse_cannon_aias). Each CIWS slot gets
+# that pod's class (from EB_001's world data) and NPC row (Online Mode's aias_CannonPod_01, which Scripts/main.lua adds
+# to the campaign's DT_NPC at the main menu with the Alicorn's rows: build_survival.build_alicorn_rows).
+LADON_PULSE_WD = '/Game/OnlineMode/Maps/EmergencyCall/EB_001/WD_EB_001'
+LADON_PULSE_PART = 'PC_L'
+LADON_PULSE_NPC = 'aias_CannonPod_01'
 LADON_VLS = ['VLS0', 'VLS1']
 LADON_SPEED = '2500.0'                       # km/h (user, 2026-10-23: "make the Ladon Speed 2500"; was 1500. Mission 16: 1200-3200)
 

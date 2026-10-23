@@ -523,6 +523,17 @@ def ladon_units(units, used_ids, z, top_number, v):
     src_path = desc_named(m16, 'AIPathDescList', survival_events.LADON_SOURCE_PATH)
     paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
     import math
+    pz = ZenPkg(stock(survival_events.LADON_PULSE_WD))       # the pulse cannon pod's class (survival_events.LADON_PULSE_*)
+    pw, _ = props_of(pz, pz.export_index(survival_events.LADON_PULSE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
+    pref = None
+    for pu in [q for q in pw[2] if q[1] == 'UnitDescList'][0][3][1]:
+        for pob in [q for q in pu[2] if q[1] == 'AIObjectDescList'][0][3][1]:
+            pk = [q for q in pob[2] if q[1] == 'ChildAIObjectDescs']
+            for ch in (pk[0][3][1] if pk and pk[0][3] else []):
+                data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+                if [q for q in data if q[1] == 'ComponentFieldName'][0][3][1] == survival_events.LADON_PULSE_PART:
+                    pref = [q for q in data if q[1] == 'Class'][0][3]
+    assert pref and pref[0] == 'obj' and pref[1] < 0, pref
     for L in survival_events.ladons():
         (x0, y0, z0), (x1, y1, _) = L['route'][0], L['route'][1]
         yaw = math.degrees(math.atan2(y1 - y0, x1 - x0))
@@ -532,6 +543,14 @@ def ladon_units(units, used_ids, z, top_number, v):
         ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
         kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
         parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
+        pulse = 0                                          # the CIWS slots: the Arsenal Bird's pulse cannon pods
+        for ch in kids:
+            data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+            comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
+            if comp in survival_events.LADON_CIWS:
+                data[:] = [(q[0], q[1], False, import_from(z, pz, pref)) if q[1] == 'Class' and q[3] is not None else q for q in data]
+                pulse += 1
+        assert pulse == len(survival_events.LADON_CIWS), pulse
         # its area over the whole job (survival_events.LADON_AREA), not 40 km round the far-west spawn
         (ax, ay), radius = survival_events.LADON_AREA
         r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
@@ -610,7 +629,8 @@ def build_alicorn_rows():
     def nm(v): return None if v is None else (v[1] if v[2] == 0 else f'{v[1]}_{v[2] - 1}')
     zn, dn = load(ALCN_TABLES[0][0], ALCN_TABLES[0][1])
     npc = {key(k): (k, row) for k, row in dn['rows']}
-    want, seen, refs = [survival_events.ALCN_ROW], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
+    # (and the Arsenal Bird's pulse cannon pod, on the Ladons' CIWS slots: survival_events.LADON_PULSE_NPC)
+    want, seen, refs = [survival_events.ALCN_ROW, survival_events.LADON_PULSE_NPC], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
     while want:
         r = want.pop(0)
         if r in seen or r in ('None', ''): continue
@@ -1259,6 +1279,11 @@ def build_npc_rows():
     for L in survival_events.ladons():
         row = copy.deepcopy(rows[(survival_events.LADON_NPC_SOURCE, 0)])
         set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(L['name_key']))
+        comps = [q for q in row[2] if q[1] == 'ChildNPCComponentNames'][0][3][1]   # its CIWS: the pulse cannon pods
+        pulse = survival_events.fname(survival_events.LADON_PULSE_NPC)
+        row[2][:] = [(q[0], q[1], q[2], ('arr', [pulse if (c[1] in survival_events.LADON_CIWS and c[2] == 0) else k
+                                                  for c, k in zip(comps, q[3][1])])) if q[1] == 'ChildNPCId' else q for q in row[2]]
+        assert sum(1 for k in [q for q in row[2] if q[1] == 'ChildNPCId'][0][3][1] if k == pulse) == len(survival_events.LADON_CIWS)
         out.append(((L['npc'], 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
