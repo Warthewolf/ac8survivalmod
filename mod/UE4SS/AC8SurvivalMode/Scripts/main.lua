@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.50.3"
+local VERSION = "0.50.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -908,7 +908,12 @@ local CFG = {
         amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 4, lanes_more = 1,
                        capture_per_troop = 25, extra_aircraft = 4,
                        captured_rounds = 2, bomber_chance = 0.6, reward = 4000, reward_per_round = 160,
-                       craft_pay = 150, troop_pay = 150, remove_after_s = 90 },
+                       craft_pay = 150, troop_pay = 150, remove_after_s = 90,
+                       -- troop vehicles that stop short of the runway (a friend's test of 2026-10-23: 5 troops ashore,
+                       -- none moving or to be found, so the round never ended): one that hasn't moved stuck_m in
+                       -- stuck_s is taken off (no pay, no capture); without its actor to watch, after troop_timeout_s.
+                       -- runway_cm: where they drive to (survival_events.LCAC_RUNWAY), for the log's distances.
+                       stuck_m = 50, stuck_s = 60, troop_timeout_s = 540, runway_cm = { 1609574, -435747 } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -1119,6 +1124,8 @@ local CFG = {
             amphib_row   = "LANDING CRAFT: %d  TROOPS: %d  AIRFIELD CAPTURE: %d%%",
             ashore       = "TROOPS ASHORE",
             ashore_sub   = "STOP THEM BEFORE THEY REACH THE RUNWAY",
+            troops_stuck = "TROOPS BOGGED DOWN",
+            troops_stuck_sub = "%d OUT OF THE FIGHT",
             on_runway    = "TROOPS ON THE RUNWAY",
             on_runway_sub = "AIRFIELD %d%% CAPTURED",
             captured     = "AIRFIELD CAPTURED",
@@ -4023,6 +4030,17 @@ local function amph() RUN.amph = RUN.amph or { count = 0, troops = {}, capture =
 
 local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.round and TIER.index(D.round))) end
 
+-- The troop units' actors, as SV_Spawn creates them (spawningUnit is the troop unit then): AMPH.actors[unit] = { actor }
+AMPH.actors = {}
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if u and u:find("^SV_Unit_LcacTroops") then
+        local l = AMPH.actors[u] or {}
+        l[#l + 1] = o
+        AMPH.actors[u] = l
+    end
+end)
+
 -- A unit's vehicles alive: SV_UnitAlive, 0 for a unit that's off the list, nil for an error (not counted as kills).
 local function aliveOf(unit)
     local n = SV_UnitAlive(unit)
@@ -4118,7 +4136,13 @@ function AMPH.tick(now, s)
                 lane.landed[k] = now
                 lane.firstLanded = lane.firstLanded or now
                 local tu = "SV_Unit_LcacTroops" .. l .. k
-                local r = SV_UnitAlive(tu) > 0 and -100 or SV_Spawn(tu)
+                local r = -100
+                if SV_UnitAlive(tu) <= 0 then
+                    AMPH.actors[tu] = {}
+                    spawningUnit = tu
+                    r = SV_Spawn(tu)
+                    spawningUnit = nil
+                end
                 log(string.format("special: lane %s craft %s on the beach; troops %s: %s", l, k, tu,
                     r > 0 and (r .. " vehicle(s) ashore") or (r == -100 and "still up from before" or
                     ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"))))
@@ -4208,6 +4232,42 @@ function AMPH.runTick(now)
                     hudCallout(t.on_runway, string.format(t.on_runway_sub, A.capture))
                     log(string.format("special: troops %s reached the runway; airfield %d%% captured", tr.unit, A.capture))
                 end
+            end
+        end
+    end
+    -- every 15 s: a troop vehicle short of the runway that hasn't moved stuck_m in stuck_s (or, with no actor seen,
+    -- has been ashore troop_timeout_s) is taken off: no pay, no capture
+    for _, tr in ipairs(A.troops) do
+        if tr.alive > 0 and not tr.reached and now >= (tr.checkAt or tr.at + 15) then
+            tr.checkAt = now + 15
+            local at
+            for _, o in ipairs(AMPH.actors[tr.unit] or {}) do
+                if not at and valid(o) then
+                    pcall(function() local v = o:K2_GetActorLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                end
+            end
+            local why
+            if at then
+                local moved = tr.last and math.sqrt((at.X - tr.last.X) ^ 2 + (at.Y - tr.last.Y) ^ 2) / 100 or math.huge
+                if moved < c.stuck_m then tr.still = (tr.still or 0) + 15 else tr.still, tr.last = 0, at end
+                tr.last = tr.last or at
+                if now >= (tr.posAt or 0) then
+                    tr.posAt = now + 60
+                    log(string.format("special: troops %s at (%.1f, %.1f) km, %.0f m up, %.1f km from the runway%s", tr.unit,
+                        at.X / 100000, at.Y / 100000, at.Z / 100, math.sqrt((at.X - c.runway_cm[1]) ^ 2 + (at.Y - c.runway_cm[2]) ^ 2) / 100000,
+                        (tr.still or 0) > 0 and string.format(", still for %d s", tr.still) or ""))
+                end
+                if (tr.still or 0) >= c.stuck_s then why = string.format("hasn't moved in %d s", tr.still) end
+            elseif now - tr.at >= c.troop_timeout_s then
+                why = string.format("ashore %d s, no actor to watch", math.floor(now - tr.at))
+            end
+            if why then
+                local n = tr.alive
+                tr.alive, tr.removed = 0, true
+                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
+                hudCallout(t.troops_stuck, string.format(t.troops_stuck_sub, n))
+                log(string.format("special: troops %s stuck (%s): taken off (%s)", tr.unit, why, tostring(r)))
+                ashore = ashore - n
             end
         end
     end
