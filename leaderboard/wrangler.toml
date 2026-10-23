@@ -1,0 +1,17 @@
+# Cloudflare Worker settings (only needed if you deploy with the `wrangler` command line tool; the dashboard route in
+# README.md doesn't use this file). Secrets are never written here: set them with `wrangler secret put <NAME>`.
+name = "ac8-survival-leaderboard"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ac8-survival"
+database_id = "PUT-YOUR-D1-DATABASE-ID-HERE"
+
+[vars]
+DISCORD_APP_ID = "PUT-YOUR-APPLICATION-ID-HERE"
+DISCORD_PUBLIC_KEY = "PUT-YOUR-PUBLIC-KEY-HERE"
+RUNS_CHANNEL_ID = "PUT-THE-RUNS-CHANNEL-ID-HERE"
+BOARD_CHANNEL_ID = "PUT-THE-LEADERBOARD-CHANNEL-ID-HERE"
+# secrets (wrangler secret put ...): DISCORD_TOKEN, SUBMIT_KEY, ADMIN_KEY

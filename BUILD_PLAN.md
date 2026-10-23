@@ -488,7 +488,17 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
 - [ ] End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
 
-## Milestone 8: Discord leaderboard (after release)
+## Milestone 8: Discord leaderboard (started 2026-10-23)
+User's choices (2026-10-23): end-of-run prompt; Cloudflare Worker; boards for highest round, score, per difficulty and
+fastest specials; a Discord server exists, the bot application is still to be made (leaderboard/README.md walks it).
+- [x] leaderboard/: the Worker (src/index.js: /submit with HMAC signature, plausibility checks, server-side score,
+  dedupe, 6 runs / hour per sender; posts to #survival-runs, keeps a pinned board message; /leaderboard and /pilot
+  slash commands; /setup registers them), schema.sql (D1), wrangler.toml, README.md (setup), test/worker.test.mjs
+  (node:sqlite stand-in for D1, Discord stubbed: 13 checks pass).
+- [ ] Game: run stats (kills air / ground, specials with time and result, zollars, time), end-of-run summary with
+  "Submit run?", native SV_Post (WinHTTP + bcrypt HMAC, URL and key baked into main.dll from leaderboard/submit.local,
+  not in git), offline queue (config\pending_runs).
+
 - [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
   mod's own native runtime (NOT the Mod Launcher). Sends to a small relay (e.g. Cloudflare Worker) which sanity-checks and
   posts to a Discord #survival-runs channel and keeps a pinned top 10 per difficulty. Offline: queue and send next launch.
