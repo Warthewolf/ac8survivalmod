@@ -856,7 +856,10 @@ def build_ladon(g, flag, stock_ep):
             volley = f"RE_SV_LadonVolley{L['key']}{side}"
             g.trigger('RE_SpawnEnemy_kokatu_1st', volley)
             g.execute(t_hatch, volley, {1: f"{L['obj']}_MissileHatch"})
-            g.execute(t_vls, volley, {1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
+            # WN_WEAPON_1: the launcher's ordinary missile (BP_wp_vls_ladon). WN_WEAPON_2, Mission 16's record, is
+            # BP_wp_vls_certain_ladon, the scripted sure kill it fires at the allied F/A-18s: flares did nothing
+            # against it (user, 2026-10-23: "the VLS guidance needs to be nerfed ... Flares don't even work")
+            g.execute(t_vls, volley, {0: 'WN_WEAPON_1', 1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
         for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
