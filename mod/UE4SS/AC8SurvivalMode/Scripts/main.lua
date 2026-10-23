@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.8"
+local VERSION = "0.51.9"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -746,6 +746,10 @@ local CFG = {
                                                "SV_Unit_AAGun_E" } },
                              sam = { label = "SAM SITE", what = "a SAM site", price = 8000, raise = 1.25,
                                      units = { "SV_Unit_SAM_A", "SV_Unit_SAM_B" } },
+                             -- their fire control (user, 2026-10-23: "increase the fire rate of the Airfield"): the
+                             -- allies' (CFG.allies.fcs: x0.5 times, x1.6 range, x1.5 cone), then arming / lock x lock_x
+                             -- and time between shots / rest x fire_x (0.5: twice as often again, 4x the stock rate)
+                             fcs = { lock_x = 0.75, fire_x = 0.5 },
                          } },
         },
     },
@@ -5203,7 +5207,7 @@ end
 -- queued, price }, and the enemy orders waiting to be fired (events).
 do
 -- DT_SV_NpcRows' ally rows (tools/build_survival.py build_npc_rows: the F-22, the hulls and their turrets)
-local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Aegis",
+local ROWS = { "SV_Ally_Moonchild", "SV_Ally_Aegis", "SV_Def_Gepa", "SV_Def_Avng",
                "SV_Turret_aegs_mk15_Ally", "SV_Turret_aegs_mk41_Ally", "SV_Turret_aegs_mk45_Ally",
                "SV_Turret_aegs_artillery_Ally" }
 local ROW_SHIP = {}            -- a ship type's hull and turret rows (its fcs and module): SV_Ally_<key>, SV_Turret_<turrets>_*
@@ -5214,6 +5218,7 @@ for _, row in ipairs(ROWS) do
         end
     end
 end
+ROW_SHIP.SV_Def_Gepa, ROW_SHIP.SV_Def_Avng = "Defence", "Defence"   -- (the airfield's AA guns and SAM sites)
 for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
 for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
 
@@ -5248,7 +5253,8 @@ function ALLY.setup()
         end
     end
     local function allyFcs(src, key)                 -- src .. "_SVA[_<ship>]": farther, wider, quicker, tighter
-        local sf = key and CFG.allies.ships[key] and CFG.allies.ships[key].fcs
+        local sf = key and (key == "Defence" and CFG.shop.items.Airfield.defences.fcs
+                            or CFG.allies.ships[key] and CFG.allies.ships[key].fcs)
         local new = src .. "_SVA" .. (sf and ("_" .. key) or "")
         local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
         if made[new] == nil then
@@ -5338,7 +5344,7 @@ function ALLY.setup()
         for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
     end
     ALLY.ready = n == #ROWS
-    if #shipSaid > 0 then log("allies: the ships' own fire control: " .. table.concat(shipSaid, ", ")) end
+    if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
     log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
 end

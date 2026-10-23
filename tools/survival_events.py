@@ -292,8 +292,12 @@ ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Pla
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
 # one at a time where Mission 22 placed them. Allied, so they fire at enemies by themselves; no event records.
 DEFENCE_SOURCE = 'AB_Unit_01_Ground0'
-DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}') for k, c in enumerate('ABCDE')] +
-            [(f'SV_Unit_SAM_{c}', f'AB_Obj_01_Ground0_SAM{k}') for k, c in enumerate('AB')])
+DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}', 'gepa_common') for k, c in enumerate('ABCDE')] +
+            [(f'SV_Unit_SAM_{c}', f'AB_Obj_01_Ground0_SAM{k}', 'avng_common') for k, c in enumerate('AB')])
+# their rows of their own (user, 2026-10-23: "increase the fire rate of the Airfield"): Mission 22's mission row ->
+# (Survival's mission row, its DT_SV_NpcRows copy of the DT_NPC row), so Scripts/main.lua can give their weapons fire
+# control of their own (CFG.shop.items.Airfield.defences.fcs) without touching the stock rows
+DEFENCE_ROWS = {'gepa_common': ('sv_def_gepa', 'SV_Def_Gepa'), 'avng_common': ('sv_def_avng', 'SV_Def_Avng')}
 # Allies the STORE sells (user, 2026-10-23: "buy Allied Aircraft from the Store from the Airfield Page ... a Docks Page
 # ... Different Allied Ships that will cruise around on the water ... expensive ... boost their FCS ... enemies can
 # target these ... Allied Aircraft are F-22's and they spawn in at the Airfield, Take Off from the airfield and their

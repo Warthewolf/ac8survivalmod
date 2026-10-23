@@ -726,8 +726,8 @@ def split_units(units, used_ids, z, top_number):
     left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.PAD_DUMMIES, survival_events.PAD_DUMMY_UNIT)
     print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}), '
           f'{len(survival_events.PAD_DUMMIES)} dummies in {survival_events.PAD_DUMMY_UNIT}; {survival_events.PAD_UNIT} keeps {left} objects')
-    for new_unit, obj in survival_events.DEFENCES:
-        move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit)
+    for new_unit, obj, mrow in survival_events.DEFENCES:
+        move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit, survival_events.DEFENCE_ROWS[mrow][0])
     print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')
     # The Anomaly (survival_events.ANOMALY_*): MINDRIPPER alone, and its guards
     # (user, 2026-10-22: "make mindripper an F-4": its NPC row is the F-4E one in the world data too, not only at spawn)
@@ -1245,6 +1245,7 @@ def build_npc_rows():
     # (under its name key) and turrets (as they are: main.lua gives every one of them fire control of its own)
     m22 = mission_npc_ids()
     allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY)]
+    allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
         allies.append((m22[hull], npc, text))
@@ -1371,6 +1372,8 @@ def build_npc_table():
     # the STORE's allies (survival_events.ALLY_*): MOONCHILD on Mission 22's allied F/A-18 row, each ship's hull and
     # turrets on copies of Mission 22's rows, all pointing at DT_SV_NpcRows copies (their names, their fire control)
     extra.append((survival_events.ALLY_AIR_ROW, 'f18e_common', survival_events.ALLY_AIR_NPC))
+    for src, (row, npc) in survival_events.DEFENCE_ROWS.items():           # the airfield's AA guns and SAM sites
+        extra.append((row, src, npc))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         row, npc, _ = survival_events.ally_ship_rows(key)
         extra.append((row, hull, npc))
