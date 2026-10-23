@@ -141,6 +141,26 @@ Copy a working stock pattern before inventing a new one.
     stopped loading Survival at the hangar: LowLevelFatalError AsyncLoading2.cpp:1814 "WD_SurvivalMode_global: Bad
     export index 74/19" (2026-10-23). make_path writes empty tube data; build_wd_global fails on any such reference.
 
+35. A tube path (ControlType 2) with its tube data emptied "finishes" every frame: its PathFinish trigger fired ~30
+    times a second and restarted the next path (the Ladons milled about and "bombed" the airfield every second). Copies
+    become ControlType 1 (make_path), and aircraft paths need smooth=True (tangents about a leg long, up banked into
+    turns, pitch on climbs) or they fly flat, sharp corners. Confirmed 2026-10-23 (user: "Ladons work now").
+
+36. Stock event records can fire a scripted sure kill: Mission 16 fires the Ladon VLS's WN_WEAPON_2
+    (BP_wp_vls_certain_ladon) only at the allied F/A-18s it means to kill; aimed at the player, flares did nothing.
+    WN_WEAPON_1 is the ordinary missile. Check what a copied LiveFireOneShotWeapon record was for. Confirmed 2026-10-23.
+
+37. LiveAIRequestUniqueAction works on any AI plane, by unit (every plane of it): every unique action's tree is built
+    at level start; OneShot ends by itself; Below_Return outranks evading, provoke and pursuit. The stock EnemyBehind
+    trigger only fires for the player's selected target and re-fires every frame, so Survival detects "behind" in Lua
+    and fires RE_SV_AceTurn / AceKulbit (tools/re/UNIQUE_ACTIONS.md). Confirmed 2026-10-23: the Reaper F-22 went into
+    UniqueAction after each and fought ~2 min (26 s before). The player's current target is player+0x1ae8 -> +0x750
+    (SV_PlayerTarget, confirmed the same day).
+
+38. Online Mode parts can be mounted on a campaign aircraft: the Ladons' CIWS slots carry the Arsenal Bird's pulse
+    cannon pods (class from EB_001's world data via import_from, NPC row in the Ladon's ChildNPCId, the pod's rows added
+    at the main menu with the Alicorn's). Confirmed 2026-10-23.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
