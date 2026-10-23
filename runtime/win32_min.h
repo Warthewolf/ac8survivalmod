@@ -80,6 +80,7 @@ typedef DWORD (WINAPI *ThreadProc)(void* arg);
 /* ---- KERNEL32.dll ------------------------------------------------------- */
 IMPORT HANDLE WINAPI GetModuleHandleW(const wchar_t* name);
 IMPORT HANDLE WINAPI LoadLibraryW(const wchar_t* name);
+IMPORT DWORD  WINAPI GetLastError(void);
 IMPORT void*  WINAPI GetProcAddress(HANDLE module, const char* name);
 IMPORT DWORD  WINAPI GetModuleFileNameW(HANDLE module, wchar_t* buf, DWORD cap);
 IMPORT BOOL   WINAPI DisableThreadLibraryCalls(HANDLE module);

@@ -2082,8 +2082,9 @@ static int L_Reset(void* lua)
  * through WinHTTP, the body signed with HMAC-SHA256 (bcrypt) under the build's submit key, in X-SV-Signature.
  * The Worker's host and the key come from leaderboard/submit.local through runtime/build.sh (build/runtime/
  * submit_cfg.h, never in git); a build without them answers SV_ERR_NO_SERVER. Only that host is ever contacted.
- * SV_PostResult(job) -> 0 while sending, then the HTTP status, or < 0 when it couldn't get through (-1 no
- * connection, -2 no answer); the job is freed once its result is read. SV_PostReply(job) -> the Worker's reply. */
+ * SV_PostResult(job) -> 0 while sending, then the HTTP status, or < 0 when it couldn't get through: minus WinHTTP's
+ * error (e.g. -12007 the name didn't resolve, -12029 no connection, -12002 timed out, -12175 TLS failed), or -1 / -2
+ * when Windows gave none; the job is freed once its result is read. SV_PostReply(job) -> the Worker's reply. */
 #if __has_include("submit_cfg.h")
 #include "submit_cfg.h"
 #endif
@@ -2174,11 +2175,13 @@ static DWORD WINAPI PostWorker(void* arg)
     for (size_t i = 0; head[i]; ++i) headers[n++] = head[i];
     for (size_t i = 0; sig[i]; ++i) headers[n++] = sig[i];
     headers[n++] = L'\r'; headers[n++] = L'\n'; headers[n] = 0;
+    DWORD err = 0;
     HANDLE ses = hOpen(L"AC8SurvivalMode", 4 /* automatic proxy */, NULL, NULL, 0);
     if (!ses) ses = hOpen(L"AC8SurvivalMode", 0 /* default proxy */, NULL, NULL, 0);
     HANDLE con = ses ? hConnect(ses, SV_SUBMIT_HOST, 443, 0) : NULL;
     HANDLE req = con ? hRequest(con, L"POST", SV_SUBMIT_PATH, NULL, NULL, NULL, 0x00800000 /* WINHTTP_FLAG_SECURE */) : NULL;
     if (req && hTimeouts) hTimeouts(req, 10000, 10000, 15000, 15000);
+    if (!ses || !con || !req) err = GetLastError();
     if (req && hSend(req, headers, (DWORD)-1, j->body, j->len, j->len, 0)) {
         if (hReceive(req, NULL)) {
             DWORD code = 0, sz = sizeof(code);
@@ -2187,9 +2190,13 @@ static DWORD WINAPI PostWorker(void* arg)
             while (j->replyLen < sizeof(j->reply) - 1 && hRead(req, j->reply + j->replyLen, (DWORD)(sizeof(j->reply) - 1 - j->replyLen), &got) && got)
                 j->replyLen += got;
         } else {
+            err = GetLastError();
             j->status = -2;
         }
+    } else if (req) {
+        err = GetLastError();
     }
+    if (j->status < 0 && err) j->status = -(int32_t)err;          /* why it couldn't get through (WinHTTP's error) */
     j->reply[j->replyLen] = 0;
     if (req) hClose(req);
     if (con) hClose(con);

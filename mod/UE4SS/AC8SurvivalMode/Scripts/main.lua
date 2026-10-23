@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.48.1"
+local VERSION = "0.48.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3726,7 +3726,11 @@ function LB.hud(now)
             else
                 sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st)
             end
-            log(string.format("leaderboard: the server answered %d: %s", st, reply:sub(1, 200)))
+            local why = ({ [-12007] = "the server's name didn't resolve (DNS, or the address is blocked)",
+                           [-12029] = "couldn't connect (a firewall, or the address is blocked)",
+                           [-12002] = "timed out", [-12175] = "the secure connection failed (TLS)",
+                           [-12038] = "the certificate's name didn't match (a proxy in the way?)" })[st]
+            log(string.format("leaderboard: the server answered %d%s: %s", st, why and (" (" .. why .. ")") or "", reply:sub(1, 200)))
         end
     end
     if sh and not sh.at and H and H.lbTitle and H.shown then sh.at = os.clock() end
@@ -5456,7 +5460,9 @@ local function probeTick(tick)
         SHUTTLE.obj, SHUTTLE.lookAt = nil, nil
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
-        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true }
+        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
+                -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
+                stats = { started = os.time(), air = 0, ground = 0, specials = {} } }
         ALLY.run = nil                             -- (a new level: no allies up)
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
