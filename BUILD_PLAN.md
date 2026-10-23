@@ -627,3 +627,9 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   terrain (M13's drive path is short and on its own map).
 - 0.43.1 (user: "spawn all LCAC lanes, make it difficult"): lanes_first 4 (all 16 craft every assault), extra_aircraft 4
   fighters on top of the round's budget, bomber_chance 0.6 (was 0.4).
+- Test of 2026-10-23 (0.43.1, Ctrl+F12, round 1): 16 craft on 4 lanes; lane B shot down at sea; A, C, D landed (12 BTRs);
+  C's four drove ~0.6 km to the runway in ~40 s (25/50/75/100 %), captured, landing closed; all 12 destroyed -> retaken,
+  landing open. A's and D's BTRs were killed before they could arrive (times fit 60 km/h).
+- Aegis: 4 at sea through the round, not one "Aegis launches" line: LiveMissile actors are pooled (no new objects), so
+  0.43.2 polls FindAllOf("LiveMissile") every 5 s (Aegis-owned ones that moved = in flight, nearest enemy each) and
+  logs the missiles' owners once.

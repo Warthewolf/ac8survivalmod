@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.43.1"
+local VERSION = "0.43.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -365,11 +365,6 @@ local SHUTTLE = { obj = nil }
 local shuttleHealth            -- (section "special rounds"; the HUD shows it)
 -- The STORE's allies (section "allies"): its functions, the run's state (ALLY.run) and which units are allies.
 local ALLY = { unit = {} }
--- every missile, for the allied ships' launch log (ALLY.missileTick: does an Aegis fire, and from how far)
-pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o)
-    ALLY.missiles = ALLY.missiles or {}
-    if #ALLY.missiles < 200 then ALLY.missiles[#ALLY.missiles + 1] = o end
-end)
 -- The Anomaly (section "special rounds"): its field's state, for the HUD and the level reset.
 local ANOM = { on = false }
 -- The amphibious assault (section "amphibious assault"): its functions; its run state is RUN.amph / RUN.captured.
@@ -4647,43 +4642,57 @@ function ALLY.strike(bomber, ship)
     end
 end
 
--- The ships' launches (report of 2026-10-23: "aegis's didn't seem to fire all that much better"): each missile whose
--- owner is an Aegis part, with the nearest enemy aircraft from where it was launched; a line every 10 s while any fly.
+-- The ships' launches (report of 2026-10-23: "aegis's didn't seem to fire all that much better"). Missiles are pooled
+-- actors, reused (0.42.1 watched for new ones and saw none in a whole round with four Aegis at sea), so every 5 s this
+-- looks at the LiveMissile actors whose owner is an Aegis part and counts those that moved since the last look (in
+-- flight), with the nearest enemy aircraft to each; once a run, the missiles' owners (to check the "aegs" match).
 function ALLY.missileTick(now)
-    local q = ALLY.missiles
-    ALLY.missiles = {}
-    local M = ALLY.launch or { n = 0, near = {}, at = now }
-    ALLY.launch = M
-    for _, o in ipairs(q or {}) do
+    if now < (ALLY.missileAt or 0) then return end
+    ALLY.missileAt = now + 5
+    local list = FindAllOf("LiveMissile") or {}
+    local last, seen = ALLY.missileLast or {}, {}
+    local owners, flying, near, parts = {}, 0, {}, {}
+    for _, o in ipairs(list) do
         pcall(function()
             if not valid(o) then return end
             local owner = o:GetOwner()
-            local on = valid(owner) and nameOf(owner) or ""
+            local on = valid(owner) and (nameOf(owner):match("([%w_]+)_C_%d+") or nameOf(owner):match("[%w_]+$") or "?") or "none"
+            owners[on] = (owners[on] or 0) + 1
             if not on:lower():find("aegs", 1, true) then return end
             local v = o:K2_GetActorLocation()
-            local at, best = { X = v.X, Y = v.Y, Z = v.Z }, nil
-            for _, p in ipairs(planes) do
-                if not p.down and not ALLY.unit[p.unit or ""] and valid(p.obj) then
-                    local w = p.obj:K2_GetActorLocation()
-                    local d = km({ X = w.X, Y = w.Y, Z = w.Z }, at)
-                    if not best or d < best then best = d end
+            local at = { X = v.X, Y = v.Y, Z = v.Z }
+            local key = addrOf(o) or nameOf(o)
+            seen[key] = at
+            local was = last[key]
+            if was and km(was, at) > 0.1 then          -- moved more than 100 m in 5 s: in flight
+                flying = flying + 1
+                local part = on:match("aegs_(%w+)") or "?"
+                parts[part] = (parts[part] or 0) + 1
+                local best = nil
+                for _, p in ipairs(planes) do
+                    if not p.down and not ALLY.unit[p.unit or ""] and valid(p.obj) then
+                        local w = p.obj:K2_GetActorLocation()
+                        local d = km({ X = w.X, Y = w.Y, Z = w.Z }, at)
+                        if not best or d < best then best = d end
+                    end
                 end
+                near[#near + 1] = best and string.format("%.1f", best) or "?"
             end
-            M.n = M.n + 1
-            M.near[#M.near + 1] = best and string.format("%.1f", best) or "?"
-            M.by = M.by or {}
-            local part = on:match("BP_VE002_aegs_(%w+)") or "?"
-            M.by[part] = (M.by[part] or 0) + 1
         end)
     end
-    if now - M.at >= 10 then
-        if M.n > 0 then
-            local by = {}
-            for k, n in pairs(M.by or {}) do by[#by + 1] = k .. " x" .. n end
-            log(string.format("allies: Aegis launches in %.0f s: %d (%s), nearest enemy at launch (km) %s", now - M.at, M.n,
-                table.concat(by, ", "), table.concat(M.near, " ")))
-        end
-        ALLY.launch = { n = 0, near = {}, at = now }
+    ALLY.missileLast = seen
+    if not ALLY.ownersSaid and #list > 0 and ALLY.shipsAtSea and #(ALLY.shipsAtSea() or {}) > 0 then
+        ALLY.ownersSaid = true
+        local o = {}
+        for k, n in pairs(owners) do o[#o + 1] = k .. " x" .. n end
+        table.sort(o)
+        log(string.format("allies: %d missile actors, owners: %s", #list, table.concat(o, ", ")))
+    end
+    if flying > 0 then
+        local by = {}
+        for k, n in pairs(parts) do by[#by + 1] = k .. " x" .. n end
+        log(string.format("allies: Aegis missiles in flight: %d (%s), nearest enemy to each (km) %s", flying,
+            table.concat(by, ", "), table.concat(near, " ")))
     end
 end
 
