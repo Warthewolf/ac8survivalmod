@@ -27,7 +27,7 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   If the clouds sit wrong, copy only the Cloudly sky/cloud actor into a new Map17 lighting level.
 
 ## 4. Airfield health bar
-- A health bar above the airfield, starting at 100. The run ends (or round fails) at 0.
+- A health bar above the airfield, starting at 100 (250 from Lua 0.49.2, user 2026-10-23: "buff the airbase health"). The run ends (or round fails) at 0.
 - Stock references:
   - Mission 4: a base the enemy attacks, with base HP set by difficulty (RE_BaseHP_Easy, RE_BaseHP_Norml) and
     bomber attack paths (01_MB_BaseAttackAssist_*). Closest match. Study first.
@@ -80,6 +80,7 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 
 ## 10. Special rounds in play (user, 2026-10-23)
 - After round 3, special rounds are mixed in at random: any round above 3 can be one.
+- The shuttle (Comona Defense) is more likely early: rounds 2-6 are each the shuttle at 35 % (user, 2026-10-23).
 - A special's difficulty follows its round (as the normal round before it would have been).
 - ALICORN special round: no normal aircraft spawn in it.
 - Test keys for every special round.

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.49.0"
+local VERSION = "0.49.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -653,11 +653,13 @@ local CFG = {
     -- round after, then it reopens at repair_hp. Bomber flights (2 aircraft, Mission 22's airport strike: they only
     -- go for the airfield) join rounds from bombers.from_round, one more flight every `every` rounds, up to `max`;
     -- Tu-95s and Tu-160s (`heavy`) from heavy_from_round. bombers.pool must match survival_events.BOMBERS.
+    -- hp 250 / repair_hp 125 (user, 2026-10-23: "buff the airbase health"; at 100 a bomber raid took it from full to
+    -- down in about 45 s in rounds 7 and 9 of that day's test); the STORE's repairs restore 60 (were 25).
     airfield = {
         enabled    = true,
-        hp         = 100,
+        hp         = 250,
         hit_damage = 4,
-        repair_hp  = 50,
+        repair_hp  = 125,
         bombers = {
             -- Bomber raids (user, 2026-10-22: "in bomber rounds bombers primarily spawn"): from first_raid, every
             -- raid_every rounds; raid_share of that round's aircraft are bombers (squadrons of 2, 4, 6 by the same
@@ -725,14 +727,14 @@ local CFG = {
             -- above stand in, with Airfield doing three jobs in turn.
             RepairAircraft = { role = "aircraft", label = "REPAIR AIRCRAFT", price = 600, min_price = 100, raise = 1.0 },
             -- (raise 1.0, was 1.25: airfield repairs are upkeep every raid, and 1.25 compounding made the 20th one 21700)
-            RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 25, price = 300, raise = 1.0 },
+            RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 60, price = 300, raise = 1.0 },
             AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
             -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
             -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
             Moonchild      = { role = "ally_air",  label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
             ShipAegis      = { role = "ally_ship", ship = "Aegis", label = "AEGIS DESTROYER", price = 20000, raise = 1.25 },
-            Airfield = { role = "combined", repair = 25, price = 300, raise = 1.0, label = "REPAIR AIRFIELD",
+            Airfield = { role = "combined", repair = 60, price = 300, raise = 1.0, label = "REPAIR AIRFIELD",
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
                              aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.25,
@@ -850,6 +852,10 @@ local CFG = {
         first    = 4,
         every    = 5,
         rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn" },
+        -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
+        -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
+        -- specials in a row, not the same one twice running); otherwise the round's pick is made as above.
+        early    = { kind = "shuttle", from = 2, to = 6, chance = 0.35 },
         -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
         -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
         -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
@@ -2774,8 +2780,12 @@ local function specialFor(round)
         RUN.specialPick = RUN.specialPick or {}
         local pick = RUN.specialPick
         if pick[round] == nil then
-            local kind = false
-            if round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
+            local kind, early = false, sp.early
+            if early and early.kind and round >= (early.from or 0) and round <= (early.to or -1) and not pick[round - 1]
+                and RUN.lastSpecial ~= early.kind and math.random() < (early.chance or 0) then
+                kind = early.kind
+                RUN.lastSpecial = kind
+            elseif round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
                 local choices = {}
                 for _, k in ipairs(sp.rotation) do if k ~= RUN.lastSpecial or #sp.rotation == 1 then choices[#choices + 1] = k end end
                 kind = choices[math.random(#choices)]
