@@ -136,6 +136,11 @@ Copy a working stock pattern before inventing a new one.
     switches the row at run time while a run is on (CFG.allies.ally_speakers; not yet confirmed). Line IDs ending in
     digits without a leading zero are stored split (v0003_1682 = ('v0003', 1683)), as hard rule 17.
 
+34. A desc copied from another package must not keep object references (('obj', n > 0): an export of that package).
+    Mission 16's Ladon path's PathTubeData names its tube object (export 75 there); copied as a path template, the game
+    stopped loading Survival at the hangar: LowLevelFatalError AsyncLoading2.cpp:1814 "WD_SurvivalMode_global: Bad
+    export index 74/19" (2026-10-23). make_path writes empty tube data; build_wd_global fails on any such reference.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

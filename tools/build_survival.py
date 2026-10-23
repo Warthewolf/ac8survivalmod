@@ -415,7 +415,10 @@ def make_path(z, used_ids, template, name, pts):
             b = point(begin, k, pos, nxt, pos, ('name', 'DefaultPathPoint', 0))
         else:
             els.append(point(point_t, k, pos, nxt, prv, ('name', name, k)))
-    repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els),
+    # no tube data: a template's (Mission 16's Ladon path) names a tube object in its own package, an export index past
+    # ours ("Bad export index 74/19": the game's loader stopped at the hangar, 2026-10-23)
+    tube = ('struct', 'LiveAIPathTubeData', [(0, 'TubeData', False, ('arr', [])), (1, 'MoveData', False, ('arr', []))])
+    repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els), 'PathTubeData': tube,
             'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}')),
             'Name': ('name', name, 0), 'WorldDataName': ('name', 'WD_SurvivalMode_global', 0)}
     new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl else q for q in new[2]]
@@ -772,6 +775,17 @@ def build_wd_global():
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
     assert any(p[1] == 'CombatZoneDescList' for p in v[2])
+    # every object reference in the world data inside this package (an export index from another mission's desc crashes
+    # the game's loader when the level loads: "Bad export index")
+    def refs(x, out):
+        if isinstance(x, tuple):
+            if x and x[0] == 'obj' and isinstance(x[1], int) and x[1] > len(z.exports): out.append(x)
+            for y in x: refs(y, out)
+        elif isinstance(x, list):
+            for y in x: refs(y, out)
+        return out
+    bad = refs(v, [])
+    assert not bad, f'object references past the {len(z.exports)} exports: {bad[:5]}'
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
     print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}; '
