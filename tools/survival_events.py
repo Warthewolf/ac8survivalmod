@@ -1137,11 +1137,15 @@ def build_shuttle(g, flag):
     # round 9: a delayed record's conditions are checked when its event fires, at the shuttle's appearance).
     # LiveDestroyUnitExecution kills through TakeDamage(FLT_MAX), which is clamped at the object's MinHealth: the 1.0
     # set before liftoff has to go back to 0 first (as M019/M021/M026 do), or the shuttle stays up with 1 HP.
+    # (user, 2026-10-23: "the space shuttle and centre hasnt despawned", RE_SV_ShuttleRemove fired: destroying them
+    # through damage never took them off) Both units are switched off with Mission 22's own despawn,
+    # LiveSetActiveGameObjectExecution ({0 object, 1 unit, 2 tag, 3 active}: false), as it does its stray dummies; the
+    # next shuttle round spawns them fresh. The pad's allies (guns, SAMs, tower) go with it: the whole unit.
+    t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
+    assert arg_values(t_off)[1] == 'NoneSelect' and arg_values(t_off)[2] == 'NoneSelect', arg_values(t_off)
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
-    g.execute(t_minhp, 'RE_SV_ShuttleRemove', {0: SHUTTLE, 3: '0.0'})
-    g.execute(t_remove, 'RE_SV_ShuttleRemove', delay=1.0)
-    g.execute(t_remove, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'})
-    # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
+    for unit in (SHUTTLE_UNIT, PAD_UNIT):
+        g.execute(t_off, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
     # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too)
     for name in resets:
         flag('RE_SV_ShuttleRemove', name, 'Set', 0)
