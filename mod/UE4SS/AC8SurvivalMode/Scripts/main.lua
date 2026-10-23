@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.49.3"
+local VERSION = "0.49.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -695,9 +695,10 @@ local CFG = {
     -- from round 8 and lost money from 16 (the enemies take more missiles a kill, the pay stayed 100), so allies at
     -- 15000-20000 were out of reach. Now (model): ~18000 by round 10, ~64000 by 20, ~156000 by 30.
     -- special_x (user, 2026-10-23: "Special Rounds should pay out larger amounts, as should their enemies"): every
-    -- kill in a special round (aircraft, landing craft, troop vehicles, the Alicorn's ballast tanks) pays x this.
+    -- kill in a special round (aircraft, landing craft, troop vehicles, the Alicorn's ballast tanks) pays x this
+    -- (1.5 in 0.49.3, then "buff the special round eco more": 2, and the specials' own rewards twice 0.49.2's).
     credits = {
-        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 100, special_x = 1.5,
+        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 100, special_x = 2.0,
         tier_pay = { 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0 },
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
     },
@@ -867,7 +868,7 @@ local CFG = {
         -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
         alicorn = { name = "ALICORN", dive_every_s = 110, dive_for_s = 30, first_shot_s = 25, railgun_every_s = 35,
                     volley_every_s = 25, health_x = 0.5, health_per_round = 0.04, health_max_x = 1.5,
-                    tank_pay = 500, reward = 9000, reward_per_round = 300,
+                    tank_pay = 500, reward = 12000, reward_per_round = 400,
                     tank_classes = { "BP_BA002_alcn_btankfl_Base_C", "BP_BA002_alcn_btankfr_Base_C",
                                      "BP_BA002_alcn_btankrl_Base_C", "BP_BA002_alcn_btankrr_Base_C" },
                     core_class = "BP_MP028_dummy_emlmcore_Base_C",
@@ -885,7 +886,7 @@ local CFG = {
         -- route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 0.85, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
-                  reward = 4500, reward_per_round = 150,
+                  reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
         -- `lanes` (from the user's marks; `craft` craft each, side by side) cross to Comona's beaches by the airport,
@@ -903,10 +904,10 @@ local CFG = {
         -- more fighters than the round's own and a bomber raid more often)
         amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 4, lanes_more = 1,
                        capture_per_troop = 25, extra_aircraft = 4,
-                       captured_rounds = 2, bomber_chance = 0.6, reward = 3000, reward_per_round = 120,
+                       captured_rounds = 2, bomber_chance = 0.6, reward = 4000, reward_per_round = 160,
                        craft_pay = 150, troop_pay = 150, remove_after_s = 90 },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
-        shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 4500, reward_per_round = 150, strike_share = 0.4,
+        shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
                      -- (removed after it, tools/survival_events.py PAD_REMOVE_LOST_S / SHUTTLE_REMOVE_S)
                      -- remove_s: liftoff to the shuttle and pad being taken off; = SHUTTLE_REMOVE_S (its flags reset after it)
@@ -923,7 +924,7 @@ local CFG = {
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
         -- field_km 3.2: the ECM pod's ring on the radar is 3.2 km (BP_wp_ecm_a0), so the ring shows the field
         anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "both",
-                     fade_s = 1.5, reward = 6000, reward_per_round = 225, ai_level = 5, guard_offset_m = 800,
+                     fade_s = 1.5, reward = 8000, reward_per_round = 300, ai_level = 5, guard_offset_m = 800,
                      -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
                      -- to those levels should spawn")
                      only = true,
