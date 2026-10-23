@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.54.2"
+local VERSION = "0.54.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -546,7 +546,8 @@ local CFG = {
     -- The flight recorder (user, 2026-10-23: "tracks my movements ... build our own behaviours while I play ... feed
     -- them into an AI aircraft"): 4 times a second while an enemy is within range_km, one CSV line of how you fly
     -- (stick, throttle and brake: dlls/main.dll SV_Input, every frame averaged; attitude, speed, health) and where the
-    -- nearest enemy is (range, its bearing off your nose, your angle off its tail, height difference, its AI state),
+    -- enemy you have targeted is (dlls/main.dll SV_PlayerTarget; else the nearest one; user: "Can it track the enemy
+    -- I'm locked onto?"): range, its bearing off your nose, your angle off its tail, height difference, its AI state,
     -- into flights_<date>_<time>.csv next to Scripts (one file a level). Only on this PC; nothing is sent.
     recorder = { enabled = true, range_km = 8 },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
@@ -2237,13 +2238,24 @@ function ACE.recTick(now, D)      -- (D: the run, passed in: declared further do
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     local me = vec(pawn:K2_GetActorLocation())
-    -- the nearest enemy by its last known place, then read now
-    local best, bd
+    -- the enemy you have targeted (SV_PlayerTarget), else the nearest by its last known place; then read now
+    local best, bd, targeted
+    local tAddr = type(SV_PlayerTarget) == "function" and addrOf(pawn) and SV_PlayerTarget(addrOf(pawn)) or 0
     for _, p in ipairs(planes) do
-        if not p.down and p.at and valid(p.obj) then
-            local d = km(p.at, me)
-            if not bd or d < bd then best, bd = p, d end
+        if not p.down and valid(p.obj) then
+            if tAddr and tAddr > 0 and addrOf(p.obj) == tAddr then
+                best, bd, targeted = p, p.at and km(p.at, me) or 0, true
+                break
+            end
+            if p.at then
+                local d = km(p.at, me)
+                if not bd or d < bd then best, bd = p, d end
+            end
         end
+    end
+    if targeted and not REC.tSaid then REC.tSaid = true; log("recorder: following your target " .. best.name) end
+    if not REC.addrSaid and tAddr and tAddr ~= 0 and not targeted then
+        REC.addrSaid = true; log(string.format("recorder: your target %X isn't an enemy aircraft (a ground target?)", tAddr))
     end
     if not best or bd > c.range_km + 2 then
         for a = 0, 4 do if type(SV_Input) == "function" then SV_Input(a) end end   -- (start the next average afresh)
@@ -2257,7 +2269,7 @@ function ACE.recTick(now, D)      -- (D: the run, passed in: declared further do
         REC.file = io.open(REC.name, "w")
         if not REC.file then c.enabled = false; log("recorder: can't write " .. REC.name .. "; off"); return end
         REC.file:write("t,round,x_km,y_km,alt_m,speed_kmh,pitch,yaw,roll,in_pitch,in_yaw,in_roll,in_throttle,in_brake,hp,",
-            "enemy,tier,enemy_state,range_m,enemy_off_nose,me_off_its_tail,its_nose_to_me,dz_m,enemy_speed_kmh\n")
+            "enemy,targeted,tier,enemy_state,range_m,enemy_off_nose,me_off_its_tail,its_nose_to_me,dz_m,enemy_speed_kmh\n")
         log("recorder: writing " .. REC.name)
     end
     local fwd, rot, vel = vec(pawn:GetActorForwardVector()), pawn:K2_GetActorRotation(), vec(pawn:GetVelocity())
@@ -2275,9 +2287,9 @@ function ACE.recTick(now, D)      -- (D: the run, passed in: declared further do
         st = AI_STATE[v] or tostring(v)
     end)
     local spd = function(v) return math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) * 0.036 end
-    REC.file:write(string.format("%.2f,%d,%.3f,%.3f,%.0f,%.0f,%.1f,%.1f,%.1f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%s,%s,%s,%.0f,%.1f,%.1f,%.1f,%.0f,%.0f\n",
+    REC.file:write(string.format("%.2f,%d,%.3f,%.3f,%.0f,%.0f,%.1f,%.1f,%.1f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%s,%d,%s,%s,%.0f,%.1f,%.1f,%.1f,%.0f,%.0f\n",
         now, D.round, me.X / 100000, me.Y / 100000, me.Z / 100, spd(vel), rot.Pitch, rot.Yaw, rot.Roll,
-        inp[0], inp[1], inp[2], inp[3], inp[4], hp, best.name, best.tier and best.tier.name or "-", st,
+        inp[0], inp[1], inp[2], inp[3], inp[4], hp, best.name, targeted and 1 or 0, best.tier and best.tier.name or "-", st,
         range * 1000, deg(fwd, toE), deg(eback, toMe), deg(efwd, toMe), (ep.Z - me.Z) / 100, spd(evel)))
     REC.lines = REC.lines + 1
     if REC.lines % 40 == 0 then REC.file:flush() end

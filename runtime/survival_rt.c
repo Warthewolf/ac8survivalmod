@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.15.0"
+#define RT_VERSION           L"0.15.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1811,10 +1811,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.15.0" */
+/* SV_Version() -> "0.15.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.15.0";
+    static const char v[] = "0.15.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -1849,6 +1849,24 @@ static int L_PlaneLevel(void* lua)
     uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)addr;
     if (!LiveObject(plane) || !Readable(plane + PLANE_AI_LEVEL, 2)) return Ret(lua, SV_ERR_BAD_ARGS);
     return Ret(lua, *(uint16_t*)(plane + PLANE_AI_LEVEL));
+}
+
+/* SV_PlayerTarget(plane) -> the address of the player plane's current target (the enemy it has selected, the one its
+ * missiles go for), 0 for none, SV_ERR_BAD_ARGS for a bad plane. tools/re/UNIQUE_ACTIONS.md: the player tick posts
+ * EnemyBehind for player+0x1ae8 -> +0x750. For the flight recorder (Lua CFG.recorder). */
+#define PLAYER_TARGET_HOLDER 0x1ae8
+#define PLAYER_TARGET        0x750
+static int L_PlayerTarget(void* lua)
+{
+    double addr = 0;
+    if (!ArgNumber(lua, &addr) || addr <= 0) return Ret(lua, SV_ERR_BAD_ARGS);
+    uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)addr;
+    if (!LiveObject(plane) || !Readable(plane + PLAYER_TARGET_HOLDER, 8)) return Ret(lua, SV_ERR_BAD_ARGS);
+    uint8_t* holder = *(uint8_t**)(plane + PLAYER_TARGET_HOLDER);
+    if (!holder || !Readable(holder + PLAYER_TARGET, 8)) return Ret(lua, 0);
+    uint8_t* target = *(uint8_t**)(holder + PLAYER_TARGET);
+    if (!target || !LiveObject(target)) return Ret(lua, 0);
+    return Ret(lua, (int64_t)(uintptr_t)target);
 }
 
 /* SV_SetAircraft(unit, npc [, index]) -> AI objects changed or an SV_ERR code */
@@ -2320,7 +2338,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_Input", L_Input },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_Input", L_Input }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
     };
