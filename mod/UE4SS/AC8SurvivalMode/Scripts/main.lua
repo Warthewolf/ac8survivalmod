@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.50.0"
+local VERSION = "0.50.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -866,8 +866,10 @@ local CFG = {
         -- you every volley_every_s. Destroy its four ballast tanks and the core opens; destroy the core to sink it.
         -- Its parts' health x health_x (tuned for an online squad) and health_per_round more a round after `first`.
         -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
-        alicorn = { name = "ALICORN", dive_every_s = 110, dive_for_s = 30, first_shot_s = 25, railgun_every_s = 35,
-                    volley_every_s = 25, health_x = 0.5, health_per_round = 0.04, health_max_x = 1.5,
+        -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
+        -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.
+        alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
+                    volley_every_s = 45, health_x = 0.3, health_per_round = 0.03, health_max_x = 1.0,
                     tank_pay = 500, reward = 12000, reward_per_round = 400,
                     tank_classes = { "BP_BA002_alcn_btankfl_Base_C", "BP_BA002_alcn_btankfr_Base_C",
                                      "BP_BA002_alcn_btankrl_Base_C", "BP_BA002_alcn_btankrr_Base_C" },
@@ -3630,7 +3632,7 @@ local function stats()
                                specials = {} }
     return RUN.stats
 end
-function LB.stat(what, n) if D then local st = stats(); st[what] = st[what] + (n or 1) end end
+function LB.stat(what, n) if D then local st = stats(); st[what] = (st[what] or 0) + (n or 1) end end
 function LB.special(kind, won, seconds)
     if not D then return end
     local sp = stats().specials
@@ -3729,7 +3731,8 @@ function LB.finish(how)
                 round = D.round, mod = VERSION, kills = { air = st.air, ground = st.ground },
                 zollars = { earned = math.floor(RUN.earned or 0), spent = math.floor(RUN.spent or 0) },
                 time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials,
-                aircraft = st.jet, how = how, aces = st.aces, allies = st.allies, af_down = st.af_down, captured = st.captured,
+                aircraft = st.jet, how = how, aces = st.aces or 0, allies = st.allies or 0, af_down = st.af_down or 0,
+                captured = st.captured or 0,
                 tier = CFG.tiers.enabled and (CFG.tiers.list[TIER.index(D.round)] or {}).name or nil }
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
@@ -5553,7 +5556,8 @@ local function probeTick(tick)
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
         RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
                 -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
-                stats = { started = os.time(), air = 0, ground = 0, specials = {} } }
+                stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
+                          specials = {} } }
         ALLY.run = nil                             -- (a new level: no allies up)
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
@@ -5607,7 +5611,8 @@ local function probeTick(tick)
                         if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
                             log(string.format("mission restarted in round %d (%s %d -> %d): the run starts over", D.round, k, D.maxFlags[k], v))
                             levelTick = -1         -- the level-load reset below, on the next tick
-                            LB.finish("restart")
+                            local okL, errL = pcall(LB.finish, "restart")          -- (its error mustn't stop the reset)
+                            if not okL then log("leaderboard: error " .. tostring(errL)) end
                         end
                         D.maxFlags[k] = math.max(D.maxFlags[k] or 0, v)
                     end
@@ -5616,7 +5621,8 @@ local function probeTick(tick)
         end
         if (D.pcLost or 0) >= 8 then
             log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
-            LB.finish("left")
+            local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
+            if not okL then log("leaderboard: error " .. tostring(errL)) end
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
