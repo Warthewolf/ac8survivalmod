@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.55.6"
+local VERSION = "0.55.7"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -898,13 +898,31 @@ local CFG = {
         -- Its parts' health x health_x (tuned for an online squad) and health_per_round more a round after `first`.
         -- Each ballast tank takes tank_missiles of your standard missiles (user, 2026-10-23: "it should only take like
         -- 6 missiles to destroy each ballast tank"; 14 missiles took none down), from the missile's own damage read in
-        -- game, more a round as above; health_x when it can't be read. 0: health_x.
+        -- game, more a round as above; health_x when it can't be read. 0: health_x. Its weapons (weapon_classes: the
+        -- VLS, SAM, AA guns, CIWS, ECM and their hatches) take weapon_missiles each, its railguns railgun_missiles
+        -- (user, 2026-10-23: "lower the health down on the alicorns weaponry"; they had the online squad's 800-2000 and
+        -- took 10-62.5 % from most weapons); never more than they had. 0: their online health.
         -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
         -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
         -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
                     volley_every_s = 45, health_x = 0.3, health_per_round = 0.03, health_max_x = 1.0,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
+                    weapon_missiles = 3, railgun_missiles = 4,
+                    weapon_classes = {   -- its weapons and their hatches: which *_missiles each takes
+                        BP_BA002_alcn_hatch_emls_L_Base_C = "railgun_missiles", BP_BA002_alcn_hatch_emls_R_Base_C = "railgun_missiles",
+                        BP_BA002_alcn_emls_Base_C = "railgun_missiles",
+                        BP_BA002_alcn_vlsL1_Base_C = "weapon_missiles", BP_BA002_alcn_vlsL2_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_vlsR1_Base_C = "weapon_missiles", BP_BA002_alcn_vlsR2_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_vls_Base_C = "weapon_missiles", BP_BA002_alcn_ecm_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchL1_Base_C = "weapon_missiles", BP_BA002_alcn_hatchL2_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchL3_Base_C = "weapon_missiles", BP_BA002_alcn_hatchL4_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchL5_Base_C = "weapon_missiles", BP_BA002_alcn_hatchL6_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchR1_Base_C = "weapon_missiles", BP_BA002_alcn_hatchR2_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchR3_Base_C = "weapon_missiles", BP_BA002_alcn_hatchR4_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_hatchR5_Base_C = "weapon_missiles", BP_BA002_alcn_hatchR6_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_aagun_Base_C = "weapon_missiles", BP_BA002_alcn_ram_Base_C = "weapon_missiles",
+                        BP_BA002_alcn_ciws_Base_C = "weapon_missiles", BP_BA002_alcn_ciwsp5_Base_C = "weapon_missiles" },
                     tank_classes = { "BP_BA002_alcn_btankfl_Base_C", "BP_BA002_alcn_btankfr_Base_C",
                                      "BP_BA002_alcn_btankrl_Base_C", "BP_BA002_alcn_btankrr_Base_C" },
                     core_class = "BP_MP028_dummy_emlmcore_Base_C",
@@ -4247,6 +4265,27 @@ function SPC.alicornTick(now, s)
                     want and string.format("%d missiles", math.floor(want / (s.mslDamage * 10) + 0.5)) or string.format("x%.2f", hx),
                     tostring(h0), tostring(hp(o))))
             end
+        end
+    end
+    -- its weapons: weapon_missiles / railgun_missiles each (the first 5 checks, once the missile's damage is known)
+    if (s.weaponChecks or 0) < 5 and not tankWait then
+        s.weaponChecks = (s.weaponChecks or 0) + 1
+        local n, growth = 0, hx / (c.health_x or 1)
+        for cls, k in pairs(c.weapon_classes or {}) do
+            local m = c[k] or 0
+            for _, o in ipairs(m > 0 and s.mslDamage and parts(cls) or {}) do
+                local key = addrOf(o) or nameOf(o)
+                local h0 = not s.scaled[key] and hp(o)
+                if h0 and h0 > 0 then
+                    s.scaled[key] = true
+                    local want = math.floor(m * s.mslDamage * 10 * growth + 0.5)
+                    if want < h0 and pcall(function() o.HealthInternal = want end) then n = n + 1 end
+                end
+            end
+        end
+        if n > 0 then
+            log(string.format("special: Alicorn weapons: %d parts lowered to %d missiles (railguns %d)", n,
+                math.floor((c.weapon_missiles or 0) * growth + 0.5), math.floor((c.railgun_missiles or 0) * growth + 0.5)))
         end
     end
     local tanks, seen = 0, #tankList
