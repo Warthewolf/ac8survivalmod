@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.47.1"
+local VERSION = "0.47.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1011,6 +1011,9 @@ local CFG = {
         -- The game draws its HUD white and tints it in a post-process (green by default, plus a glow); ours is a
         -- plain widget, so it gets the measured green (linear RGB) and a faint outline in place of the glow.
         color            = { 0.26, 1.0, 0.33 },
+        -- the end-of-run summary's panel (user, 2026-10-23: "a dark green background with light green edges so that we
+        -- can see the text better"): its box on the 3840 x 2160 layout, its fill (r, g, b, a) and edge colour / width
+        summary          = { w = 1700, y = 520, h = 690, fill = { 0.02, 0.16, 0.05, 0.82 }, edge = { 0.6, 1.0, 0.65 }, edge_px = 4 },
         opacity          = 0.9,
         glow_size        = 2,                   -- outline width; 0 = none
         glow_alpha       = 0.25,
@@ -2241,9 +2244,9 @@ local function newText(name, justify, spacing)
     return t
 end
 
-local function newBar(canvas, a0, a1, off)
+local function newBar(canvas, a0, a1, off, color)
     local b = newWidget("Image", "Bar")
-    local c = CFG.hud.color
+    local c = color or CFG.hud.color
     b:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })   -- no brush texture: a plain quad, as the game's bars
     b:SetRenderOpacity(CFG.hud.opacity)
     slotIn(canvas, b, a0, a1, off, { 0, 0 }, false)
@@ -2325,7 +2328,19 @@ local function hudBuild(pc)
     slotIn(canvas, H.sub, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y + 34 + 40, 0, 0 }, { 0.5, 0 }, true)
     banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed)
 
-    -- the end-of-run summary (LB.show): a title and its lines, centred, under the banner
+    -- the end-of-run summary (LB.show): a title and its lines, centred, under the banner, on a panel behind them
+    local sm = hc.summary
+    H.lbPanel = newWidget("CanvasPanel", "LbPanel")
+    slotIn(canvas, H.lbPanel, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, sm.y, sm.w, sm.h }, { 0.5, 0 }, false)
+    local fill = newWidget("Image", "LbFill")
+    fill:SetColorAndOpacity({ R = sm.fill[1], G = sm.fill[2], B = sm.fill[3], A = sm.fill[4] })
+    slotIn(H.lbPanel, fill, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+    local e = sm.edge_px
+    newBar(H.lbPanel, { 0, 0 }, { 1, 0 }, { 0, 0, 0, e }, sm.edge)          -- top
+    newBar(H.lbPanel, { 0, 1 }, { 1, 1 }, { 0, -e, 0, e }, sm.edge)         -- bottom
+    newBar(H.lbPanel, { 0, 0 }, { 0, 1 }, { 0, 0, e, 0 }, sm.edge)          -- left
+    newBar(H.lbPanel, { 1, 0 }, { 1, 1 }, { -e, 0, e, 0 }, sm.edge)         -- right
+    H.lbPanel:SetVisibility(VIS.Collapsed)
     H.lbTitle = newText("LbTitle", 1, hc.banner_letter_spacing)
     slotIn(canvas, H.lbTitle, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, 560, 0, 0 }, { 0.5, 0 }, true)
     H.lbLines = {}
@@ -3711,6 +3726,7 @@ function LB.hud(now)
     local t = CFG.hud.text
     if not sh then
         if H.lbShown then
+            if H.lbPanel then H.lbPanel:SetVisibility(VIS.Collapsed) end
             H.lbTitle:SetVisibility(VIS.Collapsed)
             for _, l in ipairs(H.lbLines) do l:SetVisibility(VIS.Collapsed) end
             H.lbShown = false
@@ -3728,6 +3744,7 @@ function LB.hud(now)
     setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
     for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end
     if not H.lbShown then
+        if H.lbPanel then H.lbPanel:SetVisibility(VIS.HitTestInvisible) end
         H.lbTitle:SetVisibility(VIS.HitTestInvisible)
         for _, l in ipairs(H.lbLines) do l:SetVisibility(VIS.HitTestInvisible) end
         H.lbShown = true
