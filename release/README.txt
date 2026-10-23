@@ -52,13 +52,28 @@ Named aces (ace rounds: 16, 19, 22, ... - only ace squadrons, no bomber raids; t
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
 an "ACE INBOUND" callout names each one the first time it shows up.
 
-Special rounds (round 5, then every 5th, in turn):
+Special rounds: from round 4 on, any round can be a special one (about 1 in 3, never two in a row). They get harder
+the later they come.
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
-  the ~2.5 minute countdown. Liftoff pays 3000 zollars; if it's destroyed the shop is closed through the next round.
-- THE ANOMALY (round 10, 20, ...): the ace MINDRIPPER comes through a lightning portal in an F-4E, hovering in place,
-  with four PHANTASM guards circling it. It's tough and very aggressive, and it carries an ECM pod (its area shows on
-  the radar; your missiles miss more near it). Within 3 km of it your pitch and roll invert. Shoot it down for 4000
-  zollars and your controls come back. Nothing else flies in its round.
+  the ~2.5 minute countdown. If it's destroyed the shop is closed through the next round.
+- THE ANOMALY: the ace MINDRIPPER comes through a lightning portal in an F-4E, hovering in place, with four PHANTASM
+  guards. Within 3 km of it your pitch and roll invert. Nothing else flies in its round.
+- AMPHIBIOUS ASSAULT: 16 landing craft head for the beaches by the airport; every one that lands puts a BTR ashore,
+  which drives for the runway. Each BTR that reaches it captures 25 % of the airfield; at 100 % the airfield is taken
+  (no landing, no STORE) until you destroy them or two rounds pass. Fighters (and maybe bombers) come too.
+- THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down.
+- THE ALICORN: the submarine carrier sails the west sea, diving and surfacing, firing its railgun and missiles.
+  Destroy its four ballast tanks to open its core, then the core.
+
+Leaderboard (Discord)
+---------------------
+When a run ends (shot down, or a restart) a summary shows: round, score, kills, specials beaten, time. Press Y to
+submit it to the Survival leaderboard on Discord, N to skip (30 seconds to answer). You appear under your Steam name;
+to use another, set  pilot = Your Name  under [leaderboard] in survival.ini. submit = always there sends every run
+without asking (for a controller), never turns it off. If you're offline the run is kept and sent next time. Only the
+leaderboard's own server is contacted; nothing about your PC is sent besides the run.
+Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
+x1 Standard, x1.5 Ace.
 
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the

@@ -13,6 +13,10 @@ rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/survival.ini* "$st"/ue4ss/Mods/AC8SurvivalMode/*.log
+rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/pending_runs.txt "$st"/ue4ss/Mods/AC8SurvivalMode/config/coast_*.txt       "$st"/ue4ss/Mods/AC8SurvivalMode/hud_dump.txt
+# the test-only cheats (main.lua's TEST ONLY BEGIN ... END: the +5000 zollars key) never ship
+python -I tools/strip_test_only.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"
+python -I tools/checks/lua_check.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"
 sed "s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 out="build/release/AC8SurvivalMode_$name.zip"
 python -I -c "

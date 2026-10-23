@@ -5696,7 +5696,8 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             if not ok then log("launch: error " .. tostring(err)) end
         end)
     end)
-    -- TEST ONLY, take out of every release / test zip (user, 2026-10-23): Ctrl+F9 in a run gives 5000 zollars
+    -- TEST ONLY BEGIN (tools/package_test.sh strips this from every release / test zip; user, 2026-10-23)
+    -- Ctrl+F9 in a run gives 5000 zollars
     if Key.F9 then
         pcall(RegisterKeyBind, Key.F9, mods, function()
             ExecuteInGameThread(function()
@@ -5710,6 +5711,7 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             end)
         end)
     end
+    -- TEST ONLY END
     -- Y / N: answer the end-of-run prompt (CFG.leaderboard); they do nothing while it isn't up
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
     for _, yn in ipairs({ { "Y", true }, { "N", false } }) do
@@ -5751,7 +5753,7 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
         end
     end
     end)()
-    if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen; was Ctrl+F9, now the test key)
+    if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
         pcall(RegisterKeyBind, Key.F7, mods, function()
             ExecuteInGameThread(function()
                 local ok, err = pcall(hudDump, "Ctrl+F7")
