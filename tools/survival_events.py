@@ -313,6 +313,29 @@ ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Pla
 # firing (CFG.specials.glitch). The records here: the pool's orders and the MISSION UPDATE banner when it appears.
 GLITCH_UNIT = 'SV_Unit_Glitch'
 GLITCH_OBJ = None                           # its AI object name, set by build_survival.py build_wd_global
+# Its blinks (user, 2026-10-23: "the teleport did not work": Lua's K2_SetActorLocationAndRotation read back right but
+# the flight model put the plane back): Mission 22's LiveActorTeleportExecution, which moved its dummies onto the player
+# (target Player, world offsets, Absolute), one remote event per spot: RE_SV_GlitchBlink_<tag> puts AB.L..IN `m` metres
+# from the player at bearing `deg` (world: 0 = +X, 90 = +Y), at their height, its nose (yaw) on them. Scripts/main.lua
+# picks the spot (CFG.specials.glitch.blinks: keep in step).
+# Its gun and ECM pod on command (user, 2026-10-23: "no crazy guns either"; "ECM didn't turn on"): Mission 19's
+# LiveFireOneShotWeapon, which has a Rafale fire WN_WEAPON_3 at the player. WN_WEAPON_<n> is fire-control slot n - 1
+# (that Rafale's row: flares, gun, missiles; the Ladon VLS's WN_WEAPON_1 / _2 are its two missiles), so on the EA-18G's
+# row (flares, gun, missiles, ECM) the gun is WN_WEAPON_2 and the ECM pod WN_WEAPON_4. Scripts/main.lua fires
+# RE_SV_GlitchGun through each frenzy and RE_SV_GlitchEcm every ecm_every_s.
+GLITCH_GUN_SLOT = 'WN_WEAPON_2'
+GLITCH_ECM_SLOT = 'WN_WEAPON_4'
+GLITCH_BLINK_STEP_DEG = 30
+GLITCH_BLINK_RINGS_M = (500, 800)
+
+
+def glitch_blinks():
+    """[(event, bearing deg, metres)]; tags are letters (hard rule 17)."""
+    out = []
+    for ring, m in enumerate(GLITCH_BLINK_RINGS_M):
+        for k, deg in enumerate(range(0, 360, GLITCH_BLINK_STEP_DEG)):
+            out.append((f'RE_SV_GlitchBlink_{chr(65 + ring)}{chr(65 + k)}', deg, m))
+    return out
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -682,7 +705,7 @@ def build_events(stock_ep):
         g.execute(t_landing, ev, {0: on})
     build_shuttle(g, flag)
     build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
-    build_glitch(g, t_search, t_engage)
+    build_glitch(g, t_search, t_engage, stock_ep)
     build_repair(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
@@ -1008,11 +1031,29 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
         g.execute(t_glass_off, ev)
 
 
-def build_glitch(g, t_search, t_engage):
-    """AB.L..IN (see GLITCH_*): the pool's orders when it appears (search, then engage the player anywhere) and the
-    stock MISSION UPDATE banner and beep. Everything else is Scripts/main.lua's (ANOM.glitchTick)."""
+def build_glitch(g, t_search, t_engage, stock_ep):
+    """AB.L..IN (see GLITCH_*): the pool's orders when it appears (search, then engage the player anywhere), the
+    stock MISSION UPDATE banner and beep, and its blinks (GLITCH_BLINK_*). Everything else is Scripts/main.lua's
+    (ANOM.glitchTick)."""
+    import math
     assert GLITCH_OBJ, 'build_survival.py build_wd_global sets GLITCH_OBJ first'
     t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')                  # {0e MISSION_ACCOMPLISHED}
+    # Mission 22's: A_Obj_01_dummyN0 onto the player, 6.5 km north ({1: obj, 2: Player, 4-6: offset cm, 9-11: rotation
+    # (roll, pitch, yaw), 13: Absolute})
+    t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
+    v = arg_values(t_tp)
+    assert v[2] == 'Player' and v[13] == 'Absolute' and v[8] == 'NoneSelect', v
+    for ev, deg, m in glitch_blinks():
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                                  # a remote event Lua fires
+        dx, dy = m * 100 * math.cos(math.radians(deg)), m * 100 * math.sin(math.radians(deg))
+        yaw = (deg + 180 + 180) % 360 - 180                                     # facing back at the player
+        g.execute(t_tp, ev, {1: GLITCH_OBJ, 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
+    for ev, slot in (('RE_SV_GlitchGun', GLITCH_GUN_SLOT), ('RE_SV_GlitchEcm', GLITCH_ECM_SLOT)):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_fire, ev, {0: slot, 1: GLITCH_OBJ})
     up = 'SV_GlitchUp'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: GLITCH_UNIT})
     g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)

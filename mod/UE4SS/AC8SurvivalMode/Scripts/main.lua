@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.2"
+local VERSION = "0.56.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -942,16 +942,21 @@ local CFG = {
         -- HP (the EA-18G has 60), its ECM pod always up, an accurate gun that holds the trigger (gun_*: it fires once
         -- you're within gun_range_m and gun_angle_deg of its nose). It arrives hidden and shows in a puff of `smoke`
         -- arrive_s later. Each time it's hit (outside a frenzy) it frenzies for frenzy_s: every blink_every_s it
-        -- vanishes in smoke (hidden, untargetable, unhurt) and comes back in smoke blink_m from you at your height
-        -- (blink_height_m either way; user: "at whatever height the player is closest too"), at least ground_clear_m
-        -- above the ground, behind its own flight path within blink_spread_deg, and between blinks its nose stays on
-        -- you (leading you at bullet_mps). Its health grows health_per_round a round after `first` (at most
+        -- vanishes in smoke (hidden, untargetable, unhurt) and comes back in smoke at one of the `blinks` spots around
+        -- you at your height (user: "at whatever height the player is closest too"), one at least ground_clear_m above
+        -- the ground, behind its own flight path within blink_spread_deg, and its gun is fired at you all
+        -- through it (gun_every_s). Its health grows health_per_round a round after `first` (at most
         -- health_max_x), as the other specials'. Shot down: `reward` zollars.
         glitch   = { name = "AB.L..IN", squadron = "IFF: FATAL ERROR", unit = "SV_Unit_Glitch", health = 450,
                      reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
                      health_per_round = 0.04, health_max_x = 3.0,
-                     frenzy_s = 6, blink_every_s = 1.0, blink_m = { 450, 850 }, blink_height_m = 40,
-                     blink_spread_deg = 35, ground_clear_m = 150, min_alt_m = 150, bullet_mps = 1000,
+                     frenzy_s = 6, blink_every_s = 1.0, blink_spread_deg = 35, ground_clear_m = 150,
+                     -- its gun and ECM pod on command (tools/survival_events.py GLITCH_GUN_SLOT / _ECM_SLOT): the gun
+                     -- fired at you every gun_every_s through a frenzy, the pod every ecm_every_s while it's up
+                     gun_every_s = 0.5, ecm_every_s = 14,
+                     -- its blink spots: the event package's (tools/survival_events.py GLITCH_BLINK_*; keep in step, not
+                     -- an ini setting): RE_SV_GlitchBlink_<ring letter><bearing letter>, every step_deg on each ring
+                     blinks = { step_deg = 30, rings_m = { 500, 800 } },
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
                      smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
                      smoke_s = 3.0 },
@@ -3292,8 +3297,8 @@ function ANOM.nearPlayer(spawn_km)
 end
 
 -- AB.L..IN (CFG.specials.glitch; tools/survival_events.py GLITCH_*): its actor (just created ones too), where an actor
--- is, the rotation that points a nose at `to` from `from`, and the ground under a point (a straight-down trace: it
--- finds terrain only near the player, hard rule 27, which is where it blinks).
+-- is, and the ground under a point (a straight-down trace: it finds terrain only near the player, hard rule 27, which
+-- is where it blinks).
 local function glitchActor(c)
     for _, list in ipairs({ planes, pending }) do
         for _, q in ipairs(list) do if q.unit == c.unit and valid(q.obj) then return q.obj end end
@@ -3302,10 +3307,6 @@ end
 local function where(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
-end
-local function aimAt(from, to)
-    local dx, dy, dz = to.X - from.X, to.Y - from.Y, to.Z - from.Z
-    return { Pitch = math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy))), Yaw = math.deg(math.atan(dy, dx)), Roll = 0 }
 end
 local function groundAt(x, y)
     local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
@@ -3321,17 +3322,6 @@ local function groundAt(x, y)
         if l and l.Z then z = l.Z end
     end)
     return z
-end
--- where to aim from `from`: the player's position now, plus their velocity over the rounds' flight time (bullet_mps)
-local function glitchTarget(from)
-    local you = playerLocation()
-    if not you or not from then return you end
-    local pawn = valid(survivalPC) and survivalPC.Pawn
-    local ok, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
-    if not (ok and v) then return you end
-    local dx, dy, dz = you.X - from.X, you.Y - from.Y, you.Z - from.Z
-    local tof = math.sqrt(dx * dx + dy * dy + dz * dz) / (CFG.specials.glitch.bullet_mps * 100)
-    return { X = you.X + v.X * tof, Y = you.Y + v.Y * tof, Z = you.Z + v.Z * tof }
 end
 -- gone (hidden, no collision, no target box, can't be locked or targeted, can't be hurt) or back; the first time, the
 -- log says which of those took (code review of 2026-10-23: hidden alone left its TGT box and lock up)
@@ -3385,23 +3375,32 @@ function ANOM.glitchSpawn(now)
     return true
 end
 
--- A blink: where it comes back, `blink_m` from the player at their height (blink_height_m either way; user, 2026-10-23:
--- "at whatever height the player is closest too"), never under ground_clear_m above the ground or min_alt_m. Its
--- bearing is behind its own flight path (within blink_spread_deg), so the nose it's given on the player lines up with
--- where it's already going (code review of 2026-10-23: a teleport keeps its velocity); any bearing when that can't be read.
-local function blinkPoint(c, o, you)
-    local base = math.random() * 2 * math.pi
+-- A blink: the spot it comes back to (CFG.specials.glitch.blinks; the event package moves it there, from the player at
+-- their height, nose on them: the flight model undoes a Lua move). Behind its own flight path when that can be read
+-- (within blink_spread_deg, so the nose it's given lines up with where it's going), else any; never one under
+-- ground_clear_m above the ground. Returns its event, the point and its distance (cm), or nil.
+local function blinkSpot(c, o, you)
+    local bl = c.blinks
+    local want = math.random() * 360
     local ok, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y } end)
-    local spread = math.rad(c.blink_spread_deg or 180)
-    if ok and v and (v.X ~= 0 or v.Y ~= 0) then base = math.atan(-v.Y, -v.X) end
-    local b = base + (math.random() * 2 - 1) * spread
-    local d = (c.blink_m[1] + math.random() * (c.blink_m[2] - c.blink_m[1])) * 100
-    local hz = c.blink_height_m or 0
-    local to = { X = you.X + d * math.cos(b), Y = you.Y + d * math.sin(b), Z = you.Z + (math.random() * 2 - 1) * hz * 100 }
-    local ground = groundAt(to.X, to.Y)
-    local floor = math.max(c.min_alt_m * 100, ground and (ground + c.ground_clear_m * 100) or 0)
-    if to.Z < floor then to.Z = floor end
-    return to, d, ground
+    local spread = c.blink_spread_deg or 180
+    if ok and v and (v.X ~= 0 or v.Y ~= 0) then want = math.deg(math.atan(-v.Y, -v.X)) + (math.random() * 2 - 1) * spread end
+    local spots = {}
+    for ring, m in ipairs(bl.rings_m) do
+        for k = 0, math.floor(360 / bl.step_deg) - 1 do
+            local deg = k * bl.step_deg
+            local off = math.abs((deg - want + 180) % 360 - 180)
+            spots[#spots + 1] = { ev = "RE_SV_GlitchBlink_" .. string.char(64 + ring) .. string.char(65 + k), deg = deg, d = m * 100,
+                                  off = off + math.random() * bl.step_deg }       -- (either ring, near the bearing wanted)
+        end
+    end
+    table.sort(spots, function(p, q) return p.off < q.off end)
+    for _, p in ipairs(spots) do
+        local to = { X = you.X + p.d * math.cos(math.rad(p.deg)), Y = you.Y + p.d * math.sin(math.rad(p.deg)), Z = you.Z }
+        local ground = groundAt(to.X, to.Y)
+        if not ground or to.Z >= ground + c.ground_clear_m * 100 then return p.ev, to, p.d, ground end
+    end
+    return nil
 end
 
 -- Every tick of AB.L..IN's round: its arrival in smoke, its frenzies (a hit starts one: it blinks around the player,
@@ -3452,6 +3451,11 @@ function ANOM.glitchTick(now, s)
         log(string.format("special: %s hit (%.0f -> %.0f): frenzy %d for %.0f s", c.name, s.lastHp, h, s.frenzies, c.frenzy_s))
     end
     s.lastHp = h or s.lastHp
+    if now >= (s.ecmFireAt or 0) then                   -- its ECM pod up (fired by event: hard to keep up by its FCS)
+        s.ecmFireAt = now + c.ecm_every_s
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchEcm") or -5
+        if r ~= 1 and not s.ecmSaid then s.ecmSaid = true; log("special: RE_SV_GlitchEcm not fired: " .. (SV_ERR[r] or tostring(r))) end
+    end
     if now >= (s.ecmAt or 0) then                       -- its ECM pods up (LiveElectronicSupportMeasures), each change
         s.ecmAt = now + 2
         local n, near = 0, nil
@@ -3472,27 +3476,32 @@ function ANOM.glitchTick(now, s)
         end
     end
     if not s.frenzyUntil then return end
+    if s.check and at and you then                      -- the last blink, a tick on: where it really is
+        local k, to = s.check.n, s.check.to
+        local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) or 0
+        local off = -1                                    -- the angle between its flight path and the player
+        if speed > 0 then
+            local ax, ay, az = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+            local n = math.sqrt(ax * ax + ay * ay + az * az)
+            off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed)))))
+        end
+        log(string.format("special: %s blink %d (%s): a tick on it's %.0f m from the spot, %.0f m from you, %.0f m/s, flight path %.0f deg off you",
+            c.name, k, s.check.ev, math.sqrt((at.X - to.X) ^ 2 + (at.Y - to.Y) ^ 2 + (at.Z - to.Z) ^ 2) / 100,
+            math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100, speed / 100, off))
+        s.check = nil
+    end
     if s.vanished then                                  -- back, around the player at their height, nose on them
-        if you then
-            local to, d, ground = blinkPoint(c, o, you)
-            local aim = glitchTarget(to) or you
-            local ok, err = pcall(function() o:K2_SetActorLocationAndRotation(to, aimAt(to, aim), false, {}, true) end)
+        local ev, to, d, ground
+        if you then ev, to, d, ground = blinkSpot(c, o, you) end
+        if ev then
+            local r = type(SV_Event) == "function" and SV_Event(ev) or -5
             s.blinks = (s.blinks or 0) + 1
-            if s.blinks <= 3 or not ok then
-                local back = where(o)
-                local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
-                local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) / 100 or -1
-                local off = -1                                -- the angle between its flight path and the player
-                if okV and v and speed > 0 then
-                    local ax, ay, az = you.X - to.X, you.Y - to.Y, you.Z - to.Z
-                    local n = math.sqrt(ax * ax + ay * ay + az * az)
-                    off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed * 100)))))
-                end
-                log(string.format("special: %s blink %d: %.0f m from you, %+.0f m to your height, ground %s%s; reads back %s, %.0f m/s, flight path %.0f deg off you",
-                    c.name, s.blinks, d / 100, (to.Z - you.Z) / 100, ground and string.format("%.0f m", ground / 100) or "?",
-                    ok and "" or (" (FAILED: " .. tostring(err) .. ")"),
-                    back and string.format("%.0f m from there", math.sqrt((back.X - to.X) ^ 2 + (back.Y - to.Y) ^ 2 + (back.Z - to.Z) ^ 2) / 100) or "?",
-                    speed, off))
+            if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
+            if s.blinks <= 3 then
+                s.check = { n = s.blinks, ev = ev, to = to }
+                log(string.format("special: %s blink %d: %s, %.0f m from you, ground %s", c.name, s.blinks, ev, d / 100,
+                    ground and string.format("%.0f m", ground / 100) or "?"))
             end
             glitchSmoke(s, to)
         end
@@ -3500,14 +3509,18 @@ function ANOM.glitchTick(now, s)
         s.vanished, s.nextBlink = false, now + c.blink_every_s
     elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
         s.frenzyUntil = nil
-        log(string.format("special: %s's frenzy %d over (%d blinks so far)", c.name, s.frenzies or 0, s.blinks or 0))
+        log(string.format("special: %s's frenzy %d over (%d blinks, %d gun orders so far)", c.name, s.frenzies or 0,
+            s.blinks or 0, s.shots or 0))
     elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
         glitchSmoke(s, at)
         setGone(o, true)
         s.vanished = true
-    elseif at then                                      -- between blinks: nose on the player
-        local aim = glitchTarget(at)
-        if aim then pcall(function() o:K2_SetActorRotation(aimAt(at, aim), true) end) end
+    end
+    if s.frenzyUntil and not s.vanished and now >= (s.gunAt or 0) then   -- its gun at the player all through the frenzy
+        s.gunAt = now + c.gun_every_s
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
+        s.shots = (s.shots or 0) + 1
+        if r ~= 1 and not s.gunSaid then s.gunSaid = true; log("special: RE_SV_GlitchGun not fired: " .. (SV_ERR[r] or tostring(r))) end
     end
 end
 
