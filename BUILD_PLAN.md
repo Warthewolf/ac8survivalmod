@@ -487,6 +487,21 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
 - [ ] (user 2026-10-21) Ace learns from your fights: log how the player kills aces (missile/gun/tail/SPW/altitude), save
   across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
 - [ ] End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
+- [ ] Nexus release in two editions (user, 2026-10-23: "when we finish this completely and everything works, before we
+  fully release to NexusMods ... One is Online Mode (game can send files to the cloudflare server), Two is Offline Mode
+  (None of the Code for sending the files remains)"). Do this last, once everything else is confirmed.
+  - Online: today's build (leaderboard sending, Steam name, pending_runs queue).
+  - Offline: no network code at all, not just switched off:
+    - dlls/main.dll built with SV_OFFLINE (runtime/build.sh): no SV_Post / SV_PostResult / SV_PostReply / SV_SteamName,
+      no WinHTTP or bcrypt loading, no submit_cfg.h (no address, no key) compiled in.
+    - main.lua: the sending half of LB (send, poll, queue, pending_runs.txt, pilot name / pilot_id.txt) in
+      `-- ONLINE ONLY BEGIN/END` blocks the packager strips; the end-of-run summary stays, showing the run locally.
+      [leaderboard] left out of survival.default.ini, the readme's leaderboard section left out.
+    - packager (tools/package_test.sh -> a release script taking online | offline): two zips, each named for its
+      edition; the offline one fails if its main.dll or Lua contains winhttp, workers.dev, SV_Post, SV_SteamName or
+      bcrypt, or its Lua any ONLINE ONLY text.
+  - Nexus page: the two files side by side, what Online sends (run stats, pilot name, aircraft; one HTTPS post per run
+    to the leaderboard's Worker) and that Offline sends nothing.
 
 ## Milestone 8: Discord leaderboard (started 2026-10-23)
 User's choices (2026-10-23): end-of-run prompt; Cloudflare Worker; boards for highest round, score, per difficulty and
