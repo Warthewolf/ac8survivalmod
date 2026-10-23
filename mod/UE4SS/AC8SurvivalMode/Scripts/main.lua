@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.6"
+local VERSION = "0.56.7"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -944,13 +944,13 @@ local CFG = {
         -- arrive_s later. Each time it's hit (outside a frenzy) it frenzies for frenzy_s: every blink_every_s it
         -- vanishes in smoke (hidden, untargetable, unhurt) and comes back in smoke at one of the `blinks` spots around
         -- you at your height (user: "at whatever height the player is closest too"), one at least ground_clear_m above
-        -- the ground, behind its own flight path within blink_spread_deg, and its gun is fired at you all
+        -- the ground, at least blink_turn_deg round you from the last one, and its gun is fired at you all
         -- through it (gun_every_s). Its health grows health_per_round a round after `first` (at most
         -- health_max_x), as the other specials'. Shot down: `reward` zollars.
         glitch   = { name = "AB.L..IN", squadron = "IFF: FATAL ERROR", unit = "SV_Unit_Glitch", health = 450,
                      reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
                      health_per_round = 0.04, health_max_x = 3.0,
-                     frenzy_s = 6, blink_every_s = 1.0, blink_spread_deg = 35, ground_clear_m = 150,
+                     frenzy_s = 6, blink_every_s = 1.0, blink_turn_deg = 60, ground_clear_m = 150,
                      -- its gun and ECM pod on command (tools/survival_events.py GLITCH_GUN_* / _ECM_SLOT): through a
                      -- frenzy RE_SV_GlitchGun every gun_every_s, which fires the gun at you 5 times 0.1 s apart (user,
                      -- 2026-10-23: "make it fire at 0.1"; = GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S, keep in step); the
@@ -3355,10 +3355,6 @@ end
 -- plane carries for its death (its BP's DamagedMainBodyMesh / DamagedPartsMesh: the burnt _DAM model, hidden until
 -- then) shown and kept on it, its flying model (every other mesh: airframe, pilot, stores) hidden, and the
 -- damaged-plane smoke and fire (dead_fx) on it. Each step is logged once.
-local function eachOf(arr, f)
-    if type(arr) == "table" then for _, e in ipairs(arr) do f(e) end
-    elseif arr then pcall(function() arr:ForEach(function(_, e) f(e:get()) end) end) end
-end
 local function glitchDeadLook(c, o)
     local shown, moved, hidden, names = 0, 0, 0, {}
     local root = o:K2_GetRootComponent()
@@ -3377,17 +3373,18 @@ local function glitchDeadLook(c, o)
         end
     end
     if shown > 0 then                                   -- (no wreck: it keeps its own look)
-        for _, cls in ipairs({ "/Script/Engine.SkeletalMeshComponent", "/Script/Engine.StaticMeshComponent" }) do
-            local k = StaticFindObject(cls)
-            local ok, list = pcall(function() return o:K2_GetComponentsByClass(k) end)
-            eachOf(ok and list or nil, function(comp)
-                local nm = "?"
-                pcall(function() nm = comp:GetFName():ToString() end)
-                if not nm:find("Damaged", 1, true) and pcall(function() comp:SetHiddenInGame(true, false) end) then
-                    hidden = hidden + 1
-                    names[#names + 1] = nm
-                end
-            end)
+        -- its flying meshes by name (LiveAIPlane's and the BP's; test of 2026-10-23: K2_GetComponentsByClass gave none)
+        local seen = {}
+        for _, n in ipairs({ "PlaneBodyMeshComponent", "PlaneBodySkelMeshComponent", "PlaneBodyStaticMeshComponent",
+                             "PilotMeshComponent", "LandingGearOnMeshComponent", "LandingGearOffMeshComponent",
+                             "RefuelProbeOffMesh", "RefuelProbeNavyMesh", "RefuelProbeAirforceMesh", "PlaneBodyMesh",
+                             "PilotMesh0", "PilotMesh1", "MissileMesh1", "MissileMesh2", "LandingGearOnMesh", "LandingGearOffMesh" }) do
+            local ok, comp = pcall(function() return o[n] end)
+            local key = ok and comp and valid(comp) and (addrOf(comp) or n)
+            if key and not seen[key] then
+                seen[key] = true
+                if pcall(function() comp:SetHiddenInGame(true, false) end) then hidden = hidden + 1; names[#names + 1] = n end
+            end
         end
     end
     local fx = portalFx(c.dead_fx, o, nil, c.dead_fx_scale, 3600)
@@ -3427,29 +3424,30 @@ function ANOM.glitchSpawn(now)
 end
 
 -- A blink: the spot it comes back to (CFG.specials.glitch.blinks; the event package moves it there, from the player at
--- their height, nose on them: the flight model undoes a Lua move). Behind its own flight path when that can be read
--- (within blink_spread_deg, so the nose it's given lines up with where it's going), else any; never one under
--- ground_clear_m above the ground. Returns its event, the point and its distance (cm), or nil.
-local function blinkSpot(c, o, you)
+-- their height, nose on them: the flight model undoes a Lua move). Anywhere round the player, but at least
+-- blink_turn_deg round from the last one (user, 2026-10-23: "it teleports but only to one spot on me": behind its own
+-- flight path it kept the same side, as it flies at the player), and never one under ground_clear_m above the ground.
+-- Returns its event, the point, its distance (cm), the ground and its bearing, or nil.
+local function blinkSpot(c, s, you)
     local bl = c.blinks
     local want = math.random() * 360
-    local ok, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y } end)
-    local spread = c.blink_spread_deg or 180
-    if ok and v and (v.X ~= 0 or v.Y ~= 0) then want = math.deg(math.atan(-v.Y, -v.X)) + (math.random() * 2 - 1) * spread end
+    if s.lastDeg then want = s.lastDeg + c.blink_turn_deg + math.random() * (360 - 2 * c.blink_turn_deg) end
     local spots = {}
     for ring, m in ipairs(bl.rings_m) do
         for k = 0, math.floor(360 / bl.step_deg) - 1 do
             local deg = k * bl.step_deg
             local off = math.abs((deg - want + 180) % 360 - 180)
+            local fromLast = s.lastDeg and math.abs((deg - s.lastDeg + 180) % 360 - 180) or 360
             spots[#spots + 1] = { ev = "RE_SV_GlitchBlink_" .. string.char(64 + ring) .. string.char(65 + k), deg = deg, d = m * 100,
-                                  off = off + math.random() * bl.step_deg }       -- (either ring, near the bearing wanted)
+                                  off = off + math.random() * bl.step_deg            -- (either ring, near the bearing wanted)
+                                        + (fromLast < c.blink_turn_deg and 1000 or 0) }   -- (last resort: near the last)
         end
     end
     table.sort(spots, function(p, q) return p.off < q.off end)
     for _, p in ipairs(spots) do
         local to = { X = you.X + p.d * math.cos(math.rad(p.deg)), Y = you.Y + p.d * math.sin(math.rad(p.deg)), Z = you.Z }
         local ground = groundAt(to.X, to.Y)
-        if not ground or to.Z >= ground + c.ground_clear_m * 100 then return p.ev, to, p.d, ground end
+        if not ground or to.Z >= ground + c.ground_clear_m * 100 then return p.ev, to, p.d, ground, p.deg end
     end
     return nil
 end
@@ -3557,9 +3555,10 @@ function ANOM.glitchTick(now, s)
         s.check = nil
     end
     if s.vanished then                                  -- back, around the player at their height, nose on them
-        local ev, to, d, ground
-        if you then ev, to, d, ground = blinkSpot(c, o, you) end
+        local ev, to, d, ground, deg
+        if you then ev, to, d, ground, deg = blinkSpot(c, s, you) end
         if ev then
+            s.lastDeg = deg
             local r = type(SV_Event) == "function" and SV_Event(ev) or -5
             s.blinks = (s.blinks or 0) + 1
             if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
