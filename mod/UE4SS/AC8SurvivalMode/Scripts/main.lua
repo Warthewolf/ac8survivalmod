@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.60.2"
+local VERSION = "0.60.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -788,7 +788,12 @@ local CFG = {
         enabled      = true,
         hunt_share   = 0.35,                     -- (0.5 until 0.48.5: MOONCHILD was swarmed in 2 minutes)
         strike_share = 0.25,
-        fcs          = { range_x = 1.6, angle_x = 1.5, time_x = 0.5, spread_x = 0.4 },
+        -- gun_lead_s / burst_x: MOONCHILD's guns aim gun_lead_s ahead (PredictionOffsetTime; stock aircraft guns 0)
+        -- and fire bursts burst_x as long (stock 10 rounds); aa_lead_x: the ships' and the airfield's AA guns and CIWS
+        -- lead that much further (stock AA guns 0.8 s; user, 2026-10-24: "increase the gun lead for the allied
+        -- fighters too, and their bursts, increase the gun lead for allied AA guns too")
+        fcs          = { range_x = 1.6, angle_x = 1.5, time_x = 0.5, spread_x = 0.4, gun_lead_s = 1.0, burst_x = 3,
+                         aa_lead_x = 1.5 },
         aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
                          units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" },
                          -- scaling with the enemy (user, 2026-10-23: "buff the allied F-22's so they scale up with the
@@ -5997,7 +6002,7 @@ function ALLY.setup()
     local wpn = loadObject(WEAPON_TABLE)
     for _, t in ipairs({ npc, mine, fcs, wpn }) do if t then pin(t, nameOf(t)) end end
     local c, made, boosted, lost = CFG.allies.fcs, {}, 0, {}
-    local shipSaid, shipModule = {}, {}
+    local shipSaid, shipModule, gunSaid = {}, {}, {}
     local modules = loadObject(SEARCH_MODULE.path)
     if modules then
         pin(modules, nameOf(modules))
@@ -6027,6 +6032,18 @@ function ALLY.setup()
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
                 end
+                pcall(function()                     -- guns: MOONCHILD's lead and fire longer bursts, AA guns lead further
+                    if src:find("PlaneGun", 1, true) then
+                        r.PredictionOffsetTime = c.gun_lead_s or 0
+                        r.TriggerCount = math.max(1, math.floor(r.TriggerCount * (c.burst_x or 1) + 0.5))
+                        gunSaid[#gunSaid + 1] = string.format("%s leads %.2f s, %d-round bursts", new, r.PredictionOffsetTime, r.TriggerCount)
+                    elseif src:find("AAGun", 1, true) or src:find("CIWS", 1, true) then
+                        local l = r.PredictionOffsetTime
+                        if type(l) ~= "number" or l <= 0 then l = 0.8 end        -- (none of its own: the AA guns')
+                        r.PredictionOffsetTime = l * (c.aa_lead_x or 1)
+                        gunSaid[#gunSaid + 1] = string.format("%s leads %.2f s", new, r.PredictionOffsetTime)
+                    end
+                end)
                 if sf and shipModule[key] then        -- the ship type's own turret module: farther, not lost in cloud
                     pcall(function() r.NpcAIModuleId = FName(shipModule[key]) end)
                     pcall(function() r.bEnableLostTargetInClouds = false end)
@@ -6108,6 +6125,7 @@ function ALLY.setup()
     end
     ALLY.ready = n == #ROWS
     if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
+    if #gunSaid > 0 then log("allies: guns: " .. table.concat(gunSaid, ", ")) end
     log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
 end
