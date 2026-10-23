@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.4"
+local VERSION = "0.51.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3080,10 +3080,53 @@ local function portalTick(now, s, c)
 end
 
 -- Every tick of a running Anomaly: its distance (the field) and its end.
+-- Its health bars (LiveUnitHealthDisplaySwitch, tools/survival_events.py: the HUD's unit life list and the gauge at
+-- the aircraft) are labelled with the unit's DisplayName, which Survival's unit hasn't got: they read "None" (user,
+-- 2026-10-23 screenshot). Every 2 s while it's up, a "None" in those widgets becomes its name.
+local LIFE_WIDGETS = { "WBP_HUD_UnitLife_Item_000_C", "WBP_HUD_UnitLife_000_C", "WBP_HUD_UnitLife_List_000_C" }
+function ANOM.nameGauges(name)
+    local n, seen = 0, 0
+    local function walk(w, depth)
+        if depth > 8 or not valid(w) then return end
+        local ok, txt = pcall(function() return w:GetText():ToString() end)
+        if ok and txt == "None" and pcall(function() w:SetText(toText(name)) end) then n = n + 1 end
+        local okT, tree = pcall(function() return w.WidgetTree end)
+        if okT and valid(tree) then
+            local okR, r = pcall(function() return tree.RootWidget end)
+            if okR then walk(r, depth + 1) end
+            return
+        end
+        local okN, cnt = pcall(function() return w:GetChildrenCount() end)
+        if okN and type(cnt) == "number" then
+            for i = 0, cnt - 1 do
+                local okC, ch = pcall(function() return w:GetChildAt(i) end)
+                if okC then walk(ch, depth + 1) end
+            end
+        end
+    end
+    for _, cls in ipairs(LIFE_WIDGETS) do
+        for _, w in ipairs(FindAllOf(cls) or {}) do
+            if liveWidget(w) then seen = seen + 1; walk(w, 0) end
+        end
+    end
+    return n, seen
+end
+
 function ANOM.tick(now, s)
     local c, t = CFG.specials.anomaly, CFG.hud.text
     if s.state == "portal" then return portalTick(now, s, c) end
     if s.state ~= "hunt" then return end
+    if now >= (s.gaugeAt or 0) then
+        s.gaugeAt = now + 2
+        local ok, n, seen = pcall(ANOM.nameGauges, c.name)
+        if ok and n > 0 and not s.gaugeSaid then
+            s.gaugeSaid = true
+            log(string.format("special: %s's health bars named (%d labels in %d widgets)", c.name, n, seen))
+        elseif not ok and not s.gaugeErr then
+            s.gaugeErr = true
+            log("special: naming the health bars failed: " .. tostring(n))
+        end
+    end
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
         setField(false, s)
