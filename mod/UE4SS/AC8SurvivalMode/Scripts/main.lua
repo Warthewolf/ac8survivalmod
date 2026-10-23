@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.58.1"
+local VERSION = "0.59.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -979,11 +979,16 @@ local CFG = {
         -- it; the route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
         -- volley_*: its missiles (RE_SV_LadonVolley<Key>L / R: the hatch opens, one launcher fires its salvo at you,
         -- left and right in turn) every volley_every_s while you're within volley_range_km of it, the first once
-        -- you've been in range volley_warn_s; its pulse cannons fire on their own. (Was both launchers every 20 s
-        -- within 12 km: the player was down within 9 s of the first volley, test of 2026-10-23.)
-        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 1.0, bomb_damage = 20,
-                  bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
-                  volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10,
+        -- you've been in range volley_warn_s, and never within volley_gap_s of the other Ladon's; its pulse cannons
+        -- fire on their own. (Was both launchers every 20 s within 12 km: the player was down within 9 s of the first
+        -- volley, test of 2026-10-23; then both Ladons fired together, a friend's test the same day.)
+        -- missile_*: their VLS missiles (BP_wp_vls_ladon: 15 damage, 60 deg homing cone) as they appear in Survival:
+        -- damage x missile_damage_x, homing cone x missile_homing_x (user, 2026-10-24: "tone that down too, only minorly").
+        -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
+        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
+                  bomb_per_round = 1, health_per_round = 0.03, health_max_x = 2.0,
+                  volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
+                  missile_damage_x = 0.8, missile_homing_x = 0.85,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
@@ -4180,16 +4185,18 @@ function SPC.ladonTick(now, s)
             end
             if near and near <= c.volley_range_km then
                 L.inRangeAt = L.inRangeAt or now                       -- (the first volley: once in range volley_warn_s)
-                if now - L.inRangeAt >= (c.volley_warn_s or 0) then
-                    L.volleyAt = now + c.volley_every_s
+                -- one Ladon's volley at a time, volley_gap_s apart (a friend's test of 2026-10-23: both came into range
+                -- together and fired in the same second, and the player was down 20 s later): the other one waits
+                local gap = c.volley_gap_s or c.volley_every_s / 2
+                if now - L.inRangeAt >= (c.volley_warn_s or 0) and now - (s.volleyAny or -1e9) >= gap then
+                    L.volleyAt, s.volleyAny, s.volleyWho = now + c.volley_every_s, now, c.names[k] or k
                     L.side = (L.side == "L") and "R" or "L"
                     local ev = "RE_SV_LadonVolley" .. k .. L.side
                     local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
-                    if not L.volleySaid then
-                        L.volleySaid = true
-                        log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s), one every %d s in range",
-                            c.names[k] or k, near, ev, tostring(r), c.volley_every_s))
-                    end
+                    log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s", c.names[k] or k, near, ev,
+                        tostring(r), L.volleySaid and "" or string.format(", one every %d s in range, %d s after the other's",
+                        c.volley_every_s, gap)))
+                    L.volleySaid = true
                 end
             else
                 L.inRangeAt = nil
@@ -4229,6 +4236,130 @@ function SPC.ladonTick(now, s)
         end
     end
     if SPC.ladonsLeft(s) == 0 then s.state = "done"; LB.special("ladon", not s.escaped, now - s.at) end
+end
+end
+
+---------------------------------------------------------------------------------------------------- hits on the player
+-- A friend's run ended 20 s after both Ladons' volleys and the log couldn't say what hit them (2026-10-23): the
+-- player's health is read every tick and a drop is logged (at most once a second, the drops between added up) with the
+-- enemy missiles near the player then (every LiveMissile but the player's, tracked from its creation; one that hit is
+-- gone the tick after, so the last distance it was seen at counts) and the nearest enemy aircraft. No missile near:
+-- a gun, the Ladons' pulse cannons, a SAM's blast or a collision. The Ladons' VLS missiles are toned down here as they
+-- appear (CFG.specials.ladon.missile_*): from their class default, so a missile seen twice isn't cut twice.
+local HIT = { new = {}, msl = {} }
+pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o) if #HIT.new < 200 then HIT.new[#HIT.new + 1] = o end end)
+do
+local LADON_MSL = "BP_wp_vls_ladon"
+local LADON_CDO = "/Game/Blueprints/Weapons/MSL/NPC/Vls/Ladon/BP_wp_vls_ladon.Default__BP_wp_vls_ladon_C"
+local function short(o)                                    -- "BP_wp_vls_ladon" from "... .BP_wp_vls_ladon_C_2147..."
+    local n = nameOf(o):match("([%w_]+)$") or "?"
+    return (n:gsub("_C_%d+$", ""):gsub("_C$", ""))
+end
+local function at(o)
+    local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
+    return ok and v or nil
+end
+local function owner(o)                                    -- who fired it (its owner, else its instigator), or nil
+    for _, f in ipairs({ function() return o:GetOwner() end, function() return o.Instigator end }) do
+        local ok, w = pcall(f)
+        if ok and valid(w) then return short(w) end
+    end
+    return nil
+end
+
+local function nerf(o)
+    local c = CFG.specials.ladon
+    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    local base = valid(HIT.cdo) and HIT.cdo or o
+    local ok, err = pcall(function()
+        local d0, a0 = base.damage, base.MaxHomingAngle
+        o.damage = d0 * (c.missile_damage_x or 1)
+        o.MaxHomingAngle = a0 * (c.missile_homing_x or 1)
+        if not HIT.nerfSaid then
+            HIT.nerfSaid = true
+            log(string.format("hits: the Ladons' missile %s toned down: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg (from %s)",
+                LADON_MSL, d0, o.damage, a0, o.MaxHomingAngle, base == o and "the missile itself" or "its class default"))
+        end
+    end)
+    if not ok and not HIT.nerfErr then HIT.nerfErr = true; log("hits: the Ladons' missile NOT toned down: " .. tostring(err)) end
+end
+
+-- what's near the player now: "missiles: ...; enemies: ..."
+local function around(me, now)
+    local ms = {}
+    for _, m in ipairs(HIT.msl) do
+        if m.d and m.d <= 800 and now - (m.seen or -1e9) <= 0.6 then ms[#ms + 1] = m end
+    end
+    table.sort(ms, function(a, b) return a.d < b.d end)
+    local mt = {}
+    for i = 1, math.min(3, #ms) do
+        local m = ms[i]
+        mt[#mt + 1] = string.format("%s %.0f m%s%s", m.name, m.d, m.from and (" from " .. m.from) or "",
+            valid(m.obj) and "" or " (gone: it hit)")
+    end
+    local es = {}
+    for _, p in ipairs(planes) do
+        if not p.down and p.dist and p.dist <= 8 and valid(p.obj) then
+            local v = at(p.obj)
+            if v then es[#es + 1] = { name = p.unit or short(p.obj), d = km(v, me) } end
+        end
+    end
+    table.sort(es, function(a, b) return a.d < b.d end)
+    local et = {}
+    for i = 1, math.min(3, #es) do et[#et + 1] = string.format("%s %.2f km", es[i].name, es[i].d) end
+    return "missiles near: " .. (#mt > 0 and table.concat(mt, ", ") or "none (gun / pulse cannon / blast / collision?)") ..
+        "; nearest enemies: " .. (#et > 0 and table.concat(et, ", ") or "none within 8 km")
+end
+
+function HIT.reset() HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil end
+
+-- every tick in a run (now: the round clock)
+function HIT.tick(pc, now)
+    local new = HIT.new
+    HIT.new = {}
+    for _, o in ipairs(new) do                             -- the new missiles: enemies' tracked, the Ladons' toned down
+        if valid(o) then
+            local n = short(o)
+            if not n:find("^BP_plwp_") and not n:find("^Default__") then
+                if n == LADON_MSL then nerf(o) end
+                if #HIT.msl >= 60 then table.remove(HIT.msl, 1) end
+                HIT.msl[#HIT.msl + 1] = { obj = o, name = n, born = now }
+            end
+        end
+    end
+    local pawn = pc and pc.Pawn
+    if not valid(pawn) then return end
+    local me = at(pawn)
+    local keep = {}
+    for _, m in ipairs(HIT.msl) do                         -- where each one is (kept 2 s after it's gone)
+        if valid(m.obj) and now - m.born < 30 then
+            m.from = m.from or owner(m.obj)
+            local v = me and at(m.obj)
+            if v then m.d, m.seen = km(v, me) * 1000, now end
+            keep[#keep + 1] = m
+        elseif now - (m.seen or m.born) < 2 then keep[#keep + 1] = m end
+    end
+    HIT.msl = keep
+    local okA, addr = pcall(function() return tostring(pawn:GetAddress()) end)
+    if not okA then addr = nameOf(pawn) end
+    if addr ~= HIT.pawn then HIT.pawn, HIT.h, HIT.sum = addr, nil, nil end    -- (a new aircraft: a restart)
+    local ok, h = pcall(function() return pawn.HealthInternal end)
+    if not ok or type(h) ~= "number" then return end
+    local last = HIT.h
+    HIT.h = h
+    if last and h < last then
+        if not HIT.sum then HIT.sum, HIT.n, HIT.near = 0, 0, me and around(me, now) or "?" end   -- (as it was at the first)
+        HIT.sum, HIT.n = HIT.sum + (last - h), HIT.n + 1
+    end
+    if HIT.sum and now - (HIT.logged or -1e9) >= 1 then
+        local okM, maxHp = pcall(function() return pawn.MaxHealth end)
+        local pct = (okM and type(maxHp) == "number" and maxHp > 0) and string.format("%d%%", math.floor(h / 10 / maxHp * 100 + 0.5)) or "?"
+        local s = D and D.special
+        local vol = (s and s.volleyAny and now - s.volleyAny < 60) and string.format("; Ladon %s's volley %.0f s ago", s.volleyWho or "?", now - s.volleyAny) or ""
+        log(string.format("hit: -%.0f HP in %d hit%s, health now %s (%.0f HP)%s; %s%s", HIT.sum / 10, HIT.n, HIT.n == 1 and "" or "s",
+            pct, h / 10, h <= 0 and ", SHOT DOWN" or "", HIT.near, vol))
+        HIT.logged, HIT.sum = now, nil
+    end
 end
 end
 
@@ -6388,6 +6519,7 @@ local function probeTick(tick)
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
+            HIT.reset()
         end
     end
     if D then
@@ -6423,6 +6555,10 @@ local function probeTick(tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if now and valid(survivalPC) then                               -- what hits the player (section "hits")
+            local okHt, errHt = pcall(HIT.tick, survivalPC, now)
+            if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
+        end
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
