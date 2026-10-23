@@ -671,3 +671,11 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   down -> ALCN_AdvancePhase + ALCN_OpenCore; core down (or the hull gone) -> sunk, reward, removed 20 s later.
 - First test: does Online Mode's content load offline (the main unknown), do LiveSubmarineOperation /
   LiveAIActionEventExecution run in the campaign mode, are the part classes right.
+- Second code review (501155b..8b68db9, 10 findings, all fixed in 0.46.1): ported units kept the source's
+  bIsSpawnFromStart = true (Ladons and Alicorn would have spawned at level load every run; port_unit now writes the
+  explicit zero); grandchild parts lost their parent's FName number (6 duplicate Alicorn weapon names); an unreadable
+  part health counted as destroyed (now as up); the round's special pick recorded as it was (forced / fallen back);
+  ini [specials] documents random / chance / the five specials, plus [specials.ladon] / [specials.alicorn]; the
+  Ladons pay once (their reward) and skip the fighters' tier / spike tuning; Ladon health scaling only scans the
+  planes made since they spawned; one fallback for the solo specials; zone_area(); the Ladon parts' unused mission
+  rows and the never-fired rail cannon event dropped.

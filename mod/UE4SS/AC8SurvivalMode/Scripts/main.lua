@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.46.0"
+local VERSION = "0.46.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3106,6 +3106,9 @@ local function startRound()
         special = nil
     end
     D.special = special and { kind = special, state = "pending" } or nil
+    RUN.specialPick = RUN.specialPick or {}                      -- (as it is: a forced one too; specialFor reads it)
+    RUN.specialPick[D.round] = special or false
+    if special then RUN.lastSpecial = special end
     if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
         budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), CFG.max_aircraft)
     end
@@ -3297,29 +3300,20 @@ local function roundsTick(now)
         if u == "@shuttle" then
             spawnShuttle()
         elseif u == "@amphib" then
-            if not AMPH.spawn(now) then D.special = nil end     -- no lane could come: a normal round
-        elseif u == "@alicorn" then
-            if not SPC.alicornSpawn(now) then
-                D.special = nil                    -- a normal round instead (an Alicorn round had no fighters)
-                local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
-                for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
-                log(string.format("round %d: no Alicorn; %d fighter flights instead", D.round, #f))
-            end
-        elseif u == "@ladon" then
-            if not SPC.ladonSpawn(now) then
-                D.special = nil                    -- a normal round instead (a Ladon round had no fighters)
-                local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
-                for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
-                log(string.format("round %d: no Ladons; %d fighter flights instead", D.round, #f))
-            end
-        elseif u == "@anomaly" then
-            if ANOM.spawn() then
-                D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
+            if not AMPH.spawn(now) then D.special, RUN.specialPick[D.round] = nil, false end   -- no lane: a normal round
+        elseif u == "@alicorn" or u == "@ladon" or u == "@anomaly" then
+            local ok
+            if u == "@alicorn" then ok = SPC.alicornSpawn(now)
+            elseif u == "@ladon" then ok = SPC.ladonSpawn(now)
             else
-                D.special = nil                    -- a normal round instead: its fighters (an Anomaly round had none)
+                ok = ANOM.spawn()
+                if ok then D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now end
+            end
+            if not ok then                         -- a normal round instead: its fighters (these specials fly alone)
+                D.special, RUN.specialPick[D.round] = nil, false
                 local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
                 for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
-                log(string.format("round %d: no Anomaly; %d fighter flights instead", D.round, #f))
+                log(string.format("round %d: no %s; %d fighter flights instead", D.round, u:sub(2), #f))
             end
         elseif u then
             local r = spawnFlight(u)
@@ -3479,7 +3473,7 @@ function SPC.ladonSpawn(now)
         return false
     end
     local s = D.special
-    s.units, s.state, s.at, s.runs = {}, "run", now, 0
+    s.units, s.state, s.at, s.runs, s.planeFrom = {}, "run", now, 0, #planes + 1
     for _, k in ipairs(KEYS) do
         local unit = "SV_Unit_Ladon" .. k
         local r = -3
@@ -3510,9 +3504,10 @@ function SPC.ladonTick(now, s)
     local f = svFlags() or {}
     -- its health for its round, once its aircraft is up (HealthInternal: health x 10, as the shuttle's)
     local hx = math.min(c.health_max_x or 2.5, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
-    for _, p in ipairs(planes) do
+    for i = s.planeFrom or 1, (s.scaledN or 0) < 2 and #planes or 0 do
+        local p = planes[i]
         if hx > 1 and not p.down and not p.scaled and p.unit and p.unit:find("^SV_Unit_Ladon") and valid(p.obj) then
-            p.scaled = true
+            p.scaled, s.scaledN = true, (s.scaledN or 0) + 1
             pcall(function()
                 local h0 = p.obj.HealthInternal
                 p.obj.HealthInternal = h0 * hx
@@ -3651,9 +3646,10 @@ function SPC.alicornTick(now, s)
     local hx = math.min(c.health_max_x or 1.5, (c.health_x or 1) *
         (1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first)))
     s.scaled = s.scaled or {}
-    local tanks, seen = 0, 0
-    local all = {}
-    for _, cls in ipairs(c.tank_classes) do for _, o in ipairs(parts(cls)) do all[#all + 1] = o end end
+    -- one look at the parts a check; a part whose health can't be read counts as up (code review of 2026-10-23:
+    -- counted as down it paid every reward and sank the Alicorn 2 s after it appeared)
+    local tankList, all = {}, {}
+    for _, cls in ipairs(c.tank_classes) do for _, o in ipairs(parts(cls)) do tankList[#tankList + 1] = o; all[#all + 1] = o end end
     local core = parts(c.core_class)
     for _, o in ipairs(core) do all[#all + 1] = o end
     for _, o in ipairs(all) do                         -- each part's health for this round, once
@@ -3668,9 +3664,8 @@ function SPC.alicornTick(now, s)
             end
         end
     end
-    for _, cls in ipairs(c.tank_classes) do
-        for _, o in ipairs(parts(cls)) do seen = seen + 1; if (hp(o) or 0) > 0 then tanks = tanks + 1 end end
-    end
+    local tanks, seen = 0, #tankList
+    for _, o in ipairs(tankList) do local h = hp(o); if h == nil or h > 0 then tanks = tanks + 1 end end
     if seen > 0 then s.tanksSeen = true end
     if s.tanksSeen and tanks < (s.tanks or 4) then
         addCredits(TIER.pay(c.tank_pay, TIER.index(D.round)) * ((s.tanks or 4) - tanks), "Alicorn ballast tank down")
@@ -3684,7 +3679,7 @@ function SPC.alicornTick(now, s)
         log("special: the Alicorn's ballast tanks are gone: its core opens")
     end
     local coreUp = false
-    for _, o in ipairs(core) do if (hp(o) or 0) > 0 then coreUp = true end end
+    for _, o in ipairs(core) do local h = hp(o); if h == nil or h > 0 then coreUp = true end end
     if #core > 0 then s.coreSeen = true end
     local hull = SV_UnitAlive(UNIT)
     if (s.coreOpen and s.coreSeen and not coreUp) or hull == 0 or hull == -7 then
@@ -5128,6 +5123,7 @@ end
 -- bomber (heavy for CFG.airfield.bombers.heavy models), any other flight fighter. Only when the plane's flight
 -- couldn't be read does its model decide (CFG.credits.models).
 local function creditKill(p)
+    if p.unit and p.unit:find("^SV_Unit_Ladon") then return end   -- (a Ladon pays its own reward: SPC.ladonTick)
     local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
     local kind = "fighter"
     if p.unit and BOMBER_UNIT[p.unit] then
@@ -5322,12 +5318,15 @@ local function probeTick(tick)
             if up then
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
-                pcall(planeUnit, p); pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round)
+                pcall(planeUnit, p)
+                local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
+                if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
                 local an = CFG.specials.anomaly
                 local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
-                pcall(enemySpike, p, D and D.round, tierFor); pcall(probeTrack, p); pcall(aiWatch, p, you or nil)
+                if not own then pcall(enemySpike, p, D and D.round, tierFor) end
+                pcall(probeTrack, p); pcall(aiWatch, p, you or nil)
                 p.dist = (p.at and you) and km(p.at, you) or nil
             else
                 p.down = true

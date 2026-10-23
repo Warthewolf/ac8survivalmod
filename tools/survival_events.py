@@ -178,7 +178,7 @@ LADON_SOURCE_UNIT = 'B_Unit_01_Air0'
 LADON_SOURCE_PATH = '01_Air0_Ladon_Path1'
 LADON_SOURCE_ROW = 'OP0045_radn_01'          # Mission 16's mission row (NpcId OP0045_ladn_01)
 LADON_NPC_SOURCE = 'OP0045_ladn_01'          # DT_NPC (1200 HP, LuaSet 0031_CP)
-LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, km... side offset m, height offset m) - main.lua CFG.specials.ladon
+LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, side offset m, height offset m) - main.lua CFG.specials.ladon
 # (x km, y km, altitude km): from the far west (Mission 22's combat zone runs to x -44 km), north, back south across
 # the island's west, east along the south and in over the airfield (16.1, -4.4), then out past it
 LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
@@ -227,7 +227,7 @@ ALCN_ROUTE = [(-27.7, -4.4), (-23.0, -5.1), (-19.0, -5.8), (-15.3, -6.3), (-11.5
 ALCN_SPEED = '120.0'
 ALCN_VLS = ['vls_L_1', 'vls_L_2', 'vls_R_1', 'vls_R_2']
 ALCN_ACTIONS = {'RE_SV_AlcnRailgun': 'ALCN_ShotRailgun_Focus', 'RE_SV_AlcnOpenCore': 'ALCN_OpenCore',
-                'RE_SV_AlcnAdvance': 'ALCN_AdvancePhase', 'RE_SV_AlcnRailCannon': 'ALCN_ShotRailCannon'}
+                'RE_SV_AlcnAdvance': 'ALCN_AdvancePhase'}
 
 
 def alcn_paths():

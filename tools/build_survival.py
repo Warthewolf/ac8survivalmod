@@ -377,6 +377,11 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     repl = {'Name': ('name', new_unit, 0), 'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(cx, cy, 0.0),
             'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd, 'Tags': ('arr', [])}
     new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in new[2]]
+    # never at the level's start (the source may say so: Mission 16's Ladons and EB_002's Alicorn did, and build_wd_global's
+    # switch-off has run by now; code review of 2026-10-23): an explicit zero, as Mission 22's reinforcements carry it
+    sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
+    new[2][:] = sorted([q for q in new[2] if q[1] != 'bIsSpawnFromStart'] + [(sp_idx, 'bIsSpawnFromStart', True, None)],
+                       key=lambda q: q[0])
     assert npc_row in NPC_ROWS, npc_row
     for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global']: z.nb.add(n)
     units.append(new)
@@ -461,9 +466,17 @@ def retag_parts(children, owner, used_ids, z, zs):
                     for q in ch[2]]
         for nm in names_in(ch): z.nb.add(nm)
         n += 1
-        grand = d.get('GrandChildrens')
-        if grand and grand[3]: n += retag_parts(grand[3][1], f'{owner}_{comp[1]}', used_ids, z, zs)
+        grand = d.get('GrandChildrens')       # (after the whole name: EB_002's WP_L #2..#7 each hold a ram / aagun / ciws)
+        sub = f'{owner}_{comp[1]}' + (f'_{comp[2] - 1}' if comp[2] else '')
+        if grand and grand[3]: n += retag_parts(grand[3][1], sub, used_ids, z, zs)
     return n
+
+
+def zone_area(u):
+    """Unit desc `u`'s area over the whole combat zone (as the pool's: a 6-10 km area keeps an AI from what's outside)."""
+    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
 
 
 def ladon_units(units, used_ids, z, top_number, v):
@@ -476,7 +489,6 @@ def ladon_units(units, used_ids, z, top_number, v):
     src_path = desc_named(m16, 'AIPathDescList', survival_events.LADON_SOURCE_PATH)
     paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
     import math
-    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
     for L in survival_events.ladons():
         (x0, y0, z0), (x1, y1, _) = L['route'][0], L['route'][1]
         yaw = math.degrees(math.atan2(y1 - y0, x1 - x0))
@@ -486,9 +498,7 @@ def ladon_units(units, used_ids, z, top_number, v):
         ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
         kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
         parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
-        # its unit area over the whole zone (as the pool's: a 6-10 km area keeps an AI from what's outside it)
-        u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                         ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+        zone_area(u)
         paths.append(make_path(z, used_ids, src_path, L['path'], L['route']))
         paths.append(make_path(z, used_ids, src_path, L['loop'], L['circuit']))
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
@@ -520,9 +530,7 @@ def alcn_units(units, used_ids, z, top_number, v):
     u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.ALCN_UNIT][0]
     ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
     parts = retag_parts([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], survival_events.ALCN_OBJ, used_ids, z, ebz)
-    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
-    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+    zone_area(u)
     src_path = desc_named(eb, 'AIPathDescList', survival_events.ALCN_SOURCE_PATH)
     paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
     for name, pts in paths_def:
@@ -1263,11 +1271,9 @@ NPC_ROWS = set()           # its row names, filled by build_npc_table
 NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
               # the amphibious assault's landing craft and troops (survival_events.LCAC_*), Mission 13's
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common']),
-              # the Ladons' parts (survival_events.LADON*: its own row is LADON_SOURCE_ROW's copy, ladon_rows)
-              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016',
-               ['OP0045_ladn_' + p for p in ('AirIntake_L', 'AirIntake_R', 'Engine_L', 'Engine_R', 'LCIWS_BL', 'LCIWS_BR',
-                                            'LCIWS_FL', 'LCIWS_FR', 'TailWing_L', 'TailWing_R', 'VariableWing_L',
-                                            'VariableWing_R', 'Wing_L', 'Wing_R', 'VLS_L', 'VLS_R')]),
+              # the Ladons' own rows (survival_events.LADON*: LADON_SOURCE_ROW's copies; its parts name no mission row:
+              # they come with its DT_NPC row's ChildNPCId)
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016', []),
               # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
               ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01'])]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
