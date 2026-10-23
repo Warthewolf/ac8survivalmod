@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.8"
+local VERSION = "0.56.9"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3369,14 +3369,26 @@ local function glitchDeadLook(c, o)
             local okN, num = pcall(function() return comp:GetNumMaterials() end)
             for i = 0, (okN and type(num) == "number" and num or 0) - 1 do
                 slots = slots + 1
-                local dam = nil
+                local dam, src = nil, "?"
                 pcall(function()                         -- /Game/.../MI_x.MI_x -> /Game/.../MI_x_DAM.MI_x_DAM
-                    local path = comp:GetMaterial(i):GetPathName()
-                    local pkg, obj = path:match("^(.-)%.([^%.]+)$")
-                    if pkg and not obj:find("_DAM$") then dam = loadObject(pkg .. "_DAM." .. obj .. "_DAM") end
+                    -- (a slot may hold a run-time copy, a MaterialInstanceDynamic: its asset is up its Parent chain;
+                    -- test of 2026-10-23: 1 of 13 slots found its _DAM by the slot's own name)
+                    local m = comp:GetMaterial(i)
+                    for _ = 1, 4 do
+                        local path = m:GetPathName()
+                        local pkg, obj = path:match("^(/Game/.-)%.([^%.:]+)$")
+                        if pkg then
+                            src = obj
+                            if not obj:find("_DAM$") then dam = loadObject(pkg .. "_DAM." .. obj .. "_DAM") end
+                            break
+                        end
+                        m = m.Parent
+                        if not m then break end
+                    end
                 end)
-                local m = dam or (i == 0 and fallback) or nil
+                local m = dam or fallback
                 if m and pcall(function() comp:SetMaterial(i, m) end) then swapped = swapped + 1 end
+                names[#names + 1] = string.format("slot %d %s%s", i, src, dam and "" or " -> common")
             end
         end
     end
@@ -3389,8 +3401,8 @@ local function glitchDeadLook(c, o)
         end
     end
     local fx = portalFx(c.dead_fx, o, nil, c.dead_fx_scale, 3600)
-    log(string.format("special: %s's dead look: %d of %d material slots burnt, %d meshes hidden (%s), %d smoke/fire systems",
-        c.name, swapped, slots, hidden, table.concat(names, ", "), fx))
+    log(string.format("special: %s's dead look: %d of %d material slots burnt, %d meshes hidden, %d smoke/fire systems (%s)",
+        c.name, swapped, slots, hidden, fx, table.concat(names, ", ")))
 end
 
 -- AB.L..IN on its ace row at the top fire-control level, gone until its smoke (glitchTick); false if it can't come.
