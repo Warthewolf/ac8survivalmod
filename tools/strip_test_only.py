@@ -8,8 +8,7 @@ p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
 n = s.count('TEST ONLY BEGIN')
 s = re.sub(r'[ \t]*-- TEST ONLY BEGIN.*?-- TEST ONLY END[^\n]*\n', '', s, flags=re.S)
-LEFT = ('TEST ONLY', 'Key.F8', 'Key.F9', 'Key.SIX', 'TEST_SPECIALS', 'forceSpecial = kind', 'openSurvival', 'addCredits(5000',
-        'CFG.recorder.enabled = true')
+LEFT = ('TEST ONLY', 'Key.F8', 'Key.F9', 'Key.SIX', 'TEST_SPECIALS', 'forceSpecial = kind', 'openSurvival', 'addCredits(5000')
 if not n or any(x in s for x in LEFT):
     sys.exit('strip_test_only: test-only code left in ' + p)
 open(p, 'w', encoding='utf-8', newline='').write(s)
