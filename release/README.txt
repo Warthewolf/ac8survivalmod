@@ -67,10 +67,9 @@ the later they come.
 
 Leaderboard (Discord)
 ---------------------
-When a run ends (shot down, or a restart) a summary shows: round, score, kills, specials beaten, time. Press Y to
-submit it to the Survival leaderboard on Discord, N to skip (30 seconds to answer). You appear under your Steam name;
-to use another, set  pilot = Your Name  under [leaderboard] in survival.ini. submit = always there sends every run
-without asking (for a controller), never turns it off. If you're offline the run is kept and sent next time. Only the
+Every run you finish (shot down, restarted, or left) is submitted to the Survival leaderboard on Discord, and a summary
+shows how it went: round, score, kills, specials beaten, time. You appear under your Steam name; to use another, set
+pilot = Your Name  under [leaderboard] in survival.ini. If you're offline the run is kept and sent next time. Only the
 leaderboard's own server is contacted; nothing about your PC is sent besides the run.
 Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
 x1 Standard, x1.5 Ace.

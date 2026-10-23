@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.47.2"
+local VERSION = "0.48.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -810,14 +810,14 @@ local CFG = {
         },
     },
     -- The Discord leaderboard (Milestone 8; leaderboard/README.md; user, 2026-10-23: an end-of-run prompt, a
-    -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). When a run ends (shot
-    -- down, restarted or left), its summary shows with "Y SUBMIT / N SKIP" for prompt_s seconds. submit: "ask", "always"
-    -- (no prompt: for a controller) or "never". The name on the leaderboard: `pilot`, or when that's empty the player's
-    -- Steam name (user, 2026-10-23; dlls/main.dll SV_SteamName), kept to what the leaderboard takes (letters, digits,
-    -- space _ - ., 24 at most); nothing is sent without one. Runs that couldn't get
-    -- through wait in config\pending_runs.txt and go at the next start. Only the leaderboard's own server is contacted
-    -- (dlls/main.dll SV_Post; its address is built in).
-    leaderboard = { pilot = "", submit = "ask", prompt_s = 30 },
+    -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). Every run that ends (shot
+    -- down, restarted or left) is submitted (user, 2026-10-23: "have it always submit a run regardless"; was a Y / N
+    -- prompt), and its summary shows for show_s seconds with how it went. The name on the leaderboard: `pilot`, or when
+    -- that's empty the player's Steam name (dlls/main.dll SV_SteamName), kept to what the leaderboard takes (letters,
+    -- digits, space _ - ., 24 at most); with neither, Pilot-<6 hex> made once a install (config\pilot_id.txt). Runs that
+    -- couldn't get through wait in config\pending_runs.txt and go at the next start. Only the leaderboard's own server is
+    -- contacted (dlls/main.dll SV_Post; its address is built in).
+    leaderboard = { pilot = "", show_s = 15 },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
@@ -1067,13 +1067,11 @@ local CFG = {
             lb_title     = "RUN OVER: %s",
             lb_lines     = { "ROUND REACHED  %d", "SCORE  %s", "KILLS  %d AIR, %d GROUND", "SPECIALS BEATEN  %d",
                              "TIME  %s", "ZOLLARS EARNED  %s" },
-            lb_ask       = "SUBMIT TO THE LEADERBOARD?  Y: YES   N: NO",
-            lb_no_pilot  = "NO PILOT NAME: SET pilot = YOUR NAME UNDER [leaderboard] IN survival.ini",
             lb_sending   = "SENDING...",
             lb_sent      = "SUBMITTED: SCORE %s",
             lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
             lb_refused   = "NOT ACCEPTED: %s",
-            lb_skipped   = "NOT SUBMITTED",
+
             alicorn_sub  = "SUBMARINE CONTACT",
             alicorn_go   = "THE ALICORN",
             alicorn_go_sub = "DESTROY ITS BALLAST TANKS, THEN ITS CORE",
@@ -3646,6 +3644,20 @@ function LB.pilot()
         name = LB.steam
     end
     name = name:gsub("[^%w _%.%-]", ""):gsub("^%s+", ""):gsub("%s+$", ""):sub(1, 24)
+    if name == "" then                                 -- (a Steam name of other letters only): one made for this install
+        if not LB.anon then
+            local f = io.open(configDir() .. "pilot_id.txt", "r")
+            LB.anon = f and (f:read("l") or ""):match("^Pilot%-%x+$") or nil
+            if f then f:close() end
+            if not LB.anon then
+                LB.anon = string.format("Pilot-%06x", math.random(0, 0xFFFFFF))
+                local w = io.open(configDir() .. "pilot_id.txt", "w")
+                if w then w:write(LB.anon, "\n"); w:close() end
+            end
+            log("leaderboard: no usable name; submitting as " .. LB.anon)
+        end
+        name = LB.anon
+    end
     return name
 end
 
@@ -3672,18 +3684,13 @@ function LB.finish(how)
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
         how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))
-    local mode = tostring(c.submit or "ask"):lower()
-    if mode == "never" then return end
-    -- (at: when it's first on screen: a run left from the menu has no HUD, so its prompt waits for the next run's)
-    LB.show = { run = r, at = nil, state = (r.pilot == "" and "nopilot") or (mode == "always" and "auto") or "ask" }
-    if LB.show.state == "auto" then LB.answer(true) end
+    -- submitted straight away; the summary shows show_s once it's on screen (at: a run left from the menu has no HUD,
+    -- so its summary waits for the next run's)
+    LB.show = { run = r, at = nil, state = "sending" }
+    LB.send(LB.show)
 end
 
--- Y / N on the prompt
-function LB.answer(yes)
-    local sh = LB.show
-    if not sh or (sh.state ~= "ask" and sh.state ~= "auto") then return end
-    if not yes then sh.state, sh.until_ = "skipped", os.clock() + 4; log("leaderboard: not submitted"); return end
+function LB.send(sh)
     local body = json(sh.run)
     local id = type(SV_Post) == "function" and SV_Post(body) or -5
     if id > 0 then
@@ -3691,7 +3698,7 @@ function LB.answer(yes)
         log("leaderboard: sending the run (job " .. id .. ")")
     else
         LB.queue[#LB.queue + 1] = body; saveQueue()
-        sh.state, sh.until_ = "queued", os.clock() + 6
+        sh.state = "queued"
         log("leaderboard: not sent now (" .. tostring(id == -8 and "this build has no leaderboard address" or id) .. "); kept for later")
     end
 end
@@ -3705,21 +3712,18 @@ function LB.hud(now)
             local reply = SV_PostReply(sh.job) or ""
             sh.job = nil
             if st == 200 then
-                sh.state, sh.until_ = "sent", os.clock() + 8
-                sh.score = reply:match('"score":(%d+)')
+                sh.state, sh.score = "sent", reply:match('"score":(%d+)')
             elseif st < 0 or st >= 500 or st == 429 then
                 LB.queue[#LB.queue + 1] = sh.body; saveQueue()
-                sh.state, sh.until_ = "queued", os.clock() + 6
+                sh.state = "queued"
             else
-                sh.state, sh.until_, sh.why = "refused", os.clock() + 10, reply:match('"error":"([^"]+)"') or ("status " .. st)
+                sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st)
             end
             log(string.format("leaderboard: the server answered %d: %s", st, reply:sub(1, 200)))
         end
     end
     if sh and not sh.at and H and H.lbTitle and H.shown then sh.at = os.clock() end
-    if sh and ((sh.until_ and os.clock() > sh.until_) or (sh.state == "ask" or sh.state == "nopilot") and sh.at and
-        os.clock() - sh.at > (CFG.leaderboard.prompt_s or 30)) then
-        if sh.state == "ask" then log("leaderboard: no answer; not submitted") end
+    if sh and sh.at and sh.state ~= "sending" and os.clock() - sh.at > (CFG.leaderboard.show_s or 15) then
         LB.show, sh = nil, nil
     end
     if not (H and H.lbTitle) then return end
@@ -3737,10 +3741,9 @@ function LB.hud(now)
     local lines = { string.format(t.lb_lines[1], r.round), string.format(t.lb_lines[2], money(r.score)),
                     string.format(t.lb_lines[3], r.kills.air, r.kills.ground), string.format(t.lb_lines[4], r.won),
                     string.format(t.lb_lines[5], clockText(r.time_s)), string.format(t.lb_lines[6], money(r.zollars.earned)), "" }
-    lines[8] = (sh.state == "ask" and t.lb_ask) or (sh.state == "nopilot" and t.lb_no_pilot) or
-        (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
+    lines[8] = (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
         or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
-        or (sh.state == "skipped" and t.lb_skipped) or ""
+        or ""
     setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
     for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end
     if not H.lbShown then
@@ -5712,21 +5715,6 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
         end)
     end
     -- TEST ONLY END
-    -- Y / N: answer the end-of-run prompt (CFG.leaderboard); they do nothing while it isn't up
-    ;(function()                   -- (its own function: the main chunk's 200-local limit)
-    for _, yn in ipairs({ { "Y", true }, { "N", false } }) do
-        if Key[yn[1]] then
-            pcall(RegisterKeyBind, Key[yn[1]], function()
-                ExecuteInGameThread(function()
-                    if LB.show and LB.show.state == "ask" then
-                        local ok, err = pcall(LB.answer, yn[2])
-                        if not ok then log("leaderboard: answer error " .. tostring(err)) end
-                    end
-                end)
-            end)
-        end
-    end
-    end)()
     -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
     -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
     ;(function()                   -- (its own function: the main chunk's 200-local limit)

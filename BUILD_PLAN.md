@@ -696,3 +696,6 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   Ladons pay once (their reward) and skip the fighters' tier / spike tuning; Ladon health scaling only scans the
   planes made since they spawned; one fallback for the solo specials; zone_area(); the Ladon parts' unused mission
   rows and the never-fired rail cannon event dropped.
+- Leaderboard confirmed 2026-10-23: a run shot down in round 2, Y, the server answered 200 {"ok":true,"score":3750}.
+- 0.48.0 (user: "have it always submit a run regardless"): no prompt and no submit setting; every finished run is sent,
+  its summary shows show_s (15) s; with no usable name a Pilot-<hex> made once an install (config\pilot_id.txt).
