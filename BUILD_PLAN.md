@@ -699,3 +699,6 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
 - Leaderboard confirmed 2026-10-23: a run shot down in round 2, Y, the server answered 200 {"ok":true,"score":3750}.
 - 0.48.0 (user: "have it always submit a run regardless"): no prompt and no submit setting; every finished run is sent,
   its summary shows show_s (15) s; with no usable name a Pilot-<hex> made once an install (config\pilot_id.txt).
+- 2026-10-23: friends asked whether the mod contacts anything outside the game. Explained (one HTTPS post per run to
+  the user's Worker; run stats, pilot name, aircraft; IP seen by Cloudflare, only a salted hash stored). Offered opt-in
+  (off by default) plus a build without network code; the user declined "for now". Revisit before a public release.
