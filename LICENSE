@@ -1,0 +1,17 @@
+Copyright (c) 2026 voidcallsreaper. All rights reserved.
+
+The source code, scripts, tools and documentation in this repository are published for reference only.
+
+You may view this repository on GitHub. You may not copy, modify, merge, publish, distribute, sublicense or sell any
+part of it, or use it in other projects, without prior written permission from the copyright holder.
+
+To ask for permission, contact @voidcallsreaper on Discord.
+
+ACE COMBAT is a trademark of Bandai Namco Entertainment Inc. This project is an unofficial fan modification. It is not
+made, endorsed or supported by Bandai Namco Entertainment Inc. It contains no game assets: the build tools extract
+what they need from your own copy of the game. The one exception is tools/usmap.pkl, a property-name mapping
+generated from the game's type information, which the build tools need.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
