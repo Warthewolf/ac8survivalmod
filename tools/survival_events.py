@@ -1048,6 +1048,15 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
     v = arg_values(t_tp)
     assert v[2] == 'Player' and v[13] == 'Absolute' and v[8] == 'NoneSelect', v
+    # main.lua builds the same names from CFG.specials.glitch (blinks, gun_every_s): checked here so the two can't drift
+    # (code review of 2026-10-23)
+    import re
+    lua = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts',
+                            'main.lua'), encoding='utf-8').read()
+    m_bl = re.search(r'blinks = \{ step_deg = (\d+), rings_m = \{ ([\d, ]+) \} \}', lua)
+    m_gun = re.search(r'[^a-z_]gun_every_s = ([\d.]+)', lua)          # (not railgun_every_s)
+    assert m_bl and int(m_bl.group(1)) == GLITCH_BLINK_STEP_DEG and         tuple(int(x) for x in m_bl.group(2).split(',')) == GLITCH_BLINK_RINGS_M, 'main.lua CFG.specials.glitch.blinks != GLITCH_BLINK_*'
+    assert m_gun and abs(float(m_gun.group(1)) - GLITCH_GUN_SHOTS * GLITCH_GUN_EVERY_S) < 1e-6, 'main.lua gun_every_s != GLITCH_GUN_*'
     for ev, deg, m in glitch_blinks():
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                                  # a remote event Lua fires
         dx, dy = m * 100 * math.cos(math.radians(deg)), m * 100 * math.sin(math.radians(deg))

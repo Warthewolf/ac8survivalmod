@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.10"
+local VERSION = "0.57.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1879,13 +1879,13 @@ local function searchSetup()
     -- its ECM pod held up (tools/re/MINIMAP_MARKERS.md 3a: the stock row rests 30 s after each 15 s, so the radar ring
     -- comes and goes): no rest, a new pod as the last one's 15 s run out, and up from 20 km so the ring is there first
     -- (user, 2026-10-23: AB.L..IN's "ECM didn't turn on": TriggeringTime was 0.5; the stock row's 15 s matches the
-    -- pod's 15 s LifeTime, so it's kept, with the 30 s rest taken out and a new pod every 15 s)
+    -- pod's 15 s LifeTime, so it's kept, with the 30 s rest taken out and a new pod every 14 s)
     local function anomEcm(src)
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.ActivationTime = 20000, 0.5
-            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 15.0, 15.0, 0
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 15.0, 14.0, 0     -- (each new pod 1 s before the last ends)
             r.MagazineCapacity = 999
-        end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 15 s, from 20 km)", "x")
+        end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km)", "x")
     end
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
@@ -3316,8 +3316,10 @@ local function where(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
 end
+local kismet = nil
 local function groundAt(x, y)
-    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(kismet) then kismet = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
+    local ks = kismet
     if not (valid(ks) and valid(survivalPC)) then return nil end
     local hit, z = {}, nil
     pcall(function()
@@ -3376,10 +3378,10 @@ local function glitchDeadLook(c, o)
                     local m = comp:GetMaterial(i)
                     for _ = 1, 4 do
                         local path = m:GetPathName()
-                        local pkg, obj = path:match("^(/Game/.-)%.([^%.:]+)$")
+                        local pkg, obj = path:match("^(/Game/[^%.:]+)%.([^%.:]+)$")   -- (an asset, not a run-time copy)
                         if pkg then
                             src = obj
-                            if not obj:find("_DAM$") then dam = loadObject(pkg .. "_DAM." .. obj .. "_DAM") end
+                            dam = obj:find("_DAM$") and m or loadObject(pkg .. "_DAM." .. obj .. "_DAM")
                             break
                         end
                         m = m.Parent
@@ -3439,7 +3441,8 @@ end
 -- A blink: the spot it comes back to (CFG.specials.glitch.blinks; the event package moves it there, from the player at
 -- their height, nose on them: the flight model undoes a Lua move). Anywhere round the player, but at least
 -- blink_turn_deg round from the last one (user, 2026-10-23: "it teleports but only to one spot on me": behind its own
--- flight path it kept the same side, as it flies at the player), and never one under ground_clear_m above the ground.
+-- flight path it kept the same side, as it flies at the player), and never one under ground_clear_m above the ground
+-- (less when the player flies lower than that).
 -- Returns its event, the point, its distance (cm), the ground and its bearing, or nil.
 local function blinkSpot(c, s, you)
     local bl = c.blinks
@@ -3457,10 +3460,15 @@ local function blinkSpot(c, s, you)
         end
     end
     table.sort(spots, function(p, q) return p.off < q.off end)
+    -- the clearance wanted: ground_clear_m, or 80 % of the player's own height over the ground under them when they
+    -- fly lower (code review of 2026-10-23: at 100 m over the sea every spot failed 150 m, so no blinks at all)
+    local under = groundAt(you.X, you.Y)
+    local clear = c.ground_clear_m * 100
+    if under then clear = math.max(0, math.min(clear, (you.Z - under) * 0.8)) end
     for _, p in ipairs(spots) do
         local to = { X = you.X + p.d * math.cos(math.rad(p.deg)), Y = you.Y + p.d * math.sin(math.rad(p.deg)), Z = you.Z }
         local ground = groundAt(to.X, to.Y)
-        if not ground or to.Z >= ground + c.ground_clear_m * 100 then return p.ev, to, p.d, ground, p.deg end
+        if not ground or to.Z >= ground + clear then return p.ev, to, p.d, ground, p.deg end
     end
     return nil
 end
@@ -3531,25 +3539,6 @@ function ANOM.glitchTick(now, s)
         s.ecmFireAt = now + c.ecm_every_s
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchEcm") or -5
         if r ~= 1 and not s.ecmSaid then s.ecmSaid = true; log("special: RE_SV_GlitchEcm not fired: " .. (SV_ERR[r] or tostring(r))) end
-    end
-    if now >= (s.ecmAt or 0) then                       -- its ECM pods up (LiveElectronicSupportMeasures), each change
-        s.ecmAt = now + 2
-        local n, near = 0, nil
-        for _, e in ipairs(FindAllOf("LiveElectronicSupportMeasures") or {}) do
-            if valid(e) and not nameOf(e):find("Default__", 1, true) then
-                n = n + 1
-                local p = where(e)
-                if p and at then
-                    local d = math.sqrt((p.X - at.X) ^ 2 + (p.Y - at.Y) ^ 2 + (p.Z - at.Z) ^ 2) / 100
-                    near = math.min(near or d, d)
-                end
-            end
-        end
-        if n ~= s.ecmN then
-            s.ecmN = n
-            log(string.format("special: %s's ECM: %d pod%s up%s", c.name, n, n == 1 and "" or "s",
-                near and string.format(", nearest %.0f m from it", near) or ""))
-        end
     end
     if not s.frenzyUntil then return end
     if s.check and at and you then                      -- the last blink, a tick on: where it really is

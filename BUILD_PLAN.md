@@ -717,3 +717,21 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
 - 2026-10-23: friends asked whether the mod contacts anything outside the game. Explained (one HTTPS post per run to
   the user's Worker; run stats, pilot name, aircraft; IP seen by Cloudflare, only a salted hash stored). Offered opt-in
   (off by default) plus a build without network code; the user declined "for now". Revisit before a public release.
+
+## AB.L..IN special round (Lua 0.56.x-0.57.0, 2026-10-23)
+- [x] One EA-18G Growler, AB.L..IN, squadron tag IFF: FATAL ERROR (user's spec, SURVIVAL_SPEC.md 10): 450 HP (+4 % a
+  round after `first`, at most x3), alone in its round, 7000 + 250 a round. Ctrl+7 (test builds only).
+- [x] ECM pod always up: RE_SV_GlitchEcm (LiveFireOneShotWeapon WN_WEAPON_4) every 14 s. Confirmed 2026-10-23.
+- [x] Each hit starts a 6 s frenzy: it vanishes in smoke (hidden, untargetable, unhurt) and comes back in smoke at one
+  of 24 spots round the player (500 / 800 m, every 30 deg, at their height; RE_SV_GlitchBlink_*, Mission 22's
+  LiveActorTeleportExecution) every second, at least 60 deg round from the last, and its gun fires at the player every
+  0.1 s (RE_SV_GlitchGun, WN_WEAPON_2, delay 0.1 x 5). Confirmed 2026-10-23 (user: "it was shooting"; 40 blinks).
+- [x] MINDRIPPER's death sounds on its kill.
+- [ ] The dead look (user: "look spooky like its the dead flying"): its airframe in the wreck's _DAM materials (0.57.0
+  looks them up from each slot's asset), pilot and missiles hidden, damaged-plane smoke and fire. 0.56.8 burnt 1 of 13
+  slots; untested since.
+- [ ] Blinks over low ground / sea: the clearance is at most 80 % of the player's own height (0.57.0, untested).
+
+## Shuttle removal (Lua 0.56.10, 2026-10-23)
+- [ ] RE_SV_ShuttleRemove switches SV_Unit_Shuttle and the pad unit off with LiveSetActiveGameObjectExecution (as
+  Mission 22 does its stray dummies) instead of LiveDestroyUnitExecution, which never took them off in any test. Untested.

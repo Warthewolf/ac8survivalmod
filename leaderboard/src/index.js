@@ -260,6 +260,7 @@ async function pinnedMessage(env, key, content) {
   if (id) return { id, made: false };
   const m = await discord(env, "POST", `/channels/${env.BOARD_CHANNEL_ID}/messages`, { content });
   await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key, m.id).run();
+  await env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(key + "_sum").run();   // (its content isn't there yet)
   let pinned = true;
   try { await discord(env, "PUT", `/channels/${env.BOARD_CHANNEL_ID}/pins/${m.id}`); } catch (e) { pinned = false; }
   return { id: m.id, made: true, pinned };
@@ -267,11 +268,12 @@ async function pinnedMessage(env, key, content) {
 
 // One pinned message brought up to date; a message that's gone (deleted in Discord: 404 Unknown Message, which made
 // every update and /setup fail) is forgotten and made again.
-async function updatePinned(env, key, placeholder, body) {
+async function updatePinned(env, key, placeholder, body, force) {
   let m = await pinnedMessage(env, key, placeholder);
-  // unchanged since the last edit: no edit (Discord caps edits to messages older than an hour)
+  // unchanged since the last edit: no edit (Discord caps edits to messages older than an hour); /setup always edits, so
+  // a message deleted in Discord is found and made again
   const sum = await sha256Hex(JSON.stringify(body));
-  if (!m.made && (await setting(env, key + "_sum")) === sum) return m;
+  if (!force && !m.made && (await setting(env, key + "_sum")) === sum) return m;
   try {
     await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${m.id}`, body);
   } catch (e) {
@@ -285,12 +287,12 @@ async function updatePinned(env, key, placeholder, body) {
   return m;
 }
 
-async function refreshBoards(env) {
+async function refreshBoards(env, force) {
   if (!(await setting(env, "board_message"))) return;
   const one = await updatePinned(env, "board_message", "Leaderboard coming up...",
-    { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) });
+    { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) }, force);
   const two = await updatePinned(env, "board_message_2", "Records coming up...",
-    { content: "**AC8 Survival Mode — records, aircraft and this week**", embeds: await extraEmbeds(env) });
+    { content: "**AC8 Survival Mode — records, aircraft and this week**", embeds: await extraEmbeds(env) }, force);
   return { ...two, oneRemade: !!one.remade };
 }
 
@@ -310,7 +312,7 @@ async function ensureColumns(env) {
 }
 
 // ------------------------------------------------------------------------------------------------- routes
-async function submit(req, env) {
+async function submit(req, env, ctx) {
   const body = await req.text();
   if (body.length > 16384) return json({ ok: false, error: "too big" }, 413);
   const sig = (req.headers.get("X-SV-Signature") || "").toLowerCase();
@@ -340,10 +342,15 @@ async function submit(req, env) {
     batch.push(env.DB.prepare("INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(run.run_id, s.kind, s.round, s.seconds, s.won ? 1 : 0, run.pilot, run.difficulty));
   await env.DB.batch(batch);
-  // the post and the boards: a Discord hiccup mustn't lose the run (it's stored), so their errors are only logged
-  try { await discord(env, "POST", `/channels/${env.RUNS_CHANNEL_ID}/messages`, { embeds: [runEmbed(run, sc)] }); }
-  catch (e) { console.log(String(e)); }
-  try { await refreshBoards(env); } catch (e) { console.log(String(e)); }
+  // the post and the boards: a Discord hiccup mustn't lose the run (it's stored), so their errors are only logged; they
+  // run after the reply (ctx.waitUntil), so a rate-limit wait never holds the game past its 15 s timeout (code review
+  // of 2026-10-23)
+  const after = (async () => {
+    try { await discord(env, "POST", `/channels/${env.RUNS_CHANNEL_ID}/messages`, { embeds: [runEmbed(run, sc)] }); }
+    catch (e) { console.log(String(e)); }
+    try { await refreshBoards(env); } catch (e) { console.log(String(e)); }
+  })();
+  if (ctx && ctx.waitUntil) ctx.waitUntil(after); else await after;     // (tests: no ctx)
   return json({ ok: true, score: sc });
 }
 
@@ -415,7 +422,7 @@ async function setup(req, env) {
       done.push(`leaderboard message made${m.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
     }
     step = "updating the leaderboard messages";
-    const two = await refreshBoards(env);
+    const two = await refreshBoards(env, true);
     if (two && two.oneRemade) done.push("the leaderboard message was gone: made again");
     if (two && two.made) done.push(`records message ${two.remade ? "was gone: made again" : "made"}${two.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
     done.push("leaderboard up to date");
@@ -429,10 +436,10 @@ async function setup(req, env) {
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const path = new URL(req.url).pathname;
     try {
-      if (req.method === "POST" && path === "/submit") return await submit(req, env);
+      if (req.method === "POST" && path === "/submit") return await submit(req, env, ctx);
       if (req.method === "POST" && path === "/interactions") return await interactions(req, env);
       if (req.method === "GET" && path === "/setup") return await setup(req, env);
       if (req.method === "GET" && path === "/") return new Response("AC8 Survival Mode leaderboard");
