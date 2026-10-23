@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.55.0"
+local VERSION = "0.55.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -917,11 +917,13 @@ local CFG = {
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
         -- 1200, speeds x speed_x (1.0 since the route's speed went to 2500 km/h, user 2026-10-23: their rows mustn't cap
         -- it; the route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
-        -- volley_*: its missiles (RE_SV_LadonVolley<Key>: the hatch opens, each VLS fires one at you) every
-        -- volley_every_s while you're within volley_range_km of it; its CIWS guns fire on their own.
+        -- volley_*: its missiles (RE_SV_LadonVolley<Key>L / R: the hatch opens, one launcher fires its salvo at you,
+        -- left and right in turn) every volley_every_s while you're within volley_range_km of it, the first once
+        -- you've been in range volley_warn_s; its pulse cannons fire on their own. (Was both launchers every 20 s
+        -- within 12 km: the player was down within 9 s of the first volley, test of 2026-10-23.)
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 1.0, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
-                  volley_every_s = 20, volley_range_km = 12,
+                  volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
@@ -3798,13 +3800,20 @@ function SPC.ladonTick(now, s)
                 if p.unit == L.unit and not p.down and valid(p.obj) and p.dist then near = math.min(near or p.dist, p.dist) end
             end
             if near and near <= c.volley_range_km then
-                L.volleyAt = now + c.volley_every_s
-                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonVolley" .. k) or "n/a"
-                if not L.volleySaid then
-                    L.volleySaid = true
-                    log(string.format("special: Ladon %s fires its missiles at you (%.1f km; RE_SV_LadonVolley%s %s), every %d s in range",
-                        c.names[k] or k, near, k, tostring(r), c.volley_every_s))
+                L.inRangeAt = L.inRangeAt or now                       -- (the first volley: once in range volley_warn_s)
+                if now - L.inRangeAt >= (c.volley_warn_s or 0) then
+                    L.volleyAt = now + c.volley_every_s
+                    L.side = (L.side == "L") and "R" or "L"
+                    local ev = "RE_SV_LadonVolley" .. k .. L.side
+                    local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+                    if not L.volleySaid then
+                        L.volleySaid = true
+                        log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s), one every %d s in range",
+                            c.names[k] or k, near, ev, tostring(r), c.volley_every_s))
+                    end
                 end
+            else
+                L.inRangeAt = nil
             end
         end
         if L.alive then

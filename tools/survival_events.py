@@ -850,11 +850,13 @@ def build_ladon(g, flag, stock_ep):
         g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
         for part in LADON_CIWS:
             g.execute(t_ciws, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
-        volley = f"RE_SV_LadonVolley{L['key']}"
-        g.trigger('RE_SpawnEnemy_kokatu_1st', volley)
-        g.execute(t_hatch, volley, {1: f"{L['obj']}_MissileHatch"})
-        for k, part in enumerate(LADON_VLS):
-            g.execute(t_vls, volley, {1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5 + 1.0 * k)
+        # one launcher a volley (user, 2026-10-23: "nerf the enemy LADONs VLS, way too insane": both at once shot the
+        # player down within 9 s of the first volley): RE_SV_LadonVolley<Key>L / R, main.lua alternates them
+        for side, part in zip('LR', LADON_VLS):
+            volley = f"RE_SV_LadonVolley{L['key']}{side}"
+            g.trigger('RE_SpawnEnemy_kokatu_1st', volley)
+            g.execute(t_hatch, volley, {1: f"{L['obj']}_MissileHatch"})
+            g.execute(t_vls, volley, {1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
         for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
