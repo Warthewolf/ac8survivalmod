@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.50.1"
+local VERSION = "0.50.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3740,7 +3740,11 @@ function LB.finish(how)
     -- submitted straight away; the summary shows show_s once it's on screen (at: a run left from the menu has no HUD,
     -- so its summary waits for the next run's)
     LB.show = { run = r, at = nil, state = "sending" }
-    LB.send(LB.show)
+    local ok, err = pcall(LB.send, LB.show)
+    if not ok then                                      -- (0.50.0: a send that failed left "SENDING..." up for good)
+        LB.show.state, LB.show.why = "refused", "error"
+        log("leaderboard: the run couldn't be sent: " .. tostring(err))
+    end
 end
 
 -- A run goes into pending_runs.txt before it's sent and comes off once the server has answered for good (taken or
@@ -3798,7 +3802,9 @@ end
 function LB.hud(now)
     local sh = LB.show
     if sh and not sh.at and H and H.lbTitle and H.shown then sh.at = os.clock() end
-    if sh and sh.at and sh.state ~= "sending" and os.clock() - sh.at > (CFG.leaderboard.show_s or 15) then
+    -- (closed show_s after it's on screen once it's answered, and after 3 minutes whatever: a send that never answers
+    -- mustn't keep it up)
+    if sh and sh.at and os.clock() - sh.at > ((sh.state ~= "sending") and (CFG.leaderboard.show_s or 15) or 180) then
         LB.show, sh = nil, nil
     end
     if not (H and H.lbTitle) then return end
