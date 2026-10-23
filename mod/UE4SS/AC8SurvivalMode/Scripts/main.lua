@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.2"
+local VERSION = "0.51.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -889,8 +889,11 @@ local CFG = {
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
         -- 1200, speeds x speed_x (user: "the HP needs to be nerfed a bit and their speed needs a nerf slightly"; the
         -- route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
+        -- volley_*: its missiles (RE_SV_LadonVolley<Key>: the hatch opens, each VLS fires one at you) every
+        -- volley_every_s while you're within volley_range_km of it; its CIWS guns fire on their own.
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 0.85, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
+                  volley_every_s = 20, volley_range_km = 12,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
@@ -3649,6 +3652,21 @@ function SPC.ladonTick(now, s)
         end
     end
     for k, L in pairs(s.units) do
+        if L.alive and now >= (L.volleyAt or s.at + 10) then             -- a missile volley while you're in range
+            local near
+            for _, p in ipairs(planes) do
+                if p.unit == L.unit and not p.down and valid(p.obj) and p.dist then near = math.min(near or p.dist, p.dist) end
+            end
+            if near and near <= c.volley_range_km then
+                L.volleyAt = now + c.volley_every_s
+                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonVolley" .. k) or "n/a"
+                if not L.volleySaid then
+                    L.volleySaid = true
+                    log(string.format("special: Ladon %s fires its missiles at you (%.1f km; RE_SV_LadonVolley%s %s), every %d s in range",
+                        c.names[k] or k, near, k, tostring(r), c.volley_every_s))
+                end
+            end
+        end
         if L.alive then
             local runs = f["SV_LadonRun" .. k] or 0
             -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at

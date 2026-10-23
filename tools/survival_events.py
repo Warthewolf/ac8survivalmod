@@ -194,8 +194,12 @@ LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0),
 # spawn, big enough for all of it (code review of 2026-10-23: 40 km round the spawn left the airfield 59 km out, so the
 # AI kept turning them back west)
 LADON_AREA = ((-9.0, 2.0), 80000.0)          # (centre x, y km), radius m
-# the parts that fire (Mission 16's Normal engagement orders on them: missiles and the CIWS turrets)
-LADON_WEAPONS = ['VLS0', 'VLS1', 'LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
+# the parts that fire. The CIWS turrets: Mission 16's Normal engagement order on each (its Default_RemoteEvent_20
+# record). The missiles never fire on an order alone (test of 2026-10-23: none at all): Mission 16 opens the missile
+# hatch and fires each VLS at its target with LiveFireOneShotWeapon, so RE_SV_LadonVolley<Key> does that at the
+# player, and Scripts/main.lua fires it while the player is in range (CFG.specials.ladon.volley_*).
+LADON_CIWS = ['LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
+LADON_VLS = ['VLS0', 'VLS1']
 LADON_SPEED = '1500.0'                       # km/h (Mission 16 flies its Ladons at 1700-2600: "a nerf slightly")
 
 
@@ -789,19 +793,28 @@ def build_ladon(g, flag, stock_ep):
     t_eng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_CompositeEvent_83',
                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
     assert arg_values(t_eng)[3] == 'Normal', arg_values(t_eng)
-    # its weapons' own orders (Mission 16's Normal_Missile record, on each firing part; code review of 2026-10-23: only
-    # the body had one)
-    t_weng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Normal_Missile',
-                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_VLS0' and a[8] == 'false')
-    assert arg_values(t_weng)[3] == 'Normal' and arg_values(t_weng)[6] == 'PlayerFirst', arg_values(t_weng)
+    # its guns' own orders (code review of 2026-10-23: only the body had one) and its missile volleys (LADON_VLS)
+    t_ciws = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_RemoteEvent_20',
+                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_LCIWS')
+    assert arg_values(t_ciws)[3] == 'Normal' and arg_values(t_ciws)[6] == 'PlayerFirst', arg_values(t_ciws)
+    t_hatch = g.foreign_template(m16, 'LiveFireOneShotWeapon', 'Default_VolumeEvent_51',
+                                 lambda a, e: a[1] == 'B_Obj_01_Air0_Ladon0_MissileHatch')
+    t_vls = g.foreign_template(m16, 'LiveFireOneShotWeapon', 'Default_CompositeEvent_44',
+                               lambda a, e: a[1] == 'B_Obj_01_Air0_Ladon0_VLS0' and a[2] == 'A_Obj_01_Air0_f18c_0')
+    assert arg_values(t_hatch)[0] == 'WN_WEAPON_1' and arg_values(t_vls)[0] == 'WN_WEAPON_2', (arg_values(t_hatch), arg_values(t_vls))
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
     for L in ladons():
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
         flag(L['up'], L['flag'], 'Set', 0)
         g.execute(t_path, L['up'], {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0)
         g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
-        for part in LADON_WEAPONS:
-            g.execute(t_weng, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
+        for part in LADON_CIWS:
+            g.execute(t_ciws, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
+        volley = f"RE_SV_LadonVolley{L['key']}"
+        g.trigger('RE_SpawnEnemy_kokatu_1st', volley)
+        g.execute(t_hatch, volley, {1: f"{L['obj']}_MissileHatch"})
+        for k, part in enumerate(LADON_VLS):
+            g.execute(t_vls, volley, {1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5 + 1.0 * k)
         for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
