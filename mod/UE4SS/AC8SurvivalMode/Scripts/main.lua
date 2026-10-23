@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.7"
+local VERSION = "0.56.8"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -960,9 +960,10 @@ local CFG = {
                      -- an ini setting): RE_SV_GlitchBlink_<ring letter><bearing letter>, every step_deg on each ring
                      blinks = { step_deg = 30, rings_m = { 500, 800 } },
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
-                     -- the dead flying (user: "look spooky like its the dead flying"): its wreck model shown, its
-                     -- flying model hidden, the damaged-plane smoke and fire on it
+                     -- the dead flying (user: "look spooky like its the dead flying"): its airframe in the wreck's
+                     -- burnt material, no pilot or stores, the damaged-plane smoke and fire on it
                      dead_look = true, dead_fx_scale = 1.0,
+                     dead_material = "/Game/Vehicles/Aircraft/PP/PP0010_e18g/Materials/Common/MI_PP0010_e18g_DAM",
                      dead_fx = { "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001",
                                  "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001" },
                      smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
@@ -3351,45 +3352,45 @@ local function glitchSmoke(s, at)
     end
 end
 
--- Its dead look (user, 2026-10-23: "I want the aircraft to look spooky like its the dead flying"): the wreck every AI
--- plane carries for its death (its BP's DamagedMainBodyMesh / DamagedPartsMesh: the burnt _DAM model, hidden until
--- then) shown and kept on it, its flying model (every other mesh: airframe, pilot, stores) hidden, and the
--- damaged-plane smoke and fire (dead_fx) on it. Each step is logged once.
+-- Its dead look (user, 2026-10-23: "I want the aircraft to look spooky like its the dead flying"): its own airframe
+-- in its wreck's burnt material (each slot's <material>_DAM, the one the game puts on the wreck; dead_material when a
+-- slot has none), an empty cockpit and no stores (pilot and missile meshes hidden), and the damaged-plane smoke and
+-- fire (dead_fx) on it. (The BP's wreck meshes, DamagedMainBodyMesh / DamagedPartsMesh, don't draw on a live plane:
+-- shown, with the airframe hidden, nothing was left, test of 2026-10-23.) Each step is logged once.
 local function glitchDeadLook(c, o)
-    local shown, moved, hidden, names = 0, 0, 0, {}
-    local root = o:K2_GetRootComponent()
-    local at = where(o)
-    for _, n in ipairs({ "DamagedMainBodyMesh", "DamagedPartsMesh" }) do
+    local swapped, slots, hidden, names = 0, 0, 0, {}
+    local fallback = loadObject(c.dead_material .. "." .. c.dead_material:match("[^/]+$"))
+    local seen = {}
+    for _, n in ipairs({ "PlaneBodyMeshComponent", "PlaneBodySkelMeshComponent", "PlaneBodyStaticMeshComponent", "PlaneBodyMesh" }) do
         local ok, comp = pcall(function() return o[n] end)
-        if ok and comp and valid(comp) then
-            pcall(function() comp:SetHiddenInGame(false, true) end)
-            pcall(function() comp:SetVisibility(true, true) end)
-            shown = shown + 1
-            local okL, l = pcall(function() local v = comp:K2_GetComponentLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
-            if okL and l and at and math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2 + (l.Z - at.Z) ^ 2) > 2000 then
-                -- (not on the plane: snapped onto it)
-                if pcall(function() comp:K2_AttachToComponent(root, FName("None"), 2, 2, 2, false) end) then moved = moved + 1 end
+        local key = ok and comp and valid(comp) and (addrOf(comp) or n)
+        if key and not seen[key] then
+            seen[key] = true
+            local okN, num = pcall(function() return comp:GetNumMaterials() end)
+            for i = 0, (okN and type(num) == "number" and num or 0) - 1 do
+                slots = slots + 1
+                local dam = nil
+                pcall(function()                         -- /Game/.../MI_x.MI_x -> /Game/.../MI_x_DAM.MI_x_DAM
+                    local path = comp:GetMaterial(i):GetPathName()
+                    local pkg, obj = path:match("^(.-)%.([^%.]+)$")
+                    if pkg and not obj:find("_DAM$") then dam = loadObject(pkg .. "_DAM." .. obj .. "_DAM") end
+                end)
+                local m = dam or (i == 0 and fallback) or nil
+                if m and pcall(function() comp:SetMaterial(i, m) end) then swapped = swapped + 1 end
             end
         end
     end
-    if shown > 0 then                                   -- (no wreck: it keeps its own look)
-        -- its flying meshes by name (LiveAIPlane's and the BP's; test of 2026-10-23: K2_GetComponentsByClass gave none)
-        local seen = {}
-        for _, n in ipairs({ "PlaneBodyMeshComponent", "PlaneBodySkelMeshComponent", "PlaneBodyStaticMeshComponent",
-                             "PilotMeshComponent", "LandingGearOnMeshComponent", "LandingGearOffMeshComponent",
-                             "RefuelProbeOffMesh", "RefuelProbeNavyMesh", "RefuelProbeAirforceMesh", "PlaneBodyMesh",
-                             "PilotMesh0", "PilotMesh1", "MissileMesh1", "MissileMesh2", "LandingGearOnMesh", "LandingGearOffMesh" }) do
-            local ok, comp = pcall(function() return o[n] end)
-            local key = ok and comp and valid(comp) and (addrOf(comp) or n)
-            if key and not seen[key] then
-                seen[key] = true
-                if pcall(function() comp:SetHiddenInGame(true, false) end) then hidden = hidden + 1; names[#names + 1] = n end
-            end
+    for _, n in ipairs({ "PilotMeshComponent", "PilotMesh0", "PilotMesh1", "MissileMesh1", "MissileMesh2" }) do
+        local ok, comp = pcall(function() return o[n] end)
+        local key = ok and comp and valid(comp) and (addrOf(comp) or n)
+        if key and not seen[key] then
+            seen[key] = true
+            if pcall(function() comp:SetHiddenInGame(true, false) end) then hidden = hidden + 1; names[#names + 1] = n end
         end
     end
     local fx = portalFx(c.dead_fx, o, nil, c.dead_fx_scale, 3600)
-    log(string.format("special: %s's dead look: %d wreck meshes shown (%d snapped on), %d flying meshes hidden (%s), %d smoke/fire systems",
-        c.name, shown, moved, hidden, table.concat(names, ", "), fx))
+    log(string.format("special: %s's dead look: %d of %d material slots burnt, %d meshes hidden (%s), %d smoke/fire systems",
+        c.name, swapped, slots, hidden, table.concat(names, ", "), fx))
 end
 
 -- AB.L..IN on its ace row at the top fire-control level, gone until its smoke (glitchTick); false if it can't come.
