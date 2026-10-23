@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.0"
+local VERSION = "0.51.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3120,7 +3120,17 @@ end
 -- The shuttle's countdown clock (D.shuttleClock: cd seconds run, fired the last second's event): it runs on the game
 -- clock except while you're down at the airfield (D.grounded, from roundsTick), and fires RE_SV_ShuttleT_<s> for each
 -- whole second s (tools/survival_events.py build_shuttle: radio, ignition, liftoff at countdown_s, the climb after it)
--- up to countdown_s + 30; it stops when the shuttle is lost.
+-- up to countdown_s + 30; it stops when the shuttle is lost. While the countdown is held the shuttle can't be hurt
+-- (user, 2026-10-23: "Make the shuttle invulnerable while the countdown is held"; LiveGameObject.SetIsInvincible).
+function SPC.shuttleInvincible(on)
+    if not valid(SHUTTLE.obj) then shuttleHealth() end           -- (finds the shuttle's actor)
+    if not valid(SHUTTLE.obj) then return false end
+    local ok = pcall(function() SHUTTLE.obj:SetIsInvincible(on) end)
+    log(string.format("special: shuttle %s%s", on and "invulnerable while the countdown is held" or "can be hit again",
+        ok and "" or " (SetIsInvincible failed)"))
+    return ok
+end
+
 function SPC.shuttleClockTick(now)
     local k = D.shuttleClock
     if not k then return end
@@ -3131,12 +3141,17 @@ function SPC.shuttleClockTick(now)
         k.grounded = D.grounded
         log(string.format("special: shuttle countdown %s at %.0f s", D.grounded and "held (you're down at the airfield)" or "running", k.cd))
     end
+    local want = (D.grounded and not k.s.lost and k.s.state == "countdown") or false   -- (not after liftoff)
+    if want ~= (k.inv or false) and SPC.shuttleInvincible(want) then k.inv = want end
     local last = CFG.specials.shuttle.countdown_s + 30
     while k.fired < math.min(math.floor(k.cd), last) do
         k.fired = k.fired + 1
         if type(SV_Event) == "function" then SV_Event("RE_SV_ShuttleT_" .. k.fired) end
     end
-    if k.fired >= last or k.s.lost then D.shuttleClock = nil end
+    if k.fired >= last or k.s.lost then
+        if k.inv then SPC.shuttleInvincible(false) end
+        D.shuttleClock = nil
+    end
 end
 
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
@@ -3145,6 +3160,7 @@ local function specialTick(now)
     SPC.shuttleClockTick(now)
     if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then            -- (tools/survival_events.py RE_SV_ShuttleRemove)
         D.shuttleRemoveAt = nil
+        if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
         log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
     end
