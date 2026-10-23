@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.52.3"
+local VERSION = "0.53.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -604,10 +604,13 @@ local CFG = {
         -- as MINDRIPPER's 120 / 270 / 25), top and cornering speed x speed_x, cruise x cruise_x, health + health_add;
         -- post_stall: cobra and kulbit on, whatever the airframe's blueprint says (Grim's Su-57 had both off);
         -- hunt: its target kept on you (the AI's blackboard TargetActor, every 2 s: Grim's stayed on the airfield's
-        -- target dummy for the whole of the test of 2026-10-23 while its wingman went for the player)
+        -- target dummy for the whole of the test of 2026-10-23 while its wingman went for the player); no_provoke: its
+        -- bPermissionToProvoke off (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 8.2: being tailed put it in Provoke, then our
+        -- reactions handed it to EscapeFromPursuer, both above PursueTarget, so a tailed ace defended and never
+        -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you)
         flight = {
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
-                       health_add = 600, post_stall = true, hunt = true },
+                       health_add = 600, post_stall = true, hunt = true, no_provoke = true },
         },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
@@ -2188,6 +2191,14 @@ end
 function ACE.hunt(p)
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
     if not (fl and fl.hunt) then return end
+    if fl.no_provoke then                       -- (every 2 s: an engagement order sets it again)
+        pcall(function() if p.obj.bPermissionToProvoke then p.obj.bPermissionToProvoke = false end end)
+        if not p.noProvokeSaid then
+            p.noProvokeSaid = true
+            local okR, v = pcall(function() return p.obj.bPermissionToProvoke end)
+            log(string.format("aces: %s won't defend when tailed (bPermissionToProvoke %s)", p.name, okR and tostring(v) or "?"))
+        end
+    end
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     local bb = p.obj.AIStateComponent.BlackboardComponent
