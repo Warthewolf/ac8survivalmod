@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.1"
+local VERSION = "0.56.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -951,7 +951,7 @@ local CFG = {
                      reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
                      health_per_round = 0.04, health_max_x = 3.0,
                      frenzy_s = 6, blink_every_s = 1.0, blink_m = { 450, 850 }, blink_height_m = 40,
-                     blink_spread_deg = 100, ground_clear_m = 150, min_alt_m = 150, bullet_mps = 1000,
+                     blink_spread_deg = 35, ground_clear_m = 150, min_alt_m = 150, bullet_mps = 1000,
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
                      smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
                      smoke_s = 3.0 },
@@ -1865,12 +1865,14 @@ local function searchSetup()
     end
     -- its ECM pod held up (tools/re/MINIMAP_MARKERS.md 3a: the stock row rests 30 s after each 15 s, so the radar ring
     -- comes and goes): no rest, a new pod as the last one's 15 s run out, and up from 20 km so the ring is there first
+    -- (user, 2026-10-23: AB.L..IN's "ECM didn't turn on": TriggeringTime was 0.5; the stock row's 15 s matches the
+    -- pod's 15 s LifeTime, so it's kept, with the 30 s rest taken out and a new pod every 15 s)
     local function anomEcm(src)
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.ActivationTime = 20000, 0.5
-            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 0.5, 14.0, 0
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 15.0, 15.0, 0
             r.MagazineCapacity = 999
-        end, "MINDRIPPER's ECM pod: always up (no rest, every 14 s, from 20 km)", "x")
+        end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 15 s, from 20 km)", "x")
     end
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
@@ -3450,6 +3452,25 @@ function ANOM.glitchTick(now, s)
         log(string.format("special: %s hit (%.0f -> %.0f): frenzy %d for %.0f s", c.name, s.lastHp, h, s.frenzies, c.frenzy_s))
     end
     s.lastHp = h or s.lastHp
+    if now >= (s.ecmAt or 0) then                       -- its ECM pods up (LiveElectronicSupportMeasures), each change
+        s.ecmAt = now + 2
+        local n, near = 0, nil
+        for _, e in ipairs(FindAllOf("LiveElectronicSupportMeasures") or {}) do
+            if valid(e) and not nameOf(e):find("Default__", 1, true) then
+                n = n + 1
+                local p = where(e)
+                if p and at then
+                    local d = math.sqrt((p.X - at.X) ^ 2 + (p.Y - at.Y) ^ 2 + (p.Z - at.Z) ^ 2) / 100
+                    near = math.min(near or d, d)
+                end
+            end
+        end
+        if n ~= s.ecmN then
+            s.ecmN = n
+            log(string.format("special: %s's ECM: %d pod%s up%s", c.name, n, n == 1 and "" or "s",
+                near and string.format(", nearest %.0f m from it", near) or ""))
+        end
+    end
     if not s.frenzyUntil then return end
     if s.vanished then                                  -- back, around the player at their height, nose on them
         if you then
