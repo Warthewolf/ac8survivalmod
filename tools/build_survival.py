@@ -652,6 +652,21 @@ def build_alicorn_rows():
         rename_package(z, src, DATA + out)
         rows = [(k, row) for k, row in dt['rows'] if key(k) in keepsets[i]]
         assert {key(k) for k, _ in rows} == keepsets[i], (out, keepsets[i] - {key(k) for k, _ in rows})
+        if i == 0:                  # the ballast tanks and the core: Survival's damage table (survival_events.ALCN_PART_*)
+            n_parts = 0
+            for k, row in rows:
+                if key(k) in survival_events.ALCN_DURABLE_PARTS:
+                    row[2][:] = [(q[0], q[1], q[2], ('name', survival_events.ALCN_PART_DURABILITY, 0))
+                                 if q[1] == 'WeaponDurabilityId' else q for q in row[2]]
+                    n_parts += 1
+            assert n_parts == len(survival_events.ALCN_DURABLE_PARTS), n_parts
+        if i == 2:                  # ... a copy of NWDID_SubMarine taking full damage from every weapon category
+            src_row = [row for k, row in rows if key(k) == survival_events.ALCN_PART_DURABILITY_SOURCE][0]
+            new = copy.deepcopy(src_row)
+            full = ('raw', 'Float', struct.pack('<f', 100.0))
+            new[2][:] = [(q[0], q[1], q[2], full) if q[1].startswith('Category') and q[3] is not None
+                         and struct.unpack('<f', q[3][2])[0] < 100.0 else q for q in new[2]]
+            rows.append(((survival_events.ALCN_PART_DURABILITY, 0), new))
         for k, row in rows:
             for n in names_in(row) + [k[0]]: z.nb.add(n)
         dt['rows'] = rows

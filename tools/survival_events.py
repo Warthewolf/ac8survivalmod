@@ -245,6 +245,13 @@ ALCN_DROP = {'airs0', 'airs1', 'airs2', 'Airs0', 'Airs1', 'Airs2', 'BarrierDrone
 ALCN_ROUTE = [(-27.7, -4.4), (-23.0, -5.1), (-19.0, -5.8), (-15.3, -6.3), (-11.5, -6.4)]
 ALCN_SPEED = '120.0'
 ALCN_VLS = ['vls_L_1', 'vls_L_2', 'vls_R_1', 'vls_R_2']
+# The ballast tanks' and the core's damage table (user, 2026-10-23: "how tough are those ballast tanks"; 14 missiles and
+# specials took none down): Online Mode's NWDID_SubMarine takes 10-62.5 % from most weapon categories (10 % from one,
+# likely the standard missile). Survival's copy ALCN_PART_DURABILITY takes 100 % from every category; their health
+# stays CFG.specials.alicorn.health_x of the online squad's.
+ALCN_DURABLE_PARTS = ['alcn_btank_01', 'alcn_btank_02', 'alcn_btank_03', 'alcn_btank_04', 'alcn_core_01']
+ALCN_PART_DURABILITY = 'NWDID_SV_AlcnParts'
+ALCN_PART_DURABILITY_SOURCE = 'NWDID_SubMarine'
 # the railguns: _Distributed, as EB_002 fires them (TargetMode 1: at the players); _Focus (TargetMode 0) didn't aim at
 # the player (user, 2026-10-23: "the alicorns railguns ... don't seem to target the player")
 ALCN_ACTIONS = {'RE_SV_AlcnRailgun': 'ALCN_ShotRailgun_Distributed', 'RE_SV_AlcnOpenCore': 'ALCN_OpenCore',
