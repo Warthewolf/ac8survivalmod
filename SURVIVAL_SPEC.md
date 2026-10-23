@@ -60,6 +60,7 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - (Superseded: captured when landed troops were still alive ~30 s after reaching the beach.) Now (user, 2026-10-23):
   the troops drive from the beach to the runway; each one that reaches it adds to a capture percentage on the HUD
   (25 % each), and at 100 % the airfield is captured. More landing craft: four per lane.
+- Every lane every time (16 craft), and harder: extra escort fighters and a bomber raid more often (user, 2026-10-23).
 - Once captured, destroying every landed troop vehicle frees it early; otherwise it's back after two rounds.
 - Captured = landing and the STORE closed, "AIRFIELD CAPTURED" and the rounds left on the HUD (proposed, as when the
   airfield is down).

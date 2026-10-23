@@ -625,3 +625,5 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   main.lua: each arrival adds capture_per_troop (25) %, HUD row "AIRFIELD CAPTURE: n%", 100 % = captured (the 30 s rule
   is gone); a round ending short of 100 resets it. Untested: whether ground vehicles follow a path over Comona's
   terrain (M13's drive path is short and on its own map).
+- 0.43.1 (user: "spawn all LCAC lanes, make it difficult"): lanes_first 4 (all 16 craft every assault), extra_aircraft 4
+  fighters on top of the round's budget, bomber_chance 0.6 (was 0.4).

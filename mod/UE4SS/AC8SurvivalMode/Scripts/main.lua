@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.43.0"
+local VERSION = "0.43.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -832,9 +832,11 @@ local CFG = {
         -- (user: "enemy aircraft still spawn also, with a chance for bombers to also spawn"). No capture: `reward`
         -- (+ reward_per_round x the round); each craft pays craft_pay, each troop vehicle troop_pay (times the tier's
         -- pay, as aircraft). Craft that landed are taken off remove_after_s after landing (they're heading out).
-        amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 2, lanes_more = 1,
-                       capture_per_troop = 25,
-                       captured_rounds = 2, bomber_chance = 0.4, reward = 3000, reward_per_round = 120,
+        -- (user, 2026-10-23: "spawn all LCAC lanes, make it difficult": every lane every time, 16 craft, extra_aircraft
+        -- more fighters than the round's own and a bomber raid more often)
+        amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 4, lanes_more = 1,
+                       capture_per_troop = 25, extra_aircraft = 4,
+                       captured_rounds = 2, bomber_chance = 0.6, reward = 3000, reward_per_round = 120,
                        craft_pay = 300, troop_pay = 200, remove_after_s = 90 },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, reward_per_round = 100, strike_share = 0.4,
@@ -3003,6 +3005,9 @@ local function startRound()
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+F11: the Anomaly next, for testing)
     D.forceSpecial = nil
     D.special = special and { kind = special, state = "pending" } or nil
+    if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
+        budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), CFG.max_aircraft)
+    end
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
     -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
     D.roundTier = nil
