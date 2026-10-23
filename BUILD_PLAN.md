@@ -613,3 +613,7 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   of a bomber raid; troops alive 30 s after landing capture the airfield (landing closed, STORE closed, HUD row) for 2
   rounds or until all are destroyed; craft 300 / troops 200 x tier pay, 3000 + 120 x round when repelled. Ctrl+F12:
   next round amphibious (test key, out of release zips with Ctrl+F9).
+- Test of 2026-10-23 (0.42.0, Ctrl+F12 at round 1): both lanes spawned (B, A), lane B's craft shot down, lane A's two
+  craft reached the beach 2 min 15 s after spawning, both BTRs ashore, the airfield captured 30 s later and landing
+  closed. No HUD boxes on craft or troops (M13's descs have no bShowHUDBox: its events mark them): ported objects now
+  carry bShowHUDBox and TargetMarkType TGT (ELiveTargetMarkType 1).

@@ -343,10 +343,12 @@ def vec(x, y, zz, kind='Vector'):
     return ('native', kind, struct.pack('<3d', x, y, zz))
 
 
-def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number):
+def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False):
     """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
     (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
-    the other mission's), our world data's name, new UniqueIDs. Returns the objects' names as event args write them."""
+    the other mission's), our world data's name, new UniqueIDs; tgt: a target box and a TGT mark on each (user,
+    2026-10-23: "assault ships and troops did not come with target boxes"). Returns the objects' names as event args
+    write them."""
     new = copy.deepcopy(src)
     assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
     assert not new_unit[-1].isdigit() and not obj_name[-1].isdigit() and obj_name not in top_number, obj_name
@@ -363,6 +365,12 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
                 'Tags': ('arr', [])}
         assert all(any(q[1] == n for q in ob[2]) for n in ('Name', 'MissionNpcID', 'UniqueID', 'SpawnPoint')), new_unit
         ob[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in ob[2]]
+        if tgt:                    # the HUD's target box and the red TGT mark (ELiveTargetMarkType 1), as a mission target
+            sc = uprop.U.schema('LiveAIObjectDesc')
+            ix = {n: k for k, (n, t) in sc.items() if n in ('TargetMarkType', 'bShowHUDBox')}
+            ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
+                (ix['TargetMarkType'], 'TargetMarkType', False, ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b''))),
+                (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b''))], key=lambda q: q[0])
         names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
     top_number[obj_name] = len(points)
     uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
@@ -423,7 +431,7 @@ def lcac_units(units, used_ids, z, top_number, v):
     for lane in survival_events.lcac_lane_names():
         cs = [c for c in craft if c['lane'] == lane]
         names = port_unit(units, used_ids, z, src_craft, cs[0]['unit'], cs[0]['obj_base'], survival_events.LCAC_ROW,
-                          [c['start'] for c in cs], cs[0]['yaw'], top_number)
+                          [c['start'] for c in cs], cs[0]['yaw'], top_number, tgt=True)
         assert names == [c['obj'] for c in cs], names
     for c in craft:
         (sx, sy, sz), (bx, by, bz) = c['start'], c['beach']
@@ -434,7 +442,7 @@ def lcac_units(units, used_ids, z, top_number, v):
         paths.append(make_path(z, used_ids, src_path, c['path'], inbound))
         paths.append(make_path(z, used_ids, src_path, c['back'], back))
         port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
-                  [c['beach']], c['yaw'], top_number)
+                  [c['beach']], c['yaw'], top_number, tgt=True)
     print(f'  amphibious assault: {len(survival_events.LCAC_LANES)} lanes of 2 landing craft, {len(craft) * 2} paths, '
           f'{len(craft)} troop units')
 
