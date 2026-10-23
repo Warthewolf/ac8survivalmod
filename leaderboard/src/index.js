@@ -13,6 +13,16 @@ const DIFF_NAME = { casual: "Casual", standard: "Standard", ace: "Ace" };
 const DIFF_X = { casual: 0.75, standard: 1.0, ace: 1.5 };        // score multiplier
 const SPECIALS = { shuttle: "Comona Defense", anomaly: "The Anomaly", amphibious: "Amphibious Assault",
                    ladon: "The Ladons", alicorn: "The Alicorn" };
+// The player's aircraft (its blueprint's code, e.g. su57 from BP_PlayerPlane_PP0021_su57) by its in-game name
+const AIRCRAFT = { a10c: "A-10C Thunderbolt II", f02a: "F-2A", f04e: "F-4E Phantom II", f15c: "F-15C Eagle",
+  f22a: "F-22A Raptor", f35c: "F-35C Lightning II", f18c: "F/A-18C Hornet", j39e: "Gripen E", su34: "Su-34 Fullback",
+  e18g: "EA-18G Growler", typn: "Typhoon", f15j: "F-15J Eagle", a06e: "A-6E Intruder", rflm: "Rafale M",
+  su25: "Su-25SM Frogfoot", x40a: "X-40 Nightmare", mr2k: "Mirage 2000-5", ea36: "EA-36 Barricader", fa36: "FA-36 Game",
+  m29a: "MiG-29A Fulcrum", su57: "Su-57 Felon", f16c: "F-16C Fighting Falcon", f14d: "F-14D Super Tomcat",
+  f18f: "F/A-18F Super Hornet", f15e: "F-15E Strike Eagle", su47: "Su-47 Berkut", m21b: "MiG-21bis Fishbed",
+  su35: "Su-35S Flanker-E", m31b: "MiG-31B Foxhound", su33: "Su-33 Flanker-D", e06b: "EA-6B Prowler",
+  f18e: "F/A-18E Super Hornet", f14a: "F-14A Tomcat", adfx: "ADFX-02" };
+const jet = (code) => (code ? AIRCRAFT[code] || code.toUpperCase() : null);
 const RATE_PER_HOUR = 6;                                            // runs one sender may submit in an hour
 const API = "https://discord.com/api/v10";
 
@@ -41,6 +51,7 @@ function checkRun(run) {
   if (!isInt(run.time_s, Math.max(0, (run.round - 1) * 25), 48 * 3600)) return "run time doesn't fit the rounds";
   if (!["died", "quit"].includes(run.ended)) return "bad ending";
   if (typeof run.mod !== "string" || !/^[0-9.]{1,16}$/.test(run.mod)) return "bad mod version";
+  if (run.aircraft !== undefined && (typeof run.aircraft !== "string" || !/^[a-z0-9]{2,12}$/.test(run.aircraft))) return "bad aircraft";
   const sp = run.specials || [];
   if (!Array.isArray(sp) || sp.length > run.round) return "too many specials";
   for (const s of sp) {
@@ -104,6 +115,7 @@ function runEmbed(run, sc) {
       { name: "Score", value: num(sc), inline: true },
       { name: "Kills", value: `${run.kills.air} air, ${run.kills.ground} ground`, inline: true },
       { name: "Time", value: fmtTime(run.time_s), inline: true },
+      ...(run.aircraft ? [{ name: "Aircraft", value: jet(run.aircraft), inline: true }] : []),
       { name: "Specials beaten", value: won.length ? won.map((s) => `${SPECIALS[s.kind]} (round ${s.round}, ${fmtTime(s.seconds)})`).join("\n") : "none" },
     ],
     footer: { text: `${run.ended === "died" ? "Shot down" : "Left the run"} · Survival Mode ${run.mod}` },
@@ -112,17 +124,20 @@ function runEmbed(run, sc) {
 
 // The boards, as embeds: highest round and score per difficulty (best run per pilot), fastest beaten specials.
 async function boardEmbeds(env, onlyBoard, onlyDiff) {
+  await ensureAircraft(env);
   const out = [];
   const diffs = onlyDiff ? [onlyDiff] : DIFFICULTIES;
   for (const [board, col, title] of [["round", "round", "Highest round"], ["score", "score", "Score"]]) {
     if (onlyBoard && onlyBoard !== board) continue;
     const fields = [];
     for (const d of diffs) {
+      // (one aggregate: SQLite takes the other columns, the aircraft too, from each pilot's best run)
       const { results } = await env.DB.prepare(
-        `SELECT pilot, MAX(${col}) AS best, MAX(round) AS round, MAX(score) AS score FROM runs WHERE difficulty = ?
-         GROUP BY pilot ORDER BY best DESC LIMIT 10`).bind(d).all();
+        `SELECT pilot, MAX(${col}) AS best, aircraft FROM runs WHERE difficulty = ? GROUP BY pilot ORDER BY best DESC LIMIT 10`)
+        .bind(d).all();
       fields.push({ name: DIFF_NAME[d], value: results.length
-        ? results.map((r, i) => `${i + 1}. **${r.pilot}** — ${board === "round" ? `round ${r.best}` : num(r.best)}`).join("\n")
+        ? results.map((r, i) => `${i + 1}. **${r.pilot}** — ${board === "round" ? `round ${r.best}` : num(r.best)}` +
+                                (r.aircraft ? ` (${jet(r.aircraft)})` : "")).join("\n")
         : "no runs yet", inline: true });
     }
     out.push({ title: `${title} — top 10`, color: 0xd4ac0d, fields });
@@ -155,6 +170,15 @@ async function refreshBoards(env) {
     { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) });
 }
 
+// The aircraft column, added to a database made before it existed (once per Worker instance)
+let haveAircraft = false;
+async function ensureAircraft(env) {
+  if (haveAircraft) return;
+  try { await env.DB.prepare("SELECT aircraft FROM runs LIMIT 0").all(); }
+  catch (e) { await env.DB.prepare("ALTER TABLE runs ADD COLUMN aircraft TEXT").run(); }
+  haveAircraft = true;
+}
+
 // ------------------------------------------------------------------------------------------------- routes
 async function submit(req, env) {
   const body = await req.text();
@@ -173,11 +197,12 @@ async function submit(req, env) {
     .bind(ipHash, now - 3600).first();
   if (recent.n >= RATE_PER_HOUR) return json({ ok: false, error: "too many runs this hour, try later" }, 429);
   const sc = score(run);
+  await ensureAircraft(env);
   const batch = [env.DB.prepare(
     `INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
-     mod_version, submitted, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     mod_version, submitted, ip_hash, aircraft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(run.run_id, run.pilot, run.difficulty, run.round, sc, run.kills.air, run.kills.ground, run.zollars.earned,
-          run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash)];
+          run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, run.aircraft || null)];
   for (const s of run.specials || [])
     batch.push(env.DB.prepare("INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(run.run_id, s.kind, s.round, s.seconds, s.won ? 1 : 0, run.pilot, run.difficulty));

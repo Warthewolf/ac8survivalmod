@@ -26,7 +26,7 @@ const check = (what, ok) => { console.log(`${ok ? "ok  " : "FAIL"} ${what}`); if
 const post = (body, sig) => worker.fetch(new Request("https://x/submit", { method: "POST", body,
   headers: { "X-SV-Signature": sig ?? createHmac("sha256", env.SUBMIT_KEY).update(body).digest("hex"), "CF-Connecting-IP": "1.2.3.4" } }), env);
 
-const run = { v: 1, run_id: "0123456789abcdef0123", pilot: "Naish", difficulty: "ace", round: 12, mod: "0.47.0",
+const run = { v: 1, run_id: "0123456789abcdef0123", pilot: "Naish", difficulty: "ace", round: 12, mod: "0.47.0", aircraft: "su57",
   kills: { air: 140, ground: 12 }, zollars: { earned: 40000, spent: 30000 }, time_s: 2400, ended: "died",
   specials: [{ kind: "ladon", round: 7, seconds: 212, won: true }, { kind: "amphibious", round: 10, seconds: 300, won: false }] };
 
@@ -57,5 +57,8 @@ const rows = db.prepare("SELECT COUNT(*) AS n FROM runs").get().n;
 check(`runs stored: ${rows}`, rows === 6);
 const sp = db.prepare("SELECT COUNT(*) AS n FROM specials WHERE won = 1").get().n;
 check(`beaten specials stored: ${sp}`, sp === 6);
+const jetRow = db.prepare("SELECT aircraft FROM runs WHERE run_id = '0123456789abcdef0123'").get();
+check(`aircraft stored: ${jetRow && jetRow.aircraft}`, jetRow && jetRow.aircraft === "su57");
+check("a bad aircraft code is refused", checkRun({ ...run, aircraft: "<b>" }) !== null);
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);

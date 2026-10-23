@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.48.0"
+local VERSION = "0.48.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3618,9 +3618,10 @@ local function json(r)
         sp[#sp + 1] = string.format('{"kind":%s,"round":%d,"seconds":%d,"won":%s}', jstr(x.kind), x.round, x.seconds, tostring(x.won))
     end
     return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
-        .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"specials":[%s]}', jstr(r.run_id), jstr(r.pilot),
+        .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"specials":[%s]%s}', jstr(r.run_id), jstr(r.pilot),
         jstr(r.difficulty), r.round, jstr(r.mod), r.kills.air, r.kills.ground, r.zollars.earned, r.zollars.spent, r.time_s,
-        jstr(r.ended), table.concat(sp, ","))
+        jstr(r.ended), table.concat(sp, ","),
+        (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "")
 end
 
 local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
@@ -3664,6 +3665,11 @@ end
 -- Shot down: the player's aircraft at 0 health (checked once a second in a run)
 function LB.deathCheck(pc)
     if not D or not D.round or D.round < 1 or (RUN.stats and RUN.stats.ended) then return end
+    local st = stats()
+    if not st.jet then                                -- the player's aircraft (user, 2026-10-23), read while it flies
+        local code = nameOf(pc.Pawn):match("BP_PlayerPlane_PP%d+_(%w+)")
+        if code then st.jet = code:lower():sub(1, 12); log("leaderboard: flying the " .. st.jet) end
+    end
     local ok, h = pcall(function() return pc.Pawn.HealthInternal end)
     if ok and type(h) == "number" and h <= 0 then LB.finish("died") end
 end
@@ -3680,7 +3686,8 @@ function LB.finish(how)
     local r = { run_id = table.concat(id), pilot = LB.pilot(), difficulty = (presetName()),
                 round = D.round, mod = VERSION, kills = { air = st.air, ground = st.ground },
                 zollars = { earned = math.floor(RUN.earned or 0), spent = math.floor(RUN.spent or 0) },
-                time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials }
+                time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials,
+                aircraft = st.jet }
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
         how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))

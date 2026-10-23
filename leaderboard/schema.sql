@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS runs (
   ended       TEXT NOT NULL,             -- died | quit
   mod_version TEXT NOT NULL,
   submitted   INTEGER NOT NULL,          -- unix seconds
-  ip_hash     TEXT NOT NULL              -- a hash of the sender's IP, for the rate limit only
+  ip_hash     TEXT NOT NULL,             -- a hash of the sender's IP, for the rate limit only
+  aircraft    TEXT                       -- the player's aircraft code (su57, f22a, ...); older databases get it added
 );
 CREATE INDEX IF NOT EXISTS runs_round ON runs (difficulty, round DESC, score DESC);
 CREATE INDEX IF NOT EXISTS runs_score ON runs (difficulty, score DESC);
