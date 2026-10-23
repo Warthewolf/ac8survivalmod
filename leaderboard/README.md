@@ -5,10 +5,14 @@ A Cloudflare Worker that takes finished Survival runs from the game and puts the
 - every submitted run is posted to a **#survival-runs** channel;
 - a pinned message in **#survival-leaderboard** keeps the top 10 by **highest round** and by **score** for each
   difficulty (Casual / Standard / Ace), and the **fastest time for each special round**;
-- slash commands: `/leaderboard [board] [difficulty]` and `/pilot <name>`.
+- a second pinned message keeps the **records** (most kills, longest run, most zollars earned, most ace squadron kills
+  and most specials beaten in one run), the **best run on each aircraft**, and **this week's** best rounds and scores
+  (the week starts Monday 00:00 UTC);
+- slash commands: `/leaderboard [board] [difficulty]` (boards: round, score, specials, records, aircraft, this week)
+  and `/pilot <name>` (best runs, fastest specials, totals and most flown aircraft).
 
 Players appear under their Steam name (the mod reads it from the game's Steam), or under the `pilot` name they set in
-`survival.ini`'s `[leaderboard]` section. The game asks "Submit run?" at the end of a run and sends it here over HTTPS (Survival's own runtime; it never talks to
+`survival.ini`'s `[leaderboard]` section. The game sends every finished run here over HTTPS (Survival's own runtime; it never talks to
 Bandai Namco's services). The Worker works the score out itself, checks the numbers are possible, refuses duplicates
 and limits each sender (IP) to 30 runs an hour.
 
@@ -64,6 +68,10 @@ answers; it will once step 4 is done).
 ### 6. Finish
 Open `https://ac8-survival-leaderboard.<you>.workers.dev/setup?key=<ADMIN_KEY>` in a browser. It registers the slash
 commands and makes and pins the leaderboard message. It should answer `{"ok":true,...}`.
+
+**After updating the Worker's code**, open the same `/setup` address again: it registers changed slash commands (e.g. the
+new `/leaderboard` boards) and makes any pinned message that's new. Running it again is safe; it never makes a second
+copy of a message that's already there.
 
 Then send the Worker's address and the `SUBMIT_KEY` to whoever builds the mod (they go into the release build, not
 into git).

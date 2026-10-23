@@ -2,10 +2,12 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
-import worker, { score, checkRun, boardEmbeds } from "../src/index.js";
+import worker, { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed } from "../src/index.js";
 
 const db = new DatabaseSync(":memory:");
-db.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
+// (the oldest database, schema_console.sql's: the Worker adds the newer columns itself; schema.sql is checked below)
+db.exec(readFileSync(new URL("../schema_console.sql", import.meta.url), "utf8"));
+new DatabaseSync(":memory:").exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
 const stmt = (sql, args = []) => ({
   sql,
   bind: (...a) => stmt(sql, a),
@@ -41,6 +43,13 @@ check("a sane run passes", checkRun(run) === null);
 check("too many kills is refused", checkRun({ ...run, kills: { air: 9999, ground: 0 } }) !== null);
 check("a too-short run is refused", checkRun({ ...run, time_s: 10 }) !== null);
 check("a bad pilot name is refused", checkRun({ ...run, pilot: "<script>" }) !== null);
+// mod 0.50.0's fields (optional: the run above, from an older mod, has none)
+const more = { how: "restart", tier: "Elite", aces: 3, allies: 1, af_down: 2, captured: 1 };
+check("a run with 0.50.0's fields passes", checkRun({ ...run, ...more }) === null);
+check("more ace kills than air kills is refused", checkRun({ ...run, ...more, aces: 141 }) !== null);
+check("a bad ending is refused", checkRun({ ...run, ...more, how: "won" }) !== null);
+check("a bad tier is refused", checkRun({ ...run, ...more, tier: "<i>" }) !== null);
+check("weekStart is a Monday 00:00 UTC", new Date(weekStart(Date.UTC(2026, 9, 23, 15) / 1000) * 1000).toISOString() === "2026-10-19T00:00:00.000Z");
 
 let r = await post(JSON.stringify(run));
 let j = await r.json();
@@ -51,23 +60,41 @@ j = await r.json();
 check("the same run again is a duplicate", j.duplicate === true);
 r = await post(JSON.stringify({ ...run, run_id: "aaaaaaaaaaaaaaaa1" }), "00");
 check("a bad signature is refused", r.status === 401);
-for (let i = 0; i < 30; i++) await post(JSON.stringify({ ...run, run_id: `bbbbbbbbbbbbbbbb${i}` }));
+for (let i = 0; i < 30; i++)
+  await post(JSON.stringify({ ...run, ...more, run_id: `bbbbbbbbbbbbbbbb${i}`, aces: i, aircraft: i % 2 ? "f22a" : "su57",
+                              round: 12 + (i % 5), time_s: 2400 + i * 10 }));
 r = await post(JSON.stringify({ ...run, run_id: "cccccccccccccccc" }));
 check("the 31st run within the hour is refused", r.status === 429);
 r = await worker.fetch(new Request("https://x/setup?key=admin"), env);
 j = await r.json();
 check(`setup: ${JSON.stringify(j.done)}`, j.ok && calls.includes("PUT /applications/1/commands"));
+check("both pinned messages were edited", calls.filter((c) => c === "PATCH /channels/200/messages/999").length >= 2);
 calls.length = 0;
 await post(JSON.stringify({ ...run, run_id: "dddddddddddddddd", pilot: "Other" }), undefined);   // (rate limited: same IP)
 const rows = db.prepare("SELECT COUNT(*) AS n FROM runs").get().n;
 check(`runs stored: ${rows}`, rows === 30);
 const sp = db.prepare("SELECT COUNT(*) AS n FROM specials WHERE won = 1").get().n;
 check(`beaten specials stored: ${sp}`, sp === 30);
-db.prepare("INSERT INTO runs VALUES ('lower1', 'naish', 'ace', 50, 99999, 0, 0, 0, 0, 999, 'died', 'x', 0, 'h', 'f22a')").run();
+db.prepare(`INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
+  mod_version, submitted, ip_hash, aircraft) VALUES ('lower1', 'naish', 'ace', 50, 99999, 0, 0, 0, 0, 999, 'died', 'x', 0, 'h', 'f22a')`).run();
 const e = await boardEmbeds(env);
 const ace = e[0].fields.find((f) => f.name.toLowerCase().includes("ace")).value;
 check(`'Naish' and 'naish' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
 check(`the boards: ${e.length} embeds (round, score, specials)`, e.length === 3 && e[2].fields.length === 5);
+const x = await extraEmbeds(env, null, null, Math.floor(Date.now() / 1000));
+check(`the second message: ${x.map((m) => m.title.split(" —")[0]).join(", ")}`, x.length === 3 && x[0].fields.length === 5);
+check(`records: most ace squadron kills ${JSON.stringify(x[0].fields[3].value)}`, x[0].fields[3].value.includes("— 28 "));   // (the 30th of these was rate limited)
+check(`records: most specials beaten ${JSON.stringify(x[0].fields[4].value)}`, x[0].fields[4].value.includes("— 1 "));
+check(`per aircraft: ${JSON.stringify(x[1].description)}`, x[1].description.includes("F-22A Raptor") && x[1].description.includes("Su-57 Felon")
+  && x[1].description.split("\n")[0].includes("round 50"));
+check(`this week: ${JSON.stringify(x[2].fields[0].value)}`, x[2].fields[0].value.includes("round 16") && !x[2].fields[0].value.includes("round 50"));
+const newRow = db.prepare("SELECT how, tier, aces, allies, af_down, captured FROM runs WHERE run_id = 'bbbbbbbbbbbbbbbb5'").get();
+check(`0.50.0's fields stored: ${JSON.stringify(newRow)}`, newRow.how === "restart" && newRow.tier === "Elite" && newRow.aces === 5
+  && newRow.allies === 1 && newRow.af_down === 2 && newRow.captured === 1);
+const pe = await pilotEmbed(env, "naish");
+const totals = pe.fields.find((f) => f.name === "Totals");
+check(`/pilot totals: ${JSON.stringify(totals && totals.value)}`, totals && totals.value.startsWith("31 runs") && totals.value.includes("ace squadron")
+  && totals.value.includes("most flown"));
 const jetRow = db.prepare("SELECT aircraft FROM runs WHERE run_id = '0123456789abcdef0123'").get();
 check(`aircraft stored: ${jetRow && jetRow.aircraft}`, jetRow && jetRow.aircraft === "su57");
 check("a bad aircraft code is refused", checkRun({ ...run, aircraft: "<b>" }) !== null);

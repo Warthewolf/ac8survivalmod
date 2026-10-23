@@ -2,7 +2,8 @@
 //
 //   POST /submit        a finished run from the game (Survival's native runtime), signed with SUBMIT_KEY
 //   POST /interactions  Discord's slash commands (/leaderboard, /pilot), signed by Discord
-//   GET  /setup?key=..  once, after deploying: registers the slash commands and makes the leaderboard messages
+//   GET  /setup?key=..  after deploying: registers the slash commands and makes the leaderboard messages (two pinned:
+//                       rounds / scores / specials, and records / aircraft / this week)
 //
 // Bindings (wrangler.toml / dashboard): DB (D1), and as variables / secrets DISCORD_TOKEN, DISCORD_PUBLIC_KEY,
 // DISCORD_APP_ID, RUNS_CHANNEL_ID, BOARD_CHANNEL_ID, SUBMIT_KEY, ADMIN_KEY.
@@ -36,6 +37,7 @@ function score(run) {
 
 // ------------------------------------------------------------------------------------------------- checks
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+const HOWS = ["died", "restart", "left"];
 
 // A run as the game sends it, or the reason it's refused. Generous limits: they catch typing in numbers, not play.
 function checkRun(run) {
@@ -52,6 +54,13 @@ function checkRun(run) {
   if (!["died", "quit"].includes(run.ended)) return "bad ending";
   if (typeof run.mod !== "string" || !/^[0-9.]{1,16}$/.test(run.mod)) return "bad mod version";
   if (run.aircraft !== undefined && (typeof run.aircraft !== "string" || !/^[a-z0-9]{2,12}$/.test(run.aircraft))) return "bad aircraft";
+  // (from mod 0.50.0; older runs leave them out)
+  if (run.how !== undefined && !HOWS.includes(run.how)) return "bad ending";
+  if (run.tier !== undefined && (typeof run.tier !== "string" || !/^[A-Za-z]{1,16}$/.test(run.tier))) return "bad tier";
+  if (run.aces !== undefined && !isInt(run.aces, 0, run.kills.air)) return "bad ace kills";
+  if (run.allies !== undefined && !isInt(run.allies, 0, run.round * 10)) return "bad allies";
+  if (run.af_down !== undefined && !isInt(run.af_down, 0, run.round)) return "bad airfield losses";
+  if (run.captured !== undefined && !isInt(run.captured, 0, run.round)) return "bad captures";
   const sp = run.specials || [];
   if (!Array.isArray(sp) || sp.length > run.round) return "too many specials";
   for (const s of sp) {
@@ -116,16 +125,21 @@ function runEmbed(run, sc) {
       { name: "Kills", value: `${run.kills.air} air, ${run.kills.ground} ground`, inline: true },
       { name: "Time", value: fmtTime(run.time_s), inline: true },
       ...(run.aircraft ? [{ name: "Aircraft", value: jet(run.aircraft), inline: true }] : []),
+      ...(run.tier ? [{ name: "Enemy tier", value: run.tier, inline: true }] : []),
+      ...(run.aces ? [{ name: "Ace squadron kills", value: String(run.aces), inline: true }] : []),
+      ...(run.allies ? [{ name: "Allies called in", value: String(run.allies), inline: true }] : []),
+      ...(run.af_down || run.captured ? [{ name: "Airfield", value: [run.af_down ? `lost ${run.af_down}x` : "",
+          run.captured ? `captured ${run.captured}x` : ""].filter(Boolean).join(", "), inline: true }] : []),
       { name: "Specials beaten", value: won.length ? won.map((s) => `${SPECIALS[s.kind]} (round ${s.round}, ${fmtTime(s.seconds)})`).join("\n") : "none" },
     ],
-    footer: { text: `${run.ended === "died" ? "Shot down" : "Left the run"} · Survival Mode ${run.mod}` },
+    footer: { text: `${run.ended === "died" ? "Shot down" : run.how === "restart" ? "Restarted" : "Left the run"} · Survival Mode ${run.mod}` },
   };
 }
 
 // The boards, as embeds: highest round and score per difficulty (best run per pilot), fastest beaten specials.
 // Pilots are grouped ignoring case (as /pilot finds them); every query goes to D1 in one batch.
 async function boardEmbeds(env, onlyBoard, onlyDiff) {
-  await ensureAircraft(env);
+  await ensureColumns(env);
   const diffs = onlyDiff ? [onlyDiff] : DIFFICULTIES;
   const boards = [["round", "round", "Highest round"], ["score", "score", "Score"]]
     .filter(([board]) => !onlyBoard || onlyBoard === board);
@@ -165,26 +179,105 @@ async function boardEmbeds(env, onlyBoard, onlyDiff) {
   return out;
 }
 
+// The second message's boards: records (best single runs), the best run on each aircraft, and this week's best.
+const RECORDS = [["Most kills in a run", "air_kills + ground_kills", (v) => `${num(v)} kills`],
+                 ["Longest run", "time_s", (v) => fmtTime(v)],
+                 ["Most zollars earned", "earned", (v) => `${num(v)} Z`],
+                 ["Most ace squadron kills", "aces", (v) => `${num(v)}`]];
+const EXTRA_BOARDS = ["records", "aircraft", "weekly"];
+
+function weekStart(nowS) {                  // Monday 00:00 UTC of this week, unix seconds
+  const d = new Date(nowS * 1000);
+  return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (d.getUTCDay() + 6) % 7) / 1000);
+}
+
+async function extraEmbeds(env, onlyBoard, onlyDiff, nowS = Math.floor(Date.now() / 1000)) {
+  await ensureColumns(env);
+  const want = (b) => !onlyBoard || onlyBoard === b;
+  const dw = onlyDiff ? "AND difficulty = ?" : "";
+  const da = onlyDiff ? [onlyDiff] : [];
+  const stmts = [];
+  if (want("records")) {
+    for (const [, expr] of RECORDS)
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${expr}) AS best, difficulty FROM runs WHERE ${expr} > 0 ${dw}
+         GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(...da));
+    stmts.push(env.DB.prepare(`SELECT r.pilot AS pilot, MAX(c.n) AS best, r.difficulty AS difficulty
+       FROM (SELECT run_id, COUNT(*) AS n FROM specials WHERE won = 1 GROUP BY run_id) c JOIN runs r ON r.run_id = c.run_id
+       ${onlyDiff ? "WHERE r.difficulty = ?" : ""} GROUP BY r.pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(...da));
+  }
+  if (want("aircraft"))
+    stmts.push(env.DB.prepare(`SELECT aircraft, pilot, MAX(round) AS best, difficulty FROM runs WHERE aircraft IS NOT NULL ${dw}
+       GROUP BY aircraft ORDER BY best DESC LIMIT 15`).bind(...da));
+  const since = weekStart(nowS);
+  if (want("weekly"))
+    for (const col of ["round", "score"])
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, difficulty, aircraft FROM runs WHERE submitted >= ? ${dw}
+         GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(since, ...da));
+  const answers = stmts.length ? await env.DB.batch(stmts) : [];
+  let n = 0;
+  const lines = (results, fmt, none) => results.length ? results.map((r, i) => `${i + 1}. ${fmt(r)}`).join("\n") : none;
+  const out = [];
+  if (want("records")) {
+    const fields = RECORDS.map(([name, , show]) => ({ name, inline: true, value: lines(answers[n++].results,
+      (r) => `**${r.pilot}** — ${show(r.best)} (${DIFF_NAME[r.difficulty]})`, "no runs yet") }));
+    fields.push({ name: "Most specials beaten in a run", inline: true, value: lines(answers[n++].results,
+      (r) => `**${r.pilot}** — ${r.best} (${DIFF_NAME[r.difficulty]})`, "none beaten yet") });
+    out.push({ title: "Records — top 5", color: 0x16a085, fields });
+  }
+  if (want("aircraft"))
+    out.push({ title: "Best run on each aircraft", color: 0x2980b9, description: lines(answers[n++].results,
+      (r) => `**${jet(r.aircraft)}** — ${r.pilot}, round ${r.best} (${DIFF_NAME[r.difficulty]})`, "no runs yet") });
+  if (want("weekly")) {
+    const day = new Date(since * 1000).toUTCString().slice(0, 11);
+    const fields = [["Highest round", (r) => `round ${r.best}`], ["Score", (r) => num(r.best)]].map(([name, show]) => ({
+      name, inline: true, value: lines(answers[n++].results,
+        (r) => `**${r.pilot}** — ${show(r)} (${DIFF_NAME[r.difficulty]}${r.aircraft ? ", " + jet(r.aircraft) : ""})`, "no runs this week yet") }));
+    out.push({ title: `This week — top 5 (since ${day} 00:00 UTC; resets every Monday)`, color: 0xe67e22, fields });
+  }
+  return out;
+}
+
 async function setting(env, key) {
   const r = await env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind(key).first();
   return r ? r.value : null;
 }
 
-// The pinned leaderboard message in BOARD_CHANNEL_ID: edited after every run (made and pinned by /setup)
+// The pinned leaderboard messages in BOARD_CHANNEL_ID, edited after every run: board_message (made and pinned by
+// /setup) and board_message_2 (records, aircraft, this week: made and pinned here the first time it's missing).
+async function pinnedMessage(env, key, content) {
+  const id = await setting(env, key);
+  if (id) return { id, made: false };
+  const m = await discord(env, "POST", `/channels/${env.BOARD_CHANNEL_ID}/messages`, { content });
+  await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key, m.id).run();
+  let pinned = true;
+  try { await discord(env, "PUT", `/channels/${env.BOARD_CHANNEL_ID}/pins/${m.id}`); } catch (e) { pinned = false; }
+  return { id: m.id, made: true, pinned };
+}
+
 async function refreshBoards(env) {
   const id = await setting(env, "board_message");
   if (!id) return;
   await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${id}`,
     { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) });
+  const two = await pinnedMessage(env, "board_message_2", "Records coming up...");
+  await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${two.id}`,
+    { content: "**AC8 Survival Mode — records, aircraft and this week**", embeds: await extraEmbeds(env) });
+  return two;
 }
 
-// The aircraft column, added to a database made before it existed (once per Worker instance)
-let haveAircraft = false;
-async function ensureAircraft(env) {
-  if (haveAircraft) return;
-  try { await env.DB.prepare("SELECT aircraft FROM runs LIMIT 0").all(); }
-  catch (e) { await env.DB.prepare("ALTER TABLE runs ADD COLUMN aircraft TEXT").run(); }
-  haveAircraft = true;
+// Columns added after the first databases were made (aircraft; how / tier / aces / allies / af_down / captured from
+// mod 0.50.0), added to an older database once per Worker instance.
+const NEW_COLUMNS = { aircraft: "TEXT", how: "TEXT", tier: "TEXT", aces: "INTEGER", allies: "INTEGER", af_down: "INTEGER",
+                      captured: "INTEGER" };
+let haveColumns = false;
+async function ensureColumns(env) {
+  if (haveColumns) return;
+  const { results } = await env.DB.prepare("PRAGMA table_info(runs)").all();
+  const have = new Set(results.map((r) => r.name));
+  for (const [col, type] of Object.entries(NEW_COLUMNS))
+    if (!have.has(col)) await env.DB.prepare(`ALTER TABLE runs ADD COLUMN ${col} ${type}`).run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS runs_week ON runs (submitted)").run();   // (this week's board)
+  haveColumns = true;
 }
 
 // ------------------------------------------------------------------------------------------------- routes
@@ -205,12 +298,15 @@ async function submit(req, env) {
     .bind(ipHash, now - 3600).first();
   if (recent.n >= RATE_PER_HOUR) return json({ ok: false, error: "too many runs this hour, try later" }, 429);
   const sc = score(run);
-  await ensureAircraft(env);
+  await ensureColumns(env);
+  const opt = (v) => (v === undefined ? null : v);
   const batch = [env.DB.prepare(
     `INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
-     mod_version, submitted, ip_hash, aircraft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     mod_version, submitted, ip_hash, aircraft, how, tier, aces, allies, af_down, captured)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(run.run_id, run.pilot, run.difficulty, run.round, sc, run.kills.air, run.kills.ground, run.zollars.earned,
-          run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, run.aircraft || null)];
+          run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, opt(run.aircraft), opt(run.how), opt(run.tier),
+          opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured))];
   for (const s of run.specials || [])
     batch.push(env.DB.prepare("INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(run.run_id, s.kind, s.round, s.seconds, s.won ? 1 : 0, run.pilot, run.difficulty));
@@ -229,6 +325,11 @@ async function pilotEmbed(env, name) {
   if (!runs.results.length) return { title: `No runs from ${name} yet`, color: 0x7f8c8d };
   const sp = await env.DB.prepare(
     "SELECT kind, MIN(seconds) AS best FROM specials WHERE pilot = ? COLLATE NOCASE AND won = 1 GROUP BY kind").bind(name).all();
+  const tot = await env.DB.prepare(`SELECT COUNT(*) AS runs, SUM(air_kills) AS air, SUM(ground_kills) AS ground,
+     SUM(time_s) AS time_s, SUM(earned) AS earned, SUM(COALESCE(aces, 0)) AS aces FROM runs WHERE pilot = ? COLLATE NOCASE`)
+    .bind(name).first();
+  const fav = await env.DB.prepare(`SELECT aircraft, COUNT(*) AS n FROM runs WHERE pilot = ? COLLATE NOCASE AND aircraft IS NOT NULL
+     GROUP BY aircraft ORDER BY n DESC LIMIT 1`).bind(name).first();
   return {
     title: `${name} — Survival Mode`,
     color: 0x2e86c1,
@@ -236,6 +337,9 @@ async function pilotEmbed(env, name) {
       ...runs.results.map((r) => ({ name: DIFF_NAME[r.difficulty],
         value: `best round ${r.round}\nbest score ${num(r.score)}\n${r.n} run${r.n === 1 ? "" : "s"}`, inline: true })),
       { name: "Fastest specials", value: sp.results.length ? sp.results.map((s) => `${SPECIALS[s.kind]}: ${fmtTime(s.best)}`).join("\n") : "none beaten yet" },
+      { name: "Totals", value: `${num(tot.runs)} runs, ${fmtTime(tot.time_s || 0)} flown\n${num(tot.air || 0)} air / ${num(tot.ground || 0)} ground kills` +
+          `${tot.aces ? `, ${num(tot.aces)} ace squadron` : ""}\n${num(tot.earned || 0)} Z earned` +
+          (fav ? `\nmost flown: ${jet(fav.aircraft)}` : "") },
     ],
   };
 }
@@ -248,7 +352,9 @@ async function interactions(req, env) {
   if (it.type === 2) {
     const opt = Object.fromEntries((it.data.options || []).map((o) => [o.name, o.value]));
     if (it.data.name === "leaderboard")
-      return json({ type: 4, data: { embeds: await boardEmbeds(env, opt.board || null, opt.difficulty || null) } });
+      return json({ type: 4, data: { embeds: EXTRA_BOARDS.includes(opt.board)
+        ? await extraEmbeds(env, opt.board, opt.difficulty || null)
+        : await boardEmbeds(env, opt.board || null, opt.difficulty || null) } });
     if (it.data.name === "pilot")
       return json({ type: 4, data: { embeds: [await pilotEmbed(env, String(opt.name || "").slice(0, 24))] } });
   }
@@ -258,7 +364,8 @@ async function interactions(req, env) {
 const COMMANDS = [
   { name: "leaderboard", description: "AC8 Survival Mode leaderboards", options: [
     { type: 3, name: "board", description: "Which board", required: false,
-      choices: [{ name: "Highest round", value: "round" }, { name: "Score", value: "score" }, { name: "Fastest specials", value: "specials" }] },
+      choices: [{ name: "Highest round", value: "round" }, { name: "Score", value: "score" }, { name: "Fastest specials", value: "specials" },
+                { name: "Records", value: "records" }, { name: "Best per aircraft", value: "aircraft" }, { name: "This week", value: "weekly" }] },
     { type: 3, name: "difficulty", description: "Which difficulty", required: false,
       choices: DIFFICULTIES.map((d) => ({ name: DIFF_NAME[d], value: d })) }] },
   { name: "pilot", description: "A pilot's best Survival Mode runs", options: [
@@ -277,7 +384,8 @@ async function setup(req, env) {
     try { await discord(env, "PUT", `/channels/${env.BOARD_CHANNEL_ID}/pins/${m.id}`); done.push("leaderboard message made and pinned"); }
     catch (e) { done.push("leaderboard message made (pinning failed: give the bot Manage Messages)"); }
   }
-  await refreshBoards(env);
+  const two = await refreshBoards(env);
+  if (two && two.made) done.push(`records message made${two.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
   done.push("leaderboard up to date");
   return json({ ok: true, done });
 }
@@ -300,4 +408,4 @@ export default {
   },
 };
 
-export { score, checkRun, boardEmbeds };      // (for tests)
+export { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed };      // (for tests)

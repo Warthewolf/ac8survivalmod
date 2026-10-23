@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.49.4"
+local VERSION = "0.50.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2721,6 +2721,8 @@ local function spawnFlight(unit)
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
+        D.aceSquad = D.aceSquad or {}
+        D.aceSquad[unit] = ace and true or nil                -- (the leaderboard's ace squadron kills)
         D.orders = D.orders or {}
         D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
         if ace then
@@ -3468,6 +3470,7 @@ local function airfieldTick(tick)
                 AF.down, AF.downRound, AF.closePending = true, D.round, true
                 hudCallout(t.airfield_down, string.format(t.airfield_down_sub, D.round + 1))   -- airfieldTick reopens it then
                 log("airfield: down")
+                LB.stat("af_down", 1)
             elseif hp > 0 and AF.attackRound ~= D.round then
                 AF.attackRound = D.round
                 hudCallout(t.under_attack, nil)
@@ -3618,11 +3621,13 @@ end
 
 ---------------------------------------------------------------------------------------------------- leaderboard
 -- CFG.leaderboard; leaderboard/src/index.js is the other end (same score, same checks). RUN.stats: { started, air,
--- ground, specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen. LB.queue: the runs not yet
+-- ground, aces (ace squadron aircraft down), allies (allies bought), af_down (times the airfield went down), captured
+-- (times it was captured), specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen. LB.queue: the runs not yet
 -- answered for good (pending_runs.txt); LB.jobs: the sends in flight.
 do
 local function stats()
-    RUN.stats = RUN.stats or { started = os.time(), air = 0, ground = 0, specials = {} }
+    RUN.stats = RUN.stats or { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
+                               specials = {} }
     return RUN.stats
 end
 function LB.stat(what, n) if D then local st = stats(); st[what] = st[what] + (n or 1) end end
@@ -3647,10 +3652,12 @@ local function json(r)
         sp[#sp + 1] = string.format('{"kind":%s,"round":%d,"seconds":%d,"won":%s}', jstr(x.kind), x.round, x.seconds, tostring(x.won))
     end
     return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
-        .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"specials":[%s]%s}', jstr(r.run_id), jstr(r.pilot),
+        .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"how":%s,"aces":%d,"allies":%d,"af_down":%d,'
+        .. '"captured":%d,"specials":[%s]%s%s}', jstr(r.run_id), jstr(r.pilot),
         jstr(r.difficulty), r.round, jstr(r.mod), r.kills.air, r.kills.ground, r.zollars.earned, r.zollars.spent, r.time_s,
-        jstr(r.ended), table.concat(sp, ","),
-        (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "")
+        jstr(r.ended), jstr(r.how), r.aces, r.allies, r.af_down, r.captured, table.concat(sp, ","),
+        (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "",
+        (r.tier and r.tier:match("^%a+$")) and (',"tier":' .. jstr(r.tier)) or "")
 end
 
 local function configDir() return SCRIPT_DIR .. "..\\config\\" end
@@ -3722,7 +3729,8 @@ function LB.finish(how)
                 round = D.round, mod = VERSION, kills = { air = st.air, ground = st.ground },
                 zollars = { earned = math.floor(RUN.earned or 0), spent = math.floor(RUN.spent or 0) },
                 time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials,
-                aircraft = st.jet }
+                aircraft = st.jet, how = how, aces = st.aces, allies = st.allies, af_down = st.af_down, captured = st.captured,
+                tier = CFG.tiers.enabled and (CFG.tiers.list[TIER.index(D.round)] or {}).name or nil }
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
         how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))
@@ -4200,6 +4208,7 @@ function AMPH.runTick(now)
         RUN.captured, RUN.dirty = { untilRound = D.round + c.captured_rounds, closePending = true }, true
         A.capture = 0                                     -- (the meter starts over once it's back in our hands)
         if D.special and D.special.kind == "amphibious" then D.special.captured = true end
+        LB.stat("captured", 1)
         hudCallout(t.captured, t.captured_sub)
         log(string.format("special: round %d, the airfield is captured (100%%, %d troop vehicles ashore); back after round %d at the latest",
             D.round, ashore, RUN.captured.untilRound))
@@ -4937,6 +4946,7 @@ function shopBuy(name)
     elseif o.role == "ally_air" or o.role == "ally_ship" then
         local ok, msg = ALLY.buy(o.role, o.unit, it.ship, price)
         if not ok then return done(msg) end
+        LB.stat("allies", 1)
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
         return done(string.format("%s for %d.", msg, price))
@@ -5479,6 +5489,7 @@ local function creditKill(p)
     addCredits(pay, string.format("%s down (%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
         TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or ""))
     LB.stat("air", 1)
+    if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
 end
 
 local function probeTick(tick)

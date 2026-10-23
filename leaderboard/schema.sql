@@ -15,12 +15,20 @@ CREATE TABLE IF NOT EXISTS runs (
   mod_version TEXT NOT NULL,
   submitted   INTEGER NOT NULL,          -- unix seconds
   ip_hash     TEXT NOT NULL,             -- a hash of the sender's IP, for the rate limit only
-  aircraft    TEXT                       -- the player's aircraft code (su57, f22a, ...); older databases get it added
+  aircraft    TEXT,                      -- the player's aircraft code (su57, f22a, ...)
+  -- from mod 0.50.0 (null for older runs); the Worker adds these columns to an older database itself
+  how         TEXT,                      -- died | restart | left
+  tier        TEXT,                      -- the enemy skill tier at the end (Rookie ... Reaper)
+  aces        INTEGER,                   -- ace squadron aircraft shot down
+  allies      INTEGER,                   -- allies bought (MOONCHILD flights, ships)
+  af_down     INTEGER,                   -- times the airfield went down
+  captured    INTEGER                    -- times the airfield was captured
 );
 CREATE INDEX IF NOT EXISTS runs_round ON runs (difficulty, round DESC, score DESC);
 CREATE INDEX IF NOT EXISTS runs_score ON runs (difficulty, score DESC);
 CREATE INDEX IF NOT EXISTS runs_pilot ON runs (pilot);
 CREATE INDEX IF NOT EXISTS runs_ip ON runs (ip_hash, submitted);
+CREATE INDEX IF NOT EXISTS runs_week ON runs (submitted);
 
 CREATE TABLE IF NOT EXISTS specials (
   run_id   TEXT NOT NULL,
