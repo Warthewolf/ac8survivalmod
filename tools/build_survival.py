@@ -418,9 +418,14 @@ def make_path(z, used_ids, template, name, pts):
     # no tube data: a template's (Mission 16's Ladon path) names a tube object in its own package, an export index past
     # ours ("Bad export index 74/19": the game's loader stopped at the hangar, 2026-10-23)
     tube = ('struct', 'LiveAIPathTubeData', [(0, 'TubeData', False, ('arr', [])), (1, 'MoveData', False, ('arr', []))])
+    # and so no tube control (ControlType 2): a tube path without its tube "finishes" at once, every frame (the Ladons'
+    # PathFinish fired ~30 times a second and restarted their circuit: no route, a bombing run a second, 2026-10-23)
+    ctl = ('enum', 'ELiveAIPathControlType', ('raw', 'Byte', b'\x01'))
     repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els), 'PathTubeData': tube,
             'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}')),
             'Name': ('name', name, 0), 'WorldDataName': ('name', 'WD_SurvivalMode_global', 0)}
+    ct = [q for q in new[2] if q[1] == 'ControlType']
+    if ct and ct[0][3] is not None and ct[0][3][2][2] == b'\x02': repl['ControlType'] = ctl
     new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl else q for q in new[2]]
     for n in names_in(new) + [name, 'DefaultPathPoint']: z.nb.add(n)
     return new

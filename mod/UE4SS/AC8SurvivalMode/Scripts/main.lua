@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.48.4"
+local VERSION = "0.48.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3567,8 +3567,10 @@ function SPC.ladonTick(now, s)
     for k, L in pairs(s.units) do
         if L.alive then
             local runs = f["SV_LadonRun" .. k] or 0
-            if now - s.at >= 5 and runs > L.runs then        -- (a count left from last time is reset by its appearance)
-                L.runs, s.runs = runs, (s.runs or 0) + (runs - L.runs)
+            -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at
+            -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
+            if now - s.at >= 5 and runs > L.runs and now - (L.bombAt or 0) >= 30 then
+                L.runs, L.bombAt, s.runs = runs, now, (s.runs or 0) + 1
                 local dmg = c.bomb_damage + (c.bomb_per_round or 0) * math.max(0, D.round - CFG.specials.first)
                 if CFG.airfield.enabled and not AF.down then AF.bomb = AF.bomb + dmg end
                 hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
