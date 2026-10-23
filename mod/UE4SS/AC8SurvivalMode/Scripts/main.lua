@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.60.1"
+local VERSION = "0.60.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -964,6 +964,9 @@ local CFG = {
                      -- an ini setting): RE_SV_GlitchBlink_<ring letter><bearing letter>, every step_deg on each ring
                      blinks = { step_deg = 30, rings_m = { 500, 800 } },
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
+                     -- it leads you as MINDRIPPER does (user, 2026-10-24): gun_lead_s ahead; 0.8 s suits its blinks
+                     -- 500 / 800 m from you (its rounds fly 833 m/s)
+                     gun_lead_s = 0.8,
                      -- the dead flying (user: "look spooky like its the dead flying"): its airframe in the wreck's
                      -- burnt material, no pilot or stores, the damaged-plane smoke and fire on it
                      dead_look = true, dead_fx_scale = 1.0,
@@ -1923,7 +1926,7 @@ local function searchSetup()
     local function glitchGun(src)
         local GL = CFG.specials.glitch
         return gunRow(src, { range = GL.gun_range_m, angle = GL.gun_angle_deg, aim = 0.05, burst = 200, rest = 0,
-                             damage_x = GL.gun_damage_x, spread = GL.gun_spread_deg }, "AB.L..IN's ", "g")
+                             damage_x = GL.gun_damage_x, spread = GL.gun_spread_deg, lead = GL.gun_lead_s }, "AB.L..IN's ", "g")
     end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
