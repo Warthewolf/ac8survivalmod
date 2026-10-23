@@ -228,6 +228,10 @@ ALLY_TURRETS = {   # each hull's turret mission rows in Mission 22's world data 
     'Aegis': ['aegs_mk15', 'aegs_mk41', 'aegs_mk45', 'aegs_artillery'],
 }
 ALLY_SHIP_SPEED = '80'                      # Mission 22's allied ships'
+# A ship's unit area: Mission 22's allied hulls have 10 km and 200-6000 m, and its turrets engage only inside it (as
+# the fighters' 6 km area kept them from the player): the Aegis's 25 km search and 20 km missiles stopped at 10 km
+# (user, 2026-10-23: "aegis's didn't seem to fire all that much better"). Survival's ships get this much.
+ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M = 25000.0, (0.0, 15000.0)
 
 
 def ally_ships():

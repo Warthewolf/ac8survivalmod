@@ -310,6 +310,13 @@ def ally_units(units, used_ids, z, top_number, v):
         retag_turrets([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], obj, rows, used_ids, z)
         x, y, _ = path_start(v, lane)
         set_unit_point(u, (x, y, 300.0))
+        area = {'RadiusInMeter': survival_events.ALLY_SHIP_AREA_M, 'MinAltitudeInMeter': survival_events.ALLY_SHIP_ALT_M[0],
+                'MaxAltitudeInMeter': survival_events.ALLY_SHIP_ALT_M[1]}
+        sc = uprop.U.schema('LiveUnitDesc')
+        aidx = {n: k for k, (n, t) in sc.items() if n in area}
+        assert len(aidx) == 3, aidx
+        u[2][:] = sorted([p for p in u[2] if p[1] not in area] + [(aidx[n], n, False, ('raw', 'Float', struct.pack('<f', val)))
+                         for n, val in area.items()], key=lambda p: p[0])
     print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
           f'{len(survival_events.ally_ships())} ships')
 

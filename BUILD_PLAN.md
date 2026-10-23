@@ -510,6 +510,11 @@ Airfield, Take Off from the airfield ... Squadron ID is MOONCHILD." Built 2026-1
   past 6 km is seen; and VLS_Vessel_000 flies 9 s from 500 km/h (+300/s to 3000), ~4 km. Now: NPC_AIModule_SV_Aegis
   (25 km, clouds off) on its FCS rows, hull and turret DT_NPC rows; its homing missiles on <weapon>_SVA_Aegis (30 s,
   accel x2, 3600 km/h, turn x1.5, no cloud homing loss) with lock-on 20 km (CFG.allies.ships.Aegis.fcs.missile).
+  0.42.1 (user: "aegis's didn't seem to fire all that much better"; the 0.41.0 log had the rows in): the ships' unit
+  area (M22's 10 km, 200-6000 m) is the likely cap, as the fighters' 6 km area was: 25 km, 0-15000 m
+  (survival_events.ALLY_SHIP_AREA_M). main.lua logs every Aegis launch (LiveMissile owner "aegs") with the nearest
+  enemy's distance, a line every 10 s ("allies: Aegis launches"). If they still don't reach, next: forced volleys
+  (LiveFireOneShotWeapon on the mk41 at a pool flight's object, as M22's RE_Ally_Ship_Shot_Loop_* fire its ships).
 - Radio (user, 2026-10-23): the level's radio table is Survival's own copy of ms022's (DT_SV_Radio, build_survival.py
   build_radio; PL_SurvivalMode's hard import retargeted). MOONCHILD's takeoff plays M25-2's Savian mercenary leader
   "Our economy relies on mercs like us." (v2501_0054) in place of Singleton's "Providing support" line; the shuttle
