@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.42.1"
+local VERSION = "0.43.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -821,15 +821,19 @@ local CFG = {
         every    = 5,
         rotation = { "shuttle", "anomaly", "amphibious" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
-        -- `lanes` (pairs of two, from the user's marks) cross to Comona's beaches by the airport, lanes_first of them the
-        -- first time, lanes_more more each time after; each craft that reaches the beach puts a BTR-90 ashore. Troops
-        -- still alive capture_s after landing capture the airfield (landing and the STORE closed, "AIRFIELD CAPTURED")
-        -- for captured_rounds rounds, or until every landed troop vehicle is destroyed (user, 2026-10-23). The round's
+        -- `lanes` (from the user's marks; `craft` craft each, side by side) cross to Comona's beaches by the airport,
+        -- lanes_first of them the first time, lanes_more more each time after; each craft that reaches the beach puts a
+        -- BTR-90 ashore, which drives to the runway. Each one that gets there adds capture_per_troop % to the airfield's
+        -- capture (on the HUD); at 100 it is captured (landing and the STORE closed, "AIRFIELD CAPTURED") for
+        -- captured_rounds rounds, or until every landed troop vehicle is destroyed (user, 2026-10-23: "each troop that
+        -- reaches the runway should put a percentage on the HUD ... when it reaches 100% the airfield is captured").
+        -- A round that ends short of 100 starts the next landing from 0. The round's
         -- fighters come as in a normal round, and bomber_chance of the time a bomber raid on the airfield with them
         -- (user: "enemy aircraft still spawn also, with a chance for bombers to also spawn"). No capture: `reward`
         -- (+ reward_per_round x the round); each craft pays craft_pay, each troop vehicle troop_pay (times the tier's
         -- pay, as aircraft). Craft that landed are taken off remove_after_s after landing (they're heading out).
-        amphibious = { lanes = { "A", "B", "C", "D" }, lanes_first = 2, lanes_more = 1, capture_s = 30,
+        amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 2, lanes_more = 1,
+                       capture_per_troop = 25,
                        captured_rounds = 2, bomber_chance = 0.4, reward = 3000, reward_per_round = 120,
                        craft_pay = 300, troop_pay = 200, remove_after_s = 90 },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
@@ -1010,9 +1014,11 @@ local CFG = {
             amphib_sub   = "LANDING CRAFT INBOUND",
             amphib_go    = "AMPHIBIOUS ASSAULT",
             amphib_go_sub = "STOP THE LANDING CRAFT BEFORE THEY REACH THE BEACH",
-            amphib_row   = "LANDING CRAFT: %d  TROOPS ASHORE: %d",
+            amphib_row   = "LANDING CRAFT: %d  TROOPS: %d  AIRFIELD CAPTURE: %d%%",
             ashore       = "TROOPS ASHORE",
-            ashore_sub   = "DESTROY THEM BEFORE THEY TAKE THE AIRFIELD",
+            ashore_sub   = "STOP THEM BEFORE THEY REACH THE RUNWAY",
+            on_runway    = "TROOPS ON THE RUNWAY",
+            on_runway_sub = "AIRFIELD %d%% CAPTURED",
             captured     = "AIRFIELD CAPTURED",
             captured_sub = "DESTROY THE LANDED TROOPS TO RETAKE IT",
             captured_row = "AIRFIELD CAPTURED: %d ROUND%s LEFT, %d TROOPS",
@@ -2341,7 +2347,7 @@ local function hudTick(now, paused, pc)
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then
         local craft, ashore = AMPH.counts()
-        setText(H.next, "nextStr", string.format(t.amphib_row, craft, ashore))
+        setText(H.next, "nextStr", string.format(t.amphib_row, craft, ashore, AMPH.capture()))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
@@ -3451,9 +3457,7 @@ end
 -- troops are SV_Unit_LcacTroops<L><craft>. RUN.amph.troops: every troop unit put ashore this run that may still be up;
 -- RUN.captured: { untilRound, closePending, closed } while the airfield is taken.
 do
-local CRAFT = { "L", "R" }
-
-local function amph() RUN.amph = RUN.amph or { count = 0, troops = {} }; return RUN.amph end
+local function amph() RUN.amph = RUN.amph or { count = 0, troops = {}, capture = 0 }; return RUN.amph end
 
 local function tierPay(base)          -- a kill's pay at the round's skill tier (creditKill's x)
     local tp, ti = CFG.credits.tier_pay or {}, nil
@@ -3475,6 +3479,9 @@ function AMPH.counts()
     for _, t in ipairs(amph().troops) do ashore = ashore + math.max(0, t.alive) end
     return craft, ashore
 end
+
+-- The airfield's capture so far, in % (0-100).
+function AMPH.capture() return math.min(100, amph().capture or 0) end
 
 -- The round can't end while a craft is still coming in or troops are ashore and the airfield isn't taken.
 function AMPH.busy(s)
@@ -3527,7 +3534,7 @@ function AMPH.tick(now, s)
             log(string.format("special: lane %s: %d landing craft left", l, alive))
         end
         lane.alive = alive
-        for _, k in ipairs(CRAFT) do
+        for _, k in ipairs(c.craft) do
             -- (a flag still 1 from this lane's last assault is reset by its appearance: not read in the first 5 s)
             if now - lane.at >= 5 and (f["SV_LcacLand" .. l .. k] or 0) >= 1 and not lane.landed[k] then
                 lane.landed[k] = now
@@ -3564,6 +3571,10 @@ function AMPH.roundOver(now, s)
         end
     end
     s.state = "done"
+    if not RUN.captured and (amph().capture or 0) > 0 then        -- short of 100: the next landing starts from 0
+        log(string.format("special: the capture stopped at %d%%", AMPH.capture()))
+        amph().capture = 0
+    end
     if not s.captured then
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "landing repelled")
@@ -3594,7 +3605,7 @@ function AMPH.runTick(now)
     if not D or not nativeReady() or now < (AMPH.nextAt or 0) then return end
     AMPH.nextAt = now + 1
     local c, t = CFG.specials.amphibious, CFG.hud.text
-    local A, ashore, overdue = amph(), 0, false
+    local A, ashore, f = amph(), 0, nil
     for _, tr in ipairs(A.troops) do
         if tr.alive > 0 then
             local n = math.max(0, SV_UnitAlive(tr.unit))
@@ -3604,14 +3615,28 @@ function AMPH.runTick(now)
             end
             tr.alive = n
             ashore = ashore + n
-            if n > 0 and now - tr.at >= c.capture_s then overdue = true end
+        end
+        -- at the runway (the end of its drive path): its share of the capture, once (troops spawned in the first 2 s
+        -- may still read last time's flag, reset by their appearance)
+        if not tr.reached and not tr.removed and now - tr.at >= 2 then
+            f = f or svFlags() or {}
+            if (f["SV_LcacRunway" .. tr.lane .. tr.craft] or 0) >= 1 then
+                tr.reached = true
+                if not RUN.captured then
+                    A.capture = math.min(100, (A.capture or 0) + c.capture_per_troop)
+                    RUN.dirty = true
+                    hudCallout(t.on_runway, string.format(t.on_runway_sub, A.capture))
+                    log(string.format("special: troops %s reached the runway; airfield %d%% captured", tr.unit, A.capture))
+                end
+            end
         end
     end
-    if overdue and not RUN.captured then
+    if (A.capture or 0) >= 100 and not RUN.captured then
         RUN.captured, RUN.dirty = { untilRound = D.round + c.captured_rounds, closePending = true }, true
+        A.capture = 0                                     -- (the meter starts over once it's back in our hands)
         if D.special and D.special.kind == "amphibious" then D.special.captured = true end
         hudCallout(t.captured, t.captured_sub)
-        log(string.format("special: round %d, the airfield is captured (%d troop vehicles ashore); back after round %d at the latest",
+        log(string.format("special: round %d, the airfield is captured (100%%, %d troop vehicles ashore); back after round %d at the latest",
             D.round, ashore, RUN.captured.untilRound))
     end
     local cap = RUN.captured

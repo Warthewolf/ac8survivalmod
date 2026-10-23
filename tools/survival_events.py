@@ -119,30 +119,48 @@ LCAC_LANES = [   # (lane, start at sea (x, y) cm, beach (x, y, ground z) cm) - m
     ('C', (1202428, -1235402), (1600055, -489665, 500)),
     ('D', (1472712, -1417822), (1781906, -515173, 496)),
 ]
-LCAC_CRAFT = 'LR'              # the two craft of a lane: left and right of its line
-LCAC_GAP_CM = 24000.0          # between them
+LCAC_CRAFT = 'WXYZ'            # the craft of a lane, side by side across its line (user, 2026-10-23: "spawn more
+                               # LCAC's": four a lane, was two; Mission 13's unit has two, the others are copies)
+LCAC_GAP_CM = 18000.0          # between two neighbours
 LCAC_SEA_Z = -20.0             # Mission 13's craft and path points at sea
 LCAC_SPEED = '180.0'           # Mission 13's (02_ReinforcementAppearance)
 LCAC_RETURN_S = 20.0           # Mission 13's: landing to heading back out
+# The troops drive from where their craft landed to the runway (user, 2026-10-23: "draw a path for the Troops to Drive
+# on so that they reach the airfield"), each to its own spot along it (Mission 22's runway: centre, heading), on
+# Mission 13's order (EvadeOnly: they keep driving) at LCAC_TROOP_SPEED; reaching the end of the path sets
+# SV_LcacRunway<lane><craft> and Scripts/main.lua adds to the airfield's capture.
+LCAC_RUNWAY = ((1609574.0, -435747.0), -23.0)
+LCAC_RUNWAY_SPREAD_CM = 90000.0   # the spots, from one end of this stretch along the runway to the other
+LCAC_GROUND_Z = 300.0             # path points over land (Mission 13's drive path: 48-200; the airport is near sea level)
+LCAC_TROOP_SPEED = '60.0'         # km/h (Mission 13's 25.0)
+LCAC_TROOP_SOURCE_PATH = '02_Ground0_Tank_0_Path0'
 
 
 def lcac_craft():
     """One dict per landing craft: its lane's unit and object, its paths, its troops and its landing flag."""
     import math
     out = []
+    (rx, ry), ryaw = LCAC_RUNWAY
+    rux, ruy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
+    total = len(LCAC_LANES) * len(LCAC_CRAFT)
     for lane, start, beach in LCAC_LANES:
         dx, dy = beach[0] - start[0], beach[1] - start[1]
         length = math.hypot(dx, dy)
         ux, uy = dx / length, dy / length
         for k, c in enumerate(LCAC_CRAFT):
-            side = (-0.5 if k == 0 else 0.5) * LCAC_GAP_CM          # left of the line, then right
+            side = (k - (len(LCAC_CRAFT) - 1) / 2.0) * LCAC_GAP_CM   # across the line, in order
             ox, oy = -uy * side, ux * side
+            i = len(out)                                          # its spot on the runway
+            along = (i / max(1, total - 1) - 0.5) * LCAC_RUNWAY_SPREAD_CM
             out.append(dict(
                 lane=lane, craft=c, k=k, unit=f'SV_Unit_Lcac{lane}', obj_base=f'SV_Obj_Lcac{lane}',
                 obj=f'SV_Obj_Lcac{lane}_{k}',                              # as event args write the 2-craft unit's objects
                 path=f'SV_Path_Lcac{lane}{c}', back=f'SV_Path_Lcac{lane}{c}Back',
                 troops=f'SV_Unit_LcacTroops{lane}{c}', troop_obj=f'SV_Obj_LcacTroops{lane}{c}',
                 flag=f'SV_LcacLand{lane}{c}', land=f'SV_LcacLanded{lane}{c}', up=f'SV_LcacUp{lane}',
+                drive=f'SV_Path_LcacDrive{lane}{c}', troops_up=f'SV_LcacTroopsUp{lane}{c}',
+                rflag=f'SV_LcacRunway{lane}{c}', at_runway=f'SV_LcacAtRunway{lane}{c}',
+                runway=(rx + rux * along, ry + ruy * along, LCAC_GROUND_Z),
                 start=(start[0] + ox, start[1] + oy, LCAC_SEA_Z), beach=(beach[0] + ox, beach[1] + oy, float(beach[2])),
                 yaw=math.degrees(math.atan2(dy, dx)), length=length))
     return out
@@ -288,7 +306,8 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
              + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
-             + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT])
+             + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
+             + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -644,6 +663,11 @@ def build_amphib(g, flag, stock_ep):
                                  lambda a, e: a[1] == 'E_Unit02_02_Ship0')
     t_exit = g.foreign_template(m13, 'LiveAIPathExitExecution', '02_LCAC_PathFinish_0')
     t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    t_tpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_Reinforce_tank_0',
+                                 lambda a, e: a[0] == 'E_Obj02_02_Ground0_tank_0')
+    t_tengage = g.foreign_template(m13, 'LiveAIEngagementOrder', '02_Reinforce_tank_0',
+                                   lambda a, e: a[1] == 'E_Unit02_02_Ground0')
+    assert arg_values(t_tpath)[2] == LCAC_TROOP_SOURCE_PATH and arg_values(t_tengage)[3] == 'EvadeOnly'
     assert arg_values(t_cpath)[2] == LCAC_SOURCE_PATH and arg_values(t_cpath)[4] == LCAC_SPEED, arg_values(t_cpath)
     assert arg_values(t_upath)[2] == LCAC_SOURCE_PATH, arg_values(t_upath)
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
@@ -664,6 +688,13 @@ def build_amphib(g, flag, stock_ep):
             g.execute(t_exit, c['land'], {0: c['obj']})
             flag(c['land'], c['flag'], 'Set', 1)
             g.execute(t_cpath, c['land'], {0: c['obj'], 2: c['back']}, delay=LCAC_RETURN_S)
+            # its troops: off the beach along their path to the runway, driving on whatever shoots at them
+            g.trigger('01_E_AreaA_ReinforcementAppearance_0', c['troops_up'], arg_changes={0: c['troops']})
+            flag(c['troops_up'], c['rflag'], 'Set', 0)
+            g.execute(t_tengage, c['troops_up'], {1: c['troops']})
+            g.execute(t_tpath, c['troops_up'], {0: c['troop_obj'], 2: c['drive'], 4: LCAC_TROOP_SPEED}, delay=0.5)
+            g.trigger(finish, c['at_runway'], arg_changes={0: c['troop_obj'], 2: c['drive']})
+            flag(c['at_runway'], c['rflag'], 'Set', 1)
             trm = f'RE_SV_LcacTroopsRemove{lane}{c["craft"]}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})

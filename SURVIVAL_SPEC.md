@@ -57,8 +57,9 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Enemy LCACs land troops on Comona's beaches by the airport (Mission 13's enemy LCAC pattern).
 - Failure: "the airfield being captured and it lasts for 2 rounds" (it is taken while troops get ashore; it is back
   after two rounds).
-- Captured when troops that landed are still alive ~30 s after reaching the beach; destroying them on the beach first
-  saves the airfield (user, 2026-10-23).
+- (Superseded: captured when landed troops were still alive ~30 s after reaching the beach.) Now (user, 2026-10-23):
+  the troops drive from the beach to the runway; each one that reaches it adds to a capture percentage on the HUD
+  (25 % each), and at 100 % the airfield is captured. More landing craft: four per lane.
 - Once captured, destroying every landed troop vehicle frees it early; otherwise it's back after two rounds.
 - Captured = landing and the STORE closed, "AIRFIELD CAPTURED" and the rounds left on the HUD (proposed, as when the
   airfield is down).

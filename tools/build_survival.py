@@ -354,7 +354,7 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     assert not new_unit[-1].isdigit() and not obj_name[-1].isdigit() and obj_name not in top_number, obj_name
     wd = ('name', 'WD_SurvivalMode_global', 0)
     objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    assert len(objs) >= len(points), (new_unit, len(objs))
+    while len(objs) < len(points): objs.append(copy.deepcopy(objs[-1]))   # more than the source has: copies of its last
     del objs[len(points):]
     names = []
     for k, (ob, pt) in enumerate(zip(objs, points)):
@@ -426,6 +426,7 @@ def lcac_units(units, used_ids, z, top_number, v):
     src_craft = desc_named(m13, 'UnitDescList', survival_events.LCAC_SOURCE_UNIT)
     src_troop = desc_named(m13, 'UnitDescList', survival_events.LCAC_TROOP_SOURCE)
     src_path = desc_named(m13, 'AIPathDescList', survival_events.LCAC_SOURCE_PATH)
+    src_drive = desc_named(m13, 'AIPathDescList', survival_events.LCAC_TROOP_SOURCE_PATH)
     paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
     craft = survival_events.lcac_craft()
     for lane in survival_events.lcac_lane_names():
@@ -441,9 +442,13 @@ def lcac_units(units, used_ids, z, top_number, v):
         back = [at(1.0, bz), at(shore, sz), at(0.6, sz), at(0.2, sz), at(-0.3, sz)]   # out past the start
         paths.append(make_path(z, used_ids, src_path, c['path'], inbound))
         paths.append(make_path(z, used_ids, src_path, c['back'], back))
+        (gx, gy, gz) = c['runway']                                  # the troops' drive: beach to their runway spot
+        gnd = survival_events.LCAC_GROUND_Z
+        drive = [(bx, by, bz)] + [(bx + (gx - bx) * t, by + (gy - by) * t, gnd) for t in (0.15, 0.4, 0.65, 0.9)] + [(gx, gy, gz)]
+        paths.append(make_path(z, used_ids, src_drive, c['drive'], drive))
         port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
                   [c['beach']], c['yaw'], top_number, tgt=True)
-    print(f'  amphibious assault: {len(survival_events.LCAC_LANES)} lanes of 2 landing craft, {len(craft) * 2} paths, '
+    print(f'  amphibious assault: {len(survival_events.LCAC_LANES)} lanes of {len(survival_events.LCAC_CRAFT)} landing craft, {len(craft) * 3} paths, '
           f'{len(craft)} troop units')
 
 

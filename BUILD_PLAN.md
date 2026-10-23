@@ -617,3 +617,11 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   craft reached the beach 2 min 15 s after spawning, both BTRs ashore, the airfield captured 30 s later and landing
   closed. No HUD boxes on craft or troops (M13's descs have no bShowHUDBox: its events mark them): ported objects now
   carry bShowHUDBox and TargetMarkType TGT (ELiveTargetMarkType 1).
+- 0.43.0 (user: "spawn more LCAC's ... draw a path for the Troops to Drive on so that they reach the airfield, each troop
+  that reaches the runway should put a percentage on the HUD"): four craft a lane (W-Z; M13's unit has two, port_unit
+  copies its last object for more), 16 craft / 16 troop units; each troop unit has a drive path SV_Path_LcacDrive<L><c>
+  (M13's 02_Ground0_Tank_0_Path0 as the template, points at 3 m) from its landing point to its own spot along 900 m of
+  the runway; on appearance M13's EvadeOnly order and the path at 60 km/h; PathFinish sets SV_LcacRunway<L><c>.
+  main.lua: each arrival adds capture_per_troop (25) %, HUD row "AIRFIELD CAPTURE: n%", 100 % = captured (the 30 s rule
+  is gone); a round ending short of 100 resets it. Untested: whether ground vehicles follow a path over Comona's
+  terrain (M13's drive path is short and on its own map).
