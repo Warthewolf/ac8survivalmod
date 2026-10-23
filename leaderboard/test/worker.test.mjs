@@ -40,6 +40,9 @@ const run = { v: 1, run_id: "0123456789abcdef0123", pilot: "Naish", difficulty: 
 
 check("score: (12000 + 14000 + 600 + 3000) x 1.5 = 44400", score(run) === 44400);
 check("a sane run passes", checkRun(run) === null);
+{ const newer = { ...run, specials: [...run.specials, { kind: "wormhole", round: 11, seconds: 90, won: true }] };
+  check("a special this Worker doesn't know is left out, not the run", checkRun(newer) === null && newer.specials.length === 2); }
+check("a bad special kind is refused", checkRun({ ...run, specials: [{ kind: "<x>", round: 3, seconds: 90, won: true }] }) !== null);
 check("too many kills is refused", checkRun({ ...run, kills: { air: 9999, ground: 0 } }) !== null);
 check("a too-short run is refused", checkRun({ ...run, time_s: 10 }) !== null);
 check("a bad pilot name is refused", checkRun({ ...run, pilot: "<script>" }) !== null);

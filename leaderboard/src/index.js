@@ -64,9 +64,12 @@ function checkRun(run) {
   const sp = run.specials || [];
   if (!Array.isArray(sp) || sp.length > run.round) return "too many specials";
   for (const s of sp) {
-    if (!SPECIALS[s.kind] || !isInt(s.round, 1, run.round) || !isInt(s.seconds, 5, 3600) || typeof s.won !== "boolean")
+    if (typeof s.kind !== "string" || !/^[a-z]{1,16}$/.test(s.kind) || !isInt(s.round, 1, run.round)
+        || !isInt(s.seconds, 5, 3600) || typeof s.won !== "boolean")
       return "bad special";
   }
+  // a special this Worker doesn't know yet (a newer mod than the deployed Worker) is left out, not the whole run
+  run.specials = sp.filter((s) => SPECIALS[s.kind]);
   return null;
 }
 
