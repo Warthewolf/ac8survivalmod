@@ -2175,32 +2175,50 @@ static DWORD WINAPI PostWorker(void* arg)
     for (size_t i = 0; head[i]; ++i) headers[n++] = head[i];
     for (size_t i = 0; sig[i]; ++i) headers[n++] = sig[i];
     headers[n++] = L'\r'; headers[n++] = L'\n'; headers[n] = 0;
+    /* Each proxy mode in turn (automatic, the system's, none), with TLS 1.2 / 1.3 switched on: WinHTTP's own defaults
+     * can leave TLS 1.2 off (older or tweaked Windows), which Cloudflare refuses at once (a friend's test of 2026-10-23:
+     * the browser reached the Worker, the game failed in 0.25 s). */
+    typedef BOOL (*HttpOptionFn)(HANDLE, DWORD, void*, DWORD);
+    HttpOptionFn hOption = (HttpOptionFn)GetProcAddress(wh, "WinHttpSetOption");
+    static const DWORD kAccess[] = { 4 /* automatic proxy */, 0 /* the system's (netsh winhttp) */, 1 /* none */ };
     DWORD err = 0;
-    HANDLE ses = hOpen(L"AC8SurvivalMode", 4 /* automatic proxy */, NULL, NULL, 0);
-    if (!ses) ses = hOpen(L"AC8SurvivalMode", 0 /* default proxy */, NULL, NULL, 0);
-    HANDLE con = ses ? hConnect(ses, SV_SUBMIT_HOST, 443, 0) : NULL;
-    HANDLE req = con ? hRequest(con, L"POST", SV_SUBMIT_PATH, NULL, NULL, NULL, 0x00800000 /* WINHTTP_FLAG_SECURE */) : NULL;
-    if (req && hTimeouts) hTimeouts(req, 10000, 10000, 15000, 15000);
-    if (!ses || !con || !req) err = GetLastError();
-    if (req && hSend(req, headers, (DWORD)-1, j->body, j->len, j->len, 0)) {
-        if (hReceive(req, NULL)) {
-            DWORD code = 0, sz = sizeof(code);
-            if (hQuery(req, 19 | 0x20000000 /* STATUS_CODE | FLAG_NUMBER */, NULL, &code, &sz, NULL)) j->status = (int32_t)code;
-            DWORD got = 0;
-            while (j->replyLen < sizeof(j->reply) - 1 && hRead(req, j->reply + j->replyLen, (DWORD)(sizeof(j->reply) - 1 - j->replyLen), &got) && got)
-                j->replyLen += got;
-        } else {
-            err = GetLastError();
-            j->status = -2;
+    for (size_t a = 0; a < sizeof(kAccess) / sizeof(kAccess[0]) && j->status < 0; ++a) {
+        err = 0;
+        HANDLE ses = hOpen(L"AC8SurvivalMode", kAccess[a], NULL, NULL, 0);
+        if (ses && hOption) {
+            DWORD tls = 0x00000800 | 0x00002000;                   /* WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | TLS1_3 */
+            if (!hOption(ses, 84 /* WINHTTP_OPTION_SECURE_PROTOCOLS */, &tls, sizeof(tls))) {
+                tls = 0x00000800;                                  /* (no TLS 1.3 before Windows 11) */
+                hOption(ses, 84, &tls, sizeof(tls));
+            }
         }
-    } else if (req) {
-        err = GetLastError();
+        HANDLE con = ses ? hConnect(ses, SV_SUBMIT_HOST, 443, 0) : NULL;
+        HANDLE req = con ? hRequest(con, L"POST", SV_SUBMIT_PATH, NULL, NULL, NULL, 0x00800000 /* WINHTTP_FLAG_SECURE */) : NULL;
+        if (req && hTimeouts) hTimeouts(req, 10000, 10000, 15000, 15000);
+        if (!ses || !con || !req) err = GetLastError();
+        j->replyLen = 0;
+        if (req && hSend(req, headers, (DWORD)-1, j->body, j->len, j->len, 0)) {
+            if (hReceive(req, NULL)) {
+                DWORD code = 0, sz = sizeof(code);
+                if (hQuery(req, 19 | 0x20000000 /* STATUS_CODE | FLAG_NUMBER */, NULL, &code, &sz, NULL)) j->status = (int32_t)code;
+                DWORD got = 0;
+                while (j->replyLen < sizeof(j->reply) - 1 && hRead(req, j->reply + j->replyLen, (DWORD)(sizeof(j->reply) - 1 - j->replyLen), &got) && got)
+                    j->replyLen += got;
+            } else {
+                err = GetLastError();
+            }
+        } else if (req) {
+            err = GetLastError();
+        }
+        if (j->status < 0) {
+            j->status = err ? -(int32_t)err : -1;                 /* why it couldn't get through (WinHTTP's error) */
+            Log(L"leaderboard: proxy mode %d: no connection (%d)", (int32_t)kAccess[a], j->status);
+        }
+        if (req) hClose(req);
+        if (con) hClose(con);
+        if (ses) hClose(ses);
     }
-    if (j->status < 0 && err) j->status = -(int32_t)err;          /* why it couldn't get through (WinHTTP's error) */
     j->reply[j->replyLen] = 0;
-    if (req) hClose(req);
-    if (con) hClose(con);
-    if (ses) hClose(ses);
     Log(L"leaderboard: run sent, status %d", j->status);
     j->state = 2;
     return 0;
