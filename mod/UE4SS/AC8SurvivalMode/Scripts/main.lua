@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.57.0"
+local VERSION = "0.57.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -6359,6 +6359,7 @@ local function probeTick(tick)
             log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
             local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
             if not okL then log("leaderboard: error " .. tostring(errL)) end
+            if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
@@ -6373,6 +6374,16 @@ local function probeTick(tick)
             if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
             local okM, errM = timed("music", musicTick, tick, now, paused)
             if not okM then log("music: error " .. tostring(errM)) end
+            -- the landing store plays its own supply music without pausing the BGM channel, so the Music Player's track
+            -- clock ran out there (user, 2026-10-24: "music skipped"): held while it's open (paused, down at the airfield)
+            if type(SV_MusicHold) == "function" then
+                local hold = (paused and playerOnAirfield()) and 1 or 0
+                if hold ~= D.musicHold then
+                    D.musicHold = hold
+                    SV_MusicHold(hold)
+                    log("music: track clock " .. (hold == 1 and "held (landing store)" or "running"))
+                end
+            end
             local okF, errF = timed("airfield", airfieldTick, tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
             local okB, errB = pcall(bombTick, tick)

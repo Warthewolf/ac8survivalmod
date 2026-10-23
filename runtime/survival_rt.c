@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.16.0"
+#define RT_VERSION           L"0.16.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1551,6 +1551,7 @@ static uint8_t*     g_fMusicNext;
 static MusicTickFn  g_nextMusicTick;
 static MusicNextFn  g_nextMusicNext;
 static volatile int32_t g_musicClockHold = 1;     /* SV_MusicClock(on) */
+static volatile int32_t g_musicForceHold;         /* SV_MusicHold(on): Lua holds it (the landing store)             */
 static int32_t      g_musicHeldMs;                /* clock held since the last track change                        */
 static int32_t      g_musicHolding;               /* the SoundController's clock is held now                       */
 
@@ -1569,12 +1570,14 @@ static void OnMusicTick(void* tickable, float dt)
         uint8_t* gi = PtrAt(mgr, UOBJ_OUTER);
         uint8_t* ctx = PtrAt(gi, GI_CAMPAIGN_CONTEXT);
         uint8_t* ch = PtrAt(PtrAt(gi, GI_SOUND_MANAGER), SM_CHANNELS);
+        /* (user, 2026-10-24: "music skipped": the landing store plays its own supply music without pausing the BGM
+         * channel, so the track's clock ran out in the store; Lua holds it there with SV_MusicHold) */
         int hold = ctx && Readable(ctx + CTX_MISSION_ID, 4) && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID &&
-                   ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED];
+                   (g_musicForceHold || (ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED]));
         int track = PtrAt(mgr, MPM_CONTROLLER) == co;     /* the SoundController; the ambience controller is held too */
         if (track && hold != g_musicHolding && Readable(co + MPC_CLOCK, 8)) {
             g_musicHolding = hold;
-            Log(L"music player: BGM %s, track clock %s at %d of %d ms", hold ? L"paused" : L"playing again",
+            Log(L"music player: BGM %s, track clock %s at %d of %d ms", hold ? (g_musicForceHold ? L"held by Survival" : L"paused") : L"playing again",
                 hold ? L"held" : L"running", Ms(*(float*)(co + MPC_CLOCK)), Ms(*(float*)(co + MPC_LENGTH)));
         }
         if (hold) {
@@ -1802,10 +1805,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.16.0" */
+/* SV_Version() -> "0.16.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.16.0";
+    static const char v[] = "0.16.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2027,6 +2030,18 @@ static int L_MusicPlayer(void* lua)
 
 /* SV_MusicClock([on]) -> the old setting (1: the music player's track clock is held while Survival's BGM is paused,
  * 0: the stock clock), or SV_ERR_NO_GAME when the clock wasn't hooked */
+/* SV_MusicHold(on) -> the hold it had: Lua holds the music player's track clock (in Survival's mission only) while the
+ * landing store is open, as a paused BGM channel does */
+static int L_MusicHold(void* lua)
+{
+    double on = -1;
+    ArgNumber(lua, &on);
+    if (!g_nextMusicTick) return Ret(lua, SV_ERR_NO_GAME);
+    int64_t old = g_musicForceHold;
+    if (on >= 0) g_musicForceHold = on != 0;
+    return Ret(lua, old);
+}
+
 static int L_MusicClock(void* lua)
 {
     double on = -1;
@@ -2315,7 +2330,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
     };
