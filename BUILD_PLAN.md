@@ -416,7 +416,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   isn't up already. They keep Survival's behaviour (world data), AI module, fire control and tier, not NLID_0400_CP.
   Test: "aces:" lines; Su-57 / F-22A etc. arrive from round 16 ([rounds] start_round = 16 to test sooner); the names show on the
   target boxes; "ACE INBOUND" callout.
-- [ ] Ladon: the heavy boss (OP0045_ladn_01, 1200 HP, 16 child parts = ChildAIObjectDescs; EVENTS_AIRCRAFT.md).
+- [x] (done 2026-10-23: the Ladon special round, KOT and MISHKA) Ladon: the heavy boss (OP0045_ladn_01, 1200 HP, 16 child parts = ChildAIObjectDescs; EVENTS_AIRCRAFT.md).
 - [ ] Podarge drop / Land Aegis: port the drop chain the way Stonehenge's podarge_build did (from Mission 25).
 - [ ] ECM towers: ground units that jam (radar noise, LiveStartHUDRaderMapNoise) until destroyed.
 - [ ] Stealth wing: f22a / su57 / x40a style flight, hidden from radar until close.
@@ -440,7 +440,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   Test 2026-10-23 (Lua 0.37.5): strike F-15Es circled 1.4-3.3 km from it for 150 s, 0 hits: Mission 22's shuttle desc
   is an attack-target exception (bIsAttackTargetsException; M22's attacks on it are scripted near misses). Fix (Lua
   0.38.0, untested): cleared on Survival's copy. Same test: liftoff paid, RE_SV_ShuttleRemove fired 182 s after it.
-- [ ] (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
+- [x] (superseded by the built Comona Defense above) (original plan) Comona Defense (shuttle launch, SPECIAL_ROUNDS.md 12a): Mission 22 already is an in-game "defend the shuttle
   launch" mission and Survival's WD / EP are its copies, so the shuttle, its launch path, VFX descs and NPC row
   (sstb_common) are already in Survival's files, switched off. Build from Mission 22's shuttle chain, dress with
   Mission 19's pad VFX. Key callouts only (countdown, pad under attack, liftoff); no allies. Fail = shuttle lost ->
@@ -451,7 +451,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   hit (config/coast_rings2.txt) to find the open water. Next: LCAC units (port M13 E_Unit02_02_Ship0 descs, NPC rows
   lcac_common), lanes fleet -> beaches, landing -> troops, the round's rules.
   Failure (user, 2026-10-23): the airfield is captured for 2 rounds (SURVIVAL_SPEC.md section 7).
-- [ ] (original) Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
+- [x] (superseded by the built amphibious assault above) (original) Amphibious assault (SPECIAL_ROUNDS.md 12b): enemy fleet offshore launching LCAC waves at Comona's beaches
   (Mission 13's enemy LCAC pattern; Mission 9's are allies on another map); new paths to Comona's shoreline.
 - [~] The Anomaly BUILT 2026-10-22, TESTED (inversion, portal, kill confirmed; Lua 0.36.4, runtime 0.14.1). User's spec: MINDRIPPER in an F-4E
   (OP1003_f04e_Named skin, Survival name key), own HUD warning, mission-update beep at its start, the shuttle's focus
@@ -473,7 +473,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   lightning systems switched off after their time and at the kill; shuttle camera, ~20 km out (spawn_km optional).
   Ctrl+F11 = Anomaly next round (testing). Open: true orbit of the guards if the area leash isn't enough.
   Test: [rounds] start_round = 10; "special: anomaly" lines; beep, WARNING, camera; inversion inside 3 km; kill.
-- [ ] (original) Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
+- [x] (superseded by the built Anomaly above) (original) Anomaly ace (boss, SPECIAL_ROUNDS.md 13): floating ace with 5 orbiting guards that attack when the player is
   within ~5 km; inside ~3 km the player's pitch and roll invert (HUD warning, radar noise, glasses effect) until it dies.
   Config: on/off, pitch / roll / both. Research first: where AC8 reads flight input (native flip).
 - [ ] Helios barrages on RANDOM rounds (HELIOS_VFX.md 3), targeting the player only, never the airfield. Offline only:
@@ -486,7 +486,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
   letterbox, name card, radio line.
 - [ ] (user 2026-10-21) Ace learns from your fights: log how the player kills aces (missile/gun/tail/SPW/altitude), save
   across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
-- [ ] End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
+- [x] (done: the leaderboard summary panel) End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
 - [ ] Nexus release in two editions (user, 2026-10-23: "when we finish this completely and everything works, before we
   fully release to NexusMods ... One is Online Mode (game can send files to the cloudflare server), Two is Offline Mode
   (None of the Code for sending the files remains)"). Do this last, once everything else is confirmed.
@@ -519,9 +519,9 @@ fastest specials; a Discord server exists, the bot application is still to be ma
 - [x] Pilot name (user, 2026-10-23: "Need a way for people to add their own name"; chose the Steam name): Lua 0.47.1 uses
   [leaderboard] pilot, else the Steam name (dlls/main.dll SV_SteamName: the loaded steam_api64.dll's flat API,
   SteamFriends_v017 -> GetPersonaName), filtered to the leaderboard's characters.
-- [ ] Set up the Discord application and the Worker (user), then leaderboard/submit.local, then a test run.
+- [x] (done 2026-10-23, confirmed) Set up the Discord application and the Worker (user), then leaderboard/submit.local, then a test run.
 
-- [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
+- [x] (superseded 2026-10-23: every run is submitted, no prompt) End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
   mod's own native runtime (NOT the Mod Launcher). Sends to a small relay (e.g. Cloudflare Worker) which sanity-checks and
   posts to a Discord #survival-runs channel and keeps a pinned top 10 per difficulty. Offline: queue and send next launch.
   Never contacts Bandai services.
