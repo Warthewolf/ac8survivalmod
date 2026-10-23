@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.52.2"
+local VERSION = "0.52.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -601,9 +601,13 @@ local CFG = {
         -- a tier's squadron airframes (its ace rows, lead and wing) flying beyond stock (user, 2026-10-23: "the Reaper
         -- Squadron was so easy to handle, make them 10x more aggressive ... they still had issues getting behind me";
         -- their behaviours already weigh everything at rank 5 / AI level 5): turn rates + turn_add (pitch / roll / yaw,
-        -- as MINDRIPPER's 120 / 270 / 25), top and cornering speed x speed_x, cruise x cruise_x
+        -- as MINDRIPPER's 120 / 270 / 25), top and cornering speed x speed_x, cruise x cruise_x, health + health_add;
+        -- post_stall: cobra and kulbit on, whatever the airframe's blueprint says (Grim's Su-57 had both off);
+        -- hunt: its target kept on you (the AI's blackboard TargetActor, every 2 s: Grim's stayed on the airfield's
+        -- target dummy for the whole of the test of 2026-10-23 while its wingman went for the player)
         flight = {
-            reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15 },
+            reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
+                       health_add = 600, post_stall = true, hunt = true },
         },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
@@ -1921,6 +1925,7 @@ local function searchSetup()
                             r.PitchSpeedDifference = (r.PitchSpeedDifference or 0) + fl.turn_add.pitch
                             r.RollSpeedDifference = (r.RollSpeedDifference or 0) + fl.turn_add.roll
                             r.YawSpeedDifference = (r.YawSpeedDifference or 0) + fl.turn_add.yaw
+                            if fl.health_add then r.MaxHealthDifference = (r.MaxHealthDifference or 0) + fl.health_add end
                             for f, x in pairs({ SpeedMaxCoefficient = fl.speed_x, SpeedTurnCoefficient = fl.speed_x,
                                                 SpeedNormalCoefficient = fl.cruise_x }) do
                                 local v = r[f]
@@ -1928,8 +1933,8 @@ local function searchSetup()
                             end
                         end)
                         if level == 0 then
-                            log(string.format("aces: %s flies harder: turn +%d/+%d/+%d, speed x%.2f, cruise x%.2f%s", svNpc,
-                                fl.turn_add.pitch, fl.turn_add.roll, fl.turn_add.yaw, fl.speed_x, fl.cruise_x,
+                            log(string.format("aces: %s flies harder: turn +%d/+%d/+%d, speed x%.2f, cruise x%.2f, %+d HP%s", svNpc,
+                                fl.turn_add.pitch, fl.turn_add.roll, fl.turn_add.yaw, fl.speed_x, fl.cruise_x, fl.health_add or 0,
                                 okF and "" or ("; NOT applied: " .. tostring(errF))))
                         end
                     end
@@ -2117,6 +2122,8 @@ function enemyManeuvers(p, round)
     for _, m in ipairs(CFG.maneuvers.post_stall) do if m == model then allow = true end end
     if p.tier and not p.tier.post_stall then allow = false end
     local all = spikeCfg(spikeLevel(round)).post_stall_all      -- a difficulty spike: every airframe
+    local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
+    if fl and fl.post_stall then all = true end                    -- (a top tier: on, whatever its blueprint)
     local function read()
         local okC, c = pcall(function() return p.obj.bCanManeuverPugachevsCobra end)
         local okK, k = pcall(function() return p.obj.bCanManeuverKulbit end)
@@ -2175,6 +2182,23 @@ local function aiWatch(p, you)
     local air = p.at and math.sqrt((p.at.X - AIRFIELD.X) ^ 2 + (p.at.Y - AIRFIELD.Y) ^ 2) / 100000
     log(string.format("ai: %s (%s) %s, target %s; %s km from you, %s km from the airfield", p.name, tostring(p.unit or "?"),
         st, tgt, (p.at and you) and string.format("%.1f", km(p.at, you)) or "?", air and string.format("%.1f", air) or "?"))
+end
+
+-- CFG.aces.flight <tier>.hunt: that tier's aircraft keep the player as their target (blackboard TargetActor)
+function ACE.hunt(p)
+    local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
+    if not (fl and fl.hunt) then return end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return end
+    local bb = p.obj.AIStateComponent.BlackboardComponent
+    local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
+    if okT and valid(t) and nameOf(t) == nameOf(pawn) then return end
+    local ok = pcall(function() bb:SetValueAsObject(FName("TargetActor"), pawn) end)
+    p.huntN = (p.huntN or 0) + 1
+    if p.huntN == 1 or p.huntN % 30 == 0 then
+        log(string.format("aces: %s back onto you (was %s)%s, %d times", p.name, okT and valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none",
+            ok and "" or " (write failed)", p.huntN))
+    end
 end
 
 local function probeKill(p, you)
@@ -5891,7 +5915,7 @@ local function probeTick(tick)
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
                 if not own then pcall(enemySpike, p, D and D.round, tierFor) end
-                pcall(probeTrack, p); pcall(aiWatch, p, you or nil)
+                pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
                 p.dist = (p.at and you) and km(p.at, you) or nil
             else
                 p.down = true
