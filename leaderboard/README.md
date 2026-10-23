@@ -10,7 +10,7 @@ A Cloudflare Worker that takes finished Survival runs from the game and puts the
 Players appear under their Steam name (the mod reads it from the game's Steam), or under the `pilot` name they set in
 `survival.ini`'s `[leaderboard]` section. The game asks "Submit run?" at the end of a run and sends it here over HTTPS (Survival's own runtime; it never talks to
 Bandai Namco's services). The Worker works the score out itself, checks the numbers are possible, refuses duplicates
-and limits each sender to 6 runs an hour.
+and limits each sender (IP) to 30 runs an hour.
 
 **Score** = 1000 a round reached + 100 an aircraft + 50 a ground or sea target + 3000 a special round beaten,
 x 0.75 Casual / 1.0 Standard / 1.5 Ace.

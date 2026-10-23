@@ -19,3 +19,7 @@ leaderboard/node_modules/
 leaderboard/.wrangler/
 leaderboard/*.secret
 leaderboard/submit.local
+
+# written by the game into the mod folder (the leaderboard queue, the anonymous pilot name)
+mod/UE4SS/AC8SurvivalMode/config/pending_runs.txt
+mod/UE4SS/AC8SurvivalMode/config/pilot_id.txt

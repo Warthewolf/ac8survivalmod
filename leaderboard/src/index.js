@@ -23,7 +23,7 @@ const AIRCRAFT = { a10c: "A-10C Thunderbolt II", f02a: "F-2A", f04e: "F-4E Phant
   su35: "Su-35S Flanker-E", m31b: "MiG-31B Foxhound", su33: "Su-33 Flanker-D", e06b: "EA-6B Prowler",
   f18e: "F/A-18E Super Hornet", f14a: "F-14A Tomcat", adfx: "ADFX-02" };
 const jet = (code) => (code ? AIRCRAFT[code] || code.toUpperCase() : null);
-const RATE_PER_HOUR = 6;                                            // runs one sender may submit in an hour
+const RATE_PER_HOUR = 30;                     // runs one IP may submit in an hour (every ended run is sent, restarts too)
 const API = "https://discord.com/api/v10";
 
 // The score, worked out here from the run (the game shows the same number; Scripts/main.lua runScore):
@@ -123,35 +123,43 @@ function runEmbed(run, sc) {
 }
 
 // The boards, as embeds: highest round and score per difficulty (best run per pilot), fastest beaten specials.
+// Pilots are grouped ignoring case (as /pilot finds them); every query goes to D1 in one batch.
 async function boardEmbeds(env, onlyBoard, onlyDiff) {
   await ensureAircraft(env);
-  const out = [];
   const diffs = onlyDiff ? [onlyDiff] : DIFFICULTIES;
-  for (const [board, col, title] of [["round", "round", "Highest round"], ["score", "score", "Score"]]) {
-    if (onlyBoard && onlyBoard !== board) continue;
-    const fields = [];
-    for (const d of diffs) {
+  const boards = [["round", "round", "Highest round"], ["score", "score", "Score"]]
+    .filter(([board]) => !onlyBoard || onlyBoard === board);
+  const kinds = !onlyBoard || onlyBoard === "specials" ? Object.entries(SPECIALS) : [];
+  const stmts = [];
+  for (const [, col] of boards)
+    for (const d of diffs)
       // (one aggregate: SQLite takes the other columns, the aircraft too, from each pilot's best run)
-      const { results } = await env.DB.prepare(
-        `SELECT pilot, MAX(${col}) AS best, aircraft FROM runs WHERE difficulty = ? GROUP BY pilot ORDER BY best DESC LIMIT 10`)
-        .bind(d).all();
-      fields.push({ name: DIFF_NAME[d], value: results.length
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, aircraft FROM runs WHERE difficulty = ?
+         GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 10`).bind(d));
+  for (const [kind] of kinds)
+    stmts.push(env.DB.prepare(`SELECT pilot, MIN(seconds) AS best, difficulty FROM specials WHERE kind = ? AND won = 1
+       ${onlyDiff ? "AND difficulty = ?" : ""} GROUP BY pilot COLLATE NOCASE ORDER BY best ASC LIMIT 5`)
+      .bind(...(onlyDiff ? [kind, onlyDiff] : [kind])));
+  const answers = stmts.length ? await env.DB.batch(stmts) : [];
+  let n = 0;
+  const out = [];
+  for (const [board, , title] of boards) {
+    const fields = diffs.map((d) => {
+      const results = answers[n++].results;
+      return { name: DIFF_NAME[d], value: results.length
         ? results.map((r, i) => `${i + 1}. **${r.pilot}** — ${board === "round" ? `round ${r.best}` : num(r.best)}` +
                                 (r.aircraft ? ` (${jet(r.aircraft)})` : "")).join("\n")
-        : "no runs yet", inline: true });
-    }
+        : "no runs yet", inline: true };
+    });
     out.push({ title: `${title} — top 10`, color: 0xd4ac0d, fields });
   }
-  if (!onlyBoard || onlyBoard === "specials") {
-    const fields = [];
-    for (const [kind, name] of Object.entries(SPECIALS)) {
-      const { results } = await env.DB.prepare(
-        `SELECT pilot, MIN(seconds) AS best, difficulty FROM specials WHERE kind = ? AND won = 1 ${onlyDiff ? "AND difficulty = ?" : ""}
-         GROUP BY pilot ORDER BY best ASC LIMIT 5`).bind(...(onlyDiff ? [kind, onlyDiff] : [kind])).all();
-      fields.push({ name, value: results.length
+  if (kinds.length) {
+    const fields = kinds.map(([, name]) => {
+      const results = answers[n++].results;
+      return { name, value: results.length
         ? results.map((r, i) => `${i + 1}. **${r.pilot}** — ${fmtTime(r.best)} (${DIFF_NAME[r.difficulty]})`).join("\n")
-        : "not beaten yet", inline: true });
-    }
+        : "not beaten yet", inline: true };
+    });
     out.push({ title: "Fastest specials — top 5", color: 0x8e44ad, fields });
   }
   return out;
@@ -292,4 +300,4 @@ export default {
   },
 };
 
-export { score, checkRun };      // (for tests)
+export { score, checkRun, boardEmbeds };      // (for tests)

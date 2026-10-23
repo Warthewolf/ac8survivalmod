@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.48.3"
+local VERSION = "0.48.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -28,10 +28,13 @@ local TABLES = {
 
 -- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
 -- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
+-- main.lua's folder (Scripts\): the mod's files are found from it (..\config\, ..\AC8SurvivalMode_lua.log, ai\)
+local SCRIPT_DIR = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
+
 local log
 do
     local LOG_FILE = nil
-    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\"
+    local dir = SCRIPT_DIR .. "..\\"
     local ok, f = pcall(io.open, dir .. "AC8SurvivalMode_lua.log", "w")
     if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
     function log(s)
@@ -372,7 +375,7 @@ local AMPH = {}
 -- The Ladons and later specials (section "ladon"): their functions; their state is in D.special.
 local SPC = {}
 -- The leaderboard (section "leaderboard"): the run's stats (RUN.stats), its end, the prompt and sending.
-local LB = { queue = {}, show = nil }
+local LB = { queue = {}, jobs = {}, show = nil }
 -- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
 local ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
@@ -1205,7 +1208,7 @@ local function mergeDefaults(dir)
 end
 
 local function loadIni()
-    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\"
+    local dir = SCRIPT_DIR .. "..\\config\\"
     pcall(mergeDefaults, dir)
     local f = io.open(dir .. "survival.ini", "r")
     if f then
@@ -1385,10 +1388,8 @@ local function withLevel(base, over)                    -- a copy of `base` with
     return t
 end
 
-local function scriptDir() return debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "" end
-
 local function readScript(file)
-    local f = io.open(scriptDir() .. "ai\\" .. file, "r")
+    local f = io.open(SCRIPT_DIR .. "ai\\" .. file, "r")
     if not f then return nil, "Scripts\\ai\\" .. file .. " not found" end
     local code = f:read("a"); f:close()
     return code
@@ -2583,7 +2584,7 @@ local function hudDump(why)
         walk(w, 0)
     end
     if #roots == 0 then out[#out + 1] = "no HUD widgets found (classes: " .. table.concat(DUMP_ROOTS, ", ") .. ")" end
-    local dir = (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\"
+    local dir = SCRIPT_DIR .. "..\\"
     local f = io.open(dir .. "hud_dump.txt", "w")
     if f then
         f:write(table.concat(out, "\n"), "\n"); f:close()
@@ -3590,7 +3591,8 @@ end
 
 ---------------------------------------------------------------------------------------------------- leaderboard
 -- CFG.leaderboard; leaderboard/src/index.js is the other end (same score, same checks). RUN.stats: { started, air,
--- ground, specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen, waiting for Y / N.
+-- ground, specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen. LB.queue: the runs not yet
+-- answered for good (pending_runs.txt); LB.jobs: the sends in flight.
 do
 local function stats()
     RUN.stats = RUN.stats or { started = os.time(), air = 0, ground = 0, specials = {} }
@@ -3600,7 +3602,7 @@ function LB.stat(what, n) if D then local st = stats(); st[what] = st[what] + (n
 function LB.special(kind, won, seconds)
     if not D then return end
     local sp = stats().specials
-    if #sp < 200 then sp[#sp + 1] = { kind = kind, round = D.round, seconds = math.max(5, math.floor(seconds + 0.5)), won = won } end
+    if #sp < 200 then sp[#sp + 1] = { kind = kind, round = D.round, seconds = math.min(3600, math.max(5, math.floor(seconds + 0.5))), won = won } end
 end
 
 -- leaderboard/src/index.js score(): 1000 a round, 100 an aircraft, 50 a ground target, 3000 a special beaten, x the difficulty
@@ -3624,8 +3626,9 @@ local function json(r)
         (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "")
 end
 
-local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
+local function configDir() return SCRIPT_DIR .. "..\\config\\" end
 local function saveQueue()
+    while #LB.queue > 50 do table.remove(LB.queue, 1) end
     local f = io.open(configDir() .. "pending_runs.txt", "w")
     if not f then return end
     for _, body in ipairs(LB.queue) do f:write(body, "\n") end
@@ -3671,7 +3674,12 @@ function LB.deathCheck(pc)
         if code then st.jet = code:lower():sub(1, 12); log("leaderboard: flying the " .. st.jet) end
     end
     local ok, h = pcall(function() return pc.Pawn.HealthInternal end)
-    if ok and type(h) == "number" and h <= 0 then LB.finish("died") end
+    if not ok or type(h) ~= "number" then return end
+    if h > 0 then st.flying, st.downs = true, 0                  -- (a pawn reads 0 while it's spawned: not a death)
+    elseif st.flying then
+        st.downs = (st.downs or 0) + 1
+        if st.downs >= 2 then LB.finish("died") end
+    end
 end
 
 -- The run's over (died / restart / left): its record, and the prompt (or straight off with submit = "always").
@@ -3697,42 +3705,60 @@ function LB.finish(how)
     LB.send(LB.show)
 end
 
+-- A run goes into pending_runs.txt before it's sent and comes off once the server has answered for good (taken or
+-- refused), so a run the game closes on, or one that can't get through, is sent later (LB.queueTick).
+local function unqueue(body)
+    for i, b in ipairs(LB.queue) do if b == body then table.remove(LB.queue, i); saveQueue(); return end end
+end
+local function post(body, sh)
+    local id = type(SV_Post) == "function" and SV_Post(body) or -5
+    if id > 0 then LB.jobs[#LB.jobs + 1] = { id = id, body = body, sh = sh } end
+    return id
+end
+
 function LB.send(sh)
     local body = json(sh.run)
-    local id = type(SV_Post) == "function" and SV_Post(body) or -5
+    LB.queue[#LB.queue + 1] = body; saveQueue()
+    local id = post(body, sh)
     if id > 0 then
-        sh.state, sh.job, sh.body = "sending", id, body
+        sh.state = "sending"
         log("leaderboard: sending the run (job " .. id .. ")")
     else
-        LB.queue[#LB.queue + 1] = body; saveQueue()
         sh.state = "queued"
         log("leaderboard: not sent now (" .. tostring(id == -8 and "this build has no leaderboard address" or id) .. "); kept for later")
     end
 end
 
--- Each HUD pass: the summary's texts, the job's answer, and closing it.
-function LB.hud(now)
-    local sh = LB.show
-    if sh and sh.job then
-        local st = SV_PostResult(sh.job)
+local WHY = { [-12007] = "the server's name didn't resolve (DNS, or the address is blocked)",
+              [-12029] = "couldn't connect (a firewall, or the address is blocked)",
+              [-12002] = "timed out", [-12175] = "the secure connection failed (TLS)",
+              [-12038] = "the certificate's name didn't match (a proxy in the way?)" }
+
+-- Once a second, at the main menu and in runs: the sends' answers (reading a job's result frees its native slot).
+function LB.poll()
+    for i = #LB.jobs, 1, -1 do
+        local j = LB.jobs[i]
+        local st = SV_PostResult(j.id)
         if st ~= 0 then
-            local reply = SV_PostReply(sh.job) or ""
-            sh.job = nil
-            if st == 200 then
-                sh.state, sh.score = "sent", reply:match('"score":(%d+)')
-            elseif st < 0 or st >= 500 or st == 429 then
-                LB.queue[#LB.queue + 1] = sh.body; saveQueue()
-                sh.state = "queued"
-            else
-                sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st)
+            table.remove(LB.jobs, i)
+            local reply = SV_PostReply(j.id) or ""
+            local final = st > 0 and st < 500 and st ~= 429
+            if final then unqueue(j.body) else LB.qwait = os.clock() + (st == 429 and 600 or 120) end
+            local sh = j.sh
+            if sh then
+                if st == 200 then sh.state, sh.score = "sent", reply:match('"score":(%d+)')
+                elseif not final then sh.state = "queued"
+                else sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st) end
             end
-            local why = ({ [-12007] = "the server's name didn't resolve (DNS, or the address is blocked)",
-                           [-12029] = "couldn't connect (a firewall, or the address is blocked)",
-                           [-12002] = "timed out", [-12175] = "the secure connection failed (TLS)",
-                           [-12038] = "the certificate's name didn't match (a proxy in the way?)" })[st]
-            log(string.format("leaderboard: the server answered %d%s: %s", st, why and (" (" .. why .. ")") or "", reply:sub(1, 200)))
+            log(string.format("leaderboard: %s: the server answered %d%s: %s", sh and "the run" or "a waiting run", st,
+                WHY[st] and (" (" .. WHY[st] .. ")") or "", reply:sub(1, 200)))
         end
     end
+end
+
+-- Each HUD pass: the summary's texts, and closing it.
+function LB.hud(now)
+    local sh = LB.show
     if sh and not sh.at and H and H.lbTitle and H.shown then sh.at = os.clock() end
     if sh and sh.at and sh.state ~= "sending" and os.clock() - sh.at > (CFG.leaderboard.show_s or 15) then
         LB.show, sh = nil, nil
@@ -3765,7 +3791,7 @@ function LB.hud(now)
     end
 end
 
--- The runs that didn't get through: read at the start, sent one at a time (at the main menu or in a run).
+-- The runs not yet answered for good: read at the start, sent one at a time (at the main menu or in a run).
 function LB.queueTick()
     if not LB.loaded then
         LB.loaded = true
@@ -3776,19 +3802,9 @@ function LB.queueTick()
             if #LB.queue > 0 then log("leaderboard: " .. #LB.queue .. " run(s) waiting to be sent") end
         end
     end
-    if #LB.queue == 0 or type(SV_Post) ~= "function" or (LB.show and LB.show.job) then return end
-    if LB.qjob then
-        local st = SV_PostResult(LB.qjob)
-        if st == 0 then return end
-        log(string.format("leaderboard: waiting run sent: %d %s", st, SV_PostReply(LB.qjob) or ""))
-        LB.qjob = nil
-        if st > 0 and st < 500 and st ~= 429 then table.remove(LB.queue, 1); saveQueue()     -- (accepted or refused for good)
-        else LB.qwait = os.clock() + 120 end                                                -- (no connection: later)
-        return
-    end
-    if os.clock() < (LB.qwait or 0) then return end
-    local id = SV_Post(LB.queue[1])
-    if id > 0 then LB.qjob = id elseif id == -8 then LB.qwait = math.huge end
+    -- one at a time, none while a send is in flight (the run just ended is in the queue too)
+    if #LB.queue == 0 or #LB.jobs > 0 or type(SV_Post) ~= "function" or os.clock() < (LB.qwait or 0) then return end
+    if post(LB.queue[1], nil) == -8 then LB.qwait = math.huge end
 end
 end
 
@@ -5666,6 +5682,7 @@ LoopAsync(250, function()
             end
         end
         if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
+        if tick % 4 == 1 then pcall(LB.poll) end                         -- the leaderboard sends' answers
         if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
         queued = false
     end)

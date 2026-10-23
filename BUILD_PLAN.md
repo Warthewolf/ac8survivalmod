@@ -492,7 +492,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
 User's choices (2026-10-23): end-of-run prompt; Cloudflare Worker; boards for highest round, score, per difficulty and
 fastest specials; a Discord server exists, the bot application is still to be made (leaderboard/README.md walks it).
 - [x] leaderboard/: the Worker (src/index.js: /submit with HMAC signature, plausibility checks, server-side score,
-  dedupe, 6 runs / hour per sender; posts to #survival-runs, keeps a pinned board message; /leaderboard and /pilot
+  dedupe, 30 runs / hour per sender (6 until 0.48.4: every ended run is sent now); posts to #survival-runs, keeps a pinned board message; /leaderboard and /pilot
   slash commands; /setup registers them), schema.sql (D1), wrangler.toml, README.md (setup), test/worker.test.mjs
   (node:sqlite stand-in for D1, Discord stubbed: 13 checks pass).
 - [x] Game, Lua 0.47.0 (untested): RUN.stats (air / ground kills, specials with time and result); the run's end (shot
