@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.52.1"
+local VERSION = "0.52.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -598,6 +598,13 @@ local CFG = {
         phantom   = { squadron = "Wraith",   su57 = "Specter",  typhoon = "Revenant", su47 = "Banshee" },
         reaper    = { squadron = "Harvest",  su57 = "Grim",     f22a = "Scythe",   typhoon = "Charon", rafale = "Nightfall",
                       adfx02 = "Oblivion" },
+        -- a tier's squadron airframes (its ace rows, lead and wing) flying beyond stock (user, 2026-10-23: "the Reaper
+        -- Squadron was so easy to handle, make them 10x more aggressive ... they still had issues getting behind me";
+        -- their behaviours already weigh everything at rank 5 / AI level 5): turn rates + turn_add (pitch / roll / yaw,
+        -- as MINDRIPPER's 120 / 270 / 25), top and cornering speed x speed_x, cruise x cruise_x
+        flight = {
+            reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15 },
+        },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
@@ -649,7 +656,8 @@ local CFG = {
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
     -- airframes; those keep their blueprint's own, e.g. su33 cobra but no kulbit), so early fighters never post-stall.
     maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a",
-                                                 "f04e" } },          -- (f04e: only the Anomaly's flies one)
+                                                 "f04e",              -- (f04e: only the Anomaly's flies one)
+                                                 "adfx02", "typn", "rflm" } },   -- (the Reaper squadron's, 2026-10-23)
     -- Airfield and bombers (Milestone 3; tools/survival_events.py AIRFIELD_* / BOMBERS, tools/re/AIRFIELD_SUPPLY.md).
     -- The airfield starts at `hp`; every enemy weapon that reaches one of its 4 target points (the event package
     -- counts them in SV_AirHits) takes hit_damage. At 0 it is down: landing closes (no rearming) until the end of the
@@ -1904,6 +1912,25 @@ local function searchSetup()
                                 an.health_add, an.turn_add.pitch, an.turn_add.roll, an.turn_add.yaw,
                                 an.hover and string.format("hovers (speed x%.2f)", an.hover_speed) or "flies",
                                 okE and "" or ("; NOT applied: " .. tostring(errE))))
+                        end
+                    end
+                    local ft = a:match("^sv_ace_(%a+)_")                    -- a tier's squadron: CFG.aces.flight
+                    local fl = ft and CFG.aces.flight and CFG.aces.flight[ft]
+                    if fl then
+                        local okF, errF = pcall(function()
+                            r.PitchSpeedDifference = (r.PitchSpeedDifference or 0) + fl.turn_add.pitch
+                            r.RollSpeedDifference = (r.RollSpeedDifference or 0) + fl.turn_add.roll
+                            r.YawSpeedDifference = (r.YawSpeedDifference or 0) + fl.turn_add.yaw
+                            for f, x in pairs({ SpeedMaxCoefficient = fl.speed_x, SpeedTurnCoefficient = fl.speed_x,
+                                                SpeedNormalCoefficient = fl.cruise_x }) do
+                                local v = r[f]
+                                r[f] = ((type(v) == "number" and v > 0) and v or 1.0) * x
+                            end
+                        end)
+                        if level == 0 then
+                            log(string.format("aces: %s flies harder: turn +%d/+%d/+%d, speed x%.2f, cruise x%.2f%s", svNpc,
+                                fl.turn_add.pitch, fl.turn_add.roll, fl.turn_add.yaw, fl.speed_x, fl.cruise_x,
+                                okF and "" or ("; NOT applied: " .. tostring(errF))))
                         end
                     end
                     local mind = a == ACE.row("anomaly", "f04e", "l")       -- MINDRIPPER: its own, every level
