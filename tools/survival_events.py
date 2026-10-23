@@ -328,6 +328,9 @@ GLITCH_ECM_SLOT = 'WN_WEAPON_4'
 # each RE_SV_GlitchGun fires the gun GLITCH_GUN_SHOTS times GLITCH_GUN_EVERY_S apart (user, 2026-10-23: "make it fire at
 # 0.1"; Lua's tick is 250 ms, so the repeat is the record's: delay + loop, as the bombers' runs); main.lua fires the
 # event every GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S (CFG.specials.glitch.gun_every_s: keep in step)
+# its post-stalls, RE_SV_Glitch<name> -> the stock unique action (Mission 28's Shadows', Mission 19's Toprak's kulbit,
+# Mission 2's Tasha's cobra); main.lua CFG.specials.glitch.post_stall_moves names the same <name>s
+GLITCH_POST_STALL = (('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
 GLITCH_GUN_EVERY_S = 0.1
 GLITCH_GUN_SHOTS = 5
 GLITCH_BLINK_STEP_DEG = 30
@@ -1069,6 +1072,17 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     g.execute(t_fire, 'RE_SV_GlitchGun', {0: GLITCH_GUN_SLOT, 1: GLITCH_OBJ}, delay=GLITCH_GUN_EVERY_S, loop=GLITCH_GUN_SHOTS)
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchEcm')
     g.execute(t_fire, 'RE_SV_GlitchEcm', {0: GLITCH_ECM_SLOT, 1: GLITCH_OBJ})
+    # its post-stalls on command (user, 2026-10-24: "make the EA-18G do post stalls even more"): the campaign's own
+    # unique actions (tools/re/UNIQUE_ACTIONS.md 9), OneShot (they end by themselves), Below_Return (above evading and
+    # pursuit), as build_ace_moves; Scripts/main.lua ANOM.glitchTick picks one (CFG.specials.glitch.post_stall_*)
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
+    for name, action in GLITCH_POST_STALL:
+        ev = f'RE_SV_Glitch{name}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_req, ev, {0: 'NoneSelect', 1: GLITCH_UNIT, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return',
+                              6: 'NoneSelect', 7: 'false'})
     # its death: MINDRIPPER's (user, 2026-10-23: "add the same death scream MINDRIPPER has on its kill"), the Celaeno's
     # body explosion and core collapse (ANOMALY_DOWN_SOUNDS) on its wreck
     t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))

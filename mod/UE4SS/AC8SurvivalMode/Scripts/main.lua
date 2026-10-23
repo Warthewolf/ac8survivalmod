@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.61.0"
+local VERSION = "0.62.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -976,8 +976,19 @@ local CFG = {
                      blinks = { step_deg = 30, rings_m = { 500, 800 } },
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
                      -- it leads you as MINDRIPPER does (user, 2026-10-24): gun_lead_s ahead; 0.8 s suits its blinks
-                     -- 500 / 800 m from you (its rounds fly 833 m/s)
-                     gun_lead_s = 0.8,
+                     -- 500 / 800 m from you (its rounds fly 833 m/s). Its own fire control leads by its row; in a frenzy
+                     -- (user: "go through the mission event the EA-18G uses and see if you can find gun lead for it": the
+                     -- event's LiveFireOneShotWeapon only aims at the target) Lua also fires it each tick gun_lead_shots
+                     -- times with LiveAIGameObject.FireOneShotWeaponWithLocationTracking at where you'll be gun_lead_s on
+                     -- (your velocity); gun_lead_event: the event's unled shots go on as well (false: only the led ones)
+                     gun_lead_s = 0.8, gun_lead_shots = 2, gun_lead_event = true,
+                     -- post-stalls on command (user, 2026-10-24: "make the EA-18G do post stalls even more"): outside
+                     -- a frenzy, within post_stall_range_km of you, one of post_stall_moves (tools/survival_events.py
+                     -- GLITCH_POST_STALL: Shadow / Toprak kulbits, Tasha's cobra) every post_stall_every_s, and as soon
+                     -- as you get behind it (more than 110 deg off its nose within post_stall_behind_km), at least
+                     -- post_stall_gap_s apart; its own cobra / kulbit are on whatever the round
+                     post_stall = true, post_stall_every_s = 6, post_stall_gap_s = 3, post_stall_range_km = 3,
+                     post_stall_behind_km = 1.5, post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
                      -- the dead flying (user: "look spooky like its the dead flying"): its airframe in the wreck's
                      -- burnt material, no pilot or stores, the damaged-plane smoke and fire on it
                      dead_look = true, dead_fx_scale = 1.0,
@@ -3616,6 +3627,29 @@ function ANOM.glitchTick(now, s)
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchEcm") or -5
         if r ~= 1 and not s.ecmSaid then s.ecmSaid = true; log("special: RE_SV_GlitchEcm not fired: " .. (SV_ERR[r] or tostring(r))) end
     end
+    if c.post_stall and not s.frenzyUntil and at and you and s.dist and s.dist <= c.post_stall_range_km then
+        if not s.psOn then                              -- its own cobra / kulbit too, whatever the round's spike
+            s.psOn = true
+            pcall(function() o.bCanManeuverPugachevsCobra = true; o.bCanManeuverKulbit = true end)
+        end
+        local behind = false                            -- you more than 110 deg off its nose, close
+        if s.dist <= c.post_stall_behind_km then
+            local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+            local tx, ty, tz = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+            local n = math.sqrt(tx * tx + ty * ty + tz * tz)
+            behind = okF and n > 0 and (f.X * tx + f.Y * ty + f.Z * tz) / n < math.cos(math.rad(110)) or false
+        end
+        local moves = c.post_stall_moves or {}
+        if #moves > 0 and type(SV_Event) == "function" and (now >= (s.psAt or 0) or (behind and now >= (s.psGapAt or 0))) then
+            local mv = moves[math.random(#moves)]
+            local r = SV_Event("RE_SV_Glitch" .. mv)
+            s.psAt, s.psGapAt, s.psN = now + c.post_stall_every_s, now + c.post_stall_gap_s, (s.psN or 0) + 1
+            if s.psN <= 5 or s.psN % 10 == 0 then
+                log(string.format("special: %s post-stall %d: %s (%s), %.1f km from you%s", c.name, s.psN, mv, tostring(r),
+                    s.dist, behind and ", you behind it" or ""))
+            end
+        end
+    end
     if not s.frenzyUntil then return end
     if s.check and at and you then                      -- the last blink, a tick on: where it really is
         local k, to = s.check.n, s.check.to
@@ -3658,8 +3692,32 @@ function ANOM.glitchTick(now, s)
         setGone(o, true)
         s.vanished = true
     end
-    if s.frenzyUntil and not s.vanished and now >= (s.gunAt or 0) then   -- its gun at the player all through the frenzy
-        s.gunAt = now + c.gun_every_s
+    local led = false                                   -- its gun at where you'll be, every tick of the frenzy
+    if s.frenzyUntil and not s.vanished and you and (c.gun_lead_s or 0) > 0 and not s.leadFail then
+        local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+        local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        if okV and v then
+            local L = c.gun_lead_s
+            local aim = { X = you.X + v.X * L, Y = you.Y + v.Y * L, Z = you.Z + v.Z * L }
+            led = true
+            for _ = 1, c.gun_lead_shots or 1 do         -- (WN_WEAPON_2 = ELiveWeaponNumber 1: its gun)
+                local ok, err = pcall(function() o:FireOneShotWeaponWithLocationTracking(1, aim, true, false) end)
+                if not ok then
+                    s.leadFail, led = true, false
+                    log("special: " .. c.name .. "'s led gun failed (the event's shots only): " .. tostring(err))
+                    break
+                end
+            end
+            if led and not s.leadSaid then
+                s.leadSaid = true
+                log(string.format("special: %s's frenzy gun leads you %.1f s (%.0f m ahead), %d shots a tick%s", c.name, L,
+                    math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) * L / 100, c.gun_lead_shots or 1,
+                    c.gun_lead_event and ", the event's too" or ""))
+            end
+        end
+    end
+    if s.frenzyUntil and not s.vanished and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
+        s.gunAt = now + c.gun_every_s                   -- (the event: 5 shots 0.1 s apart, at you)
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
         s.shots = (s.shots or 0) + 1
         if r ~= 1 and not s.gunSaid then s.gunSaid = true; log("special: RE_SV_GlitchGun not fired: " .. (SV_ERR[r] or tostring(r))) end
