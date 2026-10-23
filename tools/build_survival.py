@@ -418,6 +418,82 @@ def make_path(z, used_ids, template, name, pts):
     return new
 
 
+M16 = '/Game/Maps/Ingame/Mission016/'
+
+
+def import_from(z, zs, ref):
+    """Our import index for another package's import `ref` (('obj', -n) in `zs`): the same imported package and public
+    export hash, added to `z`'s import map (and its imported packages) when it isn't there yet. Hard rule 7: pack.py
+    puts the package into the container header from this list."""
+    assert ref[0] == 'obj' and ref[1] < 0, ref
+    x = zs.imports[-ref[1] - 1]
+    assert x >> 62 == 2, hex(x)                               # a package import
+    pkg = zs.imp_pkgs[(x >> 32) & 0x3fffffff]
+    h = zs.imp_hashes[x & 0xffffffff]
+    if pkg not in z.imp_pkgs:
+        z.ipn.add(pkg)
+        z.imp_pkg_nums.append(0)
+    k = z.imp_pkgs.index(pkg)
+    if h not in z.imp_hashes:
+        z.imp_hashes.append(h)
+    new = (2 << 62) | (k << 32) | z.imp_hashes.index(h)
+    if new not in z.imports:
+        z.imports.append(new)
+    return ('obj', -(z.imports.index(new) + 1))
+
+
+def retag_parts(children, owner, used_ids, z, zs):
+    """A ported aircraft's parts (ChildAIObjectDescs / GrandChildrens): named after their new owner (<owner>_<component>,
+    keeping the component's FName number), new UniqueIDs, our world data's name, and their classes imported from the
+    source package `zs`. Their mission rows stay the source mission's (NPC_IMPORT brings them)."""
+    n = 0
+    for ch in children:
+        d = {p[1]: p for p in ch[2]}
+        data = d['Data'][3][2]
+        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3]
+        data[:] = [(q[0], q[1], False, import_from(z, zs, q[3])) if q[1] == 'Class' and q[3] is not None else q for q in data]
+        name = (f'{owner}_{comp[1]}', comp[2])
+        assert not name[0].rpartition('_')[2].isdigit(), name                 # hard rule 17
+        uid = new_unique_id(used_ids, f'AC8SurvivalMode:{name[0]}:{name[1]}')
+        ch[2][:] = [(q[0], q[1], False, ('name',) + name) if q[1] == 'Name' else
+                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else
+                    (q[0], q[1], False, ('name', 'WD_SurvivalMode_global', 0)) if q[1] == 'WorldDataName' and q[3] is not None else q
+                    for q in ch[2]]
+        for nm in names_in(ch): z.nb.add(nm)
+        n += 1
+        grand = d.get('GrandChildrens')
+        if grand and grand[3]: n += retag_parts(grand[3][1], f'{owner}_{comp[1]}', used_ids, z, zs)
+    return n
+
+
+def ladon_units(units, used_ids, z, top_number, v):
+    """The Ladons (survival_events.LADON*): Mission 16's Ladon desc with its parts, once per Ladon, at the start of
+    its route, on its own mission row; its route and its circuit round the airfield."""
+    m16z = ZenPkg(stock(M16 + 'WD_Mission016_global'))
+    i = m16z.export_index('WD_Mission016_global')
+    m16, _ = props_of(m16z, i, 'LiveWorldData')
+    src = desc_named(m16, 'UnitDescList', survival_events.LADON_SOURCE_UNIT)
+    src_path = desc_named(m16, 'AIPathDescList', survival_events.LADON_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    import math
+    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    for L in survival_events.ladons():
+        (x0, y0, z0), (x1, y1, _) = L['route'][0], L['route'][1]
+        yaw = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        names = port_unit(units, used_ids, z, src, L['unit'], L['obj'], L['row'], [L['route'][0]], yaw, top_number)
+        assert names == [L['obj']], names
+        u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == L['unit']][0]
+        ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+        kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
+        parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
+        # its unit area over the whole zone (as the pool's: a 6-10 km area keeps an AI from what's outside it)
+        u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                         ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+        paths.append(make_path(z, used_ids, src_path, L['path'], L['route']))
+        paths.append(make_path(z, used_ids, src_path, L['loop'], L['circuit']))
+        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
+
+
 def lcac_units(units, used_ids, z, top_number, v):
     """The amphibious assault (survival_events.LCAC_*): per lane a unit of four landing craft (LCAC_CRAFT) at its start, each
     craft's path in and back out, and per craft a troop unit (one BTR-90) on the beach where it lands."""
@@ -586,6 +662,7 @@ def build_wd_global():
     split_units(units, used_ids, z, top_number)
     ally_units(units, used_ids, z, top_number, v)
     lcac_units(units, used_ids, z, top_number, v)
+    ladon_units(units, used_ids, z, top_number, v)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -1017,6 +1094,11 @@ def build_npc_rows():
         row = copy.deepcopy(rows[(f[1], f[2])])
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
         out.append(((npc, 0), row))
+    # the Ladons (survival_events.LADON*): the stock Ladon under each one's name key (main.lua: name, health, speed)
+    for L in survival_events.ladons():
+        row = copy.deepcopy(rows[(survival_events.LADON_NPC_SOURCE, 0)])
+        set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(L['name_key']))
+        out.append(((L['npc'], 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -1083,7 +1165,13 @@ NPC_ROWS = set()           # its row names, filled by build_npc_table
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
 NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
               # the amphibious assault's landing craft and troops (survival_events.LCAC_*), Mission 13's
-              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common'])]
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common']),
+              # the Ladons' parts (survival_events.LADON*: its own row is LADON_SOURCE_ROW's copy, ladon_rows)
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016',
+               ['OP0045_ladn_' + p for p in ('AirIntake_L', 'AirIntake_R', 'Engine_L', 'Engine_R', 'LCIWS_BL', 'LCIWS_BR',
+                                            'LCIWS_FL', 'LCIWS_FR', 'TailWing_L', 'TailWing_R', 'VariableWing_L',
+                                            'VariableWing_R', 'Wing_L', 'Wing_R', 'VLS_L', 'VLS_R')])]
+LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
@@ -1139,6 +1227,13 @@ def build_npc_table():
         ds, os_ = dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')
         assert os_ == len(zs.payloads[0])
         srows = dict(ds['rows'])
+        if table.endswith('DT_NPC_Mission016'):          # the Ladons' own rows: Mission 16's, on Survival's NPC rows
+            for L in survival_events.ladons():
+                row = copy.deepcopy(srows[(survival_events.LADON_SOURCE_ROW, 0)])
+                set_prop(row[2], npc_idx, 'NpcId', ('name', L['npc'], 0))
+                for n in names_in(row) + [L['row'], L['npc']]: z.nb.add(n)
+                dt['rows'].append(((L['row'], 0), row))
+                extra.append((L['row'], LADON_TABLE_NOTE, L['npc']))
         for r in wanted:
             assert (r, 0) not in rows, r
             row = copy.deepcopy(srows[(r, 0)])

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.44.1"
+local VERSION = "0.45.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -369,6 +369,8 @@ local ALLY = { unit = {} }
 local ANOM = { on = false }
 -- The amphibious assault (section "amphibious assault"): its functions; its run state is RUN.amph / RUN.captured.
 local AMPH = {}
+-- The Ladons and later specials (section "ladon"): their functions; their state is in D.special.
+local SPC = {}
 -- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
 local ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
@@ -811,11 +813,29 @@ local CFG = {
     -- it, lifts off countdown_s after it appears. The round's fighters come for the player; strike_share of its aircraft
     -- are strike flights (no heavies) sent at the shuttle. Launched: `reward` zollars. Lost: the shop is closed for the
     -- next shop_closed_rounds rounds. countdown_s is built into the event package (SHUTTLE_COUNTDOWN_S): keep it equal.
+    -- random (user, 2026-10-23: "after round 3, special rounds get randomised into the normal play, they can appear on
+    -- any round above 3, their difficulty increases along with the corresponding round"): from round `first` each
+    -- round is a special with `chance`, never two in a row (and not the same one twice running); the pick is made
+    -- once a round (RUN.specialPick), so its callout and the round agree. random = false: every `every` rounds, in
+    -- `rotation` order. A special's own enemies scale with its round as a normal round's do (budget, skill tier,
+    -- difficulty spikes); the Ladons, which fly alone, take ladon.bomb_per_round more bomb damage and health_per_round
+    -- more health a round after `first`.
     specials = {
         enabled  = true,
-        first    = 5,
+        random   = true,
+        chance   = 0.3,
+        first    = 4,
         every    = 5,
-        rotation = { "shuttle", "anomaly", "amphibious" },
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon" },
+        -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
+        -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
+        -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
+        -- 1200, speeds x speed_x (user: "the HP needs to be nerfed a bit and their speed needs a nerf slightly"; the
+        -- route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
+        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 0.85, bomb_damage = 20,
+                  bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
+                  reward = 3000, reward_per_round = 100,
+                  npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
         -- `lanes` (from the user's marks; `craft` craft each, side by side) cross to Comona's beaches by the airport,
         -- lanes_first of them the first time, lanes_more more each time after; each craft that reaches the beach puts a
@@ -1009,6 +1029,14 @@ local CFG = {
             anomaly_down      = "%s DOWN",
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
+            ladon_sub    = "LADONS INBOUND",
+            ladon_go     = "LADONS FROM THE WEST",
+            ladon_go_sub = "STOP %s AND %s BEFORE THEY REACH THE AIRFIELD",
+            ladon_row    = "LADONS LEFT: %d  BOMBING RUNS: %d",
+            ladon_run    = "%s: BOMBING RUN",
+            ladon_run_sub = "THE AIRFIELD IS HIT",
+            ladon_down   = "%s DOWN",
+            ladon_down_sub = "+%d ZOLLARS",
             amphib_sub   = "LANDING CRAFT INBOUND",
             amphib_go    = "AMPHIBIOUS ASSAULT",
             amphib_go_sub = "STOP THE LANDING CRAFT BEFORE THEY REACH THE BEACH",
@@ -2355,6 +2383,9 @@ local function hudTick(now, paused, pc)
         local hp = shuttleHealth()
         setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif D.special and D.special.kind == "ladon" and D.special.state == "run" then
+        setText(H.next, "nextStr", string.format(t.ladon_row, SPC.ladonsLeft(D.special), D.special.runs or 0))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then
         local craft, ashore = AMPH.counts()
         setText(H.next, "nextStr", string.format(t.amphib_row, craft, ashore, AMPH.capture()))
@@ -2650,6 +2681,22 @@ end
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 local function specialFor(round)
     local sp = CFG.specials
+    if sp.enabled and sp.random and #sp.rotation > 0 then
+        RUN.specialPick = RUN.specialPick or {}
+        local pick = RUN.specialPick
+        if pick[round] == nil then
+            local kind = false
+            if round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
+                local choices = {}
+                for _, k in ipairs(sp.rotation) do if k ~= RUN.lastSpecial or #sp.rotation == 1 then choices[#choices + 1] = k end end
+                kind = choices[math.random(#choices)]
+                RUN.lastSpecial = kind
+            end
+            pick[round] = kind
+            if kind then log(string.format("specials: round %d will be %s", round, kind)) end
+        end
+        return pick[round] or nil
+    end
     local every = math.max(1, math.floor(sp.every))
     if not sp.enabled or #sp.rotation == 0 or round < sp.first or (round - sp.first) % every ~= 0 then return nil end
     return sp.rotation[((round - sp.first) // every) % #sp.rotation + 1]
@@ -2961,6 +3008,7 @@ local function specialTick(now)
     AMPH.runTick(now)                                               -- landed troops, the capture (any round)
     if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
     if s and s.kind == "amphibious" then return AMPH.tick(now, s) end
+    if s and s.kind == "ladon" then return SPC.ladonTick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
@@ -3010,7 +3058,7 @@ local function startRound()
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
         CFG.max_aircraft)
     local b = CFG.airfield.bombers
-    local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+F11: the Anomaly next, for testing)
+    local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
     if special == "amphibious" and not AMPH.ready() then          -- no lane can come: a normal round
         log(string.format("round %d: no landing craft can come; a normal round", D.round))
@@ -3038,7 +3086,7 @@ local function startRound()
     end
     D.nextTier, D.nextTierRound = nil, nil
     D.budget = budget
-    local anomalyOnly = special == "anomaly" and CFG.specials.anomaly.only
+    local anomalyOnly = (special == "anomaly" and CFG.specials.anomaly.only) or special == "ladon"   -- (its fighters: none)
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
@@ -3047,6 +3095,8 @@ local function startRound()
         bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
     elseif special == "anomaly" then              -- MINDRIPPER and its guards take that many of the round's aircraft
         nBombers = 1 + CFG.specials.anomaly.guards
+    elseif special == "ladon" then
+        nBombers = 2
     elseif special == "amphibious" and CFG.airfield.enabled and math.random() < CFG.specials.amphibious.bomber_chance then
         raid = true                                   -- a raid on the airfield with the landing (its share of the budget)
         local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
@@ -3090,6 +3140,7 @@ local function startRound()
     for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
     if special == "shuttle" then table.insert(D.queue, 1, "@shuttle") end     -- the shuttle first: it sets their orders
     if special == "anomaly" then table.insert(D.queue, 1, "@anomaly") end
+    if special == "ladon" then table.insert(D.queue, 1, "@ladon") end
     if special == "amphibious" then table.insert(D.queue, 1, "@amphib") end    -- the landing craft first
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
@@ -3168,6 +3219,8 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             elseif nextSpecial == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
+            elseif nextSpecial == "ladon" then
+                hudCallout(string.format(t.special, D.round + 1), t.ladon_sub)
             elseif nextSpecial == "amphibious" then
                 hudCallout(string.format(t.special, D.round + 1), t.amphib_sub)
             elseif nextAce then
@@ -3198,6 +3251,13 @@ local function roundsTick(now)
             spawnShuttle()
         elseif u == "@amphib" then
             if not AMPH.spawn(now) then D.special = nil end     -- no lane could come: a normal round
+        elseif u == "@ladon" then
+            if not SPC.ladonSpawn(now) then
+                D.special = nil                    -- a normal round instead (a Ladon round had no fighters)
+                local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
+                for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
+                log(string.format("round %d: no Ladons; %d fighter flights instead", D.round, #f))
+            end
         elseif u == "@anomaly" then
             if ANOM.spawn() then
                 D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
@@ -3230,6 +3290,8 @@ local function roundsTick(now)
         if flights == 0 and D.special and (D.special.state == "countdown" or D.special.state == "portal") then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round,
                 D.special.state == "portal" and "Anomaly's portal" or "shuttle's countdown")) end
+        elseif flights == 0 and D.special and D.special.kind == "ladon" and SPC.ladonBusy(D.special) then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Ladons are still up", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
         elseif flights == 0 then
@@ -3307,6 +3369,124 @@ local function airfieldTick(tick)
         end
         log("airfield: repaired to " .. ac.repair_hp .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
     end
+end
+
+---------------------------------------------------------------------------------------------------- ladon
+-- CFG.specials.ladon; tools/survival_events.py LADON* builds the units (Mission 16's Ladon, parts and all), routes and
+-- records. Ladon <Key> is unit SV_Unit_Ladon<Key> on DT_NPC row SV_Ladon_<Key>; each pass over the airfield adds one to
+-- SV_LadonRun<Key>.
+do
+local KEYS = { "Kot", "Mishka" }
+
+-- At the main menu, before the level loads (the spawner caches the rows then): each Ladon's DT_NPC row, from
+-- DT_SV_NpcRows, with its name, health and speed.
+function SPC.ladonSetup()
+    if SPC.ladonDone or not gameInstance() then return end
+    local c = CFG.specials.ladon
+    local npc, mine = loadObject(PROBE_TABLES[2].path), loadObject(c.npc_rows)
+    SPC.ladonTries = (SPC.ladonTries or 0) + 1
+    if not (npc and mine) then
+        if SPC.ladonTries >= 20 then SPC.ladonDone = true; log("special: the Ladons' tables didn't load; no Ladon round") end
+        return
+    end
+    SPC.ladonDone = true
+    local n = 0
+    for _, k in ipairs(KEYS) do
+        local row = "SV_Ladon_" .. k
+        local _, have = dtCall(npc, "FindRow", row)
+        if have == nil then
+            local _, r = dtCall(mine, "FindRow", row)
+            if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
+        end
+        if have ~= nil then
+            n = n + 1
+            local ok, err = pcall(function()
+                have.MaxHealthDifference = c.health_add
+                for _, f in ipairs({ "SpeedNormalCoefficient", "SpeedMaxCoefficient", "SpeedMinCoefficient", "SpeedTurnCoefficient" }) do
+                    local v = have[f]
+                    have[f] = ((type(v) == "number" and v > 0) and v or 1.0) * c.speed_x
+                end
+            end)
+            if not ok then log("special: Ladon row " .. row .. ": health / speed NOT set: " .. tostring(err)) end
+        end
+        if type(SV_SetText) == "function" then SV_SetText(row, c.names[k] or k:upper()) end
+    end
+    SPC.ladonReady = n == #KEYS
+    log(string.format("special: %d of %d Ladon rows in DT_NPC (%s; %+d HP, speeds x%.2f)", n, #KEYS,
+        table.concat({ c.names.Kot, c.names.Mishka }, ", "), c.health_add, c.speed_x))
+end
+
+function SPC.ladonSpawn(now)
+    local c, t = CFG.specials.ladon, CFG.hud.text
+    if not (nativeReady() and SPC.ladonReady) then
+        log("special: no Ladon round (" .. (SPC.ladonReady and "no native spawner" or "their rows aren't in") .. ")")
+        return false
+    end
+    local s = D.special
+    s.units, s.state, s.at, s.runs = {}, "run", now, 0
+    for _, k in ipairs(KEYS) do
+        local unit = "SV_Unit_Ladon" .. k
+        local r = -3
+        if SV_UnitAlive(unit) <= 0 then spawningUnit = unit; r = SV_Spawn(unit); spawningUnit = nil end
+        log(string.format("special: Ladon %s (%s): %s", c.names[k] or k, unit, r > 0 and "up" or
+            ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        if r > 0 then s.units[k] = { unit = unit, alive = true, runs = 0 } end
+    end
+    if not next(s.units) then return false end
+    hudCallout(t.ladon_go, string.format(t.ladon_go_sub, c.names.Kot or "KOT", c.names.Mishka or "MISHKA"))
+    log(string.format("special: round %d, the Ladons from the west", D.round))
+    return true
+end
+
+function SPC.ladonsLeft(s)
+    local n = 0
+    for _, L in pairs(s.units or {}) do if L.alive then n = n + 1 end end
+    return n
+end
+
+function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
+
+-- Every second: a pass over the airfield (its bombs), a Ladon shot down (its pay).
+function SPC.ladonTick(now, s)
+    if s.state ~= "run" or now < (s.nextAt or 0) then return end
+    s.nextAt = now + 1
+    local c, t = CFG.specials.ladon, CFG.hud.text
+    local f = svFlags() or {}
+    -- its health for its round, once its aircraft is up (HealthInternal: health x 10, as the shuttle's)
+    local hx = math.min(c.health_max_x or 2.5, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
+    for _, p in ipairs(planes) do
+        if hx > 1 and not p.down and not p.scaled and p.unit and p.unit:find("^SV_Unit_Ladon") and valid(p.obj) then
+            p.scaled = true
+            pcall(function()
+                local h0 = p.obj.HealthInternal
+                p.obj.HealthInternal = h0 * hx
+                log(string.format("special: %s health x%.2f for round %d (%s -> %s)", p.unit, hx, D.round, tostring(h0),
+                    tostring(p.obj.HealthInternal)))
+            end)
+        end
+    end
+    for k, L in pairs(s.units) do
+        if L.alive then
+            local runs = f["SV_LadonRun" .. k] or 0
+            if now - s.at >= 5 and runs > L.runs then        -- (a count left from last time is reset by its appearance)
+                L.runs, s.runs = runs, (s.runs or 0) + (runs - L.runs)
+                local dmg = c.bomb_damage + (c.bomb_per_round or 0) * math.max(0, D.round - CFG.specials.first)
+                if CFG.airfield.enabled and not AF.down then AF.bomb = AF.bomb + dmg end
+                hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
+                log(string.format("special: Ladon %s's pass over the airfield (%d): -%d", c.names[k] or k, runs, dmg))
+            end
+            local n = SV_UnitAlive(L.unit)
+            if n == 0 or n == -7 then
+                L.alive = false
+                local pay = c.reward + (c.reward_per_round or 0) * D.round
+                addCredits(pay, "Ladon " .. (c.names[k] or k) .. " down")
+                hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, pay))
+                log(string.format("special: round %d, Ladon %s down %.0f s after it appeared", D.round, c.names[k] or k, now - s.at))
+            end
+        end
+    end
+    if SPC.ladonsLeft(s) == 0 then s.state = "done" end
+end
 end
 
 ---------------------------------------------------------------------------------------------------- amphibious assault
@@ -4832,6 +5012,8 @@ local function probeTick(tick)
         if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
+        local okL, errL = pcall(SPC.ladonSetup)
+        if not okL then log("special: Ladon setup error " .. tostring(errL)); SPC.ladonDone = true end
         local okSp, errSp = pcall(specialSetup)
         if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
         local okAs, errAs = pcall(ALLY.setup)
@@ -5063,38 +5245,32 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             end)
         end)
     end
-    if Key.F11 then                -- Ctrl+F11 in a run: the next round is the Anomaly (in the break: it starts now)
-        pcall(RegisterKeyBind, Key.F11, mods, function()
-            ExecuteInGameThread(function()
-                local ok, err = pcall(function()
-                    if not D or not D.now then log("test: Ctrl+F11 outside a Survival run"); return end
-                    D.forceSpecial = "anomaly"
-                    local soon = D.state == "wait"
-                    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
-                    hudCallout("TEST: THE ANOMALY", soon and "STARTING NOW" or "NEXT ROUND")
-                    log(string.format("test: Ctrl+F11, round %d is the Anomaly (%s)", D.round + 1,
-                        soon and "starting in 3 s" or "after this round"))
+    -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
+    -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
+    ;(function()                   -- (its own function: the main chunk's 200-local limit)
+    local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
+                            { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
+                            { "FIVE", "alicorn", "THE ALICORN" } }
+    for i, ts in ipairs(TEST_SPECIALS) do
+        local key, kind, label = Key[ts[1]], ts[2], ts[3]
+        if key then
+            pcall(RegisterKeyBind, key, mods, function()
+                ExecuteInGameThread(function()
+                    local ok, err = pcall(function()
+                        if not D or not D.now then log("test: Ctrl+" .. i .. " outside a Survival run"); return end
+                        D.forceSpecial = kind
+                        local soon = D.state == "wait"
+                        if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+                        hudCallout("TEST: " .. label, soon and "STARTING NOW" or "NEXT ROUND")
+                        log(string.format("test: Ctrl+%d, round %d is %s (%s)", i, D.round + 1, kind,
+                            soon and "starting in 3 s" or "after this round"))
+                    end)
+                    if not ok then log("test: Ctrl+" .. i .. " error " .. tostring(err)) end
                 end)
-                if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
             end)
-        end)
+        end
     end
-    if Key.F12 then                -- Ctrl+F12 in a run: the next round is the amphibious assault (in the break: it starts now)
-        pcall(RegisterKeyBind, Key.F12, mods, function()
-            ExecuteInGameThread(function()
-                local ok, err = pcall(function()
-                    if not D or not D.now then log("test: Ctrl+F12 outside a Survival run"); return end
-                    D.forceSpecial = "amphibious"
-                    local soon = D.state == "wait"
-                    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
-                    hudCallout("TEST: AMPHIBIOUS ASSAULT", soon and "STARTING NOW" or "NEXT ROUND")
-                    log(string.format("test: Ctrl+F12, round %d is the amphibious assault (%s)", D.round + 1,
-                        soon and "starting in 3 s" or "after this round"))
-                end)
-                if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
-            end)
-        end)
-    end
+    end)()
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen; was Ctrl+F9, now the test key)
         pcall(RegisterKeyBind, Key.F7, mods, function()
             ExecuteInGameThread(function()

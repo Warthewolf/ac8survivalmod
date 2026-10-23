@@ -166,6 +166,50 @@ def lcac_craft():
     return out
 
 
+# Special round "Ladon" (user, 2026-10-23: "adding the LADON special round, the HP needs to be nerfed a bit and their
+# speed needs a nerf slightly, have them spawn on the far western side of the map and create a path that takes the
+# players on a bit of a ride back to the airfield, have no other aircraft spawn"; "KOT and MISHKA are the two LADON
+# names"). Two Ladons, each a copy of Mission 16's B_Unit_01_Air0 (its 18 parts: ChildAIObjectDescs with the parts'
+# blueprint classes as imports, hard rule 7), each on a mission row of its own (sv_ladon_<key> -> SV_Ladon_<Key> in
+# DT_SV_NpcRows, which Scripts/main.lua gives its name, health and speed). From the far west they fly LADON_ROUTE, a
+# long way round, and over the airfield; each time a Ladon ends a pass over it (the end of the route, then of each
+# LADON_LOOP circuit round the airfield) SV_LadonRun<Key> goes up by one and main.lua drops its bombs on the airfield.
+LADON_SOURCE_UNIT = 'B_Unit_01_Air0'
+LADON_SOURCE_PATH = '01_Air0_Ladon_Path1'
+LADON_SOURCE_ROW = 'OP0045_radn_01'          # Mission 16's mission row (NpcId OP0045_ladn_01)
+LADON_NPC_SOURCE = 'OP0045_ladn_01'          # DT_NPC (1200 HP, LuaSet 0031_CP)
+LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, km... side offset m, height offset m) - main.lua CFG.specials.ladon
+# (x km, y km, altitude km): from the far west (Mission 22's combat zone runs to x -44 km), north, back south across
+# the island's west, east along the south and in over the airfield (16.1, -4.4), then out past it
+LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
+               (7, -19, 2.0), (12, -11, 1.6), (16.1, -4.4, 1.2), (19, 2, 1.5)]
+LADON_LOOP = [(19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), (16.1, -4.4, 1.2), (19, 2, 1.5)]
+LADON_SPEED = '1500.0'                       # km/h (Mission 16 flies its Ladons at 1700-2600: "a nerf slightly")
+
+
+def ladons():
+    """One dict per Ladon: unit, object, mission / NPC rows, paths, flag, events, its route (cm)."""
+    import math
+    out = []
+    for key, side_m, up_m in LADONS:
+        def place(pts):
+            res = []
+            for k, (x, y, a) in enumerate(pts):
+                nx, ny = pts[min(k + 1, len(pts) - 1)][:2]
+                px, py = pts[max(k - 1, 0)][:2]
+                dx, dy = nx - px, ny - py
+                n = math.hypot(dx, dy) or 1.0
+                ox, oy = -dy / n * side_m / 1000.0, dx / n * side_m / 1000.0           # to the side of the way on
+                res.append(((x + ox) * 100000.0, (y + oy) * 100000.0, (a * 1000.0 + up_m) * 100.0))
+            return res
+        out.append(dict(key=key, unit=f'SV_Unit_Ladon{key}', obj=f'SV_Obj_Ladon{key}', row=f'sv_ladon_{key.lower()}',
+                        npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
+                        loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
+                        over=f'SV_LadonOver{key}', lap=f'SV_LadonLap{key}',
+                        route=place(LADON_ROUTE), circuit=place(LADON_LOOP)))
+    return out
+
+
 def lcac_lane_names():
     return [lane for lane, _, _ in LCAC_LANES]
 
@@ -307,7 +351,8 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT])
+             + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -559,6 +604,7 @@ def build_events(stock_ep):
     build_repair(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
+    build_ladon(g, flag, stock_ep)
     return g
 
 
@@ -698,6 +744,27 @@ def build_amphib(g, flag, stock_ep):
             trm = f'RE_SV_LcacTroopsRemove{lane}{c["craft"]}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
+
+
+def build_ladon(g, flag, stock_ep):
+    """The Ladons (LADON*), on Mission 16's records: appearance -> its route (PathFinish triggers: hard rule 1) and
+    Mission 16's Normal engagement order; the end of the route or of a circuit -> SV_LadonRun<Key> + 1 and the next
+    circuit."""
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
+    t_eng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_CompositeEvent_83',
+                               lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
+    assert arg_values(t_eng)[3] == 'Normal', arg_values(t_eng)
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    for L in ladons():
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
+        flag(L['up'], L['flag'], 'Set', 0)
+        g.execute(t_path, L['up'], {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0)
+        g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
+        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
+            g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
+            flag(ev, L['flag'], 'Add', 1)
+            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED})
 
 
 def build_repair(g, stock_ep):

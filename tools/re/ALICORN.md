@@ -276,7 +276,7 @@ the hull's template (DelaySec 12) natively [I].
 | 7 | ChildDamageByTag / AlicornDive / BossCommon triggers offline | [T] | not needed: Survival's Lua can poll part health/alive state and fire `SV_Event` remote events |
 | 8 | the network send on dive (0x1474a85d0) offline | low [T] | first test: dive/surface |
 | 9 | HP tuned for an online squad (tanks 4 x 1875, core 3125, railguns 2 x 2000) | balance | scale the model `MaxHealth` in Survival's copies, or `MaxHealthDifference` / coefficients in the NPC rows |
-| 10 | sea area: the hull is about 300+ m long, dives 56 m, and needs about 6 km straight legs of open water | map | Comona has sea (Mission 22's enemy fleet sits offshore at about +5..7 km x). Keep the paths away from the island and shallows [I] |
+| 10 | sea area: the hull is about 300+ m long, dives 56 m, and needs about 6 km straight legs of open water | map | Comona has sea: Mission 22's enemy fleet units spawn at (-2765447, -437298, 300) / (-2800928, -348099, 300) / (-2491106, 1161837, 300) / (-2564813, 1240082, 300) cm, i.e. 25-28 km west of the origin; Survival's LCAC lanes start at sea around x 1.12-1.47e6, y 0.6e6..-1.42e6 (`survival_events.LCAC_LANES`, sea Z -20). Keep the paths away from the island and shallows [V positions, I depth] |
 | 11 | online HUD gauge (`LiveSetDisplayProgressGaugeExecution`), boss-battle end, IGC cutscenes (`BP_IGCAIBoss_BA002_Alcn`), radio `DT_Rdo_EB_002` | n/a | skip them. Survival has its own HUD and callouts |
 | 12 | event names with numeric tails (`ALCN_LaunchAir_0`, `Path_Boss0_ALCN_0_1`, `Boss_0_ALCN_0`) | build | store them with `survival_events.fname` (hard rule 17) |
 
@@ -358,3 +358,106 @@ the hull's template (DelaySec 12) natively [I].
 - Does the rail cannon fire by itself after `OpenCore`, or only on `ALCN_ShotRailCannon`?
 - Does the Arrangement pool spawn its 50/106 children at once or on launch?
 - Does the `LiveRectennaBarrier` make the hull or core immune while it is up?
+
+---------------------------------------------------------------------------------------------------------------------
+## 5. Port details (second pass, 2026-10-23)
+
+### 5.1 Exists only in Online Mode [V]
+- Loc: `ContainerGround_Name_alcn` = "ALICORN", `ContainerGround_Name_AlicornJammer` = "JAMMER" (CP_en.tsv 9703 / 9706).
+- Campaign `DT_NPC` and `DT_NPC_Model` have no `alcn` / `alsn` names. Outside `/Game/OnlineMode` only three extracted
+  packages name it: the minimap widget `WBP_HUD_Radar_Parts_MiniMapBattleLayer_000` and the Wwise DBs
+  `DA_SoundDB_AKB_GameSe`, `DA_SoundDB_Init`. No campaign WD / EP places it.
+- Kind: **submarine** (`ALiveAIAlicorn : ALiveAISubmarine`). It sails on the surface (SpawnPoint Z 0, paths at Z 0),
+  dives 56 m and surfaces on command. Not an aircraft.
+
+### 5.2 `DT_NPC_Mission_EB_002_ON` (51 rows, `LiveNpcMissionDataTable`) [V]
+- Every row's key equals its NpcId. The `_01` tails have a leading zero, so the FNames are not split (the name batch
+  holds `alcn_01` whole): no hard-rule-17 trap for these rows.
+- Alicorn rows: `alcn_01`, `alcn_emlm_01`, `alcn_emls_01..03`, `alcn_core_01`, `alcn_btank_01..04`, `alcn_ecm_01`,
+  `alcn_rams_01`, `alcn_aagun_01`, `alcn_ciws_01`, `alsn_ciws_02`, `alcn_hatchL_01..06`, `alcn_hatchR_01..06`,
+  `alcn_vlsL_01/02`, `alcn_vlsR_01/02`, `alcn_uav_01`, `alcn_uavrpool_01`, `alcn_rflmpool_01..03`, `alcn_uavspool_01`.
+  Pool children: `OP0074_uavm_01`, `OP1014_rflm_03`, `OP1024_f18f_03`. Others: `OP0072_uavr_01`, `Targetdummy_01`,
+  `OP0070_p01a_01`, the allied fleet `VE007_udal_*`, `VE002_aegs_*`.
+- Every row has default values except **`alcn_emls_03` (the `railgun_R` hatch): `MinHealth` 1.0** (it can't be
+  destroyed in EB_002; `railgun_destroy_all` presumably counts the railguns, not the hatches [I]).
+- No object references in any row, so `NPC_IMPORT` (build_survival.py) can copy them as it does Mission 16's Ladon
+  parts: add `('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', [<the alcn rows>])`.
+
+### 5.3 `alcn_01` (DT_NPC_ON) [V]
+`ModelId alcn`, `LuaSetId` none, `WeaponDurabilityId NWDID_SubMarine`, `ExplosionDurabilityId NEDID_10`, every
+`NpcFCSId0..5` none, `bIsBoss` false (the core row has it). 30 `ChildNPCId` / `ChildNPCComponentNames` pairs, in this
+order: airs0-2 = rflmpool_01-03, BarrierDrones = uavrpool_01, btank_Front_L/R = btank_04/03, btank_Rear_L/R =
+btank_02/01, core, ecm, railcannon = emlm_01, railgun_L/R = emls_02/03, SLUAVs = uavspool_01, vls_L_1/2, vls_R_1/2,
+WP_L_1..6 = hatchL_01..06, WP_R_1..6 = hatchR_01..06. (The NPC row says `airs0`, the WD desc `Airs0`.)
+
+### 5.4 `WD_EB_002` unit `Boss_0` [V]
+- 1 AI object (`Boss_0_ALCN_0` = FName `Boss_0_ALCN` #1), `MissionNpcID alcn_01`, `AIObjectClass None`.
+  Desc flags: `bUseCoordinateSync`, `bIgnoreMeshOptimize`, `bIgnoreSetAutoSkipUpdateTransform`; LevelId 0xC8;
+  `ConeSearchSettings` 1000 m / 1000 m.
+- Unit: Faction 2, SpawnPoint (138117, 10907, 150000), `RadiusInMeter` 6000, `MinAltitudeInMeter` 100,
+  `MaxAltitudeInMeter` 3000, `PatrolRadiusRatio` 0.5. Raise the radius as `ladon_units` does.
+- 30 `ChildAIObjectDescs`. Every one has `MissionNpcID None` and a **hard class import** `Class = obj(-N)`.
+  Children are named `Boss_0_ALCN_0_<component>`, grandchildren `..._<component>_<sub>`. Only the 30 direct children
+  carry `WorldDataName WD_EB_002`.
+- Import map (`obj(-N)` = import N-1, all package imports; paths under `/Game/OnlineMode/Blueprint/AI/Actors/` unless
+  shown):
+
+  | N | package | used by |
+  |---|---|---|
+  | 1, 2 | `/Game/Blueprints/AI/DamagedState/BP_Plane_BodyDestroyParam`, `..._ScatterPartsParam` | allied planes |
+  | 3 | `Others/BP_MP028_dummy_emlmcore_Base` | core |
+  | 4 | `Plane/BP_OP0074_uavm_ON` | the 106 SLUAV grandchildren |
+  | 5 | `Submarine/alcn/BP_BA002_alcn_emlm_Base` | railcannon |
+  | 6 | `Submarine/alcn/Child/BP_BA002_alcn_uavr_Base` | the 50 barrier-drone grandchildren |
+  | 7-9 | `.../Child/ChildPool/BP_BA002_alcn_rflmpool_0/1/2_Base` | Airs0/1/2 |
+  | 10, 11 | `.../ChildPool/BP_BA002_alcn_uavrpool_Base`, `..._uavspool_Base` | BarrierDrones, SLUAVs |
+  | 12-15 | `.../Hatch/BP_BA002_alcn_btankfl/fr/rl/rr_Base` | btank_Front_L/R, Rear_L/R |
+  | 16 | `.../Hatch/BP_BA002_alcn_ecm_Base` | ecm |
+  | 17, 18 | `.../Hatch/BP_BA002_alcn_hatch_emls_L/R_Base` | railgun_L/R |
+  | 19-24, 25-30 | `.../Hatch/BP_BA002_alcn_hatchL1..L6_Base`, `hatchR1..R6_Base` | WP_L_1..6, WP_R_1..6 |
+  | 31-34 | `.../Hatch/BP_BA002_alcn_vlsL1/L2/R1/R2_Base` | vls_L_1/2, vls_R_1/2 |
+  | 35-39 | `.../Hatch/Weapon/BP_BA002_alcn_aagun/ciws/ciwsp5/emls/ram_Base` | the hatches' grandchildren |
+  | 40, 41 | `/Game/OnlineMode/Blueprint/Vehicle/AI/Plane/BP_OP1014_rflm_ON`, `BP_OP1024_f18f_ON` | Air grandchildren of Airs0-2 |
+  | 42-47 | allied `BP_VE007_udal_ak130_01/02_ON`, `BP_VE002_aegs_mk15_01/mk41/mk45_ON`, `BP_VE002_artillery_ON` | not needed |
+
+- The import map has **6259 entries** (6208 imported export hashes). The other ~6200 are sub-objects of the pool BPs
+  (uavspool 3189, rflmpool_1 656, uavrpool 609, rflmpool_2 580, rflmpool_0 573) and of the hatches (13-36 each).
+  The desc's properties name only -1..-47. `import_from` copies only the referenced ones; the BP packages should bring
+  their own sub-objects when they load [I]. Dropping the pools removes most of the weight.
+
+### 5.5 Path execution and other templates (EP_EB_002) [V]
+- First leg (MissionStart; also the re-path 12 s after each `AlicornDive_n`):
+  `LiveAIPathExecution {01 Boss_0_ALCN_0} {02 NoneSelect} {04 Path_Boss0_ALCN_0_<n>} {0a NoneSelect} {10 120.0}
+  {10 0.0} {10 2.0} {0e ObjectSetting} {10 0.0} {11 1} {11 0} {11 true} {10 5.0} {11 0} {10 0} {11 false}`.
+  Arg 4 is the speed, 120 (known by value, as Mission 13's LCAC 150-180; SPECIAL_ROUNDS.md).
+- PathFinish chain (`PathFinish_1..3`): the same, but `{02 Boss_0}`, arg 5 `0`, arg 8 `10.0` / `0`, and every bool
+  arg `false`.
+- Exit before a re-path: `LiveAIPathExitExecution {01 Boss_0_ALCN_0} {02 Boss_0}`, 10 s after the dive trigger.
+- Paths: `Path_Boss0_ALCN_0_0` starts at (143868, 15105, 0) and runs east through (276186, 15805), (468439, 14105),
+  (698147, -87443) ... Copy its shape with `make_path`, which takes any path desc as the template.
+- Dive / surface: `LiveSubmarineOperation {01 Boss_0_ALCN_0} {0e Diving|Surface}`. Surface comes 33 s (dives 1-2) or
+  28 s (dives 3-4) after the dive trigger.
+- Actions: `LiveAIActionEventExecution {01 Boss_0_ALCN_0} {.. <DT_AIActionEvent row>}` (1.4).
+  VLS shots: `LiveFireOneShotWeapon {WN_WEAPON_1} {Boss_0_ALCN_0_vls_<L|R>_<1|2>} {<target unit>}`.
+- No campaign mission uses these exec classes (node_catalog.tsv has no `LiveSubmarineOperation` /
+  `LiveAIActionEventExecution`). So `survival_events.foreign_template(EP_EB_002, cls, event)` is the only source of
+  templates, and the EP needs their script-class imports.
+
+### 5.6 Recipe with Survival's existing helpers (build_survival.py)
+1. `DT_SV_ModelRows` (+ main.lua AddRow into `DT_NPC_Model`): the `alcn*` / `alsn_ciwssp5` rows of `MODEL_ON`, as
+   `ACE_MODELS` does for the ADFX. Here they keep their own GameObjectIds 5100-5112.
+2. `DT_SV_NpcRows` (+ AddRow into `DT_NPC` at the main menu, before the level loads, hard rule 20): the `alcn_*` rows
+   of `DT_NPC_ON`, with durability remapped or the durability rows added (3.2 row 3), and the `ChildNPCId` lists cut
+   to the kept parts.
+3. `DT_SV_NpcMission`: an `NPC_IMPORT` entry for EB_002_ON (5.2).
+4. World data: a function like `ladon_units`:
+   - `src = desc_named(<WD_EB_002 props>, 'UnitDescList', 'Boss_0')`;
+   - `port_unit(units, used_ids, z, src, 'SV_Unit_Alcn', 'SV_Alcn', 'alcn_01', [(x, y, 0)], yaw, top_number)`;
+   - delete the unwanted children, then `retag_parts(kids, 'SV_Alcn', used_ids, z, <WD_EB_002 ZenPkg>)`. It imports
+     the classes with `import_from`, and pack.py puts the packages in the container header (hard rule 7).
+   - The parts are then named `SV_Alcn_<component>` (e.g. `SV_Alcn_vls_R_1` = FName `SV_Alcn_vls_R` #2), which is
+     what the EP args must say.
+   - `port_unit` asserts `npc_row in NPC_ROWS`, so step 3 must run first. It does: build_npc_table fills NPC_ROWS.
+   - Set `RadiusInMeter` as `ladon_units` does. The faction stays 2.
+5. EP: `RE_SV_Alcn*` remote events with the templates from 5.5. Drive the timing from Lua, not from delays gated on
+   flags (hard rule 26).

@@ -73,4 +73,15 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Enemies shot down by bought allies (MOONCHILD, the DOCKS ships) pay the player as if the player had shot them down
   ("allied kills should still pay me yeah"). Every enemy aircraft that goes down pays, whoever downed it.
 
+## 9. Ladon special round (user, 2026-10-23)
+- Two Ladons, named KOT and MISHKA. Health nerfed a bit, speed slightly.
+- They spawn on the far western side of the map and fly a long route back to the airfield ("a bit of a ride").
+- No other aircraft spawn in their round.
+
+## 10. Special rounds in play (user, 2026-10-23)
+- After round 3, special rounds are mixed in at random: any round above 3 can be one.
+- A special's difficulty follows its round (as the normal round before it would have been).
+- ALICORN special round: no normal aircraft spawn in it.
+- Test keys for every special round.
+
 ## Open decisions

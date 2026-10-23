@@ -647,3 +647,15 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   tick (cache 0.2 s -> 1 s); the per-aircraft pass ran for every enemy on one tick every 2 s (now an eighth each tick);
   a "perf:" line every 60 s gives the tick's average / worst and its slowest parts.
 - Clean-up: the coast grid scan, the rings round each mark and Ctrl+F10 marks are gone (no more lanes to lay).
+
+## Ladon special round (Lua 0.45.x, 2026-10-23; untested)
+- survival_events.LADON*: KOT and MISHKA, each a copy of Mission 16's B_Unit_01_Air0 with its 24 parts (retag_parts;
+  their blueprint classes imported into WD_SurvivalMode_global with import_from: 17 packages, the first new package
+  imports Survival has written); mission rows sv_ladon_<key> (M16's OP0045_radn_01) -> DT_SV_NpcRows SV_Ladon_<Key>
+  (OP0045_ladn_01 under its name key); the parts' M16 rows via NPC_IMPORT (the parts name none, kept for safety).
+- Route from x -42 km round the west and south into the airfield, 1500 km/h (M16: 1700-2600), then a ~45 km circuit
+  round the airfield; each pass (route end, circuit end) SV_LadonRun<Key> + 1 -> main.lua drops bomb_damage on it.
+- main.lua: Ladon rows at the main menu (-300 HP, speeds x0.85, names), no other aircraft in its round, HUD row,
+  reward per Ladon; health x(1 + 0.04 per round after `first`) via HealthInternal (untested), bombs +1 a round.
+- Specials random from round 4 (chance 0.3, never two in a row, not the same twice running; RUN.specialPick).
+- Test keys Ctrl+1..5: shuttle, Anomaly, amphibious, Ladons, Alicorn (were Ctrl+F11 / F12).

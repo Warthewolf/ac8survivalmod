@@ -71,8 +71,8 @@ game after a change. Delete the file to get a fresh one.
 
 Test keys (in a Survival run)
 -----------------------------
-- Ctrl+F11: the next round is THE ANOMALY (between rounds it starts at once).
-- Ctrl+F12: the next round is the AMPHIBIOUS ASSAULT (between rounds it starts at once).
+- Ctrl+1 / 2 / 3 / 4 / 5: the next round is a special round: 1 COMONA DEFENSE (the shuttle), 2 THE ANOMALY,
+  3 AMPHIBIOUS ASSAULT, 4 THE LADONS, 5 THE ALICORN (between rounds it starts at once).
 
 
 If something goes wrong
