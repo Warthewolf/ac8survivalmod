@@ -53,7 +53,7 @@ for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephi
 an "ACE INBOUND" callout names each one the first time it shows up.
 
 Special rounds: in rounds 2-6 only Comona Defense can come (about 1 in 3 each); from round 7 on, any round can be
-any special (about 1 in 3, never two in a row). They get harder
+any special (about 1 in 3, never two in a row). Each special comes at most once every 10 rounds. They get harder
 the later they come.
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown. If it's destroyed the shop is closed through the next round.

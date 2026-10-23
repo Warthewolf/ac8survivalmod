@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.7"
+local VERSION = "0.51.8"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -863,6 +863,9 @@ local CFG = {
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
         -- random picks above start after `to` (user: only the Shuttle Launch may come between 2 and 6).
         early    = { kind = "shuttle", from = 2, to = 6, chance = 0.35 },
+        -- each special comes at most once in this many rounds (user, 2026-10-23): Comona Defense in round 2 can come
+        -- again from round 12; the others keep their chance meanwhile. 0: no cooldown.
+        cooldown_rounds = 10,
         -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
         -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
         -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
@@ -2806,19 +2809,29 @@ local function specialFor(round)
         local pick = RUN.specialPick
         if pick[round] == nil then
             local kind, early = false, sp.early
+            -- each special at most once in cooldown_rounds (user, 2026-10-23: "Each Special Round can only Spawn Once
+            -- Every 10 rounds"): one that started in round r can't come again before r + cooldown_rounds
+            local function ready(k)
+                local last = RUN.specialAt and RUN.specialAt[k]
+                return not last or round - last >= (sp.cooldown_rounds or 0)
+            end
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
             local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
             if inEarly then
-                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and math.random() < (early.chance or 0) then
+                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and ready(early.kind) and math.random() < (early.chance or 0) then
                     kind = early.kind
                     RUN.lastSpecial = kind
                 end
             elseif round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
                 local choices = {}
-                for _, k in ipairs(sp.rotation) do if k ~= RUN.lastSpecial or #sp.rotation == 1 then choices[#choices + 1] = k end end
-                kind = choices[math.random(#choices)]
-                RUN.lastSpecial = kind
+                for _, k in ipairs(sp.rotation) do
+                    if (k ~= RUN.lastSpecial or #sp.rotation == 1) and ready(k) then choices[#choices + 1] = k end
+                end
+                if #choices > 0 then                       -- (every one cooling down: a normal round)
+                    kind = choices[math.random(#choices)]
+                    RUN.lastSpecial = kind
+                end
             end
             pick[round] = kind
             if kind then log(string.format("specials: round %d will be %s", round, kind)) end
@@ -3245,7 +3258,11 @@ local function startRound()
     D.special = special and { kind = special, state = "pending" } or nil
     RUN.specialPick = RUN.specialPick or {}                      -- (as it is: a forced one too; specialFor reads it)
     RUN.specialPick[D.round] = special or false
-    if special then RUN.lastSpecial = special end
+    if special then
+        RUN.lastSpecial = special
+        RUN.specialAt = RUN.specialAt or {}
+        RUN.specialAt[special] = D.round                    -- (its cooldown: specialFor)
+    end
     if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
         budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), CFG.max_aircraft)
     end
