@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.1"
+local VERSION = "0.51.2"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3607,9 +3607,10 @@ function SPC.ladonSpawn(now)
     s.units, s.state, s.at, s.runs, s.planeFrom = {}, "run", now, 0, #planes + 1
     for _, k in ipairs(KEYS) do
         local unit = "SV_Unit_Ladon" .. k
-        local r = -3
-        if SV_UnitAlive(unit) <= 0 then spawningUnit = unit; r = SV_Spawn(unit); spawningUnit = nil end
-        log(string.format("special: Ladon %s (%s): %s", c.names[k] or k, unit, r > 0 and "up" or
+        local r, was = SV_UnitAlive(unit), nil
+        if r > 0 then was = true                     -- still up from before (a restart mid-round): this round's, then
+        else spawningUnit = unit; r = SV_Spawn(unit); spawningUnit = nil end
+        log(string.format("special: Ladon %s (%s): %s", c.names[k] or k, unit, r > 0 and (was and "still up, taken on" or "up") or
             ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
         if r > 0 then s.units[k] = { unit = unit, alive = true, runs = 0 } end
     end
@@ -3638,13 +3639,13 @@ function SPC.ladonTick(now, s)
     for i = s.planeFrom or 1, (s.scaledN or 0) < 2 and #planes or 0 do
         local p = planes[i]
         if hx > 1 and not p.down and not p.scaled and p.unit and p.unit:find("^SV_Unit_Ladon") and valid(p.obj) then
-            p.scaled, s.scaledN = true, (s.scaledN or 0) + 1
-            pcall(function()
-                local h0 = p.obj.HealthInternal
-                p.obj.HealthInternal = h0 * hx
-                log(string.format("special: %s health x%.2f for round %d (%s -> %s)", p.unit, hx, D.round, tostring(h0),
-                    tostring(p.obj.HealthInternal)))
-            end)
+            local ok, h0 = pcall(function() return p.obj.HealthInternal end)
+            if ok and type(h0) == "number" and h0 > 0 then        -- (not yet set on a fresh actor: next second)
+                p.scaled, s.scaledN = true, (s.scaledN or 0) + 1
+                local okW, err = pcall(function() p.obj.HealthInternal = math.floor(h0 * hx) end)
+                log(string.format("special: %s health x%.2f for round %d (%s -> %s)%s", p.unit, hx, D.round, tostring(h0),
+                    tostring(okW and p.obj.HealthInternal or "?"), okW and "" or (" (write failed: " .. tostring(err) .. ")")))
+            end
         end
     end
     for k, L in pairs(s.units) do
@@ -3659,8 +3660,19 @@ function SPC.ladonTick(now, s)
                 hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
                 log(string.format("special: Ladon %s's pass over the airfield (%d): -%d", c.names[k] or k, runs, dmg))
             end
-            local n = SV_UnitAlive(L.unit)
-            if n == 0 or n == -7 then
+            local n, gone = SV_UnitAlive(L.unit), false
+            if n >= 0 then L.errs = 0 else L.errs = (L.errs or 0) + 1 end
+            if n == -7 or (L.errs or 0) >= 20 then           -- off the phase's list, or unreadable for 20 s
+                local flying = false                          -- (code review of 2026-10-23: -7 paid, other errors held
+                for _, p in ipairs(planes) do                 -- the round for good)
+                    if p.unit == L.unit and not p.down and valid(p.obj) then flying = true end
+                end
+                if not flying then
+                    L.alive, gone, s.escaped = false, true, true
+                    log(string.format("special: Ladon %s gone without being shot down (SV_UnitAlive %d); no pay", c.names[k] or k, n))
+                end
+            end
+            if n == 0 and not gone then
                 L.alive = false
                 local pay = c.reward + (c.reward_per_round or 0) * D.round
                 addCredits(pay, "Ladon " .. (c.names[k] or k) .. " down")
@@ -3670,7 +3682,7 @@ function SPC.ladonTick(now, s)
             end
         end
     end
-    if SPC.ladonsLeft(s) == 0 then s.state = "done"; LB.special("ladon", true, now - s.at) end
+    if SPC.ladonsLeft(s) == 0 then s.state = "done"; LB.special("ladon", not s.escaped, now - s.at) end
 end
 end
 

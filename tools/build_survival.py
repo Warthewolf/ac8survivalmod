@@ -532,12 +532,19 @@ def ladon_units(units, used_ids, z, top_number, v):
         ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
         kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
         parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
-        zone_area(u)
+        # its area over the whole job (survival_events.LADON_AREA), not 40 km round the far-west spawn
+        (ax, ay), radius = survival_events.LADON_AREA
+        r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+        u[2][:] = sorted([q for q in u[2] if q[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                         ('raw', 'Float', struct.pack('<f', radius)))], key=lambda q: q[0])
+        u[2][:] = [(q[0], q[1], False, vec(ax * 100000.0, ay * 100000.0, 0.0)) if q[1] == 'SpawnPoint' else q for q in u[2]]
+        far = max(math.dist((ax * 100000.0, ay * 100000.0), pt[:2]) for pt in L['route'] + L['circuit']) / 100.0
+        assert far < radius * 0.9, (L['unit'], far, radius)
         # smooth: wide banked turns (players saw sharp flat turns with 1.2 km tangents, 2026-10-23); the route runs on
-        # into the circuit, and the circuit (its first point = its last) into itself
+        # into the circuit, and the circuit (it ends over the airfield and starts just past it) into itself
         loop = L['circuit']
-        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[1]))
-        paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-2], after=loop[1]))
+        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[0]))
+        paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
 
 

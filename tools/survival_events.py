@@ -180,12 +180,22 @@ LADON_SOURCE_UNIT = 'B_Unit_01_Air0'
 LADON_SOURCE_PATH = '01_Air0_Ladon_Path1'
 LADON_SOURCE_ROW = 'OP0045_radn_01'          # Mission 16's mission row (NpcId OP0045_ladn_01)
 LADON_NPC_SOURCE = 'OP0045_ladn_01'          # DT_NPC (1200 HP, LuaSet 0031_CP)
-LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, side offset m, height offset m) - main.lua CFG.specials.ladon
+LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, offset north m, height offset m) - main.lua CFG.specials.ladon
 # (x km, y km, altitude km): from the far west (Mission 22's combat zone runs to x -44 km), north, back south across
-# the island's west, east along the south and in over the airfield (16.1, -4.4), then out past it
+# the island's west, east along the south and in over the airfield (16.1, -4.4), where the route ends. The circuit
+# starts a little past the airfield (LADON_LOOP[0]: a new path begins ahead of the aircraft, hard rule 2; its start
+# isn't its end, so it can't "finish" as it begins) and ends over it, so every PathFinish, the bombing run, is over the
+# airfield (code review of 2026-10-23: they ended 6.6 km NE of it).
+LADON_AIRFIELD = (16.1, -4.4, 1.2)
 LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
-               (7, -19, 2.0), (12, -11, 1.6), (16.1, -4.4, 1.2), (19, 2, 1.5)]
-LADON_LOOP = [(19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), (16.1, -4.4, 1.2), (19, 2, 1.5)]
+               (7, -19, 2.0), (12, -11, 1.6), LADON_AIRFIELD]
+LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), LADON_AIRFIELD]
+# the Ladons' unit area (a unit only fights inside it; build_survival.ladon_units): centred on the whole job, not the
+# spawn, big enough for all of it (code review of 2026-10-23: 40 km round the spawn left the airfield 59 km out, so the
+# AI kept turning them back west)
+LADON_AREA = ((-9.0, 2.0), 80000.0)          # (centre x, y km), radius m
+# the parts that fire (Mission 16's Normal engagement orders on them: missiles and the CIWS turrets)
+LADON_WEAPONS = ['VLS0', 'VLS1', 'LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
 LADON_SPEED = '1500.0'                       # km/h (Mission 16 flies its Ladons at 1700-2600: "a nerf slightly")
 
 
@@ -195,15 +205,10 @@ def ladons():
     out = []
     for key, side_m, up_m in LADONS:
         def place(pts):
-            res = []
-            for k, (x, y, a) in enumerate(pts):
-                nx, ny = pts[min(k + 1, len(pts) - 1)][:2]
-                px, py = pts[max(k - 1, 0)][:2]
-                dx, dy = nx - px, ny - py
-                n = math.hypot(dx, dy) or 1.0
-                ox, oy = -dy / n * side_m / 1000.0, dx / n * side_m / 1000.0           # to the side of the way on
-                res.append(((x + ox) * 100000.0, (y + oy) * 100000.0, (a * 1000.0 + up_m) * 100.0))
-            return res
+            """pts shifted side_m north (+y) and up_m up: one fixed shift for the whole track, so its shape, its
+            joins and its turns are KOT's (a shift to the side of the way on flipped across the turn over the airfield:
+            MISHKA's next circuit began 1.7 km behind it)"""
+            return [(x * 100000.0, (y + side_m / 1000.0) * 100000.0, (a * 1000.0 + up_m) * 100.0) for x, y, a in pts]
         out.append(dict(key=key, unit=f'SV_Unit_Ladon{key}', obj=f'SV_Obj_Ladon{key}', row=f'sv_ladon_{key.lower()}',
                         npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
                         loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
@@ -784,12 +789,19 @@ def build_ladon(g, flag, stock_ep):
     t_eng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_CompositeEvent_83',
                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
     assert arg_values(t_eng)[3] == 'Normal', arg_values(t_eng)
+    # its weapons' own orders (Mission 16's Normal_Missile record, on each firing part; code review of 2026-10-23: only
+    # the body had one)
+    t_weng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Normal_Missile',
+                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_VLS0' and a[8] == 'false')
+    assert arg_values(t_weng)[3] == 'Normal' and arg_values(t_weng)[6] == 'PlayerFirst', arg_values(t_weng)
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
     for L in ladons():
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
         flag(L['up'], L['flag'], 'Set', 0)
         g.execute(t_path, L['up'], {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0)
         g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
+        for part in LADON_WEAPONS:
+            g.execute(t_weng, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
         for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
