@@ -80,7 +80,7 @@ db.prepare(`INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills
 const e = await boardEmbeds(env);
 const ace = e[0].fields.find((f) => f.name.toLowerCase().includes("ace")).value;
 check(`'Naish' and 'naish' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
-check(`the boards: ${e.length} embeds (round, score, specials)`, e.length === 3 && e[2].fields.length === 5);
+check(`the boards: ${e.length} embeds (round, score, specials)`, e.length === 3 && e[2].fields.length === 6);
 const x = await extraEmbeds(env, null, null, Math.floor(Date.now() / 1000));
 check(`the second message: ${x.map((m) => m.title.split(" —")[0]).join(", ")}`, x.length === 3 && x[0].fields.length === 5);
 check(`records: most ace squadron kills ${JSON.stringify(x[0].fields[3].value)}`, x[0].fields[3].value.includes("— 28 "));   // (the 30th of these was rate limited)

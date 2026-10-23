@@ -306,6 +306,13 @@ ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Pla
                        (1.5, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play'),
                        (3.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play'),
                        (0.5, 'AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play')]
+# Special round "AB.L..IN" (user, 2026-10-23: "One Last Anomaly. an EA-18G Growler ... its Squadron Tag is IFF: FATAL
+# ERROR, it's name is AB.L..IN"): one EA-18G (the campaign named-ace row, its ECM pod held up by main.lua) in its own
+# one-aircraft unit, a copy of pool flight ANOMALY_SOURCE like MINDRIPPER's; Scripts/main.lua spawns it hidden, shows
+# it in a puff of smoke and, each time it's hit, blinks it around the player for a few seconds, aimed at them, gun
+# firing (CFG.specials.glitch). The records here: the pool's orders and the MISSION UPDATE banner when it appears.
+GLITCH_UNIT = 'SV_Unit_Glitch'
+GLITCH_OBJ = None                           # its AI object name, set by build_survival.py build_wd_global
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -675,6 +682,7 @@ def build_events(stock_ep):
         g.execute(t_landing, ev, {0: on})
     build_shuttle(g, flag)
     build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
+    build_glitch(g, t_search, t_engage)
     build_repair(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
@@ -998,6 +1006,18 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
         g.execute(t_warn_off, ev)
         g.execute(t_noise_off, ev)
         g.execute(t_glass_off, ev)
+
+
+def build_glitch(g, t_search, t_engage):
+    """AB.L..IN (see GLITCH_*): the pool's orders when it appears (search, then engage the player anywhere) and the
+    stock MISSION UPDATE banner and beep. Everything else is Scripts/main.lua's (ANOM.glitchTick)."""
+    assert GLITCH_OBJ, 'build_survival.py build_wd_global sets GLITCH_OBJ first'
+    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')                  # {0e MISSION_ACCOMPLISHED}
+    up = 'SV_GlitchUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: GLITCH_UNIT})
+    g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)
+    g.execute(t_engage, up, {1: GLITCH_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+    g.execute(t_msg, up, {0: 'MISSION_UPDATE'})
 
 
 def build_shuttle(g, flag):

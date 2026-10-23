@@ -84,6 +84,10 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
   Rounds 2-6 can only be the shuttle; the other specials come from round 7 (user, 2026-10-23).
 - A special's difficulty follows its round (as the normal round before it would have been).
 - ALICORN special round: no normal aircraft spawn in it.
+- AB.L..IN special round (user, 2026-10-23): an EA-18G Growler named AB.L..IN, squadron tag IFF: FATAL ERROR,
+  450 HP, ECM always on, flies as a normal enemy. When damaged it teleports around the player for 6 s, fully
+  aimed at them, gun firing nonstop with extreme accuracy, then flies normally until hit again. It vanishes and
+  reappears in small smoke clouds. Alone in its round.
 - Test keys for every special round.
 
 ## Open decisions

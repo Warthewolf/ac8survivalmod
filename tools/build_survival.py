@@ -775,6 +775,12 @@ def split_units(units, used_ids, z, top_number):
                        survival_events.ANOMALY_GUARDS, top_number, 'SV_Obj_AnomalyGuard', wing + '_sv')
     survival_events.ANOMALY_OBJ = ace[0]
     print(f'  anomaly: {ace[0]} in {survival_events.ANOMALY_UNIT}, guards {guards} in {survival_events.ANOMALY_GUARD_UNIT}')
+    # AB.L..IN (survival_events.GLITCH_*): the EA-18G alone, on its ace row (its airframe in the world data too)
+    (glead, _, _), _ = ace_rows('glitch', 'e18g')
+    gl = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.GLITCH_UNIT, 1, top_number,
+                   'SV_Obj_Glitch', glead + '_sv')
+    survival_events.GLITCH_OBJ = gl[0]
+    print(f'  glitch: {gl[0]} in {survival_events.GLITCH_UNIT}')
 
 
 def build_wd_global():
@@ -1233,6 +1239,8 @@ ACES = [  # (tier, key, lead DT_NPC row, wing DT_NPC row)
     ('reaper',    'adfx02',  'OP1021_su57_Named',      'OP1021_su57_Named'),        # model: ACE_MODELS
     # the Anomaly's MINDRIPPER (lead) and its guards (wing): main.lua CFG.specials.anomaly names them
     ('anomaly',   'f04e',    'OP1003_f04e_Named',      'OP1003_f04e_Named'),
+    # AB.L..IN (lead; no wing flies): main.lua CFG.specials.glitch names it and its squadron tag
+    ('glitch',    'e18g',    'OP1010_e18g_Named',      'OP1010_e18g_Named'),
 ]
 # Airframes only Online Mode has (user, 2026-10-22: "ADFX-02 appears in the Online Mode"): their model rows are in
 # DT_NPC_Model_ON, not the campaign's DT_NPC_Model, so DT_SV_ModelRows carries copies (GameObjectId 1 like every

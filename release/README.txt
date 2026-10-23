@@ -65,6 +65,8 @@ the later they come.
 - THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down.
 - THE ALICORN: the submarine carrier sails the west sea, diving and surfacing, firing its railgun and missiles.
   Destroy its four ballast tanks to open its core, then the core.
+- AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
+  smoke and blinks around you for 6 seconds, nose on you, gun firing. Nothing else flies in its round.
 
 Leaderboard (Discord)
 ---------------------

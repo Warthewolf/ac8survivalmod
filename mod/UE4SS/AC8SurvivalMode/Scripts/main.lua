@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.55.7"
+local VERSION = "0.56.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -881,7 +881,7 @@ local CFG = {
         chance   = 0.3,
         first    = 4,
         every    = 5,
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn" },
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
@@ -933,6 +933,24 @@ local CFG = {
                                  "/Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability.DT_NPC_WeaponDurability" },
                                { "/Game/Mods/SurvivalMode/Data/DT_SV_AlcnExDur.DT_SV_AlcnExDur",
                                  "/Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability.DT_NPC_ExplosionDurability" } } },
+        -- "glitch" = AB.L..IN, squadron tag IFF: FATAL ERROR (user, 2026-10-23: "One Last Anomaly. an EA-18G Growler, It's
+        -- health is set to 450. it has ECM Activated always, it's a normal aircraft, but as soon as it gets damaged, it
+        -- begins to teleport at different angles, during this time, it's constantly firing it's gun at you ... for 6
+        -- seconds before continuing to flight normally against you ... disappear in a small smoke cloud, also have it
+        -- reappear within small smoke clouds too"; "it teleports around the player ... fully aiming at the player as
+        -- it fires it's gun with extreme accuracy"). One EA-18G alone (tools/survival_events.py GLITCH_*), `health`
+        -- HP (the EA-18G has 60), its ECM pod always up, an accurate gun that holds the trigger (gun_*: it fires once
+        -- you're within gun_range_m and gun_angle_deg of its nose). It arrives hidden and shows in a puff of `smoke`
+        -- arrive_s later. Each time it's hit (outside a frenzy) it frenzies for frenzy_s: every blink_every_s it
+        -- vanishes in smoke and comes back blink_m from you (any bearing, blink_pitch_deg up or down) in smoke, and
+        -- between blinks its nose stays on you (leading you at bullet_mps). Shot down: `reward` zollars.
+        glitch   = { name = "AB.L..IN", squadron = "IFF: FATAL ERROR", unit = "SV_Unit_Glitch", health = 450,
+                     reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
+                     frenzy_s = 6, blink_every_s = 1.0, blink_m = { 450, 850 }, blink_pitch_deg = { -25, 35 },
+                     min_alt_m = 300, bullet_mps = 1000,
+                     gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
+                     smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
+                     smoke_s = 3.0 },
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
         -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
@@ -1138,6 +1156,7 @@ local CFG = {
             spike_sub    = "ENEMY PILOTS GROW SHARPER",
             ace          = "ACE INBOUND: %s",
             anomaly_sub  = "ANOMALY DETECTED",
+            glitch_sub   = "IFF: FATAL ERROR",
             anomaly_warn = "WARNING: %s",
             anomaly_warn_sub = "ITS FIELD INVERTS YOUR CONTROLS",
             anomaly_field     = "ANOMALY FIELD",
@@ -1421,7 +1440,8 @@ local SPIKE_SUFFIX = { [0] = "", "b", "c", "d" }      -- tools/build_survival.py
 local ACE = {
     roster = { mercenary = { "f15c", "su35", "typhoon" }, legend = { "su47", "rafale" }, demon = { "f22a", "su57" },
                phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale", "adfx02" },
-               anomaly = { "f04e" } },             -- the Anomaly's MINDRIPPER and guards (not a tier: never a flight's)
+               anomaly = { "f04e" },               -- the Anomaly's MINDRIPPER and guards (not a tier: never a flight's)
+               glitch = { "e18g" } },              -- AB.L..IN (CFG.specials.glitch; not a tier either)
     row = function(tier, key, part) return "sv_ace_" .. tier .. "_" .. key .. "_" .. part end,
     -- airframes from Online Mode (tools/build_survival.py ACE_MODELS): their model row (DT_SV_ModelRows) goes into the
     -- campaign's DT_NPC_Model first, and their name (the model's GameObjectDisplayName01) is Survival's text
@@ -1857,6 +1877,21 @@ local function searchSetup()
         end, string.format("MINDRIPPER's gun: within %d m / %d deg, %.2f s on target, %d-round bursts, rest %.2f s",
             g.range_m * 1.5, math.min(180, g.angle_deg * 1.5), g.aim_s / AGG, math.min(200, g.burst * AGG), g.rest_s / AGG), "x")
     end
+    -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
+    local function glitchGun(src)
+        local GL = CFG.specials.glitch
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.CaptureAngleRange = GL.gun_range_m, GL.gun_angle_deg
+            r.TriggeringTime, r.TriggerCount, r.RestingTime = 0.05, 200, 0
+            if wpn then
+                local rounds = copy(wpn, r.NpcWeaponId:ToString(), function(x)
+                    x.damage = x.damage * GL.gun_damage_x
+                    x.MaxSpawnAngle = GL.gun_spread_deg
+                end, string.format("AB.L..IN's gun rounds: damage x%.1f, spread %.2f deg", GL.gun_damage_x, GL.gun_spread_deg), "g")
+                if rounds then r.NpcWeaponId = FName(rounds) end
+            end
+        end, string.format("AB.L..IN's gun: within %d m / %d deg, 200-round bursts, no rest", GL.gun_range_m, GL.gun_angle_deg), "g")
+    end
     local ok, why = cloneRow(mod, SEARCH_MODULE.src, SEARCH_MODULE.row, function(r)
         if not CFG.search.enabled then return end   -- off: the stock module's values
         r.Radius = CFG.search.radius_m
@@ -1893,9 +1928,10 @@ local function searchSetup()
             end
         end
         for tier, keys in pairs(ACE.roster) do
-            local an = CFG.specials.anomaly
-            local c = tier == "anomaly" and { squadron = an.guards_name, f04e = an.name } or CFG.aces[tier] or {}
-            if tier ~= "anomaly" and not CFG.aces.enabled then keys = {} end
+            local an, gl = CFG.specials.anomaly, CFG.specials.glitch
+            local c = (tier == "anomaly" and { squadron = an.guards_name, f04e = an.name })
+                or (tier == "glitch" and { squadron = gl.squadron, e18g = gl.name }) or CFG.aces[tier] or {}
+            if tier ~= "anomaly" and tier ~= "glitch" and not CFG.aces.enabled then keys = {} end
             if type(SV_SetText) == "function" and SV_SetText("SV_Sqn_" .. tier, tostring(c.squadron or tier)) == 1 then names = names + 1 end
             for _, k in ipairs(keys) do
                 if type(SV_SetText) == "function" and SV_SetText("SV_Ace_" .. tier .. "_" .. k, tostring(c[k] or k)) == 1 then names = names + 1 end
@@ -1947,6 +1983,14 @@ local function searchSetup()
                                 okE and "" or ("; NOT applied: " .. tostring(errE))))
                         end
                     end
+                    if a == ACE.row("glitch", "e18g", "l") then            -- AB.L..IN (CFG.specials.glitch)
+                        local gl = CFG.specials.glitch
+                        local okE, errE = pcall(function() r.MaxHealthDifference = gl.health - 60 end)   -- (the EA-18G: 60)
+                        if level == 0 then
+                            log(string.format("special: %s's row %s: %d HP%s", gl.name, svNpc, gl.health,
+                                okE and "" or ("; NOT applied: " .. tostring(errE))))
+                        end
+                    end
                     local ft = a:match("^sv_ace_(%a+)_")                    -- a tier's squadron: CFG.aces.flight
                     local fl = ft and CFG.aces.flight and CFG.aces.flight[ft]
                     if fl then
@@ -1968,6 +2012,7 @@ local function searchSetup()
                         end
                     end
                     local mind = a == ACE.row("anomaly", "f04e", "l")       -- MINDRIPPER: its own, every level
+                    local glitch = a == ACE.row("glitch", "e18g", "l")      -- AB.L..IN: its gun and ECM pod
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free, frees = nil, {}
                         for i = 0, 5 do
@@ -1977,7 +2022,9 @@ local function searchSetup()
                                 if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
                                     new = mind and anomFcs(id) or svFcs(id, level)
                                 elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
-                                    new = mind and anomGun(id) or svGun(id, level)
+                                    new = (mind and anomGun(id)) or (glitch and glitchGun(id)) or svGun(id, level)
+                                elseif glitch and id:find("ECM", 1, true) then
+                                    new = anomEcm(id)                                -- its pod always up
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
                                 if new then r["NpcFCSId" .. i] = FName(new) end
                             end)
@@ -3238,6 +3285,163 @@ local function portalTick(now, s, c)
     end
 end
 
+-- AB.L..IN (CFG.specials.glitch; tools/survival_events.py GLITCH_*): its actor (just created ones too), a puff of
+-- smoke at a world location, and the rotation that points its nose at `to` from `from`.
+local function glitchActor(c)
+    for _, list in ipairs({ planes, pending }) do
+        for _, q in ipairs(list) do if q.unit == c.unit and valid(q.obj) then return q.obj end end
+    end
+end
+local function glitchSmoke(at)
+    local c = CFG.specials.glitch
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = loadObject(c.smoke .. "." .. c.smoke:match("[^/]+$"))
+    if not (valid(lib) and valid(survivalPC) and sys and at) then return false end
+    local ok, err = pcall(function()
+        local comp = lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
+            { X = c.smoke_scale, Y = c.smoke_scale, Z = c.smoke_scale }, true, true, 0, true)
+        keepFx(comp, c.smoke_s)
+    end)
+    if not ok and not niagaraSaid then niagaraSaid = true; log("special: AB.L..IN's smoke failed: " .. tostring(err)) end
+    return ok
+end
+local function aimAt(from, to)
+    local dx, dy, dz = to.X - from.X, to.Y - from.Y, to.Z - from.Z
+    return { Pitch = math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy))), Yaw = math.deg(math.atan(dy, dx)), Roll = 0 }
+end
+local function where(o)
+    local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
+    return ok and v or nil
+end
+-- where to aim at the player from `from`: their position now, plus their velocity over the rounds' flight time
+local function glitchTarget(from)
+    local c = CFG.specials.glitch
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    local you = pawn and where(pawn)
+    if not you then return nil end
+    local ok, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+    if ok and v and from then
+        local dx, dy, dz = you.X - from.X, you.Y - from.Y, you.Z - from.Z
+        local tof = math.sqrt(dx * dx + dy * dy + dz * dz) / (c.bullet_mps * 100)
+        return { X = you.X + v.X * tof, Y = you.Y + v.Y * tof, Z = you.Z + v.Z * tof }, you
+    end
+    return you, you
+end
+local function setShown(o, shown) return pcall(function() o:SetActorHiddenInGame(not shown) end) end
+
+-- AB.L..IN on its ace row at the top fire-control level, hidden until its smoke (glitchTick); false if it can't come.
+function ANOM.glitchSpawn(now)
+    local c = CFG.specials.glitch
+    local row = ACE.row("glitch", "e18g", "l")
+    if not SR.usable[row] then
+        log("special: AB.L..IN's row wasn't in before this level loaded; a normal round instead")
+        return false
+    end
+    local x, y, dist, bearing = spawnPoint()
+    local you = playerLocation()
+    if you and c.spawn_km and (c.spawn_km[2] or 0) > 0 then          -- spawn_km from the player, inside the combat zone
+        for _ = 1, 30 do
+            local b, d = math.random() * 360, c.spawn_km[1] + math.random() * (c.spawn_km[2] - c.spawn_km[1])
+            local px, py = you.X + d * 100000 * math.cos(math.rad(b)), you.Y + d * 100000 * math.sin(math.rad(b))
+            if math.abs(px - ZONE.X) < ZONE.HALF and math.abs(py - ZONE.Y) < ZONE.HALF then
+                x, y, bearing, dist = px, py, b, d
+                break
+            end
+        end
+    end
+    local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
+    if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
+    spawningUnit = c.unit
+    local r = SV_Spawn(c.unit, x, y, alt * 100, (bearing + 180) % 360)
+    spawningUnit = nil
+    local hidden = 0
+    for _, q in ipairs(pending) do                     -- hidden before a frame is drawn (as MINDRIPPER)
+        if q.unit == c.unit and valid(q.obj) and setShown(q.obj, false) then hidden = hidden + 1 end
+    end
+    log(string.format("special: AB.L..IN as %s (%s set), %.1f km out at bearing %.0f, %.1f km up: %s (%d hidden)", row,
+        tostring(set), dist or -1, bearing or -1, alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"),
+        hidden))
+    if r <= 0 then return false end
+    D.flightTier = D.flightTier or {}
+    D.up[c.unit], D.flown[c.unit], D.flightTier[c.unit] = true, true, #CFG.tiers.list
+    D.special.state, D.special.at = "arrive", now
+    return true
+end
+
+-- Every tick of AB.L..IN's round: its arrival in smoke, its frenzies (a hit starts one: it blinks around the player,
+-- nose on them, gun firing), and its end.
+function ANOM.glitchTick(now, s)
+    local c, t = CFG.specials.glitch, CFG.hud.text
+    local o = glitchActor(c)
+    if s.state == "arrive" then
+        if o then setShown(o, false) end
+        if now - s.at < c.arrive_s or not o then return end
+        local at = where(o)
+        setShown(o, true)
+        glitchSmoke(at)
+        s.state = "hunt"
+        hudCallout(c.name, c.squadron)
+        log(string.format("special: %s (%s) appears in smoke", c.name, c.squadron))
+        return
+    end
+    if s.state ~= "hunt" then return end
+    if SV_UnitAlive(c.unit) <= 0 then
+        s.state = "done"
+        if s.lastAt then glitchSmoke(s.lastAt) end
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, c.name .. " down")
+        LB.special("glitch", true, now - s.at)
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
+        log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks)", D.round, c.name,
+            now - s.at, s.frenzies or 0, s.blinks or 0))
+        return
+    end
+    if not o then return end
+    local at = where(o)
+    s.lastAt = at or s.lastAt
+    local okH, h = pcall(function() return o.HealthInternal end)
+    h = okH and type(h) == "number" and h or nil
+    if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil then      -- hit: a frenzy
+        s.frenzyUntil, s.nextBlink = now + c.frenzy_s, now
+        s.frenzies = (s.frenzies or 0) + 1
+        log(string.format("special: %s hit (%.0f -> %.0f): frenzy %d for %.0f s", c.name, s.lastHp, h, s.frenzies, c.frenzy_s))
+    end
+    s.lastHp = h or s.lastHp
+    if not s.frenzyUntil then return end
+    if s.vanished then                                  -- back, somewhere around the player, nose on them
+        local aim, you = glitchTarget(nil)
+        if you then
+            local b, e = math.random() * 2 * math.pi, math.rad(c.blink_pitch_deg[1] + math.random() * (c.blink_pitch_deg[2] - c.blink_pitch_deg[1]))
+            local d = (c.blink_m[1] + math.random() * (c.blink_m[2] - c.blink_m[1])) * 100
+            local to = { X = you.X + d * math.cos(e) * math.cos(b), Y = you.Y + d * math.cos(e) * math.sin(b),
+                         Z = math.max(c.min_alt_m * 100, you.Z + d * math.sin(e)) }
+            aim = glitchTarget(to) or aim
+            local ok, err = pcall(function() o:K2_SetActorLocationAndRotation(to, aimAt(to, aim), false, {}, true) end)
+            s.blinks = (s.blinks or 0) + 1
+            if s.blinks <= 3 or not ok then
+                local back = where(o)
+                log(string.format("special: %s blink %d: to %.0f m from you%s; reads back %s", c.name, s.blinks, d / 100,
+                    ok and "" or (" (FAILED: " .. tostring(err) .. ")"),
+                    back and string.format("%.0f m from there", math.sqrt((back.X - to.X) ^ 2 + (back.Y - to.Y) ^ 2 + (back.Z - to.Z) ^ 2) / 100) or "?"))
+            end
+            glitchSmoke(to)
+        end
+        setShown(o, true)
+        s.vanished, s.nextBlink = false, now + c.blink_every_s
+    elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
+        s.frenzyUntil = nil
+        log(string.format("special: %s's frenzy %d over (%d blinks so far)", c.name, s.frenzies or 0, s.blinks or 0))
+    elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
+        glitchSmoke(at)
+        setShown(o, false)
+        s.vanished = true
+    elseif at then                                      -- between blinks: nose on the player
+        local aim = glitchTarget(at)
+        if aim then pcall(function() o:K2_SetActorRotation(aimAt(at, aim), true) end) end
+    end
+end
+
 -- Every tick of a running Anomaly: its distance (the field) and its end.
 function ANOM.tick(now, s)
     local c, t = CFG.specials.anomaly, CFG.hud.text
@@ -3338,6 +3542,7 @@ local function specialTick(now)
     if s and s.kind == "amphibious" then return AMPH.tick(now, s) end
     if s and s.kind == "ladon" then return SPC.ladonTick(now, s) end
     if s and s.kind == "alicorn" then return SPC.alicornTick(now, s) end
+    if s and s.kind == "glitch" then return ANOM.glitchTick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
@@ -3426,7 +3631,7 @@ local function startRound()
     D.nextTier, D.nextTierRound = nil, nil
     D.budget = budget
     local anomalyOnly = (special == "anomaly" and CFG.specials.anomaly.only) or special == "ladon"   -- (its fighters: none)
-        or special == "alicorn"
+        or special == "alicorn" or special == "glitch"
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
@@ -3437,7 +3642,7 @@ local function startRound()
         nBombers = 1 + CFG.specials.anomaly.guards
     elseif special == "ladon" then
         nBombers = 2
-    elseif special == "alicorn" then
+    elseif special == "alicorn" or special == "glitch" then
         nBombers = 1
     elseif special == "amphibious" and CFG.airfield.enabled and math.random() < CFG.specials.amphibious.bomber_chance then
         raid = true                                   -- a raid on the airfield with the landing (its share of the budget)
@@ -3484,6 +3689,7 @@ local function startRound()
     if special == "anomaly" then table.insert(D.queue, 1, "@anomaly") end
     if special == "ladon" then table.insert(D.queue, 1, "@ladon") end
     if special == "alicorn" then table.insert(D.queue, 1, "@alicorn") end
+    if special == "glitch" then table.insert(D.queue, 1, "@glitch") end
     if special == "amphibious" then table.insert(D.queue, 1, "@amphib") end    -- the landing craft first
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
@@ -3565,6 +3771,8 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
             elseif nextSpecial == "alicorn" then
                 hudCallout(string.format(t.special, D.round + 1), t.alicorn_sub)
+            elseif nextSpecial == "glitch" then
+                hudCallout(string.format(t.special, D.round + 1), t.glitch_sub)
             elseif nextSpecial == "ladon" then
                 hudCallout(string.format(t.special, D.round + 1), t.ladon_sub)
             elseif nextSpecial == "amphibious" then
@@ -3597,9 +3805,10 @@ local function roundsTick(now)
             spawnShuttle()
         elseif u == "@amphib" then
             if not AMPH.spawn(now) then D.special, RUN.specialPick[D.round] = nil, false end   -- no lane: a normal round
-        elseif u == "@alicorn" or u == "@ladon" or u == "@anomaly" then
+        elseif u == "@alicorn" or u == "@ladon" or u == "@anomaly" or u == "@glitch" then
             local ok
             if u == "@alicorn" then ok = SPC.alicornSpawn(now)
+            elseif u == "@glitch" then ok = ANOM.glitchSpawn(now)
             elseif u == "@ladon" then ok = SPC.ladonSpawn(now)
             else
                 ok = ANOM.spawn()
@@ -6221,22 +6430,22 @@ if type(RegisterKeyBind) == "function" and Key then
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
     local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
                             { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
-                            { "FIVE", "alicorn", "THE ALICORN" } }
+                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" } }
     for i, ts in ipairs(TEST_SPECIALS) do
         local key, kind, label = Key[ts[1]], ts[2], ts[3]
         if key then
             pcall(RegisterKeyBind, key, mods, function()
                 ExecuteInGameThread(function()
                     local ok, err = pcall(function()
-                        if not D or not D.now then log("test: Ctrl+" .. i .. " outside a Survival run"); return end
+                        if not D or not D.now then log("test: Ctrl+" .. ts[1] .. " outside a Survival run"); return end
                         D.forceSpecial = kind
                         local soon = D.state == "wait"
                         if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
                         hudCallout("TEST: " .. label, soon and "STARTING NOW" or "NEXT ROUND")
-                        log(string.format("test: Ctrl+%d, round %d is %s (%s)", i, D.round + 1, kind,
+                        log(string.format("test: Ctrl+%s, round %d is %s (%s)", ts[1], D.round + 1, kind,
                             soon and "starting in 3 s" or "after this round"))
                     end)
-                    if not ok then log("test: Ctrl+" .. i .. " error " .. tostring(err)) end
+                    if not ok then log("test: Ctrl+" .. ts[1] .. " error " .. tostring(err)) end
                 end)
             end)
         end
