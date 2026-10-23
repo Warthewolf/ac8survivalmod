@@ -52,8 +52,8 @@ Named aces (ace rounds: 16, 19, 22, ... - only ace squadrons, no bomber raids; t
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
 an "ACE INBOUND" callout names each one the first time it shows up.
 
-Special rounds: from round 4 on, any round can be a special one (about 1 in 3, never two in a row), and Comona Defense
-can come early, in rounds 2-6 (about 1 in 3 each). They get harder
+Special rounds: in rounds 2-6 only Comona Defense can come (about 1 in 3 each); from round 7 on, any round can be
+any special (about 1 in 3, never two in a row). They get harder
 the later they come.
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown. If it's destroyed the shop is closed through the next round.

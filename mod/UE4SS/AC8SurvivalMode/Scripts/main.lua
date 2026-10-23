@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.6"
+local VERSION = "0.51.7"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -860,7 +860,8 @@ local CFG = {
         rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
-        -- specials in a row, not the same one twice running); otherwise the round's pick is made as above.
+        -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
+        -- random picks above start after `to` (user: only the Shuttle Launch may come between 2 and 6).
         early    = { kind = "shuttle", from = 2, to = 6, chance = 0.35 },
         -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
         -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
@@ -2805,10 +2806,14 @@ local function specialFor(round)
         local pick = RUN.specialPick
         if pick[round] == nil then
             local kind, early = false, sp.early
-            if early and early.kind and round >= (early.from or 0) and round <= (early.to or -1) and not pick[round - 1]
-                and RUN.lastSpecial ~= early.kind and math.random() < (early.chance or 0) then
-                kind = early.kind
-                RUN.lastSpecial = kind
+            -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
+            -- wanted the Shuttle Launch to ever do"; the others start after it)
+            local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
+            if inEarly then
+                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and math.random() < (early.chance or 0) then
+                    kind = early.kind
+                    RUN.lastSpecial = kind
+                end
             elseif round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
                 local choices = {}
                 for _, k in ipairs(sp.rotation) do if k ~= RUN.lastSpecial or #sp.rotation == 1 then choices[#choices + 1] = k end end

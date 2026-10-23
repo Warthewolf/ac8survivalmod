@@ -81,6 +81,7 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 ## 10. Special rounds in play (user, 2026-10-23)
 - After round 3, special rounds are mixed in at random: any round above 3 can be one.
 - The shuttle (Comona Defense) is more likely early: rounds 2-6 are each the shuttle at 35 % (user, 2026-10-23).
+  Rounds 2-6 can only be the shuttle; the other specials come from round 7 (user, 2026-10-23).
 - A special's difficulty follows its round (as the normal round before it would have been).
 - ALICORN special round: no normal aircraft spawn in it.
 - Test keys for every special round.
