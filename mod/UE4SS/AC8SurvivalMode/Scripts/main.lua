@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.54.3"
+local VERSION = "0.54.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -549,7 +549,9 @@ local CFG = {
     -- enemy you have targeted is (dlls/main.dll SV_PlayerTarget; else the nearest one; user: "Can it track the enemy
     -- I'm locked onto?"): range, its bearing off your nose, your angle off its tail, height difference, its AI state,
     -- into flights_<date>_<time>.csv next to Scripts (one file a level). Only on this PC; nothing is sent.
-    recorder = { enabled = true, range_km = 8 },
+    -- Off in releases (user, 2026-10-23: "shouldn't it just be for me since I'm the main tester?"): the dev build turns
+    -- it on in a test-only block near the end, which tools/package_test.sh strips from every zip.
+    recorder = { enabled = false, range_km = 8 },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
@@ -6166,6 +6168,10 @@ local function openSurvival()
         log("launch: console command failed (" .. tostring(err) .. ")")
     end
 end
+-- TEST ONLY END
+
+-- TEST ONLY BEGIN (the flight recorder: the main tester's builds only)
+CFG.recorder.enabled = true
 -- TEST ONLY END
 
 if type(RegisterKeyBind) == "function" and Key then
