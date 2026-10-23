@@ -501,6 +501,9 @@ fastest specials; a Discord server exists, the bot application is still to be ma
   (ask / always / never) / prompt_s; no pilot name, nothing sent. dlls/main.dll SV_Post / SV_PostResult / SV_PostReply:
   WinHTTP on a thread, HMAC-SHA256 (bcrypt) in X-SV-Signature, host and key baked in from leaderboard/submit.local
   (runtime/build.sh -> build/runtime/submit_cfg.h). Runs that don't get through: config\pending_runs.txt, resent.
+- [x] Pilot name (user, 2026-10-23: "Need a way for people to add their own name"; chose the Steam name): Lua 0.47.1 uses
+  [leaderboard] pilot, else the Steam name (dlls/main.dll SV_SteamName: the loaded steam_api64.dll's flat API,
+  SteamFriends_v017 -> GetPersonaName), filtered to the leaderboard's characters.
 - [ ] Set up the Discord application and the Worker (user), then leaderboard/submit.local, then a test run.
 
 - [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival

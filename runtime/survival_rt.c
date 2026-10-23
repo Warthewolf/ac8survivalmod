@@ -2240,6 +2240,30 @@ static int L_PostReply(void* lua)
     return 1;
 }
 
+/* SV_SteamName() -> the player's Steam name (UTF-8), or "" when Steam isn't there: the leaderboard's default pilot
+ * name (user, 2026-10-23). Read from the steam_api64.dll the game has already loaded (its flat API: SteamFriends_v017,
+ * the game's Steamworks 1.57); nothing is loaded or initialised here, and only the name is read. */
+typedef void* (*SteamFriendsFn)(void);
+typedef const char* (*PersonaNameFn)(void* friends);
+static int L_SteamName(void* lua)
+{
+    HANDLE st = GetModuleHandleW(L"steam_api64.dll");
+    const char* name = NULL;
+    if (st) {
+        static const char* kFriends[] = { "SteamAPI_SteamFriends_v017", "SteamAPI_SteamFriends_v018", "SteamAPI_SteamFriends_v016" };
+        PersonaNameFn persona = (PersonaNameFn)GetProcAddress(st, "SteamAPI_ISteamFriends_GetPersonaName");
+        for (size_t i = 0; persona && !name && i < sizeof(kFriends) / sizeof(kFriends[0]); ++i) {
+            SteamFriendsFn get = (SteamFriendsFn)GetProcAddress(st, kFriends[i]);
+            void* fr = get ? get() : NULL;
+            if (fr) name = persona(fr);
+        }
+    }
+    size_t n = 0;
+    while (name && name[n] && n < 128) ++n;
+    U.luaSetString(lua, name ? name : "", n);
+    return 1;
+}
+
 static void RegisterLua(void* lua)
 {
     static const struct { const char* name; LuaFn fn; } kFns[] = {
@@ -2249,7 +2273,7 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
-        { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply },
+        { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     static wchar_t list[640];                                    /* the names registered, for the log */

@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.47.0"
+local VERSION = "0.47.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -812,7 +812,9 @@ local CFG = {
     -- The Discord leaderboard (Milestone 8; leaderboard/README.md; user, 2026-10-23: an end-of-run prompt, a
     -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). When a run ends (shot
     -- down, restarted or left), its summary shows with "Y SUBMIT / N SKIP" for prompt_s seconds. submit: "ask", "always"
-    -- (no prompt: for a controller) or "never". Nothing is ever sent without a `pilot` name. Runs that couldn't get
+    -- (no prompt: for a controller) or "never". The name on the leaderboard: `pilot`, or when that's empty the player's
+    -- Steam name (user, 2026-10-23; dlls/main.dll SV_SteamName), kept to what the leaderboard takes (letters, digits,
+    -- space _ - ., 24 at most); nothing is sent without one. Runs that couldn't get
     -- through wait in config\pending_runs.txt and go at the next start. Only the leaderboard's own server is contacted
     -- (dlls/main.dll SV_Post; its address is built in).
     leaderboard = { pilot = "", submit = "ask", prompt_s = 30 },
@@ -1063,7 +1065,7 @@ local CFG = {
             lb_lines     = { "ROUND REACHED  %d", "SCORE  %s", "KILLS  %d AIR, %d GROUND", "SPECIALS BEATEN  %d",
                              "TIME  %s", "ZOLLARS EARNED  %s" },
             lb_ask       = "SUBMIT TO THE LEADERBOARD?  Y: YES   N: NO",
-            lb_no_pilot  = "SET pilot = YOUR NAME UNDER [leaderboard] IN survival.ini TO SUBMIT RUNS",
+            lb_no_pilot  = "NO PILOT NAME: SET pilot = YOUR NAME UNDER [leaderboard] IN survival.ini",
             lb_sending   = "SENDING...",
             lb_sent      = "SUBMITTED: SCORE %s",
             lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
@@ -3618,6 +3620,20 @@ end
 local function money(n) return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "") end
 local function clockText(t) return string.format("%d:%02d:%02d", t // 3600, t // 60 % 60, t % 60) end
 
+-- The name the run goes under: [leaderboard] pilot, else the Steam name; only what the leaderboard takes, or "".
+function LB.pilot()
+    local name = tostring(CFG.leaderboard.pilot or "")
+    if name:gsub("%s", "") == "" then
+        if LB.steam == nil then
+            LB.steam = type(SV_SteamName) == "function" and tostring(SV_SteamName() or "") or ""
+            log("leaderboard: Steam name " .. (LB.steam ~= "" and ("'" .. LB.steam .. "'") or "not available"))
+        end
+        name = LB.steam
+    end
+    name = name:gsub("[^%w _%.%-]", ""):gsub("^%s+", ""):gsub("%s+$", ""):sub(1, 24)
+    return name
+end
+
 -- Shot down: the player's aircraft at 0 health (checked once a second in a run)
 function LB.deathCheck(pc)
     if not D or not D.round or D.round < 1 or (RUN.stats and RUN.stats.ended) then return end
@@ -3634,7 +3650,7 @@ function LB.finish(how)
     local c = CFG.leaderboard
     local id = {}
     for _ = 1, 32 do id[#id + 1] = string.format("%x", math.random(0, 15)) end
-    local r = { run_id = table.concat(id), pilot = tostring(c.pilot or ""):sub(1, 24), difficulty = (presetName()),
+    local r = { run_id = table.concat(id), pilot = LB.pilot(), difficulty = (presetName()),
                 round = D.round, mod = VERSION, kills = { air = st.air, ground = st.ground },
                 zollars = { earned = math.floor(RUN.earned or 0), spent = math.floor(RUN.spent or 0) },
                 time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials }

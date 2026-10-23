@@ -7,7 +7,8 @@ A Cloudflare Worker that takes finished Survival runs from the game and puts the
   difficulty (Casual / Standard / Ace), and the **fastest time for each special round**;
 - slash commands: `/leaderboard [board] [difficulty]` and `/pilot <name>`.
 
-The game asks "Submit run?" at the end of a run and sends it here over HTTPS (Survival's own runtime; it never talks to
+Players appear under their Steam name (the mod reads it from the game's Steam), or under the `pilot` name they set in
+`survival.ini`'s `[leaderboard]` section. The game asks "Submit run?" at the end of a run and sends it here over HTTPS (Survival's own runtime; it never talks to
 Bandai Namco's services). The Worker works the score out itself, checks the numbers are possible, refuses duplicates
 and limits each sender to 6 runs an hour.
 
