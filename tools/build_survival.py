@@ -1341,7 +1341,10 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
 SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
-                   'm29a_common', 'm31b_common', 'su33_common', 'su34_common']
+                   'm29a_common', 'su47_common', 'su33_common', 'su34_common']
+# Pool aircraft Mission 22's table hasn't got: (new mission row, Mission 22 row it's shaped like, DT_NPC row). The Su-47
+# (user, 2026-10-23: "add SU-47's in instead of the MiG-31's"): the campaign's plain enemy Su-47.
+POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01')]
 # Difficulty spikes (main.lua CFG.spikes; user, 2026-10-22: "every 7 rounds ... a difficulty spike across the board"):
 # each level after the first gets its own rows, <row>_sv<letter> -> <NpcId>_SV<LETTER>, whose DT_NPC copies main.lua
 # gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
@@ -1357,6 +1360,14 @@ def build_npc_table():
     rows = dict(dt['rows'])
     npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
     extra = list(NPC_EXTRA)
+    for new_row, src, npc in POOL_EXTRA:
+        assert (new_row, 0) not in rows, new_row
+        row = copy.deepcopy(rows[(src, 0)])
+        nid = survival_events.fname(npc)                                    # (its numeric tail: hard rule 17)
+        set_prop(row[2], npc_idx, 'NpcId', nid)
+        for n in (new_row, nid[1]): z.nb.add(n)
+        rows[(new_row, 0)] = row
+        dt['rows'].append(((new_row, 0), row))
     for src in SEARCH_AIRCRAFT:
         npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]          # ('name', base, number)
         base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'

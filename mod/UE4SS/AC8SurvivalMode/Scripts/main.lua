@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.9"
+local VERSION = "0.52.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -518,7 +518,9 @@ local CFG = {
     distance_km         = { 18, 25 },           -- from the airfield, random bearing
     altitude_m          = { 2000, 4500 },
     aircraft            = { "f16c_common", "f18e_common", "f15e_common", "f14d_common", "m21b_common",
-                            "m29a_common", "m31b_common", "su33_common", "su34_common" },   -- NPC rows in Mission 22's table
+                            "m29a_common", "su47_common", "su33_common", "su34_common" },   -- NPC rows in Mission 22's table
+                                                                            -- (su47_common: Survival's; the MiG-31 is out,
+                                                                            -- user 2026-10-23)
     pool                = {},                   -- Mission 22's 24 "kokatu" flights (tools/survival_events.py POOL)
     -- Ammo cap at spawn (BUILD_PLAN Milestone 2): missiles / each special weapon / flares per preset; the gun is
     -- unlimited. The preset follows the game's difficulty (1 Casual, 2 Easy, 3 Normal, 4 Hard, 5 Ace).
