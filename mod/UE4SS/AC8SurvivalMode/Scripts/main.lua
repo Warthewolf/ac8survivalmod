@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.48.5"
+local VERSION = "0.49.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -391,6 +391,7 @@ local function logPlane(o, unit)
     end
     if unit and ALLY.unit[unit] then                 -- MOONCHILD: no kill credit, no enemy skill or spikes on it
         log("allies: " .. short .. " (" .. unit .. ") is an ally, not an enemy")
+        if ALLY.unit[unit] == "air" then local R = ALLY.state(); R.planes[#R.planes + 1] = { obj = o, unit = unit, name = short } end
         return
     end
     if n:find("Wingman", 1, true) then log("planes: wingman " .. short .. " (not an enemy)"); return end
@@ -755,11 +756,19 @@ local CFG = {
     -- raids) are strike flights sent at one of them.
     allies = {
         enabled      = true,
-        hunt_share   = 0.5,
+        hunt_share   = 0.35,                     -- (0.5 until 0.48.5: MOONCHILD was swarmed in 2 minutes)
         strike_share = 0.25,
         fcs          = { range_x = 1.6, angle_x = 1.5, time_x = 0.5, spread_x = 0.4 },
         aircraft     = { name = "MOONCHILD", name_key = "SV_Moonchild", takeoff_gap_s = 45,
-                         units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" } },
+                         units = { "SV_Unit_MoonchildA", "SV_Unit_MoonchildB" },
+                         -- scaling with the enemy (user, 2026-10-23: "buff the allied F-22's so they scale up with the
+                         -- enemy"), set as each one is seen up and again every round while it flies: PilotRank the
+                         -- round's skill tier's + rank_add (at least rank_min, at most 5; not lowered on Casual), AI level
+                         -- the tier's (at least ai_level_min; set before each takeoff), health x health_x x (1 +
+                         -- health_per_round x (round - 1)), at most health_max_x. (Test of 2026-10-23: a 15000 Z flight
+                         -- bought in round 9 was gone 112 s after takeoff.)
+                         scale = { rank_add = 1, rank_min = 3, ai_level_min = 3, health_x = 2.0, health_per_round = 0.08,
+                                   health_max_x = 4.5 } },
         ships        = {
             -- search_m: its turrets' AI module (a copy of NPC_AIModule_Turret000, 6000 m, made NPC_AIModule_SV_<key>),
             -- the farthest they see anything, and no losing targets in cloud. missile: its homing missiles' own weapon
@@ -886,8 +895,8 @@ local CFG = {
         -- more fighters than the round's own and a bomber raid more often)
         amphibious = { lanes = { "A", "B", "C", "D" }, craft = { "W", "X", "Y", "Z" }, lanes_first = 4, lanes_more = 1,
                        capture_per_troop = 25, extra_aircraft = 4,
-                       captured_rounds = 2, bomber_chance = 0.6, reward = 3000, reward_per_round = 120,
-                       craft_pay = 300, troop_pay = 200, remove_after_s = 90 },
+                       captured_rounds = 2, bomber_chance = 0.6, reward = 2000, reward_per_round = 80,
+                       craft_pay = 150, troop_pay = 150, remove_after_s = 90 },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, reward_per_round = 100, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -5171,7 +5180,7 @@ function ALLY.speakerTick(want)
 end
 
 function ALLY.state()
-    ALLY.run = ALLY.run or { up = {}, events = {}, hunted = {}, seen = {}, nextTakeoff = 0 }
+    ALLY.run = ALLY.run or { up = {}, events = {}, hunted = {}, seen = {}, planes = {}, nextTakeoff = 0 }
     return ALLY.run
 end
 
@@ -5211,6 +5220,40 @@ function ALLY.buy(role, unit, key, price)
     return true, CFG.allies.aircraft.name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
 end
 
+-- MOONCHILD's level for this round (CFG.allies.aircraft.scale): { rank, ai, hx (health multiplier), tier name }
+function ALLY.level()
+    local sc, round = CFG.allies.aircraft.scale or {}, math.max(1, D and D.round or 1)
+    local t = CFG.tiers.enabled and CFG.tiers.list[TIER.index(round)] or {}
+    return { rank = math.max(sc.rank_min or 1, math.min(5, (t.rank or 3) + (sc.rank_add or 0))),
+             ai = math.max(sc.ai_level_min or 2, t.ai_level or 2),
+             hx = math.min(sc.health_max_x or 1, (sc.health_x or 1) * (1 + (sc.health_per_round or 0) * (round - 1))),
+             tier = t.name or "-" }
+end
+
+-- Each allied aircraft at this round's level: its rank, and its health raised by the growth since it was last set.
+function ALLY.scale()
+    local R = ALLY.state()
+    if #R.planes == 0 then return end
+    local L = ALLY.level()
+    for i = #R.planes, 1, -1 do
+        local p = R.planes[i]
+        if not valid(p.obj) then table.remove(R.planes, i)
+        elseif p.round ~= D.round then
+            p.round = D.round
+            pcall(function() p.obj.PilotRank = L.rank end)
+            local was = p.hx or 1
+            p.hx = L.hx
+            local ok, h0, h1 = pcall(function()
+                local h = p.obj.HealthInternal
+                if L.hx > was and h > 0 then p.obj.HealthInternal = h * L.hx / was end
+                return h, p.obj.HealthInternal
+            end)
+            log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)", p.name, p.unit,
+                D.round, L.tier, L.rank, L.hx, ok and tostring(h0) or "?", ok and tostring(h1) or "?"))
+        end
+    end
+end
+
 -- Strike flight `bomber` (a normal round's, sent at allied ship unit `ship`): RE_SV_Strike<ship>_NN once its own
 -- orders (the airfield's, from its appearance) are in.
 function ALLY.strike(bomber, ship)
@@ -5231,6 +5274,7 @@ function ALLY.tick(now)
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
         if s and s.queued and now >= R.nextTakeoff and not playerOnAirfield() then
+            if type(SV_SetLevel) == "function" then SV_SetLevel(u, ALLY.level().ai * 100) end
             spawningUnit = u
             local r = SV_Spawn(u)
             spawningUnit = nil
@@ -5249,8 +5293,9 @@ function ALLY.tick(now)
             end
         end
     end
-    if now >= (R.checkAt or 0) then                  -- every 2 s: losses, and the enemies' orders on MOONCHILD
+    if now >= (R.checkAt or 0) then                  -- every 2 s: losses, scaling, and the enemies' orders on MOONCHILD
         R.checkAt = now + 2
+        ALLY.scale()
         local f, airborne = svFlags() or {}, 0
         for u, s in pairs(R.up) do
             if not s.queued then
