@@ -105,14 +105,22 @@ async function discordSigned(req, body, publicKey) {
 }
 
 // ------------------------------------------------------------------------------------------------- Discord
+// A rate limit with a short wait (e.g. 429 code 30046, "Maximum number of edits to messages older than 1 hour", 1.4 s
+// on the pinned boards; user, 2026-10-23) is waited out and tried again, twice at most.
 async function discord(env, method, path, json) {
-  const r = await fetch(API + path, {
-    method,
-    headers: { Authorization: `Bot ${env.DISCORD_TOKEN}`, "Content-Type": "application/json" },
-    body: json === undefined ? undefined : JSON.stringify(json),
-  });
-  if (!r.ok) throw new Error(`Discord ${method} ${path}: ${r.status} ${await r.text()}`);
-  return r.status === 204 ? null : r.json();
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(API + path, {
+      method,
+      headers: { Authorization: `Bot ${env.DISCORD_TOKEN}`, "Content-Type": "application/json" },
+      body: json === undefined ? undefined : JSON.stringify(json),
+    });
+    if (r.ok) return r.status === 204 ? null : r.json();
+    const text = await r.text();
+    let wait = -1;
+    if (r.status === 429) { try { wait = Number(JSON.parse(text).retry_after); } catch (e) { /* not JSON */ } }
+    if (attempt < 2 && wait >= 0 && wait <= 10) { await new Promise((ok) => setTimeout(ok, wait * 1000 + 250)); continue; }
+    throw new Error(`Discord ${method} ${path}: ${r.status} ${text}`);
+  }
 }
 
 const fmtTime = (s) => `${Math.floor(s / 3600) ? Math.floor(s / 3600) + "h " : ""}${Math.floor(s / 60) % 60}m ${s % 60}s`;
@@ -261,6 +269,9 @@ async function pinnedMessage(env, key, content) {
 // every update and /setup fail) is forgotten and made again.
 async function updatePinned(env, key, placeholder, body) {
   let m = await pinnedMessage(env, key, placeholder);
+  // unchanged since the last edit: no edit (Discord caps edits to messages older than an hour)
+  const sum = await sha256Hex(JSON.stringify(body));
+  if (!m.made && (await setting(env, key + "_sum")) === sum) return m;
   try {
     await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${m.id}`, body);
   } catch (e) {
@@ -270,6 +281,7 @@ async function updatePinned(env, key, placeholder, body) {
     await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${m.id}`, body);
     m.remade = true;
   }
+  await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(key + "_sum", sum).run();
   return m;
 }
 
