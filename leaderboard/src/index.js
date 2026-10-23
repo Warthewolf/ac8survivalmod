@@ -257,15 +257,29 @@ async function pinnedMessage(env, key, content) {
   return { id: m.id, made: true, pinned };
 }
 
+// One pinned message brought up to date; a message that's gone (deleted in Discord: 404 Unknown Message, which made
+// every update and /setup fail) is forgotten and made again.
+async function updatePinned(env, key, placeholder, body) {
+  let m = await pinnedMessage(env, key, placeholder);
+  try {
+    await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${m.id}`, body);
+  } catch (e) {
+    if (m.made || !String(e.message).includes(": 404 ")) throw e;
+    await env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(key).run();
+    m = await pinnedMessage(env, key, placeholder);
+    await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${m.id}`, body);
+    m.remade = true;
+  }
+  return m;
+}
+
 async function refreshBoards(env) {
-  const id = await setting(env, "board_message");
-  if (!id) return;
-  await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${id}`,
+  if (!(await setting(env, "board_message"))) return;
+  const one = await updatePinned(env, "board_message", "Leaderboard coming up...",
     { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) });
-  const two = await pinnedMessage(env, "board_message_2", "Records coming up...");
-  await discord(env, "PATCH", `/channels/${env.BOARD_CHANNEL_ID}/messages/${two.id}`,
+  const two = await updatePinned(env, "board_message_2", "Records coming up...",
     { content: "**AC8 Survival Mode — records, aircraft and this week**", embeds: await extraEmbeds(env) });
-  return two;
+  return { ...two, oneRemade: !!one.remade };
 }
 
 // Columns added after the first databases were made (aircraft; how / tier / aces / allies / af_down / captured from
@@ -379,17 +393,24 @@ async function setup(req, env) {
   const key = new URL(req.url).searchParams.get("key") || "";
   if (!env.ADMIN_KEY || !sameText(key, env.ADMIN_KEY)) return json({ ok: false, error: "bad key" }, 401);
   const done = [];
-  await discord(env, "PUT", `/applications/${env.DISCORD_APP_ID}/commands`, COMMANDS);
-  done.push("slash commands registered (they can take a minute to show)");
-  if (!(await setting(env, "board_message"))) {
-    const m = await discord(env, "POST", `/channels/${env.BOARD_CHANNEL_ID}/messages`, { content: "Leaderboard coming up..." });
-    await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('board_message', ?)").bind(m.id).run();
-    try { await discord(env, "PUT", `/channels/${env.BOARD_CHANNEL_ID}/pins/${m.id}`); done.push("leaderboard message made and pinned"); }
-    catch (e) { done.push("leaderboard message made (pinning failed: give the bot Manage Messages)"); }
+  let step = "registering the slash commands";
+  try {           // (admin only: a failure says which step and why, not just "server error")
+    await discord(env, "PUT", `/applications/${env.DISCORD_APP_ID}/commands`, COMMANDS);
+    done.push("slash commands registered (they can take a minute to show)");
+    step = "making the leaderboard message";
+    if (!(await setting(env, "board_message"))) {
+      const m = await pinnedMessage(env, "board_message", "Leaderboard coming up...");
+      done.push(`leaderboard message made${m.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
+    }
+    step = "updating the leaderboard messages";
+    const two = await refreshBoards(env);
+    if (two && two.oneRemade) done.push("the leaderboard message was gone: made again");
+    if (two && two.made) done.push(`records message ${two.remade ? "was gone: made again" : "made"}${two.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
+    done.push("leaderboard up to date");
+  } catch (e) {
+    console.log(String(e && e.stack || e));
+    return json({ ok: false, failed: step, error: String(e && e.message || e), done }, 500);
   }
-  const two = await refreshBoards(env);
-  if (two && two.made) done.push(`records message made${two.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
-  done.push("leaderboard up to date");
   return json({ ok: true, done });
 }
 
