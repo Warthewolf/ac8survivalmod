@@ -401,7 +401,7 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LadonRun{key}' for key, _, _ in LADONS])
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -654,6 +654,11 @@ def build_events(stock_ep):
         for obj in objs[unit][:BOMBER_SIZES[unit]]:   # build_survival.py keeps these first aircraft
             g.execute(t_fire, run, {1: obj}, delay=BOMB_GAP_S, loop=BOMB_COUNT)
     assert arg_values(t_landing)[0] == 'false'
+    # the run's heartbeat (Scripts/main.lua fires it every 10 s): a mission restart sets every flag back to 0, so a drop
+    # in SV_Beat is a restart even in a round without a kill or an airfield hit (test of 2026-10-23: a retry after the
+    # Ladons shot the player down went unseen and the run went on to round 2)
+    g.trigger('RE_Wave2_AreaB_PathSet', 'RE_SV_Beat')
+    flag('RE_SV_Beat', 'SV_Beat', 'Add', 1)
     for ev, on in (('RE_SV_AirfieldClose', 'false'), ('RE_SV_AirfieldOpen', 'true')):
         g.trigger('RE_Wave2_AreaB_PathSet', ev)                                    # a remote-event trigger
         g.execute(t_landing, ev, {0: on})

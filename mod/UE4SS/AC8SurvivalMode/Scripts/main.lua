@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.55.2"
+local VERSION = "0.55.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -5898,7 +5898,7 @@ local function probeTick(tick)
             local f = svFlags()
             if f then
                 D.maxFlags = D.maxFlags or {}
-                for _, k in ipairs({ "SV_Kills", "SV_AirHits" }) do
+                for _, k in ipairs({ "SV_Kills", "SV_AirHits", "SV_Beat" }) do      -- (SV_Beat: our heartbeat)
                     local v = f[k]
                     if v then
                         if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
@@ -5944,6 +5944,7 @@ local function probeTick(tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
