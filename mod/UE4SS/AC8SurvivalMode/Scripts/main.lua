@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.60.3"
+local VERSION = "0.61.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -589,6 +589,12 @@ local CFG = {
         enabled = true,
         first_round = 16, every = 3,
         callout = true,                            -- "ACE INBOUND" the first time each ace shows up in a run
+        -- their guns lead you (user, 2026-10-24: "apply the gun lead to all enemy ace aircraft and scale it"): a tier's
+        -- gun_lead_s (PredictionOffsetTime: the seconds ahead of you they aim; stock aircraft guns 0), the higher the
+        -- tier the more, + gun_lead_per_level for each difficulty spike level, at most gun_lead_max. "anomaly" is
+        -- MINDRIPPER's guards (MINDRIPPER and AB.L..IN have their own: specials.anomaly / glitch gun_lead_s).
+        gun_lead_s = { mercenary = 0.4, legend = 0.55, demon = 0.7, phantom = 0.85, reaper = 1.0, anomaly = 0.85 },
+        gun_lead_per_level = 0.1, gun_lead_max = 1.3,
         -- airframes only Online Mode has (the ADFX-02: its model and blueprint come from Online Mode's tables, ACE.models).
         -- false leaves them out (if one ever misbehaves offline); their tier flies the rest of its line-up.
         online_aircraft = true,
@@ -1895,6 +1901,17 @@ local function searchSetup()
         return gunRow(src, { range = g.range_m, angle = g.angle_deg, aim = g.aim_s, burst = g.burst, rest = g.rest_s,
                              damage_x = g.damage_x, spread = g.spread_deg }, "", SPIKE_SUFFIX[level])
     end
+    -- an ace tier's: the level's gun, leading you by its tier's gun_lead_s (rows _SV<level>_<TIER>), or nil (no lead set)
+    local function aceGun(src, level, tier)
+        local A = CFG.aces
+        local base = type(A.gun_lead_s) == "table" and A.gun_lead_s[tier]
+        if type(base) ~= "number" or base <= 0 then return nil end
+        local lead = math.min(A.gun_lead_max or base, base + (A.gun_lead_per_level or 0) * level)
+        local g = withLevel(CFG.guns, spikeCfg(level).guns)
+        return gunRow(src, { range = g.range_m, angle = g.angle_deg, aim = g.aim_s, burst = g.burst, rest = g.rest_s,
+                             damage_x = g.damage_x, spread = g.spread_deg, lead = lead },
+                      tier .. " aces' ", SPIKE_SUFFIX[level] .. "_" .. tier)
+    end
     -- MINDRIPPER's own (CFG.specials.anomaly.aggression): the top spike level's, that many times quicker (rows _SVX)
     local AN = CFG.specials.anomaly
     local AGG = math.max(1, AN.aggression or 1)
@@ -1983,7 +2000,10 @@ local function searchSetup()
                         local _, r = dtCall(mine, "FindRow", row)
                         if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
                     end
-                    if have ~= nil then list[#list + 1] = ACE.row(tier, k, part:lower()); nAces = nAces + 1
+                    if have ~= nil then
+                        list[#list + 1] = ACE.row(tier, k, part:lower()); nAces = nAces + 1
+                        SR.aceTier = SR.aceTier or {}
+                        SR.aceTier[ACE.row(tier, k, part:lower())] = tier      -- (its gun's lead: CFG.aces.gun_lead_s)
                     else lost[#lost + 1] = row end
                 end
             end
@@ -2063,7 +2083,8 @@ local function searchSetup()
                                 if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
                                     new = mind and anomFcs(id) or svFcs(id, level)
                                 elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
-                                    new = (mind and anomGun(id)) or (glitch and glitchGun(id)) or svGun(id, level)
+                                    new = (mind and anomGun(id)) or (glitch and glitchGun(id))
+                                        or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a])) or svGun(id, level)
                                 elseif glitch and id:find("ECM", 1, true) then
                                     new = anomEcm(id)                                -- its pod always up
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
