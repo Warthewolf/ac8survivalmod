@@ -62,6 +62,8 @@ Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weap
 - Once captured, destroying every landed troop vehicle frees it early; otherwise it's back after two rounds.
 - Captured = landing and the STORE closed, "AIRFIELD CAPTURED" and the rounds left on the HUD (proposed, as when the
   airfield is down).
+- The round still has its enemy fighters, with a chance of a bomber raid too (user, 2026-10-23: "when an LCAC round
+  spawns, enemy aircraft still spawn also, with a chance for bombers to also spawn").
 - Start points on the water: the user marks them with Ctrl+F10 (marks after the five beach marks in
   config/coast_marks.txt are start points).
 

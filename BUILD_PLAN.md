@@ -593,3 +593,18 @@ Research pass 2 (2026-10-22, user: "reverse engineer anything else you think you
 
 ## Dropped by the user
 Weather/night rounds, sky selection (time of day can't change at runtime), buying a wingman in the shop.
+
+## Amphibious assault (Lua 0.42.0, 2026-10-23; untested)
+- Lanes from the user's Ctrl+F10 marks (4 starts at sea -> 4 beaches; survival_events.LCAC_LANES). Per lane SV_Unit_Lcac<L>,
+  two craft ported from M13's E_Unit02_02_Ship0 (lcac_common, from DT_NPC_Mission013 via NPC_IMPORT; no child descs, so
+  no blueprint imports: the class comes through the NPC row as the F-4 / Tu-160 do), their own paths in and out
+  (SV_Path_Lcac<L><L|R>[Back], M13's path desc as the template), and per craft a troop unit SV_Unit_LcacTroops<L><c>
+  (M13's E_Unit02_02_Ground0: one BTR-90, btr9_common) on the beach. The world data's folder trailer isn't updated (as
+  for the allies): if a path is "not found", that's the first suspect.
+- Events (M13's order): appearance -> craft paths (180) + unit path; PathFinish -> path exit, SV_LcacLand<L><c> = 1,
+  20 s later the way back; RE_SV_LcacRemove<L> / RE_SV_LcacTroopsRemove<L><c> destroy (LiveDestroyUnitExecution) so a
+  lane / its troops can come again.
+- main.lua: rotation shuttle / anomaly / amphibious (round 15 first); its fighters as a normal round plus a 40 % chance
+  of a bomber raid; troops alive 30 s after landing capture the airfield (landing closed, STORE closed, HUD row) for 2
+  rounds or until all are destroyed; craft 300 / troops 200 x tier pay, 3000 + 120 x round when repelled. Ctrl+F12:
+  next round amphibious (test key, out of release zips with Ctrl+F9).

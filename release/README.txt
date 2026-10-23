@@ -72,6 +72,7 @@ game after a change. Delete the file to get a fresh one.
 Test keys (in a Survival run)
 -----------------------------
 - Ctrl+F11: the next round is THE ANOMALY (between rounds it starts at once).
+- Ctrl+F12: the next round is the AMPHIBIOUS ASSAULT (between rounds it starts at once).
 - Ctrl+F10: mark a beach (fly low over it): the coming amphibious-assault round will land there. Marks go into
   AC8SurvivalMode\config\coast_marks.txt - please send that file too.
 

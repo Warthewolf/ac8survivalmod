@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.41.0"
+local VERSION = "0.42.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -367,6 +367,8 @@ local shuttleHealth            -- (section "special rounds"; the HUD shows it)
 local ALLY = { unit = {} }
 -- The Anomaly (section "special rounds"): its field's state, for the HUD and the level reset.
 local ANOM = { on = false }
+-- The amphibious assault (section "amphibious assault"): its functions; its run state is RUN.amph / RUN.captured.
+local AMPH = {}
 -- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
 local ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
@@ -812,7 +814,19 @@ local CFG = {
         enabled  = true,
         first    = 5,
         every    = 5,
-        rotation = { "shuttle", "anomaly" },
+        rotation = { "shuttle", "anomaly", "amphibious" },
+        -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
+        -- `lanes` (pairs of two, from the user's marks) cross to Comona's beaches by the airport, lanes_first of them the
+        -- first time, lanes_more more each time after; each craft that reaches the beach puts a BTR-90 ashore. Troops
+        -- still alive capture_s after landing capture the airfield (landing and the STORE closed, "AIRFIELD CAPTURED")
+        -- for captured_rounds rounds, or until every landed troop vehicle is destroyed (user, 2026-10-23). The round's
+        -- fighters come as in a normal round, and bomber_chance of the time a bomber raid on the airfield with them
+        -- (user: "enemy aircraft still spawn also, with a chance for bombers to also spawn"). No capture: `reward`
+        -- (+ reward_per_round x the round); each craft pays craft_pay, each troop vehicle troop_pay (times the tier's
+        -- pay, as aircraft). Craft that landed are taken off remove_after_s after landing (they're heading out).
+        amphibious = { lanes = { "A", "B", "C", "D" }, lanes_first = 2, lanes_more = 1, capture_s = 30,
+                       captured_rounds = 2, bomber_chance = 0.4, reward = 3000, reward_per_round = 120,
+                       craft_pay = 300, troop_pay = 200, remove_after_s = 90 },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 3000, reward_per_round = 100, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -988,6 +1002,21 @@ local CFG = {
             anomaly_down      = "%s DOWN",
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
+            amphib_sub   = "LANDING CRAFT INBOUND",
+            amphib_go    = "AMPHIBIOUS ASSAULT",
+            amphib_go_sub = "STOP THE LANDING CRAFT BEFORE THEY REACH THE BEACH",
+            amphib_row   = "LANDING CRAFT: %d  TROOPS ASHORE: %d",
+            ashore       = "TROOPS ASHORE",
+            ashore_sub   = "DESTROY THEM BEFORE THEY TAKE THE AIRFIELD",
+            captured     = "AIRFIELD CAPTURED",
+            captured_sub = "DESTROY THE LANDED TROOPS TO RETAKE IT",
+            captured_row = "AIRFIELD CAPTURED: %d ROUND%s LEFT, %d TROOPS",
+            retaken      = "AIRFIELD RETAKEN",
+            retaken_sub  = "CLEARED TO LAND",
+            freed        = "AIRFIELD BACK IN OUR HANDS",
+            repelled     = "LANDING REPELLED",
+            repelled_sub = "+%d ZOLLARS",
+            shop_captured = "SHOP CLOSED: THE AIRFIELD IS CAPTURED.",
             ace_sub      = "%s SQUADRON (%s)",
         },
     },
@@ -2305,6 +2334,15 @@ local function hudTick(now, paused, pc)
         local hp = shuttleHealth()
         setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then
+        local craft, ashore = AMPH.counts()
+        setText(H.next, "nextStr", string.format(t.amphib_row, craft, ashore))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif RUN.captured then
+        local left = math.max(0, RUN.captured.untilRound - D.round)
+        local _, ashore = AMPH.counts()
+        setText(H.next, "nextStr", string.format(t.captured_row, left, left == 1 and "" or "S", ashore))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "anomaly" and D.special.state == "hunt" and D.special.dist then
         local an = CFG.specials.anomaly
         setText(H.next, "nextStr", ANOM.on and t.anomaly_row_field or string.format(t.anomaly_row, an.name:upper(), D.special.dist))
@@ -2465,7 +2503,8 @@ local function spawnBomber(unit)
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.shipStrike and D.shipStrike[unit] then ALLY.strike(unit, D.shipStrike[unit]) end   -- (its own callout)
-        if D.bomberCallout ~= D.round and not D.special and not (D.shipStrike and D.shipStrike[unit]) then
+        if D.bomberCallout ~= D.round and (not D.special or D.special.kind == "amphibious")
+            and not (D.shipStrike and D.shipStrike[unit]) then
             D.bomberCallout = D.round
             hudCallout(CFG.hud.text.bombers, CFG.hud.text.bombers_sub)
         end
@@ -2898,7 +2937,9 @@ local function specialTick(now)
     end
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
+    AMPH.runTick(now)                                               -- landed troops, the capture (any round)
     if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
+    if s and s.kind == "amphibious" then return AMPH.tick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
@@ -2978,6 +3019,10 @@ local function startRound()
         bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
     elseif special == "anomaly" then              -- MINDRIPPER and its guards take that many of the round's aircraft
         nBombers = 1 + CFG.specials.anomaly.guards
+    elseif special == "amphibious" and CFG.airfield.enabled and math.random() < CFG.specials.amphibious.bomber_chance then
+        raid = true                                   -- a raid on the airfield with the landing (its share of the budget)
+        local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
+        bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
     elseif special == "shuttle" then             -- strike flights at the shuttle (heavies only bomb the airfield)
         local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
         bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
@@ -3017,6 +3062,7 @@ local function startRound()
     for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
     if special == "shuttle" then table.insert(D.queue, 1, "@shuttle") end     -- the shuttle first: it sets their orders
     if special == "anomaly" then table.insert(D.queue, 1, "@anomaly") end
+    if special == "amphibious" then table.insert(D.queue, 1, "@amphib") end    -- the landing craft first
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
         or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or ""))
@@ -3253,6 +3299,8 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             elseif nextSpecial == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
+            elseif nextSpecial == "amphibious" then
+                hudCallout(string.format(t.special, D.round + 1), t.amphib_sub)
             elseif nextAce then
                 D.nextTier, D.nextTierRound = nextAce, D.round + 1   -- startRound flies this one
                 local tn = CFG.tiers.list[D.nextTier].name:lower()
@@ -3279,6 +3327,8 @@ local function roundsTick(now)
         local u = table.remove(D.queue, 1)
         if u == "@shuttle" then
             spawnShuttle()
+        elseif u == "@amphib" then
+            if not AMPH.spawn(now) then D.special = nil end     -- no lane could come: a normal round
         elseif u == "@anomaly" then
             if ANOM.spawn() then
                 D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
@@ -3311,7 +3361,10 @@ local function roundsTick(now)
         if flights == 0 and D.special and (D.special.state == "countdown" or D.special.state == "portal") then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round,
                 D.special.state == "portal" and "Anomaly's portal" or "shuttle's countdown")) end
+        elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
         elseif flights == 0 then
+            if D.special and D.special.kind == "amphibious" then AMPH.roundOver(now, D.special) end
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
@@ -3380,8 +3433,199 @@ local function airfieldTick(tick)
         AF.down, AF.full, AF.base, AF.bombBase, AF.hp = false, ac.repair_hp, hits, AF.bomb, ac.repair_hp
         AF.closePending, AF.closeHeld, AF.closed, RUN.dirty = false, false, false, true
         hudCallout(t.airfield_up, t.airfield_up_sub)
+        if reopen and RUN.captured then                -- captured: it opens when it's retaken (AMPH)
+            reopen = false; RUN.captured.closed = true
+        end
         log("airfield: repaired to " .. ac.repair_hp .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
     end
+end
+
+---------------------------------------------------------------------------------------------------- amphibious assault
+-- CFG.specials.amphibious; tools/survival_events.py LCAC_* builds the units, paths and records. A lane L is unit
+-- SV_Unit_Lcac<L> (two craft), its craft L and R; a craft that reaches the beach sets SV_LcacLand<L><craft> and its
+-- troops are SV_Unit_LcacTroops<L><craft>. RUN.amph.troops: every troop unit put ashore this run that may still be up;
+-- RUN.captured: { untilRound, closePending, closed } while the airfield is taken.
+do
+local CRAFT = { "L", "R" }
+
+local function amph() RUN.amph = RUN.amph or { count = 0, troops = {} }; return RUN.amph end
+
+local function tierPay(base)          -- a kill's pay at the round's skill tier (creditKill's x)
+    local tp, ti = CFG.credits.tier_pay or {}, nil
+    for i, t in ipairs(CFG.tiers.list) do if D and D.round and D.round >= t.from_round then ti = i end end
+    return math.floor(base * ((ti and (tp[ti] or tp[#tp])) or 1) / 10 + 0.5) * 10
+end
+
+-- Landing craft still on their way in, and troop vehicles ashore and alive.
+function AMPH.counts()
+    local craft, ashore = 0, 0
+    local s = D and D.special and D.special.kind == "amphibious" and D.special
+    if s and s.lanes then
+        for _, l in pairs(s.lanes) do
+            local landed = 0
+            for _ in pairs(l.landed) do landed = landed + 1 end
+            craft = craft + math.max(0, l.alive - landed)
+        end
+    end
+    for _, t in ipairs(amph().troops) do ashore = ashore + math.max(0, t.alive) end
+    return craft, ashore
+end
+
+-- The round can't end while a craft is still coming in or troops are ashore and the airfield isn't taken.
+function AMPH.busy(s)
+    local craft, ashore = AMPH.counts()
+    return craft > 0 or (ashore > 0 and not RUN.captured)
+end
+
+function AMPH.spawn(now)
+    local c, t = CFG.specials.amphibious, CFG.hud.text
+    if not nativeReady() then return false end
+    local A = amph()
+    local want = math.min(#c.lanes, c.lanes_first + A.count * c.lanes_more)
+    local order = {}
+    for _, l in ipairs(c.lanes) do table.insert(order, math.random(#order + 1), l) end
+    local s = D.special
+    s.lanes, s.state, s.at = {}, "assault", now
+    local n = 0
+    for _, l in ipairs(order) do
+        if n >= want then break end
+        local unit = "SV_Unit_Lcac" .. l
+        if SV_UnitAlive(unit) > 0 then           -- still afloat from last time: off now, it comes again next time
+            local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
+            log(string.format("special: lane %s's craft were still up; taken off (%s)", l, tostring(r)))
+        else
+            local r = SV_Spawn(unit)
+            log(string.format("special: landing craft lane %s (%s): %s", l, unit, r > 0 and (r .. " craft") or
+                ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+            if r > 0 then s.lanes[l] = { alive = r, landed = {}, removed = false, at = now }; n = n + 1 end
+        end
+    end
+    if n == 0 then log("special: no landing craft could come; a normal round"); return false end
+    A.count = A.count + 1
+    hudCallout(t.amphib_go, t.amphib_go_sub)
+    log(string.format("special: round %d, amphibious assault on %d lanes", D.round, n))
+    return true
+end
+
+-- Every second: craft lost (pay), craft landed (their troops ashore), landed craft taken off once they're away.
+function AMPH.tick(now, s)
+    if s.state ~= "assault" or now < (s.nextAt or 0) then return end
+    s.nextAt = now + 1
+    local c, t = CFG.specials.amphibious, CFG.hud.text
+    local f = svFlags() or {}
+    for l, lane in pairs(s.lanes) do
+        local unit = "SV_Unit_Lcac" .. l
+        local alive = lane.removed and 0 or math.max(0, SV_UnitAlive(unit))
+        if alive < lane.alive and not lane.removed then
+            local pay = tierPay(c.craft_pay) * (lane.alive - alive)
+            addCredits(pay, string.format("landing craft down (lane %s)", l))
+            log(string.format("special: lane %s: %d landing craft left", l, alive))
+        end
+        lane.alive = alive
+        for _, k in ipairs(CRAFT) do
+            -- (a flag still 1 from this lane's last assault is reset by its appearance: not read in the first 5 s)
+            if now - lane.at >= 5 and (f["SV_LcacLand" .. l .. k] or 0) >= 1 and not lane.landed[k] then
+                lane.landed[k] = now
+                lane.firstLanded = lane.firstLanded or now
+                local tu = "SV_Unit_LcacTroops" .. l .. k
+                local r = SV_UnitAlive(tu) > 0 and -100 or SV_Spawn(tu)
+                log(string.format("special: lane %s craft %s on the beach; troops %s: %s", l, k, tu,
+                    r > 0 and (r .. " vehicle(s) ashore") or (r == -100 and "still up from before" or
+                    ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"))))
+                if r > 0 then
+                    local A = amph()
+                    A.troops[#A.troops + 1] = { unit = tu, alive = r, at = now, lane = l, craft = k }
+                    if not s.ashoreSaid then s.ashoreSaid = true; hudCallout(t.ashore, t.ashore_sub) end
+                end
+            end
+        end
+        if lane.firstLanded and not lane.removed and now - lane.firstLanded >= c.remove_after_s then
+            lane.removed = true                        -- (no pay for these: they got away)
+            local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
+            log(string.format("special: lane %s's craft are away; taken off (%s)", l, tostring(r)))
+        end
+    end
+end
+
+-- The round is over (nothing coming in, no troops ashore, or the airfield taken): the reward if it held, and craft
+-- still afloat taken off.
+function AMPH.roundOver(now, s)
+    local c, t = CFG.specials.amphibious, CFG.hud.text
+    for l, lane in pairs(s.lanes or {}) do
+        if not lane.removed and SV_UnitAlive("SV_Unit_Lcac" .. l) > 0 then
+            lane.removed = true
+            local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
+            log(string.format("special: lane %s's craft taken off at the round's end (%s)", l, tostring(r)))
+        end
+    end
+    s.state = "done"
+    if not s.captured then
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, "landing repelled")
+        hudCallout(t.repelled, string.format(t.repelled_sub, pay))
+        log(string.format("special: round %d, the landing was repelled", D.round))
+    end
+end
+
+local function free(why, removeLeft)
+    local cap, t = RUN.captured, CFG.hud.text
+    RUN.captured, RUN.dirty = nil, true
+    if removeLeft then                                   -- its time is up: the troops still ashore go
+        for _, tr in ipairs(amph().troops) do
+            if tr.alive > 0 then
+                tr.alive, tr.removed = 0, true
+                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
+                log(string.format("special: troops %s taken off (%s)", tr.unit, tostring(r)))
+            end
+        end
+    end
+    local reopen = cap.closed and not AF.down
+    hudCallout(removeLeft and t.freed or t.retaken, t.retaken_sub)
+    log("special: the airfield is free again (" .. why .. ")" .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
+end
+
+-- Every tick, any round: troop vehicles lost (pay), the capture, landing closed under it, and the airfield freed.
+function AMPH.runTick(now)
+    if not D or not nativeReady() or now < (AMPH.nextAt or 0) then return end
+    AMPH.nextAt = now + 1
+    local c, t = CFG.specials.amphibious, CFG.hud.text
+    local A, ashore, overdue = amph(), 0, false
+    for _, tr in ipairs(A.troops) do
+        if tr.alive > 0 then
+            local n = math.max(0, SV_UnitAlive(tr.unit))
+            if n < tr.alive then
+                addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle down (" .. tr.unit .. ")")
+                log(string.format("special: troops %s: %d left", tr.unit, n))
+            end
+            tr.alive = n
+            ashore = ashore + n
+            if n > 0 and now - tr.at >= c.capture_s then overdue = true end
+        end
+    end
+    if overdue and not RUN.captured then
+        RUN.captured, RUN.dirty = { untilRound = D.round + c.captured_rounds, closePending = true }, true
+        if D.special and D.special.kind == "amphibious" then D.special.captured = true end
+        hudCallout(t.captured, t.captured_sub)
+        log(string.format("special: round %d, the airfield is captured (%d troop vehicles ashore); back after round %d at the latest",
+            D.round, ashore, RUN.captured.untilRound))
+    end
+    local cap = RUN.captured
+    if not cap then return end
+    if cap.closePending then
+        if playerOnAirfield() then
+            if not cap.heldSaid then cap.heldSaid = true; log("special: captured, landing stays open until you take off") end
+        else
+            cap.closePending = false
+            if not AF.closed then cap.closed = true; log("special: landing closed" .. airfieldEvent("RE_SV_AirfieldClose"))
+            else cap.closed = true end
+        end
+    end
+    if ashore == 0 then
+        free("every landed troop vehicle destroyed", false)
+    elseif D.state == "wait" and D.round >= cap.untilRound then
+        free(string.format("%d rounds", c.captured_rounds), true)
+    end
+end
 end
 
 -- The world-data unit (flight) an AI plane belongs to, from its GetUnitName(); cached in p.unit, false if unreadable.
@@ -3905,6 +4149,7 @@ end
 -- The shop is closed after a lost special (CFG.specials.shuttle.shop_closed_rounds): through round RUN.shopClosedUntil,
 -- including the break before it, and open again in the break after it.
 local function shopClosed()
+    if RUN.captured then return true end            -- the amphibious assault took the airfield
     local u = RUN.shopClosedUntil
     return u ~= nil and D ~= nil and (D.round < u or (D.round == u and D.state ~= "wait"))
 end
@@ -4041,7 +4286,7 @@ function shopTexts()
         local o = offer(name)
         RUN.offerShown[name] = o.role
         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
-        local help = shopClosed() and CFG.hud.text.shop_closed or o.help
+        local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
@@ -4853,6 +5098,22 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
                         soon and "starting in 3 s" or "after this round"))
                 end)
                 if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    if Key.F12 then                -- Ctrl+F12 in a run: the next round is the amphibious assault (in the break: it starts now)
+        pcall(RegisterKeyBind, Key.F12, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now then log("test: Ctrl+F12 outside a Survival run"); return end
+                    D.forceSpecial = "amphibious"
+                    local soon = D.state == "wait"
+                    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+                    hudCallout("TEST: AMPHIBIOUS ASSAULT", soon and "STARTING NOW" or "NEXT ROUND")
+                    log(string.format("test: Ctrl+F12, round %d is the amphibious assault (%s)", D.round + 1,
+                        soon and "starting in 3 s" or "after this round"))
+                end)
+                if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
             end)
         end)
     end

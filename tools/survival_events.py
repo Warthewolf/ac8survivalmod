@@ -99,6 +99,59 @@ SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_
                        (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
                        (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
 SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
+# Special round "Amphibious Assault" (SURVIVAL_SPEC.md 7; tools/re/SPECIAL_ROUNDS.md 12b): Mission 13's enemy LCAC
+# pattern on Comona. Each lane: a unit of two landing craft (a copy of Mission 13's E_Unit02_02_Ship0, NPC row
+# lcac_common) that Scripts/main.lua spawns at the lane's start point at sea; its appearance sends each craft along
+# its own path (side by side, LCAC_GAP_CM apart) onto the beach; at the end of it the craft leaves its path, the
+# event package sets SV_LcacLand<lane><craft> and main.lua spawns that craft's troops (a copy of Mission 13's
+# E_Unit02_02_Ground0, one BTR-90, btr9_common) on the beach; LCAC_RETURN_S later the craft heads back out along the
+# lane, and main.lua takes the lane's craft off (RE_SV_LcacRemove<lane>) once they're well away, so the lane can come
+# again. Lanes from the user's Ctrl+F10 marks (config/coast_marks.txt, 2026-10-23): the first five are beaches, the
+# four after them start points at sea; each start goes to the beach it faces (the fifth beach mark, at sea level,
+# 350, isn't used).
+LCAC_SOURCE_UNIT = 'E_Unit02_02_Ship0'
+LCAC_SOURCE_PATH = '02_ship0_lcac_0_Path0'
+LCAC_TROOP_SOURCE = 'E_Unit02_02_Ground0'
+LCAC_ROW, LCAC_TROOP_ROW = 'lcac_common', 'btr9_common'
+LCAC_LANES = [   # (lane, start at sea (x, y) cm, beach (x, y, ground z) cm) - main.lua CFG.specials.amphibious.lanes
+    ('A', (1124592, 601882), (1125609, -41221, 500)),
+    ('B', (1181763, -939973), (1451014, -405292, 393)),
+    ('C', (1202428, -1235402), (1600055, -489665, 500)),
+    ('D', (1472712, -1417822), (1781906, -515173, 496)),
+]
+LCAC_CRAFT = 'LR'              # the two craft of a lane: left and right of its line
+LCAC_GAP_CM = 24000.0          # between them
+LCAC_SEA_Z = -20.0             # Mission 13's craft and path points at sea
+LCAC_SPEED = '180.0'           # Mission 13's (02_ReinforcementAppearance)
+LCAC_RETURN_S = 20.0           # Mission 13's: landing to heading back out
+
+
+def lcac_craft():
+    """One dict per landing craft: its lane's unit and object, its paths, its troops and its landing flag."""
+    import math
+    out = []
+    for lane, start, beach in LCAC_LANES:
+        dx, dy = beach[0] - start[0], beach[1] - start[1]
+        length = math.hypot(dx, dy)
+        ux, uy = dx / length, dy / length
+        for k, c in enumerate(LCAC_CRAFT):
+            side = (-0.5 if k == 0 else 0.5) * LCAC_GAP_CM          # left of the line, then right
+            ox, oy = -uy * side, ux * side
+            out.append(dict(
+                lane=lane, craft=c, k=k, unit=f'SV_Unit_Lcac{lane}', obj_base=f'SV_Obj_Lcac{lane}',
+                obj=f'SV_Obj_Lcac{lane}_{k}',                              # as event args write the 2-craft unit's objects
+                path=f'SV_Path_Lcac{lane}{c}', back=f'SV_Path_Lcac{lane}{c}Back',
+                troops=f'SV_Unit_LcacTroops{lane}{c}', troop_obj=f'SV_Obj_LcacTroops{lane}{c}',
+                flag=f'SV_LcacLand{lane}{c}', land=f'SV_LcacLanded{lane}{c}', up=f'SV_LcacUp{lane}',
+                start=(start[0] + ox, start[1] + oy, LCAC_SEA_Z), beach=(beach[0] + ox, beach[1] + oy, float(beach[2])),
+                yaw=math.degrees(math.atan2(dy, dx)), length=length))
+    return out
+
+
+def lcac_lane_names():
+    return [lane for lane, _, _ in LCAC_LANES]
+
+
 # Special round "The Anomaly" (tools/re/SPECIAL_ROUNDS.md 13; user, 2026-10-22: the ace flies an F-4 and is named
 # MINDRIPPER; its own HUD warning; the mission-update beep when its round starts; the shuttle's zoom-in camera on it).
 # build_survival.py copies pool flight ANOMALY_SOURCE (Survival's fighter behaviour, 40 km area) into MINDRIPPER's own
@@ -230,7 +283,8 @@ KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission
 INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
              + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
              + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
-             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS])
+             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
+             + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -481,6 +535,7 @@ def build_events(stock_ep):
     build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
     build_repair(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
+    build_amphib(g, flag, stock_ep)
     return g
 
 
@@ -571,6 +626,43 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
             g.execute(t_move, ev, {0: unit, 1: obj, 3: 'NoneSelect'})
             g.execute(t_bsearch, ev, {1: unit, 3: 'AIR_AND_GROUND'})
             g.execute(t_strike, ev, {0: 'NoneSelect', 1: unit, 5: ship})
+
+
+def build_amphib(g, flag, stock_ep):
+    """The amphibious assault (LCAC_*), in Mission 13's order (hard rule 5): the lane's craft appear -> each craft and
+    the unit get their path -> PathFinish (hard rule 1) -> the craft leaves its path, SV_LcacLand<lane><craft> = 1
+    (Scripts/main.lua spawns its troops) -> LCAC_RETURN_S later back out along the lane. RE_SV_LcacRemove<lane> and
+    RE_SV_LcacTroopsRemove<lane><craft> (main.lua) take a lane's craft / a craft's troops off, so they can come again."""
+    m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
+    t_cpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
+                                 lambda a, e: a[0] == 'E_Obj02_02_Ship0_lcac_0')
+    t_upath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
+                                 lambda a, e: a[1] == 'E_Unit02_02_Ship0')
+    t_exit = g.foreign_template(m13, 'LiveAIPathExitExecution', '02_LCAC_PathFinish_0')
+    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    assert arg_values(t_cpath)[2] == LCAC_SOURCE_PATH and arg_values(t_cpath)[4] == LCAC_SPEED, arg_values(t_cpath)
+    assert arg_values(t_upath)[2] == LCAC_SOURCE_PATH, arg_values(t_upath)
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    craft = lcac_craft()
+    for lane in lcac_lane_names():
+        cs = [c for c in craft if c['lane'] == lane]
+        up = cs[0]['up']
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: cs[0]['unit']})
+        for c in cs:
+            flag(up, c['flag'], 'Set', 0)
+            g.execute(t_cpath, up, {0: c['obj'], 2: c['path']}, delay=0.5 + c['k'] * 1.5)
+        g.execute(t_upath, up, {1: cs[0]['unit'], 2: cs[0]['path']}, delay=0.5)
+        rm = f'RE_SV_LcacRemove{lane}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', rm)                  # a remote-event trigger
+        g.execute(t_remove, rm, {0: 'NoneSelect', 1: cs[0]['unit'], 2: 'NoneSelect'})
+        for c in cs:
+            g.trigger(finish, c['land'], arg_changes={0: c['obj'], 2: c['path']})
+            g.execute(t_exit, c['land'], {0: c['obj']})
+            flag(c['land'], c['flag'], 'Set', 1)
+            g.execute(t_cpath, c['land'], {0: c['obj'], 2: c['back']}, delay=LCAC_RETURN_S)
+            trm = f'RE_SV_LcacTroopsRemove{lane}{c["craft"]}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
+            g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
 
 
 def build_repair(g, stock_ep):

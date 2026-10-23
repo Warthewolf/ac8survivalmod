@@ -314,6 +314,124 @@ def ally_units(units, used_ids, z, top_number, v):
           f'{len(survival_events.ally_ships())} ships')
 
 
+M13 = '/Game/Maps/Ingame/Mission013/'
+
+
+def stock_wd(path):
+    """A stock world data's LiveWorldData properties (for descs copied from another mission)."""
+    zs = ZenPkg(stock(path))
+    i = zs.export_index(path.rsplit('/', 1)[1])
+    v, _ = props_of(zs, i, 'LiveWorldData')
+    return v
+
+
+def desc_named(v, lst, name):
+    for el in [p for p in v[2] if p[1] == lst][0][3][1]:
+        if [p for p in el[2] if p[1] == 'Name'][0][3][1:3] == (name, 0):
+            return el
+    raise LookupError((lst, name))
+
+
+def vec(x, y, zz, kind='Vector'):
+    return ('native', kind, struct.pack('<3d', x, y, zz))
+
+
+def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number):
+    """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
+    (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
+    the other mission's), our world data's name, new UniqueIDs. Returns the objects' names as event args write them."""
+    new = copy.deepcopy(src)
+    assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
+    assert not new_unit[-1].isdigit() and not obj_name[-1].isdigit() and obj_name not in top_number, obj_name
+    wd = ('name', 'WD_SurvivalMode_global', 0)
+    objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    assert len(objs) >= len(points), (new_unit, len(objs))
+    del objs[len(points):]
+    names = []
+    for k, (ob, pt) in enumerate(zip(objs, points)):
+        num = 0 if len(points) == 1 else k + 1
+        uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}:{k}')
+        repl = {'Name': ('name', obj_name, num), 'MissionNpcID': ('name', npc_row, 0), 'UniqueID': ('raw', 'UInt32', uid),
+                'SpawnPoint': vec(*pt), 'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd,
+                'Tags': ('arr', [])}
+        assert all(any(q[1] == n for q in ob[2]) for n in ('Name', 'MissionNpcID', 'UniqueID', 'SpawnPoint')), new_unit
+        ob[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in ob[2]]
+        names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
+    top_number[obj_name] = len(points)
+    uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
+    cx, cy = sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)
+    repl = {'Name': ('name', new_unit, 0), 'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(cx, cy, 0.0),
+            'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd, 'Tags': ('arr', [])}
+    new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in new[2]]
+    assert npc_row in NPC_ROWS, npc_row
+    for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global']: z.nb.add(n)
+    units.append(new)
+    return names
+
+
+def make_path(z, used_ids, template, name, pts):
+    """An AI path desc `name` through `pts` (cm), shaped like `template` (Mission 13's LCAC path: begin point, points
+    with tangents, ControlType 1)."""
+    import math
+    new = copy.deepcopy(template)
+    f = {p[1]: p for p in new[2]}
+    begin = f['BeginPointDesc'][3]
+    point_t = f['PathPointDescList'][3][1][0]
+
+    def point(el, k, pos, nxt, prv, pname):
+        dx, dy = (nxt[0] - prv[0]), (nxt[1] - prv[1])
+        seg = math.hypot(dx, dy) or 1.0
+        tx, ty = dx / seg * min(seg, 120000.0), dy / seg * min(seg, 120000.0)
+        yaw = math.degrees(math.atan2(dy, dx))
+        repl = {'Pos': vec(*pos), 'tan': vec(tx, ty, 0.0), 'Up': vec(0.0, 0.0, 1.0),
+                'PathPointRotation': vec(0.0, yaw, 0.0, 'Rotator'),
+                'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}:{k}')), 'Name': pname}
+        el = copy.deepcopy(el)
+        el[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in el[2]]
+        return el
+    els, b = [], None
+    for k, pos in enumerate(pts):
+        prv, nxt = pts[max(0, k - 1)], pts[min(len(pts) - 1, k + 1)]
+        if k == 0:
+            b = point(begin, k, pos, nxt, pos, ('name', 'DefaultPathPoint', 0))
+        else:
+            els.append(point(point_t, k, pos, nxt, prv, ('name', name, k)))
+    repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els),
+            'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}')),
+            'Name': ('name', name, 0), 'WorldDataName': ('name', 'WD_SurvivalMode_global', 0)}
+    new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl else q for q in new[2]]
+    for n in names_in(new) + [name, 'DefaultPathPoint']: z.nb.add(n)
+    return new
+
+
+def lcac_units(units, used_ids, z, top_number, v):
+    """The amphibious assault (survival_events.LCAC_*): per lane a unit of two landing craft at its start, each
+    craft's path in and back out, and per craft a troop unit (one BTR-90) on the beach where it lands."""
+    m13 = stock_wd(M13 + 'WD_Mission013_global')
+    src_craft = desc_named(m13, 'UnitDescList', survival_events.LCAC_SOURCE_UNIT)
+    src_troop = desc_named(m13, 'UnitDescList', survival_events.LCAC_TROOP_SOURCE)
+    src_path = desc_named(m13, 'AIPathDescList', survival_events.LCAC_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    craft = survival_events.lcac_craft()
+    for lane in survival_events.lcac_lane_names():
+        cs = [c for c in craft if c['lane'] == lane]
+        names = port_unit(units, used_ids, z, src_craft, cs[0]['unit'], cs[0]['obj_base'], survival_events.LCAC_ROW,
+                          [c['start'] for c in cs], cs[0]['yaw'], top_number)
+        assert names == [c['obj'] for c in cs], names
+    for c in craft:
+        (sx, sy, sz), (bx, by, bz) = c['start'], c['beach']
+        at = lambda t, zz: (sx + (bx - sx) * t, sy + (by - sy) * t, zz)
+        shore = 1.0 - min(0.08, 60000.0 / c['length'])           # the last point at sea, up to 600 m off the beach
+        inbound = [at(0.0, 0.0), at(0.35, sz), at(0.7, sz), at(shore, sz), at(1.0, bz)]
+        back = [at(1.0, bz), at(shore, sz), at(0.6, sz), at(0.2, sz), at(-0.3, sz)]   # out past the start
+        paths.append(make_path(z, used_ids, src_path, c['path'], inbound))
+        paths.append(make_path(z, used_ids, src_path, c['back'], back))
+        port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
+                  [c['beach']], c['yaw'], top_number)
+    print(f'  amphibious assault: {len(survival_events.LCAC_LANES)} lanes of 2 landing craft, {len(craft) * 2} paths, '
+          f'{len(craft)} troop units')
+
+
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
     """A new unit `new_unit`: a copy of `src_unit`'s desc (faction, point, area, tags) holding its first `size` AI
     objects, named obj_name (numbered _0, _1, ... when more than one) with new UniqueIDs, on NPC row `npc_row` (their
@@ -448,6 +566,7 @@ def build_wd_global():
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     split_units(units, used_ids, z, top_number)
     ally_units(units, used_ids, z, top_number, v)
+    lcac_units(units, used_ids, z, top_number, v)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -968,7 +1087,9 @@ NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
 NPC_ROWS = set()           # its row names, filled by build_npc_table
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
-NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common'])]
+NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
+              # the amphibious assault's landing craft and troops (survival_events.LCAC_*), Mission 13's
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common'])]
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript

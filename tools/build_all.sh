@@ -23,7 +23,7 @@ tools/get_stock.sh \
   Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.uasset \
   LuaSource/Chronicle/AI/LA_PursueTarget_0011.uasset \
   Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset \
-  Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset \
+  Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset Datatables/AI/NPC/Mission/DT_NPC_Mission013.uasset Maps/Ingame/Mission013/WD_Mission013_global.uasset Maps/Ingame/Mission013/EP_Mission013_global.uasset \
   Datatables/AI/NPC/DT_NPC.uasset   Datatables/Radio/DT_Rdo_ST_ms022.uasset Datatables/Radio/DT_SpeakerTable.uasset \
   Maps/Ingame/Mission015/EP_Mission015_global.uasset \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
