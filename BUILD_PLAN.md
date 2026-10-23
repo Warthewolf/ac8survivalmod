@@ -495,9 +495,13 @@ fastest specials; a Discord server exists, the bot application is still to be ma
   dedupe, 6 runs / hour per sender; posts to #survival-runs, keeps a pinned board message; /leaderboard and /pilot
   slash commands; /setup registers them), schema.sql (D1), wrangler.toml, README.md (setup), test/worker.test.mjs
   (node:sqlite stand-in for D1, Discord stubbed: 13 checks pass).
-- [ ] Game: run stats (kills air / ground, specials with time and result, zollars, time), end-of-run summary with
-  "Submit run?", native SV_Post (WinHTTP + bcrypt HMAC, URL and key baked into main.dll from leaderboard/submit.local,
-  not in git), offline queue (config\pending_runs).
+- [x] Game, Lua 0.47.0 (untested): RUN.stats (air / ground kills, specials with time and result); the run's end (shot
+  down: the player pawn's HealthInternal 0; a restart; leaving the level) makes its record (same score as the Worker);
+  the summary on the HUD (kept up while the game's HUD is gone) with "Y: YES  N: NO"; [leaderboard] pilot / submit
+  (ask / always / never) / prompt_s; no pilot name, nothing sent. dlls/main.dll SV_Post / SV_PostResult / SV_PostReply:
+  WinHTTP on a thread, HMAC-SHA256 (bcrypt) in X-SV-Signature, host and key baked in from leaderboard/submit.local
+  (runtime/build.sh -> build/runtime/submit_cfg.h). Runs that don't get through: config\pending_runs.txt, resent.
+- [ ] Set up the Discord application and the Worker (user), then leaderboard/submit.local, then a test run.
 
 - [ ] End-of-run "Submit to leaderboard? Yes/No" (opt-in, remembered; pilot name in config). Submitted by the Survival
   mod's own native runtime (NOT the Mod Launcher). Sends to a small relay (e.g. Cloudflare Worker) which sanity-checks and

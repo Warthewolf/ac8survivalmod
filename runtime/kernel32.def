@@ -1,6 +1,7 @@
 LIBRARY KERNEL32.dll
 EXPORTS
 GetModuleHandleW
+LoadLibraryW
 GetProcAddress
 GetModuleFileNameW
 DisableThreadLibraryCalls

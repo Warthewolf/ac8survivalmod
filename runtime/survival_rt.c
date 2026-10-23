@@ -2076,6 +2076,170 @@ static int L_Reset(void* lua)
     return Ret(lua, 1);
 }
 
+/* ---------------------------------------------------------------------------------------- leaderboard (Milestone 8)
+ * SV_Post(json) -> a job number (1..8) or an SV_ERR code: sends a finished run to the leaderboard Worker
+ * (leaderboard/src/index.js, POST /submit) on a thread of its own, so the game never waits on the network: HTTPS
+ * through WinHTTP, the body signed with HMAC-SHA256 (bcrypt) under the build's submit key, in X-SV-Signature.
+ * The Worker's host and the key come from leaderboard/submit.local through runtime/build.sh (build/runtime/
+ * submit_cfg.h, never in git); a build without them answers SV_ERR_NO_SERVER. Only that host is ever contacted.
+ * SV_PostResult(job) -> 0 while sending, then the HTTP status, or < 0 when it couldn't get through (-1 no
+ * connection, -2 no answer); the job is freed once its result is read. SV_PostReply(job) -> the Worker's reply. */
+#if __has_include("submit_cfg.h")
+#include "submit_cfg.h"
+#endif
+#ifndef SV_SUBMIT_HOST
+#define SV_SUBMIT_HOST L""
+#define SV_SUBMIT_PATH L"/submit"
+#define SV_SUBMIT_KEY  ""
+#endif
+#define SV_ERR_NO_SERVER -8
+#define SV_ERR_BUSY      -9
+#define POST_JOBS 8
+#define POST_BODY 16384
+typedef struct {
+    volatile int32_t state;            /* 0 free, 1 sending, 2 done */
+    int32_t status;
+    DWORD   len, replyLen;
+    char    body[POST_BODY];
+    char    reply[512];
+} PostJob;
+static PostJob g_post[POST_JOBS];
+
+typedef HANDLE (*HttpOpenFn)(const wchar_t*, DWORD, const wchar_t*, const wchar_t*, DWORD);
+typedef HANDLE (*HttpConnectFn)(HANDLE, const wchar_t*, uint16_t, DWORD);
+typedef HANDLE (*HttpOpenRequestFn)(HANDLE, const wchar_t*, const wchar_t*, const wchar_t*, const wchar_t*, const wchar_t**, DWORD);
+typedef BOOL   (*HttpSendFn)(HANDLE, const wchar_t*, DWORD, void*, DWORD, DWORD, uintptr_t);
+typedef BOOL   (*HttpReceiveFn)(HANDLE, void*);
+typedef BOOL   (*HttpQueryFn)(HANDLE, DWORD, const wchar_t*, void*, DWORD*, DWORD*);
+typedef BOOL   (*HttpReadFn)(HANDLE, void*, DWORD, DWORD*);
+typedef BOOL   (*HttpCloseFn)(HANDLE);
+typedef BOOL   (*HttpTimeoutsFn)(HANDLE, int, int, int, int);
+typedef int32_t (*BcOpenFn)(HANDLE*, const wchar_t*, const wchar_t*, DWORD);
+typedef int32_t (*BcCreateFn)(HANDLE, HANDLE*, uint8_t*, DWORD, uint8_t*, DWORD, DWORD);
+typedef int32_t (*BcDataFn)(HANDLE, uint8_t*, DWORD, DWORD);
+typedef int32_t (*BcFinishFn)(HANDLE, uint8_t*, DWORD, DWORD);
+typedef int32_t (*BcDestroyFn)(HANDLE);
+typedef int32_t (*BcCloseFn)(HANDLE, DWORD);
+
+/* HMAC-SHA256 of the body under the build's key, as 64 hex characters (wide, for the header); 0 if bcrypt failed */
+static int SignBody(const char* body, DWORD len, wchar_t* hex)
+{
+    HANDLE bc = LoadLibraryW(L"bcrypt.dll");
+    if (!bc) return 0;
+    BcOpenFn open = (BcOpenFn)GetProcAddress(bc, "BCryptOpenAlgorithmProvider");
+    BcCreateFn create = (BcCreateFn)GetProcAddress(bc, "BCryptCreateHash");
+    BcDataFn data = (BcDataFn)GetProcAddress(bc, "BCryptHashData");
+    BcFinishFn finish = (BcFinishFn)GetProcAddress(bc, "BCryptFinishHash");
+    BcDestroyFn destroy = (BcDestroyFn)GetProcAddress(bc, "BCryptDestroyHash");
+    BcCloseFn close = (BcCloseFn)GetProcAddress(bc, "BCryptCloseAlgorithmProvider");
+    if (!open || !create || !data || !finish || !destroy || !close) return 0;
+    static const char key[] = SV_SUBMIT_KEY;
+    HANDLE alg = NULL, h = NULL;
+    uint8_t mac[32];
+    int ok = open(&alg, L"SHA256", NULL, 0x8 /* BCRYPT_ALG_HANDLE_HMAC_FLAG */) == 0
+          && create(alg, &h, NULL, 0, (uint8_t*)key, (DWORD)(sizeof(key) - 1), 0) == 0
+          && data(h, (uint8_t*)body, len, 0) == 0
+          && finish(h, mac, 32, 0) == 0;
+    if (h) destroy(h);
+    if (alg) close(alg, 0);
+    if (!ok) return 0;
+    static const char digits[] = "0123456789abcdef";
+    for (int i = 0; i < 32; ++i) { hex[2 * i] = (wchar_t)digits[mac[i] >> 4]; hex[2 * i + 1] = (wchar_t)digits[mac[i] & 15]; }
+    hex[64] = 0;
+    return 1;
+}
+
+static DWORD WINAPI PostWorker(void* arg)
+{
+    PostJob* j = (PostJob*)arg;
+    j->status = -1;
+    HANDLE wh = LoadLibraryW(L"winhttp.dll");
+    HttpOpenFn hOpen = wh ? (HttpOpenFn)GetProcAddress(wh, "WinHttpOpen") : NULL;
+    HttpConnectFn hConnect = wh ? (HttpConnectFn)GetProcAddress(wh, "WinHttpConnect") : NULL;
+    HttpOpenRequestFn hRequest = wh ? (HttpOpenRequestFn)GetProcAddress(wh, "WinHttpOpenRequest") : NULL;
+    HttpSendFn hSend = wh ? (HttpSendFn)GetProcAddress(wh, "WinHttpSendRequest") : NULL;
+    HttpReceiveFn hReceive = wh ? (HttpReceiveFn)GetProcAddress(wh, "WinHttpReceiveResponse") : NULL;
+    HttpQueryFn hQuery = wh ? (HttpQueryFn)GetProcAddress(wh, "WinHttpQueryHeaders") : NULL;
+    HttpReadFn hRead = wh ? (HttpReadFn)GetProcAddress(wh, "WinHttpReadData") : NULL;
+    HttpCloseFn hClose = wh ? (HttpCloseFn)GetProcAddress(wh, "WinHttpCloseHandle") : NULL;
+    HttpTimeoutsFn hTimeouts = wh ? (HttpTimeoutsFn)GetProcAddress(wh, "WinHttpSetTimeouts") : NULL;
+    wchar_t headers[160], sig[65];
+    if (!hOpen || !hConnect || !hRequest || !hSend || !hReceive || !hQuery || !hRead || !hClose || !SignBody(j->body, j->len, sig)) {
+        Log(L"leaderboard: WinHTTP or bcrypt missing; run not sent");
+        j->state = 2;
+        return 0;
+    }
+    static const wchar_t head[] = L"Content-Type: application/json\r\nX-SV-Signature: ";
+    size_t n = 0;
+    for (size_t i = 0; head[i]; ++i) headers[n++] = head[i];
+    for (size_t i = 0; sig[i]; ++i) headers[n++] = sig[i];
+    headers[n++] = L'\r'; headers[n++] = L'\n'; headers[n] = 0;
+    HANDLE ses = hOpen(L"AC8SurvivalMode", 4 /* automatic proxy */, NULL, NULL, 0);
+    if (!ses) ses = hOpen(L"AC8SurvivalMode", 0 /* default proxy */, NULL, NULL, 0);
+    HANDLE con = ses ? hConnect(ses, SV_SUBMIT_HOST, 443, 0) : NULL;
+    HANDLE req = con ? hRequest(con, L"POST", SV_SUBMIT_PATH, NULL, NULL, NULL, 0x00800000 /* WINHTTP_FLAG_SECURE */) : NULL;
+    if (req && hTimeouts) hTimeouts(req, 10000, 10000, 15000, 15000);
+    if (req && hSend(req, headers, (DWORD)-1, j->body, j->len, j->len, 0)) {
+        if (hReceive(req, NULL)) {
+            DWORD code = 0, sz = sizeof(code);
+            if (hQuery(req, 19 | 0x20000000 /* STATUS_CODE | FLAG_NUMBER */, NULL, &code, &sz, NULL)) j->status = (int32_t)code;
+            DWORD got = 0;
+            while (j->replyLen < sizeof(j->reply) - 1 && hRead(req, j->reply + j->replyLen, (DWORD)(sizeof(j->reply) - 1 - j->replyLen), &got) && got)
+                j->replyLen += got;
+        } else {
+            j->status = -2;
+        }
+    }
+    j->reply[j->replyLen] = 0;
+    if (req) hClose(req);
+    if (con) hClose(con);
+    if (ses) hClose(ses);
+    Log(L"leaderboard: run sent, status %d", j->status);
+    j->state = 2;
+    return 0;
+}
+
+static int L_Post(void* lua)
+{
+    if (!SV_SUBMIT_HOST[0] || sizeof(SV_SUBMIT_KEY) <= 1) return Ret(lua, SV_ERR_NO_SERVER);
+    if (U.luaStackSize(lua) < 1 || !U.luaIsString(lua, 1)) return Ret(lua, SV_ERR_BAD_ARGS);
+    StrView sv = { NULL, 0 };
+    U.luaGetString(lua, &sv, 1);
+    if (!sv.p || !sv.n || sv.n >= POST_BODY) return Ret(lua, SV_ERR_BAD_ARGS);
+    for (int i = 0; i < POST_JOBS; ++i) {
+        PostJob* j = &g_post[i];
+        if (j->state != 0) continue;
+        memcpy(j->body, sv.p, sv.n);
+        j->len = (DWORD)sv.n; j->replyLen = 0; j->reply[0] = 0; j->status = 0;
+        j->state = 1;
+        HANDLE th = CreateThread(NULL, 0, PostWorker, j, 0, NULL);
+        if (!th) { j->state = 0; return Ret(lua, SV_ERR_BUSY); }
+        CloseHandle(th);
+        return Ret(lua, i + 1);
+    }
+    return Ret(lua, SV_ERR_BUSY);
+}
+
+static int L_PostResult(void* lua)
+{
+    double id = 0;
+    if (!ArgNumber(lua, &id) || id < 1 || id > POST_JOBS) return Ret(lua, SV_ERR_BAD_ARGS);
+    PostJob* j = &g_post[(int)id - 1];
+    if (j->state != 2) return Ret(lua, 0);
+    int32_t st = j->status;
+    j->state = 0;                                   /* read: free again (its reply stays until the next send) */
+    return Ret(lua, st);
+}
+
+static int L_PostReply(void* lua)
+{
+    double id = 0;
+    if (!ArgNumber(lua, &id) || id < 1 || id > POST_JOBS) { U.luaSetString(lua, "", 0); return 1; }
+    PostJob* j = &g_post[(int)id - 1];
+    U.luaSetString(lua, j->reply, j->replyLen);
+    return 1;
+}
+
 static void RegisterLua(void* lua)
 {
     static const struct { const char* name; LuaFn fn; } kFns[] = {
@@ -2085,6 +2249,7 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
+        { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply },
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     static wchar_t list[640];                                    /* the names registered, for the log */

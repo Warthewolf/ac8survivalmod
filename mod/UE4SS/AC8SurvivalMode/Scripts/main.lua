@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.46.1"
+local VERSION = "0.47.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -371,6 +371,8 @@ local ANOM = { on = false }
 local AMPH = {}
 -- The Ladons and later specials (section "ladon"): their functions; their state is in D.special.
 local SPC = {}
+-- The leaderboard (section "leaderboard"): the run's stats (RUN.stats), its end, the prompt and sending.
+local LB = { queue = {}, show = nil }
 -- its camera settings, in tools/survival_events.py ANOMALY_CAMERAS order (RE_SV_AnomalyCam_A, _B, ...)
 local ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
@@ -807,6 +809,13 @@ local CFG = {
               aircraft_add = 6 },
         },
     },
+    -- The Discord leaderboard (Milestone 8; leaderboard/README.md; user, 2026-10-23: an end-of-run prompt, a
+    -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). When a run ends (shot
+    -- down, restarted or left), its summary shows with "Y SUBMIT / N SKIP" for prompt_s seconds. submit: "ask", "always"
+    -- (no prompt: for a controller) or "never". Nothing is ever sent without a `pilot` name. Runs that couldn't get
+    -- through wait in config\pending_runs.txt and go at the next start. Only the leaderboard's own server is contacted
+    -- (dlls/main.dll SV_Post; its address is built in).
+    leaderboard = { pilot = "", submit = "ask", prompt_s = 30 },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
@@ -1050,6 +1059,16 @@ local CFG = {
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
             ladon_sub    = "LADONS INBOUND",
+            lb_title     = "RUN OVER: %s",
+            lb_lines     = { "ROUND REACHED  %d", "SCORE  %s", "KILLS  %d AIR, %d GROUND", "SPECIALS BEATEN  %d",
+                             "TIME  %s", "ZOLLARS EARNED  %s" },
+            lb_ask       = "SUBMIT TO THE LEADERBOARD?  Y: YES   N: NO",
+            lb_no_pilot  = "SET pilot = YOUR NAME UNDER [leaderboard] IN survival.ini TO SUBMIT RUNS",
+            lb_sending   = "SENDING...",
+            lb_sent      = "SUBMITTED: SCORE %s",
+            lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
+            lb_refused   = "NOT ACCEPTED: %s",
+            lb_skipped   = "NOT SUBMITTED",
             alicorn_sub  = "SUBMARINE CONTACT",
             alicorn_go   = "THE ALICORN",
             alicorn_go_sub = "DESTROY ITS BALLAST TANKS, THEN ITS CORE",
@@ -1605,7 +1624,6 @@ end
 -- probe, an aircraft only flies its _sv row when the rows were in before the level loaded.
 local SEARCH_MODULE = { path = "/Game/Datatables/AI/NPC/AIModule/DT_NPC_AIModule.DT_NPC_AIModule",
                         src = "NPC_AIModule_Plane000", row = "NPC_AIModule_SV_Search" }
-local SV_NPC_MISSION = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
 
 -- Called every second from the start (main menu included) until done (or 20 tries failed).
 -- The fighter flights' behaviour row (tools/survival_events.py POOL_BEHAVIOUR_ROW = BEHAVIOUR_AIRCRAFT .. "_sv"): the
@@ -1664,7 +1682,7 @@ local function searchSetup()
     local function giveUp(why) log("search: " .. why .. "; enemies keep the stock 6 km search"); SR.done = true end
     local mod, why1 = loadObject(SEARCH_MODULE.path)
     local npc, why2 = loadObject(PROBE_TABLES[2].path)
-    local mission, why3 = loadObject(SV_NPC_MISSION)
+    local mission, why3 = loadObject("/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission")   -- (Survival's NPC table)
     if not (mod and npc and mission) then
         if SR.tries >= 20 then giveUp("tables not loaded (" .. tostring(why1 or why2 or why3) .. ")") end
         return
@@ -2140,8 +2158,8 @@ end
 -- UUserWidget is Abstract (constructing one directly is fatal in a shipping build), so the widget comes from
 -- WidgetBlueprintLibrary.Create, the engine's CreateWidget; TextBlock / Image / CanvasPanel / ScaleBox / SizeBox are
 -- concrete and made with StaticConstructObject in its WidgetTree. All of it runs in the one game-thread tick.
-local HUD_BASE = "/Game/Blueprints/UI/WBP/HUD4K/Campaign/WBP_HUD_NonGlowMessage_000.WBP_HUD_NonGlowMessage_000_C"
-local HUD_FONT = "/Game/UI/Font/UI_FontSet_ja.UI_FontSet_ja"
+local HUD_ASSET = { base = "/Game/Blueprints/UI/WBP/HUD4K/Campaign/WBP_HUD_NonGlowMessage_000.WBP_HUD_NonGlowMessage_000_C",
+                   font = "/Game/UI/Font/UI_FontSet_ja.UI_FontSet_ja" }
 local DESIGN_W, DESIGN_H = 3840, 2160
 local VIS = { Visible = 0, Collapsed = 1, Hidden = 2, HitTestInvisible = 3, SelfHitTestInvisible = 4 }
 local H = nil                      -- the HUD layer: { widget, tree, font, rowSlots, round, next, banner, ... }
@@ -2237,7 +2255,7 @@ end
 local function hudBuild(pc)
     local wbl = cdo("/Script/UMG.Default__WidgetBlueprintLibrary")
     if not wbl then error("WidgetBlueprintLibrary not found") end
-    local cls, why = loadObject(HUD_BASE)
+    local cls, why = loadObject(HUD_ASSET.base)
     if not cls then error("base widget class not loaded (" .. tostring(why) .. ")") end
     local w = wbl:Create(pc, cls, pc)
     if not valid(w) then error("WidgetBlueprintLibrary.Create returned nothing") end
@@ -2245,7 +2263,7 @@ local function hudBuild(pc)
     local root = H.tree.RootWidget
     for i = root:GetChildrenCount() - 1, 0, -1 do root:GetChildAt(i):SetVisibility(VIS.Collapsed) end   -- its own banner
     local font
-    font, why = loadObject(HUD_FONT)
+    font, why = loadObject(HUD_ASSET.font)
     H.font = font
     if not font then hudLog("font", "HUD font not loaded (" .. tostring(why) .. "); using the default font") end
 
@@ -2305,6 +2323,16 @@ local function hudBuild(pc)
     slotIn(canvas, H.sub, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y + 34 + 40, 0, 0 }, { 0.5, 0 }, true)
     banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed)
 
+    -- the end-of-run summary (LB.show): a title and its lines, centred, under the banner
+    H.lbTitle = newText("LbTitle", 1, hc.banner_letter_spacing)
+    slotIn(canvas, H.lbTitle, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, 560, 0, 0 }, { 0.5, 0 }, true)
+    H.lbLines = {}
+    for i = 1, 8 do
+        H.lbLines[i] = newText("LbLine" .. i)
+        slotIn(canvas, H.lbLines[i], { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, 560 + 30 + i * hc.line, 0, 0 }, { 0.5, 0 }, true)
+    end
+    H.lbTitle:SetVisibility(VIS.Collapsed)
+    for _, l in ipairs(H.lbLines) do l:SetVisibility(VIS.Collapsed) end
     w:AddToViewport(hc.zorder)
     w:SetVisibility(VIS.HitTestInvisible)
     H.shown = true
@@ -2383,7 +2411,8 @@ local function hudTick(now, paused, pc)
     pcall(function() pawnOk = valid(pc.Pawn) end)
     local gameHud = true
     pcall(function() local hud = pc:GetHUD(); if valid(hud) then gameHud = hud.bShowHUD end end)
-    local show = (not paused) and pawnOk and gameHud
+    local show = ((not paused) and pawnOk and gameHud) or (LB.show ~= nil)    -- (the run's summary stays up)
+    pcall(LB.hud, now)
     if show ~= H.shown then
         H.widget:SetVisibility(show and VIS.HitTestInvisible or VIS.Collapsed)
         H.shown = show
@@ -3006,6 +3035,7 @@ function ANOM.tick(now, s)
         log(string.format("special: %s's last burst (%d systems)", c.name, nb))
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
+        LB.special("anomaly", true, now - s.at)
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
         log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
         return
@@ -3078,6 +3108,7 @@ local function specialTick(now)
         D.shuttleRemoveAt = now + 30                    -- the pad's allies (the shuttle is gone)
         RUN.shopClosedUntil = D.round + c.shop_closed_rounds
         RUN.dirty = true
+        LB.special("shuttle", false, now - s.at)
         hudCallout(t.shuttle_lost, t.shuttle_lost_sub)
         log(string.format("special: round %d, the shuttle was lost %.0f s into the countdown (%d hits); shop closed through round %d",
             D.round, now - s.at, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
@@ -3086,6 +3117,7 @@ local function specialTick(now)
         D.shuttleRemoveAt = now + c.remove_s            -- it and the pad's allies, once it's well up
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "shuttle launched")
+        LB.special("shuttle", true, now - s.at)
         hudCallout(t.launched, string.format(t.launched_sub, pay))
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
             launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
@@ -3531,12 +3563,185 @@ function SPC.ladonTick(now, s)
                 L.alive = false
                 local pay = c.reward + (c.reward_per_round or 0) * D.round
                 addCredits(pay, "Ladon " .. (c.names[k] or k) .. " down")
+                LB.stat("air", 1)
                 hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, pay))
                 log(string.format("special: round %d, Ladon %s down %.0f s after it appeared", D.round, c.names[k] or k, now - s.at))
             end
         end
     end
-    if SPC.ladonsLeft(s) == 0 then s.state = "done" end
+    if SPC.ladonsLeft(s) == 0 then s.state = "done"; LB.special("ladon", true, now - s.at) end
+end
+end
+
+---------------------------------------------------------------------------------------------------- leaderboard
+-- CFG.leaderboard; leaderboard/src/index.js is the other end (same score, same checks). RUN.stats: { started, air,
+-- ground, specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen, waiting for Y / N.
+do
+local function stats()
+    RUN.stats = RUN.stats or { started = os.time(), air = 0, ground = 0, specials = {} }
+    return RUN.stats
+end
+function LB.stat(what, n) if D then local st = stats(); st[what] = st[what] + (n or 1) end end
+function LB.special(kind, won, seconds)
+    if not D then return end
+    local sp = stats().specials
+    if #sp < 200 then sp[#sp + 1] = { kind = kind, round = D.round, seconds = math.max(5, math.floor(seconds + 0.5)), won = won } end
+end
+
+-- leaderboard/src/index.js score(): 1000 a round, 100 an aircraft, 50 a ground target, 3000 a special beaten, x the difficulty
+local DIFF_X = { casual = 0.75, standard = 1.0, ace = 1.5 }
+local function score(r)
+    local won = 0
+    for _, sp in ipairs(r.specials) do if sp.won then won = won + 1 end end
+    return math.floor((r.round * 1000 + r.kills.air * 100 + r.kills.ground * 50 + won * 3000) * (DIFF_X[r.difficulty] or 1)), won
+end
+
+local function jstr(v) return '"' .. tostring(v):gsub('[%c"\\]', function(c) return string.format("\\u%04x", c:byte()) end) .. '"' end
+local function json(r)
+    local sp = {}
+    for _, x in ipairs(r.specials) do
+        sp[#sp + 1] = string.format('{"kind":%s,"round":%d,"seconds":%d,"won":%s}', jstr(x.kind), x.round, x.seconds, tostring(x.won))
+    end
+    return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
+        .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"specials":[%s]}', jstr(r.run_id), jstr(r.pilot),
+        jstr(r.difficulty), r.round, jstr(r.mod), r.kills.air, r.kills.ground, r.zollars.earned, r.zollars.spent, r.time_s,
+        jstr(r.ended), table.concat(sp, ","))
+end
+
+local function configDir() return (debug.getinfo(1, "S").source:match("^@(.*[/\\])") or "") .. "..\\config\\" end
+local function saveQueue()
+    local f = io.open(configDir() .. "pending_runs.txt", "w")
+    if not f then return end
+    for _, body in ipairs(LB.queue) do f:write(body, "\n") end
+    f:close()
+end
+local function money(n) return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "") end
+local function clockText(t) return string.format("%d:%02d:%02d", t // 3600, t // 60 % 60, t % 60) end
+
+-- Shot down: the player's aircraft at 0 health (checked once a second in a run)
+function LB.deathCheck(pc)
+    if not D or not D.round or D.round < 1 or (RUN.stats and RUN.stats.ended) then return end
+    local ok, h = pcall(function() return pc.Pawn.HealthInternal end)
+    if ok and type(h) == "number" and h <= 0 then LB.finish("died") end
+end
+
+-- The run's over (died / restart / left): its record, and the prompt (or straight off with submit = "always").
+function LB.finish(how)
+    if not D or not D.round or D.round < 1 then return end
+    local st = stats()
+    if st.ended then return end                         -- (shot down, then restarted: one record)
+    st.ended = how
+    local c = CFG.leaderboard
+    local id = {}
+    for _ = 1, 32 do id[#id + 1] = string.format("%x", math.random(0, 15)) end
+    local r = { run_id = table.concat(id), pilot = tostring(c.pilot or ""):sub(1, 24), difficulty = (presetName()),
+                round = D.round, mod = VERSION, kills = { air = st.air, ground = st.ground },
+                zollars = { earned = math.floor(RUN.earned or 0), spent = math.floor(RUN.spent or 0) },
+                time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials }
+    r.score, r.won = score(r)
+    log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
+        how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))
+    local mode = tostring(c.submit or "ask"):lower()
+    if mode == "never" then return end
+    -- (at: when it's first on screen: a run left from the menu has no HUD, so its prompt waits for the next run's)
+    LB.show = { run = r, at = nil, state = (r.pilot == "" and "nopilot") or (mode == "always" and "auto") or "ask" }
+    if LB.show.state == "auto" then LB.answer(true) end
+end
+
+-- Y / N on the prompt
+function LB.answer(yes)
+    local sh = LB.show
+    if not sh or (sh.state ~= "ask" and sh.state ~= "auto") then return end
+    if not yes then sh.state, sh.until_ = "skipped", os.clock() + 4; log("leaderboard: not submitted"); return end
+    local body = json(sh.run)
+    local id = type(SV_Post) == "function" and SV_Post(body) or -5
+    if id > 0 then
+        sh.state, sh.job, sh.body = "sending", id, body
+        log("leaderboard: sending the run (job " .. id .. ")")
+    else
+        LB.queue[#LB.queue + 1] = body; saveQueue()
+        sh.state, sh.until_ = "queued", os.clock() + 6
+        log("leaderboard: not sent now (" .. tostring(id == -8 and "this build has no leaderboard address" or id) .. "); kept for later")
+    end
+end
+
+-- Each HUD pass: the summary's texts, the job's answer, and closing it.
+function LB.hud(now)
+    local sh = LB.show
+    if sh and sh.job then
+        local st = SV_PostResult(sh.job)
+        if st ~= 0 then
+            local reply = SV_PostReply(sh.job) or ""
+            sh.job = nil
+            if st == 200 then
+                sh.state, sh.until_ = "sent", os.clock() + 8
+                sh.score = reply:match('"score":(%d+)')
+            elseif st < 0 or st >= 500 or st == 429 then
+                LB.queue[#LB.queue + 1] = sh.body; saveQueue()
+                sh.state, sh.until_ = "queued", os.clock() + 6
+            else
+                sh.state, sh.until_, sh.why = "refused", os.clock() + 10, reply:match('"error":"([^"]+)"') or ("status " .. st)
+            end
+            log(string.format("leaderboard: the server answered %d: %s", st, reply:sub(1, 200)))
+        end
+    end
+    if sh and not sh.at and H and H.lbTitle and H.shown then sh.at = os.clock() end
+    if sh and ((sh.until_ and os.clock() > sh.until_) or (sh.state == "ask" or sh.state == "nopilot") and sh.at and
+        os.clock() - sh.at > (CFG.leaderboard.prompt_s or 30)) then
+        if sh.state == "ask" then log("leaderboard: no answer; not submitted") end
+        LB.show, sh = nil, nil
+    end
+    if not (H and H.lbTitle) then return end
+    local t = CFG.hud.text
+    if not sh then
+        if H.lbShown then
+            H.lbTitle:SetVisibility(VIS.Collapsed)
+            for _, l in ipairs(H.lbLines) do l:SetVisibility(VIS.Collapsed) end
+            H.lbShown = false
+        end
+        return
+    end
+    local r = sh.run
+    local lines = { string.format(t.lb_lines[1], r.round), string.format(t.lb_lines[2], money(r.score)),
+                    string.format(t.lb_lines[3], r.kills.air, r.kills.ground), string.format(t.lb_lines[4], r.won),
+                    string.format(t.lb_lines[5], clockText(r.time_s)), string.format(t.lb_lines[6], money(r.zollars.earned)), "" }
+    lines[8] = (sh.state == "ask" and t.lb_ask) or (sh.state == "nopilot" and t.lb_no_pilot) or
+        (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
+        or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
+        or (sh.state == "skipped" and t.lb_skipped) or ""
+    setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
+    for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end
+    if not H.lbShown then
+        H.lbTitle:SetVisibility(VIS.HitTestInvisible)
+        for _, l in ipairs(H.lbLines) do l:SetVisibility(VIS.HitTestInvisible) end
+        H.lbShown = true
+    end
+end
+
+-- The runs that didn't get through: read at the start, sent one at a time (at the main menu or in a run).
+function LB.queueTick()
+    if not LB.loaded then
+        LB.loaded = true
+        local f = io.open(configDir() .. "pending_runs.txt", "r")
+        if f then
+            for line in f:lines() do if line:sub(1, 1) == "{" then LB.queue[#LB.queue + 1] = line end end
+            f:close()
+            if #LB.queue > 0 then log("leaderboard: " .. #LB.queue .. " run(s) waiting to be sent") end
+        end
+    end
+    if #LB.queue == 0 or type(SV_Post) ~= "function" or (LB.show and LB.show.job) then return end
+    if LB.qjob then
+        local st = SV_PostResult(LB.qjob)
+        if st == 0 then return end
+        log(string.format("leaderboard: waiting run sent: %d %s", st, SV_PostReply(LB.qjob) or ""))
+        LB.qjob = nil
+        if st > 0 and st < 500 and st ~= 429 then table.remove(LB.queue, 1); saveQueue()     -- (accepted or refused for good)
+        else LB.qwait = os.clock() + 120 end                                                -- (no connection: later)
+        return
+    end
+    if os.clock() < (LB.qwait or 0) then return end
+    local id = SV_Post(LB.queue[1])
+    if id > 0 then LB.qjob = id elseif id == -8 then LB.qwait = math.huge end
 end
 end
 
@@ -3669,6 +3874,7 @@ function SPC.alicornTick(now, s)
     if seen > 0 then s.tanksSeen = true end
     if s.tanksSeen and tanks < (s.tanks or 4) then
         addCredits(TIER.pay(c.tank_pay, TIER.index(D.round)) * ((s.tanks or 4) - tanks), "Alicorn ballast tank down")
+        LB.stat("ground", (s.tanks or 4) - tanks)
         log(string.format("special: Alicorn ballast tanks left: %d", tanks))
         s.tanks = tanks
     end
@@ -3686,6 +3892,7 @@ function SPC.alicornTick(now, s)
         s.state = "done"
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "the Alicorn sunk")
+        LB.stat("ground", 1); LB.special("alicorn", true, now - s.at)
         hudCallout(t.alicorn_down, string.format(t.alicorn_down_sub, pay))
         log(string.format("special: round %d, the Alicorn sunk %.0f s after it appeared (core %s, hull %d)", D.round, now - s.at,
             coreUp and "up" or "down", hull))
@@ -3793,6 +4000,7 @@ function AMPH.tick(now, s)
         if alive < lane.alive and not lane.removed then
             local pay = tierPay(c.craft_pay) * (lane.alive - alive)
             addCredits(pay, string.format("landing craft down (lane %s)", l))
+            LB.stat("ground", lane.alive - alive)
             log(string.format("special: lane %s: %d landing craft left", l, alive))
         end
         lane.alive = alive
@@ -3837,6 +4045,7 @@ function AMPH.roundOver(now, s)
         log(string.format("special: the capture stopped at %d%%", AMPH.capture()))
         amph().capture = 0
     end
+    LB.special("amphibious", not s.captured, now - (s.at or now))
     if not s.captured then
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "landing repelled")
@@ -3873,6 +4082,7 @@ function AMPH.runTick(now)
             local n = aliveOf(tr.unit) or tr.alive
             if n < tr.alive then
                 addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle down (" .. tr.unit .. ")")
+                LB.stat("ground", tr.alive - n)
                 log(string.format("special: troops %s: %d left", tr.unit, n))
             end
             tr.alive = n
@@ -3924,8 +4134,10 @@ end
 end
 
 -- The world-data unit (flight) an AI plane belongs to, from its GetUnitName(); cached in p.unit, false if unreadable.
+local planeUnit
+do
 local unitWarned = false
-local function planeUnit(p)
+function planeUnit(p)
     if p.unit ~= nil then return p.unit end
     local ok, u = pcall(function() local v = p.obj:GetUnitName(); return type(v) == "string" and v or v:ToString() end)
     p.unit = (ok and type(u) == "string" and u ~= "") and u or false
@@ -3934,6 +4146,7 @@ local function planeUnit(p)
         log("planes: GetUnitName unreadable (" .. p.name .. ": " .. tostring(u) .. "); credits and bomb runs go by model")
     end
     return p.unit
+end
 end
 
 -- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
@@ -5138,6 +5351,7 @@ local function creditKill(p)
     ti = ti or (D and D.round and TIER.index(D.round))
     local pay, x = TIER.pay(CFG.credits[kind] or 0, ti)
     addCredits(pay, string.format("%s down (%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or ""))
+    LB.stat("air", 1)
 end
 
 local function probeTick(tick)
@@ -5253,6 +5467,7 @@ local function probeTick(tick)
                         if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
                             log(string.format("mission restarted in round %d (%s %d -> %d): the run starts over", D.round, k, D.maxFlags[k], v))
                             levelTick = -1         -- the level-load reset below, on the next tick
+                            LB.finish("restart")
                         end
                         D.maxFlags[k] = math.max(D.maxFlags[k] or 0, v)
                     end
@@ -5261,6 +5476,7 @@ local function probeTick(tick)
         end
         if (D.pcLost or 0) >= 8 then
             log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
+            LB.finish("left")
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
@@ -5288,6 +5504,7 @@ local function probeTick(tick)
             local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
+        if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
     end
@@ -5400,6 +5617,7 @@ LoopAsync(250, function()
             end
         end
         if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
+        if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
         queued = false
     end)
     return false
@@ -5459,6 +5677,21 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             end)
         end)
     end
+    -- Y / N: answer the end-of-run prompt (CFG.leaderboard); they do nothing while it isn't up
+    ;(function()                   -- (its own function: the main chunk's 200-local limit)
+    for _, yn in ipairs({ { "Y", true }, { "N", false } }) do
+        if Key[yn[1]] then
+            pcall(RegisterKeyBind, Key[yn[1]], function()
+                ExecuteInGameThread(function()
+                    if LB.show and LB.show.state == "ask" then
+                        local ok, err = pcall(LB.answer, yn[2])
+                        if not ok then log("leaderboard: answer error " .. tostring(err)) end
+                    end
+                end)
+            end)
+        end
+    end
+    end)()
     -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
     -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
