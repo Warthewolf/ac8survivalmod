@@ -393,7 +393,8 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LadonRun{key}' for key, _, _ in LADONS])
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS]
+             + [f'SV_Ace_{k + 1:02d}' for k in range(len(POOL))])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -506,8 +507,17 @@ class Graph:
         self.used_hashes.add(h)
         return h
 
-    def trigger(self, template_event, name, life=None, arg_changes=None):
-        t = self.trig_template(template_event)
+    def foreign_trig_template(self, stock_ep, event):
+        """A trigger record of another stock EP (its type is a byte, EventType: nothing to import)."""
+        if stock_ep not in self.foreign: self.foreign[stock_ep] = ep_dump.load(stock_ep)
+        fz, _, _, fT, _, _ = self.foreign[stock_ep]
+        for t in fT:
+            if ep_dump.show(fields(t)['EventName'][3], fz) == event:
+                return copy.deepcopy(t)
+        raise LookupError((stock_ep, event))
+
+    def trigger(self, template_event, name, life=None, arg_changes=None, template=None):
+        t = copy.deepcopy(template) if template is not None else self.trig_template(template_event)
         setf(t, 'EventName', fname(name)); self.names.add(fname(name)[1])
         setf(t, 'EventHash', ('raw', 'Int', struct.pack('<i', self._hash(name))))
         if life: setf(t, 'LifeCount', ('raw', 'Int', struct.pack('<i', life)))
@@ -647,7 +657,35 @@ def build_events(stock_ep):
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
     build_alicorn(g, flag, stock_ep)
+    build_ace_moves(g, flag, stock_ep)
     return g
+
+
+def build_ace_moves(g, flag, stock_ep):
+    """Ace moves (2026-10-23, "a proper fix for the cannon fodder"; tools/re/UNIQUE_ACTIONS.md): a pool flight that
+    Scripts/main.lua flags SV_Ace_NN (RE_SV_AceOn_NN / RE_SV_AceOff_NN: while it flies a top tier, CFG.aces.flight)
+    turns on the player whenever the player gets behind it, as Missions 2, 5, 6, 12 and 21 do with their named aces:
+    Mission 6's EnemyBehind trigger (the local player within 90 deg of its tail, 1-4 km) on the flight's unit ->
+    LiveAIRequestUniqueAction LastTGT (a hard 600 km/h turn onto the player, then 10 s 200 m behind it, twice), reset
+    ACE_MOVE_RESET_S later so the next time can come."""
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    behind = g.foreign_trig_template(m06, 'EnemyBehind_LastTGT')
+    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    t_reset = g.foreign_template(m06, 'LiveAIResetUniqueAction', 'UniqueAction_LastTGT')
+    assert arg_values(behind)[:2] == ['ByName', 'LocalPlayer'] and arg_values(t_req)[3] == 'LastTGT', (arg_values(behind), arg_values(t_req))
+    for k, unit in enumerate(POOL):
+        n = f'{k + 1:02d}'
+        ace = f'SV_Ace_{n}'
+        for ev, v in ((f'RE_SV_AceOn_{n}', 1), (f'RE_SV_AceOff_{n}', 0)):
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            flag(ev, ace, 'Set', v)
+        ev = f'SV_AceBehind_{n}'
+        g.trigger(None, ev, template=behind, arg_changes={2: 'NoneSelect', 3: unit})
+        g.execute(t_req, ev, {0: 'NoneSelect', 1: unit}, conds=[g.cond(ace, 'Geq', 1)])
+        g.execute(t_reset, ev, {0: 'NoneSelect', 1: unit}, delay=ACE_MOVE_RESET_S, conds=[g.cond(ace, 'Geq', 1)])
+
+
+ACE_MOVE_RESET_S = 24.0             # LastTGT runs ~2 x (turn up to 5 s + 10 s pursuit)
 
 
 def build_allies(g, flag, t_search, t_move, t_bsearch):

@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.53.0"
+local VERSION = "0.53.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -607,10 +607,12 @@ local CFG = {
         -- target dummy for the whole of the test of 2026-10-23 while its wingman went for the player); no_provoke: its
         -- bPermissionToProvoke off (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 8.2: being tailed put it in Provoke, then our
         -- reactions handed it to EscapeFromPursuer, both above PursueTarget, so a tailed ace defended and never
-        -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you)
+        -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you);
+        -- moves: when you get behind it, it does the campaign aces' LastTGT reversal (tools/survival_events.py
+        -- build_ace_moves: its pool flight's SV_Ace_NN flag on while it flies this tier)
         flight = {
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
-                       health_add = 600, post_stall = true, hunt = true, no_provoke = true },
+                       health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true },
         },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
@@ -2810,6 +2812,18 @@ local function spawnFlight(unit, maxLevel)
     log(string.format("round %d: %s%s as %s (%s set, %s), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), tier.name or "no tier", dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    local pn, pk = unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")         -- its ace moves (CFG.aces.flight <tier>.moves)
+    local fl = tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()]
+    if pn and r > 0 and type(SV_Event) == "function" then
+        local want = (fl and fl.moves) and true or false
+        D.aceMoves = D.aceMoves or {}
+        if want or D.aceMoves[unit] then
+            local ev = string.format("RE_SV_Ace%s_%02d", want and "On" or "Off", (tonumber(pn) - 1) * 3 + tonumber(pk) + 1)
+            local rv = SV_Event(ev)
+            D.aceMoves[unit] = want or nil
+            if want then log(string.format("aces: %s turns on you when you get behind it (%s %s)", unit, ev, tostring(rv))) end
+        end
+    end
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         D.aceSquad = D.aceSquad or {}
