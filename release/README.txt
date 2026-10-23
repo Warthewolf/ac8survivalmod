@@ -86,17 +86,8 @@ game after a change. Delete the file to get a fresh one.
 - After an update, new settings are added at the end of your survival.ini (switched off), with their notes.
 
 
-Test keys (in a Survival run)
------------------------------
-- Ctrl+1 / 2 / 3 / 4 / 5: the next round is a special round: 1 COMONA DEFENSE (the shuttle), 2 THE ANOMALY,
-  3 AMPHIBIOUS ASSAULT, 4 THE LADONS, 5 THE ALICORN (between rounds it starts at once).
-
-
 If something goes wrong
 -----------------------
-Test shortcut: Ctrl+F8 on the main menu loads Survival's map directly, skipping the hangar. If the normal way
-crashes or shows a black hangar, try this and say whether it works.
-
 Please send these (and say what you saw, and which AC8 Mod Loader version you have: the first line of
 AC8IoStoreLoader.log):
 - ...\Win64\ue4ss\UE4SS.log

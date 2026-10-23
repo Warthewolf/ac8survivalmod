@@ -3,7 +3,8 @@
 --   * adds Survival's mission row and main-menu row to the game's tables at run time, copied from Survival's own
 --     tables (DT_SV_MissionRows / DT_SV_MenuRows), so no stock or other-mod table file is overridden
 --   * the main-menu entry opens the game's difficulty page; dlls\main.dll then starts Survival's mission
---   * dev shortcut: Ctrl+F8 on the main menu opens PL_SurvivalMode directly
+--   * dev keys (in the dev build only; tools/package_test.sh strips them from every zip): open the map from the main
+--     menu, zollars, a chosen special next
 -- Milestone 2:
 --   * rounds: random flights, aircraft and bearings each round, spawned through dlls\main.dll's SV_* functions
 --   * round HUD: Survival's own HUD layer, built at run time (round, countdown to the next round, callouts)
@@ -12,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.50.2"
+local VERSION = "0.50.3"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -219,7 +220,7 @@ end
 local function containerMissing()
     containerState = false
     log("Survival Mode's tables could not be loaded from SurvivalMode_P (" .. tostring(lastLoadError) ..
-        "), so Survival Mode is off: no menu entry and Ctrl+F8 does nothing. If AC8IoStoreLoader.log shows " ..
+        "), so Survival Mode is off: no menu entry. If AC8IoStoreLoader.log shows " ..
         "SurvivalMode_P mounted, please send UE4SS.log.")
 end
 
@@ -3718,7 +3719,7 @@ function LB.deathCheck(pc)
     end
 end
 
--- The run's over (died / restart / left): its record, and the prompt (or straight off with submit = "always").
+-- The run's over (died / restart / left): its record, sent at once, and its summary on screen.
 function LB.finish(how)
     if not D or not D.round or D.round < 1 then return end
     local st = stats()
@@ -5776,7 +5777,9 @@ LoopAsync(250, function()
     return false
 end)
 
----------------------------------------------------------------------------------------------------- dev shortcut
+---------------------------------------------------------------------------------------------------- dev keys
+-- TEST ONLY BEGIN (tools/package_test.sh strips every such block from release / test zips: user, 2026-10-23, "remove
+-- all the special codes for accessing levels and cash")
 -- On-screen note. PrintString is stripped from some shipping builds, so the log line is the one to rely on.
 local function notify(msg)
     log(msg)
@@ -5807,16 +5810,20 @@ local function openSurvival()
         log("launch: console command failed (" .. tostring(err) .. ")")
     end
 end
+-- TEST ONLY END
 
-if type(RegisterKeyBind) == "function" and Key and Key.F8 then
+if type(RegisterKeyBind) == "function" and Key then
     local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
-    pcall(RegisterKeyBind, Key.F8, mods, function()
-        ExecuteInGameThread(function()
-            local ok, err = pcall(openSurvival)
-            if not ok then log("launch: error " .. tostring(err)) end
+    -- TEST ONLY BEGIN
+    -- Ctrl+F8 on the main menu opens PL_SurvivalMode directly
+    if Key.F8 then
+        pcall(RegisterKeyBind, Key.F8, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(openSurvival)
+                if not ok then log("launch: error " .. tostring(err)) end
+            end)
         end)
-    end)
-    -- TEST ONLY BEGIN (tools/package_test.sh strips this from every release / test zip; user, 2026-10-23)
+    end
     -- Ctrl+F9 in a run gives 5000 zollars
     if Key.F9 then
         pcall(RegisterKeyBind, Key.F9, mods, function()
@@ -5831,7 +5838,6 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
             end)
         end)
     end
-    -- TEST ONLY END
     -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
     -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
@@ -5858,6 +5864,7 @@ if type(RegisterKeyBind) == "function" and Key and Key.F8 then
         end
     end
     end)()
+    -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
         pcall(RegisterKeyBind, Key.F7, mods, function()
             ExecuteInGameThread(function()
