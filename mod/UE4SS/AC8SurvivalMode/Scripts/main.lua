@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.52.0"
+local VERSION = "0.52.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -2718,15 +2718,18 @@ function ACE.flight(unit, tk, level)
     return f
 end
 
-local function spawnFlight(unit)
+-- maxLevel (the dev key Ctrl+6): the top skill tier's squadron (its ace leading) on the top fire-control level,
+-- whatever the round
+local function spawnFlight(unit, maxLevel)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
-    local ti = CFG.tiers.enabled and (D.roundTier or TIER.pick(D.round)) or nil
+    local ti = CFG.tiers.enabled and (maxLevel and #CFG.tiers.list or D.roundTier or TIER.pick(D.round)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
-    local fcsLevel = math.max(spikeLevel(D.round), tier.fcs or 0)
+    local topSpike = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
+    local fcsLevel = math.max(maxLevel and topSpike or spikeLevel(D.round), tier.fcs or 0)
     local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], fcsLevel)
-    local ace = D.roundTier and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
+    local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
     if ace then ac = ace.wing end
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
@@ -6029,6 +6032,28 @@ if type(RegisterKeyBind) == "function" and Key then
         end
     end
     end)()
+    -- Ctrl+6 in a run: a flight at the top level now (the last skill tier's squadron, its ace leading, on the top
+    -- fire control), whatever the round (user, 2026-10-23: "a special key to have one of the Aircraft Spawn that is
+    -- the MAX LEVEL"); it counts in the round like any flight
+    if Key.SIX then
+        pcall(RegisterKeyBind, Key.SIX, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now or not nativeReady() then log("test: Ctrl+6 outside a Survival run"); return end
+                    local unit
+                    for _, u in ipairs(CFG.pool) do
+                        if not unit and not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
+                    end
+                    if not unit then hudCallout("TEST: NO FREE FLIGHT", "TRY AGAIN WHEN SOME ARE DOWN"); return end
+                    local r = spawnFlight(unit, true)
+                    local tn = (CFG.tiers.list[#CFG.tiers.list] or {}).name or "?"
+                    hudCallout("TEST: " .. tn:upper() .. " FLIGHT", r > 0 and "INBOUND" or "COULD NOT SPAWN")
+                    log(string.format("test: Ctrl+6, a %s flight (%s): %s", tn, unit, tostring(r)))
+                end)
+                if not ok then log("test: Ctrl+6 error " .. tostring(err)) end
+            end)
+        end)
+    end
     -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
         pcall(RegisterKeyBind, Key.F7, mods, function()
