@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.58.0"
+local VERSION = "0.58.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -4277,9 +4277,14 @@ local function json(r)
 end
 
 local function configDir() return SCRIPT_DIR .. "..\\config\\" end
+-- The file holds only the runs still waiting for an answer: once the last one is in (taken or refused), the file is
+-- deleted, so no run stays on the player's PC after it's uploaded (user, 2026-10-24: "once its been uploaded, it self
+-- deletes"). A run is written before it's sent so a game closed mid-send doesn't lose it.
 local function saveQueue()
     while #LB.queue > 50 do table.remove(LB.queue, 1) end
-    local f = io.open(configDir() .. "pending_runs.txt", "w")
+    local path = configDir() .. "pending_runs.txt"
+    if #LB.queue == 0 then os.remove(path); return end
+    local f = io.open(path, "w")
     if not f then return end
     for _, body in ipairs(LB.queue) do f:write(body, "\n") end
     f:close()
@@ -4467,6 +4472,7 @@ function LB.queueTick()
         if f then
             for line in f:lines() do if line:sub(1, 1) == "{" then LB.queue[#LB.queue + 1] = line end end
             f:close()
+            if #LB.queue == 0 then saveQueue() end              -- (an empty file from an older version: deleted)
             if #LB.queue > 0 then log("leaderboard: " .. #LB.queue .. " run(s) waiting to be sent") end
         end
     end
