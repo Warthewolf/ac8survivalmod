@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.14.2"
+#define RT_VERSION           L"0.15.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1610,9 +1610,18 @@ static volatile int32_t  g_invFadeMs = 1500;
 static float         g_invScale[2] = { 1.0f, 1.0f };
 static uint64_t      g_invLastMs;
 
+/* The flight recorder (Lua CFG.recorder, user 2026-10-23: "tracks my movements ... build our own behaviours"): every
+ * frame the player plane's packed input (pitch, yaw, roll, throttle, brake: out+0x0..+0x10) is summed per axis, and
+ * SV_Input(axis) hands Lua the axis's average since its last call (x1000), so a 4 Hz recorder still sees every frame. */
+static volatile float   g_inSum[5];
+static volatile int32_t g_inN[5];
+
 static void OnBuildInput(uint8_t* plane, float* out)
 {
     g_nextBuildInput(plane, out);
+    if (plane && out) {
+        for (int a = 0; a < 5; ++a) { g_inSum[a] += out[a]; g_inN[a] += 1; }
+    }
     if (!plane || plane != g_invPlane || !out) return;
     uint64_t now = GetTickCount64();
     float step = g_invLastMs && now > g_invLastMs ? (float)(now - g_invLastMs) * 2.0f / (float)(g_invFadeMs > 0 ? g_invFadeMs : 1) : 0.0f;
@@ -1802,10 +1811,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.14.2" */
+/* SV_Version() -> "0.15.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.14.2";
+    static const char v[] = "0.15.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2022,6 +2031,21 @@ static int L_MusicClock(void* lua)
  * SV_ERR_NO_GAME when BuildFlightInput wasn't hooked. pitch / roll 1 = invert that axis, 0 = normal; the change fades
  * over fade_s; plane = the player's ALivePlayerPlane address (only that plane's input is touched; 0 = none). Turning
  * the axes back to normal keeps the plane until the fade is over. */
+/* SV_Input(axis) -> the player's input on axis 0 pitch, 1 yaw, 2 roll, 3 throttle, 4 brake, averaged over the frames
+ * since the last SV_Input(axis), x1000 (-1000..1000); SV_ERR_NO_GAME without the hook, SV_ERR_BAD_ARGS otherwise. The
+ * values are the game's own, before the inverted-controls field scales them (what the player asked for). */
+static int L_Input(void* lua)
+{
+    double a = -1;
+    if (!ArgNumber(lua, &a) || a < 0 || a > 4) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
+    int i = (int)a;
+    int32_t n = g_inN[i];
+    float sum = g_inSum[i];
+    g_inSum[i] = 0.0f; g_inN[i] = 0;
+    return Ret(lua, n > 0 ? (int64_t)(sum / (float)n * 1000.0f) : 0);
+}
+
 static int L_SetControlInvert(void* lua)
 {
     double pitch = 0, roll = 0, fade = 1.5, addr = 0;
@@ -2296,7 +2320,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_Input", L_Input },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
     };

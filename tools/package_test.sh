@@ -15,7 +15,7 @@ cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/survival.ini* "$st"/ue4ss/Mods/AC8SurvivalMode/*.log
 # (what the game writes there: the queue of unsent runs, this install's anonymous pilot name, map notes, dumps)
 rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/pending_runs.txt "$st"/ue4ss/Mods/AC8SurvivalMode/config/pilot_id.txt \
-      "$st"/ue4ss/Mods/AC8SurvivalMode/config/coast_*.txt "$st"/ue4ss/Mods/AC8SurvivalMode/hud_dump.txt
+      "$st"/ue4ss/Mods/AC8SurvivalMode/config/coast_*.txt "$st"/ue4ss/Mods/AC8SurvivalMode/hud_dump.txt "$st"/ue4ss/Mods/AC8SurvivalMode/flights_*.csv
 # the test-only cheats (main.lua's TEST ONLY BEGIN ... END: the +5000 zollars key) never ship
 python -I tools/strip_test_only.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"
 python -I tools/checks/lua_check.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"

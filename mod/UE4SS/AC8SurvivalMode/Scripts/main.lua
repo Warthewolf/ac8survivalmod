@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.53.1"
+local VERSION = "0.54.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -543,6 +543,12 @@ local CFG = {
     -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
     -- script) first flight, never in the normal rotation.
     ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
+    -- The flight recorder (user, 2026-10-23: "tracks my movements ... build our own behaviours while I play ... feed
+    -- them into an AI aircraft"): 4 times a second while an enemy is within range_km, one CSV line of how you fly
+    -- (stick, throttle and brake: dlls/main.dll SV_Input, every frame averaged; attitude, speed, health) and where the
+    -- nearest enemy is (range, its bearing off your nose, your angle off its tail, height difference, its AI state),
+    -- into flights_<date>_<time>.csv next to Scripts (one file a level). Only on this PC; nothing is sent.
+    recorder = { enabled = true, range_km = 8 },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
@@ -2212,6 +2218,73 @@ function ACE.hunt(p)
         log(string.format("aces: %s back onto you (was %s)%s, %d times", p.name, okT and valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none",
             ok and "" or " (write failed)", p.huntN))
     end
+end
+
+-- CFG.recorder: the flight recorder (one line every 250 ms tick while an enemy is within range_km)
+do
+local REC = { file = nil, lines = 0 }
+local function deg(a, b)                           -- the angle between two vectors, degrees
+    local la = math.sqrt(a.X * a.X + a.Y * a.Y + a.Z * a.Z)
+    local lb = math.sqrt(b.X * b.X + b.Y * b.Y + b.Z * b.Z)
+    if la == 0 or lb == 0 then return 0 end
+    return math.deg(math.acos(math.max(-1, math.min(1, (a.X * b.X + a.Y * b.Y + a.Z * b.Z) / (la * lb)))))
+end
+local function vec(v) return { X = v.X, Y = v.Y, Z = v.Z } end
+function ACE.recTick(now, D)      -- (D: the run, passed in: declared further down)
+    local c = CFG.recorder
+    if not (c and c.enabled and D and D.round and D.round >= 1) then return end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return end
+    local me = vec(pawn:K2_GetActorLocation())
+    -- the nearest enemy by its last known place, then read now
+    local best, bd
+    for _, p in ipairs(planes) do
+        if not p.down and p.at and valid(p.obj) then
+            local d = km(p.at, me)
+            if not bd or d < bd then best, bd = p, d end
+        end
+    end
+    if not best or bd > c.range_km + 2 then
+        for a = 0, 4 do if type(SV_Input) == "function" then SV_Input(a) end end   -- (start the next average afresh)
+        return
+    end
+    local ep = vec(best.obj:K2_GetActorLocation())
+    local range = km(ep, me)
+    if range > c.range_km then return end
+    if not REC.file then
+        REC.name = SCRIPT_DIR .. "..\\flights_" .. os.date("%Y%m%d_%H%M%S") .. ".csv"
+        REC.file = io.open(REC.name, "w")
+        if not REC.file then c.enabled = false; log("recorder: can't write " .. REC.name .. "; off"); return end
+        REC.file:write("t,round,x_km,y_km,alt_m,speed_kmh,pitch,yaw,roll,in_pitch,in_yaw,in_roll,in_throttle,in_brake,hp,",
+            "enemy,tier,enemy_state,range_m,enemy_off_nose,me_off_its_tail,its_nose_to_me,dz_m,enemy_speed_kmh\n")
+        log("recorder: writing " .. REC.name)
+    end
+    local fwd, rot, vel = vec(pawn:GetActorForwardVector()), pawn:K2_GetActorRotation(), vec(pawn:GetVelocity())
+    local efwd, evel = vec(best.obj:GetActorForwardVector()), vec(best.obj:GetVelocity())
+    local toE = { X = ep.X - me.X, Y = ep.Y - me.Y, Z = ep.Z - me.Z }
+    local toMe = { X = -toE.X, Y = -toE.Y, Z = -toE.Z }
+    local eback = { X = -efwd.X, Y = -efwd.Y, Z = -efwd.Z }
+    local inp = {}
+    for a = 0, 4 do inp[a] = type(SV_Input) == "function" and (SV_Input(a) or 0) / 1000 or 0 end
+    local hp = 0
+    pcall(function() hp = math.floor(pawn.HealthInternal / 10 / math.max(1, pawn.MaxHealth) * 100 + 0.5) end)
+    local st = "?"
+    pcall(function()
+        local v = best.obj.AIStateComponent.BlackboardComponent:GetValueAsEnum(FName("AIState"))
+        st = AI_STATE[v] or tostring(v)
+    end)
+    local spd = function(v) return math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) * 0.036 end
+    REC.file:write(string.format("%.2f,%d,%.3f,%.3f,%.0f,%.0f,%.1f,%.1f,%.1f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%s,%s,%s,%.0f,%.1f,%.1f,%.1f,%.0f,%.0f\n",
+        now, D.round, me.X / 100000, me.Y / 100000, me.Z / 100, spd(vel), rot.Pitch, rot.Yaw, rot.Roll,
+        inp[0], inp[1], inp[2], inp[3], inp[4], hp, best.name, best.tier and best.tier.name or "-", st,
+        range * 1000, deg(fwd, toE), deg(eback, toMe), deg(efwd, toMe), (ep.Z - me.Z) / 100, spd(evel)))
+    REC.lines = REC.lines + 1
+    if REC.lines % 40 == 0 then REC.file:flush() end
+end
+function ACE.recClose()                            -- a new level: the next fight starts a new file
+    if REC.file then REC.file:close(); log(string.format("recorder: %s closed, %d lines", REC.name, REC.lines)) end
+    REC.file, REC.lines = nil, 0
+end
 end
 
 local function probeKill(p, you)
@@ -5762,6 +5835,7 @@ local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
+        pcall(ACE.recClose)                        -- (the flight recorder: a new file for this level)
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
         SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
@@ -5902,6 +5976,8 @@ local function probeTick(tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        local okRec, errRec = pcall(ACE.recTick, now, D)                       -- the flight recorder (CFG.recorder)
+        if not okRec and not D.recErr then D.recErr = true; log("recorder: error " .. tostring(errRec)) end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
     end
