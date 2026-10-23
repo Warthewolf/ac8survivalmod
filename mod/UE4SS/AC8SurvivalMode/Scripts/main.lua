@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.59.0"
+local VERSION = "0.60.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1027,26 +1027,33 @@ local CFG = {
         -- "anomaly" = The Anomaly (tools/survival_events.py ANOMALY_*; user, 2026-10-22): the ace `name` in an F-4E
         -- (the campaign named-ace skin) with `guards` escorts under `guards_name`, both at the top skill tier and AI
         -- level ai_level. Within field_km of it the player's controls invert (`invert`: "both", "pitch" or "roll",
-        -- fading over fade_s; dlls/main.dll SV_Invert), with the stock glasses effect and radar noise; its
+        -- or "random": each time you come into it, random_min..random_max of random_fx: pitch / roll / yaw (rudder)
+        -- inverted, swap (pitch and roll swapped), throttle (throttle and brake swapped); user, 2026-10-24),
+        -- fading over fade_s (dlls/main.dll SV_Invert), with the stock glasses effect and radar noise; its
         -- round starts with the stock MISSION UPDATE beep, a forced WARNING and the focus camera on it. Shot down:
         -- `reward` zollars, controls back. The round ends when it and every other enemy are down.
         -- field_km 3.2: the ECM pod's ring on the radar is 3.2 km (BP_wp_ecm_a0), so the ring shows the field
-        anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "both",
+        anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "random",
+                     random_fx = { "pitch", "roll", "yaw", "swap", "throttle" }, random_min = 1, random_max = 2,
                      fade_s = 1.5, reward = 8000, reward_per_round = 300, ai_level = 5, guard_offset_m = 800,
                      -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
                      -- to those levels should spawn")
                      only = true,
-                     -- stronger (user: "make the F-4 more stronger"): the F-4E has 60 HP and turns slowly (pitch 30,
+                     -- stronger (user: "make the F-4 more stronger"; 1000 HP from 2026-10-24, was 500: a friend's
+                     -- test had it down to 2 missiles 12 s into its field): the F-4E has 60 HP and turns slowly (pitch 30,
                      -- roll 90); its DT_NPC rows get health_add HP and turn_add degrees/s (MaxHealthDifference,
                      -- Pitch/Roll/YawSpeedDifference). hover: it floats (user: "didn't hover in place"): its speeds
                      -- times hover_speed (Speed*Coefficient), so it hangs in the air and turns on the spot.
-                     health_add = 440, turn_add = { pitch = 120, roll = 270, yaw = 25 }, hover = true, hover_speed = 0.06,
+                     health_add = 940, turn_add = { pitch = 120, roll = 270, yaw = 25 }, hover = true, hover_speed = 0.06,
                      -- (user, 2026-10-22: "make MINDRIPPER 5x more aggressive with everything"): its own fire control
                      -- from the top difficulty spike's, `aggression` times quicker (arm, lock, time on target, between
                      -- shots, rests; gun bursts that many times longer), half again the reach and cone, gun rounds x2
                      -- damage at half the spread; every special weapon it has room for; it reacts to you `aggression`
                      -- times quicker (provoke) and sits closer on your tail (surround_m).
                      aggression = 5, provoke_cone_deg = 30, surround_m = { 20, 60 },
+                     -- its gun on top of that (user, 2026-10-24: "increase its gun accuracy and distance 20x"): spread
+                     -- / gun_accuracy_x, firing range and its rounds' life (how far they fly) x gun_reach_x
+                     gun_accuracy_x = 20, gun_reach_x = 20,
                      -- its guards' search range: they see you only this close, so they stay circling it and jump you
                      -- when you come near (test of 2026-10-22: with the 40 km search they left it for you and the airfield)
                      guard_search_m = 5000,
@@ -1186,12 +1193,14 @@ local CFG = {
             glitch_row   = "%s: %.1f KM",
             glitch_row_frenzy = "%s: SIGNAL UNSTABLE",
             anomaly_warn = "WARNING: %s",
-            anomaly_warn_sub = "ITS FIELD INVERTS YOUR CONTROLS",
+            anomaly_warn_sub = "ITS FIELD SCRAMBLES YOUR CONTROLS",
             anomaly_field     = "ANOMALY FIELD",
-            anomaly_field_sub = "CONTROLS INVERTED",
+            anomaly_field_sub = "%s",                     -- (what the field does this time: anomaly_fx joined by " + ")
             anomaly_clear     = "CONTROLS RESTORED",
             anomaly_row       = "%s: %.1f KM",
-            anomaly_row_field = "ANOMALY FIELD: CONTROLS INVERTED",
+            anomaly_row_field = "ANOMALY FIELD: %s",
+            anomaly_fx        = { pitch = "PITCH INVERTED", roll = "ROLL INVERTED", yaw = "RUDDER INVERTED",
+                                  swap = "STICK AXES SWAPPED", throttle = "THROTTLE / BRAKE SWAPPED" },
             anomaly_down      = "%s DOWN",
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
@@ -1860,7 +1869,9 @@ local function searchSetup()
                 local rounds = copy(wpn, r.NpcWeaponId:ToString(), function(x)
                     x.damage = x.damage * o.damage_x
                     x.MaxSpawnAngle = o.spread
-                end, string.format("%sgun rounds: damage x%.1f, spread %.2f deg", what, o.damage_x, o.spread), suf)
+                    if o.life_x then x.LifeTime = x.LifeTime * o.life_x end      -- (how far they fly)
+                end, string.format("%sgun rounds: damage x%.1f, spread %.3f deg%s", what, o.damage_x, o.spread,
+                    o.life_x and string.format(", life x%.0f", o.life_x) or ""), suf)
                 if rounds then r.NpcWeaponId = FName(rounds) end
             end
         end, string.format("%sgun: within %.0f m / %.0f deg, %.2f s on target, %.0f-round bursts, rest %.2f s", what, o.range, o.angle,
@@ -1898,9 +1909,10 @@ local function searchSetup()
     end
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
-        return gunRow(src, { range = g.range_m * 1.5, angle = math.min(180, g.angle_deg * 1.5), aim = g.aim_s / AGG,
+        local reach, acc = AN.gun_reach_x or 1, AN.gun_accuracy_x or 1
+        return gunRow(src, { range = g.range_m * 1.5 * reach, angle = math.min(180, g.angle_deg * 1.5), aim = g.aim_s / AGG,
                              burst = math.min(200, g.burst * AGG), rest = g.rest_s / AGG, damage_x = g.damage_x * 2,
-                             spread = g.spread_deg / 2 }, "MINDRIPPER's ", "x")
+                             spread = g.spread_deg / 2 / acc, life_x = reach }, "MINDRIPPER's ", "x")
     end
     -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
     local function glitchGun(src)
@@ -2724,7 +2736,7 @@ local function hudTick(now, paused, pc)
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "anomaly" and D.special.state == "hunt" and D.special.dist then
         local an = CFG.specials.anomaly
-        setText(H.next, "nextStr", ANOM.on and t.anomaly_row_field or string.format(t.anomaly_row, an.name:upper(), D.special.dist))
+        setText(H.next, "nextStr", ANOM.on and string.format(t.anomaly_row_field, ANOM.fxText or "") or string.format(t.anomaly_row, an.name:upper(), D.special.dist))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif H.nextShown ~= false then
         H.next:SetVisibility(VIS.Collapsed); H.nextShown = false
@@ -3096,20 +3108,41 @@ end
 -- SV_Invert on the player's plane) and RE_SV_AnomalyFieldOn / Off switch the stock glasses effect and radar
 -- noise; the event package does the start (MISSION UPDATE beep, WARNING, focus camera) and the end when it's down.
 do
-local function inverted(c, axis) return c.invert == "both" or c.invert == axis end
+-- the field's effects this time: { pitch = true, ... }. invert = "random" (user, 2026-10-24: "random each time"):
+-- random_min..random_max of random_fx, picked each time you come into it; else "both", "pitch" or "roll" as before.
+local FX_ORDER = { "pitch", "roll", "yaw", "swap", "throttle" }
+local function pickFx(c)
+    if c.invert ~= "random" then return { pitch = c.invert == "both" or c.invert == "pitch",
+                                          roll = c.invert == "both" or c.invert == "roll" } end
+    local pool = {}
+    for _, k in ipairs(c.random_fx or FX_ORDER) do pool[#pool + 1] = k end
+    if #pool == 0 then return { pitch = true, roll = true } end
+    local lo = math.max(1, math.min(#pool, c.random_min or 1))
+    local n, fx = math.random(lo, math.max(lo, math.min(#pool, c.random_max or 2))), {}
+    for _ = 1, n do fx[table.remove(pool, math.random(#pool))] = true end
+    return fx
+end
 local function setField(on, s)
     if ANOM.on == on then return end
     ANOM.on = on
     local c, t = CFG.specials.anomaly, CFG.hud.text
+    local fx = on and pickFx(c) or {}
+    if on then
+        local names = {}
+        for _, k in ipairs(FX_ORDER) do if fx[k] then names[#names + 1] = (t.anomaly_fx or {})[k] or k:upper() end end
+        ANOM.fxText = table.concat(names, " + ")
+    end
     local r = "no runtime"
     if type(SV_Invert) == "function" then        -- off keeps the plane, so the controls fade back
-        r = SV_Invert(on and inverted(c, "pitch") and 1 or 0, on and inverted(c, "roll") and 1 or 0, c.fade_s,
-                                ANOM.pawn or 0)
+        local function b(k) return fx[k] and 1 or 0 end
+        r = SV_Invert(b("pitch"), b("roll"), c.fade_s, ANOM.pawn or 0, b("yaw"), b("swap"), b("throttle"))
     end
     if type(SV_Event) == "function" then SV_Event(on and "RE_SV_AnomalyFieldOn" or "RE_SV_AnomalyFieldOff") end
-    if s and s.state == "hunt" then hudCallout(on and t.anomaly_field or t.anomaly_clear, on and t.anomaly_field_sub or nil) end
+    if s and s.state == "hunt" then
+        hudCallout(on and t.anomaly_field or t.anomaly_clear, on and string.format(t.anomaly_field_sub, ANOM.fxText) or nil)
+    end
     log(string.format("special: anomaly field %s (%s, %.1f km; SV_Invert %s)", on and "ON" or "off",
-        on and c.invert or "controls back", s and s.dist or -1, tostring(r)))
+        on and ANOM.fxText or "controls back", s and s.dist or -1, tostring(r)))
 end
 ANOM.setField = setField
 

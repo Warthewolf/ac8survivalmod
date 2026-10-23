@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.16.1"
+#define RT_VERSION           L"0.17.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1601,16 +1601,20 @@ static void OnMusicNext(void* manager)
 }
 
 /* The Anomaly's field (tools/re/SPECIAL_ROUNDS.md 13): BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) packs the
- * plane's stick into the flight engine's input every frame (out+0x0 pitch, +0x8 roll, already clamped to -1..1). The
- * detour runs it, then scales pitch / roll of the plane Lua named by a factor that moves from 1 to -1 (inverted) over
- * the fade time and back. The struct is rebuilt every call, so nothing can flip twice. */
+ * plane's controls into the flight engine's input every frame: out+0x0 pitch, +0x4 yaw (right rudder - left), +0x8 roll
+ * (each clamped to -1..1), +0xC throttle, +0x10 brake (0..1), +0x14 the high-G turn (from throttle + brake, or brake on
+ * the single-button option: left as built), +0x18 flags (disassembly of 2026-10-24). The detour runs it, then, on the
+ * plane Lua named, applies the field's effects, each fading over the fade time by a factor from 1 (off) to -1 (on):
+ * pitch / roll / yaw inverted (times the factor), pitch and roll swapped, throttle and brake swapped (blended
+ * (1 - factor) / 2 of the way to the other). The struct is rebuilt every call, so nothing can apply twice. */
+enum { INV_PITCH, INV_ROLL, INV_YAW, INV_SWAP_AXES, INV_SWAP_THROTTLE, INV_N };
 typedef void (*BuildInputFn)(uint8_t* plane, float* out);
 static uint8_t*      g_fBuildInput;
 static BuildInputFn  g_nextBuildInput;
 static uint8_t* volatile g_invPlane;                /* the player's plane (SV_Invert), or NULL */
-static volatile int32_t  g_invWant[2];              /* pitch, roll: 1 = inverted */
+static volatile int32_t  g_invWant[INV_N];          /* 1 = that effect on */
 static volatile int32_t  g_invFadeMs = 1500;
-static float         g_invScale[2] = { 1.0f, 1.0f };
+static float         g_invScale[INV_N] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static uint64_t      g_invLastMs;
 
 static void OnBuildInput(uint8_t* plane, float* out)
@@ -1621,15 +1625,21 @@ static void OnBuildInput(uint8_t* plane, float* out)
     float step = g_invLastMs && now > g_invLastMs ? (float)(now - g_invLastMs) * 2.0f / (float)(g_invFadeMs > 0 ? g_invFadeMs : 1) : 0.0f;
     if (now - g_invLastMs > 1000) step = 0.0f;           /* first frame after a pause: no jump */
     g_invLastMs = now;
-    for (int a = 0; a < 2; ++a) {
+    for (int a = 0; a < INV_N; ++a) {
         float want = g_invWant[a] ? -1.0f : 1.0f, s = g_invScale[a];
         if (g_invFadeMs <= 0) s = want;
         else if (s < want) { s += step; if (s > want) s = want; }
         else if (s > want) { s -= step; if (s < want) s = want; }
         g_invScale[a] = s;
     }
-    out[0] *= g_invScale[0];
-    out[2] *= g_invScale[1];
+    float pitch = out[0] * g_invScale[INV_PITCH], yaw = out[1] * g_invScale[INV_YAW], roll = out[2] * g_invScale[INV_ROLL];
+    float u = (1.0f - g_invScale[INV_SWAP_AXES]) * 0.5f, t = (1.0f - g_invScale[INV_SWAP_THROTTLE]) * 0.5f;
+    float thr = out[3], brk = out[4];
+    out[0] = pitch * (1.0f - u) + roll * u;
+    out[1] = yaw;
+    out[2] = roll * (1.0f - u) + pitch * u;
+    out[3] = thr * (1.0f - t) + brk * t;
+    out[4] = brk * (1.0f - t) + thr * t;
 }
 
 static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
@@ -1805,10 +1815,10 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.16.1" */
+/* SV_Version() -> "0.17.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.16.1";
+    static const char v[] = "0.17.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2052,21 +2062,24 @@ static int L_MusicClock(void* lua)
     return Ret(lua, old);
 }
 
-/* SV_Invert(pitch, roll, fade_s, plane) -> the factor pitch had (x100: 100 normal, -100 inverted), or
- * SV_ERR_NO_GAME when BuildFlightInput wasn't hooked. pitch / roll 1 = invert that axis, 0 = normal; the change fades
- * over fade_s; plane = the player's ALivePlayerPlane address (only that plane's input is touched; 0 = none). Turning
- * the axes back to normal keeps the plane until the fade is over. */
+/* SV_Invert(pitch, roll, fade_s, plane[, yaw, swap_axes, swap_throttle]) -> the factor pitch had (x100: 100 normal,
+ * -100 inverted), or SV_ERR_NO_GAME when BuildFlightInput wasn't hooked. pitch / roll / yaw 1 = invert that axis,
+ * swap_axes 1 = pitch and roll swapped, swap_throttle 1 = throttle and brake swapped, 0 = normal; the changes fade over
+ * fade_s; plane = the player's ALivePlayerPlane address (only that plane's input is touched; 0 = none). Turning the
+ * effects back off keeps the plane until the fade is over. */
 static int L_SetControlInvert(void* lua)
 {
-    double pitch = 0, roll = 0, fade = 1.5, addr = 0;
+    double pitch = 0, roll = 0, fade = 1.5, addr = 0, yaw = 0, swapAxes = 0, swapThrottle = 0;
     ArgNumber(lua, &pitch); ArgNumber(lua, &roll); ArgNumber(lua, &fade); ArgNumber(lua, &addr);
+    ArgNumber(lua, &yaw); ArgNumber(lua, &swapAxes); ArgNumber(lua, &swapThrottle);
     if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
-    int64_t old = (int64_t)(g_invScale[0] * 100.0f);
+    int64_t old = (int64_t)(g_invScale[INV_PITCH] * 100.0f);
     uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)(addr > 0 ? addr : 0);
     if (plane && !LiveObject(plane)) return Ret(lua, SV_ERR_BAD_ARGS);
-    if (plane != g_invPlane) { g_invScale[0] = g_invScale[1] = 1.0f; g_invLastMs = 0; }
+    if (plane != g_invPlane) { for (int a = 0; a < INV_N; ++a) g_invScale[a] = 1.0f; g_invLastMs = 0; }
     g_invFadeMs = (int32_t)(fade * 1000.0);
-    g_invWant[0] = pitch != 0; g_invWant[1] = roll != 0;
+    g_invWant[INV_PITCH] = pitch != 0; g_invWant[INV_ROLL] = roll != 0; g_invWant[INV_YAW] = yaw != 0;
+    g_invWant[INV_SWAP_AXES] = swapAxes != 0; g_invWant[INV_SWAP_THROTTLE] = swapThrottle != 0;
     g_invPlane = plane;
     return Ret(lua, old);
 }
