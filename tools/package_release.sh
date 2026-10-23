@@ -1,0 +1,62 @@
+#!/bin/sh
+# package_release.sh online|offline [version] : a Nexus release zip of one edition (run tools/build_all.sh first).
+#   build/release/AC8SurvivalMode_<version>_Online.zip  : the build as it is (the leaderboard sends each run)
+#   build/release/AC8SurvivalMode_<version>_Offline.zip : no leaderboard code at all (user, 2026-10-23: "None of the
+#     Code for sending the files remains"): dlls/main.dll rebuilt with SV_OFFLINE (runtime/build.sh OFFLINE=1), main.lua,
+#     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
+#     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
+# Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
+set -e
+cd "$(dirname "$0")/.."
+ed=$1
+case "$ed" in online) Ed=Online ;; offline) Ed=Offline ;; *) echo "usage: package_release.sh online|offline [version]"; exit 2 ;; esac
+lua=$(grep -m1 '^local VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
+rt=$(grep -m1 '^#define RT_VERSION' runtime/survival_rt.c | sed 's/.*L"\(.*\)".*/\1/')
+ver=${2:-$lua}
+st=build/release/stage_$ed
+mod=$st/ue4ss/Mods/AC8SurvivalMode
+rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
+cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
+cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
+rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
+      "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv
+python -I tools/strip_test_only.py "$mod/Scripts/main.lua"
+sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
+if [ "$ed" = offline ]; then
+    (cd runtime && OFFLINE=1 sh build.sh > /dev/null)
+    cp build/runtime/offline/main.dll "$mod/dlls/main.dll"
+fi
+python -I tools/edition.py "$ed" "$mod/Scripts/main.lua" "$mod/config/survival.default.ini" "$st/README.txt"
+python -I tools/checks/lua_check.py "$mod/Scripts/main.lua"
+if [ "$ed" = offline ]; then
+    python -I -c "
+import os, sys
+st = sys.argv[1]
+words = ['winhttp', 'bcrypt', 'workers.dev', 'https://', 'SV_Post', 'SV_SteamName', 'steam_api', 'SteamAPI', 'pending_runs',
+         'pilot_id', 'ONLINE ONLY', 'OFFLINE:']
+bad = []
+for d, _, fs in os.walk(st):
+    for f in fs:
+        p = os.path.join(d, f)
+        if p.endswith(('.ucas', '.utoc')): continue                      # (game data, packed; no code)
+        b = open(p, 'rb').read()
+        for w in words:
+            if w.lower().encode() in b.lower() or w.lower().encode('utf-16-le') in b.lower():
+                bad.append((os.path.relpath(p, st), w))
+if bad:
+    for p, w in bad: print('OFFLINE CHECK FAILED:', p, 'holds', repr(w))
+    sys.exit(1)
+print('offline check: no network code in', st)
+" "$st"
+fi
+out="build/release/AC8SurvivalMode_${ver}_$Ed.zip"
+python -I -c "
+import os, sys, zipfile
+st, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    for d, _, fs in os.walk(st):
+        for f in sorted(fs):
+            p = os.path.join(d, f)
+            z.write(p, os.path.relpath(p, st).replace(os.sep, '/'))
+" "$st" "$out"
+echo "packaged $out ($Ed edition, Lua $lua, runtime $rt)"

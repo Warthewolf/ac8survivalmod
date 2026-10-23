@@ -487,7 +487,7 @@ tools/re/EVENTS_AIRCRAFT.md / NPC_DATA.md (aces, Ladon, X-40), Stonehenge's poda
 - [ ] (user 2026-10-21) Ace learns from your fights: log how the player kills aces (missile/gun/tail/SPW/altitude), save
   across runs (save game or file), next spawn loads the matching LA_ counter variant + a radio line. Reset option in config.
 - [x] (done: the leaderboard summary panel) End-of-run summary (UI_SHOP_SAVE.md 7): rounds survived, kills, credits, time, best round.
-- [ ] Nexus release in two editions (user, 2026-10-23: "when we finish this completely and everything works, before we
+- [x] (built 2026-10-24, Lua 0.58.0: tools/package_release.sh online|offline; the Offline edition untested in game) Nexus release in two editions (user, 2026-10-23: "when we finish this completely and everything works, before we
   fully release to NexusMods ... One is Online Mode (game can send files to the cloudflare server), Two is Offline Mode
   (None of the Code for sending the files remains)"). Do this last, once everything else is confirmed.
   - Online: today's build (leaderboard sending, Steam name, pending_runs queue).

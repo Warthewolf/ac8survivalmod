@@ -1,4 +1,4 @@
-AC8 Survival Mode - test build {DATE} (Lua {LUA}, runtime {RT})
+AC8 Survival Mode - {EDITION} edition, test build {DATE} (Lua {LUA}, runtime {RT})
 ======================================================================
 
 A round-based survival mode for Ace Combat 8 (PC, game version 1.1.2.0). Waves of enemy fighters get bigger and
@@ -68,6 +68,7 @@ the later they come.
 - AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
   smoke and blinks around you for 6 seconds, nose on you, gun firing. Nothing else flies in its round.
 
+ONLINE ONLY BEGIN
 Leaderboard (Discord)
 ---------------------
 Every run you finish (shot down, restarted, or left) is submitted to the Survival leaderboard on Discord, and a summary
@@ -79,6 +80,15 @@ allow AceCombat8.exe outbound access. Runs kept until then are sent automaticall
 Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
 x1 Standard, x1.5 Ace.
 
+ONLINE ONLY END
+OFFLINE: Offline edition
+OFFLINE: ---------------
+OFFLINE: This edition never connects to the internet: it has no leaderboard code at all. When a run ends (shot down,
+OFFLINE: restarted, or left) a summary shows how it went: round, score, kills, specials beaten, time. The Online edition
+OFFLINE: submits runs to the Discord leaderboard as well.
+OFFLINE: Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
+OFFLINE: x1 Standard, x1.5 Ace.
+OFFLINE:
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the
 game after a change. Delete the file to get a fresh one.

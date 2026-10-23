@@ -2110,6 +2110,10 @@ static int L_Reset(void* lua)
     return Ret(lua, 1);
 }
 
+/* The Offline edition (runtime/build.sh OFFLINE=1, user, 2026-10-23: "None of the Code for sending the files remains")
+ * is built with SV_OFFLINE: everything from here to RegisterLua (WinHTTP, bcrypt, the address and key, the Steam name)
+ * is left out, and so are its Lua functions; main.lua's leaderboard half is stripped from that edition too. */
+#ifndef SV_OFFLINE
 /* ---------------------------------------------------------------------------------------- leaderboard (Milestone 8)
  * SV_Post(json) -> a job number (1..8) or an SV_ERR code: sends a finished run to the leaderboard Worker
  * (leaderboard/src/index.js, POST /submit) on a thread of its own, so the game never waits on the network: HTTPS
@@ -2323,6 +2327,8 @@ static int L_SteamName(void* lua)
     return 1;
 }
 
+#endif /* SV_OFFLINE */
+
 static void RegisterLua(void* lua)
 {
     static const struct { const char* name; LuaFn fn; } kFns[] = {
@@ -2332,7 +2338,9 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
+#ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
+#endif
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
     static wchar_t list[640];                                    /* the names registered, for the log */

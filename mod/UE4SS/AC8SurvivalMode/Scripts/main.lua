@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.57.1"
+local VERSION = "0.58.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -851,6 +851,7 @@ local CFG = {
               aircraft_add = 6 },
         },
     },
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
     -- The Discord leaderboard (Milestone 8; leaderboard/README.md; user, 2026-10-23: an end-of-run prompt, a
     -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). Every run that ends (shot
     -- down, restarted or left) is submitted (user, 2026-10-23: "have it always submit a run regardless"; was a Y / N
@@ -859,6 +860,9 @@ local CFG = {
     -- digits, space _ - ., 24 at most); with neither, Pilot-<6 hex> made once a install (config\pilot_id.txt). Runs that
     -- couldn't get through wait in config\pending_runs.txt and go at the next start. Only the leaderboard's own server is
     -- contacted (dlls/main.dll SV_Post; its address is built in).
+-- ONLINE ONLY END
+--OFFLINE:     -- The end-of-run summary (round, score, kills, specials, time) shows for show_s seconds. This is the Offline
+--OFFLINE:     -- edition: nothing is sent anywhere.
     leaderboard = { pilot = "", show_s = 15 },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
@@ -4231,8 +4235,10 @@ end
 ---------------------------------------------------------------------------------------------------- leaderboard
 -- CFG.leaderboard; leaderboard/src/index.js is the other end (same score, same checks). RUN.stats: { started, air,
 -- ground, aces (ace squadron aircraft down), allies (allies bought), af_down (times the airfield went down), captured
--- (times it was captured), specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen. LB.queue: the runs not yet
--- answered for good (pending_runs.txt); LB.jobs: the sends in flight.
+-- (times it was captured), specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen.
+-- ONLINE ONLY BEGIN
+-- LB.queue: the runs not yet answered for good (pending_runs.txt); LB.jobs: the sends in flight.
+-- ONLINE ONLY END
 do
 local function stats()
     RUN.stats = RUN.stats or { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
@@ -4254,6 +4260,7 @@ local function score(r)
     return math.floor((r.round * 1000 + r.kills.air * 100 + r.kills.ground * 50 + won * 3000) * (DIFF_X[r.difficulty] or 1)), won
 end
 
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
 local function jstr(v) return '"' .. tostring(v):gsub('[%c"\\]', function(c) return string.format("\\u%04x", c:byte()) end) .. '"' end
 local function json(r)
     local sp = {}
@@ -4277,9 +4284,11 @@ local function saveQueue()
     for _, body in ipairs(LB.queue) do f:write(body, "\n") end
     f:close()
 end
+-- ONLINE ONLY END
 local function money(n) return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "") end
 local function clockText(t) return string.format("%d:%02d:%02d", t // 3600, t // 60 % 60, t % 60) end
 
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
 -- The name the run goes under: [leaderboard] pilot, else the Steam name; only what the leaderboard takes, or "".
 function LB.pilot()
     local name = tostring(CFG.leaderboard.pilot or "")
@@ -4307,7 +4316,9 @@ function LB.pilot()
     end
     return name
 end
-
+-- ONLINE ONLY END
+--OFFLINE: -- The name on the summary: [leaderboard] pilot.
+--OFFLINE: function LB.pilot() return (tostring(CFG.leaderboard.pilot or ""):gsub("[^%w _%.%-]", ""):sub(1, 24)) end
 -- Shot down: the player's aircraft at 0 health (checked once a second in a run)
 function LB.deathCheck(pc)
     if not D or not D.round or D.round < 1 or (RUN.stats and RUN.stats.ended) then return end
@@ -4347,13 +4358,17 @@ function LB.finish(how)
     -- submitted straight away; the summary shows show_s once it's on screen (at: a run left from the menu has no HUD,
     -- so its summary waits for the next run's)
     LB.show = { run = r, at = nil, state = "sending" }
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
     local ok, err = pcall(LB.send, LB.show)
     if not ok then                                      -- (0.50.0: a send that failed left "SENDING..." up for good)
         LB.show.state, LB.show.why = "refused", "error"
         log("leaderboard: the run couldn't be sent: " .. tostring(err))
     end
+-- ONLINE ONLY END
+--OFFLINE:     LB.show.state = "local"                           -- (the Offline edition: shown here only)
 end
 
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
 -- A run goes into pending_runs.txt before it's sent and comes off once the server has answered for good (taken or
 -- refused), so a run the game closes on, or one that can't get through, is sent later (LB.queueTick).
 local function unqueue(body)
@@ -4404,7 +4419,8 @@ function LB.poll()
         end
     end
 end
-
+-- ONLINE ONLY END
+--OFFLINE: function LB.poll() end
 -- Each HUD pass: the summary's texts, and closing it.
 function LB.hud(now)
     local sh = LB.show
@@ -4442,6 +4458,7 @@ function LB.hud(now)
     end
 end
 
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
 -- The runs not yet answered for good: read at the start, sent one at a time (at the main menu or in a run).
 function LB.queueTick()
     if not LB.loaded then
@@ -4457,6 +4474,8 @@ function LB.queueTick()
     if #LB.queue == 0 or #LB.jobs > 0 or type(SV_Post) ~= "function" or os.clock() < (LB.qwait or 0) then return end
     if post(LB.queue[1], nil) == -8 then LB.qwait = math.huge end
 end
+-- ONLINE ONLY END
+--OFFLINE: function LB.queueTick() end
 end
 
 ---------------------------------------------------------------------------------------------------- alicorn
