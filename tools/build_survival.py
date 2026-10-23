@@ -388,33 +388,59 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     return names
 
 
-def make_path(z, used_ids, template, name, pts):
+def make_path(z, used_ids, template, name, pts, smooth=False, before=None, after=None):
     """An AI path desc `name` through `pts` (cm), shaped like `template` (Mission 13's LCAC path: begin point, points
-    with tangents, ControlType 1)."""
+    with tangents, ControlType 1). Default: short level tangents (at most 1.2 km), up straight up, no pitch: fine for
+    craft and vehicles. smooth=True (aircraft: the Ladons): Mission 16's Ladon path's shape, each tangent along the
+    line through its neighbours (3D) and as long as its shorter leg, so the spline turns in wide curves; up banked into
+    the turn (up to 50 degrees, with the turn's angle) and the rotation's pitch the climb. `before` / `after`: the
+    points just outside `pts` (a circuit's other end, the next path's second point), so the tangent runs on smoothly."""
     import math
     new = copy.deepcopy(template)
     f = {p[1]: p for p in new[2]}
     begin = f['BeginPointDesc'][3]
     point_t = f['PathPointDescList'][3][1][0]
 
-    def point(el, k, pos, nxt, prv, pname):
-        dx, dy = (nxt[0] - prv[0]), (nxt[1] - prv[1])
-        seg = math.hypot(dx, dy) or 1.0
-        tx, ty = dx / seg * min(seg, 120000.0), dy / seg * min(seg, 120000.0)
-        yaw = math.degrees(math.atan2(dy, dx))
-        repl = {'Pos': vec(*pos), 'tan': vec(tx, ty, 0.0), 'Up': vec(0.0, 0.0, 1.0),
-                'PathPointRotation': vec(0.0, yaw, 0.0, 'Rotator'),
+    def unit(v):
+        n = math.sqrt(sum(c * c for c in v)) or 1.0
+        return [c / n for c in v]
+
+    def shape(k, pos):
+        prv = pts[k - 1] if k > 0 else (before or pos)
+        nxt = pts[k + 1] if k + 1 < len(pts) else (after or pos)
+        if not smooth:
+            dx, dy = (nxt[0] - prv[0]), (nxt[1] - prv[1])
+            seg = math.hypot(dx, dy) or 1.0
+            tan = (dx / seg * min(seg, 120000.0), dy / seg * min(seg, 120000.0), 0.0)
+            return tan, (0.0, 0.0, 1.0), (0.0, math.degrees(math.atan2(dy, dx)), 0.0)
+        legs = [math.dist(a, b) for a, b in ((prv, pos), (pos, nxt)) if math.dist(a, b) > 1.0]
+        d = unit([nxt[i] - prv[i] for i in range(3)])
+        tan = tuple(c * min(legs or [1.0]) for c in d)
+        din = unit([pos[0] - prv[0], pos[1] - prv[1], 0.0]) if math.dist(prv, pos) > 1.0 else None
+        dout = unit([nxt[0] - pos[0], nxt[1] - pos[1], 0.0]) if math.dist(pos, nxt) > 1.0 else None
+        up = (0.0, 0.0, 1.0)
+        if din and dout:
+            turn = math.acos(max(-1.0, min(1.0, din[0] * dout[0] + din[1] * dout[1])))
+            inside = unit([dout[0] - din[0], dout[1] - din[1], 0.0])
+            bank = min(math.radians(50.0), turn * 0.6)
+            if turn > 0.02:
+                up = (inside[0] * math.sin(bank), inside[1] * math.sin(bank), math.cos(bank))
+        pitch = math.degrees(math.atan2(d[2], math.hypot(d[0], d[1])))
+        return tan, up, (pitch, math.degrees(math.atan2(d[1], d[0])), 0.0)
+
+    def point(el, k, pos, pname):
+        tan, up, rot = shape(k, pos)
+        repl = {'Pos': vec(*pos), 'tan': vec(*tan), 'Up': vec(*up), 'PathPointRotation': vec(*rot, 'Rotator'),
                 'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}:{k}')), 'Name': pname}
         el = copy.deepcopy(el)
         el[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in el[2]]
         return el
     els, b = [], None
     for k, pos in enumerate(pts):
-        prv, nxt = pts[max(0, k - 1)], pts[min(len(pts) - 1, k + 1)]
         if k == 0:
-            b = point(begin, k, pos, nxt, pos, ('name', 'DefaultPathPoint', 0))
+            b = point(begin, k, pos, ('name', 'DefaultPathPoint', 0))
         else:
-            els.append(point(point_t, k, pos, nxt, prv, ('name', name, k)))
+            els.append(point(point_t, k, pos, ('name', name, k)))
     # no tube data: a template's (Mission 16's Ladon path) names a tube object in its own package, an export index past
     # ours ("Bad export index 74/19": the game's loader stopped at the hangar, 2026-10-23)
     tube = ('struct', 'LiveAIPathTubeData', [(0, 'TubeData', False, ('arr', [])), (1, 'MoveData', False, ('arr', []))])
@@ -507,8 +533,11 @@ def ladon_units(units, used_ids, z, top_number, v):
         kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
         parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
         zone_area(u)
-        paths.append(make_path(z, used_ids, src_path, L['path'], L['route']))
-        paths.append(make_path(z, used_ids, src_path, L['loop'], L['circuit']))
+        # smooth: wide banked turns (players saw sharp flat turns with 1.2 km tangents, 2026-10-23); the route runs on
+        # into the circuit, and the circuit (its first point = its last) into itself
+        loop = L['circuit']
+        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[1]))
+        paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-2], after=loop[1]))
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
 
 
