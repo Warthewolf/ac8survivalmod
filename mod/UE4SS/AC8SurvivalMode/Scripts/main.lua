@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.51.3"
+local VERSION = "0.51.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -887,11 +887,11 @@ local CFG = {
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
         -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
-        -- 1200, speeds x speed_x (user: "the HP needs to be nerfed a bit and their speed needs a nerf slightly"; the
-        -- route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
+        -- 1200, speeds x speed_x (1.0 since the route's speed went to 2500 km/h, user 2026-10-23: their rows mustn't cap
+        -- it; the route's own speed is built in: LADON_SPEED). Each one down pays `reward` (+ reward_per_round x the round).
         -- volley_*: its missiles (RE_SV_LadonVolley<Key>: the hatch opens, each VLS fires one at you) every
         -- volley_every_s while you're within volley_range_km of it; its CIWS guns fire on their own.
-        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 0.85, bomb_damage = 20,
+        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -300, speed_x = 1.0, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.04, health_max_x = 2.5,
                   volley_every_s = 20, volley_range_km = 12,
                   reward = 6000, reward_per_round = 200,

@@ -200,7 +200,7 @@ LADON_AREA = ((-9.0, 2.0), 80000.0)          # (centre x, y km), radius m
 # player, and Scripts/main.lua fires it while the player is in range (CFG.specials.ladon.volley_*).
 LADON_CIWS = ['LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
 LADON_VLS = ['VLS0', 'VLS1']
-LADON_SPEED = '1500.0'                       # km/h (Mission 16 flies its Ladons at 1700-2600: "a nerf slightly")
+LADON_SPEED = '2500.0'                       # km/h (user, 2026-10-23: "make the Ladon Speed 2500"; was 1500. Mission 16: 1200-3200)
 
 
 def ladons():
