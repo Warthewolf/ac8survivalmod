@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.54.0"
+local VERSION = "0.54.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -614,8 +614,9 @@ local CFG = {
         -- bPermissionToProvoke off (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 8.2: being tailed put it in Provoke, then our
         -- reactions handed it to EscapeFromPursuer, both above PursueTarget, so a tailed ace defended and never
         -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you);
-        -- moves: when you get behind it, it does the campaign aces' LastTGT reversal (tools/survival_events.py
-        -- build_ace_moves: its pool flight's SV_Ace_NN flag on while it flies this tier)
+        -- moves: when you get behind one of its aircraft (within 3 km, inside 70 deg of its tail; ACE.movesTick, 4 times
+        -- a second) its flight does the campaign aces' LastTGT reversal, or within 900 m the Shadow kulbit
+        -- (tools/survival_events.py build_ace_moves), each flight at most every 20 s
         flight = {
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
                        health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true },
@@ -2281,6 +2282,39 @@ function ACE.recTick(now, D)      -- (D: the run, passed in: declared further do
     REC.lines = REC.lines + 1
     if REC.lines % 40 == 0 then REC.file:flush() end
 end
+-- CFG.aces.flight <tier>.moves: the reversals (RE_SV_AceTurn_NN / RE_SV_AceKulbit_NN on the plane's pool flight)
+function ACE.movesTick(now, D)
+    if not (D and D.round and type(SV_Event) == "function") then return end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return end
+    local me
+    D.aceMoveAt = D.aceMoveAt or {}
+    for _, p in ipairs(planes) do
+        local fl = not p.down and p.unit and p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
+        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) then
+            local pn, pk = p.unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
+            if pn then
+                me = me or vec(pawn:K2_GetActorLocation())
+                local at, fwd = vec(p.obj:K2_GetActorLocation()), vec(p.obj:GetActorForwardVector())
+                local toMe = { X = me.X - at.X, Y = me.Y - at.Y, Z = me.Z - at.Z }
+                local range = km(at, me) * 1000
+                local offTail = deg({ X = -fwd.X, Y = -fwd.Y, Z = -fwd.Z }, toMe)
+                if range <= 3000 and offTail <= 70 then
+                    local kulbit = range <= 900
+                    local ev = string.format("RE_SV_%s_%02d", kulbit and "AceKulbit" or "AceTurn", (tonumber(pn) - 1) * 3 + tonumber(pk) + 1)
+                    local r = SV_Event(ev)
+                    D.aceMoveAt[p.unit] = now + (kulbit and 12 or 20)
+                    D.aceMoves = (D.aceMoves or 0) + 1
+                    if D.aceMoves <= 5 or D.aceMoves % 20 == 0 then
+                        log(string.format("aces: %s has you %.0f m behind it, %.0f deg off its tail: %s (%s), %d so far", p.name,
+                            range, offTail, ev, tostring(r), D.aceMoves))
+                    end
+                end
+            end
+        end
+    end
+end
+
 function ACE.recClose()                            -- a new level: the next fight starts a new file
     if REC.file then REC.file:close(); log(string.format("recorder: %s closed, %d lines", REC.name, REC.lines)) end
     REC.file, REC.lines = nil, 0
@@ -2885,18 +2919,6 @@ local function spawnFlight(unit, maxLevel)
     log(string.format("round %d: %s%s as %s (%s set, %s), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), tier.name or "no tier", dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    local pn, pk = unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")         -- its ace moves (CFG.aces.flight <tier>.moves)
-    local fl = tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()]
-    if pn and r > 0 and type(SV_Event) == "function" then
-        local want = (fl and fl.moves) and true or false
-        D.aceMoves = D.aceMoves or {}
-        if want or D.aceMoves[unit] then
-            local ev = string.format("RE_SV_Ace%s_%02d", want and "On" or "Off", (tonumber(pn) - 1) * 3 + tonumber(pk) + 1)
-            local rv = SV_Event(ev)
-            D.aceMoves[unit] = want or nil
-            if want then log(string.format("aces: %s turns on you when you get behind it (%s %s)", unit, ev, tostring(rv))) end
-        end
-    end
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         D.aceSquad = D.aceSquad or {}
@@ -5977,6 +5999,8 @@ local function probeTick(tick)
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
         local okRec, errRec = pcall(ACE.recTick, now, D)                       -- the flight recorder (CFG.recorder)
+        local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
+        if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
         if not okRec and not D.recErr then D.recErr = true; log("recorder: error " .. tostring(errRec)) end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
