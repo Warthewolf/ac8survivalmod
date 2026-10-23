@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.4"
+local VERSION = "0.56.5"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3422,6 +3422,16 @@ function ANOM.glitchTick(now, s)
         local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
         local okH, h0 = pcall(function() return o.HealthInternal end)
         if okH and type(h0) == "number" and h0 > 0 and hx ~= 1 then pcall(function() o.HealthInternal = h0 * hx end) end
+        -- its damage model (smoke, fire, damaged look) goes by health against MaxHealth (user, 2026-10-23: "make the
+        -- EA-18G use it's damage model"): MaxHealth (HP; HealthInternal is HP x 10) raised to what it has, if under
+        local okM, mh = pcall(function() return o.MaxHealth end)
+        local okN, hn = pcall(function() return o.HealthInternal end)
+        local raised = false
+        if okM and okN and type(mh) == "number" and type(hn) == "number" and mh * 10 < hn then
+            raised = pcall(function() o.MaxHealth = hn / 10 end)
+        end
+        log(string.format("special: %s health %s of MaxHealth %s%s", c.name, tostring(okN and hn), tostring(okM and mh),
+            raised and string.format(" (raised to %s)", tostring(o.MaxHealth)) or ""))
         setGone(o, false)
         glitchSmoke(s, where(o))
         s.state = "hunt"
@@ -3450,7 +3460,9 @@ function ANOM.glitchTick(now, s)
     if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil then      -- hit: a frenzy
         s.frenzyUntil, s.nextBlink = now + c.frenzy_s, now
         s.frenzies = (s.frenzies or 0) + 1
-        log(string.format("special: %s hit (%.0f -> %.0f): frenzy %d for %.0f s", c.name, s.lastHp, h, s.frenzies, c.frenzy_s))
+        local okD, dmg = pcall(function() return o:GetDamagePercentage() end)
+        log(string.format("special: %s hit (%.0f -> %.0f, damage %s %%): frenzy %d for %.0f s", c.name, s.lastHp, h,
+            okD and string.format("%.0f", dmg) or "?", s.frenzies, c.frenzy_s))
     end
     s.lastHp = h or s.lastHp
     if now >= (s.ecmFireAt or 0) then                   -- its ECM pod up (fired by event: hard to keep up by its FCS)

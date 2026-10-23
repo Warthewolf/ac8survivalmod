@@ -1060,6 +1060,13 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     g.execute(t_fire, 'RE_SV_GlitchGun', {0: GLITCH_GUN_SLOT, 1: GLITCH_OBJ}, delay=GLITCH_GUN_EVERY_S, loop=GLITCH_GUN_SHOTS)
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchEcm')
     g.execute(t_fire, 'RE_SV_GlitchEcm', {0: GLITCH_ECM_SLOT, 1: GLITCH_OBJ})
+    # its death: MINDRIPPER's (user, 2026-10-23: "add the same death scream MINDRIPPER has on its kill"), the Celaeno's
+    # body explosion and core collapse (ANOMALY_DOWN_SOUNDS) on its wreck
+    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
+    down = 'SV_GlitchDown'
+    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: GLITCH_UNIT})
+    for delay, key in ANOMALY_DOWN_SOUNDS:
+        g.execute(t_sound, down, {0: key, 1: GLITCH_OBJ}, delay=delay)
     up = 'SV_GlitchUp'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: GLITCH_UNIT})
     g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)
