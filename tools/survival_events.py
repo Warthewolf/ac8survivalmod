@@ -210,6 +210,32 @@ def ladons():
     return out
 
 
+# Special round "Alicorn" (user, 2026-10-23: "start working on the ALICORN special round ... spawn none of the normal
+# aircraft"; tools/re/ALICORN.md): the submarine carrier exists only in Online Mode, as Emergency Call EB_002's boss
+# (unit Boss_0: one AI object with 30 parts, their blueprints Online Mode's). Survival's copy keeps the hull, core,
+# ballast tanks, railguns, rail cannon, ECM, VLS and the 12 weapon hatches, and leaves out the pools of fighters and
+# drones it launches (ALCN_DROP). It sails Mission 22's allied fleet lane in the west sea and back (EB_002's speed,
+# 120); Scripts/main.lua fires its actions as remote events: dive / surface, railgun, the VLS volley at the player,
+# and once its four ballast tanks are gone the core's opening (ALCN_OpenCore). Destroying the core sinks it.
+ALCN_SOURCE_UNIT = 'Boss_0'
+ALCN_SOURCE_PATH = 'Path_Boss0_ALCN_0_0'
+ALCN_ROW = 'alcn_01'                          # mission row = NpcId (DT_NPC_Mission_EB_002_ON / DT_NPC_ON)
+ALCN_UNIT, ALCN_OBJ = 'SV_Unit_Alicorn', 'SV_Obj_Alicorn'
+ALCN_DROP = {'airs0', 'airs1', 'airs2', 'Airs0', 'Airs1', 'Airs2', 'BarrierDrones', 'SLUAVs'}
+# (x km, y km): Mission 22's allied fleet lane (01_Ship0_freeAlly_0_Path0: -27.7,-4.4 -> -15.3,-6.3), on east a little
+ALCN_ROUTE = [(-27.7, -4.4), (-23.0, -5.1), (-19.0, -5.8), (-15.3, -6.3), (-11.5, -6.4)]
+ALCN_SPEED = '120.0'
+ALCN_VLS = ['vls_L_1', 'vls_L_2', 'vls_R_1', 'vls_R_2']
+ALCN_ACTIONS = {'RE_SV_AlcnRailgun': 'ALCN_ShotRailgun_Focus', 'RE_SV_AlcnOpenCore': 'ALCN_OpenCore',
+                'RE_SV_AlcnAdvance': 'ALCN_AdvancePhase', 'RE_SV_AlcnRailCannon': 'ALCN_ShotRailCannon'}
+
+
+def alcn_paths():
+    """The Alicorn's way out and back (cm, on the surface)."""
+    out = [(x * 100000.0, y * 100000.0, 0.0) for x, y in ALCN_ROUTE]
+    return [('SV_Path_AlicornOut', out), ('SV_Path_AlicornBack', list(reversed(out)))]
+
+
 def lcac_lane_names():
     return [lane for lane, _, _ in LCAC_LANES]
 
@@ -605,6 +631,7 @@ def build_events(stock_ep):
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
+    build_alicorn(g, flag, stock_ep)
     return g
 
 
@@ -765,6 +792,41 @@ def build_ladon(g, flag, stock_ep):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
             g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED})
+
+
+def build_alicorn(g, flag, stock_ep):
+    """The Alicorn (ALCN_*), on EB_002's records: appearance -> out along its lane, and back at each end (PathFinish);
+    remote events for Lua: RE_SV_AlcnDive / Surface (LiveSubmarineOperation), the ALCN_ACTIONS (LiveAIActionEvent-
+    Execution), RE_SV_AlcnVolley (each VLS fires at the player, LiveFireOneShotWeapon), RE_SV_AlcnRemove."""
+    eb = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(stock_ep)))), 'OnlineMode', 'Maps', 'EmergencyCall',
+                      'EB_002', 'EP_EB_002.uasset')
+    t_path = g.foreign_template(eb, 'LiveAIPathExecution', 'MissionStart', lambda a, e: a[0] == 'Boss_0_ALCN_0')
+    t_dive = g.foreign_template(eb, 'LiveSubmarineOperation', 'Debug_Dive')
+    t_surface = g.foreign_template(eb, 'LiveSubmarineOperation', 'Debug_Surface')
+    t_action = g.foreign_template(eb, 'LiveAIActionEventExecution', 'Debug_OpenCore')
+    t_vls = g.foreign_template(eb, 'LiveFireOneShotWeapon', 'ElapsedTime_5s', lambda a, e: a[1] == 'Boss_0_ALCN_0_vls_L_1')
+    t_eng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
+    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    assert arg_values(t_path)[4] == ALCN_SPEED and arg_values(t_dive)[1] == 'Diving' and arg_values(t_surface)[1] == 'Surface'
+    finish = '01_A_Air1_f18e_PathFinish'
+    (out, _), (back, _) = alcn_paths()
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', 'SV_AlcnUp', arg_changes={0: ALCN_UNIT})
+    g.execute(t_path, 'SV_AlcnUp', {0: ALCN_OBJ, 2: out}, delay=1.0)
+    g.execute(t_eng, 'SV_AlcnUp', {0: 'NoneSelect', 1: ALCN_UNIT}, delay=2.0)
+    for ev, a, b in (('SV_AlcnOut', out, back), ('SV_AlcnBack', back, out)):
+        g.trigger(finish, ev, arg_changes={0: ALCN_OBJ, 2: a})
+        g.execute(t_path, ev, {0: ALCN_OBJ, 2: b})
+    for ev, t in (('RE_SV_AlcnDive', t_dive), ('RE_SV_AlcnSurface', t_surface)):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t, ev, {0: ALCN_OBJ})
+    for ev, row in ALCN_ACTIONS.items():
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_action, ev, {0: ALCN_OBJ, 1: row})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AlcnVolley')
+    for k, v in enumerate(ALCN_VLS):
+        g.execute(t_vls, 'RE_SV_AlcnVolley', {1: f'{ALCN_OBJ}_{v}', 2: 'Player'}, delay=0.2 + 0.3 * k)
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AlcnRemove')
+    g.execute(t_remove, 'RE_SV_AlcnRemove', {0: 'NoneSelect', 1: ALCN_UNIT, 2: 'NoneSelect'})
 
 
 def build_repair(g, stock_ep):

@@ -659,3 +659,15 @@ Weather/night rounds, sky selection (time of day can't change at runtime), buyin
   reward per Ladon; health x(1 + 0.04 per round after `first`) via HealthInternal (untested), bombs +1 a round.
 - Specials random from round 4 (chance 0.3, never two in a row, not the same twice running; RUN.specialPick).
 - Test keys Ctrl+1..5: shuttle, Anomaly, amphibious, Ladons, Alicorn (were Ctrl+F11 / F12).
+
+## Alicorn special round (Lua 0.46.0, 2026-10-23; untested)
+- Online Mode only (EB_002's Boss_0; tools/re/ALICORN.md). survival_events.ALCN_*: the unit ported with 39 parts, the
+  pools (Airs0-2, BarrierDrones, SLUAVs) left out; ~30 Online Mode blueprint imports (import_from). Rows: DT_SV_AlcnNpc
+  (31 NPC rows, alcn_01's children trimmed), DT_SV_AlcnModel (31), DT_SV_AlcnWpDur (4), DT_SV_AlcnExDur (1), added by
+  main.lua at the main menu (SPC.alicornSetup); mission row alcn_01 via NPC_IMPORT.
+- Sails Mission 22's allied-fleet lane in the west sea (-27.7,-4.4 -> -11.5,-6.4) and back at 120. Lua: dive every
+  110 s for 30 s (LiveSubmarineOperation), railgun (ALCN_ShotRailgun_Focus) every 35 s and a 4-VLS volley at the
+  player every 25 s while up; ballast tanks / core found by class every 2 s (health x0.5, +4 % a round); all tanks
+  down -> ALCN_AdvancePhase + ALCN_OpenCore; core down (or the hull gone) -> sunk, reward, removed 20 s later.
+- First test: does Online Mode's content load offline (the main unknown), do LiveSubmarineOperation /
+  LiveAIActionEventExecution run in the campaign mode, are the part classes right.

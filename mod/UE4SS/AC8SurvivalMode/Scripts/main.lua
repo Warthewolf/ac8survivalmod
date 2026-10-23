@@ -12,7 +12,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.45.1"
+local VERSION = "0.46.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -826,7 +826,27 @@ local CFG = {
         chance   = 0.3,
         first    = 4,
         every    = 5,
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon" },
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn" },
+        -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
+        -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
+        -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
+        -- dive_every_s for dive_for_s, and while surfaced fires its railgun every railgun_every_s and a VLS volley at
+        -- you every volley_every_s. Destroy its four ballast tanks and the core opens; destroy the core to sink it.
+        -- Its parts' health x health_x (tuned for an online squad) and health_per_round more a round after `first`.
+        -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
+        alicorn = { name = "ALICORN", dive_every_s = 110, dive_for_s = 30, first_shot_s = 25, railgun_every_s = 35,
+                    volley_every_s = 25, health_x = 0.5, health_per_round = 0.04, health_max_x = 1.5,
+                    tank_pay = 500, reward = 6000, reward_per_round = 200,
+                    tank_classes = { "BP_BA002_alcn_btankfl_Base_C", "BP_BA002_alcn_btankfr_Base_C",
+                                     "BP_BA002_alcn_btankrl_Base_C", "BP_BA002_alcn_btankrr_Base_C" },
+                    core_class = "BP_MP028_dummy_emlmcore_Base_C",
+                    tables = { { "/Game/Mods/SurvivalMode/Data/DT_SV_AlcnNpc.DT_SV_AlcnNpc", "/Game/Datatables/AI/NPC/DT_NPC.DT_NPC" },
+                               { "/Game/Mods/SurvivalMode/Data/DT_SV_AlcnModel.DT_SV_AlcnModel",
+                                 "/Game/Datatables/AI/NPC/Model/DT_NPC_Model.DT_NPC_Model" },
+                               { "/Game/Mods/SurvivalMode/Data/DT_SV_AlcnWpDur.DT_SV_AlcnWpDur",
+                                 "/Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability.DT_NPC_WeaponDurability" },
+                               { "/Game/Mods/SurvivalMode/Data/DT_SV_AlcnExDur.DT_SV_AlcnExDur",
+                                 "/Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability.DT_NPC_ExplosionDurability" } } },
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
         -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
@@ -1030,6 +1050,16 @@ local CFG = {
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
             ladon_sub    = "LADONS INBOUND",
+            alicorn_sub  = "SUBMARINE CONTACT",
+            alicorn_go   = "THE ALICORN",
+            alicorn_go_sub = "DESTROY ITS BALLAST TANKS, THEN ITS CORE",
+            alicorn_row  = "ALICORN: BALLAST TANKS %d/4  CORE %s%s",
+            alicorn_dive = "THE ALICORN IS DIVING",
+            alicorn_surface = "THE ALICORN HAS SURFACED",
+            alicorn_core = "CORE EXPOSED",
+            alicorn_core_sub = "HIT THE ALICORN'S CORE",
+            alicorn_down = "THE ALICORN IS SINKING",
+            alicorn_down_sub = "+%d ZOLLARS",
             ladon_go     = "LADONS FROM THE WEST",
             ladon_go_sub = "STOP %s AND %s BEFORE THEY REACH THE AIRFIELD",
             ladon_row    = "LADONS LEFT: %d  BOMBING RUNS: %d",
@@ -2383,6 +2413,11 @@ local function hudTick(now, paused, pc)
         local hp = shuttleHealth()
         setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif D.special and D.special.kind == "alicorn" and D.special.state == "sail" then
+        local sp = D.special
+        setText(H.next, "nextStr", string.format(t.alicorn_row, sp.tanks or 4, sp.coreOpen and "EXPOSED" or "SHUT",
+            sp.dived and "  (DIVED)" or ""))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "ladon" and D.special.state == "run" then
         setText(H.next, "nextStr", string.format(t.ladon_row, SPC.ladonsLeft(D.special), D.special.runs or 0))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
@@ -3006,9 +3041,15 @@ local function specialTick(now)
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
     AMPH.runTick(now)                                               -- landed troops, the capture (any round)
+    if D.alicornRemoveAt and now >= D.alicornRemoveAt then
+        D.alicornRemoveAt = nil
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_AlcnRemove") or "n/a"
+        log("special: the Alicorn taken off (RE_SV_AlcnRemove " .. tostring(r) .. ")")
+    end
     if s and s.kind == "anomaly" then return ANOM.tick(now, s) end
     if s and s.kind == "amphibious" then return AMPH.tick(now, s) end
     if s and s.kind == "ladon" then return SPC.ladonTick(now, s) end
+    if s and s.kind == "alicorn" then return SPC.alicornTick(now, s) end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
@@ -3087,6 +3128,7 @@ local function startRound()
     D.nextTier, D.nextTierRound = nil, nil
     D.budget = budget
     local anomalyOnly = (special == "anomaly" and CFG.specials.anomaly.only) or special == "ladon"   -- (its fighters: none)
+        or special == "alicorn"
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
@@ -3097,6 +3139,8 @@ local function startRound()
         nBombers = 1 + CFG.specials.anomaly.guards
     elseif special == "ladon" then
         nBombers = 2
+    elseif special == "alicorn" then
+        nBombers = 1
     elseif special == "amphibious" and CFG.airfield.enabled and math.random() < CFG.specials.amphibious.bomber_chance then
         raid = true                                   -- a raid on the airfield with the landing (its share of the budget)
         local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
@@ -3141,6 +3185,7 @@ local function startRound()
     if special == "shuttle" then table.insert(D.queue, 1, "@shuttle") end     -- the shuttle first: it sets their orders
     if special == "anomaly" then table.insert(D.queue, 1, "@anomaly") end
     if special == "ladon" then table.insert(D.queue, 1, "@ladon") end
+    if special == "alicorn" then table.insert(D.queue, 1, "@alicorn") end
     if special == "amphibious" then table.insert(D.queue, 1, "@amphib") end    -- the landing craft first
     log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
@@ -3219,6 +3264,8 @@ local function roundsTick(now)
                 hudCallout(string.format(t.special, D.round + 1), string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()))
             elseif nextSpecial == "anomaly" then
                 hudCallout(string.format(t.special, D.round + 1), t.anomaly_sub)
+            elseif nextSpecial == "alicorn" then
+                hudCallout(string.format(t.special, D.round + 1), t.alicorn_sub)
             elseif nextSpecial == "ladon" then
                 hudCallout(string.format(t.special, D.round + 1), t.ladon_sub)
             elseif nextSpecial == "amphibious" then
@@ -3251,6 +3298,13 @@ local function roundsTick(now)
             spawnShuttle()
         elseif u == "@amphib" then
             if not AMPH.spawn(now) then D.special = nil end     -- no lane could come: a normal round
+        elseif u == "@alicorn" then
+            if not SPC.alicornSpawn(now) then
+                D.special = nil                    -- a normal round instead (an Alicorn round had no fighters)
+                local f = pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end)
+                for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
+                log(string.format("round %d: no Alicorn; %d fighter flights instead", D.round, #f))
+            end
         elseif u == "@ladon" then
             if not SPC.ladonSpawn(now) then
                 D.special = nil                    -- a normal round instead (a Ladon round had no fighters)
@@ -3290,6 +3344,8 @@ local function roundsTick(now)
         if flights == 0 and D.special and (D.special.state == "countdown" or D.special.state == "portal") then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round,
                 D.special.state == "portal" and "Anomaly's portal" or "shuttle's countdown")) end
+        elseif flights == 0 and D.special and D.special.kind == "alicorn" and D.special.state == "sail" then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Alicorn is still afloat", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "ladon" and SPC.ladonBusy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Ladons are still up", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
@@ -3486,6 +3542,163 @@ function SPC.ladonTick(now, s)
         end
     end
     if SPC.ladonsLeft(s) == 0 then s.state = "done" end
+end
+end
+
+---------------------------------------------------------------------------------------------------- alicorn
+-- CFG.specials.alicorn; tools/survival_events.py ALCN_* builds the unit (EB_002's, without its pools), its lane and
+-- its remote events (RE_SV_AlcnDive / Surface / Railgun / Volley / OpenCore / Advance / Remove).
+do
+local UNIT = "SV_Unit_Alicorn"
+
+-- At the main menu: the Alicorn's Online Mode rows into the campaign tables (NPC, model, durability), before the
+-- level loads (the spawner caches them then: hard rule 20). AddRow only; a model row's soft class is never read
+-- (hard rule 29).
+function SPC.alicornSetup()
+    if SPC.alicornDone or not gameInstance() then return end
+    local c = CFG.specials.alicorn
+    SPC.alicornTries = (SPC.alicornTries or 0) + 1
+    local pairs_, missing = {}, false
+    for _, tp in ipairs(c.tables) do
+        local from, to = loadObject(tp[1]), loadObject(tp[2])
+        if not (from and to) then missing = true end
+        pairs_[#pairs_ + 1] = { from, to, tp }
+    end
+    if missing then
+        if SPC.alicornTries >= 20 then SPC.alicornDone = true; log("special: the Alicorn's tables didn't load; no Alicorn round") end
+        return
+    end
+    SPC.alicornDone = true
+    local added, total, lost = 0, 0, {}
+    for _, p in ipairs(pairs_) do
+        local from, to = p[1], p[2]
+        pin(from, nameOf(from)); pin(to, nameOf(to))
+        for _, row in ipairs(rowList(from) or {}) do
+            total = total + 1
+            local _, have = dtCall(to, "FindRow", row)
+            if have == nil then
+                local _, r = dtCall(from, "FindRow", row)
+                if r ~= nil then dtCall(to, "AddRow", row, r); _, have = dtCall(to, "FindRow", row) end
+            end
+            if have ~= nil then added = added + 1 else lost[#lost + 1] = row end
+        end
+    end
+    SPC.alicornReady = total > 0 and #lost == 0
+    log(string.format("special: the Alicorn's rows: %d of %d in the campaign tables%s", added, total,
+        #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or ""))
+end
+
+function SPC.alicornSpawn(now)
+    local c, t = CFG.specials.alicorn, CFG.hud.text
+    if not (nativeReady() and SPC.alicornReady) then
+        log("special: no Alicorn round (" .. (SPC.alicornReady and "no native spawner" or "its rows aren't in") .. ")")
+        return false
+    end
+    if SV_UnitAlive(UNIT) > 0 then
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_AlcnRemove") or "n/a"
+        log("special: the Alicorn was still up from last time; taken off (" .. tostring(r) .. "), none this round")
+        return false
+    end
+    spawningUnit = UNIT
+    local r = SV_Spawn(UNIT)
+    spawningUnit = nil
+    log("special: the Alicorn (" .. UNIT .. "): " .. (r > 0 and "up" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if r <= 0 then return false end
+    local s = D.special
+    s.state, s.at, s.tanks, s.coreOpen, s.dived = "sail", now, 4, false, false
+    s.nextDive, s.nextRail, s.nextVolley = now + c.dive_every_s, now + c.first_shot_s, now + c.first_shot_s + 5
+    hudCallout(t.alicorn_go, t.alicorn_go_sub)
+    log(string.format("special: round %d, the Alicorn in the west sea", D.round))
+    return true
+end
+
+local function fire(ev)
+    local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+    if r ~= 1 then log("special: " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
+end
+
+-- Its parts that are up, by class: { actor, ... } (FindAllOf: every 2 s only)
+local function parts(cls)
+    local out = {}
+    for _, o in ipairs(FindAllOf(cls) or {}) do
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = o end
+    end
+    return out
+end
+local function hp(o)
+    local ok, h = pcall(function() return o.HealthInternal end)
+    return ok and type(h) == "number" and h or nil
+end
+
+function SPC.alicornTick(now, s)
+    if s.state ~= "sail" or now < (s.nextAt or 0) then return end
+    s.nextAt = now + 1
+    local c, t = CFG.specials.alicorn, CFG.hud.text
+    -- the dives, and its guns while it's up
+    if not s.dived and now >= s.nextDive then
+        s.dived, s.surfaceAt = true, now + c.dive_for_s
+        fire("RE_SV_AlcnDive"); hudCallout(t.alicorn_dive, nil); log("special: the Alicorn dives")
+    elseif s.dived and now >= s.surfaceAt then
+        s.dived, s.nextDive = false, now + c.dive_every_s
+        s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
+        fire("RE_SV_AlcnSurface"); hudCallout(t.alicorn_surface, nil); log("special: the Alicorn surfaces")
+    end
+    if not s.dived and now >= s.nextRail then s.nextRail = now + c.railgun_every_s; fire("RE_SV_AlcnRailgun") end
+    if not s.dived and now >= s.nextVolley then s.nextVolley = now + c.volley_every_s; fire("RE_SV_AlcnVolley") end
+    -- its parts, every 2 s
+    if now < (s.partsAt or 0) then return end
+    s.partsAt = now + 2
+    local hx = math.min(c.health_max_x or 1.5, (c.health_x or 1) *
+        (1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first)))
+    s.scaled = s.scaled or {}
+    local tanks, seen = 0, 0
+    local all = {}
+    for _, cls in ipairs(c.tank_classes) do for _, o in ipairs(parts(cls)) do all[#all + 1] = o end end
+    local core = parts(c.core_class)
+    for _, o in ipairs(core) do all[#all + 1] = o end
+    for _, o in ipairs(all) do                         -- each part's health for this round, once
+        local key = addrOf(o) or nameOf(o)
+        if not s.scaled[key] and hx ~= 1 then
+            s.scaled[key] = true
+            local h0 = hp(o)
+            if h0 and h0 > 0 then
+                pcall(function() o.HealthInternal = h0 * hx end)
+                log(string.format("special: Alicorn part %s health x%.2f (%s -> %s)", nameOf(o):match("([%w_]+)_C_%d+") or "?", hx,
+                    tostring(h0), tostring(hp(o))))
+            end
+        end
+    end
+    for _, cls in ipairs(c.tank_classes) do
+        for _, o in ipairs(parts(cls)) do seen = seen + 1; if (hp(o) or 0) > 0 then tanks = tanks + 1 end end
+    end
+    if seen > 0 then s.tanksSeen = true end
+    if s.tanksSeen and tanks < (s.tanks or 4) then
+        addCredits(TIER.pay(c.tank_pay, TIER.index(D.round)) * ((s.tanks or 4) - tanks), "Alicorn ballast tank down")
+        log(string.format("special: Alicorn ballast tanks left: %d", tanks))
+        s.tanks = tanks
+    end
+    if s.tanksSeen and tanks == 0 and not s.coreOpen then
+        s.coreOpen = true
+        fire("RE_SV_AlcnAdvance"); fire("RE_SV_AlcnOpenCore")
+        hudCallout(t.alicorn_core, t.alicorn_core_sub)
+        log("special: the Alicorn's ballast tanks are gone: its core opens")
+    end
+    local coreUp = false
+    for _, o in ipairs(core) do if (hp(o) or 0) > 0 then coreUp = true end end
+    if #core > 0 then s.coreSeen = true end
+    local hull = SV_UnitAlive(UNIT)
+    if (s.coreOpen and s.coreSeen and not coreUp) or hull == 0 or hull == -7 then
+        s.state = "done"
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, "the Alicorn sunk")
+        hudCallout(t.alicorn_down, string.format(t.alicorn_down_sub, pay))
+        log(string.format("special: round %d, the Alicorn sunk %.0f s after it appeared (core %s, hull %d)", D.round, now - s.at,
+            coreUp and "up" or "down", hull))
+        D.alicornRemoveAt = now + 20                    -- (off once it has gone down)
+    elseif not s.partsSaid and now - s.at > 30 then
+        s.partsSaid = true
+        log(string.format("special: the Alicorn's parts found: %d ballast tanks, %d core", seen, #core))
+    end
 end
 end
 
@@ -5012,6 +5225,8 @@ local function probeTick(tick)
         if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
+        local okAc, errAc = pcall(SPC.alicornSetup)
+        if not okAc then log("special: Alicorn setup error " .. tostring(errAc)); SPC.alicornDone = true end
         local okL, errL = pcall(SPC.ladonSetup)
         if not okL then log("special: Ladon setup error " .. tostring(errL)); SPC.ladonDone = true end
         local okSp, errSp = pcall(specialSetup)

@@ -333,7 +333,7 @@ def stock_wd(path):
 
 def desc_named(v, lst, name):
     for el in [p for p in v[2] if p[1] == lst][0][3][1]:
-        if [p for p in el[2] if p[1] == 'Name'][0][3][1:3] == (name, 0):
+        if [p for p in el[2] if p[1] == 'Name'][0][3][1:3] == survival_events.fname(name)[1:]:   # ('Boss_0' = ('Boss', 1))
             return el
     raise LookupError((lst, name))
 
@@ -492,6 +492,102 @@ def ladon_units(units, used_ids, z, top_number, v):
         paths.append(make_path(z, used_ids, src_path, L['path'], L['route']))
         paths.append(make_path(z, used_ids, src_path, L['loop'], L['circuit']))
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
+
+
+EB002 = '/Game/OnlineMode/Maps/EmergencyCall/EB_002/'
+
+
+def alcn_units(units, used_ids, z, top_number, v):
+    """The Alicorn (survival_events.ALCN_*): EB_002's Boss_0 at the start of its lane, without the pools it launches,
+    its parts' classes imported (import_from); its ways out and back."""
+    import math
+    ebz = ZenPkg(stock(EB002 + 'WD_EB_002'))
+    i = ebz.export_index('WD_EB_002')
+    eb, _ = props_of(ebz, i, 'LiveWorldData')
+    src = copy.deepcopy(desc_named(eb, 'UnitDescList', survival_events.ALCN_SOURCE_UNIT))
+    ob = [p for p in src[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
+    def comp(ch):
+        data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+        return [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
+    dropped = [comp(ch) for ch in kids if comp(ch) in survival_events.ALCN_DROP]
+    kids[:] = [ch for ch in kids if comp(ch) not in survival_events.ALCN_DROP]
+    paths_def = survival_events.alcn_paths()
+    (x0, y0, z0), (x1, y1, _) = paths_def[0][1][0], paths_def[0][1][1]
+    names = port_unit(units, used_ids, z, src, survival_events.ALCN_UNIT, survival_events.ALCN_OBJ,
+                      survival_events.ALCN_ROW, [(x0, y0, z0)], math.degrees(math.atan2(y1 - y0, x1 - x0)), top_number)
+    assert names == [survival_events.ALCN_OBJ], names
+    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.ALCN_UNIT][0]
+    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    parts = retag_parts([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], survival_events.ALCN_OBJ, used_ids, z, ebz)
+    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+    src_path = desc_named(eb, 'AIPathDescList', survival_events.ALCN_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    for name, pts in paths_def:
+        paths.append(make_path(z, used_ids, src_path, name, pts))
+    print(f'  alicorn: {survival_events.ALCN_UNIT}, {parts} parts ({len(dropped)} pools left out: {", ".join(dropped)})')
+
+
+# The Alicorn's rows, all Online Mode's (tools/re/ALICORN.md 3, 5): copies of the rows it needs, into Survival tables
+# that Scripts/main.lua adds to the campaign tables at the main menu (CFG.specials.alicorn.tables).
+ON_NPC = '/Game/OnlineMode/DataTables/AI/NPC/'
+ALCN_TABLES = [   # (Online table, row struct, Survival's copy, the campaign table main.lua adds the rows to)
+    (ON_NPC + 'DT_NPC_ON', 'LiveNpcDataTable', 'DT_SV_AlcnNpc', '/Game/Datatables/AI/NPC/DT_NPC'),
+    (ON_NPC + 'DT_NPC_Model_ON', 'LiveModelDataTable', 'DT_SV_AlcnModel', '/Game/Datatables/AI/NPC/Model/DT_NPC_Model'),
+    (ON_NPC + 'DT_NPC_WeaponDurability_ON', 'LiveWeaponDurabilityDataTable', 'DT_SV_AlcnWpDur',
+     '/Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability'),
+    (ON_NPC + 'DT_NPC_ExplosionDurability_ON', 'LiveExplosionDurabilityDataTable', 'DT_SV_AlcnExDur',
+     '/Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability'),
+]
+
+
+def build_alicorn_rows():
+    """DT_SV_Alcn*: the Alicorn's NPC rows (alcn_01 with its pools left out of its children, and every kept part's,
+    down the tree), their model rows and the durability rows they name."""
+    def load(path, st):
+        z = ZenPkg(stock(path))
+        dt, o = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        assert o == len(z.payloads[0]), path
+        return z, dt
+    def key(k): return k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'
+    def field(row, n):
+        q = [q for q in row[2] if q[1] == n]
+        return q[0][3] if q else None
+    def nm(v): return None if v is None else (v[1] if v[2] == 0 else f'{v[1]}_{v[2] - 1}')
+    zn, dn = load(ALCN_TABLES[0][0], ALCN_TABLES[0][1])
+    npc = {key(k): (k, row) for k, row in dn['rows']}
+    want, seen, refs = [survival_events.ALCN_ROW], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
+    while want:
+        r = want.pop(0)
+        if r in seen or r in ('None', ''): continue
+        seen.append(r)
+        row = npc[r][1]
+        kids, comps = field(row, 'ChildNPCId'), field(row, 'ChildNPCComponentNames')
+        if r == survival_events.ALCN_ROW:        # its pools out
+            keep = [i for i, c in enumerate(comps[1]) if nm(c) not in survival_events.ALCN_DROP]
+            row[2][:] = [(q[0], q[1], q[2], ('arr', [q[3][1][i] for i in keep])) if q[1] in ('ChildNPCId', 'ChildNPCComponentNames')
+                         else q for q in row[2]]
+            kids = field(row, 'ChildNPCId')
+        for k in (kids[1] if kids else []): want.append(nm(k))
+        for f in refs:
+            v = field(row, f)
+            if v is not None and nm(v) not in ('None', ''): refs[f].add(nm(v))
+    keepsets = {0: set(seen), 1: refs['ModelId'], 2: refs['WeaponDurabilityId'], 3: refs['ExplosionDurabilityId']}
+    for i, (src, st, out, _) in enumerate(ALCN_TABLES):
+        z, dt = (zn, dn) if i == 0 else load(src, st)
+        rename_package(z, src, DATA + out)
+        rows = [(k, row) for k, row in dt['rows'] if key(k) in keepsets[i]]
+        assert {key(k) for k, _ in rows} == keepsets[i], (out, keepsets[i] - {key(k) for k, _ in rows})
+        for k, row in rows:
+            for n in names_in(row) + [k[0]]: z.nb.add(n)
+        dt['rows'] = rows
+        z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+        chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        assert chk['rows'] == dt['rows']
+        save(z, DATA + out)
+        print(f'  {out}: {len(rows)} rows')
 
 
 def lcac_units(units, used_ids, z, top_number, v):
@@ -663,6 +759,7 @@ def build_wd_global():
     ally_units(units, used_ids, z, top_number, v)
     lcac_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
+    alcn_units(units, used_ids, z, top_number, v)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -1170,7 +1267,9 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016',
                ['OP0045_ladn_' + p for p in ('AirIntake_L', 'AirIntake_R', 'Engine_L', 'Engine_R', 'LCIWS_BL', 'LCIWS_BR',
                                             'LCIWS_FL', 'LCIWS_FR', 'TailWing_L', 'TailWing_R', 'VariableWing_L',
-                                            'VariableWing_R', 'Wing_L', 'Wing_R', 'VLS_L', 'VLS_R')])]
+                                            'VariableWing_R', 'Wing_L', 'Wing_R', 'VLS_L', 'VLS_R')]),
+              # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01'])]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
@@ -1284,6 +1383,7 @@ def build_lua_scripts():
 
 if __name__ == '__main__':
     build_radio()
+    build_alicorn_rows()
     build_lua_scripts()
     build_npc_table()
     build_shop_rows()
