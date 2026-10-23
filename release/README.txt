@@ -71,6 +71,8 @@ Every run you finish (shot down, restarted, or left) is submitted to the Surviva
 shows how it went: round, score, kills, specials beaten, time. You appear under your Steam name; to use another, set
 pilot = Your Name  under [leaderboard] in survival.ini. If you're offline the run is kept and sent next time. Only the
 leaderboard's own server is contacted; nothing about your PC is sent besides the run.
+If the summary always says NO CONNECTION while your internet works, a firewall or antivirus is blocking the game:
+allow AceCombat8.exe outbound access. Runs kept until then are sent automatically afterwards.
 Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
 x1 Standard, x1.5 Ace.
 
