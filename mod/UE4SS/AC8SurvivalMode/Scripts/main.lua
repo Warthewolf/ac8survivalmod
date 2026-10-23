@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.3"
+local VERSION = "0.56.4"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -951,8 +951,10 @@ local CFG = {
                      reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
                      health_per_round = 0.04, health_max_x = 3.0,
                      frenzy_s = 6, blink_every_s = 1.0, blink_spread_deg = 35, ground_clear_m = 150,
-                     -- its gun and ECM pod on command (tools/survival_events.py GLITCH_GUN_SLOT / _ECM_SLOT): the gun
-                     -- fired at you every gun_every_s through a frenzy, the pod every ecm_every_s while it's up
+                     -- its gun and ECM pod on command (tools/survival_events.py GLITCH_GUN_* / _ECM_SLOT): through a
+                     -- frenzy RE_SV_GlitchGun every gun_every_s, which fires the gun at you 5 times 0.1 s apart (user,
+                     -- 2026-10-23: "make it fire at 0.1"; = GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S, keep in step); the
+                     -- pod every ecm_every_s while it's up
                      gun_every_s = 0.5, ecm_every_s = 14,
                      -- its blink spots: the event package's (tools/survival_events.py GLITCH_BLINK_*; keep in step, not
                      -- an ini setting): RE_SV_GlitchBlink_<ring letter><bearing letter>, every step_deg on each ring

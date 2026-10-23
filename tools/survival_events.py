@@ -325,6 +325,11 @@ GLITCH_OBJ = None                           # its AI object name, set by build_s
 # RE_SV_GlitchGun through each frenzy and RE_SV_GlitchEcm every ecm_every_s.
 GLITCH_GUN_SLOT = 'WN_WEAPON_2'
 GLITCH_ECM_SLOT = 'WN_WEAPON_4'
+# each RE_SV_GlitchGun fires the gun GLITCH_GUN_SHOTS times GLITCH_GUN_EVERY_S apart (user, 2026-10-23: "make it fire at
+# 0.1"; Lua's tick is 250 ms, so the repeat is the record's: delay + loop, as the bombers' runs); main.lua fires the
+# event every GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S (CFG.specials.glitch.gun_every_s: keep in step)
+GLITCH_GUN_EVERY_S = 0.1
+GLITCH_GUN_SHOTS = 5
 GLITCH_BLINK_STEP_DEG = 30
 GLITCH_BLINK_RINGS_M = (500, 800)
 
@@ -1051,9 +1056,10 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
-    for ev, slot in (('RE_SV_GlitchGun', GLITCH_GUN_SLOT), ('RE_SV_GlitchEcm', GLITCH_ECM_SLOT)):
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_fire, ev, {0: slot, 1: GLITCH_OBJ})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchGun')
+    g.execute(t_fire, 'RE_SV_GlitchGun', {0: GLITCH_GUN_SLOT, 1: GLITCH_OBJ}, delay=GLITCH_GUN_EVERY_S, loop=GLITCH_GUN_SHOTS)
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchEcm')
+    g.execute(t_fire, 'RE_SV_GlitchEcm', {0: GLITCH_ECM_SLOT, 1: GLITCH_OBJ})
     up = 'SV_GlitchUp'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: GLITCH_UNIT})
     g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)
