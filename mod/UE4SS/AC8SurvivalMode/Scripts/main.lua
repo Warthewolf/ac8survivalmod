@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.56.5"
+local VERSION = "0.56.6"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -960,6 +960,11 @@ local CFG = {
                      -- an ini setting): RE_SV_GlitchBlink_<ring letter><bearing letter>, every step_deg on each ring
                      blinks = { step_deg = 30, rings_m = { 500, 800 } },
                      gun_range_m = 1500, gun_angle_deg = 6, gun_damage_x = 1.5, gun_spread_deg = 0.1,
+                     -- the dead flying (user: "look spooky like its the dead flying"): its wreck model shown, its
+                     -- flying model hidden, the damaged-plane smoke and fire on it
+                     dead_look = true, dead_fx_scale = 1.0,
+                     dead_fx = { "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001",
+                                 "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001" },
                      smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
                      smoke_s = 3.0 },
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
@@ -3346,6 +3351,50 @@ local function glitchSmoke(s, at)
     end
 end
 
+-- Its dead look (user, 2026-10-23: "I want the aircraft to look spooky like its the dead flying"): the wreck every AI
+-- plane carries for its death (its BP's DamagedMainBodyMesh / DamagedPartsMesh: the burnt _DAM model, hidden until
+-- then) shown and kept on it, its flying model (every other mesh: airframe, pilot, stores) hidden, and the
+-- damaged-plane smoke and fire (dead_fx) on it. Each step is logged once.
+local function eachOf(arr, f)
+    if type(arr) == "table" then for _, e in ipairs(arr) do f(e) end
+    elseif arr then pcall(function() arr:ForEach(function(_, e) f(e:get()) end) end) end
+end
+local function glitchDeadLook(c, o)
+    local shown, moved, hidden, names = 0, 0, 0, {}
+    local root = o:K2_GetRootComponent()
+    local at = where(o)
+    for _, n in ipairs({ "DamagedMainBodyMesh", "DamagedPartsMesh" }) do
+        local ok, comp = pcall(function() return o[n] end)
+        if ok and comp and valid(comp) then
+            pcall(function() comp:SetHiddenInGame(false, true) end)
+            pcall(function() comp:SetVisibility(true, true) end)
+            shown = shown + 1
+            local okL, l = pcall(function() local v = comp:K2_GetComponentLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+            if okL and l and at and math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2 + (l.Z - at.Z) ^ 2) > 2000 then
+                -- (not on the plane: snapped onto it)
+                if pcall(function() comp:K2_AttachToComponent(root, FName("None"), 2, 2, 2, false) end) then moved = moved + 1 end
+            end
+        end
+    end
+    if shown > 0 then                                   -- (no wreck: it keeps its own look)
+        for _, cls in ipairs({ "/Script/Engine.SkeletalMeshComponent", "/Script/Engine.StaticMeshComponent" }) do
+            local k = StaticFindObject(cls)
+            local ok, list = pcall(function() return o:K2_GetComponentsByClass(k) end)
+            eachOf(ok and list or nil, function(comp)
+                local nm = "?"
+                pcall(function() nm = comp:GetFName():ToString() end)
+                if not nm:find("Damaged", 1, true) and pcall(function() comp:SetHiddenInGame(true, false) end) then
+                    hidden = hidden + 1
+                    names[#names + 1] = nm
+                end
+            end)
+        end
+    end
+    local fx = portalFx(c.dead_fx, o, nil, c.dead_fx_scale, 3600)
+    log(string.format("special: %s's dead look: %d wreck meshes shown (%d snapped on), %d flying meshes hidden (%s), %d smoke/fire systems",
+        c.name, shown, moved, hidden, table.concat(names, ", "), fx))
+end
+
 -- AB.L..IN on its ace row at the top fire-control level, gone until its smoke (glitchTick); false if it can't come.
 function ANOM.glitchSpawn(now)
     local c = CFG.specials.glitch
@@ -3433,6 +3482,7 @@ function ANOM.glitchTick(now, s)
         log(string.format("special: %s health %s of MaxHealth %s%s", c.name, tostring(okN and hn), tostring(okM and mh),
             raised and string.format(" (raised to %s)", tostring(o.MaxHealth)) or ""))
         setGone(o, false)
+        if c.dead_look then pcall(glitchDeadLook, c, o) end
         glitchSmoke(s, where(o))
         s.state = "hunt"
         hudCallout(c.name, c.squadron)
@@ -3442,6 +3492,7 @@ function ANOM.glitchTick(now, s)
     if s.state ~= "hunt" then return end
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
+        ANOM.cleanFx(now, true)                         -- (its smoke and fire off)
         if s.lastAt then glitchSmoke(s, s.lastAt) end
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
