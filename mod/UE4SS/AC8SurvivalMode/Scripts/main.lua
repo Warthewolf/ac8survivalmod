@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.50.4"
+local VERSION = "0.51.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -842,6 +842,8 @@ local CFG = {
     -- it, lifts off countdown_s after it appears. The round's fighters come for the player; strike_share of its aircraft
     -- are strike flights (no heavies) sent at the shuttle. Launched: `reward` zollars. Lost: the shop is closed for the
     -- next shop_closed_rounds rounds. countdown_s is built into the event package (SHUTTLE_COUNTDOWN_S): keep it equal.
+    -- The countdown runs on Survival's own clock (D.shuttleClock), which stops while you're down at the airfield (user,
+    -- 2026-10-23: it ran on in the landing store): each whole second fires that second's RE_SV_ShuttleT_<s>.
     -- random (user, 2026-10-23: "after round 3, special rounds get randomised into the normal play, they can appear on
     -- any round above 3, their difficulty increases along with the corresponding round"): from round `first` each
     -- round is a special with `chance`, never two in a row (and not the same one twice running); the pick is made
@@ -2487,7 +2489,8 @@ local function hudTick(now, paused, pc)
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif sp then                                  -- Comona Defense: the countdown and the shuttle's health
         local hp = shuttleHealth()
-        setText(H.next, "nextStr", string.format(t.launch_row, clock(CFG.specials.shuttle.countdown_s - (now - sp.at)), hp or 100))
+        local cd = D.shuttleClock and D.shuttleClock.cd or (now - sp.at)
+        setText(H.next, "nextStr", string.format(t.launch_row, clock(math.max(0, CFG.specials.shuttle.countdown_s - cd)), hp or 100))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "alicorn" and D.special.state == "sail" then
         local sp = D.special
@@ -2836,6 +2839,7 @@ local function spawnShuttle()
     log("special: shuttle " .. c.unit .. ": " .. (r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r <= 0 then D.special = nil; return r end            -- a normal round, then
     D.special.state, D.special.at = "countdown", D.now
+    D.shuttleClock = { cd = 0, fired = 0, at = D.now, s = D.special }
     return r
 end
 
@@ -3113,9 +3117,32 @@ function ANOM.tick(now, s)
 end
 end
 
+-- The shuttle's countdown clock (D.shuttleClock: cd seconds run, fired the last second's event): it runs on the game
+-- clock except while you're down at the airfield (D.grounded, from roundsTick), and fires RE_SV_ShuttleT_<s> for each
+-- whole second s (tools/survival_events.py build_shuttle: radio, ignition, liftoff at countdown_s, the climb after it)
+-- up to countdown_s + 30; it stops when the shuttle is lost.
+function SPC.shuttleClockTick(now)
+    local k = D.shuttleClock
+    if not k then return end
+    local dt = math.max(0, now - k.at)
+    k.at = now
+    if not D.grounded then k.cd = k.cd + dt end
+    if D.grounded ~= k.grounded then
+        k.grounded = D.grounded
+        log(string.format("special: shuttle countdown %s at %.0f s", D.grounded and "held (you're down at the airfield)" or "running", k.cd))
+    end
+    local last = CFG.specials.shuttle.countdown_s + 30
+    while k.fired < math.min(math.floor(k.cd), last) do
+        k.fired = k.fired + 1
+        if type(SV_Event) == "function" then SV_Event("RE_SV_ShuttleT_" .. k.fired) end
+    end
+    if k.fired >= last or k.s.lost then D.shuttleClock = nil end
+end
+
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
+    SPC.shuttleClockTick(now)
     if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then            -- (tools/survival_events.py RE_SV_ShuttleRemove)
         D.shuttleRemoveAt = nil
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
@@ -3137,7 +3164,8 @@ local function specialTick(now)
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
     local alive = SV_UnitAlive(c.unit)
-    local over = now - s.at >= c.countdown_s + 3
+    local cd = D.shuttleClock and D.shuttleClock.cd or (now - s.at)
+    local over = cd >= c.countdown_s + 3
     local launched = (f.SV_ShuttleLaunched or 0) >= 1
     if now >= (s.logAt or 0) then                   -- every 10 s: is anything getting at it (report of 2026-10-23)
         s.logAt = now + 10
@@ -3153,24 +3181,24 @@ local function specialTick(now)
             end
         end
         log(string.format("special: shuttle %.0f s in: health %s%%, %d hits, nearest strike aircraft %s, %d alive in its unit",
-            now - s.at, tostring(hp), f.SV_ShuttleHits or -1, near and string.format("%.1f km", near) or "none",
+            cd, tostring(hp), f.SV_ShuttleHits or -1, near and string.format("%.1f km", near) or "none",
             alive))
     end
     if (f.SV_ShuttleLost or 0) >= 1 or (alive <= 0 and not launched and not over) or (over and not launched and alive <= 0) then
-        s.state = "done"
+        s.state, s.lost = "done", true
         D.shuttleRemoveAt = now + 30                    -- the pad's allies (the shuttle is gone)
         RUN.shopClosedUntil = D.round + c.shop_closed_rounds
         RUN.dirty = true
-        LB.special("shuttle", false, now - s.at)
+        LB.special("shuttle", false, cd)
         hudCallout(t.shuttle_lost, t.shuttle_lost_sub)
         log(string.format("special: round %d, the shuttle was lost %.0f s into the countdown (%d hits); shop closed through round %d",
-            D.round, now - s.at, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
+            D.round, cd, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
     elseif launched or over then
         s.state = "done"
         D.shuttleRemoveAt = now + c.remove_s            -- it and the pad's allies, once it's well up
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "shuttle launched")
-        LB.special("shuttle", true, now - s.at)
+        LB.special("shuttle", true, cd)
         hudCallout(t.launched, string.format(t.launched_sub, pay))
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
             launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
@@ -3341,6 +3369,7 @@ local function roundsTick(now)
     -- every tick, whatever the round's state (code review of 2026-10-23: in the break it never ran, so the shuttle's
     -- removal and the Anomaly's lightning clean-up waited for the next round, and while fighting it ran once a second,
     -- which rounded the portal's timing)
+    if D.shuttleClock then D.grounded = playerOnAirfield() end   -- (the shuttle's countdown stops while you're down)
     specialTick(now)
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then

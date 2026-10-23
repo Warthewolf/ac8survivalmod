@@ -62,10 +62,12 @@ BOMB_GAP_S = 0.4
 # tower; user, 2026-10-22: "you can leave the AA guns in", "SAMs too and tower"), spawned at the first special and kept;
 # build_survival.py moves the shuttle into a unit of its own (SHUTTLE_UNIT, spawned every special: a unit with
 # anything still alive can't be spawned again) and gives it Survival's NPC row, for its name SV_Shuttle_Name.
-# Scripts/main.lua spawns both in place (SV_Spawn without a position); the shuttle's appearance runs the chain on
-# exec delays: SHUTTLE_COUNTDOWN_S after it appears the shuttle lifts off (main.lua CFG.specials.shuttle.countdown_s
-# must be the same), SHUTTLE_REMOVE_S after liftoff it is taken off (LiveDestroyUnitExecution) so the next special can
-# spawn it again. Flags for Lua: SV_ShuttleRound 1 while it's on the pad (strike flights go for it instead of the
+# Scripts/main.lua spawns both in place (SV_Spawn without a position) and runs the countdown on a clock of its own
+# that stops while the player is down at the airfield (user, 2026-10-23: "Shuttle timer continues to countdown while in
+# the airfield landing store"; exec delays from the shuttle's appearance couldn't stop): at each whole second s of it,
+# main.lua fires RE_SV_ShuttleT_<s>, which carries that second's records (radio, ignition, liftoff at
+# SHUTTLE_COUNTDOWN_S = main.lua CFG.specials.shuttle.countdown_s, the climb after it). SHUTTLE_REMOVE_S after liftoff
+# it is taken off (LiveDestroyUnitExecution) so the next special can spawn it again. Flags for Lua: SV_ShuttleRound 1 while it's on the pad (strike flights go for it instead of the
 # airfield), SV_ShuttleLaunched / SV_ShuttleLost, SV_ShuttleHits.
 PAD_UNIT = 'AA_Unit_01_Ground0'
 SHUTTLE_UNIT = 'SV_Unit_Shuttle'
@@ -916,9 +918,19 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
 
 
 def build_shuttle(g, flag):
-    """Comona Defense (see SHUTTLE_*): Mission 22's shuttle records, copied with their exact arguments, on delays
-    from the shuttle's appearance instead of Mission 22's mission timer."""
+    """Comona Defense (see SHUTTLE_*): Mission 22's shuttle records, copied with their exact arguments, on main.lua's
+    countdown events (RE_SV_ShuttleT_<second>) instead of Mission 22's mission timer."""
     T = SHUTTLE_COUNTDOWN_S
+    made = set()
+
+    def at(sec):
+        """The event for second `sec` of the countdown (main.lua fires RE_SV_ShuttleT_1, _2, ... as its clock runs)."""
+        assert float(sec).is_integer() and 1 <= sec <= T + 30, sec
+        name = f'RE_SV_ShuttleT_{int(sec)}'
+        if name not in made:
+            made.add(name)
+            g.trigger('RE_SpawnEnemy_kokatu_1st', name)
+        return name
     tpl = lambda cls, ev, pred=None: g.exec_template(cls, ev, pred)
     t_maxhp = tpl('LiveSetMaxHealthExecution', 'MissionStart')
     t_minhp = tpl('LiveSetMinHealthExecution', 'RE_SetGroundObjMinHP1')
@@ -946,23 +958,23 @@ def build_shuttle(g, flag):
     g.execute(t_maxhp, up, {3: f'{SHUTTLE_HP}'})
     g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
     for before, key in SHUTTLE_RADIO:
-        g.execute(t_radio, up, {0: key}, delay=T - before, conds=standing())
+        g.execute(t_radio, at(T - before), {0: key}, conds=standing())
     for before, key in SHUTTLE_SOUND_FLAGS:
-        g.execute(t_sflag, up, {0: key}, delay=T - before, conds=standing())
-    g.execute(t_minhp, up, {0: SHUTTLE, 3: '1.0'}, delay=T - 20, conds=standing())   # the last 20 s it can't die
-    g.execute(t_vfx_on, up, delay=T - 14, conds=standing())                         # ignition (RE_Shuttle_Boost_On)
-    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Play', 1: SHUTTLE}, delay=T - 14, conds=standing())
-    g.execute(t_fire, up, delay=T - 4, conds=standing())                            # on its path, engines lit
-    g.execute(t_cam_on, up, delay=T - 2, conds=standing())
+        g.execute(t_sflag, at(T - before), {0: key}, conds=standing())
+    g.execute(t_minhp, at(T - 20), {0: SHUTTLE, 3: '1.0'}, conds=standing())   # the last 20 s it can't die
+    g.execute(t_vfx_on, at(T - 14), conds=standing())                         # ignition (RE_Shuttle_Boost_On)
+    g.execute(t_sound, at(T - 14), {0: SHUTTLE_SOUND + 'Ignition_Play', 1: SHUTTLE}, conds=standing())
+    g.execute(t_fire, at(T - 4), conds=standing())                            # on its path, engines lit
+    g.execute(t_cam_on, at(T - 2), conds=standing())
     # liftoff (RE_Shuttle_Launch, without Mission 22's wave cleanup)
-    g.execute(t_climb, up, delay=T, conds=standing())
-    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE}, delay=T, conds=standing())
-    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'LiftOff_Play', 1: SHUTTLE}, delay=T, conds=standing())
-    flag(up, 'SV_ShuttleLaunched', 'Set', 1, delay=T, conds=standing())
-    flag(up, 'SV_ShuttleRound', 'Set', 0, delay=T, conds=standing())
-    g.execute(t_climb2, up, delay=T + 13, conds=standing())
-    g.execute(t_cam_off, up, delay=T + 7)
-    g.execute(t_vfx_off, up, delay=T + 30)
+    g.execute(t_climb, at(T), conds=standing())
+    g.execute(t_sound, at(T), {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE}, conds=standing())
+    g.execute(t_sound, at(T), {0: SHUTTLE_SOUND + 'LiftOff_Play', 1: SHUTTLE}, conds=standing())
+    flag(at(T), 'SV_ShuttleLaunched', 'Set', 1, conds=standing())
+    flag(at(T), 'SV_ShuttleRound', 'Set', 0, conds=standing())
+    g.execute(t_climb2, at(T + 13), conds=standing())
+    g.execute(t_cam_off, at(T + 7))
+    g.execute(t_vfx_off, at(T + 30))
     # Taking it and the pad's allies off after liftoff: Scripts/main.lua fires RE_SV_ShuttleRemove SHUTTLE_REMOVE_S after
     # it (test of 2026-10-22: records here on a delay gated on SV_ShuttleLaunched never ran, both units stayed up to
     # round 9: a delayed record's conditions are checked when its event fires, at the shuttle's appearance).
@@ -973,11 +985,9 @@ def build_shuttle(g, flag):
     g.execute(t_remove, 'RE_SV_ShuttleRemove', delay=1.0)
     g.execute(t_remove, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'})
     # the pad's allies (guns, SAMs, tower) go with it: the whole unit, not one object
-    # the flags back to 0 once this special's records are all done, in case the game checks a delayed record's conditions
-    # when the event fires, not when it runs: then a loss left in SV_ShuttleLost would silence the next special
-    after = T + SHUTTLE_REMOVE_S + 30                # (well after Lua's removal: it counts from when it sees liftoff)
+    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too)
     for name in resets:
-        flag(up, name, 'Set', 0, delay=after)
+        flag('RE_SV_ShuttleRemove', name, 'Set', 0)
     # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
     # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag
     # asset doesn't have: that check is replaced by an int flag of Survival's, set when the line plays and reset when the
