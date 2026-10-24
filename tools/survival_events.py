@@ -686,6 +686,14 @@ def build_events(stock_ep):
         # AttackOnly order on it, so they go for nothing else.
         g.execute(t_bsearch, up, {1: unit, 3: 'AIR_AND_GROUND'}, delay=2.0, conds=on_shuttle())
         g.execute(t_sengage, up, {0: 'NoneSelect', 1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
+        # ... and once the shuttle's taken off, back to the airfield (main.lua fires it for each strike flight still up;
+        # a friend's log of 2026-10-24: with only the AttackOnly order on the gone shuttle, three bombers wandered
+        # 35 km out for 4 minutes and the round couldn't end)
+        retask = f'RE_SV_BomberRetask_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', retask)
+        g.execute(t_bmove, retask, {0: unit}, delay=1.0)
+        g.execute(t_bsearch, retask, {1: unit}, delay=2.0)
+        g.execute(t_bengage, retask, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0)
     for k, dummy in enumerate(AIRFIELD_DUMMIES):
         hit = f'SV_AirfieldHit_{k + 1}'
         t = g.trigger(f'MissedWeapon_AreaB_{k}', hit, arg_changes={4: dummy})      # LifeCount cleared: every hit

@@ -9,6 +9,14 @@ and AA guns / SAM sites around the airport.
 This is a TEST build: things may break. Please send logs (see below).
 
 
+Fixed in 0.58.0.1
+-----------------
+- AB.L..IN could be shot down invisibly a second after it appeared (from the second special round on: its health
+  went to 0 when the round's health boost was applied). All health boosts are now whole numbers.
+- In the shuttle round, bombers still up after the shuttle was gone had no target: they flew off and the round
+  couldn't end. They now go back to attacking the airfield.
+
+
 Needs
 -----
 - UE4SS for Ace Combat 8 (dwmapi.dll next to AceCombat8.exe and a "ue4ss" folder).
