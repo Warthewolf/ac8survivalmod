@@ -49,6 +49,11 @@ load and a whole VALKA fight were normal (2026-10-25). The 0.69.1 container diff
 textures (all other files the same size: only cook GUIDs differ) [V], so the next test is a clean A/B on virtual
 textures. Unknown: what loads them before VALKA's round (Lua loads her model only at her reveal).
 
+A/B result [T] (Lua 0.69.5 with the 0.69.1 container, 2026-10-25): hangar to mission in ~33 s, round 1 and a whole VALKA
+fight with no crash; the game's working set 20.3 GB at level load, 16-20 GB in the fight (SV_MemMB). So Survival's own
+virtual textures caused the 0.69 crash. Her paint on the ordinary textures: variants 1-2 (AC8's aircraft master) black
+as expected, one of 1 / 2 showed her red (user, which one not yet known); 9-11 never built (a Lua bug, fixed in 0.69.6).
+
 ### AC8's config (tools/pak_read.py: Live/Config/DefaultEngine.ini in pakchunk0-Windows.pak) [V]
 - [/Script/Engine.RendererSettings]: r.VirtualTextures=True, r.VT.EnableAutoImport=False; no r.VT.TileSize /
   TileBorderSize set, so UE's defaults 128 / 4 (as every stock VT and Survival's own cook); r.RayTracing=True (with

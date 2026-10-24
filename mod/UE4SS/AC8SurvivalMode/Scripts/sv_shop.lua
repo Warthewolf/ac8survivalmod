@@ -51,7 +51,8 @@ end
 -- the player's own plane's icon (T_HUD_acIcon_PP<nnn>_<model>, from its BP_PlayerPlane_PP<nnnn>_<model>), if any
 local function planeIcon()
     local ok, n = pcall(function() return nameOf(survivalPC.Pawn) end)
-    local num, model = ok and n and n:match("PP0*(%d+)_(%w+)")
+    local num, model                                -- (not `ok and n:match(...)`: `and` keeps only the first capture)
+    if ok and n then num, model = n:match("PP0*(%d+)_(%w+)") end
     if not num then return nil end
     return texture(string.format("/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP%03d_%s", tonumber(num), model))
 end

@@ -756,10 +756,11 @@ CFG = {
                      -- alpha curve (time fraction, alpha), intensity_x times the stock flare's brightness. If it doesn't
                      -- load, the flash above shows instead.
                      -- her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"): opens
-                     -- lead_s before the opener's shot where she comes out, open_s / hold_s / close_s; sizes x diameter_m:
+                     -- lead_s before the opener's shot where she comes out, open_s / hold_s / close_s; sizes x diameter_m,
+                     -- which grows to at least min_deg wide from where you are:
                      -- the lensing (lens_x the barrier refraction's strength), the glow and photon ring (their brightness x
                      -- the stock flare's), the black horizon 1.0
-                     portal = { enabled = true, diameter_m = 120, lead_s = 1.0, open_s = 1.2, hold_s = 3.0, close_s = 1.0,
+                     portal = { enabled = true, diameter_m = 120, min_deg = 4, lead_s = 3.0, open_s = 1.2, hold_s = 5.0, close_s = 1.0,
                                 lens_size = 2.4, lens_x = 3, glow_size = 2.0, glow_x = 4, ring_size = 1.3, ring_x = 8,
                                 textures = "/Game/Mods/SurvivalMode/Valka/Portal/" },
                      flare = { enabled = true, life_s = 7, intensity_x = 6,

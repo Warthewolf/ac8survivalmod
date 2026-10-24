@@ -193,9 +193,11 @@ Copy a working stock pattern before inventing a new one.
     / Livemap as virtual textures (every stock skin texture is a UDIM VT: tools/re/AIRCRAFT_MATERIALS.md,
     tools/checks/tex_info.py). An ordinary texture there draws pure black whatever the instance's values: VALKA's X-02S,
     tests of 2026-10-24 (paint variants 2-5 all black). AC8's general masters (MP_Live_Base_CameraDitherFade, _WPO,
-    M_Live_Cha_Base) take ordinary textures on skinned meshes. Whether Survival's own virtual textures are safe is open:
-    the 0.69 container with them loaded the mission in ~3.5 min and crashed AC8 at round 1 (GPUSortBatch, "resize
-    TArray to an invalid size of 2147483648"); without it all was fine (2026-10-25).
+    M_Live_Cha_Base) take ordinary textures on skinned meshes (from their shader maps; not yet seen in game). Don't ship
+    virtual textures of our own: the 0.69 container with VALKA's paint as VTs loaded the mission in ~3.5 min and crashed
+    AC8 at round 1 (GPUSortBatch, "resize TArray to an invalid size of 2147483648"); the same container with only those
+    three textures ordinary loaded in ~33 s and ran a whole VALKA fight (A/B, 2026-10-25).
+
 
 45. An AI aircraft's railgun shows on the minimap and HUD like a stock one when its LiveFCSModule_LauncherTripleRailCannon
     gets IsDispRadarMap / ForceAlertDisp true and HUDControl 1 (LongRangeRailGun) at run time; Mission 18's
@@ -205,7 +207,11 @@ Copy a working stock pattern before inventing a new one.
     SetSkeletalMeshAsset put VALKA's X-02S on the x40a, whose own body is a StaticMeshComponent (AC8's NPC bodies are
     static; the only skeletal meshes on it were the wreck's, which never draw: hard rule 41). Confirmed 2026-10-24.
 
-## Economy review build (Lua 0.70.0, runtime 0.19.0, 2026-10-25; untested in game)
+47. In Lua, `a and f()` / `a or f()` keep only f's first value: `local ok, v = x and pcall(f)` always leaves v nil.
+    VALKA's flare and paint variants 9-11 never built that way (test of 2026-10-25, "NOT up (nil)"). Write
+    `if x then ok, v = pcall(f) end`; lua_check.py fails the build on the pattern.
+
+## Economy review build (Lua 0.70.x, runtime 0.19.0, 2026-10-25; untested in game)
 The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
 late-round scaling, raids from one direction with escorts, the jammer, more airframes, kill attribution by side
 (DamageHistoryMap), WINGMEN, ally orders, repairs between rounds, FULL REARM, upgrades, tactical items, SECOND CHANCE,

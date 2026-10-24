@@ -766,7 +766,8 @@ function SPC.V.flareStart(c, s, at, now)
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
         local mi, why = loadObject(p .. "." .. p:match("[^/]+$"))
-        local okM, mid = valid(mi) and pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end)
+        local okM, mid = false, nil                     -- (not `valid(mi) and pcall(...)`: `and` keeps only pcall's first value)
+        if valid(mi) then okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end) end
         if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, e[2], e[2], nil) end) then
             local okB, b = pcall(function() return mid:K2_GetScalarParameterValue(FName("Emissive_Intensity")) end)
             fl.mids[#fl.mids + 1] = { mid = mid, base = (okB and type(b) == "number" and b > 0) and b or 1 }
@@ -832,7 +833,8 @@ function SPC.V.portalStart(c, s, at, now)
     if not valid(kml) then return 0 end
     local a, comp, whyB = SPC.V.billboard(at)
     if not a then log("special: VALKA's portal: " .. tostring(whyB)); return 0 end
-    local d = p.diameter_m * 100
+    -- at least min_deg wide where you are (14 km out, 120 m was half a degree: test of 2026-10-25, unseen)
+    local d = math.max(p.diameter_m, (at.km or 0) * 1000 * math.tan(math.rad(p.min_deg or 0))) * 100
     local po = { actor = a, comp = comp, from = now, glow = {}, said = {}, up = 0 }
     local function add(name, mid, size)
         if mid and pcall(function() comp:AddElement(mid, nil, false, size, size, nil) end) then
@@ -880,7 +882,7 @@ function SPC.V.portalStart(c, s, at, now)
     s.portal = po
     SPC.V.portalTick(c, s, now)
     log(string.format("special: VALKA's portal at %.0f, %.0f, %.0f (%.0f m): %s", at.X / 100, at.Y / 100, at.Z / 100,
-        p.diameter_m, table.concat(po.said, ", ")))
+        d / 100, table.concat(po.said, ", ")))
     if po.up == 0 then SPC.V.portalStop(s) end
     return po.up
 end
@@ -1180,9 +1182,10 @@ function SPC.V.paint(c, s, body, k)
     if pv.parent then                                   -- another AC8 master, her textures on it
         local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
         local parent, why = loadObject(pv.parent .. "." .. pv.parent:match("[^/]+$"))
-        local okM, mid = valid(parent) and valid(kml) and pcall(function()
-            return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0)
-        end)
+        local okM, mid = false, nil                     -- (not `valid(parent) and pcall(...)`: `and` keeps one value)
+        if valid(parent) and valid(kml) then
+            okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
+        end
         if not (okM and valid(mid)) then
             log(string.format("special: %s's paint %d %s: no instance of %s (%s)", c.name, k, pv.name, pv.parent,
                 tostring(valid(parent) and mid or why)))
