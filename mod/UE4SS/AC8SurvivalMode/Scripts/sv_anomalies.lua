@@ -679,9 +679,12 @@ function SPC.V.emlWeapon(c)
     return n, string.format("%d launchers, %d projectile modules beside them; was %s; %s life %s s", nL, nP,
         #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
 end
--- her railgun's rounds now in the level (c.eml_weapon's): each lives at least eml_life_s (its class default's or
+-- her railgun's rounds now in the level (c.eml_weapon's): one at a time (ROUND_ONE: no burst, no donut spread; the
+-- land battleship's fires a ring of them), each lives at least eml_life_s (its class default's or
 -- longer), and does no damage while `harmless` (the opener's shot) or its class default's otherwise. Instances only:
 -- the rounds are pooled, so this runs around every shot. Returns how many, and their life.
+SPC.V.ROUND_ONE = { { "bBurstShot", false }, { "BurstShotCount", 1 }, { "bFireAllInOneShot", false },
+                    { "bDonutsShot", false }, { "bMultipleLockOn", false } }
 function SPC.V.rounds(c, harmless)
     if not c.eml_weapon or c.eml_weapon == "" then return 0 end
     local nm = c.eml_weapon:match("[^/]+$")
@@ -689,11 +692,21 @@ function SPC.V.rounds(c, harmless)
     local okD, d0 = pcall(function() return cdo.damage end)
     local okL, l0 = pcall(function() return cdo.LifeTime end)
     local life = math.max(c.eml_life_s or 0, (okL and type(l0) == "number") and l0 or 0)
+    if not SPC.V.roundSaid and valid(cdo) then         -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
+        SPC.V.roundSaid = true
+        local said = {}
+        for _, f in ipairs(SPC.V.ROUND_ONE) do
+            local okF, v = pcall(function() return cdo[f[1]] end)
+            said[#said + 1] = f[1] .. " " .. (okF and tostring(v) or "?")
+        end
+        log("special: VALKA's round " .. nm .. " (class default): " .. table.concat(said, ", "))
+    end
     local n = 0
     local ok, list = pcall(FindAllOf, nm .. "_C")
     for _, r in ipairs(ok and list or {}) do
         if valid(r) and not nameOf(r):find("Default__", 1, true) then
             n = n + 1
+            for _, f in ipairs(SPC.V.ROUND_ONE) do pcall(function() r[f[1]] = f[2] end) end
             pcall(function() if (r.LifeTime or 0) < life then r.LifeTime = life end end)
             pcall(function() if (r.EffectiveTime or 0) > 0 and r.EffectiveTime < life then r.EffectiveTime = life end end)
             pcall(function() r.damage = harmless and 0 or (okD and d0 or r.damage) end)
@@ -770,6 +783,22 @@ function SPC.V.parts(o)
 end
 -- her parts gone with her (found until some are) or back as they were (their own box / lock / target flags)
 SPC.V.PART_FLAGS = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
+-- her parts (the x40a's railguns and laser pod, hidden with the X-02S on) moved onto her: railgun_at (cm, her frame),
+-- so her shots leave from her and not from where the x40a's turret sat (test of 2026-10-24, 0.67.1: "the railgun
+-- didn't sit on her aircraft"); how many moved
+function SPC.V.partsPlace(c, s, o)
+    local at, n = c.railgun_at or { X = 400, Y = 0, Z = -80 }, 0
+    for _, p in ipairs(s.parts or {}) do              -- (in the world: attached ones keep that as their new offset,
+        if valid(p) and pcall(function()             -- whatever x40a socket they hang on)
+            local base = o:K2_GetActorLocation()
+            local f, rt, up = o:GetActorForwardVector(), o:GetActorRightVector(), o:GetActorUpVector()
+            p:K2_SetActorLocation({ X = base.X + f.X * at.X + rt.X * at.Y + up.X * at.Z,
+                                    Y = base.Y + f.Y * at.X + rt.Y * at.Y + up.Y * at.Z,
+                                    Z = base.Z + f.Z * at.X + rt.Z * at.Y + up.Z * at.Z }, false, {}, true)
+        end) then n = n + 1 end
+    end
+    return n
+end
 function SPC.V.partsGone(c, s, o, gone)
     if not gone and s.modelComp then return end         -- (her X-02S on: the x40a's parts stay gone)
     if gone and #(s.parts or {}) == 0 then
@@ -849,14 +878,22 @@ SPC.V.BODY_PROPS = { "PlaneBodySkelMeshComponent", "PlaneBodyMeshComponent", "Pl
 --   1 raw     as built (what 0.66.2 showed)
 --   2 stock   the stock F/A-18E skin's scalar / vector values (MI_PP0032_f18e_001_Decal) and no dirt mask (black)
 --   3 stock + white Livemap   4 stock + the parent's own dirt mask   5 stock + white Livemap and the parent's dirt
+-- and, as 2 stayed black (test of 2026-10-24, 0.67.1: "she was still coated black", "her mesh was missing pieces"),
+-- three that tell where it goes wrong:
+--   6 stock + the F/A-18E's own Livemap (if it's ours that's wrong)   7 the F/A-18E's three textures (wrongly mapped,
+--   but lit if the material works on her)   8 the engine's grid material on every slot (the mesh and its lighting alone)
 SPC.V.PAINT_STOCK = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Materials/001/MI_PP0032_f18e_001_Decal"
-SPC.V.PAINT_TEX = { black = "/Engine/EngineResources/Black", white = "/Engine/EngineResources/WhiteSquareTexture" }
+SPC.V.PAINT_TEX = { black = "/Engine/EngineResources/Black", white = "/Engine/EngineResources/WhiteSquareTexture",
+    f18_c = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_C", f18_mrx = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_MRX", f18_no = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_NO" }
 SPC.V.PAINTS = {
     { name = "RAW" },
     { name = "STOCK", stock = true, dirt = "black" },
     { name = "STOCK + WHITE LIVEMAP", stock = true, dirt = "black", livemap = "white" },
     { name = "STOCK + PARENT DIRT", stock = true },
     { name = "STOCK + WHITE LIVEMAP + PARENT DIRT", stock = true, livemap = "white" },
+    { name = "STOCK + F-18 LIVEMAP", stock = true, dirt = "black", livemap = "f18_mrx" },
+    { name = "F-18 TEXTURES", stock = true, dirt = "black", livemap = "f18_mrx", basecolor = "f18_c", normal = "f18_no" },
+    { name = "ENGINE GRID", material = "/Engine/EngineMaterials/WorldGridMaterial" },
 }
 -- the parent values logged once (what a stock skin changes, for the real fix)
 SPC.V.PAINT_SAY = { "WeatheringWeight", "Wet_Darkness", "Wet_Range", "AO_amoumt", "MetallicMapWeight",
@@ -906,6 +943,26 @@ function SPC.V.paint(c, s, body, k)
         log(string.format("special: %s's paint: no MI_X02S_Valka slot on %s", c.name, nameOf(body)))
         return pv.name
     end
+    if not s.paintOrig then                             -- every slot's own material (the canopy's too), to go back to
+        s.paintOrig, s.paintN = {}, 0
+        pcall(function()
+            s.paintN = body:GetNumMaterials()
+            for i = 0, s.paintN - 1 do s.paintOrig[i] = body:GetMaterial(i) end
+        end)
+    end
+    for i = 0, (s.paintN or 0) - 1 do                   -- (the grid variant changes every slot)
+        if valid(s.paintOrig[i]) then pcall(function() body:SetMaterial(i, s.paintOrig[i]) end) end
+    end
+    if pv.material then
+        local m, why = loadObject(pv.material .. "." .. pv.material:match("[^/]+$"))
+        local n = 0
+        for i = 0, (s.paintN or 0) - 1 do
+            if valid(m) and pcall(function() body:SetMaterial(i, m) end) then n = n + 1 end
+        end
+        log(string.format("special: %s's paint %d %s: %d of %d slots%s", c.name, k, pv.name, n, s.paintN or 0,
+            valid(m) and "" or (" (" .. pv.material .. " not loaded: " .. tostring(why) .. ")")))
+        return pv.name
+    end
     local sc, ve, nStock = {}, {}, 0
     if pv.stock then
         local stock, why = loadObject(V.PAINT_STOCK .. "." .. V.PAINT_STOCK:match("[^/]+$"))
@@ -914,6 +971,7 @@ function SPC.V.paint(c, s, body, k)
         end
     end
     local dirt, live = pv.dirt and paintTex(pv.dirt), pv.livemap and paintTex(pv.livemap)
+    local base, nrm = pv.basecolor and paintTex(pv.basecolor), pv.normal and paintTex(pv.normal)
     local said, made = {}, 0
     for _, i in ipairs(s.paintSlots) do
         local okM, mid = pcall(function() return body:CreateDynamicMaterialInstance(i, s.paintMI, FName("None")) end)
@@ -935,6 +993,8 @@ function SPC.V.paint(c, s, body, k)
             end
             if dirt then pcall(function() mid:SetTextureParameterValue(FName("DirtMask"), dirt) end) end
             if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
+            if base then pcall(function() mid:SetTextureParameterValue(FName("Basecolor"), base) end) end
+            if nrm then pcall(function() mid:SetTextureParameterValue(FName("Normalmap"), nrm) end) end
         end
     end
     if made == 0 then                                   -- (no instances: the slots back as built)
@@ -943,7 +1003,9 @@ function SPC.V.paint(c, s, body, k)
     if #said > 0 then log(string.format("special: %s's paint: the parent's values: %s", c.name, table.concat(said, ", "))) end
     log(string.format("special: %s's paint %d %s: %d slots, %d stock values%s%s", c.name, k, pv.name, made, nStock,
         pv.dirt and (", dirt mask " .. pv.dirt .. (dirt and "" or " NOT loaded")) or "",
-        pv.livemap and (", Livemap " .. pv.livemap .. (live and "" or " NOT loaded")) or ""))
+        pv.livemap and (", Livemap " .. pv.livemap .. (live and "" or " NOT loaded")) or "") ..
+        (pv.basecolor and (", Basecolor " .. pv.basecolor .. (base and "" or " NOT loaded")) or "") ..
+        (pv.normal and (", Normalmap " .. pv.normal .. (nrm and "" or " NOT loaded")) or ""))
     return pv.name
 end
 -- no skeletal body of her own (the x40a's isn't one: test of 2026-10-24, 0.66.0, only the wreck meshes were skeletal
@@ -1047,6 +1109,7 @@ function SPC.V.model(c, s, o)
     s.sweepLen = okA and (pcall(function() return anim:GetPlayLength() end) and anim:GetPlayLength() or 1) or nil
     local hid = SPC.V.modelHide(s, o)
     SPC.V.partsGone(c, s, o, true)
+    log(string.format("special: %s's railguns moved onto her: %d parts", c.name, SPC.V.partsPlace(c, s, o)))
     -- her hit spheres from the x40a's size to the X-02S's (hit_radius_m), each logged once
     local spheres = {}
     for _, sc in ipairs(SPC.V.comps(o, "/Script/Engine.SphereComponent")) do
@@ -1114,6 +1177,7 @@ function SPC.V.modelTick(s, o, now)
     end
     if now < (s.modelAt or 0) then return end
     s.modelAt = now + 2
+    SPC.V.partsPlace(c, s, o)
     local n = SPC.V.modelHide(s, o)
     if n > 0 and not s.modelSaid then
         s.modelSaid = true
@@ -1217,6 +1281,10 @@ function SPC.valkaTick(now, s)
         end
         if now >= s.roundsUntil then s.roundsUntil, s.harmUntil = nil, nil; SPC.V.rounds(c, false) end
     end
+    if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
+        s.alertOffAt = nil
+        if not s.chargeAt then V.event("RE_SV_ValkaAlertOff") end
+    end
     if s.passAt and now >= s.passAt then                -- her round passing you (its sound)
         s.passAt = nil
         SND.event(CFG.sound.valka.pass, nil)
@@ -1285,6 +1353,7 @@ function SPC.valkaTick(now, s)
         V.event("RE_SV_ValkaEmlChargeOff")
         V.sndShot(s, s.emlAt, now)
         s.harmUntil, s.roundsUntil = now + c.reveal_s + 3, now + c.reveal_s + 3     -- its rounds: long, harmless
+        s.alertOffAt = now + (c.alert_off_s or 3)
         do
             local flashes = {}
             for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
@@ -1351,6 +1420,7 @@ function SPC.valkaTick(now, s)
         V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
         if s.invertUntil then V.invert(c, s, false, now) end
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
+        V.event("RE_SV_ValkaAlertOff")
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
@@ -1423,6 +1493,7 @@ function SPC.valkaTick(now, s)
         V.sndShot(s, at, now)
         s.chargeAt, s.shots, s.railAt = nil, (s.shots or 0) + 1, now + c.railgun_every_s
         s.roundsUntil, s.harmUntil = now + 3, nil
+        s.alertOffAt = now + (c.alert_off_s or 3)
         log(string.format("special: %s railgun shot %d, %.1f km from you, %.0f deg off her nose", c.name, s.shots,
             s.dist or -1, offNose or -1))
     elseif not s.chargeAt and now >= s.railAt and s.dist and s.dist <= c.railgun_range_km and offNose

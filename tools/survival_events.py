@@ -1234,6 +1234,8 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     # the railgun alert (Mission 18's) while she's up: on with the opener's charge and every charge of hers
     remote('RE_SV_ValkaAlertOn')
     g.execute(t_alert, 'RE_SV_ValkaAlertOn', {0: 'true'})
+    remote('RE_SV_ValkaAlertOff')                          # (main.lua: a few s after each shot, and when she's down)
+    g.execute(t_alert, 'RE_SV_ValkaAlertOff', {0: 'false'})
     remote('RE_SV_ValkaEmlChargeOn')
     g.execute(t_noise, 'RE_SV_ValkaEmlChargeOn')
     g.execute(t_sound, 'RE_SV_ValkaEmlChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: 'Player'})

@@ -593,10 +593,14 @@ CFG = {
                      -- shot down, the x40a's wreck meshes kept hidden wreck_s so the X-02S falls
                      model_yaw = 0, wreck_s = 15,
                      -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
-                     -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask (test key Ctrl+9 cycles them)
+                     -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
+                     -- its textures, the engine grid; test key Ctrl+9 cycles them)
                      paint = 2,
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
-                     sweep_anim = "/Game/Mods/SurvivalMode/Valka/Model/A_X02S_Valka_Sweep", sweep_kmh = { 800, 1000 },
+                     -- (off, "": A_X02S_Valka_Sweep swings the wings forward, not back: build/x02s/ue_check.log has the
+                     -- tips 0.6 m ahead of their pivot unswept and 2-4 m ahead swept; in game they stuck out in front of
+                     -- her, test of 2026-10-24, 0.67.1: "it looked like her mesh was missing pieces"; to fix in tools/x02s)
+                     sweep_anim = "", sweep_kmh = { 800, 1000 },
                      sweep_s = 2.5, hit_radius_m = 10,
                      -- the opener's flash: flash_layers copies of it at once (its light adds up), flash_scale big (user,
                      -- 2026-10-24: "put that further away and turn its brightness up a lot ... it was quite hard to see")
@@ -614,7 +618,9 @@ CFG = {
                      -- fired from"): their launchers' radar display on, forced, in radar_hud's style
                      -- (ELiveFCSRailGunHUDControl: 0 RailGun, 1 LongRangeRailGun, 2 DiffusionRailGun), and the railgun
                      -- alert on while she's up (Mission 18's LiveSetRailgunAlertEnable)
-                     radar_hud = 1,
+                     radar_hud = 1, alert_off_s = 3,
+                     -- where her railgun sits on the X-02S (cm in her frame: forward, right, up): under her nose
+                     railgun_at = { X = 400, Y = 0, Z = -80 },
                      camera = "LookAt_Event_Camera_ms22-01",
                      -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                      -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
