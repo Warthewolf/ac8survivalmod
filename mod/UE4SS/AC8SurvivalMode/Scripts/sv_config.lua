@@ -614,7 +614,10 @@ CFG = {
         -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
         -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.
         -- (health_per_round 0.05, health_max_x 1.4: were 0.03 / 1.0, economy review of 2026-10-25)
+        -- It counts as surfaced once it's back within surfaced_m of where it sailed (the order sent again every
+        -- resurface_s while it isn't rising, resurface_tries times at most; up anyway after up_wait_s).
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
+                    surfaced_m = 3, resurface_s = 8, resurface_tries = 4, up_wait_s = 60,
                     volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
                     weapon_missiles = 3, railgun_missiles = 4,

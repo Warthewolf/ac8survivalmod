@@ -107,19 +107,46 @@ local function hp(o)
     local ok, h = pcall(function() return o.HealthInternal end)
     return ok and type(h) == "number" and h or nil
 end
+local function partZ(o)                                 -- a part's height (cm), or nil
+    if not (o and valid(o)) then return nil end
+    local ok, l = pcall(function() return o:K2_GetActorLocation() end)
+    return ok and l and type(l.Z) == "number" and l.Z or nil
+end
 
 function SPC.alicornTick(now, s)
     if s.state ~= "sail" or now < (s.nextAt or 0) then return end
     s.nextAt = now + 1
     local c, t = CFG.specials.alicorn, CFG.hud.text
-    -- the dives, and its guns while it's up
+    -- the dives, and its guns while it's up. It's "up" once a part of it (s.depthPart: the core, else a tank) is back
+    -- within surfaced_m of where it sailed: a friend's 0.62.1 run (round 16, 2026-10-24) called it surfaced while no
+    -- hit landed for 40 s to 2 min after. The order goes again every resurface_s while it isn't rising (at most
+    -- resurface_tries times); after up_wait_s it counts as up anyway. A part that can't be read: up at once (as before).
+    local z = partZ(s.depthPart)
+    if not s.dived and z then s.seaZ = z end
     if not s.dived and now >= s.nextDive then
-        s.dived, s.surfaceAt = true, now + c.dive_for_s
+        s.dived, s.surfaceAt, s.surfaceSent = true, now + c.dive_for_s, nil
         fire("RE_SV_AlcnDive"); hudCallout(t.alicorn_dive, nil); log("special: the Alicorn dives")
     elseif s.dived and now >= s.surfaceAt then
-        s.dived, s.nextDive = false, now + c.dive_every_s
-        s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
-        fire("RE_SV_AlcnSurface"); hudCallout(t.alicorn_surface, nil); log("special: the Alicorn surfaces")
+        local down = (z and s.seaZ) and (s.seaZ - z) / 100 or nil
+        if not s.surfaceSent then
+            s.surfaceSent, s.surfaceTry, s.lastZ, s.lastZAt = now, 1, z, now
+            fire("RE_SV_AlcnSurface")
+            log(string.format("special: the Alicorn surfacing (%s down)", down and string.format("%.0f m", down) or "depth unknown"))
+        elseif not down or down <= (c.surfaced_m or 3) or now - s.surfaceSent >= (c.up_wait_s or 60) then
+            s.dived, s.nextDive = false, now + c.dive_every_s
+            s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
+            hudCallout(t.alicorn_surface, nil)
+            log(string.format("special: the Alicorn surfaces, %.0f s after the order (%d sent%s)", now - s.surfaceSent, s.surfaceTry,
+                (down and down > (c.surfaced_m or 3)) and string.format(", still %.0f m down: counted up after up_wait_s", down) or ""))
+        elseif now - s.lastZAt >= (c.resurface_s or 8) then
+            if s.lastZ and z - s.lastZ < 100 and s.surfaceTry < (c.resurface_tries or 4) then
+                s.surfaceTry = s.surfaceTry + 1
+                fire("RE_SV_AlcnSurface")
+                log(string.format("special: the Alicorn is still %.0f m down %.0f s after the order, not rising: surface again (%d)",
+                    down, now - s.surfaceSent, s.surfaceTry))
+            end
+            s.lastZ, s.lastZAt = z, now
+        end
     end
     if not s.dived and now >= s.nextRail then s.nextRail = now + c.railgun_every_s; fire("RE_SV_AlcnRailgun") end
     if not s.dived and now >= s.nextVolley then s.nextVolley = now + c.volley_every_s; fire("RE_SV_AlcnVolley") end
@@ -137,6 +164,7 @@ function SPC.alicornTick(now, s)
     end
     local core = parts(c.core_class)
     for _, o in ipairs(core) do all[#all + 1] = o end
+    if not (s.depthPart and valid(s.depthPart)) then s.depthPart = core[1] or tankList[1] end
     -- the tanks' health: tank_missiles standard missiles each (tried for 5 checks; the tanks wait for it meanwhile)
     local tankHp, tankWait
     if (c.tank_missiles or 0) > 0 then
