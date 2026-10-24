@@ -15,7 +15,7 @@ canards, flaps, nozzles, bay doors) at AC7's model scale (2.19 m long; AC8's air
   T_X02S_Valka_LM.tga     AC8's "Livemap" (its _MRX: three paint-region masks): 4x4 black, no regions
 python -I tools/x02s/prepare.py   (needs the .psa: tools/x02s/build.sh exports it with UModel first)
 """
-import json, os, shutil, struct
+import json, math, os, shutil, struct
 
 SRC = r'E:/Ace Combat 7 Exports/Game/Vehicles/Aircraft/x02s'
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,11 +54,126 @@ def skinned_gltf():
     for n in g['nodes']:                              # bone positions
         if 'translation' in n:
             n['translation'] = [c * s for c in n['translation']]
+    for part in PARTS:                                # AC7's other X-02S meshes, on her Body bone
+        merge_part(g, buf, part, s)
+    g['buffers'][0]['byteLength'] = len(buf)
     g['buffers'][0]['uri'] = 'x02s_skel.bin'
     g['nodes'][0]['name'] = 'SK_X02S_Valka'
     json.dump(g, open(os.path.join(OUT, 'x02s_skel.gltf'), 'w', encoding='utf-8'), indent=1)
     open(os.path.join(OUT, 'x02s_skel.bin'), 'wb').write(buf)
     return s, hi - lo
+
+
+# AC7 builds the X-02S from more than x02s.gltf: the closed gear doors and refuel panel are their own static meshes, and
+# the belly between the engines is a special weapon's skinned mesh (SWP1-3; SWP3 the long centre piece). Without them
+# she had holes (test of 2026-10-24, 0.67.x: "her refuel off mesh isn't visible", the slot between her engines).
+# Each goes into her skinned mesh as more triangles on her Body bone, in its rest pose, on her paint (material 0).
+PARTS = ('x02s_GearOff_SM', 'x02s_RefuelOff_SM', 'x02s_SWP3')
+
+
+def _m4(a, b):                                        # column-major 4x4 product (glTF)
+    return [sum(a[k * 4 + r] * b[c * 4 + k] for k in range(4)) for c in range(4) for r in range(4)]
+
+
+def _trs(n):
+    if 'matrix' in n:
+        return list(n['matrix'])
+    t, (x, y, z, w), sc = n.get('translation', [0, 0, 0]), n.get('rotation', [0, 0, 0, 1]), n.get('scale', [1, 1, 1])
+    m = [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0,
+         2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0,
+         2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, t[0], t[1], t[2], 1]
+    for c in range(3):
+        for r in range(3):
+            m[c * 4 + r] *= sc[c]
+    return m
+
+
+def merge_part(g, buf, name, s):
+    """name.gltf (AC7's export next to x02s.gltf): its triangles posed (a skinned part through its own bones, a static
+    one through its node), scaled by s, appended to g's first mesh as one primitive weighted 100 % to the Body joint."""
+    pg = json.load(open(os.path.join(SRC, name + '.gltf'), encoding='utf-8'))
+    pb = open(os.path.join(SRC, pg['buffers'][0]['uri']), 'rb').read()
+
+    def read(i):
+        a = pg['accessors'][i]
+        v = pg['bufferViews'][a['bufferView']]
+        n = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}[a['type']]
+        fmt = {5126: 'f', 5125: 'I', 5123: 'H', 5121: 'B'}[a['componentType']]
+        st = v.get('byteStride') or n * struct.calcsize(fmt)
+        base = v.get('byteOffset', 0) + a.get('byteOffset', 0)
+        return [struct.unpack_from('<' + fmt * n, pb, base + k * st) for k in range(a['count'])]
+
+    parent = {c: i for i, n in enumerate(pg['nodes']) for c in n.get('children', [])}
+    glob = {}
+
+    def G(i):
+        if i not in glob:
+            glob[i] = _trs(pg['nodes'][i]) if i not in parent else _m4(G(parent[i]), _trs(pg['nodes'][i]))
+        return glob[i]
+
+    mesh_node = next(i for i, n in enumerate(pg['nodes']) if 'mesh' in n)
+    skin = pg['skins'][0] if pg.get('skins') else None
+    jm = [_m4(G(j), list(m)) for j, m in zip(skin['joints'], read(skin['inverseBindMatrices']))] if skin else None
+    P, N, T, UV, IDX = [], [], [], [], []
+    for prim in pg['meshes'][pg['nodes'][mesh_node]['mesh']]['primitives']:
+        at = prim['attributes']
+        pos, nrm, uv = read(at['POSITION']), read(at['NORMAL']), read(at['TEXCOORD_0'])
+        tan = read(at['TANGENT']) if 'TANGENT' in at else [(1, 0, 0, 1)] * len(pos)
+        J = read(at['JOINTS_0']) if skin and 'JOINTS_0' in at else None
+        W = read(at['WEIGHTS_0']) if J else None
+        base = len(P)
+        for k, p in enumerate(pos):
+            if J:                                     # the bones' rest pose, weighted
+                m = [0.0] * 16
+                for j, w in zip(J[k], W[k]):
+                    if w:
+                        for e in range(16):
+                            m[e] += jm[j][e] * w / 255.0
+            else:
+                m = G(mesh_node)
+            def lin(v, wgt):
+                return [m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * wgt,
+                        m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * wgt,
+                        m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14] * wgt]
+            def unit(v):
+                ln = math.sqrt(sum(c * c for c in v)) or 1.0
+                return [c / ln for c in v]
+            P.append([c * s for c in lin(p, 1)])
+            N.append(unit(lin(nrm[k], 0)))
+            T.append(unit(lin(tan[k][:3], 0)) + [tan[k][3]])
+            UV.append(uv[k])
+        IDX += [base + i[0] for i in read(prim['indices'])]
+    body = next(k for k, j in enumerate(g['skins'][0]['joints']) if g['nodes'][j].get('name') == 'Body')
+
+    def add(data, ctype, typ, count, target, mn=None, mx=None, normalized=False):
+        while len(buf) % 4:
+            buf.append(0)
+        g['bufferViews'].append({'buffer': 0, 'byteOffset': len(buf), 'byteLength': len(data), 'target': target})
+        buf.extend(data)
+        a = {'bufferView': len(g['bufferViews']) - 1, 'componentType': ctype, 'count': count, 'type': typ}
+        if mn is not None:
+            a['min'], a['max'] = mn, mx
+        if normalized:
+            a['normalized'] = True
+        g['accessors'].append(a)
+        return len(g['accessors']) - 1
+
+    n = len(P)
+    flat = lambda rows, f: b''.join(struct.pack('<' + f * len(r), *r) for r in rows)
+    attrs = {
+        'POSITION': add(flat(P, 'f'), 5126, 'VEC3', n, 34962, [min(p[d] for p in P) for d in range(3)], [max(p[d] for p in P) for d in range(3)]),
+        'NORMAL': add(flat(N, 'f'), 5126, 'VEC3', n, 34962),
+        'TANGENT': add(flat(T, 'f'), 5126, 'VEC4', n, 34962),
+        'COLOR_0': add(bytes([255, 255, 255, 255]) * n, 5121, 'VEC4', n, 34962, normalized=True),
+        'JOINTS_0': add(struct.pack('<4H', body, 0, 0, 0) * n, 5123, 'VEC4', n, 34962),
+        'WEIGHTS_0': add(bytes([255, 0, 0, 0]) * n, 5121, 'VEC4', n, 34962, normalized=True),
+        'TEXCOORD_0': add(flat(UV, 'f'), 5126, 'VEC2', n, 34962),
+        'TEXCOORD_1': add(flat(UV, 'f'), 5126, 'VEC2', n, 34962),
+    }
+    idx = add(struct.pack(f'<{len(IDX)}I', *IDX), 5125, 'SCALAR', len(IDX), 34963)
+    g['meshes'][0]['primitives'].append({'attributes': attrs, 'indices': idx, 'material': 0})
+    print(f'x02s: {name} merged: {len(IDX) // 3} triangles on Body (joint {body}), '
+          f'x {min(p[0] for p in P):.2f}..{max(p[0] for p in P):.2f} m')
 
 
 def sweep():

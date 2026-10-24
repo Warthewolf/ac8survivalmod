@@ -621,8 +621,9 @@ CFG = {
                      radar_hud = 1, alert_off_s = 3,
                      -- where her railgun sits on the X-02S (cm in her frame: forward, right, up): under her nose
                      railgun_at = { X = 400, Y = 0, Z = -80 },
-                     -- and shown there (her railgun part: railgun_show, a Lua pattern in its actor name), railgun_scale big
-                     railgun_show = "_RG_C", railgun_scale = 0.5,
+                     -- railgun_show: a part shown there (a Lua pattern in its actor name), railgun_scale big; "" = none (the
+                     -- user, 2026-10-24: her railgun is AC7's EML housing, SWP3, built into her X-02S, not an x40a part)
+                     railgun_show = "", railgun_scale = 0.5,
                      camera = "LookAt_Event_Camera_ms22-01",
                      -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                      -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
