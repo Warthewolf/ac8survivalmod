@@ -28,7 +28,7 @@ Also `build/install/AC8SurvivalMode` (the UE4SS runtime: `Scripts/main.lua` from
 | `pack.py` | Packs `mod/Content` into `SurvivalMode_P` with retoc `pack-raw`; container header imports come from each package's own import list |
 | `zenpkg.py` | Zen package editor that handles wide (Japanese) names; `python zenpkg.py <pkgs>` checks round-trips |
 | `make_scriptobjs.py` | Builds `scriptobjs.pkl` for `scripts/zen_ep.py` from `retoc print-script-objects` (inspection only) |
-| `checks/` | Inspectors: `dump_props.py`, `dump_export.py`, `imp_pkgs.py`, `wd_find.py`, `verify_headers.py`, `ep_dump.py` (any event package's triggers/execs); `lua_check.py Scripts/*.lua` (Lua 5.4 syntax, each part's 200-local count, unknown globals across the parts together; there is no Lua on the build machine, run it after every Lua change) |
+| `checks/` | Inspectors: `dump_props.py`, `dump_export.py`, `imp_pkgs.py`, `wd_find.py`, `verify_headers.py`, `ep_dump.py` (any event package's triggers/execs), `tex_info.py` (a cooked texture's size / format / virtual-texture layout, or which vertex factories and virtual samplers a material's shader map has: tools/re/AIRCRAFT_MATERIALS.md); `lua_check.py Scripts/*.lua` (Lua 5.4 syntax, each part's 200-local count, unknown globals across the parts together; there is no Lua on the build machine, run it after every Lua change) |
 | `scripts/` | Zen package / property / container format libraries (`uprop.py`, `eprec.py`, `zen.py`, `chdr.py`, ...) |
 
 Git Bash rewrites `/Game/...` arguments into Windows paths; `export MSYS_NO_PATHCONV=1` first (build_all.sh does).
