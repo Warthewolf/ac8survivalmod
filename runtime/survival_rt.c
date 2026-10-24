@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.18.2"
+#define RT_VERSION           L"0.18.3"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1999,6 +1999,17 @@ static void SndLevels(SndVoice* v, double left, double right, double ratio)
     ((int32_t (*)(void*, float, uint32_t))SND_VT(v->voice, 26))(v->voice, (float)ratio, 0);   /* SetFrequencyRatio */
 }
 
+/* SV_MemMB() -> working set MB x 100000 + commit charge (private bytes) MB, or -1: the game's memory for the log
+ * (sv_main.lua memText splits it; the 0.69 X-02S container ran the game to ~21 GB during a 3.5-minute load, 2026-10-25) */
+static int L_MemMB(void* lua)
+{
+    PROCESS_MEMORY_COUNTERS pmc;
+    memset(&pmc, 0, sizeof(pmc));
+    pmc.cb = sizeof(pmc);
+    if (!K32GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) return Ret(lua, -1);
+    return Ret(lua, (int64_t)(pmc.WorkingSetSize >> 20) * 100000 + (int64_t)(pmc.PagefileUsage >> 20));
+}
+
 /* SV_SndLoad(name) -> the sound's id (> 0) or an error (-1 no audio, -2 no file, -3 not 16-bit PCM, -4 too many);
  * name: a WAV under the mod's Sounds\ folder, e.g. "valka/shot_main.wav" */
 static int L_SndLoad(void* lua)
@@ -2086,10 +2097,10 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.18.2" */
+/* SV_Version() -> "0.18.3" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.18.2";
+    static const char v[] = "0.18.3";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2622,7 +2633,7 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
-        { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
+        { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
 #endif

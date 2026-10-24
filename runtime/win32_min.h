@@ -114,6 +114,12 @@ IMPORT HANDLE WINAPI CreateThread(void* sec, size_t stack, ThreadProc fn, void* 
 IMPORT void   WINAPI Sleep(DWORD ms);
 IMPORT uint64_t WINAPI GetTickCount64(void);
 IMPORT void   WINAPI GetLocalTime(uint16_t st[8]);
+typedef struct {                                   /* PROCESS_MEMORY_COUNTERS */
+    DWORD  cb, PageFaultCount;
+    size_t PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage;
+    size_t QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage, PagefileUsage, PeakPagefileUsage;
+} PROCESS_MEMORY_COUNTERS;
+IMPORT BOOL   WINAPI K32GetProcessMemoryInfo(HANDLE process, PROCESS_MEMORY_COUNTERS* counters, DWORD cb);
 
 /* ---- api-ms-win-crt-heap-l1-1-0.dll (the same heap UE4SS.dll uses) ------- */
 IMPORT void* malloc(size_t n);

@@ -143,7 +143,7 @@ local function probeTick(tick)
     end
     if levelTick == -1 then
         levelTick = tick
-        log("level loaded: PL_SurvivalMode")
+        log("level loaded: PL_SurvivalMode (" .. memText() .. ")")
         pcall(logRenderCVars)                      -- (AC8's texture / VT settings, logged once, read only)
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
@@ -419,8 +419,8 @@ LoopAsync(250, function()
                 for i = 1, math.min(4, #parts) do
                     top[#top + 1] = string.format("%s %.1f/%.1f", parts[i][1], parts[i][2].sum / math.max(1, parts[i][2].n), parts[i][2].max)
                 end
-                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts avg/worst ms: %s", pf.sum / pf.n,
-                    pf.max, pf.n, table.concat(top, ", ")))
+                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts avg/worst ms: %s; %s", pf.sum / pf.n,
+                    pf.max, pf.n, table.concat(top, ", "), memText()))
                 D.perf = nil
             end
         end
@@ -579,6 +579,13 @@ local RENDER_CVARS = {
     { "r.Streaming.FullyLoadUsedTextures", "i" }, { "r.TextureStreaming", "i" }, { "r.MaterialQualityLevel", "i" },
     { "r.Shaders.FastMath", "i" }, { "fx.Niagara.GPUSort", "i" }, { "fx.GPUSort.MaxSortBatchSize", "i" },
 }
+-- the game's memory for the log ("memory 5123 MB, committed 7012 MB"), from the runtime (SV_MemMB, 0.18.3)
+function memText()
+    if type(SV_MemMB) ~= "function" then return "memory ?" end
+    local v = SV_MemMB()
+    if type(v) ~= "number" or v < 0 then return "memory ?" end
+    return string.format("memory %d MB, committed %d MB", v // 100000, v % 100000)
+end
 function logRenderCVars()
     if RENDER_CVARS.said then return end
     local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
