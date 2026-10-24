@@ -1,5 +1,5 @@
 -- sv_spawn.lua: the clock, spawn points, squadrons, flights and the shuttle's spawn.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The game clock (seconds, stops while paused), or nil.
@@ -86,16 +86,45 @@ function hudDump(why)
 end
 
 -- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
-function spawnPoint(range)
+-- compass (optional): around that compass bearing from the airfield (within spread degrees; north -Y, east +X, as
+-- Mission 22's dummyN0 / dummyS0 sit), for a raid that comes from one direction; the bearing returned is then the
+-- compass one too.
+function spawnPoint(range, compass, spread)
     range = range or CFG.distance_km
     local lo, hi = range[1], range[2]
-    for _ = 1, 30 do
-        local b, d = math.random() * 360, lo + math.random() * (hi - lo)
-        local x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
-        local y = AIRFIELD.Y + d * 100000 * math.sin(math.rad(b))
+    for try = 1, 30 do
+        local d = lo + math.random() * (hi - lo)
+        local x, y, b
+        if compass and try <= 20 then
+            b = (compass + (math.random() * 2 - 1) * (spread or 0)) % 360
+            x = AIRFIELD.X + d * 100000 * math.sin(math.rad(b))
+            y = AIRFIELD.Y - d * 100000 * math.cos(math.rad(b))
+        else
+            b = math.random() * 360
+            x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
+            y = AIRFIELD.Y + d * 100000 * math.sin(math.rad(b))
+        end
         if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b end
     end
     return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
+end
+
+-- A compass bearing from the airfield whose raid spawn points (range km out) are inside the combat zone, or nil.
+function raidBearing(range)
+    local d = (range[1] + range[2]) / 2
+    for _ = 1, 24 do
+        local b = math.random(0, 359)
+        local x = AIRFIELD.X + d * 100000 * math.sin(math.rad(b))
+        local y = AIRFIELD.Y - d * 100000 * math.cos(math.rad(b))
+        if math.abs(x - ZONE.X) < ZONE.HALF * 0.9 and math.abs(y - ZONE.Y) < ZONE.HALF * 0.9 then return b end
+    end
+    return nil
+end
+
+-- "NORTH-EAST" for a compass bearing.
+function compassName(b)
+    local names = { "NORTH", "NORTH-EAST", "EAST", "SOUTH-EAST", "SOUTH", "SOUTH-WEST", "WEST", "NORTH-WEST" }
+    return names[math.floor(((b or 0) % 360) / 45 + 0.5) % 8 + 1]
 end
 
 HEAVY_UNIT = {}
@@ -111,11 +140,15 @@ local function spawnBomber(unit)
     -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
     if not heavy then ac = searchAircraft(ac, spikeLevel(D.round)) end
     local set = SV_SetAircraft(unit, ac)
-    local x, y, dist, bearing = spawnPoint(b.distance_km)
+    -- a raid's bombers from one direction (CFG.airfield.bombers.one_bearing; D.raidBearing, picked in startRound)
+    local raid = D.raidBearing and D.raidUnits and D.raidUnits[unit]
+    local x, y, dist, bearing = spawnPoint(b.distance_km, raid and D.raidBearing or nil, b.spread_deg)
+    -- SV_Spawn's yaw: towards the airfield (spawnPoint's own bearing is a maths angle, a raid's a compass one)
+    local yaw = raid and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
     local band = heavy and b.altitude_m or b.strike_altitude_m
     local alt = band[1] + math.random() * (band[2] - band[1])
     spawningUnit = unit
-    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)
+    local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit = nil
     log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
         unit, ac, tostring(set), dist, bearing, alt / 1000,
@@ -128,7 +161,10 @@ local function spawnBomber(unit)
         if D.bomberCallout ~= D.round and (not D.special or D.special.kind == "amphibious")
             and not (D.shipStrike and D.shipStrike[unit]) then
             D.bomberCallout = D.round
-            hudCallout(CFG.hud.text.bombers, CFG.hud.text.bombers_sub)
+            local t = CFG.hud.text
+            if D.strikeAir and D.strikeAir[unit] then hudCallout(t.strike_air, t.strike_air_sub)   -- (a normal round's package)
+            elseif raid and b.warn then hudCallout(string.format(t.raid, compassName(D.raidBearing)), string.format(t.raid_sub, D.raidBombers or 0))
+            else hudCallout(t.bombers, t.bombers_sub) end
         end
     end
     return r
@@ -161,6 +197,35 @@ function ACE.flight(unit, tk, level)
     return f
 end
 
+-- The airframe (a DT_SV_NpcMission row) a fighter flight of tier `tier` flies this round (CFG.aircraft, CFG.variety):
+-- the round-1 pool plus the airframes whose round has come (only those whose Survival rows were in before the level
+-- loaded: SR.usable), types flown less this run picked more often, and from the Mercenary tier on signature_share of
+-- flights on the tier's own types. Returns the row and how it was picked ("pool" / "signature").
+function pickAircraft(tier)
+    local v = CFG.variety or {}
+    local list, how = {}, "pool"
+    if v.enabled and tier and tier.name and v.signature and not D.roundTier and math.random() < (v.signature_share or 0) then
+        for _, a in ipairs(v.signature[tier.name:lower()] or {}) do if SR.usable[a] then list[#list + 1] = a end end
+        if #list > 0 then how = "signature" end
+    end
+    if #list == 0 then
+        for _, a in ipairs(CFG.aircraft) do list[#list + 1] = a end
+        if v.enabled then
+            for _, e in ipairs(v.late or {}) do if D.round >= e[2] and SR.usable[e[1]] then list[#list + 1] = e[1] end end
+        end
+    end
+    RUN.seenAc = RUN.seenAc or {}
+    local pick = list[math.random(#list)]
+    if v.enabled and v.unseen and #list > 1 then         -- a type flown n times this run: weight 1 / (1 + n)
+        local total, w = 0, {}
+        for i, a in ipairs(list) do w[i] = 1 / (1 + (RUN.seenAc[a] or 0)); total = total + w[i] end
+        local r = math.random() * total
+        for i, a in ipairs(list) do r = r - w[i]; if r <= 0 then pick = a; break end end
+    end
+    RUN.seenAc[pick] = (RUN.seenAc[pick] or 0) + 1
+    return pick, how
+end
+
 -- maxLevel (the dev key Ctrl+6): the top skill tier's squadron (its ace leading) on the top fire-control level,
 -- whatever the round
 function spawnFlight(unit, maxLevel)
@@ -171,9 +236,12 @@ function spawnFlight(unit, maxLevel)
     D.flightTier[unit] = ti
     local topSpike = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
     local fcsLevel = math.max(maxLevel and topSpike or spikeLevel(D.round), tier.fcs or 0)
-    local ac = searchAircraft(CFG.aircraft[math.random(#CFG.aircraft)], fcsLevel)
+    local base, how = pickAircraft(tier)
+    local ac = searchAircraft(base, fcsLevel)
     local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
-    if ace then ac = ace.wing end
+    if ace then ac, how = ace.wing, "ace squadron" end
+    -- the round's jammer (CFG.jammer; D.jammerUnit, picked in startRound): its lead an EA-18G
+    local jam = D.jammerUnit == unit and not ace and SR.usable[CFG.jammer.aircraft] and searchAircraft(CFG.jammer.aircraft, fcsLevel)
     local pv = PROBE_OF[unit]
     if pv then                                     -- its behaviour was built from the probe row at level load
         ac = PROBE_MISSION_ROW[pv]
@@ -182,17 +250,29 @@ function spawnFlight(unit, maxLevel)
     end
     local set = SV_SetAircraft(unit, ac)
     if ace and ace.lead then SV_SetAircraft(unit, ace.lead, 0) end        -- the first aircraft: the ace
+    if jam then SV_SetAircraft(unit, jam, 0) end                           -- the first aircraft: the jammer
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     spawningUnit = unit
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
     spawningUnit = nil
-    log(string.format("round %d: %s%s as %s (%s set, %s), %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
-        D.flown[unit] and " (flown before, recycled)" or "", ac, tostring(set), tier.name or "no tier", dist, bearing, alt / 1000,
+    log(string.format("round %d: %s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
+        D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
+        jam and (", led by the jammer " .. jam) or "", dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if jam and r > 0 then
+        D.jammer = { unit = unit, at = D.now }
+        local t = CFG.hud.text
+        hudCallout(t.jammer, t.jammer_sub)
+    elseif D.jammerUnit == unit then
+        D.jammerUnit = nil                                                -- (it didn't come: no jammer this round)
+    end
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
+        if D.escortUnits and D.escortUnits[unit] then            -- a raid's escort: over the airfield, once its orders are in
+            queueEvent(D.now + CFG.orders_check_s + 1, string.format("RE_SV_Escort_%02d", poolIndex(unit)), unit .. " escorts the raid")
+        end
         D.aceSquad = D.aceSquad or {}
         D.aceSquad[unit] = ace and true or nil                -- (the leaderboard's ace squadron kills)
         D.orders = D.orders or {}
@@ -253,6 +333,12 @@ function pickFlights(units, budget, skip)
 end
 
 ---------------------------------------------------------------------------------------------------- special rounds
+-- A special that's switched off (CFG.specials.<kind>.enabled = false) never comes, whatever the rotation says.
+function specialOn(kind)
+    local c = CFG.specials[kind]
+    return SPC.kinds[kind] ~= nil and not (type(c) == "table" and c.enabled == false)
+end
+
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 function specialFor(round)
     local sp = CFG.specials
@@ -265,7 +351,7 @@ function specialFor(round)
             -- Every 10 rounds"): one that started in round r can't come again before r + cooldown_rounds
             local function ready(k)
                 local last = RUN.specialAt and RUN.specialAt[k]
-                return not last or round - last >= (sp.cooldown_rounds or 0)
+                return specialOn(k) and (not last or round - last >= (sp.cooldown_rounds or 0))
             end
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
@@ -292,7 +378,14 @@ function specialFor(round)
     end
     local every = math.max(1, math.floor(sp.every))
     if not sp.enabled or #sp.rotation == 0 or round < sp.first or (round - sp.first) % every ~= 0 then return nil end
-    return sp.rotation[((round - sp.first) // every) % #sp.rotation + 1]
+    local kind = sp.rotation[((round - sp.first) // every) % #sp.rotation + 1]
+    return specialOn(kind) and kind or nil
+end
+
+-- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and its RE_SV_*_NN events), or nil.
+function poolIndex(unit)
+    local n, k = tostring(unit):match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
+    return n and (tonumber(n) - 1) * 3 + tonumber(k) + 1
 end
 
 -- Comona Defense: the pad (once a run: its guns and SAMs stay up between specials) and the shuttle, both where the

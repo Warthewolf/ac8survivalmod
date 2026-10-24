@@ -1,5 +1,5 @@
 -- sv_ai.lua: enemy pilots: tiers, kill log, ace hunting, kill pay.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- Question 2: PilotRank on each enemy (p from the plane list), called every 2 s while it is up.
@@ -19,6 +19,7 @@ function enemyTier(p, round, flightTier)
     if sk.rank_min then want = math.max(want, math.min(5, sk.rank_min)) end
     local ok0, r0 = pcall(function() return p.obj.PilotRank end)
     local okW, err = pcall(function() p.obj.PilotRank = want end)
+    p.rankSet = want                                         -- (the jammer's boost goes back to this: JAM.tick)
     local key = round .. t.name
     if not tierSaid[key] or not okW then
         tierSaid[key] = true
@@ -205,13 +206,142 @@ function probeKill(p, you)
         aspect, dz, #used > 0 and table.concat(used, ", ") or "nothing seen"))
 end
 
+---------------------------------------------------------------------------------------------------- who shot it down
+-- CFG.allies.kills (economy review of 2026-10-25: "no line records an ally's or a defence's kills"): each enemy's
+-- DamageHistoryMap (attacker -> its total damage; tools/re/KILLS_HEALTH_DEATH.md 1) is read while it flies, with its
+-- position, and once more as it goes down. Attackers by side: your aircraft "you", MOONCHILD's / the WINGMEN's planes
+-- "allies", the Aegis's hull and turrets (BP_VE002_aegs_*) "ships", the AA guns and SAM sites (BP_GR002_gepa_*,
+-- BP_GR005_avng_*) "defences". A kill is yours when you hit it at all (or nothing could be read); else the side that
+-- did it the most damage.
+KILL = {}
+function KILL.side(o, pawnAddr)
+    local a = addrOf(o)
+    if a and a == pawnAddr then return "you" end
+    local n = nameOf(o)
+    if n:find("BP_VE002_aegs", 1, true) then return "ships" end
+    if n:find("_gepa_", 1, true) or n:find("_avng_", 1, true) then return "defences" end
+    local R = ALLY.run
+    if R and a then for _, q in ipairs(R.planes) do if addrOf(q.obj) == a then return "allies" end end end
+    if n:find("PlayerPlane", 1, true) then return "you" end
+    return "other"
+end
+
+function KILL.read(p)
+    if not (CFG.allies.kills and valid(p.obj)) then return end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    local pa = valid(pawn) and addrOf(pawn) or nil
+    local d = {}
+    local ok = pcall(function()
+        p.obj.DamageHistoryMap:ForEach(function(k, v)
+            local okK, o = pcall(function() return k:get() end)
+            local okV, x = pcall(function() return v:get() end)
+            if okK and okV and type(x) == "number" and x > 0 and valid(o) then
+                local s = KILL.side(o, pa)
+                d[s] = (d[s] or 0) + x
+            end
+        end)
+    end)
+    if ok and next(d) then p.dmg = d
+    elseif not ok and not KILL.said then KILL.said = true; log("kills: an enemy's DamageHistoryMap couldn't be read; every kill counts as yours") end
+end
+
+-- What you fired at lately: KILL.fired[address] = when (your aircraft's LastFiredWeaponTarget, read every tick), so a
+-- plane your missile finished between two reads of its damage still counts as yours
+KILL.fired = {}
+function KILL.markTarget(pc, now)
+    local ok, tgt = pcall(function() return pc.Pawn.LastFiredWeaponTarget end)
+    local a = ok and valid(tgt) and addrOf(tgt)
+    if a then KILL.fired[a] = now end
+    if now >= (KILL.pruneAt or 0) then                     -- (old ones out, every 30 s)
+        KILL.pruneAt = now + 30
+        for k, t in pairs(KILL.fired) do if now - t > 30 then KILL.fired[k] = nil end end
+    end
+end
+
+-- Who gets plane p's kill: "you", "allies", "ships" or "defences".
+function KILL.by(p)
+    local d = p.dmg
+    if not d or (d.you or 0) > 0 then return "you" end
+    local t = p.addr and KILL.fired[p.addr]
+    if t and D and D.now and D.now - t <= 15 then return "you" end   -- (you fired at it in its last 15 s)
+    local best, side = 0, "you"
+    for s, x in pairs(d) do if s ~= "other" and x > best then best, side = x, s end end
+    return side
+end
+
+---------------------------------------------------------------------------------------------------- late rounds, the jammer
+-- CFG.late: a pool or bomber aircraft's health x TIER.lateHealthX(round), once, as it's first seen up (the specials
+-- scale their own). HealthInternal is health x 10 and a whole number; MaxHealth is raised with it, so its damage
+-- model (smoke, fire) reads the new health as whole (as AB.L..IN's).
+function scaleHealth(o, x)
+    if not (x and x ~= 1 and valid(o)) then return nil end
+    local okH, h0 = pcall(function() return o.HealthInternal end)
+    if not (okH and type(h0) == "number" and h0 > 0) then return nil end
+    local h1 = math.floor(h0 * x + 0.5)
+    pcall(function() o.HealthInternal = h1 end)
+    pcall(function() if o.MaxHealth * 10 < h1 then o.MaxHealth = h1 / 10 end end)
+    return h0, h1
+end
+
+local lateSaid = {}
+function enemyLate(p, round)
+    if p.late ~= nil then return end
+    p.late = false
+    local u = p.unit
+    if not (u and (poolIndex(u) or BOMBER_UNIT[u])) then return end
+    local x = TIER.lateHealthX(round)
+    if x <= 1 then return end
+    local h0, h1 = scaleHealth(p.obj, x)
+    p.late = h1 ~= nil
+    if h1 and not lateSaid[round] then
+        lateSaid[round] = true
+        log(string.format("late: round %d enemies' health x%.2f (%s: %d -> %d)", round, x, p.name, h0, h1))
+    end
+end
+
+-- The jammer (CFG.jammer): its plane, found as it's seen up (its flight D.jammer.unit, an EA-18G), sharpens every enemy
+-- within radius_km (PilotRank + rank_add, at most 5) while it flies; each goes back to its own rank when it's out of
+-- range or the jammer is down. Run every 2 s.
+JAM = {}
+function JAM.tick()
+    local j = D and D.jammer
+    if not j then return end
+    local c = CFG.jammer
+    if not j.p then
+        for _, p in ipairs(planes) do
+            if not p.down and p.unit == j.unit and p.name:find("_e18g_", 1, true) then
+                j.p, p.jammer = p, true
+                log("jammer: " .. p.name .. " (" .. j.unit .. ") is up")
+            end
+        end
+        if not j.p then return end
+    end
+    local on = not j.p.down and j.p.at
+    local n = 0
+    for _, p in ipairs(planes) do
+        if p ~= j.p and not p.down and valid(p.obj) then
+            local want = on and p.at and km(p.at, j.p.at) <= c.radius_km and p.rankSet
+            if want and not p.jammed then
+                p.jammed = true
+                pcall(function() p.obj.PilotRank = math.min(5, p.rankSet + c.rank_add) end)
+            elseif not want and p.jammed then
+                p.jammed = nil
+                pcall(function() p.obj.PilotRank = p.rankSet end)
+            end
+            if p.jammed then n = n + 1 end
+        end
+    end
+    if n ~= j.n then j.n = n; log(string.format("jammer: %d enemies sharpened near it", n)) end
+    if not on then D.jammer = nil end
+end
+
 ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
 SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
 D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
 -- The run's money and purchases: { credits, earned, spent, bought = { [item] = n },
 -- msg = { [item] = last result }, dirty (shop texts need updating) }. Reset when Survival's level loads.
-RUN = { credits = 0, earned = 0, spent = 0, bought = {}, msg = {} }
+RUN = { credits = 0, earned = 0, spent = 0, bought = {}, msg = {}, kills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 } }
 
 function addCredits(n, why)
     if n <= 0 then return end

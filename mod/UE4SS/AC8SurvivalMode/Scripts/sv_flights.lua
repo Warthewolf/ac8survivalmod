@@ -1,5 +1,5 @@
 -- sv_flights.lua: flight bookkeeping: bombers, ammo, orders, the round clock.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The world-data unit (flight) an AI plane belongs to, from its GetUnitName(); cached in p.unit, false if unreadable.
@@ -208,6 +208,12 @@ function ammoTick(tick, pc)
         A.applied = ok and r
     end
     if not A.applied then return end
+    -- the STORE's upgrades on this aircraft (sv_tactical.lua UP.apply): every 2 s, and at once while a purchase made down
+    -- at the airfield waits to be loaded (WEAPON BAYS must raise the full load before more than the stock one goes in)
+    if tick % 8 == 6 or (A.owed and next(A.owed)) then
+        local okU, errU = pcall(UP.apply, pawn)
+        if not okU and not A.upErr then A.upErr = true; log("upgrades: error " .. tostring(errU)) end
+    end
     if tick % 2 == 0 then                                                      -- every 0.5 s: counts for the kill probe
         local s = {}
         for k = 0, 4 do s[k] = SV_Ammo(k) end
@@ -282,17 +288,21 @@ end
 SHOP = {
     mine = "/Game/Mods/SurvivalMode/Data/DT_SV_ShopRows.DT_SV_ShopRows",
     game = "/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.DT_LiveMenuIngameHangarCommands",
-    -- the landing page's rows: STORE when Survival's store pages are in the game's menu list, else the four old ones
-    store = { "SVShopStore" },
+    -- the landing page's rows: the STORE's (one per page it opens on: tools/build_survival.py STORE_ROWS) when its pages
+    -- are in the game's menu list, else the four old ones
+    store = { "SVShopStore", "SVShopStoreUp", "SVShopStoreTac", "SVShopStoreAf" },
     rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
-    all = { "SVShopStore", "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
-    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20, 21 and 22 (SUPPLIES, AIRFIELD, DOCKS:
-    -- rows "20", "21", "22" open them), added to the in-game menu table at the main menu, before a level builds its menu
-    -- list from it
+    all = { "SVShopStore", "SVShopStoreUp", "SVShopStoreTac", "SVShopStoreAf", "SVShopMissiles", "SVShopSpecial",
+            "SVShopFlares", "SVShopAirfield" },
+    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20-24 (SUPPLIES, AIRFIELD, ALLIES, UPGRADES,
+    -- TACTICAL: rows "20" .. "24" open them), added to the in-game menu table at the main menu, before a level builds its
+    -- menu list from it
     menuMine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows",
     menuGame = "/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData",
     menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 },
-                 { row = "SVStoreDocks", id = "SV_StoreDocks", index = 22 } },
+                 { row = "SVStoreDocks", id = "SV_StoreDocks", index = 22 },
+                 { row = "SVStoreUpgrades", id = "SV_StoreUpgrades", index = 23 },
+                 { row = "SVStoreTactical", id = "SV_StoreTactical", index = 24 } },
     -- each row's icon (stock textures; the aircraft repair shows the player's own plane when the game has its icon)
     icons = {
         Missiles = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
@@ -305,9 +315,23 @@ SHOP = {
         SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
         Moonchild   = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
         ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",   -- (no ship icon in the game: an ally's)
+        -- (the review build's rows: stock textures already used above)
+        Rearm      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
+        UpAirframe = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP004_f15c",
+        UpBays     = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_qaam_a0",
+        UpGun      = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
+        UpFlares   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
+        Airstrike  = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
+        Ecm        = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",
+        Decoy      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
+        Insurance  = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
+        Wingmen    = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
+        Orders     = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
         ["20"]   = "/Game/NUI/Common/Texture/IconMenu/T_Menu_Common_IconMenu_Shop_000",          -- STORE, SUPPLIES >
         ["21"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",                         -- AIRFIELD >
-        ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",                        -- DOCKS >
+        ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                    -- ALLIES >
+        ["23"]   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_qaam_a0",                 -- UPGRADES >
+        ["24"]   = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",            -- TACTICAL >
     },
 }
 SH = { added = false, addr = nil, warned = {}, decor = {} }

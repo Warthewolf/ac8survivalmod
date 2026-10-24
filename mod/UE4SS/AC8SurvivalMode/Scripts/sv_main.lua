@@ -1,5 +1,5 @@
 -- sv_main.lua: kill credits, the probe tick, the keys, the loops that run it all.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The landing menu's ammo panel ([WEAPONS AMMO], WBP_Menu_IngameHangar_WeaponDetail_002: six slots
@@ -117,14 +117,33 @@ local function creditKill(p)
     elseif p.unit == false then
         kind = CFG.credits.models[model] or "fighter"
     end
-    -- its skill tier's pay (the tier it was given, else the round's own)
+    -- its skill tier's pay (the tier it was given, else the round's own), x the round (CFG.credits round_x_*), and who
+    -- shot it down (KILL.by: an ally's, a ship's or a defence's kill pays ally_x, an airstrike's airstrike_x)
     local list, ti = CFG.tiers.list, nil
     for i, t in ipairs(list) do if t == p.tier then ti = i end end
     ti = ti or (D and D.round and TIER.index(D.round))
-    local pay, x = TIER.pay((CFG.credits[kind] or 0) * TIER.specialX(), ti)
-    addCredits(pay, string.format("%s down (%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
-        TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or ""))
+    local c = CFG.credits
+    local by = p.struck and "airstrike" or KILL.by(p)
+    local byX = (by == "airstrike" and (c.airstrike_x or 1)) or (by ~= "you" and (c.ally_x or 1)) or 1
+    local rx = TIER.roundX(D and D.round)
+    local jx = p.jammer and (CFG.jammer.pay_x or 1) or 1
+    local pay, x = TIER.pay((c[kind] or 0) * TIER.specialX() * rx * byX * jx, ti)
+    addCredits(pay, string.format("%s down (%s%s%s%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
+        TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or "", rx ~= 1 and string.format(", round x%.2f", rx) or "",
+        by ~= "you" and string.format(", by %s x%.2f", by, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or ""))
+    RUN.kills[by] = (RUN.kills[by] or 0) + 1
+    if RUN.roundKills then RUN.roundKills[by] = (RUN.roundKills[by] or 0) + 1 end
+    if by ~= "you" and by ~= "airstrike" then
+        local d = p.dmg or {}
+        log(string.format("kills: %s (%s) went down to the %s (damage: you %.0f, allies %.0f, ships %.0f, defences %.0f)", p.name,
+            tostring(p.unit), by, d.you or 0, d.allies or 0, d.ships or 0, d.defences or 0))
+    end
+    if p.jammer then
+        local t = CFG.hud.text
+        hudCallout(t.jammer_down, string.format(t.jammer_down_sub, pay))
+    end
     LB.stat("air", 1)
+    if by == "allies" or by == "ships" then LB.stat("by_allies", 1) elseif by == "defences" then LB.stat("by_defences", 1) end
     if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
 end
 
@@ -191,10 +210,15 @@ local function probeTick(tick)
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
         RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
+                -- kills by who made them (KILL.by), the airframes flown so far (pickAircraft), the tactical items, upgrade
+                -- tiers and SECOND CHANCE held (sv_tactical.lua)
+                kills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }, seenAc = {},
+                items = {}, ups = {}, insured = false,
                 -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
                 stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
-                          specials = {} } }
-        ALLY.run = nil                             -- (a new level: no allies up)
+                          by_allies = 0, by_defences = 0, specials = {} } }
+        pcall(TAC.reset)                                -- (the gun's class default back to stock, the ECM / decoy off)
+        ALLY.run, KILL.fired = nil, {}             -- (a new level: no allies up, nothing fired at)
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
             log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
@@ -262,6 +286,7 @@ local function probeTick(tick)
             if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
             if D.special then pcall(SPC.V.cleanup, D.special) end
             pcall(SND.stopAll)
+            pcall(TAC.reset)                       -- (the gun's class default back to stock)
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
@@ -309,6 +334,12 @@ local function probeTick(tick)
         if now and valid(survivalPC) then                               -- what hits the player (section "hits")
             local okHt, errHt = pcall(HIT.tick, survivalPC, now)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
+            if CFG.allies.kills then pcall(KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
+            -- the STORE's tactical items and SECOND CHANCE (sv_tactical.lua)
+            local okT, errT = pcall(TAC.tick, now)
+            if not okT and not D.tacErr then D.tacErr = true; log("tactical: error " .. tostring(errT)) end
+            local okIn, errIn = pcall(INS.tick, now)
+            if not okIn and not D.insErr then D.insErr = true; log("insurance: error " .. tostring(errIn)) end
         end
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
@@ -351,18 +382,25 @@ local function probeTick(tick)
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
                 if not own then pcall(enemySpike, p, D and D.round, tierFor) end
+                if D then pcall(enemyLate, p, D.round) end                         -- (CFG.late: late rounds' health)
                 pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
+                pcall(KILL.read, p)                                                -- (who's hurt it so far)
+                p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
                 p.dist = (p.at and you) and km(p.at, you) or nil
             else
                 p.down = true
+                pcall(KILL.read, p)                                                -- (the last hits, if it's still there)
                 log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
                     p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
                 pcall(probeKill, p, you or nil)
-                pcall(creditKill, p)
+                local okC, errC = pcall(creditKill, p)
+                if not okC then log("credits: error " .. tostring(errC)) end
             end
         end
     end
     if slot ~= 0 then return end                                    -- every 2 s: the summaries
+    local okJ, errJ = pcall(JAM.tick)                               -- (the jammer's boost on the enemies near it)
+    if not okJ and not D.jamErr then D.jamErr = true; log("jammer: error " .. tostring(errJ)) end
     local fl, flagged = flagLine()
     if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
     local alive, nearest = 0, nil

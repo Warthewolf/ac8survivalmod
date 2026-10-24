@@ -1,5 +1,5 @@
 -- sv_rounds.lua: the shuttle countdown, the specials' tick, starting and running rounds, the airfield.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The shuttle's countdown clock (D.shuttleClock: cd seconds run, fired the last second's event): it runs on the game
@@ -113,8 +113,79 @@ local function specialTick(now)
     end
 end
 
+-- Events Lua fires a little later (a flight's orders after its appearance's): { at, name, why } in D.events, fired by
+-- roundsTick. (ALLY.run.events are the allies' own.)
+function queueEvent(at, name, why)
+    if not D then return end
+    D.events = D.events or {}
+    D.events[#D.events + 1] = { at = at, name = name, why = why }
+end
+
+local function eventsTick(now)
+    local q = D.events
+    if not q or #q == 0 then return end
+    for i = #q, 1, -1 do
+        local e = q[i]
+        if now >= e.at then
+            table.remove(q, i)
+            local r = type(SV_Event) == "function" and SV_Event(e.name) or -5
+            log(string.format("events: %s (%s) %s", e.name, e.why or "", r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+        end
+    end
+end
+
+-- Aircraft shot down before this round come off the plane list (it only grew: 538 entries by round 23 of a friend's
+-- run, all walked every tick; economy review of 2026-10-25, "frame-time cost grows with round size").
+local function pruneDown()
+    local keep = {}
+    for _, p in ipairs(planes) do if not p.down then keep[#keep + 1] = p end end
+    if #keep < #planes then log(string.format("round probe: %d downed aircraft off the list, %d still up", #planes - #keep, #keep)) end
+    planes = keep
+end
+
+-- The round's flights in waves (CFG.waves): the first holds the special, the escorts and the bombers (behind their
+-- fighters), each wave at most `cap` aircraft; the other fighters follow in the next waves. One wave when it all fits.
+local function makeWaves(special, fighters, bombers, cap)
+    local function size(u)
+        local k = type(u) == "string" and u:sub(1, 1) == "@" and SPC.kinds[u:sub(2)]
+        if k then return SPC.kindValue(k.aircraft) or 0 end
+        return flightSize(u)
+    end
+    local total, firstN = 0, 0
+    for _, u in ipairs(fighters) do total = total + size(u) end
+    for _, u in ipairs(bombers) do total = total + size(u); firstN = firstN + size(u) end
+    if special then local n = size("@" .. special); total = total + n; firstN = firstN + n end
+    local one = {}
+    if special then one[1] = "@" .. special end
+    if not (CFG.waves.enabled and cap and total > cap) then
+        for _, u in ipairs(fighters) do one[#one + 1] = u end
+        for _, u in ipairs(bombers) do one[#one + 1] = u end
+        return { one }
+    end
+    local waves, left, i = { one }, math.max(0, cap - firstN), 1
+    while i <= #fighters and size(fighters[i]) <= left do        -- the first wave's fighters (escorts first)
+        one[#one + 1] = fighters[i]; left = left - size(fighters[i]); i = i + 1
+    end
+    for _, u in ipairs(bombers) do one[#one + 1] = u end
+    local cur, n = nil, 0
+    for k = i, #fighters do
+        local u = fighters[k]
+        if not cur or n + size(u) > cap then cur, n = {}, 0; waves[#waves + 1] = cur end
+        cur[#cur + 1] = u; n = n + size(u)
+    end
+    return waves
+end
+
+-- The most aircraft a wave holds now (CFG.waves.max_up, by the game's difficulty when max_up_by_preset has it).
+local function waveCap()
+    local w = CFG.waves
+    return (w.max_up_by_preset and w.max_up_by_preset[presetName()]) or w.max_up
+end
+
 local function startRound()
     D.round = D.round + 1
+    pruneDown()
+    D.events = {}
     local sk = spikeCfg(spikeLevel(D.round))
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
         CFG.max_aircraft)
@@ -159,60 +230,114 @@ local function startRound()
     local raid = not special and not D.roundTier and CFG.airfield.enabled and D.round >= b.first_raid
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
+    local taken = {}                                -- (flights already picked this round: one pick never takes them again)
+    local function pick(units, n, skip)
+        local out, got = pickFlights(units, n, function(u) return taken[u] or (skip and skip(u)) end)
+        for _, u in ipairs(out) do taken[u] = true end
+        return out, got
+    end
+    local function raidShare()                      -- a raid's bombers: raid_share of the round, whole 2-ships, max_bombers
+        return math.min(math.floor(budget * b.raid_share / 2 + 0.5) * 2, b.max_bombers or budget)
+    end
+    D.raidBearing, D.raidUnits, D.raidBombers, D.strikeAir, D.escortUnits = nil, {}, 0, {}, {}
     if raid then
-        local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
-        bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
+        bombers, nBombers = pick(b.pool, raidShare(), function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
     elseif spk and spk.aircraft then                -- its own aircraft take that many of the round's
         nBombers = SPC.kindValue(spk.aircraft)
     elseif special == "amphibious" and CFG.airfield.enabled and math.random() < CFG.specials.amphibious.bomber_chance then
         raid = true                                   -- a raid on the airfield with the landing (its share of the budget)
-        local share = math.floor(budget * b.raid_share / 2 + 0.5) * 2
-        bombers, nBombers = pickFlights(b.pool, share, function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
+        bombers, nBombers = pick(b.pool, raidShare(), function(u) return D.round < b.heavy_from_round and HEAVY_UNIT[u] end)
     elseif special == "shuttle" then             -- strike flights at the shuttle (heavies only bomb the airfield)
         local share = math.floor(budget * CFG.specials.shuttle.strike_share / 2 + 0.5) * 2
-        bombers, nBombers = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
+        bombers, nBombers = pick(b.pool, share, function(u) return HEAVY_UNIT[u] end)
+    end
+    if raid and #bombers > 0 then                   -- a raid from one direction (CFG.airfield.bombers.one_bearing)
+        for _, u in ipairs(bombers) do D.raidUnits[u] = true end
+        D.raidBombers = nBombers
+        if b.one_bearing then D.raidBearing = raidBearing(b.distance_km) end
     end
     D.strikeUnits = {}                              -- (for the shuttle's countdown log)
     if special == "shuttle" then for _, u in ipairs(bombers) do D.strikeUnits[u] = true end end
+    local normal = not raid and not special and not D.roundTier
+    -- a normal round's strike package at the airfield (CFG.strike): one 2-ship, not a heavy
+    local st = CFG.strike
+    if normal and CFG.airfield.enabled and st and st.enabled and D.round >= st.from_round and math.random() < st.chance then
+        local sb, sn = pick(b.pool, 2, function(u) return HEAVY_UNIT[u] end)
+        for _, u in ipairs(sb) do bombers[#bombers + 1] = u; D.strikeAir[u] = true end
+        nBombers = nBombers + sn
+        if #sb > 0 then log(string.format("round %d: a strike package (%s) goes for the airfield", D.round, sb[1])) end
+    end
     -- allied ships at sea (CFG.allies): a normal round's strike flights at them, each at one ship (ace rounds are their
-    -- squadron only)
+    -- squadron only), every ship_strike_every rounds
     D.shipStrike = {}
-    local ships = (not raid and not special and not D.roundTier and CFG.allies.enabled and ALLY.shipsAtSea)
+    local ships = (normal and CFG.allies.enabled and ALLY.shipsAtSea and D.round % math.max(1, CFG.allies.ship_strike_every or 1) == 0)
         and ALLY.shipsAtSea() or {}
     if #ships > 0 then
         local share = math.floor(budget * CFG.allies.strike_share / 2 + 0.5) * 2
-        local sb, sn = pickFlights(b.pool, share, function(u) return HEAVY_UNIT[u] end)
+        local sb, sn = pick(b.pool, share, function(u) return HEAVY_UNIT[u] end)
         for _, u in ipairs(sb) do bombers[#bombers + 1] = u; D.shipStrike[u] = ships[math.random(#ships)] end
         nBombers = nBombers + sn
         if #sb > 0 then log(string.format("round %d: %d strike aircraft in %d squadrons go for the allied ships", D.round, sn, #sb)) end
     end
     local nWant = alone and 0 or (budget - nBombers)
     if spk and spk.budget then nWant = spk.budget(budget) end      -- (VALKA's decoys: a few of the round's)
-    local fighters, nFighters = pickFlights(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
-    D.queue, D.spare = {}, {}
-    for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
-    for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
-        if not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 then
-            local queued = false
-            for _, q in ipairs(D.queue) do if q == u then queued = true end end
-            if not queued then D.spare[#D.spare + 1] = u end
+    -- a late special that flies alone brings escorts (CFG.specials escort_*)
+    local sp = CFG.specials
+    if special and alone and D.round >= (sp.escort_from or math.huge) then
+        for _, k in ipairs(sp.escort_kinds or {}) do
+            if k == special then
+                nWant = math.max(sp.escort_min or 0, math.min(sp.escort_max or budget, math.floor(budget * (sp.escort_share or 0) / 2 + 0.5) * 2))
+                log(string.format("round %d: the %s brings %d escorts", D.round, special, nWant))
+            end
         end
     end
-    local want = #D.queue
+    local fighters, nFighters = pick(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
     -- the behaviour probe: round 1's first flight flies the package script, round 2's the run-time one
     local pv = CFG.probe.enabled and CFG.probe.behaviour and ((D.round == 1 and "Pkg") or (D.round == 2 and "Rt"))
     local pu = pv and CFG.probe.units[pv]
-    if pu and not D.up[pu] and PR.usable[pv] and (pv == "Pkg" or (CFG.probe.runtime and GLS.injected[PROBE_RT_MODULE])) then
-        table.insert(D.queue, 1, pu)
-        if #D.queue > want then D.spare[#D.spare + 1] = table.remove(D.queue) end
+    if pu and not D.up[pu] and not taken[pu] and PR.usable[pv] and (pv == "Pkg" or (CFG.probe.runtime and GLS.injected[PROBE_RT_MODULE])) then
+        table.insert(fighters, 1, pu)
+        if #fighters > 1 then taken[table.remove(fighters)] = nil end
     end
-    for _, u in ipairs(bombers) do D.queue[#D.queue + 1] = u end   -- bombers last, behind their escort
-    if spk then table.insert(D.queue, 1, "@" .. special) end   -- the special first (the shuttle sets its strikers' orders)
-    log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s", D.round, nFighters + nBombers, nFighters,
-        #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons", nBombers, #bombers)
-        or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or ""))
+    -- a raid's escorts (CFG.escorts): share of its fighter flights hold over the airfield; first in the queue
+    local nEsc = 0
+    if raid and CFG.escorts.enabled and #fighters > 0 then
+        local n = math.ceil(#fighters * CFG.escorts.share)
+        for i = 1, math.min(n, #fighters) do
+            if poolIndex(fighters[i]) then D.escortUnits[fighters[i]] = true; nEsc = nEsc + 1 end
+        end
+    end
+    -- the round's jammer (CFG.jammer): one fighter flight led by an EA-18G
+    local jc = CFG.jammer
+    D.jammerUnit, D.jammer = nil, nil
+    if normal and jc and jc.enabled and D.round >= jc.from_round and math.random() < jc.chance and SR.usable[jc.aircraft] then
+        for _, u in ipairs(fighters) do if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] then D.jammerUnit = u end end
+        if D.jammerUnit then log(string.format("round %d: the jammer flies with %s", D.round, D.jammerUnit)) end
+    end
+    D.waves = makeWaves(spk and special or nil, fighters, bombers, waveCap())
+    D.wave, D.queue = 1, D.waves[1]
+    D.spare = {}
+    for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
+        if not D.up[u] and not taken[u] and not PROBE_OF[u] and flightSize(u) == 2 then D.spare[#D.spare + 1] = u end
+    end
+    local waveText = ""
+    if #D.waves > 1 then
+        local sizes = {}
+        for _, w in ipairs(D.waves) do
+            local n = 0
+            for _, u in ipairs(w) do if u:sub(1, 1) ~= "@" then n = n + flightSize(u) end end
+            sizes[#sizes + 1] = tostring(n)
+        end
+        waveText = string.format(", %d waves (%s aircraft)", #D.waves, table.concat(sizes, " + "))
+    end
+    log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s%s%s", D.round, nFighters + nBombers, nFighters,
+        #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons%s", nBombers, #bombers,
+            D.raidBearing and string.format(" from the %s (bearing %d)", compassName(D.raidBearing), D.raidBearing) or "")
+        or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or "",
+        nEsc > 0 and string.format(", %d escort flights", nEsc) or "", waveText))
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
-    D.state, D.at, D.lastAlive = "spawning", D.now, nil
+    D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
+    RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
 end
 
 -- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
@@ -227,12 +352,6 @@ end
 
 local ordersTick
 do
--- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and RE_SV_FlightOrders_NN event).
-local function poolIndex(unit)
-    local n, k = unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
-    return n and (tonumber(n) - 1) * 3 + tonumber(k) + 1
-end
-
 -- A fighter flight's orders (player only, air search) come from its appearance trigger, which also sets SV_Up_NN. One
 -- that appeared while the landing menu was up never got them (test of 2026-10-22: two F-16 flights attacked the
 -- airfield), so a flight still unflagged CFG.orders_check_s after spawning gets them from RE_SV_FlightOrders_NN.
@@ -271,6 +390,7 @@ function roundsTick(now)
     end
     D.orders = D.orders or {}
     ordersTick(now)
+    eventsTick(now)
     -- every tick, whatever the round's state (code review of 2026-10-23: in the break it never ran, so the shuttle's
     -- removal and the Anomaly's lightning clean-up waited for the next round, and while fighting it ran once a second,
     -- which rounded the portal's timing)
@@ -329,7 +449,32 @@ function roundsTick(now)
             end
         end
         D.at = now + CFG.spawn_gap_s
-        if #D.queue == 0 then D.state = "fighting" end
+        if #D.queue == 0 then
+            if D.waves and D.wave < #D.waves then D.state = "wave"        -- the next wave once this one thins out
+            else D.state = "fighting" end
+        end
+    elseif D.state == "wave" then                    -- (CFG.waves) the round's aircraft left, once a second
+        if now < D.at then return end
+        D.at = now + 1
+        local alive = 0
+        for u in pairs(D.up) do
+            local n = SV_UnitAlive(u)
+            if n > 0 then alive = alive + n else D.up[u] = nil end
+        end
+        local w = CFG.waves
+        if alive <= w.next_at or now - D.waveAt >= w.timeout_s then
+            D.wave, D.waveAt = D.wave + 1, now
+            D.queue = D.waves[D.wave]
+            local n = 0
+            for _, u in ipairs(D.queue) do if u:sub(1, 1) ~= "@" then n = n + flightSize(u) end end
+            log(string.format("round %d: wave %d of %d (%d aircraft) with %d of the last wave's left%s", D.round, D.wave,
+                #D.waves, n, alive, alive > w.next_at and string.format(" (%d s on)", w.timeout_s) or ""))
+            if w.callout then
+                local t = CFG.hud.text
+                hudCallout(string.format(t.wave_in, D.wave, #D.waves), string.format(t.wave_in_sub, n))
+            end
+            D.state = "spawning"
+        end
     elseif D.state == "fighting" then
         if now < D.at then return end
         D.at = now + 1
@@ -359,6 +504,18 @@ function roundsTick(now)
             D.state, D.at, D.announced = "wait", now + CFG.intermission_s, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
                        string.format(CFG.hud.text.complete_sub, CFG.intermission_s))
+            -- who shot down what (CFG.allies.kills; economy review of 2026-10-25: "show what allies do"), when anyone but
+            -- you did
+            local k = RUN.roundKills
+            if k then
+                log(string.format("kills: round %d: you %d, allied aircraft %d, ships %d, airfield defences %d, airstrikes %d",
+                    D.round, k.you, k.allies, k.ships, k.defences, k.airstrike))
+                if k.allies + k.ships + k.defences > 0 then
+                    local t = CFG.hud.text
+                    hudCallout(string.format(t.kills, D.round), string.format(t.kills_sub, k.you + k.airstrike, k.allies, k.ships, k.defences))
+                end
+            end
+            pcall(ALLY.repairAll)                     -- (CFG.allies.repair: allies and defences back to full)
         end
     end
 end

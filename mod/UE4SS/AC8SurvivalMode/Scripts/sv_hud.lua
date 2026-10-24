@@ -1,5 +1,5 @@
 -- sv_hud.lua: Survival's HUD (round, credits, callouts, warnings).
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- Font for one of our texts: UI_FontSet_ja, then the HUD typeface, size, spacing and glow outline written into the
@@ -106,7 +106,14 @@ local function hudBuild(pc)
         H.airNum = newText("AirfieldHP")
         slotIn(canvas, H.airNum, { 0, 0 }, { 0, 0 }, { hc.x + ab.x + ab.w + 20, airY, 0, 0 }, { 0, 0 }, true)
     end
-    slotIn(canvas, H.next, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true)
+    -- NEXT ROUND / the special's row, then ALLIES and ITEMS (the review build's): each shown only with something in it,
+    -- stacked from here down in that order (stackRows)
+    H.allies = newText("Allies"); H.items = newText("Items")
+    H.stackY, H.stack = rowY, {}
+    for _, w in ipairs({ H.next, H.allies, H.items }) do
+        H.stack[#H.stack + 1] = { w = w, slot = slotIn(canvas, w, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true) }
+        w:SetVisibility(VIS.Collapsed)
+    end
 
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
     local banner = newWidget("CanvasPanel", "Banner")
@@ -167,6 +174,39 @@ end
 local function clock(s)
     s = math.max(0, math.ceil(s))
     return string.format("%d:%02d", s // 60, s % 60)
+end
+
+-- The stacked rows (NEXT, ALLIES, ITEMS): the shown ones one line apart from H.stackY, moved only when that changes
+local function stackRows()
+    local y, key = H.stackY, ""
+    for _, r in ipairs(H.stack or {}) do key = key .. (r.shown and "1" or "0") end
+    if key == H.stackKey then return end
+    H.stackKey = key
+    for _, r in ipairs(H.stack) do
+        if r.shown then
+            pcall(function() r.slot:SetOffsets({ Left = CFG.hud.x, Top = y, Right = 0, Bottom = 0 }) end)
+            y = y + CFG.hud.line
+        end
+    end
+end
+
+-- One stacked row: shown with text s, collapsed with none
+local function stackText(w, key, s)
+    for _, r in ipairs(H.stack or {}) do
+        if r.w == w then
+            if s then setText(w, key, s) end
+            local shown = s ~= nil
+            if r.shown ~= shown then r.shown = shown; w:SetVisibility(shown and VIS.HitTestInvisible or VIS.Collapsed) end
+        end
+    end
+end
+
+-- A raid's bombers still up (the round's D.raidUnits), or 0
+local function raidLeft()
+    if not (D.raidUnits and next(D.raidUnits)) then return 0 end
+    local n = 0
+    for _, p in ipairs(planes) do if not p.down and p.unit and D.raidUnits[p.unit] then n = n + 1 end end
+    return n
 end
 
 -- One HUD pass: build when needed, show/hide with the game's HUD, update the rows and the callout.
@@ -231,7 +271,9 @@ function hudTick(now, paused, pc)
     end
     pcall(hideGameInfo, now)
     local t = CFG.hud.text
-    setText(H.round, "roundStr", string.format(t.round, math.max(D.round, 1)))
+    local waves = D.waves and #D.waves > 1 and D.state ~= "wait" and D.wave
+    setText(H.round, "roundStr", waves and string.format(t.round_wave, math.max(D.round, 1), D.wave, #D.waves)
+        or string.format(t.round, math.max(D.round, 1)))
     setText(H.credits, "creditsStr", string.format(t.credits, RUN.credits))
     if H.air and AF.hp then
         setText(H.air, "airStr", AF.down and t.airfield_down_row or t.airfield)
@@ -246,49 +288,51 @@ function hudTick(now, paused, pc)
         end
     end
     local sp = D.special and D.special.state == "countdown" and D.special
+    local nextS = nil                               -- (the NEXT row: the break's countdown, or what's going on)
     if D.state == "wait" then
-        setText(H.next, "nextStr", string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now)))   -- (start_round > 1: NEXT ROUND)
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(D.round == 0 and t.first_round or t.next_round, clock(D.at - now))   -- (start_round > 1: NEXT ROUND)
     elseif sp then                                  -- Comona Defense: the countdown and the shuttle's health
         local hp = shuttleHealth()
         local cd = D.shuttleClock and D.shuttleClock.cd or (now - sp.at)
-        setText(H.next, "nextStr", string.format(t.launch_row, clock(math.max(0, CFG.specials.shuttle.countdown_s - cd)), hp or 100))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(t.launch_row, clock(math.max(0, CFG.specials.shuttle.countdown_s - cd)), hp or 100)
     elseif D.special and D.special.kind == "alicorn" and D.special.state == "sail" then
         local sp = D.special
-        setText(H.next, "nextStr", string.format(t.alicorn_row, sp.tanks or 4, sp.coreOpen and "EXPOSED" or "SHUT",
-            sp.dived and "  (DIVED)" or ""))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(t.alicorn_row, sp.tanks or 4, sp.coreOpen and "EXPOSED" or "SHUT", sp.dived and "  (DIVED)" or "")
     elseif D.special and D.special.kind == "ladon" and D.special.state == "run" then
-        setText(H.next, "nextStr", string.format(t.ladon_row, SPC.ladonsLeft(D.special), D.special.runs or 0))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(t.ladon_row, SPC.ladonsLeft(D.special), D.special.runs or 0)
     elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then
         local craft, ashore = AMPH.counts()
-        setText(H.next, "nextStr", string.format(t.amphib_row, craft, ashore, AMPH.capture()))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(t.amphib_row, craft, ashore, AMPH.capture())
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
         local _, ashore = AMPH.counts()
-        setText(H.next, "nextStr", string.format(t.captured_row, left, left == 1 and "" or "S", ashore))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = string.format(t.captured_row, left, left == 1 and "" or "S", ashore)
     elseif D.special and D.special.kind == "glitch" and D.special.state == "hunt" and D.special.dist then
         local gl = CFG.specials.glitch
-        setText(H.next, "nextStr", D.special.frenzyUntil and string.format(t.glitch_row_frenzy, gl.name)
-            or string.format(t.glitch_row, gl.name, D.special.dist))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+        nextS = D.special.frenzyUntil and string.format(t.glitch_row_frenzy, gl.name) or string.format(t.glitch_row, gl.name, D.special.dist)
     elseif D.special and D.special.kind == "valka" and D.special.state == "hunt" and D.special.dist then
         local sp, va = D.special, CFG.specials.valka
-        setText(H.next, "nextStr", sp.chargeAt and string.format(t.valka_row_charge, va.name)
+        nextS = sp.chargeAt and string.format(t.valka_row_charge, va.name)
             or sp.invertUntil and string.format(t.valka_row_field, va.name, sp.fxText or "")
-            or string.format(t.valka_row, va.name, sp.dist))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+            or string.format(t.valka_row, va.name, sp.dist)
     elseif D.special and D.special.kind == "anomaly" and D.special.state == "hunt" and D.special.dist then
         local an = CFG.specials.anomaly
-        setText(H.next, "nextStr", ANOM.on and string.format(t.anomaly_row_field, ANOM.fxText or "") or string.format(t.anomaly_row, an.name:upper(), D.special.dist))
-        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
-    elseif H.nextShown ~= false then
-        H.next:SetVisibility(VIS.Collapsed); H.nextShown = false
+        nextS = ANOM.on and string.format(t.anomaly_row_field, ANOM.fxText or "") or string.format(t.anomaly_row, an.name:upper(), D.special.dist)
+    elseif D.raidBearing then                       -- a raid from one direction: its bombers left
+        local n = raidLeft()
+        if n > 0 then nextS = string.format(t.raid_row, n, compassName(D.raidBearing)) end
     end
+    stackText(H.next, "nextStr", nextS)
+    -- the allies' and the tactical items' rows (once a second is plenty)
+    if now >= (H.rowsAt or 0) then
+        H.rowsAt = now + 1
+        local okA, al = pcall(ALLY.hudLine)
+        stackText(H.allies, "alliesStr", okA and al and string.format(t.allies_row, al) or nil)
+        local okI, it = pcall(TAC.line, now)
+        stackText(H.items, "itemsStr", okI and it and string.format(t.items_row, it) or nil)
+        if not (okA and okI) then hudLog("rowserr", "allies / items row error " .. tostring(okA and it or al)) end
+    end
+    stackRows()
 
     if #callouts > 0 and not H.calloutUntil then
         local c = table.remove(callouts, 1)

@@ -410,6 +410,12 @@ ALLY_AIR_ROW = 'sv_ally_moonchild'          # DT_SV_NpcMission row -> NpcId ALLY
 ALLY_AIR_NPC = 'SV_Ally_Moonchild'          # DT_SV_NpcRows: ALLY_AIR_SOURCE_NPC under name key ALLY_AIR_NAME_KEY
 ALLY_AIR_SOURCE_NPC = 'OP1005_f22a_01'
 ALLY_AIR_NAME_KEY = 'SV_Moonchild'
+# WINGMEN (economy review of 2026-10-25: "a pair of F-16s for about 5,000"): flown on MOONCHILD's units, their airframe
+# set at takeoff (main.lua CFG.allies.wingmen.row); the campaign's plain enemy F-16C under their own name key
+ALLY_WINGMEN_ROW = 'sv_ally_wingmen'        # DT_SV_NpcMission row -> NpcId ALLY_WINGMEN_NPC
+ALLY_WINGMEN_NPC = 'SV_Ally_Wingmen'
+ALLY_WINGMEN_SOURCE_NPC = 'OP1022_f16c_01'
+ALLY_WINGMEN_NAME_KEY = 'SV_Wingmen'
 ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names, set by build_survival.py
 TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_Path2']   # taxi, roll, climb
 TAKEOFF_WING_FIRST = '01_Air0_f18e_0_Path0_Sub0'     # the wing's taxi onto the lead's start; then the lead's three
@@ -776,7 +782,59 @@ def build_events(stock_ep):
     build_ladon(g, flag, stock_ep)
     build_alicorn(g, flag, stock_ep)
     build_ace_moves(g, flag, stock_ep)
+    build_review(g, stock_ep, t_search, t_engage, t_bmove)
     return g
+
+
+ESCORT_RADIUS_M = 8000.0          # a raid's escorts hold this close over the airfield (main.lua CFG.escorts)
+ALLY_COVER_RADIUS_M = 5000.0      # main.lua CFG.allies.orders cover_radius_m / defend_radius_m (keep in step)
+ALLY_DEFEND_RADIUS_M = 8000.0
+
+
+def build_review(g, stock_ep, t_search, t_engage, t_bmove):
+    """The economy review's orders (2026-10-25), all remote events Scripts/sv_*.lua fires:
+    RE_SV_Escort_NN      pool flight NN escorts a raid: its area on the airfield (Mission 22's airport strike move,
+                         ESCORT_RADIUS_M), air-only search, Normal / PlayerFirst (you first, then the allied aircraft)
+    RE_SV_Decoy_NN       pool flight NN breaks off: engagement None (as MOONCHILD's hold on the ground)
+    RE_SV_DecoyEnd_NN    ... and back: its appearance's orders (air-only, PlayerOnlyNoLimit)
+    RE_SV_Ally<Order><X> MOONCHILD / WINGMEN flight X's orders: Hunt (its area back on the airfield, the pool's 40 km),
+                         Cover (its area moved near you, Mission 6's NearPlayer move, ALLY_COVER_RADIUS_M) and Defend (on
+                         the airfield, ALLY_DEFEND_RADIUS_M). The radius is Mission 6's LiveChangeUnitRadius."""
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
+    t_near = g.foreign_template(m06, 'LiveUnitMoveActor', 'CE_ReinforceAppear_Phase01_2')
+    assert arg_values(t_near)[12] == 'NearPlayer', arg_values(t_near)
+    assert len(arg_values(t_radius)) == 3, arg_values(t_radius)
+    t_hold = g.exec_template('LiveAIEngagementOrder', 'RE_Wave01_Start', lambda a, e: a[0] == 'AB_Obj_01_Air1_f18e_0')
+    assert arg_values(t_hold)[3] == 'None', arg_values(t_hold)
+    for k, unit in enumerate(POOL):
+        ev = f'RE_SV_Escort_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_bmove, ev, {0: unit})
+        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ESCORT_RADIUS_M:.1f}'})
+        g.execute(t_search, ev, {1: unit}, delay=1.0)
+        g.execute(t_engage, ev, {1: unit, 6: 'PlayerFirst'}, delay=1.0)
+        ev = f'RE_SV_Decoy_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_hold, ev, {0: 'NoneSelect', 1: unit})
+        ev = f'RE_SV_DecoyEnd_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_search, ev, {1: unit})
+        g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'})
+    for unit in ALLY_AIR_UNITS:
+        x = unit[-1]
+        ev = f'RE_SV_AllyHunt{x}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_bmove, ev, {0: unit})
+        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{AREA_RADIUS_M:.1f}'})
+        ev = f'RE_SV_AllyCover{x}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_near, ev, {0: unit})
+        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ALLY_COVER_RADIUS_M:.1f}'})
+        ev = f'RE_SV_AllyDefend{x}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_bmove, ev, {0: unit})
+        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ALLY_DEFEND_RADIUS_M:.1f}'})
 
 
 def build_ace_moves(g, flag, stock_ep):

@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.18.3"
+#define RT_VERSION           L"0.19.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -625,7 +625,7 @@ static void InitText(void)
 
 /* Texts Lua sets at run time (SV_SetText: the shop's rows and prices, the shuttle's and the aces' names). Fixed
  * buffers, rewritten in place on the game thread, so an FString the game was handed never points at freed memory. */
-#define DYN_TEXTS 64           /* used: shop 8, shuttle 1, aces and squadrons 19 */
+#define DYN_TEXTS 160          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4 */
 #define DYN_KEY   48
 #define DYN_CAP   256
 static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
@@ -1311,6 +1311,30 @@ static int64_t SetFreeRestock(int on)
     int64_t old = f[AM.restock];
     f[AM.restock] = on ? 1 : 0;
     return old;
+}
+
+/* Sets one kind's maximum (its full load) to max (1..9999), for the STORE's WEAPON BAYS and FLARE PODS upgrades: kinds
+ * 1-3 the weapon slot's max (the int before its current count, as AmmoGet reads it), 4 the flares' (W + flareMax, the
+ * activator's reflected MaxFlareCount). A current count above it comes down to it. Returns the new max or an SV_ERR
+ * code. (Runtime 0.19.0; the game reads the max for its refills and caps, nothing sizes a buffer by it.) */
+static int64_t AmmoSetMax(int kind, int32_t max)
+{
+    if (kind < 1 || kind >= AMMO_KINDS || max < 1 || max > 9999) return SV_ERR_BAD_ARGS;
+    uint8_t* w = PlayerWeapons();
+    if (!w) return AM.state < 0 ? SV_ERR_NO_GAME : SV_ERR_NOT_READY;
+    if (kind == 4) {
+        uint8_t* f = *(uint8_t**)(w + AM.flareObj);
+        *(int32_t*)(w + AM.flareMax) = max;
+        if (f && Readable(f + AM.flareCur, 4) && *(int32_t*)(f + AM.flareCur) > max) AmmoSet(4, max);
+        return max;
+    }
+    int32_t num = 0;
+    uint8_t* data = AmmoSlots(w, &num);
+    if (!data || kind >= num) return SV_NOT_SPAWNED;
+    uint8_t* slot = data + (size_t)kind * AM.slotStride;
+    *(int32_t*)(slot + AM.slotCur - 4) = max;
+    if (*(int32_t*)(slot + AM.slotCur) > max) AmmoSet(kind, max);
+    return max;
 }
 
 /* ---- music and remote events (tools/re/MUSIC_RADIO_CAMERA.md, HUD_NOTES.md) ------------------------------------
@@ -2097,10 +2121,10 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.18.3" */
+/* SV_Version() -> "0.19.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.18.3";
+    static const char v[] = "0.19.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2198,6 +2222,14 @@ static int L_SetAmmo(void* lua)
     double kind = -1, value = 0;
     if (!ArgNumber(lua, &kind) || !ArgNumber(lua, &value)) return Ret(lua, SV_ERR_BAD_ARGS);
     return Ret(lua, AmmoSet((int)kind, (int32_t)value));
+}
+
+/* SV_AmmoMax(kind, max) -> the new maximum (full load) of kind 1-4, or an SV_ERR code (see AmmoSetMax) */
+static int L_AmmoMax(void* lua)
+{
+    double kind = -1, max = 0;
+    if (!ArgNumber(lua, &kind) || !ArgNumber(lua, &max)) return Ret(lua, SV_ERR_BAD_ARGS);
+    return Ret(lua, AmmoSetMax((int)kind, (int32_t)max));
 }
 
 /* SV_FreeRestock(on) -> the old setting (1 on, 0 off) or an SV_ERR code; on = 0 stops missiles refilling over time */
@@ -2629,7 +2661,7 @@ static void RegisterLua(void* lua)
     static const struct { const char* name; LuaFn fn; } kFns[] = {
         { "SV_Version", L_Version }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
-        { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_FreeRestock", L_SetFreeRestock },
+        { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },

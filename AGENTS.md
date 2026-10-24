@@ -205,6 +205,14 @@ Copy a working stock pattern before inventing a new one.
     SetSkeletalMeshAsset put VALKA's X-02S on the x40a, whose own body is a StaticMeshComponent (AC8's NPC bodies are
     static; the only skeletal meshes on it were the wreck's, which never draw: hard rule 41). Confirmed 2026-10-24.
 
+## Economy review build (Lua 0.70.0, runtime 0.19.0, 2026-10-25; untested in game)
+The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
+late-round scaling, raids from one direction with escorts, the jammer, more airframes, kill attribution by side
+(DamageHistoryMap), WINGMEN, ally orders, repairs between rounds, FULL REARM, upgrades, tactical items, SECOND CHANCE,
+a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lines to check. None of it is a hard rule
+until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
+`python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime

@@ -1,5 +1,5 @@
 -- sv_rows.lua: the game's Lua and behaviour scripts, the NPC / ace / special rows added at the menu.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- Puts a behaviour script into the game's Lua as module `mod` (instrumented). true, or false and the error.
@@ -352,7 +352,14 @@ function searchSetup()
     log(string.format("special: the Anomaly's guards search %d m (%s)", AN.guard_search_m, okG and guardModule or "module NOT made"))
     SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
-    for _, a in ipairs(CFG.aircraft) do if a ~= BEHAVIOUR_AIRCRAFT then list[#list + 1] = a end end
+    local inList = { [BEHAVIOUR_AIRCRAFT] = true }
+    local function add(a) if a and not inList[a] then inList[a] = true; list[#list + 1] = a end end
+    for _, a in ipairs(CFG.aircraft) do add(a) end
+    -- the airframes that join later (CFG.variety.late, the tiers' signature types) and the jammer's (CFG.jammer): their
+    -- rows are made whether or not they're on now, so a survival.ini change needs no new rows
+    for _, e in ipairs(CFG.variety and CFG.variety.late or {}) do add(e[1]) end
+    for _, l in pairs(CFG.variety and CFG.variety.signature or {}) do for _, a in ipairs(l) do add(a) end end
+    if CFG.jammer then add(CFG.jammer.aircraft) end
     do      -- CFG.aces and the Anomaly's: DT_NPC rows (DT_SV_NpcRows), names. The Anomaly's always: the world data names them
         local mine = loadObject(CFG.specials.shuttle.npc_rows)
         local nAces, names, lost = 0, 0, {}

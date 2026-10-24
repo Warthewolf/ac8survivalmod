@@ -32,21 +32,43 @@ Play
 ----
 Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start over Comona Airport.
 - Shoot down every enemy to clear a round; the next one starts 20 seconds later.
-- Bomber raids (every 3rd round) go for the airfield. At 0 health it's down: no landing for the rest of that round
-  and the next one, then it comes back at half health.
+- Big rounds come in WAVES (at most 14 / 18 / 22 aircraft up at once on Casual / Standard / Ace): the next wave comes
+  once the last one is down to a few. The ROUND row shows WAVE 2/3. After round 15 rounds stop growing and the
+  enemies get tougher instead.
+- Bomber raids (every 3rd round) go for the airfield, all from one direction: the callout and the HUD say which
+  ("BOMBER RAID FROM THE NORTH-EAST"). Half the fighters escort them over the airfield. At 0 health the airfield is
+  down: no landing for the rest of that round and the next one, then it comes back at half health.
+- From round 8 a round may bring an ENEMY JAMMER: an EA-18G that makes every pilot near it sharper. Shoot it down
+  first; it pays triple.
 - Ammo: you take off with your difficulty's load, and landing does NOT refill it. Buy more at the airfield.
-- Land at Comona Airport between rounds and pick STORE on the landing menu. It has two pages:
-    SUPPLIES: MISSILES +12 / SPECIAL WEAPON +4 / FLARES +2 (loaded straight onto your aircraft, same price every
-              time), REPAIR AIRCRAFT (to full health), AIRFIELD > and TAKE OFF
-    AIRFIELD: REPAIR AIRFIELD, BUILD AA GUN, BUILD SAM SITE (defences that fire at enemies on their own: 5 AA guns,
-              2 SAM sites; expensive), < SUPPLIES and TAKE OFF
-  Each item has its icon; the bottom line says what it does and how many zollars you have. (If the STORE can't be
-  added on your setup, the landing menu shows the four shop rows instead.)
+- Land at Comona Airport between rounds: the landing menu has four STORE rows (SUPPLIES, UPGRADES, TACTICAL,
+  AIRFIELD & ALLIES), each opening its page; the pages also link in a ring and each has TAKE OFF.
+    SUPPLIES: FULL REARM (everything back to full load in one press), MISSILES +12, SPECIAL WEAPON +4 (shows what you
+              carry, e.g. (4/4, 8/8)), FLARES +2
+    UPGRADES: for the rest of the run, in tiers: AIRFRAME (+25 % health a tier), WEAPON BAYS (+50 % missiles and
+              special weapons), GUN (+15 % damage), FLARE PODS (+2 flares). Buy the extra ammo after.
+    TACTICAL: items you carry until you use them (up to 2 each):
+              AIRSTRIKE  (Ctrl+F1) destroys the biggest enemy flight near you
+              ECM BURST  (Ctrl+F2) breaks every missile lock on you for 10 seconds
+              DECOY      (Ctrl+F3) the nearest enemy flight breaks off for 30 seconds
+              Each also goes off by itself when it's needed (8 enemies close, 2 missiles closing in, a big flight
+              on you). SECOND CHANCE: survive one shoot-down (not a crash into the ground).
+    AIRFIELD: REPAIR AIRCRAFT, REPAIR AIRFIELD (repairs its AA guns and SAM sites too), BUILD AA GUN, BUILD SAM SITE
+    ALLIES:   WINGMEN (two F-16Cs, cheap), MOONCHILD (two F-22s), AEGIS DESTROYER, and ALLY ORDERS: HUNT (anywhere),
+              COVER (stay with you) or DEFEND (the airfield). Ctrl+F4 changes the order in flight.
+  Allies, ships and airfield defences still up are repaired between rounds. The ALLIES row on the HUD shows what's
+  up and what they've shot down; their kills pay you half. Each item has its icon; the bottom line says what it does
+  and how many zollars you have. (If the STORE can't be added on your setup, the landing menu shows the four shop
+  rows instead.)
+- The ITEMS row on the HUD shows the tactical items you carry and the SECOND CHANCE.
 - Pause menu -> Music Player picks your music.
 
 Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite, Ace, then Mercenary, Legend, Demon,
 Phantom and Reaper from round 16). Rounds 8, 15 and 22 are difficulty spikes. Better pilots sit on your tail, break,
 flare, and from Mercenary up use cobra / kulbit baits and scissors.
+
+More aircraft types join the enemy as the rounds go (F-2A, F-15C, Gripen, F-35C, Su-35, Rafale, Typhoon, Su-57,
+F-22A), and from the Mercenary rank pilots often fly their rank's own types.
 
 Named aces (ace rounds: 16, 19, 22, ... - only ace squadrons, no bomber raids; the rounds between are normal): each rank flies its own squadron - F-15C, Su-35, Typhoon, Su-47, Rafale, F-22A, Su-57 and,
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
@@ -54,7 +76,7 @@ an "ACE INBOUND" callout names each one the first time it shows up.
 
 Special rounds: in rounds 2-6 only Comona Defense can come (about 1 in 3 each); from round 7 on, any round can be
 any special (about 1 in 3, never two in a row). Each special comes at most once every 10 rounds. They get harder
-the later they come.
+the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN bring escorts.
 - COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown. If it's destroyed the shop is closed through the next round.
 - THE ANOMALY: the ace MINDRIPPER comes through a lightning portal in an F-4E, hovering in place, with four PHANTASM
@@ -62,11 +84,12 @@ the later they come.
 - AMPHIBIOUS ASSAULT: 16 landing craft head for the beaches by the airport; every one that lands puts a BTR ashore,
   which drives for the runway. Each BTR that reaches it captures 25 % of the airfield; at 100 % the airfield is taken
   (no landing, no STORE) until you destroy them or two rounds pass. Fighters (and maybe bombers) come too.
-- THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down.
+- THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down
+  (escorted from round 12).
 - THE ALICORN: the submarine carrier sails the west sea, diving and surfacing, firing its railgun and missiles.
   Destroy its four ballast tanks to open its core, then the core.
 - AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
-  smoke and blinks around you for 6 seconds, nose on you, gun firing. Nothing else flies in its round.
+  smoke and blinks around you for 6 seconds, nose on you, gun firing. Before round 12 nothing else flies with it.
 
 ONLINE ONLY BEGIN
 Leaderboard (Discord)

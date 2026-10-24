@@ -6,6 +6,8 @@
 #     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
 #     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
 # Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
+# NOVALKA=1 package_release.sh ...: a build without VALKA (user, 2026-10-25, a build for a friend): no X-02S container,
+#   no AC7 railgun sounds, VALKA switched off and out of the rotation (tools/novalka.py); the zip is named ..._NoValka.
 set -e
 cd "$(dirname "$0")/.."
 ed=$1
@@ -21,6 +23,14 @@ cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
+suffix=
+if [ "$NOVALKA" = 1 ]; then
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
+    rm -rf "$mod/Sounds/valka"
+    rmdir "$mod/Sounds" 2>/dev/null || true
+    python -X utf8 -I tools/novalka.py "$mod"
+    suffix=_NoValka
+fi
 sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 if [ "$ed" = offline ]; then
     (cd runtime && OFFLINE=1 sh build.sh > /dev/null)
@@ -49,7 +59,7 @@ if bad:
 print('offline check: no network code in', st)
 " "$st"
 fi
-out="build/release/AC8SurvivalMode_${ver}_$Ed.zip"
+out="build/release/AC8SurvivalMode_${ver}_$Ed$suffix.zip"
 python -I -c "
 import os, sys, zipfile
 st, out = sys.argv[1], sys.argv[2]

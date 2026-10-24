@@ -1,5 +1,5 @@
 -- sv_config.lua: the difficulty, CFG (every setting) and survival.ini.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The game's current difficulty (LiveDifficultyManager.CurrentDifficulty: 1 Casual .. 5 Ace).
@@ -39,7 +39,10 @@ CFG = {
     -- a squadron size joins the draw from its from_round.
     aircraft_round1     = 4,
     aircraft_per_round  = 2,                    -- added every round
-    max_aircraft        = 60,                   -- in one round, difficulty spikes included (user, 2026-10-23: 60)
+    -- in one round, difficulty spikes included (60 until 0.70.0, user 2026-10-23; the economy review of 2026-10-25: a
+    -- friend's round 23 brought 54 aircraft, 13 flights up at once, and ended the run with 148 missiles unfired. Past
+    -- about 30 the rounds now get harder by CFG.late instead of by numbers)
+    max_aircraft        = 30,
     squadrons           = { { size = 2, from_round = 1 }, { size = 4, from_round = 4 }, { size = 6, from_round = 8 } },
     distance_km         = { 18, 25 },           -- from the airfield, random bearing
     altitude_m          = { 2000, 4500 },
@@ -208,16 +211,23 @@ CFG = {
     -- Tu-95s and Tu-160s (`heavy`) from heavy_from_round. bombers.pool must match survival_events.BOMBERS.
     -- hp 250 / repair_hp 125 (user, 2026-10-23: "buff the airbase health"; at 100 a bomber raid took it from full to
     -- down in about 45 s in rounds 7 and 9 of that day's test); the STORE's repairs restore 60 (were 25).
+    -- hit_damage 3, bomb_damage 10 (were 4 and 12; economy review of 2026-10-25: a friend's airfield went down in rounds
+    -- 8, 12, 19 and 21 with 6 AA guns and 2 SAM sites up: "the airfield should fall only when a raid is ignored")
     airfield = {
         enabled    = true,
         hp         = 250,
-        hit_damage = 4,
+        hit_damage = 3,
         repair_hp  = 125,
         bombers = {
             -- Bomber raids (user, 2026-10-22: "in bomber rounds bombers primarily spawn"): from first_raid, every
             -- raid_every rounds; raid_share of that round's aircraft are bombers (squadrons of 2, 4, 6 by the same
-            -- from_round rule), the rest fighter escort. Other rounds have no bombers.
-            first_raid = 3, raid_every = 3, raid_share = 0.65,
+            -- from_round rule), at most max_bombers, the rest fighter escort. Other rounds have no bombers.
+            -- raid_share 0.5 and max_bombers 12 (were 0.65 and no cap: 18 bombers from round 12, economy review)
+            first_raid = 3, raid_every = 3, raid_share = 0.5, max_bombers = 12,
+            -- a raid you can see coming (economy review: "a 60-second warning with the raid on the map"): every bomber
+            -- flight of a raid comes from one direction (within spread_deg of it), called out with the compass point when
+            -- the round starts, and on the HUD while bombers are up
+            one_bearing = true, spread_deg = 25, warn = true,
             -- flight sizes; must match tools/survival_events.py BOMBER_SIZES (EB_Unit_01_Air0 too)
             sizes = { ERB_Unit_01_Air2 = 4, EA_Unit_01_Air0 = 2, EA_Unit_01_Air1 = 2, EA_Unit_01_Air2 = 4, EB_Unit_01_Air0 = 6 },
             aircraft = { "su34_common", "f15e_common" },
@@ -237,7 +247,7 @@ CFG = {
             -- run_cooldown_s, and bomb_damage is taken off the airfield damage_delay_s later (as the bombs land).
             -- drop_km 3 (was 1.5: the Tu-160s of the test of 2026-10-22 never came that close; their orbit is now 1.5 km,
             -- tools/survival_events.py HEAVY_AREA_RADIUS_M); every heavy's distance is logged every 10 s ("bombers:")
-            drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 12, damage_delay_s = 5,
+            drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 10, damage_delay_s = 5,
         },
     },
     -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
@@ -250,8 +260,13 @@ CFG = {
     -- special_x (user, 2026-10-23: "Special Rounds should pay out larger amounts, as should their enemies"): every
     -- kill in a special round (aircraft, landing craft, troop vehicles, the Alicorn's ballast tanks) pays x this
     -- (1.5 in 0.49.3, then "buff the special round eco more": 2, and the specials' own rewards twice 0.49.2's).
+    -- Economy review of 2026-10-25 (a friend's 3-hour run: special rounds paid 4-10 times more a minute than normal ones):
+    -- round_bonus 250 (was 100), and every kill pays x (1 + round_x_per_round x (round - 1)), at most round_x_max. A kill
+    -- an ally, an allied ship or an airfield defence made (CFG.allies.kills) pays ally_x of it, an airstrike's
+    -- airstrike_x.
     credits = {
-        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 100, special_x = 2.0,
+        start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 250, special_x = 2.0,
+        round_x_per_round = 0.02, round_x_max = 1.5, ally_x = 0.5, airstrike_x = 0.5,
         tier_pay = { 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0 },
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
     },
@@ -288,15 +303,39 @@ CFG = {
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
             -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
             -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
-            Moonchild      = { role = "ally_air",  label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
+            Moonchild      = { role = "ally_air", ally = "moonchild", label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
             ShipAegis      = { role = "ally_ship", ship = "Aegis", label = "AEGIS DESTROYER", price = 20000, raise = 1.25 },
+            -- Economy review of 2026-10-25 (tools/build_survival.py STORE_PAGES puts them on the STORE's pages):
+            -- FULL REARM: everything missing up to the full load in one press, priced per round as the packs are
+            -- ("100 separate MISSILES purchases over the run"): per missile, special weapon round and flare
+            Rearm      = { role = "rearm", label = "FULL REARM", missile = 25, special = 100, flare = 75 },
+            -- upgrades for the rest of the run, bought once a tier ("lasting upgrades as the late-game sink"): `tiers`
+            -- their prices, `step` what each tier adds: AIRFRAME your aircraft's health (+25 %), WEAPON BAYS what it
+            -- carries of missiles and special weapons (+50 % of its own full load), GUN its gun's damage (+15 %), FLARE
+            -- PODS its flares (+2)
+            UpAirframe = { role = "upgrade", up = "airframe", label = "AIRFRAME", tiers = { 5000, 9000, 14000 }, step = 0.25 },
+            UpBays     = { role = "upgrade", up = "bays", label = "WEAPON BAYS", tiers = { 4000, 8000 }, step = 0.5 },
+            UpGun      = { role = "upgrade", up = "gun", label = "GUN", tiers = { 4000, 7000, 11000 }, step = 0.15 },
+            UpFlares   = { role = "upgrade", up = "flares", label = "FLARE PODS", tiers = { 2500, 4500, 7000 }, step = 2 },
+            -- tactical items, carried until used, at most `max` of each (CFG.tactical: how they work)
+            Airstrike  = { role = "tactical", tac = "airstrike", label = "AIRSTRIKE", price = 6000, raise = 1.0, max = 2 },
+            Ecm        = { role = "tactical", tac = "ecm", label = "ECM BURST", price = 4000, raise = 1.0, max = 2 },
+            Decoy      = { role = "tactical", tac = "decoy", label = "DECOY", price = 4000, raise = 1.0, max = 2 },
+            -- one shoot-down survived (CFG.insurance), one held at a time ("insurance as a high-end purchase")
+            Insurance  = { role = "insurance", label = "SECOND CHANCE", price = 50000, raise = 1.0 },
+            -- a cheaper first rung of allies ("a pair of F-16s for about 5,000 before MOONCHILD at 15,000"): flies on
+            -- MOONCHILD's two flights (CFG.allies.wingmen), so at most two flights of the two kinds are up together
+            Wingmen    = { role = "ally_air", ally = "wingmen", label = "WINGMEN: 2 x F-16C", price = 5000, raise = 1.2 },
+            -- the allied aircraft's orders (CFG.allies.orders), free: each press the next one
+            Orders     = { role = "orders", label = "ALLY ORDERS" },
+            -- (defences' raise 1.12, was 1.25: "the sixth AA gun cost 12,210, three times the first")
             Airfield = { role = "combined", repair = 60, price = 300, raise = 1.0, label = "REPAIR AIRFIELD",
                          defences = {
                              order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
-                             aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.25,
+                             aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.12,
                                      units = { "SV_Unit_AAGun_A", "SV_Unit_AAGun_B", "SV_Unit_AAGun_C", "SV_Unit_AAGun_D",
                                                "SV_Unit_AAGun_E" } },
-                             sam = { label = "SAM SITE", what = "a SAM site", price = 8000, raise = 1.25,
+                             sam = { label = "SAM SITE", what = "a SAM site", price = 8000, raise = 1.12,
                                      units = { "SV_Unit_SAM_A", "SV_Unit_SAM_B" } },
                              -- their fire control (user, 2026-10-23: "increase the fire rate of the Airfield"): the
                              -- allies' (CFG.allies.fcs: x0.5 times, x1.6 range, x1.5 cone), then arming / lock x lock_x
@@ -319,7 +358,26 @@ CFG = {
     allies = {
         enabled      = true,
         hunt_share   = 0.35,                     -- (0.5 until 0.48.5: MOONCHILD was swarmed in 2 minutes)
-        strike_share = 0.25,
+        -- at least hunters flights of a round go for the allied aircraft while they fly (economy review of 2026-10-25:
+        -- "hunter pairs that go for allies")
+        hunters      = 1,
+        -- strike_share 0.15 (was 0.25), only every ship_strike_every rounds (economy review: "an Aegis destroyer died
+        -- 13.6 min after sailing")
+        strike_share = 0.15,
+        ship_strike_every = 2,
+        -- between rounds every allied aircraft, ship and airfield defence still up is repaired to full (economy review:
+        -- "allies who last ... rearm and repair between rounds while they live"); their weapons never run dry
+        -- (magazine_min rounds on every allied fire control)
+        repair       = true,
+        magazine_min = 999,
+        -- what they did (economy review: "show what allies do"): each enemy's damage by attacker is read while it flies
+        -- (its DamageHistoryMap); one you never hit that an ally, an allied ship or an airfield defence did is theirs
+        kills        = true,
+        -- the allied aircraft's orders (the STORE's ALLY ORDERS row, Ctrl+F4 in flight): hunt (anywhere, the default),
+        -- cover (their area kept within cover_radius_m of you, moved every cover_every_s) or defend (their area on the
+        -- airfield, defend_radius_m)
+        orders       = { default = "hunt", list = { "hunt", "cover", "defend" }, cover_every_s = 6, cover_radius_m = 5000,
+                         defend_radius_m = 8000, key = true },
         -- gun_lead_s / burst_x: MOONCHILD's guns aim gun_lead_s ahead (PredictionOffsetTime; stock aircraft guns 0)
         -- and fire bursts burst_x as long (stock 10 rounds); aa_lead_x: the ships' and the airfield's AA guns and CIWS
         -- lead that much further (stock AA guns 0.8 s; user, 2026-10-24: "increase the gun lead for the allied
@@ -336,16 +394,26 @@ CFG = {
                          -- bought in round 9 was gone 112 s after takeoff.)
                          scale = { rank_add = 1, rank_min = 3, ai_level_min = 3, health_x = 2.0, health_per_round = 0.08,
                                    health_max_x = 4.5 } },
+        -- WINGMEN (the STORE's cheaper allies): two F-16Cs on MOONCHILD's flights (its world-data units, the airframe
+        -- changed before takeoff: SV_SetAircraft, tools/build_survival.py's sv_ally_wingmen row), flying as MOONCHILD
+        -- does but scaled less
+        wingmen      = { name = "VIPER", name_key = "SV_Wingmen", row = "sv_ally_wingmen", moonchild_row = "sv_ally_moonchild",
+                         scale = { rank_add = 0, rank_min = 2, ai_level_min = 2, health_x = 1.5, health_per_round = 0.05,
+                                   health_max_x = 3.0 } },
         ships        = {
             -- search_m: its turrets' AI module (a copy of NPC_AIModule_Turret000, 6000 m, made NPC_AIModule_SV_<key>),
             -- the farthest they see anything, and no losing targets in cloud. missile: its homing missiles' own weapon
             -- row (VLS_Vessel_000: 9 s of flight from 500 km/h, +300 km/h a second to 3000, ~4 km, so 6 km locks fell
             -- short; user, 2026-10-23: "aegis ships still don't engage far enough"): lock-on at range_m, life_s of
             -- flight, acceleration x accel_x, top speed speed_max_kmph, turn rate x turn_x.
-            Aegis = { name = "DDG AEGIS", turrets = "aegs", fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
+            -- health_add: HP on its hull's own (economy review: "ships placed to protect"; its row's MaxHealthDifference)
+            Aegis = { name = "DDG AEGIS", turrets = "aegs", health_add = 300,
+                      fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
                                                   missile = { range_m = 20000, life_s = 30, accel_x = 2.0,
                                                               speed_max_kmph = 3600, turn_x = 1.5 } },
-                      units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisB", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD" } },
+                      -- (the STORE sends the first free one: their lanes start 11.5 (A), 11.9 (C), 13.0 (D) and 13.6 km
+                      -- (B) from the airfield, all inside its 20 km missiles' reach of the bombers' run-in; nearest first)
+                      units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD", "SV_Unit_ShipAegisB" } },
         },
         -- Speakers who talk as allies during a Survival run (user, 2026-10-23: the Savian mercenary leader's line at
         -- MOONCHILD's takeoff showed as an enemy's). The game reads speakers from the game instance's own
@@ -355,10 +423,38 @@ CFG = {
         ally_speakers = { { table = "/Game/Datatables/Radio/DT_SpeakerTable.DT_SpeakerTable", row = "826",
                             id = "ms25_Savia_Mercenary_Leader", process = "Ally_Fighter_Mob" } },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
+                 takeoff_sub_wingmen = "TWO F-16s JOINING THE FIGHT",
                  air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
                  sunk = "%s SUNK", lost_sub = "THE STORE CAN SEND ANOTHER",
-                 strike = "STRIKE FLIGHTS INBOUND", strike_sub = "HEADING FOR OUR SHIPS" },
+                 strike = "STRIKE FLIGHTS INBOUND", strike_sub = "HEADING FOR OUR SHIPS",
+                 orders = "ALLIES: %s", orders_sub = { hunt = "HUNTING ANYWHERE", cover = "COVERING YOU",
+                                                        defend = "DEFENDING THE AIRFIELD" },
+                 def_lost = "%s LOST", def_lost_sub = "THE STORE CAN BUILD ANOTHER",
+                 repaired = "ALLIES REPAIRED", repaired_sub = "%d BACK TO FULL HEALTH" },
     },
+    -- Tactical items (economy review of 2026-10-25: "one-use tactical items ... priced to compete with allies"), bought
+    -- in the STORE and carried until used: each by its key in flight (Ctrl+F1 / F2 / F3; keys = false: none), or by
+    -- itself when `auto` and its moment comes.
+    --   airstrike: the enemy flight with the most aircraft within range_km of you (no specials, no aces leading)
+    --              destroyed delay_s after the call; its kills pay CFG.credits.airstrike_x. auto: when auto_near or more
+    --              enemies are within auto_km of you.
+    --   ecm:       for ecm_s every enemy missile within range_km of you loses its lock (homing off; one still closing
+    --              within kill_m is destroyed). auto: when auto_missiles or more are within auto_km of you.
+    --   decoy:     the enemy fighter flight nearest you breaks off for decoy_s (RE_SV_Decoy_NN: no engagement), then
+    --              comes back (RE_SV_DecoyEnd_NN: its orders again). auto: a flight of auto_size or more within auto_km.
+    tactical = { keys = true,
+                 airstrike = { delay_s = 4, range_km = 15, auto = true, auto_near = 8, auto_km = 10 },
+                 ecm = { ecm_s = 10, range_km = 4, kill_m = 500, auto = true, auto_missiles = 2, auto_km = 2.5 },
+                 decoy = { decoy_s = 30, range_km = 12, auto = true, auto_size = 4, auto_km = 4 } },
+    -- SECOND CHANCE (the STORE's Insurance; economy review: "50,000 for one free continue: the friend died holding 26,770
+    -- with nothing to spend it on that could have saved the run"): while held, your aircraft's health can't drop under
+    -- floor of its full health (its MinHealth, as Missions 19, 21 and 26 hold yours); the moment it's down there it's
+    -- repaired to full, invulnerable for safe_s, and the SECOND CHANCE is used up. Not a crash: hitting the ground still
+    -- ends the run.
+    insurance = { enabled = true, floor = 0.04, safe_s = 3 },
+    -- Upgrades (the STORE's UPGRADES page; CFG.shop.items Up*): gun_experimental = false leaves the GUN upgrade out of the
+    -- STORE (it changes the player's gun class default damage; test it first)
+    upgrades = { enabled = true, gun_experimental = true },
     -- Difficulty spikes (user, 2026-10-22: "every 7 rounds we should have a difficulty spike that's across the board,
     -- enemies react quicker, have more accuracy and will always try to get behind you, even start post stalling").
     -- Level L (rounds 1 + L x every on; the last level stays) on top of the round's skill tier and growth:
@@ -388,6 +484,43 @@ CFG = {
               aircraft_add = 6 },
         },
     },
+    -- Waves (economy review of 2026-10-25: "split a round into 2-4 waves, with at most 16-20 enemy aircraft up at once;
+    -- the next wave comes when the last thins out"): a round's flights come in waves of at most max_up aircraft
+    -- (max_up_by_preset by the game's difficulty), the special and the bombers in the first; the next wave once next_at or
+    -- fewer of the round's aircraft are left, or timeout_s after the last one started. enabled = false: all at once.
+    waves = { enabled = true, max_up = 18, max_up_by_preset = { casual = 14, standard = 18, ace = 22 }, next_at = 4,
+              timeout_s = 150, callout = true },
+    -- Late rounds (economy review: "quality over quantity after round 15 ... raise ace share, health and accuracy
+    -- instead"): from from_round, every enemy aircraft's health x (1 + health_per_round x rounds past it), at most
+    -- health_max_x, and the chance a pilot flies one tier up (CFG.tiers.promote_chance) + promote_per_round a round, at
+    -- most promote_max. Accuracy keeps climbing with the difficulty spikes and the tiers' fire control.
+    late = { enabled = true, from_round = 15, health_per_round = 0.04, health_max_x = 2.0, promote_per_round = 0.03,
+             promote_max = 0.6 },
+    -- More airframes (economy review: "kills were mostly F-15E, Su-34 and F-16C. Weight the picks towards airframes not
+    -- yet seen this run, and give each tier signature aircraft"). `aircraft` above is the pool from round 1; each of these
+    -- joins it from its round (their mission rows: tools/build_survival.py POOL_EXTRA, the campaign's plain enemy rows).
+    -- unseen: a type flown n times this run is picked 1 / (1 + n) as often. From the Mercenary tier on, signature_share
+    -- of normal rounds' fighter flights fly the tier's own types (signature: the named aces' airframes, plain skins).
+    variety = { enabled = true, unseen = true, signature_share = 0.35,
+                late = { { "f02a_common", 4 }, { "f15c_common", 6 }, { "j39e_common", 7 }, { "f35c_common", 9 },
+                         { "su35_common", 10 }, { "rflm_common", 12 }, { "typn_common", 12 }, { "su57_common", 16 },
+                         { "f22a_common", 18 } },
+                signature = { mercenary = { "f15c_common", "su35_common", "typn_common" },
+                              legend = { "su47_common", "rflm_common" }, demon = { "f22a_common", "su57_common" },
+                              phantom = { "su57_common", "typn_common", "su47_common" },
+                              reaper = { "su57_common", "f22a_common", "typn_common", "rflm_common" } } },
+    -- The jammer (economy review: "a jammer or AWACS that buffs nearby enemies until it's shot down"): from from_round, in
+    -- a normal round with `chance`, one fighter flight is led by an EA-18G (its ECM pod spoils your missiles near it)
+    -- and every enemy within radius_km of it flies rank_add better (PilotRank, at most 5) until it's down. Shot down: its
+    -- kill pays pay_x.
+    jammer = { enabled = true, from_round = 8, chance = 0.5, aircraft = "e18g_common", radius_km = 6, rank_add = 1, pay_x = 3 },
+    -- Escorts (economy review: "escorts that stay with the bombers"): in a bomber raid escort_share of the fighter
+    -- flights hold over the airfield the bombers are making for (RE_SV_Escort_NN: their area on the airfield, any target
+    -- that comes) instead of hunting you across the map.
+    escorts = { enabled = true, share = 0.5 },
+    -- Strike packages (economy review: "strike flights that go for the airfield or the ships"): from from_round a normal
+    -- round brings a 2-ship strike at the airfield with `chance` (not in raid, ace or special rounds).
+    strike = { enabled = true, from_round = 6, chance = 0.35 },
 -- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
     -- The Discord leaderboard (Milestone 8; leaderboard/README.md; user, 2026-10-23: an end-of-run prompt, a
     -- Cloudflare Worker, boards for highest round, score per difficulty and fastest specials). Every run that ends (shot
@@ -459,6 +592,12 @@ CFG = {
         -- each special comes at most once in this many rounds (user, 2026-10-23): Comona Defense in round 2 can come
         -- again from round 12; the others keep their chance meanwhile. 0: no cooldown.
         cooldown_rounds = 10,
+        -- specials scale with the round (economy review of 2026-10-25: "all five were beaten easily, in 2.8-4.4 minutes.
+        -- A special late in the run should bring escorts and more health, like the normal rounds around it"): from
+        -- escort_from, the specials named in escort_kinds (which fly alone) bring escort_share of the round's aircraft
+        -- as fighter flights (escort_min..escort_max). Their health grows by their own health_per_round.
+        escort_from = 12, escort_share = 0.25, escort_min = 2, escort_max = 8,
+        escort_kinds = { "alicorn", "ladon", "glitch" },
         -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
         -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
         -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
@@ -474,8 +613,9 @@ CFG = {
         -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
         -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
         -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.
+        -- (health_per_round 0.05, health_max_x 1.4: were 0.03 / 1.0, economy review of 2026-10-25)
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
-                    volley_every_s = 45, health_x = 0.3, health_per_round = 0.03, health_max_x = 1.0,
+                    volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
                     weapon_missiles = 3, railgun_missiles = 4,
                     weapon_classes = {   -- its weapons and their hatches: which *_missiles each takes
@@ -516,9 +656,10 @@ CFG = {
         -- the ground, at least blink_turn_deg round you from the last one, and its gun is fired at you all
         -- through it (gun_every_s). Its health grows health_per_round a round after `first` (at most
         -- health_max_x), as the other specials'. Shot down: `reward` zollars.
+        -- (health_per_round 0.06, health_max_x 3.5: were 0.04 / 3.0, economy review of 2026-10-25)
         glitch   = { name = "AB.L..IN", squadron = "IFF: FATAL ERROR", unit = "SV_Unit_Glitch", health = 450,
                      reward = 7000, reward_per_round = 250, ai_level = 5, spawn_km = { 6, 9 }, arrive_s = 1.0,
-                     health_per_round = 0.04, health_max_x = 3.0,
+                     health_per_round = 0.06, health_max_x = 3.5,
                      frenzy_s = 6, blink_every_s = 1.0, blink_turn_deg = 60, ground_clear_m = 150,
                      -- its gun and ECM pod on command (tools/survival_events.py GLITCH_GUN_* / _ECM_SLOT): through a
                      -- frenzy RE_SV_GlitchGun every gun_every_s, which fires the gun at you 5 times 0.1 s apart (user,
@@ -577,7 +718,9 @@ CFG = {
         -- round's aircraft (decoy_min..decoy_max), and lurk_s after the last of them is down her attack starts: the
         -- opener, then straight after the shot the camera and the HUD's anomaly_line and her name big (big_x). The
         -- forced WARNING is on from her round's start until she's down (user, 2026-10-24).
-        valka    = { name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
+        -- enabled = false: she never comes, whatever `rotation` says (a build without her X-02S and AC7 sounds:
+        -- tools/package_release.sh novalka)
+        valka    = { enabled = true, name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
                      health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
                      disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                      anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
@@ -675,8 +818,9 @@ CFG = {
         -- missile_*: their VLS missiles (BP_wp_vls_ladon: 15 damage, 60 deg homing cone) as they appear in Survival:
         -- damage x missile_damage_x, homing cone x missile_homing_x (user, 2026-10-24: "tone that down too, only minorly").
         -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
+        -- (health_per_round 0.05, health_max_x 2.5: were 0.03 / 2.0, economy review of 2026-10-25)
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
-                  bomb_per_round = 1, health_per_round = 0.03, health_max_x = 2.0,
+                  bomb_per_round = 1, health_per_round = 0.05, health_max_x = 2.5,
                   volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
                   missile_damage_x = 0.8, missile_homing_x = 0.85,
                   reward = 6000, reward_per_round = 200,
@@ -726,6 +870,9 @@ CFG = {
         anomaly  = { name = "MINDRIPPER", guards_name = "PHANTASM", guards = 4, field_km = 3.2, invert = "random",
                      random_fx = { "pitch", "roll", "yaw", "swap", "throttle" }, random_min = 1, random_max = 2,
                      fade_s = 1.5, reward = 8000, reward_per_round = 300, ai_level = 5, guard_offset_m = 800,
+                     -- its health for its round (economy review of 2026-10-25): x (1 + health_per_round a round after
+                     -- specials.first), at most health_max_x, set when it appears
+                     health_per_round = 0.05, health_max_x = 2.5,
                      -- its round has nothing else in it (user, 2026-10-22: "no other aircraft other than those special
                      -- to those levels should spawn")
                      only = true,
@@ -906,7 +1053,37 @@ CFG = {
             ladon_sub    = "LADONS INBOUND",
             lb_title     = "RUN OVER: %s",
             lb_lines     = { "ROUND REACHED  %d", "SCORE  %s", "KILLS  %d AIR, %d GROUND", "SPECIALS BEATEN  %d",
-                             "TIME  %s", "ZOLLARS EARNED  %s" },
+                             "TIME  %s", "ZOLLARS EARNED  %s", "BY ALLIES  %d, BY DEFENCES  %d" },
+            -- (economy review of 2026-10-25: waves, raids, the jammer, ally kills, tactical items)
+            round_wave   = "ROUND: %d   WAVE %d/%d",
+            wave_in      = "WAVE %d OF %d",
+            wave_in_sub  = "%d AIRCRAFT INBOUND",
+            raid         = "BOMBER RAID FROM THE %s",
+            raid_sub     = "%d BOMBERS: PROTECT THE AIRFIELD",
+            raid_row     = "RAID: %d BOMBERS FROM THE %s",
+            strike_air   = "STRIKE FLIGHT INBOUND",
+            strike_air_sub = "HEADING FOR THE AIRFIELD",
+            jammer       = "ENEMY JAMMER INBOUND",
+            jammer_sub   = "THE EA-18G SHARPENS EVERY PILOT NEAR IT",
+            jammer_down  = "JAMMER DOWN",
+            jammer_down_sub = "+%d ZOLLARS",
+            allies_row   = "ALLIES: %s",
+            items_row    = "ITEMS: %s",
+            kills        = "ROUND %d KILLS",
+            kills_sub    = "YOU %d   ALLIES %d   SHIPS %d   DEFENCES %d",
+            airstrike    = "AIRSTRIKE INBOUND",
+            airstrike_sub = "TARGET: %d AIRCRAFT",
+            airstrike_none = "AIRSTRIKE HELD",
+            airstrike_none_sub = "NO ENEMY FLIGHT WITHIN %d KM",
+            airstrike_hit = "AIRSTRIKE: %d DOWN",
+            ecm          = "ECM BURST",
+            ecm_sub      = "ENEMY LOCKS BROKEN FOR %d SECONDS",
+            decoy        = "DECOY RELEASED",
+            decoy_sub    = "%d AIRCRAFT BREAK OFF",
+            decoy_none   = "DECOY HELD",
+            decoy_none_sub = "NO ENEMY FLIGHT WITHIN %d KM",
+            insured      = "SECOND CHANCE",
+            insured_sub  = "AIRCRAFT RESTORED: DON'T WASTE IT",
             lb_sending   = "SENDING...",
             lb_sent      = "SUBMITTED: SCORE %s",
             lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
@@ -1201,10 +1378,34 @@ function TIER.index(round)
     for k, t in ipairs(CFG.tiers.list) do if math.max(round or 1, 1) >= t.from_round then i = k end end
     return i
 end
+-- How many rounds `round` is past CFG.late.from_round (0 before it, 1 in it), or 0 when CFG.late is off.
+function TIER.lateRounds(round)
+    local l = CFG.late
+    if not (l and l.enabled and round) then return 0 end
+    return math.max(0, round - l.from_round + 1)
+end
+-- The chance a pilot flies one tier above the round's: CFG.tiers.promote_chance, plus CFG.late's growth.
+function TIER.promoteChance(round)
+    local l, n = CFG.late, TIER.lateRounds(round)
+    local p = CFG.tiers.promote_chance
+    if n > 0 then p = math.max(p, math.min(l.promote_max or 1, p + (l.promote_per_round or 0) * n)) end
+    return p
+end
+-- An enemy aircraft's health multiplier in round `round` (CFG.late), 1 before it.
+function TIER.lateHealthX(round)
+    local l, n = CFG.late, TIER.lateRounds(round)
+    if n <= 0 then return 1 end
+    return math.min(l.health_max_x or 1, 1 + (l.health_per_round or 0) * n)
+end
 function TIER.pick(round)
     local tc, i = CFG.tiers, TIER.index(round)
-    if i < #tc.list and math.random() < tc.promote_chance then i = i + 1 end
+    if i < #tc.list and math.random() < TIER.promoteChance(round) then i = i + 1 end
     return i
+end
+-- Kill pay's round multiplier (CFG.credits round_x_per_round / round_x_max).
+function TIER.roundX(round)
+    local c = CFG.credits
+    return math.min(c.round_x_max or 1, 1 + (c.round_x_per_round or 0) * math.max(0, (round or 1) - 1))
 end
 function TIER.pay(base, i)
     local tp = CFG.credits.tier_pay or {}

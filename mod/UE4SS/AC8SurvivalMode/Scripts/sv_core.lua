@@ -1,5 +1,5 @@
 -- sv_core.lua: shared helpers: logging, objects, the menu rows and tables, Survival's flags.
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 -- AC8 Survival Mode - runtime (UE4SS Lua half; the native half is dlls\main.dll)
 -- Milestone 1:
@@ -414,7 +414,7 @@ end
 -- (set while a flight is up) are shown as one count, also returned as the second value.
 -- Every SV_* int flag: { name = value }, read at most once a second (several callers share one walk), or nil
 -- while there is no event container.
--- The event containers are looked up again only when one has gone (a new level) or every 30 s; FindAllOf walks every
+-- The event containers are looked up again only when one has gone (a new level) or every 120 s; FindAllOf walks every
 -- object in the game, which several times a second was a visible hitch (user, 2026-10-22: "a bit of lag").
 flagCache = { at = -1, t = nil, cs = nil, found = -100 }
 function svFlags()
@@ -423,7 +423,9 @@ function svFlags()
     -- entries through two pcalls each; user, 2026-10-23: "the custom HUD ... seems a bit laggy")
     if now - flagCache.at < 1.0 then return flagCache.t end
     local cs = flagCache.cs
-    local stale = not cs or now - flagCache.found > 30 or (#cs == 0 and now - flagCache.found > 2)
+    -- (a gone container is found by its validity; the timed look again every 120 s, was 30: each FindAllOf walk was a
+    -- 22-29 ms hitch in a friend's late rounds, economy review of 2026-10-25)
+    local stale = not cs or now - flagCache.found > 120 or (#cs == 0 and now - flagCache.found > 2)
     for _, c in ipairs(cs or {}) do if not valid(c) then stale = true end end
     if stale then cs, flagCache.found = FindAllOf("LiveEventContainer") or {}, now; flagCache.cs = cs end
     local t = nil

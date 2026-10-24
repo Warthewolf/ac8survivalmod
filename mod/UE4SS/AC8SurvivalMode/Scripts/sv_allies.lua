@@ -1,5 +1,5 @@
 -- sv_allies.lua: the allies (MOONCHILD, the ships).
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 ---------------------------------------------------------------------------------------------------- allies
@@ -24,6 +24,9 @@ end
 ROW_SHIP.SV_Def_Gepa, ROW_SHIP.SV_Def_Avng = "Defence", "Defence"   -- (the airfield's AA guns and SAM sites)
 for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
 for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
+-- WINGMEN's DT_SV_NpcRows row (the review build's: tools/build_survival.py, its F-16C under SV_Wingmen); apart from
+-- ROWS, so a container without it still sells the rest
+local WINGMEN_ROW = "SV_Ally_Wingmen"
 
 function ALLY.setup()
     if ALLY.setupDone or not CFG.allies.enabled or not gameInstance() or not SR.done then return end
@@ -67,6 +70,8 @@ function ALLY.setup()
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
                 end
+                -- (CFG.allies.magazine_min: an ally that lasts round after round never runs dry)
+                pcall(function() r.MagazineCapacity = math.max(r.MagazineCapacity, CFG.allies.magazine_min or 0) end)
                 pcall(function()                     -- guns: MOONCHILD's lead and fire longer bursts, AA guns lead further
                     if src:find("PlaneGun", 1, true) then
                         r.PredictionOffsetTime = c.gun_lead_s or 0
@@ -126,14 +131,25 @@ function ALLY.setup()
         return made[new] and new or nil
     end
     local n = 0
-    for _, row in ipairs(ROWS) do
+    local all = { WINGMEN_ROW }
+    for _, row in ipairs(ROWS) do all[#all + 1] = row end
+    for _, row in ipairs(all) do
         local _, have = dtCall(npc, "FindRow", row)
         if have == nil then
             local _, r = dtCall(mine, "FindRow", row)
             if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
         end
+        if row == WINGMEN_ROW then ALLY.wingmenReady = have ~= nil end
+        if have ~= nil and row ~= WINGMEN_ROW then n = n + 1 end
+        local sh = ROW_SHIP[row] and CFG.allies.ships[ROW_SHIP[row]]
+        if have ~= nil and sh and sh.health_add and row == "SV_Ally_" .. ROW_SHIP[row] then   -- a hull: its own health
+            local okH, h = pcall(function()                -- (once a session: ALLY.setup runs once, the row stays in)
+                have.MaxHealthDifference = (have.MaxHealthDifference or 0) + sh.health_add
+                return have.MaxHealthDifference
+            end)
+            log(string.format("allies: %s's hull %+d HP (MaxHealthDifference now %s)", sh.name, sh.health_add, okH and tostring(h) or "NOT set"))
+        end
         if have ~= nil then
-            n = n + 1
             for i = 0, 5 do
                 pcall(function()
                     local id = have["NpcFCSId" .. i]:ToString()
@@ -143,7 +159,7 @@ function ALLY.setup()
                     end
                 end)
             end
-            if row == ROWS[1] and SR.module then      -- MOONCHILD searches as far as the enemies do
+            if (row == ROWS[1] or row == WINGMEN_ROW) and SR.module then   -- MOONCHILD / WINGMEN search as far as the enemies do
                 pcall(function() have.NpcAIModuleId = FName(SR.module) end)
             end
             if ROW_SHIP[row] and shipModule[ROW_SHIP[row]] then   -- a ship's hull and turrets: its own module
@@ -156,13 +172,15 @@ function ALLY.setup()
     local names = 0
     if type(SV_SetText) == "function" then
         if SV_SetText(CFG.allies.aircraft.name_key, CFG.allies.aircraft.name) == 1 then names = names + 1 end
+        if SV_SetText(CFG.allies.wingmen.name_key, CFG.allies.wingmen.name) == 1 then names = names + 1 end
         for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
     end
     ALLY.ready = n == #ROWS
     if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
     if #gunSaid > 0 then log("allies: guns: " .. table.concat(gunSaid, ", ")) end
-    log(string.format("allies: %d of %d rows in DT_NPC%s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
-        n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", boosted, c.range_x, c.time_x, names))
+    log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
+        n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", ALLY.wingmenReady and "in" or "NOT in",
+        boosted, c.range_x, c.time_x, names))
 end
 
 -- CFG.allies.ally_speakers: on while a run is on (`want`), back to the game's values after it.
@@ -230,14 +248,22 @@ function ALLY.buy(role, unit, key, price)
         hudCallout(string.format(t.ship, sh.name), t.ship_sub)
         return true, sh.name .. " AT SEA"
     end
-    R.up[unit] = { kind = "air", queued = true, at = now, price = price }
-    log(string.format("allies: %s (%s) bought; it takes off once you're airborne", CFG.allies.aircraft.name, unit))
-    return true, CFG.allies.aircraft.name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
+    -- an allied flight on MOONCHILD's units: MOONCHILD's F-22s, or the cheaper WINGMEN (key "wingmen")
+    local wing = key == "wingmen"
+    local name = wing and CFG.allies.wingmen.name or CFG.allies.aircraft.name
+    R.up[unit] = { kind = "air", ally = wing and "wingmen" or "moonchild", queued = true, at = now, price = price }
+    log(string.format("allies: %s (%s) bought; it takes off once you're airborne", name, unit))
+    return true, name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
 end
 
--- MOONCHILD's level for this round (CFG.allies.aircraft.scale): { rank, ai, hx (health multiplier), tier name }
-function ALLY.level()
-    local sc, round = CFG.allies.aircraft.scale or {}, math.max(1, D and D.round or 1)
+-- An allied flight's name and scaling (MOONCHILD, or the WINGMEN on its units)
+local function airName(s) return (s and s.ally == "wingmen") and CFG.allies.wingmen.name or CFG.allies.aircraft.name end
+local function airScale(s) return ((s and s.ally == "wingmen") and CFG.allies.wingmen.scale or CFG.allies.aircraft.scale) or {} end
+
+-- An allied flight's level for this round (CFG.allies.aircraft.scale / wingmen.scale): { rank, ai, hx (health
+-- multiplier), tier name }
+function ALLY.level(s)
+    local sc, round = airScale(s), math.max(1, D and D.round or 1)
     local t = CFG.tiers.enabled and CFG.tiers.list[TIER.index(round)] or {}
     return { rank = math.max(sc.rank_min or 1, math.min(5, (t.rank or 3) + (sc.rank_add or 0))),
              ai = math.max(sc.ai_level_min or 2, t.ai_level or 2),
@@ -245,15 +271,16 @@ function ALLY.level()
              tier = t.name or "-" }
 end
 
--- Each allied aircraft at this round's level: its rank, and its health raised by the growth since it was last set.
+-- Each allied aircraft at this round's level: its rank, and its health raised by the growth since it was last set
+-- (p.full: its full health now, what the repairs between rounds bring it back to)
 function ALLY.scale()
     local R = ALLY.state()
     if #R.planes == 0 then return end
-    local L = ALLY.level()
     for i = #R.planes, 1, -1 do
         local p = R.planes[i]
         if not valid(p.obj) then table.remove(R.planes, i)
         elseif p.round ~= D.round then
+            local L = ALLY.level(R.up[p.unit])
             p.round = D.round
             pcall(function() p.obj.PilotRank = L.rank end)
             local was = p.hx or 1
@@ -263,10 +290,131 @@ function ALLY.scale()
                 if L.hx > was and h > 0 then p.obj.HealthInternal = math.floor(h * L.hx / was + 0.5) end
                 return h, p.obj.HealthInternal
             end)
+            if ok then
+                local okM, mh = pcall(function() return p.obj.MaxHealth end)
+                p.full = (okM and type(mh) == "number") and math.floor(mh * 10 * L.hx + 0.5) or math.max(p.full or 0, h1 or 0)
+            end
             log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)", p.name, p.unit,
                 D.round, L.tier, L.rank, L.hx, ok and tostring(h0) or "?", ok and tostring(h1) or "?"))
         end
     end
+end
+
+-- CFG.allies.repair: between rounds every allied aircraft, ship (hull and turrets) and airfield defence still up back
+-- to full health (economy review of 2026-10-25: "allies who last"). The ships' and defences' actors are found by their
+-- classes (BP_VE002_aegs_* / BP_GR002_gepa_CP / BP_GR005_avng_CP: the names the AI watch logged), once a round.
+local SHIP_CLASSES = { "BP_VE002_aegs_CP_C", "BP_VE002_aegs_mk15_01_CP_C", "BP_VE002_aegs_mk41_CP_C", "BP_VE002_aegs_mk45_CP_C" }
+local DEF_CLASSES = { "BP_GR002_gepa_CP_C", "BP_GR005_avng_CP_C" }
+local function repairActors(classes)
+    local n = 0
+    for _, cls in ipairs(classes) do
+        for _, o in ipairs(FindAllOf(cls) or {}) do
+            if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
+                pcall(function()
+                    local h, mh = o.HealthInternal, o.MaxHealth
+                    if h > 0 and mh > 0 and h < math.floor(mh * 10) then o.HealthInternal = math.floor(mh * 10); n = n + 1 end
+                end)
+            end
+        end
+    end
+    return n
+end
+
+-- The airfield defences' health in % (their actors within 4 km of the runway, found again every 30 s or when one is
+-- built or lost; read every 2 s), or nil when none is up
+local function defenceHealth(R, now)
+    local n = R.defCount and (R.defCount.aa + R.defCount.sam) or 0
+    if n == 0 then R.defActors = nil; return nil end
+    if not R.defActors or R.defActorsN ~= n or now >= (R.defActorsAt or 0) then
+        R.defActors, R.defActorsN, R.defActorsAt = {}, n, now + 30
+        for _, cls in ipairs(DEF_CLASSES) do
+            for _, o in ipairs(FindAllOf(cls) or {}) do
+                if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
+                    local ok, l = pcall(function() return o:K2_GetActorLocation() end)
+                    if ok and l and math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) < 400000 then
+                        R.defActors[#R.defActors + 1] = o
+                    end
+                end
+            end
+        end
+    end
+    local sum, k = 0, 0
+    for _, o in ipairs(R.defActors) do
+        pcall(function()
+            local h, mh = o.HealthInternal, o.MaxHealth
+            if h > 0 and mh > 0 then sum, k = sum + math.min(1, h / (mh * 10)), k + 1 end
+        end)
+    end
+    return k > 0 and math.floor(sum / k * 100 + 0.5) or nil
+end
+
+function ALLY.repairDefences()
+    local n = repairActors(DEF_CLASSES)
+    if n > 0 then log(string.format("allies: %d airfield defences repaired with the airfield", n)) end
+    return n
+end
+
+function ALLY.repairAll()
+    if not (CFG.allies.enabled and CFG.allies.repair and D) then return end
+    local R, planesN = ALLY.state(), 0
+    for _, p in ipairs(R.planes) do
+        if valid(p.obj) and p.full then
+            pcall(function()
+                local h = p.obj.HealthInternal
+                if h > 0 and h < p.full then p.obj.HealthInternal = p.full; planesN = planesN + 1 end
+            end)
+        end
+    end
+    local ships = next(ALLY.shipsAtSea()) and repairActors(SHIP_CLASSES) or 0
+    local defs = repairActors(DEF_CLASSES)
+    local n = planesN + ships + defs
+    if n > 0 then
+        local t = CFG.allies.text
+        hudCallout(t.repaired, string.format(t.repaired_sub, n))
+    end
+    log(string.format("allies: repaired between rounds: %d aircraft, %d ship parts, %d airfield defences", planesN, ships, defs))
+end
+
+-- The allied aircraft's orders (CFG.allies.orders): R.order now, ALLY.nextOrder the next one (the STORE's row, Ctrl+F4)
+function ALLY.order() return ALLY.state().order or CFG.allies.orders.default end
+
+function ALLY.nextOrder(how)
+    local R, list = ALLY.state(), CFG.allies.orders.list
+    local cur, k = ALLY.order(), 1
+    for i, o in ipairs(list) do if o == cur then k = i end end
+    R.order = list[k % #list + 1]
+    R.orderGiven, R.coverAt, RUN.dirty = {}, 0, true             -- (every airborne flight gets it on the next check)
+    R.checkAt = 0
+    local t = CFG.allies.text
+    hudCallout(string.format(t.orders, R.order:upper()), t.orders_sub[R.order])
+    log(string.format("allies: orders now %s (%s)", R.order, how or "?"))
+    return R.order
+end
+
+-- The HUD's allies row: what's up and what it has shot down ("MOONCHILD 2  SHIPS 1  AA 3/5  KILLS 7  HUNT"), or nil
+function ALLY.hudLine()
+    local R = ALLY.run
+    if not R then return nil end
+    local parts, air = {}, {}
+    for u, s in pairs(R.up) do                        -- (aircraft up; a flight waiting to take off shows 0)
+        if s.kind == "air" then
+            local n = airName(s)
+            air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, SV_UnitAlive(u)))
+        end
+    end
+    for n, k in pairs(air) do parts[#parts + 1] = string.format("%s %d", n, k) end
+    local ships = #ALLY.shipsAtSea()
+    if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships end
+    local dc = R.defCount
+    if dc and (dc.aa > 0 or dc.sam > 0) then
+        parts[#parts + 1] = string.format("AA %d  SAM %d", dc.aa, dc.sam) .. (R.defHp and string.format(" (%d%%)", R.defHp) or "")
+    end
+    local k = RUN.kills or {}
+    local kills = (k.allies or 0) + (k.ships or 0) + (k.defences or 0)
+    if #parts == 0 and kills == 0 then return nil end
+    if kills > 0 then parts[#parts + 1] = "KILLS " .. kills end
+    if next(air) then parts[#parts + 1] = ALLY.order():upper() end
+    return table.concat(parts, "   ")
 end
 
 -- Strike flight `bomber` (a normal round's, sent at allied ship unit `ship`): RE_SV_Strike<ship>_NN once its own
@@ -289,60 +437,101 @@ function ALLY.tick(now)
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
         if s and s.queued and now >= R.nextTakeoff and not playerOnAirfield() then
-            if type(SV_SetLevel) == "function" then SV_SetLevel(u, ALLY.level().ai * 100) end
+            -- its airframe (the unit's AI objects take the row's aircraft: hard rule 15), WINGMEN's F-16C or MOONCHILD's F-22
+            local w = c.wingmen
+            local set = SV_SetAircraft(u, s.ally == "wingmen" and w.row or w.moonchild_row)
+            if type(SV_SetLevel) == "function" then SV_SetLevel(u, ALLY.level(s).ai * 100) end
             spawningUnit = u
             local r = SV_Spawn(u)
             spawningUnit = nil
+            local name = airName(s)
             if r > 0 then
                 s.queued, s.at, R.nextTakeoff = nil, now, now + c.aircraft.takeoff_gap_s
-                hudCallout(string.format(t.takeoff, c.aircraft.name), t.takeoff_sub)
-                log(string.format("allies: %s (%s) taxiing out: %d aircraft", c.aircraft.name, u, r))
+                R.orderGiven = R.orderGiven or {}
+                R.orderGiven[u] = nil                -- (its orders once it's airborne)
+                hudCallout(string.format(t.takeoff, name), s.ally == "wingmen" and t.takeoff_sub_wingmen or t.takeoff_sub)
+                log(string.format("allies: %s (%s) taxiing out: %d aircraft (airframe set %s)", name, u, r, tostring(set)))
             else
                 s.tries, R.nextTakeoff = (s.tries or 0) + 1, now + 5
-                log(string.format("allies: %s (%s) not spawned (%s)", c.aircraft.name, u, SV_ERR[r] or tostring(r)))
+                log(string.format("allies: %s (%s) not spawned (%s)", name, u, SV_ERR[r] or tostring(r)))
                 if s.tries >= 3 then                 -- never came: the zollars back
                     R.up[u] = nil
                     RUN.credits, RUN.spent, RUN.dirty = RUN.credits + (s.price or 0), RUN.spent - (s.price or 0), true
-                    log(string.format("allies: %s (%s) couldn't take off; %d zollars back", c.aircraft.name, u, s.price or 0))
+                    log(string.format("allies: %s (%s) couldn't take off; %d zollars back", name, u, s.price or 0))
                 end
             end
         end
     end
-    if now >= (R.checkAt or 0) then                  -- every 2 s: losses, scaling, and the enemies' orders on MOONCHILD
+    if now >= (R.checkAt or 0) then                  -- every 2 s: losses, scaling, orders, and the enemies' on the allies
         R.checkAt = now + 2
         ALLY.scale()
         local f, airborne = svFlags() or {}, 0
+        R.orderGiven = R.orderGiven or {}
         for u, s in pairs(R.up) do
             if not s.queued then
                 local n = SV_UnitAlive(u)
                 if n <= 0 and now - s.at > 5 then
                     R.up[u], RUN.dirty = nil, true
-                    local name = s.kind == "air" and c.aircraft.name or c.ships[s.key].name
+                    local name = s.kind == "air" and airName(s) or c.ships[s.key].name
                     hudCallout(string.format(s.kind == "air" and t.air_lost or t.sunk, name), t.lost_sub)
                     log(string.format("allies: %s (%s) lost %.0f s after it %s", name, u, now - s.at,
                         s.kind == "air" and "spawned" or "sailed"))
                 elseif s.kind == "air" and n > 0 then
-                    airborne = airborne + math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
-                end
-            end
-        end
-        if airborne ~= (R.airborne or 0) then log(string.format("allies: %d %s aircraft airborne", airborne, c.aircraft.name)) end
-        R.airborne = airborne
-        -- an enemy fighter flight that's had its own orders (4 s up) while MOONCHILD flies: hunt_share of them prefer it
-        for u in pairs(R.seen) do if not D.up[u] then R.seen[u], R.hunted[u] = nil, nil end end
-        for u in pairs(D.up) do
-            local fn, fk = u:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")      -- (tools/survival_events.py POOL order)
-            if fn then
-                R.seen[u] = R.seen[u] or now
-                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 then
-                    R.hunted[u] = true
-                    if math.random() < c.hunt_share then
-                        R.events[#R.events + 1] = { at = now, why = u .. " goes for " .. c.aircraft.name,
-                            name = string.format("RE_SV_Hunt_%02d", (tonumber(fn) - 1) * 3 + tonumber(fk) + 1) }
+                    local up = math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
+                    airborne = airborne + up
+                    -- its orders (CFG.allies.orders), once it's airborne and whenever they change; cover again and again
+                    local order = ALLY.order()
+                    local again = order == "cover" and now >= (R.coverAt or 0)
+                    if up > 0 and (R.orderGiven[u] ~= order or again) and type(SV_Event) == "function" then
+                        local ev = "RE_SV_Ally" .. order:sub(1, 1):upper() .. order:sub(2) .. u:sub(-1)
+                        local r = SV_Event(ev)
+                        if R.orderGiven[u] ~= order then
+                            log(string.format("allies: %s (%s) ordered to %s: %s %s", airName(s), u, order, ev,
+                                r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+                        end
+                        R.orderGiven[u] = order
                     end
                 end
             end
         end
+        if ALLY.order() == "cover" and now >= (R.coverAt or 0) then R.coverAt = now + c.orders.cover_every_s end
+        if airborne ~= (R.airborne or 0) then log(string.format("allies: %d allied aircraft airborne", airborne)) end
+        R.airborne = airborne
+        -- an enemy fighter flight that's had its own orders (4 s up) while allied aircraft fly: hunt_share of them prefer
+        -- them, and at least `hunters` a round (economy review: "hunter pairs that go for allies")
+        if R.huntRound ~= D.round then R.huntRound, R.hunters = D.round, 0 end
+        for u in pairs(R.seen) do if not D.up[u] then R.seen[u], R.hunted[u] = nil, nil end end
+        for u in pairs(D.up) do
+            local i = poolIndex(u)
+            if i then
+                R.seen[u] = R.seen[u] or now
+                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now) then
+                    R.hunted[u] = true
+                    if math.random() < c.hunt_share or (R.hunters or 0) < (c.hunters or 0) then
+                        R.hunters = (R.hunters or 0) + 1
+                        R.events[#R.events + 1] = { at = now, why = u .. " hunts the allied aircraft",
+                            name = string.format("RE_SV_Hunt_%02d", i) }
+                    end
+                end
+            end
+        end
+        -- the airfield's defences: how many are up, and a warning for each one lost (economy review: "warn when one is lost")
+        local d = CFG.shop.items.Airfield.defences
+        R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0 }
+        for _, kind in ipairs({ "aa", "sam" }) do
+            for _, u in ipairs(d[kind].units) do
+                local up = SV_UnitAlive(u) > 0
+                if up then R.defCount[kind] = R.defCount[kind] + 1 end
+                if R.defUp[u] and not up then
+                    hudCallout(string.format(t.def_lost, d[kind].label), t.def_lost_sub)
+                    log(string.format("allies: %s (%s) lost in round %d", d[kind].label, u, D.round))
+                    RUN.dirty = true
+                end
+                R.defUp[u] = up
+            end
+        end
+        local okD, hp = pcall(defenceHealth, R, now)
+        R.defHp = okD and hp or nil
     end
     for i = #R.events, 1, -1 do
         local e = R.events[i]

@@ -1,5 +1,5 @@
 -- sv_leaderboard.lua: the run's stats, its summary and the leaderboard (Online edition only).
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 ---------------------------------------------------------------------------------------------------- leaderboard
@@ -126,7 +126,9 @@ function LB.finish(how)
                 time_s = math.max(0, os.time() - st.started), ended = how == "died" and "died" or "quit", specials = st.specials,
                 aircraft = st.jet, how = how, aces = st.aces or 0, allies = st.allies or 0, af_down = st.af_down or 0,
                 captured = st.captured or 0,
-                tier = CFG.tiers.enabled and (CFG.tiers.list[TIER.index(D.round)] or {}).name or nil }
+                tier = CFG.tiers.enabled and (CFG.tiers.list[TIER.index(D.round)] or {}).name or nil,
+                -- (the summary's own: kills by allies and ships, by airfield defences; not sent)
+                by_allies = st.by_allies or 0, by_defences = st.by_defences or 0 }
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
         how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))
@@ -219,7 +221,8 @@ function LB.hud(now)
     local r = sh.run
     local lines = { string.format(t.lb_lines[1], r.round), string.format(t.lb_lines[2], money(r.score)),
                     string.format(t.lb_lines[3], r.kills.air, r.kills.ground), string.format(t.lb_lines[4], r.won),
-                    string.format(t.lb_lines[5], clockText(r.time_s)), string.format(t.lb_lines[6], money(r.zollars.earned)), "" }
+                    string.format(t.lb_lines[5], clockText(r.time_s)), string.format(t.lb_lines[6], money(r.zollars.earned)),
+                    t.lb_lines[7] and string.format(t.lb_lines[7], r.by_allies or 0, r.by_defences or 0) or "" }
     lines[8] = (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
         or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
         or ""

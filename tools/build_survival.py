@@ -15,7 +15,7 @@ Every package is a stock game file with Survival's changes (Survival Mode uses n
   - /Game/LuaSource/SurvivalMode/AI/*  <- Survival's behaviour scripts (Scripts/ai)
 Stock packages are pulled with tools/get_stock.sh into build/stock first.
 """
-import copy, math, os, sys, struct, zlib
+import copy, math, os, re, sys, struct, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
@@ -1082,17 +1082,28 @@ SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/ma
 # adds pages of its own (DT_SV_MenuClassRows -> DT_IngameMenuSettingData at the main menu: indexes 20, 21, 22),
 # copies of the landing page (WBP_SV_Store*, with their own settings asset and command table), and one landing row,
 # STORE ("20"). Lua checks the game's menu list for them; without them it falls back to the 4 SHOP_ITEMS rows.
-# A page lists 6 rows at most, so the pages link in a ring (SUPPLIES > AIRFIELD > DOCKS > SUPPLIES; user, 2026-10-23:
-# "add a Docks Page too"), each with TAKE OFF.
+# A page lists 6 rows at most, so the pages link in a ring, each with TAKE OFF (user, 2026-10-23: "add a Docks Page
+# too"). The economy review (2026-10-25) added UPGRADES and TACTICAL and moved the allies onto the DOCKS page (shown as
+# ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. The menu-class rows
+# go into the game's table in this list's order, so the menu ids 20-24 follow it: keep it in Scripts/sv_flights.lua
+# SHOP.menuRows' order.
 STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
     ('SV_Store', 'Store', 'SV_Store_Title',
-     ['Missiles', 'Special', 'Flares', 'RepairAircraft', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
+     ['Rearm', 'Missiles', 'Special', 'Flares', ('SVStoreToUpgrades', 'SV_Store_ToUpgrades', '23'), 'takeoff']),
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
-     ['RepairAirfield', 'AAGun', 'SAM', 'Moonchild', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
+     ['RepairAircraft', 'RepairAirfield', 'AAGun', 'SAM', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
     ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
-     ['ShipAegis', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
+     ['Wingmen', 'Moonchild', 'ShipAegis', 'Orders', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
+    ('SV_StoreUpgrades', 'StoreUpgrades', 'SV_Store_TitleUpgrades',
+     ['UpAirframe', 'UpBays', 'UpGun', 'UpFlares', ('SVStoreToTactical', 'SV_Store_ToTactical', '24'), 'takeoff']),
+    ('SV_StoreTactical', 'StoreTactical', 'SV_Store_TitleTactical',
+     ['Airstrike', 'Ecm', 'Decoy', 'Insurance', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
 ]
-STORE_ROW = ('SVShopStore', 'SV_Shop_Store', '20')      # the landing page's row that opens the first page
+STORE_MENU_FIRST = 20       # the first page's menu id (the game's table has 20 rows): Scripts/sv_flights.lua SHOP.menuRows
+# the landing page's rows, one per page they open (it lists 4 of Survival's beside its 2 stock rows): Scripts/sv_flights.lua
+# SHOP.store, texts SV_Shop_Store* (sv_shop.lua shopTexts)
+STORE_ROWS = [('SVShopStore', 'SV_Shop_Store', '20'), ('SVShopStoreUp', 'SV_Shop_StoreUp', '23'),
+              ('SVShopStoreTac', 'SV_Shop_StoreTac', '24'), ('SVShopStoreAf', 'SV_Shop_StoreAf', '21')]
 LANDING_PAGE = '/Game/Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000'
 LANDING_SETTINGS = '/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings'
 MENU_TABLE = '/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData'
@@ -1138,8 +1149,19 @@ def commands_table(new_path, items, extra=()):
 
 
 def build_shop_rows():
-    # the landing page's rows: the fallback items and STORE (Lua adds one or the other)
-    commands_table(SHOP_TABLE, SHOP_ITEMS, [STORE_ROW])
+    # the landing page's rows: the fallback items and the STORE's (Lua adds one set or the other)
+    commands_table(SHOP_TABLE, SHOP_ITEMS, STORE_ROWS)
+    # every page row that opens another page names one of the pages, by its menu id (20 + its place in STORE_PAGES)
+    ids = {str(STORE_MENU_FIRST + k) for k in range(len(STORE_PAGES))}
+    for _, _, _, items in STORE_PAGES:
+        assert len(items) <= 6, items                                    # (a page shows 6 rows)
+        assert all(i[2] in ids for i in items if isinstance(i, tuple)), items
+    assert all(r[2] in ids for r in STORE_ROWS) and len(STORE_ROWS) <= 4, STORE_ROWS
+    lua = survival_events.runtime_lua()
+    for _, _, _, items in STORE_PAGES:                                    # every item is one CFG.shop.items knows
+        for i in items:
+            if not isinstance(i, tuple) and i != 'takeoff':
+                assert re.search(r'\n\s+' + i + r'\s+= \{', lua), f'{i}: not in Scripts/sv_config.lua CFG.shop.items'
     menu_rows = []
     for menu_id, page, title, items in STORE_PAGES:
         table, settings, widget = DATA + 'DT_SV_' + page + 'Commands', UI + 'DA_SV_' + page + 'Settings', UI + 'WBP_SV_' + page
@@ -1340,7 +1362,8 @@ def build_npc_rows():
     # the STORE's allies (survival_events.ALLY_*): MOONCHILD (an F-22 under its squadron's name key), each ship's hull
     # (under its name key) and turrets (as they are: main.lua gives every one of them fire control of its own)
     m22 = mission_npc_ids()
-    allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY)]
+    allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY),
+              (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY)]
     allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
@@ -1443,10 +1466,24 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
 SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
-                   'm29a_common', 'su47_common', 'su33_common', 'su34_common']
+                   'm29a_common', 'su47_common', 'su33_common', 'su34_common',
+                   # the economy review's (2026-10-25): main.lua CFG.variety.late and CFG.jammer.aircraft
+                   'f02a_common', 'f15c_common', 'f35c_common', 'su35_common', 'rflm_common', 'typn_common',
+                   'su57_common', 'f22a_common', 'e18g_common', 'j39e_common']
 # Pool aircraft Mission 22's table hasn't got: (new mission row, Mission 22 row it's shaped like, DT_NPC row). The Su-47
-# (user, 2026-10-23: "add SU-47's in instead of the MiG-31's"): the campaign's plain enemy Su-47.
-POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01')]
+# (user, 2026-10-23: "add SU-47's in instead of the MiG-31's"): the campaign's plain enemy Su-47. The rest (economy
+# review of 2026-10-25: "use the whole aircraft pool"): the campaign's plain enemy rows of the named aces' airframes and
+# a few more, joining the pool round by round (main.lua CFG.variety), and the jammer's EA-18G (CFG.jammer).
+POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01'),
+              ('f02a_common', 'f16c_common', 'OP1002_f02a_01'),
+              ('f15c_common', 'f15e_common', 'OP1004_f15c_01'),
+              ('f35c_common', 'f18e_common', 'OP1006_f35c_01'),
+              ('su35_common', 'su33_common', 'OP1028_su35_01'),
+              ('rflm_common', 'f18e_common', 'OP1014_rflm_01'),
+              ('typn_common', 'f18e_common', 'OP1011_typn_01'),
+              ('su57_common', 'su33_common', 'OP1021_su57_01'),
+              ('f22a_common', 'f15e_common', 'OP1005_f22a_01'),
+              ('e18g_common', 'f18e_common', 'OP1010_e18g_01')]
 # Difficulty spikes (main.lua CFG.spikes; user, 2026-10-22: "every 7 rounds ... a difficulty spike across the board"):
 # each level after the first gets its own rows, <row>_sv<letter> -> <NpcId>_SV<LETTER>, whose DT_NPC copies main.lua
 # gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
@@ -1485,6 +1522,7 @@ def build_npc_table():
     # the STORE's allies (survival_events.ALLY_*): MOONCHILD on Mission 22's allied F/A-18 row, each ship's hull and
     # turrets on copies of Mission 22's rows, all pointing at DT_SV_NpcRows copies (their names, their fire control)
     extra.append((survival_events.ALLY_AIR_ROW, 'f18e_common', survival_events.ALLY_AIR_NPC))
+    extra.append((survival_events.ALLY_WINGMEN_ROW, 'f18e_common', survival_events.ALLY_WINGMEN_NPC))
     for src, (row, npc) in survival_events.DEFENCE_ROWS.items():           # the airfield's AA guns and SAM sites
         extra.append((row, src, npc))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:

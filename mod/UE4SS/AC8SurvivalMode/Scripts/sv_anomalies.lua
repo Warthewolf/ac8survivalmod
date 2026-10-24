@@ -1,5 +1,5 @@
 -- sv_anomalies.lua: the specials' Lua: MINDRIPPER, AB.L..IN, VALKA and the kinds table (SPC, ANOM).
--- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 -- The Anomaly (CFG.specials.anomaly; tools/survival_events.py ANOMALY_*): MINDRIPPER and its guards, spawned as one
@@ -1877,6 +1877,12 @@ function ANOM.tick(now, s)
     end
     local p
     for _, q in ipairs(planes) do if q.unit == c.unit and valid(q.obj) then p = q end end
+    if p and not s.healthDone then                 -- its health for its round (economy review of 2026-10-25)
+        s.healthDone = true
+        local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
+        local h0, h1 = scaleHealth(p.obj, hx)
+        log(string.format("special: %s's health x%.2f for round %d (%s -> %s)", c.name, hx, D.round, tostring(h0), tostring(h1)))
+    end
     local you = playerLocation()
     if not (p and you) then return end
     local ok, l = pcall(function() local v = p.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
