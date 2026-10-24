@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.18.1"
+#define RT_VERSION           L"0.18.2"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1882,7 +1882,12 @@ static int SndInit(void)
     /* IXAudio2::CreateMasteringVoice(this, out, channels 2, rate 0 = the device's, flags, device, effects, GameEffects) */
     hr = ((int32_t (*)(void*, void**, uint32_t, uint32_t, uint32_t, const wchar_t*, void*, uint32_t))SND_VT(SND.xa, 7))(
         SND.xa, &SND.master, 2, 0, 0, NULL, NULL, 6);
-    if (hr < 0 || !SND.master) { Log(L"sound: no mastering voice (0x%x); no sound effects", (uint32_t)hr); return 0; }
+    if (hr < 0 || !SND.master) {
+        Log(L"sound: no mastering voice (0x%x); no sound effects", (uint32_t)hr);
+        ((uint32_t (*)(void*))SND_VT(SND.xa, 2))(SND.xa);                                   /* Release */
+        SND.xa = NULL;
+        return 0;
+    }
     Log(L"sound: XAudio2 2.9 up (stereo mastering voice)");
     SND.state = 1;
     return 1;
@@ -1939,9 +1944,11 @@ static int32_t SndLoad(const wchar_t* name)
         }
         at += 8 + (size_t)len + (len & 1);
     }
-    if (!haveFmt || !s->data || s->fmt.tag != 1 || s->fmt.bits != 16 || s->fmt.channels < 1 || s->fmt.channels > 2) {
+    if (!haveFmt || !s->data || s->fmt.tag != 1 || s->fmt.bits != 16 || s->fmt.channels < 1 || s->fmt.channels > 2
+        || s->fmt.align != s->fmt.channels * 2) {                 /* (align 0 would divide by zero below) */
         free(buf); Log(L"sound: %s is not a 16-bit PCM WAV", path); return SND_ERR_FORMAT;
     }
+    s->bytes -= s->bytes % s->fmt.align;                          /* whole frames only (XAudio2 refuses a part one) */
     uint32_t frames = s->bytes / s->fmt.align;
     if (s->loopLength && s->loopBegin + s->loopLength > frames) s->loopLength = 0;
     s->file = buf;
@@ -2079,10 +2086,10 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.18.1" */
+/* SV_Version() -> "0.18.2" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.18.1";
+    static const char v[] = "0.18.2";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

@@ -727,9 +727,6 @@ function SPC.V.radar(c)
     end
     return n
 end
--- The opener's light as AC7 Mission 18's lens flash (ms18_LensEffect1: screen-space billboard elements, faded by its
--- alpha curve): a plain actor spawned at `at` with a MaterialBillboardComponent, one element per AC7 texture
--- (MI_SV_ValkaFlare_*, on AC8's own Mission 23 flare). How many elements came up.
 -- a plain actor spawned at `at` with a MaterialBillboardComponent (her flare's and portal's); actor, component, or nil
 -- and why not
 function SPC.V.billboard(at)
@@ -753,6 +750,9 @@ function SPC.V.billboard(at)
     pcall(function() a:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
     return a, comp
 end
+-- The opener's light as AC7 Mission 18's lens flash (ms18_LensEffect1: screen-space billboard elements, faded by its
+-- alpha curve): a plain actor spawned at `at` with a MaterialBillboardComponent, one element per AC7 texture
+-- (MI_SV_ValkaFlare_*, on AC8's own Mission 23 flare). How many elements came up.
 function SPC.V.flareStart(c, s, at, now)
     local f = c.flare
     SPC.V.flareStop(s)
@@ -926,9 +926,19 @@ end
 function SPC.V.sndStop(s)
     if s.sndLoop then SND.stop(s.sndLoop); s.sndLoop = nil end
 end
+-- everything of hers that outlives a tick: the charge loop, the flare, the portal (a run restarted or left mid-fight;
+-- code review of 2026-10-25: they were only cleared when she was shot down, so the loop played on into the next run)
+function SPC.V.cleanup(s)
+    if type(s) ~= "table" then return end
+    SPC.V.sndStop(s)
+    SPC.V.flareStop(s)
+    SPC.V.portalStop(s)
+    s.passAt = nil
+end
 function SPC.V.sndShot(s, at, now)
     local cs = CFG.sound.valka
     SPC.V.sndStop(s)
+    if not at then return end                           -- (no place to fire from: silent, not on you)
     SND.event(cs.charge_end, at)
     SND.event(cs.shot, at)
     local me = playerLocation()
@@ -1447,11 +1457,30 @@ function SPC.V.emlSpawn(c)
     end
     local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y } end)
     local closing = okV and math.max(0, v.X * f.X + v.Y * f.Y) or 0                 -- cm/s towards it
-    local d = math.min(c.opener_km * 100000 + closing * (c.charge_s + 1), (c.opener_max_km or 30) * 100000)
-    local edge = ZONE.HALF * 0.95                        -- (the zone's edge first: nearer, still straight ahead)
-    for _, k in ipairs({ "X", "Y" }) do
-        local lim = f[k] > 0.001 and (ZONE[k] + edge - you[k]) / f[k] or f[k] < -0.001 and (ZONE[k] - edge - you[k]) / f[k]
-        if lim and lim > 0 then d = math.min(d, lim) end
+    local want = math.min(c.opener_km * 100000 + closing * (c.charge_s + 1), (c.opener_max_km or 30) * 100000)
+    local edge = ZONE.HALF * 0.95                        -- (the zone's edge first: nearer, still on its bearing)
+    local function room(dir)
+        local d = want
+        for _, k in ipairs({ "X", "Y" }) do
+            local lim = dir[k] > 0.001 and (ZONE[k] + edge - you[k]) / dir[k] or dir[k] < -0.001 and (ZONE[k] - edge - you[k]) / dir[k]
+            if lim then d = math.min(d, math.max(0, lim)) end
+        end
+        return d
+    end
+    local d = room(f)
+    if d < want * 0.5 then                               -- (near the zone's edge that way: code review of 2026-10-25,
+        local best, bestD = f, d                        -- it spawned ~1 km from you) the bearing with the most room
+        for deg = 0, 315, 45 do
+            local g = { X = math.sin(math.rad(deg)), Y = -math.cos(math.rad(deg)) }
+            local gd = room(g)
+            if gd > bestD then best, bestD = g, gd end
+        end
+        if best ~= f then
+            log(string.format("special: %s's opener: only %.1f km of room on its bearing; one with %.1f km instead", c.name,
+                d / 100000, bestD / 100000))
+        end
+        f, d = best, bestD
+        h = math.deg(math.atan(f.Y, f.X))
     end
     local at = { X = you.X + f.X * d, Y = you.Y + f.Y * d, Z = math.max(you.Z, c.opener_min_alt_m * 100) }
     local yaw = (h + 180) % 360

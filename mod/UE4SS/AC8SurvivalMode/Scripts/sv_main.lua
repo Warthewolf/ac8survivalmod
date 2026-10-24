@@ -163,6 +163,8 @@ local function probeTick(tick)
             end
             log(string.format("special: anomaly sounds and portal systems loaded: %d of %d", got, want))
         end
+        if D and D.special then pcall(SPC.V.cleanup, D.special) end        -- (a restart mid-fight: her effects)
+        pcall(SND.stopAll)
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
@@ -258,6 +260,8 @@ local function probeTick(tick)
             local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
             if not okL then log("leaderboard: error " .. tostring(errL)) end
             if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
+            if D.special then pcall(SPC.V.cleanup, D.special) end
+            pcall(SND.stopAll)
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
@@ -266,6 +270,7 @@ local function probeTick(tick)
     end
     if D then
         local now, paused = roundClock(tick)
+        pcall(SND.setPaused, paused)                                    -- (Survival's own sounds hold their breath)
         if now then
             local okR, errR = timed("rounds", roundsTick, now)
             if not okR then log("rounds: error " .. tostring(errR)) end

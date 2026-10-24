@@ -52,7 +52,7 @@ end
 -- the runtime's id of Sounds\<file> (loaded once), or nil
 function SND.id(file)
     if not CFG.sound.enabled or type(SV_SndLoad) ~= "function" then return nil end
-    if SND.ids[file] then return SND.ids[file] end
+    if SND.ids[file] ~= nil then return SND.ids[file] or nil end      -- (false: it failed once, not tried again)
     if not SND.master then
         SND.master = true
         local r = SV_SndMaster(db(CFG.sound.master_db))
@@ -60,7 +60,8 @@ function SND.id(file)
     end
     local id = SV_SndLoad(file)
     if id and id > 0 then SND.ids[file] = id; return id end
-    if not SND.said[file] then SND.said[file] = true; log("sound: " .. file .. " not loaded (" .. tostring(id) .. ")") end
+    SND.ids[file] = false
+    log("sound: " .. file .. " not loaded (" .. tostring(id) .. "); not tried again this session")
     return nil
 end
 
@@ -70,6 +71,7 @@ function SND.play(l, at, extraDb, ratio)
     local id = SND.id(l.file)
     if not id then return nil end
     local where = type(at) == "function" and at() or at
+    if type(at) == "function" and not where then return nil end      -- (a moving source that's already gone)
     local left, right = gains(where, l.db + (extraDb or 0), l.curve)
     local r = (ratio or 1) * 2 ^ ((l.cents or 0) / 1200)
     local h = SV_SndPlay(id, left, right, r, l.loop and 1 or 0)
@@ -77,7 +79,7 @@ function SND.play(l, at, extraDb, ratio)
         if not SND.said["play " .. l.file] then SND.said["play " .. l.file] = true; log("sound: " .. l.file .. " didn't play (" .. tostring(h) .. ")") end
         return nil
     end
-    SND.live[h] = { l = l, at = at, extra = extraDb or 0, ratio = r }
+    SND.live[h] = { l = l, at = at, last = where, extra = extraDb or 0, ratio = r }
     return h
 end
 
@@ -107,6 +109,22 @@ function SND.pick(l)
     return setmetatable({ file = f[1], db = f[3] or l.db }, { __index = l })
 end
 
+-- every voice stopped (a run restarted or left: nothing of it plays on)
+function SND.stopAll()
+    if type(SV_SndStop) == "function" then
+        for h in pairs(SND.live) do SV_SndStop(h, 0) end
+    end
+    SND.live = {}
+end
+
+-- the game paused / running: Survival's sounds silent while it's paused (their clock stops, a loop would play on)
+function SND.setPaused(paused)
+    paused = paused and true or false
+    if paused == (SND.paused or false) or not SND.master or type(SV_SndMaster) ~= "function" then return end
+    SND.paused = paused
+    SV_SndMaster(paused and 0 or db(CFG.sound.master_db))
+end
+
 -- a whole event (a list of layers, CFG.sound.valka.<event>) at `at`; the handles
 function SND.event(list, at, extraDb, ratio)
     local hs = {}
@@ -121,7 +139,11 @@ end
 function SND.tick()
     if type(SV_SndSet) ~= "function" then return end
     for h, v in pairs(SND.live) do
-        local where = type(v.at) == "function" and v.at() or v.at
+        local where = v.at
+        if type(v.at) == "function" then                -- (its source gone: where it last was, not on you)
+            where = v.at() or v.last
+            v.last = where
+        end
         local left, right = gains(where, v.l.db + v.extra, v.l.curve)
         if SV_SndSet(h, left, right, v.ratio) ~= 1 then SND.live[h] = nil end
     end
