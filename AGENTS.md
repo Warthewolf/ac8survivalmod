@@ -188,7 +188,8 @@ Copy a working stock pattern before inventing a new one.
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
-  into modules with a smaller central controller"). Edit the parts, not main.lua. "main.lua" in older notes and hard
+  into modules with a smaller central controller"; confirmed in game the same day, 0.66.0: a full
+  VALKA round ran). Edit the parts, not main.lua. "main.lua" in older notes and hard
   rules means the runtime as a whole; find a function with grep over Scripts/*.lua.
 - All parts run in this mod's one Lua state, in order: a name another part uses is a global (no `local`), a part's
   own helpers stay local. A new top-level function another part calls: drop its `local`. Order matters only for code

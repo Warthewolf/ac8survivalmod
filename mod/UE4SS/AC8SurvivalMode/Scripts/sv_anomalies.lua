@@ -739,6 +739,7 @@ end
 -- sweep_kmh[2] (AC7's VwgMin / VwgMax), a full travel taking sweep_s. Her other meshes are hidden (again every 2 s)
 -- and her parts gone (not lockable); her flight model and railguns stay the x40a's. Off (the x40a as it is) when
 -- `model` is "" or doesn't load. True if on.
+SPC.V.BODY_PROPS = { "PlaneBodySkelMeshComponent", "PlaneBodyMeshComponent", "PlaneBodyStaticMeshComponent", "PlaneBodyMesh" }
 function SPC.V.model(c, s, o)
     if not c.model or c.model == "" or s.modelComp then return s.modelComp ~= nil end
     local function load(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
@@ -748,14 +749,26 @@ function SPC.V.model(c, s, o)
         log(string.format("special: %s's X-02S %s not loaded (%s); the x40a shows", c.name, c.model, tostring(why)))
         return false
     end
-    -- her body: the skeletal mesh component that is her root, else the biggest one
+    -- her body: the plane's own body mesh (its PlaneBody* property, as glitchDeadLook finds it), else the biggest
+    -- skeletal mesh in her tree that isn't a wreck mesh (test of 2026-10-24, 0.66.0: the tree held only
+    -- DamagedMainBodyMesh / DamagedPartsMesh, the X-02S went on the wreck one, which never draws: hard rule 41)
     local body, best, names = nil, -1, {}
-    local root = addrOf(o.RootComponent)
+    local skel = StaticFindObject("/Script/Engine.SkeletalMeshComponent")
+    for _, n in ipairs(SPC.V.BODY_PROPS) do
+        local ok, comp = pcall(function() return o[n] end)
+        if ok and comp and valid(comp) then
+            local okC, cls = pcall(function() return comp:GetClass():GetFName():ToString() end)
+            local isSkel = pcall(function() assert(comp:IsA(skel)) end)
+            names[#names + 1] = string.format("%s=%s%s", n, okC and cls or "?", isSkel and "" or " (not skeletal)")
+            if isSkel and not body then body, best = comp, 1e12 end
+        end
+    end
     for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.SkeletalMeshComponent")) do
+        local nm = nameOf(comp):match("([%w_]+)$") or "?"
+        names[#names + 1] = nm
         local okB, r = pcall(function() return comp.Bounds.SphereRadius end)
-        local size = (addrOf(comp) == root and 1e12) or (okB and type(r) == "number" and r) or 0
-        names[#names + 1] = nameOf(comp):match("([%w_]+)$") or "?"
-        if size > best then body, best = comp, size end
+        local size = (okB and type(r) == "number" and r) or 0
+        if not nm:find("^Damaged") and size > best then body, best = comp, size end
     end
     if not valid(body) then
         local all = {}
@@ -804,16 +817,23 @@ function SPC.V.model(c, s, o)
         hid, #(s.parts or {})))
     return true
 end
--- her other meshes (the x40a's, not the X-02S's body) hidden; how many it hid this time
+-- her other meshes (the x40a's, not the X-02S's body) hidden; how many it hid this time. (Her named body / pilot
+-- meshes too: they needn't be in the tree SPC.V.comps walks.)
 function SPC.V.modelHide(s, o)
-    local n, me = 0, addrOf(s.modelComp)
+    local n, me, seen = 0, addrOf(s.modelComp), {}
+    local function hide(comp)
+        local a = valid(comp) and addrOf(comp)
+        if not a or a == me or seen[a] then return end
+        seen[a] = true
+        local okV, vis = pcall(function() return comp:IsVisible() end)
+        if okV and vis and pcall(function() comp:SetVisibility(false, false) end) then n = n + 1 end
+    end
     for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
-        for _, comp in ipairs(SPC.V.comps(o, cls)) do
-            local okV, vis = pcall(function() return comp:IsVisible() end)
-            if addrOf(comp) ~= me and okV and vis then
-                if pcall(function() comp:SetVisibility(false, false) end) then n = n + 1 end
-            end
-        end
+        for _, comp in ipairs(SPC.V.comps(o, cls)) do hide(comp) end
+    end
+    for _, k in ipairs({ "PilotMeshComponent", table.unpack(SPC.V.BODY_PROPS) }) do
+        local ok, comp = pcall(function() return o[k] end)
+        if ok and comp then hide(comp) end
     end
     return n
 end
@@ -1048,6 +1068,10 @@ function SPC.valkaTick(now, s)
     end
     if not o then return end
     V.modelTick(s, o, now)
+    if now >= (s.holdAt or 0) then                       -- her parts held (EvadeOnly), again every hold_s
+        s.holdAt = now + (c.hold_s or 5)
+        V.event("RE_SV_ValkaHold")
+    end
     local at = where(o)
     if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
     -- the angle between her nose and you (for LastTGT when you're behind her, and her railgun's cone)

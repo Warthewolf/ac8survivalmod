@@ -1198,6 +1198,12 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     g.execute(t_engage, up, {1: VALKA_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
     for comp in VALKA_IDLE_PARTS:
         g.execute(t_hold, up, {0: VALKA_PARTS[comp]}, delay=3.0)
+    # all four parts, her own RailGun too, held again whenever main.lua asks (every hold_s while she hunts): held parts
+    # still fire on command (the opener's held dummy did); test of 2026-10-24: the unheld RailGun (or a hold that
+    # lapsed) hit the airfield 38 times in 13 s
+    remote('RE_SV_ValkaHold')
+    for comp in (VALKA_RAILGUN,) + VALKA_IDLE_PARTS:
+        g.execute(t_hold, 'RE_SV_ValkaHold', {0: VALKA_PARTS[comp]})
     flag(up, 'SV_ValkaUp', 'Set', 1)
     # the opener's dummy railgun: held (EvadeOnly: it never attacks by itself; twice, in case the first is early),
     # one shot at the player on command (as Mission 26 fires its held CK railgun), its charge heard at the player (it's

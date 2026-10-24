@@ -556,6 +556,9 @@ CFG = {
                      spawn_km = { 6, 9 }, arrive_s = 1.0,
                      opener_km = 9, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
                      eml_unit = "SV_Unit_ValkaEml",
+                     -- her parts (all four, her own RailGun too) held back again every hold_s: they never fire by
+                     -- themselves, only her scripted shots (test of 2026-10-24: 38 hits on the airfield in 13 s)
+                     hold_s = 5,
                      -- her X-02S (tools/x02s; "" = the x40a as it is) and its length (m)
                      model = "/Game/Mods/SurvivalMode/Valka/Model/SK_X02S_Valka", model_length_m = 19.6,
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
