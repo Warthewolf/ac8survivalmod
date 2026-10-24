@@ -567,6 +567,32 @@ def ladon_units(units, used_ids, z, top_number, v):
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
 
 
+M26 = '/Game/Maps/Ingame/Mission026/'
+
+
+def valka_unit(units, used_ids, z, top_number):
+    """VALKA (survival_events.VALKA_*): Mission 26's x40a desc with its parts (laser pod, three railguns), as the Ladons
+    are ported, on her ace row (her airframe in the world data too: hard rule 20), her area over the whole zone."""
+    m26z = ZenPkg(stock(M26 + 'WD_Mission026_global'))
+    m26, _ = props_of(m26z, m26z.export_index('WD_Mission026_global'), 'LiveWorldData')
+    src = desc_named(m26, 'UnitDescList', survival_events.VALKA_SOURCE_UNIT)
+    (lead, _, _), _ = ace_rows('valka', 'x40a')
+    names = port_unit(units, used_ids, z, src, survival_events.VALKA_UNIT, 'SV_Obj_Valka', lead + '_sv',
+                      [(0.0, 0.0, 300000.0)], 0.0, top_number)
+    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.VALKA_UNIT][0]
+    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
+    parts = retag_parts(kids, names[0], used_ids, z, m26z)
+    for ch in kids:
+        data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
+        survival_events.VALKA_PARTS[comp] = [q for q in ch[2] if q[1] == 'Name'][0][3][1]
+    assert set(survival_events.VALKA_PARTS) >= {survival_events.VALKA_RAILGUN, *survival_events.VALKA_IDLE_PARTS}, survival_events.VALKA_PARTS
+    zone_area(u)
+    survival_events.VALKA_OBJ = names[0]
+    print(f'  valka: {names[0]} in {survival_events.VALKA_UNIT} ({lead}_sv), {parts} parts: {survival_events.VALKA_PARTS}')
+
+
 EB002 = '/Game/OnlineMode/Maps/EmergencyCall/EB_002/'
 
 
@@ -855,6 +881,7 @@ def build_wd_global():
     lcac_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
     alcn_units(units, used_ids, z, top_number, v)
+    valka_unit(units, used_ids, z, top_number)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -1241,6 +1268,9 @@ ACES = [  # (tier, key, lead DT_NPC row, wing DT_NPC row)
     ('anomaly',   'f04e',    'OP1003_f04e_Named',      'OP1003_f04e_Named'),
     # AB.L..IN (lead; no wing flies): main.lua CFG.specials.glitch names it and its squadron tag
     ('glitch',    'e18g',    'OP1010_e18g_Named',      'OP1010_e18g_Named'),
+    # VALKA (lead; no wing flies): Mission 26's x40a with its railguns (survival_events.VALKA_*) until the X-02S is
+    # built; main.lua CFG.specials.valka names her
+    ('valka',     'x40a',    'OP1016_x40a_MS26',       'OP1016_x40a_MS26'),
 ]
 # Airframes only Online Mode has (user, 2026-10-22: "ADFX-02 appears in the Online Mode"): their model rows are in
 # DT_NPC_Model_ON, not the campaign's DT_NPC_Model, so DT_SV_ModelRows carries copies (GameObjectId 1 like every

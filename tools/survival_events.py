@@ -344,6 +344,37 @@ def glitch_blinks():
         for k, deg in enumerate(range(0, 360, GLITCH_BLINK_STEP_DEG)):
             out.append((f'RE_SV_GlitchBlink_{chr(65 + ring)}{chr(65 + k)}', deg, m))
     return out
+
+
+# Special round "VALKA" (user, 2026-10-24: "port the Mihaly fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss
+# ... VALKA, who uses an EML"): AC7 Mission 18's opener, then a Super AI with AB.L..IN's blinks and a chance of
+# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, tools/re/VALKA.md): a hidden dummy railgun 700 m ahead
+# of the player, facing them, charges 6 s (HUD warning, a flash of light at it), then fires at a target riding ahead
+# of them. Here VALKA herself is the dummy: hidden, kept 700 m ahead (RE_SV_ValkaTp_A*), she fires her railgun
+# (WN_WEAPON_1 of the X-40A's RailGun part: Mission 26's LiveFireOneShotWeapon on its x40a), then goes to the far ring
+# (RE_SV_ValkaTp_C*), shows, and the focus camera swings onto her. AC8 has no X-02S: she flies Mission 26's X-40A
+# (EI_Unit_01_Air0 with its four parts, ported as the Ladon is) until the X-02S model is built.
+# Scripts/main.lua CFG.specials.valka drives it (VALK.*); keep VALKA_SPOTS in step with its `spots`.
+VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare") and its parts
+VALKA_UNIT = 'SV_Unit_Valka'
+VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
+VALKA_PARTS = {}                               # component -> its object name (RailGun, RailGunCK, RailGunPF, LaserPod)
+VALKA_RAILGUN = 'RailGun'                      # the part she fires (the CK one is Mission 26's scripted sure kill)
+VALKA_IDLE_PARTS = ('RailGunCK', 'RailGunPF', 'LaserPod')   # held back (EvadeOnly), as Mission 26 holds its CK railgun
+# teleport rings: (ring letter, metres, step deg): A ahead of the player for the opener, B / C her blinks, D the far
+# spot she shows at after the first shot
+VALKA_SPOTS = (('A', 700, 10), ('B', 500, 30), ('C', 800, 30), ('D', 6000, 30))
+VALKA_CHARGE_SOUND = 'AKE_Ms29_ARMS_SKY_OP1016_x40a_Railgun_Charge_'      # + Play / Stop: the x40a railgun's charge
+VALKA_POST_STALL = (('Turn', 'LastTGT'), ('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
+
+
+def valka_spots():
+    """[(event, bearing deg, metres)]: two bearing letters (36 steps), no digits (hard rule 17)."""
+    out = []
+    for ring, m, step in VALKA_SPOTS:
+        for k, deg in enumerate(range(0, 360, step)):
+            out.append((f'RE_SV_ValkaTp_{ring}{chr(65 + k // 26)}{chr(65 + k % 26)}', deg, m))
+    return out
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -450,7 +481,7 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat'])
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -714,6 +745,7 @@ def build_events(stock_ep):
     build_shuttle(g, flag)
     build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move)
     build_glitch(g, t_search, t_engage, stock_ep)
+    build_valka(g, flag, t_search, t_engage, stock_ep)
     build_repair(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
@@ -1095,6 +1127,93 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)
     g.execute(t_engage, up, {1: GLITCH_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})
+
+
+def build_valka(g, flag, t_search, t_engage, stock_ep):
+    """VALKA (see VALKA_*): the orders when she spawns (the player only, anywhere; her spare railguns and laser pod
+    held back), her teleport spots, the railgun shot, the opener's warning / charge, her reveal (MISSION UPDATE, the
+    focus camera, the Anomaly's attack pressure), LastTGT and the post-stalls. The rest is Scripts/main.lua's (VALK.*)."""
+    import math, re
+    assert VALKA_OBJ and VALKA_RAILGUN in VALKA_PARTS, 'build_survival.py valka_unit sets VALKA_OBJ / VALKA_PARTS first'
+    lua = open(os.path.join(HERE, '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'main.lua'), encoding='utf-8').read()
+    m = re.search(r'spots = \{ ((?:\{ [^}]* \},? )+)\}', lua)
+    lua_spots = re.findall(r'\{ "(\w)", (\d+), (\d+) \}', m.group(1)) if m else []
+    assert [(r, int(a), int(b)) for r, a, b in lua_spots] == list(VALKA_SPOTS), 'main.lua CFG.specials.valka.spots != VALKA_SPOTS'
+    dirn = os.path.dirname(os.path.dirname(stock_ep))
+    m15 = os.path.join(dirn, 'Mission015', 'EP_Mission015_global.uasset')
+    m19 = os.path.join(dirn, 'Mission019', 'EP_Mission019_global.uasset')
+    m26 = os.path.join(dirn, 'Mission026', 'EP_Mission026_global.uasset')
+    m06 = os.path.join(dirn, 'MIssion006', 'EP_Mission006_global.uasset')
+    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')
+    t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    t_hold = g.foreign_template(m26, 'LiveAIEngagementOrder', 'x40a_fire_AB_Ship0_3')        # {0 part, 3 EvadeOnly}
+    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
+    t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
+    t_noise = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_02')
+    t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
+    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
+    t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
+    t_cam_off = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
+    t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')
+    t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')
+    t_ma = g.exec_template('LiveChangePlayerMaxAttackersNumExecution', '01_Wave03_RemainingTime_0')
+    v = arg_values(t_tp)
+    assert v[2] == 'Player' and v[13] == 'Absolute', v
+    assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
+    assert arg_values(t_hold)[3] == 'EvadeOnly' and arg_values(t_hold)[0].endswith('_RailGunCK'), arg_values(t_hold)
+    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
+    assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false']
+    def attack(ev, a):
+        g.execute(t_mm, ev, {1: a['missiles']})
+        g.execute(t_ma, ev, {0: a['attackers']})
+        g.execute(t_cd, ev, {i: f'{x}' for i, x in enumerate(a['cooldown'])})
+    remote = lambda ev: g.trigger('RE_SpawnEnemy_kokatu_1st', ev)          # remote events Lua fires (SV_Event)
+    up = 'SV_ValkaUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: VALKA_UNIT})
+    g.execute(t_search, up, {1: VALKA_UNIT}, delay=2.0)
+    g.execute(t_engage, up, {1: VALKA_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
+    for comp in VALKA_IDLE_PARTS:
+        g.execute(t_hold, up, {0: VALKA_PARTS[comp]}, delay=3.0)
+    flag(up, 'SV_ValkaUp', 'Set', 1)
+    for ev, deg, metres in valka_spots():                  # her spots round the player, at their height, nose on them
+        remote(ev)
+        dx, dy = metres * 100 * math.cos(math.radians(deg)), metres * 100 * math.sin(math.radians(deg))
+        yaw = (deg + 180 + 180) % 360 - 180
+        g.execute(t_tp, ev, {1: VALKA_OBJ, 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
+    remote('RE_SV_ValkaRailgun')                           # one shot (main.lua makes the part a single-shot one)
+    g.execute(t_fire, 'RE_SV_ValkaRailgun', {0: 'WN_WEAPON_1', 1: VALKA_PARTS[VALKA_RAILGUN]})
+    remote('RE_SV_ValkaChargeOn')                          # a railgun charging at you: WARNING, radar noise, the hum
+    g.execute(t_warn_on, 'RE_SV_ValkaChargeOn')
+    g.execute(t_noise, 'RE_SV_ValkaChargeOn')
+    g.execute(t_sound, 'RE_SV_ValkaChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: VALKA_OBJ})
+    remote('RE_SV_ValkaChargeOff')
+    g.execute(t_warn_off, 'RE_SV_ValkaChargeOff')
+    g.execute(t_noise_off, 'RE_SV_ValkaChargeOff')
+    g.execute(t_sound, 'RE_SV_ValkaChargeOff', {0: VALKA_CHARGE_SOUND + 'Stop', 1: VALKA_OBJ})
+    remote('RE_SV_ValkaReveal')                            # after the first shot: the banner, the pressure
+    g.execute(t_msg, 'RE_SV_ValkaReveal', {0: 'MISSION_UPDATE'})
+    attack('RE_SV_ValkaReveal', ANOMALY_ATTACK)
+    for k, cam in enumerate(ANOMALY_CAMERAS):              # the focus camera on her (main.lua picks one: `camera`)
+        ev = f'RE_SV_ValkaCam_{chr(65 + k)}'
+        remote(ev)
+        g.execute(t_cam_on, ev, {0: VALKA_OBJ, 4: cam})
+        g.execute(t_cam_off, ev, delay=ANOMALY_CAMERA_S)
+    for name, action in VALKA_POST_STALL:                  # LastTGT and the post-stalls, as build_glitch's
+        ev = f'RE_SV_Valka{name}'
+        remote(ev)
+        g.execute(t_req, ev, {0: 'NoneSelect', 1: VALKA_UNIT, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return',
+                              6: 'NoneSelect', 7: 'false'})
+    down = 'SV_ValkaDown'
+    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: VALKA_UNIT})
+    for ev in (down, 'RE_SV_ValkaEnd'):
+        if ev != down: remote(ev)
+        attack(ev, ATTACK_BASE)
+        flag(ev, 'SV_ValkaUp', 'Set', 0)
+        g.execute(t_warn_off, ev)
+        g.execute(t_noise_off, ev)
+        g.execute(t_sound, ev, {0: VALKA_CHARGE_SOUND + 'Stop', 1: VALKA_OBJ})
 
 
 def build_shuttle(g, flag):

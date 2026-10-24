@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.62.0"
+local VERSION = "0.63.0"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -896,7 +896,7 @@ local CFG = {
         chance   = 0.3,
         first    = 4,
         every    = 5,
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch" },
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
@@ -997,6 +997,44 @@ local CFG = {
                                  "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001" },
                      smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
                      smoke_s = 3.0 },
+        -- "valka" = VALKA (user, 2026-10-24: "port the Mihaly Fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss,
+        -- we're going to mix MINDRIPPER's abilities and ABELCAINS abilities into this new Anomaly called VALKA, who uses
+        -- an EML"; tools/survival_events.py VALKA_*). AC7 Mission 18's opener: she comes hidden and is kept opener_m
+        -- ahead of you, facing you; a flash of light there, the railgun WARNING and charge for charge_s, then one
+        -- railgun shot at you. reveal_s after it she's on the far ring (6 km), shows, and the focus camera swings onto
+        -- her (`camera`). Then a Super AI (the top fire-control level, ai_level, MINDRIPPER's attack pressure) on you
+        -- alone, anywhere (user: "the AI after the initial shot will always target the player and go after the player
+        -- also using the lastTGT psm ability"): LastTGT every turn_every_s and at once when you get behind her within
+        -- behind_km (behind_gap_s apart), post-stalls (post_stall_*), blinks round you (AB.L..IN's: each hit outside a
+        -- blink spell starts blink_s of them, one every blink_every_s, then blink_cooldown_s before the next spell), her
+        -- railgun every railgun_every_s (railgun_charge_s of warning first) when you're within railgun_range_km and
+        -- railgun_cone_deg of her nose, and every invert_every_s a chance of invert_chance that your controls scramble
+        -- for invert_s (random_min..random_max of random_fx, as MINDRIPPER's field). Her railgun fires one round a
+        -- shot (user, 2026-10-24: "Mission 26 has a 4 shot EML, I only want single shot": its part's TriggerCount and
+        -- MagazineCapacity 3 -> single_shot). No AC7 voice lines, no invincibility (AC7 held Mihaly's health with
+        -- SetMinHealth until a radio line; she has none). Shot down: `reward` zollars.
+        valka    = { name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
+                     health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
+                     spawn_km = { 6, 9 }, arrive_s = 1.0,
+                     opener_m = 700, charge_s = 6.0, reveal_s = 1.5,
+                     flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 3.0, flash_s = 2.0,
+                     camera = "LookAt_Event_Camera_ms22-01",
+                     turn_every_s = 12, behind_km = 1.5, behind_gap_s = 4,
+                     post_stall = true, post_stall_every_s = 9, post_stall_range_km = 3,
+                     post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
+                     blink_s = 4, blink_every_s = 1.0, blink_turn_deg = 60, ground_clear_m = 150, blink_cooldown_s = 8,
+                     smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
+                     smoke_s = 3.0,
+                     railgun_every_s = 15, railgun_charge_s = 2.5, railgun_range_km = 5, railgun_cone_deg = 25,
+                     single_shot = 1,
+                     -- weapons added to her row's empty slots (slot = fire-control row): the x40a row carries flares and
+                     -- missiles only; both on MINDRIPPER's quick fire control
+                     weapons = { [1] = "NPC_FCS_PlaneGun000", [3] = "NPC_FCS_PlaneQAAM000" },
+                     invert = "random", invert_every_s = 20, invert_chance = 0.35, invert_s = 8, fade_s = 1.0,
+                     random_fx = { "pitch", "roll", "yaw", "swap", "throttle" }, random_min = 1, random_max = 2,
+                     -- her teleport rings (tools/survival_events.py VALKA_SPOTS; keep in step, not an ini setting):
+                     -- { ring, metres, step deg }: A the opener's, B / C her blinks, D where she shows
+                     spots = { { "A", 700, 10 }, { "B", 500, 30 }, { "C", 800, 30 }, { "D", 6000, 30 } } },
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
         -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
@@ -1220,6 +1258,12 @@ local CFG = {
             glitch_sub   = "IFF: FATAL ERROR",
             glitch_row   = "%s: %.1f KM",
             glitch_row_frenzy = "%s: SIGNAL UNSTABLE",
+            valka_sub    = "ELECTROMAGNETIC LAUNCHER DETECTED",
+            valka_charge = "WARNING: RAILGUN",
+            valka_charge_sub = "EML CHARGING",
+            valka_row    = "%s: %.1f KM",
+            valka_row_charge = "%s: RAILGUN CHARGING",
+            valka_row_field  = "%s: %s",                 -- (her name, the scramble: anomaly_fx joined by " + ")
             anomaly_warn = "WARNING: %s",
             anomaly_warn_sub = "ITS FIELD SCRAMBLES YOUR CONTROLS",
             anomaly_field     = "ANOMALY FIELD",
@@ -1506,7 +1550,8 @@ local ACE = {
     roster = { mercenary = { "f15c", "su35", "typhoon" }, legend = { "su47", "rafale" }, demon = { "f22a", "su57" },
                phantom = { "su57", "typhoon", "su47" }, reaper = { "su57", "f22a", "typhoon", "rafale", "adfx02" },
                anomaly = { "f04e" },               -- the Anomaly's MINDRIPPER and guards (not a tier: never a flight's)
-               glitch = { "e18g" } },              -- AB.L..IN (CFG.specials.glitch; not a tier either)
+               glitch = { "e18g" },                -- AB.L..IN (CFG.specials.glitch; not a tier either)
+               valka = { "x40a" } },               -- VALKA (CFG.specials.valka; not a tier either)
     row = function(tier, key, part) return "sv_ace_" .. tier .. "_" .. key .. "_" .. part end,
     -- airframes from Online Mode (tools/build_survival.py ACE_MODELS): their model row (DT_SV_ModelRows) goes into the
     -- campaign's DT_NPC_Model first, and their name (the model's GameObjectDisplayName01) is Survival's text
@@ -1997,10 +2042,11 @@ local function searchSetup()
             end
         end
         for tier, keys in pairs(ACE.roster) do
-            local an, gl = CFG.specials.anomaly, CFG.specials.glitch
+            local an, gl, va = CFG.specials.anomaly, CFG.specials.glitch, CFG.specials.valka
             local c = (tier == "anomaly" and { squadron = an.guards_name, f04e = an.name })
-                or (tier == "glitch" and { squadron = gl.squadron, e18g = gl.name }) or CFG.aces[tier] or {}
-            if tier ~= "anomaly" and tier ~= "glitch" and not CFG.aces.enabled then keys = {} end
+                or (tier == "glitch" and { squadron = gl.squadron, e18g = gl.name })
+                or (tier == "valka" and { squadron = va.squadron, x40a = va.name }) or CFG.aces[tier] or {}
+            if tier ~= "anomaly" and tier ~= "glitch" and tier ~= "valka" and not CFG.aces.enabled then keys = {} end
             if type(SV_SetText) == "function" and SV_SetText("SV_Sqn_" .. tier, tostring(c.squadron or tier)) == 1 then names = names + 1 end
             for _, k in ipairs(keys) do
                 if type(SV_SetText) == "function" and SV_SetText("SV_Ace_" .. tier .. "_" .. k, tostring(c[k] or k)) == 1 then names = names + 1 end
@@ -2085,6 +2131,16 @@ local function searchSetup()
                     end
                     local mind = a == ACE.row("anomaly", "f04e", "l")       -- MINDRIPPER: its own, every level
                     local glitch = a == ACE.row("glitch", "e18g", "l")      -- AB.L..IN: its gun and ECM pod
+                    local valka = a == ACE.row("valka", "x40a", "l")        -- VALKA: MINDRIPPER's fire control
+                    if fcs and valka then              -- the x40a row has no gun: hers in slot 1, a QAAM in slot 3
+                        pcall(function()
+                            local va = CFG.specials.valka
+                            for slot, id in pairs(va.weapons or {}) do
+                                local cur = r["NpcFCSId" .. slot]:ToString()
+                                if cur == "None" or cur == "" then r["NpcFCSId" .. slot] = FName(id) end
+                            end
+                        end)
+                    end
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free, frees = nil, {}
                         for i = 0, 5 do
@@ -2092,9 +2148,11 @@ local function searchSetup()
                                 local id = r["NpcFCSId" .. i]:ToString()
                                 local new
                                 if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
-                                    new = mind and anomFcs(id) or svFcs(id, level)
+                                    new = (mind or valka) and anomFcs(id) or svFcs(id, level)
+                                elseif valka and id:find("^NPC_FCS_PlaneQAAM") then
+                                    new = anomFcs(id)
                                 elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
-                                    new = (mind and anomGun(id)) or (glitch and glitchGun(id))
+                                    new = ((mind or valka) and anomGun(id)) or (glitch and glitchGun(id))
                                         or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a])) or svGun(id, level)
                                 elseif glitch and id:find("ECM", 1, true) then
                                     new = anomEcm(id)                                -- its pod always up
@@ -2778,6 +2836,12 @@ local function hudTick(now, paused, pc)
         local gl = CFG.specials.glitch
         setText(H.next, "nextStr", D.special.frenzyUntil and string.format(t.glitch_row_frenzy, gl.name)
             or string.format(t.glitch_row, gl.name, D.special.dist))
+        if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
+    elseif D.special and D.special.kind == "valka" and D.special.state == "hunt" and D.special.dist then
+        local sp, va = D.special, CFG.specials.valka
+        setText(H.next, "nextStr", sp.chargeAt and string.format(t.valka_row_charge, va.name)
+            or sp.invertUntil and string.format(t.valka_row_field, va.name, sp.fxText or "")
+            or string.format(t.valka_row, va.name, sp.dist))
         if H.nextShown ~= true then H.next:SetVisibility(VIS.HitTestInvisible); H.nextShown = true end
     elseif D.special and D.special.kind == "anomaly" and D.special.state == "hunt" and D.special.dist then
         local an = CFG.specials.anomaly
@@ -3724,6 +3788,279 @@ function ANOM.glitchTick(now, s)
     end
 end
 
+-- VALKA (CFG.specials.valka; tools/survival_events.py VALKA_*): AC7 Mission 18's opener (hidden and kept opener_m
+-- ahead of the player, a flash, the charge, one railgun shot), her reveal on the far ring with the focus camera, then
+-- the fight: LastTGT and post-stalls, blinks when she's hit, her railgun, and now and then the scrambled controls.
+-- (Functions on SPC.V: the main chunk is at its 200-local limit, hard rule 23.)
+SPC.V = {}
+-- her teleport event on ring `ring` nearest bearing `deg` (RE_SV_ValkaTp_<ring><two letters>), the point it puts her
+-- at round `you` (cm, at your height) and that step's bearing
+function SPC.V.spot(c, ring, deg, you)
+    for _, sp in ipairs(c.spots) do
+        if sp[1] == ring then
+            local n = math.floor(360 / sp[3])
+            local k = math.floor((deg % 360) / sp[3] + 0.5) % n
+            local b, d = k * sp[3], sp[2] * 100
+            return "RE_SV_ValkaTp_" .. ring .. string.char(65 + k // 26) .. string.char(65 + k % 26),
+                you and { X = you.X + d * math.cos(math.rad(b)), Y = you.Y + d * math.sin(math.rad(b)), Z = you.Z }, b
+        end
+    end
+end
+-- the player's heading (degrees, world: 0 = +X), from their velocity (their nose when they're near still)
+function SPC.V.heading()
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    if not pawn then return nil end
+    local ok, h = pcall(function()
+        local v = pawn:GetVelocity()
+        if math.abs(v.X) + math.abs(v.Y) > 1000 then return math.deg(math.atan(v.Y, v.X)) end
+        local f = pawn:GetActorForwardVector()
+        return math.deg(math.atan(f.Y, f.X))
+    end)
+    return ok and h or nil
+end
+-- a blink spot (rings B / C): at least blink_turn_deg round from the last, never under ground_clear_m above the ground
+-- (less when you fly lower), as AB.L..IN's. Returns its event, point and bearing, or nil.
+function SPC.V.blinkSpot(c, s, you)
+    local want = math.random() * 360
+    if s.lastDeg then want = s.lastDeg + c.blink_turn_deg + math.random() * (360 - 2 * c.blink_turn_deg) end
+    local under = groundAt(you.X, you.Y)
+    local clear = c.ground_clear_m * 100
+    if under then clear = math.max(0, math.min(clear, (you.Z - under) * 0.8)) end
+    local rings = math.random() < 0.5 and { "B", "C" } or { "C", "B" }
+    for _, off in ipairs({ 0, 30, -30, 60, -60, 90, -90 }) do
+        for _, ring in ipairs(rings) do
+            local ev, to, deg = SPC.V.spot(c, ring, want + off, you)
+            local ground = to and groundAt(to.X, to.Y)
+            if ev and (not ground or to.Z >= ground + clear) then return ev, to, deg end
+        end
+    end
+end
+-- her railgun parts fire one round a shot (user, 2026-10-24: "I only want single shot"; Mission 26's fire 3): the x40a
+-- railguns' launcher modules (only hers are in Survival) get TriggerCount / MagazineCapacity single_shot. Returns how many.
+function SPC.V.singleShot(c)
+    local n, why = 0, nil
+    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
+    for _, m in ipairs(ok and list or {}) do
+        local okS, err = pcall(function()
+            m.FireControl.TriggerCount = c.single_shot
+            m.Performance.MagazineCapacity = c.single_shot
+        end)
+        if okS then n = n + 1 else why = why or tostring(err) end
+    end
+    return n, why
+end
+function SPC.V.event(ev)
+    local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+    if r ~= 1 then log("special: VALKA " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
+    return r
+end
+-- the scrambled controls on (random_min..random_max of random_fx, as MINDRIPPER's field) or off
+function SPC.V.invert(c, s, on, now)
+    local t = CFG.hud.text
+    local fx = on and pickFx(c) or {}
+    if on then
+        local names = {}
+        for _, k in ipairs(FX_ORDER) do if fx[k] then names[#names + 1] = (t.anomaly_fx or {})[k] or k:upper() end end
+        s.fxText, s.invertUntil = table.concat(names, " + "), now + c.invert_s
+    else
+        s.invertUntil = nil
+    end
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    local function b(k) return fx[k] and 1 or 0 end
+    local r = type(SV_Invert) == "function" and SV_Invert(b("pitch"), b("roll"), c.fade_s, pawn and addrOf(pawn) or 0,
+        b("yaw"), b("swap"), b("throttle")) or "no runtime"
+    hudCallout(on and t.anomaly_field or t.anomaly_clear, on and s.fxText or nil)
+    log(string.format("special: %s scrambles your controls: %s (SV_Invert %s)", c.name, on and s.fxText or "back",
+        tostring(r)))
+end
+
+-- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, hidden until her opener; false if
+-- she can't come.
+function SPC.valkaSpawn(now)
+    local c = CFG.specials.valka
+    local row = ACE.row("valka", "x40a", "l")
+    if not SR.usable[row] then
+        log("special: VALKA's row wasn't in before this level loaded; a normal round instead")
+        return false
+    end
+    local x, y, _, bearing = spawnPoint()
+    local px, py, pb, pd = ANOM.nearPlayer(c.spawn_km)
+    if px then x, y, bearing = px, py, pb end
+    local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
+    if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
+    spawningUnit = c.unit
+    local r = SV_Spawn(c.unit, x, y, alt * 100, (bearing + 180) % 360)
+    spawningUnit = nil
+    local hidden = 0
+    for _, q in ipairs(pending) do                     -- gone before a frame is drawn (as MINDRIPPER)
+        if q.unit == c.unit and valid(q.obj) then setGone(q.obj, true); hidden = hidden + 1 end
+    end
+    log(string.format("special: VALKA as %s (%s set), %s at bearing %.0f, %.1f km up: %s (%d hidden)", row, tostring(set),
+        pd and string.format("%.1f km from you", pd) or "at a spawn point", bearing or -1, alt / 1000,
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"), hidden))
+    if r <= 0 then return false end
+    D.flightTier = D.flightTier or {}
+    D.up[c.unit], D.flown[c.unit], D.flightTier[c.unit] = true, true, #CFG.tiers.list
+    D.special.state, D.special.at = "arrive", now
+    return true
+end
+
+-- Every tick of VALKA's round.
+function SPC.valkaTick(now, s)
+    local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
+    local o = glitchActor(c)
+    local you = playerLocation()
+    if s.state == "arrive" then                         -- hidden; her railguns made single-shot; then the opener
+        if o then setGone(o, true) end
+        if not o and now - s.at >= c.arrive_s + 3 then
+            s.state = "hunt"
+            log(string.format("special: %s's actor not found %.0f s after she spawned; no opener", c.name, now - s.at))
+            return
+        end
+        if now - s.at < c.arrive_s or not o or not you then return end
+        local n, why = V.singleShot(c)
+        log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
+        s.state, s.chargeAt, s.openAt = "opener", now + c.charge_s, now
+        V.event("RE_SV_ValkaChargeOn")
+        hudCallout(t.valka_charge, t.valka_charge_sub)
+        local pawn = valid(survivalPC) and survivalPC.Pawn
+        local fx = pawn and portalFx({ c.flash }, pawn, { X = c.opener_m * 100, Y = 0, Z = 50 }, c.flash_scale, c.flash_s) or 0
+        log(string.format("special: %s's opener: railgun charging %.0f m ahead of you for %.1f s (flash: %d)", c.name,
+            c.opener_m, c.charge_s, fx))
+    end
+    if s.state == "opener" then                         -- kept ahead of you, nose on you, then the shot
+        if not o then return end
+        setGone(o, true)
+        local h = V.heading()
+        if h and you then V.event((V.spot(c, "A", h, you))) end
+        if now >= s.chargeAt then
+            if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- (in case the parts came late)
+            V.event("RE_SV_ValkaRailgun")
+            V.event("RE_SV_ValkaChargeOff")
+            s.chargeAt, s.shots, s.state, s.revealAt = nil, 1, "fired", now + c.reveal_s
+            local pawn = valid(survivalPC) and survivalPC.Pawn
+            if pawn then portalFx({ c.flash }, pawn, { X = c.opener_m * 100, Y = 0, Z = 50 }, c.flash_scale, c.flash_s) end
+            log(string.format("special: %s's opener shot (from %.0f m ahead of you)", c.name, c.opener_m))
+        end
+        return
+    end
+    if s.state == "fired" then                          -- the far spot, shown, the camera on her
+        if not o or now < s.revealAt then return end
+        local h = V.heading() or 0
+        local ev = you and V.spot(c, "D", h, you)
+        if ev then V.event(ev) end
+        local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
+        local hp = c.health * hx
+        local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = hp * 10 end)
+        setGone(o, false)
+        local cam = 1
+        for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
+        V.event("RE_SV_ValkaCam_" .. string.char(64 + cam))
+        V.event("RE_SV_ValkaReveal")
+        s.state, s.revealedAt = "hunt", now
+        s.railAt, s.turnAt, s.psAt, s.invertAt = now + c.railgun_every_s, now + c.turn_every_s, now + c.post_stall_every_s,
+            now + c.invert_every_s
+        hudCallout(c.name, c.squadron)
+        log(string.format("special: %s shows %.0f m out (%s), %.0f HP (x%.2f)%s; camera %s", c.name,
+            c.spots[4][2], tostring(ev), hp, hx, okH and "" or " (health NOT set)", ANOMALY_CAMERAS[cam]))
+        return
+    end
+    if s.state ~= "hunt" then return end
+    s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
+    s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
+    if SV_UnitAlive(c.unit) <= 0 then
+        s.state = "done"
+        if s.invertUntil then V.invert(c, s, false, now) end
+        if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
+        ANOM.cleanFx(now, true)
+        local pay = c.reward + (c.reward_per_round or 0) * D.round
+        addCredits(pay, c.name .. " down")
+        LB.special("valka", true, now - s.at)
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
+        log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d turns, %d scrambles)",
+            D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0, s.turns or 0, s.scrambles or 0))
+        return
+    end
+    if not o then return end
+    local at = where(o)
+    if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
+    -- the angle between her nose and you (for LastTGT when you're behind her, and her railgun's cone)
+    local offNose = nil
+    if at and you then
+        local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local tx, ty, tz = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+        local n = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if okF and n > 0 then offNose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
+    end
+    -- the scrambled controls: a chance every invert_every_s, for invert_s
+    if s.invertUntil and now >= s.invertUntil then V.invert(c, s, false, now) end
+    if not s.invertUntil and now >= s.invertAt then
+        s.invertAt = now + c.invert_every_s
+        if math.random() < c.invert_chance then s.scrambles = (s.scrambles or 0) + 1; V.invert(c, s, true, now) end
+    end
+    -- blinks: a hit outside a spell (and its cooldown) starts blink_s of them
+    local okH, hpNow = pcall(function() return o.HealthInternal end)
+    hpNow = okH and type(hpNow) == "number" and hpNow or nil
+    if hpNow and s.lastHp and hpNow < s.lastHp - 0.5 and not s.blinkUntil and now >= (s.blinkCool or 0) then
+        s.blinkUntil, s.nextBlink = now + c.blink_s, now
+        log(string.format("special: %s hit (%.0f -> %.0f): blinking for %.0f s", c.name, s.lastHp, hpNow, c.blink_s))
+    end
+    s.lastHp = hpNow or s.lastHp
+    if s.vanished then                                  -- back, round you, nose on you
+        local ev, to, deg
+        if you then ev, to, deg = V.blinkSpot(c, s, you) end
+        if ev then
+            s.lastDeg, s.blinks = deg, (s.blinks or 0) + 1
+            V.event(ev)
+            if to and fxAt({ c.smoke }, to, c.smoke_scale, c.smoke_s) == 0 and not s.smokeSaid then
+                s.smokeSaid = true; log("special: VALKA's smoke " .. c.smoke .. " didn't spawn")
+            end
+        end
+        setGone(o, false)
+        s.vanished, s.nextBlink = false, now + c.blink_every_s
+    elseif s.blinkUntil and now >= s.blinkUntil then
+        s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
+    elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
+        if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
+        setGone(o, true)
+        s.vanished = true
+        return
+    end
+    -- her railgun: warning and charge, then one shot (when you're in front of her, near enough)
+    if s.chargeAt and now >= s.chargeAt then
+        V.event("RE_SV_ValkaRailgun")
+        V.event("RE_SV_ValkaChargeOff")
+        s.chargeAt, s.shots, s.railAt = nil, (s.shots or 0) + 1, now + c.railgun_every_s
+        log(string.format("special: %s railgun shot %d, %.1f km from you, %.0f deg off her nose", c.name, s.shots,
+            s.dist or -1, offNose or -1))
+    elseif not s.chargeAt and now >= s.railAt and s.dist and s.dist <= c.railgun_range_km and offNose
+        and offNose <= c.railgun_cone_deg then
+        s.chargeAt = now + c.railgun_charge_s
+        V.event("RE_SV_ValkaChargeOn")
+        hudCallout(t.valka_charge, t.valka_charge_sub)
+    end
+    -- LastTGT: every turn_every_s, and at once (behind_gap_s apart) when you're behind her within behind_km
+    local behind = offNose and offNose > 110 and s.dist and s.dist <= c.behind_km
+    if (now >= s.turnAt) or (behind and now >= (s.behindAt or 0)) then
+        s.turnAt, s.behindAt, s.turns = now + c.turn_every_s, now + c.behind_gap_s, (s.turns or 0) + 1
+        s.psAt = math.max(s.psAt, now + 3)                -- (not straight into a post-stall)
+        V.event("RE_SV_ValkaTurn")
+        if s.turns <= 5 or s.turns % 10 == 0 then
+            log(string.format("special: %s LastTGT %d%s, %.1f km from you", c.name, s.turns, behind and " (you behind her)" or "",
+                s.dist or -1))
+        end
+    elseif c.post_stall and now >= s.psAt and s.dist and s.dist <= c.post_stall_range_km then
+        s.psAt = now + c.post_stall_every_s
+        if not s.psOn then
+            s.psOn = true
+            pcall(function() o.bCanManeuverPugachevsCobra = true; o.bCanManeuverKulbit = true end)
+        end
+        local moves = c.post_stall_moves or {}
+        if #moves > 0 then V.event("RE_SV_Valka" .. moves[math.random(#moves)]) end
+    end
+end
+
 -- The special rounds by kind (CFG.specials.rotation; code review of 2026-10-23: each new one meant a branch in eight
 -- places): `sub` its callout's second line (a CFG.hud.text key, or a function of the texts), `alone` whether its round
 -- has no fighters of its own (a value or a function), `aircraft` how many of the round's aircraft it counts for,
@@ -3748,6 +4085,8 @@ SPC.kinds = {
                    tick = function(now, s) return SPC.alicornTick(now, s) end },
     glitch     = { sub = "glitch_sub", alone = true, aircraft = 1, spawn = function(now) return ANOM.glitchSpawn(now) end,
                    tick = function(now, s) return ANOM.glitchTick(now, s) end },
+    valka      = { sub = "valka_sub", alone = true, aircraft = 1, spawn = function(now) return SPC.valkaSpawn(now) end,
+                   tick = function(now, s) return SPC.valkaTick(now, s) end },
 }
 -- a kind's field that may be a function (alone, aircraft, sub)
 function SPC.kindValue(v, ...) if type(v) == "function" then return v(...) end return v end
@@ -6885,7 +7224,8 @@ if type(RegisterKeyBind) == "function" and Key then
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
     local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
                             { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
-                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" } }
+                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },
+                            { "EIGHT", "valka", "VALKA" } }
     for i, ts in ipairs(TEST_SPECIALS) do
         local key, kind, label = Key[ts[1]], ts[2], ts[3]
         if key then

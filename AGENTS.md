@@ -14,6 +14,8 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - IoStore mod loader container: arena map, airfield, spawn points, path sets.
 - Config file: wave tables, prices, special rotation, intermission length. Players must be able to edit these without rebuilding.
 - Survival Mode is built only from stock game files; nothing from Stonehenge Returns is used or shipped.
+  One exception, at the user's request (2026-10-24): the VALKA special may use Ace Combat 7 assets (the X-02S model,
+  Mihaly's railgun effects and sounds). Never AC7 voice lines. See tools/re/VALKA.md.
 - Survival's own build: `tools/build_all.sh` (see tools/README.md). Packages are generated into `mod/Content`
   by `tools/build_survival.py`. Edit that script, not the binaries. The container is `SurvivalMode_P`, packages live under `/Game/Mods/SurvivalMode/`.
 - Survival Mode is its own mod: never repoint or override Stonehenge Returns' (or any other mod's) files or mission slot.
