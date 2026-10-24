@@ -521,6 +521,14 @@ def set_arg(rec, i, value):
     a[2][:] = [(q[0], q[1], q[2], ('str', str(value)) if q[1] == 'Value' else q[3]) for q in a[2]]
 
 
+def runtime_lua():
+    """The runtime's Lua, all of it (Scripts/main.lua is the controller, its parts are Scripts/sv_*.lua:
+    tools/lua_split.py), for the checks that keep this file and main.lua's CFG in step."""
+    import glob
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts')
+    return chr(10).join(open(f, encoding='utf-8').read() for f in sorted(glob.glob(os.path.join(d, '*.lua'))))
+
+
 def arg_values(rec):
     return [fields(a)['Value'][3][1] for a in args(rec)]
 
@@ -1100,8 +1108,7 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     # main.lua builds the same names from CFG.specials.glitch (blinks, gun_every_s): checked here so the two can't drift
     # (code review of 2026-10-23)
     import re
-    lua = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts',
-                            'main.lua'), encoding='utf-8').read()
+    lua = runtime_lua()
     m_bl = re.search(r'blinks = \{ step_deg = (\d+), rings_m = \{ ([\d, ]+) \} \}', lua)
     m_gun = re.search(r'[^a-z_]gun_every_s = ([\d.]+)', lua)          # (not railgun_every_s)
     assert m_bl and int(m_bl.group(1)) == GLITCH_BLINK_STEP_DEG and         tuple(int(x) for x in m_bl.group(2).split(',')) == GLITCH_BLINK_RINGS_M, 'main.lua CFG.specials.glitch.blinks != GLITCH_BLINK_*'
@@ -1149,7 +1156,7 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     focus camera, the Anomaly's attack pressure), LastTGT and the post-stalls. The rest is Scripts/main.lua's (VALK.*)."""
     import math, re
     assert VALKA_OBJ and VALKA_RAILGUN in VALKA_PARTS, 'build_survival.py valka_unit sets VALKA_OBJ / VALKA_PARTS first'
-    lua = open(os.path.join(HERE, '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'main.lua'), encoding='utf-8').read()
+    lua = runtime_lua()
     m = re.search(r'spots = \{ ((?:\{ [^}]* \},? )+)\}', lua)
     lua_spots = re.findall(r'\{ "(\w)", (\d+), (\d+) \}', m.group(1)) if m else []
     assert [(r, int(a), int(b)) for r, a, b in lua_spots] == list(VALKA_SPOTS), 'main.lua CFG.specials.valka.spots != VALKA_SPOTS'

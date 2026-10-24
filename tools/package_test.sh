@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")/.."
 name=${1:-test_$(date +%Y-%m-%d)}
 st=build/release/stage
-lua=$(grep -m1 '^local VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
+lua=$(grep -m1 -E '^(local )?VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
 rt=$(grep -m1 '^#define RT_VERSION' runtime/survival_rt.c | sed 's/.*L"\(.*\)".*/\1/')
 rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
@@ -16,9 +16,9 @@ rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/survival.ini* "$st"/ue4ss/Mods/AC8
 # (what the game writes there: the queue of unsent runs, this install's anonymous pilot name, map notes, dumps)
 rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/pending_runs.txt "$st"/ue4ss/Mods/AC8SurvivalMode/config/pilot_id.txt \
       "$st"/ue4ss/Mods/AC8SurvivalMode/config/coast_*.txt "$st"/ue4ss/Mods/AC8SurvivalMode/hud_dump.txt
-# the test-only cheats (main.lua's TEST ONLY BEGIN ... END: the +5000 zollars key) never ship
-python -I tools/strip_test_only.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"
-python -I tools/checks/lua_check.py "$st/ue4ss/Mods/AC8SurvivalMode/Scripts/main.lua"
+# the test-only cheats (TEST ONLY BEGIN ... END in Scripts/*.lua: the +5000 zollars key) never ship
+python -I tools/strip_test_only.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua
+python -X utf8 -I tools/checks/lua_check.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua
 sed "s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 out="build/release/AC8SurvivalMode_$name.zip"
 python -I -c "

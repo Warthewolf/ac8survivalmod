@@ -299,7 +299,7 @@ KNOWN_GLOBALS = {
 }
 
 
-def check(path):
+def parse(path):
     src = open(path, encoding='utf-8').read()
     try:
         p = Parser(tokenize(src))
@@ -308,14 +308,31 @@ def check(path):
             tk = p.peek(); raise LuaSyntaxError(f"line {tk[2]}: '<eof>' expected near '{tk[1]}'")
     except LuaSyntaxError as e:
         print(f'{path}: SYNTAX ERROR {e}')
+        return None
+    return p
+
+
+def check(paths):
+    """Each file's syntax and its main chunk's locals (hard rule 23, per file). Files checked together are one Lua
+    state's parts (the runtime's Scripts/main.lua + sv_*.lua, tools/lua_split.py): a global one of them sets is known
+    to all of them, so only names no part sets warn."""
+    parsed = {path: parse(path) for path in paths}
+    if not all(parsed.values()):
         return False
-    print(f'{path}: syntax ok (main chunk: at most {p.max_locals} of 200 locals in scope)')
-    for n, line in sorted(p.globals_set.items(), key=lambda kv: kv[1]):
-        print(f'  note: global assigned: {n} (line {line})')
-    seen = set()
-    for n, line in p.used:
-        if n not in KNOWN_GLOBALS and n not in p.globals_set and n not in seen:
-            seen.add(n); print(f'  WARNING: unknown global {n} (line {line}): a typo, or a local used before it is declared')
+    shared = {}
+    for p in parsed.values():
+        for n, line in p.globals_set.items(): shared.setdefault(n, line)
+    for path, p in parsed.items():
+        print(f'{path}: syntax ok (main chunk: at most {p.max_locals} of 200 locals in scope)')
+        if len(paths) == 1:
+            for n, line in sorted(p.globals_set.items(), key=lambda kv: kv[1]):
+                print(f'  note: global assigned: {n} (line {line})')
+        seen = set()
+        for n, line in p.used:
+            if n not in KNOWN_GLOBALS and n not in shared and n not in seen:
+                seen.add(n); print(f'  WARNING: unknown global {n} (line {line}): a typo, or a local used before it is declared')
+    if len(paths) > 1:
+        print(f'{len(paths)} files as one Lua state: {len(shared)} globals shared between them')
     return True
 
 
@@ -331,5 +348,5 @@ def check_runtime_names():
 
 
 if __name__ == '__main__':
-    ok = all([check(f) for f in sys.argv[1:]]) and check_runtime_names()
+    ok = check(sys.argv[1:]) and check_runtime_names()
     sys.exit(0 if ok else 1)

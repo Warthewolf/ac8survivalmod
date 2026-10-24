@@ -10,7 +10,7 @@ set -e
 cd "$(dirname "$0")/.."
 ed=$1
 case "$ed" in online) Ed=Online ;; offline) Ed=Offline ;; *) echo "usage: package_release.sh online|offline [version]"; exit 2 ;; esac
-lua=$(grep -m1 '^local VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
+lua=$(grep -m1 -E '^(local )?VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
 rt=$(grep -m1 '^#define RT_VERSION' runtime/survival_rt.c | sed 's/.*L"\(.*\)".*/\1/')
 ver=${2:-$lua}
 st=build/release/stage_$ed
@@ -20,14 +20,14 @@ cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv
-python -I tools/strip_test_only.py "$mod/Scripts/main.lua"
+python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
 sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 if [ "$ed" = offline ]; then
     (cd runtime && OFFLINE=1 sh build.sh > /dev/null)
     cp build/runtime/offline/main.dll "$mod/dlls/main.dll"
 fi
-python -I tools/edition.py "$ed" "$mod/Scripts/main.lua" "$mod/config/survival.default.ini" "$st/README.txt"
-python -I tools/checks/lua_check.py "$mod/Scripts/main.lua"
+python -I tools/edition.py "$ed" "$mod"/Scripts/*.lua "$mod/config/survival.default.ini" "$st/README.txt"
+python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
 if [ "$ed" = offline ]; then
     python -I -c "
 import os, sys

@@ -185,17 +185,30 @@ Copy a working stock pattern before inventing a new one.
     "ObjectSerializationError ... T_X02S_Valka_NO", 2026-10-24). Versioned (tagged) packages loaded fine the next test.
     New assets that use AC8's materials parent them on stubs at AC8's paths that are never packed.
 
+## Runtime layout (Lua, from 0.66.0)
+- `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
+  order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
+  into modules with a smaller central controller"). Edit the parts, not main.lua. "main.lua" in older notes and hard
+  rules means the runtime as a whole; find a function with grep over Scripts/*.lua.
+- All parts run in this mod's one Lua state, in order: a name another part uses is a global (no `local`), a part's
+  own helpers stay local. A new top-level function another part calls: drop its `local`. Order matters only for code
+  that runs at load (top-level statements), as it did in one file.
+- Hard rule 23's 200-local limit now counts per part (lua_check prints each part's count).
+- Packaging strips test-only code and picks the edition across every part (tools/strip_test_only.py,
+  tools/edition.py over Scripts/*.lua).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
   the game never spawns a desc again while its shot-down flight is still on the phase's unit list
   (tools/re/SPAWN_SYSTEM.md has the whole pipeline, offsets and signatures).
-- Round settings live in main.lua's CFG. Players edit `config/survival.ini` (made from `config/survival.default.ini` on the
+- Round settings live in CFG (Scripts/sv_config.lua). Players edit `config/survival.ini` (made from `config/survival.default.ini` on the
   first run; main.lua's INI_ALIAS maps its sections onto CFG). An optional `Scripts/survival_config.lua` returning a table
   of CFG overrides is loaded after it, for advanced changes.
 - The pool's flights must also be in tools/survival_events.py POOL (that's where they get their attack orders and the
   chase that moves their 6 km unit area onto the player every 6 s).
-- No Lua interpreter on the build machine: run `python tools/checks/lua_check.py <file.lua>` after every Lua edit.
+- No Lua interpreter on the build machine: run `python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua`
+  after every Lua edit (all the parts together: a global one sets is known to the others).
 
 ## User friendliness (top priority)
 - Install through ACE8 Mod Launcher, with Survival Mode as a toggle.

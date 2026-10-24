@@ -1,0 +1,546 @@
+-- sv_main.lua: kill credits, the probe tick, the keys, the loops that run it all.
+-- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_main); a name
+-- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
+
+-- The landing menu's ammo panel ([WEAPONS AMMO], WBP_Menu_IngameHangar_WeaponDetail_002: six slots
+-- AmmoText{L,R}{Top,Center,Bottom}, each WBP_Hangar_Detail_Text_000 with the weapon's name in Text_Body and its stock
+-- full load in Text_Body_1, e.g. "MSL" "144"; user screenshot of 2026-10-22: GUN / MSL / FLR on the left, the special
+-- weapons on the right). While Survival's caps apply, each capped weapon shows what the player takes off with: the
+-- cap (the rearm fills up to it; the gun is left alone).
+local AMMO_SLOTS = { "AmmoTextLTop", "AmmoTextLCenter", "AmmoTextLBottom", "AmmoTextRTop", "AmmoTextRCenter", "AmmoTextRBottom" }
+local AMMO_SLOT_KIND = { AmmoTextLCenter = 1, AmmoTextLBottom = 4, AmmoTextRTop = 2, AmmoTextRCenter = 3, AmmoTextRBottom = 3 }
+-- A named child widget (GetWidgetFromName, else the blueprint variable) and a text widget's text (GetText, else its
+-- Text property): on the landing menu the variables read back as TrivialObjects (test of 2026-10-22).
+local function childWidget(w, n)
+    local ok, x = pcall(function() return w:GetWidgetFromName(FName(n)) end)
+    if ok and valid(x) then return x end
+    ok, x = pcall(function() return w[n] end)
+    if ok and valid(x) then return x end
+    return nil
+end
+local function widgetText(t)
+    local ok, v = pcall(function() return t:GetText():ToString() end)
+    if ok and type(v) == "string" then return v end
+    ok, v = pcall(function() return t.Text:ToString() end)
+    if ok and type(v) == "string" then return v end
+    return nil
+end
+-- The slot's name and count TextBlocks. Found by their full names under the panel (<panel>.WidgetTree_N.AmmoText<slot>.
+-- WidgetTree_N.<text>): GetWidgetFromName gave nothing on the live panel (test of 2026-10-23: every slot 'nil'). The
+-- count is the text that reads as a number (or "---", an empty special slot), the name the other; the count widget is
+-- kept once found, as Survival's own number then shows in it.
+local function slotTexts(panel, slot)
+    SH.slotCache = SH.slotCache or {}
+    local key = addrOf(panel) or nameOf(panel)   -- (the address read back nil on the live panel: test of 2026-10-23)
+    local c = SH.slotCache[key]
+    if not c or (not c.found and os.clock() - c.at > 2) then   -- (none yet: looked for again every 2 s, not every call)
+        c = { slots = {}, at = os.clock() }
+        local base = nameOf(panel):match("^%S+%s+(.+)$") or nameOf(panel)
+        for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+            local n = nameOf(t)
+            local at = n:find(base, 1, true)
+            local sl, leaf = nil, nil         -- (not `at and s:match(...)`: `and` keeps only the first capture)
+            if at then sl, leaf = n:sub(at + #base):match("^%.WidgetTree[_%d]*%.(AmmoText%a+)%.WidgetTree[_%d]*%.([%w_]+)$") end
+            if sl then c.slots[sl] = c.slots[sl] or { all = {} }; c.slots[sl].all[leaf] = t; c.found = true end
+        end
+        SH.slotCache[key] = c
+    end
+    local e = c.slots[slot]
+    if not e then return nil, nil end
+    if not (e.count and valid(e.count)) then
+        for _, t in pairs(e.all) do
+            local v = widgetText(t)
+            if v and (v:match("^%s*%d+%s*$") or v:match("^%s*%-+%s*$")) then e.count = t
+            elseif v and v:match("%a") then e.name = t end
+        end
+    end
+    return e.name, e.count
+end
+
+local function hangarAmmoTick(tick)
+    if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
+    if not playerOnAirfield() then SH.panels, SH.slotCache = nil, nil; return end   -- the landing menu only exists down there
+    -- every 2 s, all of them: the STORE pages show their own panel, made when the page opens, while the landing
+    -- page's stays valid (report of 2026-10-23: the STORE still showed the stock counts)
+    if tick % 8 == 1 or not SH.panels then
+        SH.panels = {}
+        for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
+            if liveWidget(w) then SH.panels[#SH.panels + 1] = w end
+        end
+    end
+    for _, panel in ipairs(SH.panels or {}) do
+        local pkey = addrOf(panel) or nameOf(panel)
+        SH.panelSaid = SH.panelSaid or {}
+        if liveWidget(panel) and not SH.panelSaid[pkey] then
+            SH.panelSaid[pkey] = true                -- once a panel: what it holds (test of 2026-10-22: no rewrite seen)
+            local parts = {}
+            for _, slot in ipairs(AMMO_SLOTS) do
+                local name, count = slotTexts(panel, slot)
+                parts[#parts + 1] = string.format("%s '%s' '%s'", slot, tostring(name and widgetText(name)),
+                    tostring(count and widgetText(count)))
+            end
+            local mx = {}
+            for k = 0, 4 do mx[#mx + 1] = tostring(A.max[k]) end
+            log("shop: ammo panel " .. nameOf(panel) .. ": " .. table.concat(parts, ", ") .. "; maxima " .. table.concat(mx, "/"))
+        end
+        if liveWidget(panel) then
+            for _, slot in ipairs(AMMO_SLOTS) do
+                pcall(function()
+                    local kind = AMMO_SLOT_KIND[slot]
+                    local cap = kind and A.caps[kind]
+                    if not cap then return end
+                    local _, t = slotTexts(panel, slot)
+                    local now = t and widgetText(t)
+                    if not (now and now:match("^%s*%d+%s*$")) then return end              -- an empty special slot shows "---"
+                    local want = tostring(math.min(cap, A.max[kind] or cap))              -- what you take off with
+                    if now ~= want then
+                        t:SetText(toText(want))
+                        SH.ammoSaid = SH.ammoSaid or {}
+                        if not SH.ammoSaid[pkey] then SH.ammoSaid[pkey] = true; log("shop: ammo panel " .. (nameOf(panel):match("([%w_]+)$") or "?") .. " shows the caps (" .. now .. " -> " .. want .. ")") end
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- Credits for an enemy aircraft that went down (probeTick's plane watch), by its flight's role: a bomber flight pays
+-- bomber (heavy for CFG.airfield.bombers.heavy models), any other flight fighter. Only when the plane's flight
+-- couldn't be read does its model decide (CFG.credits.models).
+local function creditKill(p)
+    if p.unit and p.unit:find("^SV_Unit_Ladon") then return end   -- (a Ladon pays its own reward: SPC.ladonTick)
+    local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
+    local kind = "fighter"
+    if p.unit and BOMBER_UNIT[p.unit] then
+        kind = "bomber"
+        for _, h in ipairs(CFG.airfield.bombers.heavy) do if (h:match("^(%w+)_") or h) == model then kind = "heavy" end end
+    elseif p.unit == false then
+        kind = CFG.credits.models[model] or "fighter"
+    end
+    -- its skill tier's pay (the tier it was given, else the round's own)
+    local list, ti = CFG.tiers.list, nil
+    for i, t in ipairs(list) do if t == p.tier then ti = i end end
+    ti = ti or (D and D.round and TIER.index(D.round))
+    local pay, x = TIER.pay((CFG.credits[kind] or 0) * TIER.specialX(), ti)
+    addCredits(pay, string.format("%s down (%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
+        TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or ""))
+    LB.stat("air", 1)
+    if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
+end
+
+local function probeTick(tick)
+    local function timed(name, fn, ...)            -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
+        local t0 = os.clock()
+        local ok, err = pcall(fn, ...)
+        local pf = D and D.perf
+        if pf then
+            local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
+            pf.parts[name] = e
+            local dt = (os.clock() - t0) * 1000
+            e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
+        end
+        return ok, err
+    end
+    if levelTick == -1 then
+        levelTick = tick
+        log("level loaded: PL_SurvivalMode")
+        if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
+        ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
+        SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
+        do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
+            local an, got, want = CFG.specials.anomaly, 0, 0
+            local function keep(path)
+                local n = path:match("[^/]+$")
+                want = want + 1
+                local o = loadObject(path .. "." .. n)
+                if o then pin(o, n); got = got + 1 else log("special: anomaly asset not loaded: " .. path) end
+            end
+            for _, n in ipairs(an.down_sound_names) do keep(an.down_sounds .. n) end
+            for _, n in ipairs(an.hum_sound_names) do keep(an.hum_sounds .. n) end
+            for _, part in ipairs({ an.portal.open, an.portal.burst, { an.portal.strike, an.portal.aura } }) do
+                for _, p in ipairs(part) do keep(p) end
+            end
+            log(string.format("special: anomaly sounds and portal systems loaded: %d of %d", got, want))
+        end
+        planes, lastAlive, lastFlags = {}, nil, nil
+        presetCache.at = -100                 -- the difficulty may have changed since the last run
+        if type(SV_Reset) == "function" then SV_Reset() end
+        log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
+            "; round 1 in " .. CFG.first_round_delay_s .. " s")
+        D = { round = math.max(1, math.floor(CFG.start_round)) - 1, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
+        PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
+        log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
+        SR.usable = {}
+        local nS = 0
+        local nA = 0                               -- the aces' rows (CFG.aces) count apart from the aircraft
+        for a, sv in pairs(SR.ready) do
+            SR.usable[a] = sv
+            if a:find("^sv_ace_") then nA = nA + 1 else nS = nS + 1 end
+        end
+        SR.usableLevels = {}                       -- spike rows in before this level loaded (the spawner cached them)
+        for a, t in pairs(SR.levels or {}) do SR.usableLevels[a] = t end
+        log(string.format("search: at level load, %d of %d aircraft (and %d ace rows) fly with the %s m search", nS,
+            #CFG.aircraft, nA, tostring(CFG.search.radius_m)))
+        if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end   -- a restart keeps the level
+        H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
+        flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
+        SHUTTLE.obj, SHUTTLE.lookAt = nil, nil
+        M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
+        AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
+        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
+                -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
+                stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
+                          specials = {} } }
+        ALLY.run = nil                             -- (a new level: no allies up)
+        if type(SV_MusicPlayer) == "function" then
+            local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
+            log("music: pause-menu music player " .. (old < 0 and "not available (pause list not hooked)"
+                or (CFG.music.pause_player and "on" or "off")))
+        end
+        if type(SV_MusicClock) == "function" then
+            local old = SV_MusicClock(CFG.music.hold_clock and 1 or 0)
+            log("music: music player track clock " .. (old < 0 and "not hooked (tracks may end early after a pause)"
+                or (CFG.music.hold_clock and "held while the BGM is paused" or "stock")))
+        end
+    end
+    local okSR, errSR = pcall(shopRowsTick, tick)
+    if not okSR then log("shop: rows error " .. tostring(errSR)) end
+    if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
+        local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
+        if not okG then log("game Lua: error " .. tostring(errG)) end
+        local okB, errB = pcall(setsSetup)
+        if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
+        local okS, errS = pcall(searchSetup)
+        if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
+        local okAc, errAc = pcall(SPC.alicornSetup)
+        if not okAc then log("special: Alicorn setup error " .. tostring(errAc)); SPC.alicornDone = true end
+        local okL, errL = pcall(SPC.ladonSetup)
+        if not okL then log("special: Ladon setup error " .. tostring(errL)); SPC.ladonDone = true end
+        local okSp, errSp = pcall(specialSetup)
+        if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
+        local okAs, errAs = pcall(ALLY.setup)
+        if not okAs then log("allies: setup error " .. tostring(errAs)); ALLY.setupDone = true end
+        local okP, errP = pcall(probeSetup)
+        if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
+        local okM, errM = pcall(SHOP.menuSetup)
+        if not okM then log("shop: store setup error " .. tostring(errM)); SH.menuDone = true end
+    end
+    if D then
+        if not valid(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
+        -- the run is over once Survival's player controller has been gone 8 s (the level was left: before, the run went
+        -- on at the main menu and in stock missions, rewriting their ammo panels and paying vanished planes as kills)
+        if valid(survivalPC) then D.pcSeen, D.pcLost = true, 0
+        elseif D.pcSeen and tick % 4 == 0 then D.pcLost = (D.pcLost or 0) + 1 end
+        -- a mission restart from the pause menu reloads the mission in the same level (no new World, so the reset below
+        -- never ran and the run kept its round: user, 2026-10-22), but it sets the event package's flags back to 0: Survival's
+        -- counters only grow during a run, so one that drops means the mission started again
+        if tick % 8 == 4 then
+            local f = svFlags()
+            if f then
+                D.maxFlags = D.maxFlags or {}
+                for _, k in ipairs({ "SV_Kills", "SV_AirHits", "SV_Beat" }) do      -- (SV_Beat: our heartbeat)
+                    local v = f[k]
+                    if v then
+                        if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
+                            log(string.format("mission restarted in round %d (%s %d -> %d): the run starts over", D.round, k, D.maxFlags[k], v))
+                            levelTick = -1         -- the level-load reset below, on the next tick
+                            local okL, errL = pcall(LB.finish, "restart")          -- (its error mustn't stop the reset)
+                            if not okL then log("leaderboard: error " .. tostring(errL)) end
+                        end
+                        D.maxFlags[k] = math.max(D.maxFlags[k] or 0, v)
+                    end
+                end
+            end
+        end
+        if (D.pcLost or 0) >= 8 then
+            log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
+            local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
+            if not okL then log("leaderboard: error " .. tostring(errL)) end
+            if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
+            D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
+            planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
+            ALLY.run = nil
+            HIT.reset()
+        end
+    end
+    if D then
+        local now, paused = roundClock(tick)
+        if now then
+            local okR, errR = timed("rounds", roundsTick, now)
+            if not okR then log("rounds: error " .. tostring(errR)) end
+            local okH, errH = timed("hud", hudTick, now, paused, survivalPC)
+            if not okH then hudLog("tickerr", "error " .. tostring(errH)) end
+            local okM, errM = timed("music", musicTick, tick, now, paused)
+            if not okM then log("music: error " .. tostring(errM)) end
+            -- the landing store plays its own supply music without pausing the BGM channel, so the Music Player's track
+            -- clock ran out there (user, 2026-10-24: "music skipped"): held while it's open (paused, down at the airfield)
+            if type(SV_MusicHold) == "function" then
+                local hold = (paused and playerOnAirfield()) and 1 or 0
+                if hold ~= D.musicHold then
+                    D.musicHold = hold
+                    SV_MusicHold(hold)
+                    log("music: track clock " .. (hold == 1 and "held (landing store)" or "running"))
+                end
+            end
+            local okF, errF = timed("airfield", airfieldTick, tick)
+            if not okF then log("airfield: error " .. tostring(errF)) end
+            local okB, errB = pcall(bombTick, tick)
+            if not okB then log("bombers: error " .. tostring(errB)) end
+            local okS, errS = timed("shop", shopTick, tick)
+            if not okS then log("shop: error " .. tostring(errS)) end
+            local okAl, errAl = timed("allies", ALLY.tick, now)
+            if not okAl then log("allies: error " .. tostring(errAl)) end
+            local okI, errI = timed("icons", SHOP.decorTick, tick)
+            if not okI and not SH.decorErr then SH.decorErr = true; log("shop: row icons error " .. tostring(errI)) end
+            local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
+            if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
+        end
+        if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if now and valid(survivalPC) then                               -- what hits the player (section "hits")
+            local okHt, errHt = pcall(HIT.tick, survivalPC, now)
+            if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
+        end
+        if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
+        local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
+        if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
+        local okA, errA = pcall(ammoTick, tick, survivalPC)
+        if not okA then log("ammo: error " .. tostring(errA)) end
+    end
+    if levelTick then
+        if tick - levelTick == 8 then logDifficulty("at mission start") end
+        if tick - levelTick == 48 then logDifficulty("10 s into the mission") end
+    end
+    local keep = {}
+    for _, p in ipairs(pending) do
+        p.age = p.age + 1
+        if p.age >= 2 then pcall(logPlane, p.obj, p.unit) else keep[#keep + 1] = p end
+    end
+    pending = keep
+    if not levelTick then return end                                -- the rest in Survival only
+    -- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away,
+    -- and every 10 s the nearest enemy's distance: the check that they come for the player. Each aircraft every 2 s,
+    -- an eighth of them each tick (all of them on one tick every 2 s was a hitch with 60 aircraft up: user,
+    -- 2026-10-23, "the custom HUD ... seems a bit laggy").
+    local slot, you = tick % 8, nil
+    for i, p in ipairs(planes) do
+        if not p.down and i % 8 == slot then
+            if you == nil then you = playerLocation() or false end
+            local up = valid(p.obj)
+            if up then
+                local ok, h = pcall(function() return p.obj.HealthInternal end)
+                if ok and type(h) == "number" and h <= 0 then up = false end
+            end
+            if up then
+                pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
+                pcall(planeUnit, p)
+                local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
+                if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
+                local an = CFG.specials.anomaly
+                local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
+                    provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
+                    or (ft and CFG.tiers.list[ft])
+                if not own then pcall(enemySpike, p, D and D.round, tierFor) end
+                pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
+                p.dist = (p.at and you) and km(p.at, you) or nil
+            else
+                p.down = true
+                log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
+                    p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
+                pcall(probeKill, p, you or nil)
+                pcall(creditKill, p)
+            end
+        end
+    end
+    if slot ~= 0 then return end                                    -- every 2 s: the summaries
+    local fl, flagged = flagLine()
+    if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
+    local alive, nearest = 0, nil
+    for _, p in ipairs(planes) do
+        if not p.down then
+            alive = alive + 1
+            if p.dist and (not nearest or p.dist < nearest) then nearest = p.dist end
+        end
+    end
+    if alive ~= lastAlive and #planes > 0 then
+        log("round probe: AI aircraft alive " .. alive .. " (created so far " .. #planes .. ")")
+        lastAlive = alive
+    end
+    if tick % 40 == 0 and alive > 0 then
+        local flights = 0
+        if D then for _ in pairs(D.up) do flights = flights + 1 end end
+        log(string.format("enemies: nearest %s from you; %d flights up (%d flagged up)",
+            nearest and string.format("%.1f km", nearest) or "(player not found)", flights, flagged or 0))
+    end
+end
+
+---------------------------------------------------------------------------------------------------- the one tick
+-- Everything runs from this single game-thread pass every 250 ms. UE4SS 3.0.1 crashed with heap corruption inside its
+-- Lua (test M2-8) while this script ran many ExecuteWithDelay timers (one per menu widget) next to two loops; one
+-- loop that queues one game-thread job at a time keeps all Lua work in one place.
+local tick, rowsStopped, queued = 0, false, false
+LoopAsync(250, function()
+    if queued then return false end
+    queued = true
+    ExecuteInGameThread(function()
+        tick = tick + 1
+        if not rowsStopped and (tick % 4 == 0 or not (ready[1] and ready[2])) then   -- watching for reloads: 1/s
+            local ok, r = pcall(watchRows)
+            if not ok then log("rows: error " .. tostring(r)) end
+            if ok and r == false then rowsStopped = true end
+        end
+        if tick % 8 == 2 then
+            local okI, errI = pcall(infoMapsTick)
+            if not okI then log("info maps: error " .. tostring(errI)) end
+        end
+        local t0 = os.clock()
+        local ok, err = pcall(probeTick, tick)
+        if not ok then log("round probe: error " .. tostring(err)) end
+        if D then                                   -- (report of 2026-10-23: "the custom HUD ... seems a bit laggy")
+            local pf = D.perf or { n = 0, sum = 0, max = 0, parts = {}, at = tick }
+            D.perf = pf
+            local dt = (os.clock() - t0) * 1000
+            pf.n, pf.sum, pf.max = pf.n + 1, pf.sum + dt, math.max(pf.max, dt)
+            if tick - pf.at >= 240 then
+                local parts = {}
+                for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v } end
+                table.sort(parts, function(a, b) return a[2].max > b[2].max end)
+                local top = {}
+                for i = 1, math.min(4, #parts) do
+                    top[#top + 1] = string.format("%s %.1f/%.1f", parts[i][1], parts[i][2].sum / math.max(1, parts[i][2].n), parts[i][2].max)
+                end
+                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts avg/worst ms: %s", pf.sum / pf.n,
+                    pf.max, pf.n, table.concat(top, ", ")))
+                D.perf = nil
+            end
+        end
+        if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
+        if tick % 4 == 1 then pcall(LB.poll) end                         -- the leaderboard sends' answers
+        if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
+        queued = false
+    end)
+    return false
+end)
+
+---------------------------------------------------------------------------------------------------- dev keys
+-- TEST ONLY BEGIN (tools/package_test.sh strips every such block from release / test zips: user, 2026-10-23, "remove
+-- all the special codes for accessing levels and cash")
+-- On-screen note. PrintString is stripped from some shipping builds, so the log line is the one to rely on.
+local function notify(msg)
+    log(msg)
+    local pc = FindFirstOf("PlayerController")
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if valid(pc) and valid(ks) then
+        pcall(function() ks:PrintString(pc, TAG .. msg, true, false, { R = 1, G = 0.4, B = 0.1, A = 1 }, 8.0, FName("None")) end)
+    end
+end
+
+local function openSurvival()
+    if not containerMounted() then
+        notify("Survival Mode's map is not installed (SurvivalMode_P did not mount), so it was not opened.")
+        return
+    end
+    local pc = FindFirstOf("PlayerController")
+    if not valid(pc) then log("launch: no player controller yet; try again on the main menu"); return end
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    if valid(gs) then
+        local ok, err = pcall(function() gs:OpenLevel(pc, FName(LEVEL), true, "") end)
+        if ok then log("launch: opening " .. LEVEL); return end
+        log("launch: OpenLevel failed (" .. tostring(err) .. "), trying the console command")
+    end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if valid(ks) then
+        local ok, err = pcall(function() ks:ExecuteConsoleCommand(pc, "open " .. LEVEL, pc) end)
+        if ok then log("launch: console 'open " .. LEVEL .. "' sent"); return end
+        log("launch: console command failed (" .. tostring(err) .. ")")
+    end
+end
+-- TEST ONLY END
+
+if type(RegisterKeyBind) == "function" and Key then
+    local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
+    -- TEST ONLY BEGIN
+    -- Ctrl+F8 on the main menu opens PL_SurvivalMode directly
+    if Key.F8 then
+        pcall(RegisterKeyBind, Key.F8, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(openSurvival)
+                if not ok then log("launch: error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+F9 in a run gives 5000 zollars
+    if Key.F9 then
+        pcall(RegisterKeyBind, Key.F9, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D then log("test: Ctrl+F9 outside a Survival run"); return end
+                    addCredits(5000, "test key Ctrl+F9")
+                    RUN.dirty = true
+                    hudCallout("TEST: +5000 ZOLLARS", string.format("NOW %d", RUN.credits))
+                end)
+                if not ok then log("test: Ctrl+F9 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
+    -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
+    ;(function()                   -- (its own function: the main chunk's 200-local limit)
+    local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
+                            { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
+                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },
+                            { "EIGHT", "valka", "VALKA" } }
+    for i, ts in ipairs(TEST_SPECIALS) do
+        local key, kind, label = Key[ts[1]], ts[2], ts[3]
+        if key then
+            pcall(RegisterKeyBind, key, mods, function()
+                ExecuteInGameThread(function()
+                    local ok, err = pcall(function()
+                        if not D or not D.now then log("test: Ctrl+" .. ts[1] .. " outside a Survival run"); return end
+                        D.forceSpecial = kind
+                        local soon = D.state == "wait"
+                        if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+                        hudCallout("TEST: " .. label, soon and "STARTING NOW" or "NEXT ROUND")
+                        log(string.format("test: Ctrl+%s, round %d is %s (%s)", ts[1], D.round + 1, kind,
+                            soon and "starting in 3 s" or "after this round"))
+                    end)
+                    if not ok then log("test: Ctrl+" .. ts[1] .. " error " .. tostring(err)) end
+                end)
+            end)
+        end
+    end
+    end)()
+    -- Ctrl+6 in a run: a flight at the top level now (the last skill tier's squadron, its ace leading, on the top
+    -- fire control), whatever the round (user, 2026-10-23: "a special key to have one of the Aircraft Spawn that is
+    -- the MAX LEVEL"); it counts in the round like any flight
+    if Key.SIX then
+        pcall(RegisterKeyBind, Key.SIX, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now or not nativeReady() then log("test: Ctrl+6 outside a Survival run"); return end
+                    local unit
+                    for _, u in ipairs(CFG.pool) do
+                        if not unit and not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
+                    end
+                    if not unit then hudCallout("TEST: NO FREE FLIGHT", "TRY AGAIN WHEN SOME ARE DOWN"); return end
+                    local r = spawnFlight(unit, true)
+                    local tn = (CFG.tiers.list[#CFG.tiers.list] or {}).name or "?"
+                    hudCallout("TEST: " .. tn:upper() .. " FLIGHT", r > 0 and "INBOUND" or "COULD NOT SPAWN")
+                    log(string.format("test: Ctrl+6, a %s flight (%s): %s", tn, unit, tostring(r)))
+                end)
+                if not ok then log("test: Ctrl+6 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- TEST ONLY END
+    if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
+        pcall(RegisterKeyBind, Key.F7, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(hudDump, "Ctrl+F7")
+                if not ok then log("hud dump: error " .. tostring(err)) end
+            end)
+        end)
+    end
+end
+
+log("loaded, version " .. VERSION)
