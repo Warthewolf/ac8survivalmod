@@ -144,6 +144,7 @@ local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode")
+        pcall(logRenderCVars)                      -- (AC8's texture / VT settings, logged once, read only)
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
         SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
@@ -562,3 +563,29 @@ if type(RegisterKeyBind) == "function" and Key then
 end
 
 log("loaded, version " .. VERSION)
+
+-- AC8's texture and virtual-texture settings (tools/re/AIRCRAFT_MATERIALS.md: its aircraft skins are virtual textures),
+-- read through KismetSystemLibrary and logged once (at the first level load): read only, changes nothing
+local RENDER_CVARS = {
+    { "r.VirtualTextures", "i" }, { "r.VT.TileSize", "i" }, { "r.VT.TileBorderSize", "i" }, { "r.VT.EnableFeedback", "i" },
+    { "r.VT.FeedbackFactor", "i" }, { "r.VT.MaxUploadsPerFrame", "i" }, { "r.VT.PoolSizeScale", "f" },
+    { "r.VT.EnableAutoImport", "i" }, { "r.VT.Residency.Show", "i" }, { "r.VT.PoolAutoGrow", "i" },
+    { "r.VT.MaxReleasedPerFrame", "i" }, { "r.Streaming.PoolSize", "i" }, { "r.Streaming.UseFixedPoolSize", "i" },
+    { "r.Streaming.FullyLoadUsedTextures", "i" }, { "r.TextureStreaming", "i" }, { "r.MaterialQualityLevel", "i" },
+    { "r.Shaders.FastMath", "i" }, { "fx.Niagara.GPUSort", "i" }, { "fx.GPUSort.MaxSortBatchSize", "i" },
+}
+function logRenderCVars()
+    if RENDER_CVARS.said then return end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(ks) then return end
+    local out = {}
+    for _, cv in ipairs(RENDER_CVARS) do
+        local ok, v = pcall(function()
+            if cv[2] == "f" then return ks:GetConsoleVariableFloatValue(cv[1]) end
+            return ks:GetConsoleVariableIntValue(cv[1])
+        end)
+        out[#out + 1] = cv[1] .. "=" .. (ok and tostring(v) or "?")
+    end
+    RENDER_CVARS.said = true
+    log("render settings: " .. table.concat(out, " "))
+end
