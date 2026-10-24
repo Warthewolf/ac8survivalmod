@@ -577,8 +577,10 @@ def valka_unit(units, used_ids, z, top_number):
     m26, _ = props_of(m26z, m26z.export_index('WD_Mission026_global'), 'LiveWorldData')
     src = desc_named(m26, 'UnitDescList', survival_events.VALKA_SOURCE_UNIT)
     (lead, _, _), _ = ace_rows('valka', 'x40a')
+    # tgt: a target box and TGT mark (Mission 26's x40a desc has none; test of 2026-10-24: no box on her once she
+    # stopped coming hidden, setGone's un-hide had been what gave her one; hard rule 32)
     names = port_unit(units, used_ids, z, src, survival_events.VALKA_UNIT, 'SV_Obj_Valka', lead + '_sv',
-                      [(0.0, 0.0, 300000.0)], 0.0, top_number)
+                      [(0.0, 0.0, 300000.0)], 0.0, top_number, tgt=True)
     u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.VALKA_UNIT][0]
     ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
     kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
@@ -591,6 +593,24 @@ def valka_unit(units, used_ids, z, top_number):
     zone_area(u)
     survival_events.VALKA_OBJ = names[0]
     print(f'  valka: {names[0]} in {survival_events.VALKA_UNIT} ({lead}_sv), {parts} parts: {survival_events.VALKA_PARTS}')
+
+
+def valka_eml_unit(units, used_ids, z, top_number):
+    """VALKA's opener railgun (survival_events.VALKA_EML_*): AC7 Mission 18 fires its opener from a hidden dummy
+    railgun of its own (ms18_dummy_eml_p1, an AITurret_Pawn), not from Mihaly. Ours: the x40a's RailGun part alone
+    (its DT_NPC row OP1016_x40a_RG, on mission row VALKA_EML_ROW), on Mission 26's x40a unit desc without its parts
+    (an air unit: main.lua spawns it in the sky, 9 km along the player's aim)."""
+    m26z = ZenPkg(stock(M26 + 'WD_Mission026_global'))
+    m26, _ = props_of(m26z, m26z.export_index('WD_Mission026_global'), 'LiveWorldData')
+    src = desc_named(m26, 'UnitDescList', survival_events.VALKA_SOURCE_UNIT)
+    names = port_unit(units, used_ids, z, src, survival_events.VALKA_EML_UNIT, survival_events.VALKA_EML_OBJ,
+                      survival_events.VALKA_EML_ROW, [(0.0, 0.0, 300000.0)], 0.0, top_number)
+    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.VALKA_EML_UNIT][0]
+    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    ob[2][:] = [(q[0], q[1], q[2], ('arr', [])) if q[1] == 'ChildAIObjectDescs' else q for q in ob[2]]
+    zone_area(u)
+    assert names == [survival_events.VALKA_EML_OBJ], names
+    print(f'  valka: opener railgun {names[0]} in {survival_events.VALKA_EML_UNIT} ({survival_events.VALKA_EML_ROW} -> {survival_events.VALKA_EML_NPC}), no parts')
 
 
 EB002 = '/Game/OnlineMode/Maps/EmergencyCall/EB_002/'
@@ -882,6 +902,7 @@ def build_wd_global():
     ladon_units(units, used_ids, z, top_number, v)
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)
+    valka_eml_unit(units, used_ids, z, top_number)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -1417,6 +1438,7 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
     (survival_events.SHUTTLE_NPC_ROW, 'sstb_common', survival_events.SHUTTLE_NPC),   # Comona Defense's shuttle (its name)
+    (survival_events.VALKA_EML_ROW, 'gepa_common', survival_events.VALKA_EML_NPC),   # VALKA's opener railgun (a turret row)
 ]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.

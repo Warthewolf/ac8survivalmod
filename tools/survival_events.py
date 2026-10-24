@@ -348,22 +348,28 @@ def glitch_blinks():
 
 # Special round "VALKA" (user, 2026-10-24: "port the Mihaly fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss
 # ... VALKA, who uses an EML"): AC7 Mission 18's opener, then a Super AI with AB.L..IN's blinks and a chance of
-# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, tools/re/VALKA.md): a hidden dummy railgun 700 m ahead
-# of the player, facing them, charges 6 s (HUD warning, a flash of light at it), then fires at a target riding ahead
-# of them. Here VALKA herself is the dummy: hidden, kept 700 m ahead (RE_SV_ValkaTp_A*), she fires her railgun
-# (WN_WEAPON_1 of the X-40A's RailGun part: Mission 26's LiveFireOneShotWeapon on its x40a), then goes to the far ring
-# (RE_SV_ValkaTp_C*), shows, and the focus camera swings onto her. AC8 has no X-02S: she flies Mission 26's X-40A
-# (EI_Unit_01_Air0 with its four parts, ported as the Ladon is) until the X-02S model is built.
-# Scripts/main.lua CFG.specials.valka drives it (VALK.*); keep VALKA_SPOTS in step with its `spots`.
+# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, tools/re/VALKA.md): a hidden dummy railgun of its own
+# (ms18_dummy_eml_p1, not Mihaly), placed once ahead of the player along where they're aiming, facing them, charges
+# 6 s (HUD warning, a flash of light at it), then fires at them; Mihaly shows after. Ours: the dummy is the X-40A's
+# RailGun part alone (VALKA_EML_*: DT_NPC OP1016_x40a_RG on its own unit), spawned once by main.lua 9 km along your aim
+# (user, 2026-10-24: "9km from me in a fixed position in the sky that the player was currently aiming at, she can't
+# be attached to the aircraft at all"; AC7's 70000 is not 700 m), held (EvadeOnly) and fired once (RE_SV_ValkaEmlShot:
+# Mission 26's LiveFireOneShotWeapon on its x40a's railgun), then removed; VALKA spawns at its spot after the shot and
+# the focus camera swings onto her. AC8 has no X-02S: she flies Mission 26's X-40A (EI_Unit_01_Air0 with its four
+# parts, ported as the Ladon is) until the X-02S model is built.
+# Scripts/main.lua CFG.specials.valka drives it (SPC.V.*); keep VALKA_SPOTS in step with its `spots`.
 VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare") and its parts
 VALKA_UNIT = 'SV_Unit_Valka'
 VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
 VALKA_PARTS = {}                               # component -> its object name (RailGun, RailGunCK, RailGunPF, LaserPod)
 VALKA_RAILGUN = 'RailGun'                      # the part she fires (the CK one is Mission 26's scripted sure kill)
 VALKA_IDLE_PARTS = ('RailGunCK', 'RailGunPF', 'LaserPod')   # held back (EvadeOnly), as Mission 26 holds its CK railgun
-# teleport rings: (ring letter, metres, step deg): A ahead of the player for the opener, B / C her blinks, D the far
-# spot she shows at after the first shot
-VALKA_SPOTS = (('A', 700, 10), ('B', 500, 30), ('C', 800, 30), ('D', 6000, 30))
+VALKA_EML_UNIT = 'SV_Unit_ValkaEml'            # the opener's dummy railgun (build_survival.py valka_eml_unit)
+VALKA_EML_OBJ = 'SV_Obj_ValkaEml'
+VALKA_EML_ROW = 'sv_valka_eml'                 # mission row -> DT_NPC OP1016_x40a_RG (the x40a's RailGun part)
+VALKA_EML_NPC = 'OP1016_x40a_RG'
+# teleport rings for her blinks: (ring letter, metres, step deg)
+VALKA_SPOTS = (('B', 500, 30), ('C', 800, 30))
 VALKA_CHARGE_SOUND = 'AKE_Ms29_ARMS_SKY_OP1016_x40a_Railgun_Charge_'      # + Play / Stop: the x40a railgun's charge
 VALKA_POST_STALL = (('Turn', 'LastTGT'), ('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
 
@@ -720,6 +726,14 @@ def build_events(stock_ep):
         # AttackOnly order on it, so they go for nothing else.
         g.execute(t_bsearch, up, {1: unit, 3: 'AIR_AND_GROUND'}, delay=2.0, conds=on_shuttle())
         g.execute(t_sengage, up, {0: 'NoneSelect', 1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
+        # ... and once the shuttle's taken off, back to the airfield (main.lua fires it for each strike flight still up;
+        # a friend's log of 2026-10-24: with only the AttackOnly order on the gone shuttle, three bombers wandered
+        # 35 km out for 4 minutes and the round couldn't end)
+        retask = f'RE_SV_BomberRetask_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', retask)
+        g.execute(t_bmove, retask, {0: unit}, delay=1.0)
+        g.execute(t_bsearch, retask, {1: unit}, delay=2.0)
+        g.execute(t_bengage, retask, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0)
     for k, dummy in enumerate(AIRFIELD_DUMMIES):
         hit = f'SV_AirfieldHit_{k + 1}'
         t = g.trigger(f'MissedWeapon_AreaB_{k}', hit, arg_changes={4: dummy})      # LifeCount cleared: every hit
@@ -1156,6 +1170,7 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
     t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
     t_cam_off = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
+    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
     t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')
     t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')
     t_ma = g.exec_template('LiveChangePlayerMaxAttackersNumExecution', '01_Wave03_RemainingTime_0')
@@ -1177,6 +1192,23 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     for comp in VALKA_IDLE_PARTS:
         g.execute(t_hold, up, {0: VALKA_PARTS[comp]}, delay=3.0)
     flag(up, 'SV_ValkaUp', 'Set', 1)
+    # the opener's dummy railgun: held (EvadeOnly: it never attacks by itself; twice, in case the first is early),
+    # one shot at the player on command (as Mission 26 fires its held CK railgun), its charge heard at the player (it's
+    # 9 km out), removed by main.lua after the shot
+    eml_up = 'SV_ValkaEmlUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', eml_up, arg_changes={0: VALKA_EML_UNIT})
+    for d in (0.5, 2.0):
+        g.execute(t_hold, eml_up, {0: VALKA_EML_OBJ}, delay=d)
+    remote('RE_SV_ValkaEmlShot')
+    g.execute(t_fire, 'RE_SV_ValkaEmlShot', {0: 'WN_WEAPON_1', 1: VALKA_EML_OBJ})
+    remote('RE_SV_ValkaEmlChargeOn')
+    g.execute(t_noise, 'RE_SV_ValkaEmlChargeOn')
+    g.execute(t_sound, 'RE_SV_ValkaEmlChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: 'Player'})
+    remote('RE_SV_ValkaEmlChargeOff')
+    g.execute(t_noise_off, 'RE_SV_ValkaEmlChargeOff')
+    g.execute(t_sound, 'RE_SV_ValkaEmlChargeOff', {0: VALKA_CHARGE_SOUND + 'Stop', 1: 'Player'})
+    remote('RE_SV_ValkaEmlRemove')
+    g.execute(t_remove, 'RE_SV_ValkaEmlRemove', {0: 'NoneSelect', 1: VALKA_EML_UNIT, 2: 'NoneSelect'})
     for ev, deg, metres in valka_spots():                  # her spots round the player, at their height, nose on them
         remote(ev)
         dx, dy = metres * 100 * math.cos(math.radians(deg)), metres * 100 * math.sin(math.radians(deg))

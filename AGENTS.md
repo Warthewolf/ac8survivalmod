@@ -179,6 +179,12 @@ Copy a working stock pattern before inventing a new one.
     shown: hiding the airframe for them left nothing (test of 2026-10-23). For a burnt look, put the wreck's _DAM
     materials on the airframe's own mesh.
 
+42. Assets cooked in our own UE 5.4 (tools/x02s, project ue/Live) must be cooked VERSIONED (no -unversioned):
+    AC8 runs Bandai Namco's own 5.4 build, whose reflected properties differ from stock (UTexture's do), so
+    unversioned property data is read with the wrong layout and the game stops (LowLevelFatalError AsyncLoading2.cpp
+    "ObjectSerializationError ... T_X02S_Valka_NO", 2026-10-24). Versioned (tagged) packages loaded fine the next test.
+    New assets that use AC8's materials parent them on stubs at AC8's paths that are never packed.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

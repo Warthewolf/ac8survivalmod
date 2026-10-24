@@ -23,3 +23,11 @@ leaderboard/submit.local
 # written by the game into the mod folder (the leaderboard queue, the anonymous pilot name)
 mod/UE4SS/AC8SurvivalMode/config/pending_runs.txt
 mod/UE4SS/AC8SurvivalMode/config/pilot_id.txt
+
+# Survival's UE 5.4 asset project (tools/x02s): generated content, the editor's own folders (rebuild with
+# tools/x02s/build.sh); AC7's assets never go into git
+ue/Live/Content/
+ue/Live/Saved/
+ue/Live/Intermediate/
+ue/Live/DerivedDataCache/
+ue/Live/Binaries/

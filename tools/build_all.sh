@@ -36,6 +36,13 @@ python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py
 rm -rf build/install && mkdir -p build/install/SurvivalMode
 cp build/out/SurvivalMode_P.utoc build/out/SurvivalMode_P.ucas build/install/SurvivalMode/
+# VALKA's X-02S (AC7's model, cooked in UE 5.4 by tools/x02s/build.sh; no UE needed here): staged when built
+if [ -f build/x02s/out/SurvivalMode_Valka_P.utoc ]; then
+    cp build/x02s/out/SurvivalMode_Valka_P.utoc build/x02s/out/SurvivalMode_Valka_P.ucas build/install/SurvivalMode/
+    echo "staged VALKA's X-02S (build/x02s/out/SurvivalMode_Valka_P)"
+else
+    echo "no VALKA X-02S container (tools/x02s/build.sh): she flies the x40a"
+fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
 echo "staged build/install/SurvivalMode and build/install/AC8SurvivalMode"

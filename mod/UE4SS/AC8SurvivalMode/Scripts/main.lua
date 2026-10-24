@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.63.1"
+local VERSION = "0.65.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -999,10 +999,14 @@ local CFG = {
                      smoke_s = 3.0 },
         -- "valka" = VALKA (user, 2026-10-24: "port the Mihaly Fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss,
         -- we're going to mix MINDRIPPER's abilities and ABELCAINS abilities into this new Anomaly called VALKA, who uses
-        -- an EML"; tools/survival_events.py VALKA_*). AC7 Mission 18's opener: she comes hidden and is kept opener_m
-        -- ahead of you, facing you; a flash of light there, the railgun WARNING and charge for charge_s, then one
-        -- railgun shot at you. reveal_s after it she's on the far ring (6 km), shows, and the focus camera swings onto
-        -- her (`camera`). Then a Super AI (the top fire-control level, ai_level, MINDRIPPER's attack pressure) on you
+        -- an EML"; tools/survival_events.py VALKA_*). AC7 Mission 18's opener: a hidden railgun of its own (eml_unit, the
+        -- x40a's RailGun part alone, not her) placed once on the horizon ahead of you (your heading, level with you),
+        -- opener_km from you at its shot
+        -- (further out by what you fly towards it in the charge, at most opener_max_km), fixed there (user,
+        -- 2026-10-24: "9km from me in a fixed position in the sky that the player was currently aiming at, she can't
+        -- be attached to the aircraft at all"), at least opener_min_alt_m up; a flash of light there, the railgun
+        -- WARNING and charge for charge_s, then one shot at you; it's removed eml_remove_s later. reveal_s after the
+        -- shot she spawns where it came from, facing you, and the focus camera swings onto her (`camera`). Then a Super AI (the top fire-control level, ai_level, MINDRIPPER's attack pressure) on you
         -- alone, anywhere (user: "the AI after the initial shot will always target the player and go after the player
         -- also using the lastTGT psm ability"): LastTGT every turn_every_s and at once when you get behind her within
         -- behind_km (behind_gap_s apart), post-stalls (post_stall_*), blinks round you (AB.L..IN's: each hit outside a
@@ -1017,14 +1021,20 @@ local CFG = {
         -- ... have less enemies spawn ... once all those enemies are dead then the VALKA attack starts"): her round is
         -- called out as a normal one (ROUND n / HOSTILES INBOUND, the break before it too) with decoy_share of the
         -- round's aircraft (decoy_min..decoy_max), and lurk_s after the last of them is down her attack starts: the
-        -- forced WARNING until she's down, the opener, then straight after the shot the camera and the HUD's
-        -- anomaly_line and her name big (big_x).
+        -- opener, then straight after the shot the camera and the HUD's anomaly_line and her name big (big_x). The
+        -- forced WARNING is on from her round's start until she's down (user, 2026-10-24).
         valka    = { name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
                      health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
                      disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                      anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
                      spawn_km = { 6, 9 }, arrive_s = 1.0,
-                     opener_m = 700, charge_s = 6.0, reveal_s = 0.5,
+                     opener_km = 9, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
+                     eml_unit = "SV_Unit_ValkaEml",
+                     -- her X-02S (tools/x02s; "" = the x40a as it is) and its length (m)
+                     model = "/Game/Mods/SurvivalMode/Valka/Model/SK_X02S_Valka", model_length_m = 19.6,
+                     -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
+                     sweep_anim = "/Game/Mods/SurvivalMode/Valka/Model/A_X02S_Valka_Sweep", sweep_kmh = { 800, 1000 },
+                     sweep_s = 2.5, hit_radius_m = 10,
                      flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 3.0, flash_s = 2.0,
                      camera = "LookAt_Event_Camera_ms22-01",
                      turn_every_s = 12, behind_km = 1.5, behind_gap_s = 4,
@@ -1041,8 +1051,8 @@ local CFG = {
                      invert = "random", invert_every_s = 20, invert_chance = 0.35, invert_s = 8, fade_s = 1.0,
                      random_fx = { "pitch", "roll", "yaw", "swap", "throttle" }, random_min = 1, random_max = 2,
                      -- her teleport rings (tools/survival_events.py VALKA_SPOTS; keep in step, not an ini setting):
-                     -- { ring, metres, step deg }: A the opener's, B / C her blinks, D where she shows
-                     spots = { { "A", 700, 10 }, { "B", 500, 30 }, { "C", 800, 30 }, { "D", 6000, 30 } } },
+                     -- { ring, metres, step deg }: her blinks
+                     spots = { { "B", 500, 30 }, { "C", 800, 30 } } },
         -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
         -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
         -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's
@@ -3650,8 +3660,10 @@ function ANOM.glitchTick(now, s)
         if now - s.at < c.arrive_s or not o then return end
         -- its health for its round (as the Ladons' and the Alicorn's: health_per_round more a round after `first`)
         local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
+        -- (a whole number: HealthInternal is an integer and 4500 x 1.12 = 5040.000000000001 went in as 0, so it was
+        -- shot down unseen a second after it came; a friend's log of 2026-10-24, round 7)
         local okH, h0 = pcall(function() return o.HealthInternal end)
-        if okH and type(h0) == "number" and h0 > 0 and hx ~= 1 then pcall(function() o.HealthInternal = h0 * hx end) end
+        if okH and type(h0) == "number" and h0 > 0 and hx ~= 1 then pcall(function() o.HealthInternal = math.floor(h0 * hx + 0.5) end) end
         -- its damage model (smoke, fire, damaged look) goes by health against MaxHealth (user, 2026-10-23: "make the
         -- EA-18G use it's damage model"): MaxHealth (HP; HealthInternal is HP x 10) raised to what it has, if under
         local okM, mh = pcall(function() return o.MaxHealth end)
@@ -3799,8 +3811,8 @@ function ANOM.glitchTick(now, s)
     end
 end
 
--- VALKA (CFG.specials.valka; tools/survival_events.py VALKA_*): AC7 Mission 18's opener (hidden and kept opener_m
--- ahead of the player, a flash, the charge, one railgun shot), her reveal on the far ring with the focus camera, then
+-- VALKA (CFG.specials.valka; tools/survival_events.py VALKA_*): AC7 Mission 18's opener (a hidden railgun of its own,
+-- fixed opener_km along your aim: a flash, the charge, one shot), her reveal where it fired from with the focus camera, then
 -- the fight: LastTGT and post-stalls, blinks when she's hit, her railgun, and now and then the scrambled controls.
 -- (Functions on SPC.V: the main chunk is at its 200-local limit, hard rule 23.)
 SPC.V = {}
@@ -3865,6 +3877,52 @@ function SPC.V.event(ev)
     if r ~= 1 then log("special: VALKA " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
     return r
 end
+-- the shown actors attached to her (the x40a's railguns and laser pod: setGone on her airframe leaves them up; test of
+-- 2026-10-24: they hung in front of the player through the opener), from her component tree's AttachChildren
+function SPC.V.parts(o)
+    local out, seen, queue, i = {}, {}, {}, 1
+    local me = addrOf(o)
+    pcall(function() queue[1] = o.RootComponent end)
+    while queue[i] and i <= 400 do
+        local comp = queue[i]
+        i = i + 1
+        pcall(function()
+            local owner = comp:GetOwner()
+            local a = valid(owner) and addrOf(owner)
+            if a and a ~= me and not seen[a] then
+                seen[a] = true
+                if not owner.bHidden then out[#out + 1] = owner end
+            end
+            comp.AttachChildren:ForEach(function(_, e) queue[#queue + 1] = e:get() end)
+        end)
+    end
+    return out
+end
+-- her parts gone with her (found until some are) or back as they were (their own box / lock / target flags)
+SPC.V.PART_FLAGS = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
+function SPC.V.partsGone(c, s, o, gone)
+    if not gone and s.modelComp then return end         -- (her X-02S on: the x40a's parts stay gone)
+    if gone and #(s.parts or {}) == 0 then
+        s.parts, s.partWas = SPC.V.parts(o), {}
+        for k, p in ipairs(s.parts) do
+            local was = {}
+            for f in pairs(SPC.V.PART_FLAGS) do pcall(function() was[f] = p[f] end) end
+            s.partWas[k] = was
+        end
+        if #s.parts > 0 then log(string.format("special: %s's parts hidden with her: %d", c.name, #s.parts)) end
+    end
+    for k, p in ipairs(s.parts or {}) do
+        if valid(p) then
+            pcall(function() p:SetActorHiddenInGame(gone) end)
+            pcall(function() p:SetActorEnableCollision(not gone) end)
+            for f, v in pairs(SPC.V.PART_FLAGS) do
+                local to = v
+                if not gone then to = s.partWas[k][f] end
+                if to ~= nil then pcall(function() p[f] = to end) end
+            end
+        end
+    end
+end
 -- the scrambled controls on (random_min..random_max of random_fx, as MINDRIPPER's field) or off
 function SPC.V.invert(c, s, on, now)
     local t = CFG.hud.text
@@ -3885,108 +3943,310 @@ function SPC.V.invert(c, s, on, now)
         tostring(r)))
 end
 
+-- her components of class `cls` (a /Script path), from her component tree (RootComponent and AttachChildren down, as
+-- SPC.V.parts walks it; test of 2026-10-24: K2_GetComponentsByClass's array gave nothing from Lua), hers only
+function SPC.V.comps(o, cls)
+    local out, queue, i, me = {}, {}, 1, addrOf(o)
+    local class = StaticFindObject(cls)
+    pcall(function() queue[1] = o.RootComponent end)
+    while queue[i] and i <= 400 do
+        local comp = queue[i]
+        i = i + 1
+        pcall(function()
+            local owner = comp:GetOwner()
+            if valid(owner) and addrOf(owner) == me then
+                if comp:IsA(class) then out[#out + 1] = comp end
+                comp.AttachChildren:ForEach(function(_, e) queue[#queue + 1] = e:get() end)
+            end
+        end)
+    end
+    return out
+end
+
+-- Her X-02S (AC7's, user, 2026-10-24: "full port as the X-02S is swing winged"; tools/x02s, cooked in UE 5.4 into
+-- its own container SurvivalMode_Valka_P): her airframe's body mesh component gets SK_X02S_Valka (AC7's skeleton, its
+-- sockets, so what hangs on burner_01 / _02, her afterburners, moves to the X-02S's nozzles) and plays
+-- A_X02S_Valka_Sweep, the swing wings alone (AC7's x02s_Anim frames 50-100): unswept below sweep_kmh[1], swept above
+-- sweep_kmh[2] (AC7's VwgMin / VwgMax), a full travel taking sweep_s. Her other meshes are hidden (again every 2 s)
+-- and her parts gone (not lockable); her flight model and railguns stay the x40a's. Off (the x40a as it is) when
+-- `model` is "" or doesn't load. True if on.
+function SPC.V.model(c, s, o)
+    if not c.model or c.model == "" or s.modelComp then return s.modelComp ~= nil end
+    local function load(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
+    local sk, why = load(c.model)
+    local anim = c.sweep_anim and c.sweep_anim ~= "" and load(c.sweep_anim)
+    if not valid(sk) then
+        log(string.format("special: %s's X-02S %s not loaded (%s); the x40a shows", c.name, c.model, tostring(why)))
+        return false
+    end
+    -- her body: the skeletal mesh component that is her root, else the biggest one
+    local body, best, names = nil, -1, {}
+    local root = addrOf(o.RootComponent)
+    for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.SkeletalMeshComponent")) do
+        local okB, r = pcall(function() return comp.Bounds.SphereRadius end)
+        local size = (addrOf(comp) == root and 1e12) or (okB and type(r) == "number" and r) or 0
+        names[#names + 1] = nameOf(comp):match("([%w_]+)$") or "?"
+        if size > best then body, best = comp, size end
+    end
+    if not valid(body) then
+        local all = {}
+        for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.ActorComponent")) do
+            all[#all + 1] = (nameOf(comp):match("([%w_]+)$") or "?") .. ":" .. (pcall(function() return comp:GetClass():GetFName():ToString() end) and comp:GetClass():GetFName():ToString() or "?")
+        end
+        log(string.format("special: %s has no skeletal mesh component; her tree: %s; the x40a shows", c.name,
+            #all > 0 and table.concat(all, ", ") or "nothing (no RootComponent?)"))
+        return false
+    end
+    local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
+    if not okM then
+        log(string.format("special: %s's X-02S mesh not set on %s; the x40a shows", c.name, nameOf(body)))
+        return false
+    end
+    local k = (c.model_length_m or 19.6) / 19.6
+    if k ~= 1 then pcall(function() local v = body.RelativeScale3D; body:SetRelativeScale3D({ X = v.X * k, Y = v.Y * k, Z = v.Z * k }) end) end
+    local okA = valid(anim) and pcall(function()
+        body:SetAnimationMode(1)                                            -- (EAnimationMode AnimationSingleNode)
+        body:SetAnimation(anim)
+        body:SetPlayRate(0)
+        body:Play(false)
+        body:SetPosition(0, false)
+    end)
+    s.modelComp, s.sweepPos = body, 0
+    s.sweepLen = okA and (pcall(function() return anim:GetPlayLength() end) and anim:GetPlayLength() or 1) or nil
+    local hid = SPC.V.modelHide(s, o)
+    SPC.V.partsGone(c, s, o, true)
+    -- her hit spheres from the x40a's size to the X-02S's (hit_radius_m), each logged once
+    local spheres = {}
+    for _, sc in ipairs(SPC.V.comps(o, "/Script/Engine.SphereComponent")) do
+        do
+            local okR, r = pcall(function() return sc:GetUnscaledSphereRadius() end)
+            if valid(sc) and okR and type(r) == "number" and c.hit_radius_m and r > c.hit_radius_m * 100 then
+                pcall(function() sc:SetSphereRadius(c.hit_radius_m * 100, true) end)
+                spheres[#spheres + 1] = string.format("%s %.0f -> %.0f m", nameOf(sc):match("([%w_]+)$") or "?", r / 100, c.hit_radius_m)
+            elseif valid(sc) and okR then
+                spheres[#spheres + 1] = string.format("%s %.0f m (kept)", nameOf(sc):match("([%w_]+)$") or "?", (r or 0) / 100)
+            end
+        end
+    end
+    log(string.format("special: %s's hit spheres: %s", c.name, #spheres > 0 and table.concat(spheres, ", ") or "none found"))
+    log(string.format("special: %s flies the X-02S (%s on %s of %s; sweep %s%s): %d other meshes hidden, %d parts gone",
+        c.name, c.model:match("[^/]+$"), nameOf(body):match("([%w_]+)$") or "?", table.concat(names, ", "),
+        okA and "on" or "OFF", okA and string.format(" %.0f-%.0f km/h", c.sweep_kmh[1], c.sweep_kmh[2]) or "",
+        hid, #(s.parts or {})))
+    return true
+end
+-- her other meshes (the x40a's, not the X-02S's body) hidden; how many it hid this time
+function SPC.V.modelHide(s, o)
+    local n, me = 0, addrOf(s.modelComp)
+    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
+        for _, comp in ipairs(SPC.V.comps(o, cls)) do
+            local okV, vis = pcall(function() return comp:IsVisible() end)
+            if addrOf(comp) ~= me and okV and vis then
+                if pcall(function() comp:SetVisibility(false, false) end) then n = n + 1 end
+            end
+        end
+    end
+    return n
+end
+-- every tick: the wings towards their sweep for her speed (played, so it's smooth between ticks); every 2 s the
+-- x40a's meshes hidden again
+function SPC.V.modelTick(s, o, now)
+    local c, body = CFG.specials.valka, s.modelComp
+    if not valid(body) then return end
+    if s.sweepLen then
+        local okV, v = pcall(function() local q = o:GetVelocity(); return math.sqrt(q.X ^ 2 + q.Y ^ 2 + q.Z ^ 2) * 0.036 end)
+        local lo, hi = c.sweep_kmh[1], c.sweep_kmh[2]
+        local want = okV and math.max(0, math.min(1, (v - lo) / math.max(1, hi - lo))) * s.sweepLen or 0
+        pcall(function()
+            local cur = body:GetPosition()
+            local d = want - cur
+            if math.abs(d) < 0.02 * s.sweepLen then
+                body:SetPlayRate(0)
+            else
+                body:SetPlayRate((d > 0 and 1 or -1) / math.max(0.1, c.sweep_s))
+                if not body:IsPlaying() then body:Play(false) end
+            end
+            s.sweepPos = cur / s.sweepLen
+        end)
+    end
+    if now < (s.modelAt or 0) then return end
+    s.modelAt = now + 2
+    local n = SPC.V.modelHide(s, o)
+    if n > 0 and not s.modelSaid then
+        s.modelSaid = true
+        log("special: VALKA: " .. n .. " of the x40a's meshes came back on and were hidden again")
+    end
+end
+
+-- The opener's dummy railgun (AC7's ms18_dummy_eml_p1; tools/survival_events.py VALKA_EML_*): spawned once on the
+-- horizon ahead of you (user, 2026-10-24: "always spawns on the horizon, not up in the sky or anything weird"): along
+-- your heading, level with you (your pitch left out), at least opener_min_alt_m up, facing you, and fixed there; it
+-- never follows you. opener_km is its distance at the shot: it spawns further out by what you'll fly towards it
+-- through the charge (your level speed along your heading x (charge_s + 1 s for the spawn), at most opener_max_km;
+-- test of 2026-10-24: spawned 9 km out, the player was 4.8 km from it at the shot), and nearer when the combat zone's
+-- edge comes first (still straight ahead). Its actor comes through the LiveAIGameObject hook (SPC.V.emlActor).
+-- Returns the point and its yaw, or nil.
+function SPC.V.emlSpawn(c)
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    local you = playerLocation()
+    local h = SPC.V.heading()
+    if not pawn or not you or not h or type(SV_Spawn) ~= "function" then return nil end
+    local f = { X = math.cos(math.rad(h)), Y = math.sin(math.rad(h)) }
+    local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y } end)
+    local closing = okV and math.max(0, v.X * f.X + v.Y * f.Y) or 0                 -- cm/s towards it
+    local d = math.min(c.opener_km * 100000 + closing * (c.charge_s + 1), (c.opener_max_km or 30) * 100000)
+    local edge = ZONE.HALF * 0.95                        -- (the zone's edge first: nearer, still straight ahead)
+    for _, k in ipairs({ "X", "Y" }) do
+        local lim = f[k] > 0.001 and (ZONE[k] + edge - you[k]) / f[k] or f[k] < -0.001 and (ZONE[k] - edge - you[k]) / f[k]
+        if lim and lim > 0 then d = math.min(d, lim) end
+    end
+    local at = { X = you.X + f.X * d, Y = you.Y + f.Y * d, Z = math.max(you.Z, c.opener_min_alt_m * 100) }
+    local yaw = (h + 180) % 360
+    SPC.V.emlActor = nil
+    spawningUnit = c.eml_unit
+    local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z, yaw)
+    spawningUnit = nil
+    at.km = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000
+    log(string.format("special: %s's railgun %s %.1f km ahead of you on the horizon (heading %.0f, %.1f km up, you closing at %.0f km/h)",
+        c.name, r > 0 and "up" or ("NOT up (" .. (SV_ERR[r] or tostring(r)) .. ")"), at.km, h, at.Z / 100000,
+        closing * 0.036))
+    if r <= 0 then return nil end
+    return at, yaw
+end
+
 -- Her round's start (the spawn queue's "@valka"): disguised, she waits ("lurk") for the round's decoy fighters to go
--- down (SPC.valkaTick spawns her then); else she comes now. False if she can't come.
+-- down (SPC.valkaTick starts her opener then); else the opener starts now. False if she can't come.
 function SPC.valkaSpawn(now)
     local c = CFG.specials.valka
     if not SR.usable[ACE.row("valka", "x40a", "l")] then
         log("special: VALKA's row wasn't in before this level loaded; a normal round instead")
         return false
     end
-    if not c.disguise then return SPC.valkaArrive(now) end
     D.special.state, D.special.at = "lurk", now
-    log(string.format("special: round %d is VALKA's, called out as a normal round; she attacks once its fighters are down",
-        D.round))
+    -- the WARNING from her round's start until she's down (user, 2026-10-24: "the warning stays on for that entire
+    -- round until VALKA is killed"; her attack's events set it again, SV_ValkaDown / RE_SV_ValkaEnd switch it off)
+    SPC.V.event("RE_SV_ValkaWarnOn")
+    if c.disguise then
+        log(string.format("special: round %d is VALKA's, called out as a normal round; she attacks once its fighters are down",
+            D.round))
+    else
+        D.special.clearAt = now                         -- (no decoys: her opener straight away)
+    end
     return true
 end
 
--- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, hidden until her opener; false if
--- she can't come.
-function SPC.valkaArrive(now)
+-- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, at `at` ({ X, Y, Z } cm: where
+-- her railgun fired from) facing `yaw`, or spawn_km from you when there's no opener; shown at once (her reveal). False
+-- if she can't come.
+function SPC.valkaArrive(now, at, yaw)
     local c = CFG.specials.valka
     local row = ACE.row("valka", "x40a", "l")
     local x, y, _, bearing = spawnPoint()
     local px, py, pb, pd = ANOM.nearPlayer(c.spawn_km)
     if px then x, y, bearing = px, py, pb end
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local z, heading = alt * 100, (bearing + 180) % 360
+    if at then x, y, z, heading, pd = at.X, at.Y, at.Z, yaw, at.km end
     local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
     if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
     spawningUnit = c.unit
-    local r = SV_Spawn(c.unit, x, y, alt * 100, (bearing + 180) % 360)
+    local r = SV_Spawn(c.unit, x, y, z, heading)
     spawningUnit = nil
-    local hidden = 0
-    for _, q in ipairs(pending) do                     -- gone before a frame is drawn (as MINDRIPPER)
-        if q.unit == c.unit and valid(q.obj) then setGone(q.obj, true); hidden = hidden + 1 end
-    end
-    log(string.format("special: VALKA as %s (%s set), %s at bearing %.0f, %.1f km up: %s (%d hidden)", row, tostring(set),
-        pd and string.format("%.1f km from you", pd) or "at a spawn point", bearing or -1, alt / 1000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"), hidden))
+    log(string.format("special: VALKA as %s (%s set), %s, heading %.0f, %.1f km up: %s", row, tostring(set),
+        pd and string.format("%.1f km from you", pd) or "at a spawn point", heading or -1, z / 100000,
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r <= 0 then return false end
     D.flightTier = D.flightTier or {}
     D.up[c.unit], D.flown[c.unit], D.flightTier[c.unit] = true, true, #CFG.tiers.list
-    D.special.state, D.special.at = "arrive", now
+    D.special.state, D.special.at = "fired", now
     return true
 end
 
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
-    if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, she comes
+    if s.emlRemoveAt and now >= s.emlRemoveAt then      -- her railgun's gone eml_remove_s after its shot
+        s.emlRemoveAt = nil
+        V.event("RE_SV_ValkaEmlRemove")
+    end
+    if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, the opener
         if D.state ~= "fighting" then return end
-        for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
-        s.clearAt = s.clearAt or now + c.lurk_s
-        if now < s.clearAt then return end
-        if not SPC.valkaArrive(now) then
+        if c.disguise then
+            for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
+            s.clearAt = s.clearAt or now + c.lurk_s
+        end
+        if now < (s.clearAt or now) then return end
+        s.emlAt, s.emlYaw = V.emlSpawn(c)
+        if not s.emlAt then                             -- no railgun: she comes as she is, the reveal without the shot
+            log(string.format("special: %s's railgun couldn't spawn; she comes without the opener", c.name))
+            V.event("RE_SV_ValkaWarnOn")
+            if not SPC.valkaArrive(now) then
+                s.state = "done"
+                V.event("RE_SV_ValkaEnd")               -- (the WARNING off)
+                log(string.format("special: %s couldn't spawn; the round ends", c.name))
+            end
+            return
+        end
+        s.state, s.openAt, s.chargeAt = "opener", now, nil
+        return
+    end
+    local you = playerLocation()
+    if s.state == "opener" then                         -- the railgun found and hidden, the flash, the charge, the shot
+        local e = V.emlActor
+        if not s.chargeAt then
+            if not valid(e) then
+                if now - s.openAt < c.arrive_s + 3 then return end
+                log(string.format("special: %s's railgun actor not found %.0f s after it spawned; the opener goes on unseen",
+                    c.name, now - s.openAt))
+            else
+                setGone(e, true)
+            end
+            local n, why = V.singleShot(c)
+            log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
+            s.chargeAt = now + c.charge_s
+            V.event("RE_SV_ValkaWarnOn")                -- WARNING until she's down (no banner of ours: no tells)
+            V.event("RE_SV_ValkaEmlChargeOn")
+            local fx = fxAt({ c.flash }, s.emlAt, c.flash_scale, c.flash_s)
+            log(string.format("special: %s's opener: railgun charging %.1f km from you for %.1f s (flash: %d)", c.name,
+                s.emlAt.km, c.charge_s, fx))
+            return
+        end
+        if valid(e) then setGone(e, true) end
+        if now < s.chargeAt then return end
+        V.singleShot(c)                                 -- (in case its module came late)
+        V.event("RE_SV_ValkaEmlShot")
+        V.event("RE_SV_ValkaEmlChargeOff")
+        fxAt({ c.flash }, s.emlAt, c.flash_scale, c.flash_s)
+        local d = you and math.sqrt((s.emlAt.X - you.X) ^ 2 + (s.emlAt.Y - you.Y) ^ 2 + (s.emlAt.Z - you.Z) ^ 2) / 100000
+        log(string.format("special: %s's opener shot from %s km", c.name, d and string.format("%.1f", d) or "?"))
+        s.chargeAt, s.shots, s.state = nil, 1, "shot"
+        s.shotAt, s.revealAt, s.emlRemoveAt = now, now + c.reveal_s, now + c.eml_remove_s
+        return
+    end
+    if s.state == "shot" then                           -- reveal_s after the shot she's there, where it came from
+        if now < s.revealAt then return end
+        if not SPC.valkaArrive(now, s.emlAt, s.emlYaw) then
             s.state = "done"
-            log(string.format("special: %s couldn't spawn after the decoys; the round ends", c.name))
+            V.event("RE_SV_ValkaEnd")                   -- (the WARNING off)
+            log(string.format("special: %s couldn't spawn after her shot; the round ends", c.name))
         end
         return
     end
     local o = glitchActor(c)
-    local you = playerLocation()
-    if s.state == "arrive" then                         -- hidden; her railguns made single-shot; then the opener
-        if o then setGone(o, true) end
-        if not o and now - s.at >= c.arrive_s + 3 then
-            s.state = "hunt"
-            log(string.format("special: %s's actor not found %.0f s after she spawned; no opener", c.name, now - s.at))
+    if s.state == "fired" then                          -- shown: her health, the camera on her, her name
+        if not o then
+            if now - s.at >= c.arrive_s + 3 then
+                s.state = "hunt"
+                log(string.format("special: %s's actor not found %.0f s after she spawned; no reveal", c.name, now - s.at))
+            end
             return
         end
-        if now - s.at < c.arrive_s or not o or not you then return end
-        local n, why = V.singleShot(c)
-        log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
-        s.state, s.chargeAt, s.openAt = "opener", now + c.charge_s, now
-        V.event("RE_SV_ValkaWarnOn")                    -- WARNING until she's down (no banner of ours: no tells)
-        V.event("RE_SV_ValkaChargeOn")
-        local pawn = valid(survivalPC) and survivalPC.Pawn
-        local fx = pawn and portalFx({ c.flash }, pawn, { X = c.opener_m * 100, Y = 0, Z = 50 }, c.flash_scale, c.flash_s) or 0
-        log(string.format("special: %s's opener: railgun charging %.0f m ahead of you for %.1f s (flash: %d)", c.name,
-            c.opener_m, c.charge_s, fx))
-    end
-    if s.state == "opener" then                         -- kept ahead of you, nose on you, then the shot
-        if not o then return end
-        setGone(o, true)
-        local h = V.heading()
-        if h and you then V.event((V.spot(c, "A", h, you))) end
-        if now >= s.chargeAt then
-            if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- (in case the parts came late)
-            V.event("RE_SV_ValkaRailgun")
-            V.event("RE_SV_ValkaChargeOff")
-            s.chargeAt, s.shots, s.state, s.revealAt = nil, 1, "fired", now + c.reveal_s
-            local pawn = valid(survivalPC) and survivalPC.Pawn
-            if pawn then portalFx({ c.flash }, pawn, { X = c.opener_m * 100, Y = 0, Z = 50 }, c.flash_scale, c.flash_s) end
-            log(string.format("special: %s's opener shot (from %.0f m ahead of you)", c.name, c.opener_m))
-        end
-        return
-    end
-    if s.state == "fired" then                          -- the far spot, shown, the camera on her
-        if not o or now < s.revealAt then return end
-        local h = V.heading() or 0
-        local ev = you and V.spot(c, "D", h, you)
-        if ev then V.event(ev) end
         local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
         local hp = c.health * hx
-        local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = hp * 10 end)
-        setGone(o, false)
+        local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
+        local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
+        V.model(c, s, o)                                                     -- her X-02S
+        if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- her own railguns
         local cam = 1
         for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
         V.event("RE_SV_ValkaCam_" .. string.char(64 + cam))
@@ -3996,8 +4256,8 @@ function SPC.valkaTick(now, s)
             now + c.invert_every_s
         hudCallout(c.anomaly_line or t.valka_sub, nil)   -- what's happening, then her name big
         hudCallout(c.name:upper(), nil, c.big_x)
-        log(string.format("special: %s shows %.0f m out (%s), %.0f HP (x%.2f)%s; camera %s", c.name,
-            c.spots[4][2], tostring(ev), hp, hx, okH and "" or " (health NOT set)", ANOMALY_CAMERAS[cam]))
+        log(string.format("special: %s shows, %.0f HP (x%.2f)%s, target box %s; camera %s", c.name, hp, hx,
+            okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
         return
     end
     if s.state ~= "hunt" then return end
@@ -4005,6 +4265,7 @@ function SPC.valkaTick(now, s)
     s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
+        V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
         if s.invertUntil then V.invert(c, s, false, now) end
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
         ANOM.cleanFx(now, true)
@@ -4017,6 +4278,7 @@ function SPC.valkaTick(now, s)
         return
     end
     if not o then return end
+    V.modelTick(s, o, now)
     local at = where(o)
     if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
     -- the angle between her nose and you (for LastTGT when you're behind her, and her railgun's cone)
@@ -4051,13 +4313,13 @@ function SPC.valkaTick(now, s)
                 s.smokeSaid = true; log("special: VALKA's smoke " .. c.smoke .. " didn't spawn")
             end
         end
-        setGone(o, false)
+        setGone(o, false); V.partsGone(c, s, o, false)
         s.vanished, s.nextBlink = false, now + c.blink_every_s
     elseif s.blinkUntil and now >= s.blinkUntil then
         s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
     elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
         if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
-        setGone(o, true)
+        setGone(o, true); V.partsGone(c, s, o, true)
         s.vanished = true
         return
     end
@@ -4221,6 +4483,14 @@ local function specialTick(now)
         if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
         log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
+        -- its strike flights still up back onto the airfield (they were ordered onto the shuttle alone)
+        local back = {}
+        for u in pairs(D.up) do
+            if BOMBER_UNIT[u] and SV_UnitAlive(u) > 0 and type(SV_Event) == "function" then
+                back[#back + 1] = u .. " " .. tostring(SV_Event(string.format("RE_SV_BomberRetask_%02d", BOMBER_INDEX[u])))
+            end
+        end
+        if #back > 0 then log("special: strike flights back onto the airfield: " .. table.concat(back, ", ")) end
     end
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
@@ -4511,7 +4781,8 @@ local function roundsTick(now)
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Alicorn is still afloat", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "ladon" and SPC.ladonBusy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Ladons are still up", D.round)) end
-        elseif flights == 0 and D.special and D.special.kind == "valka" and D.special.state == "lurk" then
+        elseif flights == 0 and D.special and D.special.kind == "valka"
+            and (D.special.state == "lurk" or D.special.state == "opener" or D.special.state == "shot") then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: decoys down, VALKA attacks", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
@@ -5282,7 +5553,7 @@ function SPC.alicornTick(now, s)
             s.scaled[key] = true
             local h0 = hp(o)
             if h0 and h0 > 0 then
-                pcall(function() o.HealthInternal = want or h0 * hx end)
+                pcall(function() o.HealthInternal = want or math.floor(h0 * hx + 0.5) end)
                 log(string.format("special: Alicorn part %s health %s (%s -> %s)", nameOf(o):match("([%w_]+)_C_%d+") or "?",
                     want and string.format("%d missiles", math.floor(want / (s.mslDamage * 10) + 0.5)) or string.format("x%.2f", hx),
                     tostring(h0), tostring(hp(o))))
@@ -5369,6 +5640,7 @@ local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.ro
 AMPH.actors = {}
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     local u = spawningUnit
+    if u and u == CFG.specials.valka.eml_unit then SPC.V.emlActor = o end      -- VALKA's opener railgun
     if u and u:find("^SV_Unit_LcacTroops") then
         local l = AMPH.actors[u] or {}
         l[#l + 1] = o
@@ -6691,7 +6963,7 @@ function ALLY.scale()
             p.hx = L.hx
             local ok, h0, h1 = pcall(function()
                 local h = p.obj.HealthInternal
-                if L.hx > was and h > 0 then p.obj.HealthInternal = h * L.hx / was end
+                if L.hx > was and h > 0 then p.obj.HealthInternal = math.floor(h * L.hx / was + 0.5) end
                 return h, p.obj.HealthInternal
             end)
             log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)", p.name, p.unit,
