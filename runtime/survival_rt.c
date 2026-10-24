@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.18.0"
+#define RT_VERSION           L"0.18.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -87,10 +87,11 @@ static void VFmt(wchar_t* out, size_t cap, const wchar_t* fmt, va_list ap)
             const wchar_t* s = va_arg(ap, const wchar_t*);
             if (!s) s = L"<null>";
             while (*s) PUT(*s++);
-        } else if (*fmt == L'd') {
+        } else if (*fmt == L'd' || *fmt == L'u') {      /* (%u: 0.18.0's sound log used it and crashed: unknown here,
+                                                           it took no argument, so the next %s read a number) */
             int32_t d = va_arg(ap, int32_t);
-            uint64_t v = d < 0 ? (uint64_t)(-(int64_t)d) : (uint64_t)d;
-            if (d < 0) PUT(L'-');
+            uint64_t v = *fmt == L'u' ? (uint64_t)(uint32_t)d : d < 0 ? (uint64_t)(-(int64_t)d) : (uint64_t)d;
+            if (*fmt == L'd' && d < 0) PUT(L'-');
             wchar_t t[24]; int n = 0;
             do { t[n++] = (wchar_t)(L'0' + v % 10); v /= 10; } while (v);
             while (n) PUT(t[--n]);
@@ -2048,6 +2049,9 @@ static int L_SndSet(void* lua)
     ArgNumber(lua, &left); ArgNumber(lua, &right); ArgNumber(lua, &ratio);
     SndVoice* v = SND.state > 0 ? SndHandle((int64_t)h) : NULL;
     if (!v) return Ret(lua, 0);
+    SndXState st = { 0 };
+    ((void (*)(void*, SndXState*, uint32_t))SND_VT(v->voice, 25))(v->voice, &st, SND_NO_SAMPLES_PLAYED);   /* GetState */
+    if (st.queued == 0) { SndDestroy(v); return Ret(lua, 0); }             /* (over: Lua forgets it) */
     SndLevels(v, left, right, ratio);
     return Ret(lua, 1);
 }
@@ -2075,10 +2079,10 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.18.0" */
+/* SV_Version() -> "0.18.1" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.18.0";
+    static const char v[] = "0.18.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
