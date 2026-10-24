@@ -28,6 +28,7 @@ Also `build/install/AC8SurvivalMode` (the UE4SS runtime: `Scripts/main.lua` from
 | `pack.py` | Packs `mod/Content` into `SurvivalMode_P` with retoc `pack-raw`; container header imports come from each package's own import list |
 | `zenpkg.py` | Zen package editor that handles wide (Japanese) names; `python zenpkg.py <pkgs>` checks round-trips |
 | `make_scriptobjs.py` | Builds `scriptobjs.pkl` for `scripts/zen_ep.py` from `retoc print-script-objects` (inspection only) |
+| `pak_read.py` | Reads AC8's classic pakchunk0-Windows.pak (v11, AES index, Oodle): `list [regex]`, `get <regex> [dir]` (the config .ini files live there). Read only; its config holds third-party credentials: extract only into build/, never commit |
 | `checks/` | Inspectors: `dump_props.py`, `dump_export.py`, `imp_pkgs.py`, `wd_find.py`, `verify_headers.py`, `ep_dump.py` (any event package's triggers/execs), `tex_info.py` (a cooked texture's size / format / virtual-texture layout, or which vertex factories and virtual samplers a material's shader map has: tools/re/AIRCRAFT_MATERIALS.md); `lua_check.py Scripts/*.lua` (Lua 5.4 syntax, each part's 200-local count, unknown globals across the parts together; there is no Lua on the build machine, run it after every Lua change) |
 | `scripts/` | Zen package / property / container format libraries (`uprop.py`, `eprec.py`, `zen.py`, `chdr.py`, ...) |
 

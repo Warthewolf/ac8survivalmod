@@ -49,6 +49,17 @@ load and a whole VALKA fight were normal (2026-10-25). The 0.69.1 container diff
 textures (all other files the same size: only cook GUIDs differ) [V], so the next test is a clean A/B on virtual
 textures. Unknown: what loads them before VALKA's round (Lua loads her model only at her reveal).
 
+### AC8's config (tools/pak_read.py: Live/Config/DefaultEngine.ini in pakchunk0-Windows.pak) [V]
+- [/Script/Engine.RendererSettings]: r.VirtualTextures=True, r.VT.EnableAutoImport=False; no r.VT.TileSize /
+  TileBorderSize set, so UE's defaults 128 / 4 (as every stock VT and Survival's own cook); r.RayTracing=True (with
+  r.RayTracing.Geometry.SkeletalMeshes.LODBias=2), Lumen hardware ray tracing, virtual shadow maps, mesh streaming,
+  r.GPUSkin.UnlimitedBoneInfluences / Support16BitBoneIndex, r.SkinCache.CompileShaders.
+- [/Script/Engine.VirtualTexturePoolConfig]: a default pool of 1 MB, PF_DXT1 64 MB and PF_BC7 64 MB (size-scalable):
+  VALKA's colour / Livemap (DXT1) and normal map (BC7) fall into existing pools.
+- DefaultScalability: r.Streaming.PoolSize=2000. AssetManagerClassName=/Script/Live.LiveAssetManager; the asset
+  manager's config only excludes editor folders (no primary-asset scans configured there).
+Nothing in the config explains the 0.69 container's slow load / memory / crash.
+
 ## 3. Texture slots
 - Basecolor `_C`: DXT1 sRGB.
 - Normalmap `_NO`: BC7 linear (AC7's `_N` as it is: its blue and alpha near 1).
