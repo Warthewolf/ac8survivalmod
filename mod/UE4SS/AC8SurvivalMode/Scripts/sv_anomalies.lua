@@ -799,8 +799,15 @@ function SPC.V.partsPlace(c, s, o)
     end
     return n
 end
-function SPC.V.partsGone(c, s, o, gone)
-    if not gone and s.modelComp then return end         -- (her X-02S on: the x40a's parts stay gone)
+-- the part shown as her railgun on the X-02S (user, 2026-10-24: "her railgun mesh also isn't visible"): the x40a's
+-- RailGun (railgun_show: a pattern in its actor's name), not its spares or laser pod
+function SPC.V.railgunShown(c, p)
+    if not c.railgun_show or c.railgun_show == "" then return false end
+    local n = nameOf(p):match("([%w_]+)$") or ""
+    return n:find(c.railgun_show) ~= nil
+end
+function SPC.V.partsGone(c, s, o, gone, blink)        -- (blink: gone in a blink, her railgun too)
+    if not gone and s.modelComp then gone = true end    -- (her X-02S on: the x40a's parts stay gone, but her railgun)
     if gone and #(s.parts or {}) == 0 then
         s.parts, s.partWas = SPC.V.parts(o), {}
         for k, p in ipairs(s.parts) do
@@ -808,11 +815,21 @@ function SPC.V.partsGone(c, s, o, gone)
             for f in pairs(SPC.V.PART_FLAGS) do pcall(function() was[f] = p[f] end) end
             s.partWas[k] = was
         end
-        if #s.parts > 0 then log(string.format("special: %s's parts hidden with her: %d", c.name, #s.parts)) end
+        if #s.parts > 0 then
+            local names = {}
+            for _, p in ipairs(s.parts) do names[#names + 1] = nameOf(p):match("([%w_]+)$") or "?" end
+            log(string.format("special: %s's parts hidden with her: %d (%s)", c.name, #s.parts, table.concat(names, ", ")))
+        end
     end
     for k, p in ipairs(s.parts or {}) do
+        local shown = gone and not blink and s.modelComp and SPC.V.railgunShown(c, p)   -- (her railgun on the X-02S)
+        if shown and not s.railShownSaid then
+            s.railShownSaid = true
+            pcall(function() local k2 = c.railgun_scale or 1; p:SetActorScale3D({ X = k2, Y = k2, Z = k2 }) end)
+            log(string.format("special: %s's railgun shown on her: %s (x%.2f)", c.name, nameOf(p):match("([%w_]+)$") or "?", c.railgun_scale or 1))
+        end
         if valid(p) then
-            pcall(function() p:SetActorHiddenInGame(gone) end)
+            pcall(function() p:SetActorHiddenInGame(gone and not shown) end)
             pcall(function() p:SetActorEnableCollision(not gone) end)
             for f, v in pairs(SPC.V.PART_FLAGS) do
                 local to = v
@@ -1481,7 +1498,7 @@ function SPC.valkaTick(now, s)
         s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
     elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
         if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
-        setGone(o, true); V.partsGone(c, s, o, true)
+        setGone(o, true); V.partsGone(c, s, o, true, true)
         s.vanished = true
         return
     end

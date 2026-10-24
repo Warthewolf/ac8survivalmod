@@ -595,7 +595,7 @@ CFG = {
                      -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
                      -- its textures, the engine grid; test key Ctrl+9 cycles them)
-                     paint = 2,
+                     paint = 8,             -- (8 for the test of the black X-02S: back to 2 once it's found)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (off, "": A_X02S_Valka_Sweep swings the wings forward, not back: build/x02s/ue_check.log has the
                      -- tips 0.6 m ahead of their pivot unswept and 2-4 m ahead swept; in game they stuck out in front of
@@ -621,6 +621,8 @@ CFG = {
                      radar_hud = 1, alert_off_s = 3,
                      -- where her railgun sits on the X-02S (cm in her frame: forward, right, up): under her nose
                      railgun_at = { X = 400, Y = 0, Z = -80 },
+                     -- and shown there (her railgun part: railgun_show, a Lua pattern in its actor name), railgun_scale big
+                     railgun_show = "_RG_C", railgun_scale = 0.5,
                      camera = "LookAt_Event_Camera_ms22-01",
                      -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                      -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
