@@ -741,7 +741,7 @@ CFG = {
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
                      -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
                      -- WPO, character base); test key Ctrl+9 cycles them
-                     paint = 9,             -- (9: AC8's general master, ordinary textures; 2 once virtual ones work)
+                     paint = 11,            -- (11: AC8's character master, ordinary textures: SPC.V.PAINTS)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
                      -- apart in game; tools/x02s/ue_import.py ue_quat converts them now)
@@ -760,7 +760,7 @@ CFG = {
                      -- which grows to at least min_deg wide from where you are:
                      -- the lensing (lens_x the barrier refraction's strength), the glow and photon ring (their brightness x
                      -- the stock flare's), the black horizon 1.0
-                     portal = { enabled = true, diameter_m = 120, min_deg = 4, lead_s = 3.0, open_s = 1.2, hold_s = 5.0, close_s = 1.0,
+                     portal = { enabled = true, diameter_m = 120, min_deg = 1.5, lead_s = 3.0, open_s = 1.2, hold_s = 5.0, close_s = 1.0,
                                 lens_size = 2.4, lens_x = 3, glow_size = 2.0, glow_x = 4, ring_size = 1.3, ring_x = 8,
                                 textures = "/Game/Mods/SurvivalMode/Valka/Portal/" },
                      flare = { enabled = true, life_s = 7, intensity_x = 6,

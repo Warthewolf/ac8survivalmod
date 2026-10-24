@@ -1111,12 +1111,17 @@ SPC.V.PAINTS = {
     { name = "F-18 TEXTURES", stock = true, dirt = "black", livemap = "f18_mrx", basecolor = "f18_c", normal = "f18_no" },
     { name = "ENGINE GRID", material = "/Engine/EngineMaterials/WorldGridMaterial" },
     -- AC8's aircraft master (MP_Live_Vehicle_Base_UDIM, 1-7) samples virtual textures only (tools/re/AIRCRAFT_MATERIALS.md):
-    -- with ordinary ones it draws black. These are AC8's general masters with ordinary samplers and skinned-mesh shaders
-    -- and the same slot names: a dynamic instance of one, her colour and normal maps in it, its own Livemap default
-    -- (T_Livemap: non-metal, rough, no occlusion) unless `livemap` says otherwise
+    -- with ordinary ones it draws black. These are AC8's general masters with ordinary samplers and skinned-mesh shaders:
+    -- a dynamic instance of one, her colour and normal maps in it (not with `flat_normal`), its own Livemap default
+    -- unless `livemap` says otherwise. 9 and 10 have no texture parameters at all (their packages name none): plain
+    -- white (test of 2026-10-25). 11 showed her grey paint with odd shading: its Livemap default is black.
     { name = "LIVE BASE", parent = "/Game/Base/Material/MP/MP_Live_Base_CameraDitherFade" },
     { name = "LIVE BASE WPO", parent = "/Game/Base/Material/MP/MP_Live_Base_WPO" },
     { name = "CHARACTER BASE", parent = "/Game/Base/Material/Character/M_Live_Cha_Base" },
+    { name = "CHARACTER + WHITE LIVEMAP", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", livemap = "white" },
+    { name = "CHARACTER, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", flat_normal = true },
+    { name = "CHARACTER + WHITE LIVEMAP, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base",
+      livemap = "white", flat_normal = true },
 }
 -- her own textures, for the `parent` variants
 SPC.V.PAINT_OWN = { Basecolor = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_C",
@@ -1193,10 +1198,13 @@ function SPC.V.paint(c, s, body, k)
         end
         local set = {}
         for slot, path in pairs(V.PAINT_OWN) do
-            local t = loadObject(path .. "." .. path:match("[^/]+$"))
-            local ok = valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end)
-            set[#set + 1] = slot .. (ok and "" or " NOT set")
+            if not (pv.flat_normal and slot == "Normalmap") then
+                local t = loadObject(path .. "." .. path:match("[^/]+$"))
+                local ok = valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end)
+                set[#set + 1] = slot .. (ok and "" or " NOT set")
+            end
         end
+        if pv.flat_normal then set[#set + 1] = "its own flat normal" end
         local live = pv.livemap and paintTex(pv.livemap)
         if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
         local n = 0
