@@ -740,11 +740,45 @@ end
 -- and her parts gone (not lockable); her flight model and railguns stay the x40a's. Off (the x40a as it is) when
 -- `model` is "" or doesn't load. True if on.
 SPC.V.BODY_PROPS = { "PlaneBodySkelMeshComponent", "PlaneBodyMeshComponent", "PlaneBodyStaticMeshComponent", "PlaneBodyMesh" }
+-- no skeletal body of her own (the x40a's isn't one: test of 2026-10-24, 0.66.0, only the wreck meshes were skeletal
+-- and 3 other meshes got hidden): a skeletal mesh component of ours added to her (AActor::AddComponentByClass, on her
+-- root), no collision (her own spheres still take the hits), placed where her body mesh is (any PlaneBody* one) and
+-- turned model_yaw more. Returns it and how it was placed, or nil and why not.
+function SPC.V.addBody(c, o)
+    local cls = StaticFindObject("/Script/Engine.SkeletalMeshComponent")
+    if not valid(cls) then return nil, "no SkeletalMeshComponent class" end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local ok, comp = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
+    if not ok or not comp or not valid(comp) then
+        return nil, "AddComponentByClass " .. (ok and "gave nothing" or tostring(comp))
+    end
+    pcall(function() comp:SetCollisionEnabled(0) end)      -- (ECollisionEnabled NoCollision)
+    local yaw = c.model_yaw or 0
+    local ref, by = nil, "her root"
+    for _, n in ipairs(SPC.V.BODY_PROPS) do
+        local okP, p = pcall(function() return o[n] end)
+        if okP and p and valid(p) and addrOf(p) ~= addrOf(comp) then ref, by = p, n; break end
+    end
+    local placed
+    if ref then
+        placed = pcall(function()
+            local l, r = ref:K2_GetComponentLocation(), ref:K2_GetComponentRotation()
+            comp:K2_SetWorldLocationAndRotation({ X = l.X, Y = l.Y, Z = l.Z },
+                { Pitch = r.Pitch, Yaw = r.Yaw + yaw, Roll = r.Roll }, false, {}, true)
+        end)
+    else
+        placed = pcall(function()
+            comp:K2_SetRelativeLocationAndRotation({ X = 0, Y = 0, Z = 0 }, { Pitch = 0, Yaw = yaw, Roll = 0 }, false, {}, true)
+        end)
+    end
+    return comp, string.format("placed by %s%s, yaw +%d", by, placed and "" or " (NOT placed)", yaw)
+end
 function SPC.V.model(c, s, o)
     if not c.model or c.model == "" or s.modelComp then return s.modelComp ~= nil end
     local function load(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
     local sk, why = load(c.model)
-    local anim = c.sweep_anim and c.sweep_anim ~= "" and load(c.sweep_anim)
+    local anim, whyAnim = nil, "no sweep_anim"
+    if c.sweep_anim and c.sweep_anim ~= "" then anim, whyAnim = load(c.sweep_anim) end
     if not valid(sk) then
         log(string.format("special: %s's X-02S %s not loaded (%s); the x40a shows", c.name, c.model, tostring(why)))
         return false
@@ -770,13 +804,18 @@ function SPC.V.model(c, s, o)
         local size = (okB and type(r) == "number" and r) or 0
         if not nm:find("^Damaged") and size > best then body, best = comp, size end
     end
+    local added, whyAdd = false, nil
+    if not valid(body) then
+        body, whyAdd = SPC.V.addBody(c, o)
+        added = valid(body)
+    end
     if not valid(body) then
         local all = {}
         for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.ActorComponent")) do
             all[#all + 1] = (nameOf(comp):match("([%w_]+)$") or "?") .. ":" .. (pcall(function() return comp:GetClass():GetFName():ToString() end) and comp:GetClass():GetFName():ToString() or "?")
         end
-        log(string.format("special: %s has no skeletal mesh component; her tree: %s; the x40a shows", c.name,
-            #all > 0 and table.concat(all, ", ") or "nothing (no RootComponent?)"))
+        log(string.format("special: %s has no skeletal mesh component and none could be added (%s); her tree: %s; the x40a shows",
+            c.name, tostring(whyAdd), #all > 0 and table.concat(all, ", ") or "nothing (no RootComponent?)"))
         return false
     end
     local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
@@ -786,13 +825,16 @@ function SPC.V.model(c, s, o)
     end
     local k = (c.model_length_m or 19.6) / 19.6
     if k ~= 1 then pcall(function() local v = body.RelativeScale3D; body:SetRelativeScale3D({ X = v.X * k, Y = v.Y * k, Z = v.Z * k }) end) end
-    local okA = valid(anim) and pcall(function()
-        body:SetAnimationMode(1)                                            -- (EAnimationMode AnimationSingleNode)
-        body:SetAnimation(anim)
-        body:SetPlayRate(0)
-        body:Play(false)
-        body:SetPosition(0, false)
-    end)
+    local okA, errA = false, "not loaded: " .. tostring(whyAnim)
+    if valid(anim) then
+        okA, errA = pcall(function()
+            body:SetAnimationMode(1)                                        -- (EAnimationMode AnimationSingleNode)
+            body:SetAnimation(anim)
+            body:SetPlayRate(0)
+            body:Play(false)
+            body:SetPosition(0, false)
+        end)
+    end
     s.modelComp, s.sweepPos = body, 0
     s.sweepLen = okA and (pcall(function() return anim:GetPlayLength() end) and anim:GetPlayLength() or 1) or nil
     local hid = SPC.V.modelHide(s, o)
@@ -800,20 +842,24 @@ function SPC.V.model(c, s, o)
     -- her hit spheres from the x40a's size to the X-02S's (hit_radius_m), each logged once
     local spheres = {}
     for _, sc in ipairs(SPC.V.comps(o, "/Script/Engine.SphereComponent")) do
-        do
+        local nm = nameOf(sc):match("([%w_]+)$") or "?"
+        if not nm:find("^Damaged") then                 -- (DamagedCollision is her wreck's: 0.66.0 shrank it)
             local okR, r = pcall(function() return sc:GetUnscaledSphereRadius() end)
             if valid(sc) and okR and type(r) == "number" and c.hit_radius_m and r > c.hit_radius_m * 100 then
                 pcall(function() sc:SetSphereRadius(c.hit_radius_m * 100, true) end)
-                spheres[#spheres + 1] = string.format("%s %.0f -> %.0f m", nameOf(sc):match("([%w_]+)$") or "?", r / 100, c.hit_radius_m)
+                spheres[#spheres + 1] = string.format("%s %.0f -> %.0f m", nm, r / 100, c.hit_radius_m)
             elseif valid(sc) and okR then
-                spheres[#spheres + 1] = string.format("%s %.0f m (kept)", nameOf(sc):match("([%w_]+)$") or "?", (r or 0) / 100)
+                spheres[#spheres + 1] = string.format("%s %.0f m (kept)", nm, (r or 0) / 100)
             end
         end
     end
     log(string.format("special: %s's hit spheres: %s", c.name, #spheres > 0 and table.concat(spheres, ", ") or "none found"))
-    log(string.format("special: %s flies the X-02S (%s on %s of %s; sweep %s%s): %d other meshes hidden, %d parts gone",
-        c.name, c.model:match("[^/]+$"), nameOf(body):match("([%w_]+)$") or "?", table.concat(names, ", "),
-        okA and "on" or "OFF", okA and string.format(" %.0f-%.0f km/h", c.sweep_kmh[1], c.sweep_kmh[2]) or "",
+    s.modelOwner = o
+    log(string.format("special: %s flies the X-02S (%s on %s%s of %s; sweep %s%s): %d other meshes hidden, %d parts gone",
+        c.name, c.model:match("[^/]+$"), nameOf(body):match("([%w_]+)$") or "?",
+        added and (" (added; " .. tostring(whyAdd) .. ")") or "", #names > 0 and table.concat(names, ", ") or "none",
+        okA and "on" or "OFF",
+        okA and string.format(" %.0f-%.0f km/h", c.sweep_kmh[1], c.sweep_kmh[2]) or (" (" .. tostring(errA) .. ")"),
         hid, #(s.parts or {})))
     return true
 end
@@ -1049,11 +1095,16 @@ function SPC.valkaTick(now, s)
             okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
         return
     end
+    if s.state == "done" and s.wreckUntil and now < s.wreckUntil and valid(s.modelOwner) then
+        V.modelHide(s, s.modelOwner)                    -- her X-02S falls, not the x40a's wreck
+        return
+    end
     if s.state ~= "hunt" then return end
     s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
     s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
+        if s.modelComp then s.wreckUntil = now + (c.wreck_s or 15) end
         V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
         if s.invertUntil then V.invert(c, s, false, now) end
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end

@@ -561,6 +561,9 @@ CFG = {
                      hold_s = 5,
                      -- her X-02S (tools/x02s; "" = the x40a as it is) and its length (m)
                      model = "/Game/Mods/SurvivalMode/Valka/Model/SK_X02S_Valka", model_length_m = 19.6,
+                     -- the X-02S turned model_yaw deg more than the x40a's body (if it flies sideways or backwards);
+                     -- shot down, the x40a's wreck meshes kept hidden wreck_s so the X-02S falls
+                     model_yaw = 0, wreck_s = 15,
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      sweep_anim = "/Game/Mods/SurvivalMode/Valka/Model/A_X02S_Valka_Sweep", sweep_kmh = { 800, 1000 },
                      sweep_s = 2.5, hit_radius_m = 10,
