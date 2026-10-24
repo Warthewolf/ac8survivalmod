@@ -79,9 +79,12 @@ FGPUSkinVertexFactory present, no FMaterialVirtualTextureStack):
 
 | master | notes |
 |---|---|
-| /Game/Base/Material/MP/MP_Live_Base_CameraDitherFade | Basecolor / Normalmap / Livemap, Basecolor_Brightness / _Hue_Shift, NormalIntensity |
-| /Game/Base/Material/MP/MP_Live_Base_WPO | the same with world-position offset |
-| /Game/Base/Material/Character/M_Live_Cha_Base | characters: Basecolor / Normalmap / Livemap (roughness + AO) |
+| /Game/Base/Material/MP/MP_Live_Base_CameraDitherFade | **no texture parameters** (its package names none; textures fixed: T_SRGBcolor / T_FlatNormal / T_Livemap): VALKA plain white, test of 2026-10-25 [T] |
+| /Game/Base/Material/MP/MP_Live_Base_WPO | the same: no texture parameters [T] |
+| /Game/Base/Material/Character/M_Live_Cha_Base | characters: Basecolor / Normalmap / Livemap (roughness + AO; default T_Black), Use_Livemap. VALKA's grey paint showed, shading odd (2026-10-25) [T] |
+
+A material's parameter names are in its own package's name map (MP_Live_Vehicle_Base_UDIM and M_Live_Cha_Base list
+theirs): check there, not in the shader map, before relying on a parameter.
 | /Game/Base/Material/Vechicle/MP/M_Dam_Masked | the wrecks' material |
 
 Their Livemap default is T_Livemap (64 x 64, ordinary): red near 0, green and blue high: as a metallic / roughness /

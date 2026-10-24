@@ -253,6 +253,37 @@ def sweep():
     return len(rot), nf
 
 
+def flare_tga(src, dst):
+    """AC7's flare texture for AC8's additive flare. Glare and Shine are white in RGB with their shape only in the alpha,
+    which MI_ms23FarExp_Flare doesn't use: they drew as white squares (test of 2026-10-25), so a 32-bit one gets its
+    alpha multiplied into its colour. A 24-bit one is copied as it is."""
+    d = open(src, 'rb').read()
+    idl, itype = d[0], d[2]
+    w, h, bpp, desc = struct.unpack('<HHBB', d[12:18])
+    if bpp != 32:
+        shutil.copyfile(src, dst)
+        return
+    o = 18 + idl
+    if itype == 2:
+        px = d[o:o + w * h * 4]
+    elif itype == 10:                                   # (run-length encoded)
+        px = bytearray()
+        while len(px) < w * h * 4:
+            c = d[o]; o += 1
+            k = (c & 0x7f) + 1
+            if c & 0x80: px += d[o:o + 4] * k; o += 4
+            else: px += d[o:o + 4 * k]; o += 4 * k
+    else:
+        raise SystemExit(f'{src}: TGA type {itype} not handled')
+    top = bool(desc & 0x20)
+
+    def at(x, y):
+        i = ((y if top else h - 1 - y) * w + x) * 4
+        b, g, r, a = px[i:i + 4]
+        return r * a // 255, g * a // 255, b * a // 255, a
+    tga32(dst, w, h, at)
+
+
 def black_tga(path, n=4):
     head = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, n, n, 32, 8)
     open(path, 'wb').write(head + bytes(4 * n * n))
@@ -267,7 +298,7 @@ def main():
     shutil.copyfile(os.path.join(SRC, '00', 'x02s_00_N.tga'), os.path.join(OUT, 'T_X02S_Valka_NO.tga'))
     black_tga(os.path.join(OUT, 'T_X02S_Valka_LM.tga'), 256)
     for src, dst in FLARE_TEX:                        # AC7 Mission 18's lens flash (ms18_LensEffect1)
-        shutil.copyfile(os.path.join(AC7_ROOT, src), os.path.join(OUT, dst + '.tga'))
+        flare_tga(os.path.join(AC7_ROOT, src), os.path.join(OUT, dst + '.tga'))
     portal_textures()   # (all zero is AC8's neutral Livemap: T_Livemap_Flat)
     print(f'x02s: skinned mesh x{s:.3f} ({length:.3f} -> {LENGTH_M} m), sweep of {nb} wing bones (frames '
           f'{SWEEP_FRAMES[0]}-{SWEEP_FRAMES[1]} of {nf}), the stock Osean skin ({SKIN}), normal map (00), blank Livemap -> '
