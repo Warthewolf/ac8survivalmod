@@ -1098,7 +1098,17 @@ SPC.V.PAINTS = {
     { name = "STOCK + F-18 LIVEMAP", stock = true, dirt = "black", livemap = "f18_mrx" },
     { name = "F-18 TEXTURES", stock = true, dirt = "black", livemap = "f18_mrx", basecolor = "f18_c", normal = "f18_no" },
     { name = "ENGINE GRID", material = "/Engine/EngineMaterials/WorldGridMaterial" },
+    -- AC8's aircraft master (MP_Live_Vehicle_Base_UDIM, 1-7) samples virtual textures only (tools/re/AIRCRAFT_MATERIALS.md):
+    -- with ordinary ones it draws black. These are AC8's general masters with ordinary samplers and skinned-mesh shaders
+    -- and the same slot names: a dynamic instance of one, her colour and normal maps in it, its own Livemap default
+    -- (T_Livemap: non-metal, rough, no occlusion) unless `livemap` says otherwise
+    { name = "LIVE BASE", parent = "/Game/Base/Material/MP/MP_Live_Base_CameraDitherFade" },
+    { name = "LIVE BASE WPO", parent = "/Game/Base/Material/MP/MP_Live_Base_WPO" },
+    { name = "CHARACTER BASE", parent = "/Game/Base/Material/Character/M_Live_Cha_Base" },
 }
+-- her own textures, for the `parent` variants
+SPC.V.PAINT_OWN = { Basecolor = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_C",
+                    Normalmap = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_NO" }
 -- the parent values logged once (what a stock skin changes, for the real fix)
 SPC.V.PAINT_SAY = { "WeatheringWeight", "Wet_Darkness", "Wet_Range", "AO_amoumt", "MetallicMapWeight",
     "Metallic_Remap_Target_Low", "Metallic_Remap_Target_High", "Roughness_Remap", "Roughness_Contrast", "Ctrl_B_Smoke",
@@ -1156,6 +1166,33 @@ function SPC.V.paint(c, s, body, k)
     end
     for i = 0, (s.paintN or 0) - 1 do                   -- (the grid variant changes every slot)
         if valid(s.paintOrig[i]) then pcall(function() body:SetMaterial(i, s.paintOrig[i]) end) end
+    end
+    if pv.parent then                                   -- another AC8 master, her textures on it
+        local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+        local parent, why = loadObject(pv.parent .. "." .. pv.parent:match("[^/]+$"))
+        local okM, mid = valid(parent) and valid(kml) and pcall(function()
+            return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0)
+        end)
+        if not (okM and valid(mid)) then
+            log(string.format("special: %s's paint %d %s: no instance of %s (%s)", c.name, k, pv.name, pv.parent,
+                tostring(valid(parent) and mid or why)))
+            return pv.name
+        end
+        local set = {}
+        for slot, path in pairs(V.PAINT_OWN) do
+            local t = loadObject(path .. "." .. path:match("[^/]+$"))
+            local ok = valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end)
+            set[#set + 1] = slot .. (ok and "" or " NOT set")
+        end
+        local live = pv.livemap and paintTex(pv.livemap)
+        if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
+        local n = 0
+        for _, i in ipairs(s.paintSlots) do
+            if pcall(function() body:SetMaterial(i, mid) end) then n = n + 1 end
+        end
+        log(string.format("special: %s's paint %d %s: %d slots on %s, %s%s", c.name, k, pv.name, n, pv.parent:match("[^/]+$"),
+            table.concat(set, ", "), pv.livemap and (", Livemap " .. pv.livemap .. (live and "" or " NOT loaded")) or ", its own Livemap"))
+        return pv.name
     end
     if pv.material then
         local m, why = loadObject(pv.material .. "." .. pv.material:match("[^/]+$"))

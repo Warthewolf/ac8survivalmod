@@ -596,8 +596,9 @@ CFG = {
                      model_yaw = 0, wreck_s = 15,
                      -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
-                     -- its textures, the engine grid; test key Ctrl+9 cycles them)
-                     paint = 2,
+                     -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
+                     -- WPO, character base); test key Ctrl+9 cycles them
+                     paint = 9,             -- (9: AC8's general master, ordinary textures; 2 once virtual ones work)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
                      -- apart in game; tools/x02s/ue_import.py ue_quat converts them now)
