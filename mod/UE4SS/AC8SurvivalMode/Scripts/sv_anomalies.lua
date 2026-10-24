@@ -937,6 +937,11 @@ function SPC.V.sndShot(s, at, now)
         s.passAt = now + d / math.max(100, cs.pass_speed_ms)
     end
 end
+-- the hidden opener railgun keeps a target box while it charges (opener_marker; user, 2026-10-25: "couldnt see the
+-- opener as i cant find it"): seen where to look, still not lockable
+function SPC.V.mark(c, e)
+    if c.opener_marker and valid(e) then pcall(function() e.bShowHUDBox = true end) end
+end
 function SPC.V.event(ev)
     local r = type(SV_Event) == "function" and SV_Event(ev) or -5
     if r ~= 1 then log("special: VALKA " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
@@ -1531,6 +1536,7 @@ function SPC.valkaTick(now, s)
                     c.name, now - s.openAt))
             else
                 setGone(e, true)
+                SPC.V.mark(c, e)
             end
             local n, why = V.singleShot(c)
             log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
@@ -1552,7 +1558,7 @@ function SPC.valkaTick(now, s)
                 s.emlAt.km, c.charge_s, fx))
             return
         end
-        if valid(e) then setGone(e, true) end
+        if valid(e) then setGone(e, true); SPC.V.mark(c, e) end
         V.sndRise(s, now, c.charge_s)
         if c.portal and c.portal.enabled and not s.portalAt and now >= s.chargeAt - (c.portal.lead_s or 1) then
             s.portalAt = now

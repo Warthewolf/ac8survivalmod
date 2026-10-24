@@ -142,7 +142,16 @@ def import_file(src, dest, name=None):
     return list(t.get_editor_property('imported_object_paths') or [])
 
 
-def texture(name, srgb, compression, folder='/Textures', virtual=True):
+# VIRTUAL: her paint textures as virtual textures, as AC8's own skins are (tools/re/AIRCRAFT_MATERIALS.md). Off while
+# it's tested: the 0.69 container (virtual on) made the mission load ~3.5 min and crashed the game when round 1 spawned
+# (LowLevelFatalError "Trying to resize TArray to an invalid size of 2147483648" in GPUSortBatch); without that container
+# both were fine (test of 2026-10-25).
+VIRTUAL = False
+
+
+def texture(name, srgb, compression, folder='/Textures', virtual=None):
+    if virtual is None:
+        virtual = VIRTUAL
     import_file(os.path.join(SRC, name + '.tga'), DEST + folder, name)
     tex = unreal.load_asset(f'{DEST}{folder}/{name}')
     tex.set_editor_property('srgb', srgb)
