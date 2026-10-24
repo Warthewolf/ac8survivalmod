@@ -679,6 +679,41 @@ function SPC.V.emlWeapon(c)
     return n, string.format("%d launchers, %d projectile modules beside them; was %s; %s life %s s", nL, nP,
         #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
 end
+-- her railgun's rounds now in the level (c.eml_weapon's): each lives at least eml_life_s (its class default's or
+-- longer), and does no damage while `harmless` (the opener's shot) or its class default's otherwise. Instances only:
+-- the rounds are pooled, so this runs around every shot. Returns how many, and their life.
+function SPC.V.rounds(c, harmless)
+    if not c.eml_weapon or c.eml_weapon == "" then return 0 end
+    local nm = c.eml_weapon:match("[^/]+$")
+    local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
+    local okD, d0 = pcall(function() return cdo.damage end)
+    local okL, l0 = pcall(function() return cdo.LifeTime end)
+    local life = math.max(c.eml_life_s or 0, (okL and type(l0) == "number") and l0 or 0)
+    local n = 0
+    local ok, list = pcall(FindAllOf, nm .. "_C")
+    for _, r in ipairs(ok and list or {}) do
+        if valid(r) and not nameOf(r):find("Default__", 1, true) then
+            n = n + 1
+            pcall(function() if (r.LifeTime or 0) < life then r.LifeTime = life end end)
+            pcall(function() if (r.EffectiveTime or 0) > 0 and r.EffectiveTime < life then r.EffectiveTime = life end end)
+            pcall(function() r.damage = harmless and 0 or (okD and d0 or r.damage) end)
+        end
+    end
+    return n, life
+end
+-- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style
+function SPC.V.radar(c)
+    local n = 0
+    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
+    for _, m in ipairs(ok and list or {}) do
+        if pcall(function()
+            m.IsDispRadarMap = true
+            m.ForceAlertDisp = true
+            m.HUDControl = c.radar_hud or 1
+        end) then n = n + 1 end
+    end
+    return n
+end
 -- her railgun's sounds (CFG.sound.valka, sv_sound.lua): the charge at `at` (a location, or a function giving hers),
 -- its loop rising over `len` s, the shot (the round passing you pass_speed_ms later), and the loop stopped
 function SPC.V.sndCharge(s, at, now)
@@ -1173,6 +1208,15 @@ end
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
+    if s.roundsUntil then                               -- after a shot: its rounds live long (the opener's harmless)
+        local harmless = s.harmUntil and now < s.harmUntil
+        local n, life = SPC.V.rounds(c, harmless)
+        if n > 0 and not s.roundsSaid then
+            s.roundsSaid = true
+            log(string.format("special: %s's railgun rounds: %d in flight, life %s s%s", c.name, n, tostring(life), harmless and ", harmless" or ""))
+        end
+        if now >= s.roundsUntil then s.roundsUntil, s.harmUntil = nil, nil; SPC.V.rounds(c, false) end
+    end
     if s.passAt and now >= s.passAt then                -- her round passing you (its sound)
         s.passAt = nil
         SND.event(CFG.sound.valka.pass, nil)
@@ -1217,6 +1261,8 @@ function SPC.valkaTick(now, s)
             log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
             local nW, whyW = V.emlWeapon(c)
             log(string.format("special: %s's railgun rounds: %d on %s (%s)", c.name, nW, tostring(c.eml_weapon), whyW))
+            log(string.format("special: %s's railguns on the minimap: %d launchers (style %d)", c.name, V.radar(c), c.radar_hud or 1))
+            V.event("RE_SV_ValkaAlertOn")
             s.chargeAt = now + c.charge_s
             V.event("RE_SV_ValkaWarnOn")                -- WARNING until she's down (no banner of ours: no tells)
             V.event("RE_SV_ValkaEmlChargeOn")
@@ -1233,9 +1279,12 @@ function SPC.valkaTick(now, s)
         if now < s.chargeAt then return end
         V.singleShot(c)                                 -- (in case its module came late)
         V.emlWeapon(c)
+        V.radar(c)
+        V.rounds(c, true)
         V.event("RE_SV_ValkaEmlShot")
         V.event("RE_SV_ValkaEmlChargeOff")
         V.sndShot(s, s.emlAt, now)
+        s.harmUntil, s.roundsUntil = now + c.reveal_s + 3, now + c.reveal_s + 3     -- its rounds: long, harmless
         do
             local flashes = {}
             for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
@@ -1271,6 +1320,7 @@ function SPC.valkaTick(now, s)
         local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
         V.model(c, s, o)                                                     -- her X-02S
         if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- her own railguns
+        V.radar(c)
         do
             local nW, whyW = V.emlWeapon(c)
             log(string.format("special: %s's own railgun rounds: %d on %s (%s)", c.name, nW, tostring(c.eml_weapon), whyW))
@@ -1372,12 +1422,16 @@ function SPC.valkaTick(now, s)
         V.event("RE_SV_ValkaChargeOff")
         V.sndShot(s, at, now)
         s.chargeAt, s.shots, s.railAt = nil, (s.shots or 0) + 1, now + c.railgun_every_s
+        s.roundsUntil, s.harmUntil = now + 3, nil
         log(string.format("special: %s railgun shot %d, %.1f km from you, %.0f deg off her nose", c.name, s.shots,
             s.dist or -1, offNose or -1))
     elseif not s.chargeAt and now >= s.railAt and s.dist and s.dist <= c.railgun_range_km and offNose
         and offNose <= c.railgun_cone_deg then
         s.chargeAt = now + c.railgun_charge_s
         V.event("RE_SV_ValkaChargeOn")
+        V.event("RE_SV_ValkaAlertOn")
+        V.radar(c)
+        V.rounds(c, false)                              -- (pooled rounds from the opener: their damage back)
         V.sndCharge(s, function() return valid(o) and where(o) or nil end, now)
         hudCallout(t.valka_charge, t.valka_charge_sub)
     end

@@ -368,6 +368,8 @@ VALKA_EML_UNIT = 'SV_Unit_ValkaEml'            # the opener's dummy railgun (bui
 VALKA_EML_OBJ = 'SV_Obj_ValkaEml'
 VALKA_EML_ROW = 'sv_valka_eml'                 # mission row -> DT_NPC OP1016_x40a_RG (the x40a's RailGun part)
 VALKA_EML_NPC = 'OP1016_x40a_RG'
+VALKA_MISS_UP_M = 250                           # the opener's aim: a dummy this high above the player (it has to miss)
+VALKA_DUMMY = 'A_Obj_01_dummyN0'                # Mission 22's dummy (Unit_dummyN0, in Survival's world data, unused)
 # teleport rings for her blinks: (ring letter, metres, step deg)
 VALKA_SPOTS = (('B', 500, 30), ('C', 800, 30))
 VALKA_CHARGE_SOUND = 'AKE_Ms29_ARMS_SKY_OP1016_x40a_Railgun_Charge_'      # + Play / Stop: the x40a railgun's charge
@@ -1165,10 +1167,15 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     m19 = os.path.join(dirn, 'Mission019', 'EP_Mission019_global.uasset')
     m26 = os.path.join(dirn, 'Mission026', 'EP_Mission026_global.uasset')
     m06 = os.path.join(dirn, 'MIssion006', 'EP_Mission006_global.uasset')
+    m18 = os.path.join(dirn, 'Mission018', 'EP_Mission018_global.uasset')
     t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')
     t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     t_hold = g.foreign_template(m26, 'LiveAIEngagementOrder', 'x40a_fire_AB_Ship0_3')        # {0 part, 3 EvadeOnly}
+    t_alert = g.foreign_template(m18, 'LiveSetRailgunAlertEnable', 'RemoteEvent_OverAltitude')     # {0 bool}
+    assert arg_values(t_alert) == ['true'], arg_values(t_alert)
+    m_miss = re.search(r'opener_miss_up_m = (\d+)', lua)
+    assert m_miss and int(m_miss.group(1)) == VALKA_MISS_UP_M, "main.lua opener_miss_up_m != VALKA_MISS_UP_M"
     t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
     t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
     t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
@@ -1217,8 +1224,16 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', eml_up, arg_changes={0: VALKA_EML_UNIT})
     for d in (0.5, 2.0):
         g.execute(t_hold, eml_up, {0: VALKA_EML_OBJ}, delay=d)
+    # the opener's shot misses (user, 2026-10-24: "that first shot HAS to miss me"): aimed at Mission 22's dummy, put
+    # VALKA_MISS_UP_M straight above the player first (a world offset: whichever way you fly); main.lua also makes its
+    # rounds harmless
     remote('RE_SV_ValkaEmlShot')
-    g.execute(t_fire, 'RE_SV_ValkaEmlShot', {0: 'WN_WEAPON_1', 1: VALKA_EML_OBJ})
+    g.execute(t_tp, 'RE_SV_ValkaEmlShot', {1: VALKA_DUMMY, 4: '0.0', 5: '0.0', 6: f'{VALKA_MISS_UP_M * 100:.1f}',
+                                           9: '0.0', 10: '0.0', 11: '0.0'})
+    g.execute(t_fire, 'RE_SV_ValkaEmlShot', {0: 'WN_WEAPON_1', 1: VALKA_EML_OBJ, 2: VALKA_DUMMY}, delay=0.1)
+    # the railgun alert (Mission 18's) while she's up: on with the opener's charge and every charge of hers
+    remote('RE_SV_ValkaAlertOn')
+    g.execute(t_alert, 'RE_SV_ValkaAlertOn', {0: 'true'})
     remote('RE_SV_ValkaEmlChargeOn')
     g.execute(t_noise, 'RE_SV_ValkaEmlChargeOn')
     g.execute(t_sound, 'RE_SV_ValkaEmlChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: 'Player'})

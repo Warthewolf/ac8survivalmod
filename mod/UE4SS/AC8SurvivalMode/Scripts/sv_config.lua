@@ -604,6 +604,17 @@ CFG = {
                      -- her railgun's round (both her railguns: hers and the opener's): the land battleship's (user,
                      -- 2026-10-24: "try putting a land battleship railgun weapon on her EML"; "" = the x40a's own)
                      eml_weapon = "/Game/Blueprints/Weapons/EML/Ldbs/BP_wp_eml_ldbs01",
+                     -- its rounds live at least eml_life_s (so the opener's reaches past you; user, 2026-10-24: "edit the
+                     -- range on the land battleship railgun round so it does reach past me"), on Survival's rounds only
+                     -- (the land battleship's class default stays stock). The opener's shot is aimed at a dummy
+                     -- opener_miss_up_m above you and its rounds do no damage (user: "that first shot HAS to miss me").
+                     -- (tools/survival_events.py VALKA_MISS_UP_M: keep in step)
+                     eml_life_s = 30, opener_miss_up_m = 250,
+                     -- her railguns on the minimap (user, 2026-10-24: "add a minimap beam as to where the railgun is being
+                     -- fired from"): their launchers' radar display on, forced, in radar_hud's style
+                     -- (ELiveFCSRailGunHUDControl: 0 RailGun, 1 LongRangeRailGun, 2 DiffusionRailGun), and the railgun
+                     -- alert on while she's up (Mission 18's LiveSetRailgunAlertEnable)
+                     radar_hud = 1,
                      camera = "LookAt_Event_Camera_ms22-01",
                      -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                      -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
