@@ -4,7 +4,8 @@
 
 A tokenizer and recursive-descent parser for the Lua 5.4 grammar. It reports the first syntax error per file with its
 line, and warns about globals that are assigned but never declared local (typos) and locals used before their
-declaration line. Exit code 1 on a syntax error.
+declaration line. Exit code 1 on a syntax error, or on an assignment whose extra names can only get nil from a last
+`x and f()` / `x or f()` (see Parser.assigned).
 """
 import re, sys
 
@@ -94,6 +95,7 @@ class Parser:
         self.max_locals = 0
         self.globals_set = {}
         self.used = []
+        self.truncated = []
 
     # token helpers
     def peek(self, o=0): return self.t[self.k + o]
@@ -190,7 +192,7 @@ class Parser:
             while self.accept(','):
                 names.append(self.name())
                 if self.accept('<'): self.name(); self.expect('>')
-            if self.accept('='): self.explist()
+            if self.accept('='): self.assigned(len(names), line, self.explist())
             for n in names: self.declare(n)
             return
         # exprstat: call or assignment
@@ -201,7 +203,7 @@ class Parser:
             for tgt, kd in targets:
                 if kd not in ('name', 'index'): raise LuaSyntaxError(f'line {line}: cannot assign to that expression')
                 if kd == 'name' and not self.is_local(tgt): self.globals_set.setdefault(tgt, line)
-            self.expect('='); self.explist(); return
+            self.expect('='); self.assigned(len(targets), line, self.explist()); return
         if kind != 'call': raise LuaSyntaxError(f"line {line}: syntax error near '{self.peek()[1]}' (not a call or assignment)")
 
     def funcbody(self, line, method=False):
@@ -220,8 +222,17 @@ class Parser:
         self.frames.pop()
 
     def explist(self):
-        self.expr()
-        while self.accept(','): self.expr()
+        """(number of expressions, the last one's top-level binary operator or None)"""
+        n, top = 1, self.expr()
+        while self.accept(','): n, top = n + 1, self.expr()
+        return n, top
+
+    def assigned(self, targets, line, exps):
+        # `local ok, v = x and pcall(f)`: `and` / `or` keep only one value of a call, so v is always nil. VALKA's flare
+        # and paint never built that way (test of 2026-10-25: "NOT up (nil)"). Write `if x then ok, v = pcall(f) end`.
+        n, top = exps
+        if targets > n and top in ('and', 'or'):
+            self.truncated.append((line, top))
 
     def primaryexp(self):
         tk = self.peek()
@@ -270,6 +281,8 @@ class Parser:
         self.suffixedexp()
 
     def expr(self, limit=0):
+        """parses one expression; returns its top-level binary operator (None for a single operand)"""
+        top = None
         tk = self.peek()
         if (tk[0] == 'kw' and tk[1] == 'not') or (tk[0] == 'op' and tk[1] in ('-', '#', '~')):
             self.k += 1; self.expr(UNARY_PRIO)
@@ -278,9 +291,10 @@ class Parser:
         while True:
             tk = self.peek()
             op = tk[1] if tk[0] in ('op', 'kw') else None
-            if op not in BINARY or BINARY[op] <= limit: return
+            if op not in BINARY or BINARY[op] <= limit: return top
             self.k += 1
             self.expr(RIGHT.get(op, BINARY[op]))
+            top = op
 
 
 KNOWN_GLOBALS = {
@@ -322,8 +336,12 @@ def check(paths):
     shared = {}
     for p in parsed.values():
         for n, line in p.globals_set.items(): shared.setdefault(n, line)
+    ok = True
     for path, p in parsed.items():
         print(f'{path}: syntax ok (main chunk: at most {p.max_locals} of 200 locals in scope)')
+        for line, op in p.truncated:
+            ok = False
+            print(f"  ERROR line {line}: more names than values after a last `{op}`: `{op}` keeps one value of a call, so the extra names are always nil")
         if len(paths) == 1:
             for n, line in sorted(p.globals_set.items(), key=lambda kv: kv[1]):
                 print(f'  note: global assigned: {n} (line {line})')
@@ -333,7 +351,7 @@ def check(paths):
                 seen.add(n); print(f'  WARNING: unknown global {n} (line {line}): a typo, or a local used before it is declared')
     if len(paths) > 1:
         print(f'{len(paths)} files as one Lua state: {len(shared)} globals shared between them')
-    return True
+    return ok
 
 
 def check_runtime_names():
