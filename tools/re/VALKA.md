@@ -54,3 +54,28 @@ VALKA never gets one.
   her attached parts showed and she fired QAAMs / missiles / gun from ~470 m (test of 2026-10-24).
 - The editor work (X-02S model, AC7's EML effects) needs UE 5.4: AC8's engine ("Using engine version: 5.4",
   UE4SS.log). A source build of 5.4.4 is at E:\UE_5.4 (Windows-only dependencies). [V]
+
+## 5. The X-02S in AC8 (tools/x02s)
+- AC7 builds the X-02S from more than `x02s.gltf`: `x02s_GearOff_SM` (closed gear doors), `x02s_RefuelOff_SM` (closed
+  refuel panel) and a special-weapon mesh `x02s_SWP1..3` (bay covers; SWP3 the long centre piece between the engines)
+  are separate meshes. Without them she had holes (user, 2026-10-24: "told you it was missing a mesh"). prepare.py
+  merges GearOff, RefuelOff and SWP3 into her skinned mesh on the Body bone (SWP3 posed through its own bones). [V] (a
+  software render of the merged mesh closes the holes) [T] in game.
+- AC7's EML pod for the X-02S is `Vehicles/Weapons/w_eml_x0` (its export pulls in the X-02S's own x02s_00 textures);
+  the racks `WeaponRack_w_eml_x0..2` place it. Not used yet. [V]
+- Bone rotations: AC7 .psa key (x, y, z, w) -> UModel glTF (-x, -z, y, w) -> UE 5.4's glTF import mirrors y/z
+  (positions UE = (x, z, y) x 100), so a key goes into UE's bone frame as (x, -y, z, w). Unconverted keys were right
+  only where both agree (VariableWing_19) and wrong on VariableWing_03/05/07/09: her wings came apart in game (0.67.1).
+  With the conversion every wing bone's frame 0 matches its rest (|dot| 1.0), and a render of the swept glTF pose is
+  the proper delta. [V] [T] in game.
+- Paint: tools/re/AIRCRAFT_MATERIALS.md (AC8's aircraft master samples virtual textures only).
+
+## 6. Mission 18's lens flash (ms18_LensEffect1, decrypted) [V]
+`ms18_LensEffect_VFX` spawns `ms18_LensEffect1` (LensEffectActorClass, life from the event). That actor: a
+MaterialBillboardComponent (one MaterialSpriteElement: M_LensBokeh1, BaseSizeX / Y 0.4, bSizeIsInScreenSpace,
+DistanceToOpacity / DistanceToSize curves) and three planes (Plane_Flare1 M_LensFlare1 with Ace_SunGlareVR, Plane_Flare2
+M_LensFlare2 with T_EML_shine01, Plane_Ring M_LensRing1 with T_EML_LensFlare01; RelativeLocation X 79.24) that it moves
+each tick along the camera-to-`light_dummy` line (ScreenSpaceOffsetX / Y), all additive; EffectLifeTime 5 s; alpha by
+the curve Ms18_lensAlpha (keys (0.1, 1.0), (0.831, 0.84), (1.0, 0.0) over its life) into each material's `Alpha`.
+Survival's rebuild (0.68): AC7's textures on instances of AC8's Mission 23 flare, all as screen-space billboard elements
+on one spawned actor (no ghost planes yet). [T]

@@ -185,6 +185,26 @@ Copy a working stock pattern before inventing a new one.
     "ObjectSerializationError ... T_X02S_Valka_NO", 2026-10-24). Versioned (tagged) packages loaded fine the next test.
     New assets that use AC8's materials parent them on stubs at AC8's paths that are never packed.
 
+43. The native runtime's Log / VFmt understands only %s %d %u %x %p (%u from runtime 0.18.1). An unknown specifier takes
+    no argument, so the next %s reads a number as a string pointer and the game crashes: 0.18.0's sound log used %u
+    and crashed AC8 on VALKA's first sound (test of 2026-10-24); after the fix the same path ran clean.
+
+44. AC8's aircraft skins (master /Game/Base/Material/Vechicle/MP/MP_Live_Vehicle_Base_UDIM) sample Basecolor / Normalmap
+    / Livemap as virtual textures (every stock skin texture is a UDIM VT: tools/re/AIRCRAFT_MATERIALS.md,
+    tools/checks/tex_info.py). An ordinary texture there draws pure black whatever the instance's values: VALKA's X-02S,
+    tests of 2026-10-24 (paint variants 2-5 all black). AC8's general masters (MP_Live_Base_CameraDitherFade, _WPO,
+    M_Live_Cha_Base) take ordinary textures on skinned meshes. Whether Survival's own virtual textures are safe is open:
+    the 0.69 container with them loaded the mission in ~3.5 min and crashed AC8 at round 1 (GPUSortBatch, "resize
+    TArray to an invalid size of 2147483648"); without it all was fine (2026-10-25).
+
+45. An AI aircraft's railgun shows on the minimap and HUD like a stock one when its LiveFCSModule_LauncherTripleRailCannon
+    gets IsDispRadarMap / ForceAlertDisp true and HUDControl 1 (LongRangeRailGun) at run time; Mission 18's
+    LiveSetRailgunAlertEnable (true / false) shows / hides the RAILGUN WARNING. Confirmed by screenshots 2026-10-24.
+
+46. A component added at run time draws on an AI aircraft: AActor::AddComponentByClass(SkeletalMeshComponent) +
+    SetSkeletalMeshAsset put VALKA's X-02S on the x40a, whose own body is a StaticMeshComponent (AC8's NPC bodies are
+    static; the only skeletal meshes on it were the wreck's, which never draw: hard rule 41). Confirmed 2026-10-24.
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
