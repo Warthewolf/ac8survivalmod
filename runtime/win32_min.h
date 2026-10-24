@@ -18,6 +18,8 @@ typedef int32_t  BOOL;
 #define INVALID_HANDLE_VALUE      ((HANDLE)(intptr_t)-1)
 #define INVALID_FILE_ATTRIBUTES   0xFFFFFFFFu
 #define GENERIC_WRITE             0x40000000u
+#define GENERIC_READ              0x80000000u
+#define OPEN_EXISTING             3u
 #define FILE_SHARE_READ           1u
 #define FILE_SHARE_WRITE          2u
 #define CREATE_ALWAYS             2u
@@ -88,6 +90,8 @@ IMPORT HANDLE WINAPI CreateFileW(const wchar_t* path, DWORD access, DWORD share,
                                  DWORD disposition, DWORD flags, HANDLE templ);
 IMPORT BOOL   WINAPI WriteFile(HANDLE h, const void* buf, DWORD n, DWORD* put, void* ov);
 IMPORT BOOL   WINAPI FlushFileBuffers(HANDLE h);
+IMPORT BOOL   WINAPI ReadFile(HANDLE h, void* buf, DWORD n, DWORD* got, void* ov);
+IMPORT BOOL   WINAPI GetFileSizeEx(HANDLE h, int64_t* size);
 IMPORT BOOL   WINAPI CloseHandle(HANDLE h);
 IMPORT DWORD  WINAPI GetFileAttributesW(const wchar_t* path);
 IMPORT int    WINAPI WideCharToMultiByte(DWORD cp, DWORD flags, const wchar_t* in, int inLen,

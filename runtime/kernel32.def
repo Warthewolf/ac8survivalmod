@@ -9,6 +9,8 @@ DisableThreadLibraryCalls
 CreateFileW
 WriteFile
 FlushFileBuffers
+ReadFile
+GetFileSizeEx
 CloseHandle
 GetFileAttributesW
 WideCharToMultiByte

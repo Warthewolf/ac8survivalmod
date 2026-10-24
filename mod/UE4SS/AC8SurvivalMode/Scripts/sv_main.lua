@@ -296,6 +296,10 @@ local function probeTick(tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if now and valid(survivalPC) then                               -- Survival's own sounds follow (sv_sound.lua)
+            local okSn, errSn = pcall(SND.tick)
+            if not okSn and not D.sndErr then D.sndErr = true; log("sound: error " .. tostring(errSn)) end
+        end
         if now and valid(survivalPC) then                               -- what hits the player (section "hits")
             local okHt, errHt = pcall(HIT.tick, survivalPC, now)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
@@ -529,6 +533,20 @@ if type(RegisterKeyBind) == "function" and Key then
                     log(string.format("test: Ctrl+6, a %s flight (%s): %s", tn, unit, tostring(r)))
                 end)
                 if not ok then log("test: Ctrl+6 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+9 while VALKA flies the X-02S: her next paint variant (SPC.V.PAINTS), named on the HUD and in the log
+    if Key.NINE then
+        pcall(RegisterKeyBind, Key.NINE, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    local s = SPC.V.cur
+                    if not D or not s or not valid(s.modelComp) then log("test: Ctrl+9 without VALKA's X-02S up"); return end
+                    local n = SPC.V.paint(CFG.specials.valka, s, s.modelComp, (s.paintK or 1) + 1)
+                    hudCallout("TEST: VALKA PAINT " .. s.paintK, n)
+                end)
+                if not ok then log("test: Ctrl+9 error " .. tostring(err)) end
             end)
         end)
     end

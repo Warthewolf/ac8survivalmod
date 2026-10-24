@@ -416,6 +416,34 @@ CFG = {
     -- `rotation` order. A special's own enemies scale with its round as a normal round's do (budget, skill tier,
     -- difficulty spikes); the Ladons, which fly alone, take ladon.bomb_per_round more bomb damage and health_per_round
     -- more health a round after `first`.
+    -- Survival's own sound effects (sv_sound.lua, through the native runtime's XAudio2 player, runtime 0.18.0). For now
+    -- VALKA's railgun: AC7's Mihaly EML sounds (build/ac7/sfx/NOTES.md), each layer at AC7's own dB, pitch and distance
+    -- curve. AC7's layers are mixed hot (+15 dB and more; its buses took about 25 dB off), so master_db brings them
+    -- down to sit with the game's; gain_db is added to every layer, pan (0..1) how far a sound swings left / right.
+    -- ac7_unit_m: metres per AC7 unit for AC7's curves (its models are about 1/9 scale; user, 2026-10-24: AC7 distances
+    -- aren't AC8 centimetres), so its "4 km" curve (400000 units) reaches 36 km.
+    sound = { enabled = true, master_db = -24, gain_db = 0, pan = 0.8, ac7_unit_m = 0.09,
+              -- VALKA (CFG.specials.valka): charge (the charge's start, its loop rising rise_db and rise_cents over the
+              -- charge), shot (main, a whoosh, three EML layers, far), then the round's pass by you pass_speed_ms later
+              -- (AC7's round: 111111 units/s)
+              valka = {
+                  charge = { { file = "valka/charge_start.wav", db = 6, curve = { max = 400000, shape = "exp1" } } },
+                  charge_loop = { file = "valka/charge_loop.wav", db = 6, loop = true, curve = { max = 400000, shape = "exp1" } },
+                  rise_db = 6, rise_cents = 1200,
+                  charge_end = { { file = "valka/charge_end.wav", db = 12, curve = { max = 400000, shape = "exp1" } } },
+                  shot = {
+                      { file = "valka/shot_main.wav", db = 15, curve = { max = 50000, shape = "exp3", end_db = -5.97 } },
+                      { pick = { { "valka/whoosh_1.wav", 2, 20 }, { "valka/whoosh_2.wav", 2, 17 }, { "valka/whoosh_3.wav", 1, 14 },
+                                 { "valka/whoosh_4.wav", 1, 19 } }, db = 17, cents = 900, curve = { shape = "flat" } },
+                      { file = "valka/shot_eml_1.wav", db = 15, curve = { max = 400000, shape = "exp1" } },
+                      { file = "valka/shot_eml_2.wav", db = 1, curve = { max = 400000, shape = "exp1" } },
+                      { file = "valka/shot_eml_3.wav", db = 11, curve = { max = 400000, shape = "exp1" } },
+                      { file = "valka/shot_far.wav", db = 14, curve = { max = 250000, shape = "exp3" } },
+                  },
+                  pass = { { pick = { { "valka/whoosh_1.wav", 2, 20 }, { "valka/whoosh_2.wav", 2, 17 }, { "valka/whoosh_3.wav", 1, 14 },
+                                      { "valka/whoosh_4.wav", 1, 19 } }, db = 17, cents = 900, curve = { shape = "flat" } } },
+                  pass_speed_ms = 10000,
+              } },
     specials = {
         enabled  = true,
         random   = true,
@@ -554,7 +582,7 @@ CFG = {
                      disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                      anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
                      spawn_km = { 6, 9 }, arrive_s = 1.0,
-                     opener_km = 9, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
+                     opener_km = 14, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
                      eml_unit = "SV_Unit_ValkaEml",
                      -- her parts (all four, her own RailGun too) held back again every hold_s: they never fire by
                      -- themselves, only her scripted shots (test of 2026-10-24: 38 hits on the airfield in 13 s)
@@ -564,12 +592,23 @@ CFG = {
                      -- the X-02S turned model_yaw deg more than the x40a's body (if it flies sideways or backwards);
                      -- shot down, the x40a's wreck meshes kept hidden wreck_s so the X-02S falls
                      model_yaw = 0, wreck_s = 15,
+                     -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
+                     -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask (test key Ctrl+9 cycles them)
+                     paint = 2,
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      sweep_anim = "/Game/Mods/SurvivalMode/Valka/Model/A_X02S_Valka_Sweep", sweep_kmh = { 800, 1000 },
                      sweep_s = 2.5, hit_radius_m = 10,
-                     flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 3.0, flash_s = 2.0,
+                     -- the opener's flash: flash_layers copies of it at once (its light adds up), flash_scale big (user,
+                     -- 2026-10-24: "put that further away and turn its brightness up a lot ... it was quite hard to see")
+                     flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 12.0, flash_s = 3.0, flash_layers = 4,
+                     -- her railgun's round (both her railguns: hers and the opener's): the land battleship's (user,
+                     -- 2026-10-24: "try putting a land battleship railgun weapon on her EML"; "" = the x40a's own)
+                     eml_weapon = "/Game/Blueprints/Weapons/EML/Ldbs/BP_wp_eml_ldbs01",
                      camera = "LookAt_Event_Camera_ms22-01",
-                     turn_every_s = 12, behind_km = 1.5, behind_gap_s = 4,
+                     -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
+                     -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
+                     -- orders (search and attack: you only) given again every engage_every_s
+                     turn_every_s = 6, behind_km = 3, behind_gap_s = 2.5, engage_every_s = 5,
                      post_stall = true, post_stall_every_s = 9, post_stall_range_km = 3,
                      post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
                      blink_s = 4, blink_every_s = 1.0, blink_turn_deg = 60, ground_clear_m = 150, blink_cooldown_s = 8,

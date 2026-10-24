@@ -45,4 +45,30 @@ else
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
+# VALKA's railgun sounds (AC7's Mihaly EML, tools/ac7_sfx.py into build/ac7/sfx; never in git): staged when extracted,
+# under the names CFG.sound.valka plays (Scripts/sv_config.lua)
+SFX=build/ac7/sfx
+if [ -f "$SFX/OBJ_M18_MIHAI_SHOT/shot_main_31813208.wav" ]; then
+    SND=build/install/AC8SurvivalMode/Sounds/valka
+    mkdir -p "$SND"
+    while read -r src dst; do
+        [ -n "$src" ] && cp "$SFX/$src" "$SND/$dst"
+    done <<'LIST'
+OBJ_M18_MIHAI_CHARGE/charge_start_873196140.wav charge_start.wav
+OBJ_M18_MIHAI_CHARGE/charge_loop_802788028.wav charge_loop.wav
+OBJ_M18_MIHAI_CHARGE_END/charge_end_1049060902.wav charge_end.wav
+OBJ_M18_MIHAI_SHOT/shot_main_31813208.wav shot_main.wav
+OBJ_M18_MIHAI_SHOT/shot_eml_818050031.wav shot_eml_1.wav
+OBJ_M18_MIHAI_SHOT/shot_eml_933073312.wav shot_eml_2.wav
+OBJ_M18_MIHAI_SHOT/shot_eml_1028805951.wav shot_eml_3.wav
+OBJ_M18_MIHAI_SHOT/shot_far_922483504.wav shot_far.wav
+OBJ_M18_MIHAI_SHOT/shot_whoosh_323018131.wav whoosh_1.wav
+OBJ_M18_MIHAI_SHOT/shot_whoosh_813321654.wav whoosh_2.wav
+OBJ_M18_MIHAI_SHOT/shot_whoosh_723610663.wav whoosh_3.wav
+OBJ_M18_MIHAI_SHOT/shot_whoosh_656975517.wav whoosh_4.wav
+LIST
+    echo "staged VALKA's railgun sounds ($(ls "$SND" | wc -l) in AC8SurvivalMode/Sounds/valka)"
+else
+    echo "no AC7 railgun sounds (python -I tools/ac7_sfx.py): VALKA plays AC8's own"
+fi
 echo "staged build/install/SurvivalMode and build/install/AC8SurvivalMode"

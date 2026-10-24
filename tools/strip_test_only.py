@@ -5,7 +5,7 @@
 import re
 import sys
 
-LEFT = ('TEST ONLY', 'Key.F8', 'Key.F9', 'Key.SIX', 'TEST_SPECIALS', 'forceSpecial = kind', 'openSurvival', 'addCredits(5000')
+LEFT = ('TEST ONLY', 'Key.F8', 'Key.F9', 'Key.SIX', 'Key.NINE', 'TEST_SPECIALS', 'forceSpecial = kind', 'openSurvival', 'addCredits(5000')
 total, left = 0, []
 for p in sys.argv[1:]:
     s = open(p, encoding='utf-8').read()

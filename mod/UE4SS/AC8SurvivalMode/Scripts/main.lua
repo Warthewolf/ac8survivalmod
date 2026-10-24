@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.66.2"
+VERSION = "0.67.0"
 
 local MODULES = {
     "sv_core",
@@ -12,6 +12,7 @@ local MODULES = {
     "sv_rows",
     "sv_ai",
     "sv_hud",
+    "sv_sound",
     "sv_spawn",
     "sv_anomalies",
     "sv_rounds",

@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.17.0"
+#define RT_VERSION           L"0.18.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1815,10 +1815,270 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
-/* SV_Version() -> "0.17.0" */
+/* ---- sound: Survival's own sound effects (XAudio2) ---------------------------------------------------------------
+ * AC8 plays only its own Wwise banks, so Survival's own sounds (AC7's railgun sounds for VALKA: AGENTS.md's exception,
+ * tools/ac7_sfx.py) play through XAudio2 2.9 (xaudio2_9.dll, part of Windows 10 and 11), loaded at run time and called
+ * through its COM vtables: no SDK, so the slots and the packed structs below are xaudio2.h's. Sounds are 16-bit PCM
+ * WAVs under the mod's Sounds\ folder (a smpl chunk's first loop is the loop region); one stereo mastering voice.
+ * Lua works out distance and pan and passes a gain per side.                                                      */
+#pragma pack(push, 1)                              /* (xaudio2.h packs its structs to 1 byte; WAVEFORMATEX to 2)   */
+typedef struct { uint16_t tag, channels; uint32_t rate, byteRate; uint16_t align, bits, extra; } SndFormat;
+typedef struct {
+    uint32_t flags, bytes; const uint8_t* data;
+    uint32_t playBegin, playLength, loopBegin, loopLength, loopCount; void* context;
+} SndXBuffer;                                      /* XAUDIO2_BUFFER       */
+typedef struct { void* context; uint32_t queued; uint64_t played; } SndXState;   /* XAUDIO2_VOICE_STATE */
+#pragma pack(pop)
+_Static_assert(sizeof(SndFormat) == 18, "WAVEFORMATEX layout");
+_Static_assert(sizeof(SndXBuffer) == 44, "XAUDIO2_BUFFER layout");
+_Static_assert(sizeof(SndXState) == 20, "XAUDIO2_VOICE_STATE layout");
+
+#define SND_VT(o, i)          (((void**)*(void**)(o))[i])
+#define SND_MAX_SOUNDS        64
+#define SND_MAX_VOICES        48
+#define SND_END_OF_STREAM     0x40u
+#define SND_LOOP_INFINITE     255u
+#define SND_NO_SAMPLES_PLAYED 0x100u
+#define SND_ERR_NO_AUDIO      -1                   /* XAudio2 couldn't start (no device?)                            */
+#define SND_ERR_FILE          -2                   /* no such file, or it can't be read                              */
+#define SND_ERR_FORMAT        -3                   /* not a 16-bit PCM WAV                                           */
+#define SND_ERR_FULL          -4                   /* too many sounds loaded / voices playing                        */
+
+typedef struct {
+    char      name[64];
+    uint8_t*  file;                                /* the whole file (data points into it); never freed            */
+    SndFormat fmt;
+    const uint8_t* data;
+    uint32_t  bytes, loopBegin, loopLength;        /* loop in frames; loopLength 0 = none (the whole file loops)    */
+} SndSound;
+typedef struct { void* voice; uint32_t gen; int32_t sound; } SndVoice;
+
+static struct {
+    int      state;                                /* 0 not tried, 1 ok, -1 failed                                  */
+    void*    xa;                                   /* IXAudio2*                                                     */
+    void*    master;                               /* IXAudio2MasteringVoice*                                       */
+    SndSound sounds[SND_MAX_SOUNDS];
+    int32_t  nSounds;
+    SndVoice voices[SND_MAX_VOICES];
+} SND;
+
+static int SndInit(void)
+{
+    if (SND.state) return SND.state > 0;
+    SND.state = -1;
+    HANDLE ole = LoadLibraryW(L"ole32.dll");
+    int32_t (*coInit)(void*, DWORD) = ole ? (int32_t (*)(void*, DWORD))GetProcAddress(ole, "CoInitializeEx") : NULL;
+    if (coInit) coInit(NULL, 0);                   /* (COINIT_MULTITHREADED; a thread already in COM keeps its own)  */
+    HANDLE dll = LoadLibraryW(L"xaudio2_9.dll");
+    if (!dll) { Log(L"sound: xaudio2_9.dll not found (error %u); no sound effects", GetLastError()); return 0; }
+    int32_t (*create)(void**, uint32_t, uint32_t) = (int32_t (*)(void**, uint32_t, uint32_t))GetProcAddress(dll, "XAudio2Create");
+    int32_t (*createV)(void**, uint32_t, uint32_t, uint32_t) =
+        (int32_t (*)(void**, uint32_t, uint32_t, uint32_t))GetProcAddress(dll, "XAudio2CreateWithVersionInfo");
+    int32_t hr = -1;
+    if (createV) hr = createV(&SND.xa, 0, 1, 0x0A000005u);      /* (Processor1; NTDDI_WIN10_RS4)                     */
+    else if (create) hr = create(&SND.xa, 0, 1);
+    if (hr < 0 || !SND.xa) { Log(L"sound: XAudio2Create failed (0x%x); no sound effects", (uint32_t)hr); return 0; }
+    /* IXAudio2::CreateMasteringVoice(this, out, channels 2, rate 0 = the device's, flags, device, effects, GameEffects) */
+    hr = ((int32_t (*)(void*, void**, uint32_t, uint32_t, uint32_t, const wchar_t*, void*, uint32_t))SND_VT(SND.xa, 7))(
+        SND.xa, &SND.master, 2, 0, 0, NULL, NULL, 6);
+    if (hr < 0 || !SND.master) { Log(L"sound: no mastering voice (0x%x); no sound effects", (uint32_t)hr); return 0; }
+    Log(L"sound: XAudio2 2.9 up (stereo mastering voice)");
+    SND.state = 1;
+    return 1;
+}
+
+static uint32_t SndU32(const uint8_t* p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+
+/* the sound named `name` (a path under Sounds\, '/' or '\'), loaded once: its index, or an SND_ERR code */
+static int32_t SndLoad(const wchar_t* name)
+{
+    char an[64];
+    size_t n = WLen(name);
+    if (!n || n >= sizeof(an)) return SND_ERR_FILE;
+    for (size_t i = 0; i <= n; ++i) an[i] = (char)name[i];
+    for (int32_t i = 0; i < SND.nSounds; ++i) {
+        const char* a = SND.sounds[i].name;
+        size_t k = 0;
+        while (a[k] && a[k] == an[k]) ++k;
+        if (!a[k] && !an[k]) return i;
+    }
+    if (SND.nSounds >= SND_MAX_SOUNDS) return SND_ERR_FULL;
+    wchar_t path[PATH_CAP];
+    size_t root = WLen(g_modRoot);
+    if (root + n + 9 >= PATH_CAP) return SND_ERR_FILE;
+    memcpy(path, g_modRoot, root * 2);
+    memcpy(path + root, L"\\Sounds\\", 8 * 2);
+    for (size_t i = 0; i <= n; ++i) path[root + 8 + i] = name[i] == L'/' ? L'\\' : name[i];
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) { Log(L"sound: %s not found", path); return SND_ERR_FILE; }
+    int64_t size = 0;
+    uint8_t* buf = NULL;
+    DWORD got = 0;
+    if (GetFileSizeEx(f, &size) && size > 44 && size < 64 * 1024 * 1024) buf = (uint8_t*)malloc((size_t)size);
+    BOOL ok = buf && ReadFile(f, buf, (DWORD)size, &got, NULL) && got == (DWORD)size;
+    CloseHandle(f);
+    if (!ok) { if (buf) free(buf); Log(L"sound: %s can't be read", path); return SND_ERR_FILE; }
+    SndSound* s = &SND.sounds[SND.nSounds];
+    memset(s, 0, sizeof(*s));
+    if (SndU32(buf) != 0x46464952u || SndU32(buf + 8) != 0x45564157u) { free(buf); return SND_ERR_FORMAT; }   /* RIFF WAVE */
+    int haveFmt = 0;
+    for (size_t at = 12; at + 8 <= (size_t)size; ) {
+        uint32_t id = SndU32(buf + at), len = SndU32(buf + at + 4);
+        const uint8_t* c = buf + at + 8;
+        if (at + 8 + (uint64_t)len > (uint64_t)size) len = (uint32_t)((size_t)size - at - 8);
+        if (id == 0x20746D66u && len >= 16) {                        /* "fmt " */
+            memcpy(&s->fmt, c, 16);
+            s->fmt.extra = 0;
+            haveFmt = 1;
+        } else if (id == 0x61746164u) {                              /* "data" */
+            s->data = c; s->bytes = len;
+        } else if (id == 0x6C706D73u && len >= 36 + 24 && SndU32(c + 28) > 0) {   /* "smpl": its first loop */
+            uint32_t b = SndU32(c + 36 + 8), e = SndU32(c + 36 + 12);
+            if (e > b) { s->loopBegin = b; s->loopLength = e - b + 1; }
+        }
+        at += 8 + (size_t)len + (len & 1);
+    }
+    if (!haveFmt || !s->data || s->fmt.tag != 1 || s->fmt.bits != 16 || s->fmt.channels < 1 || s->fmt.channels > 2) {
+        free(buf); Log(L"sound: %s is not a 16-bit PCM WAV", path); return SND_ERR_FORMAT;
+    }
+    uint32_t frames = s->bytes / s->fmt.align;
+    if (s->loopLength && s->loopBegin + s->loopLength > frames) s->loopLength = 0;
+    s->file = buf;
+    memcpy(s->name, an, n + 1);
+    Log(L"sound: %s: %u Hz, %u ch, %u frames%s", path, s->fmt.rate, (uint32_t)s->fmt.channels, frames,
+        s->loopLength ? L", a loop" : L"");
+    return SND.nSounds++;
+}
+
+static void SndDestroy(SndVoice* v)
+{
+    if (!v->voice) return;
+    ((int32_t (*)(void*, uint32_t, uint32_t))SND_VT(v->voice, 20))(v->voice, 0, 0);        /* Stop      */
+    ((void (*)(void*))SND_VT(v->voice, 18))(v->voice);                                    /* DestroyVoice */
+    v->voice = NULL;
+}
+
+/* finished voices are destroyed (never from an XAudio2 callback: there are none) */
+static void SndReap(void)
+{
+    for (int i = 0; i < SND_MAX_VOICES; ++i) {
+        SndVoice* v = &SND.voices[i];
+        if (!v->voice) continue;
+        SndXState st = { 0 };
+        ((void (*)(void*, SndXState*, uint32_t))SND_VT(v->voice, 25))(v->voice, &st, SND_NO_SAMPLES_PLAYED);   /* GetState */
+        if (st.queued == 0) SndDestroy(v);
+    }
+}
+
+static SndVoice* SndHandle(int64_t h)
+{
+    int64_t i = (h & 0xFF) - 1;
+    if (h <= 0 || i < 0 || i >= SND_MAX_VOICES) return NULL;
+    SndVoice* v = &SND.voices[i];
+    return v->voice && v->gen == (uint32_t)(h >> 8) ? v : NULL;
+}
+
+static void SndLevels(SndVoice* v, double left, double right, double ratio)
+{
+    const SndSound* s = &SND.sounds[v->sound];
+    float m[4];
+    uint32_t ch = s->fmt.channels;
+    if (ch == 1) { m[0] = (float)left; m[1] = (float)right; }           /* mono -> L, R                          */
+    else { m[0] = (float)left; m[1] = 0; m[2] = 0; m[3] = (float)right; } /* [dst * src + src]: L->L, R->R         */
+    ((int32_t (*)(void*, void*, uint32_t, uint32_t, const float*, uint32_t))SND_VT(v->voice, 16))(v->voice, NULL, ch, 2, m, 0);
+    if (ratio < 0.0625) ratio = 0.0625;
+    if (ratio > 4.0) ratio = 4.0;
+    ((int32_t (*)(void*, float, uint32_t))SND_VT(v->voice, 26))(v->voice, (float)ratio, 0);   /* SetFrequencyRatio */
+}
+
+/* SV_SndLoad(name) -> the sound's id (> 0) or an error (-1 no audio, -2 no file, -3 not 16-bit PCM, -4 too many);
+ * name: a WAV under the mod's Sounds\ folder, e.g. "valka/shot_main.wav" */
+static int L_SndLoad(void* lua)
+{
+    wchar_t name[64];
+    if (!ArgName(lua, name, 64)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!SndInit()) return Ret(lua, SND_ERR_NO_AUDIO);
+    int32_t i = SndLoad(name);
+    return Ret(lua, i < 0 ? i : i + 1);
+}
+
+/* SV_SndPlay(id, left, right[, ratio, loop]) -> a voice handle (> 0) or an error; left / right: linear gains per side
+ * (1 = as recorded), ratio: the playback rate (pitch), loop 1: loops its smpl region (or the whole sound) until stopped */
+static int L_SndPlay(void* lua)
+{
+    double id = 0, left = 1, right = 1, ratio = 1, loop = 0;
+    if (!ArgNumber(lua, &id)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &left); ArgNumber(lua, &right); ArgNumber(lua, &ratio); ArgNumber(lua, &loop);
+    if (!SndInit()) return Ret(lua, SND_ERR_NO_AUDIO);
+    int32_t si = (int32_t)id - 1;
+    if (si < 0 || si >= SND.nSounds) return Ret(lua, SV_ERR_BAD_ARGS);
+    SndReap();
+    int slot = -1;
+    for (int i = 0; i < SND_MAX_VOICES && slot < 0; ++i) if (!SND.voices[i].voice) slot = i;
+    if (slot < 0) return Ret(lua, SND_ERR_FULL);
+    SndSound* s = &SND.sounds[si];
+    SndVoice* v = &SND.voices[slot];
+    /* IXAudio2::CreateSourceVoice(this, out, format, flags, max ratio 4, callback, sends, effects) */
+    int32_t hr = ((int32_t (*)(void*, void**, const SndFormat*, uint32_t, float, void*, void*, void*))SND_VT(SND.xa, 5))(
+        SND.xa, &v->voice, &s->fmt, 0, 4.0f, NULL, NULL, NULL);
+    if (hr < 0 || !v->voice) { v->voice = NULL; Log(L"sound: CreateSourceVoice failed (0x%x)", (uint32_t)hr); return Ret(lua, SND_ERR_NO_AUDIO); }
+    SndXBuffer b = { 0 };
+    b.flags = SND_END_OF_STREAM;
+    b.bytes = s->bytes;
+    b.data = s->data;
+    if (loop != 0) {
+        b.loopBegin = s->loopLength ? s->loopBegin : 0;
+        b.loopLength = s->loopLength;                       /* (0 with LoopBegin 0: the whole sound)                  */
+        b.loopCount = SND_LOOP_INFINITE;
+    }
+    hr = ((int32_t (*)(void*, const SndXBuffer*, void*))SND_VT(v->voice, 21))(v->voice, &b, NULL);   /* SubmitSourceBuffer */
+    if (hr < 0) { SndDestroy(v); Log(L"sound: SubmitSourceBuffer failed (0x%x)", (uint32_t)hr); return Ret(lua, SND_ERR_FORMAT); }
+    v->sound = si;
+    v->gen = (v->gen + 1) & 0xFFFFFF;
+    SndLevels(v, left, right, ratio);
+    ((int32_t (*)(void*, uint32_t, uint32_t))SND_VT(v->voice, 19))(v->voice, 0, 0);          /* Start */
+    return Ret(lua, ((int64_t)v->gen << 8) | (slot + 1));
+}
+
+/* SV_SndSet(handle, left, right[, ratio]) -> 1, or 0 when that voice is over */
+static int L_SndSet(void* lua)
+{
+    double h = 0, left = 1, right = 1, ratio = 1;
+    if (!ArgNumber(lua, &h)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &left); ArgNumber(lua, &right); ArgNumber(lua, &ratio);
+    SndVoice* v = SND.state > 0 ? SndHandle((int64_t)h) : NULL;
+    if (!v) return Ret(lua, 0);
+    SndLevels(v, left, right, ratio);
+    return Ret(lua, 1);
+}
+
+/* SV_SndStop(handle[, tail]) -> 1, or 0 when that voice was already over; tail 1: a loop plays out to its end */
+static int L_SndStop(void* lua)
+{
+    double h = 0, tail = 0;
+    if (!ArgNumber(lua, &h)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &tail);
+    SndVoice* v = SND.state > 0 ? SndHandle((int64_t)h) : NULL;
+    if (!v) return Ret(lua, 0);
+    if (tail != 0) ((int32_t (*)(void*, uint32_t))SND_VT(v->voice, 24))(v->voice, 0);      /* ExitLoop */
+    else SndDestroy(v);
+    return Ret(lua, 1);
+}
+
+/* SV_SndMaster(gain) -> 1, or -1 without audio: the linear volume of everything Survival plays */
+static int L_SndMaster(void* lua)
+{
+    double g = 1;
+    ArgNumber(lua, &g);
+    if (!SndInit()) return Ret(lua, SND_ERR_NO_AUDIO);
+    ((int32_t (*)(void*, float, uint32_t))SND_VT(SND.master, 12))(SND.master, (float)(g < 0 ? 0 : g), 0);   /* SetVolume */
+    return Ret(lua, 1);
+}
+
+/* SV_Version() -> "0.18.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.17.0";
+    static const char v[] = "0.18.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2351,6 +2611,7 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
+        { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
 #endif

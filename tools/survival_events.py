@@ -1204,6 +1204,11 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     remote('RE_SV_ValkaHold')
     for comp in (VALKA_RAILGUN,) + VALKA_IDLE_PARTS:
         g.execute(t_hold, 'RE_SV_ValkaHold', {0: VALKA_PARTS[comp]})
+    # her search and attack orders (the player only, anywhere) again whenever main.lua asks (every engage_every_s while
+    # she hunts; user, 2026-10-24: "adjust her behaviours so that she tries to follow you more often")
+    remote('RE_SV_ValkaEngage')
+    g.execute(t_search, 'RE_SV_ValkaEngage', {1: VALKA_UNIT})
+    g.execute(t_engage, 'RE_SV_ValkaEngage', {1: VALKA_UNIT, 6: 'PlayerOnlyNoLimit'})
     flag(up, 'SV_ValkaUp', 'Set', 1)
     # the opener's dummy railgun: held (EvadeOnly: it never attacks by itself; twice, in case the first is early),
     # one shot at the player on command (as Mission 26 fires its held CK railgun), its charge heard at the player (it's
