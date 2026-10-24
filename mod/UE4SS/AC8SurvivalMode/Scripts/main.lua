@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.62.0"
+local VERSION = "0.62.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -3575,8 +3575,10 @@ function ANOM.glitchTick(now, s)
         if now - s.at < c.arrive_s or not o then return end
         -- its health for its round (as the Ladons' and the Alicorn's: health_per_round more a round after `first`)
         local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
+        -- (a whole number: HealthInternal is an integer and 4500 x 1.12 = 5040.000000000001 went in as 0, so it was
+        -- shot down unseen a second after it came; a friend's log of 2026-10-24, round 7)
         local okH, h0 = pcall(function() return o.HealthInternal end)
-        if okH and type(h0) == "number" and h0 > 0 and hx ~= 1 then pcall(function() o.HealthInternal = h0 * hx end) end
+        if okH and type(h0) == "number" and h0 > 0 and hx ~= 1 then pcall(function() o.HealthInternal = math.floor(h0 * hx + 0.5) end) end
         -- its damage model (smoke, fire, damaged look) goes by health against MaxHealth (user, 2026-10-23: "make the
         -- EA-18G use it's damage model"): MaxHealth (HP; HealthInternal is HP x 10) raised to what it has, if under
         local okM, mh = pcall(function() return o.MaxHealth end)
@@ -3839,6 +3841,14 @@ local function specialTick(now)
         if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
         log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
+        -- its strike flights still up back onto the airfield (they were ordered onto the shuttle alone)
+        local back = {}
+        for u in pairs(D.up) do
+            if BOMBER_UNIT[u] and SV_UnitAlive(u) > 0 and type(SV_Event) == "function" then
+                back[#back + 1] = u .. " " .. tostring(SV_Event(string.format("RE_SV_BomberRetask_%02d", BOMBER_INDEX[u])))
+            end
+        end
+        if #back > 0 then log("special: strike flights back onto the airfield: " .. table.concat(back, ", ")) end
     end
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
@@ -4895,7 +4905,7 @@ function SPC.alicornTick(now, s)
             s.scaled[key] = true
             local h0 = hp(o)
             if h0 and h0 > 0 then
-                pcall(function() o.HealthInternal = want or h0 * hx end)
+                pcall(function() o.HealthInternal = want or math.floor(h0 * hx + 0.5) end)
                 log(string.format("special: Alicorn part %s health %s (%s -> %s)", nameOf(o):match("([%w_]+)_C_%d+") or "?",
                     want and string.format("%d missiles", math.floor(want / (s.mslDamage * 10) + 0.5)) or string.format("x%.2f", hx),
                     tostring(h0), tostring(hp(o))))
@@ -6304,7 +6314,7 @@ function ALLY.scale()
             p.hx = L.hx
             local ok, h0, h1 = pcall(function()
                 local h = p.obj.HealthInternal
-                if L.hx > was and h > 0 then p.obj.HealthInternal = h * L.hx / was end
+                if L.hx > was and h > 0 then p.obj.HealthInternal = math.floor(h * L.hx / was + 0.5) end
                 return h, p.obj.HealthInternal
             end)
             log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)", p.name, p.unit,

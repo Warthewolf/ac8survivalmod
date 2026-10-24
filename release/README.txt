@@ -9,6 +9,28 @@ and AA guns / SAM sites around the airport.
 This is a TEST build: things may break. Please send logs (see below).
 
 
+What's new in 0.62.1 (since 0.58.0)
+-----------------------------------
+Fixes
+- AB.L..IN could be shot down invisibly a second after it appeared (from the second special round on: its health
+  went to 0 when the round's health boost was applied). All health boosts are now whole numbers.
+- In the shuttle round, bombers still up after the shuttle was gone had no target: they flew off and the round
+  couldn't end. They now go back to attacking the airfield.
+ONLINE ONLY BEGIN
+- Once the leaderboard has your run, nothing of it is kept on your PC.
+ONLINE ONLY END
+Balance
+- Ladons: much less health (400 HP, growing a little each round), their two volleys at least 22 s apart, and their
+  missiles hit a little softer and home a little less.
+- MINDRIPPER: tougher (1000 HP), a far more accurate and longer-reaching gun that leads you, and its field now
+  scrambles your controls at random each time you fly into it (1-2 of: pitch, roll or yaw inverted, pitch and roll
+  swapped, throttle and brake swapped; the HUD names which).
+- AB.L..IN: its gun leads you, and it does kulbits and cobras, especially when you get behind it.
+- Enemy aces' guns lead you, more for the higher tiers and the difficulty spikes.
+- Allied guns: MOONCHILD leads further with longer bursts; the airfield's and the ships' AA guns and CIWS lead further.
+- A log line for every hit you take (what was near), for bug reports.
+
+
 Needs
 -----
 - UE4SS for Ace Combat 8 (dwmapi.dll next to AceCombat8.exe and a "ue4ss" folder).
