@@ -13,7 +13,7 @@
 --   * behaviour probe: own enemy behaviour script, live PilotRank write, kill attribution (logged; CFG.probe)
 --   * dev: Ctrl+F7 writes the live HUD's widget tree and on-screen geometry to hud_dump.txt (next to Scripts)
 
-local VERSION = "0.63.0"
+local VERSION = "0.63.1"
 local LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 local TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
@@ -1013,10 +1013,18 @@ local CFG = {
         -- shot (user, 2026-10-24: "Mission 26 has a 4 shot EML, I only want single shot": its part's TriggerCount and
         -- MagazineCapacity 3 -> single_shot). No AC7 voice lines, no invincibility (AC7 held Mihaly's health with
         -- SetMinHealth until a radio line; she has none). Shot down: `reward` zollars.
+        -- Disguised (user, 2026-10-24: "she'll appear in a random normal round, so the players don't suspect anything
+        -- ... have less enemies spawn ... once all those enemies are dead then the VALKA attack starts"): her round is
+        -- called out as a normal one (ROUND n / HOSTILES INBOUND, the break before it too) with decoy_share of the
+        -- round's aircraft (decoy_min..decoy_max), and lurk_s after the last of them is down her attack starts: the
+        -- forced WARNING until she's down, the opener, then straight after the shot the camera and the HUD's
+        -- anomaly_line and her name big (big_x).
         valka    = { name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
                      health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
+                     disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
+                     anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
                      spawn_km = { 6, 9 }, arrive_s = 1.0,
-                     opener_m = 700, charge_s = 6.0, reveal_s = 1.5,
+                     opener_m = 700, charge_s = 6.0, reveal_s = 0.5,
                      flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 3.0, flash_s = 2.0,
                      camera = "LookAt_Event_Camera_ms22-01",
                      turn_every_s = 12, behind_km = 1.5, behind_gap_s = 4,
@@ -2714,8 +2722,8 @@ end
 
 local callouts = {}                -- waiting callouts, shown one after another
 
-local function hudCallout(text, sub)   -- shown on the next HUD tick (callers are in roundsTick)
-    if #callouts < 4 then callouts[#callouts + 1] = { text = text, sub = sub } end
+local function hudCallout(text, sub, big)   -- shown on the next HUD tick (callers are in roundsTick); big: a scale
+    if #callouts < 4 then callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
     log("hud: callout '" .. text .. "'" .. (sub and (" / '" .. sub .. "'") or ""))
 end
 
@@ -2863,11 +2871,14 @@ local function hudTick(now, paused, pc)
             if d and d.X and d.X > 0 then w = math.max(w, d.X) end
         end)
         H.bannerSlot:SetSize({ X = math.max(390, w + 2 * hc.banner_pad), Y = 69 })
+        -- a big one (VALKA's name: CFG.specials.valka.big_x): the banner drawn that many times its size, held longer
+        local sc = c.big or 1
+        pcall(function() H.banner:SetRenderScale({ X = sc, Y = sc }) end)
         setText(H.sub, "subStr", c.sub or "")
         H.banner:SetRenderOpacity(1); H.sub:SetRenderOpacity(CFG.hud.opacity)
         H.banner:SetVisibility(VIS.HitTestInvisible)
         H.sub:SetVisibility(c.sub and VIS.HitTestInvisible or VIS.Collapsed)
-        H.calloutUntil = now + CFG.hud.callout_s
+        H.calloutUntil = now + CFG.hud.callout_s * (c.big and 1.5 or 1)
     end
     if H.calloutUntil then
         local left = H.calloutUntil - now
@@ -3874,15 +3885,26 @@ function SPC.V.invert(c, s, on, now)
         tostring(r)))
 end
 
--- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, hidden until her opener; false if
--- she can't come.
+-- Her round's start (the spawn queue's "@valka"): disguised, she waits ("lurk") for the round's decoy fighters to go
+-- down (SPC.valkaTick spawns her then); else she comes now. False if she can't come.
 function SPC.valkaSpawn(now)
     local c = CFG.specials.valka
-    local row = ACE.row("valka", "x40a", "l")
-    if not SR.usable[row] then
+    if not SR.usable[ACE.row("valka", "x40a", "l")] then
         log("special: VALKA's row wasn't in before this level loaded; a normal round instead")
         return false
     end
+    if not c.disguise then return SPC.valkaArrive(now) end
+    D.special.state, D.special.at = "lurk", now
+    log(string.format("special: round %d is VALKA's, called out as a normal round; she attacks once its fighters are down",
+        D.round))
+    return true
+end
+
+-- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, hidden until her opener; false if
+-- she can't come.
+function SPC.valkaArrive(now)
+    local c = CFG.specials.valka
+    local row = ACE.row("valka", "x40a", "l")
     local x, y, _, bearing = spawnPoint()
     local px, py, pb, pd = ANOM.nearPlayer(c.spawn_km)
     if px then x, y, bearing = px, py, pb end
@@ -3909,6 +3931,17 @@ end
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
+    if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, she comes
+        if D.state ~= "fighting" then return end
+        for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
+        s.clearAt = s.clearAt or now + c.lurk_s
+        if now < s.clearAt then return end
+        if not SPC.valkaArrive(now) then
+            s.state = "done"
+            log(string.format("special: %s couldn't spawn after the decoys; the round ends", c.name))
+        end
+        return
+    end
     local o = glitchActor(c)
     local you = playerLocation()
     if s.state == "arrive" then                         -- hidden; her railguns made single-shot; then the opener
@@ -3922,8 +3955,8 @@ function SPC.valkaTick(now, s)
         local n, why = V.singleShot(c)
         log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
         s.state, s.chargeAt, s.openAt = "opener", now + c.charge_s, now
+        V.event("RE_SV_ValkaWarnOn")                    -- WARNING until she's down (no banner of ours: no tells)
         V.event("RE_SV_ValkaChargeOn")
-        hudCallout(t.valka_charge, t.valka_charge_sub)
         local pawn = valid(survivalPC) and survivalPC.Pawn
         local fx = pawn and portalFx({ c.flash }, pawn, { X = c.opener_m * 100, Y = 0, Z = 50 }, c.flash_scale, c.flash_s) or 0
         log(string.format("special: %s's opener: railgun charging %.0f m ahead of you for %.1f s (flash: %d)", c.name,
@@ -3961,7 +3994,8 @@ function SPC.valkaTick(now, s)
         s.state, s.revealedAt = "hunt", now
         s.railAt, s.turnAt, s.psAt, s.invertAt = now + c.railgun_every_s, now + c.turn_every_s, now + c.post_stall_every_s,
             now + c.invert_every_s
-        hudCallout(c.name, c.squadron)
+        hudCallout(c.anomaly_line or t.valka_sub, nil)   -- what's happening, then her name big
+        hudCallout(c.name:upper(), nil, c.big_x)
         log(string.format("special: %s shows %.0f m out (%s), %.0f HP (x%.2f)%s; camera %s", c.name,
             c.spots[4][2], tostring(ev), hp, hx, okH and "" or " (health NOT set)", ANOMALY_CAMERAS[cam]))
         return
@@ -4085,7 +4119,16 @@ SPC.kinds = {
                    tick = function(now, s) return SPC.alicornTick(now, s) end },
     glitch     = { sub = "glitch_sub", alone = true, aircraft = 1, spawn = function(now) return ANOM.glitchSpawn(now) end,
                    tick = function(now, s) return ANOM.glitchTick(now, s) end },
-    valka      = { sub = "valka_sub", alone = true, aircraft = 1, spawn = function(now) return SPC.valkaSpawn(now) end,
+    -- (disguise: a normal round's callout and budget(budget) decoy fighters, VALKA after them: CFG.specials.valka)
+    valka      = { sub = "valka_sub", disguise = function() return CFG.specials.valka.disguise end,
+                   alone = function() return not CFG.specials.valka.disguise end,
+                   budget = function(budget)
+                       local c = CFG.specials.valka
+                       if not c.disguise then return 0 end
+                       local n = math.floor(budget * c.decoy_share / 2 + 0.5) * 2         -- (whole 2-ships)
+                       return math.max(c.decoy_min, math.min(c.decoy_max, n, budget))
+                   end,
+                   spawn = function(now) return SPC.valkaSpawn(now) end,
                    tick = function(now, s) return SPC.valkaTick(now, s) end },
 }
 -- a kind's field that may be a function (alone, aircraft, sub)
@@ -4308,7 +4351,9 @@ local function startRound()
         nBombers = nBombers + sn
         if #sb > 0 then log(string.format("round %d: %d strike aircraft in %d squadrons go for the allied ships", D.round, sn, #sb)) end
     end
-    local fighters, nFighters = pickFlights(CFG.pool, alone and 0 or (budget - nBombers), function(u) return PROBE_OF[u] end)
+    local nWant = alone and 0 or (budget - nBombers)
+    if spk and spk.budget then nWant = spk.budget(budget) end      -- (VALKA's decoys: a few of the round's)
+    local fighters, nFighters = pickFlights(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
     D.queue, D.spare = {}, {}
     for _, u in ipairs(fighters) do D.queue[#D.queue + 1] = u end
     for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
@@ -4403,6 +4448,7 @@ local function roundsTick(now)
             local nextSpecial = D.forceSpecial or specialFor(D.round + 1)
             local nextAce = aceRound(D.round + 1, nextSpecial)          -- (once: it picks the tier)
             local nk = nextSpecial and SPC.kinds[nextSpecial]
+            if nk and SPC.kindValue(nk.disguise) then nk = nil end      -- (VALKA: called out as a normal round)
             if nk then
                 hudCallout(string.format(t.special, D.round + 1), type(nk.sub) == "function" and nk.sub(t) or t[nk.sub])
             elseif nextAce then
@@ -4465,6 +4511,8 @@ local function roundsTick(now)
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Alicorn is still afloat", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "ladon" and SPC.ladonBusy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: the Ladons are still up", D.round)) end
+        elseif flights == 0 and D.special and D.special.kind == "valka" and D.special.state == "lurk" then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: decoys down, VALKA attacks", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
         elseif flights == 0 then

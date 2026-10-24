@@ -1184,12 +1184,15 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
         g.execute(t_tp, ev, {1: VALKA_OBJ, 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
     remote('RE_SV_ValkaRailgun')                           # one shot (main.lua makes the part a single-shot one)
     g.execute(t_fire, 'RE_SV_ValkaRailgun', {0: 'WN_WEAPON_1', 1: VALKA_PARTS[VALKA_RAILGUN]})
-    remote('RE_SV_ValkaChargeOn')                          # a railgun charging at you: WARNING, radar noise, the hum
-    g.execute(t_warn_on, 'RE_SV_ValkaChargeOn')
+    # her attack (user, 2026-10-24: she hides in a normal round and attacks once its fighters are down; "have the WARNING
+    # play for the round just like we do for the other two anomaly rounds"): the forced WARNING from her attack until
+    # she's down (SV_ValkaDown / RE_SV_ValkaEnd)
+    remote('RE_SV_ValkaWarnOn')
+    g.execute(t_warn_on, 'RE_SV_ValkaWarnOn')
+    remote('RE_SV_ValkaChargeOn')                          # a railgun charging at you: radar noise, the hum
     g.execute(t_noise, 'RE_SV_ValkaChargeOn')
     g.execute(t_sound, 'RE_SV_ValkaChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: VALKA_OBJ})
     remote('RE_SV_ValkaChargeOff')
-    g.execute(t_warn_off, 'RE_SV_ValkaChargeOff')
     g.execute(t_noise_off, 'RE_SV_ValkaChargeOff')
     g.execute(t_sound, 'RE_SV_ValkaChargeOff', {0: VALKA_CHARGE_SOUND + 'Stop', 1: VALKA_OBJ})
     remote('RE_SV_ValkaReveal')                            # after the first shot: the banner, the pressure
