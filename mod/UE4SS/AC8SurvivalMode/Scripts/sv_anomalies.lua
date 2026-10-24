@@ -727,6 +727,188 @@ function SPC.V.radar(c)
     end
     return n
 end
+-- The opener's light as AC7 Mission 18's lens flash (ms18_LensEffect1: screen-space billboard elements, faded by its
+-- alpha curve): a plain actor spawned at `at` with a MaterialBillboardComponent, one element per AC7 texture
+-- (MI_SV_ValkaFlare_*, on AC8's own Mission 23 flare). How many elements came up.
+-- a plain actor spawned at `at` with a MaterialBillboardComponent (her flare's and portal's); actor, component, or nil
+-- and why not
+function SPC.V.billboard(at)
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local actorCls, bbCls = StaticFindObject("/Script/Engine.Actor"), StaticFindObject("/Script/Engine.MaterialBillboardComponent")
+    if not (valid(gs) and valid(actorCls) and valid(bbCls)) then return nil, nil, "engine classes not found" end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okA, a = pcall(function()
+        local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, actorCls, t, 1, nil, 1)    -- (AlwaysSpawn, MultiplyWithRoot)
+        return gs:FinishSpawningActor(x, t, 1)
+    end)
+    if not okA or not valid(a) then return nil, nil, "no actor (" .. tostring(a) .. ")" end
+    local okC, comp = pcall(function()
+        return a:AddComponentByClass(bbCls, false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 },
+                                     Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+    end)
+    if not okC or not valid(comp) then
+        pcall(function() a:K2_DestroyActor() end)
+        return nil, nil, "no billboard (" .. tostring(comp) .. ")"
+    end
+    pcall(function() a:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    return a, comp
+end
+function SPC.V.flareStart(c, s, at, now)
+    local f = c.flare
+    SPC.V.flareStop(s)
+    if not f or not f.enabled or not at then return 0 end
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    if not valid(kml) then return 0 end
+    local a, comp, whyB = SPC.V.billboard(at)
+    if not a then log("special: VALKA's flare: " .. tostring(whyB)); return 0 end
+    local fl = { actor = a, comp = comp, mids = {}, from = now, life = f.life_s }
+    local said = {}
+    for _, e in ipairs(f.elements) do
+        local p = f.path .. e[1]
+        local mi, why = loadObject(p .. "." .. p:match("[^/]+$"))
+        local okM, mid = valid(mi) and pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end)
+        if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, e[2], e[2], nil) end) then
+            local okB, b = pcall(function() return mid:K2_GetScalarParameterValue(FName("Emissive_Intensity")) end)
+            fl.mids[#fl.mids + 1] = { mid = mid, base = (okB and type(b) == "number" and b > 0) and b or 1 }
+            said[#said + 1] = string.format("%s %.1f (base %.3g)", e[1], e[2], fl.mids[#fl.mids].base)
+        else
+            said[#said + 1] = e[1] .. " NOT up (" .. tostring(valid(mi) and mid or why) .. ")"
+        end
+    end
+    s.flare = fl
+    SPC.V.flareTick(c, s, now)
+    log(string.format("special: VALKA's flare (AC7 M18 lens flash): %d of %d elements, %.0f s: %s", #fl.mids, #f.elements,
+        f.life_s, table.concat(said, ", ")))
+    if #fl.mids == 0 then SPC.V.flareStop(s) end
+    return #fl.mids
+end
+-- every tick: its brightness along AC7's alpha curve; gone at the end of its life
+function SPC.V.flareTick(c, s, now)
+    local fl = s.flare
+    if not fl then return end
+    local k = (now - fl.from) / math.max(0.1, fl.life)
+    if k >= 1 or not valid(fl.actor) then SPC.V.flareStop(s); return end
+    local cv, alpha = c.flare.curve, 0
+    for i = 1, #cv - 1 do
+        local p, q = cv[i], cv[i + 1]
+        if k >= p[1] and k <= q[1] then alpha = p[2] + (q[2] - p[2]) * (k - p[1]) / math.max(1e-6, q[1] - p[1]) end
+    end
+    for _, m in ipairs(fl.mids) do
+        pcall(function() m.mid:SetScalarParameterValue(FName("Emissive_Intensity"), m.base * c.flare.intensity_x * alpha) end)
+    end
+end
+function SPC.V.flareStop(s)
+    if s.flare then
+        local a = s.flare.actor
+        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
+        s.flare = nil
+    end
+end
+-- Her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"; CFG.specials.valka.portal):
+-- one billboard of world-space elements on AC8's own effect materials, our textures on them (tools/x02s prepare.py
+-- portal_textures): the barrier's refraction (the lensing), the accretion glow and the photon ring on the additive
+-- flare, the event horizon on M_Smoke01 made black. It opens over open_s, holds, collapses over close_s.
+SPC.V.PORTAL_MAT = {
+    lens = "/Game/VFX/Vehicles/Weapon/UAV/Barrier/M_VFX_UAVBarrierSpriteRefraction",
+    disc = "/Game/VFX/Vehicles/Weapon/Impact/Materials/M_Smoke01",
+    flare = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
+}
+local function portalMid(kml, kind)
+    local p = SPC.V.PORTAL_MAT[kind]
+    local m, why = loadObject(p .. "." .. p:match("[^/]+$"))
+    if not valid(m) then return nil, why end
+    local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, m, FName("None"), 0) end)
+    if ok and valid(mid) then return mid end
+    return nil, tostring(mid)
+end
+local function portalTex(p, name)
+    return loadObject(p.textures .. name .. "." .. name)
+end
+function SPC.V.portalStart(c, s, at, now)
+    local p = c.portal
+    SPC.V.portalStop(s)
+    if not p or not p.enabled or not at then return 0 end
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    if not valid(kml) then return 0 end
+    local a, comp, whyB = SPC.V.billboard(at)
+    if not a then log("special: VALKA's portal: " .. tostring(whyB)); return 0 end
+    local d = p.diameter_m * 100
+    local po = { actor = a, comp = comp, from = now, glow = {}, said = {}, up = 0 }
+    local function add(name, mid, size)
+        if mid and pcall(function() comp:AddElement(mid, nil, false, size, size, nil) end) then
+            po.said[#po.said + 1] = name
+            po.up = po.up + 1
+            return true
+        end
+        po.said[#po.said + 1] = name .. " NOT up"
+    end
+    local lens = portalMid(kml, "lens")                -- the lensing: the barrier's refraction, stronger
+    if lens then
+        pcall(function()
+            local b = lens:K2_GetScalarParameterValue(FName("RefractionIntensity"))
+            lens:SetScalarParameterValue(FName("RefractionIntensity"), ((type(b) == "number" and b ~= 0) and b or 1) * p.lens_x)
+        end)
+        add("lens", lens, d * p.lens_size)
+    end
+    for _, e in ipairs({ { "glow", "T_SV_Portal_Glow", p.glow_size, p.glow_x }, { "ring", "T_SV_Portal_Ring", p.ring_size, p.ring_x } }) do
+        local mid, tex = portalMid(kml, "flare"), portalTex(p, e[2])
+        if mid and valid(tex) then
+            local base = 1
+            pcall(function()
+                mid:SetTextureParameterValue(FName("EmissiveMap"), tex)
+                mid:SetTextureParameterValue(FName("MaskMap"), tex)
+                local b = mid:K2_GetScalarParameterValue(FName("Emissive_Intensity"))
+                if type(b) == "number" and b > 0 then base = b end
+            end)
+            if add(e[1], mid, d * e[3]) then po.glow[#po.glow + 1] = { mid = mid, base = base * e[4] } end
+        else
+            po.said[#po.said + 1] = e[1] .. " NOT up (" .. (mid and ("no texture " .. e[2]) or "no material") .. ")"
+        end
+    end
+    local disc, tex = portalMid(kml, "disc"), portalTex(p, "T_SV_Portal_Disc")   -- the event horizon: black
+    if disc and valid(tex) then
+        pcall(function()
+            disc:SetTextureParameterValue(FName("BaseTexture"), tex)
+            disc:SetVectorParameterValue(FName("LerpColor1"), { R = 0, G = 0, B = 0, A = 1 })
+            disc:SetVectorParameterValue(FName("LerpColor2"), { R = 0, G = 0, B = 0, A = 1 })
+            disc:SetScalarParameterValue(FName("BrightnessIntensity"), 0)
+        end)
+        add("horizon", disc, d)
+    else
+        po.said[#po.said + 1] = "horizon NOT up"
+    end
+    s.portal = po
+    SPC.V.portalTick(c, s, now)
+    log(string.format("special: VALKA's portal at %.0f, %.0f, %.0f (%.0f m): %s", at.X / 100, at.Y / 100, at.Z / 100,
+        p.diameter_m, table.concat(po.said, ", ")))
+    if po.up == 0 then SPC.V.portalStop(s) end
+    return po.up
+end
+-- every tick: open, hold, close (its size and glow); gone after
+function SPC.V.portalTick(c, s, now)
+    local po, p = s.portal, c.portal
+    if not po then return end
+    local t = now - po.from
+    local k
+    if t < p.open_s then k = t / p.open_s
+    elseif t < p.open_s + p.hold_s then k = 1
+    elseif t < p.open_s + p.hold_s + p.close_s then k = 1 - (t - p.open_s - p.hold_s) / p.close_s
+    else SPC.V.portalStop(s); return end
+    k = math.max(0.02, k * k * (3 - 2 * k))             -- (eased)
+    if not valid(po.actor) then SPC.V.portalStop(s); return end
+    pcall(function() po.comp:SetWorldScale3D({ X = k, Y = k, Z = k }) end)
+    local pulse = 1 + 0.25 * math.sin(t * 9)
+    for _, g in ipairs(po.glow) do
+        pcall(function() g.mid:SetScalarParameterValue(FName("Emissive_Intensity"), g.base * k * pulse) end)
+    end
+end
+function SPC.V.portalStop(s)
+    if s.portal then
+        local a = s.portal.actor
+        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
+        s.portal = nil
+    end
+end
 -- her railgun's sounds (CFG.sound.valka, sv_sound.lua): the charge at `at` (a location, or a function giving hers),
 -- its loop rising over `len` s, the shot (the round passing you pass_speed_ms later), and the loop stopped
 function SPC.V.sndCharge(s, at, now)
@@ -1216,6 +1398,11 @@ function SPC.V.emlSpawn(c)
     local h = SPC.V.heading()
     if not pawn or not you or not h or type(SV_Spawn) ~= "function" then return nil end
     local f = { X = math.cos(math.rad(h)), Y = math.sin(math.rad(h)) }
+    if c.opener_bearing then                            -- a fixed compass bearing (north -Y, east +X: Mission 22's
+        local b = math.rad(c.opener_bearing)            -- dummyN0 / dummyS0 sit at Y -650 / +650 km)
+        f = { X = math.sin(b), Y = -math.cos(b) }
+        h = math.deg(math.atan(f.Y, f.X))
+    end
     local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y } end)
     local closing = okV and math.max(0, v.X * f.X + v.Y * f.Y) or 0                 -- cm/s towards it
     local d = math.min(c.opener_km * 100000 + closing * (c.charge_s + 1), (c.opener_max_km or 30) * 100000)
@@ -1231,8 +1418,9 @@ function SPC.V.emlSpawn(c)
     local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z, yaw)
     spawningUnit = nil
     at.km = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000
-    log(string.format("special: %s's railgun %s %.1f km ahead of you on the horizon (heading %.0f, %.1f km up, you closing at %.0f km/h)",
-        c.name, r > 0 and "up" or ("NOT up (" .. (SV_ERR[r] or tostring(r)) .. ")"), at.km, h, at.Z / 100000,
+    log(string.format("special: %s's railgun %s %.1f km out on the horizon (%s, world yaw %.0f, %.1f km up, you closing at %.0f km/h)",
+        c.name, r > 0 and "up" or ("NOT up (" .. (SV_ERR[r] or tostring(r)) .. ")"), at.km,
+        c.opener_bearing and string.format("compass bearing %.0f", c.opener_bearing) or "ahead of you", h, at.Z / 100000,
         closing * 0.036))
     if r <= 0 then return nil end
     return at, yaw
@@ -1289,6 +1477,8 @@ end
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
+    V.flareTick(c, s, now)
+    V.portalTick(c, s, now)
     if s.roundsUntil then                               -- after a shot: its rounds live long (the opener's harmless)
         local harmless = s.harmUntil and now < s.harmUntil
         local n, life = SPC.V.rounds(c, harmless)
@@ -1352,15 +1542,22 @@ function SPC.valkaTick(now, s)
             V.event("RE_SV_ValkaWarnOn")                -- WARNING until she's down (no banner of ours: no tells)
             V.event("RE_SV_ValkaEmlChargeOn")
             V.sndCharge(s, s.emlAt, now)
-            local flashes = {}
-            for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
-            local fx = fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
+            local fx = V.flareStart(c, s, s.emlAt, now)      -- AC7 M18's lens flash; Mission 23's flash if it can't
+            if fx == 0 then
+                local flashes = {}
+                for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
+                fx = fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
+            end
             log(string.format("special: %s's opener: railgun charging %.1f km from you for %.1f s (flash: %d)", c.name,
                 s.emlAt.km, c.charge_s, fx))
             return
         end
         if valid(e) then setGone(e, true) end
         V.sndRise(s, now, c.charge_s)
+        if c.portal and c.portal.enabled and not s.portalAt and now >= s.chargeAt - (c.portal.lead_s or 1) then
+            s.portalAt = now
+            V.portalStart(c, s, s.emlAt, now)
+        end
         if now < s.chargeAt then return end
         V.singleShot(c)                                 -- (in case its module came late)
         V.emlWeapon(c)
@@ -1438,6 +1635,8 @@ function SPC.valkaTick(now, s)
         if s.invertUntil then V.invert(c, s, false, now) end
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
         V.event("RE_SV_ValkaAlertOff")
+        V.flareStop(s)
+        V.portalStop(s)
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         local pay = c.reward + (c.reward_per_round or 0) * D.round

@@ -582,7 +582,9 @@ CFG = {
                      disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                      anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
                      spawn_km = { 6, 9 }, arrive_s = 1.0,
-                     opener_km = 14, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
+                     -- opener_bearing: the compass bearing it's on from you (270 = always west; user, 2026-10-24: "have
+                     -- it always at the west"); nil = straight ahead of you
+                     opener_bearing = 270, opener_km = 14, opener_max_km = 30, opener_min_alt_m = 1500, charge_s = 6.0, reveal_s = 0.5, eml_remove_s = 4,
                      eml_unit = "SV_Unit_ValkaEml",
                      -- her parts (all four, her own RailGun too) held back again every hold_s: they never fire by
                      -- themselves, only her scripted shots (test of 2026-10-24: 38 hits on the airfield in 13 s)
@@ -595,16 +597,31 @@ CFG = {
                      -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
                      -- its textures, the engine grid; test key Ctrl+9 cycles them)
-                     paint = 8,             -- (8 for the test of the black X-02S: back to 2 once it's found)
+                     paint = 2,
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
-                     -- (off, "": A_X02S_Valka_Sweep swings the wings forward, not back: build/x02s/ue_check.log has the
-                     -- tips 0.6 m ahead of their pivot unswept and 2-4 m ahead swept; in game they stuck out in front of
-                     -- her, test of 2026-10-24, 0.67.1: "it looked like her mesh was missing pieces"; to fix in tools/x02s)
-                     sweep_anim = "", sweep_kmh = { 800, 1000 },
+                     -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
+                     -- apart in game; tools/x02s/ue_import.py ue_quat converts them now)
+                     sweep_anim = "/Game/Mods/SurvivalMode/Valka/Model/A_X02S_Valka_Sweep", sweep_kmh = { 800, 1000 },
                      sweep_s = 2.5, hit_radius_m = 10,
                      -- the opener's flash: flash_layers copies of it at once (its light adds up), flash_scale big (user,
                      -- 2026-10-24: "put that further away and turn its brightness up a lot ... it was quite hard to see")
                      flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 12.0, flash_s = 3.0, flash_layers = 4,
+                     -- the opener's light as AC7 Mission 18's lens flash (user, 2026-10-24: "rebuild the Effect that Mihaly
+                     -- uses when it spawns in on Mission 18"; ms18_LensEffect1, tools/x02s builds it): screen-space billboard
+                     -- elements { name, size (fraction of the screen) } on AC8's own flare, faded over life_s along AC7's
+                     -- alpha curve (time fraction, alpha), intensity_x times the stock flare's brightness. If it doesn't
+                     -- load, the flash above shows instead.
+                     -- her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"): opens
+                     -- lead_s before the opener's shot where she comes out, open_s / hold_s / close_s; sizes x diameter_m:
+                     -- the lensing (lens_x the barrier refraction's strength), the glow and photon ring (their brightness x
+                     -- the stock flare's), the black horizon 1.0
+                     portal = { enabled = true, diameter_m = 120, lead_s = 1.0, open_s = 1.2, hold_s = 3.0, close_s = 1.0,
+                                lens_size = 2.4, lens_x = 3, glow_size = 2.0, glow_x = 4, ring_size = 1.3, ring_x = 8,
+                                textures = "/Game/Mods/SurvivalMode/Valka/Portal/" },
+                     flare = { enabled = true, life_s = 7, intensity_x = 6,
+                               path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
+                               elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },
+                               curve = { { 0, 1 }, { 0.1, 1 }, { 0.831, 0.84 }, { 1, 0 } } },
                      -- her railgun's round (both her railguns: hers and the opener's): the land battleship's (user,
                      -- 2026-10-24: "try putting a land battleship railgun weapon on her EML"; "" = the x40a's own)
                      eml_weapon = "/Game/Blueprints/Weapons/EML/Ldbs/BP_wp_eml_ldbs01",

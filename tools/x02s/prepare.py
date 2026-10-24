@@ -12,7 +12,8 @@ canards, flaps, nozzles, bay doors) at AC7's model scale (2.19 m long; AC8's air
                           Trigger's; user, 2026-10-24), its colour map as it is
   T_X02S_Valka_NO.tga     the normal map (00, shared by every skin), as it is (blue and the alpha the importer adds are near
                           1, so AC8's _NO occlusion, wherever it sits, reads as none)
-  T_X02S_Valka_LM.tga     AC8's "Livemap" (its _MRX: three paint-region masks): 4x4 black, no regions
+  T_X02S_Valka_LM.tga     AC8's "Livemap" (its _MRX: the R / G / B paint layers' masks), 256x256 black: no layers
+                          (all zero is AC8's own neutral one, T_Livemap_Flat), big enough to be a virtual texture
 python -I tools/x02s/prepare.py   (needs the .psa: tools/x02s/build.sh exports it with UModel first)
 """
 import json, math, os, shutil, struct
@@ -69,6 +70,13 @@ def skinned_gltf():
 # she had holes (test of 2026-10-24, 0.67.x: "her refuel off mesh isn't visible", the slot between her engines).
 # Each goes into her skinned mesh as more triangles on her Body bone, in its rest pose, on her paint (material 0).
 PARTS = ('x02s_GearOff_SM', 'x02s_RefuelOff_SM', 'x02s_SWP3')
+# AC7 Mission 18's lens flash before Mihaly's first shot (ms18_LensEffect1: a screen-space billboard, M_LensBokeh1,
+# and planes with M_LensFlare1 / M_LensFlare2 / M_LensRing1): its textures, for VALKA's opener light
+AC7_ROOT = 'E:/Ace Combat 7 Exports'
+FLARE_TEX = (('Game/VFX/Common/Textures/Misc/Ace_SunGlareVR.tga', 'T_SV_ValkaFlare_Glare'),
+             ('Game/VFX/Environment/ms18LensEffect/T_EML_shine01.tga', 'T_SV_ValkaFlare_Shine'),
+             ('Game/VFX/Environment/ms18LensEffect/T_EML_LensFlare01.tga', 'T_SV_ValkaFlare_Ring'),
+             ('Engine/EngineMaterials/DefaultBokeh.tga', 'T_SV_ValkaFlare_Bokeh'))
 
 
 def _m4(a, b):                                        # column-major 4x4 product (glTF)
@@ -176,6 +184,52 @@ def merge_part(g, buf, name, s):
           f'x {min(p[0] for p in P):.2f}..{max(p[0] for p in P):.2f} m')
 
 
+# VALKA's portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"): textures made here for
+# AC8's own effect materials (Lua makes their dynamic instances at run time, no shader of ours):
+#   T_SV_Portal_Disc   the event horizon for M_Smoke01 (black, its alpha a soft-edged disc, in all 8 x 8 cells of the
+#                      flipbook atlas that material samples)
+#   T_SV_Portal_Ring   the photon ring for the additive flare (a thin hot ring, brighter on one side: Doppler beaming)
+#   T_SV_Portal_Glow   the accretion glow for the additive flare (a wide ring of spiral streaks)
+def tga32(path, w, h, px):
+    """px(x, y) -> (r, g, b, a) bytes 0-255; an uncompressed 32-bit TGA, top-left origin."""
+    head = struct.pack('<BBBHHBHHHHBB', 0, 0, 2, 0, 0, 0, 0, 0, w, h, 32, 8 | 0x20)
+    rows = bytearray()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px(x, y)
+            rows += bytes((b, g, r, a))
+    open(path, 'wb').write(head + bytes(rows))
+
+
+def portal_textures():
+    def smooth(e0, e1, v):
+        t = max(0.0, min(1.0, (v - e0) / (e1 - e0)))
+        return t * t * (3 - 2 * t)
+    cell = 128                                         # disc: 8 x 8 cells of 128 px
+    def disc(x, y):
+        cx, cy = (x % cell) - cell / 2 + 0.5, (y % cell) - cell / 2 + 0.5
+        r = math.hypot(cx, cy) / (cell / 2)
+        return 0, 0, 0, int(255 * (1 - smooth(0.80, 0.92, r)))
+    tga32(os.path.join(OUT, 'T_SV_Portal_Disc.tga'), cell * 8, cell * 8, disc)
+    n = 512
+    def ring(x, y):
+        cx, cy = (x - n / 2 + 0.5) / (n / 2), (y - n / 2 + 0.5) / (n / 2)
+        r, ang = math.hypot(cx, cy), math.atan2(cy, cx)
+        band = math.exp(-((r - 0.62) / 0.025) ** 2) + 0.35 * math.exp(-((r - 0.62) / 0.08) ** 2)
+        beam = 0.55 + 0.45 * math.cos(ang - 0.6)       # one side brighter
+        v = min(1.0, band * beam)
+        return int(255 * v), int(235 * v ** 1.2), int(200 * v ** 1.6), 255
+    tga32(os.path.join(OUT, 'T_SV_Portal_Ring.tga'), n, n, ring)
+    def glow(x, y):
+        cx, cy = (x - n / 2 + 0.5) / (n / 2), (y - n / 2 + 0.5) / (n / 2)
+        r, ang = math.hypot(cx, cy), math.atan2(cy, cx)
+        body = smooth(0.30, 0.42, r) * (1 - smooth(0.62, 0.98, r))
+        streak = 0.55 + 0.45 * math.sin(7 * ang + 9.0 * math.log(max(r, 0.05)))      # log-spiral arms
+        v = max(0.0, min(1.0, body * streak * (0.8 + 0.2 * math.cos(ang - 0.6))))
+        return int(255 * v), int(120 * v ** 1.3), int(60 * v ** 1.8), 255             # hot orange
+    tga32(os.path.join(OUT, 'T_SV_Portal_Glow.tga'), n, n, glow)
+
+
 def sweep():
     b = open(PSA, 'rb').read()
     o, ch = 0, {}
@@ -211,7 +265,10 @@ def main():
     nb, nf = sweep()
     shutil.copyfile(os.path.join(SRC, SKIN, f'x02s_{SKIN}_D.tga'), os.path.join(OUT, 'T_X02S_Valka_C.tga'))
     shutil.copyfile(os.path.join(SRC, '00', 'x02s_00_N.tga'), os.path.join(OUT, 'T_X02S_Valka_NO.tga'))
-    black_tga(os.path.join(OUT, 'T_X02S_Valka_LM.tga'))
+    black_tga(os.path.join(OUT, 'T_X02S_Valka_LM.tga'), 256)
+    for src, dst in FLARE_TEX:                        # AC7 Mission 18's lens flash (ms18_LensEffect1)
+        shutil.copyfile(os.path.join(AC7_ROOT, src), os.path.join(OUT, dst + '.tga'))
+    portal_textures()   # (all zero is AC8's neutral Livemap: T_Livemap_Flat)
     print(f'x02s: skinned mesh x{s:.3f} ({length:.3f} -> {LENGTH_M} m), sweep of {nb} wing bones (frames '
           f'{SWEEP_FRAMES[0]}-{SWEEP_FRAMES[1]} of {nf}), the stock Osean skin ({SKIN}), normal map (00), blank Livemap -> '
           f'{os.path.normpath(OUT)}')

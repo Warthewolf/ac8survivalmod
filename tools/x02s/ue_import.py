@@ -62,8 +62,9 @@ def fresh(path):
         EAL.delete_asset(path)
 
 
-def stub_material(path, params):
-    """A Material at an AC8 material's path with texture parameters `params` (all wired, so they're kept)."""
+def stub_material(path, params, scalars=(), vectors=()):
+    """A Material at an AC8 material's path with texture parameters `params` (all wired, so they're kept), and scalar
+    / vector parameters (summed into its roughness, so they're kept too)."""
     fresh(path)
     pkg, name = path.rsplit('/', 1)
     m = AT.create_asset(name, pkg, unreal.Material, unreal.MaterialFactoryNew())
@@ -76,10 +77,56 @@ def stub_material(path, params):
         e.set_editor_property('parameter_name', pn)
         e.set_editor_property('texture', default)
         MEL.connect_material_property(e, 'RGB' if k < 2 else 'R', outputs[k])
+    extra = []                                      # (expression, its output pin)
+    for k, pn in enumerate(scalars):
+        e = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -400, 250 * (len(params) + k))
+        e.set_editor_property('parameter_name', pn)
+        extra.append((e, ''))
+    for k, pn in enumerate(vectors):
+        e = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -400, 250 * (len(params) + len(scalars) + k))
+        e.set_editor_property('parameter_name', pn)
+        extra.append((e, 'R'))
+    if extra:                                       # (summed into roughness: an unused input keeps them alive)
+        acc, pin = extra[0]
+        for k, (e, epin) in enumerate(extra[1:]):
+            add = MEL.create_material_expression(m, unreal.MaterialExpressionAdd, -200, 250 * k)
+            MEL.connect_material_expressions(acc, pin, add, 'A')
+            MEL.connect_material_expressions(e, epin, add, 'B')
+            acc, pin = add, ''
+        MEL.connect_material_property(acc, pin, unreal.MaterialProperty.MP_ROUGHNESS)
     MEL.recompile_material(m)
     EAL.save_loaded_asset(m)
     say(f'stub {path} ({", ".join(params) or "no parameters"})')
     return m
+
+
+# VALKA's opener light: AC7 Mission 18's lens flash, rebuilt on AC8's own additive flare (Mission 23's far flash,
+# MI_ms23FarExp_Flare: its compiled shaders cover the local vertex factory a MaterialBillboardComponent draws with), so
+# nothing ships a shader of its own: one instance per AC7 element, its texture as EmissiveMap and MaskMap.
+FLARE_PARENT = '/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare'
+FLARES = ('Glare', 'Shine', 'Ring', 'Bokeh')
+PORTAL_TEX = ('T_SV_Portal_Disc', 'T_SV_Portal_Ring', 'T_SV_Portal_Glow')   # (prepare.py portal_textures)
+
+
+def flares():
+    parent = stub_material(FLARE_PARENT, ['EmissiveMap', 'MaskMap'], ['Emissive_Intensity', 'Emissive_Power', 'Mask_Power'],
+                           ['EmissiveColor'])
+    for f in FLARES:
+        tex = texture(f'T_SV_ValkaFlare_{f}', True, unreal.TextureCompressionSettings.TC_DEFAULT, folder='/Flare',
+                      virtual=False)
+        mi = AT.create_asset(f'MI_SV_ValkaFlare_{f}', DEST + '/Flare', unreal.MaterialInstanceConstant,
+                             unreal.MaterialInstanceConstantFactoryNew())
+        MEL.set_material_instance_parent(mi, parent)
+        vals = []
+        for pn in ('EmissiveMap', 'MaskMap'):
+            v = unreal.TextureParameterValue()
+            v.set_editor_property('parameter_info', unreal.MaterialParameterInfo(pn, unreal.MaterialParameterAssociation.GLOBAL_PARAMETER, -1))
+            v.set_editor_property('parameter_value', tex)
+            vals.append(v)
+        mi.set_editor_property('texture_parameter_values', vals)
+        MEL.update_material_instance(mi)
+        EAL.save_loaded_asset(mi)
+        say(f'flare MI_SV_ValkaFlare_{f}: {tex.get_name()} on {FLARE_PARENT.rsplit("/", 1)[1]}')
 
 
 def import_file(src, dest, name=None):
@@ -95,13 +142,16 @@ def import_file(src, dest, name=None):
     return list(t.get_editor_property('imported_object_paths') or [])
 
 
-def texture(name, srgb, compression):
-    import_file(os.path.join(SRC, name + '.tga'), DEST + '/Textures', name)
-    tex = unreal.load_asset(f'{DEST}/Textures/{name}')
+def texture(name, srgb, compression, folder='/Textures', virtual=True):
+    import_file(os.path.join(SRC, name + '.tga'), DEST + folder, name)
+    tex = unreal.load_asset(f'{DEST}{folder}/{name}')
     tex.set_editor_property('srgb', srgb)
     tex.set_editor_property('compression_settings', compression)
+    # virtual (streamed in tiles), as AC8's own aircraft skins are: its paint material (MP_Live_Vehicle_Base_UDIM)
+    # samples Basecolor / Normalmap / Livemap as virtual textures, and an ordinary texture there drew black in game
+    tex.set_editor_property('virtual_texture_streaming', virtual)
     EAL.save_loaded_asset(tex)
-    say(f'texture {name}: srgb {srgb}, {compression}')
+    say(f'texture {name}: srgb {srgb}, {compression}, virtual {tex.get_editor_property("virtual_texture_streaming")}')
     return tex
 
 
@@ -182,6 +232,14 @@ def resample(keys, n):
     return out
 
 
+def ue_quat(q):
+    """An AC7 .psa key (x, y, z, w) in our imported bones' frame: AC7 -> UModel's glTF is (-x, -z, y, w), and UE's glTF
+    import maps glTF to UE as (x, z, y) x 100 for positions, a mirror, so (-x, -z, -y, w) for rotations: (x, -y, z, w)
+    in all. (The keys went in unconverted before: right only where the two agree, e.g. VariableWing_19; wrong on
+    VariableWing_03 / 05 / 07 / 09, |dot| 0.07-0.17 with their rest, and her wings came apart in game.)"""
+    return (q[0], -q[1], q[2], q[3])
+
+
 def sweep_anim(skel):
     data = json.load(open(os.path.join(SRC, 'sweep.json')))
     ref = unreal.AnimPoseExtensions.get_reference_pose(skel)
@@ -202,14 +260,17 @@ def sweep_anim(skel):
     for bone, keys in data['bones'].items():
         t = unreal.AnimPoseExtensions.get_bone_pose(ref, bone, unreal.AnimPoseSpaces.LOCAL)
         r = t.rotation
-        q0 = data['frame0'][bone]
+        q0 = ue_quat(data['frame0'][bone])
         how[bone] = round(abs(sum(a * b for a, b in zip(q0, (r.x, r.y, r.z, r.w)))), 3)
-        rots = [unreal.Quat(q[0], q[1], q[2], q[3]) for q in resample(keys, n)]
+        rots = [unreal.Quat(*ue_quat(q)) for q in resample(keys, n)]
         ctrl.add_bone_curve(bone, True)
         ctrl.set_bone_track_keys(bone, [t.translation] * n, rots, [t.scale3d] * n, True)
     ctrl.close_bracket(True)
     EAL.save_loaded_asset(seq)
     say(f"A_X02S_Valka_Sweep: {len(data['bones'])} wing bones, {n} keys over 1 s (from AC7's {src_n}); frame 0 vs rest |dot| {how}")
+    off = {b: d for b, d in how.items() if d < 0.95}
+    if off:
+        say(f"A_X02S_Valka_Sweep: WARNING frame 0 is off the rest pose on {off}")
     return seq
 
 
@@ -255,6 +316,9 @@ def main():
     EAL.save_loaded_asset(sk)
     EAL.save_loaded_asset(skel)                     # (the commit rebuilt its bone tree: the socket bones too)
     sweep_anim(skel)
+    flares()
+    for t in PORTAL_TEX:                            # her portal's textures (Lua puts them on AC8's own materials)
+        texture(t, True, unreal.TextureCompressionSettings.TC_DEFAULT, folder='/Portal', virtual=False)
     for p in made:                                  # the importer's own materials / textures: not ours to ship
         a = p.split('.')[0]
         if EAL.does_asset_exist(a):
