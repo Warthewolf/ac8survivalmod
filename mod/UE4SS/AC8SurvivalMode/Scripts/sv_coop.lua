@@ -854,6 +854,19 @@ function COOP.tick(tick)
         end
     end
     if not D then return end
+    -- An online-style pause (user, 2026-10-26: "when the Host Pauses, the game doesn't pause all the enemies for the
+    -- other players"): while another player is linked, the pause menu opens but the world keeps running, on the host's
+    -- game (its enemies, which every game copies) and on a joiner's (its plane). Alone, the game pauses as ever.
+    if playerCount() > 1 and valid(survivalPC) and gamePaused(survivalPC) then
+        local gs = cdo("/Script/Engine.Default__GameplayStatics")
+        local ok = gs and pcall(function() gs:SetGamePaused(survivalPC, false) end)
+        M.unpauses = (M.unpauses or 0) + 1
+        if M.unpauses == 1 or M.unpauses % 40 == 0 then
+            log(string.format("coop: paused with %d players: the world kept running (%s; %d times)", playerCount(),
+                ok and "unpaused" or "COULD NOT unpause", M.unpauses))
+        end
+        if M.unpauses == 1 then callout("CO-OP: THE GAME KEEPS RUNNING", "OTHER PLAYERS ARE STILL FLYING") end
+    end
     -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if valid(pawn) then
