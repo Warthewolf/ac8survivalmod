@@ -211,6 +211,27 @@ Copy a working stock pattern before inventing a new one.
     VALKA's flare and paint variants 9-11 never built that way (test of 2026-10-25, "NOT up (nil)"). Write
     `if x then ok, v = pcall(f) end`; lua_check.py fails the build on the pattern.
 
+48. Survival COOP works over Steam P2P with up to 4 players (test of 2026-10-25, coop.4: host + 3 joiners to round 5):
+    joiners' copies of the host's enemies, moved every frame through the AI plane's vtable slot 315 (TeleportTo +
+    OnReposition), flew with 0 failed moves and attacked the joiners (user: "Enemies attacked them yes"); joiners' hits
+    reached the host (16 of its 28 kills "by wingmate"); rounds, callouts, the airfield and the shop ran on every game.
+
+49. A joiner must not spawn while its Survival level is still loading: the level's LiveUnitSpawner has no world yet and
+    the game's spawn ends in UWorld::SpawnActor(NULL) (access violation reading +0x30): two joiners crashed the moment
+    the host's first flights arrived (coop.3). SpawnerReady answers SV_ERR_LOADING (-6) while GetWorld is null, and a
+    joiner holds the host's spawns until its own plane is in the level + 3 s (coop.4, confirmed the same night).
+
+50. A setting players must write into survival.ini can fail silently (a hand-made file, the default ini edited, a
+    restart forgotten): three friends set role = join and still hosted (coop.2). Make co-op need no setting: role auto
+    (look for a host, host after 20-40 s, step back on meeting one) linked all three at once (coop.3 and coop.4).
+
+51. A second ALivePlayerPlane (Online Mode's remote-player spawn, tools/re/COOP.md 6) is spawned DEFERRED: give it a
+    loadout and call AActor::FinishSpawning, or its weapons have no owner and the first teleport crashes. With role 2
+    (another player's) and no network data its own tick holds it at the map's centre; with its actor tick off and moved
+    on EVERY input-build call (2-3 a frame, not the first only) it flies solid and smooth beside you, ALLY-tagged.
+    Its slot 315 fires OnReposition, which resets a player plane's look: move it with AActor::TeleportTo + the flight
+    reset only. Confirmed solo 2026-10-25 (runtimes 0.22.2-0.22.7); not yet the co-op stand-in.
+
 ## Economy review build (Lua 0.70.x, runtime 0.19.0, 2026-10-25; untested in game)
 The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
 late-round scaling, raids from one direction with escorts, the jammer, more airframes, kill attribution by side
@@ -219,12 +240,15 @@ a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lin
 until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
 `python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
 
-## Survival COOP (Lua 0.70.6-coop.1, runtime 0.20.0, 2026-10-25; untested in game)
-Two players, host-authoritative (after Double Trigger, the AC7 co-op mod). tools/re/COOP.md has the RE (AC8's AI plane
-teleport: vtable slot 315, called every frame on a puppet; Steam P2P without callbacks), the protocol and the test
-checklist. Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data unit SV_Unit_CoopPeer.
-Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online`; offline transport test `sh tools/checks/coop_test.sh`.
-None of it is a hard rule until a test confirms it.
+## Survival COOP (Lua 0.70.6-coop.4, runtime 0.22.8, 2026-10-25; played: hard rules 48-51)
+Up to four players, host-authoritative (after Double Trigger, the AC7 co-op mod), on branch `feature/survival-coop`.
+tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a puppet; Steam P2P
+without callbacks; a real second player plane, section 6), the protocol and the test checklist. Native half
+runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-D (each other player's
+stand-in, an allied AI plane of their airframe: CFG.coop.airframes). Role auto by default; CFG.coop.name sets the name.
+Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump tools/coop_edition.py COOP_TAG for every
+build friends get: games with different tags refuse to link); offline transport test `sh tools/checks/coop_test.sh`.
+Player guide: Claude Docs "Survival COOP: Player Guide".
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
