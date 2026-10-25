@@ -31,3 +31,6 @@ ue/Live/Saved/
 ue/Live/Intermediate/
 ue/Live/DerivedDataCache/
 ue/Live/Binaries/
+
+# parked work (VALKA, 2026-10-25): builds and AC7 assets, never in git
+parked/
