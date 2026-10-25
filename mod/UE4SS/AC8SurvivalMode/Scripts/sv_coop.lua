@@ -1,6 +1,6 @@
 -- AC8 Survival Mode - runtime part sv_coop: Survival COOP (CFG.coop; the native half is dlls\main.dll 0.22.0 coop.c;
--- tools/re/COOP.md). Up to 4 players, one run, host-authoritative after the AC7 co-op mod Double Trigger. Player 1
--- (slot 0) is the host, players 2-4 (slots 1-3) the joiners, each linked to the host only:
+-- tools/re/COOP.md). Up to 24 players, one run, host-authoritative after the AC7 co-op mod Double Trigger. Player 1
+-- (slot 0) is the host, players 2-24 (slots 1-23) the joiners, each linked to the host only:
 --   host:    runs everything as in single player. Every flight it spawns (SV_Spawn, with the SV_SetAircraft /
 --            SV_SetLevel calls before it) goes to every joiner, every aircraft of it gets a stream id (its position and
 --            rotation go out 15 times a second, natively), its health once a second, its death at once. A joiner's
@@ -10,7 +10,7 @@
 --            flights, binds each copy to its stream (the runtime moves it every frame to where the host's is) and keeps
 --            it alive (MinHealth) until the host says it's down. Its round, callouts, airfield and round bonuses are
 --            the host's. Each player's kills pay their own zollars (KILL.by: another player is the "wingmate" side).
---   everyone: each other player's plane is SV_Unit_CoopPeer<A-D> (A for player 1 ... D for player 4: an allied AI
+--   everyone: each other player's plane is SV_Unit_CoopPeer<A-X> (A for player 1 ... X for player 24: an allied AI
 --            plane, fire off, invincible), moved every frame to where that player is (the host relays the joiners'
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
@@ -19,9 +19,16 @@
 COOP = { open = false, role = nil, slot = nil }
 
 do
-local PEER_UNITS = { [0] = "SV_Unit_CoopPeerA", "SV_Unit_CoopPeerB", "SV_Unit_CoopPeerC", "SV_Unit_CoopPeerD" }
-local SLOT_OF = {}
-for s = 0, 3 do SLOT_OF[PEER_UNITS[s]] = s end
+-- one stand-in plane per player slot, A-X (tools/survival_events.py COOP_PEER_SLOTS; user, 2026-10-26: "allow up to
+-- 24 players in a lobby"), each with its name key (NAME_KEYS)
+local PEER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWX"
+local MAX_SLOT = #PEER_LETTERS - 1
+local PEER_UNITS, NAME_KEYS, SLOT_OF = {}, {}, {}
+for s = 0, MAX_SLOT do
+    local c = PEER_LETTERS:sub(s + 1, s + 1)
+    PEER_UNITS[s], NAME_KEYS[s] = "SV_Unit_CoopPeer" .. c, "SV_CoopName_" .. c
+    SLOT_OF[PEER_UNITS[s]] = s
+end
 local M = {
     nextId = 0, units = {}, byId = {},        -- host: the flights mirrored, and every aircraft by stream id
     cunits = {}, copies = {}, dead = {},       -- joiner: the host's flights here, the bound copies, ids already down
@@ -64,6 +71,17 @@ local function playerCount()
     for _ in pairs(M.roster) do n = n + 1 end
     return math.max(n, 1)
 end
+COOP.playerCount = function() return COOP.open and playerCount() or 1 end
+-- A round's aircraft (or a wave's) for the host's room (sv_rounds.lua startRound): aircraft_per_player more for each
+-- player past the first, up to CFG.coop[capKey], never fewer than one player gets
+function COOP.more(n, capKey)
+    local c = cfg()
+    local p = COOP.host() and playerCount() or 1
+    if p <= 1 or type(n) ~= "number" then return n end
+    local m = math.floor(n * (1 + (tonumber(c.aircraft_per_player) or 0) * (p - 1)) + 0.5)
+    return math.max(n, math.min(m, tonumber(c[capKey]) or m))
+end
+local function maxPlayers() return math.max(2, math.min(MAX_SLOT + 1, math.floor(tonumber(cfg().max_players) or MAX_SLOT + 1))) end
 
 ---------------------------------------------------------------------------------------------------- the natives, wrapped
 -- (registered by dlls/main.dll before this script ran; every part calls them by their global names)
@@ -155,7 +173,7 @@ function COOP.hostSpawned(unit, pose, ops, level)
 end
 
 local function anyJoinerPlane()
-    for s = 1, 3 do if M.peers[s] and M.peers[s].obj then return true end end
+    for s = 1, MAX_SLOT do if M.peers[s] and M.peers[s].obj then return true end end
     return false
 end
 
@@ -180,7 +198,7 @@ end
 
 -- the roster: who's in which slot, their airframe and version, to every joiner (on a change)
 local function sendRoster(to)
-    for s = 0, 3 do
+    for s = 0, MAX_SLOT do
         local r = M.roster[s]
         if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "") end
     end
@@ -482,7 +500,7 @@ local function onHostMessage(from, f)
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), tostring(row)))
-            callout(string.upper(tostring(name)) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), cfg().max_players or 4))
+            callout(string.upper(tostring(name)) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), maxPlayers()))
             if ver ~= VERSION then
                 log("coop: WARNING: player " .. (from + 1) .. " runs Survival " .. tostring(ver) .. ", you " .. VERSION)
                 callout("CO-OP VERSION MISMATCH", string.upper(tostring(name)) .. " HAS " .. tostring(ver))
@@ -510,7 +528,7 @@ local function onJoinerMessage(f)
                 callout("CO-OP LINKED", string.upper(tostring(f[5])) .. " IS HOSTING")
                 if f[4] ~= VERSION then callout("CO-OP VERSION MISMATCH", "YOU " .. VERSION .. ", THE HOST " .. tostring(f[4])) end
             else
-                callout(string.upper(tostring(f[5])) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), cfg().max_players or 4))
+                callout(string.upper(tostring(f[5])) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), maxPlayers()))
             end
         end
     elseif k == "po" then
@@ -622,16 +640,18 @@ local function onSys(from, what, f)
         elseif M.auto then
             callout("CO-OP: TWO HOSTS", "RETRY FROM THE MENU TO JOIN THE OTHER")
         else
-            callout("CO-OP: TWO HOSTS", "ONE OF YOU: role = host, THE OTHERS: role = join OR auto")
+            callout("CO-OP: TWO HOSTS", "ONLY ONE OF YOU PICKS HOST: THE OTHERS PICK SURVIVAL CO-OP: JOIN")
         end
     end
 end
 
 local function onMessage(raw)
-    local from = tonumber(raw:sub(1, 1)) or 0
-    local f = split(raw:sub(3))
+    local slot, body = raw:match("^(%d+)|(.*)$")     -- ("<sender's slot>|...": the slot in decimal from runtime 0.24.0)
+    local from = tonumber(slot) or 0
+    body = body or raw
+    local f = split(body)
     if f[1] == "sys" then
-        log("coop: player " .. (from + 1) .. ": " .. raw:sub(3))
+        log("coop: player " .. (from + 1) .. ": " .. body)
         return onSys(from, f[2], f)
     end
     if COOP.host() then return onHostMessage(from, f) end
@@ -707,12 +727,12 @@ local AUTO_WAIT = 10                                  -- (s; up to twice that, a
 function COOP.reopen(role, why)
     local c = cfg()
     local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
-                          math.max(2, math.min(4, c.max_players or 4)))
+                          maxPlayers())
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
     M.state, M.roster = nil, {}
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
-        role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), c.max_players or 4, why,
+        role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), maxPlayers(), why,
         r == 1 and (role == "host" and "looking for players" or "looking for the host") or
         ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
     if COOP.open and COOP.host() and M.myName ~= nil then hostRosterSelf() end
@@ -720,14 +740,15 @@ function COOP.reopen(role, why)
 end
 
 -- Opens co-op for this game: the role from CFG.coop.role (auto unless set), your name, and you in the roster as host
-local function openCoop(why)
+local function openCoop(why, picked)
     local c = cfg()
     if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.22.0 or later needed)"); return end
-    local role = tostring(c.role or "auto"):lower()
+    local role = picked or tostring(c.role or "auto"):lower()              -- (the main menu's choice before the ini's)
     if role == "joiner" or role == "client" then role = "join" end
     if role ~= "host" and role ~= "join" then role = "auto" end
     M.auto, M.linkedOnce = role == "auto", false
-    log("coop: role " .. role .. (M.auto and " (a joiner that hosts if it finds no host)" or "") .. " from CFG.coop.role")
+    log("coop: role " .. role .. (M.auto and " (a joiner that hosts if it finds no host)" or "") ..
+        (picked and " picked on the main menu" or " from CFG.coop.role"))
     COOP.reopen(M.auto and "join" or role, why)
     if not COOP.open then return end
     if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
@@ -748,9 +769,8 @@ local function closeCoop(why)
 end
 
 -- Each player's name on their plane's target box (user, 2026-10-26: "we need to get player names working on the HUD
--- always"): the stand-ins SV_Unit_CoopPeer<A-D> carry the callsign key SV_CoopName_<A-D> (tools/build_survival.py
--- COOP_NAME_KEYS), whose text is set here whenever a name changes
-local NAME_KEYS = { [0] = "SV_CoopName_A", "SV_CoopName_B", "SV_CoopName_C", "SV_CoopName_D" }
+-- always"): the stand-ins SV_Unit_CoopPeer<A-X> carry the callsign key SV_CoopName_<A-X> (NAME_KEYS;
+-- tools/build_survival.py COOP_NAME_KEYS), whose text is set here whenever a name changes
 local function upperName(s, max)
     s = string.upper(tostring(s or ""))
     local n = utf8 and utf8.len(s)
@@ -760,7 +780,7 @@ end
 local function nameTick()
     if type(SV_SetText) ~= "function" then return end
     M.nameSet = M.nameSet or {}
-    for s = 0, 3 do
+    for s = 0, MAX_SLOT do
         local n = upperName(playerName(s), 20)
         if M.nameSet[s] ~= n then
             M.nameSet[s] = n
@@ -770,35 +790,45 @@ local function nameTick()
 end
 
 -- The HUD's co-op row (sv_hud.lua hudTick): who is playing, the host first and marked, in plain words; nil when solo
+local HUD_NAMES = 6
 function COOP.hudLine()
     if not COOP.open then return nil end
     if COOP.client() and M.state ~= "linked" then
-        return M.auto and "CO-OP: LOOKING FOR A HOST..." or "CO-OP: WAITING FOR THE HOST..."
+        return M.auto and "CO-OP: LOOKING FOR A HOST..." or "CO-OP: LOOKING FOR A FRIEND WHO PICKED HOST..."
     end
-    local names = {}
-    for s = 0, 3 do
+    local names, n = {}, 0
+    for s = 0, MAX_SLOT do
         if M.roster[s] or s == COOP.slot then
-            local n = upperName(playerName(s), 14) .. (s == 0 and " (HOST)" or "")
-            if M.wasLost and M.wasLost[s] then n = n .. " (LOST)" end
-            names[#names + 1] = n
+            n = n + 1
+            if n <= HUD_NAMES then                      -- (a big room: the first few, then "+N")
+                local nm = upperName(playerName(s), 14) .. (s == 0 and " (HOST)" or "")
+                if M.wasLost and M.wasLost[s] then nm = nm .. " (LOST)" end
+                names[#names + 1] = nm
+            end
         end
     end
-    if COOP.host() and #names <= 1 then return "CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS" end
-    return string.format("CO-OP %d/%d: %s", #names, cfg().max_players or 4, table.concat(names, "  "))
+    if COOP.host() and n <= 1 then return "CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS" end
+    if n > #names then names[#names + 1] = "+" .. (n - #names) end
+    return string.format("CO-OP %d/%d: %s", n, maxPlayers(), table.concat(names, "  "))
 end
 
 function COOP.tick(tick)
     local c = cfg()
     if not c.enabled then return end
-    -- Co-op opens when the player picks SURVIVAL CO-OP on the main menu and closes on SURVIVAL MODE (SV_MenuChoice, the
-    -- runtime's: 1 SURVIVAL MODE, 2 SURVIVAL CO-OP, 0 nothing yet). An older main.dll without it: open at start, as before.
+    -- Co-op opens when the player picks SURVIVAL CO-OP: HOST or JOIN on the main menu, as that role, and closes on
+    -- SURVIVAL MODE (SV_MenuChoice, the runtime's: 1 SURVIVAL MODE, 3 HOST, 4 JOIN, 0 nothing yet). An older main.dll
+    -- without it: open at start with CFG.coop.role, as before.
     local choice = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
     if choice == nil then
         if not COOP.open and not M.openTried then M.openTried = true; openCoop("start") end
     elseif choice ~= M.choice then
+        local was = M.choice
         M.choice = choice
-        if choice == 2 and not COOP.open then openCoop("SURVIVAL CO-OP picked")
-        elseif choice ~= 2 and COOP.open then closeCoop("SURVIVAL MODE picked: playing alone") end
+        local want = (choice == 3 and "host") or (choice == 4 and "join") or nil
+        if COOP.open and (not want or (was == 3 or was == 4)) then
+            closeCoop(want and "the other co-op entry picked" or "SURVIVAL MODE picked: playing alone")
+        end
+        if want then openCoop(want == "host" and "SURVIVAL CO-OP: HOST picked" or "SURVIVAL CO-OP: JOIN picked", want) end
     end
     if not COOP.open then return end
     pcall(nameTick)
@@ -849,7 +879,7 @@ function COOP.tick(tick)
                 callout(M.auto and "CO-OP: LOOKING FOR A HOST" or "CO-OP: WAITING FOR THE HOST",
                         M.auto and "NONE FOUND: YOU HOST" or tostring(c.partner))
             elseif COOP.host() then
-                callout("CO-OP: YOU ARE THE HOST", string.format("PLAYERS %d/%d", playerCount(), c.max_players or 4))
+                callout("CO-OP: YOU ARE THE HOST", string.format("PLAYERS %d/%d", playerCount(), maxPlayers()))
             end
         end
     end
@@ -883,7 +913,7 @@ function COOP.tick(tick)
     else
         SV_CoopMe(0, 0)
     end
-    for s = 0, 3 do
+    for s = 0, MAX_SLOT do
         if s ~= COOP.slot then
             local okP, errP = pcall(peerTick, s)
             if not okP then once("peerTick", "coop: player plane error " .. tostring(errP)) end

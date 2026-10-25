@@ -19,7 +19,7 @@
 LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
-local COOP_ROW = "SurvivalCoop"     -- SURVIVAL CO-OP, below SURVIVAL MODE (only when CFG.coop.enabled)
+local COOP_ROWS = { "SurvivalCoopHost", "SurvivalCoopJoin" }   -- SURVIVAL CO-OP: HOST / JOIN (only when CFG.coop.enabled)
 
 -- { our table, the game's table, the row ours goes just above (SURVIVAL MODE sits above QUIT GAME) }
 local TABLES = {
@@ -32,7 +32,7 @@ local TABLES = {
 -- The rows that go into a table: ours, and SURVIVAL CO-OP in the menu table when co-op is on (user, 2026-10-26: "a
 -- cleaner way for players to join"; CFG is read when the rows go in, after sv_config has loaded)
 local function rowsOf(t)
-    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, COOP_ROW } end
+    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, COOP_ROWS[1], COOP_ROWS[2] } end
     return { ROW }
 end
 
@@ -309,7 +309,7 @@ function watchRows()
         end
         pin(game, nameOf(game))
         local wasReady = ready[i]
-        for _, row in ipairs(rowsOf(t)) do                 -- (SURVIVAL MODE first, then SURVIVAL CO-OP below it)
+        for _, row in ipairs(rowsOf(t)) do                 -- (SURVIVAL MODE first, then the co-op ones below it)
             local r = putRow(t, game, row, wasReady)
             if r == "stop" then return false end
             if r == "wait" then return true end

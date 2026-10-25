@@ -23,10 +23,11 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.23.0"
+#define RT_VERSION           L"0.24.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
-#define SURVIVAL_COOP_ARGS   L"SurvivalCoop" /* StringArgs of the SURVIVAL CO-OP row          */
+#define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
+#define SURVIVAL_JOIN_ARGS   L"SurvivalJoin" /* StringArgs of the SURVIVAL CO-OP: JOIN row    */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
  * lighting and sublevels belong to, i.e. 10 + the row's TravelHangarMap: Survival's row is Mission 22's, which uses
  * Hangar 04 (TravelHangarMap 5). Hangar 02 with Hangar 004's lighting loads black (test 5).
@@ -404,7 +405,7 @@ static Fn4      g_nextText;
 
 static volatile int32_t  g_chosen;     /* the Survival entry was picked on the main menu */
 static volatile int32_t  g_savedMode = -1;
-static volatile int32_t  g_menuChoice;  /* the last Survival entry picked: 0 none yet, 1 SURVIVAL MODE, 2 SURVIVAL CO-OP */
+static volatile int32_t  g_menuChoice;  /* the last Survival entry picked: 0 none yet, 1 SURVIVAL MODE, 3 CO-OP: HOST, 4 CO-OP: JOIN */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
 static void* volatile    g_holdPage;
 static volatile uint64_t g_holdUntil;
@@ -545,16 +546,16 @@ static int StartSurvival(void* page, void* from, const wchar_t* why)
 static uintptr_t OnMainDecide(void* widget)
 {
     const FString* a = SelectedArgs(widget, NULL);
-    int coop = ArgsEqual(a, SURVIVAL_COOP_ARGS);
+    int coop = ArgsEqual(a, SURVIVAL_HOST_ARGS) ? 3 : ArgsEqual(a, SURVIVAL_JOIN_ARGS) ? 4 : 0;
     int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
     g_chosen = mine;
     if (mine) {
         uint8_t* ctx = Context(widget);
         g_savedMode = ctx ? ctx[CTX_MODE] : -1;
         g_page = NULL;
-        g_menuChoice = coop ? 2 : 1;
-        Log(L"main menu: %s chosen, opening the difficulty select (context mode %d)", coop ? L"Survival Co-op" : L"Survival Mode",
-            (int32_t)g_savedMode);
+        g_menuChoice = coop ? coop : 1;
+        Log(L"main menu: %s chosen, opening the difficulty select (context mode %d)",
+            coop == 3 ? L"Survival Co-op: Host" : coop == 4 ? L"Survival Co-op: Join" : L"Survival Mode", (int32_t)g_savedMode);
     }
     return g_nextMainDecide(widget);
 }
@@ -611,9 +612,11 @@ typedef struct { const wchar_t* key; const wchar_t* text; FString fs; } TextRow;
 static TextRow g_text[] = {
     { L"SV_Menu_Title",        L"SURVIVAL MODE", { 0 } },
     { L"SV_Menu_Help",         L"Hold Comona Island against endless waves. Land between rounds to rearm and repair.", { 0 } },
-    { L"SV_Menu_CoopTitle",    L"SURVIVAL CO-OP", { 0 } },
-    { L"SV_Menu_CoopHelp",     L"Survival Mode with up to three Steam friends. Everyone picks SURVIVAL CO-OP: "
-                               L"you join a friend who is already playing, or they join you.", { 0 } },
+    { L"SV_Menu_CoopHostTitle", L"SURVIVAL CO-OP: HOST", { 0 } },
+    { L"SV_Menu_CoopHostHelp",  L"Host Survival Mode for up to three Steam friends. They pick SURVIVAL CO-OP: JOIN "
+                                L"and fly with you.", { 0 } },
+    { L"SV_Menu_CoopJoinTitle", L"SURVIVAL CO-OP: JOIN", { 0 } },
+    { L"SV_Menu_CoopJoinHelp",  L"Join a Steam friend who picked SURVIVAL CO-OP: HOST, and fly their run with them.", { 0 } },
     { L"SV_Mission_Name",      L"Survival Mode", { 0 } },
     { L"SV_Mission_Subtitle",  L"Comona Island", { 0 } },
     { L"SV_Mission_Number",    L"SURVIVAL", { 0 } },
@@ -633,7 +636,7 @@ static void InitText(void)
 
 /* Texts Lua sets at run time (SV_SetText: the shop's rows and prices, the shuttle's and the aces' names). Fixed
  * buffers, rewritten in place on the game thread, so an FString the game was handed never points at freed memory. */
-#define DYN_TEXTS 160          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4 */
+#define DYN_TEXTS 256          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4; co-op names 24 (0.24.0) */
 #define DYN_KEY   48
 #define DYN_CAP   256
 static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
@@ -2147,12 +2150,13 @@ static int L_SndMaster(void* lua)
 }
 
 /* SV_Version() -> "0.19.0" */
-/* SV_MenuChoice() -> the last Survival entry picked on the main menu: 0 none yet, 1 SURVIVAL MODE, 2 SURVIVAL CO-OP */
+/* SV_MenuChoice() -> the last Survival entry picked on the main menu: 0 none yet, 1 SURVIVAL MODE, 3 SURVIVAL CO-OP:
+ * HOST, 4 SURVIVAL CO-OP: JOIN */
 static int L_MenuChoice(void* lua) { return Ret(lua, g_menuChoice); }
 
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.23.0";
+    static const char v[] = "0.24.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

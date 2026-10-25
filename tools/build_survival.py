@@ -283,7 +283,7 @@ def retag_turrets(children, owner, rows, used_ids, z):
         if grand and grand[3]: retag_turrets(grand[3][1], name, rows, used_ids, z)
 
 
-COOP_NAME_KEYS = ['SV_CoopName_A', 'SV_CoopName_B', 'SV_CoopName_C', 'SV_CoopName_D']   # sv_coop.lua NAME_KEYS
+COOP_NAME_KEYS = [f'SV_CoopName_{c}' for c in survival_events.COOP_PEER_SLOTS]   # sv_coop.lua NAME_KEYS
 
 
 def ally_units(units, used_ids, z, top_number, v):
@@ -322,7 +322,7 @@ def ally_units(units, used_ids, z, top_number, v):
     # Survival COOP: the other players' planes, one per player slot, each one aircraft of MOONCHILD's source
     # (invincible kept: they only show the players). Each shows its player's name on its target box (user, 2026-10-26:
     # "we need to get player names working on the HUD always"): the callsign is the desc's GameObjectDisplayNameID02
-    # (tools/re/MINIMAP_MARKERS.md 1d, 1g), shown for an ally with bShowCallSignForAlly; Survival's key SV_CoopName_<A-D>
+    # (tools/re/MINIMAP_MARKERS.md 1d, 1g), shown for an ally with bShowCallSignForAlly; Survival's key SV_CoopName_<A-X>
     # is set to the player's name at run time (sv_coop.lua, SV_SetText).
     sc = uprop.U.schema('LiveAIObjectDesc')
     ix = {n: k for k, (n, t) in sc.items() if n in ('bShowHUDBox', 'bShowCallSignForAlly', 'GameObjectDisplayNameID02')}
@@ -1017,7 +1017,8 @@ DATA = MOD + '/Data/'
 MISSION_ID = 9101          # must match SURVIVAL_MISSION_ID in runtime/survival_rt.c
 LEVEL_ID = 70              # ELiveLevelID Test02: no stock row uses it
 MENU_ARGS = 'SurvivalMode' # must match SURVIVAL_ARGS in runtime/survival_rt.c
-COOP_MENU_ARGS = 'SurvivalCoop'   # must match SURVIVAL_COOP_ARGS in runtime/survival_rt.c (the SURVIVAL CO-OP entry)
+COOP_HOST_ARGS = 'SurvivalHost'   # must match SURVIVAL_HOST_ARGS in runtime/survival_rt.c (SURVIVAL CO-OP: HOST)
+COOP_JOIN_ARGS = 'SurvivalJoin'   # must match SURVIVAL_JOIN_ARGS (SURVIVAL CO-OP: JOIN)
 import dtx
 
 
@@ -1305,15 +1306,20 @@ def edit_menu_row(props):
         if hit: drop_prop(props, hit[0][0])
 
 
-def edit_coop_menu_row(props):
-    """SURVIVAL CO-OP (user, 2026-10-26: "a cleaner way for players to join ... like a 6 year old being able to do it"):
-    the same entry as SURVIVAL MODE, its own texts and StringArgs; the runtime opens co-op for the run when it's picked
-    (main.dll OnMainDecide, SV_MenuChoice; Lua adds the row only when CFG.coop.enabled)."""
+def edit_coop_row(props, what, args):
+    """SURVIVAL CO-OP: HOST / JOIN (user, 2026-10-26: "a cleaner way for players to join ... like a 6 year old being able
+    to do it", then "can't we have it so people can select who is hosting and who is joining from ingame?"): the same
+    entry as SURVIVAL MODE, its own texts and StringArgs; the runtime opens co-op for the run, as host or joiner, when
+    one is picked (main.dll OnMainDecide, SV_MenuChoice; Lua adds the rows only when CFG.coop.enabled)."""
     edit_menu_row(props)
-    setv(props, 'CommandID', ('name', 'Main_Top_SurvivalCoop', 0))
-    setv(props, 'TitleTextID', s('SV_Menu_CoopTitle'))
-    setv(props, 'HelpTextID', s('SV_Menu_CoopHelp'))
-    setv(props, 'StringArgs', s(COOP_MENU_ARGS))
+    setv(props, 'CommandID', ('name', f'Main_Top_SurvivalCoop{what}', 0))
+    setv(props, 'TitleTextID', s(f'SV_Menu_Coop{what}Title'))
+    setv(props, 'HelpTextID', s(f'SV_Menu_Coop{what}Help'))
+    setv(props, 'StringArgs', s(args))
+
+
+def edit_coop_host_row(props): edit_coop_row(props, 'Host', COOP_HOST_ARGS)
+def edit_coop_join_row(props): edit_coop_row(props, 'Join', COOP_JOIN_ARGS)
 
 
 def edit_shuttle_npc(props):
@@ -1474,7 +1480,7 @@ def build_rows():
     build_model_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
-                     more=[('SurvivalCoop', edit_coop_menu_row)])
+                     more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row)])
 
 
 # ---------------------------------------------------------------- NPC mission table

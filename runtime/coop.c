@@ -1,10 +1,10 @@
 /* =============================================================================
- *  Survival COOP: the native half of co-op for up to 4 players (runtime 0.22.0; tools/re/COOP.md). Included by
+ *  Survival COOP: the native half of co-op for up to 24 players (runtime 0.24.0; tools/re/COOP.md). Included by
  *  survival_rt.c.
  *
  *  Host-authoritative, after Double Trigger, the AC7 co-op mod (layer10-love/double-trigger, MIT / Unlicense): the
  *  host's game runs the rounds and the enemies, the joiners' games mirror them. A star: each joiner is linked to the
- *  host only (slot 0 = the host, 1..3 the joiners, given by the host), and the host relays every player's plane to
+ *  host only (slot 0 = the host, 1..23 the joiners, given by the host), and the host relays every player's plane to
  *  the others. This file is the transport and the per-frame work; Scripts/sv_coop.lua decides what is mirrored.
  *
  *  Transport: Steam P2P (ISteamNetworking v006 through steam_api64's flat API: SendP2PPacket / ReadP2PPacket on a
@@ -16,8 +16,12 @@
  *    L reliable Lua message: sender nonce, seq, length, bytes (per link: resent every 250 ms until acked, in order)
  *    K ack: sender nonce, every seq below this one arrived
  *    U unreliable Lua message
- *    P a player's own plane (30 Hz): slot, time, position (cm, doubles), rotation (quaternion), health, Lua's flags;
- *      the host sends its own and relays each joiner's to the other joiners
+ *    P a joiner's own plane, to the host (30 Hz): slot, time, position (cm, doubles), rotation (quaternion), health,
+ *      Lua's flags
+ *    Q the host's batch of planes, to each joiner (30 Hz; 20 Hz past CO_FAST_UPTO players): n x {slot, time on that
+ *      player's clock, position (doubles), rotation (int16 quaternion), health, max health, flags}, every player's
+ *      latest but the receiver's own (protocol 3: up to 24 players. Relaying each joiner's P to every other joiner
+ *      was n x n packets 30 times a second, about 16,000 a second from the host at 24)
  *    E the host's tracked enemies (15 Hz): time, n x {id, position (floats), rotation (int16 quaternion)}
  *  Puppets: a local plane bound to a stream (another player's, or a host enemy on a joiner's game) is moved every
  *  frame to where the stream says it was CO_DELAY ago on its sender's clock (snapshot interpolation, nlerp), through
@@ -27,8 +31,10 @@
  *  the music player's tick (OnMusicTick).
  * ============================================================================= */
 
-#define CO_PROTO        2                   /* 2: up to 4 players (runtime 0.22.0); 1: two */
-#define CO_MAX_PLAYERS  4
+#define CO_PROTO        3                   /* 3: up to 24, the host's Q batches (runtime 0.24.0); 2: up to 4; 1: two */
+#define CO_MAX_PLAYERS  24
+#define CO_FAST_UPTO    6                   /* players (you included) up to which the host sends Q at 30 Hz, else 20  */
+#define CO_MAX_CAND     64                  /* Steam friends tried at once                                          */
 #define CO_MAGIC        0x53                /* 'S' */
 #define CO_CHANNEL      1480                /* our Steam P2P channel (the game's own use 0..7)                      */
 #define CO_MAX_PACKET   1200                /* Steam's limit for an unreliable P2P packet                           */
@@ -319,7 +325,7 @@ typedef struct {
     double   lastRecv;
 } CoEnt;
 
-/* A link to another game: the host has one per joiner (index = that joiner's slot, 1..3), a joiner one to the host
+/* A link to another game: the host has one per joiner (index = that joiner's slot, 1..23), a joiner one to the host
  * (index 0). Each has its own reliable channel. */
 typedef struct {
     int      used, connected;
@@ -337,12 +343,16 @@ typedef struct {
     uint32_t txPk, rxPk, txB, rxB, resent;
 } CoLink;
 
-/* A player's plane as streamed (slot 0 the host, 1..3 the joiners): its snapshots on that player's clock and the
- * local puppet they move. A joiner gets the other joiners' planes relayed by the host. */
+#define CO_Q_REC 49                         /* a Q record: slot, time, position, int16 quaternion, health, max, flags */
+
+/* A player's plane as streamed (slot 0 the host, 1..23 the joiners): its snapshots on that player's clock and the
+ * local puppet they move. A joiner gets the other joiners' planes from the host's Q batches; the host keeps each
+ * player's latest as a Q record (rec) until the next batch has gone. */
 typedef struct {
     CoEnt    plane;
     double   offset; int haveOffset;        /* local time - that player's time: the smallest seen, let go of slowly */
     int32_t  hp; float maxHp; uint32_t flags; double stateAt;
+    uint8_t  rec[CO_Q_REC]; int fresh;
 } CoPlayer;
 
 static struct {
@@ -352,7 +362,7 @@ static struct {
     double   delay;                         /* interpolation delay, seconds */
     uint16_t port;
     double   lastDiscover, lastFrame, lastPlayerSend, lastEntSend, lastStats;
-    uint64_t cand[16]; int32_t ncand;
+    uint64_t cand[CO_MAX_CAND]; int32_t ncand;
     char     myVer[32], myName[64];
     uint64_t myId;
     CoLink   links[CO_MAX_PLAYERS];
@@ -549,12 +559,14 @@ static void CoHelloTo(uint64_t steamId, const CoSockAddr* udp, CoLink* L, uint8_
 static void CoInboxPush(int slot, const char* s, uint32_t n)
 {
     if (CO.inCount >= CO_INBOX) { Log(L"coop: Lua inbox full; a message was dropped"); return; }
-    char* m = (char*)malloc(n + 4);
+    char* m = (char*)malloc(n + 5);
     if (!m) return;
-    m[0] = (char)('0' + (slot >= 0 && slot < 10 ? slot : 9)); m[1] = '|';  /* "<sender's slot>|<message>" */
-    memcpy(m + 2, s, n); m[n + 2] = 0;
+    int sl = slot < 0 ? 0 : slot > 99 ? 99 : slot, h = 0;      /* "<sender's slot>|<message>", the slot in decimal */
+    if (sl >= 10) m[h++] = (char)('0' + sl / 10);
+    m[h++] = (char)('0' + sl % 10); m[h++] = '|';
+    memcpy(m + h, s, n); m[n + h] = 0;
     int32_t at = (CO.inHead + CO.inCount) % CO_INBOX;
-    CO.inbox[at] = m; CO.inboxLen[at] = (uint16_t)(n + 2); ++CO.inCount;
+    CO.inbox[at] = m; CO.inboxLen[at] = (uint16_t)(n + h); ++CO.inCount;
 }
 static void CoSys(int slot, const char* s) { CoInboxPush(slot, s, (uint32_t)CoLen(s)); }
 
@@ -577,6 +589,7 @@ static void CoPlayerReset(int s)
     CO.players[s].plane.ns = 0;
     CO.players[s].haveOffset = 0;
     CO.players[s].stateAt = 0;
+    CO.players[s].fresh = 0;
 }
 static void CoEntsReset(void)                             /* the host's enemies' streams: snapshots go, bindings stay */
 {
@@ -743,7 +756,7 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
         if (k < 0 && CO.role == CO_ROLE_HOST && now - warned > 10) {
             warned = now;
             wchar_t wn[64]; CoWide(name, wn, 64);
-            Log(L"coop: %s is also set up as the %s; one of you must be the host (config\\survival.ini [coop] role)", wn,
+            Log(L"coop: %s is also the %s; only one of you picks SURVIVAL CO-OP: HOST, the others JOIN", wn,
                 role == CO_ROLE_HOST ? L"host" : L"joiner");
             CoSys(0, "sys|samerole");
         }
@@ -784,7 +797,9 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
         if (yourSlot < CO_MAX_PLAYERS && yourSlot != CO.mySlot) {
             CO.mySlot = yourSlot;
             Log(L"coop: you are player %d", (int32_t)yourSlot + 1);
-            char m[24] = "sys|slot|0"; m[9] = (char)('0' + yourSlot);
+            char m[24] = "sys|slot|", *d = m + 9;
+            if (yourSlot >= 10) *d++ = (char)('0' + yourSlot / 10);
+            *d++ = (char)('0' + yourSlot % 10); *d = 0;
             CoSys(0, m);
         }
     }
@@ -797,15 +812,26 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
     }
 }
 
-static void CoOnPlayer(int src, const uint8_t* p, double now)
+static void CoQRec(uint8_t* r, int slot, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags)
+{
+    r[0] = (uint8_t)slot;
+    memcpy(r + 1, &ms, 4); memcpy(r + 5, pos, 24);
+    for (int c = 0; c < 4; ++c) {
+        float v = q[c] < -1 ? -1 : q[c] > 1 ? 1 : q[c];
+        int16_t i = (int16_t)(v * 32767.0f); memcpy(r + 29 + c * 2, &i, 2);
+    }
+    memcpy(r + 37, &hp, 4); memcpy(r + 41, &maxHp, 4); memcpy(r + 45, &flags, 4);
+}
+
+static void CoOnPlayer(int src, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags, double now)
 {
     if (src < 0 || src >= CO_MAX_PLAYERS || src == CO.mySlot) return;
     CoPlayer* P = &CO.players[src];
-    double t = CoPeerTime(CoGet32(p + 4)), pos[3]; float q[4];
-    memcpy(pos, p + 8, 24); memcpy(q, p + 32, 16);
+    double t = CoPeerTime(ms);
     CoTrackOffset(P, t, now);
     CoPushSnap(&P->plane, t, pos, q, now);
-    memcpy(&P->hp, p + 48, 4); memcpy(&P->maxHp, p + 52, 4); P->flags = CoGet32(p + 56); P->stateAt = now;
+    P->hp = hp; P->maxHp = maxHp; P->flags = flags; P->stateAt = now;
+    if (CO.role == CO_ROLE_HOST) { CoQRec(P->rec, src, ms, pos, q, hp, maxHp, flags); P->fresh = 1; }
 }
 
 #define CO_P_SIZE (4 + 60)                  /* 'P': slot, 3 spare, time, position, rotation, health, max health, flags */
@@ -839,14 +865,24 @@ static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoS
         if (n < 6 || 2u + CoGet16(p) > n - 4) { ++CO.badPk; return; }
         CoInboxPush(k, (const char*)p + 2, CoGet16(p));
         return;
-    case 'P': {
+    case 'P': {                                                /* a joiner's own plane (the host knows it by its link) */
+        if (CO.role != CO_ROLE_HOST) return;
         if (n < CO_P_SIZE) { ++CO.badPk; return; }
-        int src = CO.role == CO_ROLE_HOST ? k : p[0];          /* the host knows a joiner by its link; a relayed one says */
-        CoOnPlayer(src, p, now);
-        if (CO.role == CO_ROLE_HOST) {                         /* relayed to the other joiners, as player k */
-            uint8_t r[CO_P_SIZE];
-            memcpy(r, b, CO_P_SIZE); r[4] = (uint8_t)k;
-            for (int j = 1; j < CO_MAX_PLAYERS; ++j) if (j != k && CO.links[j].used) CoSendTo(j, r, CO_P_SIZE);
+        double pos[3]; float q[4]; int32_t hp; float maxHp;
+        memcpy(pos, p + 8, 24); memcpy(q, p + 32, 16); memcpy(&hp, p + 48, 4); memcpy(&maxHp, p + 52, 4);
+        CoOnPlayer(k, CoGet32(p + 4), pos, q, hp, maxHp, CoGet32(p + 56), now);
+        return;
+    }
+    case 'Q': {                                                /* the host's batch: everyone else's planes */
+        if (CO.role != CO_ROLE_JOIN || k != 0) return;
+        if (n < 5 || 5u + p[0] * (uint32_t)CO_Q_REC > n) { ++CO.badPk; return; }
+        const uint8_t* r = p + 1;
+        for (uint32_t i = 0; i < p[0]; ++i, r += CO_Q_REC) {
+            double pos[3]; float q[4]; int32_t hp; float maxHp;
+            memcpy(pos, r + 5, 24);
+            for (int c = 0; c < 4; ++c) { int16_t v; memcpy(&v, r + 29 + c * 2, 2); q[c] = v / 32767.0f; }
+            memcpy(&hp, r + 37, 4); memcpy(&maxHp, r + 41, 4);
+            CoOnPlayer(r[0], CoGet32(r + 1), pos, q, hp, maxHp, CoGet32(r + 45), now);
         }
         return;
     }
@@ -936,10 +972,10 @@ static void CoDiscover(double now)
         s = e;
     }
     if (!nn) any = 1;
-    for (int i = 0; i < nn && CO.ncand < 16; ++i) if (ids[i]) CO.cand[CO.ncand++] = ids[i];
+    for (int i = 0; i < nn && CO.ncand < CO_MAX_CAND; ++i) if (ids[i]) CO.cand[CO.ncand++] = ids[i];
     uint32_t app = ST.appId && ST.utils ? ST.appId(ST.utils) : 0;
     int32_t fc = ST.friendCount(ST.friends, 4 /* k_EFriendFlagImmediate */);
-    for (int32_t i = 0; i < fc && CO.ncand < 16; ++i) {
+    for (int32_t i = 0; i < fc && CO.ncand < CO_MAX_CAND; ++i) {
         uint64_t f = ST.friendAt(ST.friends, i, 4);
         if (!f) continue;
         int want = 0;
@@ -970,6 +1006,7 @@ static void CoSendPlayer(double now)
     float q[4]; CoRotToQuat(rot, q);
     int32_t hp = CoHealth(me);
     float maxHp = g_offMaxHealth >= 0 && Readable(me + g_offMaxHealth, 4) ? *(float*)(me + g_offMaxHealth) : 0.0f;
+    if (CO.role == CO_ROLE_HOST) { CoQRec(CO.players[0].rec, 0, CoMs(now), pos, q, hp, maxHp, CO.meFlags); CO.players[0].fresh = 1; return; }
     uint8_t b[CO_P_SIZE], *p = CoHeader(b, 'P');
     *p++ = (uint8_t)(CO.mySlot >= 0 ? CO.mySlot : CO_SLOT_NONE); *p++ = 0; *p++ = 0; *p++ = 0;
     CoPut32(&p, CoMs(now));
@@ -979,6 +1016,23 @@ static void CoSendPlayer(double now)
     memcpy(p, &maxHp, 4); p += 4;
     CoPut32(&p, CO.meFlags);
     for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, CO_P_SIZE);
+}
+
+/* the host: one Q to each joiner with every player's state since the last batch, the joiner's own left out */
+static void CoSendPlanes(void)
+{
+    for (int j = 1; j < CO_MAX_PLAYERS; ++j) {
+        if (!CO.links[j].used) continue;
+        uint8_t b[CO_MAX_PACKET], *p = CoHeader(b, 'Q'), *cnt = p++;
+        *cnt = 0;
+        for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+            if (s == j || !CO.players[s].fresh || (s && !CO.links[s].used)) continue;
+            if ((size_t)(p - b) + CO_Q_REC > CO_MAX_PACKET) break;      /* (23 records fit: 1132 bytes) */
+            memcpy(p, CO.players[s].rec, CO_Q_REC); p += CO_Q_REC; ++*cnt;
+        }
+        if (*cnt) CoSendTo(j, b, (uint32_t)(p - b));
+    }
+    for (int s = 0; s < CO_MAX_PLAYERS; ++s) CO.players[s].fresh = 0;
 }
 
 static void CoSendEnts(double now)
@@ -1094,9 +1148,14 @@ static void CoStep(double now, int drive)
         CoFlushReliable(k, now);
     }
     int linked = 0;
-    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) linked = 1;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) ++linked;
     if (linked) {
-        if (now - CO.lastPlayerSend >= 1.0 / 30.0) { CO.lastPlayerSend = now; CoSendPlayer(now); }
+        double hz = CO.role == CO_ROLE_HOST && linked + 1 > CO_FAST_UPTO ? 20.0 : 30.0;
+        if (now - CO.lastPlayerSend >= 1.0 / hz) {
+            CO.lastPlayerSend = now;
+            CoSendPlayer(now);
+            if (CO.role == CO_ROLE_HOST) CoSendPlanes();
+        }
         if (CO.role == CO_ROLE_HOST && now - CO.lastEntSend >= 1.0 / 15.0) { CO.lastEntSend = now; CoSendEnts(now); }
     }
     if (drive) CoDrive(now);
@@ -1165,8 +1224,8 @@ static uint8_t* ArgObject(void* lua)                       /* an address from Lu
 
 /* SV_CoopOpen(mode, role, partner, port, delayMs, version [, maxPlayers]) -> 1, or < 0: -1 bad args, -2 no Steam,
  * -3 no UDP, -4 bad host address. mode "steam" | "udp"; role "host" | "join"; partner: steam "auto" | Steam names or
- * SteamID64s, comma-separated; udp: the joiner's host "a.b.c.d[:port]" (the host listens on port). maxPlayers 2-4
- * (the host's; default 4). Opening again starts over. */
+ * SteamID64s, comma-separated; udp: the joiner's host "a.b.c.d[:port]" (the host listens on port). maxPlayers 2-24
+ * (the host's; default 24). Opening again starts over. */
 static int L_CoopOpen(void* lua)
 {
     char mode[16], role[16], partner[160], ver[32];
@@ -1223,7 +1282,8 @@ static int L_CoopInfo(void* lua)
     if (CO.open && now - CO.lastFrame > 0.1) CoStep(now, 0);   /* (no frame ticks here: the menus, loading) */
     int used = 0, up = 0;
     for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) { ++used; if (CO.links[k].connected) ++up; }
-    char out[900]; CoBuf b = { out, out + sizeof(out) - 1 };
+    static char out[4096];                                     /* (23 peers of up to ~100 characters; static: no __chkstk) */
+    CoBuf b = { out, out + sizeof(out) - 1 };
     CoPutS(&b, "open="); CoPutU(&b, (uint64_t)CO.open);
     CoPutS(&b, ";mode="); CoPutS(&b, CO.mode == CO_MODE_STEAM ? "steam" : CO.mode == CO_MODE_UDP ? "udp" : "none");
     CoPutS(&b, ";role="); CoPutS(&b, CO.role == CO_ROLE_HOST ? "host" : CO.role == CO_ROLE_JOIN ? "join" : "none");

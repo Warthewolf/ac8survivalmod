@@ -421,7 +421,7 @@ ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names,
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
 # (coop.c: the AI plane's own teleport). Its appearance: gear up, no engagement (its fire stays off from Lua too).
-COOP_PEER_SLOTS = 'ABCD'                    # one per player slot (A = player 1, the host ... D = player 4)
+COOP_PEER_SLOTS = 'ABCDEFGHIJKLMNOPQRSTUVWX'   # one per player slot (A = player 1, the host ... X = player 24)
 COOP_PEER_UNITS = [f'SV_Unit_CoopPeer{c}' for c in COOP_PEER_SLOTS]
 COOP_PEER_OBJS = [f'SV_Obj_CoopPeer{c}' for c in COOP_PEER_SLOTS]
 TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_Path2']   # taxi, roll, climb

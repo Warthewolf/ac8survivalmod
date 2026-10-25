@@ -1,6 +1,7 @@
 /* coop_test.c : runtime/coop.c (Survival COOP's transport, reliable channel, streams and interpolation) run outside the
- * game, as two processes over localhost UDP with 20 % of the packets dropped:
- *     coop_test host   &   coop_test join
+ * game, as a host and joiners over localhost UDP with 20 % of the packets dropped (COOP_TEST_JOINERS of them, 3 by
+ * default; tools/checks/coop_test.sh runs 3, then 11 for the 20 Hz batches and two-digit slots of protocol 3):
+ *     coop_test host   &   coop_test join   &   coop_test join ...
  * The host flies a fake plane in a circle (its own stream), tracks a fake enemy flying a line, and sends 120 numbered
  * reliable messages; the joiner drives its fake puppets with them. The joiner checks every message arrived once, in
  * order, and how far its puppets sit from the true paths at their render time. Built by tools/checks/coop_test.sh. */
@@ -118,13 +119,15 @@ int main(int argc, char** argv)
 {
     int host = argc > 1 && !strcmp(argv[1], "host");
     double runFor = argc > 2 ? atof(argv[2]) : 14.0;
+    const char* nj = getenv("COOP_TEST_JOINERS");
+    int joiners = nj && atoi(nj) > 0 && atoi(nj) < CO_MAX_PLAYERS ? atoi(nj) : 3, players = joiners + 1;
     srand(host ? 11 : (unsigned)GetCurrentProcessId());
     for (int i = 0; i < 400; ++i) g_vt[i] = (void*)FakeTeleIn;
     g_vt[VT_TELEPORT_TO] = (void*)FakeTeleTo; g_vt[VT_TELEPORT_IN] = (void*)FakeTeleIn;
     g_fAITeleportTo = (uint8_t*)FakeTeleTo; g_fAITeleportInner = (uint8_t*)FakeTeleIn;
     FakeLua f;
     Args(&f); ArgS(&f, "udp"); ArgS(&f, host ? "host" : "join"); ArgS(&f, host ? "auto" : "127.0.0.1:27791");
-    ArgN(&f, 27791); ArgN(&f, 100); ArgS(&f, "test"); ArgN(&f, 4);
+    ArgN(&f, 27791); ArgN(&f, 100); ArgS(&f, "test"); ArgN(&f, players);
     int64_t r = CallI(L_CoopOpen, &f);
     const char* who = host ? "host" : "join";
     printf("%s: open %lld, nonce %08x\n", who, (long long)r, CO.nonce);
@@ -147,15 +150,15 @@ int main(int argc, char** argv)
         for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) ++linked;
         if (host) {
             if (frames == 10) { Args(&f); ArgN(&f, 7); ArgN(&f, (double)(uintptr_t)enemy); CallI(L_CoopTrack, &f); }
-            if (linked == 3 && sentRel < 120) {               /* (once all three are in) */
+            if (linked == joiners && sentRel < 120) {         /* (once every joiner is in) */
                 char m[32]; sprintf(m, "m|%d", ++sentRel);
                 Args(&f); ArgS(&f, m); ArgN(&f, 1); ArgN(&f, -1); CallI(L_CoopSend, &f);
             }
         } else {
             if (CO.mySlot >= 0 && !bound) {
-                for (int s = 0; s < CO_MAX_PLAYERS; ++s) if (s != CO.mySlot) { Args(&f); ArgN(&f, s); ArgN(&f, (double)(uintptr_t)pup[s]); CallI(L_CoopPeer, &f); }
+                for (int s = 0; s < players; ++s) if (s != CO.mySlot) { Args(&f); ArgN(&f, s); ArgN(&f, (double)(uintptr_t)pup[s]); CallI(L_CoopPeer, &f); }
                 Args(&f); ArgN(&f, 7); ArgN(&f, (double)(uintptr_t)copy); CallI(L_CoopBind, &f);
-                printf("join: I am player %d; bound the other three and the enemy\n", CO.mySlot + 1); bound = 1;
+                printf("join: I am player %d; bound the other %d and the enemy\n", CO.mySlot + 1, joiners); bound = 1;
             }
             if (bound && sentUp < 40 && frames % 2 == 0) {     /* (40 messages up to the host) */
                 char m[32]; sprintf(m, "j|%d", ++sentUp);
@@ -166,14 +169,15 @@ int main(int argc, char** argv)
         for (;;) {
             Args(&f); f.at = 0; L_CoopRecv(&f);
             if (!f.retN) break;
-            int from = f.retS[0] - '0';
-            const char* m = f.retS + 2;
+            int from = atoi(f.retS);                          /* "<slot>|...", the slot in decimal */
+            const char* m = strchr(f.retS, '|');
+            m = m ? m + 1 : f.retS;
             if (!strncmp(m, "m|", 2)) { int k = atoi(m + 2); ++gotRel; if (k != order) printf("join: OUT OF ORDER: got %d, wanted %d\n", k, order); order = k + 1; }
             else if (!strncmp(m, "j|", 2)) { if (from >= 0 && from < CO_MAX_PLAYERS) ++fromJoin[from]; }
             else printf("%s: %s\n", who, f.retS);
         }
         if (!host && bound && t - t0 > 3.0 && CoNow() - CO.players[0].plane.lastRecv < 0.2) {
-            for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+            for (int s = 0; s < players; ++s) {
                 CoPlayer* P = &CO.players[s];
                 if (s == CO.mySlot || !P->haveOffset || P->plane.ns < 4 || CoNow() - P->plane.lastRecv > 0.2) continue;
                 double want[3], wr[3], got[3], gr[3];
@@ -195,12 +199,12 @@ int main(int argc, char** argv)
     printf("%s: info %s\n", who, f.retS);
     if (host) {
         int ok = 1;
-        for (int k = 1; k < CO_MAX_PLAYERS; ++k) { printf("host: from player %d: %d of 40 messages\n", k + 1, fromJoin[k]); if (fromJoin[k] != 40) ok = 0; }
+        for (int k = 1; k < players; ++k) { printf("host: from player %d: %d of 40 messages\n", k + 1, fromJoin[k]); if (fromJoin[k] != 40) ok = 0; }
         return ok ? 0 : 2;
     }
     int ok = gotRel == 120 && order == 121 && enN > 0 && enSum / enN < 5.0;
     printf("join %d: reliable %d of 120 from the host, in order: %s\n", CO.mySlot + 1, gotRel, order == 121 ? "yes" : "NO");
-    for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+    for (int s = 0; s < players; ++s) {
         if (s == CO.mySlot) continue;
         printf("join %d: player %d's plane%s: mean %.2f m, worst %.2f m off its true path (%d samples)\n", CO.mySlot + 1, s + 1,
                s == 0 ? " (the host)" : " (relayed)", eN[s] ? eSum[s] / eN[s] : -1.0, eMax[s], eN[s]);

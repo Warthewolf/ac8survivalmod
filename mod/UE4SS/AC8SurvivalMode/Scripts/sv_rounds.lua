@@ -317,6 +317,7 @@ local function startRound()
         end
     end
     D.nextTier, D.nextTierRound = nil, nil
+    if COOP and COOP.more then budget = COOP.more(budget, "max_aircraft") end    -- (co-op: more for more players)
     D.budget = budget
     local spk = special and SPC.kinds[special]
     local alone = spk and SPC.kindValue(spk.alone)                  -- (a special that flies alone: no fighters)
@@ -407,7 +408,7 @@ local function startRound()
         for _, u in ipairs(fighters) do if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] then D.jammerUnit = u end end
         if D.jammerUnit then log(string.format("round %d: the jammer flies with %s", D.round, D.jammerUnit)) end
     end
-    D.waves = makeWaves(spk and special or nil, fighters, bombers, waveCap())
+    D.waves = makeWaves(spk and special or nil, fighters, bombers, COOP and COOP.more and COOP.more(waveCap(), "max_up") or waveCap())
     D.wave, D.queue = 1, D.waves[1]
     D.spare = {}
     for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn

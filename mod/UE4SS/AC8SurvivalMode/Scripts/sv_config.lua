@@ -547,9 +547,14 @@ CFG = {
     -- ZeroTier: the host listens on `port`, UDP; the joiner sets partner = the host's IP address). interp_ms: how far
     -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
     -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
-    -- max_players: the host's room, 2 to 4 (you included); joiners link to the host only, which relays their planes.
-    coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 4,
+    -- max_players: the host's room, 2 to 24 (you included; user, 2026-10-26: "allow up to 24 players in a lobby ... leave
+    -- it there for choice"); joiners link to the host only, which relays their planes.
+    coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 24,
              split_share = 0.5, callouts = true, leaderboard = false,
+             -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
+             -- and of a wave's (0.15: 4 players 1.45 times), up to max_aircraft in a round and max_up up at once
+             -- (Survival's pool is 24 flights). 0 = a single player's rounds.
+             aircraft_per_player = 0.15, max_aircraft = 60, max_up = 30,
              -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
              -- 2026-10-25: "make it so that the player can choose their name")
              name = "",

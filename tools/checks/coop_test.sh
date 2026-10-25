@@ -1,6 +1,7 @@
 #!/bin/sh
-# coop_test.sh : runs tools/checks/coop_test.c (runtime/coop.c outside the game: a host and three joiners as four
-# processes over localhost UDP, 20 % of the packets dropped). Needs clang (tools/llvm) and a Windows SDK / MSVC libs.
+# coop_test.sh : runs tools/checks/coop_test.c (runtime/coop.c outside the game: a host and its joiners as processes
+# over localhost UDP, 20 % of the packets dropped): 4 players, then 12 (the host's 20 Hz batches past 6 players and
+# two-digit slots, protocol 3). Needs clang (tools/llvm) and a Windows SDK / MSVC libs.
 set -e
 cd "$(dirname "$0")"
 OUT=../../build/checks
@@ -9,15 +10,25 @@ CLANG=../llvm/LLVM/bin/clang.exe
 [ -x "$CLANG" ] || CLANG=clang
 "$CLANG" -O1 -w -Wno-incompatible-pointer-types -Wno-incompatible-function-pointer-types -o "$OUT/coop_test.exe" coop_test.c -lws2_32
 cd "$OUT"
-rm -f ./*.rc
 ./coop_test.exe join 1 > /dev/null 2>&1 || true      # (a fresh exe's first start can be slow: warm it up)
-(./coop_test.exe host 16 > host.txt 2>&1; echo $? > host.rc) &
-sleep 0.3
-(./coop_test.exe join > join1.txt 2>&1; echo $? > join1.rc) &
-(./coop_test.exe join > join2.txt 2>&1; echo $? > join2.rc) &
-(./coop_test.exe join > join3.txt 2>&1; echo $? > join3.rc) &
-sleep 19
-grep -vh "\[log\]" host.txt join1.txt join2.txt join3.txt | grep -E "player|reliable|enemy|OUT OF|full|samerole" || true
-fail=0
-for f in host join1 join2 join3; do [ -f $f.rc ] && [ "$(cat $f.rc)" = 0 ] || fail=1; done
-if [ "$fail" = 0 ]; then echo "coop test (4 players): passed"; else echo "coop test (4 players): FAILED (see build/checks/*.txt)"; exit 1; fi
+result=0
+for joiners in 3 11; do
+    rm -f ./*.rc ./join*.txt
+    export COOP_TEST_JOINERS=$joiners
+    (./coop_test.exe host 16 > host.txt 2>&1; echo $? > host.rc) &
+    sleep 0.3
+    j=1
+    while [ $j -le $joiners ]; do
+        (./coop_test.exe join > join$j.txt 2>&1; echo $? > join$j.rc) &
+        j=$((j + 1))
+    done
+    sleep 19
+    grep -vh "\[log\]" host.txt join*.txt | grep -E "player|reliable|enemy|OUT OF|full|samerole" | grep -vE "mean 0\.|of 40 messages" || true
+    fail=0
+    [ -f host.rc ] && [ "$(cat host.rc)" = 0 ] || fail=1
+    j=1
+    while [ $j -le $joiners ]; do [ -f join$j.rc ] && [ "$(cat join$j.rc)" = 0 ] || fail=1; j=$((j + 1)); done
+    if [ "$fail" = 0 ]; then echo "coop test ($((joiners + 1)) players): passed"
+    else echo "coop test ($((joiners + 1)) players): FAILED (see build/checks/*.txt)"; result=1; fi
+done
+exit $result
