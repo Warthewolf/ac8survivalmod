@@ -247,14 +247,23 @@ function ammoTick(tick, pc)
                 end
             end
         end
-        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays): " .. table.concat(back, ", ")) end
         for k = 1, 4 do
             local cap = A.caps and A.caps[k]
             if cap and s[k] >= 0 and A.owed and A.owed[k] then  -- bought while the count couldn't be read: load it now
                 A.owed[k] = nil
                 if s[k] < cap then SV_SetAmmo(k, cap); s[k] = cap end
             end
+            -- On the ground nothing is fired, so a count under what you had there is the game's reload too, whether or
+            -- not the dip in the full load was seen above (UP.apply's own 2 s pass raises it back first a quarter of the
+            -- time: a run of 2026-10-25, REARMED to 18/18 and 27/27, 12/18 and 18/27 after take-off, twice). Once the
+            -- bays' full load is back, what you had goes in.
+            local m = (ground and k <= 3 and A.bays and A.bays[k] and cap and s[k] >= 0 and s[k] < cap) and SV_Ammo(k, 1) or -1
             if A.reload and A.reload[k] then                 -- (the bays' full load not back yet: nothing to read)
+            elseif m >= 0 and s[k] < math.min(cap, m) then
+                local to = math.min(cap, m)                  -- (another special picked down there: its own load)
+                SV_SetAmmo(k, to)
+                back[#back + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], to)
+                s[k] = to
             elseif cap and s[k] > cap then
                 SV_SetAmmo(k, cap)
                 over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
@@ -263,6 +272,7 @@ function ammoTick(tick, pc)
                 RUN.dirty = true                    -- the shop's help lines show the counts
             end
         end
+        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays): " .. table.concat(back, ", ")) end
         if #over > 0 then
             if type(SV_FreeRestock) == "function" and not CFG.ammo.free_restock then SV_FreeRestock(0) end
             log("ammo: refilled by the game, put back to what you had (" .. A.preset .. "): " .. table.concat(over, ", "))
