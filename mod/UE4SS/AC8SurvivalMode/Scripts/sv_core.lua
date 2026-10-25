@@ -293,6 +293,28 @@ local function putRow(t, game, row, wasReady)
     return "added"
 end
 
+-- The stock main-menu entries CFG.menu.hide names come off the game's copy of the menu table (in memory only; a
+-- reloaded table comes back with them, so every pass looks again). Never a row of ours, never QUIT GAME.
+local hiddenSaid = {}
+local function hideRows(game)
+    local m = CFG and CFG.menu
+    if not (m and m.hide_stock and type(m.hide) == "table") then return end
+    for _, row in ipairs(m.hide) do
+        if type(row) == "string" and row ~= ROW and row ~= "QuitGame" and not row:find("^Survival") then
+            local _, have = dtCall(game, "FindRow", row)
+            if have ~= nil then
+                dtCall(game, "RemoveRow", row)
+                local _, still = dtCall(game, "FindRow", row)
+                log("rows: '" .. row .. "' " .. (still == nil and "taken off" or "could not be taken off") .. " the main menu")
+                hiddenSaid[row] = true
+            elseif not hiddenSaid[row] then
+                hiddenSaid[row] = true
+                log("rows: '" .. row .. "' is not on the main menu; nothing to hide")
+            end
+        end
+    end
+end
+
 -- One pass over both tables; returns false to stop watching for good.
 function watchRows()
     if containerState == false then return false end
@@ -317,6 +339,7 @@ function watchRows()
             ready[i] = false
         end
         pin(game, nameOf(game))
+        if t.above then hideRows(game) end                 -- (the menu table: the stock entries CFG.menu.hide names)
         local wasReady = ready[i]
         for _, row in ipairs(rowsOf(t)) do                 -- (SURVIVAL MODE first, then the co-op ones below it)
             local r = putRow(t, game, row, wasReady)

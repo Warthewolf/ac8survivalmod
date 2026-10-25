@@ -537,6 +537,10 @@ CFG = {
 --OFFLINE:     -- The end-of-run summary (round, score, kills, specials, time) shows for show_s seconds. This is the Offline
 --OFFLINE:     -- edition: nothing is sent anywhere.
     leaderboard = { pilot = "", show_s = 15 },
+    -- The main menu's stock entries taken off it while the game runs (sv_core.lua hideRows; user, 2026-10-26: "hide on
+    -- the menu ACE COMBAT STORE, ACE COMBAT ONLINE, CAMPAIGN TRAINING"): rows of DT_LiveMenuMainTopCommands by name
+    -- (Shop, Online, CampaignTraining). Only the game's copy in memory: no file changes, back when hide_stock is false.
+    menu = { hide_stock = true, hide = { "Shop", "Online", "CampaignTraining" } },
     -- Survival COOP (Scripts/sv_coop.lua, the runtime's coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
     -- called Survival COOP", then "make it so that 4 players can join", 2026-10-26: "allow up to 24"): up to 24 players,
     -- one run. The host's game runs the rounds, the enemies and the specials; the joiner's game mirrors every enemy the
