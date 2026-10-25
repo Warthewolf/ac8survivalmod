@@ -174,7 +174,20 @@ hold it (2 of 3 samples a frame off its spot, its own path steady), so its fligh
 writes it back; the flight reset 0x147d40830 only turns six vectors at +0x1a38 by +0x2268's rotation (+0x2b38),
 never the position. B never moved (survival_rt.c's input-build hook runs CoopFrame only when the music tick doesn't)
 and the music tick runs 2-3 times within a millisecond each frame, so the timing log learned nothing. 0.22.6: test B
-leaves the copy flying (role 0, tick on) and scans its object at 1 s and 2 s for position / velocity triples. SV_CoopFollow(plane, pawn,
+leaves the copy flying (role 0, tick on) and scans its object at 1 s and 2 s for position / velocity triples.
+0.22.7 (test of 2026-10-25, user: "test A did not stutter any more"): in a mission the music player's clock never ticks;
+every per-frame call comes from the input build (BuildFlightInput, once per player plane, 2-3 a frame), and moving the
+copy on every call (not the first of a frame) took the stutter away. So a smooth, solid stand-in is: role 2 (ALLY tag,
+W box), its actor tick off (`SetActorTickEnabled(false)`), moved on every input-build call (AActor::TeleportTo + the
+flight reset). The scan (copy flying on its own, role 0) found, in the plane object:
+- +0x850 FVector location (cm, = the root), +0x868 FRotator (yaw -23 = its heading), +0x880 velocity (cm/s: 15343,
+  -6512, 0 = the 1 s move exactly), +0x898 the last frame's move (cm): a unit-level movement cache (AI / missiles?);
+  +0xc50 and +0x12f0 hold the previous frame's location.
+- +0x19a8 the flight model's (+0x1918) location in cm; +0x19c0..+0x1a20 six points around the plane (cm, world), and
+  +0x1a38..+0x1ab0 the same six a frame earlier (what the flight reset writes).
+- +0x2b38: the flight state the reset reads (+0x2268 + 0x8d0): two doubles, then the position in metres with Y up
+  (+0x2b48 = -Y, +0x2b50 = Z, +0x2b58 = X), in six 0x28-byte entries (+0x2b38, +0x2b60, ... all equal).
+With the tick off these go stale (the cache at +0x850 keeps the spawn spot): a stand-in should have them written too. SV_CoopFollow(plane, pawn,
 forward, right, up) moves it every frame in formation through slot 315. sv_main.lua Ctrl+F11 / Ctrl+F12 (TEST ONLY).
 What the probe should tell: does the spawn survive offline (no session data), does the local camera / HUD / control
 stay the local player's, does it look like the player's plane (paint: default?), does it fly in formation smoothly,
