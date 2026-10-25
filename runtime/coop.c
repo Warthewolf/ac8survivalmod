@@ -51,6 +51,7 @@ static uint8_t* g_fAITeleportInner;
 static uint8_t* g_fPPTeleportTo, *g_fPPTeleportInner;              /* the same pair on ALivePlayerPlane              */
 static uint8_t* g_fSpawnPlayerPlane, *g_fWorldSpawnActor;          /* a second player plane (COOP.md 6)              */
 static uint8_t* g_siteRemotePossess, *g_siteRemoteNetObj, *g_siteRemoteRole, *g_siteRemoteDummyCls;
+static uint8_t* g_siteRemoteLoadout, *g_siteRemoteFlags, *g_siteRemoteFinish;
 
 /* ---- clock and math ------------------------------------------------------------------------------------------- */
 static int64_t g_qpcFreq;
@@ -415,6 +416,23 @@ static int32_t CoHealth(uint8_t* obj) { return g_offHealth >= 0 && Readable(obj 
 
 /* Whether obj is an AI plane or a player plane with the game's own teleport in both slots (anything else: never
  * teleported). */
+/* AActor::FinishSpawning (from the remote spawn's call to it) and its bHasFinishedSpawning byte (bit 0, its first
+ * test): an actor spawned deferred and never finished has no setup, and teleporting one crashed the game (a player
+ * plane's weapons had no owner, test of 2026-10-25) */
+static uint8_t* g_fFinishSpawning;
+static int32_t  g_finishedOff = -1;
+static int CoFinishSpawningFn(void)
+{
+    if (g_finishedOff >= 0) return g_finishedOff > 0;
+    g_finishedOff = 0;
+    uint8_t* s = g_siteRemoteFinish;
+    if (!s || s[20] != 0xE8) return 0;
+    uint8_t* f = s + 25 + *(int32_t*)(s + 21);
+    if (!InGame(f) || f[0x28] != 0x0F || f[0x29] != 0xB6 || f[0x2a] != 0x41) return 0;          /* movzx eax, byte [rcx + d8] */
+    g_fFinishSpawning = f; g_finishedOff = f[0x2b];
+    return g_finishedOff > 0;
+}
+
 static int CoCanDrive(uint8_t* obj)
 {
     if (!obj) return 0;
@@ -422,6 +440,7 @@ static int CoCanDrive(uint8_t* obj)
     if (!Readable(vt, 8 * (VT_TELEPORT_IN + 1))) return 0;
     int ai = g_fAITeleportTo && g_fAITeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fAITeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fAITeleportInner;
     int pp = g_fPPTeleportTo && g_fPPTeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fPPTeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fPPTeleportInner;
+    if (pp && (!CoFinishSpawningFn() || !(obj[g_finishedOff] & 1))) return 0;                   /* a player plane: set up */
     return ai || pp;
 }
 
@@ -1314,6 +1333,35 @@ typedef void* (*CoSpawnPlaneFn)(void* world, void* cls, const double* transform,
 typedef void  (*CoObjObjFn)(void* self, void* other);
 typedef void  (*CoSelfFn)(void* self);
 
+typedef struct { void* data; int32_t num, max; } CoArr;                          /* TArray<int32> */
+typedef void (*CoLoadoutFn)(void* plane, const CoArr* list1, const CoArr* list2);
+typedef void (*CoFinishFn)(void* actor, const double* transform, uint8_t isDefault, void* cache, uint8_t scaleMethod);
+
+/* The loadout call and its object's field (`cmp qword [plane + disp32], 0` at +0x21: it makes the object once), and the
+ * two loadout bytes, from the remote spawn's code */
+static int CoLoadoutSites(uint8_t** fn, int32_t* objOff, int32_t* byteOff)
+{
+    uint8_t* s = g_siteRemoteLoadout;
+    if (!s || !g_siteRemoteFlags || s[12] != 0xE8) return 0;
+    uint8_t* f = s + 17 + *(int32_t*)(s + 13);
+    if (!InGame(f) || f[0x21] != 0x48 || f[0x22] != 0x83 || f[0x23] != 0xB9 || f[0x28] != 0) return 0;
+    *fn = f; *objOff = *(int32_t*)(f + 0x24);
+    s = g_siteRemoteFlags;
+    if (s[5] != 0x44 || s[6] != 0x88 || s[7] != 0xB6 || s[15] != 0x40 || s[16] != 0x88 || s[17] != 0xBE) return 0;
+    byteOff[0] = *(int32_t*)(s + 8); byteOff[1] = *(int32_t*)(s + 18);
+    return *objOff > 0 && *objOff < 0x8000 && byteOff[0] > 0 && byteOff[0] < 0x8000 && byteOff[1] > 0 && byteOff[1] < 0x8000;
+}
+
+/* One of the loadout object's two lists (TArray<int32> at +0x30 / +0x40, 0x147dd4cb0 fills them), if it looks whole */
+static CoArr CoLoadoutList(uint8_t* lo, int32_t off)
+{
+    CoArr a = { 0 };
+    if (!lo || !Readable(lo + off, sizeof(CoArr))) return a;
+    CoArr* src = (CoArr*)(lo + off);
+    if (src->num < 0 || src->num > 64 || src->max < src->num || (src->num && !Readable(src->data, 4 * (uint32_t)src->num))) return a;
+    return *src;                                                                  /* the loadout call copies it */
+}
+
 static int CoRemoteSites(int32_t* possessSlot, uint8_t** possessFn, int32_t* netSlot, int32_t* roleOff)
 {
     uint8_t* s = g_siteRemotePossess;
@@ -1344,8 +1392,8 @@ static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTr
 
 /* SV_CoopSpawnPP(pawn, x, y, z, yaw) -> the new player plane's address (a copy of pawn's plane class, possessed by a
  * network dummy controller, marked as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy
- * controller class, -4 the controller didn't spawn, -5 the plane didn't spawn. One at a time: a second call removes
- * the first. */
+ * controller class, -4 the controller didn't spawn, -5 the plane didn't spawn, -6 its spawn didn't finish. One at a
+ * time: a second call removes the first. */
 static int L_CoopSpawnPP(void* lua)
 {
     uint8_t* pawn = ArgObject(lua);
@@ -1353,11 +1401,14 @@ static int L_CoopSpawnPP(void* lua)
     if (!pawn || !ArgNumber(lua, &pos[0]) || !ArgNumber(lua, &pos[1]) || !ArgNumber(lua, &pos[2])) return Ret(lua, -1);
     ArgNumber(lua, &yaw);
     if (!LiveObject(pawn)) return Ret(lua, -1);
-    int32_t possessSlot = 0, netSlot = 0, roleOff = 0; uint8_t* possessFn = NULL;
+    int32_t possessSlot = 0, netSlot = 0, roleOff = 0, loObj = 0, loByte[2] = { 0, 0 };
+    uint8_t* possessFn = NULL, *loadoutFn = NULL;
     if (!g_fSpawnPlayerPlane || !g_fWorldSpawnActor || !ResolveUE4SS() ||
-        !CoRemoteSites(&possessSlot, &possessFn, &netSlot, &roleOff)) {
-        Log(L"coop: second player plane: game code not found (spawn %p, world spawn %p, sites %p %p %p)", g_fSpawnPlayerPlane,
-            g_fWorldSpawnActor, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole);
+        !CoRemoteSites(&possessSlot, &possessFn, &netSlot, &roleOff) || !CoLoadoutSites(&loadoutFn, &loObj, loByte) ||
+        !CoFinishSpawningFn()) {
+        Log(L"coop: second player plane: game code not found (spawn %p, world spawn %p, sites %p %p %p %p %p %p)", g_fSpawnPlayerPlane,
+            g_fWorldSpawnActor, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole, g_siteRemoteLoadout, g_siteRemoteFlags,
+            g_siteRemoteFinish);
         return Ret(lua, -2);
     }
     if (CoRefGet(&g_ppPlane) && g_destroyActor) g_destroyActor(g_ppPlane.obj, 0);
@@ -1405,9 +1456,31 @@ static int L_CoopSpawnPP(void* lua)
     if (netOk) ((CoSelfFn)nf)(plane);
     else Log(L"coop: second player plane: its network-object function isn't the one checked (%p); left out", nf);
     *(uint8_t*)(plane + roleOff) = 2;
-    CoRefSet(&g_ppPlane, plane); CoRefSet(&g_ppCtrl, ctrl);
+    /* The game's helper spawns the plane deferred: as the remote spawn does, give it a loadout (yours: your loadout
+     * object's two lists) and the two loadout bytes, then FinishSpawning (construction and BeginPlay: the plane's own
+     * setup, its weapons' owner among it). 0.22.1 left that out and the first formation teleport crashed the game
+     * (its weapons had no owner, test of 2026-10-25). */
+    uint8_t* lo = *(uint8_t**)(pawn + loObj);
+    if (!LiveObject(lo)) lo = NULL;
+    CoArr l1 = CoLoadoutList(lo, 0x30), l2 = CoLoadoutList(lo, 0x40);
+    ((CoLoadoutFn)loadoutFn)(plane, &l1, &l2);
+    plane[loByte[0]] = pawn[loByte[0]]; plane[loByte[1]] = pawn[loByte[1]];
+    ((CoFinishFn)g_fFinishSpawning)(plane, xf, 0, NULL, 1);
+    int finished = (plane[g_finishedOff] & 1) != 0;
+    int32_t wOff = *(int32_t*)(g_siteRemoteLoadout + 20);                          /* mov r14, [plane + disp32] */
+    uint8_t* w = (wOff > 0 && wOff < 0x8000) ? *(uint8_t**)(plane + wOff) : NULL;
+    void* owner = (w && Readable(w + 0x2d0, 8)) ? *(void**)(w + 0x2d0) : NULL;   /* what crashed 0.22.1 (COOP.md 6) */
     Log(L"coop: second player plane %p (class %p) spawned, controller %p, possessed (slot +%x, Possess %p), network object %p (+%x), role byte +%x = 2",
         plane, cls, ctrl, (uint32_t)possessSlot, possessFn, (netOk && noOff > 0) ? *(void**)(plane + noOff) : NULL, (uint32_t)noOff, (uint32_t)roleOff);
+    Log(L"coop: second player plane: loadout %p (+%x; yours %p: %d and %d entries), bytes +%x +%x = %d %d, spawn finished: %s, weapons %p (+%x), their owner %p",
+        *(void**)(plane + loObj), (uint32_t)loObj, lo, l1.num, l2.num, (uint32_t)loByte[0], (uint32_t)loByte[1], plane[loByte[0]],
+        plane[loByte[1]], finished ? L"yes" : L"NO", w, (uint32_t)wOff, owner);
+    if (!finished) {
+        if (g_destroyActor) { g_destroyActor(plane, 0); g_destroyActor(ctrl, 0); }
+        Log(L"coop: second player plane: its spawn didn't finish; removed");
+        return Ret(lua, -6);
+    }
+    CoRefSet(&g_ppPlane, plane); CoRefSet(&g_ppCtrl, ctrl);
     return Ret(lua, (int64_t)(uintptr_t)plane);
 }
 
