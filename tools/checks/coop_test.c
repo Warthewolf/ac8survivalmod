@@ -122,6 +122,19 @@ int main(int argc, char** argv)
     const char* nj = getenv("COOP_TEST_JOINERS");
     int joiners = nj && atoi(nj) > 0 && atoi(nj) < CO_MAX_PLAYERS ? atoi(nj) : 3, players = joiners + 1;
     srand(host ? 11 : (unsigned)GetCurrentProcessId());
+    if (host) {                                           /* the guard on states from other games (security review of
+                                                           * 2026-10-26): never a NaN, a far-off point or a zero rotation */
+        CoEnt e; memset(&e, 0, sizeof(e));
+        double good[3] = { 1000, 2000, 3000 }, nanp[3] = { NAN, 0, 0 }, distant[3] = { 1e12, 0, 0 };
+        float unit[4] = { 0, 0, 0, 1 }, zero[4] = { 0, 0, 0, 0 }, nanq[4] = { NAN, 0, 0, 1 };
+        CoPushSnap(&e, 1.0, nanp, unit, 0); CoPushSnap(&e, 1.1, distant, unit, 0);
+        CoPushSnap(&e, 1.2, good, zero, 0); CoPushSnap(&e, 1.3, good, nanq, 0);
+        int dropped = e.ns == 0;
+        CoPushSnap(&e, 1.4, good, unit, 0);
+        printf("host: guard: bad states %s, a good one %s\n", dropped ? "dropped" : "KEPT", e.ns == 1 ? "kept" : "DROPPED");
+        if (!dropped || e.ns != 1) return 3;
+        CO.badPk = 0;
+    }
     for (int i = 0; i < 400; ++i) g_vt[i] = (void*)FakeTeleIn;
     g_vt[VT_TELEPORT_TO] = (void*)FakeTeleTo; g_vt[VT_TELEPORT_IN] = (void*)FakeTeleIn;
     g_fAITeleportTo = (uint8_t*)FakeTeleTo; g_fAITeleportInner = (uint8_t*)FakeTeleIn;

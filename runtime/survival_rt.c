@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.25.0"
+#define RT_VERSION           L"0.26.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -405,7 +405,9 @@ static Fn4      g_nextText;
 
 static volatile int32_t  g_chosen;     /* the Survival entry was picked on the main menu */
 static volatile int32_t  g_savedMode = -1;
-static volatile int32_t  g_menuChoice;  /* the last Survival entry picked: 0 none yet, 1 SURVIVAL MODE, 3 CO-OP: HOST, 4 CO-OP: JOIN */
+static volatile int32_t  g_menuChoice;  /* the last main-menu entry picked: 0 none yet or another entry, 1 SURVIVAL MODE,
+                                          * 3 CO-OP: HOST, 4 CO-OP: JOIN (settings rows leave it) */
+static volatile int32_t  g_menuPicks;   /* how many main-menu entries were picked: Lua sees the same entry picked again */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
 static void* volatile    g_holdPage;
 static volatile uint64_t g_holdUntil;
@@ -553,6 +555,8 @@ static int32_t  g_setHead, g_setCount;
 static uintptr_t OnMainDecide(void* widget)
 {
     const FString* a = SelectedArgs(widget, NULL);
+    /* Survival's own settings rows only: taken here, not passed on (the stock decide would open their page). Every
+     * other row still goes down the chain (Stonehenge's hooks too), as the landing menu's SV_Buy_ rows do. */
     if (a && a->data && a->num > 8 && a->num <= 32 && !memcmp(a->data, L"SV_Set_", 7 * 2)) {
         g_chosen = 0;                                  /* (not a start: should the menu move on anyway, no Survival) */
         if (g_setCount < SET_QUEUE) {
@@ -573,7 +577,11 @@ static uintptr_t OnMainDecide(void* widget)
         g_menuChoice = coop ? coop : 1;
         Log(L"main menu: %s chosen, opening the difficulty select (context mode %d)",
             coop == 3 ? L"Survival Co-op: Host" : coop == 4 ? L"Survival Co-op: Join" : L"Survival Mode", (int32_t)g_savedMode);
+    } else {
+        g_menuChoice = 0;                               /* another entry: co-op closes (code review of 2026-10-26: it
+                                                         * stayed open into stock missions) */
     }
+    ++g_menuPicks;
     return g_nextMainDecide(widget);
 }
 
@@ -630,8 +638,8 @@ static TextRow g_text[] = {
     { L"SV_Menu_Title",        L"SURVIVAL MODE", { 0 } },
     { L"SV_Menu_Help",         L"Hold Comona Island against endless waves. Land between rounds to rearm and repair.", { 0 } },
     { L"SV_Menu_CoopHostTitle", L"SURVIVAL CO-OP: HOST", { 0 } },
-    { L"SV_Menu_CoopHostHelp",  L"Host Survival Mode for up to three Steam friends. They pick SURVIVAL CO-OP: JOIN "
-                                L"and fly with you.", { 0 } },
+    { L"SV_Menu_CoopHostHelp",  L"Host Survival Mode for your Steam friends (CO-OP ROOM: how many). They pick "
+                                L"SURVIVAL CO-OP: JOIN and fly with you.", { 0 } },
     { L"SV_Menu_CoopJoinTitle", L"SURVIVAL CO-OP: JOIN", { 0 } },
     { L"SV_Menu_CoopJoinHelp",  L"Join a Steam friend who picked SURVIVAL CO-OP: HOST, and fly their run with them.", { 0 } },
     { L"SV_Mission_Name",      L"Survival Mode", { 0 } },
@@ -2169,11 +2177,13 @@ static int L_SndMaster(void* lua)
 /* SV_Version() -> "0.19.0" */
 /* SV_MenuChoice() -> the last Survival entry picked on the main menu: 0 none yet, 1 SURVIVAL MODE, 3 SURVIVAL CO-OP:
  * HOST, 4 SURVIVAL CO-OP: JOIN */
-static int L_MenuChoice(void* lua) { return Ret(lua, g_menuChoice); }
+/* SV_MenuChoice() -> the last main-menu entry picked (g_menuChoice) + 16 x how many were picked, so the same entry
+ * picked again is seen (a retry after a failed co-op open). Lua: % 16 the entry, // 16 the picks. */
+static int L_MenuChoice(void* lua) { return Ret(lua, (int64_t)g_menuChoice + 16 * (int64_t)g_menuPicks); }
 
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.25.0";
+    static const char v[] = "0.26.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

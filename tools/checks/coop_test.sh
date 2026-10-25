@@ -23,7 +23,7 @@ for joiners in 3 11; do
         j=$((j + 1))
     done
     sleep 19
-    grep -vh "\[log\]" host.txt join*.txt | grep -E "player|reliable|enemy|OUT OF|full|samerole" | grep -vE "mean 0\.|of 40 messages" || true
+    grep -vh "\[log\]" host.txt join*.txt | grep -E "player|reliable|enemy|OUT OF|full|samerole|guard" | grep -vE "mean 0\.|of 40 messages" || true
     fail=0
     [ -f host.rc ] && [ "$(cat host.rc)" = 0 ] || fail=1
     j=1

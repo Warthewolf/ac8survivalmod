@@ -1910,4 +1910,26 @@ function ANOM.tick(now, s)
     if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
     elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end      -- (0.3 km: no flicker)
 end
+
+-- A Survival COOP joiner's own field (sv_coop.lua clientRounds; code review of 2026-10-26: the host's field events
+-- switched every joiner's field on the host's distance): the joiner runs no rounds, so its distance to its copy of the
+-- Anomaly decides it here, as ANOM.tick does for the host. Off once the copy is gone.
+function ANOM.clientTick()
+    local c = CFG.specials.anomaly
+    local p
+    for _, q in ipairs(planes) do if q.unit == c.unit and valid(q.obj) then p = q end end
+    local you = playerLocation()
+    if not (p and you) then
+        if ANOM.on then setField(false, nil) end
+        return
+    end
+    local ok, l = pcall(function() local v = p.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not ok then return end
+    local s = { state = "hunt", dist = km(l, you) }
+    local pawn = valid(survivalPC) and survivalPC.Pawn
+    local a = pawn and addrOf(pawn)
+    if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end
+    if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
+    elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end
+end
 end

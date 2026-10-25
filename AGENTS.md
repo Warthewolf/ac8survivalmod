@@ -240,14 +240,28 @@ a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lin
 until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
 `python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
 
-## Survival COOP (Lua 0.70.6-coop.4, runtime 0.22.8, 2026-10-25; played: hard rules 48-51)
-Up to four players, host-authoritative (after Double Trigger, the AC7 co-op mod), on branch `feature/survival-coop`.
-tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a puppet; Steam P2P
-without callbacks; a real second player plane, section 6), the protocol and the test checklist. Native half
-runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-D (each other player's
-stand-in, an allied AI plane of their airframe: CFG.coop.airframes). Role auto by default; CFG.coop.name sets the name.
-Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump tools/coop_edition.py COOP_TAG for every
-build friends get: games with different tags refuse to link); offline transport test `sh tools/checks/coop_test.sh`.
+## Survival COOP (Lua 0.70.6-coop.11, runtime 0.26.0, 2026-10-26; played up to coop.4: hard rules 48-51)
+Up to 24 players (protocol 3), host-authoritative (after Double Trigger, the AC7 co-op mod), on branch
+`feature/survival-coop`. tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
+puppet; Steam P2P without callbacks; a real second player plane, section 6), the protocol and the test checklist.
+Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-X (each other
+player's stand-in, an allied AI plane of their airframe: CFG.coop.airframes), name keys SV_CoopName_A-X.
+Untested in game since coop.4 (coop.5-coop.11): every RE_SV_* event forwarded to the joiners but each player's own;
+SURVIVAL CO-OP: HOST / JOIN on the main menu (OnMainDecide, SV_MenuChoice); names on the stand-ins' target boxes; an
+online-style pause; the host's Q batches for up to 24 players; more enemies per player (COOP.more); the host's settings
+for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); the main menu's settings rows (SV_Set_*,
+SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
+tools/coop_edition.py COOP_TAG for every build friends get: games with different tags refuse to link).
+Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
+state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
+sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
+(knownRow) and stand-in rows of CFG.coop.airframes, and takes a host's settings only where the shipped CFG has that
+setting with a value of the same type and size (fits; build data and each player's own sections never). The main menu:
+any entry but HOST / JOIN closes co-op; picking one again retries a failed open (SV_MenuChoice counts the picks).
+Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP),
+`sh tools/checks/coop_settings_test.sh` (the settings sync, rows and scaling on the real parts) and
+`sh tools/checks/lua_load_test.sh [mod folder]` (every part of main.lua loads). The last two run on a real Lua 5.4.6
+that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).
 Player guide: Claude Docs "Survival COOP: Player Guide".
 
 ## Runtime layout (Lua, from 0.66.0)
@@ -274,7 +288,9 @@ Player guide: Claude Docs "Survival COOP: Player Guide".
 - The pool's flights must also be in tools/survival_events.py POOL (that's where they get their attack orders and the
   chase that moves their 6 km unit area onto the player every 6 s).
 - No Lua interpreter on the build machine: run `python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua`
-  after every Lua edit (all the parts together: a global one sets is known to the others).
+  after every Lua edit (all the parts together: a global one sets is known to the others). To run Lua code,
+  `sh tools/checks/lua_build.sh` builds a Lua 5.4.6 (UE4SS's) from lua.org's source into build/checks/lua.exe;
+  `sh tools/checks/lua_load_test.sh` then loads every part outside the game, with the game's API stubbed.
 
 ## User friendliness (top priority)
 - Install through ACE8 Mod Launcher, with Survival Mode as a toggle.

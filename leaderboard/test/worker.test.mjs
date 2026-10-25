@@ -101,5 +101,9 @@ check(`/pilot totals: ${JSON.stringify(totals && totals.value)}`, totals && tota
 const jetRow = db.prepare("SELECT aircraft FROM runs WHERE run_id = '0123456789abcdef0123'").get();
 check(`aircraft stored: ${jetRow && jetRow.aircraft}`, jetRow && jetRow.aircraft === "su57");
 check("a bad aircraft code is refused", checkRun({ ...run, aircraft: "<b>" }) !== null);
+{ // (security review of 2026-10-26: names of Object's own members are no aircraft or special)
+  const r = { ...run, aircraft: "constructor", specials: [{ kind: "constructor", round: 1, seconds: 30, won: true }] };
+  check("a special named constructor is left out", checkRun(r) === null && r.specials.length === 0);
+}
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);

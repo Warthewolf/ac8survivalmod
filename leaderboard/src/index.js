@@ -23,7 +23,10 @@ const AIRCRAFT = { a10c: "A-10C Thunderbolt II", f02a: "F-2A", f04e: "F-4E Phant
   f18f: "F/A-18F Super Hornet", f15e: "F-15E Strike Eagle", su47: "Su-47 Berkut", m21b: "MiG-21bis Fishbed",
   su35: "Su-35S Flanker-E", m31b: "MiG-31B Foxhound", su33: "Su-33 Flanker-D", e06b: "EA-6B Prowler",
   f18e: "F/A-18E Super Hornet", f14a: "F-14A Tomcat", adfx: "ADFX-02" };
-const jet = (code) => (code ? AIRCRAFT[code] || code.toUpperCase() : null);
+// (own keys only: "constructor" passes the code check and would name Object's constructor, its source on the boards;
+// security review of 2026-10-26)
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);
+const jet = (code) => (code ? own(AIRCRAFT, code) || code.toUpperCase() : null);
 const RATE_PER_HOUR = 30;                     // runs one IP may submit in an hour (every ended run is sent, restarts too)
 const API = "https://discord.com/api/v10";
 
@@ -69,7 +72,7 @@ function checkRun(run) {
       return "bad special";
   }
   // a special this Worker doesn't know yet (a newer mod than the deployed Worker) is left out, not the whole run
-  run.specials = sp.filter((s) => SPECIALS[s.kind]);
+  run.specials = sp.filter((s) => own(SPECIALS, s.kind));
   return null;
 }
 

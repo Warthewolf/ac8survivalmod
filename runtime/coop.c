@@ -672,8 +672,20 @@ static void CoOnReliable(int k, uint32_t seq, const char* d, uint16_t n)
     }
 }
 
+/* A state from another game, before it may move anything (security review of 2026-10-26): a position that isn't a
+ * finite number within 100,000 km, or a rotation that isn't about a unit quaternion, from a broken or hostile game,
+ * would go straight to the plane's teleport. */
+static int CoSaneState(const double* p, const float* q)
+{
+    for (int c = 0; c < 3; ++c) if (!(p[c] > -1e10 && p[c] < 1e10)) return 0;    /* (false for NaN too) */
+    double n = 0;
+    for (int c = 0; c < 4; ++c) { if (!(q[c] >= -1.01f && q[c] <= 1.01f)) return 0; n += (double)q[c] * q[c]; }
+    return n > 0.5 && n < 1.5;
+}
+
 static void CoPushSnap(CoEnt* e, double t, const double* p, const float* q, double now)
 {
+    if (!CoSaneState(p, q)) { ++CO.badPk; return; }
     if (e->ns && t <= e->s[e->ns - 1].t) return;              /* old or repeated */
     if (e->ns == CO_SNAPS) { memcpy(&e->s[0], &e->s[1], sizeof(CoSnap) * (CO_SNAPS - 1)); --e->ns; }
     CoSnap* s = &e->s[e->ns++];
@@ -826,6 +838,8 @@ static void CoQRec(uint8_t* r, int slot, uint32_t ms, const double* pos, const f
 static void CoOnPlayer(int src, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags, double now)
 {
     if (src < 0 || src >= CO_MAX_PLAYERS || src == CO.mySlot) return;
+    if (!CoSaneState(pos, q)) { ++CO.badPk; return; }          /* (not kept, not relayed) */
+    if (!(maxHp >= 0 && maxHp < 1e9f)) maxHp = 0;
     CoPlayer* P = &CO.players[src];
     double t = CoPeerTime(ms);
     CoTrackOffset(P, t, now);

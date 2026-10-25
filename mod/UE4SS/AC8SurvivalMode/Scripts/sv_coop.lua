@@ -55,6 +55,30 @@ local function split(s)
     return t
 end
 local function once(key, msg) if not M.said[key] then M.said[key] = true; log(msg) end end
+-- Guards on what another game sends (security review of 2026-10-26: a broken or hostile game must not crash, hang or
+-- take over this one): text cut to a length, numbers finite and in range, slots and NPC rows ones this game has.
+local function short(v, n) return (tostring(v or ""):sub(1, n)) end
+local function finite(v, lim) return type(v) == "number" and v == v and v > -lim and v < lim end
+local HIT_MAX, CREDITS_MAX = 100000, 1000000                -- (one hit's damage; one round bonus's zollars)
+local function slotOk(s) return type(s) == "number" and s == math.floor(s) and s >= 0 and s <= MAX_SLOT end
+local knownRows = {}
+local function knownRow(row)                                -- a row of Survival's NPC table here (DT_SV_NpcMission)
+    if type(row) ~= "string" or #row == 0 or #row > 64 or not row:match("^[%w_]+$") then return false end
+    if knownRows[row] then return true end
+    local dt = loadObject("/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission")
+    if not dt then return true end                          -- (it can't be checked: as before)
+    local ok, r = dtCall(dt, "FindRow", row)
+    if ok and r ~= nil then knownRows[row] = true; return true end
+    return false
+end
+local function standInRow(row)                              -- another player's airframe: one of CFG.coop.airframes
+    local c = cfg()
+    if type(row) == "string" and row ~= "" then
+        if row == c.default then return row end
+        for _, r in pairs(c.airframes) do if r == row then return row end end
+    end
+    return c.default
+end
 local function callout(text, sub)
     if cfg().callouts and type(hudCallout) == "function" then M.noMirror = true; pcall(hudCallout, text, sub); M.noMirror = false end
 end
@@ -71,7 +95,6 @@ local function playerCount()
     for _ in pairs(M.roster) do n = n + 1 end
     return math.max(n, 1)
 end
-COOP.playerCount = function() return COOP.open and playerCount() or 1 end
 -- A round's aircraft (or a wave's) for the host's room (sv_rounds.lua startRound): aircraft_per_player more for each
 -- player past the first, up to CFG.coop[capKey], never fewer than one player gets
 function COOP.more(n, capKey)
@@ -135,6 +158,7 @@ local KEEP_EVENTS = {
     "^RE_SV_AceTurn_", "^RE_SV_AceKulbit_",  -- moves around the host's plane: a joiner sees them in the copies' stream
     "^RE_SV_GlitchBlink", "^RE_SV_ValkaTp_",
     "^RE_SV_AirfieldOpen$", "^RE_SV_AirfieldClose$",                    -- (the airfield goes as "af")
+    "^RE_SV_AnomalyField",     -- each player's own field: a joiner's game runs ANOM.clientTick on its own distance
 }
 local function mirroredEvent(name)
     name = tostring(name)
@@ -286,7 +310,8 @@ end
 
 local function hostHit(from, id, dmg)
     local e = M.byId[id]
-    if not (e and not e.dead and valid(e.obj) and dmg > 0) then return end
+    if not (e and not e.dead and valid(e.obj) and finite(dmg, math.huge) and dmg > 0) then return end
+    dmg = math.min(dmg, HIT_MAX)
     local P = M.peers[from]
     local causer = P and P.obj and valid(P.obj) and P.obj or nil
     local ok = pcall(function() e.obj:ModifyHealth(-dmg, causer, true) end)
@@ -349,7 +374,9 @@ local function doSpawn(q)
         log("coop: " .. unit .. "'s last copies are still up; spawning anyway")
     end
     for _, op in ipairs(q.ops) do
-        if op.idx >= 0 then rawSetAircraft(unit, op.row, op.idx) else rawSetAircraft(unit, op.row) end
+        if not knownRow(op.row) then
+            once("row" .. tostring(op.row), "coop: the host's aircraft " .. short(op.row, 64) .. " isn't in this game's table; not set")
+        elseif op.idx >= 0 then rawSetAircraft(unit, op.row, op.idx) else rawSetAircraft(unit, op.row) end
     end
     if q.level and q.level >= 0 and rawSetLevel then rawSetLevel(unit, q.level) end
     local old = M.cunits[unit]
@@ -394,6 +421,22 @@ local function clientRounds(now)
         else D.waves = nil end
     end
     if not levelReady() then return end
+    if ANOM and ANOM.clientTick then                     -- the Anomaly's field on your own distance to its copy
+        local okA, errA = pcall(ANOM.clientTick)
+        if not okA then once("anomField", "coop: anomaly field error " .. tostring(errA)) end
+    end
+    -- the host's events held while this level loaded, in order (code review: some set lasting state, as the railgun
+    -- warning and the shuttle's countdown); older than a minute: let go
+    if M.evQ and #M.evQ > 0 then
+        local q = M.evQ
+        M.evQ = nil
+        for _, e in ipairs(q) do
+            if os.clock() - e.at < 60 then
+                local r = rawEvent(e.name)
+                if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. e.name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+            end
+        end
+    end
     for i = #M.spawnQ, 1, -1 do
         local q = M.spawnQ[i]
         if os.clock() >= (q.at or 0) then
@@ -459,7 +502,7 @@ local function peerTick(slot)
     local unit = PEER_UNITS[slot]
     if fresh and not P.obj and not P.spawning and levelReady() then          -- (not while this level loads)
         local r0 = M.roster[slot]
-        local row = (r0 and r0.row ~= "" and r0.row) or cfg().default
+        local row = standInRow(r0 and r0.row)
         rawSetAircraft(unit, row)
         spawningUnit = unit
         local r = rawSpawn(unit)
@@ -501,6 +544,38 @@ end
 -- the host's difficulty preset is used for everyone (presetName).
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, probe = true, ai_watch = true }
+-- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
+-- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
+local function structural(path)
+    local last = path[#path]
+    return path[1] == "pool" or last == "pool" or last == "heavy_units" or last == "units"
+end
+-- A host's value against the shipped one at its place (security review of 2026-10-26: a broken or hostile host must
+-- not hang or break a joiner): the same type; numbers finite and not wildly past the shipped size; text short, no
+-- control characters; lists of at most 1000 items like the shipped ones. Paths this build doesn't have are skipped.
+local function fits(v, d)
+    if type(v) ~= type(d) then return false end
+    if type(v) == "number" then return v == v and math.abs(v) <= math.max(math.abs(d) * 1000, 100000) end
+    if type(v) == "string" then return #v <= 1024 and not v:find("%c") end
+    if type(v) == "table" then
+        local n = 0
+        for k, x in pairs(v) do
+            n = n + 1
+            local dx = d[k]
+            if dx == nil and math.type(k) == "integer" then dx = d[1] end    -- (a list's new item: like its first)
+            if n > 1000 or dx == nil or not fits(x, dx) then return false end
+        end
+    end
+    return true
+end
+local function shipped(path)                               -- CFG_DEFAULTS at path, or nil
+    local t = CFG_DEFAULTS
+    for j = 1, #path do
+        if type(t) ~= "table" then return nil end
+        t = t[path[j]]
+    end
+    return t
+end
 local CHUNK = 900
 local function esc(s) return (s:gsub("[%%,{}|%c]", function(c) return string.format("%%%02X", c:byte()) end)) end
 local function enc(v, out)
@@ -585,8 +660,10 @@ function M.sendSettings(to)
         if type(v) == "table" and type(d) == "table" and not isList(v) and not isList(d) then diff(v, d, { k }, out)
         elseif not same(v, d) then out[#out + 1] = { { k }, v } end
     end
+    for i = #out, 1, -1 do if structural(out[i][1]) then table.remove(out, i) end end
     local tk = {}
-    enc({ ver = VERSION, preset = (presetName()), max = maxPlayers(), diff = out }, tk)
+    local pname, pdiff = presetName()
+    enc({ ver = VERSION, preset = pname, pdiff = pdiff, max = maxPlayers(), diff = out }, tk)
     local text = table.concat(tk, ",")
     local n = math.max(1, math.ceil(#text / CHUNK))
     for i = 1, n do sendTo(to, true, "cf", i, n, text:sub((i - 1) * CHUNK + 1, i * CHUNK)) end
@@ -597,7 +674,7 @@ end
 -- (joiner) a chunk of the host's settings; the last one applies them
 function M.onSettings(f)
     local i, n = tonumber(f[2]), tonumber(f[3])
-    if not (i and n and n >= 1 and n <= 400) then return end
+    if not (i and n and n == math.floor(n) and n >= 1 and n <= 400 and i == math.floor(i) and i >= 1 and i <= n) then return end
     if i == 1 then M.cfParts = {} end
     M.cfParts = M.cfParts or {}
     M.cfParts[i] = f[4] or ""
@@ -613,10 +690,14 @@ function M.onSettings(f)
         for k in pairs(synced()) do M.mine[k] = deepCopy(CFG[k]) end
     end
     for k in pairs(synced()) do put(k, CFG_DEFAULTS[k]) end
-    local names = {}
-    for _, e in ipairs(s.diff) do
+    local names, skipped = {}, 0
+    for i, e in ipairs(s.diff) do
         local p = type(e) == "table" and e[1]
-        if type(p) == "table" and #p >= 1 and not PERSONAL[p[1]] then
+        local ok = i <= 5000 and type(p) == "table" and #p >= 1 and #p <= 12 and not PERSONAL[p[1]] and not structural(p)
+        local d = ok and shipped(p)
+        if not ok or d == nil or e[2] == nil or not fits(e[2], d) then
+            skipped = skipped + 1
+        else
             local t = CFG
             for j = 1, #p - 1 do
                 if type(t[p[j]]) ~= "table" then t[p[j]] = {} end
@@ -627,8 +708,11 @@ function M.onSettings(f)
             if #names < 12 then local q = {}; for j = 1, #p do q[j] = tostring(p[j]) end; names[#names + 1] = table.concat(q, ".") end
         end
     end
-    M.hostPreset = type(s.preset) == "string" and s.preset or nil
-    M.hostMax = tonumber(s.max)
+    if skipped > 0 then log("coop: " .. skipped .. " of the host's settings skipped (this build has no such setting, or the value doesn't fit it)") end
+    M.hostPreset = type(s.preset) == "string" and short(s.preset, 16) or nil
+    M.hostDiff = math.tointeger(s.pdiff)
+    local mx = math.tointeger(s.max)
+    M.hostMax = mx and mx >= 2 and mx <= MAX_SLOT + 1 and mx or nil
     log(string.format("coop: playing with the host's settings (Survival %s, preset %s): %d differ from the shipped ones%s",
         tostring(s.ver), tostring(M.hostPreset), #s.diff, #names > 0 and (": " .. table.concat(names, ", ") .. (#s.diff > #names and ", ..." or "")) or ""))
 end
@@ -637,7 +721,7 @@ end
 function M.restoreMine()
     if not M.mine then return end
     for k in pairs(synced()) do put(k, M.mine[k]) end
-    M.mine, M.hostPreset, M.hostMax = nil, nil, nil
+    M.mine, M.hostPreset, M.hostDiff, M.hostMax = nil, nil, nil, nil
     log("coop: your own settings are back")
 end
 
@@ -647,7 +731,7 @@ function M.ownRoot() return M.mine or CFG end
 local rawPreset = presetName
 presetName = function()
     local name, d = rawPreset()
-    if COOP.client() and M.hostPreset then return M.hostPreset, d end
+    if COOP.client() and M.hostPreset then return M.hostPreset, M.hostDiff or d end
     return name, d
 end
 end
@@ -655,7 +739,7 @@ end
 local function onHostMessage(from, f)
     local k = f[1]
     if k == "hi" then
-        local ver, rt, row, name = f[2], f[3], f[4], f[5]
+        local ver, rt, row, name = short(f[2], 32), short(f[3], 16), short(f[4], 64), short(f[5], 32)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first = not M.roster[from]
         M.roster[from] = { row = row or "", ver = ver, name = name }
@@ -684,9 +768,10 @@ local function onJoinerMessage(f)
                   waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, got = os.clock() }
     elseif k == "pi" then
         local s = tonumber(f[2])
-        if not s then return end
+        if not slotOk(s) then return end
+        f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first = not M.roster[s]
-        M.roster[s] = { row = f[3] or "", ver = f[4], name = f[5] }
+        M.roster[s] = { row = f[3], ver = f[4], name = f[5] }
         if first and s ~= COOP.slot then
             log(string.format("coop: player %d is %s (Survival %s, flies %s)", s + 1, tostring(f[5]), tostring(f[4]), tostring(f[3])))
             if s == 0 then
@@ -711,16 +796,16 @@ local function onJoinerMessage(f)
             log("coop: the host's airfield is " .. (down and "down: landing closed" or "back up: landing open"))
         end
     elseif k == "co" then
-        if cfg().callouts then M.noMirror = true; pcall(hudCallout, f[2], f[3] ~= "" and f[3] or nil, f[4] == "1"); M.noMirror = false end
+        if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, f[4] == "1"); M.noMirror = false end
     elseif k == "cr" then
         local n = tonumber(f[2]) or 0
-        if n > 0 then addCredits(n, tostring(f[3]) .. " (the host's round)") end
+        if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX then addCredits(math.floor(n), short(f[3], 80) .. " (the host's round)") end
     elseif k == "sp" then
-        local unit, pose, ops = f[2], nil, {}
+        local unit, pose, ops = short(f[2], 96), nil, {}
         if f[3] and f[3] ~= "-" then
             local p = {}
             for v in f[3]:gmatch("[^,]+") do p[#p + 1] = tonumber(v) end
-            if #p == 4 then pose = p end
+            if #p == 4 and finite(p[1], 1e10) and finite(p[2], 1e10) and finite(p[3], 1e10) and finite(p[4], 1e6) then pose = p end
         end
         if f[4] and f[4] ~= "-" then
             for op in f[4]:gmatch("[^;]+") do
@@ -746,7 +831,7 @@ local function onJoinerMessage(f)
             local c = M.copies[tonumber(id)]
             h = tonumber(h)
             if c and valid(c.obj) and h and h > 0 then
-                local v = math.max(h, 1)
+                local v = math.min(math.max(h, 1), 2147483647)
                 pcall(function() c.obj.HealthInternal = v end)
                 c.exp = v
             end
@@ -759,11 +844,15 @@ local function onJoinerMessage(f)
             if c then killCopy(id, c.obj); M.copies[id] = nil end
         end
     elseif k == "ev" then
-        if mirroredEvent(f[2]) and D and rawEvent and levelReady() then
+        if mirroredEvent(f[2]) and D and rawEvent and not levelReady() then    -- (held until this level is ready)
+            M.evQ = M.evQ or {}
+            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock() } end
+        elseif mirroredEvent(f[2]) and D and rawEvent then
             local r = rawEvent(f[2])
             if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. tostring(f[2]) .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
         end
     elseif k == "rs" then
+        M.evQ = nil
         killAllCopies("the host's run started over")
         if D then D.round, D.state, M.rnd = 0, "wait", nil end
     end
@@ -815,6 +904,7 @@ local function onMessage(raw)
     local from = tonumber(slot) or 0
     body = body or raw
     local f = split(body)
+    for i = 2, #f do f[i] = f[i]:gsub("%c", "") end
     if f[1] == "sys" then
         log("coop: player " .. (from + 1) .. ": " .. body)
         return onSys(from, f[2], f)
@@ -1057,20 +1147,23 @@ function COOP.tick(tick)
             if not okS then log("settings: " .. tostring(errS)) end
         end
     end
-    -- Co-op opens when the player picks SURVIVAL CO-OP: HOST or JOIN on the main menu, as that role, and closes on
-    -- SURVIVAL MODE (SV_MenuChoice, the runtime's: 1 SURVIVAL MODE, 3 HOST, 4 JOIN, 0 nothing yet). An older main.dll
-    -- without it: open at start with CFG.coop.role, as before.
-    local choice = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
-    if choice == nil then
+    -- Co-op opens when the player picks SURVIVAL CO-OP: HOST or JOIN on the main menu, as that role, and closes when
+    -- they pick any other entry (SV_MenuChoice, the runtime's: the entry, 1 SURVIVAL MODE, 3 HOST, 4 JOIN, 0 another,
+    -- + 16 x the picks so far: picking the same entry again retries a co-op that couldn't open, and keeps one that's
+    -- open). An older main.dll without it: open at start with CFG.coop.role, as before.
+    local raw = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
+    if raw == nil then
         if not COOP.open and not M.openTried then M.openTried = true; openCoop("start") end
-    elseif choice ~= M.choice then
-        local was = M.choice
-        M.choice = choice
+    elseif raw ~= M.raw then
+        M.raw = raw
+        local choice = math.floor(raw) % 16
         local want = (choice == 3 and "host") or (choice == 4 and "join") or nil
-        if COOP.open and (not want or (was == 3 or was == 4)) then
-            closeCoop(want and "the other co-op entry picked" or "SURVIVAL MODE picked: playing alone")
+        if COOP.open and want ~= M.picked then
+            closeCoop((want and "the other co-op entry picked") or (choice == 1 and "SURVIVAL MODE picked: playing alone")
+                      or "another main-menu entry picked")
         end
-        if want then openCoop(want == "host" and "SURVIVAL CO-OP: HOST picked" or "SURVIVAL CO-OP: JOIN picked", want) end
+        M.picked = want
+        if want and not COOP.open then openCoop(want == "host" and "SURVIVAL CO-OP: HOST picked" or "SURVIVAL CO-OP: JOIN picked", want) end
     end
     if not COOP.open then return end
     pcall(nameTick)
@@ -1087,7 +1180,11 @@ function COOP.tick(tick)
         local info = SV_CoopInfo()
         local st = info:match("state=(%a+)")
         M.linkNames = {}
-        for s, name in (info:match("peers=(.*)$") or ""):gmatch("(%d+)/%a+/%-?%d+/%-?%d+/([^,]*)") do M.linkNames[tonumber(s)] = name end
+        M.linkedPeers = 0
+        for s, st, name in (info:match("peers=(.*)$") or ""):gmatch("(%d+)/(%a+)/%-?%d+/%-?%d+/([^,]*)") do
+            M.linkNames[tonumber(s)] = name
+            if st == "linked" then M.linkedPeers = M.linkedPeers + 1 end
+        end
         if st ~= M.state then
             M.state = st
             log("coop: " .. info)
@@ -1129,7 +1226,7 @@ function COOP.tick(tick)
     -- An online-style pause (user, 2026-10-26: "when the Host Pauses, the game doesn't pause all the enemies for the
     -- other players"): while another player is linked, the pause menu opens but the world keeps running, on the host's
     -- game (its enemies, which every game copies) and on a joiner's (its plane). Alone, the game pauses as ever.
-    if playerCount() > 1 and valid(survivalPC) and gamePaused(survivalPC) then
+    if (M.linkedPeers or 0) > 0 and valid(survivalPC) and gamePaused(survivalPC) then
         local gs = cdo("/Script/Engine.Default__GameplayStatics")
         local ok = gs and pcall(function() gs:SetGamePaused(survivalPC, false) end)
         M.unpauses = (M.unpauses or 0) + 1

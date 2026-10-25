@@ -251,7 +251,9 @@ local seen = {}                    -- per table: address of the table object las
 ready = {}                   -- per table: all its rows are in
 
 -- One of a table's rows into the game's copy: "in" (it was), "added", "wait" (try again later) or "stop" (give up)
+local absent = {}                  -- extra rows this build's tables don't have: said once, not looked for again
 local function putRow(t, game, row, wasReady)
+    if absent[row] then return "in" end
     local okF, have = dtCall(game, "FindRow", row)
     if not okF then
         log("rows: this UE4SS build cannot read data tables (" .. tostring(have) .. "); the menu is left as it is")
@@ -267,7 +269,11 @@ local function putRow(t, game, row, wasReady)
     end
     local src, why = sourceRow(t, row)
     if src == nil then
-        if row ~= ROW then log("rows: '" .. row .. "' is not in this build's tables (" .. tostring(why) .. ")"); return "in" end
+        if row ~= ROW then
+            absent[row] = true
+            log("rows: '" .. row .. "' is not in this build's tables (" .. tostring(why) .. "); left out")
+            return "in"
+        end
         lastLoadError = why
         missingTries = missingTries + 1
         if missingTries >= MISSING_TRIES then containerMissing(); return "stop" end
@@ -321,7 +327,7 @@ function watchRows()
             for _ = 1, #rowsOf(t) + 1 do
                 local p, all = rowOrder(game), true
                 for _, row in ipairs(rowsOf(t)) do
-                    if not (p[row] and p[t.above] and p[row] < p[t.above]) then all = false; placeAbove(game, t.above, row) end
+                    if not absent[row] and not (p[row] and p[t.above] and p[row] < p[t.above]) then all = false; placeAbove(game, t.above, row) end
                 end
                 if all then break end
             end

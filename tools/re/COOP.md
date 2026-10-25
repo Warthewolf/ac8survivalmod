@@ -196,3 +196,38 @@ Log lines: `coop: player plane: spawn ..., remote spawn sites: ...` (all found),
 spawned, controller ..., network object ...`, `coop: second player plane: loadout ..., spawn finished: yes, weapons
 ..., their owner <the plane>`, `test: Ctrl+F11 after the spawn: your pawn is still yours`,
 `coop: formation test: N moves, 0 refused`.
+
+## 7. Since coop.4 (coop.5-coop.11, runtimes 0.23.0-0.26.0, 2026-10-26; untested in game)
+- Events: the host forwards every RE_SV_* event it fires ("ev") but each player's own (sv_coop.lua KEEP_EVENTS); a
+  joiner fires them once its level is ready. (Nagase's radio and the shuttle never ran on the joiners in coop.4.)
+- Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
+  SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
+  never hosts by itself; TWO HOSTS says only one picks HOST.
+- Names: each stand-in's AI desc shows a callsign (bShowCallSignForAlly, GameObjectDisplayNameID02 =
+  SV_CoopName_<slot letter>), set to the player's name with SV_SetText. A co-op row on the HUD lists the players.
+- Pause: while another player is linked, the pause menu opens but the game is unpaused from Lua's 250 ms tick.
+- Protocol 3, up to 24 players: a joiner sends its own plane to the host (P, 30 Hz); the host sends each joiner one Q
+  packet of every other player's latest state (49-byte records: 23 fit in 1132 bytes), at 30 Hz up to 6 players and
+  20 Hz past that (relaying every P to every joiner was n x n packets: ~16,000 a second at 24). Message slots are
+  decimal ("12|..."). The offline test runs 4 and 12 players: 0.6 m worst off the true path at 20 % loss.
+  Bandwidth, the host's upload: ~25 KB/s of planes per joiner at 24 players, plus the enemy stream (22 bytes an enemy,
+  15 Hz).
+- More players, more enemies: CFG.coop.aircraft_per_player (0.15) more of a round's and a wave's aircraft for each
+  player past the first, up to coop.max_aircraft (60) / coop.max_up (30) (COOP.more, sv_rounds.lua startRound).
+- The host's settings for everyone: on a joiner's first hello the host sends "cf" chunks of its CFG's differences from
+  CFG_DEFAULTS (the shipped CFG, copied before survival.ini and survival_config.lua apply), as data only (a small
+  token format, no code). The joiner puts every shared section back to CFG_DEFAULTS and applies them, in place (other
+  parts hold CFG's tables), and gets its own back when co-op closes or it hosts. Its own: coop, hud, sound, music,
+  leaderboard (and probe, ai_watch). presetName() answers the host's preset on a joiner.
+- Settings rows under JOIN: CO-OP ROOM, CO-OP ENEMIES, START AT ROUND, BREAK BETWEEN ROUNDS (StringArgs SV_Set_<what>).
+  main.dll's OnMainDecide queues the pick and doesn't call the stock decide (as the landing menu's SV_Buy_ rows), Lua
+  (SV_MenuSetting) steps the value, saves it with iniSet and relabels the row's live TextBlock. A run that started past
+  round 1 isn't sent to the leaderboard.
+- Code review and security review of coop.11: the Anomaly's field is each player's own (the host's field events aren't
+  forwarded; a joiner runs ANOM.clientTick on its distance to its copy); events that arrive while a joiner's level
+  loads are held and fired when it's ready; any other main-menu entry closes co-op and the same entry picked again
+  retries (SV_MenuChoice = entry + 16 x picks); the online pause counts live links only; the host's preset comes with
+  its difficulty number. Guards on what other games send: coop.c CoSaneState (finite positions within 100,000 km, unit
+  rotations), sv_coop.lua knownRow / standInRow / slotOk / short / finite, the settings sync's fits (same type and
+  size as the shipped setting; build data such as unit lists never synced). tools/checks/coop_settings_test.sh's
+  "guard" role and coop_test.sh's guard line test them.

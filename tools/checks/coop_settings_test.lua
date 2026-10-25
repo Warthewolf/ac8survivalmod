@@ -1,8 +1,10 @@
--- coop_settings_test.lua <mod dir> <work dir> <role: host|join> (run by tools/checks/coop_settings_test.sh): Survival
+-- coop_settings_test.lua <mod dir> <work dir> <role: host|join|guard> (run by tools/checks/coop_settings_test.sh): Survival
 -- COOP's settings sync (sv_coop.lua M.sendSettings / onSettings / restoreMine), the main menu's settings rows
 -- (M.stepSetting, iniSet) and the co-op enemy scaling (COOP.more), on the real sv_config.lua and sv_coop.lua (M exposed
 -- for the test) with a survival.ini of the role's own. host: writes its settings messages and its synced CFG to <work>;
--- join: applies the host's messages and checks the result. <work>/<role>/Scripts and /config must exist.
+-- join: applies the host's messages and checks the result. guard: a joiner fed what a broken or hostile game could
+-- send (bad settings, slots, credits, poses, texts) and the main menu's picks. <work>/<role>/Scripts and /config must
+-- exist.
 local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -25,6 +27,16 @@ function FindFirstOf() return nil end
 function liveWidget() return false end
 function toText(s) return s end
 function myAirframe() return "f16c" end
+function valid(o) return o ~= nil end
+function nameOf() return "?" end
+function addrOf() return nil end
+local callouts, credits = {}, {}
+function hudCallout(t) callouts[#callouts + 1] = tostring(t) end
+function addCredits(n) credits[#credits + 1] = n end
+SV_ERR = {}
+local KNOWN_ROWS = { f16c_common = true }
+function loadObject() return {} end
+function dtCall(_, _, row) return true, KNOWN_ROWS[row] and {} or nil end
 
 -- the role's survival.ini: the shipped one with a few edits
 local default = readAll(MOD .. "/config/survival.default.ini")
@@ -92,8 +104,7 @@ if ROLE == "host" then
     check(COOP.more(18, "max_up") == 26, "host: 4 players, wave of 18 -> 26")
     M.roster = { [0] = {} }
     check(COOP.more(20, "max_aircraft") == 20, "host: alone, unchanged")
-else
-    local mineBefore = syncedDump()
+elseif ROLE == "join" then
     local waves, aircraft = CFG.waves, CFG.aircraft
     check(CFG.max_aircraft == 99 and CFG.credits.fighter == 100000, "join: its own edits read")
     COOP.open, COOP.role = true, "join"
@@ -134,6 +145,67 @@ else
     dofile(MOD .. "/Scripts/sv_config.lua")
     check(CFG.start_round == 5 and CFG.intermission_s == 30 and CFG.coop.max_players == 2, "join: survival.ini read again: the saved values")
     print2("  (log: " .. #logs .. " lines; last: " .. tostring(logs[#logs]) .. ")")
+else                                             -- guard
+    -- the main menu's picks (SV_MenuChoice: the entry + 16 x the picks so far)
+    CFG.coop.enabled = true
+    local menu, opens, closes, openResult, inbox = 0, 0, 0, 1, {}
+    function SV_MenuChoice() return menu end
+    function SV_MenuSetting() return "" end
+    function SV_CoopOpen() opens = opens + 1; return openResult end
+    function SV_CoopClose() closes = closes + 1 end
+    function SV_CoopRecv() return table.remove(inbox, 1) or "" end
+    function SV_CoopInfo() return "open=1;state=linked;peers=0/linked/40/10/host" end
+    local function tick() COOP.tick(0) end
+    tick(); check(not COOP.open and opens == 0, "menu: nothing picked: co-op closed")
+    menu = 16 + 3; tick(); check(COOP.open and COOP.role == "host" and opens == 1, "menu: HOST picked: hosting")
+    menu = 32 + 3; tick(); check(COOP.open and opens == 1 and closes == 0, "menu: HOST picked again: still hosting, links kept")
+    menu = 48 + 0; tick(); check(not COOP.open and closes == 1, "menu: another entry picked: co-op closed")
+    openResult, menu = -2, 64 + 4; tick(); check(not COOP.open, "menu: JOIN picked, Steam not ready: not open")
+    openResult, menu = 1, 80 + 4; tick(); check(COOP.open and COOP.role == "join", "menu: JOIN picked again: open (a retry)")
+    -- what a broken or hostile host could send
+    local function enc(v, out)
+        local t = type(v)
+        if t == "table" then
+            out[#out + 1] = "{"
+            for k, x in pairs(v) do enc(k, out); enc(x, out) end
+            out[#out + 1] = "}"
+        elseif t == "string" then out[#out + 1] = "s" .. v:gsub("[%%,{}|%c]", function(c) return string.format("%%%02X", c:byte()) end)
+        elseif t == "number" then out[#out + 1] = math.type(v) == "integer" and ("i" .. v) or string.format("n%.17g", v)
+        elseif t == "boolean" then out[#out + 1] = v and "T" or "F" end
+    end
+    local tk = {}
+    enc({ ver = "x", preset = "ace", pdiff = 5, max = 999, diff = {
+        { { "start_round" }, "five" },                       -- a type that doesn't fit
+        { { "intermission_s" }, 1e12 },                     -- far past the shipped size
+        { { "max_aircraft" }, 45 },                         -- fine
+        { { "no_such_setting" }, 1 },                       -- not in this build
+        { { "pool" }, { "SV_Evil" } },                      -- build data
+        { { "airfield", "bombers", "pool" }, { "SV_Evil" } },
+        { { "waves", "next_at" } },                         -- a removal
+        { { "coop", "name" }, "Evil" },                     -- personal
+        { { "aircraft" }, { "f16c_common", 5 } },           -- a list item of another type
+        { { "credits", "fighter" }, 250 },                  -- fine
+    } }, tk)
+    inbox = { "0|cf|1|1|" .. table.concat(tk, ","),
+              "0|pi|99|f16c_common|v|SlotTooHigh", "0|pi|2|bogus_row|" .. string.rep("V", 80) .. "|" .. string.rep("N", 300),
+              "0|cr|1000000000000|bonus", "0|cr|500|bonus", "0|co|" .. string.rep("X", 500) .. "||0",
+              "0|sp|SV_Unit_X|1e300,0,0,0|-|-1|1", "0|sp|SV_Unit_Y|100,200,300,90|-|-1|2" }
+    tick()
+    check(CFG.max_aircraft == 45 and CFG.credits.fighter == 250, "guard: the fitting settings applied")
+    check(CFG.start_round == 1 and CFG.intermission_s == CFG_DEFAULTS.intermission_s and CFG.waves.next_at == CFG_DEFAULTS.waves.next_at,
+          "guard: wrong type, oversized and removed settings skipped (shipped values)")
+    check(CFG.no_such_setting == nil and CFG.pool[1] ~= "SV_Evil" and CFG.airfield.bombers.pool[1] ~= "SV_Evil", "guard: unknown and build-data paths skipped")
+    check(CFG.coop.name ~= "Evil" and #CFG.aircraft == #CFG_DEFAULTS.aircraft, "guard: personal and mistyped lists skipped")
+    check(presetName() == "ace" and select(2, presetName()) == 5, "guard: the host's preset and difficulty number")
+    check(M.hostMax == nil, "guard: an impossible room size (999) ignored")
+    check(M.roster[99] == nil, "guard: a slot past 24 ignored")
+    check(M.roster[2] and #M.roster[2].name == 32 and #M.roster[2].ver == 32, "guard: a name and version cut to 32")
+    check(#credits == 1 and credits[1] == 500, "guard: 10^12 zollars refused, 500 paid")
+    local longest = 0
+    for _, c in ipairs(callouts) do longest = math.max(longest, #c) end
+    check(longest <= 120, "guard: a callout cut to 120 characters (" .. longest .. ")")
+    local q1, q2 = M.spawnQ[1], M.spawnQ[2]
+    check(q1 and q1.pose == nil and q2 and q2.pose and q2.pose[1] == 100, "guard: a spawn at 1e300 has no pose, a normal one keeps it")
 end
 print2(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
