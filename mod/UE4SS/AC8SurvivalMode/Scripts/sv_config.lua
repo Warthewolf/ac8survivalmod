@@ -599,8 +599,9 @@ CFG = {
         -- A special late in the run should bring escorts and more health, like the normal rounds around it"): from
         -- escort_from, the specials named in escort_kinds (which fly alone) bring escort_share of the round's aircraft
         -- as fighter flights (escort_min..escort_max). Their health grows by their own health_per_round.
+        -- Not the Ladons (user, 2026-10-25: "during a ladon round, only the ladon's spawn, no other aircraft should").
         escort_from = 12, escort_share = 0.25, escort_min = 2, escort_max = 8,
-        escort_kinds = { "alicorn", "ladon", "glitch" },
+        escort_kinds = { "alicorn", "glitch" },
         -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
         -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
         -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
