@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.22.7"
+#define RT_VERSION           L"0.22.8"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -725,6 +725,7 @@ typedef int (*LuaFn)(void* lua);
 #define SV_ERR_UP        -3     /* that flight is still up                                      */
 #define SV_ERR_BAD_ARGS  -4
 #define SV_ERR_NO_GAME   -5     /* game functions or offsets not found (other game version?)   */
+#define SV_ERR_LOADING   -6     /* Survival's level is still loading: its spawner has no world   */
 #define SV_NOT_SPAWNED   -7     /* SV_UnitAlive: the flight isn't on the phase's list           */
 #define WD_NAME          L"WD_SurvivalMode_global"
 #define SPAWNER_UNIT_CLASS 0x2E8 /* ALiveUnitSpawner::UnitBPClass, read by SpawnUnits (0x147e19a40) */
@@ -954,7 +955,17 @@ static int SpawnerReady(void)
     if (!ResolveUE4SS()) return SV_ERR_NO_GAME;
     if (!g_scanned) return SV_ERR_NOT_READY;       /* the signature scan is still running */
     if (!g_spawnUnit || !g_unregisterUnit || !g_destroyActor || !ResolveLayout()) return SV_ERR_NO_GAME;
-    return FindSpawner() ? 1 : SV_ERR_NOT_READY;
+    if (!FindSpawner()) return SV_ERR_NOT_READY;
+    /* A spawner whose level isn't in a world yet (Survival's level still loading) spawns into no world: a co-op
+     * joiner spawning the host's flights as its level loaded crashed in UWorld::SpawnActor reading world+0x30 (two
+     * joiners' games, 2026-10-25, runtime 0.22.7). */
+    void* world = VCall(g_spawner, VF_WORLD);
+    if (!world || !LiveObject(world)) {
+        static uint32_t said;
+        if (said++ % 20 == 0) Log(L"spawner %p: no world yet (the level is still loading); spawns wait", g_spawner);
+        return SV_ERR_LOADING;
+    }
+    return 1;
 }
 
 static uint8_t* FindDesc(const FNameRaw* name)
@@ -2130,7 +2141,7 @@ static int L_SndMaster(void* lua)
 /* SV_Version() -> "0.19.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.22.7";
+    static const char v[] = "0.22.8";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

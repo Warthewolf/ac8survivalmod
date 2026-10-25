@@ -337,7 +337,8 @@ end
 
 ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
 SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
-                 [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found" }
+                 [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found",
+                 [-6] = "the level is still loading" }
 D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
 -- The run's money and purchases: { credits, earned, spent, bought = { [item] = n },
 -- msg = { [item] = last result }, dirty (shop texts need updating) }. Reset when Survival's level loads.

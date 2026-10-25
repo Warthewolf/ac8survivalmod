@@ -535,6 +535,48 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
+    -- Ctrl+F10 in a run: the nearest enemy aircraft is moved every frame 200 m off your left wing through the co-op
+    -- runtime's AI-plane teleport (vtable slot 315, the path a joiner's copies of the host's enemies take), a second
+    -- press lets it go. The solo check of that path before friends join again (two joiners crashed, 2026-10-25).
+    if Key.F10 then
+        pcall(RegisterKeyBind, Key.F10, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+                    if not D or not valid(pawn) then log("test: Ctrl+F10 outside a flight"); return end
+                    if type(SV_CoopFollow) ~= "function" then log("test: Ctrl+F10 needs dlls/main.dll 0.22"); return end
+                    if TEST_AI_FOLLOW then
+                        SV_CoopFollow(0)
+                        TEST_AI_FOLLOW = nil
+                        log("test: Ctrl+F10 the enemy is let go")
+                        hudCallout("TEST: ENEMY LET GO", nil)
+                        return
+                    end
+                    local l, best, bestD = pawn:K2_GetActorLocation(), nil, nil
+                    for _, p in ipairs(planes or {}) do
+                        if not p.down and valid(p.obj) then
+                            local okP, q = pcall(function() return p.obj:K2_GetActorLocation() end)
+                            if okP and q then
+                                local dd = (q.X - l.X) ^ 2 + (q.Y - l.Y) ^ 2 + (q.Z - l.Z) ^ 2
+                                if not bestD or dd < bestD then best, bestD = p, dd end
+                            end
+                        end
+                    end
+                    if not best then hudCallout("TEST: NO ENEMY UP", "WAIT FOR A ROUND"); return end
+                    local f = SV_CoopFollow(addrOf(best.obj), addrOf(pawn), 0, -200, 50, 0)
+                    log(string.format("test: Ctrl+F10 %s (%s, %.1f km away) moved every frame through the AI teleport: %s",
+                        nameOf(best.obj):match("([^%.:]+)$") or "?", tostring(best.unit), math.sqrt(bestD) / 100000, tostring(f)))
+                    if f == 1 then
+                        TEST_AI_FOLLOW = true
+                        hudCallout("TEST: ENEMY IN FORMATION", "200 M OFF YOUR LEFT WING; CTRL+F10 LETS GO")
+                    else
+                        hudCallout("TEST: ENEMY NOT MOVED", tostring(f))
+                    end
+                end)
+                if not ok then log("test: Ctrl+F10 error " .. tostring(err)) end
+            end)
+        end)
+    end
     -- Ctrl+1 .. Ctrl+5 in a run: the next round is that special (in the break: it starts in 3 s), for testing
     -- (user, 2026-10-23: "build special keys for me to test each special round"; were Ctrl+F11 / Ctrl+F12)
     ;(function()                   -- (its own function: the main chunk's 200-local limit)

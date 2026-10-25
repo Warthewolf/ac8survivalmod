@@ -307,10 +307,24 @@ local function doSpawn(q)
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
     spawningUnit = nil
+    if r == -6 or r == -1 then                           -- (this game's level isn't ready: again in a second)
+        q.tries = (q.tries or 0) + 1
+        if q.tries < 30 then q.at = os.clock() + 1; M.cunits[unit] = old; return false end
+    end
     if type(r) ~= "number" or r <= 0 then
         log("coop: the host's " .. unit .. " not spawned here (" .. (SV_ERR[r] or tostring(r)) .. ")")
     end
     return true
+end
+
+-- A joiner spawns nothing until its own plane is in Survival's level and a few seconds have passed: the host's
+-- spawns came in while two joiners' levels were still loading, and spawning then crashed their games (2026-10-25).
+local READY_S = 3
+local function levelReady()
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not (D and valid(pawn)) then M.readyAt = nil; return false end
+    M.readyAt = M.readyAt or (os.clock() + READY_S)
+    return os.clock() >= M.readyAt
 end
 
 local function clientRounds(now)
@@ -328,6 +342,7 @@ local function clientRounds(now)
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
     end
+    if not levelReady() then return end
     for i = #M.spawnQ, 1, -1 do
         local q = M.spawnQ[i]
         if os.clock() >= (q.at or 0) then
@@ -391,7 +406,7 @@ local function peerTick(slot)
     if not D then return end
     if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
     local unit = PEER_UNITS[slot]
-    if fresh and not P.obj and not P.spawning then
+    if fresh and not P.obj and not P.spawning and levelReady() then          -- (not while this level loads)
         local r0 = M.roster[slot]
         local row = (r0 and r0.row ~= "" and r0.row) or cfg().default
         rawSetAircraft(unit, row)
