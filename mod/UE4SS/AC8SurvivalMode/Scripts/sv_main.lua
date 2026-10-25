@@ -598,6 +598,52 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
+    -- Ctrl+F11 in a run: a second player plane (tools/re/COOP.md 6, the research probe for co-op's real wingmate): a copy
+    -- of your own plane spawned as Online Mode spawns another player's (network dummy controller, network object, role
+    -- 2), kept 150 m off your right wing every frame. Ctrl+F12 takes it away. Watch: does your camera, HUD and control
+    -- stay yours, does it look like your plane, do the enemies go for it; the log says what the game did.
+    if Key.F11 then
+        pcall(RegisterKeyBind, Key.F11, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+                    if not D or not valid(pawn) then log("test: Ctrl+F11 outside a flight"); return end
+                    if type(SV_CoopSpawnPP) ~= "function" then log("test: Ctrl+F11 needs dlls/main.dll 0.21.0"); return end
+                    local l, r = pawn:K2_GetActorLocation(), pawn:K2_GetActorRotation()
+                    local yaw = math.rad(r.Yaw)
+                    local x, y = l.X - math.sin(yaw) * 15000, l.Y + math.cos(yaw) * 15000
+                    local a = SV_CoopSpawnPP(addrOf(pawn), x, y, l.Z, r.Yaw)
+                    log(string.format("test: Ctrl+F11 second player plane: %s", tostring(a)))
+                    if type(a) ~= "number" or a <= 0 then hudCallout("TEST: SECOND PLANE FAILED", tostring(a)); return end
+                    local f = SV_CoopFollow(a, addrOf(pawn), 0, 150, 0)
+                    local after = survivalPC.Pawn
+                    log("test: Ctrl+F11 after the spawn: your pawn is " .. (addrOf(after) == addrOf(pawn) and "still yours" or
+                        ("NOW " .. nameOf(after))) .. "; formation " .. tostring(f))
+                    for _, o in ipairs(FindAllOf("LivePlayerPlane") or {}) do
+                        if valid(o) then
+                            local okH, h = pcall(function() return o.HealthInternal end)
+                            local okC, ctl = pcall(function() return o.Controller end)
+                            log(string.format("test:   player plane %s, health %s, controller %s", nameOf(o):match("([^%.:]+)$") or "?",
+                                tostring(okH and h), okC and valid(ctl) and nameOf(ctl):match("([^%.:]+)$") or "none"))
+                        end
+                    end
+                    hudCallout("TEST: SECOND PLAYER PLANE", "150 M OFF YOUR RIGHT WING")
+                end)
+                if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    if Key.F12 then
+        pcall(RegisterKeyBind, Key.F12, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if type(SV_CoopKillPP) ~= "function" then return end
+                    log("test: Ctrl+F12 second player plane removed: " .. tostring(SV_CoopKillPP()))
+                end)
+                if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
+            end)
+        end)
+    end
     -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
         pcall(RegisterKeyBind, Key.F7, mods, function()

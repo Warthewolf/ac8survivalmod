@@ -43,6 +43,9 @@
 
 static uint8_t* g_fAITeleportTo;            /* found by FindFunctions (sigs.h)                                       */
 static uint8_t* g_fAITeleportInner;
+static uint8_t* g_fPPTeleportTo, *g_fPPTeleportInner;              /* the same pair on ALivePlayerPlane              */
+static uint8_t* g_fSpawnPlayerPlane, *g_fWorldSpawnActor;          /* a second player plane (COOP.md 6)              */
+static uint8_t* g_siteRemotePossess, *g_siteRemoteNetObj, *g_siteRemoteRole;
 
 /* ---- clock and math ------------------------------------------------------------------------------------------- */
 static int64_t g_qpcFreq;
@@ -398,13 +401,16 @@ static int CoReadPose(uint8_t* obj, double* p, double* rot)
 
 static int32_t CoHealth(uint8_t* obj) { return g_offHealth >= 0 && Readable(obj + g_offHealth, 4) ? *(int32_t*)(obj + g_offHealth) : 1; }
 
-/* Whether obj is an AI plane with the game's own teleport in both slots (any other class: never teleported). */
+/* Whether obj is an AI plane or a player plane with the game's own teleport in both slots (anything else: never
+ * teleported). */
 static int CoCanDrive(uint8_t* obj)
 {
-    if (!g_fAITeleportTo || !g_fAITeleportInner || !obj) return 0;
+    if (!obj) return 0;
     void** vt = *(void***)obj;
     if (!Readable(vt, 8 * (VT_TELEPORT_IN + 1))) return 0;
-    return vt[VT_TELEPORT_TO] == (void*)g_fAITeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fAITeleportInner;
+    int ai = g_fAITeleportTo && g_fAITeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fAITeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fAITeleportInner;
+    int pp = g_fPPTeleportTo && g_fPPTeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fPPTeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fPPTeleportInner;
+    return ai || pp;
 }
 
 typedef uint8_t (*CoTeleportFn)(void* self, const double* loc, const double* rot, uint8_t isTest, uint8_t noCheck);
@@ -896,9 +902,11 @@ static void CoStep(double now, int drive)
 
 /* The per-frame work, from the music player's tick (OnMusicTick: once per frame for each controller; the first
  * call in a frame does it) and as a fallback from the player's flight input. */
+static void CoFollowFrame(void);
 static double g_coMusicAt;
 static void CoopFrame(int fromMusic)
 {
+    CoFollowFrame();
     if (!CO.open) return;
     double now = CoNow();
     if (fromMusic) g_coMusicAt = now;
@@ -1117,3 +1125,157 @@ static int L_CoopReset(void* lua)
     memset(&CO.me, 0, sizeof(CO.me));
     return Ret(lua, 1);
 }
+
+/* ---- a second player plane (runtime 0.21.0; tools/re/COOP.md 6) ------------------------------------------------
+ * Online Mode's remote-player spawn (0x1471cc490, Emergency Call co-op) does, in order: SpawnActor a
+ * LiveNetworkDummyController (identity transform, AlwaysSpawn, transient); SpawnActor<ALivePlayerPlane> of the remote
+ * player's plane class (the game's helper 0x1471e5500); controller->vtable[+0x798](plane); AController::Possess;
+ * plane->vtable[+0xc60]() (creates its ULiveNetworkPlayerPlane in LiveGameObject.NetworkObject); then its loadout, name
+ * and emblem from the session's player data, and `plane[+0xed8] = 2` (another player's). SV_CoopSpawnPP does the same
+ * minus the session data (it has none offline). The slots and the role byte are read from that code (sigs.h), the
+ * network-object function is checked before it's called. Research probe first: Ctrl+F11 (sv_main.lua, test only)
+ * spawns a copy of your own plane and SV_CoopFollow keeps it in formation. */
+static CoRef  g_ppPlane, g_ppCtrl, g_follow, g_followPawn;
+static double g_followOff[3], g_followAt;
+static int32_t g_followMoves, g_followFails;
+
+typedef void* (*CoWorldSpawnFn)(void* world, void* cls, const double* transform, void* params);
+typedef void* (*CoSpawnPlaneFn)(void* world, void* cls, const double* transform, void* a4, void* a5, uint8_t a6);
+typedef void  (*CoObjObjFn)(void* self, void* other);
+typedef void  (*CoSelfFn)(void* self);
+
+static int CoRemoteSites(int32_t* possessSlot, uint8_t** possessFn, int32_t* netSlot, int32_t* roleOff)
+{
+    uint8_t* s = g_siteRemotePossess;
+    if (!s || !g_siteRemoteNetObj || !g_siteRemoteRole) return 0;
+    if (s[12] != 0x41 || s[13] != 0xFF || s[14] != 0x90) return 0;                  /* call [r8 + disp32] */
+    *possessSlot = *(int32_t*)(s + 15);
+    uint8_t* c = s + 19;                                                            /* mov rdx, rsi; mov rcx, rbx; call */
+    if (c[0] != 0x48 || c[1] != 0x8B || c[2] != 0xD6 || c[3] != 0x48 || c[4] != 0x8B || c[5] != 0xCB || c[6] != 0xE8) return 0;
+    *possessFn = c + 11 + *(int32_t*)(c + 7);
+    s = g_siteRemoteNetObj;
+    if (s[14] != 0xFF || s[15] != 0x92) return 0;                                   /* call [rdx + disp32] */
+    *netSlot = *(int32_t*)(s + 16);
+    s = g_siteRemoteRole;
+    if (s[2] != 0xC6 || s[3] != 0x86 || s[8] != 0x02) return 0;                     /* mov byte [rsi + disp32], 2 */
+    *roleOff = *(int32_t*)(s + 4);
+    return *possessSlot > 0 && *possessSlot < 0x2000 && *netSlot > 0 && *netSlot < 0x2000 && *roleOff > 0 && *roleOff < 0x8000 &&
+           InGame(*possessFn);
+}
+
+static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTransform: quat, translation, scale */
+{
+    memset(xf, 0, 12 * sizeof(double));
+    double h = yawDeg * CO_PI / 360.0;
+    xf[2] = Sin(h); xf[3] = Cos(h);                                               /* yaw only: (0, 0, sin, cos) */
+    if (pos) { xf[4] = pos[0]; xf[5] = pos[1]; xf[6] = pos[2]; }
+    xf[8] = xf[9] = xf[10] = 1.0;
+}
+
+/* SV_CoopSpawnPP(pawn, x, y, z, yaw) -> the new player plane's address (a copy of pawn's plane class, possessed by a
+ * network dummy controller, marked as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy
+ * controller class, -4 the controller didn't spawn, -5 the plane didn't spawn. One at a time: a second call removes
+ * the first. */
+static int L_CoopSpawnPP(void* lua)
+{
+    uint8_t* pawn = ArgObject(lua);
+    double pos[3] = { 0 }, yaw = 0;
+    if (!pawn || !ArgNumber(lua, &pos[0]) || !ArgNumber(lua, &pos[1]) || !ArgNumber(lua, &pos[2])) return Ret(lua, -1);
+    ArgNumber(lua, &yaw);
+    if (!LiveObject(pawn)) return Ret(lua, -1);
+    int32_t possessSlot = 0, netSlot = 0, roleOff = 0; uint8_t* possessFn = NULL;
+    if (!g_fSpawnPlayerPlane || !g_fWorldSpawnActor || !ResolveUE4SS() ||
+        !CoRemoteSites(&possessSlot, &possessFn, &netSlot, &roleOff)) {
+        Log(L"coop: second player plane: game code not found (spawn %p, world spawn %p, sites %p %p %p)", g_fSpawnPlayerPlane,
+            g_fWorldSpawnActor, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole);
+        return Ret(lua, -2);
+    }
+    if (CoRefGet(&g_ppPlane) && g_destroyActor) g_destroyActor(g_ppPlane.obj, 0);
+    if (CoRefGet(&g_ppCtrl) && g_destroyActor) g_destroyActor(g_ppCtrl.obj, 0);
+    memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
+    void* cls = *(void**)(pawn + 0x10);                                             /* UObjectBase::ClassPrivate */
+    void* world = VCall(pawn, VF_WORLD);
+    void* dummy = U.findObject(L"Class", L"/Script/Live.LiveNetworkDummyController", 0, 0);
+    if (!LiveObject(cls) || !LiveObject(world)) return Ret(lua, -1);
+    if (!LiveObject(dummy)) { Log(L"coop: second player plane: /Script/Live.LiveNetworkDummyController not found"); return Ret(lua, -3); }
+    double idf[12] __attribute__((aligned(16))), xf[12] __attribute__((aligned(16)));
+    CoXform(idf, NULL, 0);
+    CoXform(xf, pos, yaw);
+    uint8_t params[0x80] __attribute__((aligned(16)));                              /* FActorSpawnParameters, as the game fills it */
+    memset(params, 0, sizeof(params));
+    *(uint16_t*)(params + 0x30) = 0x101;                                            /* AlwaysSpawn, MultiplyWithRoot */
+    *(uint32_t*)(params + 0x34) = 0x48;                                             /* RF_Transactional | RF_Transient */
+    uint8_t* ctrl = (uint8_t*)((CoWorldSpawnFn)g_fWorldSpawnActor)(world, dummy, idf, params);
+    if (!LiveObject(ctrl)) { Log(L"coop: second player plane: the dummy controller didn't spawn"); return Ret(lua, -4); }
+    uint8_t* plane = (uint8_t*)((CoSpawnPlaneFn)g_fSpawnPlayerPlane)(world, cls, xf, NULL, NULL, 0);
+    if (!LiveObject(plane)) {
+        if (g_destroyActor) g_destroyActor(ctrl, 0);
+        Log(L"coop: second player plane: the plane didn't spawn");
+        return Ret(lua, -5);
+    }
+    ((CoObjObjFn)(*(void***)ctrl)[possessSlot / 8])(ctrl, plane);
+    ((CoObjObjFn)possessFn)(ctrl, plane);
+    /* its network object: the function in that slot must be the one read (it creates LiveGameObject.NetworkObject) */
+    uint8_t* nf = (uint8_t*)(*(void***)plane)[netSlot / 8];
+    uint8_t* no = (uint8_t*)U.valuePtr(plane, L"NetworkObject");
+    int32_t noOff = no ? (int32_t)(no - plane) : -1;
+    int netOk = InGame(nf) && nf[0] == 0x40 && nf[1] == 0x57 && nf[2] == 0x48 && nf[3] == 0x81 && nf[4] == 0xEC &&
+                nf[0x1b] == 0x48 && nf[0x1c] == 0x83 && nf[0x1d] == 0xB9 && *(int32_t*)(nf + 0x1e) == noOff;
+    if (netOk) ((CoSelfFn)nf)(plane);
+    else Log(L"coop: second player plane: its network-object function isn't the one checked (%p); left out", nf);
+    *(uint8_t*)(plane + roleOff) = 2;
+    CoRefSet(&g_ppPlane, plane); CoRefSet(&g_ppCtrl, ctrl);
+    Log(L"coop: second player plane %p (class %p) spawned, controller %p, possessed (slot +%x, Possess %p), network object %p (+%x), role byte +%x = 2",
+        plane, cls, ctrl, (uint32_t)possessSlot, possessFn, (netOk && noOff > 0) ? *(void**)(plane + noOff) : NULL, (uint32_t)noOff, (uint32_t)roleOff);
+    return Ret(lua, (int64_t)(uintptr_t)plane);
+}
+
+/* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up) */
+static int L_CoopKillPP(void* lua)
+{
+    int n = 0;
+    if (g_follow.obj == g_ppPlane.obj) memset(&g_follow, 0, sizeof(g_follow));
+    if (CoRefGet(&g_ppPlane) && g_destroyActor) { g_destroyActor(g_ppPlane.obj, 0); ++n; }
+    if (CoRefGet(&g_ppCtrl) && g_destroyActor) { g_destroyActor(g_ppCtrl.obj, 0); ++n; }
+    memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
+    if (n) Log(L"coop: second player plane removed");
+    return Ret(lua, n ? 1 : 0);
+}
+
+/* SV_CoopFollow(plane, pawn, forward, right, up) -> 1: every frame plane is moved to pawn's spot + that offset (metres,
+ * along pawn's heading) with pawn's rotation; plane 0 stops it. A formation test of the per-frame drive. */
+static int L_CoopFollow(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    if (!plane) { memset(&g_follow, 0, sizeof(g_follow)); return Ret(lua, 0); }
+    uint8_t* pawn = ArgObject(lua);
+    double f = 0, r = 0, u = 0;
+    ArgNumber(lua, &f); ArgNumber(lua, &r); ArgNumber(lua, &u);
+    if (!pawn || !LiveObject(plane) || !LiveObject(pawn) || !CoCanDrive(plane)) return Ret(lua, -1);
+    CoRefSet(&g_follow, plane); CoRefSet(&g_followPawn, pawn);
+    g_followOff[0] = f * 100; g_followOff[1] = r * 100; g_followOff[2] = u * 100;
+    g_followMoves = g_followFails = 0;
+    Log(L"coop: %p follows %p (%d m ahead, %d m right, %d m up)", plane, pawn, (int32_t)f, (int32_t)r, (int32_t)u);
+    return Ret(lua, 1);
+}
+
+static void CoFollowFrame(void)
+{
+    if (!g_follow.obj) return;
+    double now = CoNow();
+    if (now - g_followAt < 0.001) return;
+    g_followAt = now;
+    uint8_t* plane = CoRefGet(&g_follow), *pawn = CoRefGet(&g_followPawn);
+    if (!plane || !pawn) { memset(&g_follow, 0, sizeof(g_follow)); Log(L"coop: formation test ended (an actor is gone)"); return; }
+    double pos[3], rot[3];
+    if (!CoReadPose(pawn, pos, rot)) return;
+    double h = rot[1] * CO_PI / 180.0, c = Cos(h), sn = Sin(h);
+    pos[0] += g_followOff[0] * c - g_followOff[1] * sn;
+    pos[1] += g_followOff[0] * sn + g_followOff[1] * c;
+    pos[2] += g_followOff[2];
+    CoTeleportFn tp = (CoTeleportFn)(*(void***)plane)[VT_TELEPORT_IN];
+    if (tp(plane, pos, rot, 0, 1)) ++g_followMoves; else ++g_followFails;
+    if ((g_followMoves + g_followFails) % 600 == 1)
+        Log(L"coop: formation test: %d moves, %d refused", g_followMoves, g_followFails);
+}
+

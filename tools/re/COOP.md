@@ -92,3 +92,52 @@ Special rounds' scripted parts (Ladon volleys, the Alicorn's dives and railgun, 
 blinks) run on the host only; the joiner sees their aircraft. Ground and sea units (LCACs, BTRs, ships) are spawned on
 the joiner too but not streamed or synced. Missiles fired at the other player aren't shown. The other player's
 plane flies the enemy NPC row of its airframe (an enemy paint). Allies a joiner buys exist only on their side.
+
+## 6. A second player plane (research of 2026-10-25, runtime 0.21.0; probe not yet run)
+Goal (user, 2026-10-25): the other player as a real player plane, their own aircraft and paint, targeted by the
+enemies as a player, instead of an allied AI stand-in.
+### What AC8 has for it (Online Mode's Emergency Call co-op, reflected classes with no reflected properties)
+`ULiveNetworkPlayerPlane < LiveNetworkGameObject < LiveNetworkBaseObject` (a player plane's network object),
+`ALiveNetworkDummyController < AController` (drives another player's plane), `LiveNetworkCoopGameMode`,
+`LiveNetworkP2P`, `StrixNetworkFacade` (Online Mode runs on Strix), `ELivePlayerRemoteTypeParam` {None, Both,
+LocalPlayer, OtherPlayer}, `ELiveGameObjectUniqueType::OtherPlayer`, `ELiveObjectTriggerFactionType` {AnyPlayer,
+LocalPlayer, OtherPlayer, AllyPlayer, AllyOtherPlayer, ...}: the game's AI and events know several players.
+`LiveAIBotPlane < LiveAIPlane` + `LiveAIBotConfig` (AIBotPlaneClass, AIBotPlayerPlaneID, AIBotAILevel, bAIBotInvincible):
+Online Mode's AI bots fly player aircraft (the fallback if a real second player plane can't work offline).
+### Online Mode's remote-player spawn: 0x1471cc490 (owner, int playerIndex, UClass* planeClass)
+Called from 0x1471cd2d0, which resolves the class from a plane ID: GameInstance +0x958 / +0x928 / +0x878 ->
+0x147360970(+0x878 object, planeId) -> a PlayerPlaneDataTable row; `Reference` (its plane blueprint, a soft class) at
+row +0x38, loaded synchronously. In order:
+1. `world = GetWorld(owner)`; `ctrl = UWorld::SpawnActor(world, ALiveNetworkDummyController, identity, params)` (0x14465a120;
+   params: AlwaysSpawn, MultiplyWithRoot, ObjectFlags 0x48).
+2. `plane = SpawnActor<ALivePlayerPlane>(world, planeClass, identity, -, -, 0)` (0x1471e5500: UWorld::SpawnActor +
+   IsA(ALivePlayerPlane::StaticClass 0x14708b2f0)). Not deferred: its BeginPlay runs here, unpossessed.
+3. `ctrl->vtable[+0x798](plane)`, then `AController::Possess(ctrl, plane)` (0x144354890; the Possess UFUNCTION's thunk
+   0x144352da0 calls it).
+4. `plane->vtable[+0xc60]()` = 0x147d6ed30: creates its ULiveNetworkPlayerPlane (StaticClass 0x146f0d260) in
+   LiveGameObject.NetworkObject (+0xed0) if there is none.
+5. From the session's player data (0x147ee0460 / 0x147ee01c0 -> 0x1474a5ae0, 0x1474c5080 by player index): `plane+0x53b8`
+   = an id, NetworkObject+0x28 = id | 0x200000000000000, **`plane+0xed8 = 2`** (the network role; 0x1471cbbb7 turns 2
+   into 3; the AC7 net plane's "ownership 2" is the same idea), the loadout 0x147d4ad20(plane, arrays), bytes +0xfa0
+   / +0xfa1, name strings (+0x6d8), emblem and avatar data. Few places read +0xed8: "another player's" is mostly
+   decided by the controller (a dummy controller is never locally controlled).
+### Moving it
+ALivePlayerPlane vtable 0x14cc01cc8: slot 186 = 0x147d4f6b0 (keeps byte +0x3c04 around the game object's TeleportTo
+0x147d1e390), slot 315 = 0x147d4f6f0 (AActor::TeleportTo, the component reset, then on success the player's flight
+model reset 0x147d40830(+0x1918, +0x2268, +0x1a38)). Same signature as the AI plane's: coop.c drives either.
+### Paint
+LivePlayerPlane has PlaneTypeID (reflected) but no reflected skin field or skin UFUNCTION; LiveSkinDataTable rows
+(SkinID -> DecalMaterialRef, the skin decal) and LiveAirframeSkinDataTable (materials) hold the paints; the remote
+spawn applies the loadout natively from the session data (0x147d4ad20). Open: where the local player's skin ID lives
+(campaign context ForceSelectedSkinID / the hangar's selection) and which function applies it to a spawned plane.
+### The probe (runtime 0.21.0, test only)
+SV_CoopSpawnPP(pawn, x, y, z, yaw) does steps 1-4 and the role byte with a copy of the pawn's own plane class (the
+slots, Possess and the role offset read from the remote spawn's code: sigs.h kSigRemote*; the network-object
+function checked by its bytes and the reflected NetworkObject offset before it's called). SV_CoopFollow(plane, pawn,
+forward, right, up) moves it every frame in formation through slot 315. sv_main.lua Ctrl+F11 / Ctrl+F12 (TEST ONLY).
+What the probe should tell: does the spawn survive offline (no session data), does the local camera / HUD / control
+stay the local player's, does it look like the player's plane (paint: default?), does it fly in formation smoothly,
+do enemies target it (TargetingPlayerPlanes / NearestPlayerPlane), and anything the log or the screen shows wrong.
+Log lines: `coop: player plane: spawn ..., remote spawn sites: ...` (all found), `coop: second player plane ...
+spawned, controller ..., network object ...`, `test: Ctrl+F11 after the spawn: your pawn is still yours`,
+`coop: formation test: N moves, 0 refused`.
