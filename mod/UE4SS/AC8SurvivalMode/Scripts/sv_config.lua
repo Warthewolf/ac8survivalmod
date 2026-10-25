@@ -548,7 +548,7 @@ CFG = {
     -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
     -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
     -- max_players: the host's room, 2 to 4 (you included); joiners link to the host only, which relays their planes.
-    coop = { enabled = false, role = "host", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 4,
+    coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 4,
              split_share = 0.5, callouts = true, leaderboard = false,
              -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
              -- 2026-10-25: "make it so that the player can choose their name")
@@ -1267,7 +1267,21 @@ local function loadIni()
         -- format 1 (Lua 0.24-0.25) copied every default as a live setting, which pinned them: a later default change never
         -- reached the player. Format 2 lists them switched off. An old file is kept as survival.ini.old.
         local text = f:read("a") or ""
-        if not text:find("survival.ini format 2", 1, true) then
+        -- A file without the format line that sets only a few things was made by hand (a player who wrote just
+        -- "[coop] role = join" before the game made one): it's kept and marked, not replaced (user, 2026-10-25:
+        -- friends set role = join and still hosted). A format 1 file set every one of the ~300 settings.
+        local live = 0
+        for l in text:gmatch("[^\r\n]+") do if l:match("^%s*[%w_]+%s*=") then live = live + 1 end end
+        if not text:find("survival.ini format 2", 1, true) and live < 60 then
+            f:close(); f = nil
+            local w = io.open(dir .. "survival.ini", "w")
+            if w then
+                w:write("; AC8 Survival Mode settings  (survival.ini format 2; this file was made by hand)\n" .. text)
+                w:close()
+                log("config: survival.ini has no format line and " .. live .. " settings (made by hand?): kept as it is")
+            end
+            f = io.open(dir .. "survival.ini", "r")
+        elseif not text:find("survival.ini format 2", 1, true) then
             f:close(); f = nil
             os.remove(dir .. "survival.ini.old")
             local ok = os.rename(dir .. "survival.ini", dir .. "survival.ini.old")

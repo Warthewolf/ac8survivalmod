@@ -565,7 +565,15 @@ local function onSys(from, what, f)
     elseif what == "full" then
         callout("CO-OP: THE HOST'S GAME IS FULL", nil)
     elseif what == "samerole" then
-        callout("CO-OP: TWO HOSTS", "ONE OF YOU SET role = join")
+        if M.auto and COOP.host() and playerCount() <= 1 and not D then   -- (an automatic host, alone, not in a run)
+            log("coop: another host found; this game was hosting only because it found none (role auto): joining")
+            COOP.reopen("join", "another host found")
+            callout("CO-OP: ANOTHER HOST FOUND", "JOINING THEM")
+        elseif M.auto then
+            callout("CO-OP: TWO HOSTS", "RETRY FROM THE MENU TO JOIN THE OTHER")
+        else
+            callout("CO-OP: TWO HOSTS", "ONE OF YOU: role = host, THE OTHERS: role = join OR auto")
+        end
     end
 end
 
@@ -641,21 +649,38 @@ LB.send = function(sh)
 end
 
 ---------------------------------------------------------------------------------------------------- the tick
+-- (Re)opens the link as role ("host" | "join"). Role auto (the default from coop.3; user, 2026-10-25: friends set
+-- role = join and their games still all hosted) opens as a joiner; if no host is found in AUTO_WAIT (+ up to as much
+-- again at random, so two such games don't host at once) it reopens as the host, and an automatic host that meets
+-- another host while alone and before a run joins that one (onSys "samerole").
+local AUTO_WAIT = 20
+function COOP.reopen(role, why)
+    local c = cfg()
+    local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
+                          math.max(2, math.min(4, c.max_players or 4)))
+    COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
+    M.state, M.roster = nil, {}
+    M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
+    log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
+        role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), c.max_players or 4, why,
+        r == 1 and (role == "host" and "looking for players" or "looking for the host") or
+        ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
+    if COOP.open and COOP.host() and M.myName ~= nil then hostRosterSelf() end
+    return r
+end
+
 function COOP.tick(tick)
     local c = cfg()
     if not c.enabled then return end
     if not COOP.open and not M.openTried then
         M.openTried = true
         if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.22.0 or later needed)"); return end
-        local role = (c.role or "host"):lower()
-        role = (role == "join" or role == "joiner" or role == "client") and "join" or "host"
-        local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
-                              math.max(2, math.min(4, c.max_players or 4)))
-        COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
-        log(string.format("coop: %s as the %s over %s (partner %s, up to %d players): %s", r == 1 and "open" or "NOT open",
-            role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), c.max_players or 4,
-            r == 1 and "looking for players" or
-            ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
+        local role = tostring(c.role or "auto"):lower()
+        if role == "joiner" or role == "client" then role = "join" end
+        if role ~= "host" and role ~= "join" then role = "auto" end
+        M.auto = role == "auto"
+        log("coop: role " .. role .. (M.auto and " (a joiner that hosts if it finds no host)" or "") .. " from CFG.coop.role")
+        COOP.reopen(M.auto and "join" or role, "start")
         if not COOP.open then return end
         if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
         local own = tostring(c.name or ""):gsub("[%c|,;]", ""):match("^%s*(.-)%s*$")
@@ -686,6 +711,13 @@ function COOP.tick(tick)
             log("coop: " .. info)
             if st == "searching" and COOP.client() then once("searching", "coop: waiting for the host (" .. tostring(c.partner) .. ")") end
         end
+        if st == "linked" then M.linkedOnce = true end
+        if M.auto and COOP.client() and not M.linkedOnce and st ~= "linked" and now >= (M.autoAt or 0) then
+            log("coop: no host found in time (role auto): this game hosts")
+            COOP.reopen("host", "no host found")
+            callout("CO-OP: NO HOST FOUND", "YOU ARE THE HOST")
+            return
+        end
         if COOP.client() and st == "linked" and now >= M.nextHi and not M.roster[COOP.slot or -1] then
             M.nextHi = now + 10                              -- (the host hasn't listed us yet: hello again)
             sendHi()
@@ -703,7 +735,12 @@ function COOP.tick(tick)
         if D then
             if COOP.host() then send(true, "rs") else send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
-            if COOP.client() and M.state ~= "linked" then callout("CO-OP: WAITING FOR THE HOST", tostring(c.partner)) end
+            if COOP.client() and M.state ~= "linked" then
+                callout(M.auto and "CO-OP: LOOKING FOR A HOST" or "CO-OP: WAITING FOR THE HOST",
+                        M.auto and "NONE FOUND: YOU HOST" or tostring(c.partner))
+            elseif COOP.host() then
+                callout("CO-OP: YOU ARE THE HOST", string.format("PLAYERS %d/%d", playerCount(), c.max_players or 4))
+            end
         end
     end
     if not D then return end
