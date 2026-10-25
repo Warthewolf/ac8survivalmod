@@ -1118,11 +1118,11 @@ static void CoStep(double now, int drive)
 
 /* The per-frame work, from the music player's tick (OnMusicTick: once per frame for each controller; the first
  * call in a frame does it) and as a fallback from the player's flight input. */
-static void CoFollowFrame(void);
+static void CoFollowFrame(int fromMusic);
 static double g_coMusicAt;
 static void CoopFrame(int fromMusic)
 {
-    CoFollowFrame();
+    CoFollowFrame(fromMusic);
     if (!CO.open) return;
     double now = CoNow();
     if (fromMusic) g_coMusicAt = now;
@@ -1548,38 +1548,117 @@ static int L_CoopKillPP(void* lua)
     return Ret(lua, n ? 1 : 0);
 }
 
-/* SV_CoopFollow(plane, pawn, forward, right, up) -> 1: every frame plane is moved to pawn's spot + that offset (metres,
- * along pawn's heading) with pawn's rotation; plane 0 stops it. A formation test of the per-frame drive. */
+/* Formation test diagnostics (runtime 0.22.4): the copy flickered in and out with either way of moving it (tests of
+ * 2026-10-25, 0.22.2 and 0.22.3). Each sample (at the input build and at the music tick, twice a frame) reads where
+ * the copy is against where it was put and against the last sample, and the visibility bits of its root and of the
+ * three mesh components the game's own show / hide code (0x147d50710) sets: USceneComponent +0x188 (bit 5 bVisible,
+ * from SetVisibility 0x1442ce610), and AActor bHidden's byte. One summary a second for 30 s after each start. */
+typedef struct { int32_t off; uint8_t* comp; uint16_t last; int32_t changes; } CoVisProbe;
+static int32_t    g_followMode;                    /* 0 moved every frame, 1 left alone (only watched) */
+static double     g_followSet[3], g_followMusicAt, g_fdLast[3], g_fdWinAt, g_fdMaxOff, g_fdMaxJump, g_fdFarPos[3];
+static int        g_followHaveSet, g_fdHaveLast;
+static int32_t    g_fdSamples, g_fdFar, g_fdJumps, g_fdWin, g_fdHidChanges;
+static uint8_t*   g_fdHid;
+static uint8_t    g_fdHidLast;
+static CoVisProbe g_fdVis[4] = { { -1, NULL, 0, 0 }, { 0x15a0, NULL, 0, 0 }, { 0x1af8, NULL, 0, 0 }, { 0x15c8, NULL, 0, 0 } };
+
+static void CoFollowDiagStart(uint8_t* plane)
+{
+    CoResolve(plane);                                                             /* the root's offset */
+    g_followHaveSet = g_fdHaveLast = 0;
+    g_fdSamples = g_fdFar = g_fdJumps = g_fdWin = g_fdHidChanges = 0;
+    g_fdMaxOff = g_fdMaxJump = 0; g_fdWinAt = CoNow();
+    g_fdHid = (uint8_t*)U.valuePtr(plane, L"bHidden");
+    g_fdHidLast = g_fdHid ? *g_fdHid : 0;
+    for (int i = 0; i < 4; ++i) {
+        CoVisProbe* v = &g_fdVis[i];
+        int32_t off = i == 0 ? g_offRoot : v->off;
+        uint8_t* c = (off > 0 && Readable(plane + off, 8)) ? *(uint8_t**)(plane + off) : NULL;
+        v->comp = (c && LiveObject(c) && Readable(c + 0x188, 2)) ? c : NULL;
+        v->last = v->comp ? *(uint16_t*)(v->comp + 0x188) : 0;
+        v->changes = 0;
+    }
+    Log(L"coop: follow diagnostics: bHidden byte %p (+%x) = %x; components root %p, +15a0 %p, +1af8 %p, +15c8 %p", g_fdHid,
+        g_fdHid ? (uint32_t)(g_fdHid - plane) : 0u, (uint32_t)g_fdHidLast, g_fdVis[0].comp, g_fdVis[1].comp, g_fdVis[2].comp, g_fdVis[3].comp);
+}
+
+static void CoFollowSample(uint8_t* plane, double now)
+{
+    double p[3], r[3];
+    if (CoReadPose(plane, p, r)) {
+        if (g_followHaveSet && g_followMode == 0) {
+            double dx = p[0] - g_followSet[0], dy = p[1] - g_followSet[1], dz = p[2] - g_followSet[2];
+            double d = CoSqrt(dx * dx + dy * dy + dz * dz) / 100;
+            if (d > g_fdMaxOff) g_fdMaxOff = d;
+            if (d > 50) { ++g_fdFar; memcpy(g_fdFarPos, p, 24); }
+        }
+        if (g_fdHaveLast) {
+            double dx = p[0] - g_fdLast[0], dy = p[1] - g_fdLast[1], dz = p[2] - g_fdLast[2];
+            double d = CoSqrt(dx * dx + dy * dy + dz * dz) / 100;
+            if (d > g_fdMaxJump) g_fdMaxJump = d;
+            if (d > 50) ++g_fdJumps;
+        }
+        memcpy(g_fdLast, p, 24); g_fdHaveLast = 1;
+    }
+    ++g_fdSamples;
+    for (int i = 0; i < 4; ++i) {
+        CoVisProbe* v = &g_fdVis[i];
+        if (!v->comp || !LiveObject(v->comp)) continue;
+        uint16_t b = *(uint16_t*)(v->comp + 0x188);
+        if (b != v->last) { ++v->changes; v->last = b; }
+    }
+    if (g_fdHid && *g_fdHid != g_fdHidLast) { ++g_fdHidChanges; g_fdHidLast = *g_fdHid; }
+    if (now - g_fdWinAt < 1.0 || g_fdWin >= 30) return;
+    Log(L"coop: follow diag (%s): %d samples; off its spot >50 m: %d (max %d m, last at %d %d %d m); jumps >50 m: %d (max %d m); visibility changes: root %d (%x), +15a0 %d (%x), +1af8 %d (%x), +15c8 %d (%x), bHidden byte %d (%x)",
+        g_followMode ? L"left alone" : L"moved", g_fdSamples, g_fdFar, (int32_t)g_fdMaxOff, (int32_t)(g_fdFarPos[0] / 100),
+        (int32_t)(g_fdFarPos[1] / 100), (int32_t)(g_fdFarPos[2] / 100), g_fdJumps, (int32_t)g_fdMaxJump,
+        g_fdVis[0].changes, (uint32_t)g_fdVis[0].last, g_fdVis[1].changes, (uint32_t)g_fdVis[1].last, g_fdVis[2].changes,
+        (uint32_t)g_fdVis[2].last, g_fdVis[3].changes, (uint32_t)g_fdVis[3].last, g_fdHidChanges, (uint32_t)g_fdHidLast);
+    g_fdSamples = g_fdFar = g_fdJumps = g_fdHidChanges = 0; g_fdMaxOff = g_fdMaxJump = 0;
+    for (int i = 0; i < 4; ++i) g_fdVis[i].changes = 0;
+    g_fdWinAt = now; ++g_fdWin;
+}
+
+/* SV_CoopFollow(plane, pawn, forward, right, up[, mode]) -> 1: every frame plane is moved to pawn's spot + that offset
+ * (metres, along pawn's heading) with pawn's rotation (mode 0), or only watched (mode 1: the diagnostics above, no
+ * moves); plane 0 stops it. A formation test of the per-frame drive. */
 static int L_CoopFollow(void* lua)
 {
     uint8_t* plane = ArgObject(lua);
     if (!plane) { memset(&g_follow, 0, sizeof(g_follow)); return Ret(lua, 0); }
     uint8_t* pawn = ArgObject(lua);
-    double f = 0, r = 0, u = 0;
-    ArgNumber(lua, &f); ArgNumber(lua, &r); ArgNumber(lua, &u);
+    double f = 0, r = 0, u = 0, mode = 0;
+    ArgNumber(lua, &f); ArgNumber(lua, &r); ArgNumber(lua, &u); ArgNumber(lua, &mode);
     if (!pawn || !LiveObject(plane) || !LiveObject(pawn) || !CoCanDrive(plane)) return Ret(lua, -1);
     CoRefSet(&g_follow, plane); CoRefSet(&g_followPawn, pawn);
     g_followOff[0] = f * 100; g_followOff[1] = r * 100; g_followOff[2] = u * 100;
     g_followMoves = g_followFails = 0;
-    Log(L"coop: %p follows %p (%d m ahead, %d m right, %d m up)", plane, pawn, (int32_t)f, (int32_t)r, (int32_t)u);
+    g_followMode = mode == 1 ? 1 : 0;
+    Log(L"coop: %p follows %p (%d m ahead, %d m right, %d m up), %s", plane, pawn, (int32_t)f, (int32_t)r, (int32_t)u,
+        g_followMode ? L"left alone (watched only)" : L"moved every frame");
+    CoFollowDiagStart(plane);
     return Ret(lua, 1);
 }
 
-static void CoFollowFrame(void)
+static void CoFollowFrame(int fromMusic)
 {
     if (!g_follow.obj) return;
     double now = CoNow();
-    if (now - g_followAt < 0.001) return;
-    g_followAt = now;
     uint8_t* plane = CoRefGet(&g_follow), *pawn = CoRefGet(&g_followPawn);
     if (!plane || !pawn) { memset(&g_follow, 0, sizeof(g_follow)); Log(L"coop: formation test ended (an actor is gone)"); return; }
+    CoFollowSample(plane, now);
+    /* one move a frame, at the music tick when it runs (the later one; 0.22.3 and before moved at both) */
+    if (fromMusic) g_followMusicAt = now;
+    else if (now - g_followMusicAt < 0.05) return;
+    if (g_followMode == 1 || now - g_followAt < 0.001) return;
+    g_followAt = now;
     double pos[3], rot[3];
     if (!CoReadPose(pawn, pos, rot)) return;
     double h = rot[1] * CO_PI / 180.0, c = Cos(h), sn = Sin(h);
     pos[0] += g_followOff[0] * c - g_followOff[1] * sn;
     pos[1] += g_followOff[0] * sn + g_followOff[1] * c;
     pos[2] += g_followOff[2];
-    if (CoTeleport(plane, pos, rot)) ++g_followMoves; else ++g_followFails;
+    if (CoTeleport(plane, pos, rot)) { ++g_followMoves; memcpy(g_followSet, pos, 24); g_followHaveSet = 1; } else ++g_followFails;
     if ((g_followMoves + g_followFails) % 600 == 1)
         Log(L"coop: formation test: %d moves, %d refused", g_followMoves, g_followFails);
 }
