@@ -50,7 +50,7 @@ static uint8_t* g_fAITeleportTo;            /* found by FindFunctions (sigs.h)  
 static uint8_t* g_fAITeleportInner;
 static uint8_t* g_fPPTeleportTo, *g_fPPTeleportInner;              /* the same pair on ALivePlayerPlane              */
 static uint8_t* g_fSpawnPlayerPlane, *g_fWorldSpawnActor;          /* a second player plane (COOP.md 6)              */
-static uint8_t* g_siteRemotePossess, *g_siteRemoteNetObj, *g_siteRemoteRole;
+static uint8_t* g_siteRemotePossess, *g_siteRemoteNetObj, *g_siteRemoteRole, *g_siteRemoteDummyCls;
 
 /* ---- clock and math ------------------------------------------------------------------------------------------- */
 static int64_t g_qpcFreq;
@@ -1365,9 +1365,20 @@ static int L_CoopSpawnPP(void* lua)
     memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
     void* cls = *(void**)(pawn + 0x10);                                             /* UObjectBase::ClassPrivate */
     void* world = VCall(pawn, VF_WORLD);
-    void* dummy = U.findObject(L"Class", L"/Script/Live.LiveNetworkDummyController", 0, 0);
+    /* the dummy controller's class: by its short name as UE4SS finds classes (the full path found nothing: test of
+     * 2026-10-25), else from the remote spawn's own call to its StaticClass */
+    const wchar_t* how = L"by name";
+    void* dummy = U.findObject(L"Class", L"LiveNetworkDummyController", 0, 0);
+    if (!LiveObject(dummy)) {
+        uint8_t* s = g_siteRemoteDummyCls;
+        uint8_t* sc = (s && s[0x18] == 0xE8) ? s + 0x1d + *(int32_t*)(s + 0x19) : NULL;
+        typedef void* (*CoStaticClassFn)(void);
+        dummy = (sc && InGame(sc)) ? ((CoStaticClassFn)sc)() : NULL;
+        how = L"from its StaticClass";
+    }
     if (!LiveObject(cls) || !LiveObject(world)) return Ret(lua, -1);
-    if (!LiveObject(dummy)) { Log(L"coop: second player plane: /Script/Live.LiveNetworkDummyController not found"); return Ret(lua, -3); }
+    if (!LiveObject(dummy)) { Log(L"coop: second player plane: the LiveNetworkDummyController class wasn't found"); return Ret(lua, -3); }
+    Log(L"coop: second player plane: dummy controller class %p (%s)", dummy, how);
     double idf[12] __attribute__((aligned(16))), xf[12] __attribute__((aligned(16)));
     CoXform(idf, NULL, 0);
     CoXform(xf, pos, yaw);

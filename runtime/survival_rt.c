@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.22.0"
+#define RT_VERSION           L"0.22.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -2130,7 +2130,7 @@ static int L_SndMaster(void* lua)
 /* SV_Version() -> "0.19.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.22.0";
+    static const char v[] = "0.22.1";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2790,6 +2790,7 @@ static void FindFunctions(void)
         { kSigRemotePossess,    NULL, sizeof(kSigRemotePossess), NULL, 0 },
         { kSigRemoteNetObj,     NULL, sizeof(kSigRemoteNetObj),  NULL, 0 },
         { kSigRemoteRole,       NULL, sizeof(kSigRemoteRole),    NULL, 0 },
+        { kSigRemoteDummyClass, NULL, sizeof(kSigRemoteDummyClass), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -2826,6 +2827,7 @@ static void FindFunctions(void)
     g_siteRemotePossess = p[35].hit;
     g_siteRemoteNetObj  = p[36].hit;
     g_siteRemoteRole    = p[37].hit;
+    g_siteRemoteDummyCls = p[38].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -2838,8 +2840,9 @@ static void FindFunctions(void)
     Log(L"music player: track clock tick %p, next track %p", g_fMusicTick, g_fMusicNext);
     Log(L"flight input: BuildFlightInput %p", g_fBuildInput);
     Log(L"coop: AI plane teleport %p, inner %p", g_fAITeleportTo, g_fAITeleportInner);
-    Log(L"coop: player plane: spawn %p, world spawn %p, teleport %p, inner %p; remote spawn sites: possess %p, network object %p, role %p",
-        g_fSpawnPlayerPlane, g_fWorldSpawnActor, g_fPPTeleportTo, g_fPPTeleportInner, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole);
+    Log(L"coop: player plane: spawn %p, world spawn %p, teleport %p, inner %p; remote spawn sites: possess %p, network object %p, role %p, dummy class %p",
+        g_fSpawnPlayerPlane, g_fWorldSpawnActor, g_fPPTeleportTo, g_fPPTeleportInner, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole,
+        g_siteRemoteDummyCls);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
