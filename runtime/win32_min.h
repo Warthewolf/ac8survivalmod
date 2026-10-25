@@ -113,6 +113,8 @@ IMPORT BOOL   WINAPI GetThreadContext(HANDLE thread, CONTEXT64* ctx);
 IMPORT HANDLE WINAPI CreateThread(void* sec, size_t stack, ThreadProc fn, void* arg, DWORD flags, DWORD* id);
 IMPORT void   WINAPI Sleep(DWORD ms);
 IMPORT uint64_t WINAPI GetTickCount64(void);
+IMPORT BOOL   WINAPI QueryPerformanceCounter(int64_t* count);
+IMPORT BOOL   WINAPI QueryPerformanceFrequency(int64_t* freq);
 IMPORT void   WINAPI GetLocalTime(uint16_t st[8]);
 typedef struct {                                   /* PROCESS_MEMORY_COUNTERS */
     DWORD  cb, PageFaultCount;

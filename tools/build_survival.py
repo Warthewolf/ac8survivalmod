@@ -316,6 +316,10 @@ def ally_units(units, used_ids, z, top_number, v):
         assert len(aidx) == 3, aidx
         u[2][:] = sorted([p for p in u[2] if p[1] not in area] + [(aidx[n], n, False, ('raw', 'Float', struct.pack('<f', val)))
                          for n, val in area.items()], key=lambda p: p[0])
+    # Survival COOP: the other player's plane, one aircraft of MOONCHILD's source (invincible kept: it only shows them)
+    names = copy_unit(units, used_ids, z, survival_events.ALLY_AIR_SOURCE, survival_events.COOP_PEER_UNIT, 1, top_number,
+                      survival_events.COOP_PEER_OBJ, survival_events.ALLY_AIR_ROW)
+    assert names == [survival_events.COOP_PEER_OBJ], names
     print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
           f'{len(survival_events.ally_ships())} ships')
 

@@ -444,6 +444,10 @@ LoopAsync(250, function()
         local t0 = os.clock()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
+        if COOP and COOP.tick then                  -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
+            local okC, errC = pcall(COOP.tick, tick)
+            if not okC then log("coop: error " .. tostring(errC)) end
+        end
         if D then                                   -- (report of 2026-10-23: "the custom HUD ... seems a bit laggy")
             local pf = D.perf or { n = 0, sum = 0, max = 0, parts = {}, at = tick }
             D.perf = pf

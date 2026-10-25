@@ -537,6 +537,28 @@ CFG = {
 --OFFLINE:     -- The end-of-run summary (round, score, kills, specials, time) shows for show_s seconds. This is the Offline
 --OFFLINE:     -- edition: nothing is sent anywhere.
     leaderboard = { pilot = "", show_s = 15 },
+    -- Survival COOP (Scripts/sv_coop.lua, runtime 0.20.0 coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
+    -- called Survival COOP"): two players, one run. The host's game runs the rounds, the enemies and the specials; the
+    -- joiner's game mirrors every enemy the host spawns (moved every frame to where the host's is) and its rounds,
+    -- callouts, airfield and round bonuses. Each player earns their own kills (an enemy you hit at all is yours; one
+    -- only your wingmate hit pays ally_x, as an ally's kill) and shops at their own airfield store.
+    -- role: "host" or "join". transport: "steam" (Steam P2P: both of you on Steam; partner "auto" = the Steam friend who's
+    -- playing ACE COMBAT 8 too, or that friend's name or SteamID64) or "udp" (LAN or a VPN such as Radmin / Tailscale /
+    -- ZeroTier: the host listens on `port`, UDP; the joiner sets partner = the host's IP address). interp_ms: how far
+    -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
+    -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
+    coop = { enabled = false, role = "host", transport = "steam", partner = "auto", port = 27777, interp_ms = 120,
+             split_share = 0.5, callouts = true, leaderboard = false,
+             -- the other player's airframe -> the NPC mission row their plane is shown as here (the player's plane
+             -- blueprint BP_PlayerPlane_PPnnnn_<code>_C; a code not listed flies `default`). Rows of Survival's table.
+             airframes = { f16c = "f16c_common", f16v = "f16c_common", f18e = "f18e_common", f18f = "f18e_common",
+                           f15e = "f15e_common", f15c = "f15c_common", f15x = "f15e_common", f14d = "f14d_common",
+                           f22a = "f22a_common", f35c = "f35c_common", f02a = "f02a_common", su57 = "su57_common",
+                           su35 = "su35_common", su37 = "su35_common", su30 = "su35_common", su33 = "su33_common",
+                           su34 = "su34_common", su47 = "su47_common", m29a = "m29a_common", m21b = "m21b_common",
+                           m31b = "m31b_common", rflm = "rflm_common", typn = "typn_common", j39e = "j39e_common",
+                           e18g = "e18g_common", a10c = "a10c_common" },
+             default = "f16c_common" },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around

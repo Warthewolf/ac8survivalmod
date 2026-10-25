@@ -33,3 +33,5 @@ Sleep
 GetTickCount64
 GetLocalTime
 K32GetProcessMemoryInfo
+QueryPerformanceCounter
+QueryPerformanceFrequency

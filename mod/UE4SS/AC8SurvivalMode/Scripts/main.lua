@@ -24,6 +24,7 @@ local MODULES = {
     "sv_shop",
     "sv_allies",
     "sv_tactical",
+    "sv_coop",
     "sv_main",
 }
 

@@ -6,6 +6,8 @@
 #     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
 #     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
 # Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
+# COOP=1 package_release.sh ...: the Survival COOP build (user, 2026-10-25): co-op on, VERSION tagged
+#   (tools/coop_edition.py), release/README_COOP.txt in the readme; the zip is named ..._COOP.
 # NOVALKA=1 package_release.sh ...: a build without VALKA (user, 2026-10-25, a build for a friend): no X-02S container,
 #   no AC7 railgun sounds, VALKA switched off and out of the rotation (tools/novalka.py); the zip is named ..._NoValka.
 set -e
@@ -32,6 +34,12 @@ if [ "$NOVALKA" = 1 ]; then
     suffix=_NoValka
 fi
 sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
+if [ "$COOP" = 1 ]; then
+    python -X utf8 -I tools/coop_edition.py "$st" "$mod"
+    lua=$(grep -m1 -E '^(local )?VERSION = ' "$mod/Scripts/main.lua" | sed 's/.*"\(.*\)".*/\1/')
+    sed -i "s/(Lua [^,]*, runtime/(Lua $lua, runtime/" "$st/README.txt"
+    suffix="_COOP$suffix"
+fi
 if [ "$ed" = offline ]; then
     (cd runtime && OFFLINE=1 sh build.sh > /dev/null)
     cp build/runtime/offline/main.dll "$mod/dlls/main.dll"

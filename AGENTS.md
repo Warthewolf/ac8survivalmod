@@ -219,6 +219,13 @@ a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lin
 until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
 `python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
 
+## Survival COOP (Lua 0.70.6-coop.1, runtime 0.20.0, 2026-10-25; untested in game)
+Two players, host-authoritative (after Double Trigger, the AC7 co-op mod). tools/re/COOP.md has the RE (AC8's AI plane
+teleport: vtable slot 315, called every frame on a puppet; Steam P2P without callbacks), the protocol and the test
+checklist. Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data unit SV_Unit_CoopPeer.
+Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online`; offline transport test `sh tools/checks/coop_test.sh`.
+None of it is a hard rule until a test confirms it.
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
