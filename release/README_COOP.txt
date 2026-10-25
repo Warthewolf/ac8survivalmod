@@ -22,6 +22,8 @@ On the same network or a VPN (Radmin VPN, ZeroTier, Tailscale) you can go direct
     transport = udp
 and each joiner adds  partner = <the host's IP address>. The host lets UDP port 27777 through their firewall.
 The host can take fewer players with  max_players = 2  (or 3).
+Your name on the other players' screens ("REAPER JOINED") is your Steam name; to pick another, add under [coop]:
+    name = Reaper                            (up to 20 characters; restart the game after changing it)
 
 Playing: everyone starts SURVIVAL MODE as usual (same difficulty), the host first. A joiner's screen shows
 "CO-OP: WAITING FOR THE HOST" until the games find each other, then "CO-OP LINKED"; everyone sees "<NAME> JOINED"

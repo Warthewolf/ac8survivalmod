@@ -658,6 +658,12 @@ function COOP.tick(tick)
             ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
         if not COOP.open then return end
         if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
+        local own = tostring(c.name or ""):gsub("[%c|,;]", ""):match("^%s*(.-)%s*$")
+        if own ~= "" then
+            local n = utf8 and utf8.len(own)                                  -- (20 characters, not bytes)
+            if n then M.myName = n <= 20 and own or own:sub(1, utf8.offset(own, 21) - 1) else M.myName = own:sub(1, 20) end
+            log("coop: your name for the other players: " .. M.myName .. " (CFG.coop.name)")
+        end
         if COOP.host() then hostRosterSelf() end
     end
     if not COOP.open then return end

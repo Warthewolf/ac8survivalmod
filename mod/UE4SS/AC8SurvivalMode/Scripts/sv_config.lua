@@ -550,6 +550,9 @@ CFG = {
     -- max_players: the host's room, 2 to 4 (you included); joiners link to the host only, which relays their planes.
     coop = { enabled = false, role = "host", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 4,
              split_share = 0.5, callouts = true, leaderboard = false,
+             -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
+             -- 2026-10-25: "make it so that the player can choose their name")
+             name = "",
              -- the other player's airframe -> the NPC mission row their plane is shown as here (the player's plane
              -- blueprint BP_PlayerPlane_PPnnnn_<code>_C; a code not listed flies `default`). Rows of Survival's table.
              airframes = { f16c = "f16c_common", f16v = "f16c_common", f18e = "f18e_common", f18f = "f18e_common",
