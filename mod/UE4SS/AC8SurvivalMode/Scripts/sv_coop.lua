@@ -103,14 +103,26 @@ if rawSpawn then
     end
 end
 
--- The host's scripted events a joiner's game fires too (user, 2026-10-25: "nagase didn't talk and the shuttle never
--- launched on their side"): the shuttle's countdown seconds RE_SV_ShuttleT_<s> carry Mission 22's countdown radio, the
--- ignition and the liftoff (tools/survival_events.py build_shuttle), so the joiner's copy of the shuttle launches with
--- its lines. Only these: the others steer units the joiners' games copy from the host.
-local MIRROR_EVENTS = { "^RE_SV_ShuttleT_%d+$", "^RE_SV_ShuttleRemove$" }
+-- The host's scripted events (SV_Event: the event package's RE_SV_* remote events) go to every joiner, whose game fires
+-- them too (user, 2026-10-25: "nagase didn't talk and the shuttle never launched on their side", then "make sure that
+-- all the coop events are forwarded to the joiners"): the shuttle's countdown (its radio, ignition, liftoff), the
+-- specials' scripted attacks and moves (Ladon volleys, the Alicorn, the Anomaly's field, camera and end, AB.L..IN's ECM
+-- and gun, VALKA), bomb runs, flight / escort / bomber orders, the landing craft's removals. All but these:
+local KEEP_EVENTS = {
+    "^RE_SV_RepairAircraft$", "^RE_SV_Decoy", "^RE_SV_Ally", "^RE_SV_Strike", "^RE_SV_Beat$",   -- each player's own
+    "^RE_SV_Hunt_",            -- the host's flights after the joiners' planes (a joiner's copies go for the joiner anyway)
+    "^RE_SV_AceTurn_", "^RE_SV_AceKulbit_",  -- moves around the host's plane: a joiner sees them in the copies' stream
+    "^RE_SV_GlitchBlink", "^RE_SV_ValkaTp_",
+    "^RE_SV_AirfieldOpen$", "^RE_SV_AirfieldClose$",                    -- (the airfield goes as "af")
+}
 local function mirroredEvent(name)
-    for _, p in ipairs(MIRROR_EVENTS) do if tostring(name):match(p) then return true end end
-    return false
+    name = tostring(name)
+    if not name:match("^RE_SV_") then return false end
+    if name:match("^RE_SV_Glitch") and not (name:match("^RE_SV_GlitchEcm") or name:match("^RE_SV_GlitchGun")) then
+        return false                                     -- (AB.L..IN's post-stall moves and blinks: as the aces' turns)
+    end
+    for _, p in ipairs(KEEP_EVENTS) do if name:match(p) then return false end end
+    return true
 end
 local rawEvent = SV_Event
 if rawEvent then
@@ -564,7 +576,7 @@ local function onJoinerMessage(f)
             if c then killCopy(id, c.obj); M.copies[id] = nil end
         end
     elseif k == "ev" then
-        if mirroredEvent(f[2]) and D and rawEvent then
+        if mirroredEvent(f[2]) and D and rawEvent and levelReady() then
             local r = rawEvent(f[2])
             if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. tostring(f[2]) .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
         end
