@@ -30,7 +30,7 @@ def main(stage, mod):
     open(p, 'w', encoding='utf-8', newline='').write(s)
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, '; enabled: true in the Survival COOP build.', '; enabled: true (this is the Survival COOP build).', 'ini coop')
+    s = sub(s, 'enabled: true in the Survival COOP build.', 'enabled: true (this is the Survival COOP build).', 'ini coop')
     open(p, 'w', encoding='utf-8', newline='').write(s)
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     extra = open(os.path.join(here, 'release', 'README_COOP.txt'), encoding='utf-8').read()

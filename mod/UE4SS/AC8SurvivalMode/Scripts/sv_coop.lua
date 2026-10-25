@@ -1,39 +1,47 @@
--- AC8 Survival Mode - runtime part sv_coop: Survival COOP (CFG.coop; the native half is dlls\main.dll 0.20.0 coop.c;
--- tools/re/COOP.md). Two players, one run, host-authoritative after the AC7 co-op mod Double Trigger:
---   host:   runs everything as in single player. Every flight it spawns (SV_Spawn, with the SV_SetAircraft /
---           SV_SetLevel calls before it) is sent to the joiner, every aircraft of it gets a stream id (its position and
---           rotation go out 15 times a second, natively), its health once a second, its death at once. The joiner's
---           hits on its copies come back and are dealt as real damage (ModifyHealth, the cause the joiner's plane).
---   joiner: spawns no rounds of its own (roundsTick, airfieldTick and bombTick are the host's): it spawns the host's
---           flights, binds each copy to its stream (the runtime moves it every frame to where the host's is) and keeps
---           it alive (MinHealth) until the host says it's down. Its round, callouts, airfield and round bonuses are
---           the host's. Each player's kills pay their own zollars (KILL.by: the other player is the "wingmate" side).
---   both:   the other player's plane is SV_Unit_CoopPeer (an allied AI plane, fire off, invincible), moved every frame
---           to where the other player is. A plane the host's fighters are sent after (split_share of its flights:
---           the stock allied-hunt order) makes them go for the joiner too.
--- Messages are "kind|field|field...", reliable unless said: hi, rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs (host),
--- jn, ht (joiner).
-COOP = { open = false, role = nil }
+-- AC8 Survival Mode - runtime part sv_coop: Survival COOP (CFG.coop; the native half is dlls\main.dll 0.22.0 coop.c;
+-- tools/re/COOP.md). Up to 4 players, one run, host-authoritative after the AC7 co-op mod Double Trigger. Player 1
+-- (slot 0) is the host, players 2-4 (slots 1-3) the joiners, each linked to the host only:
+--   host:    runs everything as in single player. Every flight it spawns (SV_Spawn, with the SV_SetAircraft /
+--            SV_SetLevel calls before it) goes to every joiner, every aircraft of it gets a stream id (its position and
+--            rotation go out 15 times a second, natively), its health once a second, its death at once. A joiner's
+--            hits on its copies come back and are dealt as real damage (ModifyHealth, the cause that joiner's plane).
+--            It keeps the roster (each player's name, airframe, version) and sends it to everyone.
+--   joiner:  spawns no rounds of its own (roundsTick, airfieldTick and bombTick are the host's): it spawns the host's
+--            flights, binds each copy to its stream (the runtime moves it every frame to where the host's is) and keeps
+--            it alive (MinHealth) until the host says it's down. Its round, callouts, airfield and round bonuses are
+--            the host's. Each player's kills pay their own zollars (KILL.by: another player is the "wingmate" side).
+--   everyone: each other player's plane is SV_Unit_CoopPeer<A-D> (A for player 1 ... D for player 4: an allied AI
+--            plane, fire off, invincible), moved every frame to where that player is (the host relays the joiners'
+--            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
+--            go for the joiners' planes too.
+-- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po
+-- (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+COOP = { open = false, role = nil, slot = nil }
 
 do
-local PEER_UNIT = "SV_Unit_CoopPeer"
+local PEER_UNITS = { [0] = "SV_Unit_CoopPeerA", "SV_Unit_CoopPeerB", "SV_Unit_CoopPeerC", "SV_Unit_CoopPeerD" }
+local SLOT_OF = {}
+for s = 0, 3 do SLOT_OF[PEER_UNITS[s]] = s end
 local M = {
     nextId = 0, units = {}, byId = {},        -- host: the flights mirrored, and every aircraft by stream id
     cunits = {}, copies = {}, dead = {},       -- joiner: the host's flights here, the bound copies, ids already down
     spawnQ = {}, hunts = {}, mirror = 0,       -- joiner's spawns waiting, host's hunt orders waiting, inside the rounds
-    peer = {}, lastD = nil, said = {}, nextHi = 0, nextRnd = 0, nextHp = 0, nextAf = 0, nextInfo = 0,
+    peers = {}, roster = {}, hiFrom = {},      -- the other players' planes here by slot; the roster (host: kept, joiner: told)
+    lastD = nil, said = {}, nextRnd = 0, nextHp = 0, nextAf = 0, nextInfo = 0, nextHi = 0,
 }
 local function cfg() return CFG.coop end
 function COOP.host() return COOP.open and COOP.role == "host" end
 function COOP.client() return COOP.open and COOP.role == "join" end
 
 local function clean(s) return (tostring(s or ""):gsub("|", "/")) end
-local function send(reliable, ...)
+-- to: a slot, or nil for every other game (a joiner's go to the host)
+local function sendTo(to, reliable, ...)
     if not COOP.open or type(SV_CoopSend) ~= "function" then return false end
     local parts = { ... }
     for i = 1, #parts do parts[i] = clean(parts[i]) end
-    return SV_CoopSend(table.concat(parts, "|"), reliable and 1 or 0) == 1
+    return SV_CoopSend(table.concat(parts, "|"), reliable and 1 or 0, to or -1) > 0
 end
+local function send(reliable, ...) return sendTo(nil, reliable, ...) end
 local function split(s)
     local t = {}
     for f in (s .. "|"):gmatch("([^|]*)|") do t[#t + 1] = f end
@@ -47,6 +55,15 @@ local function health(o)
     local ok, h = pcall(function() return o.HealthInternal end)
     return ok and type(h) == "number" and h or nil
 end
+local function playerName(slot)
+    local r = M.roster[slot]
+    return (r and r.name and r.name ~= "") and r.name or ("PLAYER " .. (slot + 1))
+end
+local function playerCount()
+    local n = 0
+    for _ in pairs(M.roster) do n = n + 1 end
+    return math.max(n, 1)
+end
 
 ---------------------------------------------------------------------------------------------------- the natives, wrapped
 -- (registered by dlls/main.dll before this script ran; every part calls them by their global names)
@@ -56,7 +73,7 @@ if rawSetAircraft then
     SV_SetAircraft = function(unit, row, idx)
         local r
         if idx == nil then r = rawSetAircraft(unit, row) else r = rawSetAircraft(unit, row, idx) end
-        if COOP.host() and type(unit) == "string" and unit ~= PEER_UNIT then
+        if COOP.host() and type(unit) == "string" and not SLOT_OF[unit] then
             acOps[unit] = acOps[unit] or {}
             table.insert(acOps[unit], { row = row, idx = idx or -1 })
         end
@@ -74,7 +91,7 @@ if rawSpawn then
     SV_Spawn = function(unit, x, y, z, yaw)
         local r
         if x ~= nil then r = rawSpawn(unit, x, y, z, yaw) else r = rawSpawn(unit) end
-        if COOP.host() and type(unit) == "string" and unit ~= PEER_UNIT then
+        if COOP.host() and type(unit) == "string" and not SLOT_OF[unit] then
             local ops, lvl = acOps[unit], levels[unit]
             acOps[unit], levels[unit] = nil, nil
             if type(r) == "number" and r > 0 then
@@ -97,14 +114,19 @@ local function poseText(p)
     if not p then return "-" end
     return string.format("%.0f,%.0f,%.0f,%.1f", p[1], p[2], p[3], p[4] or 0)
 end
-local function sendUnit(unit, u)
-    send(true, "sp", unit, poseText(u.pose), opsText(u.ops), u.level or -1, u.gen)
+local function sendUnit(to, unit, u)
+    sendTo(to, true, "sp", unit, poseText(u.pose), opsText(u.ops), u.level or -1, u.gen)
 end
 
 function COOP.hostSpawned(unit, pose, ops, level)
     M.gen = (M.gen or 0) + 1
     M.units[unit] = { gen = M.gen, pose = pose, ops = ops, level = level, n = 0, planes = {} }
-    sendUnit(unit, M.units[unit])
+    sendUnit(nil, unit, M.units[unit])
+end
+
+local function anyJoinerPlane()
+    for s = 1, 3 do if M.peers[s] and M.peers[s].obj then return true end end
+    return false
 end
 
 local function hostPlane(o, unit)
@@ -119,10 +141,18 @@ local function hostPlane(o, unit)
     M.byId[id] = { obj = o, unit = unit, ord = u.n }
     if type(SV_CoopTrack) == "function" and a then SV_CoopTrack(id, a) end
     send(true, "bd", unit, u.gen, u.n, id)
-    -- split the fighters between the two of you: a pool flight goes after the joiner's plane (it's an allied aircraft
-    -- here) with split_share, once it's had its orders
-    if u.n == 1 and poolIndex(unit) and M.peer.obj and math.random() < (cfg().split_share or 0) then
+    -- split the fighters between you: a pool flight goes after the joiners' planes (allied aircraft here) with
+    -- split_share, once it's had its orders
+    if u.n == 1 and poolIndex(unit) and anyJoinerPlane() and math.random() < (cfg().split_share or 0) then
         M.hunts[#M.hunts + 1] = { at = os.clock() + 5, name = string.format("RE_SV_Hunt_%02d", poolIndex(unit)), unit = unit }
+    end
+end
+
+-- the roster: who's in which slot, their airframe and version, to every joiner (on a change)
+local function sendRoster(to)
+    for s = 0, 3 do
+        local r = M.roster[s]
+        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "") end
     end
 end
 
@@ -180,43 +210,51 @@ local function hostTick()
             table.remove(M.hunts, i)
             if D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
-                log("coop: " .. h.unit .. " goes after the joiner (" .. h.name .. " " .. tostring(r) .. ")")
+                log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")")
             end
         end
     end
 end
 
--- the joiner asked for the whole picture (it loaded in, or the link came back): every flight with anything alive
-local function hostSync()
-    send(true, "rs")
+-- a joiner asked for the whole picture (it loaded in, or its link came back): every flight with anything alive
+local function hostSync(to)
+    sendTo(to, true, "rs")
+    sendRoster(to)
+    local n = 0
     for unit, u in pairs(M.units) do
-        sendUnit(unit, u)
+        n = n + 1
+        sendUnit(to, unit, u)
         for ord, pl in pairs(u.planes) do
-            send(true, "bd", unit, u.gen, ord, pl.id)
-            if pl.dead then send(true, "dn", pl.id) end
+            sendTo(to, true, "bd", unit, u.gen, ord, pl.id)
+            if pl.dead then sendTo(to, true, "dn", pl.id) end
         end
     end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
-    log("coop: sent the joiner the run: " .. (function() local n = 0; for _ in pairs(M.units) do n = n + 1 end; return n end)() .. " flights")
+    log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end
 
-local function hostHit(id, dmg)
+local function hostHit(from, id, dmg)
     local e = M.byId[id]
     if not (e and not e.dead and valid(e.obj) and dmg > 0) then return end
-    local causer = M.peer.obj and valid(M.peer.obj) and M.peer.obj or nil
+    local P = M.peers[from]
+    local causer = P and P.obj and valid(P.obj) and P.obj or nil
     local ok = pcall(function() e.obj:ModifyHealth(-dmg, causer, true) end)
     if not ok then ok = pcall(function() e.obj:ModifyHealth(-dmg, e.obj, true) end) end
-    if not ok then once("hitfail", "coop: the joiner's hits can't be dealt (ModifyHealth failed)") end
-    M.hits = (M.hits or 0) + 1
+    if not ok then once("hitfail", "coop: the joiners' hits can't be dealt (ModifyHealth failed)") end
 end
 
 ---------------------------------------------------------------------------------------------------- joiner
+local function hostPuppet()
+    local P = M.peers[0]
+    return P and P.obj and valid(P.obj) and P.obj or nil
+end
+
 local function killCopy(id, o)
     if type(SV_CoopBind) == "function" then SV_CoopBind(id, 0) end
     if not valid(o) then return end
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
-    local causer = M.peer.obj and valid(M.peer.obj) and M.peer.obj or nil
+    local causer = hostPuppet()
     local ok = pcall(function() o:ModifyHealth(-(h / 10 + 100), causer, true) end)
     if not ok then pcall(function() o.HealthInternal = 0 end) end
 end
@@ -317,7 +355,7 @@ local function clientTick()
     end
 end
 
----------------------------------------------------------------------------------------------------- the other player's plane
+---------------------------------------------------------------------------------------------------- the other players' planes
 local AF_CODE = "BP_PlayerPlane_PP%d+_(%w+)"
 local function myAirframe()
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
@@ -327,7 +365,7 @@ local function myAirframe()
     return code and (c.airframes[code] or c.default) or c.default, code
 end
 
-function COOP.peerPlane(o)
+function COOP.peerPlane(o, slot)
     if not valid(o) or not inSurvival(o) then return end
     for k, v in pairs({ bPermissionToFire = false, bPermissionToEngage = false, bPermissionToUseFlares = false,
                         bPermissionToProvoke = false, bPermissionToEvade = false, bIsNotLockonTarget = true,
@@ -335,31 +373,34 @@ function COOP.peerPlane(o)
         pcall(function() o[k] = v end)
     end
     pcall(function() o:SetIsInvincible(true) end)
-    M.peer.obj, M.peer.addr, M.peer.spawning = o, addrOf(o), nil
-    local r = type(SV_CoopPeer) == "function" and M.peer.addr and SV_CoopPeer(M.peer.addr) or -9
-    M.peer.bound = r == 1
-    log("coop: the other player's plane is up (" .. (nameOf(o):match("([^%.:]+)$") or "?") .. ", " ..
-        (r == 1 and "moved every frame" or ("NOT moved: " .. tostring(r))) .. ")")
+    local P = M.peers[slot] or {}
+    M.peers[slot] = P
+    P.obj, P.addr, P.spawning, P.shown = o, addrOf(o), nil, nil
+    local r = type(SV_CoopPeer) == "function" and P.addr and SV_CoopPeer(slot, P.addr) or -9
+    log(string.format("coop: player %d's plane is up (%s, %s)", slot + 1, nameOf(o):match("([^%.:]+)$") or "?",
+        r == 1 and "moved every frame" or ("NOT moved: " .. tostring(r))))
 end
 
-local function peerTick()
-    local s = type(SV_CoopPeerAt) == "function" and SV_CoopPeerAt() or ""
+local function peerTick(slot)
+    local s = type(SV_CoopPeerAt) == "function" and SV_CoopPeerAt(slot) or ""
     local f = {}
     for v in s:gmatch("[^,]+") do f[#f + 1] = tonumber(v) end
     local fresh = #f >= 10 and f[10] < 3000 and (math.floor(f[9]) % 2 == 1)        -- (flag 1: in Survival's level)
-    M.peer.at = fresh and { X = f[1], Y = f[2], Z = f[3] } or nil
-    M.peer.hp, M.peer.max = f[7], f[8]
+    local P = M.peers[slot] or {}
+    M.peers[slot] = P
     if not D then return end
-    local P = M.peer
-    if P.obj and not valid(P.obj) then P.obj, P.addr, P.bound = nil, nil, false end
+    if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
+    local unit = PEER_UNITS[slot]
     if fresh and not P.obj and not P.spawning then
-        local row = M.peerRow or cfg().default
-        rawSetAircraft(PEER_UNIT, row)
-        spawningUnit = PEER_UNIT
-        local r = rawSpawn(PEER_UNIT)
+        local r0 = M.roster[slot]
+        local row = (r0 and r0.row ~= "" and r0.row) or cfg().default
+        rawSetAircraft(unit, row)
+        spawningUnit = unit
+        local r = rawSpawn(unit)
         spawningUnit = nil
         P.spawning = os.clock()
-        log("coop: the other player's plane as " .. row .. ": " .. ((type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        log(string.format("coop: player %d's plane as %s: %s", slot + 1, row,
+            (type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     elseif P.spawning and os.clock() - P.spawning > 10 then
         P.spawning = nil                                  -- (it never came: again)
     end
@@ -368,69 +409,71 @@ local function peerTick()
         if show ~= P.shown then
             P.shown = show
             pcall(function() P.obj:SetActorHiddenInGame(not show) end)
-            if type(SV_CoopPeer) == "function" then SV_CoopPeer(show and P.addr or 0) end
-            log("coop: the other player's plane " .. (show and "shown" or "hidden (they're not in the mission)"))
+            if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
+            log(string.format("coop: player %d's plane %s", slot + 1, show and "shown" or "hidden (not in the mission)"))
         end
     end
 end
 
 ---------------------------------------------------------------------------------------------------- messages
-local function onHi(f)
-    local role, ver, rt, row, name = f[2], f[3], f[4], f[5], f[6]
-    if not name or name == "" then name = M.infoName or "the other player" end
-    M.peerRow, M.peerName, M.peerVer = row ~= "" and row or nil, name, ver
-    if not M.hiSeen then
-        M.hiSeen = true
-        log(string.format("coop: the other player: %s (%s), Survival %s, runtime %s, flies %s", tostring(name), tostring(role),
-            tostring(ver), tostring(rt), tostring(row)))
-        callout(CFG.hud.text.coop_linked or "CO-OP LINKED", string.upper(tostring(name)) .. (COOP.host() and " JOINED" or " IS HOSTING"))
-        if ver ~= VERSION then
-            log("coop: WARNING: the other player runs Survival " .. tostring(ver) .. ", you " .. VERSION .. ": install the same build")
-            callout("CO-OP VERSION MISMATCH", "YOU " .. VERSION .. ", THEM " .. tostring(ver))
-        end
-    end
-    if M.peer.obj and M.peerRow and M.peerRow ~= M.peer.row then M.peer.row = M.peerRow end
-end
-
 local function sendHi()
     local row = myAirframe()
-    send(true, "hi", COOP.role, VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", "")
+    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "")
 end
 
-local function onMessage(msg)
-    local f = split(msg)
+-- the host's own roster entry, and everyone told
+local function hostRosterSelf()
+    M.roster[0] = { row = myAirframe() or "", ver = VERSION, name = M.myName or "" }
+    sendRoster(nil)
+end
+
+local function onHostMessage(from, f)
     local k = f[1]
-    if k == "sys" then
-        local what = f[2]
-        if what == "paired" or what == "restart" then
-            M.hiSeen = false; sendHi()
-            if COOP.client() and D then killAllCopies("new link"); send(true, "jn") end
-        elseif what == "lost" then
-            M.wasLost = true
-            callout("CO-OP LINK LOST", "WAITING FOR " .. string.upper(tostring(M.peerName or "the other player")))
-        elseif what == "up" then
-            if M.wasLost then                             -- (the first "up" comes right after "paired")
-                M.wasLost = false
-                callout("CO-OP LINK BACK", nil)
-                if COOP.client() and D then killAllCopies("link back"); send(true, "jn") end
+    if k == "hi" then
+        local ver, rt, row, name = f[2], f[3], f[4], f[5]
+        if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
+        local first = not M.roster[from]
+        M.roster[from] = { row = row or "", ver = ver, name = name }
+        if first then
+            log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
+                tostring(rt), tostring(row)))
+            callout(string.upper(tostring(name)) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), cfg().max_players or 4))
+            if ver ~= VERSION then
+                log("coop: WARNING: player " .. (from + 1) .. " runs Survival " .. tostring(ver) .. ", you " .. VERSION)
+                callout("CO-OP VERSION MISMATCH", string.upper(tostring(name)) .. " HAS " .. tostring(ver))
             end
-        elseif what == "samerole" then
-            callout("CO-OP: BOTH OF YOU ARE " .. (COOP.host() and "HOSTS" or "JOINERS"), "ONE OF YOU SET role = " .. (COOP.host() and "join" or "host"))
         end
-        log("coop: " .. msg)
-        return
+        hostRosterSelf()
+    elseif k == "jn" then hostSync(from)
+    elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
     end
-    if k == "hi" then onHi(f); return end
-    if COOP.host() then
-        if k == "jn" then hostSync()
-        elseif k == "ht" then hostHit(tonumber(f[2]) or 0, tonumber(f[3]) or 0)
-        end
-        return
-    end
-    -- joiner
+end
+
+local function onJoinerMessage(f)
+    local k = f[1]
     if k == "rnd" then
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
                   waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, got = os.clock() }
+    elseif k == "pi" then
+        local s = tonumber(f[2])
+        if not s then return end
+        local first = not M.roster[s]
+        M.roster[s] = { row = f[3] or "", ver = f[4], name = f[5] }
+        if first and s ~= COOP.slot then
+            log(string.format("coop: player %d is %s (Survival %s, flies %s)", s + 1, tostring(f[5]), tostring(f[4]), tostring(f[3])))
+            if s == 0 then
+                callout("CO-OP LINKED", string.upper(tostring(f[5])) .. " IS HOSTING")
+                if f[4] ~= VERSION then callout("CO-OP VERSION MISMATCH", "YOU " .. VERSION .. ", THE HOST " .. tostring(f[4])) end
+            else
+                callout(string.upper(tostring(f[5])) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), cfg().max_players or 4))
+            end
+        end
+    elseif k == "po" then
+        local s = tonumber(f[2])
+        if s and M.roster[s] then
+            callout(string.upper(playerName(s)) .. " LEFT", nil)
+            M.roster[s] = nil
+        end
     elseif k == "af" and AF then
         local down = f[4] == "1"
         AF.hp, AF.full, RUN.dirty = tonumber(f[2]) or AF.hp, tonumber(f[3]) or AF.full, true
@@ -493,6 +536,50 @@ local function onMessage(msg)
     end
 end
 
+local function onSys(from, what, f)
+    if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
+        log("coop: player " .. (from + 1) .. " linked")
+    elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
+        sendHi()
+        if COOP.client() and D then killAllCopies("new link"); send(true, "jn") end
+        if COOP.host() and what == "restart" then M.roster[from] = nil end
+    elseif what == "slot" then
+        COOP.slot = tonumber(f[3])
+        log("coop: you are player " .. tostring((COOP.slot or -1) + 1))
+    elseif what == "lost" then
+        M.wasLost = M.wasLost or {}
+        M.wasLost[from] = true
+        callout("CO-OP LINK LOST", string.upper(playerName(from)))
+    elseif what == "up" then
+        if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
+            M.wasLost[from] = nil
+            callout("CO-OP LINK BACK", string.upper(playerName(from)))
+            if COOP.client() and D then killAllCopies("link back"); send(true, "jn") end
+        end
+    elseif what == "left" then
+        callout(string.upper(playerName(from)) .. " LEFT", nil)
+        M.roster[from] = nil
+        local P = M.peers[from]
+        if P and P.obj then pcall(function() P.obj:SetActorHiddenInGame(true) end); P.shown = false end
+        if COOP.host() then send(true, "po", from) end
+    elseif what == "full" then
+        callout("CO-OP: THE HOST'S GAME IS FULL", nil)
+    elseif what == "samerole" then
+        callout("CO-OP: TWO HOSTS", "ONE OF YOU SET role = join")
+    end
+end
+
+local function onMessage(raw)
+    local from = tonumber(raw:sub(1, 1)) or 0
+    local f = split(raw:sub(3))
+    if f[1] == "sys" then
+        log("coop: player " .. (from + 1) .. ": " .. raw:sub(3))
+        return onSys(from, f[2], f)
+    end
+    if COOP.host() then return onHostMessage(from, f) end
+    if from == 0 then return onJoinerMessage(f) end
+end
+
 ---------------------------------------------------------------------------------------------------- the rest of the runtime, wrapped
 local rawRoundsTick, rawAirfieldTick, rawBombTick = roundsTick, airfieldTick, bombTick
 local function mirrored(fn, ...)                    -- the host's own round logic: its callouts and bonuses go out
@@ -525,9 +612,10 @@ addCredits = function(n, why)
 end
 local rawLogPlane = logPlane
 logPlane = function(o, unit)
-    if unit == PEER_UNIT then
-        local ok, err = pcall(COOP.peerPlane, o)
-        if not ok then log("coop: peer plane error " .. tostring(err)) end
+    local slot = unit and SLOT_OF[unit]
+    if slot then
+        local ok, err = pcall(COOP.peerPlane, o, slot)
+        if not ok then log("coop: player plane error " .. tostring(err)) end
         return
     end
     rawLogPlane(o, unit)
@@ -539,7 +627,7 @@ end
 local rawSide = KILL.side
 KILL.side = function(o, pawnAddr)
     local a = addrOf(o)
-    if a and M.peer.addr and a == M.peer.addr then return "wingmate" end
+    if a then for _, P in pairs(M.peers) do if P.addr and P.addr == a then return "wingmate" end end end
     return rawSide(o, pawnAddr)
 end
 local rawSend = LB.send
@@ -558,19 +646,23 @@ function COOP.tick(tick)
     if not c.enabled then return end
     if not COOP.open and not M.openTried then
         M.openTried = true
-        if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.20.0 or later needed)"); return end
+        if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.22.0 or later needed)"); return end
         local role = (c.role or "host"):lower()
         role = (role == "join" or role == "joiner" or role == "client") and "join" or "host"
-        local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION)
-        COOP.open, COOP.role = r == 1, role
-        log(string.format("coop: %s as the %s over %s (partner %s): %s", r == 1 and "open" or "NOT open", role == "host" and "host" or "joiner",
-            tostring(c.transport), tostring(c.partner), r == 1 and "looking for the other player" or
+        local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
+                              math.max(2, math.min(4, c.max_players or 4)))
+        COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
+        log(string.format("coop: %s as the %s over %s (partner %s, up to %d players): %s", r == 1 and "open" or "NOT open",
+            role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), c.max_players or 4,
+            r == 1 and "looking for players" or
             ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
         if not COOP.open then return end
+        if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
+        if COOP.host() then hostRosterSelf() end
     end
     if not COOP.open then return end
-    -- the other game's messages
-    for _ = 1, 400 do
+    -- the other games' messages
+    for _ = 1, 600 do
         local m = SV_CoopRecv()
         if not m or m == "" then break end
         local ok, err = pcall(onMessage, m)
@@ -581,26 +673,30 @@ function COOP.tick(tick)
         M.nextInfo = now + 5
         local info = SV_CoopInfo()
         local st = info:match("state=(%a+)")
-        local pn = info:match("peername=(.*)$")
-        if pn and pn ~= "" then M.infoName = pn end
+        M.linkNames = {}
+        for s, name in (info:match("peers=(.*)$") or ""):gmatch("(%d+)/%a+/%-?%d+/%-?%d+/([^,]*)") do M.linkNames[tonumber(s)] = name end
         if st ~= M.state then
             M.state = st
             log("coop: " .. info)
             if st == "searching" and COOP.client() then once("searching", "coop: waiting for the host (" .. tostring(c.partner) .. ")") end
         end
-        if not M.hiSeen and st == "linked" then sendHi() end
+        if COOP.client() and st == "linked" and now >= M.nextHi and not M.roster[COOP.slot or -1] then
+            M.nextHi = now + 10                              -- (the host hasn't listed us yet: hello again)
+            sendHi()
+        end
     end
     -- a new level (a run started, or started over)
     if D ~= M.lastD then
         M.lastD = D
         if type(SV_CoopReset) == "function" then SV_CoopReset() end
         if COOP.client() then killAllCopies("a new run here") end      -- (a restart in the same level keeps the actors)
-        local keep = M.peer.obj and valid(M.peer.obj) and M.peer.obj or nil
-        M.peer = keep and { obj = keep, addr = addrOf(keep) } or {}     -- (bound again by peerTick)
+        for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
+            M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj) } or {}
+        end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
         if D then
             if COOP.host() then send(true, "rs") else send(true, "jn") end
-            log("coop: in Survival's level as the " .. (COOP.host() and "host" or "joiner"))
+            log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
             if COOP.client() and M.state ~= "linked" then callout("CO-OP: WAITING FOR THE HOST", tostring(c.partner)) end
         end
     end
@@ -614,12 +710,19 @@ function COOP.tick(tick)
         if playerOnAirfield() then flags = flags + 4 end
         SV_CoopMe(addrOf(pawn) or 0, flags)
         local row = myAirframe()
-        if row and row ~= M.myRow then M.myRow = row; if M.hiSeen then sendHi() end end
+        if row and row ~= M.myRow then
+            M.myRow = row
+            if COOP.host() then hostRosterSelf() else sendHi() end
+        end
     else
         SV_CoopMe(0, 0)
     end
-    local okP, errP = pcall(peerTick)
-    if not okP then once("peerTick", "coop: peer error " .. tostring(errP)) end
+    for s = 0, 3 do
+        if s ~= COOP.slot then
+            local okP, errP = pcall(peerTick, s)
+            if not okP then once("peerTick", "coop: player plane error " .. tostring(errP)) end
+        end
+    end
     if COOP.host() then
         local okH, errH = pcall(hostTick)
         if not okH then once("hostTick", "coop: host error " .. tostring(errH)) end

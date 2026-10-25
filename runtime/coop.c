@@ -1,29 +1,34 @@
 /* =============================================================================
- *  Survival COOP: the native half of two-player co-op (runtime 0.20.0; tools/re/COOP.md). Included by survival_rt.c.
+ *  Survival COOP: the native half of co-op for up to 4 players (runtime 0.22.0; tools/re/COOP.md). Included by
+ *  survival_rt.c.
  *
  *  Host-authoritative, after Double Trigger, the AC7 co-op mod (layer10-love/double-trigger, MIT / Unlicense): the
- *  host's game runs the rounds and the enemies, the joiner's game mirrors them. This file is the transport and the
- *  per-frame work; Scripts/sv_coop.lua decides what is mirrored.
+ *  host's game runs the rounds and the enemies, the joiners' games mirror them. A star: each joiner is linked to the
+ *  host only (slot 0 = the host, 1..3 the joiners, given by the host), and the host relays every player's plane to
+ *  the others. This file is the transport and the per-frame work; Scripts/sv_coop.lua decides what is mirrored.
  *
  *  Transport: Steam P2P (ISteamNetworking v006 through steam_api64's flat API: SendP2PPacket / ReadP2PPacket on a
  *  channel of our own, no callbacks: a session is accepted by sending to that user and AcceptP2PSessionWithUser), or
  *  UDP (ws2_32, loaded at run time: LAN or a VPN, the host listens on a port). Every packet starts with
  *  'S', CO_PROTO, a type and a flags byte:
- *    H hello (1 s): role, session nonce, mod version, name, time + echo of the peer's last hello (the round trip)
- *    L reliable Lua message: sender nonce, seq, length, bytes (ours: resent every 250 ms until acked, in order)
+ *    H hello (1 s): role, session nonce, time + echo of the link's last hello (the round trip), the slot the host
+ *      gives that joiner (or none yet / full), max players, mod version, name
+ *    L reliable Lua message: sender nonce, seq, length, bytes (per link: resent every 250 ms until acked, in order)
  *    K ack: sender nonce, every seq below this one arrived
  *    U unreliable Lua message
- *    P the sender's own plane (30 Hz): time, position (cm, doubles), rotation (quaternion), health, Lua's flags
+ *    P a player's own plane (30 Hz): slot, time, position (cm, doubles), rotation (quaternion), health, Lua's flags;
+ *      the host sends its own and relays each joiner's to the other joiners
  *    E the host's tracked enemies (15 Hz): time, n x {id, position (floats), rotation (int16 quaternion)}
- *  Puppets: a local AI plane bound to a stream (the peer's plane, or a host enemy on the joiner's game) is moved every
- *  frame to where the stream says it was CO_DELAY ago (snapshot interpolation, nlerp), through the AI plane's own
- *  teleport (vtable slot 315: the flight model flies on from there, hard rule 39), late in the frame (the music
- *  player's tickable, after every actor's tick), so it draws where the stream puts it.
+ *  Puppets: a local plane bound to a stream (another player's, or a host enemy on a joiner's game) is moved every
+ *  frame to where the stream says it was CO_DELAY ago on its sender's clock (snapshot interpolation, nlerp), through
+ *  the plane's own teleport (vtable slot 315: the flight model flies on from there, hard rule 39), late in the frame
+ *  (the music player's tickable, after every actor's tick), so it draws where the stream puts it.
  *  All of it runs on the game thread: the Lua calls come from Survival's ExecuteInGameThread tick, the frame work from
  *  the music player's tick (OnMusicTick).
  * ============================================================================= */
 
-#define CO_PROTO        1
+#define CO_PROTO        2                   /* 2: up to 4 players (runtime 0.22.0); 1: two */
+#define CO_MAX_PLAYERS  4
 #define CO_MAGIC        0x53                /* 'S' */
 #define CO_CHANNEL      1480                /* our Steam P2P channel (the game's own use 0..7)                      */
 #define CO_MAX_PACKET   1200                /* Steam's limit for an unreliable P2P packet                           */
@@ -313,42 +318,49 @@ typedef struct {
     double   lastRecv;
 } CoEnt;
 
-static struct {
-    int      open, mode, role;
+/* A link to another game: the host has one per joiner (index = that joiner's slot, 1..3), a joiner one to the host
+ * (index 0). Each has its own reliable channel. */
+typedef struct {
+    int      used, connected;
+    uint64_t steamId;
+    CoSockAddr addr;
     uint32_t nonce;
-    char     partner[96];
-    double   delay;                         /* interpolation delay, seconds */
-    uint16_t port;
-    /* the peer */
-    int      havePeer, connected;
-    uint64_t peerId;
-    CoSockAddr peerAddr;
-    uint32_t peerNonce;
-    int      peerRole;
-    char     peerName[64], peerVer[32];
-    double   lastRecv, lastHello, lastDiscover, lastFrame, lastPlayerSend, lastEntSend, lastStats, lastResend;
-    uint64_t cand[16]; int32_t ncand;
-    uint32_t helloT, helloRecvT; double helloRecvAt; double rtt;
-    char     myVer[32], myName[64];
-    uint64_t myId;
-    /* reliable channel */
+    int      role;
+    char     name[64], ver[32];
+    double   lastRecv, lastHello, helloRecvAt, rtt;
+    uint32_t helloRecvT;
     uint32_t sendSeq, ackedBelow, recvNext;
     int      ackDue;
     CoOut    out[CO_RELIABLE]; int32_t nout;
     char*    ooo[CO_OOO]; uint16_t oooLen[CO_OOO]; uint32_t oooSeq[CO_OOO];
-    /* Lua inbox */
+    uint32_t txPk, rxPk, txB, rxB, resent;
+} CoLink;
+
+/* A player's plane as streamed (slot 0 the host, 1..3 the joiners): its snapshots on that player's clock and the
+ * local puppet they move. A joiner gets the other joiners' planes relayed by the host. */
+typedef struct {
+    CoEnt    plane;
+    double   offset; int haveOffset;        /* local time - that player's time: the smallest seen, let go of slowly */
+    int32_t  hp; float maxHp; uint32_t flags; double stateAt;
+} CoPlayer;
+
+static struct {
+    int      open, mode, role, maxPlayers, mySlot;   /* mySlot: the host 0, a joiner the one the host gave it (-1 before) */
+    uint32_t nonce;
+    char     partner[160];
+    double   delay;                         /* interpolation delay, seconds */
+    uint16_t port;
+    double   lastDiscover, lastFrame, lastPlayerSend, lastEntSend, lastStats;
+    uint64_t cand[16]; int32_t ncand;
+    char     myVer[32], myName[64];
+    uint64_t myId;
+    CoLink   links[CO_MAX_PLAYERS];
+    CoPlayer players[CO_MAX_PLAYERS];
     char*    inbox[CO_INBOX]; uint16_t inboxLen[CO_INBOX]; int32_t inHead, inCount;
-    /* clock offset to the peer: local time - peer time, the smallest seen (slowly let go of) */
-    double   offset; int haveOffset;
-    /* streams */
     CoRef    me; uint32_t meFlags;
-    CoEnt    peer;                          /* the peer's own plane */
-    int32_t  peerHp; float peerMaxHp; uint32_t peerFlags; double peerT;
     CoEnt    ents[CO_MAX_ENTS];
-    int32_t  nTrack;
-    /* stats */
-    uint32_t txPk, rxPk, txB, rxB, badPk, resent;
-    int      warnedTele;
+    uint32_t badPk;
+    int      warnedTele, fullSaid;
 } CO;
 
 /* reflected offsets, resolved once from the first object that has them */
@@ -416,16 +428,21 @@ static int CoCanDrive(uint8_t* obj)
 typedef uint8_t (*CoTeleportFn)(void* self, const double* loc, const double* rot, uint8_t isTest, uint8_t noCheck);
 
 /* ---- packets ---------------------------------------------------------------------------------------------------- */
-static void CoRawSend(const uint8_t* data, uint32_t n)
+static void CoRawTo(uint64_t steamId, const CoSockAddr* udp, const uint8_t* data, uint32_t n, CoLink* L)
 {
-    if (!CO.havePeer || n > CO_MAX_PACKET) return;
+    if (n > CO_MAX_PACKET) return;
 #ifdef COOP_TEST
     if (CoTestDrop()) return;                                 /* (tools/checks/coop_test.c: a lossy link) */
 #endif
     int ok = 0;
-    if (CO.mode == CO_MODE_STEAM && ST.state > 0) ok = ST.send(ST.net, CO.peerId, data, n, 0 /* unreliable */, CO_CHANNEL);
-    else if (CO.mode == CO_MODE_UDP && WS.sock) ok = WS.sendto(WS.sock, (const char*)data, (int32_t)n, 0, &CO.peerAddr, sizeof(CO.peerAddr)) == (int32_t)n;
-    if (ok) { ++CO.txPk; CO.txB += n; }
+    if (CO.mode == CO_MODE_STEAM && ST.state > 0) ok = ST.send(ST.net, steamId, data, n, 0 /* unreliable */, CO_CHANNEL);
+    else if (CO.mode == CO_MODE_UDP && WS.sock && udp) ok = WS.sendto(WS.sock, (const char*)data, (int32_t)n, 0, udp, sizeof(*udp)) == (int32_t)n;
+    if (ok && L) { ++L->txPk; L->txB += n; }
+}
+static void CoSendTo(int k, const uint8_t* data, uint32_t n)
+{
+    CoLink* L = &CO.links[k];
+    if (L->used) CoRawTo(L->steamId, &L->addr, data, n, L);
 }
 
 static uint8_t* CoHeader(uint8_t* b, uint8_t type) { b[0] = CO_MAGIC; b[1] = CO_PROTO; b[2] = type; b[3] = 0; return b + 4; }
@@ -435,127 +452,138 @@ static uint32_t CoGet32(const uint8_t* p) { uint32_t v; memcpy(&v, p, 4); return
 static uint16_t CoGet16(const uint8_t* p) { uint16_t v; memcpy(&v, p, 2); return v; }
 static uint32_t CoMs(double t) { return (uint32_t)(uint64_t)(t * 1000.0); }
 
-static void CoHelloTo(uint64_t steamId, const CoSockAddr* udp, double now)
+#define CO_SLOT_NONE 0xFF                   /* hello's yourSlot: not given yet */
+#define CO_SLOT_FULL 0xFE                   /* hello's yourSlot: the host has no room */
+
+/* hello: role, nonce, time, echo of the link's last hello + its age, yourSlot, max players, version, name */
+static void CoHelloTo(uint64_t steamId, const CoSockAddr* udp, CoLink* L, uint8_t yourSlot, double now)
 {
     uint8_t b[160], *p = CoHeader(b, 'H');
     *p++ = (uint8_t)CO.role;
     CoPut32(&p, CO.nonce);
     CoPut32(&p, CoMs(now));
-    CoPut32(&p, CO.helloRecvT);
-    CoPut32(&p, CO.helloRecvAt > 0 ? CoMs(now - CO.helloRecvAt) : 0);
+    CoPut32(&p, L ? L->helloRecvT : 0);
+    CoPut32(&p, (L && L->helloRecvAt > 0) ? CoMs(now - L->helloRecvAt) : 0);
+    *p++ = yourSlot;
+    *p++ = (uint8_t)CO.maxPlayers;
     char ver[32] = { 0 }, name[64] = { 0 };
     CoCopy(ver, sizeof(ver), CO.myVer, CoLen(CO.myVer));
     CoCopy(name, sizeof(name), CO.myName, CoLen(CO.myName));
     memcpy(p, ver, 32); p += 32;
     memcpy(p, name, 64); p += 64;
-    uint32_t n = (uint32_t)(p - b);
-    if (CO.mode == CO_MODE_STEAM && ST.state > 0) { if (ST.send(ST.net, steamId, b, n, 0, CO_CHANNEL)) { ++CO.txPk; CO.txB += n; } }
-    else if (CO.mode == CO_MODE_UDP && WS.sock && udp) { if (WS.sendto(WS.sock, (const char*)b, (int32_t)n, 0, udp, sizeof(*udp)) == (int32_t)n) { ++CO.txPk; CO.txB += n; } }
+    CoRawTo(steamId, udp, b, (uint32_t)(p - b), L);
 }
 
-static void CoInboxPush(const char* s, uint32_t n)
+static void CoInboxPush(int slot, const char* s, uint32_t n)
 {
     if (CO.inCount >= CO_INBOX) { Log(L"coop: Lua inbox full; a message was dropped"); return; }
-    char* m = (char*)malloc(n + 1);
+    char* m = (char*)malloc(n + 4);
     if (!m) return;
-    memcpy(m, s, n); m[n] = 0;
+    m[0] = (char)('0' + (slot >= 0 && slot < 10 ? slot : 9)); m[1] = '|';  /* "<sender's slot>|<message>" */
+    memcpy(m + 2, s, n); m[n + 2] = 0;
     int32_t at = (CO.inHead + CO.inCount) % CO_INBOX;
-    CO.inbox[at] = m; CO.inboxLen[at] = (uint16_t)n; ++CO.inCount;
+    CO.inbox[at] = m; CO.inboxLen[at] = (uint16_t)(n + 2); ++CO.inCount;
 }
-static void CoSys(const char* s) { CoInboxPush(s, (uint32_t)CoLen(s)); }
+static void CoSys(int slot, const char* s) { CoInboxPush(slot, s, (uint32_t)CoLen(s)); }
 
-static void CoResetReliable(void)
+static void CoLinkResetReliable(CoLink* L)
 {
-    for (int32_t i = 0; i < CO.nout; ++i) free(CO.out[i].data);
-    CO.nout = 0;
-    for (int i = 0; i < CO_OOO; ++i) { if (CO.ooo[i]) free(CO.ooo[i]); CO.ooo[i] = NULL; }
-    CO.sendSeq = 1; CO.ackedBelow = 1; CO.recvNext = 1; CO.ackDue = 0;
+    for (int32_t i = 0; i < L->nout; ++i) free(L->out[i].data);
+    L->nout = 0;
+    for (int i = 0; i < CO_OOO; ++i) { if (L->ooo[i]) free(L->ooo[i]); L->ooo[i] = NULL; }
+    L->sendSeq = 1; L->ackedBelow = 1; L->recvNext = 1; L->ackDue = 0;
+}
+static void CoLinkFree(int k)
+{
+    CoLinkResetReliable(&CO.links[k]);
+    memset(&CO.links[k], 0, sizeof(CO.links[k]));
 }
 
-/* A new peer or peer session: what came from the old one goes (snapshots, its clock); the actors stay tracked and
- * bound (the host's enemies already up are streamed to a joiner that arrives later; Lua rebinds or unbinds). */
-static void CoResetStreams(void)
+/* A player's stream starts over (a new link, a restart): its snapshots and clock go, its puppet stays bound. */
+static void CoPlayerReset(int s)
 {
-    CO.peer.ns = 0;
+    CO.players[s].plane.ns = 0;
+    CO.players[s].haveOffset = 0;
+    CO.players[s].stateAt = 0;
+}
+static void CoEntsReset(void)                             /* the host's enemies' streams: snapshots go, bindings stay */
+{
     for (int i = 0; i < CO_MAX_ENTS; ++i) {
         CO.ents[i].ns = 0;
         if (CO.ents[i].used && !CO.ents[i].ref.obj) memset(&CO.ents[i], 0, sizeof(CO.ents[i]));
     }
-    CO.haveOffset = 0; CO.peerT = 0;
-}
-static void CoClearAll(void)                              /* a new level: nothing of the old one is valid */
-{
-    memset(&CO.peer, 0, sizeof(CO.peer));
-    memset(CO.ents, 0, sizeof(CO.ents));
-    CO.nTrack = 0; CO.haveOffset = 0; CO.peerT = 0;
 }
 
-static void CoSendLua(const char* s, uint32_t n, int reliable)
+static void CoSendLua(int k, const char* s, uint32_t n, int reliable)
 {
+    CoLink* L = &CO.links[k];
+    if (!L->used) return;
     if (n > CO_MAX_LUA) n = CO_MAX_LUA;
     if (!reliable) {
         uint8_t b[CO_MAX_PACKET], *p = CoHeader(b, 'U');
         CoPut16(&p, (uint16_t)n); memcpy(p, s, n); p += n;
-        CoRawSend(b, (uint32_t)(p - b));
+        CoSendTo(k, b, (uint32_t)(p - b));
         return;
     }
-    if (CO.nout >= CO_RELIABLE) { Log(L"coop: reliable queue full; a message was dropped"); return; }
+    if (L->nout >= CO_RELIABLE) { Log(L"coop: reliable queue to player %d full; a message was dropped", k); return; }
     char* d = (char*)malloc(n ? n : 1);
     if (!d) return;
     memcpy(d, s, n);
-    CO.out[CO.nout++] = (CoOut){ CO.sendSeq++, (uint16_t)n, -1.0, d };
+    L->out[L->nout++] = (CoOut){ L->sendSeq++, (uint16_t)n, -1.0, d };
 }
 
-static void CoFlushReliable(double now)
+static void CoFlushReliable(int k, double now)
 {
+    CoLink* L = &CO.links[k];
     int sent = 0;
-    for (int32_t i = 0; i < CO.nout && sent < 16; ++i) {
-        CoOut* o = &CO.out[i];
+    for (int32_t i = 0; i < L->nout && sent < 16; ++i) {
+        CoOut* o = &L->out[i];
         if (o->sentAt >= 0 && now - o->sentAt < 0.25) continue;
-        if (o->sentAt >= 0) ++CO.resent;
+        if (o->sentAt >= 0) ++L->resent;
         uint8_t b[CO_MAX_PACKET], *p = CoHeader(b, 'L');
         CoPut32(&p, CO.nonce); CoPut32(&p, o->seq); CoPut16(&p, o->len);
         memcpy(p, o->data, o->len); p += o->len;
-        CoRawSend(b, (uint32_t)(p - b));
+        CoSendTo(k, b, (uint32_t)(p - b));
         o->sentAt = now; ++sent;
     }
-    if (CO.ackDue) {
+    if (L->ackDue) {
         uint8_t b[16], *p = CoHeader(b, 'K');
-        CoPut32(&p, CO.nonce); CoPut32(&p, CO.recvNext);
-        CoRawSend(b, (uint32_t)(p - b));
-        CO.ackDue = 0;
+        CoPut32(&p, CO.nonce); CoPut32(&p, L->recvNext);
+        CoSendTo(k, b, (uint32_t)(p - b));
+        L->ackDue = 0;
     }
 }
 
-static void CoOnAck(uint32_t below)
+static void CoOnAck(CoLink* L, uint32_t below)
 {
-    int32_t k = 0;
-    for (int32_t i = 0; i < CO.nout; ++i) {
-        if (CO.out[i].seq < below) free(CO.out[i].data); else CO.out[k++] = CO.out[i];
+    int32_t j = 0;
+    for (int32_t i = 0; i < L->nout; ++i) {
+        if (L->out[i].seq < below) free(L->out[i].data); else L->out[j++] = L->out[i];
     }
-    CO.nout = k;
-    if (below > CO.ackedBelow) CO.ackedBelow = below;
+    L->nout = j;
+    if (below > L->ackedBelow) L->ackedBelow = below;
 }
 
-static void CoOnReliable(uint32_t seq, const char* d, uint16_t n)
+static void CoOnReliable(int k, uint32_t seq, const char* d, uint16_t n)
 {
-    CO.ackDue = 1;
-    if (seq < CO.recvNext) return;                           /* a resend of one we have */
-    if (seq != CO.recvNext) {
-        if (seq - CO.recvNext >= CO_OOO) return;              /* too far ahead: it comes again */
+    CoLink* L = &CO.links[k];
+    L->ackDue = 1;
+    if (seq < L->recvNext) return;                            /* a resend of one we have */
+    if (seq != L->recvNext) {
+        if (seq - L->recvNext >= CO_OOO) return;               /* too far ahead: it comes again */
         int slot = (int)(seq % CO_OOO);
-        if (!CO.ooo[slot]) {
-            CO.ooo[slot] = (char*)malloc(n ? n : 1);
-            if (CO.ooo[slot]) { memcpy(CO.ooo[slot], d, n); CO.oooLen[slot] = n; CO.oooSeq[slot] = seq; }
+        if (!L->ooo[slot]) {
+            L->ooo[slot] = (char*)malloc(n ? n : 1);
+            if (L->ooo[slot]) { memcpy(L->ooo[slot], d, n); L->oooLen[slot] = n; L->oooSeq[slot] = seq; }
         }
         return;
     }
-    CoInboxPush(d, n); ++CO.recvNext;
+    CoInboxPush(k, d, n); ++L->recvNext;
     for (;;) {
-        int slot = (int)(CO.recvNext % CO_OOO);
-        if (!CO.ooo[slot] || CO.oooSeq[slot] != CO.recvNext) break;
-        CoInboxPush(CO.ooo[slot], CO.oooLen[slot]);
-        free(CO.ooo[slot]); CO.ooo[slot] = NULL; ++CO.recvNext;
+        int slot = (int)(L->recvNext % CO_OOO);
+        if (!L->ooo[slot] || L->oooSeq[slot] != L->recvNext) break;
+        CoInboxPush(k, L->ooo[slot], L->oooLen[slot]);
+        free(L->ooo[slot]); L->ooo[slot] = NULL; ++L->recvNext;
     }
 }
 
@@ -568,14 +596,13 @@ static void CoPushSnap(CoEnt* e, double t, const double* p, const float* q, doub
     e->lastRecv = now;
 }
 
-static void CoTrackOffset(double senderT, double now)
+static void CoTrackOffset(CoPlayer* P, double senderT, double now)
 {
     double est = now - senderT;
-    if (!CO.haveOffset || est < CO.offset) { CO.offset = est; CO.haveOffset = 1; }
-    else CO.offset += (est - CO.offset) * 0.001;              /* let go slowly (clock drift, a slower route) */
+    if (!P->haveOffset || est < P->offset) { P->offset = est; P->haveOffset = 1; }
+    else P->offset += (est - P->offset) * 0.001;              /* let go slowly (clock drift, a slower route) */
 }
 
-/* the sender's time (ms, u32, wraps) -> seconds on the peer's clock near the newest seen */
 static double CoPeerTime(uint32_t ms) { return (double)ms / 1000.0; }
 
 static CoEnt* CoEntById(uint16_t id, int make)
@@ -595,109 +622,171 @@ static CoEnt* CoEntById(uint16_t id, int make)
     return free_;
 }
 
-static void CoSetPeer(uint64_t steamId, const CoSockAddr* udp, int role, uint32_t nonce, const char* ver, const char* name, double now)
+static int CoLinkOf(uint64_t steamId, const CoSockAddr* udp)
 {
-    CO.havePeer = 1; CO.peerId = steamId; if (udp) CO.peerAddr = *udp;
-    CO.peerRole = role; CO.peerNonce = nonce;
-    CoCopy(CO.peerVer, sizeof(CO.peerVer), ver, CoLen(ver));
-    CoCopy(CO.peerName, sizeof(CO.peerName), name, CoLen(name));
-    CO.lastRecv = now;
-    CoResetReliable();
-    CoResetStreams();
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+        CoLink* L = &CO.links[k];
+        if (!L->used) continue;
+        if (CO.mode == CO_MODE_STEAM ? L->steamId == steamId
+                                     : (udp && L->addr.addr == udp->addr && L->addr.port == udp->port)) return k;
+    }
+    return -1;
+}
+
+static void CoLinkOpen(int k, uint64_t steamId, const CoSockAddr* udp, int role, uint32_t nonce, const char* ver,
+                       const char* name, double now)
+{
+    CoLink* L = &CO.links[k];
+    CoLinkFree(k);
+    L->used = 1; L->steamId = steamId; if (udp) L->addr = *udp;
+    L->role = role; L->nonce = nonce; L->lastRecv = now;
+    CoCopy(L->ver, sizeof(L->ver), ver, CoLen(ver));
+    CoCopy(L->name, sizeof(L->name), name, CoLen(name));
+    CoLinkResetReliable(L);
+    CoPlayerReset(k);
     wchar_t wn[64], wv[32];
     CoWide(name, wn, 64); CoWide(ver, wv, 32);
-    Log(L"coop: paired with %s (%s, mod %s)", wn, role == CO_ROLE_HOST ? L"host" : L"joiner", wv);
-    CoSys("sys|paired");
+    Log(L"coop: %s %s (%s, mod %s) as player %d", CO.role == CO_ROLE_HOST ? L"joined:" : L"paired with", wn,
+        role == CO_ROLE_HOST ? L"host" : L"joiner", wv, k + 1);
+    CoSys(k, CO.role == CO_ROLE_HOST ? "sys|joined" : "sys|paired");
 }
 
 static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSockAddr* udp, double now)
 {
-    if (n < 4 + 1 + 16 + 32 + 64) { ++CO.badPk; return; }
+    if (n < 4 + 1 + 16 + 2 + 32 + 64) { ++CO.badPk; return; }
     const uint8_t* p = b + 4;
     int role = p[0];
     uint32_t nonce = CoGet32(p + 1), t = CoGet32(p + 5), echo = CoGet32(p + 9), echoAge = CoGet32(p + 13);
+    uint8_t yourSlot = p[17];
     char ver[33], name[65];
-    memcpy(ver, p + 17, 32); ver[32] = 0;
-    memcpy(name, p + 49, 64); name[64] = 0;
+    memcpy(ver, p + 19, 32); ver[32] = 0;
+    memcpy(name, p + 51, 64); name[64] = 0;
     if (role != CO_ROLE_HOST && role != CO_ROLE_JOIN) return;
+    int k = CoLinkOf(steamId, udp);
 #ifdef COOP_TEST
-    { static uint32_t last; if (nonce != last) { last = nonce; Log(L"test: hello from role %d nonce %x (n %u, from %x:%d)", role, nonce, n, udp ? udp->addr : 0, udp ? (int32_t)CoBE16(udp->port) : 0); } }
+    { static uint32_t last; if (nonce != last) { last = nonce; Log(L"test: hello from role %d nonce %x (link %d)", role, nonce, k); } }
 #endif
-    if (CO.havePeer && ((CO.mode == CO_MODE_STEAM && steamId != CO.peerId) ||
-                        (CO.mode == CO_MODE_UDP && udp && (udp->addr != CO.peerAddr.addr || udp->port != CO.peerAddr.port)))) return;   /* someone else */
-    if (!CO.havePeer) {
-        if (role == CO.role) {
-            static double warned;
-            if (now - warned > 10) {
-                warned = now;
-                wchar_t wn[64]; CoWide(name, wn, 64);
-                Log(L"coop: %s is also set up as the %s; one of you must be the host and the other the joiner (config\\survival.ini [coop] role)",
-                    wn, role == CO_ROLE_HOST ? L"host" : L"joiner");
-                CoSys("sys|samerole");
+    if (role == CO.role) {                                    /* (joiners hear each other looking for the host: ignored) */
+        static double warned;
+        if (k < 0 && CO.role == CO_ROLE_HOST && now - warned > 10) {
+            warned = now;
+            wchar_t wn[64]; CoWide(name, wn, 64);
+            Log(L"coop: %s is also set up as the %s; one of you must be the host (config\\survival.ini [coop] role)", wn,
+                role == CO_ROLE_HOST ? L"host" : L"joiner");
+            CoSys(0, "sys|samerole");
+        }
+        return;
+    }
+    if (CO.role == CO_ROLE_HOST) {                            /* a joiner */
+        if (k < 0) {
+            for (int s = 1; s < CO.maxPlayers && k < 0; ++s) if (!CO.links[s].used) k = s;
+            if (k < 0) {                                       /* no room: told so */
+                CoHelloTo(steamId, udp, NULL, CO_SLOT_FULL, now);
+                return;
             }
+            CoLinkOpen(k, steamId, udp, role, nonce, ver, name, now);
+        } else if (nonce != CO.links[k].nonce) {
+            Log(L"coop: player %d's game started a new session (nonce %x -> %x); starting over with it", k + 1, CO.links[k].nonce, nonce);
+            CO.links[k].nonce = nonce;
+            CoLinkResetReliable(&CO.links[k]);
+            CoPlayerReset(k);
+            CoSys(k, "sys|restart");
+        }
+    } else {                                                  /* the host */
+        if (yourSlot == CO_SLOT_FULL) {
+            if (!CO.fullSaid) { CO.fullSaid = 1; Log(L"coop: the host's game is full (%d players)", (int32_t)p[18]); CoSys(0, "sys|full"); }
             return;
         }
-        CoSetPeer(steamId, udp, role, nonce, ver, name, now);
-    } else if (nonce != CO.peerNonce) {
-        Log(L"coop: the peer's game started a new session (nonce %x -> %x); starting over", CO.peerNonce, nonce);
-        CO.peerNonce = nonce; CO.peerRole = role;
-        CoResetReliable();
-        CoResetStreams();
-        CoSys("sys|restart");
+        if (k < 0) {
+            if (CO.links[0].used) return;                      /* another host: we have ours */
+            CoLinkOpen(0, steamId, udp, role, nonce, ver, name, now);
+            k = 0;
+        } else if (nonce != CO.links[0].nonce) {
+            Log(L"coop: the host's game started a new session (nonce %x -> %x); starting over", CO.links[0].nonce, nonce);
+            CO.links[0].nonce = nonce;
+            CoLinkResetReliable(&CO.links[0]);
+            for (int s = 0; s < CO_MAX_PLAYERS; ++s) CoPlayerReset(s);
+            CoEntsReset();
+            CoSys(0, "sys|restart");
+        }
+        if (yourSlot < CO_MAX_PLAYERS && yourSlot != CO.mySlot) {
+            CO.mySlot = yourSlot;
+            Log(L"coop: you are player %d", (int32_t)yourSlot + 1);
+            char m[24] = "sys|slot|0"; m[9] = (char)('0' + yourSlot);
+            CoSys(0, m);
+        }
     }
-    CO.helloRecvT = t; CO.helloRecvAt = now;
+    CoLink* L = &CO.links[k];
+    L->lastRecv = now;
+    L->helloRecvT = t; L->helloRecvAt = now;
     if (echo) {
         double rtt = (double)(CoMs(now) - echo) / 1000.0 - (double)echoAge / 1000.0;
-        if (rtt >= 0 && rtt < 5) CO.rtt = CO.rtt > 0 ? CO.rtt * 0.8 + rtt * 0.2 : rtt;
+        if (rtt >= 0 && rtt < 5) L->rtt = L->rtt > 0 ? L->rtt * 0.8 + rtt * 0.2 : rtt;
     }
 }
+
+static void CoOnPlayer(int src, const uint8_t* p, double now)
+{
+    if (src < 0 || src >= CO_MAX_PLAYERS || src == CO.mySlot) return;
+    CoPlayer* P = &CO.players[src];
+    double t = CoPeerTime(CoGet32(p + 4)), pos[3]; float q[4];
+    memcpy(pos, p + 8, 24); memcpy(q, p + 32, 16);
+    CoTrackOffset(P, t, now);
+    CoPushSnap(&P->plane, t, pos, q, now);
+    memcpy(&P->hp, p + 48, 4); memcpy(&P->maxHp, p + 52, 4); P->flags = CoGet32(p + 56); P->stateAt = now;
+}
+
+#define CO_P_SIZE (4 + 60)                  /* 'P': slot, 3 spare, time, position, rotation, health, max health, flags */
 
 static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSockAddr* udp, double now)
 {
     if (n < 4 || b[0] != CO_MAGIC) { ++CO.badPk; return; }
     if (b[1] != CO_PROTO) {
         static double warned;
-        if (now - warned > 10) { warned = now; Log(L"coop: the other game's co-op protocol is %d, ours %d: install the same Survival COOP build on both", (int32_t)b[1], (int32_t)CO_PROTO); CoSys("sys|protocol"); }
+        if (now - warned > 10) { warned = now; Log(L"coop: another game's co-op protocol is %d, ours %d: install the same Survival COOP build", (int32_t)b[1], (int32_t)CO_PROTO); CoSys(0, "sys|protocol"); }
         return;
     }
-    ++CO.rxPk; CO.rxB += n;
     if (b[2] == 'H') { CoOnHello(b, n, steamId, udp, now); return; }
-    if (!CO.havePeer) return;
-    if (CO.mode == CO_MODE_STEAM && steamId != CO.peerId) return;
-    if (CO.mode == CO_MODE_UDP && udp && (udp->addr != CO.peerAddr.addr || udp->port != CO.peerAddr.port)) return;
-    CO.lastRecv = now;
+    int k = CoLinkOf(steamId, udp);
+    if (k < 0) return;
+    CoLink* L = &CO.links[k];
+    ++L->rxPk; L->rxB += n;
+    L->lastRecv = now;
     const uint8_t* p = b + 4;
     switch (b[2]) {
     case 'L':
-        if (n < 14 || CoGet32(p) != CO.peerNonce) return;
+        if (n < 14 || CoGet32(p) != L->nonce) return;
         if (10u + CoGet16(p + 8) > n - 4) { ++CO.badPk; return; }
-        CoOnReliable(CoGet32(p + 4), (const char*)p + 10, CoGet16(p + 8));
+        CoOnReliable(k, CoGet32(p + 4), (const char*)p + 10, CoGet16(p + 8));
         return;
     case 'K':
-        if (n < 12 || CoGet32(p) != CO.peerNonce) return;
-        CoOnAck(CoGet32(p + 4));
+        if (n < 12 || CoGet32(p) != L->nonce) return;
+        CoOnAck(L, CoGet32(p + 4));
         return;
     case 'U':
         if (n < 6 || 2u + CoGet16(p) > n - 4) { ++CO.badPk; return; }
-        CoInboxPush((const char*)p + 2, CoGet16(p));
+        CoInboxPush(k, (const char*)p + 2, CoGet16(p));
         return;
     case 'P': {
-        if (n < 4 + 4 + 24 + 16 + 4 + 4 + 4) { ++CO.badPk; return; }
-        double t = CoPeerTime(CoGet32(p)), pos[3]; float q[4];
-        memcpy(pos, p + 4, 24); memcpy(q, p + 28, 16);
-        CoTrackOffset(t, now);
-        CoPushSnap(&CO.peer, t, pos, q, now);
-        memcpy(&CO.peerHp, p + 44, 4); memcpy(&CO.peerMaxHp, p + 48, 4); CO.peerFlags = CoGet32(p + 52); CO.peerT = now;
+        if (n < CO_P_SIZE) { ++CO.badPk; return; }
+        int src = CO.role == CO_ROLE_HOST ? k : p[0];          /* the host knows a joiner by its link; a relayed one says */
+        CoOnPlayer(src, p, now);
+        if (CO.role == CO_ROLE_HOST) {                         /* relayed to the other joiners, as player k */
+            uint8_t r[CO_P_SIZE];
+            memcpy(r, b, CO_P_SIZE); r[4] = (uint8_t)k;
+            for (int j = 1; j < CO_MAX_PLAYERS; ++j) if (j != k && CO.links[j].used) CoSendTo(j, r, CO_P_SIZE);
+        }
         return;
     }
     case 'E': {
+        if (CO.role != CO_ROLE_JOIN || k != 0) return;
         if (n < 10) { ++CO.badPk; return; }
         double t = CoPeerTime(CoGet32(p));
-        uint32_t k = CoGet16(p + 4);
-        if (10 + k * 22u > n) { ++CO.badPk; return; }
-        CoTrackOffset(t, now);
+        uint32_t cnt = CoGet16(p + 4);
+        if (10 + cnt * 22u > n) { ++CO.badPk; return; }
+        CoTrackOffset(&CO.players[0], t, now);                 /* (the host's clock) */
         const uint8_t* e = p + 6;
-        for (uint32_t i = 0; i < k; ++i, e += 22) {
+        for (uint32_t i = 0; i < cnt; ++i, e += 22) {
             uint16_t id = CoGet16(e);
             float fp[3]; int16_t qi[4];
             memcpy(fp, e + 2, 12); memcpy(qi, e + 14, 8);
@@ -712,12 +801,19 @@ static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoS
     }
 }
 
+static int CoKnown(uint64_t from)                         /* a Steam sender we talk to: linked, or one we asked */
+{
+    if (CoLinkOf(from, NULL) >= 0) return 1;
+    for (int32_t c = 0; c < CO.ncand; ++c) if (CO.cand[c] == from) return 1;
+    return 0;
+}
+
 static void CoPump(double now)
 {
     uint8_t buf[CO_MAX_PACKET + 64];
     if (CO.mode == CO_MODE_STEAM && ST.state > 0) {
         uint32_t size = 0;
-        for (int i = 0; i < 256 && ST.avail(ST.net, &size, CO_CHANNEL); ++i) {
+        for (int i = 0; i < 512 && ST.avail(ST.net, &size, CO_CHANNEL); ++i) {
             uint64_t from = 0; uint32_t got = 0;
             if (size > sizeof(buf)) {                       /* not ours: read it away */
                 static uint8_t big[16384];
@@ -726,13 +822,11 @@ static void CoPump(double now)
                 continue;
             }
             if (!ST.read(ST.net, buf, sizeof(buf), &got, &from, CO_CHANNEL)) break;
-            int known = CO.havePeer ? from == CO.peerId : 0;
-            for (int32_t c = 0; !known && c < CO.ncand; ++c) if (CO.cand[c] == from) known = 1;
-            if (!known) { ++CO.badPk; continue; }
+            if (!CoKnown(from)) { ++CO.badPk; continue; }
             CoOnPacket(buf, got, from, NULL, now);
         }
     } else if (CO.mode == CO_MODE_UDP && WS.sock) {
-        for (int i = 0; i < 256; ++i) {
+        for (int i = 0; i < 512; ++i) {
             CoSockAddr from; int32_t fl = sizeof(from);
             int32_t got = WS.recvfrom(WS.sock, (char*)buf, (int32_t)sizeof(buf), 0, &from, &fl);
             if (got <= 0) break;
@@ -741,39 +835,59 @@ static void CoPump(double now)
     }
 }
 
-/* Steam: the friends to say hello to while unpaired (the partner named in the ini, or every friend in this game). */
+/* Steam: who to say hello to while there's room (the host) or no host yet (a joiner): the partners named in the ini
+ * (Steam names or SteamID64s, comma-separated), or every friend in this game ("auto"). */
 static void CoDiscover(double now)
 {
-    if (CO.mode != CO_MODE_STEAM || ST.state <= 0) return;
+    if (CO.mode == CO_MODE_UDP) {
+        if (CO.role == CO_ROLE_JOIN && !CO.links[0].used && CO.links[0].addr.family) CoHelloTo(0, &CO.links[0].addr, NULL, CO_SLOT_NONE, now);
+        return;
+    }
+    if (ST.state <= 0) return;
     CO.ncand = 0;
-    const char* want = CO.partner;
-    uint64_t id = 0; int digits = 1;
-    for (const char* s = want; *s; ++s) { if (*s < '0' || *s > '9') { digits = 0; break; } id = id * 10 + (uint64_t)(*s - '0'); }
-    if (*want && digits && id > 0x0110000100000000ull) {
-        CO.cand[CO.ncand++] = id;
-    } else {
-        int any = !*want || CoIEq(want, "auto");
-        uint32_t app = ST.appId && ST.utils ? ST.appId(ST.utils) : 0;
-        int32_t n = ST.friendCount(ST.friends, 4 /* k_EFriendFlagImmediate */);
-        for (int32_t i = 0; i < n && CO.ncand < 16; ++i) {
-            uint64_t f = ST.friendAt(ST.friends, i, 4);
-            if (!f) continue;
-            if (any) {
-                CoFriendGame g; memset(&g, 0, sizeof(g));
-                if (!ST.friendGame(ST.friends, f, &g) || !app || (uint32_t)(g.gameId & 0xFFFFFF) != app) continue;
-            } else {
-                const char* nm = ST.friendName(ST.friends, f);
-                if (!nm || !CoIEq(nm, want)) continue;
-            }
-            CO.cand[CO.ncand++] = f;
+    int any = 0;
+    char names[8][64]; uint64_t ids[8]; int nn = 0;
+    for (const char* s = CO.partner; *s && nn < 8; ) {     /* the partner list */
+        while (*s == ' ' || *s == ',') ++s;
+        const char* e = s;
+        while (*e && *e != ',') ++e;
+        const char* t = e;
+        while (t > s && t[-1] == ' ') --t;
+        if (t > s) {
+            CoCopy(names[nn], 64, s, (size_t)(t - s));
+            uint64_t id = 0; int digits = 1;
+            for (const char* c = names[nn]; *c; ++c) { if (*c < '0' || *c > '9') { digits = 0; break; } id = id * 10 + (uint64_t)(*c - '0'); }
+            ids[nn] = digits && id > 0x0110000100000000ull ? id : 0;
+            if (CoIEq(names[nn], "auto")) any = 1;
+            ++nn;
         }
+        s = e;
     }
-    for (int32_t c = 0; c < CO.ncand; ++c) { ST.accept(ST.net, CO.cand[c]); CoHelloTo(CO.cand[c], NULL, now); }
+    if (!nn) any = 1;
+    for (int i = 0; i < nn && CO.ncand < 16; ++i) if (ids[i]) CO.cand[CO.ncand++] = ids[i];
+    uint32_t app = ST.appId && ST.utils ? ST.appId(ST.utils) : 0;
+    int32_t fc = ST.friendCount(ST.friends, 4 /* k_EFriendFlagImmediate */);
+    for (int32_t i = 0; i < fc && CO.ncand < 16; ++i) {
+        uint64_t f = ST.friendAt(ST.friends, i, 4);
+        if (!f) continue;
+        int want = 0;
+        if (any) {
+            CoFriendGame g; memset(&g, 0, sizeof(g));
+            want = ST.friendGame(ST.friends, f, &g) && app && (uint32_t)(g.gameId & 0xFFFFFF) == app;
+        }
+        if (!want) {
+            const char* nm = ST.friendName(ST.friends, f);
+            for (int j = 0; j < nn && nm && !want; ++j) if (!ids[j] && CoIEq(nm, names[j])) want = 1;
+        }
+        if (want) CO.cand[CO.ncand++] = f;
+    }
+    for (int32_t c = 0; c < CO.ncand; ++c) {
+        if (CoLinkOf(CO.cand[c], NULL) >= 0) continue;
+        ST.accept(ST.net, CO.cand[c]);
+        CoHelloTo(CO.cand[c], NULL, NULL, CO_SLOT_NONE, now);
+    }
     static int32_t said = -1;
-    if (said != CO.ncand) {
-        said = CO.ncand;
-        Log(L"coop: looking for the other player: %d Steam friend(s) to try", CO.ncand);
-    }
+    if (said != CO.ncand) { said = CO.ncand; Log(L"coop: looking for players: %d Steam friend(s) to try", CO.ncand); }
 }
 
 static void CoSendPlayer(double now)
@@ -784,39 +898,47 @@ static void CoSendPlayer(double now)
     float q[4]; CoRotToQuat(rot, q);
     int32_t hp = CoHealth(me);
     float maxHp = g_offMaxHealth >= 0 && Readable(me + g_offMaxHealth, 4) ? *(float*)(me + g_offMaxHealth) : 0.0f;
-    uint8_t b[96], *p = CoHeader(b, 'P');
+    uint8_t b[CO_P_SIZE], *p = CoHeader(b, 'P');
+    *p++ = (uint8_t)(CO.mySlot >= 0 ? CO.mySlot : CO_SLOT_NONE); *p++ = 0; *p++ = 0; *p++ = 0;
     CoPut32(&p, CoMs(now));
     memcpy(p, pos, 24); p += 24;
     memcpy(p, q, 16); p += 16;
     memcpy(p, &hp, 4); p += 4;
     memcpy(p, &maxHp, 4); p += 4;
     CoPut32(&p, CO.meFlags);
-    CoRawSend(b, (uint32_t)(p - b));
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, CO_P_SIZE);
 }
 
 static void CoSendEnts(double now)
 {
     uint8_t b[CO_MAX_PACKET], *p = NULL, *countAt = NULL;
-    uint16_t k = 0;
+    uint16_t cnt = 0;
     for (int i = 0; i < CO_MAX_ENTS; ++i) {
         CoEnt* e = &CO.ents[i];
         if (!e->used || !e->ref.obj) continue;
         uint8_t* o = CoRefGet(&e->ref);
         double pos[3], rot[3];
         if (!o || !CoReadPose(o, pos, rot)) continue;
-        if (!p) { p = CoHeader(b, 'E'); CoPut32(&p, CoMs(now)); countAt = p; p += 2; k = 0; }
+        if (!p) { p = CoHeader(b, 'E'); CoPut32(&p, CoMs(now)); countAt = p; p += 2; cnt = 0; }
         float q[4]; CoRotToQuat(rot, q);
         CoPut16(&p, e->id);
         float fp[3] = { (float)pos[0], (float)pos[1], (float)pos[2] };
         memcpy(p, fp, 12); p += 12;
         for (int c = 0; c < 4; ++c) { int16_t v = (int16_t)(q[c] * 32767.0f); memcpy(p, &v, 2); p += 2; }
-        ++k;
-        if ((size_t)(p - b) + 22 > CO_MAX_PACKET) { memcpy(countAt, &k, 2); CoRawSend(b, (uint32_t)(p - b)); p = NULL; }
+        ++cnt;
+        if ((size_t)(p - b) + 22 > CO_MAX_PACKET) {
+            memcpy(countAt, &cnt, 2);
+            for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, (uint32_t)(p - b));
+            p = NULL;
+        }
     }
-    if (p && k) { memcpy(countAt, &k, 2); CoRawSend(b, (uint32_t)(p - b)); }
+    if (p && cnt) {
+        memcpy(countAt, &cnt, 2);
+        for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, (uint32_t)(p - b));
+    }
 }
 
-/* where the stream was at render time rt (peer clock); 0 if it has nothing yet */
+/* where the stream was at render time rt (its sender's clock); 0 if it has nothing yet */
 static int CoSample(const CoEnt* e, double rt, double* pos, float* q)
 {
     if (!e->ns) return 0;
@@ -858,45 +980,68 @@ static void CoDriveOne(CoEnt* e, double rt)
 
 static void CoDrive(double now)
 {
-    if (!CO.haveOffset) return;
-    double rt = now - CO.offset - CO.delay;
-    if (CO.peer.ref.obj) CoDriveOne(&CO.peer, rt);
-    if (CO.role != CO_ROLE_JOIN) return;
+    for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+        CoPlayer* P = &CO.players[s];
+        if (s != CO.mySlot && P->plane.ref.obj && P->haveOffset) CoDriveOne(&P->plane, now - P->offset - CO.delay);
+    }
+    if (CO.role != CO_ROLE_JOIN || !CO.players[0].haveOffset) return;
+    double rt = now - CO.players[0].offset - CO.delay;        /* the host's enemies, on the host's clock */
     for (int i = 0; i < CO_MAX_ENTS; ++i) if (CO.ents[i].used && CO.ents[i].ref.obj) CoDriveOne(&CO.ents[i], rt);
 }
+
+#define CO_DROP_S 90.0                      /* lost this long: the link is let go (the slot is free again) */
 
 static void CoStep(double now, int drive)
 {
     CoPump(now);
-    if (!CO.havePeer && now - CO.lastDiscover >= 2.0) {
-        CO.lastDiscover = now;
-        if (CO.mode == CO_MODE_STEAM) CoDiscover(now);
-        else if (CO.mode == CO_MODE_UDP && CO.role == CO_ROLE_JOIN && CO.peerAddr.family) CoHelloTo(0, &CO.peerAddr, now);
+    int anyFree = 0;
+    for (int s = 1; s < CO.maxPlayers; ++s) if (!CO.links[s].used) anyFree = 1;
+    int searching = CO.role == CO_ROLE_HOST ? anyFree : !CO.links[0].used;
+    if (searching && now - CO.lastDiscover >= 2.0) { CO.lastDiscover = now; CoDiscover(now); }
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+        CoLink* L = &CO.links[k];
+        if (!L->used) continue;
+        if (now - L->lastHello >= 1.0) {
+            L->lastHello = now;
+            if (CO.mode == CO_MODE_STEAM && ST.state > 0) ST.accept(ST.net, L->steamId);   /* (a restarted game asks again) */
+            CoHelloTo(L->steamId, &L->addr, L, CO.role == CO_ROLE_HOST ? (uint8_t)k : CO_SLOT_NONE, now);
+        }
+        int up = now - L->lastRecv < CO_LOST_S;
+        if (up != L->connected) {
+            L->connected = up;
+            Log(up ? L"coop: player %d: link up" : L"coop: player %d: link lost (nothing for %d s)", k + 1, (int32_t)CO_LOST_S);
+            CoSys(k, up ? "sys|up" : "sys|lost");
+        }
+        if (!up && now - L->lastRecv > CO_DROP_S) {
+            Log(L"coop: player %d gone (nothing for %d s); the slot is free", k + 1, (int32_t)CO_DROP_S);
+            CoSys(k, "sys|left");
+            CoLinkFree(k);
+            CoPlayerReset(k);
+            if (CO.role == CO_ROLE_JOIN) { CO.mySlot = -1; for (int s = 0; s < CO_MAX_PLAYERS; ++s) CoPlayerReset(s); CoEntsReset(); }
+            continue;
+        }
+        CoFlushReliable(k, now);
     }
-    if (CO.havePeer) {
-        if (now - CO.lastHello >= 1.0) {
-            CO.lastHello = now;
-            if (CO.mode == CO_MODE_STEAM && ST.state > 0) ST.accept(ST.net, CO.peerId);   /* (a restarted game asks again) */
-            CoHelloTo(CO.peerId, &CO.peerAddr, now);
-        }
-        int up = now - CO.lastRecv < CO_LOST_S;
-        if (up != CO.connected) {
-            CO.connected = up;
-            Log(up ? L"coop: link up" : L"coop: link lost (nothing from the other player for %d s)", (int32_t)CO_LOST_S);
-            CoSys(up ? "sys|up" : "sys|lost");
-        }
+    int linked = 0;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) linked = 1;
+    if (linked) {
         if (now - CO.lastPlayerSend >= 1.0 / 30.0) { CO.lastPlayerSend = now; CoSendPlayer(now); }
         if (CO.role == CO_ROLE_HOST && now - CO.lastEntSend >= 1.0 / 15.0) { CO.lastEntSend = now; CoSendEnts(now); }
-        CoFlushReliable(now);
     }
     if (drive) CoDrive(now);
     if (now - CO.lastStats >= 60.0) {
         CO.lastStats = now;
         int32_t bound = 0, drives = 0, fails = 0;
         for (int i = 0; i < CO_MAX_ENTS; ++i) if (CO.ents[i].used && CO.ents[i].ref.obj) { ++bound; drives += CO.ents[i].drives; fails += CO.ents[i].fails; }
-        Log(L"coop: %s, rtt %d ms; sent %u packets (%u KB), got %u (%u KB), %u bad, %u resent; %d streams bound (%d moves, %d failed), peer puppet %d moves",
-            CO.connected ? L"linked" : (CO.havePeer ? L"link lost" : L"not paired"), (int32_t)(CO.rtt * 1000), CO.txPk, CO.txB / 1024,
-            CO.rxPk, CO.rxB / 1024, CO.badPk, CO.resent, bound, drives, fails, CO.peer.drives);
+        Log(L"coop: you are player %d; %d enemy streams bound (%d moves, %d failed); %u bad packets", CO.mySlot + 1, bound, drives, fails, CO.badPk);
+        for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+            CoLink* L = &CO.links[k];
+            if (!L->used) continue;
+            wchar_t wn[64]; CoWide(L->name, wn, 64);
+            Log(L"coop:   player %d %s: %s, rtt %d ms; sent %u packets (%u KB), got %u (%u KB), %u resent; their plane %d moves",
+                k + 1, wn, L->connected ? L"linked" : L"link lost", (int32_t)(L->rtt * 1000), L->txPk, L->txB / 1024, L->rxPk,
+                L->rxB / 1024, L->resent, CO.players[k].plane.drives);
+        }
     }
 }
 
@@ -919,9 +1064,8 @@ static void CoopFrame(int fromMusic)
 static void CoClose(void)
 {
     if (!CO.open) return;
-    CoResetReliable();
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) CoLinkResetReliable(&CO.links[k]);
     for (int32_t i = 0; i < CO.inCount; ++i) free(CO.inbox[(CO.inHead + i) % CO_INBOX]);
-    CO.inCount = 0; CO.inHead = 0;
     if (WS.sock) { WS.closesocket(WS.sock); WS.sock = 0; }
     memset(&CO, 0, sizeof(CO));
     Log(L"coop: closed");
@@ -948,22 +1092,26 @@ static uint8_t* ArgObject(void* lua)                       /* an address from Lu
     return (uint8_t*)(uintptr_t)(uint64_t)a;
 }
 
-/* SV_CoopOpen(mode, role, partner, port, delayMs, version) -> 1, or < 0: -1 bad args, -2 no Steam, -3 no UDP,
- * -4 bad host address. mode "steam" | "udp"; role "host" | "join"; partner: steam "auto" | a friend's name | a
- * SteamID64, udp the host's "a.b.c.d[:port]" (the joiner; the host listens on port). Opening again starts over. */
+/* SV_CoopOpen(mode, role, partner, port, delayMs, version [, maxPlayers]) -> 1, or < 0: -1 bad args, -2 no Steam,
+ * -3 no UDP, -4 bad host address. mode "steam" | "udp"; role "host" | "join"; partner: steam "auto" | Steam names or
+ * SteamID64s, comma-separated; udp: the joiner's host "a.b.c.d[:port]" (the host listens on port). maxPlayers 2-4
+ * (the host's; default 4). Opening again starts over. */
 static int L_CoopOpen(void* lua)
 {
-    char mode[16], role[16], partner[96], ver[32];
-    double port = 27777, delay = 100;
+    char mode[16], role[16], partner[160], ver[32];
+    double port = 27777, delay = 100, maxp = CO_MAX_PLAYERS;
     if (!ArgBytes(lua, mode, sizeof(mode), NULL) || !ArgBytes(lua, role, sizeof(role), NULL) ||
         !ArgBytes(lua, partner, sizeof(partner), NULL)) return Ret(lua, -1);
     ArgNumber(lua, &port); ArgNumber(lua, &delay);
     if (!ArgBytes(lua, ver, sizeof(ver), NULL)) CoCopy(ver, sizeof(ver), "?", 1);
+    ArgNumber(lua, &maxp);
     int m = CoIEq(mode, "udp") ? CO_MODE_UDP : CoIEq(mode, "steam") ? CO_MODE_STEAM : 0;
     int r = CoIEq(role, "host") ? CO_ROLE_HOST : (CoIEq(role, "join") || CoIEq(role, "joiner") || CoIEq(role, "client")) ? CO_ROLE_JOIN : 0;
     if (!m || !r || port < 1 || port > 65535) return Ret(lua, -1);
     CoClose();
     CO.mode = m; CO.role = r;
+    CO.maxPlayers = maxp < 2 ? 2 : maxp > CO_MAX_PLAYERS ? CO_MAX_PLAYERS : (int)maxp;
+    CO.mySlot = r == CO_ROLE_HOST ? 0 : -1;
     CO.port = (uint16_t)port;
     CO.delay = (delay < 0 ? 0 : delay > 1000 ? 1000 : delay) / 1000.0;
     CoCopy(CO.partner, sizeof(CO.partner), partner, CoLen(partner));
@@ -971,7 +1119,6 @@ static int L_CoopOpen(void* lua)
     double now = CoNow();
     CO.nonce = (uint32_t)(uint64_t)(now * 1000003.0) ^ (GetCurrentProcessId() << 16) ^ 0x5C0F;
     if (!CO.nonce) CO.nonce = 1;
-    CoResetReliable();
     if (m == CO_MODE_STEAM) {
         if (!CoSteamInit()) return Ret(lua, -2);
         CO.myId = ST.myId(ST.user);
@@ -979,63 +1126,79 @@ static int L_CoopOpen(void* lua)
         CoCopy(CO.myName, sizeof(CO.myName), nm ? nm : "?", nm ? CoLen(nm) : 1);
     } else {
         if (!CoUdpOpen(r == CO_ROLE_HOST ? CO.port : (uint16_t)(CO.port + 1))) return Ret(lua, -3);
-        if (r == CO_ROLE_JOIN && !CoParseIp(partner, &CO.peerAddr, CO.port)) { CoClose(); return Ret(lua, -4); }
+        if (r == CO_ROLE_JOIN && !CoParseIp(partner, &CO.links[0].addr, CO.port)) { CoClose(); return Ret(lua, -4); }
         CoCopy(CO.myName, sizeof(CO.myName), "pilot", 5);
         if (ST.state >= 0 && CoSteamInit()) { const char* nm = ST.myName(ST.friends); if (nm) CoCopy(CO.myName, sizeof(CO.myName), nm, CoLen(nm)); }
     }
     CO.open = 1;
     CO.lastDiscover = -10; CO.lastStats = now;
-    wchar_t wp[96], wv[32];
-    CoWide(partner, wp, 96); CoWide(ver, wv, 32);
-    Log(L"coop: open: %s, %s, partner \"%s\", port %d, interpolation %d ms, mod %s; teleport functions %p / %p",
-        m == CO_MODE_STEAM ? L"Steam P2P" : L"UDP", r == CO_ROLE_HOST ? L"host" : L"joiner", wp, (int32_t)CO.port,
+    wchar_t wp[160], wv[32];
+    CoWide(partner, wp, 160); CoWide(ver, wv, 32);
+    Log(L"coop: open: %s, %s, up to %d players, partner \"%s\", port %d, interpolation %d ms, mod %s; teleport functions %p / %p",
+        m == CO_MODE_STEAM ? L"Steam P2P" : L"UDP", r == CO_ROLE_HOST ? L"host" : L"joiner", CO.maxPlayers, wp, (int32_t)CO.port,
         (int32_t)(CO.delay * 1000), wv, g_fAITeleportTo, g_fAITeleportInner);
-    if (!g_fAITeleportTo || !g_fAITeleportInner) Log(L"coop: the AI plane's teleport wasn't found (other game version?): planes can't be moved, the other player won't show");
+    if (!g_fAITeleportTo || !g_fAITeleportInner) Log(L"coop: the AI plane's teleport wasn't found (other game version?): planes can't be moved, the other players won't show");
     return Ret(lua, 1);
 }
 
 static int L_CoopClose(void* lua) { CoClose(); return Ret(lua, 1); }
 
-/* SV_CoopInfo() -> "key=value;..." (open, mode, role, state, rtt, the peer's name / role / version, counters) */
+/* SV_CoopInfo() -> "key=value;...": open, mode, role, state (closed | searching | linked | lost), slot (yours, 0 = the
+ * host, -1 not given yet), players (linked, you included), max, tele; last peers=<slot>/<state>/<rtt ms>/<ms since>/
+ * <name>,... (one per link) */
 static int L_CoopInfo(void* lua)
 {
     double now = CoNow();
     if (CO.open && now - CO.lastFrame > 0.1) CoStep(now, 0);   /* (no frame ticks here: the menus, loading) */
-    char out[600]; CoBuf b = { out, out + sizeof(out) - 1 };
+    int used = 0, up = 0;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) { ++used; if (CO.links[k].connected) ++up; }
+    char out[900]; CoBuf b = { out, out + sizeof(out) - 1 };
     CoPutS(&b, "open="); CoPutU(&b, (uint64_t)CO.open);
     CoPutS(&b, ";mode="); CoPutS(&b, CO.mode == CO_MODE_STEAM ? "steam" : CO.mode == CO_MODE_UDP ? "udp" : "none");
     CoPutS(&b, ";role="); CoPutS(&b, CO.role == CO_ROLE_HOST ? "host" : CO.role == CO_ROLE_JOIN ? "join" : "none");
-    CoPutS(&b, ";state="); CoPutS(&b, !CO.open ? "closed" : !CO.havePeer ? "searching" : CO.connected ? "linked" : "lost");
+    CoPutS(&b, ";state="); CoPutS(&b, !CO.open ? "closed" : !used ? "searching" : up ? "linked" : "lost");
+    CoPutS(&b, ";slot="); CoPutI(&b, CO.mySlot);
+    CoPutS(&b, ";players="); CoPutI(&b, up + (CO.open ? 1 : 0));
+    CoPutS(&b, ";max="); CoPutI(&b, CO.maxPlayers);
     CoPutS(&b, ";me="); CoPutU(&b, CO.myId);
     CoPutS(&b, ";cands="); CoPutI(&b, CO.ncand);
-    CoPutS(&b, ";rtt="); CoPutI(&b, (int64_t)(CO.rtt * 1000));
-    CoPutS(&b, ";since="); CoPutI(&b, CO.havePeer ? (int64_t)((now - CO.lastRecv) * 1000) : -1);
-    CoPutS(&b, ";peerstate="); CoPutI(&b, CO.peerT > 0 ? (int64_t)((now - CO.peerT) * 1000) : -1);
-    CoPutS(&b, ";bound="); { int32_t n = 0; for (int i = 0; i < CO_MAX_ENTS; ++i) if (CO.ents[i].used && CO.ents[i].ref.obj) ++n; CoPutI(&b, n); }
-    CoPutS(&b, ";peerpuppet="); CoPutI(&b, CoRefGet(&CO.peer.ref) ? 1 : 0);
     CoPutS(&b, ";tele="); CoPutI(&b, g_fAITeleportTo && g_fAITeleportInner ? 1 : 0);
-    CoPutS(&b, ";peerrole="); CoPutS(&b, CO.peerRole == CO_ROLE_HOST ? "host" : CO.peerRole == CO_ROLE_JOIN ? "join" : "none");
-    CoPutS(&b, ";peerver="); CoPutS(&b, CO.peerVer);
-    CoPutS(&b, ";peername=");                          /* last: it may hold anything but ';' is cut */
-    for (const char* s = CO.peerName; *s && b.p < b.end; ++s) *b.p++ = *s == ';' ? ',' : *s;
+    CoPutS(&b, ";peers=");
+    int first = 1;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+        CoLink* L = &CO.links[k];
+        if (!L->used) continue;
+        if (!first) CoPutS(&b, ",");
+        first = 0;
+        CoPutI(&b, k); CoPutS(&b, "/"); CoPutS(&b, L->connected ? "linked" : "lost"); CoPutS(&b, "/");
+        CoPutI(&b, (int64_t)(L->rtt * 1000)); CoPutS(&b, "/"); CoPutI(&b, (int64_t)((now - L->lastRecv) * 1000)); CoPutS(&b, "/");
+        for (const char* s = L->name; *s && b.p < b.end; ++s) *b.p++ = (*s == ';' || *s == ',' || *s == '/') ? '_' : *s;
+    }
     *b.p = 0;
     U.luaSetString(lua, out, (size_t)(b.p - out));
     return 1;
 }
 
-/* SV_CoopSend(message [, reliable]) -> 1 queued, 0 not (no peer or closed); reliable defaults to 1 */
+/* SV_CoopSend(message [, reliable [, to]]) -> how many games it was queued for (0: none linked). reliable defaults
+ * to 1. to: a player slot, or -1 (default) every linked game (a joiner only ever sends to the host). */
 static int L_CoopSend(void* lua)
 {
     static char msg[CO_MAX_LUA + 8];
-    size_t n = 0; double rel = 1;
+    size_t n = 0; double rel = 1, to = -1;
     if (!ArgBytes(lua, msg, sizeof(msg), &n)) return Ret(lua, 0);
-    ArgNumber(lua, &rel);
-    if (!CO.open || !CO.havePeer) return Ret(lua, 0);
-    CoSendLua(msg, (uint32_t)n, rel != 0);
-    return Ret(lua, 1);
+    ArgNumber(lua, &rel); ArgNumber(lua, &to);
+    if (!CO.open) return Ret(lua, 0);
+    int sent = 0;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+        if (!CO.links[k].used || (to >= 0 && (int)to != k)) continue;
+        CoSendLua(k, msg, (uint32_t)n, rel != 0);
+        ++sent;
+    }
+    return Ret(lua, sent);
 }
 
-/* SV_CoopRecv() -> the next message from the other player (or "sys|..." from this runtime), "" when none */
+/* SV_CoopRecv() -> "<sender's slot>|<message>" (from another game, or "<slot>|sys|..." from this runtime about that
+ * link), "" when none */
 static int L_CoopRecv(void* lua)
 {
     double now = CoNow();
@@ -1049,7 +1212,7 @@ static int L_CoopRecv(void* lua)
     return 1;
 }
 
-/* SV_CoopMe(plane [, flags]) -> 1: the local player's plane (streamed to the peer), 0 = none; flags go with it */
+/* SV_CoopMe(plane [, flags]) -> 1: the local player's plane (streamed to the others), 0 = none; flags go with it */
 static int L_CoopMe(void* lua)
 {
     uint8_t* o = ArgObject(lua);
@@ -1060,19 +1223,22 @@ static int L_CoopMe(void* lua)
     return Ret(lua, CO.me.obj ? 1 : 0);
 }
 
-/* SV_CoopPeer(plane) -> 1 bound: that AI plane is the other player's from now on (moved every frame), -1 it isn't an
- * AI plane the runtime can move, 0 unbound (plane 0) */
+/* SV_CoopPeer(slot, plane) -> 1 bound: that plane shows player <slot> from now on (moved every frame), -1 it isn't a
+ * plane the runtime can move (or a bad slot), 0 unbound (plane 0) */
 static int L_CoopPeer(void* lua)
 {
+    double slot = -1;
+    if (!ArgNumber(lua, &slot) || slot < 0 || slot >= CO_MAX_PLAYERS) return Ret(lua, -1);
+    CoPlayer* P = &CO.players[(int)slot];
     uint8_t* o = ArgObject(lua);
-    if (!o) { memset(&CO.peer.ref, 0, sizeof(CO.peer.ref)); return Ret(lua, 0); }
+    if (!o) { memset(&P->plane.ref, 0, sizeof(P->plane.ref)); return Ret(lua, 0); }
     if (!LiveObject(o) || !CoCanDrive(o)) {
-        if (!CO.warnedTele) { CO.warnedTele = 1; Log(L"coop: object %p is no AI plane with the game's teleport; not bound", o); }
+        if (!CO.warnedTele) { CO.warnedTele = 1; Log(L"coop: object %p is no plane with the game's teleport; not bound", o); }
         return Ret(lua, -1);
     }
-    CoRefSet(&CO.peer.ref, o);
-    CO.peer.drives = CO.peer.fails = 0;
-    Log(L"coop: the other player's plane is %p", o);
+    CoRefSet(&P->plane.ref, o);
+    P->plane.drives = P->plane.fails = 0;
+    Log(L"coop: player %d's plane is %p", (int32_t)slot + 1, o);
     return Ret(lua, 1);
 }
 
@@ -1088,8 +1254,8 @@ static int L_CoopTrack(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_CoopBind(id, plane) -> 1 (joiner: stream id moves that local copy every frame), 0 unbound, -1 not an AI plane
- * the runtime can move */
+/* SV_CoopBind(id, plane) -> 1 (joiner: stream id moves that local copy every frame), 0 unbound, -1 not a plane the
+ * runtime can move */
 static int L_CoopBind(void* lua)
 {
     double id = 0;
@@ -1103,25 +1269,29 @@ static int L_CoopBind(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_CoopPeerAt() -> "x,y,z,pitch,yaw,roll,health,maxhealth,flags,age_ms" (the other player's latest state), "" none */
+/* SV_CoopPeerAt(slot) -> "x,y,z,pitch,yaw,roll,health,maxhealth,flags,age_ms" (player <slot>'s latest state), "" none */
 static int L_CoopPeerAt(void* lua)
 {
-    if (!CO.peer.ns) { U.luaSetString(lua, "", 0); return 1; }
-    const CoSnap* s = &CO.peer.s[CO.peer.ns - 1];
+    double slot = -1;
+    if (!ArgNumber(lua, &slot) || slot < 0 || slot >= CO_MAX_PLAYERS) { U.luaSetString(lua, "", 0); return 1; }
+    CoPlayer* P = &CO.players[(int)slot];
+    if (!P->plane.ns) { U.luaSetString(lua, "", 0); return 1; }
+    const CoSnap* s = &P->plane.s[P->plane.ns - 1];
     double rot[3]; CoQuatToRot(s->q, rot);
     char out[200]; CoBuf b = { out, out + sizeof(out) - 1 };
     CoPutF(&b, s->p[0], 0); CoPutS(&b, ","); CoPutF(&b, s->p[1], 0); CoPutS(&b, ","); CoPutF(&b, s->p[2], 0); CoPutS(&b, ",");
     CoPutF(&b, rot[0], 1); CoPutS(&b, ","); CoPutF(&b, rot[1], 1); CoPutS(&b, ","); CoPutF(&b, rot[2], 1); CoPutS(&b, ",");
-    CoPutI(&b, CO.peerHp); CoPutS(&b, ","); CoPutF(&b, CO.peerMaxHp, 1); CoPutS(&b, ","); CoPutU(&b, CO.peerFlags); CoPutS(&b, ",");
-    CoPutI(&b, (int64_t)((CoNow() - CO.peerT) * 1000));
+    CoPutI(&b, P->hp); CoPutS(&b, ","); CoPutF(&b, P->maxHp, 1); CoPutS(&b, ","); CoPutU(&b, P->flags); CoPutS(&b, ",");
+    CoPutI(&b, (int64_t)((CoNow() - P->stateAt) * 1000));
     U.luaSetString(lua, out, (size_t)(b.p - out));
     return 1;
 }
 
-/* SV_CoopReset() -> 1: every stream, binding and the peer's puppet forgotten (a new level); the link stays */
+/* SV_CoopReset() -> 1: every stream, binding and puppet forgotten (a new level); the links stay */
 static int L_CoopReset(void* lua)
 {
-    CoClearAll();
+    memset(CO.players, 0, sizeof(CO.players));
+    memset(CO.ents, 0, sizeof(CO.ents));
     memset(&CO.me, 0, sizeof(CO.me));
     return Ret(lua, 1);
 }

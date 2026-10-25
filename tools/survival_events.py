@@ -421,8 +421,9 @@ ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names,
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
 # (coop.c: the AI plane's own teleport). Its appearance: gear up, no engagement (its fire stays off from Lua too).
-COOP_PEER_UNIT = 'SV_Unit_CoopPeer'
-COOP_PEER_OBJ = 'SV_Obj_CoopPeer'
+COOP_PEER_SLOTS = 'ABCD'                    # one per player slot (A = player 1, the host ... D = player 4)
+COOP_PEER_UNITS = [f'SV_Unit_CoopPeer{c}' for c in COOP_PEER_SLOTS]
+COOP_PEER_OBJS = [f'SV_Obj_CoopPeer{c}' for c in COOP_PEER_SLOTS]
 TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_Path2']   # taxi, roll, climb
 TAKEOFF_WING_FIRST = '01_Air0_f18e_0_Path0_Sub0'     # the wing's taxi onto the lead's start; then the lead's three
 # Ships: Mission 22's own allied hulls, the only ones its world data describes turret by turret (ChildAIObjectDescs:
@@ -919,11 +920,12 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
             g.execute(t_eng_air, ev, {0: o})
             g.execute(t_search, ev, {0: o, 1: 'NoneSelect'})
             flag(ev, air, 'Add', 1)
-    # Survival COOP: the other player's plane (COOP_PEER_*): gear up and no fighting as soon as it's up
-    ev = 'SV_CoopPeerUp'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', ev, arg_changes={0: COOP_PEER_UNIT})
-    g.execute(t_gear_up, ev, {0: COOP_PEER_OBJ}, delay=0.5)
-    g.execute(t_eng_hold, ev, {0: COOP_PEER_OBJ}, delay=0.5)
+    # Survival COOP: the other players' planes (COOP_PEER_*): gear up and no fighting as soon as each is up
+    for c, unit, obj in zip(COOP_PEER_SLOTS, COOP_PEER_UNITS, COOP_PEER_OBJS):
+        ev = f'SV_CoopPeerUp{c}'
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', ev, arg_changes={0: unit})
+        g.execute(t_gear_up, ev, {0: obj}, delay=0.5)
+        g.execute(t_eng_hold, ev, {0: obj}, delay=0.5)
     # ships: on their lane at once, and again from its start whenever they reach its end; turrets fire at will
     t_spath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
     t_upath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')

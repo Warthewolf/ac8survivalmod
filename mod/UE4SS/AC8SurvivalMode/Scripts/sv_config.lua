@@ -537,8 +537,8 @@ CFG = {
 --OFFLINE:     -- The end-of-run summary (round, score, kills, specials, time) shows for show_s seconds. This is the Offline
 --OFFLINE:     -- edition: nothing is sent anywhere.
     leaderboard = { pilot = "", show_s = 15 },
-    -- Survival COOP (Scripts/sv_coop.lua, runtime 0.20.0 coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
-    -- called Survival COOP"): two players, one run. The host's game runs the rounds, the enemies and the specials; the
+    -- Survival COOP (Scripts/sv_coop.lua, runtime 0.22.0 coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
+    -- called Survival COOP", then "make it so that 4 players can join"): up to four players, one run. The host's game runs the rounds, the enemies and the specials; the
     -- joiner's game mirrors every enemy the host spawns (moved every frame to where the host's is) and its rounds,
     -- callouts, airfield and round bonuses. Each player earns their own kills (an enemy you hit at all is yours; one
     -- only your wingmate hit pays ally_x, as an ally's kill) and shops at their own airfield store.
@@ -547,7 +547,8 @@ CFG = {
     -- ZeroTier: the host listens on `port`, UDP; the joiner sets partner = the host's IP address). interp_ms: how far
     -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
     -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
-    coop = { enabled = false, role = "host", transport = "steam", partner = "auto", port = 27777, interp_ms = 120,
+    -- max_players: the host's room, 2 to 4 (you included); joiners link to the host only, which relays their planes.
+    coop = { enabled = false, role = "host", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 4,
              split_share = 0.5, callouts = true, leaderboard = false,
              -- the other player's airframe -> the NPC mission row their plane is shown as here (the player's plane
              -- blueprint BP_PlayerPlane_PPnnnn_<code>_C; a code not listed flies `default`). Rows of Survival's table.
