@@ -147,19 +147,20 @@ local function creditKill(p)
     if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
 end
 
-local function probeTick(tick)
-    local function timed(name, fn, ...)            -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
-        local t0 = os.clock()
-        local ok, err = pcall(fn, ...)
-        local pf = D and D.perf
-        if pf then
-            local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
-            pf.parts[name] = e
-            local dt = (os.clock() - t0) * 1000
-            e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
-        end
-        return ok, err
+local function timed(name, fn, ...)                -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
+    local t0 = os.clock()
+    local ok, err = pcall(fn, ...)
+    local pf = D and D.perf
+    if pf then
+        local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
+        pf.parts[name] = e
+        local dt = (os.clock() - t0) * 1000
+        e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
     end
+    return ok, err
+end
+
+local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode (" .. memText() .. ")")
@@ -445,7 +446,7 @@ LoopAsync(250, function()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
         if COOP and COOP.tick then                  -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
-            local okC, errC = pcall(COOP.tick, tick)
+            local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
             if not okC then log("coop: error " .. tostring(errC)) end
         end
         if D then                                   -- (report of 2026-10-23: "the custom HUD ... seems a bit laggy")
