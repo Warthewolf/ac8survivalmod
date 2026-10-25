@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.22.4"
+#define RT_VERSION           L"0.22.5"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -2130,7 +2130,7 @@ static int L_SndMaster(void* lua)
 /* SV_Version() -> "0.19.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.22.4";
+    static const char v[] = "0.22.5";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2675,6 +2675,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopRecv", L_CoopRecv }, { "SV_CoopMe", L_CoopMe }, { "SV_CoopPeer", L_CoopPeer }, { "SV_CoopTrack", L_CoopTrack },
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },
         { "SV_CoopSpawnPP", L_CoopSpawnPP }, { "SV_CoopKillPP", L_CoopKillPP }, { "SV_CoopFollow", L_CoopFollow },
+        { "SV_CoopPPRole", L_CoopPPRole },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },

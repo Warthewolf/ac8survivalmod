@@ -157,7 +157,17 @@ OnRestored), whose implementation (vtable +0x888 -> +0x9e0) for a player plane i
 look (0x147d54160, 0x147d4f980 -> 0x147d50710 hides and shows mesh parts, weapons, lock-ons) every call. AI planes'
 +0x9e0 differ by class (0x147c8e780, 0x147c66730, 0x147bb5900, base 0x147d1e5d0). 0.22.3 moves a player plane with
 slot 315's other steps only (AActor::TeleportTo 0x143fc1e10, flight reset 0x147d40830, word +0x1ad9 = 0; CoTeleport);
-AI planes still go through slot 315. SV_CoopFollow(plane, pawn,
+AI planes still go through slot 315.
+0.22.3 still flickered. 0.22.4's diagnostics (one line a second: where the copy is against where it was put, its
+visibility bits) and Ctrl+F11 steps found it (test of 2026-10-25): A (moved, its tick on) the copy sat at the map's
+centre (4, 0, 0 m) in ~98% of samples, 12-13 km off its spot, so its own tick puts it there every frame and our move put
+it back: the flicker; no visibility bit ever changed. C (left alone, tick on) it jumped there and stayed exactly still,
+no flight. B (`SetActorTickEnabled(false)`, moved) it held its spot every sample, solid, with an ALLY tag, but the user
+saw it stutter. So with role 2 (another player's) and no network data, its tick holds it at a zero position. Open:
+which code does it (not the network object, a 0x180-byte UObject with no own tick; role checks are the vtable
++0xc38..+0xc50 helpers 0x146dc5800..: IsLocal = role != 2, role 3, role 2, role 1), and the stutter. 0.22.5 tests: A tick
+off + moved at the music tick, B tick off + moved at the input build, C role 0 + tick on + moved, D role 0 left alone;
+and logs how far your plane moves between the input build and the music tick (whether the copy lags a frame). SV_CoopFollow(plane, pawn,
 forward, right, up) moves it every frame in formation through slot 315. sv_main.lua Ctrl+F11 / Ctrl+F12 (TEST ONLY).
 What the probe should tell: does the spawn survive offline (no session data), does the local camera / HUD / control
 stay the local player's, does it look like the player's plane (paint: default?), does it fly in formation smoothly,
