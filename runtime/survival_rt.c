@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.24.0"
+#define RT_VERSION           L"0.25.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -542,10 +542,27 @@ static int StartSurvival(void* page, void* from, const wchar_t* why)
     return 1;
 }
 
+/* The main menu's settings rows (StringArgs "SV_Set_<what>", Survival COOP's build; Scripts/sv_coop.lua): a pick waits
+ * for Lua (SV_MenuSetting), which changes the setting and the row's text; the decide is taken here, so the menu stays
+ * where it is (as the landing menu's shop rows, OnHangarDecide). */
+#define SET_QUEUE 8
+static wchar_t  g_setQueue[SET_QUEUE][32];          /* both ends run on the game thread */
+static int32_t  g_setHead, g_setCount;
+
 /* ---- handlers ----------------------------------------------------------- */
 static uintptr_t OnMainDecide(void* widget)
 {
     const FString* a = SelectedArgs(widget, NULL);
+    if (a && a->data && a->num > 8 && a->num <= 32 && !memcmp(a->data, L"SV_Set_", 7 * 2)) {
+        g_chosen = 0;                                  /* (not a start: should the menu move on anyway, no Survival) */
+        if (g_setCount < SET_QUEUE) {
+            wchar_t* q = g_setQueue[(g_setHead + g_setCount++) % SET_QUEUE];
+            memcpy(q, a->data, (size_t)a->num * 2);
+            q[a->num - 1] = 0;
+            Log(L"main menu: setting %s picked", q);
+        }
+        return 1;
+    }
     int coop = ArgsEqual(a, SURVIVAL_HOST_ARGS) ? 3 : ArgsEqual(a, SURVIVAL_JOIN_ARGS) ? 4 : 0;
     int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
     g_chosen = mine;
@@ -2156,7 +2173,7 @@ static int L_MenuChoice(void* lua) { return Ret(lua, g_menuChoice); }
 
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.24.0";
+    static const char v[] = "0.25.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2461,6 +2478,23 @@ static int L_ShopRequest(void* lua)
     return 1;
 }
 
+/* SV_MenuSetting() -> the StringArgs of the oldest settings row picked on the main menu and not yet taken
+ * ("SV_Set_..."), or "" when none is waiting */
+static int L_MenuSetting(void* lua)
+{
+    char out[32];
+    size_t n = 0;
+    if (g_setCount > 0) {
+        const wchar_t* q = g_setQueue[g_setHead];
+        while (n < 31 && q[n]) { out[n] = (char)q[n]; ++n; }
+        g_setHead = (g_setHead + 1) % SET_QUEUE;
+        --g_setCount;
+    }
+    out[n] = 0;
+    U.luaSetString(lua, out, n);
+    return 1;
+}
+
 /* SV_Reset(): forget the level's spawner (Lua calls it when a level loads) */
 static int L_Reset(void* lua)
 {
@@ -2696,7 +2730,7 @@ static void RegisterLua(void* lua)
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
-        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
+        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting }, { "SV_BGMNames", L_BGMNames },
         { "SV_CoopOpen", L_CoopOpen }, { "SV_CoopClose", L_CoopClose }, { "SV_CoopInfo", L_CoopInfo }, { "SV_CoopSend", L_CoopSend },
         { "SV_CoopRecv", L_CoopRecv }, { "SV_CoopMe", L_CoopMe }, { "SV_CoopPeer", L_CoopPeer }, { "SV_CoopTrack", L_CoopTrack },
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },

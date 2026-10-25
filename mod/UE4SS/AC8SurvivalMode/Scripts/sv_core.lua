@@ -19,7 +19,10 @@
 LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
-local COOP_ROWS = { "SurvivalCoopHost", "SurvivalCoopJoin" }   -- SURVIVAL CO-OP: HOST / JOIN (only when CFG.coop.enabled)
+-- SURVIVAL CO-OP: HOST / JOIN and the settings rows below them (only when CFG.coop.enabled; tools/build_survival.py
+-- SETTING_ROWS, sv_coop.lua SETTINGS)
+local COOP_ROWS = { "SurvivalCoopHost", "SurvivalCoopJoin", "SurvivalSetRoom", "SurvivalSetEnemies", "SurvivalSetStart",
+                    "SurvivalSetBreak" }
 
 -- { our table, the game's table, the row ours goes just above (SURVIVAL MODE sits above QUIT GAME) }
 local TABLES = {
@@ -32,7 +35,7 @@ local TABLES = {
 -- The rows that go into a table: ours, and SURVIVAL CO-OP in the menu table when co-op is on (user, 2026-10-26: "a
 -- cleaner way for players to join"; CFG is read when the rows go in, after sv_config has loaded)
 local function rowsOf(t)
-    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, COOP_ROWS[1], COOP_ROWS[2] } end
+    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, table.unpack(COOP_ROWS) } end
     return { ROW }
 end
 
@@ -315,7 +318,7 @@ function watchRows()
             if r == "wait" then return true end
         end
         if t.above and not wasReady then                   -- placing one row moves `above` too: all of them above it
-            for _ = 1, 3 do
+            for _ = 1, #rowsOf(t) + 1 do
                 local p, all = rowOrder(game), true
                 for _, row in ipairs(rowsOf(t)) do
                     if not (p[row] and p[t.above] and p[row] < p[t.above]) then all = false; placeAbove(game, t.above, row) end

@@ -1171,6 +1171,15 @@ CFG = {
     },
 }
 for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
+function deepCopy(v)
+    if type(v) ~= "table" then return v end
+    local t = {}
+    for k, x in pairs(v) do t[k] = deepCopy(x) end
+    return t
+end
+-- The shipped settings, before survival.ini and survival_config.lua change them: Survival COOP's host sends its
+-- differences from these to every joiner (sv_coop.lua, M.sendSettings)
+CFG_DEFAULTS = deepCopy(CFG)
 -- The player's settings: config/survival.ini (BUILD_PLAN Milestone 4). Releases ship config/survival.default.ini; the
 -- first run copies it to survival.ini, which an update never overwrites. A [section] names a CFG table (dots for
 -- nested ones, any case; INI_ALIAS gives the friendly names), `key = value` sets a field that exists there: a number,
@@ -1341,6 +1350,37 @@ local function loadIni()
 end
     local ok, err = pcall(loadIni)
     if not ok then log("config: survival.ini could not be read: " .. tostring(err)) end
+
+-- A setting picked in game (the main menu's settings rows, sv_coop.lua) saved to survival.ini: its line in [section]
+-- (switched off or not) becomes `key = value`, a later live line for it is switched off, and a missing one is added
+-- under the section. Returns true when the file was written.
+function iniSet(section, key, value)
+    local path = SCRIPT_DIR .. "..\\config\\survival.ini"
+    local lines, f = {}, io.open(path, "r")
+    if f then for l in f:lines() do lines[#lines + 1] = l end; f:close() end
+    local sec, at, secAt = nil, nil, nil
+    for i, l in ipairs(lines) do
+        local h = l:match("^%s*%[%s*(.-)%s*%]")
+        if h then
+            sec = h:lower()
+            if sec == section:lower() and not secAt then secAt = i end
+        elseif sec == section:lower() then
+            local k = l:match("^%s*;?%s*([%w_]+)%s*=")
+            if k and k:lower() == key:lower() then
+                if not at then at = i elseif not l:match("^%s*;") then lines[i] = ";" .. l end
+            end
+        end
+    end
+    local line = key .. " = " .. tostring(value)
+    if at then lines[at] = line
+    elseif secAt then table.insert(lines, secAt + 1, line)
+    else lines[#lines + 1] = ""; lines[#lines + 1] = "[" .. section .. "]"; lines[#lines + 1] = line end
+    local w = io.open(path, "w")
+    if not w then return false end
+    w:write(table.concat(lines, "\n") .. "\n")
+    w:close()
+    return true
+end
 end
 do  -- optional overrides: Scripts/survival_config.lua returning a table with any of the keys above. Lists (aircraft,
     -- pool, ...) are replaced whole; keyed tables (hud, hud.text) are merged, so one field can be changed alone.

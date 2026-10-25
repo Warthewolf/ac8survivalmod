@@ -158,6 +158,11 @@ local function post(body, sh)
 end
 
 function LB.send(sh)
+    if D and (D.startRound or 1) > 1 then              -- (a head start: START AT ROUND on the menu, or the ini's start_round)
+        sh.state = "local"
+        log("leaderboard: the run started at round " .. D.startRound .. " (start_round); not sent")
+        return
+    end
     local body = json(sh.run)
     LB.queue[#LB.queue + 1] = body; saveQueue()
     local id = post(body, sh)

@@ -81,7 +81,10 @@ function COOP.more(n, capKey)
     local m = math.floor(n * (1 + (tonumber(c.aircraft_per_player) or 0) * (p - 1)) + 0.5)
     return math.max(n, math.min(m, tonumber(c[capKey]) or m))
 end
-local function maxPlayers() return math.max(2, math.min(MAX_SLOT + 1, math.floor(tonumber(cfg().max_players) or MAX_SLOT + 1))) end
+local function maxPlayers()                          -- (a joiner: the host's room, from its settings)
+    if COOP.client() and M.hostMax then return M.hostMax end
+    return math.max(2, math.min(MAX_SLOT + 1, math.floor(tonumber(cfg().max_players) or MAX_SLOT + 1)))
+end
 
 ---------------------------------------------------------------------------------------------------- the natives, wrapped
 -- (registered by dlls/main.dll before this script ran; every part calls them by their global names)
@@ -490,6 +493,165 @@ local function hostRosterSelf()
     sendRoster(nil)
 end
 
+-- The host's settings for everyone (user, 2026-10-26: "we need to work on survival.ini syncing as some player might edit
+-- their ini files"): the host sends each joiner what its CFG has that differs from the shipped one (CFG_DEFAULTS:
+-- survival.ini and survival_config.lua both), as data only ("cf", in chunks); the joiner's CFG goes back to the shipped
+-- settings and takes the host's on top, in place (other parts hold CFG's tables), and its own come back when co-op
+-- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard) and
+-- the host's difficulty preset is used for everyone (presetName).
+do
+local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, probe = true, ai_watch = true }
+local CHUNK = 900
+local function esc(s) return (s:gsub("[%%,{}|%c]", function(c) return string.format("%%%02X", c:byte()) end)) end
+local function enc(v, out)
+    local t = type(v)
+    if t == "table" then
+        out[#out + 1] = "{"
+        for k, x in pairs(v) do if type(x) ~= "function" then enc(k, out); enc(x, out) end end
+        out[#out + 1] = "}"
+    elseif t == "string" then out[#out + 1] = "s" .. esc(v)
+    elseif t == "number" then out[#out + 1] = math.type(v) == "integer" and string.format("i%d", v) or string.format("n%.17g", v)
+    elseif t == "boolean" then out[#out + 1] = v and "T" or "F"
+    else out[#out + 1] = "~" end
+end
+local function dec(tk, i, depth)
+    local s = tk[i]
+    if s == "{" then
+        if depth > 40 then error("settings nested too deep") end
+        local t = {}
+        i = i + 1
+        while tk[i] and tk[i] ~= "}" do
+            local k, v
+            k, i = dec(tk, i, depth + 1)
+            v, i = dec(tk, i, depth + 1)
+            if k ~= nil then t[k] = v end
+        end
+        return t, i + 1
+    end
+    local c, rest = (s or ""):sub(1, 1), (s or ""):sub(2)
+    if c == "s" then return (rest:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)), i + 1
+    elseif c == "i" then return math.tointeger(tonumber(rest)) or tonumber(rest), i + 1
+    elseif c == "n" then return tonumber(rest), i + 1
+    elseif c == "T" then return true, i + 1
+    elseif c == "F" then return false, i + 1 end
+    return nil, i + 1
+end
+local function same(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return a == b end
+    for k, v in pairs(a) do if not same(v, b[k]) then return false end end
+    for k in pairs(b) do if a[k] == nil then return false end end
+    return true
+end
+local function isList(t) return type(t) == "table" and #t > 0 end
+local function diff(cur, def, path, out)                   -- leaves (and whole lists) of cur that differ from def
+    for k, v in pairs(cur) do
+        local d = def[k]
+        local p = { table.unpack(path) }
+        p[#p + 1] = k
+        if type(v) == "function" then
+        elseif type(v) == "table" and type(d) == "table" and not isList(v) and not isList(d) then diff(v, d, p, out)
+        elseif not same(v, d) then out[#out + 1] = { p, v } end
+    end
+    for k in pairs(def) do
+        if cur[k] == nil then local p = { table.unpack(path) }; p[#p + 1] = k; out[#out + 1] = { p } end
+    end
+end
+local function fill(into, from)                            -- `into` made to hold a copy of `from`, in place
+    for k in pairs(into) do if from[k] == nil then into[k] = nil end end
+    for k, v in pairs(from) do
+        if type(v) == "table" then
+            if type(into[k]) ~= "table" then into[k] = {} end
+            fill(into[k], v)
+        else into[k] = v end
+    end
+end
+local function synced()
+    local keys = {}
+    for k in pairs(CFG_DEFAULTS or {}) do if not PERSONAL[k] then keys[k] = true end end
+    for k in pairs(CFG) do if not PERSONAL[k] then keys[k] = true end end
+    return keys
+end
+local function put(k, v)                                   -- CFG[k] = a copy of v, tables in place
+    if type(v) == "table" and type(CFG[k]) == "table" then fill(CFG[k], v) else CFG[k] = deepCopy(v) end
+end
+
+-- (host) the settings to one joiner (to: its slot) or to every joiner (to: nil)
+function M.sendSettings(to)
+    if not CFG_DEFAULTS then return end
+    local out = {}
+    for k in pairs(synced()) do
+        local v, d = CFG[k], CFG_DEFAULTS[k]
+        if type(v) == "table" and type(d) == "table" and not isList(v) and not isList(d) then diff(v, d, { k }, out)
+        elseif not same(v, d) then out[#out + 1] = { { k }, v } end
+    end
+    local tk = {}
+    enc({ ver = VERSION, preset = (presetName()), max = maxPlayers(), diff = out }, tk)
+    local text = table.concat(tk, ",")
+    local n = math.max(1, math.ceil(#text / CHUNK))
+    for i = 1, n do sendTo(to, true, "cf", i, n, text:sub((i - 1) * CHUNK + 1, i * CHUNK)) end
+    log(string.format("coop: the host's settings to %s: %d differ from the shipped ones (%d bytes)",
+        to and ("player " .. (to + 1)) or "every joiner", #out, #text))
+end
+
+-- (joiner) a chunk of the host's settings; the last one applies them
+function M.onSettings(f)
+    local i, n = tonumber(f[2]), tonumber(f[3])
+    if not (i and n and n >= 1 and n <= 400) then return end
+    if i == 1 then M.cfParts = {} end
+    M.cfParts = M.cfParts or {}
+    M.cfParts[i] = f[4] or ""
+    if i ~= n then return end
+    for j = 1, n do if not M.cfParts[j] then log("coop: the host's settings came incomplete; kept as they were"); M.cfParts = nil; return end end
+    local tk = {}
+    for t in (table.concat(M.cfParts, "", 1, n) .. ","):gmatch("([^,]*),") do tk[#tk + 1] = t end
+    M.cfParts = nil
+    local ok, s = pcall(dec, tk, 1, 0)
+    if not ok or type(s) ~= "table" or type(s.diff) ~= "table" then log("coop: the host's settings could not be read: " .. tostring(s)); return end
+    if not M.mine then                                    -- (your own, for when co-op closes or you host)
+        M.mine = {}
+        for k in pairs(synced()) do M.mine[k] = deepCopy(CFG[k]) end
+    end
+    for k in pairs(synced()) do put(k, CFG_DEFAULTS[k]) end
+    local names = {}
+    for _, e in ipairs(s.diff) do
+        local p = type(e) == "table" and e[1]
+        if type(p) == "table" and #p >= 1 and not PERSONAL[p[1]] then
+            local t = CFG
+            for j = 1, #p - 1 do
+                if type(t[p[j]]) ~= "table" then t[p[j]] = {} end
+                t = t[p[j]]
+            end
+            local last, v = p[#p], e[2]
+            if type(v) == "table" and type(t[last]) == "table" then fill(t[last], v) else t[last] = v end
+            if #names < 12 then local q = {}; for j = 1, #p do q[j] = tostring(p[j]) end; names[#names + 1] = table.concat(q, ".") end
+        end
+    end
+    M.hostPreset = type(s.preset) == "string" and s.preset or nil
+    M.hostMax = tonumber(s.max)
+    log(string.format("coop: playing with the host's settings (Survival %s, preset %s): %d differ from the shipped ones%s",
+        tostring(s.ver), tostring(M.hostPreset), #s.diff, #names > 0 and (": " .. table.concat(names, ", ") .. (#s.diff > #names and ", ..." or "")) or ""))
+end
+
+-- your own settings back (co-op closed, or you host now)
+function M.restoreMine()
+    if not M.mine then return end
+    for k in pairs(synced()) do put(k, M.mine[k]) end
+    M.mine, M.hostPreset, M.hostMax = nil, nil, nil
+    log("coop: your own settings are back")
+end
+
+-- (your own settings, for the menu's settings rows: the host's are in CFG while you play with them)
+function M.ownRoot() return M.mine or CFG end
+
+local rawPreset = presetName
+presetName = function()
+    local name, d = rawPreset()
+    if COOP.client() and M.hostPreset then return M.hostPreset, d end
+    return name, d
+end
+end
+
 local function onHostMessage(from, f)
     local k = f[1]
     if k == "hi" then
@@ -505,6 +667,8 @@ local function onHostMessage(from, f)
                 log("coop: WARNING: player " .. (from + 1) .. " runs Survival " .. tostring(ver) .. ", you " .. VERSION)
                 callout("CO-OP VERSION MISMATCH", string.upper(tostring(name)) .. " HAS " .. tostring(ver))
             end
+            local okS, errS = pcall(M.sendSettings, from)
+            if not okS then log("coop: settings not sent: " .. tostring(errS)) end
         end
         hostRosterSelf()
     elseif k == "jn" then hostSync(from)
@@ -514,7 +678,8 @@ end
 
 local function onJoinerMessage(f)
     local k = f[1]
-    if k == "rnd" then
+    if k == "cf" then M.onSettings(f)
+    elseif k == "rnd" then
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
                   waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, got = os.clock() }
     elseif k == "pi" then
@@ -730,6 +895,7 @@ function COOP.reopen(role, why)
                           maxPlayers())
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
     M.state, M.roster = nil, {}
+    if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
         role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), maxPlayers(), why,
@@ -765,6 +931,7 @@ local function closeCoop(why)
     if type(SV_CoopClose) == "function" then SV_CoopClose() end
     COOP.open, COOP.role, COOP.slot = false, nil, nil
     M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
+    M.restoreMine()
     log("coop: closed (" .. why .. ")")
 end
 
@@ -812,9 +979,84 @@ function COOP.hudLine()
     return string.format("CO-OP %d/%d: %s", n, maxPlayers(), table.concat(names, "  "))
 end
 
+-- The main menu's settings rows (user, 2026-10-26: "there needs to be more in game settings for this ... we add a few
+-- options for the host"): each press steps one setting to its next value, saves it to survival.ini (iniSet) and shows
+-- it on the row (SV_SetText; the row on screen is relabelled in place, as the STORE's are: the game reads a row's text
+-- when the menu opens). They're your own settings: a host's apply to everyone in its game (M.sendSettings); a joiner's
+-- are kept for when they host or play alone. Rows: tools/build_survival.py SETTING_ROWS, sv_core.lua COOP_ROWS.
+do
+local SETTINGS = {
+    Room = { section = "coop", root = "coop", key = "max_players", values = { 2, 4, 6, 8, 12, 16, 24 },
+             label = function(v) return string.format("CO-OP ROOM: %d PLAYERS", v) end,
+             help = "How many players your game takes when you host, you included. Press to change." },
+    Enemies = { section = "coop", root = "coop", key = "aircraft_per_player", values = { 0, 0.1, 0.15, 0.25, 0.4 },
+                label = function(v)
+                    if v <= 0 then return "CO-OP ENEMIES: AS MANY AS ALONE" end
+                    return string.format("CO-OP ENEMIES: +%d%% FOR EACH PLAYER", math.floor(v * 100 + 0.5))
+                end,
+                help = "When you host, each player past the first brings this many more enemies. Press to change." },
+    Start = { section = "rounds", key = "start_round", values = { 1, 5, 10, 15, 20 },
+              label = function(v) return string.format("START AT ROUND %d", v) end,
+              help = "The round a run starts at, alone or when you host (past round 1 it isn't sent to the leaderboard). Press to change." },
+    Break = { section = "rounds", key = "intermission_s", values = { 10, 15, 20, 30, 45, 60 },
+              label = function(v) return string.format("BREAK BETWEEN ROUNDS: %d S", v) end,
+              help = "Seconds between two rounds, alone or when you host. Press to change." },
+}
+local function holder(st) return st.root and CFG[st.root] or M.ownRoot() end   -- (yours, not the host's you play with)
+local function key(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+local function relabel(old, new)
+    local n, want = 0, key(old)
+    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+        if liveWidget(t) then
+            local ok, v = pcall(function() return t:GetText():ToString() end)
+            if ok and type(v) == "string" and key(v) == want and pcall(function() t:SetText(toText(new)) end) then n = n + 1 end
+        end
+    end
+    return n
+end
+
+function M.settingTexts()
+    if type(SV_SetText) ~= "function" then return end
+    for name, st in pairs(SETTINGS) do
+        pcall(SV_SetText, "SV_Menu_Set" .. name .. "Title", st.label(tonumber(holder(st)[st.key]) or st.values[1]))
+        pcall(SV_SetText, "SV_Menu_Set" .. name .. "Help", st.help)
+    end
+end
+
+function M.stepSetting(name)
+    local st = SETTINGS[name or ""]
+    if not st then log("coop: unknown settings row " .. tostring(name)); return end
+    local h = holder(st)
+    local cur = tonumber(h[st.key]) or st.values[1]
+    local nxt = st.values[1]                                  -- (past the last: back to the first)
+    for _, v in ipairs(st.values) do if v > cur + 1e-9 then nxt = v; break end end
+    h[st.key] = nxt
+    local saved = iniSet(st.section, st.key, nxt)
+    local old, new = st.label(cur), st.label(nxt)
+    pcall(SV_SetText, "SV_Menu_Set" .. name .. "Title", new)
+    local okR, shown = pcall(relabel, old, new)
+    log(string.format("settings: %s.%s %s -> %s (%s; %s on screen)", st.section, st.key, tostring(cur), tostring(nxt),
+        saved and "saved to survival.ini" or "COULD NOT save survival.ini", okR and tostring(shown) or ("? " .. tostring(shown))))
+    if COOP.host() and playerCount() > 1 then pcall(M.sendSettings, nil) end      -- (your joiners get it at once)
+    if name == "Room" and COOP.host() then
+        if playerCount() <= 1 and not D then COOP.reopen("host", "room size changed")
+        else log("coop: the new room size applies the next time you host") end
+    end
+end
+end
+pcall(M.settingTexts)                                         -- (before the main menu reads the rows' texts)
+
 function COOP.tick(tick)
     local c = cfg()
     if not c.enabled then return end
+    if type(SV_MenuSetting) == "function" then                 -- the main menu's settings rows
+        for _ = 1, 8 do
+            local m = SV_MenuSetting()
+            if not m or m == "" then break end
+            local okS, errS = pcall(M.stepSetting, m:match("^SV_Set_(%w+)$"))
+            if not okS then log("settings: " .. tostring(errS)) end
+        end
+    end
     -- Co-op opens when the player picks SURVIVAL CO-OP: HOST or JOIN on the main menu, as that role, and closes on
     -- SURVIVAL MODE (SV_MenuChoice, the runtime's: 1 SURVIVAL MODE, 3 HOST, 4 JOIN, 0 nothing yet). An older main.dll
     -- without it: open at start with CFG.coop.role, as before.

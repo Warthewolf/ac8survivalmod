@@ -189,7 +189,7 @@ local function probeTick(tick)
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
-        D = { round = math.max(1, math.floor(CFG.start_round)) - 1, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
+        D = { round = math.max(1, math.floor(CFG.start_round)) - 1, startRound = math.max(1, math.floor(CFG.start_round)), state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
         SR.usable = {}

@@ -1322,6 +1322,23 @@ def edit_coop_host_row(props): edit_coop_row(props, 'Host', COOP_HOST_ARGS)
 def edit_coop_join_row(props): edit_coop_row(props, 'Join', COOP_JOIN_ARGS)
 
 
+# The main menu's settings rows, below SURVIVAL CO-OP: JOIN (user, 2026-10-26: "there needs to be more in game settings
+# for this ... we add a few options for the host"): each press changes one setting (main.dll OnMainDecide takes the
+# pick, StringArgs SV_Set_<what>; Scripts/sv_coop.lua cycles the value, saves it to survival.ini and sets the row's
+# texts SV_Menu_Set<what>Title / Help). Keep in step with sv_coop.lua SETTINGS and sv_core.lua COOP_ROWS.
+SETTING_ROWS = ['Room', 'Enemies', 'Start', 'Break']
+
+
+def edit_setting_row(what):
+    def edit(props):
+        edit_menu_row(props)
+        setv(props, 'CommandID', ('name', f'Main_Top_SurvivalSet{what}', 0))
+        setv(props, 'TitleTextID', s(f'SV_Menu_Set{what}Title'))
+        setv(props, 'HelpTextID', s(f'SV_Menu_Set{what}Help'))
+        setv(props, 'StringArgs', s(f'SV_Set_{what}'))
+    return edit
+
+
 def edit_shuttle_npc(props):
     """The shuttle's DT_NPC row (Mission 22's OP0057_sstb_01) under Survival's name key: the text hook shows
     main.lua CFG.specials.shuttle.name for it (user, 2026-10-22: "EMBDIR Shuttle - CORRIS", not Spruce Goose)."""
@@ -1480,7 +1497,8 @@ def build_rows():
     build_model_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
-                     more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row)])
+                     more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row)] +
+                          [(f'SurvivalSet{w}', edit_setting_row(w)) for w in SETTING_ROWS])
 
 
 # ---------------------------------------------------------------- NPC mission table
