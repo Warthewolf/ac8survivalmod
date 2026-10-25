@@ -543,7 +543,7 @@ end
 -- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard) and
 -- the host's difficulty preset is used for everyone (presetName).
 do
-local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, probe = true, ai_watch = true }
+local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true }
 -- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
 -- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
 local function structural(path)
