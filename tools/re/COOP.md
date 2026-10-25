@@ -149,7 +149,15 @@ FindObject wants the short name `LiveNetworkDummyController`; 0.22.1 also falls 
 remote spawn). 0.22.1 spawned and possessed it (your pawn stayed yours, two LivePlayerPlanes) but skipped steps 5's
 loadout and 6: the first formation teleport crashed the game (access violation reading 0xfa0 at 0x147d4f419,
 weapons + 0x2d0 = NULL, from slot 315's component reset -> 0x147d509ad -> 0x147d4f3e0, the weapons' visibility
-update). 0.22.2 does both and won't drive a player plane whose spawn isn't finished (CoCanDrive). SV_CoopFollow(plane, pawn,
+update). 0.22.2 does both and won't drive a player plane whose spawn isn't finished (CoCanDrive). It ran: spawn
+finished, weapons' owner = the plane, ~3600 formation moves (one a frame) and none refused, your pawn stayed yours; the
+copy came in its default paint and flickered in and out (screenshots). Cause: slot 315 fires the BlueprintNativeEvent
+OnReposition (ProcessEvent of FindFunctionChecked("OnReposition"); FNames at 0x14e357ef8 OnReposition, 0x14e357f00
+OnRestored), whose implementation (vtable +0x888 -> +0x9e0) for a player plane is 0x147d506a0: it resets the plane's
+look (0x147d54160, 0x147d4f980 -> 0x147d50710 hides and shows mesh parts, weapons, lock-ons) every call. AI planes'
++0x9e0 differ by class (0x147c8e780, 0x147c66730, 0x147bb5900, base 0x147d1e5d0). 0.22.3 moves a player plane with
+slot 315's other steps only (AActor::TeleportTo 0x143fc1e10, flight reset 0x147d40830, word +0x1ad9 = 0; CoTeleport);
+AI planes still go through slot 315. SV_CoopFollow(plane, pawn,
 forward, right, up) moves it every frame in formation through slot 315. sv_main.lua Ctrl+F11 / Ctrl+F12 (TEST ONLY).
 What the probe should tell: does the spawn survive offline (no session data), does the local camera / HUD / control
 stay the local player's, does it look like the player's plane (paint: default?), does it fly in formation smoothly,

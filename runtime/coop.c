@@ -414,8 +414,6 @@ static int CoReadPose(uint8_t* obj, double* p, double* rot)
 
 static int32_t CoHealth(uint8_t* obj) { return g_offHealth >= 0 && Readable(obj + g_offHealth, 4) ? *(int32_t*)(obj + g_offHealth) : 1; }
 
-/* Whether obj is an AI plane or a player plane with the game's own teleport in both slots (anything else: never
- * teleported). */
 /* AActor::FinishSpawning (from the remote spawn's call to it) and its bHasFinishedSpawning byte (bit 0, its first
  * test): an actor spawned deferred and never finished has no setup, and teleporting one crashed the game (a player
  * plane's weapons had no owner, test of 2026-10-25) */
@@ -433,18 +431,73 @@ static int CoFinishSpawningFn(void)
     return g_finishedOff > 0;
 }
 
-static int CoCanDrive(uint8_t* obj)
+/* Whether obj is an AI plane or a player plane with the game's own teleport in both slots (anything else: never
+ * teleported). */
+static int CoKind(uint8_t* obj)                                         /* 1 an AI plane, 2 a player plane, 0 neither */
 {
     if (!obj) return 0;
     void** vt = *(void***)obj;
     if (!Readable(vt, 8 * (VT_TELEPORT_IN + 1))) return 0;
-    int ai = g_fAITeleportTo && g_fAITeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fAITeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fAITeleportInner;
-    int pp = g_fPPTeleportTo && g_fPPTeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fPPTeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fPPTeleportInner;
-    if (pp && (!CoFinishSpawningFn() || !(obj[g_finishedOff] & 1))) return 0;                   /* a player plane: set up */
-    return ai || pp;
+    if (g_fAITeleportTo && g_fAITeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fAITeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fAITeleportInner) return 1;
+    if (g_fPPTeleportTo && g_fPPTeleportInner && vt[VT_TELEPORT_TO] == (void*)g_fPPTeleportTo && vt[VT_TELEPORT_IN] == (void*)g_fPPTeleportInner) return 2;
+    return 0;
+}
+
+static int CoCanDrive(uint8_t* obj)
+{
+    int k = CoKind(obj);
+    if (k == 2 && (!CoFinishSpawningFn() || !(obj[g_finishedOff] & 1))) return 0;                /* a player plane: set up */
+    return k != 0;
 }
 
 typedef uint8_t (*CoTeleportFn)(void* self, const double* loc, const double* rot, uint8_t isTest, uint8_t noCheck);
+typedef void    (*CoFlightResetFn)(void* a, void* b, void* c);
+
+/* A player plane's slot 315 is AActor::TeleportTo, then ProcessEvent(OnReposition), then on success its flight-model
+ * reset 0x147d40830(plane + 0x1918, + 0x2268, + 0x1a38) and `word [plane + 0x1ad9] = 0`. Its OnReposition (vtable
+ * +0x888 -> +0x9e0 = 0x147d506a0) resets the plane's look: mesh parts hidden and shown again (0x147d50710), weapons,
+ * lock-ons. Every frame that made the formation copy flicker in and out (solo test of 2026-10-25, runtime 0.22.2), so a
+ * player plane is moved with the same steps minus the event, all read from slot 315's own code. */
+static CoTeleportFn    g_fActorTeleport;
+static CoFlightResetFn g_fFlightReset;
+static int32_t g_ppReset[3], g_ppResetWord = -1;
+static int CoQuietSites(void)
+{
+    if (g_ppResetWord >= 0) return g_ppResetWord > 0;
+    g_ppResetWord = 0;
+    uint8_t* p = g_fPPTeleportInner;
+    if (!p || p[0x1b] != 0xE8) return 0;
+    uint8_t* tp = p + 0x20 + *(int32_t*)(p + 0x1c);                             /* call AActor::TeleportTo */
+    uint8_t* a = g_fAITeleportInner;
+    if (!InGame(tp) || !a || a[0x1b] != 0xE8 || a + 0x20 + *(int32_t*)(a + 0x1c) != tp) return 0;   /* the AI plane's too */
+    if (p[0x4c] != 0x4C || p[0x4d] != 0x8D || p[0x4e] != 0x86 ||                   /* lea r8,  [rsi + d32] */
+        p[0x53] != 0x48 || p[0x54] != 0x8D || p[0x55] != 0x96 ||                   /* lea rdx, [rsi + d32] */
+        p[0x5a] != 0x48 || p[0x5b] != 0x8D || p[0x5c] != 0x8E ||                   /* lea rcx, [rsi + d32] */
+        p[0x61] != 0xE8 || p[0x66] != 0xB0 || p[0x67] != 0x01 ||                   /* call reset; mov al, 1 */
+        p[0x68] != 0x66 || p[0x69] != 0xC7 || p[0x6a] != 0x86 || p[0x6f] || p[0x70]) return 0;  /* mov word [rsi + d32], 0 */
+    uint8_t* fr = p + 0x66 + *(int32_t*)(p + 0x62);
+    if (!InGame(fr)) return 0;
+    g_ppReset[0] = *(int32_t*)(p + 0x5d); g_ppReset[1] = *(int32_t*)(p + 0x56); g_ppReset[2] = *(int32_t*)(p + 0x4f);
+    for (int i = 0; i < 3; ++i) if (g_ppReset[i] <= 0 || g_ppReset[i] >= 0x8000) return 0;
+    int32_t w = *(int32_t*)(p + 0x6b);
+    if (w <= 0 || w >= 0x8000) return 0;
+    g_fActorTeleport = (CoTeleportFn)tp; g_fFlightReset = (CoFlightResetFn)fr; g_ppResetWord = w;
+    Log(L"coop: player plane teleport without OnReposition: AActor::TeleportTo %p, flight reset %p (+%x +%x +%x), word +%x",
+        tp, fr, (uint32_t)g_ppReset[0], (uint32_t)g_ppReset[1], (uint32_t)g_ppReset[2], (uint32_t)w);
+    return 1;
+}
+
+/* Moves a plane CoCanDrive allowed: an AI plane through its slot 315 (as before), a player plane quietly (above) */
+static uint8_t CoTeleport(uint8_t* o, const double* pos, const double* rot)
+{
+    if (CoKind(o) == 2 && CoQuietSites()) {
+        if (!g_fActorTeleport(o, pos, rot, 0, 1)) return 0;
+        g_fFlightReset(o + g_ppReset[0], o + g_ppReset[1], o + g_ppReset[2]);
+        *(uint16_t*)(o + g_ppResetWord) = 0;
+        return 1;
+    }
+    return ((CoTeleportFn)(*(void***)o)[VT_TELEPORT_IN])(o, pos, rot, 0, 1);
+}
 
 /* ---- packets ---------------------------------------------------------------------------------------------------- */
 static void CoRawTo(uint64_t steamId, const CoSockAddr* udp, const uint8_t* data, uint32_t n, CoLink* L)
@@ -993,8 +1046,7 @@ static void CoDriveOne(CoEnt* e, double rt)
     double pos[3], rot[3]; float q[4];
     if (!CoSample(e, rt, pos, q)) return;
     CoQuatToRot(q, rot);
-    CoTeleportFn tp = (CoTeleportFn)(*(void***)o)[VT_TELEPORT_IN];
-    if (tp(o, pos, rot, 0, 1)) ++e->drives; else ++e->fails;
+    if (CoTeleport(o, pos, rot)) ++e->drives; else ++e->fails;
 }
 
 static void CoDrive(double now)
@@ -1527,8 +1579,7 @@ static void CoFollowFrame(void)
     pos[0] += g_followOff[0] * c - g_followOff[1] * sn;
     pos[1] += g_followOff[0] * sn + g_followOff[1] * c;
     pos[2] += g_followOff[2];
-    CoTeleportFn tp = (CoTeleportFn)(*(void***)plane)[VT_TELEPORT_IN];
-    if (tp(plane, pos, rot, 0, 1)) ++g_followMoves; else ++g_followFails;
+    if (CoTeleport(plane, pos, rot)) ++g_followMoves; else ++g_followFails;
     if ((g_followMoves + g_followFails) % 600 == 1)
         Log(L"coop: formation test: %d moves, %d refused", g_followMoves, g_followFails);
 }
