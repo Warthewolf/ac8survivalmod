@@ -56,6 +56,7 @@ function SPC.alicornSpawn(now)
         log("special: the Alicorn was still up from last time; taken off (" .. tostring(r) .. "), none this round")
         return false
     end
+    SPC.alcnPool = { set = {}, n = 0, at = now + 3 }
     spawningUnit = UNIT
     local r = SV_Spawn(UNIT)
     spawningUnit = nil
@@ -67,6 +68,63 @@ function SPC.alicornSpawn(now)
     hudCallout(t.alicorn_go, t.alicorn_go_sub)
     log(string.format("special: round %d, the Alicorn in the west sea", D.round))
     return true
+end
+
+-- Its pooled aircraft (a run of 2026-10-24: "Alicorn's ghost aircraft ... abnormally loud sounds when flying near the
+-- Alicorn"): the unit came up with EB_002's pools after all, 106 SLUAVs, 19 Rafale Ms and 6 F/A-18Fs (tools/re/
+-- ALICORN.md 1.2) parked inside the hull at its spot, never launched (Survival doesn't run Online Mode's launches), up
+-- all run long after it sank, their engines all playing there, and 131 more planes for every tick to look through.
+-- Each one is kept out of `planes` (no kill, credit, tier or log) and put away: hidden, no collision, no target box,
+-- lock or targeting, invincible, not ticking, its Wwise sounds stopped and muted (again every 10 s while it sails).
+local POOLED = { "_uavm_ON_", "_rflm_ON_", "_f18f_ON_", "_uavr_" }
+local function putAway(o)
+    local r = {}
+    for _, f in ipairs({ { "hidden", function() o:SetActorHiddenInGame(true) end },
+                         { "collision", function() o:SetActorEnableCollision(false) end },
+                         { "bShowHUDBox", function() o.bShowHUDBox = false end },
+                         { "bIsNotLockonTarget", function() o.bIsNotLockonTarget = true end },
+                         { "bIsNotFCSTargets", function() o.bIsNotFCSTargets = true end },
+                         { "bIsInvincible", function() o.bIsInvincible = true end },
+                         { "tick", function() o:SetActorTickEnabled(false) end } }) do
+        r[#r + 1] = pcall(f[2]) and f[1] or (f[1] .. " FAILED")
+    end
+    return table.concat(r, ", ")
+end
+-- every Wwise component on a pooled plane stopped and its output at 0; the number done
+local function silence(set)
+    local n = 0
+    for _, c in ipairs(FindAllOf("AkComponent") or {}) do
+        local ok, w = pcall(function() return c:GetOwner() end)
+        local a = ok and valid(w) and addrOf(w)
+        if a and set[a] then
+            pcall(function() c:SetOutputBusVolume(0.0) end)
+            if pcall(function() c:Stop() end) then n = n + 1 end
+        end
+    end
+    return n
+end
+function SPC.alicornPooled(o, short, unit)
+    if unit ~= UNIT then return false end
+    local pooled = false
+    for _, p in ipairs(CFG.specials.alicorn.pooled or POOLED) do if short:find(p, 1, true) then pooled = true end end
+    if not pooled then return false end
+    SPC.alcnPool = SPC.alcnPool or { set = {}, n = 0 }
+    local a = addrOf(o)
+    if a then SPC.alcnPool.set[a] = true end
+    SPC.alcnPool.n = SPC.alcnPool.n + 1
+    local r = putAway(o)
+    if not SPC.alcnPool.said then SPC.alcnPool.said = true; log("special: the Alicorn's pooled aircraft put away (" .. r .. ")") end
+    return true
+end
+local function poolTick(now)
+    local P = SPC.alcnPool
+    if not P or now < (P.at or 0) then return end
+    P.at = now + 10
+    local n = silence(P.set)
+    if not P.silencedSaid and (P.n or 0) > 0 then
+        P.silencedSaid = true
+        log(string.format("special: the Alicorn's pooled aircraft: %d put away, %d of their sound components stopped", P.n, n))
+    end
 end
 
 local function fire(ev)
@@ -114,6 +172,7 @@ local function partZ(o)                                 -- a part's height (cm),
 end
 
 function SPC.alicornTick(now, s)
+    if s.state == "sail" then poolTick(now) end
     if s.state ~= "sail" or now < (s.nextAt or 0) then return end
     s.nextAt = now + 1
     local c, t = CFG.specials.alicorn, CFG.hud.text

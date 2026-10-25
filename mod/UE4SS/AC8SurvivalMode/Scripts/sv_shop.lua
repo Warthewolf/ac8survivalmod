@@ -336,17 +336,43 @@ local function offer(name)
     return o
 end
 
+-- A row's label on screen, in place: the game reads a row's label only when its page opens (tools/re/
+-- AIRFIELD_SHOP_UI.md), so after a purchase it kept the old one (a run of 2026-10-25: "AIRFRAME 1/10 5000 Z" after
+-- tier 1 was bought; the player pressed again and again, WEAPON BAYS tier 1 -> 4 in a second). The help line is read on
+-- every move, so it was right. Each changed label's TextBlock (a live one showing the old text) gets the new one.
+local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+local function relabel(changed)
+    local n = 0
+    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+        if liveWidget(t) then
+            local ok, v = pcall(function() return t:GetText():ToString() end)
+            local new = ok and type(v) == "string" and changed[rowKey(v)]
+            if new and pcall(function() t:SetText(toText(new)) end) then n = n + 1 end
+        end
+    end
+    return n
+end
+
 function shopTexts()
     if type(SV_SetText) ~= "function" then return end
     RUN.offerShown = RUN.offerShown or {}
+    SH.labels = SH.labels or {}
+    local changed, nChanged = {}, 0
     for name in pairs(CFG.shop.items) do
         local o = offer(name)
         RUN.offerShown[name] = o.role
         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
+        local was = SH.labels[name]
+        if was and was ~= label then changed[rowKey(was)], nChanged = label, nChanged + 1 end
+        SH.labels[name] = label
         local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
+    end
+    if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
+        local okR, n = pcall(relabel, changed)
+        if okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
     end
     -- the STORE's own texts: its rows on the landing page (one per page it opens on), its page titles and the rows
     -- between its pages (tools/build_survival.py STORE_PAGES / STORE_ROWS)
@@ -465,6 +491,7 @@ function shopBuy(name)
             if A.caps[kk] then
                 local max = SV_Ammo(kk, 1)           -- unreadable on the landing menu: the last one seen in flight
                 if max < 0 then max = A.max and A.max[kk] end
+                if max and A.bays and A.bays[kk] then max = math.max(max, A.bays[kk]) end   -- (WEAPON BAYS, before UP.apply re-raises it)
                 if max then gains[kk] = math.max(0, math.min(it.step, max - A.caps[kk])); best = math.max(best, gains[kk]) end
             end
         end
@@ -515,9 +542,15 @@ function shopTick(tick)
             local r = SV_ShopRequest()
             if not r or r == "" then break end
             local item = r:gsub("^SV_Buy_", "")
+            local it = CFG.shop.items[item]
+            local last = SH.upAt and SH.upAt[item]
             if seen[item] then
                 log("shop: " .. item .. " pressed again within a tick; once is bought")
+            elseif it and it.role == "upgrade" and last and os.clock() - last < 1.0 then
+                -- (a run of 2026-10-25: WEAPON BAYS tier 1 -> 4 within a second, 36000 Z, the row's label not changing)
+                log("shop: " .. item .. " pressed again within 1 s of a tier bought; not bought twice")
             else
+                if it and it.role == "upgrade" then SH.upAt = SH.upAt or {}; SH.upAt[item] = os.clock() end
                 seen[item] = true
                 local spent = RUN.spent
                 local ok, err = pcall(shopBuy, item)

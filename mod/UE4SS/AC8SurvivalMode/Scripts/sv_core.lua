@@ -398,6 +398,7 @@ function logPlane(o, unit)
         return
     end
     if n:find("Wingman", 1, true) then log("planes: wingman " .. short .. " (not an enemy)"); return end
+    if unit and SPC.alicornPooled and SPC.alicornPooled(o, short, unit) then return end   -- (the Alicorn's parked pools)
     local rec = { obj = o, name = short, unit = unit }
     planes[#planes + 1] = rec
     local where = ""

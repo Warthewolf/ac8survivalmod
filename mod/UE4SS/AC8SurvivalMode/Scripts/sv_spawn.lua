@@ -392,6 +392,7 @@ end
 -- world data puts them (SV_Spawn without a position). The shuttle's appearance starts the event package's countdown.
 function spawnShuttle()
     local c = CFG.specials.shuttle
+    pcall(SPC.shuttlePadBack)                             -- (the pad hidden after the last one: its units are still up)
     for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
         if u and SV_UnitAlive(u) <= 0 then
             local p = SV_Spawn(u)

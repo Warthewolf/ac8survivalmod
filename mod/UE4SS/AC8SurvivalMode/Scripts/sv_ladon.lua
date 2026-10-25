@@ -172,6 +172,7 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o) if #HIT.new < 2
 do
 local LADON_MSL = "BP_wp_vls_ladon"
 local LADON_CDO = "/Game/Blueprints/Weapons/MSL/NPC/Vls/Ladon/BP_wp_vls_ladon.Default__BP_wp_vls_ladon_C"
+local LADON_CERTAIN = "BP_wp_vls_certain_ladon"
 local function short(o)                                    -- "BP_wp_vls_ladon" from "... .BP_wp_vls_ladon_C_2147..."
     local n = nameOf(o):match("([%w_]+)$") or "?"
     return (n:gsub("_C_%d+$", ""):gsub("_C$", ""))
@@ -203,6 +204,28 @@ local function nerf(o)
         end
     end)
     if not ok and not HIT.nerfErr then HIT.nerfErr = true; log("hits: the Ladons' missile NOT toned down: " .. tostring(err)) end
+end
+
+-- Mission 16's scripted sure kill, BP_wp_vls_certain_ladon (hard rule 36): Survival's volleys fire the ordinary
+-- missile, but the Ladon's own fire control can pick it too (a run of 2026-10-24: one shot down the player from 198 HP
+-- with three airframe upgrades, 15 s after a volley). Each one is made the ordinary missile, as toned down above
+-- (damage and homing cone from BP_wp_vls_ladon's class default). Never destroyed: a missile destroyed from Lua stays
+-- counted in flight and on the missile alert, and the game crashed (the ECM burst, 2026-10-25).
+local function certain(o)
+    local c = CFG.specials.ladon
+    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    local ok, err = pcall(function()
+        local d0, a0 = o.damage, o.MaxHomingAngle
+        local d1 = valid(HIT.cdo) and HIT.cdo.damage * (c.missile_damage_x or 1) or 12
+        local a1 = valid(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
+        o.damage, o.MaxHomingAngle = d1, math.min(a0, a1)
+        if not HIT.certainSaid then
+            HIT.certainSaid = true
+            log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg",
+                d0, o.damage, a0, o.MaxHomingAngle))
+        end
+    end)
+    if not ok and not HIT.certainErr then HIT.certainErr = true; log("hits: the Ladons' sure-kill missile NOT toned down: " .. tostring(err)) end
 end
 
 -- what's near the player now: "missiles: ...; enemies: ..."
@@ -242,7 +265,7 @@ function HIT.tick(pc, now)
         if valid(o) then
             local n = short(o)
             if not n:find("^BP_plwp_") and not n:find("^Default__") then
-                if n == LADON_MSL then nerf(o) end
+                if n == LADON_MSL then nerf(o) elseif n == LADON_CERTAIN then certain(o) end
                 if #HIT.msl >= 60 then table.remove(HIT.msl, 1) end
                 HIT.msl[#HIT.msl + 1] = { obj = o, name = n, born = now }
             end

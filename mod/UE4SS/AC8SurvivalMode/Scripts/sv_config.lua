@@ -487,9 +487,12 @@ CFG = {
     -- Waves (economy review of 2026-10-25: "split a round into 2-4 waves, with at most 16-20 enemy aircraft up at once;
     -- the next wave comes when the last thins out"): a round's flights come in waves of at most max_up aircraft
     -- (max_up_by_preset by the game's difficulty), the special and the bombers in the first; the next wave once next_at or
-    -- fewer of the round's aircraft are left, or timeout_s after the last one started. enabled = false: all at once.
+    -- fewer of the round's aircraft are left, or (timeout_s > 0) timeout_s after the last wave's last flight came, not
+    -- counting time down at the airfield. enabled = false: all at once. timeout_s 0, by kills only (a run of 2026-10-24:
+    -- "Wave 2 sometimes comes right after Wave 1 spawns ... instead changing it to be based on kills"; was 150 s from
+    -- the round's start, which a long stop at the airfield used up).
     waves = { enabled = true, max_up = 18, max_up_by_preset = { casual = 14, standard = 18, ace = 22 }, next_at = 4,
-              timeout_s = 150, callout = true },
+              timeout_s = 0, callout = true },
     -- Late rounds (economy review: "quality over quantity after round 15 ... raise ace share, health and accuracy
     -- instead"): from from_round, every enemy aircraft's health x (1 + health_per_round x rounds past it), at most
     -- health_max_x, and the chance a pilot flies one tier up (CFG.tiers.promote_chance) + promote_per_round a round, at
@@ -821,6 +824,8 @@ CFG = {
         -- volley, test of 2026-10-23; then both Ladons fired together, a friend's test the same day.)
         -- missile_*: their VLS missiles (BP_wp_vls_ladon: 15 damage, 60 deg homing cone) as they appear in Survival:
         -- damage x missile_damage_x, homing cone x missile_homing_x (user, 2026-10-24: "tone that down too, only minorly").
+        -- Their own fire control's sure kill (BP_wp_vls_certain_ladon) is made one of those (a run of 2026-10-24:
+        -- "Ladons shooting down players with one missile").
         -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
         -- (health_per_round 0.05, health_max_x 2.5: were 0.03 / 2.0, economy review of 2026-10-25)
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,

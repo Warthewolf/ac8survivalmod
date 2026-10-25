@@ -153,7 +153,10 @@ local function onYou(m, pa)
 end
 
 -- ECM: every enemy missile homing on you (or, its target unreadable, within kill_m) inside range_km loses its lock;
--- one still within kill_m is destroyed (HIT.msl: every missile but the player's, with its distance)
+-- one still within kill_m is made harmless (damage 0), flying on until it runs out (HIT.msl: every missile but the
+-- player's, with its distance). Never destroyed from here: a run of 2026-10-25 destroyed 2 that way, and the enemies
+-- fired no missile again (their launchers still counted those 2 in flight), the missile alert stayed on (the warning
+-- still tracked them) and the game crashed 30 s after the burst.
 local function ecmTick(now)
     if not TAC.ecmUntil then return end
     if now >= TAC.ecmUntil then
@@ -174,7 +177,7 @@ local function ecmTick(now)
                 end
                 if m.d <= c.kill_m then
                     m.ecmDone = true
-                    pcall(function() m.obj:K2_DestroyActor() end)
+                    pcall(function() m.obj.damage = 0 end)
                 end
             end
         end
@@ -286,18 +289,24 @@ function UP.apply(pawn)
     end
     -- WEAPON BAYS (the shop's A.max too, so a purchase made down at the airfield, where the counts can't be read, can
     -- go past the stock load; ammoTick loads it once they can)
+    -- The stock full load is whatever the aircraft holds that Survival didn't set: the game puts its own back each time
+    -- it reloads the aircraft (landing, take-off), and another special weapon picked down there has its own (a run of
+    -- 2026-10-24: kept from the first read, a 10-round special was pushed to 24 at tier 0). A.bays[k]: the full load
+    -- with the bays, which ammoTick waits for before it puts back what you had (that run: 36 specials bought, the
+    -- take-off reload left 24 and the count went down to it, the money gone).
     if type(SV_AmmoMax) == "function" and A and A.applied then
         for k = 1, 3 do
             local cur = SV_Ammo(k, 1)
-            if cur >= 0 then b["max" .. k] = b["max" .. k] or cur end
+            if cur >= 0 and cur ~= b["set" .. k] then b["max" .. k] = cur end
             local base = b["max" .. k]
             if base and not b["fail" .. k] then             -- (one that didn't take stays at the aircraft's own)
                 local want = math.floor(base * (1 + step("bays") * tier("bays")) + 0.5)
-                A.max = A.max or {}
-                A.max[k] = want
+                A.max, A.bays = A.max or {}, A.bays or {}
+                A.max[k], A.bays[k] = want, want
                 if cur >= 0 and cur ~= want then
                     local r = SV_AmmoMax(k, want)
-                    if type(r) ~= "number" or r < 0 then A.max[k], b["fail" .. k] = cur, true end   -- (the shop sells to cur)
+                    if type(r) ~= "number" or r < 0 then A.max[k], A.bays[k], b["fail" .. k] = cur, nil, true   -- (the shop sells to cur)
+                    else b["set" .. k] = want end
                     log(string.format("upgrades: weapon bays tier %d: %s full load %d -> %d (stock %d): %s", tier("bays"),
                         ({ "missiles", "special 1", "special 2" })[k], cur, want, base, tostring(r)))
                 end

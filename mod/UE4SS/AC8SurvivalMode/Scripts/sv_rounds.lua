@@ -39,13 +39,100 @@ function SPC.shuttleClockTick(now)
     end
 end
 
+-- Taking the shuttle and its pad off (with RE_SV_ShuttleRemove). That event's LiveSetActiveGameObjectExecution switches
+-- nothing off (a run of 2026-10-24: fired, result 1, and the shuttle, the pad's 9 dummies and its guns were still up
+-- every round after), so Lua does it: the shuttle is killed (no longer invincible, MinHealth 0, GameplayStatics.
+-- ApplyDamage) so its unit is down and SV_Spawn brings a fresh one next time, and it and everything at the pad
+-- (SHUTTLE.padAt, 1.5 km round; not aircraft) is hidden, without collision, target box, lock or targeting, invincible
+-- and not ticking. The pad's objects come back as they were at the next shuttle round (spawnShuttle: their units are
+-- still up, so they aren't spawned again).
+do
+local GROUND = { "LiveAIGroundDummy", "LiveAIGroundVehicleObject", "LiveAIGameObject" }
+local FLAGS = { "bShowHUDBox", "bIsNotLockonTarget", "bIsNotFCSTargets", "bIsInvincible" }
+local GONE = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
+local function hide(o, keep)
+    local was = { obj = o }
+    for _, f in ipairs(FLAGS) do
+        pcall(function() was[f] = o[f] end)
+        pcall(function() o[f] = GONE[f] end)
+    end
+    local n = 0
+    for _, f in ipairs({ function() o:SetActorHiddenInGame(true) end, function() o:SetActorEnableCollision(false) end,
+                         function() o:SetActorTickEnabled(false) end }) do
+        if pcall(f) then n = n + 1 end
+    end
+    if keep then SHUTTLE.gone[#SHUTTLE.gone + 1] = was end
+    return n == 3
+end
+function SPC.shuttleTakeOff()
+    SHUTTLE.gone = SHUTTLE.gone or {}
+    local sh, killed, hidden, failed = SHUTTLE.obj, "no shuttle actor", 0, 0
+    if not valid(sh) then shuttleHealth(); sh = SHUTTLE.obj end
+    local f = svFlags() or {}
+    if valid(sh) and (f.SV_ShuttleLaunched or 0) < 1 then    -- (a kill now would count as shot down on the pad)
+        killed = "not killed (SV_ShuttleLaunched is 0)"
+        if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
+    elseif valid(sh) then
+        pcall(function() sh:SetIsInvincible(false) end)
+        pcall(function() sh:SetMinHealth(0.0) end)
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        local ok = valid(gs) and pcall(function() gs:ApplyDamage(sh, 100000000.0, nil, nil, nil) end)
+        killed = ok and "damage applied" or "ApplyDamage failed"
+        if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
+    end
+    local at = SHUTTLE.padAt
+    if at then
+        local planeCls = StaticFindObject("/Script/Live.LiveAIPlane")
+        local seen = {}
+        for _, cls in ipairs(GROUND) do
+            for _, o in ipairs(FindAllOf(cls) or {}) do
+                local a = valid(o) and addrOf(o)
+                if a and not seen[a] and not nameOf(o):find("Default__", 1, true) then
+                    seen[a] = true
+                    local okP, isPlane = pcall(function() return valid(planeCls) and o:IsA(planeCls) end)
+                    local okL, l = pcall(function() local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y } end)
+                    if not (okP and isPlane) and okL and l and math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2) <= 150000 then
+                        if hide(o, true) then hidden = hidden + 1 else failed = failed + 1 end
+                    end
+                end
+            end
+        end
+    end
+    log(string.format("special: shuttle and pad off: the shuttle %s; %d objects hidden%s%s", killed, hidden,
+        failed > 0 and string.format(", %d only partly", failed) or "", at and "" or " (the pad's spot unknown: the shuttle only)"))
+end
+-- the pad's objects back as they were (the next shuttle round)
+function SPC.shuttlePadBack()
+    local n = 0
+    for _, w in ipairs(SHUTTLE.gone or {}) do
+        local o = w.obj
+        if valid(o) then
+            pcall(function() o:SetActorHiddenInGame(false) end)
+            pcall(function() o:SetActorEnableCollision(true) end)
+            pcall(function() o:SetActorTickEnabled(true) end)
+            for _, f in ipairs(FLAGS) do if w[f] ~= nil then pcall(function() o[f] = w[f] end) end end
+            n = n + 1
+        end
+    end
+    if SHUTTLE.gone and #SHUTTLE.gone > 0 then log(string.format("special: the pad's %d objects back", n)) end
+    SHUTTLE.gone = {}
+end
+end
+
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
     SPC.shuttleClockTick(now)
-    if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then            -- (tools/survival_events.py RE_SV_ShuttleRemove)
-        D.shuttleRemoveAt = nil
+    -- the shuttle killed and hidden first, RE_SV_ShuttleRemove 3 s later: that event sets SV_ShuttleLaunched back to 0,
+    -- and a shuttle destroyed while it's 0 counts as shot down on the pad (failure radio, SV_ShuttleLost)
+    if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then
+        D.shuttleRemoveAt, D.shuttleEventAt, D.shuttleCheckAt = nil, now + 3, now + 5
         if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
+        local okT, errT = pcall(SPC.shuttleTakeOff)
+        if not okT then log("special: shuttle and pad off: error " .. tostring(errT)) end
+    end
+    if D.shuttleEventAt and now >= D.shuttleEventAt then            -- (tools/survival_events.py RE_SV_ShuttleRemove)
+        D.shuttleEventAt = nil
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleRemove") or "n/a"
         log("special: shuttle and pad taken off (RE_SV_ShuttleRemove " .. tostring(r) .. ")")
         -- its strike flights still up back onto the airfield (they were ordered onto the shuttle alone)
@@ -56,6 +143,11 @@ local function specialTick(now)
             end
         end
         if #back > 0 then log("special: strike flights back onto the airfield: " .. table.concat(back, ", ")) end
+    end
+    if D.shuttleCheckAt and now >= D.shuttleCheckAt then           -- did the kill take its unit down?
+        D.shuttleCheckAt = nil
+        local u = CFG.specials.shuttle.unit
+        log(string.format("special: shuttle unit %s: %d alive 5 s after it was taken off (0: a fresh one next time)", u, SV_UnitAlive(u)))
     end
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
@@ -78,6 +170,7 @@ local function specialTick(now)
         s.logAt = now + 10
         local hp, near, at = shuttleHealth(), nil, nil       -- (finds the shuttle's actor first)
         pcall(function() local v = SHUTTLE.obj:K2_GetActorLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
+        if at and cd < c.countdown_s and not SHUTTLE.padAt then SHUTTLE.padAt = at end   -- (on the pad: for its take-off)
         for _, q in ipairs(planes) do
             if D.strikeUnits and D.strikeUnits[q.unit] and valid(q.obj) and at then
                 pcall(function()
@@ -450,19 +543,25 @@ function roundsTick(now)
         end
         D.at = now + CFG.spawn_gap_s
         if #D.queue == 0 then
-            if D.waves and D.wave < #D.waves then D.state = "wave"        -- the next wave once this one thins out
+            -- the next wave once this one thins out; its clock (CFG.waves.timeout_s) from this wave's last flight, not
+            -- the round's start (a run of 2026-10-24: wave 1 held 3 min while the player was down at the airfield,
+            -- then wave 2 came 9 s after it, its 150 s long gone)
+            if D.waves and D.wave < #D.waves then D.state, D.waveAt, D.waveSeen = "wave", now, now
             else D.state = "fighting" end
         end
     elseif D.state == "wave" then                    -- (CFG.waves) the round's aircraft left, once a second
         if now < D.at then return end
         D.at = now + 1
+        if playerOnAirfield() then D.waveAt = D.waveAt + (now - (D.waveSeen or now)) end   -- (the clock stops while you're down)
+        D.waveSeen = now
         local alive = 0
         for u in pairs(D.up) do
             local n = SV_UnitAlive(u)
             if n > 0 then alive = alive + n else D.up[u] = nil end
         end
         local w = CFG.waves
-        if alive <= w.next_at or now - D.waveAt >= w.timeout_s then
+        local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
+        if alive <= w.next_at or timedOut then
             D.wave, D.waveAt = D.wave + 1, now
             D.queue = D.waves[D.wave]
             local n = 0

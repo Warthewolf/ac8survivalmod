@@ -223,14 +223,39 @@ function ammoTick(tick, pc)
         -- bought. The airfield's rearm (and anything else the game refills) loads the aircraft's full stock count, so a
         -- count above it is put back: landing rearms nothing. Firing lowers it, read only away from the airfield (a
         -- rearm in progress must never pass for shots).
-        local over, ground = {}, playerOnAirfield()
+        -- With WEAPON BAYS the game's reload also puts the stock full load back (the bays' is A.bays[k]): until UP.apply
+        -- has raised it again (at once, here) a count under what you had is that reload, not shots; then what you had
+        -- goes back in (a run of 2026-10-24: 36/36 specials bought, 24/36 after take-off, the rest gone).
+        local over, ground, back = {}, playerOnAirfield(), {}
+        for k = 1, 3 do
+            local m, want = SV_Ammo(k, 1), A.bays and A.bays[k]
+            if want and m >= 0 and m < want and not (A.reload and A.reload[k] and tick - A.reload[k] > 40) then
+                if not (A.reload and A.reload[k]) then          -- (10 s at most: a full load that won't go up is the aircraft's)
+                    A.reload = A.reload or {}
+                    A.reload[k] = tick
+                    local okU, errU = pcall(UP.apply, pawn)
+                    if not okU and not A.upErr then A.upErr = true; log("upgrades: error " .. tostring(errU)) end
+                end
+            elseif A.reload and A.reload[k] and m >= 0 then
+                A.reload[k] = nil
+                local cap = A.caps and A.caps[k]
+                local to = cap and math.min(cap, m)             -- (another special picked down there: its own load)
+                if to and s[k] >= 0 and s[k] < to then
+                    SV_SetAmmo(k, to)
+                    back[#back + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], to)
+                    s[k] = to
+                end
+            end
+        end
+        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays): " .. table.concat(back, ", ")) end
         for k = 1, 4 do
             local cap = A.caps and A.caps[k]
             if cap and s[k] >= 0 and A.owed and A.owed[k] then  -- bought while the count couldn't be read: load it now
                 A.owed[k] = nil
                 if s[k] < cap then SV_SetAmmo(k, cap); s[k] = cap end
             end
-            if cap and s[k] > cap then
+            if A.reload and A.reload[k] then                 -- (the bays' full load not back yet: nothing to read)
+            elseif cap and s[k] > cap then
                 SV_SetAmmo(k, cap)
                 over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
             elseif cap and s[k] >= 0 and s[k] < cap and not ground then
@@ -245,7 +270,10 @@ function ammoTick(tick, pc)
     end
     if tick % 8 == 4 then                                                      -- every 2 s: maxima, for the shop
         A.max = A.max or {}
-        for k = 0, 4 do local m = SV_Ammo(k, 1); if m >= 0 then A.max[k] = m end end
+        for k = 0, 4 do
+            local m = SV_Ammo(k, 1)
+            if m >= 0 then A.max[k] = math.max(m, A.bays and A.bays[k] or 0) end   -- (WEAPON BAYS': UP.apply raises it back)
+        end
     end
     if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
         local n, max = SV_Ammo(0), SV_Ammo(0, 1)

@@ -206,7 +206,7 @@ local function probeTick(tick)
         if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end   -- a restart keeps the level
         H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
         flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
-        SHUTTLE.obj, SHUTTLE.lookAt = nil, nil
+        SHUTTLE.obj, SHUTTLE.lookAt = nil, nil          -- (SHUTTLE.gone kept: a restart keeps the level, and its hidden pad)
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
         RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
