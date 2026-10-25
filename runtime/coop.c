@@ -1758,12 +1758,13 @@ static void CoFollowFrame(int fromMusic)
     uint8_t* plane = CoRefGet(&g_follow), *pawn = CoRefGet(&g_followPawn);
     if (!plane || !pawn) { memset(&g_follow, 0, sizeof(g_follow)); Log(L"coop: formation test ended (an actor is gone)"); return; }
     CoFollowSample(plane, pawn, now, fromMusic);
-    /* one move a frame: at the music tick when it runs (0.22.3 and before moved at both), or at the input build (mode 2) */
+    /* In a mission only the input build calls this (the music player's clock doesn't tick: test of 2026-10-25), two or
+     * three times a frame (once per player plane, maybe per flight-model step). 0.22.6 moved the copy at the first call
+     * of a frame only; if your plane moves a varying number of steps after it, the copy's lag varies: the stutter? So
+     * every call moves it now (0.22.7). Left alone (mode 1): the flight-model scan. */
     if (fromMusic) g_followMusicAt = now;
-    if (g_followMode == 1) { if (fromMusic) CoScanFrame(plane, now); return; }
+    if (g_followMode == 1) { CoScanFrame(plane, now); return; }
     if (g_followMode == 2 && fromMusic) return;
-    if (g_followMode == 0 && !fromMusic && now - g_followMusicAt < 0.05) return;
-    if (now - g_followAt < 0.001) return;
     g_followAt = now;
     double pos[3], rot[3];
     if (!CoReadPose(pawn, pos, rot)) return;
