@@ -14,8 +14,8 @@
 --            plane, fire off, invincible), moved every frame to where that player is (the host relays the joiners'
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
--- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po
--- (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+-- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
+-- ev (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
 do
@@ -99,6 +99,24 @@ if rawSpawn then
                 if not okS then log("coop: spawn mirror error " .. tostring(errS)) end
             end
         end
+        return r
+    end
+end
+
+-- The host's scripted events a joiner's game fires too (user, 2026-10-25: "nagase didn't talk and the shuttle never
+-- launched on their side"): the shuttle's countdown seconds RE_SV_ShuttleT_<s> carry Mission 22's countdown radio, the
+-- ignition and the liftoff (tools/survival_events.py build_shuttle), so the joiner's copy of the shuttle launches with
+-- its lines. Only these: the others steer units the joiners' games copy from the host.
+local MIRROR_EVENTS = { "^RE_SV_ShuttleT_%d+$", "^RE_SV_ShuttleRemove$" }
+local function mirroredEvent(name)
+    for _, p in ipairs(MIRROR_EVENTS) do if tostring(name):match(p) then return true end end
+    return false
+end
+local rawEvent = SV_Event
+if rawEvent then
+    SV_Event = function(name, ...)
+        local r = rawEvent(name, ...)
+        if COOP.host() and mirroredEvent(name) then send(true, "ev", name) end
         return r
     end
 end
@@ -544,6 +562,11 @@ local function onJoinerMessage(f)
             M.dead[id] = true
             local c = M.copies[id]
             if c then killCopy(id, c.obj); M.copies[id] = nil end
+        end
+    elseif k == "ev" then
+        if mirroredEvent(f[2]) and D and rawEvent then
+            local r = rawEvent(f[2])
+            if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. tostring(f[2]) .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
         end
     elseif k == "rs" then
         killAllCopies("the host's run started over")
