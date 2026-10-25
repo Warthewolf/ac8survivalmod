@@ -167,7 +167,14 @@ saw it stutter. So with role 2 (another player's) and no network data, its tick 
 which code does it (not the network object, a 0x180-byte UObject with no own tick; role checks are the vtable
 +0xc38..+0xc50 helpers 0x146dc5800..: IsLocal = role != 2, role 3, role 2, role 1), and the stutter. 0.22.5 tests: A tick
 off + moved at the music tick, B tick off + moved at the input build, C role 0 + tick on + moved, D role 0 left alone;
-and logs how far your plane moves between the input build and the music tick (whether the copy lags a frame). SV_CoopFollow(plane, pawn,
+and logs how far your plane moves between the input build and the music tick (whether the copy lags a frame).
+0.22.5 results (screenshots: a real second Su-57 in default paint, the game's own ALLY tag and W wingman box): tick off,
+it holds its spot but stutters; role 0 with its tick on, it flies straight on its own at ~155 m/s and our moves don't
+hold it (2 of 3 samples a frame off its spot, its own path steady), so its flight model keeps its own position and
+writes it back; the flight reset 0x147d40830 only turns six vectors at +0x1a38 by +0x2268's rotation (+0x2b38),
+never the position. B never moved (survival_rt.c's input-build hook runs CoopFrame only when the music tick doesn't)
+and the music tick runs 2-3 times within a millisecond each frame, so the timing log learned nothing. 0.22.6: test B
+leaves the copy flying (role 0, tick on) and scans its object at 1 s and 2 s for position / velocity triples. SV_CoopFollow(plane, pawn,
 forward, right, up) moves it every frame in formation through slot 315. sv_main.lua Ctrl+F11 / Ctrl+F12 (TEST ONLY).
 What the probe should tell: does the spawn survive offline (no session data), does the local camera / HUD / control
 stay the local player's, does it look like the player's plane (paint: default?), does it fly in formation smoothly,

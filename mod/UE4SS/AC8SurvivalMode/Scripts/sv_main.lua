@@ -603,9 +603,9 @@ if type(RegisterKeyBind) == "function" and Key then
     -- 2), kept 150 m off your right wing every frame. Ctrl+F12 takes it away. Watch: does your camera, HUD and control
     -- stay yours, does it look like your plane, do the enemies go for it; the log says what the game did.
     -- It flickered in and out (0.22.2, 0.22.3): with role 2 its own tick keeps it at the map's centre (test of
-    -- 2026-10-25: tick off, it held its spot but stuttered). So the copy starts with its tick off, and each further press
-    -- runs the next test on it: B moved at the input build instead of the music tick, C its tick back on with role
-    -- byte 0 (not another player's), D the same left alone; a fifth press spawns a new one (A again).
+    -- 2026-10-25: tick off, it held its spot but stuttered; role 0 with its tick on, it flew straight on its own and our
+    -- moves didn't hold it). So the copy starts with its tick off (A); a second press gives it role 0 and its tick back
+    -- and leaves it alone while the runtime scans it for its flight model's position (B, 0.22.6); a third spawns anew.
     local ppTest = { addr = nil, step = 0 }
     local function ppCopy()
         for _, o in ipairs(FindAllOf("LivePlayerPlane") or {}) do
@@ -619,25 +619,15 @@ if type(RegisterKeyBind) == "function" and Key then
                     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
                     if not D or not valid(pawn) then log("test: Ctrl+F11 outside a flight"); return end
                     if type(SV_CoopSpawnPP) ~= "function" then log("test: Ctrl+F11 needs dlls/main.dll 0.21.0"); return end
-                    local copy = ppTest.addr and ppTest.step < 4 and ppCopy()
+                    local copy = ppTest.addr and ppTest.step < 2 and ppCopy()
                     if copy then
                         ppTest.step = ppTest.step + 1
-                        if ppTest.step == 2 then
-                            local f = SV_CoopFollow(ppTest.addr, addrOf(pawn), 0, 150, 0, 2)
-                            log("test: Ctrl+F11 test B, tick off, moved at the input build: " .. tostring(f))
-                            hudCallout("TEST B: MOVED AT INPUT TIME", "TICK OFF; CTRL+F11 AGAIN FOR C")
-                        elseif ppTest.step == 3 then
-                            local old = type(SV_CoopPPRole) == "function" and SV_CoopPPRole(0)
-                            local okT, e = pcall(function() copy:SetActorTickEnabled(true) end)
-                            local f = SV_CoopFollow(ppTest.addr, addrOf(pawn), 0, 150, 0, 0)
-                            log(string.format("test: Ctrl+F11 test C, role byte %s -> 0, tick on (%s), moved at the music tick: %s", tostring(old),
-                                okT and "done" or tostring(e), tostring(f)))
-                            hudCallout("TEST C: ROLE 0, TICK ON", "MOVED; CTRL+F11 AGAIN FOR D")
-                        else
-                            local f = SV_CoopFollow(ppTest.addr, addrOf(pawn), 0, 150, 0, 1)
-                            log("test: Ctrl+F11 test D, role 0, tick on, left alone: " .. tostring(f))
-                            hudCallout("TEST D: ROLE 0, LEFT ALONE", "NOT MOVED; DOES IT FLY ON?")
-                        end
+                        local old = type(SV_CoopPPRole) == "function" and SV_CoopPPRole(0)
+                        local okT, e = pcall(function() copy:SetActorTickEnabled(true) end)
+                        local f = SV_CoopFollow(ppTest.addr, addrOf(pawn), 0, 150, 0, 1)
+                        log(string.format("test: Ctrl+F11 test B, role byte %s -> 0, tick on (%s), left alone and scanned: %s", tostring(old),
+                            okT and "done" or tostring(e), tostring(f)))
+                        hudCallout("TEST B: FLYING ON ITS OWN", "SCANNING IT; WAIT 3 SECONDS")
                         return
                     end
                     ppTest.addr, ppTest.step = nil, 0
@@ -663,7 +653,7 @@ if type(RegisterKeyBind) == "function" and Key then
                                 tostring(okH and h), okC and valid(ctl) and nameOf(ctl):match("([^%.:]+)$") or "none"))
                         end
                     end
-                    hudCallout("TEST A: TICK OFF, MOVED", "AT THE MUSIC TICK; CTRL+F11 AGAIN FOR B")
+                    hudCallout("TEST A: TICK OFF, MOVED", "CTRL+F11 AGAIN FOR B")
                 end)
                 if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
             end)

@@ -1569,6 +1569,8 @@ static int L_CoopKillPP(void* lua)
  * three mesh components the game's own show / hide code (0x147d50710) sets: USceneComponent +0x188 (bit 5 bVisible,
  * from SetVisibility 0x1442ce610), and AActor bHidden's byte. One summary a second for 30 s after each start. */
 typedef struct { int32_t off; uint8_t* comp; uint16_t last; int32_t changes; } CoVisProbe;
+static int32_t    g_scanStep;                      /* the flight-model field scan below: 0, 1, 2 done */
+static double     g_scanAt;
 static int32_t    g_followMode;                    /* 0 moved at the music tick, 1 left alone (only watched), 2 moved at the input build */
 static double     g_followSet[3], g_followMusicAt, g_fdLast[3], g_fdWinAt, g_fdMaxOff, g_fdMaxJump, g_fdFarPos[3];
 static int        g_followHaveSet, g_fdHaveLast;
@@ -1670,7 +1672,83 @@ static int L_CoopFollow(void* lua)
     Log(L"coop: %p follows %p (%d m ahead, %d m right, %d m up), %s", plane, pawn, (int32_t)f, (int32_t)r, (int32_t)u,
         g_followMode == 1 ? L"left alone (watched only)" : g_followMode == 2 ? L"moved every frame at the input build" : L"moved every frame at the music tick");
     CoFollowDiagStart(plane);
+    g_scanStep = 0; g_scanAt = CoNow();                                         /* left alone: scanned at 1 s and 2 s */
     return Ret(lua, 1);
+}
+
+/* Flight-model field scan (runtime 0.22.6). With role 0 and its tick on, the copy flies straight on its own and our
+ * moves don't hold it (test of 2026-10-25): its flight model keeps its own position and writes it back every frame.
+ * While the copy is left alone (mode 1), its object is scanned 1 s after the start and again 1 s later for triples that
+ * look like its position (within 300 m of its root: doubles in cm or m, floats in cm) or a velocity (50-600 m/s:
+ * doubles or floats, cm/s or m/s); the second scan logs each one's two readings beside the root's own move, so the
+ * fields that move with the plane show. */
+#define CO_SCAN_MAX 128
+#define CO_SCAN_END 0x6000
+typedef struct { int32_t off; uint8_t isFloat, kind; double v1[3]; } CoScanHit;  /* kind 1 position, 2 velocity */
+static CoScanHit g_scan[CO_SCAN_MAX];
+static int32_t   g_scanN;
+static double    g_scanRoot[3];
+
+static int CoScanVal(uint8_t* p, int32_t off, int isFloat, double* v)
+{
+    if (isFloat) { float f[3]; memcpy(f, p + off, 12); v[0] = f[0]; v[1] = f[1]; v[2] = f[2]; }
+    else memcpy(v, p + off, 24);
+    for (int i = 0; i < 3; ++i) if (!(v[i] == v[i]) || v[i] > 1e9 || v[i] < -1e9) return 0;        /* NaN or junk */
+    return 1;
+}
+
+static void CoScanFirst(uint8_t* plane, const double* L)
+{
+    g_scanN = 0; memcpy(g_scanRoot, L, 24);
+    for (int pass = 1; pass <= 2; ++pass)
+        for (int32_t off = 0x100; off + 24 <= CO_SCAN_END && g_scanN < CO_SCAN_MAX; off += 4) {
+            if (!Readable(plane + off, 24)) continue;
+            for (int fl = 0; fl < 2 && g_scanN < CO_SCAN_MAX; ++fl) {
+                double v[3];
+                if ((!fl && (off & 7)) || !CoScanVal(plane, off, fl, v)) continue;
+                int hit = 0;
+                if (pass == 1) {
+                    for (int u = 0; u < (fl ? 1 : 2) && !hit; ++u) {                     /* cm, or m (doubles) */
+                        double k = u ? 100.0 : 1.0;
+                        hit = CoAbs(v[0] * k - L[0]) < 30000 && CoAbs(v[1] * k - L[1]) < 30000 && CoAbs(v[2] * k - L[2]) < 30000;
+                    }
+                } else {
+                    double s = CoSqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                    hit = (s >= 5000 && s <= 60000) || (s >= 50 && s <= 600);
+                    hit = hit && CoAbs(v[0]) + CoAbs(v[1]) + CoAbs(v[2]) > 0 && v[0] != v[1];
+                }
+                if (!hit) continue;
+                CoScanHit* h = &g_scan[g_scanN++];
+                h->off = off; h->isFloat = (uint8_t)fl; h->kind = (uint8_t)pass; memcpy(h->v1, v, 24);
+            }
+        }
+    Log(L"coop: scan 1 of the copy %p: root at %d %d %d cm; %d candidates", plane, (int32_t)L[0], (int32_t)L[1], (int32_t)L[2], g_scanN);
+}
+
+static void CoScanSecond(uint8_t* plane, const double* L)
+{
+    double rd[3] = { L[0] - g_scanRoot[0], L[1] - g_scanRoot[1], L[2] - g_scanRoot[2] };
+    Log(L"coop: scan 2 of the copy %p: root at %d %d %d cm, moved %d %d %d cm", plane, (int32_t)L[0], (int32_t)L[1], (int32_t)L[2],
+        (int32_t)rd[0], (int32_t)rd[1], (int32_t)rd[2]);
+    for (int32_t i = 0; i < g_scanN; ++i) {
+        CoScanHit* h = &g_scan[i];
+        double v[3];
+        if (!CoScanVal(plane, h->off, h->isFloat, v)) continue;
+        double k = (h->kind == 1 && !h->isFloat && CoAbs(h->v1[0] - g_scanRoot[0]) > 30000) ? 100.0 : 1.0;   /* m: shown in cm */
+        Log(L"coop: scan +%x %s %s: %d %d %d -> %d %d %d (moved %d %d %d)", (uint32_t)h->off, h->isFloat ? L"float" : L"double",
+            h->kind == 1 ? (k > 1 ? L"position (m)" : L"position") : L"velocity?", (int32_t)(h->v1[0] * k), (int32_t)(h->v1[1] * k),
+            (int32_t)(h->v1[2] * k), (int32_t)(v[0] * k), (int32_t)(v[1] * k), (int32_t)(v[2] * k), (int32_t)((v[0] - h->v1[0]) * k),
+            (int32_t)((v[1] - h->v1[1]) * k), (int32_t)((v[2] - h->v1[2]) * k));
+    }
+}
+
+static void CoScanFrame(uint8_t* plane, double now)
+{
+    if (g_scanStep >= 2 || now - g_scanAt < 1.0) return;
+    double L[3], R[3];
+    if (!CoReadPose(plane, L, R)) return;
+    if (g_scanStep == 0) CoScanFirst(plane, L); else CoScanSecond(plane, L);
+    ++g_scanStep; g_scanAt = now;
 }
 
 static void CoFollowFrame(int fromMusic)
@@ -1682,7 +1760,8 @@ static void CoFollowFrame(int fromMusic)
     CoFollowSample(plane, pawn, now, fromMusic);
     /* one move a frame: at the music tick when it runs (0.22.3 and before moved at both), or at the input build (mode 2) */
     if (fromMusic) g_followMusicAt = now;
-    if (g_followMode == 1 || (g_followMode == 2 && fromMusic)) return;
+    if (g_followMode == 1) { if (fromMusic) CoScanFrame(plane, now); return; }
+    if (g_followMode == 2 && fromMusic) return;
     if (g_followMode == 0 && !fromMusic && now - g_followMusicAt < 0.05) return;
     if (now - g_followAt < 0.001) return;
     g_followAt = now;
