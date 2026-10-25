@@ -109,8 +109,9 @@ local function hudBuild(pc)
     -- NEXT ROUND / the special's row, then ALLIES and ITEMS (the review build's): each shown only with something in it,
     -- stacked from here down in that order (stackRows)
     H.allies = newText("Allies"); H.items = newText("Items")
+    H.coop = newText("Coop")                               -- CO-OP: who is playing (sv_coop.lua COOP.hudLine), first
     H.stackY, H.stack = rowY, {}
-    for _, w in ipairs({ H.next, H.allies, H.items }) do
+    for _, w in ipairs({ H.coop, H.next, H.allies, H.items }) do
         H.stack[#H.stack + 1] = { w = w, slot = slotIn(canvas, w, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true) }
         w:SetVisibility(VIS.Collapsed)
     end
@@ -331,6 +332,8 @@ function hudTick(now, paused, pc)
         local okI, it = pcall(TAC.line, now)
         stackText(H.items, "itemsStr", okI and it and string.format(t.items_row, it) or nil)
         if not (okA and okI) then hudLog("rowserr", "allies / items row error " .. tostring(okA and it or al)) end
+        local okC, co = pcall(function() return COOP and COOP.hudLine and COOP.hudLine() end)
+        stackText(H.coop, "coopStr", okC and co or nil)
     end
     stackRows()
 

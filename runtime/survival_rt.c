@@ -23,9 +23,10 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.22.8"
+#define RT_VERSION           L"0.23.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
+#define SURVIVAL_COOP_ARGS   L"SurvivalCoop" /* StringArgs of the SURVIVAL CO-OP row          */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
  * lighting and sublevels belong to, i.e. 10 + the row's TravelHangarMap: Survival's row is Mission 22's, which uses
  * Hangar 04 (TravelHangarMap 5). Hangar 02 with Hangar 004's lighting loads black (test 5).
@@ -403,6 +404,7 @@ static Fn4      g_nextText;
 
 static volatile int32_t  g_chosen;     /* the Survival entry was picked on the main menu */
 static volatile int32_t  g_savedMode = -1;
+static volatile int32_t  g_menuChoice;  /* the last Survival entry picked: 0 none yet, 1 SURVIVAL MODE, 2 SURVIVAL CO-OP */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
 static void* volatile    g_holdPage;
 static volatile uint64_t g_holdUntil;
@@ -543,13 +545,16 @@ static int StartSurvival(void* page, void* from, const wchar_t* why)
 static uintptr_t OnMainDecide(void* widget)
 {
     const FString* a = SelectedArgs(widget, NULL);
-    int mine = ArgsEqual(a, SURVIVAL_ARGS);
+    int coop = ArgsEqual(a, SURVIVAL_COOP_ARGS);
+    int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
     g_chosen = mine;
     if (mine) {
         uint8_t* ctx = Context(widget);
         g_savedMode = ctx ? ctx[CTX_MODE] : -1;
         g_page = NULL;
-        Log(L"main menu: Survival Mode chosen, opening the difficulty select (context mode %d)", (int32_t)g_savedMode);
+        g_menuChoice = coop ? 2 : 1;
+        Log(L"main menu: %s chosen, opening the difficulty select (context mode %d)", coop ? L"Survival Co-op" : L"Survival Mode",
+            (int32_t)g_savedMode);
     }
     return g_nextMainDecide(widget);
 }
@@ -606,6 +611,9 @@ typedef struct { const wchar_t* key; const wchar_t* text; FString fs; } TextRow;
 static TextRow g_text[] = {
     { L"SV_Menu_Title",        L"SURVIVAL MODE", { 0 } },
     { L"SV_Menu_Help",         L"Hold Comona Island against endless waves. Land between rounds to rearm and repair.", { 0 } },
+    { L"SV_Menu_CoopTitle",    L"SURVIVAL CO-OP", { 0 } },
+    { L"SV_Menu_CoopHelp",     L"Survival Mode with up to three Steam friends. Everyone picks SURVIVAL CO-OP: "
+                               L"you join a friend who is already playing, or they join you.", { 0 } },
     { L"SV_Mission_Name",      L"Survival Mode", { 0 } },
     { L"SV_Mission_Subtitle",  L"Comona Island", { 0 } },
     { L"SV_Mission_Number",    L"SURVIVAL", { 0 } },
@@ -2139,9 +2147,12 @@ static int L_SndMaster(void* lua)
 }
 
 /* SV_Version() -> "0.19.0" */
+/* SV_MenuChoice() -> the last Survival entry picked on the main menu: 0 none yet, 1 SURVIVAL MODE, 2 SURVIVAL CO-OP */
+static int L_MenuChoice(void* lua) { return Ret(lua, g_menuChoice); }
+
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.22.8";
+    static const char v[] = "0.23.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2676,7 +2687,7 @@ static int L_SteamName(void* lua)
 static void RegisterLua(void* lua)
 {
     static const struct { const char* name; LuaFn fn; } kFns[] = {
-        { "SV_Version", L_Version }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
+        { "SV_Version", L_Version }, { "SV_MenuChoice", L_MenuChoice }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },

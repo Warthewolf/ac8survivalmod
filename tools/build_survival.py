@@ -283,6 +283,9 @@ def retag_turrets(children, owner, rows, used_ids, z):
         if grand and grand[3]: retag_turrets(grand[3][1], name, rows, used_ids, z)
 
 
+COOP_NAME_KEYS = ['SV_CoopName_A', 'SV_CoopName_B', 'SV_CoopName_C', 'SV_CoopName_D']   # sv_coop.lua NAME_KEYS
+
+
 def ally_units(units, used_ids, z, top_number, v):
     """The STORE's allies (survival_events.ALLY_*): MOONCHILD's two-ships, parked where Mission 22 parks its scramble
     jets, and the ships, each at the start of its lane. Both may be targeted and killed (Mission 22's jets are
@@ -317,11 +320,23 @@ def ally_units(units, used_ids, z, top_number, v):
         u[2][:] = sorted([p for p in u[2] if p[1] not in area] + [(aidx[n], n, False, ('raw', 'Float', struct.pack('<f', val)))
                          for n, val in area.items()], key=lambda p: p[0])
     # Survival COOP: the other players' planes, one per player slot, each one aircraft of MOONCHILD's source
-    # (invincible kept: they only show the players)
-    for unit, obj in zip(survival_events.COOP_PEER_UNITS, survival_events.COOP_PEER_OBJS):
+    # (invincible kept: they only show the players). Each shows its player's name on its target box (user, 2026-10-26:
+    # "we need to get player names working on the HUD always"): the callsign is the desc's GameObjectDisplayNameID02
+    # (tools/re/MINIMAP_MARKERS.md 1d, 1g), shown for an ally with bShowCallSignForAlly; Survival's key SV_CoopName_<A-D>
+    # is set to the player's name at run time (sv_coop.lua, SV_SetText).
+    sc = uprop.U.schema('LiveAIObjectDesc')
+    ix = {n: k for k, (n, t) in sc.items() if n in ('bShowHUDBox', 'bShowCallSignForAlly', 'GameObjectDisplayNameID02')}
+    assert len(ix) == 3, ix
+    for unit, obj, key in zip(survival_events.COOP_PEER_UNITS, survival_events.COOP_PEER_OBJS, COOP_NAME_KEYS):
         names = copy_unit(units, used_ids, z, survival_events.ALLY_AIR_SOURCE, unit, 1, top_number, obj,
                           survival_events.ALLY_AIR_ROW)
         assert names == [obj], names
+        ob = [p for p in unit_by(unit)[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+        ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
+            (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01')),
+            (ix['bShowCallSignForAlly'], 'bShowCallSignForAlly', False, ('raw', 'Bool', b'\x01')),
+            (ix['GameObjectDisplayNameID02'], 'GameObjectDisplayNameID02', False, ('name', key, 0))], key=lambda q: q[0])
+        z.nb.add(key)
     print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
           f'{len(survival_events.ally_ships())} ships')
 
@@ -1002,22 +1017,28 @@ DATA = MOD + '/Data/'
 MISSION_ID = 9101          # must match SURVIVAL_MISSION_ID in runtime/survival_rt.c
 LEVEL_ID = 70              # ELiveLevelID Test02: no stock row uses it
 MENU_ARGS = 'SurvivalMode' # must match SURVIVAL_ARGS in runtime/survival_rt.c
+COOP_MENU_ARGS = 'SurvivalCoop'   # must match SURVIVAL_COOP_ARGS in runtime/survival_rt.c (the SURVIVAL CO-OP entry)
 import dtx
 
 
-def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit):
-    """Copy a stock DataTable package, keep one row (renamed new_row) and let edit() change its properties."""
+def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit, more=()):
+    """Copy a stock DataTable package, keep one row (renamed new_row) and let edit() change its properties; `more` =
+    (row name, edit) pairs: further copies of the same stock row, each edited by its own function."""
+    import copy
     z = ZenPkg(stock(stock_path))
     rename_package(z, stock_path, new_path)
     p = bytes(z.payloads[0])
     dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, row_struct)
     assert o == len(p), (o, len(p))
     rows = dict(dt['rows'])
-    row = rows[(src_row, 0)]
-    edit(row[2])
-    for n in names_in(row) + [new_row]:
-        z.nb.add(n)
-    dt['rows'] = [((new_row, 0), row)]
+    out = []
+    for name, ed in [(new_row, edit)] + list(more):
+        row = copy.deepcopy(rows[(src_row, 0)])
+        ed(row[2])
+        for n in names_in(row) + [name]:
+            z.nb.add(n)
+        out.append(((name, 0), row))
+    dt['rows'] = out
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, row_struct)
     assert chk['rows'] == dt['rows']
@@ -1284,6 +1305,17 @@ def edit_menu_row(props):
         if hit: drop_prop(props, hit[0][0])
 
 
+def edit_coop_menu_row(props):
+    """SURVIVAL CO-OP (user, 2026-10-26: "a cleaner way for players to join ... like a 6 year old being able to do it"):
+    the same entry as SURVIVAL MODE, its own texts and StringArgs; the runtime opens co-op for the run when it's picked
+    (main.dll OnMainDecide, SV_MenuChoice; Lua adds the row only when CFG.coop.enabled)."""
+    edit_menu_row(props)
+    setv(props, 'CommandID', ('name', 'Main_Top_SurvivalCoop', 0))
+    setv(props, 'TitleTextID', s('SV_Menu_CoopTitle'))
+    setv(props, 'HelpTextID', s('SV_Menu_CoopHelp'))
+    setv(props, 'StringArgs', s(COOP_MENU_ARGS))
+
+
 def edit_shuttle_npc(props):
     """The shuttle's DT_NPC row (Mission 22's OP0057_sstb_01) under Survival's name key: the text hook shows
     main.lua CFG.specials.shuttle.name for it (user, 2026-10-22: "EMBDIR Shuttle - CORRIS", not Spruce Goose)."""
@@ -1441,7 +1473,8 @@ def build_rows():
     build_npc_rows()
     build_model_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
-                     'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
+                     'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
+                     more=[('SurvivalCoop', edit_coop_menu_row)])
 
 
 # ---------------------------------------------------------------- NPC mission table

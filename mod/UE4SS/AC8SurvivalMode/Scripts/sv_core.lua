@@ -19,6 +19,7 @@
 LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
+local COOP_ROW = "SurvivalCoop"     -- SURVIVAL CO-OP, below SURVIVAL MODE (only when CFG.coop.enabled)
 
 -- { our table, the game's table, the row ours goes just above (SURVIVAL MODE sits above QUIT GAME) }
 local TABLES = {
@@ -26,8 +27,14 @@ local TABLES = {
       game = "/Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable" },
     { mine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuRows.DT_SV_MenuRows",
       game = "/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands",
-      above = "QuitGame" },
+      above = "QuitGame", coop = true },
 }
+-- The rows that go into a table: ours, and SURVIVAL CO-OP in the menu table when co-op is on (user, 2026-10-26: "a
+-- cleaner way for players to join"; CFG is read when the rows go in, after sv_config has loaded)
+local function rowsOf(t)
+    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, COOP_ROW } end
+    return { ROW }
+end
 
 -- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
 -- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
@@ -124,7 +131,7 @@ end
 -- Puts our row just above `last` (Quit Game). A removed row's slot is reused by the next row added, so moving one
 -- row alone puts it straight back where it was: both rows are copied, removed and added again, and the order is
 -- checked; if the slots were refilled the other way round, it is done once more in the opposite order.
-local function placeAbove(dt, last)
+local function placeAbove(dt, last, ROW)                  -- (ROW: the row to place; this one alone shadows the file's)
     local function inOrder() local p = rowOrder(dt); return p[ROW] and p[last] and p[ROW] < p[last] end
     if inOrder() then return true end
     for _, ourFirst in ipairs({ true, false }) do
@@ -226,19 +233,56 @@ local function containerMissing()
         "SurvivalMode_P mounted, please send UE4SS.log.")
 end
 
--- Our source row for a table (from DT_SV_*), or nil + the reason.
-local function sourceRow(t)
+-- Our source row `row` for a table (from DT_SV_*), or nil + the reason.
+local function sourceRow(t, row)
     local mine, why = loadObject(t.mine)
     if not mine then return nil, why end
     pin(mine, nameOf(mine))
-    local okR, r = dtCall(mine, "FindRow", ROW)
+    local okR, r = dtCall(mine, "FindRow", row)
     if r ~= nil then return r end
-    return nil, "loaded " .. nameOf(mine) .. ", but FindRow('" .. ROW .. "') gave " ..
+    return nil, "loaded " .. nameOf(mine) .. ", but FindRow('" .. row .. "') gave " ..
                 (okR and "nothing" or tostring(r)) .. "; rows: " .. rowNames(mine)
 end
 
 local seen = {}                    -- per table: address of the table object last seen ("missing" if it can't load)
-ready = {}                   -- per table: our row is in
+ready = {}                   -- per table: all its rows are in
+
+-- One of a table's rows into the game's copy: "in" (it was), "added", "wait" (try again later) or "stop" (give up)
+local function putRow(t, game, row, wasReady)
+    local okF, have = dtCall(game, "FindRow", row)
+    if not okF then
+        log("rows: this UE4SS build cannot read data tables (" .. tostring(have) .. "); the menu is left as it is")
+        return "stop"
+    end
+    if have ~= nil then
+        if not wasReady then
+            local placed = t.above and placeAbove(game, t.above, row)
+            log("rows: '" .. row .. "' is in " .. nameOf(game) ..
+                (t.above and (placed and (" (above " .. t.above .. ")") or (" (could not place it above " .. t.above .. ")")) or ""))
+        end
+        return "in"
+    end
+    local src, why = sourceRow(t, row)
+    if src == nil then
+        if row ~= ROW then log("rows: '" .. row .. "' is not in this build's tables (" .. tostring(why) .. ")"); return "in" end
+        lastLoadError = why
+        missingTries = missingTries + 1
+        if missingTries >= MISSING_TRIES then containerMissing(); return "stop" end
+        return "wait"
+    end
+    containerState = true
+    local okA, err = dtCall(game, "AddRow", row, src)
+    local _, now = dtCall(game, "FindRow", row)
+    if not (okA and now ~= nil) then
+        log("rows: could not add '" .. row .. "' to " .. t.game .. " (" .. tostring(err) .. ")")
+        return "stop"
+    end
+    local placed = t.above and placeAbove(game, t.above, row)
+    log("rows: added '" .. row .. "' to " .. nameOf(game) ..
+        (t.above and (placed and (" (above " .. t.above .. ")") or (" (could not place it above " .. t.above .. ")")) or ""))
+    log("rows: " .. nameOf(game) .. " now has: " .. rowNames(game))
+    return "added"
+end
 
 -- One pass over both tables; returns false to stop watching for good.
 function watchRows()
@@ -264,39 +308,23 @@ function watchRows()
             ready[i] = false
         end
         pin(game, nameOf(game))
-        local okF, have = dtCall(game, "FindRow", ROW)
-        if not okF then
-            log("rows: this UE4SS build cannot read data tables (" .. tostring(have) .. "); the menu is left as it is")
-            return false
+        local wasReady = ready[i]
+        for _, row in ipairs(rowsOf(t)) do                 -- (SURVIVAL MODE first, then SURVIVAL CO-OP below it)
+            local r = putRow(t, game, row, wasReady)
+            if r == "stop" then return false end
+            if r == "wait" then return true end
         end
-        if have == nil then
-            local src, why = sourceRow(t)
-            if src == nil then
-                lastLoadError = why
-                missingTries = missingTries + 1
-                if missingTries >= MISSING_TRIES then containerMissing(); return false end
-                return true
+        if t.above and not wasReady then                   -- placing one row moves `above` too: all of them above it
+            for _ = 1, 3 do
+                local p, all = rowOrder(game), true
+                for _, row in ipairs(rowsOf(t)) do
+                    if not (p[row] and p[t.above] and p[row] < p[t.above]) then all = false; placeAbove(game, t.above, row) end
+                end
+                if all then break end
             end
-            containerState = true
-            local okA, err = dtCall(game, "AddRow", ROW, src)
-            local _, now = dtCall(game, "FindRow", ROW)
-            if okA and now ~= nil then
-                local placed = t.above and placeAbove(game, t.above)
-                log("rows: added '" .. ROW .. "' to " .. nameOf(game) ..
-                    (t.above and (placed and (" (above " .. t.above .. ")") or (" (could not place it above " .. t.above .. ")")) or ""))
-                log("rows: " .. nameOf(game) .. " now has: " .. rowNames(game))
-                ready[i] = true
-            else
-                log("rows: could not add '" .. ROW .. "' to " .. t.game .. " (" .. tostring(err) .. ")")
-                return false
-            end
-        elseif not ready[i] then
-            ready[i] = true
-            containerState = true
-            local placed = t.above and placeAbove(game, t.above)
-            log("rows: '" .. ROW .. "' is in " .. nameOf(game) ..
-                (t.above and (placed and (" (above " .. t.above .. ")") or (" (could not place it above " .. t.above .. ")")) or ""))
         end
+        ready[i] = true
+        containerState = true
     end
     return true
 end

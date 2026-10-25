@@ -703,7 +703,7 @@ end
 -- role = join and their games still all hosted) opens as a joiner; if no host is found in AUTO_WAIT (+ up to as much
 -- again at random, so two such games don't host at once) it reopens as the host, and an automatic host that meets
 -- another host while alone and before a run joins that one (onSys "samerole").
-local AUTO_WAIT = 20
+local AUTO_WAIT = 10                                  -- (s; up to twice that, at random)
 function COOP.reopen(role, why)
     local c = cfg()
     local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
@@ -719,29 +719,89 @@ function COOP.reopen(role, why)
     return r
 end
 
+-- Opens co-op for this game: the role from CFG.coop.role (auto unless set), your name, and you in the roster as host
+local function openCoop(why)
+    local c = cfg()
+    if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.22.0 or later needed)"); return end
+    local role = tostring(c.role or "auto"):lower()
+    if role == "joiner" or role == "client" then role = "join" end
+    if role ~= "host" and role ~= "join" then role = "auto" end
+    M.auto, M.linkedOnce = role == "auto", false
+    log("coop: role " .. role .. (M.auto and " (a joiner that hosts if it finds no host)" or "") .. " from CFG.coop.role")
+    COOP.reopen(M.auto and "join" or role, why)
+    if not COOP.open then return end
+    if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
+    local own = tostring(c.name or ""):gsub("[%c|,;]", ""):match("^%s*(.-)%s*$")
+    if own ~= "" then
+        local n = utf8 and utf8.len(own)                                  -- (20 characters, not bytes)
+        if n then M.myName = n <= 20 and own or own:sub(1, utf8.offset(own, 21) - 1) else M.myName = own:sub(1, 20) end
+        log("coop: your name for the other players: " .. M.myName .. " (CFG.coop.name)")
+    end
+    if COOP.host() then hostRosterSelf() end
+end
+
+local function closeCoop(why)
+    if type(SV_CoopClose) == "function" then SV_CoopClose() end
+    COOP.open, COOP.role, COOP.slot = false, nil, nil
+    M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
+    log("coop: closed (" .. why .. ")")
+end
+
+-- Each player's name on their plane's target box (user, 2026-10-26: "we need to get player names working on the HUD
+-- always"): the stand-ins SV_Unit_CoopPeer<A-D> carry the callsign key SV_CoopName_<A-D> (tools/build_survival.py
+-- COOP_NAME_KEYS), whose text is set here whenever a name changes
+local NAME_KEYS = { [0] = "SV_CoopName_A", "SV_CoopName_B", "SV_CoopName_C", "SV_CoopName_D" }
+local function upperName(s, max)
+    s = string.upper(tostring(s or ""))
+    local n = utf8 and utf8.len(s)
+    if n and n > max then return s:sub(1, utf8.offset(s, max + 1) - 1) end
+    return n and s or s:sub(1, max)
+end
+local function nameTick()
+    if type(SV_SetText) ~= "function" then return end
+    M.nameSet = M.nameSet or {}
+    for s = 0, 3 do
+        local n = upperName(playerName(s), 20)
+        if M.nameSet[s] ~= n then
+            M.nameSet[s] = n
+            pcall(SV_SetText, NAME_KEYS[s], n)
+        end
+    end
+end
+
+-- The HUD's co-op row (sv_hud.lua hudTick): who is playing, the host first and marked, in plain words; nil when solo
+function COOP.hudLine()
+    if not COOP.open then return nil end
+    if COOP.client() and M.state ~= "linked" then
+        return M.auto and "CO-OP: LOOKING FOR A HOST..." or "CO-OP: WAITING FOR THE HOST..."
+    end
+    local names = {}
+    for s = 0, 3 do
+        if M.roster[s] or s == COOP.slot then
+            local n = upperName(playerName(s), 14) .. (s == 0 and " (HOST)" or "")
+            if M.wasLost and M.wasLost[s] then n = n .. " (LOST)" end
+            names[#names + 1] = n
+        end
+    end
+    if COOP.host() and #names <= 1 then return "CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS" end
+    return string.format("CO-OP %d/%d: %s", #names, cfg().max_players or 4, table.concat(names, "  "))
+end
+
 function COOP.tick(tick)
     local c = cfg()
     if not c.enabled then return end
-    if not COOP.open and not M.openTried then
-        M.openTried = true
-        if type(SV_CoopOpen) ~= "function" then log("coop: dlls/main.dll has no co-op (0.22.0 or later needed)"); return end
-        local role = tostring(c.role or "auto"):lower()
-        if role == "joiner" or role == "client" then role = "join" end
-        if role ~= "host" and role ~= "join" then role = "auto" end
-        M.auto = role == "auto"
-        log("coop: role " .. role .. (M.auto and " (a joiner that hosts if it finds no host)" or "") .. " from CFG.coop.role")
-        COOP.reopen(M.auto and "join" or role, "start")
-        if not COOP.open then return end
-        if type(SV_SteamName) == "function" then local okN, nm = pcall(SV_SteamName); if okN and type(nm) == "string" then M.myName = nm end end
-        local own = tostring(c.name or ""):gsub("[%c|,;]", ""):match("^%s*(.-)%s*$")
-        if own ~= "" then
-            local n = utf8 and utf8.len(own)                                  -- (20 characters, not bytes)
-            if n then M.myName = n <= 20 and own or own:sub(1, utf8.offset(own, 21) - 1) else M.myName = own:sub(1, 20) end
-            log("coop: your name for the other players: " .. M.myName .. " (CFG.coop.name)")
-        end
-        if COOP.host() then hostRosterSelf() end
+    -- Co-op opens when the player picks SURVIVAL CO-OP on the main menu and closes on SURVIVAL MODE (SV_MenuChoice, the
+    -- runtime's: 1 SURVIVAL MODE, 2 SURVIVAL CO-OP, 0 nothing yet). An older main.dll without it: open at start, as before.
+    local choice = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
+    if choice == nil then
+        if not COOP.open and not M.openTried then M.openTried = true; openCoop("start") end
+    elseif choice ~= M.choice then
+        M.choice = choice
+        if choice == 2 and not COOP.open then openCoop("SURVIVAL CO-OP picked")
+        elseif choice ~= 2 and COOP.open then closeCoop("SURVIVAL MODE picked: playing alone") end
     end
     if not COOP.open then return end
+    pcall(nameTick)
     -- the other games' messages
     for _ = 1, 600 do
         local m = SV_CoopRecv()
