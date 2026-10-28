@@ -312,15 +312,18 @@ end
 
 ---------------------------------------------------------------------------------------------------- late rounds, the jammer
 -- CFG.late: a pool or bomber aircraft's health x TIER.lateHealthX(round), once, as it's first seen up (the specials
--- scale their own). HealthInternal is health x 10 and a whole number; MaxHealth is raised with it, so its damage
--- model (smoke, fire) reads the new health as whole (as AB.L..IN's).
+-- scale their own), times its fighter role's CFG.roles.health_x (P1: a Skirmisher's 0.75, "dies fast if caught"; not an
+-- ace squadron's). HealthInternal is health x 10 and a whole number; MaxHealth is raised with it, so its damage model
+-- (smoke, fire) reads the new health as whole (as AB.L..IN's), and lowered with it (x below 1), or a cut-down plane
+-- would read as damaged and spawn smoking (the critic's gap fill; lowering it live is untested, raising it is confirmed).
 function scaleHealth(o, x)
     if not (x and x ~= 1 and valid(o)) then return nil end
     local okH, h0 = pcall(function() return o.HealthInternal end)
     if not (okH and type(h0) == "number" and h0 > 0) then return nil end
-    local h1 = math.floor(h0 * x + 0.5)
+    local h1 = math.max(1, math.floor(h0 * x + 0.5))
     pcall(function() o.HealthInternal = h1 end)
-    pcall(function() if o.MaxHealth * 10 < h1 then o.MaxHealth = h1 / 10 end end)
+    if x < 1 then pcall(function() o.MaxHealth = h1 / 10 end)
+    else pcall(function() if o.MaxHealth * 10 < h1 then o.MaxHealth = h1 / 10 end end) end
     return h0, h1
 end
 
@@ -331,12 +334,17 @@ function enemyLate(p, round)
     local u = p.unit
     if not (u and (poolIndex(u) or BOMBER_UNIT[u])) then return end
     local x = TIER.lateHealthX(round)
-    if x <= 1 then return end
+    local role = ROLE.flight(u)                       -- (its fighter role's health, CFG.roles.health_x; ace squadrons keep theirs)
+    local rx = role and not (D and D.aceSquad and D.aceSquad[u]) and tonumber(CFG.roles.health_x and CFG.roles.health_x[role]) or 1
+    if rx and rx > 0 and rx ~= 1 then x = x * rx else rx = 1 end
+    if x == 1 then return end
     local h0, h1 = scaleHealth(p.obj, x)
     p.late = h1 ~= nil
-    if h1 and not lateSaid[round] then
-        lateSaid[round] = true
-        log(string.format("late: round %d enemies' health x%.2f (%s: %d -> %d)", round, x, p.name, h0, h1))
+    local key = round .. "|" .. (rx ~= 1 and role or "")
+    if h1 and not lateSaid[key] then
+        lateSaid[key] = true
+        log(string.format("late: round %d enemies' health x%.2f%s (%s: %d -> %d)", round, x,
+            rx ~= 1 and string.format(" (%s x%.2f)", role, rx) or "", p.name, h0, h1))
     end
 end
 

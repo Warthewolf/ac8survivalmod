@@ -205,6 +205,12 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   PERSONAL) if it knows the id, the numbers are finite, its level is ready ([coop] callouts on), at most 4 a second,
   never queued. A tell's radio events (RE_SV_Radio*) are in KEEP_EVENTS, and sv_tells.lua plays the host's own
   through the unwrapped hudCallout / SV_Event, so a tell never also goes out as "co" or "ev". Untested in game.
+- Fighter roles (behaviour roadmap P1, BEHAVIOUR_DIRECTOR.md unit 5): the host draws the round by role and its
+  joiners' copies fly the same world-data units (their behaviour doesn't matter on a joiner: puppets). The Wolf trap's
+  per-object holds and frees (RE_SV_WolfHold_<NN><L> / RE_SV_WolfFree_<NN><L>) are forwarded, so a joiner's copy of a
+  held plane holds its fire too; its LastTGT turn (RE_SV_WolfTurn_<NN><L>) is in KEEP_EVENTS (onto LocalPlayer: the
+  host's game). The host's split hunts (RE_SV_Hunt_NN, unit-wide) skip a Wolf flight while its trap is held. A joiner
+  who links after a hold has been fired doesn't get it again (its copies attack it until the trap is freed). Untested.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.

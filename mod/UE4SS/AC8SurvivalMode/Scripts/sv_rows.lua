@@ -332,6 +332,31 @@ function searchSetup()
                              burst = math.min(200, g.burst * AGG), rest = g.rest_s / AGG, damage_x = g.damage_x * 2,
                              spread = g.spread_deg / 2 / acc, life_x = reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
     end
+    -- The fighter roles' fire control (CFG.roles, P1; made only with roles on at the main menu, as the rows are made
+    -- once a session): the Wolf airframes' gun leads you by wolf.gun_lead_s ("guns lead on" can't be switched live:
+    -- PredictionOffsetTime is on the row; rows _SV<level>_WOLF; every plane of those airframes, bait and trap, so it
+    -- holds only while no other role flies them: the Skirmishers' fallback in rounds 1-3 does), and the Skirmishers'
+    -- special slot a copy of the LAAM's that reaches skirm.laam_m and never fires inside skirm.laam_min_m (row
+    -- NPC_FCS_PlaneLAAM000_SV_SKIRM; the stock one: 1.5-4 km, as Survival's own missiles already reach)
+    local RC = CFG.roles
+    local rolesOn = RC and RC.enabled
+    local function wolfGun(src, level)
+        local lead = tonumber(RC.wolf and RC.wolf.gun_lead_s) or 0
+        if lead <= 0 then return nil end
+        local g = withLevel(CFG.guns, spikeCfg(level).guns)
+        return gunRow(src, { range = g.range_m, angle = g.angle_deg, aim = g.aim_s, burst = g.burst, rest = g.rest_s,
+                             damage_x = g.damage_x, spread = g.spread_deg, lead = lead },
+                      "the Wolf airframes' ", SPIKE_SUFFIX[level] .. "_wolf")
+    end
+    local function skirmLaam()
+        local s = RC.skirm or {}
+        if not s.laam then return nil end
+        return copy(fcs, "NPC_FCS_PlaneLAAM000", function(r)
+            r.CaptureDistance, r.CaptureMinDistance, r.CaptureAngleRange = s.laam_m, s.laam_min_m, s.laam_angle_deg
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = s.laam_lock_s, s.laam_interval_s, s.laam_rest_s
+        end, string.format("the Skirmishers' LAAM: lock within %.0f m / %.0f deg, never inside %.0f m, lock %.1f s, %.1f s between, rest %.1f s",
+            s.laam_m, s.laam_angle_deg, s.laam_min_m, s.laam_lock_s, s.laam_interval_s, s.laam_rest_s), "_skirm")
+    end
     -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
     local function glitchGun(src)
         local GL = CFG.specials.glitch
@@ -350,7 +375,7 @@ function searchSetup()
         r.bEnableLostTargetInClouds = false
     end)
     log(string.format("special: the Anomaly's guards search %d m (%s)", AN.guard_search_m, okG and guardModule or "module NOT made"))
-    SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
+    SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc, mission = mission }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     local inList = { [BEHAVIOUR_AIRCRAFT] = true }
     local function add(a) if a and not inList[a] then inList[a] = true; list[#list + 1] = a end end
@@ -480,6 +505,7 @@ function searchSetup()
                             end
                         end)
                     end
+                    local acRole = rolesOn and ROLE.ofAircraft(a) or nil     -- (a fighter role's airframe: CFG.roles)
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free, frees = nil, {}
                         for i = 0, 5 do
@@ -492,7 +518,8 @@ function searchSetup()
                                     new = anomFcs(id)
                                 elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
                                     new = ((mind or valka) and anomGun(id)) or (glitch and glitchGun(id))
-                                        or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a])) or svGun(id, level)
+                                        or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a]))
+                                        or (acRole == "wolf" and wolfGun(id, level)) or svGun(id, level)
                                 elseif glitch and id:find("ECM", 1, true) then
                                     new = anomEcm(id)                                -- its pod always up
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
@@ -512,6 +539,8 @@ function searchSetup()
                             free = nil
                         end
                         if CFG.special.enabled and free and #fcsList > 0 then
+                            -- (a Skirmisher airframe: its long-range LAAM copy, CFG.roles.skirm, not a random one)
+                            if not spw and acRole == "skirm" then spw = skirmLaam() end
                             spw = spw or fcsList[math.random(#fcsList)]
                             r["NpcFCSId" .. free] = FName(spw)
                             if level == 0 then log("weapons: " .. svNpc .. " carries " .. spw .. " (slot " .. free .. ")") end
@@ -550,6 +579,60 @@ function searchSetup()
         log("search: WARNING the fighters' behaviour row " .. BEHAVIOUR_AIRCRAFT .. "_sv has no DT_NPC row; don't start a run")
     end
     SR.done = true
+end
+
+-- The fighter roles' behaviour rows (CFG.roles, behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5; the
+-- brief's recipe (b)): the world data has each role group's AI objects name a DT_SV_NpcMission row (ROLE.ROWS, built:
+-- tools/build_survival.py NPC_EXTRA) whose NpcId is a DT_NPC row made here, before the level loads (hard rule 20), as
+-- a copy of the fighters' (f16c_common's) with Survival's search module and the role's behaviour set (ROLE.SETS). Made
+-- in Lua, not baked into DT_SV_NpcRows, so a set that couldn't be made falls back to the fighters' set (or
+-- CFG.search.fallback_luaset) instead of naming a LuaSet row that isn't there. With CFG.roles off they name the
+-- fighters' set: every flight flies today's behaviour. RS.ready[key] = { row, npc, set, want } once made; sv_main.lua
+-- keeps what was in at level load (ROLE.levelLoad, sv_spawn.lua). Once a session (cloneRow keeps an existing row).
+RS = { done = false, ready = {} }
+function rolesSetup()
+    if RS.done or not (SR.done and BS.done) then return end
+    RS.done = true
+    local npc, mission = SR.tables and SR.tables.npc, SR.tables and SR.tables.mission
+    if not (npc and mission and SR.module) then
+        log("roles: no behaviour rows (the search rows weren't made); every role flight sits out")
+        return
+    end
+    local on = CFG.roles and CFG.roles.enabled
+    local _, base = dtCall(mission, "FindRow", BEHAVIOUR_AIRCRAFT)
+    local src = base ~= nil and base.NpcId:ToString() or nil
+    local parts = {}
+    for _, key in ipairs({ "lancer", "wolf", "wolf_wing", "skirm" }) do
+        local mrow = ROLE.ROWS[key]
+        local ok, err = pcall(function()
+            if not src then error("no mission row " .. BEHAVIOUR_AIRCRAFT .. " to copy") end
+            local _, mr = dtCall(mission, "FindRow", mrow)
+            if mr == nil then error("no mission row " .. mrow .. " in DT_SV_NpcMission (a container from before roles)") end
+            local npcRow = mr.NpcId:ToString()
+            local want = on and ROLE.SETS[key] or CFG.search.luaset
+            local set = want
+            if set and CFG.behaviour_sets[set] and not BS.ready[set] then
+                set = (BS.ready[CFG.search.luaset] and CFG.search.luaset) or CFG.search.fallback_luaset
+            end
+            local okR, whyR = cloneRow(npc, src, npcRow, function(r)
+                r.NpcAIModuleId = FName(SR.module)
+                if set then r.LuaSetId = FName(set) end
+            end)
+            if not okR then error(npcRow .. ": " .. tostring(whyR)) end
+            local check = "?"
+            pcall(function() local _, r = dtCall(npc, "FindRow", npcRow); check = r.LuaSetId:ToString() end)
+            RS.ready[key] = { row = mrow, npc = npcRow, set = check ~= "?" and check or set, want = want }
+            parts[#parts + 1] = string.format("%s %s -> %s flies %s%s", key, mrow, npcRow, check,
+                set ~= want and string.format(" (wanted %s: not made)", tostring(want)) or "")
+        end)
+        if not ok then parts[#parts + 1] = key .. " NOT made (" .. tostring(err) .. ")" end
+    end
+    log("roles: behaviour rows " .. (on and "" or "(roles off: the fighters' set) ") .. table.concat(parts, "; "))
+    for _, key in ipairs({ "lancer", "wolf", "wolf_wing", "skirm" }) do       -- (as searchSetup's for the fighters' row)
+        if not RS.ready[key] then
+            log("roles: WARNING " .. key .. "'s behaviour row wasn't made: its flights sit out every level of this session")
+        end
+    end
 end
 
 -- Comona Defense's shuttle row: DT_SV_NpcRows' OP0057_sstb_01_SV (Mission 22's shuttle with Survival's name key,

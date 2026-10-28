@@ -24,6 +24,8 @@ by events: the game never spawns a desc again while its shot-down flight is stil
   SV_Shuttle*         Comona Defense (build_shuttle, SHUTTLE_*): countdown, liftoff, hits, loss
   RE_SV_Radio<Suffix> a tell's radio line (TELL_LINES, build_tells: one DT_SV_Radio group each), fired by
                       Scripts/sv_tells.lua (behaviour roadmap P3)
+  RE_SV_WolfHold / WolfFree / WolfTurn_<NN><L>  one Wolf trap object's hold, release and LastTGT (build_wolf; P1's
+                      fighter roles), fired by Scripts/sv_spawn.lua WOLF
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -498,13 +500,52 @@ def flight_size(unit):
     return None
 
 
+# Fighter roles (behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5): the pool is split into role groups by
+# flight number NN, each with its 2 / 4 / 6-ship trio (CFG.squadrons: every role can field a 2-ship from round 1). A
+# role's flights name its behaviour row in the world data, so they build its behaviour set when the level loads (hard
+# rule 20); the spawner (Scripts/sv_rounds.lua, sv_spawn.lua) draws flights by the round's role mix and gives each its
+# role's airframes. ROLE_BY_FLIGHT is Scripts/sv_config.lua's (build_wolf checks they match). NN 08's Air1 / Air2 are the
+# behaviour probe's (PROBE_UNITS: their own rows, never in a round), so the Skirmishers have NN 07 and 08's 2-ship.
+ROLE_BY_FLIGHT = ['duelist', 'duelist', 'lancer', 'lancer', 'wolf', 'wolf', 'skirm', 'skirm']
+POOL_ROLE = {u: ROLE_BY_FLIGHT[int(u[len('ERA_Unit_'):len('ERA_Unit_') + 2]) - 1] for u in POOL}
+# The roles' behaviour rows (DT_SV_NpcMission, build_survival.py NPC_EXTRA; each names a DT_NPC row Scripts/sv_rows.lua
+# rolesSetup makes at the main menu with the role's behaviour set, CFG.roles.sets): the Duelists keep the fighters' row.
+# A Wolf flight is bait and trap pairs: its even objects (0, 2, 4: the lead and the pairs' leads) the bait's row, its
+# odd ones the trap's (held at engagement None from their appearance until the trap springs: build_wolf, sv_spawn.lua WOLF).
+ROLE_ROW = {'duelist': POOL_BEHAVIOUR_ROW, 'lancer': 'sv_role_lancer', 'wolf': 'sv_role_wolf_lead',
+            'skirm': 'sv_role_skirmish'}
+WOLF_WING_ROW = 'sv_role_wolf_wing'
+ROLE_NPC = {'sv_role_lancer': 'SV_Role_Lancer', 'sv_role_wolf_lead': 'SV_Role_WolfLead',
+            'sv_role_wolf_wing': 'SV_Role_WolfWing', 'sv_role_skirmish': 'SV_Role_Skirmish'}
+# The Lancers' unit altitude band tops out here (build_survival.py build_wd_global; Mission 22's: 4-5 km), so they can
+# spawn 2 km above the others (CFG.roles.lancer.alt_add_m, kept under this less 500 m) and their zoom climbs, gated on the
+# band's top less 1 km (LA_SV_LancerZoom), still climb there: the critic's correction (a plane over its band's top may
+# count as outside its unit area and return to it, [?]). Scripts/sv_config.lua ROLE.LANCER_TOP_M is the same.
+LANCER_MAX_ALT_M = 9000.0
+# Every pool flight's AI object names after sizing (event-arg form, 'Base_N-1'), filled by build_survival.py
+# build_wd_global before the event package is built: the Wolf trap's per-object events need them.
+POOL_OBJS = {}
+
+
+def wolf_held(k):
+    """A Wolf flight's object k is the trap (held until sprung): the odd ones, each bait-and-trap pair's second."""
+    return k % 2 == 1
+
+
 def behaviour_row(unit):
     """The NPC row a flight's AI objects name in the world data (its behaviour), or None to leave Mission 22's."""
     for v, u in PROBE_UNITS.items():
         if u == unit: return PROBE_ROWS[v]
     if unit in BOMBERS: return HEAVY_BEHAVIOUR_ROW if unit in HEAVY_BOMBERS else STRIKE_BEHAVIOUR_ROW
-    if unit in POOL: return POOL_BEHAVIOUR_ROW
+    if unit in POOL: return ROLE_ROW[POOL_ROLE[unit]]
     return None
+
+
+def behaviour_rows(unit, k):
+    """The NPC row object k of a flight names: its flight's (behaviour_row), but a Wolf flight's trap objects the trap's."""
+    row = behaviour_row(unit)
+    if row == ROLE_ROW['wolf'] and wolf_held(k): return WOLF_WING_ROW
+    return row
 
 
 # The tells' radio lines (behaviour roadmap P3; Scripts/sv_config.lua CFG.tells, Scripts/sv_tells.lua,
@@ -883,6 +924,7 @@ def build_events(stock_ep):
     build_tells(g)
     build_ace_moves(g, flag, stock_ep)
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
+    build_wolf(g, stock_ep, t_search, t_engage)
     return g
 
 
@@ -953,6 +995,57 @@ def build_ace_moves(g, flag, stock_ep):
             ev = f'RE_SV_{name}_{k + 1:02d}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
             g.execute(t_req, ev, {0: 'NoneSelect', 1: unit, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return', 6: 'NoneSelect', 7: 'false'})
+
+
+def build_wolf(g, stock_ep, t_search, t_engage):
+    """The Wolf trap (behaviour roadmap P1; the critic's gap fill, tools/re/BEHAVIOUR_DIRECTOR.md unit 5): per-object
+    remote events on each Wolf flight's trap objects (wolf_held: the odd ones; POOL_OBJS, the names after sizing),
+    NN its pool index and L the object's letter (A = object 0; letters, hard rule 17), all fired by Scripts/sv_spawn.lua:
+    RE_SV_WolfHold_<NN><L>  engagement None on that object alone (Mission 22's MOONCHILD hold, RE_Wave01_Start, the
+                            stock by-object form): it stops attacking and follows its formation [I] (forwarded in co-op,
+                            so a joiner's copy holds too)
+    RE_SV_WolfFree_<NN><L>  back: air-only search and PlayerOnlyNoLimit on that object (its appearance's orders; forwarded)
+    RE_SV_WolfTurn_<NN><L>  the campaign aces' LastTGT on that object alone (Mission 6's EnemyBehind_LastTGT, by object as
+                            every stock request is; OneShot, Below_Return): a hard turn onto the player, then 200 m behind
+                            it (LocalPlayer: on a co-op host the host, so it's kept there, sv_coop.lua KEEP_EVENTS)."""
+    import re
+    lua = runtime_lua()
+    m = re.search(r'ROLE_BY_FLIGHT\s*=\s*\{([^}]*)\}', lua)
+    assert m and re.findall(r'"(\w+)"', m.group(1)) == ROLE_BY_FLIGHT, \
+        f'Scripts/sv_config.lua ROLE_BY_FLIGHT is not survival_events.ROLE_BY_FLIGHT {ROLE_BY_FLIGHT}'
+    m = re.search(r'LANCER_TOP_M\s*=\s*([\d.]+)', lua)
+    assert m and float(m.group(1)) == LANCER_MAX_ALT_M, f'Scripts/sv_config.lua ROLE.LANCER_TOP_M is not {LANCER_MAX_ALT_M}'
+    for row in list(ROLE_NPC):                       # (the roles' behaviour rows rolesSetup makes DT_NPC rows for)
+        assert f'"{row}"' in lua, f'Scripts/sv_config.lua ROLE.ROWS has no {row}'
+    t_hold = g.exec_template('LiveAIEngagementOrder', 'RE_Wave01_Start', lambda a, e: a[0] == 'AB_Obj_01_Air1_f18e_0')
+    assert arg_values(t_hold)[3] == 'None' and arg_values(t_hold)[1] == 'NoneSelect', arg_values(t_hold)
+    assert arg_values(t_search)[0] == 'NoneSelect' and arg_values(t_engage)[0] == 'NoneSelect'   # (arg 0 the object)
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    assert arg_values(t_req)[3] == 'LastTGT' and arg_values(t_req)[0] != 'NoneSelect', arg_values(t_req)
+    n = 0
+    for k, unit in enumerate(POOL):
+        if POOL_ROLE[unit] != 'wolf' or behaviour_row(unit) != ROLE_ROW['wolf']: continue
+        objs = POOL_OBJS.get(unit)
+        assert objs and len(objs) == flight_size(unit), (unit, objs)       # (build_wd_global runs first)
+        for j, obj in enumerate(objs):
+            if not wolf_held(j): continue
+            tail = f'{k + 1:02d}{chr(65 + j)}'
+            ev = f'RE_SV_WolfHold_{tail}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_hold, ev, {0: obj, 1: 'NoneSelect'})
+            ev = f'RE_SV_WolfFree_{tail}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_search, ev, {0: obj, 1: 'NoneSelect'})
+            g.execute(t_engage, ev, {0: obj, 1: 'NoneSelect', 6: 'PlayerOnlyNoLimit'})
+            ev = f'RE_SV_WolfTurn_{tail}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_req, ev, {0: obj, 1: 'NoneSelect', 2: '', 3: 'LastTGT', 4: 'OneShot', 5: 'Below_Return',
+                                  6: 'NoneSelect', 7: 'false'})
+            n += 1
+    assert n > 0, 'no Wolf trap objects'
+    print(f'  wolf trap: {n} held objects in {sum(1 for u in POOL if POOL_ROLE[u] == "wolf")} Wolf flights '
+          f'(RE_SV_WolfHold / WolfFree / WolfTurn_<NN><L>)')
 
 
 def build_allies(g, flag, t_search, t_move, t_bsearch):

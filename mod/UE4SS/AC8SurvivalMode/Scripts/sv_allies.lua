@@ -505,7 +505,9 @@ function ALLY.tick(now)
             local i = poolIndex(u)
             if i then
                 R.seen[u] = R.seen[u] or now
-                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now) then
+                -- (not a Wolf flight while its trap is held, CFG.roles.wolf: the hunt's order would free it)
+                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
+                    and not (WOLF and WOLF.holding(u)) then
                     R.hunted[u] = true
                     if math.random() < c.hunt_share or (R.hunters or 0) < (c.hunters or 0) then
                         R.hunters = (R.hunters or 0) + 1
