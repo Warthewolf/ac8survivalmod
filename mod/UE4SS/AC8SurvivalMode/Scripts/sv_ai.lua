@@ -145,6 +145,7 @@ function ACE.hunt(p)
             log(string.format("aces: %s won't defend when tailed (bPermissionToProvoke %s)", p.name, okR and tostring(v) or "?"))
         end
     end
+    if DIR and DIR.aimed and DIR.aimed(p) then return end    -- (the squad director keeps it on a co-op joiner for now)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     local bb = p.obj.AIStateComponent.BlackboardComponent
@@ -180,7 +181,9 @@ function ACE.movesTick(now, D)
     D.aceMoveAt = D.aceMoveAt or {}
     for _, p in ipairs(planes) do
         local fl = not p.down and p.unit and p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
-        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) and not roleOwn(p) then
+        -- (not a flight the squad director holds back: its top cover or regroup, sv_director.lua)
+        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) and not roleOwn(p)
+            and not (DIR and DIR.holding and DIR.holding(p.unit)) then
             local pn, pk = p.unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
             if pn then
                 if not me then                      -- (your position as read once this tick: sv_coop.lua COOP.me)

@@ -504,6 +504,11 @@ local function startRound()
     D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
     RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
     pcall(STATS.roundStart, D.now)                  -- (the round's measurements, sv_stats.lua)
+    if DIR then                                     -- (the squad director, P2: the round's budgets, wave 1's pincer)
+        local okDr, errDr = pcall(DIR.roundStart, D.now)
+        if okDr then okDr, errDr = pcall(DIR.wave, D.now) end
+        if not okDr then log("director: round start error " .. tostring(errDr)) end
+    end
 end
 
 -- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
@@ -652,6 +657,10 @@ function roundsTick(now)
             end
             local wf = TELL and tonumber(CFG.tells.wave_from_round) or 0        -- (late rounds: a radio call too, P3)
             if wf > 0 and D.round >= wf then pcall(TELL.say, "wave", TELL.ALL) end
+            if DIR then                                 -- (the squad director's pincer, P2: this wave from two sides?)
+                local okDr, errDr = pcall(DIR.wave, now)
+                if not okDr then log("director: wave error " .. tostring(errDr)) end
+            end
             D.state = "spawning"
         end
     elseif D.state == "fighting" then

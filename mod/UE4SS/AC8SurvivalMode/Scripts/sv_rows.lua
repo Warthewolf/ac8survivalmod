@@ -551,6 +551,15 @@ function searchSetup()
                     if set then r.LuaSetId = FName(set) end
                 end)
                 if not okR then error(svNpc .. ": " .. tostring(whyR)) end
+                pcall(function()                  -- its first missile slot (the squad director's salvo fires slot 2)
+                    local _, rr = dtCall(npc, "FindRow", svNpc)
+                    local slot = nil
+                    for i = 0, 5 do
+                        if slot == nil and tostring(rr["NpcFCSId" .. i]:ToString()):find("^NPC_FCS_PlaneMsl") then slot = i end
+                    end
+                    SR.mslSlot = SR.mslSlot or {}
+                    SR.mslSlot[mname] = slot
+                end)
                 if level == 0 then
                     SR.ready[a], SR.npcRow[a], n = mname, svNpc, n + 1
                 else
@@ -575,6 +584,15 @@ function searchSetup()
     local nl = 0
     for _, t in pairs(SR.levels) do nl = nl + #t end
     log(string.format("spikes: %d difficulty-spike rows made (%d levels)", nl, nLevels))
+    do                                  -- the squad director's bracket salvo (P2) fires WN_WEAPON_3: the rows that carry it
+        local want, ok, other = DIR and DIR.SALVO_FCS_SLOT or 2, 0, {}
+        for row, slot in pairs(SR.mslSlot or {}) do
+            if slot == want then ok = ok + 1 elseif not row:find("_sv%a$") then other[#other + 1] = row .. " " .. tostring(slot) end
+        end
+        table.sort(other)
+        log(string.format("director: %d rows carry their missiles in fire-control slot %d (WN_WEAPON_%d: the salvo)%s", ok, want,
+            want + 1, #other > 0 and ("; not: " .. table.concat(other, ", ")) or ""))
+    end
     if not SR.ready[BEHAVIOUR_AIRCRAFT] then
         log("search: WARNING the fighters' behaviour row " .. BEHAVIOUR_AIRCRAFT .. "_sv has no DT_NPC row; don't start a run")
     end

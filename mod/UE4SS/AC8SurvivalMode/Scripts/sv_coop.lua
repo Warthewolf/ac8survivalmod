@@ -15,7 +15,7 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev, tl (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+-- ev, tl, dv (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
 do
@@ -113,6 +113,41 @@ function COOP.tell(slot, id, a, b)
     local function num(v) return (type(v) == "number" and finite(v, 1e6)) and string.format("%.6g", v) or "" end
     return sendTo(slot, true, "tl", short(id, 32), num(a), num(b))
 end
+-- The squad director's events on one joiner's copies (sv_director.lua: a bracket salvo aimed at that player, fired by
+-- that game so its own copies shoot at it, never by "ev" to every joiner): "dv", the event, its flight and a delay (the
+-- tell's lead, timed there so the link's latency doesn't eat it). Only RE_SV_Salvo_<NN><L>, RE_SV_Dir*_<NN> and
+-- RE_SV_Wolf*_<NN><L> names, the flight the event's own (NN its pool index); the delay 0-3 s; the joiner drops it when
+-- its level isn't ready, it has no live copy of that plane (or flight), or more than DV_PER_S came that second.
+local DV_PER_S, DV_MAX_S = 8, 3.0
+local function dvName(ev)
+    return type(ev) == "string" and #ev <= 64 and (ev:match("^RE_SV_Salvo_%d%d%u$") or ev:match("^RE_SV_Dir%a+_%d%d$")
+        or ev:match("^RE_SV_Wolf%a+_%d%d%u$")) ~= nil
+end
+-- (a joiner) the host's flight `unit` is up here as the event wants: its plane <L> (one per letter), else any copy
+local function dvCopy(ev, unit)
+    local nn = tostring(ev):match("_(%d%d)%u?$")
+    if not (nn and poolIndex(unit) == tonumber(nn)) then return false end
+    local cu = M.cunits[unit]
+    if not (cu and cu.n > 0) then return false end
+    local L = tostring(ev):match("_%d%d(%u)$")
+    for ord, o in pairs(cu.planes) do
+        local id = cu.binds[ord]
+        if (not L or ord == L:byte() - 64) and valid(o) and not (id and M.dead[id]) then return true end
+    end
+    return false
+end
+function COOP.dispatch(slot, ev, unit, delay)
+    if not COOP.host() or not slotOk(slot) or slot == COOP.slot or not dvName(ev) or type(unit) ~= "string" then return false end
+    local d = tonumber(delay) or 0
+    if not finite(d, 1e6) then d = 0 end
+    return sendTo(slot, true, "dv", ev, short(unit, 96), string.format("%.2f", math.max(0, math.min(DV_MAX_S, d))))
+end
+-- The host's split-hunt flight (it went after the joiners' planes, RE_SV_Hunt_NN, this spawn): the director gives it its
+-- hunt back after a hold
+function COOP.hunted(unit)
+    local u = M.units[unit]
+    return u ~= nil and M.hunted ~= nil and M.hunted[unit] == u.gen
+end
 local function maxPlayers()                          -- (a joiner: the host's room, from its settings)
     if COOP.client() and M.hostMax then return M.hostMax end
     return math.max(2, math.min(MAX_SLOT + 1, math.floor(tonumber(cfg().max_players) or MAX_SLOT + 1)))
@@ -170,7 +205,9 @@ local KEEP_EVENTS = {
     "^RE_SV_AnomalyField",     -- each player's own field: a joiner's game runs ANOM.clientTick on its own distance
     "^RE_SV_Radio",            -- the tells' radio lines (sv_tells.lua): each player's own, a joiner's come as "tl"
     "^RE_SV_WolfTurn",         -- a Wolf trap's LastTGT (P1, sv_spawn.lua WOLF): onto LocalPlayer, the host here
-}                              -- (its holds and frees, RE_SV_WolfHold / WolfFree, are forwarded: a joiner's copies hold too)
+    "^RE_SV_Salvo_",           -- the squad director's missile shots at "Player" (P2): the host's own; a joiner's by "dv"
+}                              -- (holds and frees, RE_SV_WolfHold / WolfFree and RE_SV_DirHold / DirFree, are forwarded:
+                               -- a joiner's copies hold too)
 local function mirroredEvent(name)
     name = tostring(name)
     if not name:match("^RE_SV_") then return false end
@@ -365,8 +402,13 @@ local function hostTick()
             if D and D.up and D.up[h.unit] and WOLF and WOLF.holding(h.unit) then
                 -- (a Wolf flight holding its trap, CFG.roles.wolf: the hunt's unit-wide order would free it)
                 log("coop: " .. h.unit .. " holds its Wolf trap; it doesn't go after the joiners")
+            elseif D and D.up and D.up[h.unit] and DIR and DIR.holding and DIR.holding(h.unit) and (h.tries or 0) < 30 then
+                -- (one the squad director holds back, CFG.director: the hunt again once it's let go, which gives it back)
+                h.at, h.tries = now + 2, (h.tries or 0) + 1
+                M.hunts[#M.hunts + 1] = h
             elseif D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
+                if r == 1 and M.units[h.unit] then M.hunted = M.hunted or {}; M.hunted[h.unit] = M.units[h.unit].gen end
                 log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")")
             end
         end
@@ -552,6 +594,17 @@ local function clientRounds(now)
         else D.waves = nil end
     end
     if not levelReady() then return end
+    if M.dvQ and #M.dvQ > 0 then                         -- the director's events here once their delay is up ("dv")
+        local keep = {}
+        for _, q in ipairs(M.dvQ) do
+            if os.clock() < q.at then keep[#keep + 1] = q
+            elseif dvCopy(q.name, q.unit) then
+                local r = rawEvent(q.name)
+                log(string.format("coop: director %s fired here (%s): %s", q.name, q.unit, r == 1 and "fired" or (SV_ERR[r] or tostring(r))))
+            end
+        end
+        M.dvQ = keep
+    end
     if ANOM and ANOM.clientTick then                     -- the Anomaly's field on your own distance to its copy
         local okA, errA = pcall(ANOM.clientTick)
         if not okA then once("anomField", "coop: anomaly field error " .. tostring(errA)) end
@@ -669,7 +722,8 @@ end
 
 ---------------------------------------------------------------------------------------------------- the players, for other parts
 -- COOP.players(): every player this game knows the whereabouts of, for the behaviour director (it picks a player slot
--- to aim a tactic at; tools/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }.
+-- to aim a tactic at; tools/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }
+-- (another player's has rot too: pitch, yaw, roll from their game; yours isMe).
 -- The local player comes first (your pawn: its position read once a tick, shared with ACE.movesTick through COOP.me();
 -- health from HIT.h, its full health read every 5 s), then each other player from what peerTick already keeps of
 -- SV_CoopPeerAt every tick (no native call more): obj / addr their stand-in here, fresh when their game's state is under
@@ -707,7 +761,7 @@ function COOP.players()
         local P = M.peers[s]
         if s ~= COOP.slot and P and P.at then
             out[#out + 1] = { slot = s, obj = P.obj, addr = P.addr, at = P.at, hpPct = P.hpPct, alive = P.alive,
-                              onAirfield = P.onAirfield, fresh = P.fresh }
+                              onAirfield = P.onAirfield, fresh = P.fresh, rot = P.rot }     -- (rot: pitch, yaw, roll)
         end
     end
     return out
@@ -1006,6 +1060,20 @@ local function onJoinerMessage(f)
             local okT, errT = pcall(TELL.play, id, a, b, "the host")
             if not okT then once("tl", "coop: tell error " .. tostring(errT)) end
         end
+    elseif k == "dv" then                                -- the director's event on this game's copies (COOP.dispatch)
+        local ev, unit, delay = short(f[2], 64), short(f[3], 96), tonumber(f[4])
+        local now = os.clock()
+        if now - (M.dvAt or -1) >= 1 then M.dvAt, M.dvN = now, 0 end
+        M.dvN = M.dvN + 1                                -- (dropped, never queued past the delay: a late shot misleads)
+        local why = (M.dvN > DV_PER_S and "more than " .. DV_PER_S .. " a second") or (not dvName(ev) and "not a director event")
+            or (not (delay and finite(delay, 1e6)) and "a bad delay") or (not (D and rawEvent and levelReady()) and "this level isn't ready")
+            or (not dvCopy(ev, unit) and "no live copy of it here") or nil
+        if why then
+            once("dv" .. why, "coop: the host's director event " .. ev .. " dropped (" .. why .. ")")
+        else
+            M.dvQ = M.dvQ or {}
+            if #M.dvQ < 32 then M.dvQ[#M.dvQ + 1] = { at = now + math.max(0, math.min(DV_MAX_S, delay)), name = ev, unit = unit } end
+        end
     elseif k == "cr" then
         local n = tonumber(f[2]) or 0
         if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX then addCredits(math.floor(n), short(f[3], 80) .. " (the host's round)") end
@@ -1076,7 +1144,7 @@ local function onJoinerMessage(f)
             if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. tostring(f[2]) .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
         end
     elseif k == "rs" then
-        M.evQ = nil
+        M.evQ, M.dvQ = nil, nil
         killAllCopies("the host's run started over")
         -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
         -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
