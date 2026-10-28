@@ -634,6 +634,8 @@ function roundsTick(now)
                 local t = CFG.hud.text
                 hudCallout(string.format(t.wave_in, D.wave, #D.waves), string.format(t.wave_in_sub, n))
             end
+            local wf = TELL and tonumber(CFG.tells.wave_from_round) or 0        -- (late rounds: a radio call too, P3)
+            if wf > 0 and D.round >= wf then pcall(TELL.say, "wave", TELL.ALL) end
             D.state = "spawning"
         end
     elseif D.state == "fighting" then

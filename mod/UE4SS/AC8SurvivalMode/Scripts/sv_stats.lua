@@ -21,7 +21,7 @@
 --   STATS.tactic(name, unit, slot, why, callout)   the squad / intensity director's tactics (P2, P4): a "director:"
 --                                   line, counted per round, and the unit's live planes tagged p.dirTag = { tactic, at }
 -- Logged only (AC8SurvivalMode_lua.log), never sent: friends' release logs are the test data, so none of this is in a
--- TEST ONLY or ONLINE ONLY block, and the leaderboard's JSON keeps its fixed fields. The time base is D.now, the game
+-- test-only or online-only block, and the leaderboard's JSON keeps its fixed fields. The time base is D.now, the game
 -- clock (it stops in a pause). Per plane on its record (hard rule 16: flights are recycled), per round in D.rs, per run
 -- in RUN.metrics. Each plane is seen every 2 s, so every time here is good to about +/- 2 s.
 STATS = {}

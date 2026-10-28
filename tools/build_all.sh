@@ -26,6 +26,7 @@ tools/get_stock.sh \
   Datatables/AI/NPC/Mission/DT_NPC_Mission022.uasset \
   Datatables/AI/NPC/Mission/DT_NPC_Mission004.uasset Datatables/AI/NPC/Mission/DT_NPC_Mission013.uasset Datatables/AI/NPC/Mission/DT_NPC_Mission016.uasset Maps/Ingame/Mission016/WD_Mission016_global.uasset Maps/Ingame/Mission016/EP_Mission016_global.uasset OnlineMode/Maps/EmergencyCall/EB_002/WD_EB_002.uasset OnlineMode/Maps/EmergencyCall/EB_002/EP_EB_002.uasset OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON.uasset OnlineMode/DataTables/AI/NPC/DT_NPC_ON.uasset OnlineMode/DataTables/AI/NPC/DT_NPC_WeaponDurability_ON.uasset OnlineMode/DataTables/AI/NPC/DT_NPC_ExplosionDurability_ON.uasset Maps/Ingame/Mission013/WD_Mission013_global.uasset Maps/Ingame/Mission013/EP_Mission013_global.uasset \
   Datatables/AI/NPC/DT_NPC.uasset   Datatables/Radio/DT_Rdo_ST_ms022.uasset \
+  WwiseAssets/Database/DA_SoundDB_AKB_Voice.uasset \
   Maps/Ingame/Mission015/EP_Mission015_global.uasset \
   Maps/Ingame/Mission018/EP_Mission018_global.uasset \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \

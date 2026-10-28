@@ -15,7 +15,7 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+-- ev, tl (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
 do
@@ -60,6 +60,7 @@ local function once(key, msg) if not M.said[key] then M.said[key] = true; log(ms
 local function short(v, n) return (tostring(v or ""):sub(1, n)) end
 local function finite(v, lim) return type(v) == "number" and v == v and v > -lim and v < lim end
 local HIT_MAX, CREDITS_MAX = 100000, 1000000                -- (one hit's damage; one round bonus's zollars)
+local TL_PER_S = 4                                          -- (the host's tells a joiner plays in a second, at most)
 local function slotOk(s) return type(s) == "number" and s == math.floor(s) and s >= 0 and s <= MAX_SLOT end
 local knownRows = {}
 local function knownRow(row)                                -- a row of Survival's NPC table here (DT_SV_NpcMission)
@@ -104,6 +105,13 @@ function COOP.more(n, capKey, cap)
     if p <= 1 or type(n) ~= "number" then return n end
     local m = math.floor(n * (1 + (tonumber(c.aircraft_per_player) or 0) * (p - 1)) + 0.5)
     return math.max(n, math.min(m, tonumber(cap) or tonumber(c[capKey]) or m))
+end
+-- A tell (sv_tells.lua TELL.say) to joiner `slot`, or to every joiner (nil): "tl", its id and up to two numbers only;
+-- the joiner plays it from its own CFG.tells (text, lines and switches: PERSONAL), nothing free-form crosses
+function COOP.tell(slot, id, a, b)
+    if not COOP.host() or (slot ~= nil and not slotOk(slot)) or type(id) ~= "string" then return false end
+    local function num(v) return (type(v) == "number" and finite(v, 1e6)) and string.format("%.6g", v) or "" end
+    return sendTo(slot, true, "tl", short(id, 32), num(a), num(b))
 end
 local function maxPlayers()                          -- (a joiner: the host's room, from its settings)
     if COOP.client() and M.hostMax then return M.hostMax end
@@ -160,6 +168,7 @@ local KEEP_EVENTS = {
     "^RE_SV_GlitchBlink", "^RE_SV_ValkaTp_",
     "^RE_SV_AirfieldOpen$", "^RE_SV_AirfieldClose$",                    -- (the airfield goes as "af")
     "^RE_SV_AnomalyField",     -- each player's own field: a joiner's game runs ANOM.clientTick on its own distance
+    "^RE_SV_Radio",            -- the tells' radio lines (sv_tells.lua): each player's own, a joiner's come as "tl"
 }
 local function mirroredEvent(name)
     name = tostring(name)
@@ -725,11 +734,11 @@ end
 -- their ini files"): the host sends each joiner what its CFG has that differs from the shipped one (CFG_DEFAULTS:
 -- survival.ini and survival_config.lua both), as data only ("cf", in chunks); the joiner's CFG goes back to the shipped
 -- settings and takes the host's on top, in place (other parts hold CFG's tables), and its own come back when co-op
--- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard) and
--- the host's difficulty preset is used for everyone (presetName).
+-- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard,
+-- tells) and the host's difficulty preset is used for everyone (presetName).
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
-                   stats = true }
+                   stats = true, tells = true }
 -- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
 -- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
 local function structural(path)
@@ -983,6 +992,16 @@ local function onJoinerMessage(f)
         end
     elseif k == "co" then
         if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, f[4] == "1"); M.noMirror = false end
+    elseif k == "tl" then                                -- a tell (sv_tells.lua): an id this game knows, two numbers
+        local id, a, b = short(f[2], 32), tonumber(f[3]), tonumber(f[4])
+        local now = os.clock()
+        if now - (M.tlAt or -1) >= 1 then M.tlAt, M.tlN = now, 0 end
+        M.tlN = M.tlN + 1                                -- (at most TL_PER_S a second; tells are dropped, never queued:
+        if M.tlN <= TL_PER_S and cfg().callouts and TELL and TELL.known(id) and levelReady()   -- a late one misleads)
+            and (a == nil or finite(a, 1e6)) and (b == nil or finite(b, 1e6)) then
+            local okT, errT = pcall(TELL.play, id, a, b, "the host")
+            if not okT then once("tl", "coop: tell error " .. tostring(errT)) end
+        end
     elseif k == "cr" then
         local n = tonumber(f[2]) or 0
         if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX then addCredits(math.floor(n), short(f[3], 80) .. " (the host's round)") end
@@ -1138,8 +1157,8 @@ bombTick = function(tick)
     return mirrored(rawBombTick, tick)
 end
 local rawCallout = hudCallout
-hudCallout = function(text, sub, big)
-    rawCallout(text, sub, big)
+hudCallout = function(text, sub, big, urgent)
+    rawCallout(text, sub, big, urgent)
     if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
 end
 local rawAddCredits = addCredits

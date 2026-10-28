@@ -165,6 +165,7 @@ local function spawnBomber(unit)
             if D.strikeAir and D.strikeAir[unit] then hudCallout(t.strike_air, t.strike_air_sub)   -- (a normal round's package)
             elseif raid and b.warn then hudCallout(string.format(t.raid, compassName(D.raidBearing)), string.format(t.raid_sub, D.raidBombers or 0))
             else hudCallout(t.bombers, t.bombers_sub) end
+            if TELL then pcall(TELL.say, "raid", TELL.ALL) end      -- (its radio call, every player: P3's tells)
         end
     end
     return r
@@ -268,6 +269,7 @@ function spawnFlight(unit, maxLevel)
         D.jammer = { unit = unit, at = D.now }
         local t = CFG.hud.text
         hudCallout(t.jammer, t.jammer_sub)
+        if TELL then pcall(TELL.say, "jammer", TELL.ALL) end        -- (its radio call, every player: P3's tells)
     elseif D.jammerUnit == unit then
         D.jammerUnit = nil                                                -- (it didn't come: no jammer this round)
     end

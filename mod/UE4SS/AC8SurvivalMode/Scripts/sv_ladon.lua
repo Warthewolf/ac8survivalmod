@@ -112,11 +112,16 @@ function SPC.ladonTick(now, s)
                 if now - L.inRangeAt >= (c.volley_warn_s or 0) and now - (s.volleyAny or -1e9) >= gap then
                     L.volleyAt, s.volleyAny, s.volleyWho = now + c.volley_every_s, now, c.names[k] or k
                     L.side = (L.side == "L") and "R" or "L"
-                    local ev = "RE_SV_LadonVolley" .. k .. L.side
-                    local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
-                    log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s", c.names[k] or k, near, ev,
-                        tostring(r), L.volleySaid and "" or string.format(", one every %d s in range, %d s after the other's",
-                        c.volley_every_s, gap)))
+                    local ev, first = "RE_SV_LadonVolley" .. k .. L.side, not L.volleySaid
+                    local function volley()
+                        local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+                        log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s", c.names[k] or k, near, ev,
+                            tostring(r), first and string.format(", one every %d s in range, %d s after the other's",
+                            c.volley_every_s, gap) or ""))
+                    end
+                    -- its tell first (behaviour roadmap P3, CFG.tells ladon_vls: "large aircraft has launched missile",
+                    -- every player, as the volley's forwarded), the volley its lead_s after (0: with it; the hatch opens first)
+                    if TELL then TELL.after("ladon_vls", TELL.ALL, volley) else volley() end
                     L.volleySaid = true
                 end
             else

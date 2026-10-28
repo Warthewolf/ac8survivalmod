@@ -122,6 +122,7 @@ end
 function ACE.hunt(p)
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
     if not (fl and fl.hunt) then return end
+    if TELL and TELL.hunted then pcall(TELL.hunted, p) end    -- (its flight close: the "hunt" tell, CFG.tells hunt_km)
     if fl.no_provoke then                       -- (every 2 s: an engagement order sets it again)
         pcall(function() if p.obj.bPermissionToProvoke then p.obj.bPermissionToProvoke = false end end)
         if not p.noProvokeSaid then
@@ -179,14 +180,21 @@ function ACE.movesTick(now, D)
                 if range <= 3000 and offTail <= 70 then
                     local kulbit = range <= 900
                     local ev = string.format("RE_SV_%s_%02d", kulbit and "AceKulbit" or "AceTurn", (tonumber(pn) - 1) * 3 + tonumber(pk) + 1)
-                    local r = SV_Event(ev)
                     D.aceMoveAt[p.unit] = now + (kulbit and 12 or 20)
                     D.aceMoves = (D.aceMoves or 0) + 1
-                    pcall(STATS.tactic, "reversal", p.unit, nil, string.format("%.0f m, %.0f deg", range, offTail))
-                    if D.aceMoves <= 5 or D.aceMoves % 20 == 0 then
-                        log(string.format("aces: %s has you %.0f m behind it, %.0f deg off its tail: %s (%s), %d so far", p.name,
-                            range, offTail, ev, tostring(r), D.aceMoves))
+                    local n, name, tell = D.aceMoves, p.name, kulbit and "kulbit" or "reversal"
+                    local function go()
+                        local r = SV_Event(ev)
+                        if n <= 5 or n % 20 == 0 then
+                            log(string.format("aces: %s has you %.0f m behind it, %.0f deg off its tail: %s (%s), %d so far", name,
+                                range, offTail, ev, tostring(r), n))
+                        end
                     end
+                    -- its tell first (behaviour roadmap P3, CFG.tells reversal / kulbit: the call and callout), the move its
+                    -- lead_s after (TELL.after); no tell said (or tells off): the move at once, as before
+                    local said = false
+                    if TELL and TELL.after then said = TELL.after(tell, nil, go) else go() end
+                    pcall(STATS.tactic, "reversal", p.unit, nil, string.format("%.0f m, %.0f deg", range, offTail), said and tell or nil)
                 end
             end
         end
