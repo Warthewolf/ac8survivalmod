@@ -278,27 +278,44 @@ end
 
 -- The game's player-attack throttle for the round (CFG.late.pressure; behaviour roadmap P8 x P4, the critic's gap
 -- fill): RE_SV_Pressure<X> (tools/survival_events.py PRESSURE) when the round's preset (TIER.pressure) isn't the one in
--- force, D.pressure (nil: the mission start's ATTACK_BASE, B). An Anomaly or VALKA round fires none: their own records
--- set their throttle and put B back as they end, so D.pressure is B after them and the next round fires its own again.
--- Forwarded to co-op joiners (each game's throttle limits attacks on its own player; a joiner who links later gets the
--- one in force from hostSync, sv_coop.lua). The intensity director (P4) would turn the same dial through D.pressure.
-local PRESSURE_OWN = { anomaly = true, valka = true }
-local function roundPressure(special)
+-- force, D.pressure. D.pressure is nil in a run's first round (a new D): not known, so that round fires its preset even
+-- when it's B, the mission start's ATTACK_BASE. A restart keeps the level (sv_main.lua), and with it an earlier run's C
+-- or D on the host and on every joiner (whose "rs" doesn't reset their level either): review of unit 3. An Anomaly or
+-- VALKA round (TIER.PRESSURE_OWN) fires none: their own records set their throttle and put B back as they end, so
+-- D.pressure is B there, and pressureAfterBoss fires the band's preset again once the boss is down (or the next round
+-- does). Forwarded to co-op joiners (each game's throttle limits attacks on its own player; a joiner who links later
+-- gets the one in force from hostSync, sv_coop.lua). The intensity director (P4) would turn the same dial through
+-- D.pressure. `why`: the log's reason for a fire outside startRound.
+local function roundPressure(special, why)
     local want = TIER.pressure(D.round)
     if not want then return end
-    local was = D.pressure or "B"
-    if special and PRESSURE_OWN[special] then
+    local was = D.pressure
+    if special and TIER.PRESSURE_OWN[special] then
         D.pressure = "B"
         log(string.format("pressure: round %d is the %s's: its own throttle, then preset B%s", D.round, special,
-            want ~= "B" and string.format("; preset %s again next round", want) or ""))
+            want ~= "B" and string.format("; preset %s again once it's down", want) or ""))
         return
     end
     if want == was then return end
     local ev = "RE_SV_Pressure" .. want
     local r = type(SV_Event) == "function" and SV_Event(ev) or -5
     if r == 1 then D.pressure = want end
-    log(string.format("pressure: round %d: preset %s (was %s)%s", D.round, want, was,
-        r == 1 and "" or (", " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r)))))
+    log(string.format("pressure: round %d: preset %s (was %s%s)%s", D.round, want, was or "not known: the run's first round",
+        why and (", " .. why) or "", r == 1 and "" or (", " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r)))))
+end
+
+-- An Anomaly or VALKA round, its boss down: its down / end records put ATTACK_BASE back, so the fighters left would fly
+-- B for the rest of the round. PRESSURE_AFTER_S after Lua saw it down (those records ran first), the round's band
+-- preset again (the critic: "fire it again after those specials end"). Once a special (s.pressureAt false after).
+local PRESSURE_AFTER_S = 3
+local function pressureAfterBoss(now)
+    local s = D.special
+    if not (s and TIER.PRESSURE_OWN[s.kind] and s.state == "done" and s.pressureAt ~= false) then return end
+    s.pressureAt = s.pressureAt or now + PRESSURE_AFTER_S
+    if now < s.pressureAt then return end
+    s.pressureAt = false
+    local okP, errP = pcall(roundPressure, nil, "the " .. s.kind .. " is down")
+    if not okP then log("pressure: error " .. tostring(errP)) end
 end
 
 local function startRound()
@@ -346,7 +363,8 @@ local function startRound()
         end
     end
     D.nextTier, D.nextTierRound = nil, nil
-    if COOP and COOP.more then budget = COOP.more(budget, "max_aircraft") end    -- (co-op: more for more players)
+    -- (co-op: more for more players, up to the room's cap, which grows with the late rounds: TIER.coopCap)
+    if COOP and COOP.more then budget = COOP.more(budget, "max_aircraft", TIER.coopCap(D.round)) end
     D.budget = budget
     local spk = special and SPC.kinds[special]
     local alone = spk and SPC.kindValue(spk.alone)                  -- (a special that flies alone: no fighters)
@@ -530,6 +548,7 @@ function roundsTick(now)
     -- which rounded the portal's timing)
     if D.shuttleClock then D.grounded = playerOnAirfield() end   -- (the shuttle's countdown stops while you're down)
     specialTick(now)
+    pressureAfterBoss(now)                          -- (the band's attack throttle again once an Anomaly / VALKA is down)
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true

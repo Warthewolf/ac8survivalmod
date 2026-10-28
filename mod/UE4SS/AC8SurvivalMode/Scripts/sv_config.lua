@@ -542,21 +542,25 @@ CFG = {
     -- (was 0.04) reaches it at round 26, as the numbers start growing (x1.495 at 25). From aircraft_from_round
     -- the round's cap (CFG.max_aircraft) grows aircraft_per_round a round, up to max_aircraft (30 -> 60 by round 35),
     -- and the most up at once (CFG.waves max_up_by_preset) max_up_per_round a round, up to max_up_cap of the preset, so
-    -- the extra planes come as more waves, not a bigger wall (TIER.roundCap / TIER.maxUp; aircraft_from_round 0: no
-    -- growth). Counts are integers (iniValue keeps a setting's integer type).
+    -- the extra planes come as more waves, not a bigger wall (TIER.roundCap / TIER.maxUp; grow = false or
+    -- aircraft_from_round 0: no growth). Co-op's room cap (CFG.coop.max_aircraft, 60) grows as much as one player's
+    -- round cap, up to coop_max_aircraft (TIER.coopCap: 60 to round 25, 80 by round 32; the fighter pool holds 86).
+    -- Counts are integers (iniValue keeps a setting's integer type).
     --   pressure      the game's player-attack throttle (how many enemies may attack you at once, how many of their
     --                 missiles may be aimed at you, their attack cooldowns): from each from_round the preset at the
     --                 same place in `preset` (tools/survival_events.py PRESSURE: A gentler, B the mission start's
     --                 ATTACK_BASE, C 6 missiles / 8 attackers, D 8 / 10), so the attackers at once stay about a third of
-    --                 the most up; never in an Anomaly or VALKA round (they set their own and put B back). Fired by
-    --                 startRound when it changes (TIER.pressure; the critic's P8 x P4 gap fill; its effect is unmeasured)
+    --                 the most up; never in an Anomaly or VALKA round (they set their own and put B back): the band's
+    --                 again once the boss is down. Fired by startRound when it changes and in a run's first round,
+    --                 whatever it is (a restart keeps the level and an earlier run's preset; TIER.pressure; the
+    --                 critic's P8 x P4 gap fill; its effect is unmeasured)
     --   director_pay  your kill of a plane the squadron director used in a tactic (p.dirTag = { tactic, at }, tagged by
     --                 STATS.tactic) within tag_s pays x `x` ("so fighting smart pays at any count": any round, whatever
     --                 `enabled` above says; nothing is tagged until the director (P2) is built)
     late = { enabled = true, from_round = 15, health_per_round = 0.045, health_max_x = 1.5, promote_per_round = 0.03,
              promote_max = 0.6,
-             aircraft_from_round = 26, aircraft_per_round = 3, max_aircraft = 60,
-             max_up_per_round = 1, max_up_cap = { casual = 20, standard = 26, ace = 30 },
+             grow = true, aircraft_from_round = 26, aircraft_per_round = 3, max_aircraft = 60,
+             max_up_per_round = 1, max_up_cap = { casual = 20, standard = 26, ace = 30 }, coop_max_aircraft = 80,
              pressure = { enabled = true, from_round = { 26, 31 }, preset = { "C", "D" } },
              director_pay = { enabled = true, x = 1.5, tag_s = 20 } },
     -- More airframes (economy review: "kills were mostly F-15E, Su-34 and F-16C. Weight the picks towards airframes not
@@ -648,10 +652,11 @@ CFG = {
              split_share = 0.5, callouts = true, leaderboard = false,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
              -- and of a wave's (0.15: 4 players 1.45 times), up to max_aircraft in a round and max_up up at once
-             -- (never fewer than one player gets). 0 = a single player's rounds. max_aircraft 80 (was 60; behaviour
-             -- roadmap P8): from round 35 one player's round is already 60 (CFG.late), and the fighter pool holds 86
-             -- (22 flights). max_up 30: the Ace preset's late ceiling, the frame-time limit until a test says more.
-             aircraft_per_player = 0.15, max_aircraft = 80, max_up = 30,
+             -- (never fewer than one player gets). 0 = a single player's rounds. From CFG.late.aircraft_from_round
+             -- max_aircraft grows as much as one player's round cap, up to late.coop_max_aircraft (behaviour roadmap
+             -- P8, TIER.coopCap: 60 to round 25 whatever the room's size, 80 by round 32; the fighter pool holds 86).
+             -- max_up 30: the Ace preset's late ceiling, the frame-time limit until a test says more.
+             aircraft_per_player = 0.15, max_aircraft = 60, max_up = 30,
              -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
              -- 2026-10-25: "make it so that the player can choose their name")
              name = "",
@@ -1590,11 +1595,11 @@ function TIER.lateHealthX(round)
     return math.min(l.health_max_x or 1, 1 + (l.health_per_round or 0) * n)
 end
 -- Late rounds' growth (CFG.late aircraft_from_round on; behaviour roadmap P8): how many rounds `round` is into it (0
--- before it, 1 in it), or 0 when CFG.late is off or aircraft_from_round is 0. Pure maths of CFG (tools/checks/
--- late_rounds_test.lua reproduces the thesis' table with these).
+-- before it, 1 in it), or 0 when CFG.late or its grow is off or aircraft_from_round is 0. Pure maths of CFG
+-- (tools/checks/late_rounds_test.lua reproduces the thesis' table with these).
 function TIER.growRounds(round)
     local l = CFG.late
-    if not (l and l.enabled and round and (l.aircraft_from_round or 0) > 0) then return 0 end
+    if not (l and l.enabled and l.grow ~= false and round and (l.aircraft_from_round or 0) > 0) then return 0 end
     return math.max(0, round - l.aircraft_from_round + 1)
 end
 -- The most aircraft round `round` brings, before the menu's ENEMY AIRCRAFT % and co-op: CFG.max_aircraft, from
@@ -1610,6 +1615,27 @@ function TIER.roundBudget(round)
     local sk = spikeCfg(spikeLevel(round))
     return math.min(CFG.aircraft_round1 + (round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0), TIER.roundCap(round))
 end
+-- A co-op room's most aircraft in round `round` (COOP.more's cap, sv_rounds.lua startRound): CFG.coop.max_aircraft,
+-- grown by as many as one player's round cap has grown (TIER.roundCap), up to late.coop_max_aircraft (never below
+-- coop.max_aircraft): rounds 1-25 keep co-op's 60 whatever the room's size (the thesis: "rounds 15-25 keep today's
+-- cap"), then 63, 66 ... 80 by round 32 with the shipped settings
+function TIER.coopCap(round)
+    local base = tonumber(CFG.coop and CFG.coop.max_aircraft) or CFG.max_aircraft
+    local grow = TIER.roundCap(round) - CFG.max_aircraft
+    if grow <= 0 then return base end
+    return math.max(base, math.min(base + grow, tonumber(CFG.late.coop_max_aircraft) or base))
+end
+-- The most fighters a round can field: the pool's flights (CFG.pool; 2 / 4 / 6-ships by their _AirN suffix, as
+-- sv_spawn.lua flightSize) less the probes' (CFG.probe.units, never picked): 86 with the shipped settings. A raid's
+-- bombers come on top. Past it a round flies "pool short" (sv_rounds.lua); the menu's ENEMY AIRCRAFT help stops there.
+function TIER.poolMost()
+    local probe, n = {}, 0
+    for _, u in pairs(CFG.probe and CFG.probe.units or {}) do probe[u] = true end
+    for _, u in ipairs(CFG.pool) do
+        if not probe[u] then n = n + (({ ["0"] = 2, ["1"] = 4, ["2"] = 6 })[u:sub(-1)] or 2) end
+    end
+    return n
+end
 -- The most aircraft a wave of round `round` holds at preset `preset` (casual / standard / ace), before the menu's % and
 -- co-op: CFG.waves max_up_by_preset (or max_up), from late.aircraft_from_round max_up_per_round more a round up to
 -- late.max_up_cap[preset] (never below the preset's own; a preset without a cap doesn't grow)
@@ -1624,8 +1650,10 @@ end
 -- The game's player-attack throttle preset round `round` asks for (CFG.late.pressure): the preset of the latest
 -- from_round band it's in, "B" (ATTACK_BASE, the mission start's) before them; nil when CFG.late or its pressure is
 -- off (then nothing is fired). Letters only of TIER.PRESSURE_PRESETS, tools/survival_events.py PRESSURE (its build
--- checks the two agree), any case in survival.ini.
+-- checks the two agree), any case in survival.ini. TIER.PRESSURE_OWN: the specials whose event records set their own
+-- throttle and put B back as they end (none fired in their round; sv_rounds.lua, sv_coop.lua hostSync).
 TIER.PRESSURE_PRESETS = "ABCD"
+TIER.PRESSURE_OWN = { anomaly = true, valka = true }
 function TIER.pressure(round)
     local l = CFG.late
     local pr = l and l.pressure

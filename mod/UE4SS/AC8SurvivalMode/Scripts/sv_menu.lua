@@ -130,8 +130,13 @@ end
 local function pct(v) return string.format("%d%%", math.floor(v + 0.5)) end
 local SKILL = { [-1] = "EASIER", [0] = "NORMAL", [1] = "HARDER", [2] = "BRUTAL" }
 local function round1(x) return math.max(1, math.floor(CFG.aircraft_round1 * x + 0.5)) end
--- (round N's budget as startRound works it out, its spike and late growth in: TIER.roundBudget, sv_config.lua)
-local function roundN(r, x) return math.max(1, math.floor(TIER.roundBudget(r) * x + 0.5)) end
+-- (round N's budget as startRound works it out, its spike and late growth in: TIER.roundBudget, sv_config.lua; never
+-- more than the fighter pool can field, TIER.poolMost's 86: above 100 % a late round asks more and flies "pool short")
+local function roundN(r, x)
+    local most = TIER.poolMost()
+    local n = math.max(1, math.floor(TIER.roundBudget(r) * x + 0.5))
+    return most > 0 and math.min(n, most) or n
+end
 local SET = {
     Preset = { key = "preset", values = { "auto", "casual", "standard", "ace" },
         label = function(v) return "PRESET: " .. (v == "auto" and "AUTO (BY DIFFICULTY)" or tostring(v):upper()) end,

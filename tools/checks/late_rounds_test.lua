@@ -6,10 +6,13 @@
 --     preset), rounds 1-25 as before, CFG.late off, the x1.5 health cap, the pressure bands, survival.ini's new sections;
 --   startRound on its real code, many times a round (Monte Carlo): the budget, the wave cap, the aircraft picked and the
 --     waves (the table's "Waves (Standard, about)"), each wave within the cap, with the menu's ENEMY AIRCRAFT % (cap ->
---     % -> co-op; the pool's 86 and its "pool short" line), co-op's COOP.more for 4 players (max_aircraft 80, max_up
---     30), an amphibious round above 100 % (no longer cut back to 30);
---   the attack throttle: RE_SV_Pressure<X> fired by startRound when the band's preset changes, none in an Anomaly or
---     VALKA round and again the round after, a failed fire kept, forwarded to joiners, re-sent by hostSync;
+--     % -> co-op; the pool's 86 and its "pool short" line; the menu's help stops at the pool), co-op's COOP.more for 4,
+--     12 and 24 players (the room's cap TIER.coopCap: 60 to round 25, 80 by round 32; max_up 30), an amphibious round
+--     above 100 % (no longer cut back to 30), [late] grow off;
+--   the attack throttle: RE_SV_Pressure<X> fired by startRound when the band's preset changes and in a run's first round
+--     (B too: a restart keeps an earlier run's preset, the review's repro), none in an Anomaly or VALKA round, the band's
+--     again 3 s after its boss is down (pressureAfterBoss) or the round after, a failed fire kept, forwarded to joiners,
+--     re-sent by hostSync (B too; not while a boss is up);
 --   the director kill bonus: creditKill pays x1.5 for your kill of a plane STATS.tactic tagged (p.dirTag = { tactic,
 --     at }) within tag_s, nothing past it, for an ally's kill, a bare string tag or with it off.
 local MOD, WORK = arg[1], arg[2]
@@ -86,7 +89,8 @@ run("sv_config.lua")
 local cfgLine = nil
 for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l end end
 run("sv_ai.lua"); run("sv_spawn.lua")
-run("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
+run("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" },
+                             { "\nlocal function pressureAfterBoss%(now%)", "\nfunction pressureAfterBoss(now)" } })
 run("sv_stats.lua")
 run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function hostSync%(to%)", "\nfunction hostSync(to)" },
                           { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
@@ -121,6 +125,8 @@ check(TIER.pressure(26) == "B" and TIER.pressure(27) == "C" and TIER.pressure(32
 check(TIER.maxUp(40, "standard") == 24 and CFG.late.director_pay.x == 2.0, "[late.max_up_cap] standard = 24, [late.director_pay] x = 2.0")
 check(TIER.roundCap(29) == 30 and TIER.roundCap(30) == 33 and math.type(CFG.late.aircraft_from_round) == "integer",
       "[late] aircraft_from_round = 30: the growth starts there")
+check(CFG.late.grow == true and CFG.late.coop_max_aircraft == 80 and math.type(CFG.late.coop_max_aircraft) == "integer"
+      and CFG.coop.max_aircraft == 60, "[late] grow / coop_max_aircraft and [coop] max_aircraft 60 as shipped")
 CFG.late = deep(CFG_DEFAULTS.late)                    -- the shipped settings for the rest
 pr = CFG.late.pressure
 
@@ -153,6 +159,19 @@ CFG.late.enabled = true
 CFG.late.aircraft_from_round = 0
 check(TIER.roundBudget(35) == 30 and TIER.maxUp(35, "standard") == 18, "aircraft_from_round 0: no growth")
 CFG.late.aircraft_from_round = 26
+CFG.late.grow = false
+check(TIER.roundBudget(35) == 30 and TIER.maxUp(35, "ace") == 22 and TIER.coopCap(35) == 60 and TIER.pressure(35) == "D"
+      and TIER.lateHealthX(30) == 1.5, "[late] grow = false: no growth (co-op's cap too); the throttle and health stay")
+CFG.late.grow = true
+local cc, ccOk = {}, true
+for r = 1, 25 do if TIER.coopCap(r) ~= 60 then ccOk = false end end
+for _, r in ipairs({ 26, 28, 31, 32, 35, 60 }) do cc[#cc + 1] = r .. ": " .. TIER.coopCap(r) end
+check(ccOk and TIER.coopCap(26) == 63 and TIER.coopCap(31) == 78 and TIER.coopCap(32) == 80 and TIER.coopCap(60) == 80,
+      "co-op's room cap (TIER.coopCap): 60 in rounds 1-25, then " .. table.concat(cc, ", "))
+CFG.late.enabled = false
+check(TIER.coopCap(35) == 60, "co-op's room cap with [late] off: 60")
+CFG.late.enabled = true
+check(TIER.poolMost() == 86, "the fighter pool can field 86 (96 less the probes' 6 + 4): " .. TIER.poolMost())
 local hx = TIER.lateHealthX
 check(hx(14) == 1 and math.abs(hx(15) - 1.045) < 1e-9 and math.abs(hx(25) - 1.495) < 1e-9 and hx(26) == 1.5 and hx(60) == 1.5,
       string.format("health: x1 before 15, x1.045 at 15, x%.3f at 25, x1.5 from 26 (the cap)", hx(25)))
@@ -271,8 +290,16 @@ for _, c in ipairs({ { "standard", 25, 44, 26 }, { "standard", 35, 80, 30 }, { "
     check(r.budget == c[3] and r.cap == c[4], string.format("%s round %d: %d aircraft, %d up at once (%d / %d)", c[1], c[2], c[3], c[4],
         r.budget, r.cap))
 end
-M.roster = { [0] = {} }
+local function room(n) M.roster = {}; for s = 0, n - 1 do M.roster[s] = {} end end
 PRESET = "standard"
+for _, c in ipairs({ { 12, 20, 60, 30 }, { 24, 25, 60, 30 }, { 12, 28, 69, 30 }, { 24, 35, 80, 30 } }) do
+    room(c[1])                                         -- (the review: 30 x 2.65 = 80 at round 20 with the flat 80)
+    fresh(c[2])
+    local r = play(c[2])
+    check(r.budget == c[3] and r.cap == c[4], string.format("%d players, round %d: %d aircraft (the room's cap %d), %d up (%d / %d)",
+        c[1], c[2], c[3], TIER.coopCap(c[2]), c[4], r.budget, r.cap))
+end
+M.roster = { [0] = {} }
 fresh(35)
 local solo = play(35)
 check(solo.budget == 60 and solo.cap == 26, "host alone: one player's 60 and 26")
@@ -293,18 +320,55 @@ end
 D = nil
 fresh(25)
 local f, pl = pressureRound(25)
-check(f == "" and pl == nil, "round 25: B is in force from the mission start: nothing fired")
+check(f == "RE_SV_PressureB" and D.pressure == "B" and pl == "pressure: round 25: preset B (was not known: the run's first round)",
+      "a run's first round (25): its preset fired even when it's B (" .. tostring(pl) .. ")")
+f, pl = pressureRound(25)
+check(f == "" and pl == nil, "round 25 again: B in force, nothing fired")
 f, pl = pressureRound(26)
 check(f == "RE_SV_PressureC" and D.pressure == "C" and pl == "pressure: round 26: preset C (was B)", "round 26: preset C fired (" .. tostring(pl) .. ")")
 f, pl = pressureRound(27)
 check(f == "" and pl == nil, "round 27: C in force, nothing fired")
 f, pl = pressureRound(28, "anomaly")
-check(f == "" and D.pressure == "B" and has(pl, "round 28 is the anomaly's: its own throttle, then preset B; preset C again next round"),
+check(f == "" and D.pressure == "B" and has(pl, "round 28 is the anomaly's: its own throttle, then preset B; preset C again once it's down"),
       "an Anomaly round: none fired, B after it (" .. tostring(pl) .. ")")
+local function afterBoss(now)                          -- pressureAfterBoss at `now`: the events it fired, its log line
+    local from, ev = #logs + 1, #events
+    pressureAfterBoss(now)
+    local fired = {}
+    for i = ev + 1, #events do fired[#fired + 1] = events[i] end
+    local l = nil
+    for i = from, #logs do if logs[i]:find("^pressure:") then l = logs[i] end end
+    return table.concat(fired, ","), l
+end
+check(afterBoss(2000) == "" and D.special.pressureAt == nil, "the boss up: nothing")
+D.special.state = "done"
+f = afterBoss(2000)
+check(f == "" and D.special.pressureAt == 2003, "the boss down: nothing yet (its records put B back first)")
+f = afterBoss(2002.9)
+check(f == "", "2.9 s later: nothing yet")
+f, pl = afterBoss(2003)
+check(f == "RE_SV_PressureC" and D.pressure == "C" and pl == "pressure: round 28: preset C (was B, the anomaly is down)",
+      "3 s after the boss is down: the band's C again (" .. tostring(pl) .. ")")
+check(afterBoss(2010) == "" and D.special.pressureAt == false, "once a special")
 f, pl = pressureRound(29)
-check(f == "RE_SV_PressureC" and D.pressure == "C", "the round after it: C again")
+check(f == "" and D.pressure == "C", "the round after it: C already in force, nothing fired")
+pressureRound(29, "anomaly")
+D.special.state = "done"
+afterBoss(3000)
+f = afterBoss(3003)
+check(f == "RE_SV_PressureC", "a boss round inside band C, its boss down: C again")
+pressureRound(24, "anomaly")
+D.special.state = "done"
+afterBoss(3100)
+f = afterBoss(3103)
+check(f == "" and D.pressure == "B", "a boss round in band B: nothing after it (B is what its records put back)")
+D.special = { kind = "ladon", state = "done" }
+check(afterBoss(3200) == "" and afterBoss(3203) == "" and D.special.pressureAt == nil, "a Ladon round: not its business")
+pressureRound(29)
+check(D.pressure == "C", "(round 29 again: C)")
 f, pl = pressureRound(30, "valka")
 check(f == "" and D.pressure == "B" and has(pl, "is the valka's"), "a VALKA round (disguised as a normal one): none fired")
+-- (VALKA never seen down here: the next round fires the band's preset)
 f, pl = pressureRound(31)
 check(f == "RE_SV_PressureD" and D.pressure == "D" and has(pl, "preset D (was B)"), "round 31: D")
 pressureRound(32)
@@ -320,6 +384,13 @@ D.pressure = nil
 f, pl = pressureRound(35)
 check(f == "" and pl == nil and D.pressure == nil, "[late.pressure] off: nothing fired")
 pr.enabled = true
+D, eventResult = nil, -3                               -- a run's first round whose fire fails: tried again the next
+fresh(5)
+f, pl = pressureRound(5)
+check(f == "RE_SV_PressureB" and D.pressure == nil and has(pl, "not fired"), "a failed first-round fire: still not known")
+eventResult = 1
+f, pl = pressureRound(6)
+check(f == "RE_SV_PressureB" and D.pressure == "B", "fired again the next round")
 -- co-op: forwarded (not in KEEP_EVENTS), and the one in force re-sent to a joiner who links later
 check(mirroredEvent("RE_SV_PressureC") == true and mirroredEvent("RE_SV_AceTurn_03") == false,
       "RE_SV_Pressure* is forwarded to the joiners (the contract's table)")
@@ -336,11 +407,41 @@ hostSync(1)
 local resent = false
 for _, s in ipairs(sent) do if s == "1>ev|RE_SV_PressureC" then resent = true end end
 check(resent, "hostSync: a joiner who links later gets the preset in force")
-D.pressure, sent = "B", {}
-hostSync(1)
-resent = false
-for _, s in ipairs(sent) do if s:find("RE_SV_Pressure", 1, true) then resent = true end end
-check(not resent, "hostSync: nothing with B in force (the joiner's level starts on it)")
+local function synced()                                -- what hostSync(1) sends of the throttle
+    sent = {}
+    hostSync(1)
+    local out = {}
+    for _, s in ipairs(sent) do if s:find("RE_SV_Pressure", 1, true) then out[#out + 1] = s end end
+    return table.concat(out, ",")
+end
+D.pressure = "B"
+check(synced() == "1>ev|RE_SV_PressureB", "hostSync: B in force is sent too (a kept level may be on an earlier run's D)")
+D.pressure = nil
+check(synced() == "1>ev|RE_SV_PressureB", "hostSync: nothing known yet (before round 1): B")
+D.pressure, D.special = "B", { kind = "anomaly", state = "hunt" }
+check(synced() == "", "hostSync: nothing while the Anomaly is up (its own throttle)")
+D.special.state = "done"
+check(synced() == "1>ev|RE_SV_PressureB", "hostSync: its boss down: the one in force")
+D.special = nil
+pr.enabled = false
+check(synced() == "", "hostSync: [late.pressure] off: nothing")
+pr.enabled = true
+-- the review's repro: the host's run starts over after round 31 (host and joiners on D), the levels kept
+D = nil
+fresh(31)
+pressureRound(31)
+check(D.pressure == "D", "(the host on D after round 31)")
+sent = {}
+D = nil                                                 -- a new run: sv_main.lua's new D, "rs" to the joiners
+fresh(1)
+local ev0 = #events
+for r = 1, 5 do pressureRound(r) end
+local again, fwdB = {}, 0
+for i = ev0 + 1, #events do if events[i]:find("^RE_SV_Pressure") then again[#again + 1] = events[i] end end
+for _, s in ipairs(sent) do if s == "-1>ev|RE_SV_PressureB" then fwdB = fwdB + 1 end end
+check(table.concat(again, ",") == "RE_SV_PressureB" and fwdB == 1,
+      "a restart after round 31: round 1 fires B, once, and every joiner gets it (" .. table.concat(again, ",") .. ")")
+check(synced() == "1>ev|RE_SV_PressureB", "a joiner who links after the restart gets B")
 COOP.open, COOP.role, M.roster = false, nil, { [0] = {} }
 
 ---------------------------------------------------------------------------------------------------- the director's kill bonus
@@ -404,8 +505,16 @@ local function body(name, from)
 end
 local sr = body("sv_rounds.lua", "\nlocal function startRound%(%)")
 check(has(sr, "TIER.roundBudget(D.round)") and has(sr, "waveCap(D.round)") and has(sr, "pcall(roundPressure, special)")
-      and has(sr, 'COOP.more(budget, "max_aircraft")') and has(sr, 'COOP.more(cap, "max_up")'), "startRound: the helpers, co-op and the throttle")
-check(has(readAll(MOD .. "/Scripts/sv_menu.lua"), "roundN(35, 1)"), "the ENEMY AIRCRAFT help names round 35's (TIER.roundBudget)")
+      and has(sr, 'COOP.more(budget, "max_aircraft", TIER.coopCap(D.round))') and has(sr, 'COOP.more(cap, "max_up")'),
+      "startRound: the helpers, co-op (the room's cap by round) and the throttle")
+check(has(body("sv_rounds.lua", "\nfunction roundsTick%(now%)"), "pressureAfterBoss(now)"), "roundsTick: pressureAfterBoss every tick")
+local menuSrc = readAll(MOD .. "/Scripts/sv_menu.lua")
+check(has(menuSrc, "roundN(35, 1)"), "the ENEMY AIRCRAFT help names round 35's (TIER.roundBudget)")
+local mA = menuSrc:find("\nlocal function roundN%(r, x%)")
+local mB = mA and menuSrc:find("\nend\n", mA, true)
+local roundN = mA and mB and assert(load(menuSrc:sub(mA, mB + 4) .. "return roundN\n", "=sv_menu.lua"))()
+check(roundN and roundN(35, 1) == 60 and roundN(10, 2) == 48 and roundN(35, 1.5) == 86 and roundN(35, 2) == 86 and roundN(35, 0.5) == 30,
+      "the help's numbers: round 35 at 100 % 60, at 50 % 30, at 150 % and 200 % the pool's 86 (not 90 / 120); round 10 at 200 % 48")
 
 logFile:close()
 print(fails == 0 and "late rounds test: all passed" or ("late rounds test: " .. fails .. " FAILED"))
