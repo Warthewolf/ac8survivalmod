@@ -6,7 +6,11 @@
 --   the measurements: engaged / first hit / tail / Provoke times per plane, KILL.geom's aspect and last weapon, the
 --     kill-time line, a round's line (logged after its last kills come in), hits by source and brackets, the death line,
 --     the run line's rounds 7-12 and Veteran+ figures, STATS.tactic's count and p.dirTag = { tactic, at };
---   COOP.players() / COOP.slotOfAddr() solo and as a host, the ACE.movesTick guard on a joiner, a joiner's rounds.
+--   the hooks on the other parts' real code: sv_main.lua's plane sweep and kill credit, sv_ladon.lua's HIT.tick,
+--     sv_flights.lua's ammoTick, sv_leaderboard.lua's LB.deathCheck / LB.finish (the damage record at death too);
+--   COOP.players() / COOP.slotOfAddr() solo and as a host, the ACE.movesTick guard on a joiner, a joiner's rounds, its
+--     kills (not sorted into ordinary), the host's restart and a resync ("rs").
+-- Its log lines also go to <work dir>/test_lua.log, for stats_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -92,7 +96,8 @@ local function run(name, chunk)
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}                               -- (sv_core's own log, valid, nameOf and addrOf replaced by the test's)
-function log(s) logs[#logs + 1] = s end
+local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
+function log(s) logs[#logs + 1] = s; logFile:write(os.date("%H:%M:%S ") .. s .. "\n") end
 function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and o.full or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
@@ -140,6 +145,28 @@ settle()
 reverse = false
 check(has(line("spawn index: " .. REV_UNIT), "k 0 is NOT the lead"), "spawn index check: a lead made last is caught")
 D.jammerUnit = nil
+-- the aces (tools/build_survival.py ACES): Harvest's Named lead over Shadow wings tells by its whole blueprint; Bounty's
+-- Shark lead and wings share one, so it can't tell
+local function bpPlane(bp)
+    local o = plane("x")
+    o.full = bp .. "_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. bp .. "_C_" .. o.addr
+    return o
+end
+local nPlanes = #planes
+local function aceCheck(unit, code, b0, b1)
+    D.leadRow[unit] = { row = "sv_ace_test_l", code = code }
+    logPlane(bpPlane(b0), unit, 0); logPlane(bpPlane(b1), unit, 1)
+    return line("spawn index: " .. unit)
+end
+check(has(aceCheck("ERA_Unit_10_Dep_Air0", "su57", "BP_OP1021_su57_CP_Named", "BP_OP1021_su57_CP_Shadow"),
+      "k 0 is a BP_OP1021_su57_CP_Named, k 1 a BP_OP1021_su57_CP_Shadow; k 0 is the lead"), "spawn index check: Harvest's Named lead at k 0")
+check(has(aceCheck("ERA_Unit_10_Dep_Air1", "su57", "BP_OP1021_su57_CP_Shadow", "BP_OP1021_su57_CP_Named"), "k 0 is NOT the lead"),
+      "spawn index check: Harvest's Named lead made last")
+check(has(aceCheck("ERA_Unit_10_Dep_Air2", "rafale", "BP_OP1014_rflm_CP_Named", "BP_OP1011_typn_CP_Shadow"), "k 0 is the lead"),
+      "spawn index check: the Rafale over Typhoons")
+check(has(aceCheck("ERA_Unit_11_Dep_Air0", "f15c", "BP_OP1004_f15c_CP_Shark", "BP_OP1004_f15c_CP_Shark"),
+      "can't tell: lead and wings fly one blueprint"), "spawn index check: one blueprint for lead and wings can't tell")
+while #planes > nPlanes do table.remove(planes) end
 local rev = {}
 for _, p in ipairs(planes) do if p.unit == REV_UNIT then rev[#rev + 1] = p end end
 spawningUnit = "SV_Unit_LadonA"                -- (any other spawn: no index)
@@ -254,18 +281,114 @@ check(has(dl, "round 9 (died), 8 s into the round: last 30 s -100 HP: missiles 4
 check(has(dl, "missiles left 31 (fired 2 this run, 0 this round), specials 10/12, flares 3"), "death line: what you had left")
 STATS.runEnd("died")
 check(has(line("stats: round 9"), "(cut short: died)"), "the round you died in gets its line")
-local run = line("stats: run over")
-check(has(run, "rounds 1-9"), "run line: the rounds")
-check(has(run, "time to kill rounds 7-12 median 12 s (n 3)"), "run line: time to kill, rounds 7-12")
-check(has(run, "tailed survival Veteran+ AI Provoke median 4 s (n 1), geometric median 4 s (n 1)"), "run line: tailed survival Veteran+")
-check(has(run, "missiles left at the end 31"), "run line: missiles left")
-check(has(run, "damage taken 100 HP: missiles 40%, gun/close 10%, unknown 50%, brackets 1"), "run line: damage by source")
-check(has(run, "director tactics per round avg 0.5 (1 in 2 rounds)"), "run line: tactics per round")
-check(has(run, "kills from behind 25% (1/4)") and has(run, "fired: missiles 2, specials 1, flares 0, gun 120"), "run line: behind, fired")
+local runL = line("stats: run over")
+check(has(runL, "rounds 1-9"), "run line: the rounds")
+check(has(runL, "time to kill rounds 7-12 median 12 s (n 3)"), "run line: time to kill, rounds 7-12")
+check(has(runL, "tailed survival Veteran+ AI Provoke median 4 s (n 1), geometric median 4 s (n 1)"), "run line: tailed survival Veteran+")
+check(has(runL, "missiles left at the end 31"), "run line: missiles left")
+check(has(runL, "damage taken 100 HP: missiles 40%, gun/close 10%, unknown 50%, brackets 1"), "run line: damage by source")
+check(has(runL, "director tactics per round avg 0.5 (1 in 2 rounds)"), "run line: tactics per round")
+check(has(runL, "kills from behind 25% (1/4)") and has(runL, "fired: missiles 2, specials 1, flares 0, gun 120"), "run line: behind, fired")
 check(STATS.median({ 3, 1, 2 }) == 2 and STATS.median({ 4, 1, 3, 2 }) == 2.5 and STATS.median({}) == nil, "median")
 local n0 = #logs
 STATS.runEnd("left")
 check(#logs == n0, "one run line a run")
+
+---------------------------------------------------------------------------------------------------- the hooks
+-- The other parts' calls into STATS on their real code: sv_main.lua's plane sweep and kill credit (its creditKill ..
+-- planeSweep, run as a chunk), sv_ladon.lua's HIT.tick, sv_flights.lua's ammoTick, sv_leaderboard.lua's LB.deathCheck /
+-- LB.finish; the calls in startRound, the clear, SECOND CHANCE and probeTick by their place in the source.
+print("hooks")
+run("sv_ladon.lua"); run("sv_leaderboard.lua"); run("sv_flights.lua")    -- (sv_flights has a global M of its own:
+_G.M = M                                                                    -- sv_coop's, exposed here, back)
+local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
+local cA, cB = mainSrc:find("\nlocal function creditKill%(p%)"), mainSrc:find("\nlocal function probeTick%(tick%)")
+check(cA and cB and cA < cB, "sv_main.lua: creditKill .. planeSweep found")
+local creditKill, timed, planeSweep = assert(load(mainSrc:sub(cA, cB) .. "\nreturn creditKill, timed, planeSweep\n", "=sv_main.lua"))()
+check(type(creditKill) == "function" and type(timed) == "function" and type(planeSweep) == "function", "sv_main.lua's chunk loads")
+RUN = { kills = {}, credits = 0, earned = 0 }
+D = { round = 9, startRound = 2, state = "fighting", now = 500, up = {}, flown = {}, perf = { parts = {} }, leadRow = {} }
+STATS.roundStart(500)
+local function sweepPlane(code, unit, k)
+    local p = { obj = plane(code), unit = unit, k = k, tier = veteran, born = D.now }
+    p.name = p.obj.full:match("([^%.:]+)$")
+    return p
+end
+local SWEEP_UNIT = "ERA_Unit_06_Dep_Air0"
+local Q = sweepPlane("f16c", SWEEP_UNIT, 0)
+Q.obj.loc = x(4)
+Q.obj.AIStateComponent.BlackboardComponent.GetValueAsObject = function() return pawn end
+planes = { Q }                                             -- (planes[1]: the sweep's slot 1)
+local okP = timed("planes", planeSweep, 1)
+check(okP and Q.at and Q.at.X == 400000 and Q.youAt and Q.engagedAt == 500 and Q.dist == 4, "planeSweep: a live plane's position, STATS.track (engaged)")
+check(Q.aiState == "PursueTarget" and Q.aiTarget == pawn and Q.aiTargetAddr == pawn.addr and COOP.slotOfAddr(Q.aiTargetAddr) == 0,
+      "aiWatch keeps p.aiState and p.aiTarget / p.aiTargetAddr (you: slot 0)")
+check(D.perf.parts.planes and D.perf.parts.planes.n == 1, "timed('planes') adds to the perf line")
+Q.obj.HealthInternal = 0
+D.now = 506
+planeSweep(1)
+local kq = line("kill-time: " .. Q.name)
+check(Q.down and line("round probe: " .. Q.name .. " down") and has(kq, ", k 0, ordinary)") and has(kq, "by you"),
+      "planeSweep's death branch: KILL.geom, creditKill's side, STATS.down's kill-time line")
+check(D.rs.down == 1 and D.rs.fightersMine == 1 and RUN.kills.you == 1, "the kill counted (round, credits)")
+-- an ace squadron's plane the sweep never saw alive, and the jammer's EA-18G down before JAM.tick found it: not ordinary
+local QA, QJ = sweepPlane("su57", "ERA_Unit_07_Dep_Air0", 1), sweepPlane("e18g", "ERA_Unit_07_Dep_Air1", 0)
+QA.obj.HealthInternal, QJ.obj.HealthInternal = 0, 0
+D.aceSquad, D.leadRow[QJ.unit] = { [QA.unit] = true }, { row = "e18g_common", code = "e18g" }
+planes = { QA }; planeSweep(1)
+planes = { QJ }; planeSweep(1)
+check(line("kill-time: " .. QA.name) and not has(line("kill-time: " .. QA.name), "ordinary")
+      and not has(line("kill-time: " .. QJ.name), "ordinary") and D.rs.fighters == 1, "an untracked ace's and the jammer's kills aren't ordinary fighters")
+planes = { Q, QA, QJ }
+-- your health dropping (HIT.tick): STATS.hit
+local pc = { Pawn = pawn }
+pawn.HealthInternal = 800
+HIT.tick(pc, 510)
+pawn.HealthInternal = 700
+HIT.tick(pc, 511)
+check(D.hitRing and #D.hitRing == 1 and D.hitRing[1].hp == 10 and D.hitRing[1].src == "unknown" and RUN.metrics.hpTaken == 10,
+      "HIT.tick: a drop of 10 HP to STATS.hit")
+-- your shots (ammoTick, every 0.5 s): a missile under its cap, the gun's rounds
+local ammo = { [0] = 500, 30, 10, 12, 3 }
+function SV_Ammo(k, full) if full then return 999 end return ammo[k] end
+function SV_SetAmmo() return 1 end
+A = { pawn = nameOf(pawn), applied = true, caps = { [1] = 31, [2] = 10, [3] = 12, [4] = 3 }, seenAt = 0, tries = 0 }
+PR.ammo = {}
+ammoTick(2, pc)
+ammo[0] = 480
+ammoTick(4, pc)
+check(RUN.metrics.fired[1] == 1 and RUN.metrics.fired[0] == 20 and D.rs.fired[1] == 1, "ammoTick: a missile and 20 gun rounds to STATS.fired")
+-- shot down (LB.deathCheck, twice at 0): the death line with your aircraft's damage record, then LB.finish's run line
+local sam = { addr = 0x5555, full = "BP_SAM_Launcher_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_SAM_Launcher_C_77" }
+pawn.DamageHistoryMap = { ForEach = function(_, fn)
+    fn({ get = function() return Q.obj end }, { get = function() return 55 end })
+    fn({ get = function() return sam end }, { get = function() return 20 end })
+end }
+LB.deathCheck(pc)
+pawn.HealthInternal = 0
+D.now = 520
+LB.deathCheck(pc); LB.deathCheck(pc)
+local dh = line("death: round 9 (died)")
+check(has(dh, "; record: 2 attackers, " .. SWEEP_UNIT .. " 55, BP_SAM_Launcher 20"), "LB.deathCheck: the death line, with your aircraft's damage record")
+check(has(line("stats: round 9"), "(cut short: died)") and has(line("stats: run over (died)"), "rounds 2-9"), "LB.finish: the round's and the run's lines")
+pawn.DamageHistoryMap = nil
+D.now = 521
+STATS.death("saved")
+check(has(line("death: round 9 (saved by SECOND CHANCE)"), "; record: not read"), "no damage record: said so")
+-- the calls left in place (their parts need the whole game to run)
+local function body(file, from)
+    local s = readAll(MOD .. "/Scripts/" .. file)
+    local a = s:find(from)
+    local b = a and s:find("\nend\r?\n", a + 1)
+    return a and s:sub(a, b or #s) or ""
+end
+check(has(body("sv_rounds.lua", "\nlocal function startRound%(%)"), "pcall(STATS.roundStart, D.now)"), "startRound starts the measurements' round")
+check(has(body("sv_rounds.lua", "\nfunction roundsTick%(now%)"), "pcall(STATS.roundEnd, now)"), "the clear (roundsTick) ends it")
+check(has(body("sv_tactical.lua", "\nfunction INS.tick%(now%)"), 'pcall(STATS.death, "saved")'), "SECOND CHANCE gives a death line")
+local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+check(has(pt, 'timed("planes", planeSweep, slot)') and has(pt, 'timed("moves", ACE.movesTick, now, D)') and has(pt, "pcall(STATS.sample, D.now"),
+      "probeTick: the sweep and ACE.movesTick timed, STATS.sample every 2 s")
+pawn.HealthInternal, HIT.h = 800, 800
 
 ---------------------------------------------------------------------------------------------------- co-op
 print("co-op")
@@ -325,7 +448,38 @@ roundsTick(400)
 check(D.rs.ended == 400 and D.rs.kind == "?", "joiner: the host's clear ends it")
 STATS.sample(404, you)
 check(has(line("stats: round 4"), "length 80 s"), "joiner: its round line")
+-- a joiner's kills: only the host knows its aces and jammer, so no time to kill here
+M.rnd = { round = 8, state = "spawning", secs = 0, wave = 1, waves = 1, alive = 6, got = os.clock() }
+roundsTick(420)
+local JP = { obj = plane("f16c"), unit = "ERA_Unit_06_Dep_Air0", k = 0, born = 420 }
+JP.name = JP.obj.full:match("([^%.:]+)$")
+STATS.down(JP, nil, "you", 430)
+check(has(line("kill-time: " .. JP.name), ", k 0, ordinary ?)") and D.rs.unsorted == 1 and D.rs.fighters == 0, "joiner: a pool fighter's kill is ordinary ? (not sorted)")
+-- the host started over ("rs", not the answer to this game's own "jn"): the round cut short, the run so far its line
+local inbox = {}
+function SV_CoopRecv() return table.remove(inbox, 1) or "" end
+local function runLines() local n = 0; for _, l in ipairs(logs) do if l:find("^stats: run over") then n = n + 1 end end; return n end
+local runs0 = runLines()
+M.jnAt = os.clock() - 100
+inbox[1] = "0|rs"
+COOP.tick(5)
+local r8, run8 = line("stats: round 8"), line("stats: run over (the host started over)")
+check(has(r8, "(cut short: the host started over)") and has(r8, "ordinary fighters ? (a joiner can't tell aces; 1 pool fighters down)"),
+      "joiner: the host's restart ends its round; the round line has no time to kill")
+check(has(run8, "rounds 1-8") and has(run8, "(n 0; 1 of your kills left out: a co-op joiner can't tell aces)") and runLines() == runs0 + 1,
+      "joiner: the host's restart gives the run so far its line")
+check(RUN.metrics == nil and D.round == 0 and D.state == "wait", "joiner: the host's next run starts on empty records")
+-- a resync (the "rs" answering its own "jn"): the round cut short, the run goes on
+M.rnd = { round = 9, state = "fighting", secs = 0, wave = 1, waves = 1, alive = 6, got = os.clock() }
+roundsTick(500)
+check(D.rs and D.rs.round == 9 and not D.rs.ended, "joiner: round 9 under way")
+M.jnAt = os.clock()
+inbox[1] = "0|rs"
+COOP.tick(6)
+check(has(line("stats: round 9"), "(cut short: co-op resync)") and runLines() == runs0 + 1 and RUN.metrics ~= nil,
+      "joiner: a resync cuts the round short and keeps the run")
 
+logFile:close()
 print(fails == 0 and "stats: all passed" or ("stats: " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 20), #logs do print("    log: " .. logs[i]) end end
 os.exit(fails == 0 and 0 or 1)

@@ -1046,6 +1046,9 @@ local function onJoinerMessage(f)
     elseif k == "rs" then
         M.evQ = nil
         killAllCopies("the host's run started over")
+        -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
+        -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
+        if STATS and D then pcall(STATS.hostReset, D.now, M.jnAt ~= nil and os.clock() - M.jnAt < 15) end
         if D then D.round, D.state, M.rnd = 0, "wait", nil end
     end
 end
@@ -1055,7 +1058,7 @@ local function onSys(from, what, f)
         log("coop: player " .. (from + 1) .. " linked")
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
         sendHi()
-        if COOP.client() and D then killAllCopies("new link"); send(true, "jn") end
+        if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
         if COOP.host() and what == "restart" then M.roster[from] = nil end
     elseif what == "slot" then
         COOP.slot = tonumber(f[3])
@@ -1068,7 +1071,7 @@ local function onSys(from, what, f)
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
             M.wasLost[from] = nil
             callout("CO-OP LINK BACK", string.upper(playerName(from)))
-            if COOP.client() and D then killAllCopies("link back"); send(true, "jn") end
+            if COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
         end
     elseif what == "left" then
         callout(string.upper(playerName(from)) .. " LEFT", nil)
@@ -1351,7 +1354,7 @@ function COOP.tick(tick)
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
         M.replays, groundNew = {}, {}
         if D then
-            if COOP.host() then send(true, "rs") else send(true, "jn") end
+            if COOP.host() then send(true, "rs") else M.jnAt = os.clock(); send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
             if COOP.client() and M.state ~= "linked" then
                 callout(M.auto and "CO-OP: LOOKING FOR A HOST" or "CO-OP: WAITING FOR THE HOST",

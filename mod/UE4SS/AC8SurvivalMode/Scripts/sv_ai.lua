@@ -93,23 +93,24 @@ local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 local AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
                    "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
                    "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
--- The state is read for the measurements too (CFG.stats: STATS.aiState times Provoke episodes, sv_stats.lua) with the log
--- off; it's kept as p.aiState for later parts. The target (a name lookup) only for the log line.
+-- Both are read every time, the log on or off (coop-perf step 10), and kept for later parts: p.aiState, and p.aiTarget /
+-- p.aiTargetAddr (the object it's after and its address, for COOP.slotOfAddr; nil for none). The measurements time
+-- Provoke episodes from the state (CFG.stats: STATS.aiState, sv_stats.lua); the target's name (nameOf) only for the log.
 function aiWatch(p, you)
-    local measure = CFG.stats and CFG.stats.enabled
-    if not (CFG.ai_watch or measure) then return end
-    local st, tgt = "?", "?"
+    local st, read, tobj = "?", false, nil
     pcall(function()
         local bb = p.obj.AIStateComponent.BlackboardComponent
         local okS, v = pcall(function() return bb:GetValueAsEnum(FName("AIState")) end)
         if okS and type(v) == "number" then st = AI_STATE[v] or tostring(v) end
-        if not CFG.ai_watch then return end
         local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
-        if okT then tgt = valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none" end
+        if okT then read = true; if valid(t) then tobj = t end end
     end)
     if st ~= "?" then p.aiState = st end
-    if measure then pcall(STATS.aiState, p, st, D and D.now) end
-    if not CFG.ai_watch or st .. "|" .. tgt == p.aiKey then return end
+    if read then p.aiTarget, p.aiTargetAddr = tobj, tobj and addrOf(tobj) or nil end
+    if CFG.stats and CFG.stats.enabled then pcall(STATS.aiState, p, st, D and D.now) end
+    if not CFG.ai_watch then return end
+    local tgt = (not read and "?") or (tobj and (nameOf(tobj):match("([^%.:]+)$") or "?")) or "none"
+    if st .. "|" .. tgt == p.aiKey then return end
     p.aiKey = st .. "|" .. tgt
     local air = p.at and math.sqrt((p.at.X - AIRFIELD.X) ^ 2 + (p.at.Y - AIRFIELD.Y) ^ 2) / 100000
     log(string.format("ai: %s (%s) %s, target %s; %s km from you, %s km from the airfield", p.name, tostring(p.unit or "?"),

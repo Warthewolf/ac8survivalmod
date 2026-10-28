@@ -82,10 +82,13 @@ CFG = {
     -- within engage_km is engaged; you're on its tail within tail_km and tail_deg of its six (the aces' reversal test);
     -- a kill within close_km is a close one; a hit with two shooters' missiles within bracket_km is a bracket, one with
     -- no missile near but an enemy within gun_km a gun / close hit; death_window_s: the hits the death line adds up; the
-    -- run line's time to kill covers rounds ttk_from_round to ttk_to_round (the thesis' 7-12). Each player's own in
-    -- co-op (sv_coop.lua PERSONAL).
+    -- run line's time to kill covers rounds ttk_from_round to ttk_to_round (the thesis' 7-12); pawn_history: the death
+    -- line also reads your own aircraft's DamageHistoryMap (each attacker's damage since it took off, what the armour
+    -- took too; the read KILL.read makes on enemies, untested on the player's: false leaves it out). Each player's own
+    -- in co-op (sv_coop.lua PERSONAL).
     stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
-              bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12 },
+              bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
+              pawn_history = true },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
     -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
