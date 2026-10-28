@@ -192,12 +192,16 @@ local SET = {
 -- Survival's pages and their rows, in order (tools/build_survival.py MENU_PAGES: the same names; each row's texts are
 -- SV_Pg_<page>_<row> / _Help, a page's title SV_Pg_<page>_Title)
 local PAGES = {
-    { name = "Modes", rows = { "Offline", "Online", "Host", "Join", "Quick" } },
-    { name = "Offline", rows = { "Go", "Preset", "Zollars", "Enemies", "Rules" } },
-    { name = "Online", rows = { "Go", "Preset", "Zollars", "Enemies", "Rules" } },
-    { name = "Host", rows = { "Go", "Lobby", "Room", "CoopEnemies", "Preset", "Zollars", "Enemies", "Rules" } },
-    { name = "Rules", rows = { "StartRound", "Break", "Specials", "Airfield", "Pay", "Skill", "Reset" } },
+    { name = "Modes", rows = { "Offline", "Online", "Host", "Join", "Quick", "Back" } },
+    { name = "Offline", rows = { "Go", "Preset", "Zollars", "Enemies", "Rules", "Back" } },
+    { name = "Online", rows = { "Go", "Preset", "Zollars", "Enemies", "Rules", "Back" } },
+    { name = "Host", rows = { "Go", "Lobby", "Room", "CoopEnemies", "Preset", "Zollars", "Enemies", "Rules", "Back" } },
+    { name = "Rules", rows = { "StartRound", "Break", "Specials", "Airfield", "Pay", "Skill", "Reset", "Back" } },
 }
+-- BACK on each page (test of 2026-10-29: the pages are copies of the main menu's top page, whose cancel goes nowhere,
+-- so MORE RULES was a dead end): it asks for the page under it, and the game goes back to a page already open
+-- (tools/build_survival.py MENU_PAGES; main.dll takes SV_Back as a page row that opens nothing of ours)
+local BACK_TO = { Modes = "the main menu", Offline = "the modes", Online = "the modes", Host = "the modes", Rules = "the setup page" }
 local PAGE_MODE = { Offline = "offline", Online = "online", Host = "host" }
 -- Without the pages, the main menu's four flat settings rows (DT_SV_MenuRows SurvivalSet<row>, StringArgs SV_Set_<row>,
 -- texts SV_Menu_Set<row>Title / Help: the rows Survival COOP's coop.11 build has) step these settings instead, for
@@ -275,6 +279,7 @@ local function allTexts()
             elseif r == "Lobby" then label, help = lobby()
             elseif r == "Rules" then label, help = "MORE RULES", "Start round, break between rounds, special rounds, airfield health, zollar income, enemy skill."
             elseif r == "Reset" then label, help = "RESET TO DEFAULTS", "Puts every " .. (MODE_NAME[mode] or "") .. " setting back to the defaults."
+            elseif r == "Back" then label, help = "BACK", "Back to " .. (BACK_TO[pg.name] or "the page before") .. "."
             end
             t[key], t[key .. "_Help"] = label or r, help or ""
         end
