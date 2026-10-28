@@ -130,7 +130,8 @@ end
 local function pct(v) return string.format("%d%%", math.floor(v + 0.5)) end
 local SKILL = { [-1] = "EASIER", [0] = "NORMAL", [1] = "HARDER", [2] = "BRUTAL" }
 local function round1(x) return math.max(1, math.floor(CFG.aircraft_round1 * x + 0.5)) end
-local function round10(x) return math.max(1, math.floor(math.min(CFG.aircraft_round1 + 9 * CFG.aircraft_per_round, CFG.max_aircraft) * x + 0.5)) end
+-- (round N's budget as startRound works it out, its spike and late growth in: TIER.roundBudget, sv_config.lua)
+local function roundN(r, x) return math.max(1, math.floor(TIER.roundBudget(r) * x + 0.5)) end
 local SET = {
     Preset = { key = "preset", values = { "auto", "casual", "standard", "ace" },
         label = function(v) return "PRESET: " .. (v == "auto" and "AUTO (BY DIFFICULTY)" or tostring(v):upper()) end,
@@ -146,8 +147,8 @@ local SET = {
     Enemies = { key = "enemies", values = { 50, 75, 100, 125, 150, 200 },
         label = function(v) return "ENEMY AIRCRAFT: " .. pct(v) end,
         help = function(v)
-            return string.format("How many enemies each round brings: round 1 has %d, round 10 has %d (at 100%%: %d and %d). Press to change.",
-                round1(v / 100), round10(v / 100), round1(1), round10(1))
+            return string.format("How many enemies each round brings: round 1 has %d, round 10 has %d, round 35 has %d (at 100%%: %d, %d and %d). Press to change.",
+                round1(v / 100), roundN(10, v / 100), roundN(35, v / 100), round1(1), roundN(10, 1), roundN(35, 1))
         end },
     StartRound = { key = "start_round", values = { 1, 5, 10, 15, 20, 25, 30 },
         label = function(v) return string.format("START AT ROUND %d", v) end,

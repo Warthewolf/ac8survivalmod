@@ -40,8 +40,9 @@ CFG = {
     aircraft_round1     = 4,
     aircraft_per_round  = 2,                    -- added every round
     -- in one round, difficulty spikes included (60 until 0.70.0, user 2026-10-23; the economy review of 2026-10-25: a
-    -- friend's round 23 brought 54 aircraft, 13 flights up at once, and ended the run with 148 missiles unfired. Past
-    -- about 30 the rounds now get harder by CFG.late instead of by numbers)
+    -- friend's round 23 brought 54 aircraft, 13 flights up at once, and ended the run with 148 missiles unfired). The
+    -- cap until CFG.late.aircraft_from_round; from there it grows again by late.aircraft_per_round a round, up to
+    -- late.max_aircraft, brought in more waves (behaviour roadmap P8: TIER.roundCap)
     max_aircraft        = 30,
     squadrons           = { { size = 2, from_round = 1 }, { size = 4, from_round = 4 }, { size = 6, from_round = 8 } },
     distance_km         = { 18, 25 },           -- from the airfield, random bearing
@@ -502,7 +503,8 @@ CFG = {
     --   provoke_cone_deg / provoke_time_s   when the player is behind them: a narrower cone (Shadow squadrons fly 60)
     --                    and a quicker decision, so they turn on you sooner (live write, untested)
     --   surround_m       their pursuit sits this close behind the target (stock 100-300 m; live write, untested)
-    --   aircraft_add     more aircraft each round (never above max_aircraft)
+    --   aircraft_add     more aircraft each round, within the round's cap (max_aircraft; from CFG.late's
+    --                    aircraft_from_round its growing cap: TIER.roundBudget)
     spikes = {
         enabled = true,
         every   = 7,
@@ -527,15 +529,36 @@ CFG = {
     -- fewer of the round's aircraft are left, or (timeout_s > 0) timeout_s after the last wave's last flight came, not
     -- counting time down at the airfield. enabled = false: all at once. timeout_s 0, by kills only (a run of 2026-10-24:
     -- "Wave 2 sometimes comes right after Wave 1 spawns ... instead changing it to be based on kills"; was 150 s from
-    -- the round's start, which a long stop at the airfield used up).
+    -- the round's start, which a long stop at the airfield used up). From CFG.late.aircraft_from_round max_up grows
+    -- with late.max_up_per_round a round, up to late.max_up_cap (TIER.maxUp).
     waves = { enabled = true, max_up = 18, max_up_by_preset = { casual = 14, standard = 18, ace = 22 }, next_at = 4,
               timeout_s = 0, callout = true },
     -- Late rounds (economy review: "quality over quantity after round 15 ... raise ace share, health and accuracy
     -- instead"): from from_round, every enemy aircraft's health x (1 + health_per_round x rounds past it), at most
     -- health_max_x, and the chance a pilot flies one tier up (CFG.tiers.promote_chance) + promote_per_round a round, at
     -- most promote_max. Accuracy keeps climbing with the difficulty spikes and the tiers' fire control.
-    late = { enabled = true, from_round = 15, health_per_round = 0.04, health_max_x = 2.0, promote_per_round = 0.03,
-             promote_max = 0.6 },
+    -- Behaviour roadmap P8 ("smarter to round 25, then more planes"; tools/re/BEHAVIOUR_DIRECTOR.md unit 3): health
+    -- stops climbing once numbers do, at x1.5 (was x2.0: 60 planes mustn't each become missile sponges); 0.045 a round
+    -- (was 0.04) reaches it at round 26, as the numbers start growing (x1.495 at 25). From aircraft_from_round
+    -- the round's cap (CFG.max_aircraft) grows aircraft_per_round a round, up to max_aircraft (30 -> 60 by round 35),
+    -- and the most up at once (CFG.waves max_up_by_preset) max_up_per_round a round, up to max_up_cap of the preset, so
+    -- the extra planes come as more waves, not a bigger wall (TIER.roundCap / TIER.maxUp; aircraft_from_round 0: no
+    -- growth). Counts are integers (iniValue keeps a setting's integer type).
+    --   pressure      the game's player-attack throttle (how many enemies may attack you at once, how many of their
+    --                 missiles may be aimed at you, their attack cooldowns): from each from_round the preset at the
+    --                 same place in `preset` (tools/survival_events.py PRESSURE: A gentler, B the mission start's
+    --                 ATTACK_BASE, C 6 missiles / 8 attackers, D 8 / 10), so the attackers at once stay about a third of
+    --                 the most up; never in an Anomaly or VALKA round (they set their own and put B back). Fired by
+    --                 startRound when it changes (TIER.pressure; the critic's P8 x P4 gap fill; its effect is unmeasured)
+    --   director_pay  your kill of a plane the squadron director used in a tactic (p.dirTag = { tactic, at }, tagged by
+    --                 STATS.tactic) within tag_s pays x `x` ("so fighting smart pays at any count": any round, whatever
+    --                 `enabled` above says; nothing is tagged until the director (P2) is built)
+    late = { enabled = true, from_round = 15, health_per_round = 0.045, health_max_x = 1.5, promote_per_round = 0.03,
+             promote_max = 0.6,
+             aircraft_from_round = 26, aircraft_per_round = 3, max_aircraft = 60,
+             max_up_per_round = 1, max_up_cap = { casual = 20, standard = 26, ace = 30 },
+             pressure = { enabled = true, from_round = { 26, 31 }, preset = { "C", "D" } },
+             director_pay = { enabled = true, x = 1.5, tag_s = 20 } },
     -- More airframes (economy review: "kills were mostly F-15E, Su-34 and F-16C. Weight the picks towards airframes not
     -- yet seen this run, and give each tier signature aircraft"). `aircraft` above is the pool from round 1; each of these
     -- joins it from its round (their mission rows: tools/build_survival.py POOL_EXTRA, the campaign's plain enemy rows).
@@ -625,8 +648,10 @@ CFG = {
              split_share = 0.5, callouts = true, leaderboard = false,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
              -- and of a wave's (0.15: 4 players 1.45 times), up to max_aircraft in a round and max_up up at once
-             -- (Survival's pool is 24 flights). 0 = a single player's rounds.
-             aircraft_per_player = 0.15, max_aircraft = 60, max_up = 30,
+             -- (never fewer than one player gets). 0 = a single player's rounds. max_aircraft 80 (was 60; behaviour
+             -- roadmap P8): from round 35 one player's round is already 60 (CFG.late), and the fighter pool holds 86
+             -- (22 flights). max_up 30: the Ace preset's late ceiling, the frame-time limit until a test says more.
+             aircraft_per_player = 0.15, max_aircraft = 80, max_up = 30,
              -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
              -- 2026-10-25: "make it so that the player can choose their name")
              name = "",
@@ -1563,6 +1588,57 @@ function TIER.lateHealthX(round)
     local l, n = CFG.late, TIER.lateRounds(round)
     if n <= 0 then return 1 end
     return math.min(l.health_max_x or 1, 1 + (l.health_per_round or 0) * n)
+end
+-- Late rounds' growth (CFG.late aircraft_from_round on; behaviour roadmap P8): how many rounds `round` is into it (0
+-- before it, 1 in it), or 0 when CFG.late is off or aircraft_from_round is 0. Pure maths of CFG (tools/checks/
+-- late_rounds_test.lua reproduces the thesis' table with these).
+function TIER.growRounds(round)
+    local l = CFG.late
+    if not (l and l.enabled and round and (l.aircraft_from_round or 0) > 0) then return 0 end
+    return math.max(0, round - l.aircraft_from_round + 1)
+end
+-- The most aircraft round `round` brings, before the menu's ENEMY AIRCRAFT % and co-op: CFG.max_aircraft, from
+-- late.aircraft_from_round aircraft_per_round more a round up to late.max_aircraft (never below CFG.max_aircraft)
+function TIER.roundCap(round)
+    local l, n, cap = CFG.late, TIER.growRounds(round), CFG.max_aircraft
+    if n > 0 then cap = math.max(cap, math.min(cap + (l.aircraft_per_round or 0) * n, l.max_aircraft or cap)) end
+    return cap
+end
+-- Round `round`'s aircraft: aircraft_round1, aircraft_per_round more a round and the difficulty spike's aircraft_add,
+-- within the round's cap (the thesis: "spikes still add their aircraft_add on top, within the cap")
+function TIER.roundBudget(round)
+    local sk = spikeCfg(spikeLevel(round))
+    return math.min(CFG.aircraft_round1 + (round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0), TIER.roundCap(round))
+end
+-- The most aircraft a wave of round `round` holds at preset `preset` (casual / standard / ace), before the menu's % and
+-- co-op: CFG.waves max_up_by_preset (or max_up), from late.aircraft_from_round max_up_per_round more a round up to
+-- late.max_up_cap[preset] (never below the preset's own; a preset without a cap doesn't grow)
+function TIER.maxUp(round, preset)
+    local w, l, n = CFG.waves, CFG.late, TIER.growRounds(round)
+    local up = (w.max_up_by_preset and w.max_up_by_preset[preset]) or w.max_up
+    local cap = nil
+    if n > 0 and type(l.max_up_cap) == "table" then cap = tonumber(l.max_up_cap[preset]) end
+    if cap then up = math.max(up, math.min(up + (l.max_up_per_round or 0) * n, cap)) end
+    return up
+end
+-- The game's player-attack throttle preset round `round` asks for (CFG.late.pressure): the preset of the latest
+-- from_round band it's in, "B" (ATTACK_BASE, the mission start's) before them; nil when CFG.late or its pressure is
+-- off (then nothing is fired). Letters only of TIER.PRESSURE_PRESETS, tools/survival_events.py PRESSURE (its build
+-- checks the two agree), any case in survival.ini.
+TIER.PRESSURE_PRESETS = "ABCD"
+function TIER.pressure(round)
+    local l = CFG.late
+    local pr = l and l.pressure
+    if not (l and l.enabled and type(pr) == "table" and pr.enabled and round) then return nil end
+    local want, at = "B", -math.huge
+    local froms, presets = type(pr.from_round) == "table" and pr.from_round or {}, type(pr.preset) == "table" and pr.preset or {}
+    for i, r in ipairs(froms) do
+        local x = type(presets[i]) == "string" and presets[i]:upper() or ""
+        if type(r) == "number" and round >= r and r >= at and #x == 1 and TIER.PRESSURE_PRESETS:find(x, 1, true) then
+            want, at = x, r
+        end
+    end
+    return want
 end
 function TIER.pick(round)
     local tc, i = CFG.tiers, TIER.index(round)

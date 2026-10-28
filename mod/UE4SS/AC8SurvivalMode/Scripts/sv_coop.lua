@@ -387,6 +387,9 @@ local function hostSync(to)
             M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, events = ev }
         end
     end
+    -- the game's attack throttle in force here (CFG.late.pressure, sv_rounds.lua roundPressure: forwarded when fired,
+    -- so a joiner who links later missed it; its own level starts on B, the mission start's, as this one did)
+    if D and D.pressure and D.pressure ~= "B" then sendTo(to, true, "ev", "RE_SV_Pressure" .. D.pressure) end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end

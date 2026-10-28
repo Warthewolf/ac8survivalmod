@@ -128,10 +128,18 @@ local function creditKill(p)
     local byX = (by == "airstrike" and (c.airstrike_x or 1)) or (by ~= "you" and (c.ally_x or 1)) or 1
     local rx = TIER.roundX(D and D.round)
     local jx = p.jammer and (CFG.jammer.pay_x or 1) or 1
-    local pay, x = TIER.pay((c[kind] or 0) * TIER.specialX() * rx * byX * jx, ti)
-    addCredits(pay, string.format("%s down (%s%s%s%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
+    -- your kill of a plane the squadron director used in a tactic within tag_s (CFG.late.director_pay; behaviour roadmap
+    -- P8: "so fighting smart pays at any count"): p.dirTag = { tactic, at }, set by STATS.tactic (sv_stats.lua). The
+    -- sweep sees a kill up to 2 s late. Pays nothing until the director (P2) tags planes; a co-op joiner's copies carry
+    -- no tag (the director runs on the host), so a joiner's own kills of them pay no bonus.
+    local dp, dt, dx = CFG.late.director_pay, p.dirTag, 1
+    if by == "you" and type(dt) == "table" and type(dp) == "table" and dp.enabled and D and D.now
+        and D.now - (tonumber(dt.at) or -math.huge) <= (dp.tag_s or 20) then dx = tonumber(dp.x) or 1 end
+    local pay, x = TIER.pay((c[kind] or 0) * TIER.specialX() * rx * byX * jx * dx, ti)
+    addCredits(pay, string.format("%s down (%s%s%s%s%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
         TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or "", rx ~= 1 and string.format(", round x%.2f", rx) or "",
-        by ~= "you" and string.format(", by %s x%.2f", by, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or ""))
+        by ~= "you" and string.format(", by %s x%.2f", by, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or "",
+        dx ~= 1 and string.format(", director %s x%g", tostring(dt.tactic), dx) or ""))
     RUN.kills[by] = (RUN.kills[by] or 0) + 1
     if RUN.roundKills then RUN.roundKills[by] = (RUN.roundKills[by] or 0) + 1 end
     if by ~= "you" and by ~= "airstrike" then
