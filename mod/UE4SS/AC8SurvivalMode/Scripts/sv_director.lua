@@ -31,7 +31,7 @@
 --   DIR.release(unit, why)            let a held flight go now (P4: "the director ... releases a held flight")
 --   DIR.push(slot, why, km)           P4's push on a comfortable player: a held top cover dives, else a flight turns in
 --   DIR.holds()                       the holds in force, RE_SV_DirHold_NN (sv_coop.lua: a joiner who links later)
---   P4 (below): DIR.level, DIR.holdWave, DIR.holdOn, DIR.hot, DIR.intensityTick, DIR.clientTick
+--   P4 (below): DIR.level, DIR.holdWave, DIR.gap, DIR.holdOn, DIR.pressure, DIR.hot, DIR.intensityTick, DIR.clientTick
 DIR = { SALVO_FCS_SLOT = 2 }   -- (the fighters' missile slot, WN_WEAPON_3; tools/survival_events.py SALVO_SLOT checks it)
 
 do
@@ -898,7 +898,7 @@ function DIR.release(unit, why)
 end
 
 -- P4's "spends a tactic or releases a held flight" on player `slot` (the intensity director: that player's been
--- comfortable calm_s): a held top cover (the one nearest them; none while the intensity hold is on or inside your decoy)
+-- comfortable calm_s): a held top cover (the one nearest them; none while its intensity hold is on or inside your decoy)
 -- dives on them after its tell; else the nearest flight that may turn (cover's choice: a duelist's or an ace squadron's
 -- within rangeKm; its next move no sooner than cover.move_s) turns onto them after "check your six" (a joiner: the hunt,
 -- its TargetActor on their stand-in for cover.aim_s), counted and tagged "push". The director's gap applies; its tell
@@ -1013,11 +1013,16 @@ end
 --     host's level ("rnd").
 --   The host (or solo), once a second for the room: per player (COOP.players(): flying, fresh; a joiner's last "in"
 --     under 3 s old) how long it's been hot (intensity above high) or calm (comfort comfort.high+, intensity low or
---     under), in fights only (spawning, wave, fighting; not a boss round of skip_specials); then the hold, a push, the
---     level. Every decision logged ("intensity:"), the scores every log_s.
+--     under), in fights only (spawning, wave, fighting; not a boss round of skip_specials); then the top cover's hold,
+--     the level, a push. The wave hold starts when roundsTick asks (a wave due: DIR.holdWave). Every decision logged
+--     ("intensity:"), the scores every log_s.
 --   DIR.level(round)          the spike level enemies of round `round` fly (sv_config.lua levelFor's)
---   DIR.holdWave(now, what)   the wave gate / a later wave's spawns wait while the hold is on (sv_rounds.lua)
---   DIR.holdOn(now)           the hold's end while it's on, else false (heldTick: the top cover's dive waits)
+--   DIR.holdWave(now, what)   a wave due (roundsTick: its gate open, or a later wave's next flight): wait? The wave
+--                             hold on, or one started now (sv_rounds.lua)
+--   DIR.gap(now)              seconds more between two flights while a player's hot (hold.spawn_gap_add_s; sv_rounds.lua)
+--   DIR.holdOn(now)           the top cover's hold's end while it's on, else false (heldTick: its dive waits; DIR.push)
+--   DIR.pressure(band)        the attack throttle preset for a round band's (sv_rounds.lua roundPressure): stepped down
+--                             by the level's ease (level.pressure, not under level.pressure_min)
 --   DIR.hot(slot)             that player's intensity while above high (hold.tactics), else false (blockedBy)
 --   DIR.intensityTick(now, paused), DIR.clientTick(now, paused)   DIR.tick's P4 part: the host's (solo's), a joiner's
 -- State in D.int (a new level or run clears it with D); the level's ease carries over the run's rounds.
@@ -1168,10 +1173,12 @@ end
 
 ---------------------------------------------------------------------------------------------------- the level (the spikes a ceiling)
 -- every live enemy flown again at spike level `level`, as it would have been given at its first sweep: its provoke
--- (sv_rows.lua provokeWant / enemyProvoke: only the fields that change; MINDRIPPER's and the Ladons' keep their own) and
--- its PilotRank (enemyTier's, p.rankBase, raised to the level's rank_min; p.rankSet, which the jammer's boost goes back
--- to: a plane near the jammer keeps its boost on it, sv_ai.lua JAM.tick). Its fire control and post-stall stay as it
--- spawned (rows are set at spawn; post-stall is every spike level's)
+-- (sv_rows.lua provokeWant / enemyProvoke: only the fields that change; MINDRIPPER's and the Ladons' keep their own; a
+-- level with nothing to write for its tier, spike level 0 below a tier without its own provoke: the game's own values
+-- it had before its first write back, provokeStockWant) and its PilotRank (enemyTier's, p.rankBase, raised to the
+-- level's rank_min; p.rankSet, which the jammer's boost goes back to: a plane near the jammer keeps its boost on it,
+-- sv_ai.lua JAM.tick). Its fire control and post-stall stay as it spawned: rows are set at spawn, and post-stall once
+-- (enemyManeuvers), so a plane up when level 1 eases to 0 keeps level 1's post_stall_all, while new ones fly without
 local function reapply(level, why)
     if not (provokeWant and enemyProvoke and D and D.round) then return end
     local an = CFG.specials and CFG.specials.anomaly
@@ -1182,6 +1189,7 @@ local function reapply(level, why)
             if p.spiked ~= nil then
                 local ft = D.flightTier and D.flightTier[p.unit]
                 local okW, w = pcall(provokeWant, D.round, ft and CFG.tiers.list[ft] or nil, level)
+                if okW and not w and provokeStockWant then okW, w = pcall(provokeStockWant, p, level) end
                 if okW and w then
                     m = m + 1
                     local okP, k = pcall(enemyProvoke, p, w)
@@ -1203,12 +1211,24 @@ local function reapply(level, why)
         why, n, m, nr))
 end
 local function maxDrop() return clamp(math.floor(num(sub("level").max_drop, 1)), 0, 3) end
+-- the game's attack throttle for the new ease (runtime-ai step 8d, U3's RE_SV_Pressure presets: sv_rounds.lua
+-- pressureNow fires the round band's preset through DIR.pressure, when it isn't the one in force; not inside an
+-- Anomaly / VALKA fight, whose own throttle is up: the band's, eased, again once its boss is down)
+local function pressureAgain(why)
+    if not pressureNow then return end
+    local okP, errP = pcall(pressureNow, why)
+    if not okP then log("intensity: pressure error " .. tostring(errP)) end
+end
 -- the room above high for down_after_s of fighting: a level down (to max_drop under the spikes); below up_below for
 -- up_after_s: a level back; gap_s between two changes. The room's hot / cool time only runs in fights with a player up.
 local function levelTick(s, now, dt, room, by, high)
     local lc = sub("level")
     if not leverOn("level") then
-        if s.ease ~= 0 then s.ease = 0; log("intensity: level off: enemies fly the spikes' levels again") end
+        if s.ease ~= 0 then
+            s.ease = 0
+            log("intensity: level off: enemies fly the spikes' levels again")
+            pressureAgain("the intensity director's level off")
+        end
         return
     end
     if room > high then s.hotFor, s.coolFor = s.hotFor + dt, 0
@@ -1223,33 +1243,34 @@ local function levelTick(s, now, dt, room, by, high)
             .. "difficulty level %d (the spikes' %d, at most %d under)", D.round, high, num(lc.down_after_s, 30),
             by and whoOf(by.e) or "?", room, lv, ceil, maxDrop()))
         reapply(lv, "eased")
+        pressureAgain("the intensity director's level down")
     elseif s.coolFor >= num(lc.up_after_s, 60) and s.ease > 0 then
         s.ease, s.levelAt, s.coolFor = s.ease - 1, now, 0
         local lv = DIR.level(D.round)
         log(string.format("intensity: round %d: the room below %.0f for %.0f s of fighting: enemies from now fly difficulty "
             .. "level %d (the spikes' %d)", D.round, num(lc.up_below, 50), num(lc.up_after_s, 60), lv, ceil))
         reapply(lv, "back up")
+        pressureAgain("the intensity director's level back up")
     end
 end
 
----------------------------------------------------------------------------------------------------- the hold
--- what a hold keeps back now: the next wave (state "wave"), the rest of a later wave still coming, a top cover the
--- squad director holds; nil: nothing (a round's last wave all up, no top cover held). Its wave: the one held (the next
--- one in state "wave"), hold.per_wave's count
-local function holdWhat()
-    local parts, w = {}, D.wave or 1
-    if D.state == "wave" then
-        w = w + 1
-        parts[#parts + 1] = string.format("wave %d", w)
-    elseif D.state == "spawning" and w > 1 and D.queue and #D.queue > 0 then
-        parts[#parts + 1] = string.format("the rest of wave %d", w)
-    end
+---------------------------------------------------------------------------------------------------- the holds
+-- Two kinds, each hold.secs long (a random time in it, at most HOLD_MAX_S), never made longer, the next of its kind no
+-- sooner than hold.gap_s after the last one ended, and only for a player above high for hold.after_s:
+--   the wave hold (s.hold): started only when a wave is due, roundsTick's question (DIR.holdWave): the wave gate open
+--     (the last wave thinned to waves.next_at, or its timeout) or a later wave's next flight up; at most hold.per_wave
+--     a wave. (Review of unit 7: started as soon as a player was hot, mostly right after a wave came, it ran out long
+--     before the gate opened and held nothing; the hold after it was then refused for gap_s or per_wave.)
+--   the top cover's (s.cover): started once a second (decide) while the squad director holds a top cover (D.dir.held,
+--     kind "top"): its dive and its max_s wait (DIR.holdOn, P2's heldTick). Neither counts for the other's gap or
+--     per_wave: a wave due while the top cover's on gets a hold of its own, and the top cover isn't held twice in a row.
+-- the top cover flights held now ("ERA_..., ..."), or nil
+local function topHeld()
     local units = {}
     for unit, h in pairs((D.dir and D.dir.held) or {}) do if h.kind == "top" and not h.diving then units[#units + 1] = unit end end
+    if #units == 0 then return nil end
     table.sort(units)
-    if #units > 0 then parts[#parts + 1] = "the top cover (" .. table.concat(units, ", ") .. ")" end
-    if #parts == 0 then return nil, w end
-    return table.concat(parts, " and "), w
+    return table.concat(units, ", ")
 end
 local function roomText(ps)
     if #ps < 2 then return "" end
@@ -1257,82 +1278,128 @@ local function roomText(ps)
     for _, q in ipairs(ps) do t[#t + 1] = string.format("%s %.0f", whoOf(q.e), q.x.i) end
     return "; the room: " .. table.concat(t, ", ")
 end
-local function holdEnd(s, now, why)
-    local h = s.hold
-    s.hold, s.holdEnd = nil, math.min(now, h.untilT)
-    if s.rs and s.rs.round == h.round then s.rs.holdS = s.rs.holdS + (s.holdEnd - h.at) end
-    log(string.format("intensity: hold over after %.0f s (%s)%s", s.holdEnd - h.at, h.what, why and (": " .. why) or ""))
+-- the hold `kind` ("hold": the wave's, "cover": the top cover's) over: its end, the gap's start for its kind
+local function holdEnd(s, kind, now, why)
+    local h = s[kind]
+    local endT = math.min(now, h.untilT)
+    s[kind] = nil
+    if kind == "hold" then s.waveEnd = endT else s.coverEnd = endT end
+    if s.rs and s.rs.round == h.round then s.rs.holdS = s.rs.holdS + (endT - h.at) end
+    log(string.format("intensity: hold over after %.0f s (%s)%s", endT - h.at, h.what, why and (": " .. why) or ""))
 end
--- a player above high for hold.after_s: the hold (hold.secs, at most HOLD_MAX_S), one at a time, never made longer,
--- hold.gap_s after the last, at most hold.per_wave a wave, only when there's something to keep back
-local function holdTick(s, now, ps, high)
-    if s.hold or not leverOn("hold") then return end
+-- the player above high for hold.after_s with the highest intensity (decide's s.pl, once a second), or nil
+local function hottest(s)
+    local after, best = num(sub("hold").after_s, 3), nil
+    for _, pl in pairs(s.pl) do
+        if pl.i and pl.e and (pl.hotFor or 0) >= after and (not best or pl.i > best.i) then best = pl end
+    end
+    return best
+end
+local function holdStart(s, kind, now, pl, what, key)
     local hc = sub("hold")
-    local best, bpl = nil, nil
-    for _, q in ipairs(ps) do
-        local pl = s.pl[q.e.slot or 0]
-        if pl and pl.hotFor >= num(hc.after_s, 3) and (not best or q.x.i > best.x.i) then best, bpl = q, pl end
-    end
-    if not best then return end
-    local what, wave = holdWhat()
-    if not what then return end
-    local key = D.round .. "|" .. wave
-    local whoS = whoOf(best.e)
-    if s.holdEnd and now - s.holdEnd < num(hc.gap_s, 20) then
-        once(s, "gap|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; the last ended %.0f s ago, hold.gap_s %.0f)",
-            whoS, best.x.i, now - s.holdEnd, num(hc.gap_s, 20)))
-        return
-    end
-    local per = math.max(0, math.floor(num(hc.per_wave, 1)))
-    if (s.holdsWave[key] or 0) >= per then
-        once(s, "wave|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; wave %d had its %d)", whoS, best.x.i,
-            wave, per))
-        return
-    end
     local r = type(hc.secs) == "table" and hc.secs or { 15, 20 }
     local lo = num(r[1], 15)
     local hi = num(r[2], lo)
     local secs = clamp(lo + math.random() * math.max(0, hi - lo), 0, HOLD_MAX_S)
-    if secs <= 0 then return end
-    s.holdsWave[key] = (s.holdsWave[key] or 0) + 1
-    s.hold = { at = now, untilT = now + secs, round = D.round, slot = best.e.slot, what = what, said = {} }
+    if secs <= 0 then return nil end
+    local h = { at = now, untilT = now + secs, round = D.round, slot = pl.e.slot, what = what, key = key, said = {} }
+    s[kind] = h
     if s.rs then s.rs.holds = s.rs.holds + 1 end
     log(string.format("intensity: round %d: held %.0f s (%s at intensity %.0f, above %.0f for %.0f s): %s wait%s",
-        D.round, secs, whoS, best.x.i, high, bpl.hotFor, what, roomText(ps)))
+        D.round, secs, whoOf(pl.e), pl.i, num(icfg().high, 80), pl.hotFor, what, roomText(s.ps or {})))
+    return h
+end
+-- the top cover's hold (decide, once a second, the host's in a fight)
+local function holdTick(s, now)
+    if s.cover or not leverOn("hold") then return end
+    local units = topHeld()
+    if not units then return end
+    local pl = hottest(s)
+    if not pl then return end
+    local gap = num(sub("hold").gap_s, 20)
+    if s.coverEnd and now - s.coverEnd < gap then
+        once(s, "cgap|" .. tostring(s.coverEnd), string.format("intensity: hold not now (%s at intensity %.0f; the top cover's "
+            .. "last ended %.0f s ago, hold.gap_s %.0f)", whoOf(pl.e), pl.i, now - s.coverEnd, gap))
+        return
+    end
+    holdStart(s, "cover", now, pl, "the top cover (" .. units .. ")")
+end
+-- roundsTick's question, a wave due (`what` "wave": the next one's gate open; "spawning": a later wave's next flight
+-- up): wait? Yes while the wave hold's on; else one starts now when a player's hot, per_wave and gap_s allow
+local function waveHold(s, now, what)
+    if s.hold and (now >= s.hold.untilT or s.hold.round ~= D.round) then holdEnd(s, "hold", now) end
+    local w = (D.wave or 1) + (what == "wave" and 1 or 0)
+    local label = what == "wave" and string.format("wave %d", w) or string.format("the rest of wave %d", w)
+    local h = s.hold
+    if not h then
+        if not leverOn("hold") or client() or skipped() then return false end
+        local pl = hottest(s)
+        if not pl then return false end
+        local hc, key = sub("hold"), D.round .. "|" .. w
+        local per = math.max(0, math.floor(num(hc.per_wave, 1)))
+        if (s.holdsWave[key] or 0) >= per then
+            once(s, "wave|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; wave %d had its %d): %s comes",
+                whoOf(pl.e), pl.i, w, per, label))
+            return false
+        end
+        local gap = num(hc.gap_s, 20)
+        if s.waveEnd and now - s.waveEnd < gap then
+            once(s, "gap|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; the last ended %.0f s ago, "
+                .. "hold.gap_s %.0f): %s comes", whoOf(pl.e), pl.i, now - s.waveEnd, gap, label))
+            return false
+        end
+        h = holdStart(s, "hold", now, pl, label, key)
+        if not h then return false end
+        s.holdsWave[key] = (s.holdsWave[key] or 0) + 1
+    end
+    if not h.said[what] then
+        h.said[what] = true
+        log(string.format("round %d: %s waits for the intensity hold (%.0f s more)", D.round, label, h.untilT - now))
+    end
+    return true
 end
 
 ---------------------------------------------------------------------------------------------------- a push
--- the most comfortable player calm for calm_s: the squad director spends a tactic on them (DIR.push: a held top cover
--- dives, else a flight turns onto them); push.per_round each a round from push.from_round, cooldown_s apart
+-- the players calm for calm_s, the most comfortable first: the squad director spends a tactic on the first one it can
+-- (DIR.push: a held top cover dives, else a flight turns onto them); push.per_round each a round from push.from_round,
+-- cooldown_s apart. One used up, on its cooldown or with nothing to send (tried again PUSH_RETRY_S on) doesn't keep
+-- the next calm player waiting (review of unit 7). One push a second at most.
 local function pushTick(s, now, ps)
     if not leverOn("push") then return end
     local pc, calm = sub("push"), num(icfg().calm_s, 20)
     if (D.round or 0) < num(pc.from_round, 1) then return end
-    local best, bpl = nil, nil
+    local cands = {}
     for _, q in ipairs(ps) do
         local pl = s.pl[q.e.slot or 0]
-        if pl and pl.calmFor >= calm and (not best or q.x.c > best.x.c) then best, bpl = q, pl end
+        if pl and pl.calmFor >= calm then cands[#cands + 1] = { q = q, pl = pl } end
     end
-    if not best then return end
-    local slot, whoS = best.e.slot or 0, whoOf(best.e)
-    local what = string.format("%s comfortable %.0f s (comfort %.0f, intensity %.0f)", whoS, bpl.calmFor, best.x.c, best.x.i)
-    local used, max = s.pushN[slot] or 0, math.max(0, math.floor(num(pc.per_round, 2)))
-    local why = (used >= max and string.format("its %d this round", max))
-        or (now < (s.pushNext[slot] or 0) and string.format("its cooldown, %.0f s more", s.pushNext[slot] - now)) or nil
-    if why then
-        once(s, "push|" .. slot .. "|" .. (why:match("^[%a ]+") or why), "intensity: " .. what .. ": no push (" .. why .. ")")
-        return
-    end
-    local okP, did, whyNot = pcall(DIR.push, slot, what, num(pc.range_km, 8))
-    if not okP then did, whyNot = nil, "error " .. tostring(did) end
-    if did then
-        s.pushN[slot], s.pushNext[slot], bpl.calmFor = used + 1, now + num(pc.cooldown_s, 40), 0
-        if s.rs then s.rs.pushes = s.rs.pushes + 1 end
-        log("intensity: " .. what .. ": " .. did)
-    else
-        bpl.calmFor = math.max(0, calm - PUSH_RETRY_S)
-        once(s, "nopush|" .. slot .. "|" .. (tostring(whyNot):match("^[%a ']+") or "?"),
-            "intensity: " .. what .. ": nothing sent (" .. tostring(whyNot) .. ")")
+    table.sort(cands, function(a, b)
+        if a.q.x.c ~= b.q.x.c then return a.q.x.c > b.q.x.c end
+        return (a.q.e.slot or 0) < (b.q.e.slot or 0)
+    end)
+    local max = math.max(0, math.floor(num(pc.per_round, 2)))
+    for _, x in ipairs(cands) do
+        local q, pl = x.q, x.pl
+        local slot = q.e.slot or 0
+        local what = string.format("%s comfortable %.0f s (comfort %.0f, intensity %.0f)", whoOf(q.e), pl.calmFor, q.x.c, q.x.i)
+        local used = s.pushN[slot] or 0
+        local why = (used >= max and string.format("its %d this round", max))
+            or (now < (s.pushNext[slot] or 0) and string.format("its cooldown, %.0f s more", s.pushNext[slot] - now)) or nil
+        if why then
+            once(s, "push|" .. slot .. "|" .. (why:match("^[%a ]+") or why), "intensity: " .. what .. ": no push (" .. why .. ")")
+        else
+            local okP, did, whyNot = pcall(DIR.push, slot, what, num(pc.range_km, 8))
+            if not okP then did, whyNot = nil, "error " .. tostring(did) end
+            if did then
+                s.pushN[slot], s.pushNext[slot], pl.calmFor = used + 1, now + num(pc.cooldown_s, 40), 0
+                if s.rs then s.rs.pushes = s.rs.pushes + 1 end
+                log("intensity: " .. what .. ": " .. did)
+                return
+            end
+            pl.calmFor = math.max(0, calm - PUSH_RETRY_S)
+            once(s, "nopush|" .. slot .. "|" .. (tostring(whyNot):match("^[%a ']+") or "?"),
+                "intensity: " .. what .. ": nothing sent (" .. tostring(whyNot) .. ")")
+        end
     end
 end
 
@@ -1341,7 +1408,9 @@ local function roundLine(s, now)
     local r = s.rs
     if not r or r.said then return end
     r.said = true
-    if s.hold and s.hold.round == r.round then holdEnd(s, now, "the round's over") end
+    for _, kind in ipairs({ "hold", "cover" }) do
+        if s[kind] and s[kind].round == r.round then holdEnd(s, kind, now, "the round's over") end
+    end
     if r.n == 0 then return end
     local ceil, lv = spikeLevel(r.round), DIR.level(r.round)
     log(string.format("intensity: round %d: you avg %.0f, peak %.0f, above %.0f for %d s; comfort avg %.0f%s; level %d%s", r.round,
@@ -1389,7 +1458,10 @@ local function scoreLine(s, now)
             local pl = s.pl[slot]
             parts[#parts + 1] = string.format("player %d %.0f, comfort %.0f", slot + 1, pl.i, pl.c or 0)
         end
-        if s.hold then parts[#parts + 1] = string.format("holding %s (%.0f s more)", s.hold.what, s.hold.untilT - now) end
+        for _, kind in ipairs({ "hold", "cover" }) do
+            local h = s[kind]
+            if h then parts[#parts + 1] = string.format("holding %s (%.0f s more)", h.what, h.untilT - now) end
+        end
     end
     local ceil, lv = spikeLevel(D.round), DIR.level(D.round)
     if lv ~= ceil then parts[#parts + 1] = string.format("level %d (the spikes' %d)", lv, ceil) end
@@ -1419,15 +1491,21 @@ local function decide(s, now, dt)
         local slot = q.e.slot or 0
         local pl = s.pl[slot] or {}
         s.pl[slot], seen[slot] = pl, true
-        pl.i, pl.c, pl.isMe = q.x.i, q.x.c, q.e.isMe
+        pl.i, pl.c, pl.isMe, pl.e = q.x.i, q.x.c, q.e.isMe, q.e
         pl.hotFor = (q.x.i > high) and (pl.hotFor or 0) + dt or 0
         pl.calmFor = (q.x.c >= cHigh and q.x.i <= low) and (pl.calmFor or 0) + dt or 0
         if q.x.i > room then room, by = q.x.i, q end
     end
     for slot, pl in pairs(s.pl) do if not seen[slot] then pl.i, pl.hotFor, pl.calmFor = nil, 0, 0 end end
-    if s.hold and (not fight or now >= s.hold.untilT) then holdEnd(s, now, (not fight) and "no fight to hold" or nil) end
+    s.ps = ps                                         -- (the room this second: a wave hold's line, DIR.holdWave)
+    for _, kind in ipairs({ "hold", "cover" }) do
+        local h = s[kind]
+        if h and (not fight or now >= h.untilT or h.round ~= D.round) then
+            holdEnd(s, kind, now, (not fight) and "no fight to hold" or nil)
+        end
+    end
     if not fight then return end
-    holdTick(s, now, ps, high)
+    holdTick(s, now)
     if #ps > 0 then levelTick(s, now, dt, room, by, high) end
     pushTick(s, now, ps)
 end
@@ -1446,20 +1524,55 @@ function DIR.level(round)
 end
 
 function DIR.holdOn(now)
-    local h = D and D.int and D.int.hold
+    local h = D and D.int and D.int.cover
     if h and h.round == D.round and now and now < h.untilT then return h.untilT end
     return false
 end
 
+-- (roundsTick asks only when the wave's due: sv_rounds.lua's gate `(alive <= next_at or timedOut) and not ...`, the
+-- spawning branch at a later wave's next flight; an error here never stops the rounds: no hold)
 function DIR.holdWave(now, what)
-    local h = D and D.int and D.int.hold
-    if not (h and h.round == D.round and now and now < h.untilT) then return false end
-    if not h.said[what] then
-        h.said[what] = true
-        log(string.format("round %d: %s waits for the intensity hold (%.0f s more)", D.round, what == "wave"
-            and string.format("wave %d", (D.wave or 1) + 1) or string.format("the rest of wave %d", D.wave or 1), h.untilT - now))
+    local s = D and D.int
+    if not (s and now and D.round and ion()) then return false end
+    local okH, r = pcall(waveHold, s, now, what)
+    if not okH then
+        if not D.intErr then D.intErr = true; log("intensity: error " .. tostring(r)) end
+        return false
     end
-    return true
+    return r == true
+end
+
+-- seconds more between two of a wave's flights (runtime-ai step 8a): hold.spawn_gap_add_s while a player's been above
+-- high for hold.after_s (a round's first wave too; the host's, solo's), else 0. Logged once a wave
+function DIR.gap(now)
+    local s = D and D.int
+    if not (s and now and D.round and leverOn("hold")) or client() or skipped() then return 0 end
+    local add = clamp(num(sub("hold").spawn_gap_add_s, 0), 0, 10)
+    if add <= 0 then return 0 end
+    local pl = hottest(s)
+    if not pl then return 0 end
+    once(s, "sgap|" .. (D.wave or 1), string.format("intensity: round %d: wave %d's flights %.0f s further apart (%s at intensity %.0f)",
+        D.round, D.wave or 1, add, whoOf(pl.e), pl.i))
+    return add
+end
+
+-- the attack throttle preset for the round band's `band` (sv_rounds.lua roundPressure; TIER.PRESSURE_PRESETS letters,
+-- gentler first): one letter down a level the room's eased (level.pressure), never under level.pressure_min nor under
+-- what the band asks for already (the director only eases: the spikes' and U3's late presets are its ceiling)
+function DIR.pressure(band)
+    local lc = sub("level")
+    if type(band) ~= "string" or not leverOn("level") or lc.pressure == false or client() then return band end
+    local ease = math.min((D and D.int and D.int.ease) or 0, maxDrop())
+    local P = TIER and TIER.PRESSURE_PRESETS or "ABCD"
+    local i = P:find(band, 1, true)
+    if ease <= 0 or not i then return band end
+    local m = type(lc.pressure_min) == "string" and lc.pressure_min:upper() or "B"
+    local floor = nil
+    if #m == 1 then floor = P:find(m, 1, true) end
+    floor = floor or P:find("B", 1, true) or 1
+    if i <= floor then return band end
+    local j = math.max(floor, i - ease)
+    return P:sub(j, j)
 end
 
 function DIR.hot(slot)

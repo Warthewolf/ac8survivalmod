@@ -460,15 +460,18 @@ CFG = {
     --          (CFG.director) lets a held top cover dive on them, else turns the nearest flight that may onto them (its
     --          "check your six" tell first; a joiner: a hunt with its target kept on them); push.per_round each a round
     --          from push.from_round, push.cooldown_s apart, within push.range_km
-    --   hold   a player's intensity above `high` for hold.after_s: the next wave (the rest of a later wave still coming
-    --          too) and the top cover's dive wait hold.secs (a random time in it, 30 s at most), one hold at a time, never
-    --          made longer, the next no sooner than hold.gap_s after it, at most hold.per_wave a wave; hold.tactics: no new
-    --          cover, trap or bracket on a player above `high`
+    --   hold   a player's intensity above `high` for hold.after_s: the next wave waits hold.secs (a random time in it,
+    --          30 s at most) once it's due (its gate open: the last wave down to waves.next_at, or its timeout; the rest
+    --          of a later wave still coming, at its next flight), at most hold.per_wave a wave; a top cover the squad
+    --          director holds: its dive waits the same. Each hold never made longer, the next of its kind no sooner than
+    --          hold.gap_s after it; spawn_gap_add_s more between a wave's flights while a player's that hot (0: none);
+    --          hold.tactics: no new cover, trap or bracket on a player above `high`
     --   level  the difficulty spikes (CFG.spikes) are the ceiling: the room above `high` for level.down_after_s of a
-    --          fight, enemies that come from then fly one spike level lower (fire control, pilot rank, post-stall,
-    --          provoke, the next round's aircraft_add; the skill tiers stay the floor: CFG.tiers' fcs, rank), at most
-    --          level.max_drop under the round's spike; below level.up_below for level.up_after_s, a level back;
-    --          level.gap_s between two changes. A joiner's copies fly the host's level ("rnd")
+    --          fight, enemies that come from then fly one spike level lower (fire control, pilot rank, provoke, the next
+    --          round's aircraft_add; post-stall as each spawned; the skill tiers stay the floor: CFG.tiers' fcs, rank),
+    --          at most level.max_drop under the round's spike; below level.up_below for level.up_after_s, a level back;
+    --          level.gap_s between two changes; level.pressure: the game's attack throttle (CFG.late.pressure's preset)
+    --          a letter gentler too, never under level.pressure_min. A joiner's copies fly the host's level ("rnd")
     -- log_s: a line with your scores every log_s seconds of a fight (0: decisions only). Nothing new in a round of
     -- skip_specials (their own scripts run the fight). enabled = false (or a lever's): as before P4. Untested in game.
     intensity = {
@@ -479,8 +482,9 @@ CFG = {
         comfort = { tail = 40, kills = 35, healthy = 25, high = 60, tail_km = 3.0, tail_deg = 70, tail_full = 0.5,
                     kpm_full = 2.0, kills_window_s = 60, hp_pct = 70 },
         push = { enabled = true, from_round = 3, per_round = 2, cooldown_s = 40, range_km = 8.0 },
-        hold = { enabled = true, after_s = 3, secs = { 15, 20 }, gap_s = 20, per_wave = 1, tactics = true },
-        level = { enabled = true, max_drop = 1, down_after_s = 30, up_below = 50, up_after_s = 60, gap_s = 45 },
+        hold = { enabled = true, after_s = 3, secs = { 15, 20 }, gap_s = 20, per_wave = 1, tactics = true, spawn_gap_add_s = 3 },
+        level = { enabled = true, max_drop = 1, down_after_s = 30, up_below = 50, up_after_s = 60, gap_s = 45,
+                  pressure = true, pressure_min = "B" },
     },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its

@@ -692,11 +692,14 @@ end
 --                                      under it), so a later part can ask for another.
 --   enemyProvoke(p, want)              writes want on plane p, only the fields that differ from the last write
 --                                      (p.provokeSet; p.provokeWant = want): fields written, before / after texts.
+--                                      A field's value before its first write is kept (p.provokeStock: the game's own)
+--   provokeStockWant(p[, level])       those kept values as a want for enemyProvoke, or nil (none written yet): the
+--                                      intensity director's ease to a level with nothing to write puts them back
 --   enemySpike(p, round, tier)         once per plane when it appears (p.spiked): provokeWant + enemyProvoke, a
 --                                      "provoke:" line once per spike level and tier.
 -- Later parts (the intensity director, P4) change a live plane's values with enemyProvoke(p, provokeWant(...)).
 -- Writes read back (0.70.2's log); whether the game's provoke decision uses them is untested.
-provokeWant, enemyProvoke, enemySpike = nil, nil, nil
+provokeWant, enemyProvoke, enemySpike, provokeStockWant = nil, nil, nil, nil
 do
 local provokeSaid = {}
 local FIELDS = { { "ProvokeConditionConeAngle", "cone" }, { "ProvokeDeterminationTime", "time" },
@@ -745,7 +748,7 @@ function provokeWant(round, tier, level)
 end
 function enemyProvoke(p, want)
     if not (p and want and valid(p.obj)) then return 0, "", "", {} end
-    local set = p.provokeSet or {}
+    local set, stock = p.provokeSet or {}, p.provokeStock or {}
     local sr = want.surround
     local value = { cone = want.cone, time = want.time, smin = sr and sr[1] * 100 or nil, smax = sr and sr[2] * 100 or nil }
     local before, writes, fields, n = {}, {}, {}, 0
@@ -754,14 +757,21 @@ function enemyProvoke(p, want)
         local v = value[key]
         if v ~= nil and set[key] ~= v then
             local okR, old = pcall(function() return p.obj[field] end)
+            if set[key] == nil and stock[key] == nil and okR and type(old) == "number" then stock[key] = old end
             before[#before + 1] = field .. " " .. (okR and tostring(old) or "?")
             local okW, e = pcall(function() p.obj[field] = v end)
             if okW then set[key], n = v, n + 1; fields[#fields + 1] = field end
             writes[#writes + 1] = okW and (field .. " " .. tostring(v)) or (field .. " FAILED: " .. tostring(e))
         end
     end
-    p.provokeSet, p.provokeWant = set, want
+    p.provokeSet, p.provokeWant, p.provokeStock = set, want, stock
     return n, table.concat(before, ", "), table.concat(writes, ", "), fields
+end
+function provokeStockWant(p, level)
+    local st = p and p.provokeStock
+    if not (st and next(st)) then return nil end
+    return { level = level, cone = st.cone, time = st.time, src = "the game's own",
+             surround = (st.smin and st.smax) and { st.smin / 100, st.smax / 100 } or nil }
 end
 function enemySpike(p, round, tier)
     if p.spiked ~= nil or not round then return end

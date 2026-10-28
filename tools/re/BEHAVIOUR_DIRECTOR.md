@@ -1094,10 +1094,10 @@ both ignored by older builds. Every lever has its own switch in `[intensity]`; n
 | lever | when | what happens | where |
 |---|---|---|---|
 | scores | every game, once a second on the round clock (not in a pause) | your intensity and comfort, 0-100 (formulas below); a co-op joiner sends its own to the host ("in") | P4 block: `sample` |
-| hold | the host: a player's intensity above `high` 80 for hold.after_s 3 s, in a fight, not a boss round of skip_specials | the next wave (the gate in state "wave") and the rest of a later wave still spawning wait hold.secs 15-20 s (a random time; 30 s hard limit); a top cover the squad director holds keeps holding (its dive and its max_s wait). One hold at a time, never made longer, the next no sooner than hold.gap_s 20 after it, at most hold.per_wave 1 a wave (the wave it holds). Never a round's first wave or a special's entry; nothing to keep back (the last wave all up, no top cover held): no hold. A held top cover hit, or the round's last flight up, still goes (P2's rules) | `holdTick`, `DIR.holdWave` (sv_rounds.lua roundsTick: the wave gate and the spawning branch), `DIR.holdOn` (heldTick) |
+| hold | the host: a player's intensity above `high` 80 for hold.after_s 3 s, in a fight, not a boss round of skip_specials | two holds, each hold.secs 15-20 s (a random time; 30 s hard limit), never made longer, the next of its kind no sooner than hold.gap_s 20 after the last ended. **The wave hold** starts only when a wave is due (roundsTick asks: the wave gate open, the last wave down to waves.next_at or its timeout; or a later wave's next flight up), so a player hot long before the gate opens still gets it then; at most hold.per_wave 1 a wave. **The top cover's** starts (once a second) while the squad director holds a top cover: its dive and its max_s wait. Neither counts for the other's gap or per_wave. Never a round's first wave or a special's entry; nothing due to keep back: no hold. A held top cover hit, or the round's last flight up, still goes (P2's rules). While a player's that hot, a wave's flights also come hold.spawn_gap_add_s 3 s further apart | `waveHold` / `DIR.holdWave` (sv_rounds.lua roundsTick: the wave gate and the spawning branch), `holdTick` / `DIR.holdOn` (heldTick), `DIR.gap` (the spawning branch) |
 | hold.tactics | a player's intensity above `high` now | the squad director starts no cover, trap or bracket aimed at that player (`director: cover not now (under pressure: intensity 84)`) | `DIR.hot` in P2's blockedBy |
 | push | the host: a player comfortable (comfort comfort.high 60+ and intensity `low` 35 or under) for calm_s 20 s of a fight, from push.from_round 3 | "spends a tactic or releases a held flight": a held top cover (the one nearest them; not while the hold is on, not inside a DECOY) dives on them after its dive tell; else the nearest flight that may turn (cover's choice: a duelist's or an ace squadron's, within push.range_km 8) turns onto them after "check your six" (RE_SV_AceTurn_NN; a joiner: RE_SV_Hunt_NN with its TargetActor on their stand-in for cover.aim_s). push.per_round 2 each player a round, push.cooldown_s 40 apart, the squad director's gap_s and need_tell apply; [director] off: none. Counted and tagged by STATS.tactic as `push` (the dive as `top_cover`), so its kills pay the director bonus | `pushTick`, `DIR.push` (P2 block) |
-| level | the host: the room's intensity (its highest player) above `high` for level.down_after_s 30 s of fighting | the spikes become a ceiling: enemies that come from then fly one spike level lower (fire-control rows at spawn, rank_min, post_stall_all, provoke, the next round's aircraft_add), at most level.max_drop 1 under the round's spike (never under 0; the skill tiers stay the floor: their rank, post_stall and fcs); the enemies up get their provoke and PilotRank written again for it (the jammer's boost kept). Below level.up_below 50 for level.up_after_s 60 s of fighting: a level back up. level.gap_s 45 between two changes. Rounds 1-7 (no spike yet): nothing to ease | `levelTick`, `DIR.level`, `reapply`; sv_config.lua `levelFor` |
+| level | the host: the room's intensity (its highest player) above `high` for level.down_after_s 30 s of fighting | the spikes become a ceiling: enemies that come from then fly one spike level lower (fire-control rows at spawn, rank_min, post_stall_all, provoke, the next round's aircraft_add), at most level.max_drop 1 under the round's spike (never under 0; the skill tiers stay the floor: their rank, post_stall and fcs); the enemies up get their provoke and PilotRank written again for it (the jammer's boost kept; a level with no provoke for a plane's tier, 0, puts back the game's own values it had). The game's attack throttle (U3's RE_SV_Pressure presets, CFG.late.pressure) goes a letter gentler too (level.pressure: D to C, C to B; never under level.pressure_min B), fired when the ease changes. Below level.up_below 50 for level.up_after_s 60 s of fighting: a level back up (and the band's preset). level.gap_s 45 between two changes. Rounds 1-7 (no spike yet): nothing to ease | `levelTick`, `DIR.level`, `reapply`, `DIR.pressure`; sv_config.lua `levelFor`; sv_rounds.lua `roundPressure`, `pressureNow` |
 
 The scores (CFG.intensity.score / comfort; each part capped at its full mark):
 
@@ -1119,8 +1119,8 @@ plus two kills a minute (60).
 |---|---|---|
 | the scores | sv_director.lua P4 block: `healthTick`, `mine`, `missilesOn`, `onTail`, `sample` | every tick your health's drops (HIT.h, HP x 10; a repair is no damage, a new aircraft, HIT.pawn, starts over); once a second: the drops of the last window_s as % of MaxHealth (read every 5 s), HIT.msl's missiles seen in the last second within msl_km whose TargetToHome is your pawn (one within 1 km whose target can't be read counts), the sweep's p.dist (2 s old at most), on an enemy's tail (each plane's last pose against where you were at that sample, p.youAt from sv_stats.lua, else where you are now; comfort.tail_km 3 / tail_deg 70), RUN.kills.you's rises, health. Kept in D.int (a new level or run clears it) |
 | the room | `decide` (the host, solo) | each player flying (COOP.players(): alive, fresh, not down at the airfield; a joiner's last "in" under 3 s old): hot time (intensity above high) and calm time (comfortable), counted only in fights (spawning, wave, fighting): a pause holds them, a break between rounds, a boss round of skip_specials or the airfield starts that player's over. The room's value is its highest intensity; the level's room timers run in fights only and are kept over a break |
-| hold | `holdTick`, `DIR.holdWave(now, what)`, `DIR.holdOn(now)`; sv_rounds.lua roundsTick (the "wave" gate: `(alive <= w.next_at or timedOut) and not DIR.holdWave(now, "wave")`; the "spawning" branch for D.wave > 1, a plain flight next); sv_director.lua heldTick (a top cover: its dive and max_s wait while DIR.holdOn) | as the table above; the hold ends by itself (its time), with the round, or when there's no fight |
-| push | `pushTick`; `DIR.push(slot, why, rangeKm)` in the P2 block (reuses `coverer` with a range, `dive`, `aim`, `tellAfter`) | as the table above; nothing to send (no flight in range, a tell not sayable, the director's gap): tried again 5 s on, logged once a round per reason |
+| hold | `waveHold` / `DIR.holdWave(now, what)` (D.int.hold), `holdTick` / `DIR.holdOn(now)` (D.int.cover), `DIR.gap(now)`; sv_rounds.lua roundsTick (the "wave" gate: `(alive <= w.next_at or timedOut) and not DIR.holdWave(now, "wave")`, asked only once the first half is true; the "spawning" branch for D.wave > 1, a plain flight next, after the airfield check; `D.at = now + CFG.spawn_gap_s + gapAdd`); sv_director.lua heldTick (a top cover: its dive and max_s wait while DIR.holdOn) | as the table above; each hold ends by itself (its time), with the round, or when there's no fight |
+| push | `pushTick`; `DIR.push(slot, why, rangeKm)` in the P2 block (reuses `coverer` with a range, `dive`, `aim`, `tellAfter`) | as the table above; the calm players most comfortable first, the first one that can have one (one used up, on its cooldown or with nothing to send doesn't keep the next waiting); nothing to send (no flight in range, a tell not sayable, the director's gap): tried again 5 s on, logged once a round per reason. One push a second at most |
 | hold.tactics | `DIR.hot(slot)` in P2's `blockedBy` | per-player tactics wait while that player is above high |
 | level | `levelTick`, `DIR.level(round)`, `reapply`; sv_config.lua `levelFor(round)` (DIR.level, else spikeLevel) and `TIER.roundBudget(round, level)`; sv_ai.lua enemyTier (rank_min on levelFor; `p.rankBase`, the rank before it) and enemyManeuvers (post_stall_all); sv_rows.lua provokeWant's default level and enemySpike's `p.spiked`; sv_spawn.lua spawnBomber / spawnFlight (fcsLevel = max(levelFor, tier.fcs)); sv_rounds.lua startRound (`TIER.roundBudget(D.round, levelFor(D.round))`) and the spike callout (on levelFor; its log names the spikes' level when eased) | the ease (0 to max_drop) carries over the run's rounds; DIR.level = max(0, spikeLevel - ease). The FCS rows of every level exist from the main menu, so a lower level only picks another row at spawn |
 | co-op | sv_coop.lua `COOP.sendIntensity`, `COOP.intensityOf`, the host's "in" handler, "rnd"'s 8th field (DIR.level of the round), the joiner's `D.intLevel` (clientRounds); sv_director.lua `DIR.clientTick` | a joiner samples its own player and sends "in" once a second; the host keeps each joiner's last; a joiner's copies fly the host's level (levelFor reads D.intLevel there) and the enemies up get it written again when it changes. Room-wide: the host decides; a push on a joiner is a hunt (LastTGT turns onto the host) |
@@ -1135,20 +1135,25 @@ plus two kills a minute (60).
 - `comfort` ([intensity.comfort]): `tail` 40, `kills` 35, `healthy` 25, `high` 60, `tail_km` 3.0, `tail_deg` 70,
   `tail_full` 0.5, `kpm_full` 2.0, `kills_window_s` 60, `hp_pct` 70.
 - `push` ([intensity.push]): `enabled`, `from_round` 3, `per_round` 2, `cooldown_s` 40, `range_km` 8.0.
-- `hold` ([intensity.hold]): `enabled`, `after_s` 3, `secs` 15, 20, `gap_s` 20, `per_wave` 1, `tactics` true.
-- `level` ([intensity.level]): `enabled`, `max_drop` 1, `down_after_s` 30, `up_below` 50, `up_after_s` 60, `gap_s` 45.
+- `hold` ([intensity.hold]): `enabled`, `after_s` 3, `secs` 15, 20, `gap_s` 20, `per_wave` 1, `tactics` true,
+  `spawn_gap_add_s` 3 (0: none).
+- `level` ([intensity.level]): `enabled`, `max_drop` 1, `down_after_s` 30, `up_below` 50, `up_after_s` 60, `gap_s` 45,
+  `pressure` true, `pressure_min` B (A gentlest, B the game's own; not a preset letter: B).
 - Not PERSONAL in co-op: a joiner's scores are weighed with the host's settings (they arrive with the host's "cf").
 
 ### Log lines to look for in a test
 - Every log_s 10 s of a fight (each game): `intensity: round 12: you 34 (damage 12% of your health in 30 s, 1 missile on
   you, 3 enemies within 5 km, health 81%), comfort 55 (on a tail 8 s of 30, 2.0 kills a minute)`; the host adds
   `; player 2 71, comfort 20`, `; holding wave 3 (12 s more)`, `; level 1 (the spikes' 2)`.
-- The hold: `intensity: round 12: held 17 s (player 2 at intensity 86, above 80 for 3 s): wave 3 wait; the room: you 45,
-  player 2 86` (what it holds: `wave N`, `the rest of wave N`, `the top cover (<units>)`), then `round 12: wave 3 waits
-  for the intensity hold (14 s more)` / `round 12: the rest of wave 2 waits for the intensity hold (...)` /
-  `director: <unit> (top cover) waits for the intensity hold (...)`, and `intensity: hold over after 17 s (wave 3)`
-  (`: the round's over`, `: no fight to hold`). Held back, once a round per wave and kind: `intensity: hold not now (you
-  at intensity 88; the last ended 6 s ago, hold.gap_s 20)` / `(...; wave 3 had its 1)`.
+- The hold: `intensity: round 12: held 17 s (player 2 at intensity 86, above 80 for 24 s): wave 3 wait; the room: you
+  45, player 2 86` (what it holds: `wave N` at its gate, `the rest of wave N` at its next flight, `the top cover
+  (<units>)` on its own), then `round 12: wave 3 waits for the intensity hold (17 s more)` / `round 12: the rest of wave
+  2 waits for the intensity hold (...)` / `director: <unit> (top cover) waits for the intensity hold (...)`, and
+  `intensity: hold over after 17 s (wave 3)` (`: the round's over`, `: no fight to hold`). The `held` line comes with
+  the kill that opened the wave's gate, its `wave N of M` line 15-20 s later. Held back, once a round per wave and kind:
+  `intensity: hold not now (you at intensity 88; the last ended 6 s ago, hold.gap_s 20): wave 3 comes` / `(...; wave 3
+  had its 1): wave 3 comes` / `(...; the top cover's last ended 2 s ago, hold.gap_s 20)`. The spawn gap: `intensity:
+  round 12: wave 2's flights 3 s further apart (you at intensity 88)` (once a wave).
 - hold.tactics: `director: cover not now (under pressure: intensity 84)` (trap, bracket the same).
 - A push: `intensity: you comfortable 20 s (comfort 60, intensity 3): ERA_Unit_02_Dep_Air1 turns onto you (7.0 km off)`
   or `...: held ERA_Unit_03_Dep_Air0 dives on you (10.2 km off)`; STATS' `director: round 6 +40 s: push on
@@ -1163,7 +1168,10 @@ plus two kills a minute (60).
   pressure)`, `spikes: round 22, difficulty level 2 (the spikes' 3, eased by the intensity director)`, `intensity: round
   17: the room below 50 for 60 s of fighting: enemies from now fly difficulty level 2 (the spikes' 2)`; the spawn lines'
   rows show it (`..._svb` level 1, `_svc` 2, `_svd` 3). A joiner: `intensity: the host's difficulty level for round 15:
-  1 (the spikes' 2)`, then its `level 1 on the enemies up (the host's level)`.
+  1 (the spikes' 2)`, then its `level 1 on the enemies up (the host's level)`. The throttle: `pressure: round 28: preset
+  B (was C, the intensity director's level down; the band's C, a letter gentler)` and back `pressure: round 28: preset C
+  (was B, the intensity director's level back up)`; inside an Anomaly / VALKA fight `pressure: round N: the anomaly's own
+  throttle is up: the preset after it (...)`.
 - Each round's end: `intensity: round 12: you avg 41, peak 88, above 80 for 14 s; comfort avg 37; held 1 (17 s),
   pushes 2; level 1 (the spikes' 2)` (a joiner: no holds / pushes; `, the host's`).
 - Errors: `intensity: error ...` (once a run). The perf line's `director` part includes P4.
@@ -1174,14 +1182,16 @@ plus two kills a minute (60).
 1. The scores: fly a normal round 8+ and read the 10 s lines against what happened: damage % after a hit, `N missiles on
    you` while the missile alert sounds (this checks the TargetToHome read; 0 throughout means it can't be read: then only
    missiles within 1 km count), enemies within 5 km, comfort rising while you sit on a tail with kills.
-2. The hold (waves on, round 8+): let a wave press you (two missiles, health dropping): `held N s ... wave 2 wait`, then
-   kill the rest down to 4: the `waits for the intensity hold` line, wave 2 only after the hold (its `wave 2 of N` line
-   15-20 s after the `held` line, not at the kill). Not again within 20 s.
+2. The hold (waves on, round 8+): let a wave press you (two missiles, health dropping) and stay pressed while you kill
+   the rest down to 4: the `held N s ... wave 2 wait` line comes at that kill (not before, however long you were hot),
+   with `waits for the intensity hold`; wave 2 only after the hold (its `wave 2 of N` line 15-20 s after the `held`
+   line). Not again within 20 s (`hold not now ... wave 3 comes`). While pressed, a wave's flights ~6 s apart, not 3.
 3. A push: round 3+, health above 70 %, kill steadily or sit on a tail: after ~20 s BANDIT CUTTING IN and a flight turns
    onto you (`ai:` UniqueAction); its kill pays `director push x1.5`. With Lancers held ([roles.mix] lancer = 0.5): the
    top cover dives instead (BANDIT DIVING / HIGH, n O'CLOCK).
 4. The level: round 15+ ([spikes] on), stay under heavy pressure 30 s: `the room above 80 ... level 1`, the next flights'
-   rows `_svb` instead of `_svc`, the `level 1 on the enemies up` line; ease off for 60 s: back to 2.
+   rows `_svb` instead of `_svc`, the `level 1 on the enemies up` line; ease off for 60 s: back to 2. Round 26+: the
+   `pressure: ... preset B (was C, ...)` line with it, and fewer enemies pressing you at once.
 5. hold.tactics: while pressed, tail a plane 3 s: no BANDIT CUTTING IN (`cover not now (under pressure ...)`).
 6. Co-op (a host and a joiner): the host's score lines list `player 2 N, comfort C` (the joiner's "in"); a hold named
    after player 2; a push on player 2 (the tell on the joiner only, `ai:` target = their stand-in); the joiner's `the
@@ -1199,31 +1209,41 @@ missiles as tables, planes as objects with a position and heading; then stats_re
   1 km; not one on an ally, one unreadable 1.5 km off, one 5 km off, one gone), damage (40 HP in two drops between
   samples: 40 + 9, smoothed 3 -> 19.1; the window's 30 s; a repair and a new aircraft no damage), smooth_x 1, comfort
   (15 s on a tail 65, two kills 100, a minute later 25; p.youAt over where you are now), MaxHealth read once in 10 s;
-- the hold through the real roundsTick: none while the intensity climbs, wave 2 held 15-20 s at 3 s above 80, the gate
-  shut while it's on (logged once), never made longer, wave 2 after it, no hold within gap_s, per_wave 1, the round's
-  line (held 1, and the level eased: over 30 s above 80), the rest of wave 2 held (its spawns wait, then come), wave 1
-  never held, a top cover held past its max_s inside the hold and let go at its end; nothing to hold, an Anomaly round,
-  the lever off, [intensity] off: none;
+- the hold through the real roundsTick: above 80 for 20 s+ while wave 2's gate is shut, no hold (nothing due; the
+  review's case); the gate opens, wave 2 held 15-20 s from then, the gate shut while it's on (logged once), never made
+  longer, wave 2 after it (no second for it: per_wave 1, logged), wave 3 due within gap_s comes at once (logged), the
+  spawn gap 3 s longer while hot (logged), the round's line (held 1, and the level eased); gap_s 0: per_wave alone keeps
+  wave 2's second away; the rest of wave 2 held at its next flight (none before one's due; its spawns wait, then come),
+  wave 1 never held; spawn_gap_add_s 0: spawn_gap_s only; the top cover's own hold (held past its max_s inside it, let go
+  at its end), a wave due during it held on its own, the top cover not held again within gap_s (DIR.holdOn false), a wave
+  due just after it held all the same; nothing to hold, an Anomaly round, the lever off (no spawn gap either),
+  [intensity] off: none;
 - hold.tactics: the squad director's cover refused at intensity 84 (logged), given with tactics off or calm;
 - a push: nothing before 20 s, the six tell and RE_SV_AceTurn_05 a lead later, STATS' push line and tag, its next move
   31 s on, the cooldown (logged), a second after it, no third (per_round 2), a held top cover's dive instead
-  (RE_SV_DirFree_07, counted as top_cover), a flight instead while the hold is on, none in round 2, none with [director]
+  (RE_SV_DirFree_07, counted as top_cover), a flight instead while its hold is on, none in round 2, none with [director]
   off (logged), nothing in range (logged once, tried again 5 s on and sent once in range), the lever off, a Ladon round;
 - the level: round 15 at 2 (a Veteran's provoke 60-160 m, PilotRank 5), 1 after 30 s above 80 (logged; the enemies up
   written again: surround 80-220 m, PilotRank 4, a Rookie near the jammer 4 + its boost), a new Veteran's PilotRank 4, a
   round's aircraft_add on the level, no lower with max_drop 1 past gap_s, 0 with max_drop 2, back up after 60 s below
-  50, nothing to ease in round 5, the lever off (the spikes' level, its ease dropped, logged), [intensity] off;
+  50, nothing to ease in round 5, the lever off (the spikes' level, its ease dropped, logged), [intensity] off; round 10
+  eased to 0: a Rookie's provoke back to the game's own values (90 deg / 3 s / 100-300 m, logged 1 of 1); the throttle:
+  round 28 eased C to B (RE_SV_PressureB, logged), back to C; round 15 B stays (none fired); DIR.pressure's letters
+  (pressure_min B, a, x; ease 2; pressure false); none fired in an Anomaly fight (logged);
 - co-op joiner: "in" once a second (`in|3.0|25.0|80.0|0.0`), the host's "rnd" level taken (a live copy written again,
   logged), levels 7, 1.5, nan, -1 and x and an older host's "rnd" not taken, no event of its own;
 - co-op host: "in" kept, a second within 0.25 s dropped, values clamped, NaN / 1e999 / a word / its own slot / slot 30 /
   no numbers dropped, stale after 3 s, a host sends none; player 2 above 80 for 3 s holds the room's next wave (named,
   the room listed); its "rnd" carries its level; player 2 comfortable 20 s: the six tell by "tl" to them only, then
-  RE_SV_Hunt_05 with the flight's TargetActor on their stand-in;
+  RE_SV_Hunt_05 with the flight's TargetActor on their stand-in; you and player 2 calm (60 each), nothing in range of
+  you: player 2's push the same second; player 2 more comfortable but its 2 used: yours instead;
 - the hooks by their place in the source (the wave gate and the spawning branch, startRound and the spike callout on
   levelFor, sv_ai's two, sv_rows', sv_spawn's two, sv_coop's "in" / "rnd" / D.intLevel, DIR.tick's order, heldTick and
   blockedBy, nothing of SV_Event / hudCallout kept at load, levelFor and roundBudget's level in sv_config).
 A mutation check (each on a scratch copy of the mod: the wave gate's hold, the gap, the "in" slot guard, the top cover's
-wait, the level's ease, the hot refusal, the joiner's D.intLevel) fails 1-9 of its checks each. The other units' tests
+wait, the level's ease, the hot refusal, the joiner's D.intLevel; after the review: the wave hold never started at its
+gate, the push loop stopping at the first calm player, the provoke not put back, DIR.pressure off, the spawn gap's add
+off, one gap for both holds, DIR.holdOn on the wave's hold) fails 1-11 of its checks each. The other units' tests
 pass unchanged but one source check in late_rounds_test.lua (startRound's `TIER.roundBudget(D.round, levelFor(D.round))`).
 
 ### Untested / known limits
@@ -1238,11 +1258,48 @@ pass unchanged but one source check in late_rounds_test.lua (startRound's `TIER.
   hard rule 37); a joiner's is a hunt with its TargetActor on the stand-in (untested, unit 6).
 - The level: fire-control rows are set at spawn, so a change reaches only flights that come after it (and the next
   round's aircraft_add); the enemies up get provoke (its effect untested, unit 2) and PilotRank (live writes confirmed,
-  test 16) written again, post-stall is every spike level's already. The director only eases under the spikes and back;
-  it never goes above them. The ease carries over the run's rounds (no reset at a round's start).
+  test 16) written again; post-stall stays as each plane spawned (set once by enemyManeuvers): spike levels 1-3 all have
+  post_stall_all, so only an ease from 1 to 0 changes it, and then only for planes that come after (those up keep it).
+  The director only eases under the spikes and back; it never goes above them. The ease carries over the run's rounds
+  (no reset at a round's start).
+- The throttle's ease (level.pressure) is unmeasured, like U3's presets themselves: whether a gentler preset lets a
+  pressed player breathe is for the round lines and the deaths' damage to say. With pressure_min B it acts only from
+  round 26 (the C / D bands); pressure_min A lets it ease B to A too.
+- The spawn gap's add (3 s) only spreads a wave that's spawning: the hold keeps the rest of a later wave back first; it
+  matters for a round's first wave and for a wave whose hold is used up.
 - Co-op: the host's level reaches a joiner with its next "rnd" (1 s, unreliable); copies already up then are written
   again, their tier still re-rolled locally (as before). The hold is the room's (the waves are); a joiner's "in" older
   than 3 s leaves them out of the room's decisions.
 - The hold also keeps the top cover past its max_s (at most the hold's length, 30 s). It never keeps back a round's
   first wave, a special's entry or a raid that's already up.
 - No COOP_TAG / VERSION bump yet (the contract's single bump at the end): "in" and the "rnd" level field are new.
+- Not built: runtime-ai step 8(c)'s separate director rank add (one applyRank): the level's rank_min is that lever,
+  between the tier's rank (the floor) and the spike's rank_min (the ceiling), and reapply writes it live with the
+  jammer's boost kept on top (JAM.tick goes back to the p.rankSet reapply sets), so the two never overwrite each other;
+  a rank add under the tier's would break "tiers stay the floor". Step 9's "replace the break callout with the
+  director's own escalation tells": the stock spike callout stays, said only when the (eased) level rises; no tell names
+  a held wave (tells-radio marks those lines optional, and a callout to the pressed player would only add to the
+  pressure).
+
+### Review fixes (after unit 7's review; not yet run in game)
+- **The wave hold held nothing (blocking).** It started the first time a player had been above 80 for 3 s, usually
+  right after a wave arrived with many enemies up, and counted against per_wave; thinning the wave to next_at took
+  longer than its 15-20 s, so it had run out when the gate opened, and the next was refused for gap_s or per_wave. Now
+  the wave hold starts only when a wave is due: roundsTick asks DIR.holdWave only once the gate is open (or at a later
+  wave's next flight), and DIR.holdWave starts it there when a player has been above 80 for after_s and gap_s /
+  per_wave allow. The top cover's hold is its own (D.int.cover, started once a second while a top cover is held), and
+  neither counts for the other's gap or per_wave, so a hold that kept no wave back costs the wave nothing. The spawning
+  branch now asks after the airfield check (a hold doesn't run down while spawns wait for you on the ground).
+- **A push for the next calm player (minor).** pushTick went only to the single most comfortable calm player; now it
+  goes through the calm players most comfortable first and pushes the first one whose budget, cooldown and DIR.push
+  allow.
+- **The 1-to-0 ease (minor).** At spike level 0 provokeWant has nothing for a tier without its own provoke, so the
+  planes up kept spike 1's. enemyProvoke now keeps each field's value before its first write (p.provokeStock) and
+  reapply writes those back (provokeStockWant) when a level has nothing to write. The comment and this note no longer
+  say post-stall is every spike level's (level 0 has no post_stall_all; planes up keep theirs).
+- **Scope: the pressure presets (runtime-ai 8d).** The level's ease now also steps U3's attack throttle preset a letter
+  gentler (DIR.pressure in roundPressure; pressureNow when the ease changes; never under pressure_min B; none inside an
+  Anomaly / VALKA fight, whose boss-down refire picks up the eased one).
+- **Scope: the spawn gap (runtime-ai 8a).** `D.at = now + CFG.spawn_gap_s + DIR.gap(now)`: spawn_gap_add_s 3 s more
+  between a wave's flights while a player has been above 80 for after_s.
+- Step 8(c) and step 9's tells: see "Not built" above.
