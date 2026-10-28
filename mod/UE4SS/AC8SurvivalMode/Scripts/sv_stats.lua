@@ -17,6 +17,7 @@
 --   STATS.roundStart / roundEnd     sv_rounds.lua (host, solo), sv_coop.lua clientRounds (a joiner): "stats: round N"
 --   STATS.sample(now, you)          sv_main.lua every 2 s: time down at the airfield; a cleared round's line
 --   STATS.runEnd(how)               LB.finish: "stats: run over"
+--   STATS.hostReset(now, resync)    sv_coop.lua, a joiner told "rs": its round cut short; the host's new run: a run line
 --   STATS.tactic(name, unit, slot, why, callout)   the squad / intensity director's tactics (P2, P4): a "director:"
 --                                   line, counted per round, and the unit's live planes tagged p.dirTag = { tactic, at }
 -- Logged only (AC8SurvivalMode_lua.log), never sent: friends' release logs are the test data, so none of this is in a
@@ -124,12 +125,25 @@ end
 -- An enemy found down (the sweep, up to 2 s after it fell). g: KILL.geom (aspect, range, your recent shots and the
 -- weapon spent last), by: creditKill's side ("you", "allies", "ships", "defences", "airstrike", "wingmate" in co-op;
 -- nil for a Ladon). An ordinary fighter: a pool flight's plane that isn't a bomber, an ace squadron's, the jammer or a
--- probe flight. Only your own kills feed the shares (behind, weapon); every death ends its tail episodes.
+-- probe flight (ace and jammer as the host's spawner set them, also for a plane the sweep never tracked). A co-op
+-- joiner can't tell: only the host knows which flights are aces or led by the jammer (D.aceSquad, D.jammer), so a
+-- joiner's pool fighters are ordinary = nil, kept out of the time to kill. Only your own kills feed the shares (behind,
+-- weapon); every death ends its tail episodes.
+local function isOrdinary(p, u)
+    if not (u and poolIndex(u) and not BOMBER_UNIT[u] and not PROBE_OF[u]) then return false end
+    if client() then return nil end
+    local ace = p.ace                                       -- (as tracked, while its flight was the one it came with)
+    if ace == nil then ace = D.aceSquad and D.aceSquad[u] end
+    if ace then return false end
+    local lr = D.leadRow and D.leadRow[u]                   -- (the jammer, down before JAM.tick saw it: its EA-18G)
+    if p.jammer or (lr and lr.code == "e18g" and p.name and p.name:find("_e18g_", 1, true)) then return false end
+    return true
+end
 function STATS.down(p, g, by, now)
     if not (on() and D and now) then return end
     local c, rs = cfg(), D.rs
     local u = p.unit
-    local ordinary = (u and poolIndex(u) and not BOMBER_UNIT[u] and not p.ace and not p.jammer and not PROBE_OF[u]) and true or false
+    local ordinary = isOrdinary(p, u)
     local mine = by == "you"
     local behind, close = nil, nil
     if g and g.offNose and g.km then
@@ -143,6 +157,7 @@ function STATS.down(p, g, by, now)
     if rs then
         rs.down = rs.down + 1
         if mine then rs.mineAll = rs.mineAll + 1 end
+        if ordinary == nil then rs.unsorted = rs.unsorted + 1 end      -- (a joiner's pool fighters)
         if ordinary then
             rs.fighters = rs.fighters + 1
             if mine then
@@ -167,7 +182,8 @@ function STATS.down(p, g, by, now)
     local tag = type(p.dirTag) == "table" and p.dirTag or nil
     log(string.format("kill-time: %s (%s, %s, round %d%s%s): up %s, engaged %s (within %g km), since your first hit %s, " ..
         "tailed %s (AI Provoke %s); %s; by %s%s", p.name, tostring(u or "?"), p.tier and p.tier.name or "no tier", r.round,
-        p.k and (", k " .. p.k) or "", ordinary and ", ordinary" or "", sec(r.up), sec(r.engaged), c.engage_km or 5,
+        p.k and (", k " .. p.k) or "", (ordinary and ", ordinary") or (ordinary == nil and ", ordinary ?") or "", sec(r.up),
+        sec(r.engaged), c.engage_km or 5,
         sec(r.hit), sec(r.tailedGeo), sec(r.tailedAI),
         (g and g.offNose and g.km) and string.format("%.0f deg off its nose at %.1f km, %+.1f km", g.offNose, g.km, g.dz or 0)
             or "aspect ?", tostring(by or "?"),
@@ -235,6 +251,33 @@ function STATS.hit(now, hp, pawn)
     if rs then rs.dmg[src], rs.hp = (rs.dmg[src] or 0) + hp, rs.hp + hp end
 end
 
+-- Your aircraft's own damage record (CFG.stats.pawn_history; metrics brief step 6.3, untested): its DamageHistoryMap,
+-- attacker -> damage since it took off (the armour's share in it too, which HIT can't see), read as KILL.read reads an
+-- enemy's. The three that did the most, by flight (an enemy here) or name, as "; record: ..." for the death line.
+local function pawnHistory()
+    if cfg().pawn_history == false then return "" end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return "" end
+    local by, n = {}, 0
+    local ok = pcall(function()
+        pawn.DamageHistoryMap:ForEach(function(k, v)
+            local okK, o = pcall(function() return k:get() end)
+            local okV, x = pcall(function() return v:get() end)
+            if okK and okV and type(x) == "number" and x > 0 and valid(o) then
+                local who = unitAt(addrOf(o)) or ((nameOf(o):match("([^%.:]+)$") or "?"):gsub("_C_%d+$", ""))
+                by[who], n = (by[who] or 0) + x, n + 1
+            end
+        end)
+    end)
+    if not ok then return "; record: not read" end
+    local t = {}
+    for w, x in pairs(by) do t[#t + 1] = { w, x } end
+    table.sort(t, function(a, b) return a[2] > b[2] end)
+    local top = {}
+    for i = 1, math.min(3, #t) do top[i] = string.format("%s %.0f", t[i][1], t[i][2]) end
+    return string.format("; record: %d attacker%s%s", n, n == 1 and "" or "s", #top > 0 and (", " .. table.concat(top, ", ")) or "")
+end
+
 -- Shot down ("died") or saved at the floor by SECOND CHANCE ("saved"): what hit you in the last death_window_s, by
 -- source and by shooter, and what you still held (metrics 4 and 5).
 function STATS.death(how)
@@ -264,12 +307,12 @@ function STATS.death(how)
     if #m.deaths < 50 then m.deaths[#m.deaths + 1] = { round = D.round, how = how, hp = tot, by = by } end
     local rs = D.rs
     log(string.format("death: round %d (%s)%s: last %d s -%.0f HP: missiles %s (%d hits from %d shooters, %d brackets), " ..
-        "gun/close %s, unknown %s; top: %s; missiles left %s (fired %d this run, %d this round), specials %s/%s, flares %s",
+        "gun/close %s, unknown %s; top: %s; missiles left %s (fired %d this run, %d this round), specials %s/%s, flares %s%s",
         D.round or 0, how == "saved" and "saved by SECOND CHANCE" or tostring(how),
         rs and string.format(", %.0f s into the round", now - rs.at) or "", win, tot, share(by.missile, tot), nM, nS, br,
         share(by["gun/close"], tot), share(by.unknown, tot), #tt > 0 and table.concat(tt, ", ") or "nothing seen",
         tostring(msl or "?"), m.fired[1] or 0, rs and rs.fired[1] or 0, tostring(held(2) or "?"), tostring(held(3) or "?"),
-        tostring(held(4) or "?")))
+        tostring(held(4) or "?"), pawnHistory()))
 end
 
 ---------------------------------------------------------------------------------------------------- the director's tactics
@@ -304,8 +347,8 @@ end
 ---------------------------------------------------------------------------------------------------- rounds
 local function newRound(now)
     local ti = CFG.tiers.enabled and CFG.tiers.list[TIER.index(D.round)]
-    return { round = D.round, at = now, ground = 0, tier = ti and ti.name or "no tier",
-             down = 0, mineAll = 0, fighters = 0, fightersMine = 0, ttk = {}, ttkSpawn = {}, ttkHit = {},
+    return { round = D.round, at = now, ground = 0, tier = ti and ti.name or "no tier", client = client(),
+             down = 0, mineAll = 0, fighters = 0, fightersMine = 0, unsorted = 0, ttk = {}, ttkSpawn = {}, ttkHit = {},
              tailedAI = {}, tailedGeo = {}, provokeEscaped = 0, tailEscaped = 0, mineGeo = 0, behind = 0, close = 0,
              wpn = {}, fired = {}, dmg = {}, hp = 0, tactics = {}, nTactics = 0, callouts = 0, moves = {}, stateS = {} }
 end
@@ -327,16 +370,19 @@ local function flushRound()
     local players = 1
     if COOP and COOP.open and COOP.lobby then local okL, lb = pcall(COOP.lobby); if okL and lb and lb.n then players = lb.n end end
     local w, f = rs.wpn, rs.fired
+    -- (a joiner can't tell the host's aces and jammer from ordinary fighters: its pool fighters down, no time to kill)
+    local ft = rs.client and string.format("ordinary fighters ? (a joiner can't tell aces; %d pool fighters down)", rs.unsorted)
+        or string.format("ordinary fighters %d (yours %d): time to kill since engaged median %s (n %d), since spawn median %s, " ..
+            "since your first hit median %s", rs.fighters, rs.fightersMine, sec(median(rs.ttk)), #rs.ttk,
+            sec(median(rs.ttkSpawn)), sec(median(rs.ttkHit)))
     log(string.format("stats: round %d (%s, %s%s, %d player%s)%s: length %.0f s (%.0f s at the airfield), %d wave%s; " ..
-        "aircraft down %d (yours %d), ordinary fighters %d (yours %d): time to kill since engaged median %s (n %d), since " ..
-        "spawn median %s, since your first hit median %s; tailed survival: AI Provoke median %s (%d died, %d escaped), " ..
+        "aircraft down %d (yours %d), %s; tailed survival: AI Provoke median %s (%d died, %d escaped), " ..
         "geometric median %s (%d died, %d escaped); kills from behind %d/%d (%s); your kills with missiles %d, gun %d, " ..
         "special %d, nothing seen %d (%d close); missiles left %s, fired %d this round; you took %.0f HP (missiles %s, " ..
         "gun/close %s, unknown %s); director tactics %d (%s; %d callouts); ace reversals %d",
         rs.round, rs.tier, kind, spS and string.format(" %d s", spS) or "", players, players == 1 and "" or "s",
         rs.cut and (" (cut short: " .. tostring(rs.cut) .. ")") or "", len, rs.ground, rs.waves or 1,
-        (rs.waves or 1) == 1 and "" or "s", rs.down, rs.mineAll, rs.fighters, rs.fightersMine, sec(median(rs.ttk)), #rs.ttk,
-        sec(median(rs.ttkSpawn)), sec(median(rs.ttkHit)), sec(median(rs.tailedAI)), #rs.tailedAI, rs.provokeEscaped,
+        (rs.waves or 1) == 1 and "" or "s", rs.down, rs.mineAll, ft, sec(median(rs.tailedAI)), #rs.tailedAI, rs.provokeEscaped,
         sec(median(rs.tailedGeo)), #rs.tailedGeo, rs.tailEscaped, rs.behind, rs.mineGeo, share(rs.behind, rs.mineGeo),
         w.msl or 0, w.gun or 0, w.special or 0, w.none or 0, rs.close, tostring(rs.mslLeft or "?"), f[1] or 0, rs.hp,
         share(rs.dmg.missile, rs.hp), share(rs.dmg["gun/close"], rs.hp), share(rs.dmg.unknown, rs.hp), rs.nTactics,
@@ -383,6 +429,20 @@ function STATS.sample(now, you)
     end
 end
 
+-- Co-op, a joiner: the host sent "rs" (sv_coop.lua), before D.round goes back to 0. As the answer to this game's own
+-- "jn" (its level loaded, its link came back) it's a resync: the open round ends here, cut short, and the host's next
+-- round number starts a fresh one. Otherwise the host started a new run while this game's level, RUN and leaderboard run
+-- go on: the round ends, the run so far gets its line, and the host's next run starts on empty records (RUN.metrics).
+function STATS.hostReset(now, resync)
+    if not (on() and D) then return end
+    if D.rs and not D.rs.ended then STATS.roundEnd(now, resync and "co-op resync" or "the host started over") end
+    flushRound()
+    local m = RUN.metrics
+    if resync or not (m and (#m.rounds > 0 or #m.kills > 0)) then return end
+    STATS.runEnd("the host started over")
+    RUN.metrics = nil
+end
+
 ---------------------------------------------------------------------------------------------------- the run
 -- The run's over (LB.finish: died, restart, left): the round it ended in, then one line with the seven metrics against
 -- the thesis' targets. RUN.metrics.kills keeps every kill's round, so "rounds 7-12" is worked out here.
@@ -394,9 +454,10 @@ function STATS.runEnd(how)
     if D.rs and not D.rs.ended then STATS.roundEnd(D.now, how) end
     flushRound()
     local a, b, vet = c.ttk_from_round or 7, c.ttk_to_round or 12, veteran()
-    local ttk, tAI, tGeo, geo, behind = {}, {}, {}, 0, 0
+    local ttk, tAI, tGeo, geo, behind, unsorted = {}, {}, {}, 0, 0, 0
     for _, r in ipairs(m.kills) do
         if r.ordinary and r.mine and r.engaged and r.round >= a and r.round <= b then ttk[#ttk + 1] = r.engaged end
+        if r.ordinary == nil and r.mine and r.round >= a and r.round <= b then unsorted = unsorted + 1 end
         if r.tierI and r.tierI >= vet then
             if r.tailedAI then tAI[#tAI + 1] = r.tailedAI end
             if r.tailedGeo then tGeo[#tGeo + 1] = r.tailedGeo end
@@ -417,12 +478,14 @@ function STATS.runEnd(how)
     local msl = m.mslLeft
     if how ~= "died" or msl == nil then msl = held(1) end
     local d, f = m.dmg, m.fired
-    log(string.format("stats: run over (%s): rounds %d-%d; time to kill rounds %d-%d median %s (n %d) [target 20-40 s]; " ..
+    log(string.format("stats: run over (%s): rounds %d-%d; time to kill rounds %d-%d median %s (n %d%s) [target 20-40 s]; " ..
         "tailed survival Veteran+ AI Provoke median %s (n %d), geometric median %s (n %d) [8 s+]; specials %s; special " ..
         "rounds %s [5-8 min]; missiles left at the end %s [under 40]; damage taken %.0f HP: missiles %s, gun/close %s, " ..
         "unknown %s, brackets %d [varied]; director tactics per round avg %.1f (%d in %d rounds) [3-6]; kills from behind " ..
         "%s (%d/%d) [under 70%%]; fired: missiles %d, specials %d, flares %d, gun %d",
-        tostring(how), D.startRound or 1, D.round or 0, a, b, sec(median(ttk)), #ttk, sec(median(tAI)), #tAI,
+        tostring(how), D.startRound or 1, D.round or 0, a, b, sec(median(ttk)), #ttk,
+        unsorted > 0 and string.format("; %d of your kills left out: a co-op joiner can't tell aces", unsorted) or "",
+        sec(median(tAI)), #tAI,
         sec(median(tGeo)), #tGeo, #sp > 0 and table.concat(sp, ", ") or "none", #srl > 0 and table.concat(srl, ", ") or "none",
         tostring(msl or "?"), m.hpTaken, share(d.missile, m.hpTaken), share(d["gun/close"], m.hpTaken),
         share(d.unknown, m.hpTaken), m.brackets, nr > 0 and tac / nr or 0, tac, nr, share(behind, geo), behind, geo,

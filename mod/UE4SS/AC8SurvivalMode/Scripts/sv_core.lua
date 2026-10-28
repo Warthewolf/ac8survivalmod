@@ -442,7 +442,7 @@ function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~= nil 
 -- spawningIdx (0 before a pool or bomber flight's SV_Spawn, nil otherwise): each plane's index in its flight, p.k, in the
 -- order the spawner makes them, 0 the lead (desc 0: SV_SetAircraft(unit, row, 0) puts an ace or the jammer there).
 -- The squad director's per-plane events go by it (tools/re/BEHAVIOUR_DIRECTOR.md, unit 1); creation order = desc order
--- is [I] until a test's "spawn index:" line shows the lead's own airframe at k 0.
+-- is [I] until a test's "spawn index:" line shows the lead's own blueprint at k 0 (a jammer or a Harvest flight).
 spawningUnit, spawningIdx = nil, nil
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o)
     local k = spawningIdx
@@ -469,21 +469,33 @@ ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookA
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
 
 -- The spawn index's check: a flight whose lead got its own row (an ace's, the jammer's; sv_spawn.lua D.leadRow) says,
--- once its k 0 and k 1 are both in, which airframe each flies. The lead's at k 0 if the spawner makes desc 0 first.
+-- once its k 0 and k 1 are both in, which blueprint each flies. The lead's at k 0 if the spawner makes desc 0 first.
+-- Only a lead whose blueprint differs from its wings' can tell: the jammer (an EA-18G leading pool fighters, round 8 on)
+-- and Harvest's aces (the reaper tier: a "_CP_Named" lead over "_CP_Shadow" wings, the Rafale over Typhoons). Every
+-- other squadron's lead and wings share one blueprint (tools/build_survival.py ACES): "can't tell" (review of unit 1).
 local LEAD_CODE = { typhoon = "typn", rafale = "rflm", adfx02 = "adfx" }   -- (an ace key's blueprint code, where it differs)
+local function blueprint(name) return name:match("^(BP_.-)_C_%d+$") or name:match("^(BP_.-)_C$") or name end
+local function leadIs(bp, other, want)           -- bp is the lead's blueprint and `other` a wing's (want: the lead's code)
+    if bp == other then return false end
+    local a, b = bp:match("^BP_OP%d+_(%w+)_"), other:match("^BP_OP%d+_(%w+)_")
+    if a ~= want then return false end
+    if b ~= want then return true end
+    return bp:find("_CP_Named", 1, true) ~= nil and not other:find("_CP_Named", 1, true)   -- (named models: leads only)
+end
 local function leadCheck(rec)
     local L = D and D.leadRow and D.leadRow[rec.unit]
     if not L or L.said then return end
-    L.codes = L.codes or {}
-    L.codes[rec.k] = rec.name:match("^BP_OP%d+_(%w+)_") or rec.name
-    if not (L.codes[0] and L.codes[1]) then return end
+    L.bps = L.bps or {}
+    L.bps[rec.k] = blueprint(rec.name)
+    local b0, b1 = L.bps[0], L.bps[1]
+    if not (b0 and b1) then return end
     L.said = true
     local want = LEAD_CODE[L.code] or L.code
-    local verdict = (L.codes[0] == want and L.codes[1] ~= want and "k 0 is the lead: creation order = desc order")
-        or (L.codes[1] == want and L.codes[0] ~= want and "k 0 is NOT the lead: creation order isn't desc order")
-        or "can't tell from these two"
+    local verdict = (leadIs(b0, b1, want) and "k 0 is the lead: creation order = desc order")
+        or (leadIs(b1, b0, want) and "k 0 is NOT the lead: creation order isn't desc order")
+        or (b0 == b1 and "can't tell: lead and wings fly one blueprint") or "can't tell from these two"
     log(string.format("spawn index: %s, lead row %s (%s): k 0 is a %s, k 1 a %s; %s", rec.unit, tostring(L.row), tostring(want),
-        L.codes[0], L.codes[1], verdict))
+        b0, b1, verdict))
 end
 
 function logPlane(o, unit, k)
