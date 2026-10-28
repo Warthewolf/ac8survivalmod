@@ -288,6 +288,16 @@ ANOMALY_GUARD_RADIUS_M = 2000.0             # its guards' unit area, on it: they
 # while MINDRIPPER is up ANOMALY_ATTACK (user, 2026-10-22: "mindripper still wasn't aggressive enough").
 ATTACK_BASE = {'missiles': 4, 'attackers': 6, 'cooldown': (4.0, 8.0, 15.0, 20.0)}
 ANOMALY_ATTACK = {'missiles': 8, 'attackers': 10, 'cooldown': (0.5, 1.0, 3.0, 5.0)}
+# The throttle's presets Lua picks (behaviour roadmap P8 x P4, tools/re/BEHAVIOUR_DIRECTOR.md unit 3): remote events
+# RE_SV_Pressure<letter> (letters: hard rule 17), built in build_anomaly with its attack(). Scripts/sv_rounds.lua fires
+# one by round band (CFG.late.pressure: C from round 26, D from 31, so the attackers at once stay about a third of the
+# most up), never in an Anomaly or VALKA round (their records below set ANOMALY_ATTACK and put ATTACK_BASE back), and
+# again the round after them. A: a lull (for the intensity director, P4); B: ATTACK_BASE. Keep the letters in step
+# with Scripts/sv_config.lua TIER.PRESSURE_PRESETS (build_anomaly checks it). Their effect was never measured.
+PRESSURE = {'A': {'missiles': 2, 'attackers': 3, 'cooldown': (8.0, 12.0, 20.0, 25.0)},
+            'B': ATTACK_BASE,
+            'C': {'missiles': 6, 'attackers': 8, 'cooldown': (2.0, 4.0, 8.0, 12.0)},
+            'D': {'missiles': 8, 'attackers': 10, 'cooldown': (1.0, 2.0, 5.0, 8.0)}}
 ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
 # The arrival (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER"): it spawns hidden
 # (Scripts/main.lua CFG.specials.anomaly.portal) and the focus camera swings onto it at once; Lua opens the portal on it
@@ -1119,6 +1129,18 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
         g.execute(t_ma, ev, {0: a['attackers']}, delay=delay)
         g.execute(t_cd, ev, {i: f'{v}' for i, v in enumerate(a['cooldown'])}, delay=delay)
     attack('MissionStart', ATTACK_BASE)
+    # the presets Lua picks (PRESSURE): a remote event each, the same three records as above. The letters and Lua's
+    # TIER.PRESSURE_PRESETS / CFG.late.pressure checked here so the two can't drift
+    import re
+    lua = runtime_lua()
+    m_pp = re.search(r'TIER\.PRESSURE_PRESETS = "([A-Z]+)"', lua)
+    assert m_pp and m_pp.group(1) == ''.join(sorted(PRESSURE)), 'sv_config.lua TIER.PRESSURE_PRESETS != PRESSURE'
+    m_pr = re.search(r'pressure = \{ enabled = \w+, from_round = \{ [\d, ]+ \}, preset = \{ ([^}]*) \} \}', lua)
+    assert m_pr and all(x.strip().strip('"') in PRESSURE for x in m_pr.group(1).split(',')), 'CFG.late.pressure presets not in PRESSURE'
+    for letter, a in sorted(PRESSURE.items()):
+        ev = f'RE_SV_Pressure{letter}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                             # a remote event Lua fires (SV_Event)
+        attack(ev, a)
     assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false'], (arg_values(t_warn_on), arg_values(t_warn_off))
     up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})

@@ -105,7 +105,9 @@ if ROLE == "host" then
     -- co-op scaling: 4 players in the room
     M.roster = { [0] = {}, [1] = {}, [2] = {}, [3] = {} }
     check(COOP.more(20, "max_aircraft") == 29, "host: 4 players, 20 aircraft -> 29 (" .. tostring(COOP.more(20, "max_aircraft")) .. ")")
-    check(COOP.more(50, "max_aircraft") == 60, "host: capped at max_aircraft 60")
+    check(COOP.more(50, "max_aircraft") == 73, "host: 4 players, 50 aircraft -> 73 (under max_aircraft 80)")
+    check(COOP.more(60, "max_aircraft") == 80, "host: 4 players, round 35's 60 -> capped at max_aircraft 80")
+    check(COOP.more(30, "max_up") == 30, "host: the Ace preset's late 30 up at once stays 30 (max_up 30)")
     check(COOP.more(18, "max_up") == 26, "host: 4 players, wave of 18 -> 26")
     M.roster = { [0] = {} }
     check(COOP.more(20, "max_aircraft") == 20, "host: alone, unchanged")

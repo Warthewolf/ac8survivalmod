@@ -269,21 +269,46 @@ local function makeWaves(special, fighters, bombers, cap)
     return waves
 end
 
--- The most aircraft a wave holds now (CFG.waves.max_up, by the game's difficulty when max_up_by_preset has it).
-local function waveCap()
-    local w = CFG.waves
-    local n = (w.max_up_by_preset and w.max_up_by_preset[presetName()]) or w.max_up
-    return math.max(2, math.floor(n * SETUP.enemyX() + 0.5))      -- (the menu's ENEMY AIRCRAFT %, sv_menu.lua)
+-- The most aircraft a wave of round `round` holds (CFG.waves.max_up, by the game's difficulty when max_up_by_preset
+-- has it; from CFG.late.aircraft_from_round growing to late.max_up_cap: TIER.maxUp), x the menu's ENEMY AIRCRAFT %.
+local function waveCap(round)
+    local p = presetName()                                         -- (its first value: presetName returns two)
+    return math.max(2, math.floor(TIER.maxUp(round, p) * SETUP.enemyX() + 0.5))   -- (the menu's %, sv_menu.lua)
+end
+
+-- The game's player-attack throttle for the round (CFG.late.pressure; behaviour roadmap P8 x P4, the critic's gap
+-- fill): RE_SV_Pressure<X> (tools/survival_events.py PRESSURE) when the round's preset (TIER.pressure) isn't the one in
+-- force, D.pressure (nil: the mission start's ATTACK_BASE, B). An Anomaly or VALKA round fires none: their own records
+-- set their throttle and put B back as they end, so D.pressure is B after them and the next round fires its own again.
+-- Forwarded to co-op joiners (each game's throttle limits attacks on its own player; a joiner who links later gets the
+-- one in force from hostSync, sv_coop.lua). The intensity director (P4) would turn the same dial through D.pressure.
+local PRESSURE_OWN = { anomaly = true, valka = true }
+local function roundPressure(special)
+    local want = TIER.pressure(D.round)
+    if not want then return end
+    local was = D.pressure or "B"
+    if special and PRESSURE_OWN[special] then
+        D.pressure = "B"
+        log(string.format("pressure: round %d is the %s's: its own throttle, then preset B%s", D.round, special,
+            want ~= "B" and string.format("; preset %s again next round", want) or ""))
+        return
+    end
+    if want == was then return end
+    local ev = "RE_SV_Pressure" .. want
+    local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+    if r == 1 then D.pressure = want end
+    log(string.format("pressure: round %d: preset %s (was %s)%s", D.round, want, was,
+        r == 1 and "" or (", " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r)))))
 end
 
 local function startRound()
     D.round = D.round + 1
     pruneDown()
     D.events = {}
-    local sk = spikeCfg(spikeLevel(D.round))
-    local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
-        CFG.max_aircraft)
-    budget = math.max(1, math.floor(budget * SETUP.enemyX() + 0.5))     -- (the menu's ENEMY AIRCRAFT %, sv_menu.lua)
+    -- the round's aircraft (TIER.roundBudget: the spike's aircraft_add within the round's cap, which grows from
+    -- CFG.late.aircraft_from_round), then a special's extra, then the menu's ENEMY AIRCRAFT %, then co-op (below): the
+    -- caps before the % (CFG.setup's "% of each round's and each wave's aircraft")
+    local budget = TIER.roundBudget(D.round)
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
@@ -300,8 +325,10 @@ local function startRound()
         RUN.specialAt[special] = D.round                    -- (its cooldown: specialFor)
     end
     if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
-        budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), CFG.max_aircraft)
+        budget = math.min(budget + (CFG.specials.amphibious.extra_aircraft or 0), TIER.roundCap(D.round))
     end
+    -- (after the special's extra: capped first, then the %; before, an amphibious round above 100 % was cut back to 30)
+    budget = math.max(1, math.floor(budget * SETUP.enemyX() + 0.5))     -- (the menu's ENEMY AIRCRAFT %, sv_menu.lua)
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
     -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
     D.roundTier = nil
@@ -410,7 +437,9 @@ local function startRound()
         for _, u in ipairs(fighters) do if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] then D.jammerUnit = u end end
         if D.jammerUnit then log(string.format("round %d: the jammer flies with %s", D.round, D.jammerUnit)) end
     end
-    D.waves = makeWaves(spk and special or nil, fighters, bombers, COOP and COOP.more and COOP.more(waveCap(), "max_up") or waveCap())
+    local cap = waveCap(D.round)
+    if COOP and COOP.more then cap = COOP.more(cap, "max_up") end           -- (co-op: more for more players)
+    D.waves = makeWaves(spk and special or nil, fighters, bombers, cap)
     D.wave, D.queue = 1, D.waves[1]
     D.spare = {}
     for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
@@ -426,11 +455,19 @@ local function startRound()
         end
         waveText = string.format(", %d waves (%s aircraft)", #D.waves, table.concat(sizes, " + "))
     end
-    log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s%s%s", D.round, nFighters + nBombers, nFighters,
+    log(string.format("round %d: %d aircraft: %d fighters in %d squadrons%s%s%s; cap %d, up to %d at once", D.round,
+        nFighters + nBombers, nFighters,
         #fighters, raid and string.format(", bomber raid: %d bombers in %d squadrons%s", nBombers, #bombers,
             D.raidBearing and string.format(" from the %s (bearing %d)", compassName(D.raidBearing), D.raidBearing) or "")
         or special and string.format(", special %s: %d strike aircraft in %d squadrons", special, nBombers, #bombers) or "",
-        nEsc > 0 and string.format(", %d escort flights", nEsc) or "", waveText))
+        nEsc > 0 and string.format(", %d escort flights", nEsc) or "", waveText, TIER.roundCap(D.round), cap))
+    -- (whole 2 / 4 / 6-ships lose an odd budget's last one; more than that is the pool: 22 fighter flights, 86
+    -- aircraft, the ones still up skipped; ENEMY AIRCRAFT above 100 % or co-op can ask more of late rounds)
+    if nWant - nFighters >= 2 then
+        log(string.format("round %d: pool short: %d of %d fighters (%d spare 2-ships)", D.round, nFighters, nWant, #D.spare))
+    end
+    local okP, errP = pcall(roundPressure, special) -- (the game's attack throttle for the round: CFG.late.pressure)
+    if not okP then log("pressure: error " .. tostring(errP)) end
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
     RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
@@ -565,6 +602,8 @@ function roundsTick(now)
         end
         local w = CFG.waves
         local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
+        -- (the intensity director's hook, behaviour roadmap P4: "above 80 intensity it holds the next wave back, so a
+        -- bigger round is longer, not denser" adds `and not hold` here, a hold with a hard limit)
         if alive <= w.next_at or timedOut then
             D.wave, D.waveAt = D.wave + 1, now
             D.queue = D.waves[D.wave]

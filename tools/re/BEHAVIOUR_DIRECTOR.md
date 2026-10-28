@@ -298,3 +298,132 @@ used to open one and close it the next tick as "died" after about 0.25 s, pullin
 and count as "still up" instead of vanishing. tools/build_all.sh now lints Scripts/ai/*.lua too (lua_check, the
 packed behaviour scripts; the critic's note). stats_report.py reads the new parts (and still reads the older lines).
 Not done: runtime-ai step 11 (per-row provoke) waits for the A/B; the joiners' tails stay unwatched (above).
+
+## Unit 3: late rounds (P8)
+
+The thesis' P8: "smarter to round 25, then more planes". Rounds 15-25 keep the 30-aircraft cap with enemy health capped
+at x1.5; from round 26 a round grows by 3 aircraft up to 60 by round 35, and the most up at once by 1 a round up to a
+ceiling per preset, so the extra planes come as more waves, not a bigger wall. With it: the critic's P8 x P4 gap fill
+(the game's player-attack throttle grows with the sky: RE_SV_Pressure<A..D>) and the kill bonus for director-tagged
+kills. Lua, survival.default.ini and four new remote events (tools/survival_events.py; rebuilt into the container by
+build_all.sh). No new rows, flags or world data. No COOP_TAG bump of its own (the contract's single bump comes last), but
+the four events are new: that bump must come before any co-op build goes out, or an older joiner logs
+"coop: the host's event RE_SV_PressureC not fired here".
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| the round's cap and budget | sv_config.lua `TIER.growRounds(round)`, `TIER.roundCap(round)`, `TIER.roundBudget(round)` | growRounds: rounds into the growth (0 before CFG.late.aircraft_from_round, 1 in it; 0 with [late] off or aircraft_from_round 0). roundCap: CFG.max_aircraft, then + aircraft_per_round a round up to late.max_aircraft (never below CFG.max_aircraft). roundBudget: aircraft_round1 + aircraft_per_round a round + the spike's aircraft_add, within roundCap (the thesis' "spikes still add their aircraft_add on top, within the cap": past round 13 the base is already over 30, so a spike adds nothing late, as before). Pure maths of CFG, no new globals or main-chunk locals |
+| the most up at once | sv_config.lua `TIER.maxUp(round, preset)` | CFG.waves.max_up_by_preset[preset] (or max_up), then + late.max_up_per_round a round up to late.max_up_cap[preset] (never below the preset's own; a preset without a cap doesn't grow) |
+| startRound | sv_rounds.lua `startRound`, `waveCap(round)` | the budget is TIER.roundBudget; an amphibious round's extra is capped at TIER.roundCap; then the menu's ENEMY AIRCRAFT %; then COOP.more. The % used to come before the amphibious extra, whose re-cap at 30 cut an amphibious round above 100 % back to 30 (a bug the brief found; 45 at 150 % now). waveCap(round) = TIER.maxUp(round, presetName()) x the %, then COOP.more(..., "max_up"). The round's start line gains "; cap C, up to U at once", and a "pool short" line when the pool can't fill the fighters by 2 or more. The wave state is unchanged; its gate carries a comment for P4's hold (`and not hold`) |
+| health | sv_config.lua CFG.late | health_max_x 1.5 (was 2.0) and health_per_round 0.045 (was 0.04): x1.495 at round 25, x1.5 from 26, as the numbers start growing (the thesis: "health stops climbing once numbers do"). enemyLate / scaleHealth are unchanged |
+| co-op caps | sv_config.lua CFG.coop | max_aircraft 80 (was 60): from round 35 one player's round is already 60, and the fighter pool holds 86; max_up stays 30 (the Ace preset's late ceiling and the frame-time limit). COOP.more is unchanged (never fewer than one player gets) |
+| the attack throttle | tools/survival_events.py `PRESSURE`, build_anomaly; sv_config.lua `TIER.pressure(round)`, `TIER.PRESSURE_PRESETS`; sv_rounds.lua `roundPressure` | four remote events RE_SV_Pressure<A..D>, each the three records attack() writes (LiveSetPlayerMaxAttackerMissiles, LiveChangePlayerMaxAttackersNumExecution, LivePlayerAttackCooldownOverrideExecution), built inside build_anomaly where attack() lives (the critic's correction): A 2 missiles / 3 attackers / 8-12-20-25 s (a lull, for P4), B = ATTACK_BASE 4 / 6 / 4-8-15-20 (the mission start's), C 6 / 8 / 2-4-8-12, D 8 / 10 / 1-2-5-8. TIER.pressure: the preset of the latest [late.pressure] from_round band the round is in, B before them, nil when [late] or [late.pressure] is off. startRound fires it (after the waves are made) when it differs from the one in force (D.pressure; nil = B from the mission start), never in an Anomaly or VALKA round (their records set ANOMALY_ATTACK and put ATTACK_BASE back at their end: D.pressure is set to B there, so the next round fires its band's preset again). A failed fire leaves D.pressure as it was, so the next round tries again. The build checks Lua's letters and presets against PRESSURE (build_anomaly asserts). D.pressure is the dial the intensity director (P4) would turn too |
+| co-op for the throttle | sv_coop.lua `hostSync` | the contract's table makes RE_SV_Pressure* forwarded (not in KEEP_EVENTS; the runtime-ai brief wanted it kept, the contract wins): each game's throttle limits the attacks on its own player, and a joiner's copies attack the joiner (hard rule 48), so the host's preset belongs on every game. A joiner who links (or starts over) later missed the fire, so hostSync sends the preset in force ("ev", queued like the other events until its level is ready) unless it's B, which the joiner's own mission start already set |
+| the kill bonus | sv_main.lua `creditKill`; CFG.late.director_pay | your kill (KILL.by "you") of a plane whose p.dirTag = { tactic, at } (STATS.tactic, unit 1) is at most tag_s old pays x `x` (1.5), in the TIER.pay base with the other multipliers; the credits line gains ", director <tactic> x1.5". Nothing is tagged until the squad director (P2) calls STATS.tactic; ACE reversals aren't tagged (unit 1). Pays in any round, [late] on or off (the thesis: "so fighting smart pays at any count") |
+| the menu's help | sv_menu.lua `roundN` | ENEMY AIRCRAFT's help reads TIER.roundBudget: "round 1 has 4, round 10 has 24, round 35 has 60" at 100 % (round 10 said 22: it left out the round-8 spike's +2) |
+
+What a run brings now (default settings, solo, a normal round without bombers; the test's Monte Carlo of the real
+startRound, 300 runs a cell):
+
+| round | aircraft (picked) | most up Casual / Standard / Ace | waves Casual / Standard / Ace | throttle | health |
+|---|---|---|---|---|---|
+| 25 | 30 (30) | 14 / 18 / 22 | 3 / 2 / 2 | B | x1.495 |
+| 28 | 39 (38) | 17 / 21 / 25 | 3 / 2 (3 in 1 of 6) / 2 | C | x1.5 |
+| 31 | 48 (48) | 20 / 24 / 28 | 3 / 2 or 3 (half each) / 2 | D | x1.5 |
+| 35+ | 60 (60) | 20 / 26 / 30 | 3 or 4 (4 in 2 of 3) / 3 / 2 or 3 (3 in 2 of 5) | D | x1.5 |
+
+The thesis' table (30 / 39 / 48 / 60; 14-22, 17-25, 20-28, 20-30; about 2 / 2 / 2 / 3 waves at Standard) is matched.
+Rounds 1-25 are as before (budget and most up, checked round by round). "Picked" is the usual case: flights are whole 2 /
+4 / 6-ships, so an odd budget (39) flies one short; in 1-9 % of runs (most at round 35) the pool's eight 2-ships run out
+first and a round flies 2-4 short ("pool short").
+
+With the menu's ENEMY AIRCRAFT % (applied after the caps, as before) and co-op (COOP.more after the %), Standard:
+round 35 at 50 % asks 30 (13 up at once), at 150 % 90 (the pool gives 86; 39 up), at 200 % 120 (86; 52 up); four players
+at round 25 get 44 (26 up), at round 35 80 (30 up: max_up), Ace at round 35 80 (30), Casual at round 31 70 (29).
+
+### CFG keys
+- `CFG.late` ([late] in survival.ini): `health_per_round` 0.045 (was 0.04), `health_max_x` 1.5 (was 2.0),
+  `aircraft_from_round` 26 (0: no growth), `aircraft_per_round` 3, `max_aircraft` 60, `max_up_per_round` 1.
+- `CFG.late.max_up_cap` ([late.max_up_cap]): casual 20, standard 26, ace 30.
+- `CFG.late.pressure` ([late.pressure]): `enabled` true, `from_round` 26, 31, `preset` C, D (any case; letters of
+  TIER.PRESSURE_PRESETS / PRESSURE only, others skipped). Needs [late] on.
+- `CFG.late.director_pay` ([late.director_pay]; [zollars] points there): `enabled` true, `x` 1.5, `tag_s` 20 (the sweep
+  sees a kill up to 2 s late). In CFG.late by the contract ("CFG.late (P8 additions)"); the brief had it in CFG.credits.
+- `CFG.coop.max_aircraft` 80 (was 60).
+- Switches: [late] enabled = false turns off health, promotion, growth and the throttle together (not the kill bonus);
+  aircraft_from_round = 0 only the growth; [late.pressure] enabled = false only the throttle (the game stays on B);
+  [late.director_pay] enabled = false only the bonus. A co-op host's [late] reaches the joiners (M.sendSettings).
+
+### Log lines to look for in a test
+- `round 30: 44 aircraft: 44 fighters in 11 squadrons, 2 waves (22 + 22 aircraft); cap 45, up to 23 at once` (Standard;
+  the numbers vary; cap = TIER.roundCap, "up to" = the wave cap after the % and co-op).
+- `round 35: pool short: 58 of 60 fighters (0 spare 2-ships)` (the pool ran out of the sizes left; at 100 % rare).
+- Unchanged: `round N: wave k of n (m aircraft) with j of the last wave's left`, `late: round N enemies' health x1.50
+  (...)` (at most x1.50 now).
+- `pressure: round 26: preset C (was B)`, `pressure: round 31: preset D (was C)`; in an Anomaly or VALKA round
+  `pressure: round 28 is the anomaly's: its own throttle, then preset B; preset C again next round`, then the next round
+  `pressure: round 29: preset C (was B)`; a failure `..., RE_SV_PressureC not fired: <reason>`; `pressure: error ...`.
+- Co-op joiner: nothing when it works; `coop: the host's event RE_SV_PressureC not fired here (...)` when it doesn't.
+- `credits: +280 (f16c down (fighter, Veteran x1.25, round x1.50, director bracket x1.5)), now ...` (once P2 tags).
+- `perf: tick avg X ms, worst Y ms ...` with 26-30 up: the thesis' gate before shipping the Ace ceiling.
+
+### Test checklist (in game)
+1. Reach the late rounds: START AT ROUND 30 on the menu, or `[rounds] start_round = 35` in survival.ini. Each preset
+   (Casual / Standard / Ace). The start lines: the budget (45 at 30, 60 at 35), "cap", "up to", the waves; the wave
+   lines as each wave comes in at 4 left.
+2. Frame time with 26-30 up (Ace, round 35): the `perf:` lines (the true peak is the wave cap + next_at 4 = 34).
+3. The throttle A/B: rounds 26-30 with `[late.pressure] enabled = true` and `= false`. Compare the kill-time lines
+   (time to kill), the death line (damage at death, its record) and the stats round line; in the ai: lines, how many
+   planes attack at once. It is the strongest dial on how many may attack you at once, and its effect was never measured.
+4. Health: `late:` lines x1.50 from round 26 (x1.49-1.50 at 25).
+5. The kill bonus: only once P2 tags planes (`director:` lines), then ", director <tactic> x1.5" on the credits line
+   of your kill within 20 s.
+6. Co-op (2+ players, round 26 on): no "not fired" for RE_SV_Pressure* on the joiner; a joiner who links mid-run gets
+   the preset in force (it's in the host's "coop: sent player N the run" batch).
+
+### Offline test
+`sh tools/checks/late_rounds_test.sh` (tools/checks/late_rounds_test.lua), on the real sv_core, sv_config, sv_ai,
+sv_spawn, sv_rounds (startRound exposed), sv_stats, sv_coop (hostSync, mirroredEvent exposed) and sv_main's creditKill:
+1. survival.ini: [late.pressure] from_round / preset (lower case), [late.max_up_cap], [late.director_pay] and [late]
+   aircraft_from_round set live are read, every line used.
+2. The thesis' table from the helpers: rounds 25 / 28 / 31 / 35 (30 / 39 / 48 / 60, most up 14-22 ... 20-30), 26 / 33 /
+   40, the ceilings; rounds 1-25 against the old formula round by round; [late] off; aircraft_from_round 0; the health
+   curve; the pressure bands, a letter the build lacks, the throttle off.
+3. startRound, 300 times a round and preset: D.budget, the start line's wave cap, no wave over it, the aircraft picked,
+   the waves (Standard: always 2 at 25, about 2 at 28 and 31, always 3 at 35); 50 / 150 / 200 %; the "pool short" line;
+   an amphibious round at 150 % (45, not 30) and at round 30; four co-op players (44 / 26, 80 / 30, 80 / 30, 70 / 29) and
+   the host alone.
+4. The throttle through startRound, rounds 25-35: nothing at 25, C at 26, nothing at 27, none in the Anomaly round 28 (B
+   after it), C again at 29, none in the VALKA round 30, D at 31, a failed fire kept and fired the next round, nothing
+   with it off; forwarded (mirroredEvent), the host's fire sent to every joiner, hostSync's re-send (none with B).
+5. creditKill: 190 untagged (round 30, Veteran), 280 tagged 5 s and 20 s before, 190 at 25 s, 90 for an ally's kill
+   of a tagged plane, a bare string tag ignored, off, on with [late] off; then end to end: STATS.tactic tags a unit's
+   plane and its kill 12 s later pays the bonus.
+6. The hooks in the source: startRound's helpers, co-op, the throttle; the menu help's round 35.
+
+### Untested / known limits
+- [I] Everything in game. [V] the maths, the budgets and waves on the real startRound, the throttle's firing logic and
+  the built records (ep_dump: RE_SV_PressureA-D, life -, the three records each, like MissionStart's).
+- [I] Whether the throttle limits ordinary fighters at all (runtime-ai: never measured). C and D are guesses scaled to
+  keep the attackers at once about a third of the most up (Standard: B 6 of 18; C, rounds 26-30, 8 of 19-23; D, from 31,
+  10 of 24-26).
+- [I] Frame time with 26-30 up at once (the Ace ceiling) and 3-4 waves of 19-30: never run. A friend's round 23 (54
+  aircraft, 13 flights up) is the most that ran (0.6x, an older build). Co-op: 30 puppets moved every frame on each
+  joiner and 60-80 aircraft rounds: never run (co-op played to round 5).
+- In an Anomaly or VALKA round the band's preset stays in force until MINDRIPPER appears / VALKA reveals, and the
+  round's fighters left after the boss is down fly B (the next round fires the band's again).
+- Ace rounds (28, 31, 34 ...) take the same budget: a round-34 ace round is about 57 squadron aircraft (Reaper tier
+  from 28 anyway). The thesis says nothing; an `ace_round_x` (or ace rounds kept at 30) is the user's call.
+- ENEMY AIRCRAFT above 100 % keeps today's meaning (% after the caps): 200 % at round 35 asks 120 and gets the pool's
+  86, up to 52 at once (Standard). A hard ceiling on the wave cap would also change rounds 1-25 above 100 %: the
+  user's call. waves.enabled = false brings late rounds all at once (up to 60).
+- pickFlights is unchanged: it picks sizes at random, so in a few % of late rounds the 2-ships run out and a round
+  flies 2-4 short (logged). D.budget is the asked number, not the flown one.
+- Economy: kill pay stops growing at round 26 (round_x_max 1.5), late kills double (60 against 30) and round_bonus is
+  250 x the round; the ammo caps (Standard 48 missiles / 28 special) against 60 enemies at x1.5 health need a balance
+  pass (the "missiles left at death" metric, unit 1's death line).
+- The kill bonus: a co-op joiner's copies carry no tag (the director runs on the host), so a joiner's kills of them
+  pay no bonus; that would need a guarded message (P2's call).
+- The role mix (P1) will split the pool: a 60-aircraft round can run one role dry; check the role mix and the late
+  budgets together then.
