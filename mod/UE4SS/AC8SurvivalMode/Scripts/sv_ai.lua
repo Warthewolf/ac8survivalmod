@@ -197,9 +197,15 @@ function ACE.movesTick(now, D)
                 if range <= 3000 and offTail <= 70 then
                     local kulbit = range <= 900
                     local ev = string.format("RE_SV_%s_%02d", kulbit and "AceKulbit" or "AceTurn", (tonumber(pn) - 1) * 3 + tonumber(pk) + 1)
-                    D.aceMoveAt[p.unit] = now + (kulbit and 12 or 20)
+                    local tell = kulbit and "kulbit" or "reversal"
+                    -- (its next no sooner than this one's over, counted from the move, its tell's lead_s on: a reversal's
+                    -- LastTGT takes ~25-30 s and a new request cuts it, so the squad director's cover turn (cover.move_s,
+                    -- through the same D.aceMoveAt) and the next reversal wait it out; the kulbit is a short OneShot)
+                    local okL, ld = pcall(function() return TELL and TELL.leadS and TELL.leadS(tell) end)
+                    local cv = CFG.director and CFG.director.cover
+                    D.aceMoveAt[p.unit] = now + (okL and tonumber(ld) or 0) + (kulbit and 12 or (tonumber(cv and cv.move_s) or 30))
                     D.aceMoves = (D.aceMoves or 0) + 1
-                    local n, name, tell = D.aceMoves, p.name, kulbit and "kulbit" or "reversal"
+                    local n, name = D.aceMoves, p.name
                     local function go()
                         local r = SV_Event(ev)
                         if n <= 5 or n % 20 == 0 then

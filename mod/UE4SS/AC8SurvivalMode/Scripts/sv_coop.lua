@@ -328,6 +328,13 @@ local function sendRoster(to)
     end
 end
 
+-- how long the split hunt waits out a director's hold at most: the longest it can be (top cover's max_s, synced and
+-- tunable), with a dive's lead and your decoy over it
+local function holdWaitS()
+    local tc = CFG.director and CFG.director.top_cover
+    return (tonumber(tc and tc.max_s) or 45) + 120
+end
+
 local function hostTick()
     local now = os.clock()
     -- deaths at once, health once a second
@@ -375,8 +382,13 @@ local function hostTick()
         local r = M.replays[i]
         if now >= r.at then
             table.remove(M.replays, i)
-            for _, name in ipairs(r.events) do sendTo(r.to, true, "ev", name) end
-            log(string.format("coop: player %d brought up to date: %s", r.to + 1, table.concat(r.events, ", ")))
+            local evs = r.events or {}
+            if r.fn then                                   -- (as things stand when it goes: the director's holds)
+                local okF, l = pcall(r.fn)
+                evs = (okF and type(l) == "table") and l or {}
+            end
+            for _, name in ipairs(evs) do sendTo(r.to, true, "ev", name) end
+            if #evs > 0 then log(string.format("coop: player %d brought up to date: %s", r.to + 1, table.concat(evs, ", "))) end
         end
     end
     -- the round and the airfield
@@ -402,9 +414,10 @@ local function hostTick()
             if D and D.up and D.up[h.unit] and WOLF and WOLF.holding(h.unit) then
                 -- (a Wolf flight holding its trap, CFG.roles.wolf: the hunt's unit-wide order would free it)
                 log("coop: " .. h.unit .. " holds its Wolf trap; it doesn't go after the joiners")
-            elseif D and D.up and D.up[h.unit] and DIR and DIR.holding and DIR.holding(h.unit) and (h.tries or 0) < 30 then
-                -- (one the squad director holds back, CFG.director: the hunt again once it's let go, which gives it back)
-                h.at, h.tries = now + 2, (h.tries or 0) + 1
+            elseif D and D.up and D.up[h.unit] and DIR and DIR.holding and DIR.holding(h.unit) and now - (h.since or now) < holdWaitS() then
+                -- (one the squad director holds back, CFG.director: the hunt again once it's let go, which gives it back;
+                -- the hunt's unit-wide order would free it while it's still held, here and not on the joiners' copies)
+                h.at, h.since = now + 2, h.since or now
                 M.hunts[#M.hunts + 1] = h
             elseif D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
@@ -450,6 +463,13 @@ local function hostSync(to)
     local sp = D and D.special
     if D and TIER.pressure(D.round) and not (sp and TIER.PRESSURE_OWN[sp.kind] and sp.state ~= "done") then
         sendTo(to, true, "ev", "RE_SV_Pressure" .. (D.pressure or "B"))
+    end
+    -- the squad director's holds in force (RE_SV_DirHold_NN, forwarded when fired: a joiner who links later missed them,
+    -- and its copies of a held top cover or regroup would attack it until the release), once its copies are up, as held
+    -- then (DIR.holds read when it goes: one let go meanwhile isn't sent)
+    if DIR and DIR.holds then
+        M.replays = M.replays or {}
+        M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, fn = DIR.holds }
     end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))

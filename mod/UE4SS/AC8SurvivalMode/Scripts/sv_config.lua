@@ -260,7 +260,8 @@ CFG = {
         -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you);
         -- moves: when you get behind one of its aircraft (within 3 km, inside 70 deg of its tail; ACE.movesTick, 4 times
         -- a second) its flight does the campaign aces' LastTGT reversal, or within 900 m the Shadow kulbit
-        -- (tools/survival_events.py build_ace_moves), each flight at most every 20 s. no_provoke and moves are a tier's
+        -- (tools/survival_events.py build_ace_moves); a flight's next move no sooner than 30 s after a reversal (its
+        -- LastTGT's length; CFG.director.cover.move_s), 12 s after a kulbit, from the move. no_provoke and moves are a tier's
         -- duelists' and ace squadrons': a fighter role's Lancer, Wolf or Skirmisher flight keeps its own set's provoke
         -- and pursuit (ROLE.ownSet; CFG.roles)
         flight = {
@@ -414,10 +415,12 @@ CFG = {
     --   top_cover  a Lancer flight (top_cover.roles; with roles off any flight, any_without_roles) held at engagement None
     --              hold_after_s after its orders are in, until you've fought another flight within engage_km for
     --              engaged_s and it's been held min_s: it dives on you after the dive tell (its o'clock). Let go quietly
-    --              at max_s, when you hit it, or when it's the round's last flight
+    --              at max_s, when you hit it, or when no flight it doesn't hold is up (the round's or a wave's last);
+    --              inside your DECOY at the decoy's end
     --   pincer     a new wave of 2+ fighter flights (not a special's or a raid's), with chance: its flights come from two
     --              bearings sep_deg apart, spread_deg either way, around you (ring_km; ahead: either side of your nose)
-    --              solo, around the airfield in co-op; the pincer tell names both with the first flight
+    --              solo, around the airfield in co-op; the pincer tell names both once each side has a flight (a flight
+    --              the zone's edge sent to a normal point isn't part of it; one side only: no pincer, its budget back)
     --   regroup    a flight of min_size or more down to half its planes after_s or more after it came up: the regroup tell,
     --              it breaks off for hold_s (engagement None), then it's back
     -- budget: each tactic's most a round (in the band of the latest from_round reached: cover, trap and bracket each

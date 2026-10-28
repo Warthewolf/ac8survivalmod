@@ -28,6 +28,7 @@
 --   DIR.holding(unit)                 a flight the director holds back (hunts and the aces' moves leave it alone)
 --   DIR.aimed(p)                      a plane whose TargetActor the director keeps on a joiner (ACE.hunt leaves it)
 --   DIR.release(unit, why)            let a held flight go now (P4: "the director ... releases a held flight")
+--   DIR.holds()                       the holds in force, RE_SV_DirHold_NN (sv_coop.lua: a joiner who links later)
 DIR = { SALVO_FCS_SLOT = 2 }   -- (the fighters' missile slot, WN_WEAPON_3; tools/survival_events.py SALVO_SLOT checks it)
 
 do
@@ -65,7 +66,7 @@ local function st()
     if not D then return nil end
     local s = D.dir
     if not s then
-        s = { spent = {}, next = {}, held = {}, aims = {}, spawns = {}, said = {}, engaged = {}, rr = 0, factor = 1 }
+        s = { spent = {}, next = {}, held = {}, aims = {}, after = {}, spawns = {}, said = {}, engaged = {}, rr = 0, factor = 1 }
         D.dir = s
     end
     return s
@@ -111,7 +112,7 @@ local function spend(s, tactic, slot, now, noGap)
 end
 -- a tactic held back: once a round per tactic, player and kind of reason
 local function refuse(s, tactic, slot, why)
-    if why == "off" then return end
+    if why == "off" or tostring(why):sub(1, 5) == "off (" then return end   -- (no budget this round band: not logged)
     local key = tactic .. "|" .. tostring(slot) .. "|" .. (tostring(why):match("^[%a ']+") or tostring(why))
     if s.said[key] == D.round then return end
     s.said[key] = D.round
@@ -215,10 +216,11 @@ local function hits(unit)
     end
     return n
 end
--- another flight of the round still has a plane up
-local function othersUp(unit)
+-- another flight of the round, one the director doesn't hold, still has a plane up (two held flights don't keep each
+-- other back: the round, or the wave's next, waits on them)
+local function othersUp(s, unit)
     for _, p in ipairs(planes) do
-        if not p.down and p.unit and p.unit ~= unit and D.up and D.up[p.unit] then return true end
+        if not p.down and p.unit and p.unit ~= unit and D.up and D.up[p.unit] and not s.held[p.unit] then return true end
     end
     return false
 end
@@ -253,10 +255,17 @@ local function aim(s, unit, k, e, secs, why, restore)
 end
 -- a flight's engagement back: RE_SV_DirFree_NN (its appearance's orders: air-only search, PlayerOnlyNoLimit; forwarded,
 -- so a joiner's copies too), then, aimed at a joiner (e) or for one of the co-op host's split-hunt flights
--- (COOP.hunted), RE_SV_Hunt_NN again (Normal / AIFirst: the joiners' planes; the host's only)
+-- (COOP.hunted), RE_SV_Hunt_NN again (Normal / AIFirst: the joiners' planes; the host's only). Whether it went: never
+-- while your DECOY stands the flight down (a unit-wide order would end the item you paid for early, here and on the
+-- joiners' copies): its end (RE_SV_DecoyEnd_NN, this game's planes) comes first, then ours (s.after: afterTick)
 local function orders(s, unit, e, why)
     local i = poolIndex(unit)
-    if not i then return end
+    if not i then return false end
+    if decoyed(unit, D.now) then
+        s.after[unit] = tostring(why)
+        log(string.format("director: %s stays down with your decoy (%s): its orders back at the decoy's end", unit, tostring(why)))
+        return false
+    end
     local parts = {}
     local ev = string.format("RE_SV_DirFree_%02d", i)
     parts[#parts + 1] = ev .. " " .. (fire(ev))
@@ -266,6 +275,7 @@ local function orders(s, unit, e, why)
         parts[#parts + 1] = h .. " " .. (fire(h))
     end
     log(string.format("director: %s back in the fight (%s): %s", unit, tostring(why), table.concat(parts, ", ")))
+    return true
 end
 local function hold(s, unit, kind, now, why, secs)
     local ev = string.format("RE_SV_DirHold_%02d", poolIndex(unit))
@@ -276,16 +286,36 @@ local function hold(s, unit, kind, now, why, secs)
         ev, res))
     return ok
 end
--- held flight unit back in the fight (e: aimed at that player; a joiner's: its TargetActor on them for aim_s)
+-- held flight unit back in the fight (e: aimed at that player; a joiner's: its TargetActor on them for aim_s). Whether
+-- it was let go: inside your decoy it stays held (a dive's tell said or not), and heldTick lets it go at the decoy's end
 local function release(s, unit, why, e)
     local h = s.held[unit]
+    if h and decoyed(unit, D.now) then
+        h.decoy = D.decoyed and D.decoyed[unit]
+        if not h.decoySaid then
+            h.decoySaid = true
+            log(string.format("director: %s stays down with your decoy (%s): let go at its end", unit, tostring(why)))
+        end
+        return false
+    end
     s.held[unit] = nil
-    orders(s, unit, e, why)
-    if e and not e.isMe then aim(s, unit, nil, e, tc("top_cover").aim_s, h and h.why or why, true) end
+    if orders(s, unit, e, why) and e and not e.isMe then aim(s, unit, nil, e, tc("top_cover").aim_s, h and h.why or why, true) end
+    return true
+end
+-- the orders put off by your decoy (orders' s.after), once it's over: RE_SV_DecoyEnd_NN gave this game's planes theirs
+-- back; RE_SV_DirFree_NN (forwarded) frees a joiner's copies too, a split-hunt flight's hunt again
+local function afterTick(s, now)
+    for unit, why in pairs(s.after) do
+        if alive(unit) <= 0 then s.after[unit] = nil
+        elseif not decoyed(unit, now) then
+            s.after[unit] = nil
+            orders(s, unit, nil, why .. ", after your decoy")
+        end
+    end
 end
 local function aimsTick(s, now)
     for unit, a in pairs(s.aims) do
-        if now >= a.untilT or alive(unit) <= 0 then
+        if now >= a.untilT or alive(unit) <= 0 or decoyed(unit, now) then   -- (your decoy: it's stood down, the aim's over)
             s.aims[unit] = nil
             if a.restore and alive(unit) > 0 then orders(s, unit, nil, a.why .. ": its aim on player " .. (a.slot + 1) .. " over") end
         else
@@ -579,7 +609,7 @@ local function topTick(s, now, ps)
                 end
                 if sp.upAt and now >= sp.upAt + num(c.hold_after_s, 3) then
                     local why = blockedBy(s, "top_cover", nil, now, true)
-                        or (not othersUp(unit) and "it's the only flight up") or (busy(s, unit, now) and "it's in hand already") or nil
+                        or (not othersUp(s, unit) and "it's the only flight up") or (busy(s, unit, now) and "it's in hand already") or nil
                     sp.top = false
                     if why then refuse(s, "top_cover", nil, why .. " (" .. unit .. ")")
                     elseif hold(s, unit, "top", now, "top cover") then spend(s, "top_cover", nil, now, true); sp.top = true end
@@ -591,8 +621,11 @@ local function topTick(s, now, ps)
     end
 end
 -- held flights: a top cover dives once a player has fought another flight engaged_s (within engage_km) and it's been
--- held min_s; it's let go quietly at max_s, when hit, as the round's last flight or when your decoy's end frees it. A
--- regroup ends after hold_s (or when hit).
+-- held min_s; it's let go quietly at max_s, when hit, as the round's last flight (no flight up but held ones, whatever
+-- the round's state: in "wave" the next wave waits on the planes left, held or not, and with waves.timeout_s 0 it would
+-- never come; not while a wave's flights are still spawning) or at your decoy's end (RE_SV_DirFree_NN then too: the
+-- decoy's own end is this game's, and a joiner's copies were held by the forwarded hold). A regroup ends after hold_s
+-- (or when hit).
 local function heldTick(s, now, ps)
     if not next(s.held) then s.engaged = {}; return end
     local c = tc("top_cover")
@@ -613,12 +646,12 @@ local function heldTick(s, now, ps)
             h.decoy = D.decoyed and D.decoyed[unit]      -- (its end, RE_SV_DecoyEnd_NN, gives it its orders back)
         elseif h.decoy and now >= h.decoy then
             s.held[unit] = nil
-            log(string.format("director: %s (%s) freed by your decoy's end", unit, h.why))
+            orders(s, unit, nil, h.why .. ", freed by your decoy's end")
         elseif h.diving then                          -- (its tell said: it goes after the lead)
         elseif hits(unit) > (h.dmg or 0) then
             release(s, unit, "you hit it while it was held")
-        elseif D.state == "fighting" and not othersUp(unit) then
-            release(s, unit, "the round's last flight")
+        elseif not othersUp(s, unit) and not (D.state == "spawning" and D.queue and #D.queue > 0) then
+            release(s, unit, string.format("the round's last flight (%s)", tostring(D.state)))
         elseif h.kind == "regroup" then
             if now >= (h.untilT or now) then release(s, unit, "regrouped") end
         elseif held >= num(c.max_s, 45) then
@@ -658,6 +691,7 @@ local function regroupTick(s, now, ps)
                 sp.regroup = true
                 local e = nearestPlayer(unit, ps)
                 local why = blockedBy(s, "regroup", nil, now) or (busy(s, unit, now) and "it's in hand already")
+                    or (not othersUp(s, unit) and "it's the only flight up")   -- (heldTick would let it go at once)
                     or ((D.escortUnits and D.escortUnits[unit]) and "an escort") or ((WOLF and WOLF.holding(unit)) and "its Wolf trap is held")
                     or (not e and "nobody near it") or (not tellReady("regroup", e) and "its tell can't be said now") or nil
                 if why then refuse(s, "regroup", nil, why .. " (" .. unit .. ")")
@@ -676,13 +710,23 @@ local function regroupTick(s, now, ps)
 end
 
 ---------------------------------------------------------------------------------------------------- pincer arrival
--- a wave's pincer, once its flights are up: counted and its planes tagged
-local function pincerTick(s, now)
+-- a wave's pincer, once its flights are up (or fell back to a normal point; 60 s after its first was placed; force: the
+-- next wave's start): counted and the planes of its flights that came up on a side tagged; only when both sides had one
+-- (else no pincer: not counted, nothing tagged, its budget back)
+local function pincerTick(s, now, force)
     local pc = s.pincer
     if not pc or pc.done then return end
-    if not ((pc.n >= pc.total and now >= (pc.last or now) + 1.5) or now - pc.at > 60) then return end
+    if not (force or (pc.n + pc.nFell >= pc.total and now >= (pc.last or now) + 1.5) or (pc.first and now - pc.first > 60)) then
+        return
+    end
     pc.done = true
-    if pc.n == 0 then return end
+    if pc.count[1] == 0 or pc.count[2] == 0 then
+        local r = s.spent.room
+        if r and (r.pincer or 0) > 0 then r.pincer = r.pincer - 1 end
+        log(string.format("director: pincer: wave %d's flights didn't come from two sides (%d and %d up on them, %d at a normal "
+            .. "point: the zone's edge): no pincer, not counted", pc.wave or 0, pc.count[1], pc.count[2], pc.nFell))
+        return
+    end
     local tag, nTag = { tactic = "pincer", at = now }, 0
     for _, p in ipairs(planes) do if not p.down and p.unit and pc.sides[p.unit] then p.dirTag = tag; nTag = nTag + 1 end end
     pcall(STATS.tactic, "pincer", nil, nil, string.format("wave %d: %d of %d flights (%d planes) from bearings %.0f and %.0f around %s",
@@ -713,6 +757,7 @@ function DIR.roundStart(now)
     local s = st()
     if not s then return end
     s.round, s.spent, s.next, s.spawns, s.pincer, s.engaged, s.held, s.aims = D.round, {}, {}, {}, nil, {}, {}, {}
+    s.after = {}
     local tail = D.counter and tonumber(D.counter.tail) or 0          -- (P6's habit counter, when it's there)
     s.factor = 1 + math.max(0, tail or 0)
     if not on() then return end
@@ -730,18 +775,24 @@ function DIR.spawned(unit, role, n, ace)
     local s = st()
     if not (s and poolIndex(unit)) then return end
     s.spawns[unit] = { at = D.now or 0, n = n, role = role, ace = ace and true or nil }
-    s.held[unit], s.aims[unit] = nil, nil             -- (a recycled flight: its last spawn's hold and aim are gone)
+    s.held[unit], s.aims[unit], s.after[unit] = nil, nil, nil   -- (a recycled flight: its last spawn's hold and aim are gone)
+    local pc = s.pincer                               -- (a pincer flight placed on its side, DIR.spawnAt: it came up there)
+    local side = pc and pc.pend[unit]
+    if side then
+        pc.pend[unit], pc.sides[unit] = nil, side
+        pc.count[side], pc.n, pc.last = pc.count[side] + 1, pc.n + 1, D.now
+    end
 end
 
 -- A wave starts (D.queue its flights): with pincer.chance, its fighter flights (2 or more; not a special's wave, a raid's
 -- or the escorts) come from two bearings sep_deg apart (spawnFlight asks DIR.spawnAt): around you (ring_km; ahead: either
 -- side of your nose, else anywhere) solo, around the airfield in co-op (where you are, if 3 km or more out). Host or solo.
--- Its tell comes with its first flight (you may be down at the airfield as a round starts: the spawns wait for you); a
--- tell refused then (its gaps) leaves the pincer without one.
+-- Its tell comes once both sides have a flight on them (DIR.spawnAt: one spawn gap after its first; you may be down at
+-- the airfield as a round starts: the spawns wait for you); a tell refused then (its gaps) leaves the pincer without one.
 function DIR.wave(now)
     local s = st()
     if not s then return end
-    if s.pincer and not s.pincer.done then s.pincer.at = -math.huge; pincerTick(s, now or 0) end   -- (the last one counted)
+    if s.pincer and not s.pincer.done then pincerTick(s, now or 0, true) end   -- (the last one counted)
     s.pincer = nil
     if not (tacticOn("pincer") and now) or client() or skipped() then return end
     local c = tc("pincer")
@@ -769,55 +820,78 @@ function DIR.wave(now)
     local lo, hi = num(sr[1], 90), num(sr[2], 150)
     local sep = lo + math.random() * math.max(0, hi - lo)
     spend(s, "pincer", nil, now, true)
+    -- (tries: the flights placed, for the sides' alternation; pend: placed, not yet up; sides / count / n: up on a side;
+    -- fell / nFell: at a normal point, the zone's edge)
     s.pincer = { b0 = b0, sep = sep, b1 = (b0 - sep / 2) % 360, b2 = (b0 + sep / 2) % 360, units = units, total = n, n = 0,
-                 sides = {}, centre = centre, at = now, wave = D.wave }
+                 tries = 0, pend = {}, sides = {}, count = { 0, 0 }, placed = { 0, 0 }, fell = {}, nFell = 0, centre = centre,
+                 at = now, wave = D.wave }
     log(string.format("director: pincer: wave %d's %d fighter flights from two sides, bearings %.0f and %.0f (%.0f deg apart) around %s",
         D.wave or 0, n, s.pincer.b1, s.pincer.b2, sep, centre == "player" and "you" or "the airfield"))
 end
 
 -- A pincer flight's spawn: on its side's bearing (alternating) around the centre (where you are now, or the airfield),
 -- its nose on the centre: { x, y, d (km), b (compass), yaw, side, centre }; nil for any other flight or when the zone's edge
--- left it a random point (spawnPoint's own fallback). The first one says the pincer tell to every player.
+-- left it a random point (spawnPoint's own fallback: that flight is left out of the pincer, its tags and its count). It
+-- counts on its side once it's up (DIR.spawned). The pincer tell, to every player, once both sides have a flight.
 function DIR.spawnAt(unit)
     local s = D and D.dir
     local pc = s and s.pincer
-    if not (pc and pc.units[unit] and not pc.sides[unit]) then return nil end
+    if not (pc and not pc.done and pc.units[unit] and not pc.sides[unit] and not pc.fell[unit]) then return nil end
     local c = tc("pincer")
-    local side = (pc.n % 2 == 0) and pc.b1 or pc.b2
-    pc.n = pc.n + 1
-    pc.sides[unit] = side
+    pc.tries, pc.first = pc.tries + 1, pc.first or D.now
+    local side = (pc.tries % 2 == 1) and 1 or 2
+    local bearing = side == 1 and pc.b1 or pc.b2
     local cx, cy, range = AIRFIELD.X, AIRFIELD.Y, CFG.distance_km
     if pc.centre == "player" then
         local me = COOP and COOP.me and COOP.me() or nil
         local at = (me and me.at) or playerLocation()
         if at then cx, cy, range = at.X, at.Y, c.ring_km or { 12, 18 } end
     end
-    local x, y, d, b, onIt = spawnPoint(range, side, num(c.spread_deg, 10), cx, cy)
+    local x, y, d, b, onIt = spawnPoint(range, bearing, num(c.spread_deg, 10), cx, cy)
     pc.last = D.now
     if not onIt then
-        log(string.format("director: pincer: %s fell back to a random point (the zone's edge at bearing %.0f)", unit, side))
+        pc.fell[unit], pc.nFell, pc.pend[unit] = true, pc.nFell + 1, nil
+        log(string.format("director: pincer: %s fell back to a random point (the zone's edge at bearing %.0f): not part of it",
+            unit, bearing))
         return nil
     end
-    if not pc.told then
+    pc.pend[unit] = side
+    pc.placed[side] = pc.placed[side] + 1
+    if not pc.told and pc.placed[1] > 0 and pc.placed[2] > 0 then
         pc.told = true
         pc.said = tellSay("pincer", nil, pc.b1, pc.b2)
     end
-    return { x = x, y = y, d = d, b = b, yaw = math.deg(math.atan(cy - y, cx - x)) % 360, side = side,
+    return { x = x, y = y, d = d, b = b, yaw = math.deg(math.atan(cy - y, cx - x)) % 360, side = bearing,
              centre = (pc.centre == "player" and cx ~= AIRFIELD.X) and "you" or "the airfield" }
 end
 
 -- Lets held flight unit go now (P4's intensity director): a top cover dives on the nearest player, after its tell.
+-- Whether it did (not inside your decoy: then at its end)
 function DIR.release(unit, why)
     local s = D and D.dir
     local h = s and s.held[unit]
     if not h or h.diving then return false end
     why = why or "the director let it go"
-    if h.kind == "top" then
+    if h.kind == "top" and not decoyed(unit, D.now) then
         local e = nearestPlayer(unit, players(s))
         if e and dive(s, unit, e, D.now or 0, why) then return true end
     end
-    release(s, unit, why)
-    return true
+    return release(s, unit, why)
+end
+
+-- The holds in force now: RE_SV_DirHold_NN of each flight held (a top cover, a regroup; one diving or inside your decoy
+-- too: its release follows). A co-op joiner who links after a hold was forwarded missed it: sv_coop.lua's hostSync sends
+-- these once its copies are up, read then
+function DIR.holds()
+    local s = D and D.dir
+    local out = {}
+    if not s then return out end
+    for unit in pairs(s.held) do
+        local i = poolIndex(unit)
+        if i and alive(unit) > 0 then out[#out + 1] = string.format("RE_SV_DirHold_%02d", i) end
+    end
+    table.sort(out)
+    return out
 end
 
 function DIR.tick(now, paused)
@@ -834,6 +908,7 @@ function DIR.tick(now, paused)
     if now >= (s.slowAt or 0) then                    -- once a second: holds, aims, the pincer's tag, top cover, regroup
         s.slowAt = now + 1
         aimsTick(s, now)
+        afterTick(s, now)
         heldTick(s, now, ps)
         pincerTick(s, now)
         if not skipped() and #ps > 0 then topTick(s, now, ps); regroupTick(s, now, ps) end
