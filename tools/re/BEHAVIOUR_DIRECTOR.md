@@ -165,7 +165,7 @@ exclusive fallback; Escape's sharp break puts its turn after them instead.
 | live provoke, tiers | sv_config.lua CFG.tiers.list | Veteran, Elite, Ace, Mercenary, Legend, Demon: `provoke_cone_deg = 60, provoke_time_s = 1.5` (the doc's 60 deg / 1.5 s; Phantom 50 / 1.0 and Reaper 45 / 0.8 / 40-100 m as before). The game's own rows: 85 deg / 2.5 s (NPID_00) |
 | the merge | sv_rows.lua `provokeWant(round, tier[, level])` | the stricter of the tier's and the round's spike's (narrower cone, quicker decision, closer surround min / max), field by field. Before, the tier's simply replaced the spike's (withLevel), so with these tier fields a Demon at rounds 22-24 would have dropped from spike 3's 50 / 1.0 to 60 / 1.5. A special's own values (MINDRIPPER's unit) go through the same merge, whatever `tier_provoke` says. `level`: another spike level than the round's, for a later part |
 | the writes | sv_rows.lua `enemyProvoke(p, want)`, `enemySpike(p, round, tier)` | enemyProvoke writes ProvokeConditionConeAngle, ProvokeDeterminationTime, SurroundPursuitMin/MaxRange (cm) where they differ from its last write (`p.provokeSet`; `p.provokeWant` = what it should fly) and returns the fields written and before / after texts: the hook for the intensity director (P4) to rewrite a live plane (runtime-ai step 10's "DIR.plane writes again"). enemySpike (the sweep, once per plane: `p.spiked`) = provokeWant + enemyProvoke, and a `provoke:` line once per tier and spike level with the values read back (it replaces the old `spikes: level N on ...` line) |
-| the tail watch | sv_stats.lua `STATS.tailTick` (sv_main.lua probeTick, every 250 ms, timed "tail watch"), `tailEnd`; sv_ai.lua's `AI_STATE` now a global | the host or solo (a joiner's enemies are the host's). The enemies with a skill tier (no bombers) nearest you within `watch_km` by the sweep's last sample, at most `watch_max` a tick, are read afresh: position and heading. You within `tail_km` / `tail_deg` of one's six (the sweep's own test) opens an episode (p.tw): its provoke values in force are read (Survival's write or the game's row), then every tick its AI state (Provoke / EscapeFromPursuer / AttackAvoidance / Blackout / UniqueAction / other, timed). It ends when the plane dies (the watch's own check, or the sweep's death first: STATS.down) or once you've been off its tail `watch_grace_s` (escaped; under 1 s held is a flicker at the cone's edge, dropped). Up to 16 property reads a tick at watch_max 4 |
+| the tail watch | sv_stats.lua `STATS.tailTick` (sv_main.lua probeTick, every 250 ms, timed "tail watch"), `tailEnd`, `tailCut`; sv_ai.lua's `AI_STATE` now a global | the host or solo (a joiner's enemies are the host's). The enemies with a skill tier (no bombers) within `watch_km` of you by the sweep's last sample, at most `watch_max` a tick, are read afresh: position and heading. Those you're likely behind come first (the sweep's `p.tailing`, or the sweep's last pose of the plane against your position now: plain maths, no read), then the nearest, so in a furball a plane you chase at 2.5 km isn't crowded out by four nearer ones. You within `tail_km` / `tail_deg` of a live one's six (the sweep's own test; its HealthInternal is read before an episode opens, so a wreck the 2 s sweep hasn't marked down never opens one) opens an episode (p.tw): its provoke values in force are read (Survival's write or the game's row), then every tick its AI state (Provoke / EscapeFromPursuer / AttackAvoidance / Blackout / UniqueAction / other, timed). A plane already in Provoke, EscapeFromPursuer or Blackout at the episode's first read was defending before you got there (another pursuer, or you closed from beyond `tail_km` inside its provoke cone): "already defending", kept out of "Provoke after" and "after its Provoke" (its Provoke began before t0) and counted apart. It ends when the plane dies (the watch's own check, or the sweep's death first: STATS.down), once you've been off its tail `watch_grace_s` (escaped), or when the run ends with it open (STATS.runEnd, before the last round's line: "still up"); an escape or still-up under 1 s held is a flicker at the cone's edge, dropped. Up to 16 property reads a tick at watch_max 4 (one more as an episode opens) |
 | the lines | sv_stats.lua | a `tailed:` line per episode; the round line ends "; tail watch: ..." and the run line "; tail watch Veteran+: ... [8 s+]" (U1's 2 s "AI Provoke" and geometric figures stay) |
 | the report | tools/checks/stats_report.py | the run table's tail watch rows (verdict on "died while tailed" against 8 s+), a "watch" column per round, the `tailed:` episodes by tier and by the provoke values in force (the A/B), the `provoke:` writes |
 | offline test | tools/checks/tailed_test.sh / tailed_test.lua | below |
@@ -201,20 +201,29 @@ What a pilot flies now (default settings; the surround is the spike's until Reap
   round 8 with the spike's part and ": the stricter".
 - `tailed: BP_... (ERA_Unit_03_Dep_Air1, Veteran, k 1, rank 4, AI level 2): provoke 60 deg / 1.5 s (Survival's); you on
   its tail at 1.0 km, 12 deg off its six; Provoke after 1.8 s; Provoke 1.5 s, EscapeFromPursuer 2.0 s, AttackAvoidance
-  0.5 s, other 1.0 s; died 9.5 s after (7.7 s after its Provoke)` or `...; no Provoke; ...; escaped after 3.0 s`.
-- The round line's end: `; tail watch: 3 episodes (Veteran+ 3): died after median 5.8 s (n 2), 8.0 s after its Provoke
-  (n 1), escaped 1 (held median 3.0 s), Provoke after median 1.5 s (none in 2), blackouts 0`; the run line's:
-  `; tail watch Veteran+: died after median ... on your tail (n N), ... [8 s+]`.
+  0.5 s, other 1.0 s; died 9.5 s after (7.7 s after its Provoke)` or `...; no Provoke; ...; escaped after 3.0 s`, or
+  `...; already in Provoke when you got behind it; ...; died 3.0 s after` (defending before t0: no reaction time), or
+  `...; still up when the run ended (died), 4.5 s on its tail`.
+- The round line's end: `; tail watch: 6 episodes (Veteran+ 6): died after median 3.0 s (n 3), 8.0 s after its Provoke
+  (n 1), escaped 2 (held median 2.5 s), still up at the end 1, Provoke after median 1.5 s (none in 4, already defending
+  1), blackouts 0` ("Provoke after" and "none" are the fresh episodes only); the run line's:
+  `; tail watch Veteran+: died after median ... on your tail (n N), ..., still up at the end U, Provoke after median ...
+  (none in X, already defending Y), blackouts B [8 s+]`.
 - `perf: ... tail watch x/y` among the worst parts only if it costs.
 - `stats_report.py <log>`: "tailed lines: N" with a table by tier and one by "provoke in force" (e.g. `60 deg / 1.5 s
-  (Survival's)` against `85 deg / 2.5 s (the game's)`).
+  (Survival's)` against `85 deg / 2.5 s (the game's)`): n, died, died after, escaped, up (still up at the run's end),
+  Provoke after (fresh episodes only), none (fresh episodes without a Provoke), already (already defending), blackouts.
 
 Test checklist:
 1. The build lines above (main menu, level).
 2. Round 7 (Veteran, before the first spike): sit on enemies' tails. `tailed:` lines with "(Survival's)" and the
    reaction ("Provoke after"). Then the A/B: `[ai] tier_provoke = false` (restart the game: rows and CFG are read at
-   start), round 7 again: "(the game's)" 85 / 2.5. If "Provoke after" doesn't move (about 1.5 s against 2.5 s+) the live
-   write does nothing, and runtime-ai step 11 (per-row DT_NPC_Provoke copies) is the way. A stronger signal:
+   start), round 7 again: "(the game's)" 85 / 2.5. Compare stats_report's "Provoke after" column between the two
+   "provoke in force" rows: it is the fresh reactions only (episodes already defending when you got behind the plane
+   are counted under "already" and left out, so a Provoke begun before the episode can't pull both arms to 0). Get
+   behind planes that aren't defending yet (close in from their six rather than chasing one that's already breaking);
+   if "already" is most of an arm, its median says little. If "Provoke after" doesn't move (about 1.5 s against 2.5 s+)
+   the live write does nothing, and runtime-ai step 11 (per-row DT_NPC_Provoke copies) is the way. A stronger signal:
    `provoke_cone_deg = 30`, `provoke_time_s = 0.5`.
 3. The P5 gate: the run line's "tail watch Veteran+: died after median ... [8 s+]" (stats_report verdict). Watch
    "blackouts" (a Blackout state in an episode: 10 s of level flight) and the state times.
@@ -241,8 +250,12 @@ Test checklist:
    once per plane with one `provoke:` line per tier and level, a Regular before a spike untouched; sv_main.lua's calls.
 3. The tail watch on stubbed planes: a Provoke 1.5 s after t0, its states, death at 9.5 s (8.0 s after Provoke), an
    escape held 3.0 s with no Provoke, a 0.25 s flicker dropped, a bomber left out, only the nearest four read, the
-   sweep's death ending an episode, nothing on a co-op joiner or with tail_watch off, the round and run lines' parts;
-   then stats_report.py on its log.
+   sweep's death ending an episode, nothing on a co-op joiner or with tail_watch off; no episode on a wreck the sweep
+   hasn't marked down (and none when the sweep then finds it); a plane already in Provoke: "already defending", no
+   reaction time, nothing "after its Provoke"; two planes you're behind (one by the sweep's p.tailing, one by its cached
+   pose) read before four nearer ones beside you; an episode still open when the run ends (shot down) ending as "still
+   up" in the round line (cut short) and the run line; then stats_report.py on its log. Each of the review's three
+   fixes was checked to fail its case when undone (a scratch copy with the fix reverted).
 
 ### Untested / known limits
 - [I] Everything in game. The trees' "always one move" is [V] against the runner model only; the model follows
@@ -263,10 +276,25 @@ Test checklist:
   down [C], so a long run of reactions should blackout less; watch "blackouts" in the lines.
 - The cobra / kulbit picks need AI level 3 / 4 (round 16 / 19 on), where spike 2's post_stall_all already lets every
   airframe post-stall: their fallback runs only with spikes off or a special that turns post-stall off.
-- The tail watch: the host or solo only, your own tails only (not a joiner's stand-in on the host's game); 250 ms
-  resolution; the AI state is read only while an episode is open, so "Provoke after 0.0 s" means it was already
-  defending (another pursuer, or you sat outside tail_km first); a plane beyond `watch_km` at the sweep's last visit
-  (up to 2 s old) isn't watched until the next one. Its reads are on the game thread with the rest of the tick
-  (timed "tail watch").
+- The tail watch: the host or solo only, your own tails only (not a joiner's stand-in on the host's game: U1's 2 s
+  geometric metric covers each joiner on its own game); 250 ms resolution; the AI state is read only while an episode
+  is open, so a plane defending at its first read is "already defending" (no reaction time; it can also be one that
+  went into Provoke in the same 250 ms you crossed into the cone, rare); a plane beyond `watch_km` at the sweep's last
+  visit (up to 2 s old) isn't watched until the next one; "likely behind" uses the sweep's pose of the plane (up to 2 s
+  old), so a tail you've just started can wait a sweep for its slot when watch_max planes are both nearer and likely.
+  "Died after" counts only deaths: an escaped or still-up episode is a survival at least that long (censored), listed
+  apart, not folded into the median. Its reads are on the game thread with the rest of the tick (timed "tail watch").
 - Not built (optional in the briefs): a shorter Survival BlackoutLua (behaviour-pipeline (d)); per-row provoke
   (runtime-ai step 11).
+
+### Review fixes (after unit 2's review; not yet run in game)
+The trees, the live provoke and its merge passed the review unchanged (a hand trace against BEHAVIOUR_NATIVE_LOGIC.md
+agreed with the opposite gates). The tail watch, the P5 gate's measurement, got four fixes so its figures aren't
+biased: (1) an episode opens only on a live plane (HealthInternal read first): a wreck the 2 s sweep hadn't marked down
+used to open one and close it the next tick as "died" after about 0.25 s, pulling the "died after" median down;
+(2) a plane already defending at the episode's first read ("already defending") no longer counts as "Provoke after
+0.0 s": those zeros diluted both arms of checklist 2's A/B and could read as "the live write does nothing";
+(3) the planes you're likely behind are read before nearer ones; (4) episodes still open when the run ends get a line
+and count as "still up" instead of vanishing. tools/build_all.sh now lints Scripts/ai/*.lua too (lua_check, the
+packed behaviour scripts; the critic's note). stats_report.py reads the new parts (and still reads the older lines).
+Not done: runtime-ai step 11 (per-row provoke) waits for the A/B; the joiners' tails stay unwatched (above).

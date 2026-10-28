@@ -13,9 +13,10 @@ rm -rf "$W" && mkdir -p "$W/Scripts" "$W/config"
 "$LUA" tailed_test.lua "$HERE/../../mod/UE4SS/AC8SurvivalMode" "$W"
 # the log parser (stats_report.py) on the lines the test wrote
 python -X utf8 -I stats_report.py "$W/test_lua.log" > "$W/report.txt"
-for want in "tail watch Veteran+ (4 Hz): died, tailed     5.8 s (n 2); 8.0 s after Provoke (n 1)" \
-            "1 (held 3.0 s)" "1.5 s; none in 2; blackouts 0" "5.8 s    0/0" "tailed lines: 3" \
-            "60 deg / 1.5 s (Survival's)          3    2       5.8 s       1         1.5 s    2 0" "provoke lines: 1"; do
+for want in "tail watch Veteran+ (4 Hz): died, tailed     3.0 s (n 3); 8.0 s after Provoke (n 1)" \
+            "2 (held 2.5 s); still up 1" "1.5 s; none 4; already 1; blackouts 0" "3.0 s    0/0" "tailed lines: 6" \
+            "60 deg / 1.5 s (Survival's)          6    3       3.0 s       2   1         1.5 s    4       1 0" \
+            "provoke lines: 1"; do
     grep -qF "$want" "$W/report.txt" || { echo "stats_report: FAILED: '$want' not in $W/report.txt"; cat "$W/report.txt"; exit 1; }
 done
 echo "stats_report: the tail watch's lines read"

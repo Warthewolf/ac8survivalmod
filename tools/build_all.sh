@@ -35,6 +35,7 @@ tools/get_stock.sh \
 python -X utf8 -I tools/menu_stock.py   # Survival's menu pages: the stock main-menu page, its settings, the page tables
 python -X utf8 -I tools/checks/menu_pages_test.py > /dev/null || { python -X utf8 -I tools/checks/menu_pages_test.py; exit 1; }
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
+python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai/*.lua   # the behaviour scripts (packed)
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
