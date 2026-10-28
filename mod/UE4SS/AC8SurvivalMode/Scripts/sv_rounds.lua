@@ -344,6 +344,14 @@ local function startRound()
     D.round = D.round + 1
     pruneDown()
     D.events = {}
+    -- the learning layer's counters for this round (P6, sv_stats.lua PROF.weights: your habits, this run's and your saved
+    -- profile's): D.counter, read by the strike and jammer picks, the role mix, enemyTier / enemyManeuvers, the Lancers'
+    -- height and the squad director's budgets (DIR.roundStart) below
+    do
+        local okPf, errPf = true, nil
+        if PROF and PROF.weights then okPf, errPf = pcall(PROF.weights, D.round) end
+        if not okPf then D.counter = nil; log("learning: error " .. tostring(errPf)) end
+    end
     -- the round's aircraft (TIER.roundBudget: the spike's aircraft_add within the round's cap, which grows from
     -- CFG.late.aircraft_from_round; the spike level the intensity director's, levelFor, when it's eased under the
     -- spike: P4), then a special's extra, then the menu's ENEMY AIRCRAFT %, then co-op (below): the caps before the %
@@ -425,7 +433,12 @@ local function startRound()
     local normal = not raid and not special and not D.roundTier
     -- a normal round's strike package at the airfield (CFG.strike): one 2-ship, not a heavy
     local st = CFG.strike
-    if normal and CFG.airfield.enabled and st and st.enabled and D.round >= st.from_round and math.random() < st.chance then
+    local stChance = st and st.chance or 0           -- (more often against a player who hugs the airfield: PROF, P6)
+    if PROF and PROF.chance then
+        local okC, x = pcall(PROF.chance, "strike", stChance)
+        if okC and type(x) == "number" then stChance = x end
+    end
+    if normal and CFG.airfield.enabled and st and st.enabled and D.round >= st.from_round and math.random() < stChance then
         local sb, sn = pick(b.pool, 2, function(u) return HEAVY_UNIT[u] end)
         for _, u in ipairs(sb) do bombers[#bombers + 1] = u; D.strikeAir[u] = true end
         nBombers = nBombers + sn
@@ -486,7 +499,12 @@ local function startRound()
     -- the round's jammer (CFG.jammer): one fighter flight led by an EA-18G
     local jc = CFG.jammer
     D.jammerUnit, D.jammer = nil, nil
-    if normal and jc and jc.enabled and D.round >= jc.from_round and math.random() < jc.chance and SR.usable[jc.aircraft] then
+    local jcChance = jc and jc.chance or 0           -- (more often against a missile-heavy player: PROF, P6)
+    if PROF and PROF.chance then
+        local okC, x = pcall(PROF.chance, "jammer", jcChance)
+        if okC and type(x) == "number" then jcChance = x end
+    end
+    if normal and jc and jc.enabled and D.round >= jc.from_round and math.random() < jcChance and SR.usable[jc.aircraft] then
         for _, u in ipairs(fighters) do                -- (a duelist or Skirmisher flight with roles on: ROLE.jammerOk)
             if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] and ROLE.jammerOk(u) then D.jammerUnit = u end
         end

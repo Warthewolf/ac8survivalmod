@@ -841,7 +841,7 @@ end
 -- tells) and the host's difficulty preset is used for everyone (presetName).
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
-                   stats = true, tells = true }
+                   stats = true, tells = true, profile = true, flares = true }   -- (profile, flares: P6's, each player's own)
 -- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
 -- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
 local function structural(path)

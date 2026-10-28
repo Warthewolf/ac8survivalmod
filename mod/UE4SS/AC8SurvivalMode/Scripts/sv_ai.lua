@@ -15,6 +15,10 @@ function enemyTier(p, round, flightTier)
     p.tier = t
     local add = (tc.rank_add[presetName()] or 0) + SETUP.skillAdd()   -- (+ the menu's ENEMY SKILL, sv_menu.lua)
     local want = math.max(1, math.min(5, t.rank + add, 5))
+    if PROF and PROF.rankAdd then                            -- (a missile-heavy player: more flares, P6's learning layer)
+        local okH, h = pcall(PROF.rankAdd, i)
+        if okH and type(h) == "number" and h > 0 then want = math.min(5, want + h) end
+    end
     p.rankBase = want                                        -- (before the spike's rank_min: P4 writes it again live)
     local sk = spikeCfg(levelFor(round))                    -- (the spike's, or the intensity director's under it)
     if sk.rank_min then want = math.max(want, math.min(5, sk.rank_min)) end
@@ -51,6 +55,10 @@ function enemyManeuvers(p, round)
     local all = spikeCfg(levelFor(round)).post_stall_all        -- a difficulty spike: every airframe
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
     if fl and fl.post_stall then all = true end                    -- (a top tier: on, whatever its blueprint)
+    if PROF and PROF.postStall then                                -- (a gun / close-fight player: P6's learning layer)
+        local okH, on = pcall(PROF.postStall, p.tier)
+        if okH and on then all = true end
+    end
     local function read()
         local okC, c = pcall(function() return p.obj.bCanManeuverPugachevsCobra end)
         local okK, k = pcall(function() return p.obj.bCanManeuverKulbit end)

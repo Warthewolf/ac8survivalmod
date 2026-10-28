@@ -94,6 +94,52 @@ CFG = {
     stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
               bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
               pawn_history = true, tail_watch = true, watch_km = 4.5, watch_max = 4, watch_grace_s = 2.0 },
+    -- The learning layer (behaviour roadmap P6, "punish habits": Scripts/sv_stats.lua PROF; tools/re/BEHAVIOUR_DIRECTOR.md
+    -- unit 8). Your own kills (KILL.by "you": a co-op partner's are theirs) and where you fly (every 2 s of a fight, in
+    -- the air) make a profile of five habits, each a share 0-1:
+    --   missile   kills with a missile or a special spent in the 6 s before and the gun not
+    --   gun       kills with the gun spent, or within CFG.stats close_km (whichever share is bigger)
+    --   tail      0.6 x kills from behind (CFG.stats tail_km / tail_deg) + 0.4 x time on an enemy's tail (full at
+    --             tail.time_full of your time)
+    --   high      time high.over_m above the enemies within high.near_km (none near: above high.alone_m)
+    --   airfield  time within airfield.km of the runway
+    -- A habit over its threshold is countered, the more the further over (its strength: 0 at the threshold, 1 at 1.0),
+    -- from each round's start (the host's or solo: the enemies are the host's):
+    --   missile   the jammer more often (its chance x (1 + jammer_x x strength), at most jammer_max), PilotRank rank_add
+    --             higher from tier rank_from (more flare and strong-evasion picks), and the AI's flares refilled
+    --             (CFG.flares: chosen at the main menu from the saved profile, so from the next game session)
+    --   gun       post-stall (cobra, kulbit) on every airframe from tier post_stall_from; duelist / wolf: those fighter
+    --             roles' weight in the round's mix x (1 + that x strength) (CFG.roles)
+    --   tail      the squad director's cover-the-tailed and trap: budgets x (1 + budget_x x strength), cooldowns that much
+    --             shorter (CFG.director); wolf as above
+    --   high      lancer as above, and the Lancers come in above_m over your usual height (within their band)
+    --   airfield  the airfield's strike package more often (strike_x, strike_max as the jammer's); skirm as above
+    -- The run's own shares count from live_kills of your kills (live_samples samples for the time habits), weighed
+    -- against the saved profile as if it were prior_kills kills (prior_samples samples). save: the profile is kept in
+    -- config/survival_profile.ini (the game's own file next to survival.ini, never sent; delete it to start over), read
+    -- at the main menu and at each level load (a run's first rounds are countered from it), written at each run's end
+    -- (checkpoint: and at each round's end, so a game that closes mid-run doesn't lose it: learnt from at the next
+    -- start). A run of fewer than min_kills of your kills, or one started past round 1, is counted but not learnt from; a
+    -- run weighs K / (K + fold_kills) in the profile (S / (S + fold_samples) for the time habits), at most run_weight_max.
+    -- Each player's own in co-op (sv_coop.lua PERSONAL); only the host's counters reach the room. enabled = false: no
+    -- profile and no counters; save = false: each run learns on its own (nothing read or written). Untested in game.
+    profile = {
+        enabled = true, save = true, checkpoint = true, min_kills = 8, live_kills = 5, live_samples = 30,
+        prior_kills = 20, prior_samples = 150, fold_kills = 30, fold_samples = 300, run_weight_max = 0.5,
+        missile  = { enabled = true, threshold = 0.8, jammer_x = 1.0, jammer_max = 0.9, rank_add = 1, rank_from = "Veteran" },
+        gun      = { enabled = true, threshold = 0.35, post_stall_from = "Regular", duelist = 1.0, wolf = 0.5 },
+        tail     = { enabled = true, threshold = 0.7, time_full = 0.3, budget_x = 1.0, wolf = 1.0 },
+        high     = { enabled = true, threshold = 0.5, over_m = 1000, alone_m = 5000, near_km = 15.0, lancer = 1.5,
+                     above_m = 1000 },
+        airfield = { enabled = true, threshold = 0.4, km = 8.0, strike_x = 1.0, strike_max = 0.9, skirm = 1.5 },
+    },
+    -- The AI's flares (P6's missile counter; the critic's lever): every stock fighter carries NPC_FCS_PlaneFlr000 in
+    -- weapon slot 0 (10 flares a release, 10 in the magazine, 25 s to reload). When the saved profile (CFG.profile) has
+    -- you missile-heavy at the main menu, the fighters' rows (not the specials' own) get a copy that holds `magazine`
+    -- and reloads in reload_s. Rows are made once a game session: a change shows from the next one. always: every
+    -- session, whatever the profile says (a test). Each player's own (PERSONAL). Untested: whether the game uses the
+    -- copy (the missile and gun copies are confirmed).
+    flares = { enabled = true, always = false, magazine = 20, reload_s = 8.0 },
     -- Tells (the behaviour roadmap's P3, Scripts/sv_tells.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 4: "a radio line or
     -- HUD callout before each coordinated threat"): a tell is an id of `list`, said by TELL.say. Its radio line is one
     -- of `radio` (RE_SV_Radio<Suffix>: a stock AC8 line cloned into DT_SV_Radio at build time, tools/survival_events.py
