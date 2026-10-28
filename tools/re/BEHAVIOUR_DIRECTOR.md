@@ -854,3 +854,175 @@ timing guard against a joiner's own appearance orders) and no hostSync replay of
 spring itself (U6: it must pick the bait it watches by pair and goes through WOLF.free, which now waits out a decoy); the
 Wolf bait's ProvokeMid / Far stay stock 0012_CP turns (the drag only when tailed close); ace rounds' overflow into role
 flights until P9; everything in game.
+
+## Unit 6: the squad director (P2)
+
+The thesis' P2, "one Lua part that watches the whole sky and fires remote events on the right plane": a new part,
+Scripts/sv_director.lua (global `DIR`), loaded after sv_tells and before sv_menu / sv_coop (main.lua MODULES), ticked
+every 250 ms from sv_main.lua's probeTick right after ACE.movesTick (timed "director" in the `perf:` line). Six tactics,
+each built only on levers already proven or on the same stock records: each is said first (unit 4's tells: the action
+its `lead_s` later through TELL.after), has a cooldown and a budget a round, and is counted by STATS.tactic (unit 1:
+a `director:` line, the planes involved tagged `p.dirTag = { tactic, at }`, which unit 3's kill bonus pays x1.5 on).
+Host or solo only: on a co-op joiner DIR.tick does nothing of its own (P4's `DIR.clientTick` hooks in there later).
+Lua, survival.default.ini and the build (tools/survival_events.py `build_director`: 134 new remote events). No COOP_TAG
+or VERSION bump (the contract's single bump comes last), but the event package changed: that bump must come before any
+co-op build goes out.
+
+| tactic | when | tell first | what happens | lever | a joiner as the target |
+|---|---|---|---|---|---|
+| cover | a player on an enemy's tail (within cover.tail_km 3 / tail_deg 70 of its six) for tail_s 3 | `cover_ask` at ask_s 1.5 (the tailed one's radio "Someone cover me!"), then `six` (urgent: BANDIT CUTTING IN / CHECK YOUR SIX, lead 1 s) | the nearest plane of another pool flight within range_km 6 of that player turns its whole flight onto them; its next reversal no sooner than move_s 30 (D.aceMoveAt, shared with the aces' own) | RE_SV_AceTurn_NN (LastTGT by flight, confirmed 2026-10-23) | LastTGT would turn onto the host: RE_SV_Hunt_NN (AIFirst) and the flight's TargetActor kept on that player's stand-in for aim_s 20, then its orders back |
+| trap | a player on a Wolf bait's tail (an even plane of a Wolf flight whose next plane is held: unit 5) for spring_s 2.5 | trap.warn (`drag`: HE'S DRAGGING YOU) at drag_s 1, then `trap` (urgent: IT'S A TRAP, lead 1 s) | that bait's own held wingman is freed and turned onto the player | WOLF.free(unit, why, true, k): RE_SV_WolfFree + RE_SV_WolfTurn_<NN><L> | freed without the turn, its TargetActor on the stand-in for aim_s |
+| bracket | two enemies within bracket.range_km 4 of a player, their noses within nose_deg 60 of them, 60-120 deg apart around them (sep_deg) | `bracket` (urgent: MISSILES FROM TWO SIDES / BREAK NOW, lead 1 s) | each fires one missile at the player, in the same tick | RE_SV_Salvo_<NN><L> (new: Mission 19's LiveFireOneShotWeapon, WN_WEAPON_3 = fire-control slot 2, hard rule 40), only planes whose row has its missiles there (SR.mslSlot) | its own copies fire at it ("dv", the lead timed there) |
+| top cover | a Lancer flight (top_cover.roles; roles off: any, any_without_roles) up, its orders in, hold_after_s 3 on | `dive` (urgent: BANDIT DIVING / HIGH, n O'CLOCK, lead 1 s, then the o'clock line) when it dives | held at engagement None until a player has fought another flight (within engage_km 3) for engaged_s 3 and it's been held min_s 8: then it dives on that player. Let go quietly at max_s 45, when hit, as the round's last flight, or by the player's decoy's end | RE_SV_DirHold_NN / RE_SV_DirFree_NN (new: the MOONCHILD hold / the appearance's orders, by flight; forwarded, so the joiners' copies hold too) | freed, then RE_SV_Hunt_NN with its TargetActor on the stand-in |
+| pincer | a new wave (startRound's first, each later one) of 2+ fighter flights, not a special's or a raid's, with chance 0.6 | `pincer` (TWO GROUPS INBOUND / FROM THE x AND THE y) with its first flight, to every player | its flights alternate on two compass bearings sep_deg 90-150 apart (spread_deg 10), solo around you ring_km 12-18 out (ahead: either side of your nose), in co-op around the airfield (CFG.distance_km); each nose on the centre | spawnFlight's point (spawnPoint with a centre; SV_Spawn's pose reaches the joiners in "sp") | the same for everyone: room news |
+| regroup | a flight of min_size 4+ down to half its planes (this spawn's), after_s 10+ after it came up | `regroup` (BANDITS REGROUPING; "They're trying to regroup.") | breaks off (engagement None) for hold_s 7, then its orders back | RE_SV_DirHold_NN / DirFree_NN | the same (forwarded) |
+
+"Its orders back" is RE_SV_DirFree_NN (air-only search, PlayerOnlyNoLimit, as its appearance's), plus RE_SV_Hunt_NN again
+for a flight the co-op host had sent after the joiners (COOP.hunted) or one aimed at a joiner.
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| the part | Scripts/sv_director.lua (`DIR`; 58 of 200 locals) | DIR.tick (4 Hz: who's on whose tail, who could bracket whom, at most one tactic started a tick; 1 Hz: aims, holds, the pincer's count, top cover's holds, regroups), DIR.roundStart, DIR.wave, DIR.spawnAt, DIR.spawned, DIR.holding, DIR.aimed, DIR.release (for P4), DIR.SALVO_FCS_SLOT 2. State in D.dir (a new level or run clears it), per plane p.dirTail (a tail episode) and p.pose |
+| players | COOP.players() (sv_coop.lua; `rot` added for the others) | the targets: alive, flying, fresh; past [director] players (4) you and the others round-robin. The Offline edition (COOP nil): you from the pawn |
+| perf | sv_director.lua fastTick | candidates from the 2 s sweep's p.at within near_km 6 of a player; fresh position + heading reads for at most reads 8 a tick, the planes likely tailed first (a tail episode open, the sweep's p.tailing, or its last pose against the player), then the nearest; the read kept in `p.pose`, which the tail watch (sv_stats.lua STATS.tailTick, run after it) reuses: one read a plane a tick between them. No FindAllOf, nameOf or StaticFindObject; decisions logged, never ticks |
+| budgets | CFG.director.budget, cooldown_s, gap_s | per round by the band of the latest from_round reached (cover, trap and bracket each player's; top cover, pincer, regroup the room's); a tactic's cooldown; gap_s between any two the director starts (not the pincer, not top cover's hold). P6's hook: D.counter.tail (when P6's unit sets it) multiplies the cover and trap budgets and divides their cooldowns (the critic's gap fill (a)). A budget of 0 is silent |
+| tells first | CFG.director.need_tell | a tactic waits until its tell can be said (TELL.ready: the tells' gaps, cooldowns, line_gap_s); this game's tells off ([tells] enabled = false), it goes without one, at once (TELL.after's own rule). The pincer's tell comes with its first flight (you may be grounded as a round starts) |
+| the salvo | tools/survival_events.py `SALVO_SLOT`, `build_director`; sv_rows.lua searchSetup (`SR.mslSlot`); sv_spawn.lua (`D.flightRow`) | RE_SV_Salvo_<NN><L> on the 86 objects of the 22 usable pool flights (POOL_OBJS, the probe flights left out), WN_WEAPON_3, target Player. Static check of DT_NPC: 246 of the 261 OP1xxx rows have their first missile slot at 2. At the main menu every row Survival flies has its first missile slot recorded (all levels); the director fires a plane only when its row's (the lead's own row for k 0, D.leadRow, else its flight's, D.flightRow) is 2. Never the special slot: it differs between co-op games |
+| holds | `build_director`; sv_director.lua hold / release | RE_SV_DirHold_NN (engagement None by flight) and RE_SV_DirFree_NN for all 24 pool flights. RE_SV_Decoy_NN couldn't be reused: it's each player's own (KEEP_EVENTS), so a joiner's copies would have gone on shooting (the critic) |
+| what a hold changes elsewhere | sv_allies.lua ALLY.tick's hunts, sv_coop.lua's split hunts, sv_ai.lua ACE.movesTick | a held flight isn't sent hunting the allies; the co-op host's split hunt waits (every 2 s, up to a minute) and goes after the hold, so the hunt doesn't free it; the aces' reversals skip it |
+| aims | sv_director.lua aim / aimsTick; sv_ai.lua ACE.hunt | a flight sent after a joiner: blackboard TargetActor = that player's stand-in, written once a second for aim_s; ACE.hunt leaves an aimed plane's TargetActor alone (DIR.aimed) |
+| the pincer | sv_spawn.lua spawnPoint (a centre, a 5th value: on the bearing or not), spawnFlight (DIR.spawnAt; the yaw towards the centre); sv_rounds.lua (DIR.wave at startRound's end and in the "wave" branch) | a side over the zone's edge falls back to the normal spawn (logged); the wave's flights tagged and the tactic counted once they're up (1.5 s after the last, or 60 s on) |
+| co-op "dv" | sv_coop.lua COOP.dispatch, the joiner's "dv" handler and queue (clientRounds) | host -> one joiner: an event, its flight, a delay. Only `RE_SV_Salvo_<NN><L>`, `RE_SV_Dir<a>_<NN>`, `RE_SV_Wolf<a>_<NN><L>` (NN the flight's own pool index), delay clamped 0-3 s; the joiner drops it while its level loads, when it has no live copy of that plane (by letter; any copy for a flight's event), when the delay isn't finite, past 8 a second; never queued past its delay; "rs" clears it. KEEP_EVENTS += `^RE_SV_Salvo_` (RE_SV_DirHold / DirFree forwarded) |
+| COOP.hunted(unit) | sv_coop.lua | a flight the host sent after the joiners this spawn (its hunt's M.units gen) |
+
+### CFG keys (CFG.director; `[director]` and its sections in survival.ini; the host's for the room)
+- `enabled` true, `need_tell` true, `gap_s` 5.0, `near_km` 6.0, `reads` 8, `players` 4,
+  `skip_specials` = anomaly, glitch, valka, ladon, alicorn (their own scripts run those fights: nothing new starts).
+- `budget` ([director.budget]): `from_round` 1, 5, 10, 20; `cover` 1, 1, 2, 2; `trap` 1, 1, 2, 2; `bracket` 0, 1, 1, 2;
+  `top_cover` 0, 1, 1, 2; `pincer` 0, 1, 1, 1; `regroup` 0, 0, 1, 1 (the thesis' "3-6 a round" is the target, these the
+  most: what comes depends on the chances the sky gives).
+- `cooldown_s` ([director.cooldown_s]): cover 30, trap 20, bracket 25, top_cover 30, pincer 0, regroup 30.
+- `cover`: `enabled`, `tail_km` 3.0, `tail_deg` 70, `ask_s` 1.5, `tail_s` 3.0, `range_km` 6.0, `move_s` 30, `aim_s` 20.
+- `trap`: `enabled`, `warn` drag (a tell id; lure is the enemy's "I'll lure him into your sights!"), `drag_s` 1.0,
+  `spring_s` 2.5, `aim_s` 20.
+- `bracket`: `enabled`, `range_km` 4.0, `nose_deg` 60, `sep_deg` 60, 120.
+- `top_cover`: `enabled`, `roles` = lancer, `any_without_roles` true, `hold_after_s` 3.0, `min_s` 8, `max_s` 45,
+  `engage_km` 3.0, `engaged_s` 3.0, `aim_s` 20.
+- `pincer`: `enabled`, `chance` 0.6, `sep_deg` 90, 150, `spread_deg` 10, `ring_km` 12, 18, `ahead` true.
+- `regroup`: `enabled`, `min_size` 4, `after_s` 10, `hold_s` 7.
+- Build data outside CFG: `DIR.SALVO_FCS_SLOT` 2 (the build checks it against survival_events.SALVO_SLOT
+  'WN_WEAPON_3').
+
+### Log lines to look for in a test
+- Main menu: `director: N rows carry their missiles in fire-control slot 2 (WN_WEAPON_3: the salvo)[; not: <row> <slot>, ...]`
+  (a row listed there never fires the salvo).
+- Each round: `director: round 12's budgets (from round 10): cover 2, trap 2, bracket 1, top_cover 1, pincer 1, regroup 1`
+  (`; cover and trap x1.50 (your tail chasing)` once P6 sets its counter).
+- Each tactic: STATS.tactic's `director: round R +T s: <tactic> on <unit> (n planes)[, player N] (<why>); callout "<tell>"`
+  (bracket and pincer `on the round`, the planes named in the why), then its action:
+  `director: cover: RE_SV_AceTurn_05 fired` (a joiner: `director: cover for player 2: RE_SV_Hunt_05 fired`),
+  `roles: <unit> (wolf) trap freed (the director's spring: you chased bait A): B, turned onto the player`,
+  `director: bracket: RE_SV_Salvo_02A fired, RE_SV_Salvo_04B fired` (a joiner: `director: bracket on player 2's copies in
+  1.0 s ("dv"): RE_SV_Salvo_02A sent, ...`), `director: top cover: <unit> held at engagement None until you're in a fight
+  (RE_SV_DirHold_07 fired)`, `director: regroup: <unit> breaks off for 7 s (RE_SV_DirHold_02 fired)`,
+  `director: <unit> back in the fight (<why>): RE_SV_DirFree_07 fired[, RE_SV_Hunt_07 fired]`,
+  `director: pincer: wave 1's 3 fighter flights from two sides, bearings 29 and 151 (122 deg apart) around you`, the
+  spawn lines' `... at bearing 35 (compass) from you, a pincer side`, `director: <unit>'s TargetActor kept on player 2's
+  plane for 20 s (4 planes; cover)`, `director: <unit> down while held (top cover)`, `director: <unit> (top cover)
+  freed by your decoy's end`.
+- The tells, unit 4's: `tell: cover_ask: RE_SV_RadioEnCoverA (fired)`, `tell: six: ..., tell callout 'BANDIT CUTTING IN'`,
+  `hud: tell 'BANDIT DIVING' / 'HIGH, 3 O'CLOCK'`, `tell: dive: RE_SV_RadioDiveB (fired), then RE_SV_RadioClockC (fired)`, ...
+- Held back (once a round per tactic, player and kind of reason): `director: cover not now (its budget, 1 of 1 this
+  round)`, `(its cooldown, 12 s more)`, `(the director's gap, 2.0 s after its last)`, `(no flight within 6 km to cover
+  <plane>)`, `(its tell can't be said now)`; `director: top_cover not now (it's the only flight up (<unit>))`;
+  `director: pincer: <unit> fell back to a random point (the zone's edge at bearing 151)`.
+- Co-op: the host's `tell: bracket to player 2 ("tl")`; a joiner's `coop: director RE_SV_Salvo_02A fired here
+  (ERA_Unit_01_Dep_Air1): fired` or `coop: the host's director event ... dropped (<why>)` (once per reason).
+- The perf line's `director` part (its avg and worst ms). Errors: `director: error ...`, `director: round start error`,
+  `director: wave error`, `director: pincer error`.
+
+### Test checklist (in game)
+1. Round 3+: get on a fighter's tail and stay there 3 s with another duelist flight within 6 km: "Someone cover me!",
+   then BANDIT CUTTING IN, and a second later that flight turns in (`ai:` lines: UniqueAction). Its kill pays
+   `director cover x1.5` within 20 s.
+2. Wolf flights ([roles.mix] wolf = 1, 1, 1): chase a bait 2.5 s: HE'S DRAGGING YOU at 1 s, IT'S A TRAP at 2.5 s, its
+   own wingman (held: FollowFormation) turns onto you a second later (`ai:` PursueTarget / UniqueAction).
+3. Round 5+: two fighters coming at you from about 90 deg apart within 4 km: MISSILES FROM TWO SIDES, two missile
+   alerts a second later. Check the main-menu salvo line first; whether a forced shot needs a lock is the open question.
+4. Lancers ([roles.mix] lancer = 0.5): a Lancer flight holds (no attack; `ai:` FollowFormation / Patrol) until you've
+   fought another flight ~3 s (it's held 8 s+), then BANDIT DIVING / HIGH, n O'CLOCK (the o'clock right?) and it
+   attacks. Shoot one while it waits: it comes at once, no tell.
+5. Round 5+ waves ([director.pincer] chance = 1.0): TWO GROUPS INBOUND / FROM THE x AND THE y, contacts from two sides
+   12-18 km out (the minimap), none from behind with ahead = true.
+6. Round 10+: shoot two of a 4-ship: BANDITS REGROUPING, they break off ~7 s, then come back.
+7. Perf: the `perf:` line's director worst under ~3 ms with 26+ planes up.
+8. Co-op (a host and a joiner): the joiner tails a fighter: the tell on the joiner only, a hunt (`ai:` target = the
+   joiner's stand-in); a bracket around the joiner: its own copies fire (`coop: director RE_SV_Salvo_... fired here`),
+   no RE_SV_Salvo in the joiner's `ev` lines; top cover's copies hold their fire on the joiner while held.
+9. Off: [director] enabled = false: no `director:` lines but STATS' "ace reversals".
+
+### Offline test
+`sh tools/checks/director_test.sh` (tools/checks/director_test.lua on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
+sv_spawn, sv_rounds, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop, Lua 5.4.6; planes stubbed as objects with a
+position and a heading; then a Python check of the build side's names):
+- [director] sections read from a survival.ini; every tactic's switch on as shipped; the budgets by band (round 3, 12)
+  and P6's factor;
+- cover: nothing before 1.5 s, the call for help at 1.5 s, the six tell at 3 s and the duelist flight's AceTurn 1 s
+  later (not a nearer Lancer's, not an escort's), the tag on the covering plane only, D.aceMoveAt, the budget (once,
+  logged once), the cooldown in round 12 then the second, the gap, nothing grounded / in an Anomaly round / switched off
+  / on a joiner / with no duelist in range (logged); tells off: at 3 s without a tell;
+- the reads: 21 planes near you, 8 reads, the one you're likely on the tail of first; the tail watch reads nothing more;
+- the trap: drag at 1 s, the trap tell at 2.5 s, its own wingman B freed and turned (D left held), no cover instead;
+  nothing inside your decoy;
+- the bracket: the tell, no shot in its lead, both shots 1 s on in one tick, both tagged; its budget; nothing at 30 or
+  150 deg, with a nose away, a slot-3 row, a held flight, or no budget (and no log of it);
+- top cover: the hold 3 s after its orders (not the duelists'), no dive under min_s, the dive with HIGH, 3 O'CLOCK and
+  ClockC, DirFree after the lead, tagged; let go when hit, as the last flight, at max_s, by your decoy's end (no event);
+  no hold without budget; roles off with and without any_without_roles;
+- the pincer: around you, either side of your nose; spawns alternating on the two bearings, 12-18 km out, noses on you;
+  the spawn line; the tell once with both compass names; counted and 8 planes tagged once up; none for a special's wave,
+  a raid's, one flight, no budget; co-op around the airfield; the zone's edge (logged, a normal spawn);
+- regroup: nothing before after_s, the tell + DirHold at 10 s, held 7 s, DirFree; 3 of 4 left: none;
+- SR.mslSlot from the real searchSetup on fake tables (every level; a slot-3 row recorded and named in the line);
+- co-op host: a joiner's bracket by "tl" + two "dv" with the 1 s lead, nothing fired here; KEEP_EVENTS; COOP.dispatch's
+  refusals; a joiner's cover (the six tell to it only, RE_SV_Hunt_05, its TargetActor on the stand-in, ACE.hunt leaving
+  it, its orders back after aim_s); the split hunt waiting out a hold and going after it (COOP.hunted), a hunted
+  flight's release firing its hunt again;
+- co-op joiner "dv": dropped while loading (logged), queued and fired after its delay, dropped for a name not the
+  director's, another flight's number, a plane it hasn't got, a bad delay, a lower-case letter, a long name, a copy
+  already down; a flight's event queued with its delay cut to 3 s; 8 a second; "rs"; DIR.tick doing nothing there;
+- the hooks by their place in the source (MODULES order, the tick order in probeTick, startRound / the wave branch,
+  spawnFlight, the hunts' and moves' skips, no SV_Event / hudCallout kept at load).
+A mutation check (the salvo's row test or the split hunt's wait removed on a scratch copy) fails 3 of its checks.
+build_all.sh: `director: 86 salvo objects in 22 flights (RE_SV_Salvo_<NN><L>, WN_WEAPON_3), 24 flights held / freed`,
+`events: 762 triggers, 1518 execs` (was 628 / 1360); ep_dump: RE_SV_Salvo_02A = LiveFireOneShotWeapon {WN_WEAPON_3,
+ERA_Obj_01_Air9_su33_0, Player}, RE_SV_DirHold_07 = LiveAIEngagementOrder None on ERA_Unit_03_Dep_Air0, RE_SV_DirFree_07
+= AIR_ONLY + Normal / PlayerOnlyNoLimit on it.
+
+### Untested / known limits
+- Everything in game [V at most]. In particular:
+- A pool fighter's missile forced by LiveFireOneShotWeapon (only AB.L..IN's gun and ECM and the Ladons' VLS are
+  confirmed): whether it needs a lock or a cone, whether it counts against the player-attack throttle (ATTACK_BASE's 4,
+  unit 3's presets) or the magazine. If nothing comes, the tell still says "missiles from two sides" (the salvo line
+  says "fired": SV_Event's 1 is the record running, not a missile).
+- LastTGT on duelists that aren't aces (the same request path as the Reaper's, no rank check in it [V static]); one
+  flight turning by unit, every plane of it.
+- Engagement None by flight on pool flights (RE_SV_DirHold) and whether it also stops their evasion and flares [I] (a
+  held flight may be a free kill: hit, it's let go at once); where a held flight flies (FollowFormation or Patrol in its
+  40 km area [I]: not "above the fight", the brief's v1 limit; the Lancers do spawn 2 km higher).
+- Co-op: TargetActor written to a stand-in under Normal / AIFirst (the hunt's own pick is confirmed, a chosen joiner
+  isn't); a forwarded hold on a joiner's copies (the Wolf trap's is the same, also untested); "dv" end to end.
+- Regroup is the brief's v1 (break off, close up, come back): rejoining another flight (an area move onto its lead) is
+  left out: putting the 40 km area back afterwards needs NearPlayer moves on pool flights, untested, and an area that
+  doesn't cover the plane sends it back (ReturnToUnit beats everything).
+- p.k <-> the AI object (unit 1's [I], checked by the `spawn index:` line): a salvo or a spring on the wrong plane if
+  creation order isn't desc order.
+- A player's own DECOY ends with its flight's unit-wide orders (RE_SV_DecoyEnd_NN): a held flight is let go by it (the
+  director lets it go then); a joiner's own decoy can be cut short by a forwarded DirFree (the brief's known interaction).
+- ALLY.tick's hunt and a flight the director holds afterwards: the release gives back PlayerOnlyNoLimit, not the allies'
+  hunt.
+- The pincer's bearings are from the host's player solo and from the airfield in co-op (for every player the same).
+- Budgets and the 3-6-a-round target: what a round gets depends on chances (tails, two noses at once, a Lancer flight up,
+  a 4-ship halved); tune [director.budget] / chance after a test's `stats:` lines ("director tactics N").
+- No COOP_TAG / VERSION bump yet (the contract's single bump at the end): 134 new events, a new message kind ("dv").

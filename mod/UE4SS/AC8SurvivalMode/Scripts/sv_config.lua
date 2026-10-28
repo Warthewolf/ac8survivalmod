@@ -118,8 +118,9 @@ CFG = {
     -- the airfield (raid), the jammer up and down, each later wave from wave_from_round (wave; 0: never), the ALICORN's
     -- railgun (alcn_rail_first, then alcn_rail: lead_s before the order, with CFG.specials.alicorn.rail_alert), dive,
     -- surfacing and VLS volley, a Ladon's VLS volley, the round's first Lancer and Skirmisher flight (lancer, skirm: P1's
-    -- fighter roles, CFG.roles tells). The rest are catalogued for the squad director (P2: pincer, split, dive with its
-    -- clock, drag, lure, trap, cover_ask, six, bracket, regroup) and the ALICORN's deck (P7) and not said yet.
+    -- fighter roles, CFG.roles tells), and the squad director's tactics (P2, CFG.director: cover_ask and six for cover,
+    -- drag and trap for the Wolf trap, bracket, dive with its clock for top cover, pincer, regroup). split, lure and the
+    -- ALICORN's deck (P7) are catalogued and not said yet.
     tells = {
         enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
         line_gap_s = 20, hunt_km = 8.0, wave_from_round = 26,
@@ -397,6 +398,50 @@ CFG = {
                  rehold_s = 1.0, gun_lead_s = 0.5 },
         skirm = { laam = true, laam_m = 7000, laam_min_m = 2500, laam_angle_deg = 45, laam_lock_s = 2.0,
                   laam_interval_s = 4.0, laam_rest_s = 8.0 },
+    },
+    -- The squad director (behaviour roadmap P2, Scripts/sv_director.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 6: "one Lua
+    -- part that watches the whole sky and fires remote events on the right plane"): six tactics, each after its tell
+    -- (CFG.tells: the action its lead_s later), each with a cooldown and a budget a round; the host's (co-op joiners get
+    -- their own tells and shots, and see the planes move):
+    --   cover      you on an enemy's tail (cover.tail_km, tail_deg) for cover.tail_s: the nearest plane of another flight
+    --              within range_km of you that may turn (a duelist's or an ace squadron's, not an escort's or the
+    --              jammer's) turns its flight onto you, the aces' reversal (RE_SV_AceTurn_NN; its next no sooner than
+    --              move_s); the tailed one calls for help first (cover_ask, at ask_s), then "check your six" (six)
+    --   trap       you on a Wolf bait's tail (fighter roles: CFG.roles) for trap.spring_s: its held wingman is sprung onto
+    --              you; trap.warn's tell ("he's dragging you") at drag_s, "it's a trap" (trap) at the spring
+    --   bracket    two enemies within bracket.range_km of you, their noses within nose_deg of you, sep_deg apart around
+    --              you: each fires a missile at you at once (RE_SV_Salvo_<NN><L>), after the bracket tell
+    --   top_cover  a Lancer flight (top_cover.roles; with roles off any flight, any_without_roles) held at engagement None
+    --              hold_after_s after its orders are in, until you've fought another flight within engage_km for
+    --              engaged_s and it's been held min_s: it dives on you after the dive tell (its o'clock). Let go quietly
+    --              at max_s, when you hit it, or when it's the round's last flight
+    --   pincer     a new wave of 2+ fighter flights (not a special's or a raid's), with chance: its flights come from two
+    --              bearings sep_deg apart, spread_deg either way, around you (ring_km; ahead: either side of your nose)
+    --              solo, around the airfield in co-op; the pincer tell names both with the first flight
+    --   regroup    a flight of min_size or more down to half its planes after_s or more after it came up: the regroup tell,
+    --              it breaks off for hold_s (engagement None), then it's back
+    -- budget: each tactic's most a round (in the band of the latest from_round reached: cover, trap and bracket each
+    -- player's, the rest the room's); cooldown_s: between two of one tactic; gap_s: between any two the director starts
+    -- (the pincer and top cover's hold apart). need_tell: a tactic waits until its tell can be said (CFG.tells' gaps);
+    -- false, or tells off here, it goes without one. Never in a round of skip_specials (their own scripts run the fight).
+    -- near_km: the planes looked at (within it of a player), reads: fresh reads of them a tick (the tailed ones first),
+    -- players: the players looked at a tick (round-robin past it). A co-op joiner's tactics: a hunt with the flight's
+    -- target kept on that player for aim_s (LastTGT turns onto the host), a salvo fired on its own copies ("dv").
+    -- enabled = false (or a tactic's): none (as before P2). Untested in game.
+    director = {
+        enabled = true, need_tell = true, gap_s = 5.0, near_km = 6.0, reads = 8, players = 4,
+        skip_specials = { "anomaly", "glitch", "valka", "ladon", "alicorn" },
+        budget = { from_round = { 1, 5, 10, 20 }, cover = { 1, 1, 2, 2 }, trap = { 1, 1, 2, 2 }, bracket = { 0, 1, 1, 2 },
+                   top_cover = { 0, 1, 1, 2 }, pincer = { 0, 1, 1, 1 }, regroup = { 0, 0, 1, 1 } },
+        cooldown_s = { cover = 30, trap = 20, bracket = 25, top_cover = 30, pincer = 0, regroup = 30 },
+        cover = { enabled = true, tail_km = 3.0, tail_deg = 70, ask_s = 1.5, tail_s = 3.0, range_km = 6.0, move_s = 30,
+                  aim_s = 20 },
+        trap = { enabled = true, warn = "drag", drag_s = 1.0, spring_s = 2.5, aim_s = 20 },
+        bracket = { enabled = true, range_km = 4.0, nose_deg = 60, sep_deg = { 60, 120 } },
+        top_cover = { enabled = true, roles = { "lancer" }, any_without_roles = true, hold_after_s = 3.0, min_s = 8,
+                      max_s = 45, engage_km = 3.0, engaged_s = 3.0, aim_s = 20 },
+        pincer = { enabled = true, chance = 0.6, sep_deg = { 90, 150 }, spread_deg = 10, ring_km = { 12, 18 }, ahead = true },
+        regroup = { enabled = true, min_size = 4, after_s = 10, hold_s = 7 },
     },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its

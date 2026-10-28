@@ -274,7 +274,14 @@ function STATS.tailTick(now)
         if e and not alive(p) then
             tailEnd(p, now, "died")
         else
-            local at, fwd = fresh(p)
+            -- (one fresh read a plane a tick, shared with the squad director: p.pose, sv_director.lua, which runs first)
+            local at, fwd
+            local q = p.pose
+            if q and q.t == now then at, fwd = q.at, q.fwd
+            else
+                at, fwd = fresh(p)
+                if at then p.pose = { t = now, at = at, fwd = fwd } end
+            end
             if at then
                 local m, off = geom(at, fwd, me)
                 local tailing = m <= tkm and off <= tdeg

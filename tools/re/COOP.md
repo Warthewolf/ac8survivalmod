@@ -211,6 +211,18 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   held plane holds its fire too; its LastTGT turn (RE_SV_WolfTurn_<NN><L>) is in KEEP_EVENTS (onto LocalPlayer: the
   host's game). The host's split hunts (RE_SV_Hunt_NN, unit-wide) skip a Wolf flight while its trap is held. A joiner
   who links after a hold has been fired doesn't get it again (its copies attack it until the trap is freed). Untested.
+- The squad director (behaviour roadmap P2, BEHAVIOUR_DIRECTOR.md unit 6) runs on the host only and aims each tactic at
+  a player slot (COOP.players(); a joiner's entry now carries `rot`). "dv" (host -> one joiner, COOP.dispatch): one of
+  the director's events (RE_SV_Salvo_<NN><L>, RE_SV_Dir*_<NN>, RE_SV_Wolf*_<NN><L>, the flight's own NN), the flight and
+  a delay; the joiner fires it on its own copies after the delay (clamped 0-3 s, so the tell's lead is timed there),
+  only once its level is ready, only with a live copy of that plane (or flight), at most 8 a second, never queued past
+  its delay; "rs" clears the queue. So a bracket salvo aimed at a joiner is fired by that joiner's game (its copies'
+  "Player" is the joiner); RE_SV_Salvo_* is in KEEP_EVENTS (never "ev"). A flight's hold and release
+  (RE_SV_DirHold_NN / RE_SV_DirFree_NN: top cover, regroup) are forwarded, so a joiner's copies hold their fire too.
+  LastTGT steers to the host, so a cover or a dive aimed at a joiner sends the flight hunting (RE_SV_Hunt_NN) with its
+  TargetActor kept on that joiner's stand-in for aim_s. The host's split hunt waits while the director holds a flight
+  (the hunt's order would free it) and goes after; a split-hunt flight (COOP.hunted) gets its hunt back when the
+  director lets it go. Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.

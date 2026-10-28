@@ -428,6 +428,10 @@ local function probeTick(tick)
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         local okMv, errMv = timed("moves", ACE.movesTick, now, D)              -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
+        if DIR and DIR.tick then                                        -- the squad director (P2, sv_director.lua)
+            local okDr, errDr = timed("director", DIR.tick, now, paused)
+            if not okDr and D and not D.dirErr then D.dirErr = true; log("director: error " .. tostring(errDr)) end
+        end
         if now and TELL then                                            -- actions told lead_s ago (sv_tells.lua)
             local okTl, errTl = timed("tells", TELL.tick, now)
             if not okTl and not D.tellErr then D.tellErr = true; log("tell: tick error " .. tostring(errTl)) end

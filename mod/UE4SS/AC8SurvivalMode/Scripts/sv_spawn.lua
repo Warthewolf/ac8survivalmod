@@ -88,25 +88,27 @@ end
 -- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
 -- compass (optional): around that compass bearing from the airfield (within spread degrees; north -Y, east +X, as
 -- Mission 22's dummyN0 / dummyS0 sit), for a raid that comes from one direction; the bearing returned is then the
--- compass one too.
-function spawnPoint(range, compass, spread)
+-- compass one too, and a 5th value is true (false: the zone's edge left it a random point, a maths angle). cx, cy
+-- (optional): around that point instead of the airfield (the squad director's pincer, around the player).
+function spawnPoint(range, compass, spread, cx, cy)
     range = range or CFG.distance_km
     local lo, hi = range[1], range[2]
+    local ox, oy = cx or AIRFIELD.X, cy or AIRFIELD.Y
     for try = 1, 30 do
         local d = lo + math.random() * (hi - lo)
         local x, y, b
         if compass and try <= 20 then
             b = (compass + (math.random() * 2 - 1) * (spread or 0)) % 360
-            x = AIRFIELD.X + d * 100000 * math.sin(math.rad(b))
-            y = AIRFIELD.Y - d * 100000 * math.cos(math.rad(b))
+            x = ox + d * 100000 * math.sin(math.rad(b))
+            y = oy - d * 100000 * math.cos(math.rad(b))
         else
             b = math.random() * 360
-            x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
-            y = AIRFIELD.Y + d * 100000 * math.sin(math.rad(b))
+            x = ox + d * 100000 * math.cos(math.rad(b))
+            y = oy + d * 100000 * math.sin(math.rad(b))
         end
-        if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b end
+        if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b, compass ~= nil and try <= 20 end
     end
-    return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
+    return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90, false
 end
 
 -- A compass bearing from the airfield whose raid spawn points (range km out) are inside the combat zone, or nil.
@@ -292,6 +294,13 @@ function spawnFlight(unit, maxLevel)
     if jam then SV_SetAircraft(unit, jam, 0) end                           -- the first aircraft: the jammer
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
+    local yaw = (bearing + 180) % 360                                          -- facing the airfield
+    local pin = nil                         -- (a pincer wave's flight: its side's bearing, P2's director, sv_director.lua)
+    if DIR and DIR.spawnAt then
+        local okPn, pn = pcall(DIR.spawnAt, unit)
+        if okPn then pin = pn else log("director: pincer error " .. tostring(pn)) end
+    end
+    if pin then x, y, dist, bearing, yaw = pin.x, pin.y, pin.d, pin.b, pin.yaw end
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     if role == "lancer" then                          -- (the Lancers come from above: CFG.roles.lancer, within their band)
         alt = math.min(alt + (tonumber(CFG.roles.lancer and CFG.roles.lancer.alt_add_m) or 0), ROLE.LANCER_TOP_M - 500)
@@ -299,14 +308,17 @@ function spawnFlight(unit, maxLevel)
     -- a lead on its own row (the ace's, the jammer's): its airframe, for the spawn index's check (sv_core.lua leadCheck)
     D.leadRow = D.leadRow or {}
     D.leadRow[unit] = (ace and ace.lead and { row = ace.lead, code = ace.key }) or (jam and { row = jam, code = "e18g" }) or nil
+    D.flightRow = D.flightRow or {}
+    D.flightRow[unit] = ac                         -- (its wings' row: the director's salvo checks its missile slot, SR.mslSlot)
     spawningUnit, spawningIdx = unit, 0                                       -- (each plane's index in the flight: p.k)
-    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
+    local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
-    log(string.format("round %d: %s%s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
+    log(string.format("round %d: %s%s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round, unit,
         role and (" [" .. role .. "]") or "", D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
-        jam and (", led by the jammer " .. jam) or "", dist, bearing, alt / 1000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side") or "",
+        alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 and role then pcall(ROLE.spawned, unit, role, r, ace) end   -- (its tell, the Wolf trap's hold: below)
+    if r > 0 and DIR and DIR.spawned then pcall(DIR.spawned, unit, role, r, ace) end   -- (the director's top cover, regroup)
     if jam and r > 0 then
         D.jammer = { unit = unit, at = D.now }
         local t = CFG.hud.text

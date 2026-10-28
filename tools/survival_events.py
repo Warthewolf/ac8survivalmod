@@ -26,6 +26,8 @@ by events: the game never spawns a desc again while its shot-down flight is stil
                       Scripts/sv_tells.lua (behaviour roadmap P3)
   RE_SV_WolfHold / WolfFree / WolfTurn_<NN><L>  one Wolf trap object's hold, release and LastTGT (build_wolf; P1's
                       fighter roles), fired by Scripts/sv_spawn.lua WOLF
+  RE_SV_Salvo_<NN><L> one pool object's missile at the player; RE_SV_DirHold_NN / RE_SV_DirFree_NN a pool flight's
+                      engagement held (None) and given back (build_director; P2's squad director, Scripts/sv_director.lua)
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -925,6 +927,7 @@ def build_events(stock_ep):
     build_ace_moves(g, flag, stock_ep)
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
     build_wolf(g, stock_ep, t_search, t_engage)
+    build_director(g, stock_ep, t_search, t_engage)
     return g
 
 
@@ -1046,6 +1049,61 @@ def build_wolf(g, stock_ep, t_search, t_engage):
     assert n > 0, 'no Wolf trap objects'
     print(f'  wolf trap: {n} held objects in {sum(1 for u in POOL if POOL_ROLE[u] == "wolf")} Wolf flights '
           f'(RE_SV_WolfHold / WolfFree / WolfTurn_<NN><L>)')
+
+
+# The squad director's missile shot (behaviour roadmap P2's bracket salvo; Scripts/sv_director.lua): Mission 19's
+# LiveFireOneShotWeapon, which has its Rafale fire WN_WEAPON_3 at the player. WN_WEAPON_<n> is fire-control slot n - 1
+# of the plane's NPC row (hard rule 40): the fighters' missiles are slot 2 (DT_NPC: 246 of the 261 OP1xxx rows have
+# their first NPC_FCS_PlaneMsl there; the rest none, scripted or part rows, or one ally's in slot 5; every row Survival
+# flies is checked at the main menu, sv_rows.lua SR.mslSlot, and the director fires only planes whose row has it
+# there). Never the special slot (3+): it holds a different random weapon on each co-op game.
+SALVO_SLOT = 'WN_WEAPON_3'
+
+
+def build_director(g, stock_ep, t_search, t_engage):
+    """The squad director's events (behaviour roadmap P2; tools/re/BEHAVIOUR_DIRECTOR.md unit 6), all fired by
+    Scripts/sv_director.lua:
+    RE_SV_Salvo_<NN><L>  one object's missile at the player (SALVO_SLOT; NN its flight's pool index, L the object's
+                         letter, A = object 0: hard rule 17), on every usable pool flight's objects (POOL_OBJS, after
+                         sizing; not the probe flights'). Kept on the co-op host (sv_coop.lua KEEP_EVENTS: "Player" is each
+                         game's own); a joiner gets its own by "dv"
+    RE_SV_DirHold_NN     a pool flight's engagement None (Mission 22's MOONCHILD hold, by unit, as RE_SV_Decoy_NN): its
+                         top cover held high, its regroup (forwarded: a joiner's copies hold their fire too; Decoy is each
+                         player's own, kept, so it can't be reused)
+    RE_SV_DirFree_NN     ... and back: its appearance's orders (air-only search, PlayerOnlyNoLimit; forwarded)"""
+    import re
+    lua = runtime_lua()
+    m = re.search(r'SALVO_FCS_SLOT\s*=\s*(\d+)', lua)
+    assert m and int(m.group(1)) + 1 == int(SALVO_SLOT.rsplit('_', 1)[1]), \
+        f'Scripts/sv_director.lua DIR.SALVO_FCS_SLOT is not {SALVO_SLOT} - 1'
+    for fmt in ('"RE_SV_Salvo_%02d%s"', '"RE_SV_DirHold_%02d"', '"RE_SV_DirFree_%02d"'):
+        assert fmt in lua, f'Scripts/sv_director.lua never fires {fmt}'
+    assert '"^RE_SV_Salvo_"' in lua, 'Scripts/sv_coop.lua KEEP_EVENTS has no ^RE_SV_Salvo_'
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
+    t_hold = g.exec_template('LiveAIEngagementOrder', 'RE_Wave01_Start', lambda a, e: a[0] == 'AB_Obj_01_Air1_f18e_0')
+    assert arg_values(t_hold)[3] == 'None', arg_values(t_hold)
+    n = 0
+    probes = set(PROBE_UNITS.values())
+    for k, unit in enumerate(POOL):
+        ev = f'RE_SV_DirHold_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_hold, ev, {0: 'NoneSelect', 1: unit})
+        ev = f'RE_SV_DirFree_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_search, ev, {1: unit})
+        g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'})
+        if unit in probes: continue
+        objs = POOL_OBJS.get(unit)
+        assert objs and len(objs) == flight_size(unit), (unit, objs)       # (build_wd_global runs first)
+        for j, obj in enumerate(objs):
+            ev = f'RE_SV_Salvo_{k + 1:02d}{chr(65 + j)}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_fire, ev, {0: SALVO_SLOT, 1: obj})
+            n += 1
+    print(f'  director: {n} salvo objects in {len(POOL) - len(probes)} flights (RE_SV_Salvo_<NN><L>, {SALVO_SLOT}), '
+          f'{len(POOL)} flights held / freed (RE_SV_DirHold / DirFree_NN)')
 
 
 def build_allies(g, flag, t_search, t_move, t_bsearch):
