@@ -179,6 +179,24 @@ D = nil; tick()
 local ini2 = readAll(WORK .. "/config/survival.ini"):gsub("\r\n", "\n")
 check(ini2:find("\nlast = offline", 1, true), "[menu] last = offline saved")
 
+-- without the pages: the main menu's flat rows (coop.11's four settings rows) step SOLO's setup and the host's
+MENU.pages = false
+CFG.setup.online.zollars, CFG.setup.host.zollars = 0, 0
+tick()
+check(texts.SV_Menu_SetRoomTitle == "STARTING ZOLLARS: 0" and texts.SV_Menu_SetStartTitle == "START AT ROUND 1",
+      "flat: the rows show STARTING ZOLLARS / START AT ROUND (" .. tostring(texts.SV_Menu_SetRoomTitle) .. ")")
+check(texts.SV_Menu_SetRoomHelp and texts.SV_Menu_SetRoomHelp:find("Alone and when you host", 1, true) and #texts.SV_Menu_SetRoomHelp <= 255,
+      "flat: their help says alone and when you host")
+local rows = MENU.mainRows()
+check(rows[1] == "SurvivalMode" and rows[#rows] == "SurvivalSetBreak" and #rows == 7, "flat with co-op: SURVIVAL MODE, HOST, JOIN, four settings rows")
+press("Room"); press("Enemies"); press("Start")
+check(CFG.setup.online.zollars == 1000 and CFG.setup.host.zollars == 1000, "flat: STARTING ZOLLARS 1000 alone and hosting")
+check(CFG.setup.online.enemies == 125 and CFG.setup.host.enemies == 125 and CFG.coop.max_players == 2,
+      "flat: ENEMY AIRCRAFT steps alone's (100 -> 125) and the host's takes the same value; CO-OP ROOM untouched")
+check(CFG.setup.online.start_round == 5 and CFG.setup.host.start_round == 5, "flat: START AT ROUND 5 alone and hosting")
+check(texts.SV_Menu_SetRoomTitle == "STARTING ZOLLARS: 1,000", "flat: the label follows (" .. tostring(texts.SV_Menu_SetRoomTitle) .. ")")
+MENU.pages = nil
+
 -- survival.ini read again: the saved setups
 dofile(MOD .. "/Scripts/sv_config.lua")
 check(CFG.setup.offline.zollars == 2500 and CFG.setup.offline.specials == "off" and CFG.setup.host.zollars == 1000 and CFG.menu.last == "offline",
