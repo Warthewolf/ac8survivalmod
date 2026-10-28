@@ -284,11 +284,19 @@ end
 -- VALKA round (TIER.PRESSURE_OWN) fires none: their own records set their throttle and put B back as they end, so
 -- D.pressure is B there, and pressureAfterBoss fires the band's preset again once the boss is down (or the next round
 -- does). Forwarded to co-op joiners (each game's throttle limits attacks on its own player; a joiner who links later
--- gets the one in force from hostSync, sv_coop.lua). The intensity director (P4) would turn the same dial through
--- D.pressure. `why`: the log's reason for a fire outside startRound.
+-- gets the one in force from hostSync, sv_coop.lua). The intensity director (P4) turns the same dial: while it has
+-- the room's level eased under the spikes, the band's preset a letter gentler (DIR.pressure: never under
+-- CFG.intensity.level.pressure_min, B), fired again when its ease changes (pressureNow, below). `why`: the log's reason
+-- for a fire outside startRound.
 local function roundPressure(special, why)
-    local want = TIER.pressure(D.round)
-    if not want then return end
+    local band = TIER.pressure(D.round)
+    if not band then return end
+    local want = band
+    if DIR and DIR.pressure then
+        local okE, e = pcall(DIR.pressure, band)
+        if okE and type(e) == "string" and #e == 1 and TIER.PRESSURE_PRESETS:find(e, 1, true) then want = e end
+    end
+    if want ~= band then why = (why and (why .. "; ") or "") .. string.format("the band's %s, a letter gentler", band) end
     local was = D.pressure
     if special and TIER.PRESSURE_OWN[special] then
         D.pressure = "B"
@@ -316,6 +324,20 @@ local function pressureAfterBoss(now)
     s.pressureAt = false
     local okP, errP = pcall(roundPressure, nil, "the " .. s.kind .. " is down")
     if not okP then log("pressure: error " .. tostring(errP)) end
+end
+
+-- The intensity director's ease changed (P4, sv_director.lua levelTick): the round's preset again, eased or back
+-- (DIR.pressure), when it isn't the one in force. Not while an Anomaly / VALKA fight's own throttle is up: its
+-- pressureAfterBoss fires the band's (eased as it is then) once the boss is down. The host's (or solo's) only.
+function pressureNow(why)
+    if not (D and D.round) or (COOP and COOP.client and COOP.client()) then return end
+    local s = D.special
+    if s and TIER.PRESSURE_OWN[s.kind] and s.state ~= "done" then
+        log(string.format("pressure: round %d: the %s's own throttle is up: the preset after it (%s)", D.round, s.kind,
+            tostring(why)))
+        return
+    end
+    roundPressure(nil, why)
 end
 
 local function startRound()
@@ -600,19 +622,20 @@ function roundsTick(now)
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
-        -- (the intensity director's hold, P4: the rest of a later wave waits while a player's under heavy pressure;
-        -- never a round's first wave or a special's entry; the hold's own length is its limit)
-        local nq = D.queue and D.queue[1]
-        if (D.wave or 1) > 1 and type(nq) == "string" and nq:sub(1, 1) ~= "@" and DIR and DIR.holdWave and DIR.holdWave(now, "spawning") then
-            D.at = now + 1
-            return
-        end
         if playerOnAirfield() then                 -- the landing menu may be up, and a flight that appears then gets no orders
             if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end
             D.at = now + 1
             return
         end
         if D.held == D.round then D.held = nil; log(string.format("round %d: you took off, spawns go on", D.round)) end
+        -- (the intensity director's hold, P4: the rest of a later wave waits while a player's under heavy pressure, a
+        -- hold that starts here, its next flight due; never a round's first wave or a special's entry; the hold's own
+        -- length is its limit)
+        local nq = D.queue and D.queue[1]
+        if (D.wave or 1) > 1 and type(nq) == "string" and nq:sub(1, 1) ~= "@" and DIR and DIR.holdWave and DIR.holdWave(now, "spawning") then
+            D.at = now + 1
+            return
+        end
         local u = table.remove(D.queue, 1)
         local sk = type(u) == "string" and u:sub(1, 1) == "@" and SPC.kinds[u:sub(2)]
         if sk then
@@ -632,7 +655,12 @@ function roundsTick(now)
                 table.insert(D.queue, 1, s)
             end
         end
-        D.at = now + CFG.spawn_gap_s
+        local gapAdd = 0                            -- (the intensity director, P4: flights further apart while you're pressed)
+        if type(u) == "string" and u:sub(1, 1) ~= "@" and DIR and DIR.gap then
+            local okG, g = pcall(DIR.gap, now)
+            if okG and type(g) == "number" then gapAdd = g end
+        end
+        D.at = now + CFG.spawn_gap_s + gapAdd
         if #D.queue == 0 then
             -- the next wave once this one thins out; its clock (CFG.waves.timeout_s) from this wave's last flight, not
             -- the round's start (a run of 2026-10-24: wave 1 held 3 min while the player was down at the airfield,
@@ -653,7 +681,8 @@ function roundsTick(now)
         local w = CFG.waves
         local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
         -- (the intensity director, behaviour roadmap P4: "above 80 intensity it holds the next wave back, so a bigger
-        -- round is longer, not denser": DIR.holdWave while its hold is on, which ends by itself, 30 s at most)
+        -- round is longer, not denser": asked only once the gate's open, the wave due, DIR.holdWave starts its hold
+        -- then, or says the one on; it ends by itself, 30 s at most)
         if (alive <= w.next_at or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave")) then
             D.wave, D.waveAt = D.wave + 1, now
             D.queue = D.waves[D.wave]

@@ -6,16 +6,19 @@
 --   the scores: intensity's parts (damage in window_s, missiles homing on you within msl_km, enemies within near_km,
 --     health lost) and their sums, the smoothing, the window; comfort's (time on a tail, from each plane's p.youAt,
 --     kills a minute, healthy); a repair or a new aircraft never counted as damage;
---   the hold: intensity above high for after_s, the next wave held hold.secs by the real roundsTick's gate (and let go
---     after), never made longer, gap_s after the last, per_wave a wave, the rest of a later wave's spawns (not wave 1's),
---     the top cover's dive / max_s waiting (P2's heldTick); nothing to hold: none; a boss round, the lever off: none;
+--   the hold: intensity above high for after_s, the next wave held hold.secs once it's due (the real roundsTick's gate
+--     open; hot long before that: no hold until then, the review of unit 7's case) and let go after, never made longer,
+--     gap_s after the last, per_wave a wave, the rest of a later wave at its next flight (not wave 1's); the spawn gap's
+--     add while hot; the top cover's own hold (its dive / max_s waiting, P2's heldTick), a wave due during or just after
+--     it held all the same, the top cover not held twice in a row; nothing to hold: none; a boss round, the lever off;
 --   hold.tactics: the squad director's cover refused on a player above high (and given with it off);
 --   a push: comfortable for calm_s: a duelist flight turned onto you after "check your six", counted and tagged; a held
---     top cover dives instead (not while the hold is on); per_round, cooldown_s, from_round; the director off, nothing in
---     range (tried again 5 s on, logged once);
+--     top cover dives instead (not while its hold is on); per_round, cooldown_s, from_round; the director off, nothing in
+--     range (tried again 5 s on, logged once); co-op: the next calm player when the first can't have one;
 --   the level: the room above high for down_after_s: one spike level down (levelFor, enemyTier's rank_min, a live
---     plane's provoke written again, the next round's aircraft_add), gap_s, max_drop, back up after up_after_s below
---     up_below, never under 0 (round 5: nothing), the lever off: the spikes' own;
+--     plane's provoke written again, the game's own back at level 0, the next round's aircraft_add), gap_s, max_drop,
+--     back up after up_after_s below up_below, never under 0 (round 5: nothing), the lever off: the spikes' own; the
+--     attack throttle's preset a letter gentler (DIR.pressure, pressureNow; not under pressure_min, not in an Anomaly);
 --   co-op: a joiner's "in" once a second, its copies on the host's level ("rnd", bad values ignored); the host's "in"
 --     guards (a bad slot or number, its own slot, out of range clamped, rate, stale after 3 s), the room's hold named
 --     after the joiner who caused it, the host's level in "rnd", a joiner's push (the six tell by "tl", a hunt);
@@ -173,6 +176,7 @@ local function fresh(round, state)
           orders = {} }
     you, youFwd, grounded = { X = 0, Y = 0, Z = 300000 }, { X = 1, Y = 0, Z = 0 }, false
     COOP.open, COOP.role, COOP.slot = false, nil, nil
+    D.pressure = "B"                                               -- (the attack throttle the round fired)
     HIT = { msl = {}, h = 800, pawn = "9" }
     RUN.kills.you = 0
     CFG.intensity = deep(CFG_DEFAULTS.intensity)
@@ -287,7 +291,7 @@ for t = 100.25, 109.75, 0.25 do itick(t) end
 check(maxReads == 1, "your MaxHealth read every 5 s, no more (" .. maxReads .. " reads in the next 10 s)")
 
 ---------------------------------------------------------------------------------------------------- the hold
-print("the hold: the next wave and the top cover")
+print("the hold: the next wave once it's due, the top cover")
 local function holdScene(round, state)
     fresh(round or 10, state or "wave")
     D.waves, D.wave, D.waveAt, D.at = { { U1 }, { U2 }, { U3 } }, 1, 90, 0
@@ -298,52 +302,65 @@ local function holdScene(round, state)
     itick(99)                                   -- (your health 800 before the drop)
     HIT.h = 400
 end
+-- the review of unit 7's case: hot long before the gate opens; the hold must come when the wave's due, not before
 holdScene()
 local from = #logs + 1
-tickTo(100, 104.75, true)
-check(D.int.hold == nil, "intensity climbing past 80 (smoothed): no hold yet")
-tickTo(105, 112, true)
+tickTo(100, 130, true)
+check(D.int.hold == nil and D.wave == 1 and (D.int.pl[0].hotFor or 0) >= 20 and since(from, "^intensity: round 10: held") == 0
+      and since(from, "^intensity: hold") == 0,
+      "above 80 for 20 s+ while wave 2's gate is shut (6 left > waves.next_at 4): no hold, nothing due to keep back")
+alive[U1] = 2                                                      -- (the gate opens: 2 left)
+tickTo(130.25, 131.5, true)
 local h = D.int.hold
 local holdLine = line("intensity: round 10: held", from)
-check(h ~= nil and h.untilT - h.at >= 15 and h.untilT - h.at <= 20 and has(holdLine, "(you at intensity")
-      and has(holdLine, "above 80 for 3 s): wave 2 wait"), "above 80 for after_s 3 s: wave 2 held 15-20 s (" .. tostring(holdLine) .. ")")
-local holdAt, holdUntil = h and h.at or 0, h and h.untilT or 0
-alive[U1] = 2                                                      -- (the gate would open: 2 left)
-tickTo(112.25, holdUntil - 0.25, true)
+check(h ~= nil and D.wave == 1 and D.state == "wave" and h.at == 131 and h.untilT - h.at >= 15 and h.untilT - h.at <= 20
+      and has(holdLine, "(you at intensity") and has(holdLine, "): wave 2 wait"),
+      "the gate open (131), you still above 80: wave 2 held 15-20 s from then (" .. tostring(holdLine) .. ")")
+local holdUntil = h and h.untilT or 0
+tickTo(131.75, holdUntil - 0.25, true)
 check(D.wave == 1 and D.state == "wave" and has(line("round 10: wave 2 waits for the intensity hold", from), "s more)"),
-      "the wave gate (roundsTick's) stays shut while the hold is on, logged once")
+      "the wave gate (roundsTick's) stays shut while the hold is on, logged")
 check(since(from, "^round 10: wave 2 waits") == 1, "... once")
 check(D.int.hold and D.int.hold.untilT == holdUntil, "still hot: the hold never made longer")
 tickTo(holdUntil, holdUntil + 1, true)
 check(D.wave == 2 and has(line("round 10: wave 2 of 3", from), "wave 2 of 3"), "the hold's end: wave 2 comes")
-check(has(line("intensity: hold over after", from), "(wave 2)"), "... the hold's end logged")
-alive[U1] = 6                                                      -- (wave 3's gate shut by kills again)
--- the next hold: gap_s after the last, still hot, wave 3 waiting
-tickTo(holdUntil + 1.25, holdUntil + 12, true)
-check(D.state == "wave" and D.int.hold == nil and has(line("intensity: hold not now", from), "hold.gap_s 20"),
-      "still hot, wave 3 next: no hold within gap_s 20 of the last (logged)")
+check(has(line("intensity: hold over after", from), "(wave 2)") and has(line("intensity: hold not now", from), "wave 2 had its 1): wave 2 comes"),
+      "... the hold's end logged, and why there's no second for wave 2 (per_wave 1)")
+-- the next wave due gap_s after the last hold, still hot: it comes
+tickTo(holdUntil + 1.25, holdUntil + 10, true)
+check(D.wave == 3 and D.int.hold == nil and has(line("intensity: hold not now", from), "hold.gap_s 20): wave 3 comes"),
+      "still hot, wave 3 due within gap_s 20 of the last hold: it comes at once (logged)")
+check(#spawns >= 1 and spawns[1].unit == U2 and has(line("intensity: round 10: wave 2's flights 3 s further apart", from), "(you at intensity"),
+      "wave 2's flight came (its rest not held again: per_wave), the spawn gap 3 s longer while you're hot (logged)")
 D.state = "wait"                                                   -- (the round's clear: its line)
 itick(D.now + 1)
 local rl = line("intensity: round 10: you avg", from)
-check(rl ~= nil and rl:find("above 80 for 3%d s; comfort avg %d+; held 1 %(%d+ s%), pushes 0; level 0 %(the spikes' 1%)$") ~= nil,
+check(rl ~= nil and rl:find("above 80 for %d+ s; comfort avg %d+; held 1 %(%d+ s%), pushes 0; level 0 %(the spikes' 1%)$") ~= nil,
       "the round's over: its line (your avg / peak / 30 s+ above 80, so the level eased too; comfort, holds, pushes): " .. tostring(rl))
--- per_wave: a hold for the same wave once only
+-- per_wave, not gap_s, keeps a wave's second hold away
 holdScene()
 CFG.intensity.hold.gap_s = 0
 from = #logs + 1
-tickTo(100, 112, true)
-holdUntil = D.int.hold.untilT
+tickTo(100, 110, true)
+alive[U1] = 2
+tickTo(110.25, 112, true)
+holdUntil = D.int.hold and D.int.hold.untilT or 0
+check(holdUntil > 0, "(gap_s 0: wave 2 held once its gate opened)")
 tickTo(112.25, holdUntil + 3, true)
-check(D.int.hold == nil and has(line("intensity: hold not now", from), "wave 2 had its 1"), "gap_s 0, still hot after a hold for wave 2: none again for wave 2 (per_wave 1)")
+check(D.int.hold == nil and D.wave == 2 and has(line("intensity: hold not now", from), "wave 2 had its 1") and #spawns == 1,
+      "gap_s 0, still hot after wave 2's hold: none again for wave 2 (per_wave 1), its flight comes")
 -- the rest of a later wave
 holdScene(10, "spawning")
-D.wave, D.queue, D.at = 2, { U2, U3 }, 1e9                         -- (no spawn until the hold's on)
+D.wave, D.queue, D.at = 2, { U2, U3 }, 1e9                         -- (no flight due until 112)
 tickTo(100, 112, true)
-check(D.int.hold and has(line("intensity: round 10: held"), "the rest of wave 2 wait"), "wave 2 still spawning: the rest of it held")
+check(D.int.hold == nil, "wave 2 still to spawn, you hot, no flight due yet: no hold")
 D.at = 0
 spawns = {}
 from = #logs + 1
-tickTo(112.25, D.int.hold.untilT - 0.25, true)
+tickTo(112.25, 112.5, true)
+check(D.int.hold and D.int.hold.at == 112.25 and has(line("intensity: round 10: held", from), "the rest of wave 2 wait") and #spawns == 0,
+      "its next flight due (112.25): the rest of wave 2 held")
+tickTo(112.75, D.int.hold.untilT - 0.25, true)
 check(#spawns == 0 and #D.queue == 2 and has(line("round 10: the rest of wave 2 waits for the intensity hold", from), "s more"),
       "... its flights wait (roundsTick's spawns)")
 tickTo(D.int.hold.untilT, D.int.hold.untilT + 1.25, true)
@@ -354,7 +371,18 @@ D.wave, D.queue, D.at = 1, { U2 }, 0
 spawns = {}
 tickTo(100, 100.5, true)
 check(#spawns == 1, "wave 1's spawns (a round's start) are never held")
--- the top cover's dive and max_s wait for the hold
+-- the spawn gap while you're hot (hold.spawn_gap_add_s)
+holdScene(10, "spawning")
+D.wave, D.queue, D.at = 1, { U2, U3 }, 1e9
+tickTo(100, 110, true)
+D.at, spawns = 0, {}
+tickTo(110.25, 110.25, true)
+check(#spawns == 1 and near(D.at - 110.25, CFG.spawn_gap_s + 3), "hot: the next flight spawn_gap_s + spawn_gap_add_s 3 s on (" .. tostring(D.at - 110.25) .. ")")
+CFG.intensity.hold.spawn_gap_add_s = 0
+local second = D.at
+tickTo(110.5, second, true)
+check(#spawns == 2 and near(D.at, second + CFG.spawn_gap_s), "spawn_gap_add_s 0: spawn_gap_s only (" .. tostring(D.at - second) .. ")")
+-- the top cover's dive and max_s wait for its hold
 holdScene(10, "fighting")
 D.waves = nil
 local lp = plane(L, 0, KM(10, 10, 5), DIRV(1, 0))
@@ -364,28 +392,66 @@ D.dir.held[L] = { kind = "top", at = 70, dmg = 0, why = "top cover" }   -- (its 
 events = {}
 from = #logs + 1
 tickTo(100, 112, true)
-check(D.int.hold and has(line("intensity: round 10: held", from), "the top cover (ERA_Unit_03_Dep_Air0) wait"),
-      "no wave to come, a top cover held: it's what the hold keeps back")
-holdUntil = D.int.hold.untilT
+check(D.int.cover and D.int.hold == nil and has(line("intensity: round 10: held", from), "the top cover (ERA_Unit_03_Dep_Air0) wait"),
+      "no wave to come, a top cover held: the top cover's hold")
+holdUntil = D.int.cover.untilT
 tickTo(112.25, holdUntil - 0.25, true)
 check(evs("^RE_SV_DirFree") == "" and D.dir.held[L] ~= nil and has(line("director: ERA_Unit_03_Dep_Air0 (top cover) waits for the intensity hold", from), "s more"),
       "its max_s (115) passed inside the hold: still held (P2's heldTick waits)")
 tickTo(holdUntil, holdUntil + 1.5, true)
 check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_07" and D.dir.held[L] == nil, "the hold's end: let go (RE_SV_DirFree_07)")
--- none
+-- a wave due while the top cover's hold is on: a hold of its own; the top cover not held twice in a row
+holdScene()
+plane(L, 0, KM(10, 10, 5), DIRV(1, 0))
+alive[L] = 1
+D.up[L] = true
+D.dir.held[L] = { kind = "top", at = 95, dmg = 0, why = "top cover" }   -- (its max_s 45 at 140)
+from = #logs + 1
+tickTo(100, 110, true)
+local cov = D.int.cover
+check(cov and D.int.hold == nil, "hot, wave 2's gate shut, a top cover held: only the top cover's hold")
+alive[U1] = 2
+tickTo(110.25, 111.5, true)
+h = D.int.hold
+check(h and h.what == "wave 2" and h.at == 111 and D.int.cover == cov and D.wave == 1,
+      "wave 2's gate open while the top cover's hold is on: wave 2 held from then, a hold of its own")
+local covUntil = cov and cov.untilT or 0
+tickTo(111.75, covUntil + 2, true)
+check(D.int.cover == nil and D.int.hold == h and D.dir.held[L] ~= nil and has(line("intensity: hold not now", from), "the top cover's last ended")
+      and DIR.holdOn(D.now) == false,
+      "the top cover's hold over before the wave's: not held again within gap_s (logged; DIR.holdOn false), the wave's still on")
+-- a wave due just after the top cover's hold: its own hold (the top cover's gap_s isn't the wave's)
+holdScene()
+plane(L, 0, KM(10, 10, 5), DIRV(1, 0))
+alive[L] = 1
+D.up[L] = true
+D.dir.held[L] = { kind = "top", at = 95, dmg = 0, why = "top cover" }
+from = #logs + 1
+tickTo(100, 110, true)
+covUntil = D.int.cover and D.int.cover.untilT or 0
+tickTo(110.25, covUntil + 1, true)
+check(covUntil > 0 and D.int.cover == nil and D.int.hold == nil and D.wave == 1, "(the top cover's hold over, wave 2's gate still shut)")
+alive[U1] = 2
+tickTo(covUntil + 1.25, covUntil + 2.5, true)
+check(D.int.hold and D.int.hold.what == "wave 2" and D.wave == 1, "wave 2 due 1-2 s after the top cover's hold: held all the same")
+-- nothing to hold
 holdScene(10, "fighting"); D.waves = nil
 from = #logs + 1
 tickTo(100, 130, true)
-check(D.int.hold == nil and since(from, "^intensity: hold") == 0, "the round's last wave all up, no top cover: nothing to hold, nothing logged")
+check(D.int.hold == nil and D.int.cover == nil and since(from, "^intensity: round 10: held") == 0 and since(from, "^intensity: hold") == 0,
+      "the round's last wave all up, no top cover: nothing to hold, nothing logged")
 holdScene(); D.special = { kind = "anomaly", state = "fight" }
-tickTo(100, 130)
-check(D.int.hold == nil, "an Anomaly round (skip_specials): no hold")
+tickTo(100, 110)
+check(DIR.holdWave(110.25, "wave") == false and D.int.hold == nil, "an Anomaly round (skip_specials): a wave due isn't held")
 holdScene(); CFG.intensity.hold.enabled = false
-tickTo(100, 130)
-check(D.int.hold == nil, "[intensity.hold] enabled = false: no hold")
+tickTo(100, 110)
+check(DIR.holdWave(110.25, "wave") == false and D.int.hold == nil and DIR.gap(110.25) == 0, "[intensity.hold] enabled = false: no hold, no spawn gap")
+holdScene()
+tickTo(100, 110)
+check(DIR.holdWave(110.25, "wave") == true and D.int.hold ~= nil, "(the same with it on: held)")
 holdScene(); CFG.intensity.enabled = false
-tickTo(100, 130)
-check(D.int == nil or D.int.hold == nil, "[intensity] enabled = false: nothing")
+tickTo(100, 110)
+check(DIR.holdWave(110.25, "wave") == false and (D.int == nil or D.int.hold == nil), "[intensity] enabled = false: nothing")
 
 ---------------------------------------------------------------------------------------------------- hold.tactics
 print("hold.tactics: no new pressure on a player above high")
@@ -461,10 +527,10 @@ q = calmScene()
 plane(L, 0, KM(10, 0, 5), DIRV(-1, 0))
 D.up[L] = true
 D.dir.held[L] = { kind = "top", at = 99, dmg = 0, why = "top cover" }
-D.int.hold = { at = 99, untilT = 500, round = 6, what = "test", said = {} }
+D.int.cover = { at = 99, untilT = 500, round = 6, what = "test", said = {} }
 events = {}
 tickTo(100, 121)
-check(evs("^RE_SV_DirFree") == "" and evs("^RE_SV_Ace") == "RE_SV_AceTurn_05", "the intensity hold on: the top cover stays, a flight turns in")
+check(evs("^RE_SV_DirFree") == "" and evs("^RE_SV_Ace") == "RE_SV_AceTurn_05", "the top cover's intensity hold on: it stays, a flight turns in")
 -- none
 calmScene(2)
 tickTo(100, 125)
@@ -553,6 +619,58 @@ levelScene()
 CFG.intensity.enabled = false
 tickTo(100, 140)
 check(DIR.level(15) == 2 and levelFor(15) == 2, "[intensity] enabled = false: the spikes' level")
+-- spike 1 eased to 0: a tier without its own provoke has nothing to write at level 0, so the game's own values go back
+levelScene(10)
+D.flightTier = { [Q] = 1 }
+local rk = plane(Q, 0, KM(30, 0), DIRV(1, 0)); rk.tier = nil
+rk.obj.ProvokeConditionConeAngle, rk.obj.ProvokeDeterminationTime = 90, 3.0
+rk.obj.SurroundPursuitMinRange, rk.obj.SurroundPursuitMaxRange = 10000, 30000
+enemyTier(rk, 10, 1); enemySpike(rk, 10, CFG.tiers.list[1])
+check(rk.spiked == 1 and rk.obj.ProvokeConditionConeAngle == 70 and rk.obj.SurroundPursuitMinRange == 8000,
+      "round 10, a Rookie: spike 1's provoke (70 deg, surround 80-220 m) over the game's own (90 deg, 100-300 m)")
+from = #logs + 1
+tickTo(100, 140)
+check(DIR.level(10) == 0 and rk.spiked == 0 and rk.obj.ProvokeConditionConeAngle == 90 and rk.obj.ProvokeDeterminationTime == 3.0
+      and rk.obj.SurroundPursuitMinRange == 10000 and rk.obj.SurroundPursuitMaxRange == 30000
+      and has(line("intensity: level 0 on the enemies up (eased)", from), "provoke written again on 1 of 1"),
+      "eased to level 0: its provoke back to the game's own values it had before (logged 1 of 1)")
+-- the attack throttle with the ease (level.pressure; U3's presets, CFG.late.pressure)
+levelScene(28)
+D.pressure = "C"                                                   -- (the band's, fired at the round's start)
+events = {}
+from = #logs + 1
+tickTo(100, 140)
+check(DIR.level(28) == 2 and evs("^RE_SV_Pressure") == "RE_SV_PressureB" and D.pressure == "B"
+      and has(line("pressure: round 28: preset B", from), "the band's C, a letter gentler"),
+      "round 28 (preset C) eased: RE_SV_PressureB, logged (" .. tostring(line("pressure: round 28", from)) .. ")")
+HIT.msl, HIT.h = {}, 800
+for _, x in ipairs(planes) do x.dist = 20 end
+tickTo(140.25, 210)
+check(DIR.level(28) == 3 and evs("^RE_SV_Pressure") == "RE_SV_PressureB,RE_SV_PressureC" and D.pressure == "C",
+      "back up: the band's C again")
+levelScene(15)
+D.pressure = "B"
+events = {}
+tickTo(100, 140)
+check(DIR.level(15) == 1 and evs("^RE_SV_Pressure") == "", "round 15 (preset B) eased: B already the floor (pressure_min B), none fired")
+D.int.ease = 1
+check(DIR.pressure("D") == "C" and DIR.pressure("C") == "B" and DIR.pressure("B") == "B" and DIR.pressure("A") == "A",
+      "DIR.pressure, ease 1: D to C, C to B, B and A as they are (pressure_min B)")
+CFG.intensity.level.pressure_min = "a"
+check(DIR.pressure("B") == "A", "... pressure_min a (any case): B to A")
+CFG.intensity.level.pressure_min = "x"
+check(DIR.pressure("C") == "B" and DIR.pressure("B") == "B", "... pressure_min not a preset: B")
+D.int.ease = 2; CFG.intensity.level.max_drop = 2
+check(DIR.pressure("D") == "B", "ease 2 (max_drop 2): D to B")
+CFG.intensity.level.pressure = false
+check(DIR.pressure("D") == "D", "[intensity.level] pressure = false: the band's")
+CFG.intensity.level.pressure = true
+D.special = { kind = "anomaly", state = "fight" }
+events = {}
+from = #logs + 1
+pressureNow("test")
+check(evs("^RE_SV_Pressure") == "" and has(line("pressure: round 15: the anomaly's own throttle is up", from), "(test)"),
+      "an Anomaly's own throttle up: none fired (logged), its boss down fires the band's")
 
 ---------------------------------------------------------------------------------------------------- co-op
 print("co-op: a joiner")
@@ -628,10 +746,12 @@ from = #logs + 1
 for t = 100, 106 do
     clock = clock + 1
     inMsg("1|in|90|10|40|2")
+    if t == 104 then alive[U1] = 2 end                             -- (wave 2 due from 104)
     tickTo(t, t + 0.75, true)
 end
-check(D.int.hold and has(line("intensity: round 10: held", from), "(player 2 at intensity 90, above 80 for 3 s): wave 2 wait; the room: you 3, player 2 90"),
-      "player 2 above 80 for 3 s: the room's next wave held, named after them (" .. tostring(line("intensity: round 10: held", from)) .. ")")
+check(D.int.hold and D.int.hold.at == 104 and has(line("intensity: round 10: held", from), "(player 2 at intensity 90, above 80 for ")
+      and has(line("intensity: round 10: held", from), "): wave 2 wait; the room: you 3, player 2 90"),
+      "player 2 above 80, wave 2 due: the room's next wave held, named after them (" .. tostring(line("intensity: round 10: held", from)) .. ")")
 -- the host's level in "rnd"
 fresh(15)
 COOP.open, COOP.role, COOP.slot = true, "host", 0
@@ -661,6 +781,48 @@ check(sentOf("tl|six") == "1>tl|six||" and has(line("intensity: player 2 comfort
       "player 2 comfortable 20 s: the six tell to player 2 only (\"tl\"), a flight turns onto them")
 check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and evs("^RE_SV_Ace") == "" and jq.obj.tgt == standIn,
       "... a hunt (RE_SV_Hunt_05, not LastTGT) with its TargetActor on player 2's stand-in")
+-- two calm players: the first (you: the same comfort, the lower slot) with nothing to send doesn't keep player 2 waiting
+fresh(6)
+COOP.open, COOP.role, COOP.slot = true, "host", 0
+COOP.tick(46)
+M.peers[1].obj = standIn
+M.ints = {}                                                        -- (the last scene's "in": not this one's)
+itick(99)
+RUN.kills.you = 2                                                  -- (you: comfort 60, intensity 3)
+plane(Q, 0, KM(54, 0), DIRV(-1, 0))                                -- (4 km from player 2, 54 from you)
+D.up = { [Q] = true }
+sent, events = {}, {}
+from = #logs + 1
+for t = 100, 122 do
+    clock = clock + 1
+    inMsg("1|in|10|60|90|0")
+    tickTo(t, t + 0.75)
+end
+local youL, p2L = line("intensity: you comfortable", from), line("intensity: player 2 comfortable", from)
+check(has(youL, "nothing sent (no flight within 8 km may turn onto") and has(p2L, "ERA_Unit_02_Dep_Air1 turns onto player 2")
+      and evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and D.int.pushNext[1] == 119 + 40,
+      "you and player 2 comfortable (60 each): nothing within range of you, so player 2's push the same second, 119 (" .. tostring(p2L) .. ")")
+-- ... and you with your pushes used up: player 2's comes
+fresh(6)
+COOP.open, COOP.role, COOP.slot = true, "host", 0
+COOP.tick(47)
+M.peers[1].obj = standIn
+M.ints = {}
+itick(99)
+RUN.kills.you = 2
+plane(Q, 0, KM(54, 0), DIRV(-1, 0))
+plane(A, 0, KM(0, 5), DIRV(0, -1))                                 -- (a flight 5 km from you too)
+D.up = { [Q] = true, [A] = true }
+sent, events = {}, {}
+from = #logs + 1
+for t = 100, 122 do
+    clock = clock + 1
+    inMsg("1|in|10|61|90|0")                                     -- (player 2 the more comfortable: first)
+    if t == 101 then D.int.pushN[1] = 2 end                        -- (player 2's 2 used: you next)
+    tickTo(t, t + 0.75)
+end
+check(has(line("intensity: player 2 comfortable", from), "no push (its 2 this round)") and has(line("intensity: you comfortable", from), "ERA_Unit_01_Dep_Air0 turns onto")
+      and evs("^RE_SV_Ace") ~= "", "player 2 the most comfortable but its 2 used: your push instead")
 CFG.coop.enabled = false
 COOP.open, COOP.role, COOP.slot = false, nil, nil
 
@@ -672,11 +834,14 @@ do
           "sv_rounds roundsTick: the wave gate waits for the hold")
     check(has(sr, 'DIR.holdWave(now, "spawning")') and has(sr, "TIER.roundBudget(D.round, levelFor(D.round))")
           and has(sr, "local level = levelFor(D.round + 1)"), "... a later wave's spawns; startRound's aircraft and the spike callout on levelFor")
+    check(has(sr, "D.at = now + CFG.spawn_gap_s + gapAdd") and has(sr, "pcall(DIR.gap, now)"), "... the spawn gap's add (DIR.gap)")
+    check(has(sr, "pcall(DIR.pressure, band)") and has(sr, "function pressureNow(why)"), "... the attack throttle's preset through DIR.pressure, pressureNow")
     local ai = readAll(MOD .. "/Scripts/sv_ai.lua")
     local _, nAi = ai:gsub("spikeCfg%(levelFor%(round%)%)", "")
     check(nAi == 2 and not ai:find("spikeLevel%(round%)"), "sv_ai: enemyTier's rank_min and enemyManeuvers' post_stall_all on levelFor")
     local rw = readAll(MOD .. "/Scripts/sv_rows.lua")
-    check(has(rw, "level = level or levelFor(round)") and has(rw, "p.spiked = w and w.level or levelFor(round)"), "sv_rows: provokeWant / enemySpike on levelFor")
+    check(has(rw, "level = level or levelFor(round)") and has(rw, "p.spiked = w and w.level or levelFor(round)")
+          and has(rw, "function provokeStockWant(p, level)"), "sv_rows: provokeWant / enemySpike on levelFor, the game's own provoke kept")
     local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
     check(has(sp, "searchAircraft(ac, levelFor(D.round))") and has(sp, "topSpike or levelFor(D.round), tier.fcs or 0)"),
           "sv_spawn: the bombers' and fighters' fire-control level on levelFor (the tier's fcs the floor)")
