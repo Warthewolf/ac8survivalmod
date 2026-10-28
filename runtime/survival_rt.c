@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.28.2"
+#define RT_VERSION           L"0.28.3"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -646,8 +646,8 @@ static uintptr_t OnMainDecide(void* widget)
         page = 1, code = ModeCode(a, k), start = code != 0;
     } else if (ArgsEqual(a, L"SV_Quick")) {
         page = 1, code = g_quickMode, start = 1;
-    } else if (ArgsPrefix(a, L"SV_Page_")) {
-        page = 1;                                      /* (another of Survival's pages: no mode, no start) */
+    } else if (ArgsPrefix(a, L"SV_Page_") || ArgsEqual(a, L"SV_Back")) {
+        page = 1;                                      /* (another of Survival's pages, or BACK to the one under it) */
     }
     if (page) {
         /* the page this press opens: SURVIVAL MODE the modes, SV_Mode_<mode> its setup (not Join: a start), SV_Page_<page> */

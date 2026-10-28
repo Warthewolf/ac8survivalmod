@@ -1254,6 +1254,7 @@ def build_shop_rows():
 # SV_Page_<page> opens another page, SV_Set_<what> steps a setting in place (main.dll takes the press). Keep the pages
 # and rows in step with Scripts/sv_menu.lua PAGES / SET (checked below).
 DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
+MAIN_TOP_PAGE = 'Top'                                  # the main menu's own page (ELiveMenuMainIDs)
 # The main menu opens a row's page by ELiveMenuMainIDs, the game's fixed list of its pages, so a row naming SV_Pg<page>
 # opened nothing (test of 2026-10-29). Every row that opens one of Survival's pages names CAMPAIGN TRAINING's page instead
 # (user, 2026-10-29: "feel free to use the Campaign Training and replace it completely"), and main.dll points that page's
@@ -1276,18 +1277,21 @@ def page_menu_id(menu):
 MENU_PAGES = [
     ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),
                ('Host', 'SV_Mode_Host', 'SV_PgHost'), ('Join', 'SV_Mode_Join', DIFFICULTY_PAGE),
-               ('Quick', 'SV_Quick', DIFFICULTY_PAGE)]),
+               ('Quick', 'SV_Quick', DIFFICULTY_PAGE), ('Back', 'SV_Back', MAIN_TOP_PAGE)]),
     ('Offline', [('Go', 'SV_Go_Offline', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
-                 ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+                 ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
     ('Online', [('Go', 'SV_Go_Online', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
-                ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+                ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
     ('Host', [('Go', 'SV_Go_Host', DIFFICULTY_PAGE), ('Lobby', 'SV_Set_Lobby', ''), ('Room', 'SV_Set_Room', ''),
               ('CoopEnemies', 'SV_Set_CoopEnemies', ''), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
-              ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+              ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
     ('Rules', [('StartRound', 'SV_Set_StartRound', ''), ('Break', 'SV_Set_Break', ''), ('Specials', 'SV_Set_Specials', ''),
                ('Airfield', 'SV_Set_Airfield', ''), ('Pay', 'SV_Set_Pay', ''), ('Skill', 'SV_Set_Skill', ''),
-               ('Reset', 'SV_Set_Reset', '')]),
+               ('Reset', 'SV_Set_Reset', ''), ('Back', 'SV_Back', 'SV_PgOffline')]),
 ]
+# BACK (test of 2026-10-29: the pages copy the main menu's top page, whose cancel goes nowhere, so MORE RULES was a dead
+# end) names the page under it (any setup page's id is the same borrowed page), and the game goes back to a page that's
+# already open rather than open it again (the same test: MORE RULES on the modes page's id went back to it).
 MENU_STOCK = os.path.join(ROOT, 'build', 'menu', 'stock.json')            # tools/menu_stock.py
 MENU_STOCK_LUA = os.path.join(ROOT, 'build', 'menu', 'sv_menu_stock.lua')  # staged into Scripts/ by build_all.sh
 MAIN_COMMANDS = '/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands'
@@ -1302,7 +1306,7 @@ def check_menu_pages():
         'tools/build_survival.py MENU_PAGES and Scripts/sv_menu.lua PAGES differ'
     assert re.findall(r'\{ row = "(\w+)", set = "\w+" \}', lua) == SETTING_ROWS, \
         'tools/build_survival.py SETTING_ROWS and Scripts/sv_menu.lua FLAT differ'
-    ids = {'SV_Pg' + n for n, _ in MENU_PAGES} | {DIFFICULTY_PAGE, ''}
+    ids = {'SV_Pg' + n for n, _ in MENU_PAGES} | {DIFFICULTY_PAGE, MAIN_TOP_PAGE, ''}
     for n, rows in MENU_PAGES:
         for name, args, menu in rows:
             assert menu in ids, (n, name, menu)
