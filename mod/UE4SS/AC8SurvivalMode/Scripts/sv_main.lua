@@ -307,9 +307,24 @@ local function probeTick(tick)
             local okM, errM = timed("music", musicTick, tick, now, paused)
             if not okM then log("music: error " .. tostring(errM)) end
             -- the landing store plays its own supply music without pausing the BGM channel, so the Music Player's track
-            -- clock ran out there (user, 2026-10-24: "music skipped"): held while it's open (paused, down at the airfield)
+            -- clock ran out there (user, 2026-10-24: "music skipped"): held while it's open (paused, down at the airfield).
+            -- In co-op the store doesn't pause the game (sv_coop.lua's online-style pause keeps the world running while
+            -- others are linked), so the hold never came on there (friends' logs of 2026-10-26: rearmed and bought in the
+            -- store, no hold) and the track ended early: then the landing menu being up holds it.
             if type(SV_MusicHold) == "function" then
-                local hold = (paused and playerOnAirfield()) and 1 or 0
+                local hold = 0
+                if playerOnAirfield() then
+                    if paused then
+                        hold = 1
+                    elseif COOP and COOP.open and (tick % 2 == 0 or D.musicHold == 1) then
+                        for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
+                            local okV, vis = pcall(function() return w:IsVisible() end)   -- (a closed one may linger
+                            if liveWidget(w) and okV and vis == true then hold = 1; break end -- until it's collected)
+                        end
+                    elseif COOP and COOP.open then
+                        hold = D.musicHold or 0                     -- (looked at every other tick)
+                    end
+                end
                 if hold ~= D.musicHold then
                     D.musicHold = hold
                     SV_MusicHold(hold)

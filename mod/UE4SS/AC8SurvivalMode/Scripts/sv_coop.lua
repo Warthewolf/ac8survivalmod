@@ -195,8 +195,45 @@ end
 
 function COOP.hostSpawned(unit, pose, ops, level)
     M.gen = (M.gen or 0) + 1
-    M.units[unit] = { gen = M.gen, pose = pose, ops = ops, level = level, n = 0, planes = {} }
+    M.units[unit] = { gen = M.gen, pose = pose, ops = ops, level = level, n = 0, planes = {}, ground = {}, at = os.clock() }
     sendUnit(nil, unit, M.units[unit])
+end
+
+-- A flight's ships, vehicles and parts (every AI object SV_Spawn makes that isn't a plane: the landing craft and
+-- their troops, the Alicorn's hull and parts, the Ladons' pods, the shuttle) are linked like its planes, but by their
+-- class and order (key "<class>#<n>": both games build a unit's objects alike) and never moved: they keep to their own
+-- paths. Friends' run of 2026-10-26 (coop.11): "Lcacs ... dont die synced, if one player kills them, the others dont
+-- see them", and a joiner who restarted mid-Alicorn got a fresh one, all its tanks up, its core shut. The host's
+-- health and deaths go to every game, the joiners' hits to the host, as for the planes.
+local groundNew = {}
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if COOP.open and u and not SLOT_OF[u] and #groundNew < 600 then groundNew[#groundNew + 1] = { obj = o, unit = u, at = os.clock() } end
+end)
+local planeCls
+local function isPlane(o)                                    -- (planes come through logPlane; unknown: left alone)
+    if not (planeCls and valid(planeCls)) then planeCls = StaticFindObject("/Script/Live.LiveAIPlane") end
+    local ok, r = pcall(function() return o:IsA(planeCls) end)
+    return not (ok and r == false)
+end
+local function groundKey(o, counts)
+    local cls = nameOf(o):match("%.([%w_]+)_%d+$") or "obj"
+    counts[cls] = (counts[cls] or 0) + 1
+    return short(cls, 80) .. "#" .. counts[cls]
+end
+local hostGround, clientGround                               -- (below: the host's and the joiner's)
+local function groundTick()
+    if #groundNew == 0 then return end
+    local now, keep = os.clock(), {}
+    for _, g in ipairs(groundNew) do
+        if now - g.at < 0.5 then
+            keep[#keep + 1] = g                              -- (a moment to be placed and named)
+        elseif valid(g.obj) and inSurvival(g.obj) and not isPlane(g.obj) then
+            local ok, err = pcall(COOP.host() and hostGround or clientGround, g.obj, g.unit)
+            if not ok then once("ground", "coop: ship / vehicle error " .. tostring(err)) end
+        end
+    end
+    groundNew = keep
 end
 
 local function anyJoinerPlane()
@@ -223,6 +260,18 @@ local function hostPlane(o, unit)
     end
 end
 
+hostGround = function(o, unit)
+    local u = M.units[unit]
+    if not u then return end
+    u.gcount = u.gcount or {}
+    local key = groundKey(o, u.gcount)
+    M.nextId = M.nextId % 65535 + 1
+    local id = M.nextId
+    u.ground[key] = { id = id }
+    M.byId[id] = { obj = o, unit = unit, key = key }
+    send(true, "gd", unit, u.gen, key, id)
+end
+
 -- the roster: who's in which slot, their airframe and version, to every joiner (on a change)
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
@@ -243,9 +292,10 @@ local function hostTick()
             if h <= 0 then
                 e.dead, e.deadAt = true, now
                 send(true, "dn", id)
-                if type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
+                if not e.key and type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
                 local u = M.units[e.unit]
-                if u and u.planes[e.ord] then u.planes[e.ord].dead = true end
+                if u and e.ord and u.planes[e.ord] then u.planes[e.ord].dead = true end
+                if u and e.key and u.ground[e.key] then u.ground[e.key].dead = true end
             elseif wantHp and h ~= e.sentHp then
                 e.sentHp = h
                 nb = nb + 1
@@ -257,11 +307,29 @@ local function hostTick()
         end
     end
     if nb > 0 then send(true, "hp", table.concat(batch, ",")) end
-    -- a flight with nothing left alive is forgotten (it's spawned again as a new one)
+    -- a flight with nothing left alive is forgotten (it's spawned again as a new one); one with nothing linked is
+    -- forgotten once the spawner has none of it up (coop.11 sent a joiner who started over long-gone landing craft)
+    local checkUp = now >= (M.nextUp or 0)
+    if checkUp then M.nextUp = now + 2 end
     for unit, u in pairs(M.units) do
-        local alive = false
+        local alive, linked = false, u.n > 0
         for _, pl in pairs(u.planes) do if not pl.dead then alive = true end end
-        if u.n > 0 and not alive then M.units[unit] = nil end
+        for _, g in pairs(u.ground) do linked = true; if not g.dead then alive = true end end
+        if linked and not alive then
+            M.units[unit] = nil
+        elseif not linked and checkUp and rawUnitAlive and now - (u.at or now) > 10 then
+            local n = rawUnitAlive(unit)
+            if n == 0 or n == -7 then M.units[unit] = nil end
+        end
+    end
+    -- the specials' lasting state for a joiner that came back (hostSync), once its copies are up
+    for i = #(M.replays or {}), 1, -1 do
+        local r = M.replays[i]
+        if now >= r.at then
+            table.remove(M.replays, i)
+            for _, name in ipairs(r.events) do sendTo(r.to, true, "ev", name) end
+            log(string.format("coop: player %d brought up to date: %s", r.to + 1, table.concat(r.events, ", ")))
+        end
     end
     -- the round and the airfield
     if D and now >= M.nextRnd then
@@ -302,6 +370,21 @@ local function hostSync(to)
         for ord, pl in pairs(u.planes) do
             sendTo(to, true, "bd", unit, u.gen, ord, pl.id)
             if pl.dead then sendTo(to, true, "dn", pl.id) end
+        end
+        for key, g in pairs(u.ground) do
+            sendTo(to, true, "gd", unit, u.gen, key, g.id)
+            if g.dead then sendTo(to, true, "dn", g.id) end
+        end
+    end
+    -- the Alicorn's fresh copy there: its core open, under water, as here (events of the fight it missed)
+    local s = D and D.special
+    if s and s.kind == "alicorn" and s.state == "sail" then
+        local ev = {}
+        if s.coreOpen then ev[#ev + 1] = "RE_SV_AlcnAdvance"; ev[#ev + 1] = "RE_SV_AlcnOpenCore" end
+        if s.dived then ev[#ev + 1] = "RE_SV_AlcnDive" end
+        if #ev > 0 then
+            M.replays = M.replays or {}
+            M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, events = ev }
         end
     end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
@@ -353,6 +436,22 @@ local function clientPlane(o, unit)
     if id then bindCopy(id, o) end
 end
 
+-- a ship's, vehicle's or part's copy (groundTick): not moved, held up until the host's goes down, its hits sent
+local function bindGround(id, o)
+    if M.dead[id] then killCopy(id, o); M.copies[id] = nil; return end
+    pcall(function() o:SetMinHealth(0.1) end)
+    M.copies[id] = { obj = o, exp = health(o) or 0 }
+end
+clientGround = function(o, unit)
+    local cu = M.cunits[unit]
+    if not cu then return end
+    cu.gcount, cu.gobjs = cu.gcount or {}, cu.gobjs or {}
+    local key = groundKey(o, cu.gcount)
+    cu.gobjs[key] = o
+    local id = cu.gbinds and cu.gbinds[key]
+    if id then bindGround(id, o) end
+end
+
 local function killAllCopies(why)
     local n = 0
     for id, c in pairs(M.copies) do killCopy(id, c.obj); n = n + 1 end
@@ -368,6 +467,9 @@ local function doSpawn(q)
         local cu = M.cunits[unit]
         if cu and cu.gen ~= q.gen then
             for ord, o in pairs(cu.planes) do local id = cu.binds[ord]; killCopy(id or 0, o); if id then M.copies[id] = nil end end
+            for key, o in pairs(cu.gobjs or {}) do
+                local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o); if id then M.copies[id] = nil end
+            end
         end
         q.tries = (q.tries or 0) + 1
         if q.tries < 6 then q.at = os.clock() + 1.5; return false end
@@ -380,7 +482,8 @@ local function doSpawn(q)
     end
     if q.level and q.level >= 0 and rawSetLevel then rawSetLevel(unit, q.level) end
     local old = M.cunits[unit]
-    M.cunits[unit] = { gen = q.gen, n = 0, planes = {}, binds = (old and old.gen == q.gen) and old.binds or {} }
+    local same = old and old.gen == q.gen
+    M.cunits[unit] = { gen = q.gen, n = 0, planes = {}, binds = same and old.binds or {}, gbinds = same and old.gbinds or {} }
     spawningUnit = unit
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
@@ -389,6 +492,7 @@ local function doSpawn(q)
         q.tries = (q.tries or 0) + 1
         if q.tries < 30 then q.at = os.clock() + 1; M.cunits[unit] = old; return false end
     end
+    M.lastSpawnAt = os.clock()
     if type(r) ~= "number" or r <= 0 then
         log("coop: the host's " .. unit .. " not spawned here (" .. (SV_ERR[r] or tostring(r)) .. ")")
     end
@@ -425,9 +529,18 @@ local function clientRounds(now)
         local okA, errA = pcall(ANOM.clientTick)
         if not okA then once("anomField", "coop: anomaly field error " .. tostring(errA)) end
     end
+    for i = #M.spawnQ, 1, -1 do
+        local q = M.spawnQ[i]
+        if os.clock() >= (q.at or 0) then
+            local okS, done = pcall(doSpawn, q)
+            if not okS then log("coop: spawn error " .. tostring(done)); done = true end
+            if done then table.remove(M.spawnQ, i) end
+        end
+    end
     -- the host's events held while this level loaded, in order (code review: some set lasting state, as the railgun
-    -- warning and the shuttle's countdown); older than a minute: let go
-    if M.evQ and #M.evQ > 0 then
+    -- warning and the shuttle's countdown), after the spawns waiting with them (an event for a unit not up yet does
+    -- nothing: the Alicorn's open core for a joiner who started over); older than a minute: let go
+    if M.evQ and #M.evQ > 0 and #M.spawnQ == 0 and os.clock() - (M.lastSpawnAt or 0) >= 2 then
         local q = M.evQ
         M.evQ = nil
         for _, e in ipairs(q) do
@@ -435,14 +548,6 @@ local function clientRounds(now)
                 local r = rawEvent(e.name)
                 if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. e.name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
             end
-        end
-    end
-    for i = #M.spawnQ, 1, -1 do
-        local q = M.spawnQ[i]
-        if os.clock() >= (q.at or 0) then
-            local okS, done = pcall(doSpawn, q)
-            if not okS then log("coop: spawn error " .. tostring(done)); done = true end
-            if done then table.remove(M.spawnQ, i) end
         end
     end
 end
@@ -826,6 +931,21 @@ local function onJoinerMessage(f)
         end
         cu.binds[ord] = id
         if cu.planes[ord] then bindCopy(id, cu.planes[ord]) end
+    elseif k == "gd" then                                -- a ship's, vehicle's or part's id (hostGround)
+        local unit, gen, key, id = short(f[2], 96), tonumber(f[3]), short(f[4], 96), tonumber(f[5])
+        if not (gen and id and id >= 1 and id <= 65535 and id == math.floor(id)) then return end
+        local cu = M.cunits[unit]
+        if not cu or cu.gen ~= gen then                   -- (its spawn is still queued: keep the id for it)
+            local queued = false
+            for _, q in ipairs(M.spawnQ) do if q.unit == unit and q.gen == gen then queued = true end end
+            if not queued then return end
+            cu = { gen = gen, n = 0, planes = {}, binds = {}, gbinds = {} }
+            M.cunits[unit] = cu
+        end
+        cu.gbinds = cu.gbinds or {}
+        cu.gbinds[key] = id
+        local o = cu.gobjs and cu.gobjs[key]
+        if o and valid(o) then bindGround(id, o) end
     elseif k == "hp" then
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
@@ -1157,6 +1277,7 @@ function COOP.tick(tick)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj) } or {}
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
+        M.replays, groundNew = {}, {}
         if D then
             if COOP.host() then send(true, "rs") else send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
@@ -1204,6 +1325,8 @@ function COOP.tick(tick)
             if not okP then once("peerTick", "coop: player plane error " .. tostring(errP)) end
         end
     end
+    local okG, errG = pcall(groundTick)
+    if not okG then once("groundTick", "coop: ship / vehicle error " .. tostring(errG)) end
     if COOP.host() then
         local okH, errH = pcall(hostTick)
         if not okH then once("hostTick", "coop: host error " .. tostring(errH)) end
