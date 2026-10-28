@@ -295,8 +295,10 @@ end
 local hiddenSaid = {}
 local function hideRows(game)
     local m = CFG and CFG.menu
-    if not (m and m.hide_stock and type(m.hide) == "table") then return end
-    for _, row in ipairs(m.hide) do
+    local list = (m and m.hide_stock and type(m.hide) == "table") and m.hide or {}
+    -- CAMPAIGN TRAINING always while Survival's pages open through its page (sv_menu.lua BORROWED): its row would open them
+    if MENU and MENU.pages then list = { "CampaignTraining", table.unpack(list) } end
+    for _, row in ipairs(list) do
         if type(row) == "string" and row ~= ROW and row ~= "QuitGame" and not row:find("^Survival") then
             local _, have = dtCall(game, "FindRow", row)
             if have ~= nil then
