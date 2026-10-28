@@ -10,12 +10,13 @@
 --                              player's slot (only the host sends another player's: "tl", sv_coop.lua COOP.tell). a, b:
 --                              numbers its text shows (bearings, an o'clock) or its line is picked by. Returns true when
 --                              said (here, or sent), else false, why, and a kind ("off", "state", "gap", "cooldown",
---                              "empty")
+--                              "line", "empty")
 --   TELL.after(id, slot, fn, a, b, need)   say it, then run fn its lead_s later (CFG.tells.lead_s; TELL.tick, every
 --                              250 ms, on the round clock: a pause holds it); not said: fn at once (never with need).
 --                              Returns whether it was said
---   TELL.leadS(id)             that lead (0 with tells off), for an action timed elsewhere (a record's delay is frame
---                              accurate where this tick is 0-250 ms late: hard rule 40)
+--   TELL.leadS(id)             that lead (0 with tells off here, unless this game hosts co-op: its tells still reach
+--                              the joiners), for an action timed elsewhere (a record's delay is frame accurate where
+--                              this tick is 0-250 ms late: hard rule 40)
 --   TELL.ready(id, slot)       whether it could be said now (a lead-dependent tactic only then)
 --   TELL.play(id, a, b, from, force, line)  this game's player only (a joiner's "tl" ends here; force and line, one of
 --                              its radio events: the test key's, Ctrl+0)
@@ -24,7 +25,12 @@
 -- gap_s, radio-only ones radio_gap_s after any: classOf), each id no sooner than its cooldown_s, none between rounds,
 -- down at the airfield or over the run's summary. An urgent tell goes in front of the callout queue and cuts the
 -- banner short (sv_hud.lua hudCallout / calloutNext): it never waits behind four round callouts (up to 16 s), and at
--- most one tell waits there at a time.
+-- most one tell waits there at a time. A radio line is never asked for again within line_gap_s, by whichever tell
+-- (reversal and kulbit share theirs): the cloned rows keep the template's RequeueingWaitTime of 20 s, which may skip
+-- a group asked for again inside it.
+-- CFG.tells.enabled is this game's own switch (PERSONAL in co-op): a host with tells off still sends its joiners theirs
+-- ("tl"), and each joiner plays them by its own switches. The host's gaps, cooldowns, leads, hunt_km and
+-- wave_from_round decide when a tell is sent.
 -- Works with COOP nil (the Offline edition) and without the natives (SV_Event absent: no radio).
 TELL = { ALL = "all" }
 
@@ -39,11 +45,11 @@ local function clockNow() return (D and D.now) or os.clock() end
 local function mySlot() return (COOP and COOP.open and COOP.slot) or 0 end
 local function isHost() return COOP and COOP.host and COOP.host() or false end
 
--- this run's tell clocks (D.tells: a new level or run clears them with D)
+-- this run's tell clocks (D.tells: a new level or run clears them with D); evAt: when each radio event last fired here
 local function st()
     if not D then return nil end
     local s = D.tells
-    if not s then s = { to = {}, lines = {}, queue = {}, said = {} }; D.tells = s end
+    if not s then s = { to = {}, lines = {}, queue = {}, said = {}, evAt = {} }; D.tells = s end
     return s
 end
 -- one receiver's clocks: "me" (this game's player), a joiner's slot, or "all" (the host's tells to every joiner): when
@@ -60,10 +66,12 @@ function TELL.known(id)
         and type(c.list[id]) == "table"
 end
 
+-- (a co-op host's lead stands with its own tells off: they still go to its joiners, which play them by their own)
+local function lead(id) return math.max(0, tonumber(cfg().lead_s and cfg().lead_s[id]) or 0) end
 function TELL.leadS(id)
     local c = cfg()
-    if not (c and c.enabled and TELL.known(id)) then return 0 end
-    return math.max(0, tonumber(c.lead_s and c.lead_s[id]) or 0)
+    if not (TELL.known(id) and (c.enabled or isHost())) then return 0 end
+    return lead(id)
 end
 
 -- A tell's class, for its gap: "urgent" (cuts in: urgent_gap_s after the last urgent one; they replace each other in
@@ -116,16 +124,33 @@ local function refused(s, id, why, kind)
     log(string.format("tell: %s not said (%s)", id, tostring(why)))
 end
 
--- a line of tell id: the a-th (pick "a"), else one at random, never the one it said last
-local function pickLine(s, id, e, a)
+-- whether radio event ev may be asked for now: not within line_gap_s of its last time here, by any tell (the cloned
+-- rows' RequeueingWaitTime is the template's 20 s, tools/build_survival.py build_radio: a group asked for again inside
+-- it may be skipped; reversal and kulbit share their lines, and an ace can kulbit 12 s after its reversal)
+local function lineFree(s, ev, now)
+    local g, t = tonumber(cfg().line_gap_s) or 0, s.evAt[ev]
+    return not (t and g > 0 and now - t < g)
+end
+-- a line of tell id: the a-th (pick "a"), else one at random, not the one it said last when another will do; only
+-- lines free now (lineFree). nil, plus true when a line was left out for that
+local function pickLine(s, id, e, a, now)
     local list = e.radio
     if type(list) ~= "table" or #list == 0 then return nil end
     if e.pick == "a" then
         local i = math.floor(tonumber(a) or 0)
-        return (i >= 1 and i <= #list) and list[i] or nil
+        local ev = (i >= 1 and i <= #list) and list[i] or nil
+        if ev and not lineFree(s, ev, now) then return nil, true end
+        return ev
     end
-    local opts = {}
-    for _, ev in ipairs(list) do if ev ~= s.lines[id] or #list == 1 then opts[#opts + 1] = ev end end
+    local free, opts = {}, {}
+    for _, ev in ipairs(list) do
+        if lineFree(s, ev, now) then
+            free[#free + 1] = ev
+            if ev ~= s.lines[id] then opts[#opts + 1] = ev end
+        end
+    end
+    if #opts == 0 then opts = free end
+    if #opts == 0 then return nil, true end
     return opts[math.random(#opts)]
 end
 
@@ -139,11 +164,12 @@ local function fill(fmt, kind, a, b)
     return ok and out or fmt
 end
 
-local function fireLine(ev)
+-- fire a line's remote event (its time kept for lineFree once it fired); what happened, for the log
+local function fireLine(s, ev, now)
     if not (ev and type(rawEv) == "function") then return "no radio (natives absent)" end
     local ok, r = pcall(rawEv, ev)
     if not ok then return "error " .. tostring(r) end
-    if r == 1 then return "fired" end
+    if r == 1 then s.evAt[ev] = now; return "fired" end
     return "not fired: " .. tostring(SV_ERR and SV_ERR[r] or r)
 end
 
@@ -160,7 +186,8 @@ function TELL.play(id, a, b, from, force, line)
     why, kind = wait(x, id, now)
     if why and not force then refused(s, id, why, kind); return false, why, kind end
     local e = c.list[id]
-    local ev = c.radio and pickLine(s, id, e, a) or nil
+    local ev, busy
+    if c.radio then ev, busy = pickLine(s, id, e, a, now) end
     if force and line then for _, l in ipairs(e.radio or {}) do if l == line then ev = l end end end
     local text, sub
     if c.hud and e.hud then
@@ -168,6 +195,11 @@ function TELL.play(id, a, b, from, force, line)
         text, sub = fill(t[e.hud], e.args, a, b), fill(t[e.hud .. "_sub"], e.args, a, b)
     end
     if not ev and not text then
+        if busy then
+            why = string.format("each of its lines played within line_gap_s %.0f s", tonumber(c.line_gap_s) or 0)
+            refused(s, id, why, "line")
+            return false, why, "line"
+        end
         refused(s, id, "nothing to show: its radio or HUD half is off", "empty")
         return false, "nothing to show", "empty"
     end
@@ -175,10 +207,12 @@ function TELL.play(id, a, b, from, force, line)
     local parts = {}
     if ev then
         s.lines[id] = ev
-        parts[#parts + 1] = ev .. " (" .. fireLine(ev) .. ")"
+        parts[#parts + 1] = ev .. " (" .. fireLine(s, ev, now) .. ")"
         local ch = e.chain and c.list[e.chain]                 -- (a line after it, e.g. the dive's o'clock)
-        local ev2 = ch and pickLine(s, e.chain, ch, a)
-        if ev2 then s.lines[e.chain] = ev2; parts[#parts + 1] = "then " .. ev2 .. " (" .. fireLine(ev2) .. ")" end
+        local ev2 = ch and pickLine(s, e.chain, ch, a, now)
+        if ev2 then s.lines[e.chain] = ev2; parts[#parts + 1] = "then " .. ev2 .. " (" .. fireLine(s, ev2, now) .. ")" end
+    elseif busy then
+        parts[#parts + 1] = "no line (each played within line_gap_s)"
     end
     if text and type(rawHud) == "function" then
         local okH = pcall(rawHud, text, sub, nil, e.urgent == true)
@@ -203,9 +237,11 @@ local function send(s, key, slot, id, a, b)
     return true
 end
 
+-- (this game's own switch, CFG.tells.enabled, is TELL.play's: a co-op host with tells off still sends its joiners
+-- theirs, as each player's tells are their own)
 function TELL.say(id, slot, a, b)
     local c = cfg()
-    if not (c and c.enabled) then return false, "tells off", "off" end
+    if not c then return false, "tells off", "off" end
     if not TELL.known(id) then return false, "not a tell here", "off" end
     if slot == nil or slot == mySlot() then return TELL.play(id, a, b) end
     local s = st()
@@ -223,14 +259,16 @@ function TELL.say(id, slot, a, b)
     return send(s, slot, slot, id, a, b)
 end
 
+-- (this game's player: its own switch and state; another player: the host's gaps for them; TELL.ALL: either)
 function TELL.ready(id, slot)
-    local c = cfg()
-    if not (c and c.enabled and TELL.known(id)) then return false end
+    if not TELL.known(id) then return false end
     local s = st()
-    if not s then return false end
-    local mine = slot == nil or slot == mySlot()
-    if (mine and blocked(false)) or roomBlocked(false) then return false end
-    return wait(to(s, mine and "me" or slot), id, clockNow()) == nil
+    if not s or roomBlocked(false) then return false end
+    local now = clockNow()
+    local function mine() return cfg().enabled == true and not blocked(false) and wait(to(s, "me"), id, now) == nil end
+    if slot == nil or slot == mySlot() then return mine() end
+    if slot == TELL.ALL then return mine() or (isHost() and wait(to(s, "all"), id, now) == nil) end
+    return isHost() and type(slot) == "number" and wait(to(s, slot), id, now) == nil
 end
 
 function TELL.after(id, slot, fn, a, b, need)
@@ -239,9 +277,9 @@ function TELL.after(id, slot, fn, a, b, need)
     said = okS and said == true
     if need and not said then return false end
     local s = st()
-    local lead = said and TELL.leadS(id) or 0
-    if lead > 0 and s then
-        s.queue[#s.queue + 1] = { at = clockNow() + lead, fn = fn, id = id }
+    local wait_s = said and lead(id) or 0                   -- (said here or sent: someone has had the tell)
+    if wait_s > 0 and s then
+        s.queue[#s.queue + 1] = { at = clockNow() + wait_s, fn = fn, id = id }
         return said
     end
     local okF, errF = pcall(fn)

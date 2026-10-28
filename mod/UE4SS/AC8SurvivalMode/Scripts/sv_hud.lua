@@ -187,7 +187,10 @@ function calloutNext(now)
         if not (c.urgent and cur and not cur.urgent) then return nil end
         if H.calloutUntil - now > 1.5 then
             table.insert(callouts, 2, cur)
-            if #callouts > 4 then table.remove(callouts) end
+            if #callouts > 4 then                       -- (the queue's last makes room for it, logged as hudCallout's)
+                local d = table.remove(callouts)
+                log("hud: callout '" .. tostring(d.text) .. "' dropped (a tell cut in)")
+            end
         end
         H.calloutUntil = nil
     end

@@ -486,10 +486,10 @@ any co-op build goes out, or an older joiner hears nothing ("not fired" in its t
 | the remote events | survival_events.py `build_tells` | RE_SV_Radio<Suffix> for each group: Mission 22's LiveRadioPlayExecution (the shuttle countdown's template), no conditions (hard rule 26). Checked both ways against the Lua runtime: every RE_SV_Radio* Lua names is built, every built one is named in CFG.tells (`events: 592 triggers, 1312 execs`) |
 | the ALICORN's RAILGUN WARNING | survival_events.py `build_alicorn` | RE_SV_AlcnAlertOn / Off: Mission 18's LiveSetRailgunAlertEnable true / false (as VALKA's, hard rule 45), under the Alicorn's own names; forwarded in co-op (each game shows its own) |
 | the catalog | sv_config.lua `CFG.tells` | each tell: its radio events (`radio`: one at random, never the same twice running, or the a-th with pick "a"; `chain`: another tell's line after it), its callout (`hud`, a key of `text`, %s / %d filled from the tell's numbers with `args` "compass" or "clock"), `urgent` (cuts in), its cooldown_s and lead_s. PERSONAL in co-op |
-| TELL | sv_tells.lua | `TELL.say(id, slot, a, b)` (slot nil: this game's player; TELL.ALL: every player; a number: that player, the host only, "tl"), `TELL.after(id, slot, fn, ...)` (the action lead_s after the tell, run by `TELL.tick` every 250 ms on the round clock; at once when not said; never with `need`), `TELL.leadS(id)`, `TELL.ready(id, slot)`, `TELL.play` (this game only: the joiner's "tl" and the test key end here), `TELL.known(id)`, `TELL.hunted(p)` (the hunt's trigger). Keeps hudCallout and SV_Event as they were before sv_coop.lua wraps them (the contract's exception): a tell never goes out again as the host's "co" callout or "ev" event |
-| rate limiting | sv_tells.lua `classOf`, `wait` | each receiver (this game's player, each joiner the host sends to, "every joiner") on its own: an urgent tell urgent_gap_s (2.5) after the last urgent one; a tell with a queued callout gap_s (4, the banner's own time) after the last such; a radio-only one radio_gap_s (2) after any tell; each id its cooldown_s; none between rounds (a joiner plays the host's anyway: its mirrored state may lag), down at the airfield or over the run's summary. Refusals are logged once a round per tell and reason |
-| the urgent callout | sv_hud.lua `hudCallout(text, sub, big, urgent)`, `calloutNext(now)` | an urgent callout (a tell's) goes in front of the queue, in place of a tell still waiting there (one waits at a time), a full queue (4) losing its last callout for it (logged); the next HUD tick puts it up at once, cutting the banner's callout short (put back right after the tell when more than 1.5 s of it was left; a tell never cuts a tell), for CFG.tells.hud_s (2.5 s). Before, a callout could come up to 16 s late behind four round callouts (the brief). sv_coop's wrapper passes urgent on |
-| co-op | sv_coop.lua `COOP.tell`, the joiner's "tl" handler, KEEP_EVENTS, PERSONAL | "tl" (id, a, b) from the host to a joiner's slot or to every joiner; the joiner plays it only if it knows the id (its own catalog), a / b are finite (or absent), its level is ready, [coop] callouts is on, and at most 4 came that second; dropped, never queued (a late tell misleads). `^RE_SV_Radio` is in KEEP_EVENTS (no "ev", and a joiner refuses one); `tells` is PERSONAL (each player's switches, texts and lines) |
+| TELL | sv_tells.lua | `TELL.say(id, slot, a, b)` (slot nil: this game's player; TELL.ALL: every player; a number: that player, the host only, "tl"), `TELL.after(id, slot, fn, ...)` (the action lead_s after the tell, run by `TELL.tick` every 250 ms on the round clock; at once when not said; never with `need`), `TELL.leadS(id)` (0 with this game's tells off, unless it hosts co-op), `TELL.ready(id, slot)`, `TELL.play` (this game only: the joiner's "tl" and the test key end here), `TELL.known(id)`, `TELL.hunted(p)` (the hunt's trigger). Keeps hudCallout and SV_Event as they were before sv_coop.lua wraps them (the contract's exception): a tell never goes out again as the host's "co" callout or "ev" event |
+| rate limiting | sv_tells.lua `classOf`, `wait` | each receiver (this game's player, each joiner the host sends to, "every joiner") on its own: an urgent tell urgent_gap_s (2.5) after the last urgent one; a tell with a queued callout gap_s (4, the banner's own time) after the last such; a radio-only one radio_gap_s (2) after any tell; each id its cooldown_s; none between rounds (a joiner plays the host's anyway: its mirrored state may lag), down at the airfield or over the run's summary. A radio line is never asked for again within line_gap_s (20 s, the cloned rows' RequeueingWaitTime) by whichever tell (`lineFree`, D.tells.evAt, set when its event fired): reversal and kulbit share their two lines, and an ace can kulbit 12 s after its reversal; a tell whose lines are all that recent shows its callout only, or isn't said (kind "line"). Refusals are logged once a round per tell and reason |
+| the urgent callout | sv_hud.lua `hudCallout(text, sub, big, urgent)`, `calloutNext(now)` | an urgent callout (a tell's) goes in front of the queue, in place of a tell still waiting there (one waits at a time), a full queue (4) losing its last callout for it (logged); the next HUD tick puts it up at once, cutting the banner's callout short (put back right after the tell when more than 1.5 s of it was left, a full queue then losing its last, logged; a tell never cuts a tell), for CFG.tells.hud_s (2.5 s). Before, a callout could come up to 16 s late behind four round callouts (the brief). sv_coop's wrapper passes urgent on |
+| co-op | sv_coop.lua `COOP.tell`, the joiner's "tl" handler, KEEP_EVENTS, PERSONAL | "tl" (id, a, b) from the host to a joiner's slot or to every joiner; the joiner plays it only if it knows the id (its own catalog), a / b are finite (or absent), its level is ready, [coop] callouts is on, and at most 4 came that second; dropped, never queued (a late tell misleads). `^RE_SV_Radio` is in KEEP_EVENTS (no "ev", and a joiner refuses one); `tells` is PERSONAL (each player's switches, texts and lines). CFG.tells.enabled is each game's own: a host with tells off still sends "tl" (TELL.say checks it only for its own TELL.play) and its leads stand (TELL.leadS); a joiner with tells off plays none. The host's gaps, cooldowns, leads, hunt_km and wave_from_round decide when a tell is sent |
 
 Tells wired now (the threats that exist today):
 
@@ -500,7 +500,7 @@ Tells wired now (the threats that exist today):
 | raid | a raid's, strike's or bombers' callout (the round's first bomber flight) | sv_spawn.lua spawnBomber | everyone | "Joker Flight, enemy aircraft approaching the eastern airfield." (Survival's airfield is Mission 22's eastern one) or two others; radio only (the round's callout stays) | - |
 | jammer / jammer_down | the jammer up; shot down | sv_spawn.lua spawnFlight; sv_main.lua creditKill | everyone | "The enemy's jamming you with a powerful ECM." / "Hostile EW aircraft destroyed! Jamming has been lifted!"; radio only | - |
 | wave | each later wave of a round from wave_from_round 26 (the late rounds' growth) | sv_rounds.lua roundsTick's wave branch | everyone | "New enemy aircraft detected. Look sharp!" or three others; radio only | - |
-| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; WARNING: RAILGUN / BUILD SPEED, THEN BREAK, urgent; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive or when it sinks | the order's time is unchanged; the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
+| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; WARNING: RAILGUN / BUILD SPEED, THEN BREAK, urgent; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive, when it sinks or when the run restarts (SPC.alicornCleanup, from sv_main.lua's level-load reset) | the order's time is unchanged; the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
 | alcn_dive / alcn_up | its dive; counted surfaced | sv_alicorn.lua | everyone | "Enemy submarine diving!" / "Submarine has surfaced. Begin attack!"; radio only (its callouts stay; not on each resurface order) | - |
 | alcn_vls | its VLS volley | sv_alicorn.lua | everyone | "Missile launch from VLS!"; VLS LAUNCH / ALICORN MISSILES INBOUND, urgent | RE_SV_AlcnVolley 1.0 s after (not if it dived meanwhile) |
 | ladon_vls | a Ladon's VLS volley | sv_ladon.lua ladonTick | everyone (the volley's forwarded: each game's copy fires at its own player) | "Large aircraft has launched missile." / "The bomber has launched a missile!"; VLS LAUNCH / LADON MISSILES INBOUND, urgent | 0 (with it: the hatch opens first) |
@@ -513,9 +513,10 @@ skirm (HUD only), alcn_deck (P7). Their lead_s are set (dive, trap, six, bracket
 still be the event package's delay on its salvo records, timed with TELL.leadS("bracket") (frame accurate: hard rule 40).
 
 ### CFG keys
-- `CFG.tells` ([tells] in survival.ini; PERSONAL in co-op): `enabled` true (false: no tells, every action at once as
-  before), `radio` true, `hud` true, `hud_s` 2.5, `gap_s` 4.0, `urgent_gap_s` 2.5, `radio_gap_s` 2.0, `hunt_km` 8.0,
-  `wave_from_round` 26 (0: never).
+- `CFG.tells` ([tells] in survival.ini; PERSONAL in co-op): `enabled` true (false: no tells here, every action of
+  this game's own tells at once as before; a co-op host still sends its joiners theirs), `radio` true, `hud` true,
+  `hud_s` 2.5, `gap_s` 4.0, `urgent_gap_s` 2.5, `radio_gap_s` 2.0, `line_gap_s` 20 (0: a line may come again at once),
+  `hunt_km` 8.0, `wave_from_round` 26 (0: never).
 - `CFG.tells.cooldown_s` ([tells.cooldown_s]): reversal 20, kulbit 20, hunt 45, raid 30, jammer 30, jammer_down 10,
   wave 20, alcn_vls 30, ladon_vls 15 (and 0 for the ALICORN's other calls; the later units' set too).
 - `CFG.tells.lead_s` ([tells.lead_s]): reversal 1.0, kulbit 0.5, alcn_rail 5.0, alcn_vls 1.0, ladon_vls 0.0 (dive,
@@ -532,9 +533,13 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
   `special: the Alicorn's railgun in 5 s: warned`; a radio event that didn't fire: `... (not fired: <SV_ERR>)`.
 - Refusals, once a round each: `tell: kulbit not said (1.0 s after reversal, its gap 2.5 s)`, `tell: hunt not said
   (its cooldown, 45 s)`, `tell: bracket not said (down at the airfield)`, `... (between rounds)`,
-  `... (nothing to show: its radio or HUD half is off)`.
+  `... (nothing to show: its radio or HUD half is off)`, `... (each of its lines played within line_gap_s 20 s)`.
+- A tell whose lines were all asked for within line_gap_s: `tell: kulbit: no line (each played within line_gap_s),
+  tell callout 'ACE POST-STALL'`.
 - The HUD: `hud: tell 'ACE REVERSAL' / 'HE'S TURNING INTO YOU'`, and `hud: callout '<text>' dropped for a tell (the queue
-  was full)` when four callouts were waiting.
+  was full)` when four callouts were waiting, `hud: callout '<text>' dropped (a tell cut in)` when the callout a tell
+  cut short went back into a full queue.
+- A restart with the ALICORN's RAILGUN WARNING up: `special: the Alicorn's RAILGUN WARNING off with the run`.
 - `perf: ...` shows `tells x/y` only when it's among the four worst parts (it does almost nothing).
 - Errors: `tell: <id>'s action failed: ...`, `tell: tick error ...`, `coop: tell error ...`.
 
@@ -556,7 +561,9 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
 8. Whether the game's own play-by-play "Joker 1! Check your six!" already plays in Survival; if so, the six tell (P2)
    doubles it.
 9. Co-op: a TELL.ALL tell on every game (each from its own catalog), nothing on a joiner while its level loads; no `ev`
-   lines for RE_SV_Radio* in a joiner's log. (A slot's own tell comes with P2.)
+   lines for RE_SV_Radio* in a joiner's log; a host with [tells] enabled = false: its joiners still hear theirs, a
+   joiner with it false hears none. (A slot's own tell comes with P2.)
+10. The ALICORN's RAILGUN WARNING on, then a pause-menu restart: the warning gone in the new run.
 
 ### Offline test
 `sh tools/checks/tells_test.sh` (tools/checks/tells_test.lua, then tools/checks/tells_lines_check.py), on the real
@@ -565,24 +572,30 @@ exposed):
 1. The catalog: every tell's events RE_SV_Radio<letters>, texts present, chains / args / keys known, the twelve o'clock
    lines; MODULES order.
 2. The HUD: a tell in front of the queue, replacing a waiting tell, a full queue losing its last (logged); calloutNext
-   cutting a callout short and putting it back (3 s left), not (1 s left), never cutting a tell; hudTick uses it.
+   cutting a callout short and putting it back (3 s left; into a full queue: its last dropped, logged), not (1 s left),
+   never cutting a tell; hudTick uses it.
 3. Saying: a line at random then the other, the gaps by class (urgent after urgent, radio after any, urgent right after
    a radio-only one, queued callouts 4 s apart), cooldowns, pick a, the dive's chained o'clock, compass and o'clock texts,
    a failed event logged, between rounds / at the airfield / over the summary, radio, hud and all off, TELL.ready, the
-   forced line.
+   forced line; line_gap_s: the kulbit takes the line its reversal didn't, the reversal its own again 21 s on, both lines
+   recent: the callout only (logged), with hud off not said (kind "line"), a line that didn't fire not counted, pick a,
+   0 = no limit.
 4. The lead: an action 1 s after its tell (not at 0.75 s), at once unsaid, never with need, lead 0, a failing action
    logged, tells off, dropped with D.
 5. The wiring: ACE.movesTick's reversal (tell, then RE_SV_AceTurn_13 1 s later) and kulbit (0.5 s), at once with tells
    off; ACE.hunt's tell within 8 km once a flight a round, a second flight in the cooldown marked done, none on a joiner;
    the ALICORN second by second (call and warning at 95 for the order at 100, warning off at 112, the volley's call at
    130 and the volley at 131, the next call at 155, a dive at 157 turning it off, no order while dived, the sink turning
-   it off, rail_alert off, tells off: the warning with the order); a Ladon's volley after its call; raid, jammer,
+   it off, rail_alert off, tells off: the warning with the order, SPC.alicornCleanup turning it off once and the
+   level-load reset calling it); a Ladon's volley after its call; raid, jammer,
    jammer_down, wave, TELL.tick and Ctrl+0 by their place in the source.
 6. Co-op: a host's tell inside its mirrored rounds sends no "co" / "ev" (a round callout and the railgun warning still
    do); TELL.ALL plays here and sends "tl" to every joiner; a slot's tell goes to that slot only, with its own gaps;
+   with the host's tells off both still go, its lead stands (alcn_vls' action 1 s on) and nothing plays on the host;
    numbers sent, a NaN not; COOP.tell refuses bad slots and ids; the wrapper passes urgent on; the joiner drops a tell
    while loading, plays the host's from its own catalog, drops unknown or long ids and huge numbers, at most 4 a second,
-   none with [coop] callouts off, plays one while its mirrored state still says "wait", and tells no one else.
+   none with [coop] callouts off or its own tells off, plays one while its mirrored state still says "wait", and tells
+   no one else.
 7. tells_lines_check.py: TELL_LINES' groups letters only and whole FNames, TextIDs and speakers well formed, every event
    named by the Lua catalog and back (the build checks the same, plus every voice in the bank).
 The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv_tells (TELL nil: the move at once).
@@ -595,7 +608,9 @@ The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv
   (PByP_CP: the six, bracket, o'clock and enemy chatter lines) cloned onto an ms022 Scenario row are untested; so are
   the speaker overrides (Common_Enemy_Fighter_* for named units' lines).
 - [I] LimitPlayCount 0 = any number of times (the play-by-play rows' value); RequeueingWaitTime stays 20 s (the
-  template's): the cooldowns keep each tell 20 s+ apart where it repeats, and tells with two or more lines alternate.
+  template's). Its effect is unknown; Lua never asks for the same line within line_gap_s 20 s (by any tell: the
+  per-tell cooldowns alone didn't cover reversal and kulbit, which share their lines). If checklist item 2 shows a group
+  asked for again inside 20 s plays, line_gap_s can go to 0.
 - [I] InterruptMain and StartDelay 0.1 on the 'now' lines.
 - [I] There is no radio feedback: SV_Event's 1 says the remote event fired, not that the line played.
 - [I] The railgun's order-to-shot time (~9 s from ALICORN.md's data, never measured): lead_s 5 and alert_s 12 are guesses
@@ -605,3 +620,22 @@ The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv
   (at once, as before). The hunt tell is the host's only (its planes hunt the host); a joiner hears none.
 - A tell that can't be said is dropped, not queued (e.g. a raid's call within 2 s of another tell).
 - The RAILGUN WARNING of a joiner who links mid-warning stays off until the next one (hostSync doesn't replay it).
+  A run left from the level doesn't fire RE_SV_AlcnAlertOff (the level and its HUD go with it); a restart does.
+
+### Review fixes (after unit 4's review; not yet run in game)
+1. CFG.tells.enabled is each game's own, as the ini always said (tells are PERSONAL): a co-op host with tells off no
+   longer silences its joiners. TELL.say checks the switch only for this game's own TELL.play; the host still sends
+   "tl" (to a slot or every joiner), TELL.leadS keeps its leads on a host, TELL.after waits its lead whenever the tell
+   went to anyone, and TELL.ready answers for a joiner's slot by the host's gaps only. A joiner with tells off plays none.
+2. Radio lines shared by two tells (reversal and kulbit: RE_SV_RadioTurnA / B) could be asked for again within the
+   cloned rows' 20 s RequeueingWaitTime (an ace kulbits 12 s after its reversal), and the game might skip them silently.
+   Each line's last fired time is kept (D.tells.evAt) and a line isn't picked again within the new line_gap_s (20,
+   [tells] line_gap_s; 0 turns it off): the other line, else the callout only, else not said (kind "line"). The doc's
+   claim that cooldowns kept repeats 20 s apart is corrected (above).
+3. A callout put back into a full queue by a tell's cut-in is logged when the queue's last makes room
+   (`hud: callout '<text>' dropped (a tell cut in)`).
+4. The ALICORN's RAILGUN WARNING goes off when a run restarts with it up (SPC.alicornCleanup, beside SPC.V.cleanup in
+   sv_main.lua's level-load reset): alicornTick stops with the run, so its alert_s timer never came.
+Still open (unchanged): the single COOP_TAG / VERSION bump (61 events, 59 rows: before any co-op build goes to friends);
+COOP.peerPlanes() not exported (P2 uses COOP.players()); the P1 / P2 / P7 tells catalogued but not said, and the
+bracket salvo's frame-accurate lead (P2); no hostSync replay of the RAILGUN WARNING; everything in game.

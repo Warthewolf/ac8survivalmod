@@ -6,15 +6,18 @@
 --     cut short and put back after it, the queue never over 4);
 --   TELL.say / play: a line at random but never the same twice running, the a-th (pick), a chained line, texts filled
 --     (compass, o'clock), the gaps by class (urgent, queued callout, radio-only), cooldowns, none between rounds, at the
---     airfield or over the summary, radio / hud / all off;
+--     airfield or over the summary, radio / hud / all off; no radio line asked for again within line_gap_s by any tell
+--     (reversal and kulbit share theirs: the callout only, or not said), a line that didn't fire not counted;
 --   TELL.after: the action lead_s later (TELL.tick, on the round clock), at once unsaid or with tells off, never with need;
 --   the wiring: an ace's reversal and kulbit (ACE.movesTick: the call, the move lead_s later), the hunt (ACE.hunt), the
 --     ALICORN's railgun (the call and RAILGUN WARNING lead_s before the order, off alert_s after it, at a dive, at the
 --     sink; the first call "activated", then the others), its dive, surfacing and VLS volley (after its call), a Ladon's
 --     volley, and the raid, jammer, wave and Ctrl+0 hooks by their place in the source;
 --   co-op: the host's tells never go out as "co" / "ev" (RE_SV_Radio* kept), TELL.ALL and a slot's tell go as "tl" with
---     their own gaps, a joiner plays the host's "tl" from its own catalog, drops unknown ids, non-finite numbers, more
---     than 4 a second, while its level loads or with callouts off.
+--     their own gaps, and still with the host's own tells off (its leads stand), a joiner plays the host's "tl" from its
+--     own catalog, drops unknown ids, non-finite numbers, more than 4 a second, while its level loads, with callouts off
+--     or with its own tells off;
+--   the ALICORN's RAILGUN WARNING off when the run restarts with it up (SPC.alicornCleanup).
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -185,6 +188,13 @@ do
     H.calloutCur, H.calloutUntil = { text = "WARNING: RAILGUN", urgent = true }, 13
     hudCallout("VLS LAUNCH", nil, nil, true)
     check(calloutNext(11) == nil and #callouts == 1, "a tell never cuts another tell")
+    callouts = {}
+    H.calloutCur, H.calloutUntil = { text = "ROUND 7" }, 15
+    for _, t in ipairs({ "W1", "W2", "W3" }) do hudCallout(t, nil) end
+    hudCallout("ACE REVERSAL", nil, nil, true)
+    local cut = calloutNext(11)
+    check(cut and cut.urgent and #callouts == 3 and callouts[1].text == "ROUND 7" and callouts[3].text == "W2"
+          and has(line("hud: callout 'W3'"), "dropped (a tell cut in)"), "the cut callout put back into a full queue: its last dropped, logged")
     local src = readAll(MOD .. "/Scripts/sv_hud.lua")
     check(has(src, "local c = calloutNext(now)") and has(src, "CFG.tells.hud_s") and has(src, "H.calloutCur, H.calloutUntil = c,"),
           "hudTick shows calloutNext's, a tell for hud_s")
@@ -205,13 +215,15 @@ do
     local ok2, why, kind = TELL.say("kulbit")
     check(not ok2 and kind == "gap" and has(line("tell: kulbit not said"), "gap 2.5"), "an urgent one right after an urgent one: its gap (" .. tostring(why) .. ")")
     D.now = 102.5
-    check(TELL.say("kulbit") == true, "... 2.5 s on: said")
+    events = {}
+    check(TELL.say("kulbit") == true and events[1] ~= nil and events[1] ~= s1,
+          "... 2.5 s on: said, with the other line (reversal's asked for within line_gap_s; they share theirs)")
     D.now = 106
     local ok3, _, k3 = TELL.say("reversal")
     check(not ok3 and k3 == "cooldown", "reversal again 6 s on: its cooldown")
     D.now = 121
     events = {}
-    check(TELL.say("reversal") and events[1] ~= s1 and events[1] ~= nil, "20 s on: said, the other line (" .. tostring(events[1]) .. ")")
+    check(TELL.say("reversal") and events[1] == s1, "21 s on: said, its own line again (the other is the kulbit's, 18.5 s ago: " .. tostring(events[1]) .. ")")
     -- classes
     events = {}
     check(not TELL.say("raid") and #events == 0, "a radio-only one right after a tell: its gap (radio_gap_s)")
@@ -263,6 +275,35 @@ do
     TELL.say("six")
     check(not TELL.ready("six"), "... and not right after it")
     check(TELL.play("six", nil, nil, nil, true, "RE_SV_RadioSixC") and events[#events] == "RE_SV_RadioSixC", "TELL.play forced (Ctrl+0): that line, past the gaps")
+end
+
+print("line_gap_s (a radio line not asked for again within it, by any tell)")
+do
+    reset(); run0(10); events = {}; callouts = {}
+    C.cooldown_s.reversal, C.cooldown_s.kulbit = 0, 0
+    TELL.say("reversal")
+    D.now = 103
+    TELL.say("kulbit")
+    check(count(events, "^RE_SV_RadioTurn[AB]$") == 2 and events[1] ~= events[2], "reversal, then kulbit 3 s on: both lines asked for")
+    D.now = 106; events = {}; callouts = {}
+    check(TELL.say("reversal") == true and #events == 0 and callouts[1] and callouts[1].text == "ACE REVERSAL"
+          and has(line("tell: reversal"), "no line (each played within line_gap_s)"), "both within 20 s: its callout only, logged")
+    C.hud = false; D.now = 109
+    local ok, why, kind = TELL.say("kulbit")
+    check(not ok and kind == "line" and has(line("tell: kulbit not said"), "line_gap_s 20"), "... no callout either: not said (" .. tostring(why) .. ")")
+    C.hud = true
+    D.now = 124
+    events = {}
+    check(TELL.say("kulbit") and events[1] ~= nil, "21 s after the first: a line again (" .. tostring(events[1]) .. ")")
+    D.now = 130; eventR = -5
+    TELL.say("clock", nil, 6)
+    eventR = 1; D.now = 133; events = {}
+    check(TELL.say("clock", nil, 6) and events[1] == "RE_SV_RadioClockF", "a line that didn't fire doesn't count (clock 6 again 3 s on)")
+    D.now = 136; events = {}
+    local okC, _, kC = TELL.say("clock", nil, 6)
+    check(not okC and kC == "line" and #events == 0, "... once it fired: not again within 20 s (pick a; clock has no callout)")
+    C.line_gap_s = 0; D.now = 139
+    check(TELL.say("clock", nil, 6) and events[1] == "RE_SV_RadioClockF", "line_gap_s 0: no such limit")
 end
 
 ---------------------------------------------------------------------------------------------------- the lead
@@ -399,6 +440,12 @@ do
     upTo(400)
     check(when("RE_SV_AlcnAlertOn") == 400 and when("RE_SV_AlcnRailgun") == 400 and not (when("RE_SV_RadioAlcnRailFirst")
           or when("RE_SV_RadioAlcnRailA") or when("RE_SV_RadioAlcnRailB")), "tells off: the warning with the order, no call")
+    events = {}
+    SPC.alicornCleanup(s); SPC.alicornCleanup(s); SPC.alicornCleanup({ kind = "ladon" })
+    check(count(events, "^RE_SV_AlcnAlertOff$") == 1 and s.railAlertOn == nil and s.railOffAt == nil
+          and has(line("special: the Alicorn's RAILGUN"), "off with the run"), "a run restarted with the warning up: off once (SPC.alicornCleanup)")
+    local reset0 = readAll(MOD .. "/Scripts/sv_main.lua")
+    check(has(reset0, "pcall(SPC.V.cleanup, D.special); pcall(SPC.alicornCleanup, D.special)"), "... called by the level-load reset")
     reset()
 
     -- a Ladon's volley (sv_ladon.lua SPC.ladonTick)
@@ -476,6 +523,21 @@ do
     check(COOP.tell(99, "six") == false and COOP.tell(nil, nil) == false, "COOP.tell: a bad slot or id sends nothing")
     hudCallout("TEST", nil, nil, true)
     check(callouts[1] and callouts[1].urgent, "the wrapped hudCallout passes urgent on")
+    -- the host's own tells off: its joiners still get theirs (PERSONAL), with the host's leads
+    C.enabled = false
+    sent, events, callouts = {}, {}, {}
+    D.now = 680
+    check(TELL.say("jammer", TELL.ALL) == true and sent[#sent] == "-1>tl|jammer||" and #events == 0,
+          "the host's tells off: TELL.ALL not played here, still sent to every joiner")
+    check(TELL.say("bracket", 3) == true and sent[#sent] == "3>tl|bracket||" and #callouts == 0, "... and a slot's tell sent")
+    check(TELL.leadS("alcn_rail") == 5 and TELL.ready("six", 4) and not TELL.ready("six") and TELL.ready("six", TELL.ALL),
+          "... its leads stand; ready for a joiner, not for itself")
+    local ranV
+    D.now = 683
+    check(TELL.after("alcn_vls", TELL.ALL, function() ranV = D.now end) == true and ranV == nil, "... a TELL.ALL action waits its lead")
+    D.now = 684; TELL.tick(684)
+    check(ranV == 684 and #events == 0, "... 1 s on (lead_s alcn_vls), nothing played here")
+    C.enabled = true
 
     -- the joiner
     menu = 32 + 4
@@ -512,6 +574,12 @@ do
     COOP.tick(7)
     check(plays == 0, "callouts off ([coop] callouts): none")
     CFG.coop.callouts = true
+    CFG.tells.enabled = false; clock = clock + 2
+    local nJ = #events
+    inbox[#inbox + 1] = "0|tl|raid||"
+    COOP.tick(7)
+    check(#events == nJ and not has(line("tell: raid (the host's)"), "RadioRaid"), "this game's own tells off: the host's not played")
+    CFG.tells.enabled = true; plays = 0
     D.state = "wait"; D.now = 760; clock = clock + 2
     inbox[#inbox + 1] = "0|tl|bracket||"
     COOP.tick(8)
