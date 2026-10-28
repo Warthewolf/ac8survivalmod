@@ -14,8 +14,10 @@
 --      tier_provoke off; the test values; a special's own), enemyProvoke's writes (only what changed), enemySpike's
 --      once-per-plane write and its "provoke:" line;
 --   3. the tail watch: STATS.tailTick on planes you get behind (its reaction, its states, died / escaped, a flicker
---      dropped, at most watch_max read, no bombers, the sweep's death first), the round line's and the run line's
---      parts; nothing on a co-op joiner or with tail_watch off.
+--      dropped, at most watch_max read, no bombers, the sweep's death first, never an episode on a wreck the sweep hasn't
+--      seen down yet, one already defending kept out of the reaction figures, the planes you're likely behind read before
+--      nearer ones, an episode still open at the run's end), the round line's and the run line's parts; nothing on a
+--      co-op joiner or with tail_watch off.
 -- Its log lines also go to <work dir>/test_lua.log, for tailed_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -496,14 +498,47 @@ CFG.stats.tail_watch = false
 tick(120.25)
 check(T5.tw == nil and T5.obj.reads == 0, "nothing on a co-op joiner, nothing with tail_watch off")
 CFG.stats.tail_watch = true
--- the round's line and the run's
-STATS.roundEnd(130)
-STATS.sample(134, you)
-local rl = line("stats: round 8")
-check(has(rl, "; tail watch: 3 episodes (Veteran+ 3): died after median 5.8 s (n 2), 8.0 s after its Provoke (n 1), escaped 1 (held median 3.0 s), Provoke after median 1.5 s (none in 2), blackouts 0"),
-      "the round line's tail watch part")
+-- a wreck the sweep hasn't seen down yet (its health 0, p.down not set): no episode, nothing when the sweep finds it
+t = 121
+local W = fighter("f16c", 0.6, AHEAD, "ERA_Unit_10_Dep_Air0")
+W.obj.HealthInternal = 0
+planes = { W }
+run_(122)
+STATS.down(W, nil, "you", 122.1)
+check(W.tw == nil and not line("tailed: " .. W.name), "no episode on a wreck the sweep hasn't seen down yet")
+-- already in Provoke when you get behind it (another pursuer): no reaction of its own, nothing "after its Provoke"
+local PD = fighter("su33", 1.2, AHEAD, "ERA_Unit_11_Dep_Air0")
+PD.obj.state = 8
+planes = { PD }
+run_(125.25, function(now) if now >= 125.25 then PD.obj.HealthInternal = 0 end end)
+local pdl = line("tailed: " .. PD.name)
+check(PD.tw == nil and has(pdl, "already in Provoke when you got behind it") and has(pdl, "died 3.0 s after")
+      and not has(pdl, "after its Provoke)") and not has(pdl, "Provoke after"), "already defending: its line, no reaction time")
+-- four nearer planes beside you, two you're behind: those two are read first (the sweep's p.tailing, or its last pose
+-- against you now), then the nearest two
+local N = {}
+for i = 1, 4 do N[i] = fighter("f18e", 0.9 + i * 0.2, SIDE, "ERA_Unit_12_Dep_Air" .. (i % 3)) end
+local CH = fighter("f15e", 2.5, AHEAD, "ERA_Unit_13_Dep_Air0")
+CH.tailing = true
+local CH2 = fighter("m29a", 2.7, AHEAD, "ERA_Unit_14_Dep_Air0")
+CH2.at, CH2.fwd = at(2.7), AHEAD
+planes = { N[1], N[2], N[3], N[4], CH, CH2 }
+run_(125.5)
+check(CH.tw and CH2.tw and N[1].obj.reads > 0 and N[2].obj.reads > 0 and N[3].obj.reads == 0 and N[4].obj.reads == 0,
+      "the planes you're likely behind are read before four nearer ones")
+-- CH2 turns away at 127.5 (escaped, held 2.0 s); CH is still on your guns when the run ends at 130
+run_(127.5)
+CH2.obj.fwd = SIDE
+run_(130)
+check(CH2.tw == nil and has(line("tailed: " .. CH2.name), "escaped after 2.0 s") and CH.tw, "CH2 escaped after 2.0 s; CH still open")
+-- the run ends (shot down) mid-round: CH's episode ends as still up, then the round's line and the run's
 STATS.runEnd("died")
-check(has(line("stats: run over (died)"), "; tail watch Veteran+: died after median 5.8 s on your tail (n 2), 8.0 s after its Provoke (n 1), escaped 1 (held median 3.0 s), Provoke after median 1.5 s (none in 2), blackouts 0 [8 s+]"),
+check(CH.tw == nil and has(line("tailed: " .. CH.name), "no Provoke; ") and has(line("tailed: " .. CH.name),
+      "still up when the run ended (died), 4.5 s on its tail"), "the run's end: an open episode ends as still up")
+local rl = line("stats: round 8")
+check(has(rl, "(cut short: died)") and has(rl, "; tail watch: 6 episodes (Veteran+ 6): died after median 3.0 s (n 3), 8.0 s after its Provoke (n 1), escaped 2 (held median 2.5 s), still up at the end 1, Provoke after median 1.5 s (none in 4, already defending 1), blackouts 0"),
+      "the round line's tail watch part")
+check(has(line("stats: run over (died)"), "; tail watch Veteran+: died after median 3.0 s on your tail (n 3), 8.0 s after its Provoke (n 1), escaped 2 (held median 2.5 s), still up at the end 1, Provoke after median 1.5 s (none in 4, already defending 1), blackouts 0 [8 s+]"),
       "the run line's tail watch Veteran+ part")
 
 logFile:close()

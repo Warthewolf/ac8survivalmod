@@ -71,15 +71,17 @@ def run_table(line):
                               ('-', '0', '-', '0'))
     rows.append((2, 'tailed enemy survival, Veteran+ (AI Provoke)', f'{ai} (n {nai})', 'tailed', verdict('tailed', secs(ai))))
     rows.append((2, '  (geometric: you within the tail cone)', f'{geo} (n {ngeo})', 'tailed', verdict('tailed', secs(geo))))
+    # (the still-up and already-defending counts came with the review of unit 2: optional, for an earlier log)
     tw = grab(r'tail watch Veteran\+: died after median (\S+(?: s)?) on your tail \(n (\d+)\), (\S+(?: s)?) after its Provoke '
-              r'\(n (\d+)\), escaped (\d+) \(held median (\S+(?: s)?)\), Provoke after median (\S+(?: s)?) \(none in (\d+)\), '
-              r'blackouts (\d+)', line)
+              r'\(n (\d+)\), escaped (\d+) \(held median (\S+(?: s)?)\)(?:, still up at the end (\d+))?, Provoke after median '
+              r'(\S+(?: s)?) \(none in (\d+)(?:, already defending (\d+))?\), blackouts (\d+)', line)
     if tw:
         rows.append((2, '  tail watch Veteran+ (4 Hz): died, tailed', f'{tw[0]} (n {tw[1]}); {tw[2]} after Provoke (n {tw[3]})',
                      'tailed', verdict('tailed', secs(tw[0]))))
-        rows.append((2, '  (tail watch: escaped, held)', f'{tw[4]} (held {tw[5]})', 'tailed', '-'))
-        rows.append((2, '  (tail watch: Provoke after; none; blackouts)', f'{tw[6]}; none in {tw[7]}; blackouts {tw[8]}',
-                     'tailed', '-'))
+        rows.append((2, '  (tail watch: escaped, held; still up)', f'{tw[4]} (held {tw[5]}); still up {tw[6] or 0}', 'tailed', '-'))
+        # (Provoke after: fresh reactions only; "already": it was defending when you got behind it)
+        rows.append((2, '  (watch: Provoke after; none; already)', f'{tw[7]}; none {tw[8]}; already {tw[9] or 0}; '
+                     f'blackouts {tw[10]}', 'tailed', '-'))
     sp = (grab(r'special rounds (.*?) \[5-8 min\]', line) or ('none',))[0]
     lens = [float(x) for x in re.findall(r'round \d+ \S+ (\d+) s', sp)]
     worst = [verdict('special', x) for x in lens]
@@ -134,9 +136,12 @@ def tailed_lines(ls):
             continue
         died = re.search(r'; died ([\d.]+) s after', l)
         esc = re.search(r'; escaped after ([\d.]+) s', l)
+        up = re.search(r'; still up when the run ended \([^)]*\), ([\d.]+) s on its tail', l)
         react = re.search(r'Provoke after ([\d.]+) s', l)
+        pre = re.search(r'already in (\S+) when you got behind it', l)       # (defending before: no reaction of its own)
         eps.append({'tier': m.group(2), 'values': f'{m.group(3)} deg / {m.group(4)} s ({m.group(5)})',
                     'died': float(died.group(1)) if died else None, 'esc': float(esc.group(1)) if esc else None,
+                    'up': float(up.group(1)) if up else None, 'pre': pre.group(1) if pre else None,
                     'react': float(react.group(1)) if react else None, 'blackout': 'Blackout ' in l})
     if eps:
         print(f'\ntailed lines: {len(eps)} (the tail watch: you on an enemy\'s tail, 4 Hz)')
@@ -145,14 +150,18 @@ def tailed_lines(ls):
             groups = {}
             for e in eps:
                 groups.setdefault(e[key], []).append(e)
-            print(f'  {title:<34} {"n":>3} {"died":>4} {"died after":>11} {"escaped":>7} {"Provoke after":>13} {"none":>4} blackouts')
+            # (Provoke after: the fresh reactions only; none: fresh episodes without one; already: defending at once)
+            print(f'  {title:<34} {"n":>3} {"died":>4} {"died after":>11} {"escaped":>7} {"up":>3} {"Provoke after":>13} '
+                  f'{"none":>4} {"already":>7} blackouts')
             for k in sorted(groups):
                 g = groups[k]
                 d = [e['died'] for e in g if e['died'] is not None]
-                r = [e['react'] for e in g if e['react'] is not None]
+                r = [e['react'] for e in g if e['react'] is not None and e['pre'] is None]
                 med = lambda v: f'{statistics.median(v):.1f} s' if v else '-'
                 print(f'  {k:<34} {len(g):>3} {len(d):>4} {med(d):>11} {sum(1 for e in g if e["esc"] is not None):>7} '
-                      f'{med(r):>13} {sum(1 for e in g if e["react"] is None):>4} {sum(1 for e in g if e["blackout"])}')
+                      f'{sum(1 for e in g if e["up"] is not None):>3} {med(r):>13} '
+                      f'{sum(1 for e in g if e["react"] is None and e["pre"] is None):>4} '
+                      f'{sum(1 for e in g if e["pre"] is not None):>7} {sum(1 for e in g if e["blackout"])}')
         table('tier', 'tier')
         table('values', 'provoke in force')
     pv = [l for l in ls if l.startswith('provoke:')]
