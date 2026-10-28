@@ -221,8 +221,12 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   (RE_SV_DirHold_NN / RE_SV_DirFree_NN: top cover, regroup) are forwarded, so a joiner's copies hold their fire too.
   LastTGT steers to the host, so a cover or a dive aimed at a joiner sends the flight hunting (RE_SV_Hunt_NN) with its
   TargetActor kept on that joiner's stand-in for aim_s. The host's split hunt waits while the director holds a flight
-  (the hunt's order would free it) and goes after; a split-hunt flight (COOP.hunted) gets its hunt back when the
-  director lets it go. Untested in game.
+  (the hunt's order would free it; as long as the hold lasts, at most top_cover.max_s + 120 s) and goes after; a
+  split-hunt flight (COOP.hunted) gets its hunt back when the director lets it go. A joiner who links during a hold gets
+  the holds then in force (DIR.holds, RE_SV_DirHold_NN by "ev") 12 s after its hostSync, once its copies are up (the
+  Wolf trap's held planes have no such replay). The host's DECOY: nothing of the director's frees a decoyed flight; at
+  the decoy's end the director fires RE_SV_DirFree_NN (forwarded), since the kept RE_SV_DecoyEnd_NN never reaches the
+  joiners' copies. A joiner's own decoy can still be cut short by a forwarded DirFree. Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.
