@@ -491,6 +491,16 @@ function ROLE.jammerOk(unit)
     return false
 end
 
+-- Flight `unit` flies a role set of its own (a Lancer, Wolf or Skirmisher flight, not an ace squadron's: that keeps its
+-- tier's levers). A skill tier's no_provoke and moves (CFG.aces.flight; from round 28 every ordinary flight is Reaper
+-- tier, TIER.pick) leave it alone (ACE.hunt, ACE.movesTick; U5's review): no_provoke keeps a plane out of its Provoke
+-- slot (no LA_SV_LancerBreak, no LA_SV_WolfDrag, no Skirmisher defence), and a reversal (RE_SV_AceTurn_NN, LastTGT on
+-- every plane of the flight) turns a Lancer with you and a held Wolf trap onto you. False for duelists and roles off.
+function ROLE.ownSet(unit)
+    local r = unit and ROLE.flight(unit)
+    return r ~= nil and r ~= "duelist" and not (D and D.aceSquad and D.aceSquad[unit])
+end
+
 -- A role flight is up (spawnFlight, inside roundsTick: n planes): the round's first Lancer and first Skirmisher flight
 -- call themselves out to every player (CFG.roles.tells; P3's tells "lancer" / "skirm", HUD only), a Wolf flight's trap
 -- is held once its orders are in (WOLF). An ace squadron in a role flight neither calls out nor holds.
@@ -514,10 +524,13 @@ end
 -- one object each: tools/survival_events.py build_wolf) hold_after_s after their flight's orders are seen in (SV_Up_NN:
 -- the appearance's own orders come 2 s after it spawns and would undo an earlier hold, hard rule 26), and fly with their
 -- formation [I]. Freed (RE_SV_WolfFree_<NN><L>: their appearance's orders on that object) when: hold_max_s pass, one is
--- hit by you (free_on_hit, that one), its bait (object 0) goes down (free_on_bait_down, all), or the squad director
--- springs it (P2: WOLF.free(unit, why, true) adds RE_SV_WolfTurn_<NN><L>, LastTGT onto the player). A unit-wide order
--- after the hold (your DECOY's end, RE_SV_DecoyEnd_NN) frees them all: the ones still held are held again rehold_s
--- later. Hunts (ALLY.tick's, co-op's) and escort duty leave a holding flight alone (WOLF.holding). The host's (or solo):
+-- hit by you (free_on_hit, that one), its own bait (the plane before it, k - 1: free_on_bait_down) goes down (that one;
+-- the lead, object 0, frees them all), or the squad director springs it (P2: WOLF.free(unit, why, true) adds
+-- RE_SV_WolfTurn_<NN><L>, LastTGT onto the player). A held plane shot down is just dropped. Your DECOY stands the whole
+-- flight down (RE_SV_Decoy_NN) until its end: nothing is freed or turned inside it (a WolfFree would send that plane back
+-- in early, and to the joiners' copies; the reasons still stand after it, so those releases come then), and its end
+-- (RE_SV_DecoyEnd_NN, a unit-wide order) frees them all: the ones still held are held again rehold_s later (U5's
+-- review). Hunts (ALLY.tick's, co-op's) and escort duty leave a holding flight alone (WOLF.holding). The host's (or solo):
 -- WOLF.tick runs in roundsTick; the holds and frees are forwarded to co-op joiners (their copies hold too), the turn isn't
 -- (LastTGT steers to the host). Untested in game: a per-object engagement order on a pool plane, what a later unit-wide
 -- order does to a per-object None (BEHAVIOUR_NATIVE_LOGIC 8.5: every engagement order rewrites the permission bytes).
@@ -534,6 +547,11 @@ local function keyList(t)
     for k in pairs(t) do ks[#ks + 1] = k end
     table.sort(ks)
     return ks
+end
+-- the time your DECOY on flight `unit` ends, while it stands the flight down (sv_tactical.lua TAC.decoyed), else nil
+local function decoyEnd(unit, now)
+    if not (TAC and TAC.decoyed and TAC.decoyed(unit, now)) then return nil end
+    return D.decoyed and D.decoyed[unit] or now
 end
 
 -- flight `unit` (n planes) is up: its trap's objects, to hold once its orders are in
@@ -568,10 +586,22 @@ local function hold(unit, w, keys, why)
 end
 
 -- Frees flight `unit`'s held trap (only: that object alone) and, with turn, sends each onto the player (LastTGT): the
--- squad director's spring (P2) calls it with turn. Returns how many were freed.
-function WOLF.free(unit, why, turn, only)
+-- squad director's spring (P2) calls it with turn. Returns how many were freed: 0 while your DECOY stands the flight
+-- down (nothing fired, the trap stays held: call again after; its end frees the flight and the trap is held again).
+-- now: the round clock (D.now when nil).
+function WOLF.free(unit, why, turn, only, now)
     local w = D and D.wolf and D.wolf[unit]
     if not w then return 0 end
+    now = now or D.now
+    local dec = decoyEnd(unit, now)
+    if dec then
+        if w.decoyNote ~= dec then                       -- (once a decoy)
+            w.decoyNote = dec
+            log(string.format("roles: %s (wolf) trap kept (%s): your decoy stands its flight down for %.0f s more%s", unit,
+                tostring(why), math.max(0, dec - (now or dec)), turn and "; not sprung" or ""))
+        end
+        return 0
+    end
     local done = {}
     for _, k in ipairs(keyList(w.held)) do
         if only == nil or only == k then
@@ -613,21 +643,37 @@ function WOLF.tick(now)
             end
         elseif w.state == "held" and next(w.held) and now >= (w.checkAt or 0) then
             w.checkAt = now + 1
-            if now - w.heldAt >= (tonumber(c.hold_max_s) or 60) then
-                WOLF.free(unit, string.format("held %.0f s", now - w.heldAt))
-            else
-                local bait, hits = nil, {}
-                for _, p in ipairs(planes) do
-                    if p.unit == unit and p.k then
-                        if p.k == 0 then bait = p end
+            -- this spawn's planes by index (a recycled flight's earlier planes stay on the list, down, until the round's
+            -- end: born before this spawn); a held one shot down is dropped (nothing to free); the held ones hit
+            local mine, hits, gone = {}, {}, {}
+            for _, p in ipairs(planes) do
+                if p.unit == unit and p.k and (p.born == nil or p.born >= w.at) then
+                    mine[p.k] = p
+                    if w.held[p.k] then
+                        if p.down then w.held[p.k] = nil; gone[#gone + 1] = string.char(65 + p.k)
                         -- (you, or in co-op a joiner: the host's KILL.side calls a stand-in's damage "wingmate")
-                        if w.held[p.k] and p.dmg and (p.dmg.you or 0) + (p.dmg.wingmate or 0) > 0 then hits[#hits + 1] = p.k end
+                        elseif p.dmg and (p.dmg.you or 0) + (p.dmg.wingmate or 0) > 0 then hits[#hits + 1] = p.k end
                     end
                 end
-                if c.free_on_bait_down and bait and bait.down then
-                    WOLF.free(unit, "its bait is down")
-                elseif c.free_on_hit then
-                    for _, k in ipairs(hits) do WOLF.free(unit, "you hit it", false, k) end
+            end
+            if #gone > 0 then log(string.format("roles: %s (wolf) trap: %s down while held", unit, table.concat(gone, ", "))) end
+            if not next(w.held) then
+                w.state = "free"
+            elseif not decoyEnd(unit, now) then               -- (your decoy: nothing released inside it; after it, then)
+                if now - w.heldAt >= (tonumber(c.hold_max_s) or 60) then
+                    WOLF.free(unit, string.format("held %.0f s", now - w.heldAt), false, nil, now)
+                elseif c.free_on_bait_down and mine[0] and mine[0].down then
+                    WOLF.free(unit, "its lead, bait A, is down", false, nil, now)     -- (the flight's lead: all of them)
+                else
+                    if c.free_on_bait_down then                -- (each held plane's own bait: the plane before it)
+                        for _, k in ipairs(keyList(w.held)) do
+                            local b = mine[k - 1]
+                            if b and b.down then WOLF.free(unit, "its bait " .. string.char(64 + k) .. " is down", false, k, now) end
+                        end
+                    end
+                    if c.free_on_hit then
+                        for _, k in ipairs(hits) do if w.held[k] then WOLF.free(unit, "you hit it", false, k, now) end end
+                    end
                 end
                 -- a unit-wide order after the hold (your DECOY's end fires its flight's orders): held again
                 local dec = D.decoyed and D.decoyed[unit]

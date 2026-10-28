@@ -118,12 +118,26 @@ function aiWatch(p, you)
         st, tgt, (p.at and you) and string.format("%.1f", km(p.at, you)) or "?", air and string.format("%.1f", air) or "?"))
 end
 
+-- A fighter role flight (CFG.roles: a Lancer, Wolf or Skirmisher flight, not an ace squadron's) flies its own set's
+-- provoke and pursuit: its tier's no_provoke and moves leave it alone (ROLE.ownSet, sv_spawn.lua; logged once a round)
+local function roleOwn(p)
+    if not (p.unit and ROLE.ownSet and ROLE.ownSet(p.unit)) then return false end
+    if D and D.roleOwnSaid ~= nil and D.roleOwnSaid[p.unit] == D.round then return true end
+    if D then
+        D.roleOwnSaid = D.roleOwnSaid or {}
+        D.roleOwnSaid[p.unit] = D.round
+        log(string.format("aces: %s (%s) keeps its role's own provoke and pursuit (the %s tier's no_provoke / moves are for "
+            .. "duelists and ace squadrons)", p.unit, tostring(ROLE.flight(p.unit)), p.tier and p.tier.name or "?"))
+    end
+    return true
+end
+
 -- CFG.aces.flight <tier>.hunt: that tier's aircraft keep the player as their target (blackboard TargetActor)
 function ACE.hunt(p)
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
     if not (fl and fl.hunt) then return end
     if TELL and TELL.hunted then pcall(TELL.hunted, p) end    -- (its flight close: the "hunt" tell, CFG.tells hunt_km)
-    if fl.no_provoke then                       -- (every 2 s: an engagement order sets it again)
+    if fl.no_provoke and not roleOwn(p) then    -- (every 2 s: an engagement order sets it again)
         pcall(function() if p.obj.bPermissionToProvoke then p.obj.bPermissionToProvoke = false end end)
         if not p.noProvokeSaid then
             p.noProvokeSaid = true
@@ -166,7 +180,7 @@ function ACE.movesTick(now, D)
     D.aceMoveAt = D.aceMoveAt or {}
     for _, p in ipairs(planes) do
         local fl = not p.down and p.unit and p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
-        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) then
+        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) and not roleOwn(p) then
             local pn, pk = p.unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
             if pn then
                 if not me then                      -- (your position as read once this tick: sv_coop.lua COOP.me)
