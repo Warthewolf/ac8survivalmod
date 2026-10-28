@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.28.1"
+#define RT_VERSION           L"0.28.2"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -418,14 +418,18 @@ static volatile int32_t  g_pagesOk;     /* Lua found Survival's pages in the gam
  * page each press opens. The game doesn't open the page it's on (test of 2026-10-29, runtime 0.28.0: SP OFFLINE / ONLINE /
  * COOP HOST on the modes page, all CampaignTraining, did nothing), so the setup pages go through a second page the
  * game never shows on PC, the PS5 DualSense first-start setup (InitialSetting_DualSence), whose own class comes back
- * as soon as any other main-menu entry is picked: modes and MORE RULES on slot 0, the setup pages on slot 1. */
+ * as soon as any other main-menu entry is picked: modes and MORE RULES on slot 0, the setup pages on slot 1.
+ * A page already open under the one shown isn't opened again either: the game goes back to it (test of 2026-10-29,
+ * 0.28.1: MORE RULES, on CampaignTraining under the modes page, went back there), so MORE RULES has a third, the
+ * first-start Accessibility setup (InitialSetting_Accessibility, put back as slot 1's is). */
 #define MENU_PAGE_N 5
 static const wchar_t* const kPageNames[MENU_PAGE_N] = { L"Modes", L"Offline", L"Online", L"Host", L"Rules" };  /* sv_menu.lua PAGES */
-static const int kPageSlotOf[MENU_PAGE_N] = { 0, 1, 1, 1, 0 };   /* tools/build_survival.py page_menu_id */
-static const wchar_t* const kSlotIds[2] = { L"CampaignTraining", L"InitialSetting_DualSence" };
+#define MENU_SLOT_N 3
+static const int kPageSlotOf[MENU_PAGE_N] = { 0, 1, 1, 1, 2 };   /* tools/build_survival.py page_menu_id */
+static const wchar_t* const kSlotIds[MENU_SLOT_N] = { L"CampaignTraining", L"InitialSetting_DualSence", L"InitialSetting_Accessibility" };
 static uint8_t* volatile  g_pageClass[MENU_PAGE_N];
-static uint8_t** volatile g_pageSlot[2];   /* &MenuWidgetClassList[kSlotIds[n]].MenuClass                        */
-static uint8_t* volatile  g_slotStock[2];  /* what each held (slot 1's goes back after Survival's pages)          */
+static uint8_t** volatile g_pageSlot[MENU_SLOT_N];   /* &MenuWidgetClassList[kSlotIds[n]].MenuClass              */
+static uint8_t* volatile  g_slotStock[MENU_SLOT_N];  /* what each held (slots 1 and 2 go back after Survival's pages) */
 static volatile int32_t  g_quickMode = 2; /* the mode QUICK START plays (SV_MenuQuick): 2, 3 or 5              */
 static volatile int32_t  g_menuPicks;   /* how many main-menu entries were picked: Lua sees the same entry picked again */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
@@ -677,9 +681,9 @@ static uintptr_t OnMainDecide(void* widget)
             start ? L", opening the difficulty select to start" : L"");
         return g_nextMainDecide(widget);
     }
-    {                                                  /* (not one of Survival's pages: the borrowed second page back) */
-        uint8_t** slot = g_pageSlot[1];
-        if (slot && g_slotStock[1] && Readable(slot, 8) && *slot != g_slotStock[1]) *slot = g_slotStock[1];
+    for (int i = 1; i < MENU_SLOT_N; ++i) {            /* (not one of Survival's pages: the borrowed first-start pages back) */
+        uint8_t** slot = g_pageSlot[i];
+        if (slot && g_slotStock[i] && Readable(slot, 8) && *slot != g_slotStock[i]) *slot = g_slotStock[i];
     }
     int coop = ArgsEqual(a, SURVIVAL_HOST_ARGS) ? 3 : ArgsEqual(a, SURVIVAL_JOIN_ARGS) ? 4 : 0;
     int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
@@ -2642,7 +2646,7 @@ static int L_MenuClass(void* lua)
 }
 
 /* SV_MenuSlot(manager, class, index, slot) -> 1 when the main menu manager's MenuWidgetClassList entry `index` is found:
- * kSlotIds[slot]'s (0 CampaignTraining, 1 InitialSetting_DualSence), holding that class (0: any), found by a look through
+ * kSlotIds[slot]'s (0 CampaignTraining, 1 InitialSetting_DualSence, 2 InitialSetting_Accessibility), holding that class (0: any), found by a look through
  * the manager for the list (TArray of { FString MenuIDName, UClass* MenuClass }, 0x18 bytes each); 0 not found */
 #define MENU_ENTRY_SIZE 0x18
 static int L_MenuSlot(void* lua)
@@ -2652,7 +2656,7 @@ static int L_MenuSlot(void* lua)
     double idx = -1, which = 0;
     ArgNumber(lua, &idx);
     ArgNumber(lua, &which);
-    if (!mgr || idx < 0 || idx > 255 || (which != 0 && which != 1)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!mgr || idx < 0 || idx > 255 || which < 0 || which >= MENU_SLOT_N || which != (int)which) return Ret(lua, SV_ERR_BAD_ARGS);
     int w = (int)which;
     const wchar_t* want = kSlotIds[w];
     g_pageSlot[w] = NULL;

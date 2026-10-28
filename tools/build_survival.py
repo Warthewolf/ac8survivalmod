@@ -1264,10 +1264,14 @@ DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
 BORROWED_PAGE = 'CampaignTraining'
 BORROWED_PAGE_2 = 'InitialSetting_DualSence'
 SECOND_SLOT_PAGES = ('SV_PgOffline', 'SV_PgOnline', 'SV_PgHost')
+# A page already open under the one shown isn't opened again: the game goes back to it (test of 2026-10-29: MORE RULES
+# went back to the modes page), so MORE RULES has a third, the first-start Accessibility setup (main.dll slot 2).
+BORROWED_PAGE_3 = 'InitialSetting_Accessibility'
 
 
 def page_menu_id(menu):
     if menu in SECOND_SLOT_PAGES: return BORROWED_PAGE_2
+    if menu == 'SV_PgRules': return BORROWED_PAGE_3
     return BORROWED_PAGE if menu.startswith('SV_Pg') else menu
 MENU_PAGES = [
     ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),

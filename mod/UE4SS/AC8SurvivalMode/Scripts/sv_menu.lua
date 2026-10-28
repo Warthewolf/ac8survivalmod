@@ -371,8 +371,9 @@ end
 -- in PAGES order; SV_MenuSlot: the entry). Its own row is kept off the main menu meanwhile (sv_core.lua hideRows).
 -- The game doesn't open the page it's on (test of 2026-10-29: the setup rows on the modes page did nothing), so the
 -- setup pages go through a second page PC players never see, the PS5 DualSense first-start setup, whose own class
--- main.dll puts back when any other main-menu entry is picked.
-local BORROWED = { "CampaignTraining", "InitialSetting_DualSence" }       -- (main.dll kSlotIds: slots 0 and 1)
+-- main.dll puts back when any other main-menu entry is picked. Nor one already open under it (it goes back to it:
+-- MORE RULES went back to the modes page), so MORE RULES has a third, the first-start Accessibility setup.
+local BORROWED = { "CampaignTraining", "InitialSetting_DualSence", "InitialSetting_Accessibility" }   -- (main.dll kSlotIds)
 local function commandTable(page) return string.format("/Game/Mods/SurvivalMode/Data/DT_SV_Pg%sCommands.DT_SV_Pg%sCommands", page, page) end
 -- what the build found in the game (tools/build_survival.py writes Scripts/sv_menu_stock.lua): the stock page the
 -- pages copy (its class name) and the game's main-menu page table
