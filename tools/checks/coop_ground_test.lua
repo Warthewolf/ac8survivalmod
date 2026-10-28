@@ -148,7 +148,9 @@ if ROLE == "host" then
     check(s:find("1>sp|SV_Unit_Alicorn|", 1, true) and s:find("1>gd|SV_Unit_Alicorn|%d+|BP_BA002_alcn_btankrr_Base_C#1|"),
           "host: the joiner who started over gets the Alicorn and its parts' ids")
     check(s:find("1>dn|" .. k["SV_Unit_Alicorn/BP_BA002_alcn_btankfr_Base_C#1"], 1, true), "host: ... and its tanks down")
-    check(not s:find("1>ev|"), "host: the Alicorn's state not sent at once (its copy isn't up there yet)")
+    check(not s:find("1>ev|RE_SV_Alcn", 1, true), "host: the Alicorn's state not sent at once (its copy isn't up there yet)")
+    -- (the attack throttle in force goes at once, B too: sv_rounds.lua roundPressure, late_rounds_test.sh tests it)
+    check(s:find("1>ev|RE_SV_Pressure", 1, true), "host: ... the attack throttle in force is (CFG.late.pressure)")
     tick(13)
     local ev = table.concat(msgs("ev"), " ")
     check(ev:find("1>ev|RE_SV_AlcnAdvance", 1, true) and ev:find("1>ev|RE_SV_AlcnOpenCore", 1, true) and ev:find("1>ev|RE_SV_AlcnDive", 1, true),

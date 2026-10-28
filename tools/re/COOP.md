@@ -213,7 +213,9 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   Bandwidth, the host's upload: ~25 KB/s of planes per joiner at 24 players, plus the enemy stream (22 bytes an enemy,
   15 Hz).
 - More players, more enemies: CFG.coop.aircraft_per_player (0.15) more of a round's and a wave's aircraft for each
-  player past the first, up to coop.max_aircraft (60) / coop.max_up (30) (COOP.more, sv_rounds.lua startRound).
+  player past the first, up to coop.max_aircraft (60) / coop.max_up (30) (COOP.more, sv_rounds.lua startRound). From
+  CFG.late.aircraft_from_round (26) the round's 60 grows as one player's cap does, up to late.coop_max_aircraft (80 by
+  round 32; TIER.coopCap, BEHAVIOUR_DIRECTOR.md unit 3).
 - The host's settings for everyone: on a joiner's first hello the host sends "cf" chunks of its CFG's differences from
   CFG_DEFAULTS (the shipped CFG, copied before survival.ini and survival_config.lua apply), as data only (a small
   token format, no code). The joiner puts every shared section back to CFG_DEFAULTS and applies them, in place (other

@@ -96,13 +96,14 @@ local function playerCount()
     return math.max(n, 1)
 end
 -- A round's aircraft (or a wave's) for the host's room (sv_rounds.lua startRound): aircraft_per_player more for each
--- player past the first, up to CFG.coop[capKey], never fewer than one player gets
-function COOP.more(n, capKey)
+-- player past the first, up to `cap` if given (a round's: TIER.coopCap, CFG.coop.max_aircraft grown with the late
+-- rounds), else CFG.coop[capKey], never fewer than one player gets
+function COOP.more(n, capKey, cap)
     local c = cfg()
     local p = COOP.host() and playerCount() or 1
     if p <= 1 or type(n) ~= "number" then return n end
     local m = math.floor(n * (1 + (tonumber(c.aircraft_per_player) or 0) * (p - 1)) + 0.5)
-    return math.max(n, math.min(m, tonumber(c[capKey]) or m))
+    return math.max(n, math.min(m, tonumber(cap) or tonumber(c[capKey]) or m))
 end
 local function maxPlayers()                          -- (a joiner: the host's room, from its settings)
     if COOP.client() and M.hostMax then return M.hostMax end
@@ -388,8 +389,13 @@ local function hostSync(to)
         end
     end
     -- the game's attack throttle in force here (CFG.late.pressure, sv_rounds.lua roundPressure: forwarded when fired,
-    -- so a joiner who links later missed it; its own level starts on B, the mission start's, as this one did)
-    if D and D.pressure and D.pressure ~= "B" then sendTo(to, true, "ev", "RE_SV_Pressure" .. D.pressure) end
+    -- so a joiner who links later missed it), B too: a joiner's level kept from an earlier run may still be on its C or
+    -- D (review of unit 3). Not while an Anomaly or VALKA is up (TIER.PRESSURE_OWN: their own throttle; the band's
+    -- preset follows the boss's end, forwarded), nor with CFG.late.pressure off (this game fires none)
+    local sp = D and D.special
+    if D and TIER.pressure(D.round) and not (sp and TIER.PRESSURE_OWN[sp.kind] and sp.state ~= "done") then
+        sendTo(to, true, "ev", "RE_SV_Pressure" .. (D.pressure or "B"))
+    end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end

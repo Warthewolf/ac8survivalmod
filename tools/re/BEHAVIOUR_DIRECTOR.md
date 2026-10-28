@@ -315,13 +315,13 @@ the four events are new: that bump must come before any co-op build goes out, or
 |---|---|---|
 | the round's cap and budget | sv_config.lua `TIER.growRounds(round)`, `TIER.roundCap(round)`, `TIER.roundBudget(round)` | growRounds: rounds into the growth (0 before CFG.late.aircraft_from_round, 1 in it; 0 with [late] off or aircraft_from_round 0). roundCap: CFG.max_aircraft, then + aircraft_per_round a round up to late.max_aircraft (never below CFG.max_aircraft). roundBudget: aircraft_round1 + aircraft_per_round a round + the spike's aircraft_add, within roundCap (the thesis' "spikes still add their aircraft_add on top, within the cap": past round 13 the base is already over 30, so a spike adds nothing late, as before). Pure maths of CFG, no new globals or main-chunk locals |
 | the most up at once | sv_config.lua `TIER.maxUp(round, preset)` | CFG.waves.max_up_by_preset[preset] (or max_up), then + late.max_up_per_round a round up to late.max_up_cap[preset] (never below the preset's own; a preset without a cap doesn't grow) |
-| startRound | sv_rounds.lua `startRound`, `waveCap(round)` | the budget is TIER.roundBudget; an amphibious round's extra is capped at TIER.roundCap; then the menu's ENEMY AIRCRAFT %; then COOP.more. The % used to come before the amphibious extra, whose re-cap at 30 cut an amphibious round above 100 % back to 30 (a bug the brief found; 45 at 150 % now). waveCap(round) = TIER.maxUp(round, presetName()) x the %, then COOP.more(..., "max_up"). The round's start line gains "; cap C, up to U at once", and a "pool short" line when the pool can't fill the fighters by 2 or more. The wave state is unchanged; its gate carries a comment for P4's hold (`and not hold`) |
+| startRound | sv_rounds.lua `startRound`, `waveCap(round)` | the budget is TIER.roundBudget; an amphibious round's extra is capped at TIER.roundCap; then the menu's ENEMY AIRCRAFT %; then COOP.more up to the room's cap TIER.coopCap(round) (review fix). The % used to come before the amphibious extra, whose re-cap at 30 cut an amphibious round above 100 % back to 30 (a bug the brief found; 45 at 150 % now). waveCap(round) = TIER.maxUp(round, presetName()) x the %, then COOP.more(..., "max_up"). The round's start line gains "; cap C, up to U at once", and a "pool short" line when the pool can't fill the fighters by 2 or more. The wave state is unchanged; its gate carries a comment for P4's hold (`and not hold`) |
 | health | sv_config.lua CFG.late | health_max_x 1.5 (was 2.0) and health_per_round 0.045 (was 0.04): x1.495 at round 25, x1.5 from 26, as the numbers start growing (the thesis: "health stops climbing once numbers do"). enemyLate / scaleHealth are unchanged |
-| co-op caps | sv_config.lua CFG.coop | max_aircraft 80 (was 60): from round 35 one player's round is already 60, and the fighter pool holds 86; max_up stays 30 (the Ace preset's late ceiling and the frame-time limit). COOP.more is unchanged (never fewer than one player gets) |
-| the attack throttle | tools/survival_events.py `PRESSURE`, build_anomaly; sv_config.lua `TIER.pressure(round)`, `TIER.PRESSURE_PRESETS`; sv_rounds.lua `roundPressure` | four remote events RE_SV_Pressure<A..D>, each the three records attack() writes (LiveSetPlayerMaxAttackerMissiles, LiveChangePlayerMaxAttackersNumExecution, LivePlayerAttackCooldownOverrideExecution), built inside build_anomaly where attack() lives (the critic's correction): A 2 missiles / 3 attackers / 8-12-20-25 s (a lull, for P4), B = ATTACK_BASE 4 / 6 / 4-8-15-20 (the mission start's), C 6 / 8 / 2-4-8-12, D 8 / 10 / 1-2-5-8. TIER.pressure: the preset of the latest [late.pressure] from_round band the round is in, B before them, nil when [late] or [late.pressure] is off. startRound fires it (after the waves are made) when it differs from the one in force (D.pressure; nil = B from the mission start), never in an Anomaly or VALKA round (their records set ANOMALY_ATTACK and put ATTACK_BASE back at their end: D.pressure is set to B there, so the next round fires its band's preset again). A failed fire leaves D.pressure as it was, so the next round tries again. The build checks Lua's letters and presets against PRESSURE (build_anomaly asserts). D.pressure is the dial the intensity director (P4) would turn too |
-| co-op for the throttle | sv_coop.lua `hostSync` | the contract's table makes RE_SV_Pressure* forwarded (not in KEEP_EVENTS; the runtime-ai brief wanted it kept, the contract wins): each game's throttle limits the attacks on its own player, and a joiner's copies attack the joiner (hard rule 48), so the host's preset belongs on every game. A joiner who links (or starts over) later missed the fire, so hostSync sends the preset in force ("ev", queued like the other events until its level is ready) unless it's B, which the joiner's own mission start already set |
+| co-op caps | sv_config.lua `TIER.coopCap(round)`, CFG.coop, CFG.late.coop_max_aircraft; sv_coop.lua `COOP.more(n, capKey, cap)` | the room's most aircraft in a round: CFG.coop.max_aircraft (60, as before), grown by as many as one player's round cap has grown (TIER.roundCap - CFG.max_aircraft), up to late.coop_max_aircraft 80: 60 in rounds 1-25 whatever the room's size (the thesis' "rounds 15-25 keep today's cap"), 63 at 26, 69 at 28, 78 at 31, 80 from 32. COOP.more takes it as an optional third argument (else CFG.coop[capKey], as before; never fewer than one player gets). max_up stays 30 (the Ace preset's late ceiling and the frame-time limit). The first build raised coop.max_aircraft to a flat 80, which also took rooms of 8 or more past 60 before round 26 (8 players from round 13, 12 from round 10, 24 from round 6; review issue 2) |
+| the attack throttle | tools/survival_events.py `PRESSURE`, build_anomaly; sv_config.lua `TIER.pressure(round)`, `TIER.PRESSURE_PRESETS`; sv_rounds.lua `roundPressure` | four remote events RE_SV_Pressure<A..D>, each the three records attack() writes (LiveSetPlayerMaxAttackerMissiles, LiveChangePlayerMaxAttackersNumExecution, LivePlayerAttackCooldownOverrideExecution), built inside build_anomaly where attack() lives (the critic's correction): A 2 missiles / 3 attackers / 8-12-20-25 s (a lull, for P4), B = ATTACK_BASE 4 / 6 / 4-8-15-20 (the mission start's), C 6 / 8 / 2-4-8-12, D 8 / 10 / 1-2-5-8. TIER.pressure: the preset of the latest [late.pressure] from_round band the round is in, B before them, nil when [late] or [late.pressure] is off. startRound fires it (after the waves are made) when it differs from the one in force, D.pressure, and in a run's first round whatever it is (D.pressure nil: not known; a restart keeps the level and an earlier run's C or D, review issue 1), never in an Anomaly or VALKA round (TIER.PRESSURE_OWN: their records set ANOMALY_ATTACK and put ATTACK_BASE back at their end: D.pressure is set to B there, and `pressureAfterBoss` (sv_rounds.lua, every roundsTick on the host) fires the band's preset 3 s after Lua sees the boss down, the critic's "fire it again after those specials end"; or the next round does). A failed fire leaves D.pressure as it was, so the next round tries again. The build checks Lua's letters and presets against PRESSURE (build_anomaly asserts). D.pressure is the dial the intensity director (P4) would turn too |
+| co-op for the throttle | sv_coop.lua `hostSync` | the contract's table makes RE_SV_Pressure* forwarded (not in KEEP_EVENTS; the runtime-ai brief wanted it kept, the contract wins): each game's throttle limits the attacks on its own player, and a joiner's copies attack the joiner (hard rule 48), so the host's preset belongs on every game. A joiner who links (or starts over) later missed the fire, so hostSync sends the preset in force ("ev", queued like the other events until its level is ready), B too (a joiner's level kept from an earlier run may still be on its C or D), but not while an Anomaly or VALKA is up (their own throttle; the band's preset after the boss is forwarded) nor with [late.pressure] off. The host's restart reaches joiners through round 1's fire (forwarded), since their "rs" handler resets their round, not their level |
 | the kill bonus | sv_main.lua `creditKill`; CFG.late.director_pay | your kill (KILL.by "you") of a plane whose p.dirTag = { tactic, at } (STATS.tactic, unit 1) is at most tag_s old pays x `x` (1.5), in the TIER.pay base with the other multipliers; the credits line gains ", director <tactic> x1.5". Nothing is tagged until the squad director (P2) calls STATS.tactic; ACE reversals aren't tagged (unit 1). Pays in any round, [late] on or off (the thesis: "so fighting smart pays at any count") |
-| the menu's help | sv_menu.lua `roundN` | ENEMY AIRCRAFT's help reads TIER.roundBudget: "round 1 has 4, round 10 has 24, round 35 has 60" at 100 % (round 10 said 22: it left out the round-8 spike's +2) |
+| the menu's help | sv_menu.lua `roundN` | ENEMY AIRCRAFT's help reads TIER.roundBudget: "round 1 has 4, round 10 has 24, round 35 has 60" at 100 % (round 10 said 22: it left out the round-8 spike's +2), never above the fighters the pool can field (`TIER.poolMost`, 86: CFG.pool less the probes): at 150 % and 200 % round 35 says 86, not 90 / 120 (review issue 3) |
 
 What a run brings now (default settings, solo, a normal round without bombers; the test's Monte Carlo of the real
 startRound, 300 runs a cell):
@@ -340,19 +340,23 @@ first and a round flies 2-4 short ("pool short").
 
 With the menu's ENEMY AIRCRAFT % (applied after the caps, as before) and co-op (COOP.more after the %), Standard:
 round 35 at 50 % asks 30 (13 up at once), at 150 % 90 (the pool gives 86; 39 up), at 200 % 120 (86; 52 up); four players
-at round 25 get 44 (26 up), at round 35 80 (30 up: max_up), Ace at round 35 80 (30), Casual at round 31 70 (29).
+at round 25 get 44 (26 up), at round 35 80 (30 up: max_up), Ace at round 35 80 (30), Casual at round 31 70 (29); 12
+players at round 20 get 60 (the room's cap to round 25; the first build's flat 80 gave 80) and at round 28 69, 24
+players at round 25 60 and at round 35 80.
 
 ### CFG keys
-- `CFG.late` ([late] in survival.ini): `health_per_round` 0.045 (was 0.04), `health_max_x` 1.5 (was 2.0),
-  `aircraft_from_round` 26 (0: no growth), `aircraft_per_round` 3, `max_aircraft` 60, `max_up_per_round` 1.
+- `CFG.late` ([late] in survival.ini): `health_per_round` 0.045 (was 0.04), `health_max_x` 1.5 (was 2.0), `grow`
+  true (the growth's switch), `aircraft_from_round` 26 (0: no growth), `aircraft_per_round` 3, `max_aircraft` 60,
+  `max_up_per_round` 1, `coop_max_aircraft` 80 (the co-op room's ceiling, TIER.coopCap).
 - `CFG.late.max_up_cap` ([late.max_up_cap]): casual 20, standard 26, ace 30.
 - `CFG.late.pressure` ([late.pressure]): `enabled` true, `from_round` 26, 31, `preset` C, D (any case; letters of
   TIER.PRESSURE_PRESETS / PRESSURE only, others skipped). Needs [late] on.
 - `CFG.late.director_pay` ([late.director_pay]; [zollars] points there): `enabled` true, `x` 1.5, `tag_s` 20 (the sweep
   sees a kill up to 2 s late). In CFG.late by the contract ("CFG.late (P8 additions)"); the brief had it in CFG.credits.
-- `CFG.coop.max_aircraft` 80 (was 60).
+- `CFG.coop.max_aircraft` 60 (unchanged; the first build's 80 is back to 60, the growth is TIER.coopCap's).
 - Switches: [late] enabled = false turns off health, promotion, growth and the throttle together (not the kill bonus);
-  aircraft_from_round = 0 only the growth; [late.pressure] enabled = false only the throttle (the game stays on B);
+  [late] grow = false (or aircraft_from_round = 0) only the growth (a round's aircraft, the most up at once and the
+  co-op room's cap); [late.pressure] enabled = false only the throttle (the game stays on B);
   [late.director_pay] enabled = false only the bonus. A co-op host's [late] reaches the joiners (M.sendSettings).
 
 ### Log lines to look for in a test
@@ -361,9 +365,12 @@ at round 25 get 44 (26 up), at round 35 80 (30 up: max_up), Ace at round 35 80 (
 - `round 35: pool short: 58 of 60 fighters (0 spare 2-ships)` (the pool ran out of the sizes left; at 100 % rare).
 - Unchanged: `round N: wave k of n (m aircraft) with j of the last wave's left`, `late: round N enemies' health x1.50
   (...)` (at most x1.50 now).
-- `pressure: round 26: preset C (was B)`, `pressure: round 31: preset D (was C)`; in an Anomaly or VALKA round
-  `pressure: round 28 is the anomaly's: its own throttle, then preset B; preset C again next round`, then the next round
-  `pressure: round 29: preset C (was B)`; a failure `..., RE_SV_PressureC not fired: <reason>`; `pressure: error ...`.
+- `pressure: round 1: preset B (was not known: the run's first round)` (every run's first round, START AT ROUND's
+  too), `pressure: round 26: preset C (was B)`, `pressure: round 31: preset D (was C)`; in an Anomaly or VALKA round
+  `pressure: round 28 is the anomaly's: its own throttle, then preset B; preset C again once it's down`, then about 3 s
+  after `special: MINDRIPPER down ...` `pressure: round 28: preset C (was B, the anomaly is down)` (or, if Lua never
+  saw it down, the next round's `pressure: round 29: preset C (was B)`); a failure
+  `..., RE_SV_PressureC not fired: <reason>`; `pressure: error ...`.
 - Co-op joiner: nothing when it works; `coop: the host's event RE_SV_PressureC not fired here (...)` when it doesn't.
 - `credits: +280 (f16c down (fighter, Veteran x1.25, round x1.50, director bracket x1.5)), now ...` (once P2 tags).
 - `perf: tick avg X ms, worst Y ms ...` with 26-30 up: the thesis' gate before shipping the Ace ceiling.
@@ -380,7 +387,11 @@ at round 25 get 44 (26 up), at round 35 80 (30 up: max_up), Ace at round 35 80 (
 5. The kill bonus: only once P2 tags planes (`director:` lines), then ", director <tactic> x1.5" on the credits line
    of your kill within 20 s.
 6. Co-op (2+ players, round 26 on): no "not fired" for RE_SV_Pressure* on the joiner; a joiner who links mid-run gets
-   the preset in force (it's in the host's "coop: sent player N the run" batch).
+   the preset in force (it's in the host's "coop: sent player N the run" batch). Then the host restarts from the pause
+   menu past round 31: the new run's round 1 logs `pressure: round 1: preset B (was not known ...)` and the joiners'
+   rounds 1-25 feel like B again. Eight or more players before round 26: a round's start line stays at most 60.
+7. An Anomaly round from round 26 (Ctrl+1 in a test build, or START AT ROUND 30): the `... again once it's down` line,
+   then `pressure: round N: preset C (was B, the anomaly is down)` about 3 s after MINDRIPPER goes down.
 
 ### Offline test
 `sh tools/checks/late_rounds_test.sh` (tools/checks/late_rounds_test.lua), on the real sv_core, sv_config, sv_ai,
@@ -392,15 +403,23 @@ sv_spawn, sv_rounds (startRound exposed), sv_stats, sv_coop (hostSync, mirroredE
    curve; the pressure bands, a letter the build lacks, the throttle off.
 3. startRound, 300 times a round and preset: D.budget, the start line's wave cap, no wave over it, the aircraft picked,
    the waves (Standard: always 2 at 25, about 2 at 28 and 31, always 3 at 35); 50 / 150 / 200 %; the "pool short" line;
-   an amphibious round at 150 % (45, not 30) and at round 30; four co-op players (44 / 26, 80 / 30, 80 / 30, 70 / 29) and
-   the host alone.
-4. The throttle through startRound, rounds 25-35: nothing at 25, C at 26, nothing at 27, none in the Anomaly round 28 (B
-   after it), C again at 29, none in the VALKA round 30, D at 31, a failed fire kept and fired the next round, nothing
-   with it off; forwarded (mirroredEvent), the host's fire sent to every joiner, hostSync's re-send (none with B).
+   an amphibious round at 150 % (45, not 30) and at round 30; four co-op players (44 / 26, 80 / 30, 80 / 30, 70 / 29), 12
+   and 24 players (60 at rounds 20 and 25, 69 at 28, 80 at 35: TIER.coopCap, 60 to round 25 and 80 from 32) and the
+   host alone; [late] grow = false; TIER.poolMost's 86.
+4. The throttle through startRound, rounds 25-35: B at 25 (a run's first round), nothing at 25 again, C at 26, nothing
+   at 27, none in the Anomaly round 28 (B after it), C 3 s after its boss is down (pressureAfterBoss: not before, once),
+   nothing at 29 then, a boss round in band B (nothing after it), a Ladon round (not its business), none in the VALKA
+   round 30 (never seen down: D at 31), a failed fire kept and fired the next round (a failed first round too),
+   nothing with it off; forwarded (mirroredEvent), the host's fire sent to every joiner, hostSync's re-send (B too;
+   nothing while the Anomaly is up or with it off); the review's repro: a host on D after round 31 starts a new run,
+   round 1 fires B once and every joiner gets it.
 5. creditKill: 190 untagged (round 30, Veteran), 280 tagged 5 s and 20 s before, 190 at 25 s, 90 for an ally's kill
    of a tagged plane, a bare string tag ignored, off, on with [late] off; then end to end: STATS.tactic tags a unit's
    plane and its kill 12 s later pays the bonus.
-6. The hooks in the source: startRound's helpers, co-op, the throttle; the menu help's round 35.
+6. The hooks in the source: startRound's helpers, co-op (TIER.coopCap), the throttle, roundsTick's pressureAfterBoss;
+   the menu help's numbers (its roundN run: 60 at 100 %, 86 at 150 % and 200 %).
+coop_settings_test.sh checks COOP.more's cap argument (60 flat, 73 under 80, round 35's 80, round 25's 60);
+coop_ground_test.sh's hostSync case now sends the throttle at once (the Alicorn's events still 12 s later).
 
 ### Untested / known limits
 - [I] Everything in game. [V] the maths, the budgets and waves on the real startRound, the throttle's firing logic and
@@ -411,8 +430,11 @@ sv_spawn, sv_rounds (startRound exposed), sv_stats, sv_coop (hostSync, mirroredE
 - [I] Frame time with 26-30 up at once (the Ace ceiling) and 3-4 waves of 19-30: never run. A friend's round 23 (54
   aircraft, 13 flights up) is the most that ran (0.6x, an older build). Co-op: 30 puppets moved every frame on each
   joiner and 60-80 aircraft rounds: never run (co-op played to round 5).
-- In an Anomaly or VALKA round the band's preset stays in force until MINDRIPPER appears / VALKA reveals, and the
-  round's fighters left after the boss is down fly B (the next round fires the band's again).
+- In an Anomaly or VALKA round the band's preset stays in force until MINDRIPPER appears / VALKA reveals; after the
+  boss is down the fighters left fly B for about 3 s, then the band's preset again. [I] that its down / end records
+  have run 3 s after Lua sees SV_UnitAlive 0 (they fire on the game's destroy trigger; Lua's RE_SV_AnomalyEnd /
+  RE_SV_ValkaEnd at the same moment).
+- [I] Whether a pause-menu restart re-runs MissionStart's ATTACK_BASE: moot now (round 1 fires its preset).
 - Ace rounds (28, 31, 34 ...) take the same budget: a round-34 ace round is about 57 squadron aircraft (Reaper tier
   from 28 anyway). The thesis says nothing; an `ace_round_x` (or ace rounds kept at 30) is the user's call.
 - ENEMY AIRCRAFT above 100 % keeps today's meaning (% after the caps): 200 % at round 35 asks 120 and gets the pool's
@@ -427,3 +449,20 @@ sv_spawn, sv_rounds (startRound exposed), sv_stats, sv_coop (hostSync, mirroredE
   pay no bonus; that would need a guarded message (P2's call).
 - The role mix (P1) will split the pool: a 60-aircraft round can run one role dry; check the role mix and the late
   budgets together then.
+
+### Review fixes (after unit 3's review; not yet run in game)
+1. A run's first round fires its throttle preset whatever it is (D.pressure nil = not known), B too: a restart keeps the
+   level, so the host and every joiner (whose "rs" handler resets only their round and copies) stayed on the earlier
+   run's C or D for all of the new run's rounds 1-25 (the reviewer's offline repro; now a case in late_rounds_test).
+   hostSync sends the preset in force, B included, except while an Anomaly or VALKA is up or with [late.pressure] off.
+2. The co-op room's cap grows with the round instead of a flat 80: CFG.coop.max_aircraft is 60 again, and
+   TIER.coopCap(round) adds as many as one player's cap has grown, up to the new CFG.late.coop_max_aircraft 80 (60 to
+   round 25, 80 from round 32). With the flat 80 a room of 8 got more than 60 from round 13, of 12 from round 10,
+   of 24 from round 6, against the thesis' "rounds 15-25 keep today's cap". COOP.more takes the cap as a third argument.
+3. The ENEMY AIRCRAFT help never names more than the fighter pool can field (TIER.poolMost, 86).
+4. Scope gaps: the band's preset is fired again 3 s after an Anomaly / VALKA is down (pressureAfterBoss), not only the
+   next round (the critic's wording); the growth got its own switch, [late] grow (the contract's "every feature has a
+   switch"; aircraft_from_round = 0 still works).
+Still open for the user (unchanged): ace rounds at the full late budget, ENEMY AIRCRAFT above 100 % applied after the
+caps, economy and ammo not re-tuned for 60 enemies, the single COOP_TAG / VERSION bump (the four RE_SV_Pressure events
+are new: it must come before any co-op build goes to friends).
