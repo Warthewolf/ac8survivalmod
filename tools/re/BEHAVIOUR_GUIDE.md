@@ -71,8 +71,8 @@ on KDS for ordinary enemies; Survival's pursuits block it (`blockKDS`).
 |---|---|---|---|
 | LA_SV_MoveAway | MoveAwayFromTargetLua | ~1.5 s break after an attack pass (stock 12.5 s) | confirmed in game |
 | LA_SV_TailChase | PursueTargetLua | the stock fighter pursuit (PursueTarget_0011) plus a tail-chase branch: two 10 s pursuits 250 m behind the target (`useOffset`, ace lead 10, head-on break, KDS blocked) joined by a re-acquire turn; weighted by pilot rank (1: never, 2: 10 %, 3: 30 %, 4: 70 %, 5: always), so it grows with Survival's skill tiers and difficulty spikes. CFG.ai.tail_chase | built, untested |
-| LA_SV_ProvokeNear | ProvokeNearLua | player close behind: break turn (all), brake-and-turn overshoot (rank 2+), flare break (rank 3+), cobra bait (AI level 3+, CanCobra), kulbit bait and scissors (AI level 4+). CFG.ai.reactions | built, untested |
-| LA_SV_Escape | EscapeFromPursuerLua | rank-weighted: the stock 8 s level-and-straight run (rookies) or the aces' 2 s break up / down / sideways by altitude (EscapeFromPursuer_0400). CFG.ai.reactions | built, untested |
+| LA_SV_ProvokeNear | ProvokeNearLua | player close behind: break turn (all), brake-and-turn overshoot (rank 2+; only with the pursuer within 50 m, else a break), flare break (rank 3+; the break comes with no flare ready too), cobra bait (AI level 3+, CanCobra; else a break right), kulbit bait (AI level 4+, CanKulbit; else a break left) and scissors (AI level 4+): every pick moves, one move under 5 s (P5, tools/re/BEHAVIOUR_DIRECTOR.md unit 2). CFG.ai.reactions | built, untested |
+| LA_SV_Escape | EscapeFromPursuerLua | rank-weighted: the stock 8 s level-and-straight run (rookies) or the aces' 2 s break up / down / sideways by altitude (EscapeFromPursuer_0400), then a 2 s level turn (P5: an altitude-gated pick that fails near the band's top or floor still turns). CFG.ai.reactions | built, untested |
 
 The AI level (AILevel, `InstanceWeightProbabilityAILevel`) is the flight's world-data LevelId / 100 (stock 200 = 2),
 written by `SV_SetLevel(unit, level)` before Survival spawns it; Survival's ranks 6-10 (Mercenary, Legend, Demon,

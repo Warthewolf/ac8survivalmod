@@ -1,8 +1,10 @@
 """stats_report.py <AC8SurvivalMode_lua.log> [more logs] : the behaviour roadmap's seven measurements from test logs
 (tools/re/BEHAVIOUR_DIRECTOR.md, unit 1; Scripts/sv_stats.lua writes the lines). Read only. Prints each run's
 "stats: run over" line as a table against the behaviour thesis' targets, one row per "stats: round" line, the
-"kill-time:" lines' time to kill over every run, and the "death:", "director:" and "spawn index:" lines. Works on a
-friend's release log as well (none of these lines is TEST ONLY) and on UE4SS.log (the same lines behind its tag).
+"kill-time:" lines' time to kill over every run, and the "death:", "director:" and "spawn index:" lines; P5's tail
+watch (unit 2): the run line's Veteran+ figures, the "tailed:" episodes by tier and by the provoke values they flew (an
+A/B of the live provoke), and the "provoke:" writes. Works on a friend's release log as well (none of these lines is
+TEST ONLY) and on UE4SS.log (the same lines behind its tag).
 Exit 1 when a file has no measurement lines at all.
 """
 import re
@@ -19,7 +21,7 @@ TARGETS = {
     'tactics': ('3-6 a round', lambda v: 'LOW' if v < 3 else 'HIGH' if v > 6 else 'ok'),
     'behind': ('under 70 %', lambda v: 'ok' if v < 70 else 'HIGH'),
 }
-KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:')
+KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:', 'tailed:', 'provoke:')
 
 
 def secs(text):
@@ -69,6 +71,15 @@ def run_table(line):
                               ('-', '0', '-', '0'))
     rows.append((2, 'tailed enemy survival, Veteran+ (AI Provoke)', f'{ai} (n {nai})', 'tailed', verdict('tailed', secs(ai))))
     rows.append((2, '  (geometric: you within the tail cone)', f'{geo} (n {ngeo})', 'tailed', verdict('tailed', secs(geo))))
+    tw = grab(r'tail watch Veteran\+: died after median (\S+(?: s)?) on your tail \(n (\d+)\), (\S+(?: s)?) after its Provoke '
+              r'\(n (\d+)\), escaped (\d+) \(held median (\S+(?: s)?)\), Provoke after median (\S+(?: s)?) \(none in (\d+)\), '
+              r'blackouts (\d+)', line)
+    if tw:
+        rows.append((2, '  tail watch Veteran+ (4 Hz): died, tailed', f'{tw[0]} (n {tw[1]}); {tw[2]} after Provoke (n {tw[3]})',
+                     'tailed', verdict('tailed', secs(tw[0]))))
+        rows.append((2, '  (tail watch: escaped, held)', f'{tw[4]} (held {tw[5]})', 'tailed', '-'))
+        rows.append((2, '  (tail watch: Provoke after; none; blackouts)', f'{tw[6]}; none in {tw[7]}; blackouts {tw[8]}',
+                     'tailed', '-'))
     sp = (grab(r'special rounds (.*?) \[5-8 min\]', line) or ('none',))[0]
     lens = [float(x) for x in re.findall(r'round \d+ \S+ (\d+) s', sp)]
     worst = [verdict('special', x) for x in lens]
@@ -107,7 +118,48 @@ def round_row(line):
         'behind': '/'.join(grab(r'kills from behind (\d+)/(\d+)', line) or ('?', '?')),
         'msl': (grab(r'missiles left (\S+), fired', line) or ('?',))[0],
         'tac': (grab(r'director tactics (\d+) \(', line) or ('?',))[0],
+        'watch': (grab(r'tail watch: \d+ episodes? \(Veteran\+ \d+\): died after median (\S+(?: s)?) \(', line) or ('-',))[0],
     }
+
+
+def tailed_lines(ls):
+    """P5's tail watch: its "tailed:" episodes by tier and by the provoke values in force (Survival's write or the
+    game's own row: an A/B of the live provoke), and the "provoke:" writes"""
+    eps = []
+    for l in ls:
+        if not l.startswith('tailed:'):
+            continue
+        m = re.search(r'\(([^,()]*), ([^,()]*)(?:, k \d+)?, rank \S+, AI level \S+\): provoke (\S+) deg / (\S+) s \(([^)]*)\)', l)
+        if not m:
+            continue
+        died = re.search(r'; died ([\d.]+) s after', l)
+        esc = re.search(r'; escaped after ([\d.]+) s', l)
+        react = re.search(r'Provoke after ([\d.]+) s', l)
+        eps.append({'tier': m.group(2), 'values': f'{m.group(3)} deg / {m.group(4)} s ({m.group(5)})',
+                    'died': float(died.group(1)) if died else None, 'esc': float(esc.group(1)) if esc else None,
+                    'react': float(react.group(1)) if react else None, 'blackout': 'Blackout ' in l})
+    if eps:
+        print(f'\ntailed lines: {len(eps)} (the tail watch: you on an enemy\'s tail, 4 Hz)')
+
+        def table(key, title):
+            groups = {}
+            for e in eps:
+                groups.setdefault(e[key], []).append(e)
+            print(f'  {title:<34} {"n":>3} {"died":>4} {"died after":>11} {"escaped":>7} {"Provoke after":>13} {"none":>4} blackouts')
+            for k in sorted(groups):
+                g = groups[k]
+                d = [e['died'] for e in g if e['died'] is not None]
+                r = [e['react'] for e in g if e['react'] is not None]
+                med = lambda v: f'{statistics.median(v):.1f} s' if v else '-'
+                print(f'  {k:<34} {len(g):>3} {len(d):>4} {med(d):>11} {sum(1 for e in g if e["esc"] is not None):>7} '
+                      f'{med(r):>13} {sum(1 for e in g if e["react"] is None):>4} {sum(1 for e in g if e["blackout"])}')
+        table('tier', 'tier')
+        table('values', 'provoke in force')
+    pv = [l for l in ls if l.startswith('provoke:')]
+    if pv:
+        print(f'\nprovoke lines: {len(pv)} (the live provoke written, once per tier and spike level)')
+        for l in pv:
+            print('  ' + l[:220])
 
 
 def report(path):
@@ -125,11 +177,11 @@ def report(path):
     rounds = [r for r in (round_row(l) for l in ls if l.startswith('stats: round')) if r]
     if rounds:
         print('\nrounds')
-        print(f'  {"round":>5} {"tier":<10} {"kind":<12} {"length":>7} {"time to kill":<16} {"tailed":<8} {"behind":<7} '
-              f'{"msl left":<8} {"tactics":<7} cut short')
+        print(f'  {"round":>5} {"tier":<10} {"kind":<12} {"length":>7} {"time to kill":<16} {"tailed":<8} {"watch":<8} '
+              f'{"behind":<7} {"msl left":<8} {"tactics":<7} cut short')
         for r in rounds:
             print(f'  {r["round"]:>5} {r["tier"]:<10} {r["kind"]:<12} {r["len"] + " s":>7} {r["ttk"]:<16} {r["tail"]:<8} '
-                  f'{r["behind"]:<7} {r["msl"]:<8} {r["tac"]:<7} {r["cut"]}')
+                  f'{r["watch"]:<8} {r["behind"]:<7} {r["msl"]:<8} {r["tac"]:<7} {r["cut"]}')
     kills = [l for l in ls if l.startswith('kill-time:')]
     if kills:
         ttk = []
@@ -155,6 +207,7 @@ def report(path):
             if m:
                 count[m.group(1)] = count.get(m.group(1), 0) + 1
         print(f'\ndirector lines: {len(dirs)}: ' + ', '.join(f'{k} x{v}' for k, v in sorted(count.items())))
+    tailed_lines(ls)
     idx = [l for l in ls if l.startswith('spawn index:')]
     if idx:
         print(f'\nspawn index lines (creation order = desc order is confirmed by "k 0 is the lead"): {len(idx)}')

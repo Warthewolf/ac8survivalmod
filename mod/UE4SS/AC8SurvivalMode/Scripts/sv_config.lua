@@ -86,15 +86,22 @@ CFG = {
     -- line also reads your own aircraft's DamageHistoryMap (each attacker's damage since it took off, what the armour
     -- took too; the read KILL.read makes on enemies, untested on the player's: false leaves it out). Each player's own
     -- in co-op (sv_coop.lua PERSONAL).
+    -- tail_watch (P5's gate, "a tailed enemy lasts 8 s+ at Veteran"): 4 times a second the enemies nearest you within
+    -- watch_km (at most watch_max a tick) are read afresh, and while you're on one's tail (tail_km, tail_deg) its AI
+    -- state too: a "tailed:" line per episode (its provoke values, when it went into Provoke, the states it went
+    -- through, how long it lasted: died, or escaped once you'd been off its tail watch_grace_s). The host or solo only.
     stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
               bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
-              pawn_history = true },
+              pawn_history = true, tail_watch = true, watch_km = 4.5, watch_max = 4, watch_grace_s = 2.0 },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
     -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
     -- uses the cobra / kulbit, even on a model CFG.maneuvers allows. The round picks the tier; promote_chance of the
     -- pilots fly one tier higher. Survival's behaviour scripts (CFG.behaviour_sets) weigh their moves by the rank
     -- and the AI level these set; ranks 6-10 fly the named aces' squadrons (CFG.aces).
+    -- provoke_cone_deg / provoke_time_s / surround_m: written live on the tier's pilots, as CFG.spikes' (CFG.ai
+    -- tier_provoke; a harder tailed plane, P5 of tools/re/BEHAVIOUR_DIRECTOR.md, 2026-10-29: from Veteran up a pilot
+    -- notices you within 60 deg of its six after 1.5 s, the game's own rows 85 deg / 2.5 s; live write, untested).
     tiers = {
         enabled = true,
         promote_chance = 0.2,
@@ -102,17 +109,20 @@ CFG = {
         list = {
             { name = "Rookie",  from_round = 1,  rank = 2, post_stall = false },   -- one rank up (user, 2026-10-22:
             { name = "Regular", from_round = 4,  rank = 3, post_stall = false },   -- "still felt very easy")
-            { name = "Veteran", from_round = 7,  rank = 4, post_stall = true },
-            { name = "Elite",   from_round = 10, rank = 5, post_stall = true },
-            { name = "Ace",     from_round = 13, rank = 5, post_stall = true },
+            { name = "Veteran", from_round = 7,  rank = 4, post_stall = true, provoke_cone_deg = 60, provoke_time_s = 1.5 },
+            { name = "Elite",   from_round = 10, rank = 5, post_stall = true, provoke_cone_deg = 60, provoke_time_s = 1.5 },
+            { name = "Ace",     from_round = 13, rank = 5, post_stall = true, provoke_cone_deg = 60, provoke_time_s = 1.5 },
             -- Beyond Ace (user, 2026-10-22: "make more of these pilot ranks"). The game clamps PilotRank to 1-5, so these
             -- stay at 5 and raise the AI level instead (the flight's LevelId, 100 x ai_level, written before it spawns:
             -- dlls/main.dll SV_SetLevel; stock is 2). Survival's behaviours weigh their tight tail chase, cobra / kulbit
             -- bait and scissors by it (tools/re/BEHAVIOUR_GUIDE.md 6). fcs: fire control at least that difficulty-spike
             -- level's; provoke / surround: as CFG.spikes' (react quicker when tailed, sit closer when pursuing).
-            { name = "Mercenary", from_round = 16, rank = 5, post_stall = true, ai_level = 3, fcs = 1 },
-            { name = "Legend",    from_round = 19, rank = 5, post_stall = true, ai_level = 4, fcs = 2 },
-            { name = "Demon",     from_round = 22, rank = 5, post_stall = true, ai_level = 5, fcs = 2 },
+            { name = "Mercenary", from_round = 16, rank = 5, post_stall = true, ai_level = 3, fcs = 1,
+                                  provoke_cone_deg = 60, provoke_time_s = 1.5 },
+            { name = "Legend",    from_round = 19, rank = 5, post_stall = true, ai_level = 4, fcs = 2,
+                                  provoke_cone_deg = 60, provoke_time_s = 1.5 },
+            { name = "Demon",     from_round = 22, rank = 5, post_stall = true, ai_level = 5, fcs = 2,
+                                  provoke_cone_deg = 60, provoke_time_s = 1.5 },
             { name = "Phantom",   from_round = 25, rank = 5, post_stall = true, ai_level = 5, fcs = 3,
                                   provoke_cone_deg = 50, provoke_time_s = 1.0 },
             { name = "Reaper",    from_round = 28, rank = 5, post_stall = true, ai_level = 5, fcs = 3,
@@ -208,7 +218,21 @@ CFG = {
     -- reactions (user, 2026-10-22: "come up with some new reactions"): LA_SV_ProvokeNear when the player is close on
     -- their tail (break turn, brake-and-turn overshoot, flare break; AI level 3+ cobra bait, 4+ kulbit bait and
     -- scissors), LA_SV_Escape (low ranks the stock 8 s run, higher ranks the aces' 2 s break). false: the stock ones.
-    ai = { tail_chase = true, reactions = true },
+    -- (P5, 2026-10-29: every pick of both now moves: the overshoot only within 50 m, else a break; no cobra / kulbit
+    -- without post-stall: a break; no flare ready: the break still comes; the sharp escape's altitude-gated move, then
+    -- a turn. tools/re/BEHAVIOUR_DIRECTOR.md unit 2.)
+    -- The live provoke (P5): when you sit inside an enemy's cone of its six for its decision time it goes into Provoke
+    -- and defends (the reactions above). tier_provoke: each skill tier's provoke_cone_deg / provoke_time_s / surround_m
+    -- (CFG.tiers.list: Veteran to Demon 60 deg / 1.5 s, Phantom 50 / 1.0, Reaper 45 / 0.8) are written on its pilots;
+    -- false: only the difficulty spikes' and the specials' (the game's own rows otherwise: 85 deg / 2.5 s).
+    -- provoke_stricter: where a tier and the round's spike both set one, the stricter value (a narrower cone, a quicker
+    -- decision, a closer pursuit); false: the tier's replaces the spike's (before P5: a Veteran 60 / 1.5 would have
+    -- softened spike 3's 50 / 1.0). provoke_cone_deg / provoke_time_s above 0: a test value for every tier that has
+    -- its own (an A/B test against the game's: round 7, before the first spike, with tier_provoke off, then on with
+    -- e.g. 30 / 0.5). Written once when a plane appears (sv_rows.lua enemySpike); later parts rewrite them with
+    -- enemyProvoke. The writes read back (0.70.2); whether the game uses them is untested.
+    ai = { tail_chase = true, reactions = true, tier_provoke = true, provoke_stricter = true,
+           provoke_cone_deg = 0, provoke_time_s = 0.0 },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family

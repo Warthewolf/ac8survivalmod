@@ -133,3 +133,140 @@ lines, the `director:` tactics counted and the `spawn index:` lines.
 - On the host, a plane's ace flag comes from `D.aceSquad` at its death if the sweep never tracked it: a flight recycled
   before its last plane was seen down could be read with the new flight's flag (rare: planes are seen down within 2 s).
 - COOP.players' other players come from SV_CoopPeerAt as peerTick reads it (up to a tick old); `fresh` is under 1 s.
+
+## Unit 2: a harder tailed plane (P5)
+
+The thesis' P5: "being behind an enemy is an advantage you must work to keep, not a free kill". Three parts: the reaction
+scripts never waste a pick, Veteran and up notice a tailer sooner (the live provoke), and a 4 Hz tail watch measures the
+P5 gate ("a tailed enemy lasts 8 s+ at Veteran"). Behaviour scripts (rebuilt into the container by build_all.sh) and
+Lua; no new events, rows, flags or world data, so no COOP_TAG bump of its own (the contract's single bump comes last).
+
+### How a tree runs, and why the fixes look as they do
+From BEHAVIOUR_NATIVE_LOGIC.md 3-6 ([C] code reads): a RandomSelect picks ONE child by weight and never retries it, so a
+gate (decorator) straight under it that fails is a pick that does nothing (the Provoke dispatcher then goes straight to
+EscapeFromPursuer). A result travels one level only: when a composite under a Selector / LaxSelector finishes, that
+selector goes on to its NEXT child whatever happened. So `Selector[ gate -> Decel, Break ]` (the critic's sketch) would
+fly the decel AND the break when the gate passes (5.2 s); with the opposite gate over the fallback exactly one runs.
+6 s in Provoke sets the stock blackout (10 s of level flight: a free kill), so each Provoke pick stays under 5 s.
+The shapes are all in the stock grammar (shapecheck: "stock grammar ok" for all three scripts): LaxSelector under a
+PilotRank weight (9 stock uses; a Selector there has none), LaxSelector -> BlackboardFloat (AttackAvoidance_0430_msl_s),
+LaxSelector -> CanCobra / CanKulbit (Provoke_0002_s's own cobra fallback). Altitude gates (UnitAltitudeComparison) sit
+only under a RandomSelect or a WeightProbability in 381 stock uses and have no "expected" argument, so they can't get an
+exclusive fallback; Escape's sharp break puts its turn after them instead.
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| decel gate | Scripts/ai/LA_SV_ProvokeNear.lua (DecelW) | the brake-and-turn overshoot (300 km/h) only with the pursuer within 50 m when Provoke began (PursuerDistance <= 5000.0 cm, stock Provoke_0400_s's value; the critic's correction of the brief's 50000); farther out the same pick breaks hard at 3000 (DecelBreak). LaxSelector[ PursuerDistance <= 5000 -> Decel, PursuerDistance > 5000 -> DecelBreak ]. At Veteran (rank 4, AI level 2) this pick was 43 % of the reactions, almost always a 300 km/h turn in front of your guns |
+| flare break | LA_SV_ProvokeNear.lua (FlareW) | ActivateFlares fails when no flare is ready (the stock pod reloads 25 s after a salvo) and a failure ended its LaxSequencer before the break; the flare now has a LaxSequencer of its own (FlareShot), so the break always follows |
+| cobra / kulbit fallbacks | LA_SV_ProvokeNear.lua (CobraW, KulbitW) | LaxSelector[ CanCobra(true, true) -> the cobra, CanCobra(false, false) -> a break right ] (kulbit: CanKulbit, a break left). Before, half those picks did nothing on a plane without post-stall |
+| sharp escape | Scripts/ai/LA_SV_Escape.lua (Sharp) | LaxSequencer[ the six altitude-gated EscapeFromPursuer_0400 moves (unchanged), then a 2 s level turn either way ]. Before, within 1 km of the unit band's top (above 3 km for most pool flights, which spawn at 2-4.5 km) or floor 3 of 8 picks did nothing. Now 2-4 s of breaking (Escape isn't Provoke: no blackout timer runs). The plain run (low ranks, stock EscapeFromPursuer_0000_CP) is unchanged: with the pursuer 1 km+ away its level / straight legs are skipped (the first gate's failure ends their LaxSequencer, as in stock) and its 4 s run away always comes |
+| TailChase review | Scripts/ai/LA_SV_TailChase.lua (unchanged) | no pick without a move: the KDS front branch sits under a LaxSelector with the skill pick after it, the skill RandomSelect's four branches (Super, Tail, Tight, Stock) are ungated, and Stock's Selector falls back to SetMoveAwayFromTarget |
+| live provoke, tiers | sv_config.lua CFG.tiers.list | Veteran, Elite, Ace, Mercenary, Legend, Demon: `provoke_cone_deg = 60, provoke_time_s = 1.5` (the doc's 60 deg / 1.5 s; Phantom 50 / 1.0 and Reaper 45 / 0.8 / 40-100 m as before). The game's own rows: 85 deg / 2.5 s (NPID_00) |
+| the merge | sv_rows.lua `provokeWant(round, tier[, level])` | the stricter of the tier's and the round's spike's (narrower cone, quicker decision, closer surround min / max), field by field. Before, the tier's simply replaced the spike's (withLevel), so with these tier fields a Demon at rounds 22-24 would have dropped from spike 3's 50 / 1.0 to 60 / 1.5. A special's own values (MINDRIPPER's unit) go through the same merge, whatever `tier_provoke` says. `level`: another spike level than the round's, for a later part |
+| the writes | sv_rows.lua `enemyProvoke(p, want)`, `enemySpike(p, round, tier)` | enemyProvoke writes ProvokeConditionConeAngle, ProvokeDeterminationTime, SurroundPursuitMin/MaxRange (cm) where they differ from its last write (`p.provokeSet`; `p.provokeWant` = what it should fly) and returns the fields written and before / after texts: the hook for the intensity director (P4) to rewrite a live plane (runtime-ai step 10's "DIR.plane writes again"). enemySpike (the sweep, once per plane: `p.spiked`) = provokeWant + enemyProvoke, and a `provoke:` line once per tier and spike level with the values read back (it replaces the old `spikes: level N on ...` line) |
+| the tail watch | sv_stats.lua `STATS.tailTick` (sv_main.lua probeTick, every 250 ms, timed "tail watch"), `tailEnd`; sv_ai.lua's `AI_STATE` now a global | the host or solo (a joiner's enemies are the host's). The enemies with a skill tier (no bombers) nearest you within `watch_km` by the sweep's last sample, at most `watch_max` a tick, are read afresh: position and heading. You within `tail_km` / `tail_deg` of one's six (the sweep's own test) opens an episode (p.tw): its provoke values in force are read (Survival's write or the game's row), then every tick its AI state (Provoke / EscapeFromPursuer / AttackAvoidance / Blackout / UniqueAction / other, timed). It ends when the plane dies (the watch's own check, or the sweep's death first: STATS.down) or once you've been off its tail `watch_grace_s` (escaped; under 1 s held is a flicker at the cone's edge, dropped). Up to 16 property reads a tick at watch_max 4 |
+| the lines | sv_stats.lua | a `tailed:` line per episode; the round line ends "; tail watch: ..." and the run line "; tail watch Veteran+: ... [8 s+]" (U1's 2 s "AI Provoke" and geometric figures stay) |
+| the report | tools/checks/stats_report.py | the run table's tail watch rows (verdict on "died while tailed" against 8 s+), a "watch" column per round, the `tailed:` episodes by tier and by the provoke values in force (the A/B), the `provoke:` writes |
+| offline test | tools/checks/tailed_test.sh / tailed_test.lua | below |
+
+### CFG keys
+- `CFG.ai` ([ai] in survival.ini; the host's goes to joiners, where it does nothing: their enemies are the host's):
+  `tier_provoke` (true: the tiers' provoke values are written; false: only the spikes' and the specials', so a round-7
+  Veteran keeps the game's 85 / 2.5), `provoke_stricter` (true; false: the tier's over the spike's, as before),
+  `provoke_cone_deg` (0) / `provoke_time_s` (0.0): above 0, an A/B test value for every tier that has its own. The
+  reaction scripts are switched with `reactions` as before (false: the stock 0012_CP slots).
+- `CFG.tiers.list[*].provoke_cone_deg / provoke_time_s` (Veteran-Demon 60 / 1.5): survival_config.lua only (the ini can't
+  reach a list of tables).
+- `CFG.stats` ([stats], each player's own in co-op): `tail_watch` (true), `watch_km` 4.5, `watch_max` 4,
+  `watch_grace_s` 2.0.
+
+What a pilot flies now (default settings; the surround is the spike's until Reaper):
+| rounds (spike level) | tier | before P5 | P5 |
+|---|---|---|---|
+| 1-6 (0) | Rookie, Regular | the game's 85 / 2.5 | the same (a Regular promoted to Veteran: 60 / 1.5) |
+| 7 (0) | Veteran | 85 / 2.5 | 60 / 1.5 |
+| 8-14 (1) | Veteran, Elite, Ace | spike 1's 70 / 2.0 / 80-220 m | 60 / 1.5 / 80-220 m |
+| 15-21 (2) | Ace, Mercenary, Legend | 60 / 1.5 / 60-160 m | the same |
+| 22-24 (3) | Demon | 50 / 1.0 / 50-120 m | the same (the stricter merge keeps spike 3's) |
+| 25+ (3) | Phantom; Reaper from 28 | 50 / 1.0; 45 / 0.8 / 40-100 m | the same |
+
+### Log lines to look for in a test
+- Main menu, unchanged: `behaviour: set NLID_SV_Fighter in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, ...
+  ProvokeNearLua = LA_SV_ProvokeNear, ...)` and `game Lua: stock SurvivalMode.AI.LA_SV_ProvokeNear: true ...`. In the
+  level before round 1: `game Lua: built ... LA_SV_Escape x1, ... LA_SV_ProvokeNear x1 ...; errors 0` (a Ctor error in
+  the changed scripts shows here: both are in GAME_LUA_STOCK).
+- `provoke: round 7, spike level 0, Veteran (BP_...): was ProvokeConditionConeAngle 85.0, ProvokeDeterminationTime 2.5;
+  now ProvokeConditionConeAngle 60, ProvokeDeterminationTime 1.5; reads back 60.0, 1.5 (Veteran 60 deg / 1.5 s)`; from
+  round 8 with the spike's part and ": the stricter".
+- `tailed: BP_... (ERA_Unit_03_Dep_Air1, Veteran, k 1, rank 4, AI level 2): provoke 60 deg / 1.5 s (Survival's); you on
+  its tail at 1.0 km, 12 deg off its six; Provoke after 1.8 s; Provoke 1.5 s, EscapeFromPursuer 2.0 s, AttackAvoidance
+  0.5 s, other 1.0 s; died 9.5 s after (7.7 s after its Provoke)` or `...; no Provoke; ...; escaped after 3.0 s`.
+- The round line's end: `; tail watch: 3 episodes (Veteran+ 3): died after median 5.8 s (n 2), 8.0 s after its Provoke
+  (n 1), escaped 1 (held median 3.0 s), Provoke after median 1.5 s (none in 2), blackouts 0`; the run line's:
+  `; tail watch Veteran+: died after median ... on your tail (n N), ... [8 s+]`.
+- `perf: ... tail watch x/y` among the worst parts only if it costs.
+- `stats_report.py <log>`: "tailed lines: N" with a table by tier and one by "provoke in force" (e.g. `60 deg / 1.5 s
+  (Survival's)` against `85 deg / 2.5 s (the game's)`).
+
+Test checklist:
+1. The build lines above (main menu, level).
+2. Round 7 (Veteran, before the first spike): sit on enemies' tails. `tailed:` lines with "(Survival's)" and the
+   reaction ("Provoke after"). Then the A/B: `[ai] tier_provoke = false` (restart the game: rows and CFG are read at
+   start), round 7 again: "(the game's)" 85 / 2.5. If "Provoke after" doesn't move (about 1.5 s against 2.5 s+) the live
+   write does nothing, and runtime-ai step 11 (per-row DT_NPC_Provoke copies) is the way. A stronger signal:
+   `provoke_cone_deg = 30`, `provoke_time_s = 0.5`.
+3. The P5 gate: the run line's "tail watch Veteran+: died after median ... [8 s+]" (stats_report verdict). Watch
+   "blackouts" (a Blackout state in an episode: 10 s of level flight) and the state times.
+4. Close in under 50 m behind one (hard): the decel overshoot should show (a sudden slow-down); farther out no enemy
+   should slow to 300 km/h when you get behind it.
+5. With `[spikes] enabled = false` and a Mercenary+ round (AI level 3+) on an airframe outside CFG.maneuvers.post_stall:
+   the cobra / kulbit picks should break instead of flying straight (by default spike 2's post_stall_all lets every
+   airframe post-stall from round 15, so this fallback rarely runs).
+
+### Offline test
+`sh tools/checks/tailed_test.sh` (tools/checks/tailed_test.lua):
+1. The trees: the three scripts' Ctor on a recording `self`, then a model of the game's runner (the composite stack and
+   indices, each composite's answer to Failed / Complete / Abort, a RandomSelect's single pick, decorators, PilotRank /
+   AILevel weights; ActivateFlares fails with no flare ready) walks every pick of every RandomSelect in 4800 situations
+   (rank 1-5, AI level 1-5, the pursuer 30 m / 50 m / 500 m / 1.5 km away, cobra / kulbit allowed or not, a flare ready
+   or not, mid-band / near the top / near the floor, a KDS front phase or not). ProvokeNear (29760 walks): every pick
+   flies one move, at most 4.7 s; the decel only within 50 m and never with its break; the cobra / kulbit only when
+   allowed and never with their fallback; a flare pick always breaks. Escape (49920): every pick moves; the sharp one
+   always turns; near the band's top no climb. TailChase (11520): every pick pursues or breaks away. The model first
+   finds the old faults on fixtures: the cobra no-op, the flare that ended its break, and a Selector going on after a
+   composite child [V against the model; the model is BEHAVIOUR_NATIVE_LOGIC.md's [C] reads].
+2. The live provoke: provokeWant per tier and round (7, 8, 22, 28, 1, 5; stricter / replace; tier_provoke off; the
+   test values; a special's own; spikes off), enemyProvoke's four writes and rewrites of only what changed, enemySpike
+   once per plane with one `provoke:` line per tier and level, a Regular before a spike untouched; sv_main.lua's calls.
+3. The tail watch on stubbed planes: a Provoke 1.5 s after t0, its states, death at 9.5 s (8.0 s after Provoke), an
+   escape held 3.0 s with no Provoke, a 0.25 s flicker dropped, a bomber left out, only the nearest four read, the
+   sweep's death ending an episode, nothing on a co-op joiner or with tail_watch off, the round and run lines' parts;
+   then stats_report.py on its log.
+
+### Untested / known limits
+- [I] Everything in game. The trees' "always one move" is [V] against the runner model only; the model follows
+  BEHAVIOUR_NATIVE_LOGIC.md, whose walker, composites and RandomSelect are [C] code reads, not tests.
+- [I] `CanCobra(false, ...)` / `CanKulbit(false, ...)` as "can't": the IsEqual family's first argument is `expected`
+  ([C] for the family; IsFlareActive(false, true) is stock), but stock never passes false to these two. If it read as
+  true, a plane without post-stall would do nothing on that pick (as before) and one with it would still fly only the
+  cobra / kulbit.
+- [I] Whether the game's provoke decision reads the live fields at all (the writes read back: 0.70.2; the native read
+  0x147cf2530 is [?]). The tail watch's A/B (checklist 2) answers it. runtime-ai step 11 (per-row DT_NPC_Provoke copies
+  set as each _sv row's ProvokeId at the main menu) is the fallback and is not built.
+- [I] SurroundPursuit only applies to a non-lead PursuerTarget with the surround offset; LA_SV_TailChase's own-offset
+  branches (Tail / Tight / Super) may ignore it.
+- [I] ActivateFlares' Failed with no flare ready (BEHAVIOUR_NATIVE_MOVE.md [C]) and the pod's 25 s reload (the FCS
+  row) are what made the old flare pick a no-op; how often it happened is unmeasured.
+- The decel overshoot now needs you within 50 m when Provoke begins (stock's gate): rare in practice, so most former
+  decel picks are breaks. The sharp escape is 2-4 s instead of 1.5-2 s, and out of Provoke the blackout timer counts
+  down [C], so a long run of reactions should blackout less; watch "blackouts" in the lines.
+- The cobra / kulbit picks need AI level 3 / 4 (round 16 / 19 on), where spike 2's post_stall_all already lets every
+  airframe post-stall: their fallback runs only with spikes off or a special that turns post-stall off.
+- The tail watch: the host or solo only, your own tails only (not a joiner's stand-in on the host's game); 250 ms
+  resolution; the AI state is read only while an episode is open, so "Provoke after 0.0 s" means it was already
+  defending (another pursuer, or you sat outside tail_km first); a plane beyond `watch_km` at the sweep's last visit
+  (up to 2 s old) isn't watched until the next one. Its reads are on the game thread with the rest of the tick
+  (timed "tail watch").
+- Not built (optional in the briefs): a shorter Survival BlackoutLua (behaviour-pipeline (d)); per-row provoke
+  (runtime-ai step 11).

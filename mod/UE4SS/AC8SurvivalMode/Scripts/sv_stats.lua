@@ -45,6 +45,7 @@ local function median(t)
     return (s[n // 2] + s[n // 2 + 1]) / 2
 end
 local function sec(v) return v and string.format("%.0f s", v) or "-" end
+local function sec1(v) return v and string.format("%.1f s", v) or "-" end   -- (the tail watch: 250 ms ticks)
 local function share(a, b) return (b or 0) > 0 and string.format("%.0f%%", 100 * (a or 0) / b) or "-" end
 local function angle(ax, ay, az, bx, by, bz)          -- between two vectors, degrees (180 when one has no length)
     local la, lb = math.sqrt(ax * ax + ay * ay + az * az), math.sqrt(bx * bx + by * by + bz * bz)
@@ -122,6 +123,153 @@ function STATS.aiState(p, st, now)
     end
 end
 
+---------------------------------------------------------------------------------------------------- the tail watch (P5)
+-- P5's gate (a harder tailed plane; the thesis: "a tailed enemy lasts 8 s+ at Veteran"; runtime-ai step 10): the 2 s
+-- sweep above can't tell a 0.8 s reaction from 2.5 s. STATS.tailTick runs every 250 ms tick (sv_main.lua probeTick,
+-- timed "tail watch"; the host or solo: a joiner's enemies are the host's): the enemies with a skill tier (no bombers)
+-- nearest you within watch_km by the sweep's last sample, at most watch_max a tick, get a fresh position and heading.
+-- You on one's tail (tail_km, tail_deg: the sweep's own test) opens an episode (p.tw, t0), and its provoke values in
+-- force are read then (ProvokeConditionConeAngle / ProvokeDeterminationTime: Survival's write, sv_rows.lua enemySpike,
+-- or the game's own row). While it's open the plane is read every tick, its AI state too: when it first went into
+-- Provoke or EscapeFromPursuer after t0 (its reaction), how long it spent in each state. The episode ends when it dies
+-- ("died": seconds since t0, and since its Provoke, the thesis' own measure) or once you've been off its tail for
+-- watch_grace_s ("escaped": how long you held it; one shorter than ESC_MIN_S is a flicker at the cone's edge, dropped):
+-- a "tailed:" line, the round line's "tail watch" part, and the run line's Veteran+ figures.
+local tailEnd = nil
+do
+local AISTATE = nil                               -- (FName("AIState"), made at the first read, in the game thread)
+local ESC_MIN_S = 1.0
+local SHOWN = { "Provoke", "EscapeFromPursuer", "AttackAvoidance", "Blackout", "UniqueAction" }
+local function tw() local c = cfg(); return c.tail_watch ~= false and on() end
+local function readState(p)
+    local ok, v = pcall(function()
+        AISTATE = AISTATE or FName("AIState")
+        local bb = p.bb or p.obj.AIStateComponent.BlackboardComponent
+        p.bb = bb
+        return bb:GetValueAsEnum(AISTATE)
+    end)
+    if not (ok and type(v) == "number") then p.bb = nil; return nil end
+    return (AI_STATE and AI_STATE[v]) or tostring(v)
+end
+local function fresh(p)                           -- position (cm) and heading now, or nil
+    local ok, at, fwd = pcall(function()
+        local v, f = p.obj:K2_GetActorLocation(), p.obj:GetActorForwardVector()
+        return { X = v.X, Y = v.Y, Z = v.Z }, { X = f.X, Y = f.Y, Z = f.Z }
+    end)
+    if ok then return at, fwd end
+    return nil
+end
+local function alive(p)
+    if p.down or not valid(p.obj) then return false end
+    local ok, h = pcall(function() return p.obj.HealthInternal end)
+    return not (ok and type(h) == "number" and h <= 0)
+end
+local function geom(at, fwd, me)                  -- range (m) and your angle off its tail (deg)
+    local dx, dy, dz = me.X - at.X, me.Y - at.Y, me.Z - at.Z
+    return math.sqrt(dx * dx + dy * dy + dz * dz) / 100, angle(-fwd.X, -fwd.Y, -fwd.Z, dx, dy, dz)
+end
+local function open(p, now, m, off)
+    local e = { t0 = now, last = now, st = {}, km = m / 1000, off = off, written = p.provokeSet ~= nil }
+    local okC, c = pcall(function() return p.obj.ProvokeConditionConeAngle end)
+    local okT, t = pcall(function() return p.obj.ProvokeDeterminationTime end)
+    e.cone, e.time = okC and type(c) == "number" and c or nil, okT and type(t) == "number" and t or nil
+    if p.tierI == nil and p.tier then p.tierI = tierIndex(p.tier) or false end
+    p.tw = e
+end
+-- An episode ends: died (its death seen now, by the watch or the sweep) or escaped; its line and its counts.
+tailEnd = function(p, now, died)
+    local e = p.tw
+    if not e then return end
+    p.tw = nil
+    local held = (died and now or e.last) - e.t0
+    if not died and held < ESC_MIN_S then return end
+    local fromProv = (died and e.provAt) and now - e.provAt or nil
+    local vet = (p.tierI or 0) >= veteran()
+    local rs, m = D and D.rs, metrics()
+    if rs then
+        local w = rs.tw
+        w.n = w.n + 1
+        if vet then w.vet = w.vet + 1 end
+        if died then
+            w.died[#w.died + 1] = held
+            if fromProv then w.diedProv[#w.diedProv + 1] = fromProv end
+        else
+            w.esc[#w.esc + 1] = held
+        end
+        if e.react then w.react[#w.react + 1] = e.react else w.noReact = w.noReact + 1 end
+        if (e.st.Blackout or 0) > 0 then w.blackout = w.blackout + 1 end
+    end
+    m.tw = m.tw or {}
+    if #m.tw < 4000 then
+        m.tw[#m.tw + 1] = { round = D and D.round or 0, vet = vet, died = died, held = held, fromProv = fromProv,
+                            react = e.react, blackout = (e.st.Blackout or 0) > 0 }
+    end
+    local st = {}
+    for _, name in ipairs(SHOWN) do if (e.st[name] or 0) > 0 then st[#st + 1] = string.format("%s %.1f s", name, e.st[name]) end end
+    if (e.st.other or 0) > 0 then st[#st + 1] = string.format("other %.1f s", e.st.other) end
+    local t = p.tier
+    log(string.format("tailed: %s (%s, %s%s, rank %s, AI level %s): provoke %s deg / %s s (%s); you on its tail at %.1f km, " ..
+        "%.0f deg off its six; %s; %s; %s", p.name, tostring(p.unit or "?"), t and t.name or "no tier",
+        p.k and (", k " .. p.k) or "", tostring(p.rankSet or "?"), tostring(t and t.ai_level or 2),
+        e.cone and string.format("%.0f", e.cone) or "?", e.time and string.format("%.1f", e.time) or "?",
+        e.written and "Survival's" or "the game's", e.km, e.off,
+        e.react and string.format("Provoke after %.1f s", e.react) or "no Provoke", #st > 0 and table.concat(st, ", ") or "no states read",
+        died and string.format("died %.1f s after%s", held, fromProv and string.format(" (%.1f s after its Provoke)", fromProv) or "")
+            or string.format("escaped after %.1f s", held)))
+end
+function STATS.tailTick(now)
+    if not (now and D and tw()) or client() then return end
+    local c = cfg()
+    local me = COOP and COOP.me and COOP.me()
+    me = me and me.at
+    if not me then
+        local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+        local ok, v = pcall(function() return pawn:K2_GetActorLocation() end)
+        if not (ok and v) then return end
+        me = { X = v.X, Y = v.Y, Z = v.Z }
+    end
+    local cand, near = {}, {}
+    local wkm, max = c.watch_km or 4.5, math.max(1, math.floor(c.watch_max or 4))
+    for _, p in ipairs(planes) do
+        if p.tw then cand[#cand + 1] = p
+        elseif not p.down and p.tier and p.dist and p.dist <= wkm and not (p.unit and BOMBER_UNIT[p.unit]) then
+            near[#near + 1] = p
+        end
+    end
+    table.sort(near, function(a, b) return a.dist < b.dist end)
+    for i = 1, math.min(#near, max - #cand) do cand[#cand + 1] = near[i] end
+    local tkm, tdeg, grace = (c.tail_km or 3) * 1000, c.tail_deg or 70, c.watch_grace_s or 2.0
+    for _, p in ipairs(cand) do
+        local e = p.tw
+        if e and not alive(p) then
+            tailEnd(p, now, true)
+        else
+            local at, fwd = fresh(p)
+            if at then
+                local m, off = geom(at, fwd, me)
+                local tailing = m <= tkm and off <= tdeg
+                if tailing and not e then open(p, now, m, off); e = p.tw end
+                if e then
+                    local dt = math.max(0, math.min(1, now - (e.seen or now)))
+                    e.seen = now
+                    local st = readState(p)
+                    if st then
+                        local k = (st == "Provoke" or st == "EscapeFromPursuer" or st == "AttackAvoidance" or st == "Blackout"
+                                   or st == "UniqueAction") and st or "other"
+                        e.st[k] = (e.st[k] or 0) + dt
+                        if not e.react and (st == "Provoke" or st == "EscapeFromPursuer") then
+                            e.react, e.provAt = now - e.t0, now
+                        end
+                    end
+                    if tailing then e.last = now
+                    elseif now - e.last >= grace then tailEnd(p, now, false) end
+                end
+            end
+        end
+    end
+end
+end
+
 -- An enemy found down (the sweep, up to 2 s after it fell). g: KILL.geom (aspect, range, your recent shots and the
 -- weapon spent last), by: creditKill's side ("you", "allies", "ships", "defences", "airstrike", "wingmate" in co-op;
 -- nil for a Ladon). An ordinary fighter: a pool flight's plane that isn't a bomber, an ace squadron's, the jammer or a
@@ -141,6 +289,7 @@ local function isOrdinary(p, u)
 end
 function STATS.down(p, g, by, now)
     if not (on() and D and now) then return end
+    if p.tw then tailEnd(p, now, true) end                -- (the sweep saw it down before the tail watch did)
     local c, rs = cfg(), D.rs
     local u = p.unit
     local ordinary = isOrdinary(p, u)
@@ -350,7 +499,16 @@ local function newRound(now)
     return { round = D.round, at = now, ground = 0, tier = ti and ti.name or "no tier", client = client(),
              down = 0, mineAll = 0, fighters = 0, fightersMine = 0, unsorted = 0, ttk = {}, ttkSpawn = {}, ttkHit = {},
              tailedAI = {}, tailedGeo = {}, provokeEscaped = 0, tailEscaped = 0, mineGeo = 0, behind = 0, close = 0,
-             wpn = {}, fired = {}, dmg = {}, hp = 0, tactics = {}, nTactics = 0, callouts = 0, moves = {}, stateS = {} }
+             wpn = {}, fired = {}, dmg = {}, hp = 0, tactics = {}, nTactics = 0, callouts = 0, moves = {}, stateS = {},
+             tw = { n = 0, vet = 0, died = {}, diedProv = {}, esc = {}, react = {}, noReact = 0, blackout = 0 } }
+end
+-- The tail watch's part of the round line (P5): its episodes, Veteran+ among them.
+local function watchPart(w)
+    if not w or cfg().tail_watch == false then return "" end
+    return string.format("; tail watch: %d episode%s (Veteran+ %d): died after median %s (n %d), %s after its Provoke " ..
+        "(n %d), escaped %d (held median %s), Provoke after median %s (none in %d), blackouts %d", w.n, w.n == 1 and "" or "s",
+        w.vet, sec1(median(w.died)), #w.died, sec1(median(w.diedProv)), #w.diedProv, #w.esc, sec1(median(w.esc)),
+        sec1(median(w.react)), w.noReact, w.blackout)
 end
 
 -- The round's line, logged a few seconds after it ended (flushRound): the sweep sees a plane down up to 2 s after the
@@ -386,7 +544,7 @@ local function flushRound()
         sec(median(rs.tailedGeo)), #rs.tailedGeo, rs.tailEscaped, rs.behind, rs.mineGeo, share(rs.behind, rs.mineGeo),
         w.msl or 0, w.gun or 0, w.special or 0, w.none or 0, rs.close, tostring(rs.mslLeft or "?"), f[1] or 0, rs.hp,
         share(rs.dmg.missile, rs.hp), share(rs.dmg["gun/close"], rs.hp), share(rs.dmg.unknown, rs.hp), rs.nTactics,
-        #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0))
+        #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0) .. watchPart(rs.tw))
     if #m.rounds < 500 then
         m.rounds[#m.rounds + 1] = { round = rs.round, kind = kind, len = len, ground = rs.ground, special = spS,
                                     tactics = rs.nTactics, callouts = rs.callouts }
@@ -478,6 +636,20 @@ function STATS.runEnd(how)
     local msl = m.mslLeft
     if how ~= "died" or msl == nil then msl = held(1) end
     local d, f = m.dmg, m.fired
+    local wpart = ""                                       -- the tail watch's Veteran+ episodes (P5's gate)
+    if c.tail_watch ~= false then
+        local wd, wp, we, wr, wn, wb = {}, {}, {}, {}, 0, 0
+        for _, e in ipairs(m.tw or {}) do
+            if e.vet then
+                if e.died then wd[#wd + 1] = e.held; if e.fromProv then wp[#wp + 1] = e.fromProv end else we[#we + 1] = e.held end
+                if e.react then wr[#wr + 1] = e.react else wn = wn + 1 end
+                if e.blackout then wb = wb + 1 end
+            end
+        end
+        wpart = string.format("; tail watch Veteran+: died after median %s on your tail (n %d), %s after its Provoke (n %d), " ..
+            "escaped %d (held median %s), Provoke after median %s (none in %d), blackouts %d [8 s+]", sec1(median(wd)), #wd,
+            sec1(median(wp)), #wp, #we, sec1(median(we)), sec1(median(wr)), wn, wb)
+    end
     log(string.format("stats: run over (%s): rounds %d-%d; time to kill rounds %d-%d median %s (n %d%s) [target 20-40 s]; " ..
         "tailed survival Veteran+ AI Provoke median %s (n %d), geometric median %s (n %d) [8 s+]; specials %s; special " ..
         "rounds %s [5-8 min]; missiles left at the end %s [under 40]; damage taken %.0f HP: missiles %s, gun/close %s, " ..
@@ -489,7 +661,7 @@ function STATS.runEnd(how)
         sec(median(tGeo)), #tGeo, #sp > 0 and table.concat(sp, ", ") or "none", #srl > 0 and table.concat(srl, ", ") or "none",
         tostring(msl or "?"), m.hpTaken, share(d.missile, m.hpTaken), share(d["gun/close"], m.hpTaken),
         share(d.unknown, m.hpTaken), m.brackets, nr > 0 and tac / nr or 0, tac, nr, share(behind, geo), behind, geo,
-        f[1] or 0, (f[2] or 0) + (f[3] or 0), f[4] or 0, f[0] or 0))
+        f[1] or 0, (f[2] or 0) + (f[3] or 0), f[4] or 0, f[0] or 0) .. wpart)
 end
 
 -- (for tools/checks/stats_test.lua: the helpers above, unchanged)
