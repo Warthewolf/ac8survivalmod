@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.27.0"
+#define RT_VERSION           L"0.28.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -410,6 +410,16 @@ static volatile int32_t  g_menuChoice;  /* the last main-menu entry picked: 0 no
                                           * 2 SP OFFLINE, 3 CO-OP: HOST, 4 CO-OP: JOIN, 5 SP ONLINE, 6 Survival's pages
                                           * opened (settings and page rows leave it) */
 static volatile int32_t  g_pagesOk;     /* Lua found Survival's pages in the game's page list (SV_MenuPages)   */
+/* Survival's pages open through CAMPAIGN TRAINING's page (user, 2026-10-29: "feel free to use the Campaign Training and
+ * replace it completely"): the main menu opens a row's page by ELiveMenuMainIDs, the game's fixed list of its pages
+ * (GameTitle ... CampaignTraining), so pages of our own names never opened (test of 2026-10-29: SURVIVAL MODE pressed 25
+ * times, nothing). Survival's page rows name CampaignTraining; Lua hands over the pages' classes (SV_MenuClass) and that
+ * page's entry in the main menu manager's MenuWidgetClassList (SV_MenuSlot), and OnMainDecide points the entry at the
+ * page each press opens. */
+#define MENU_PAGE_N 5
+static const wchar_t* const kPageNames[MENU_PAGE_N] = { L"Modes", L"Offline", L"Online", L"Host", L"Rules" };  /* sv_menu.lua PAGES */
+static uint8_t* volatile  g_pageClass[MENU_PAGE_N];
+static uint8_t** volatile g_pageSlot;   /* &MenuWidgetClassList[CampaignTraining].MenuClass                     */
 static volatile int32_t  g_quickMode = 2; /* the mode QUICK START plays (SV_MenuQuick): 2, 3 or 5              */
 static volatile int32_t  g_menuPicks;   /* how many main-menu entries were picked: Lua sees the same entry picked again */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
@@ -630,6 +640,26 @@ static uintptr_t OnMainDecide(void* widget)
         page = 1;                                      /* (another of Survival's pages: no mode, no start) */
     }
     if (page) {
+        /* the page this press opens: SURVIVAL MODE the modes, SV_Mode_<mode> its setup (not Join: a start), SV_Page_<page> */
+        int target = -1;
+        if (ArgsEqual(a, SURVIVAL_MENU_ARGS)) target = 0;
+        else if (ArgsPrefix(a, L"SV_Mode_")) target = code == 2 ? 1 : code == 5 ? 2 : code == 3 ? 3 : -1;
+        else if ((k = ArgsPrefix(a, L"SV_Page_")) != 0) {
+            for (int i = 0; i < MENU_PAGE_N; ++i) {
+                size_t n = WLen(kPageNames[i]);
+                if ((size_t)a->num == k + n + 1 && !memcmp(a->data + k, kPageNames[i], n * 2)) target = i;
+            }
+        }
+        if (target >= 0) {
+            uint8_t** slot = g_pageSlot;
+            uint8_t* cls = g_pageClass[target];
+            if (!slot || !cls || !Readable(slot, 8)) {
+                Log(L"main menu: Survival's page row '%s': its page (%s) can't open (no CampaignTraining entry or class); refused",
+                    a->data, kPageNames[target]);
+                return 1;
+            }
+            *slot = cls;
+        }
         g_chosen = start;
         if (start) {
             uint8_t* ctx = Context(widget);
@@ -2590,6 +2620,50 @@ static int L_MenuPages(void* lua)
     return Ret(lua, 1);
 }
 
+/* SV_MenuClass(n, class): Survival's page n (1-5: sv_menu.lua PAGES, kPageNames) is that widget class. -> 1 */
+static int L_MenuClass(void* lua)
+{
+    double n = 0;
+    if (!ArgNumber(lua, &n) || n < 1 || n > MENU_PAGE_N) return Ret(lua, SV_ERR_BAD_ARGS);
+    uint8_t* c = ArgObject(lua);
+    if (c && !Readable(c, 0x30)) return Ret(lua, SV_ERR_BAD_ARGS);
+    g_pageClass[(int)n - 1] = c;
+    return Ret(lua, 1);
+}
+
+/* SV_MenuSlot(manager, class, index) -> 1 when the main menu manager's MenuWidgetClassList entry `index` is found:
+ * CampaignTraining's, holding that class (0: any), found by a look through the manager for the list (TArray of
+ * { FString MenuIDName, UClass* MenuClass }, 0x18 bytes each); 0 not found */
+#define MENU_ENTRY_SIZE 0x18
+static int L_MenuSlot(void* lua)
+{
+    static const wchar_t kId[] = L"CampaignTraining";
+    uint8_t* mgr = ArgObject(lua);
+    uint8_t* stock = ArgObject(lua);
+    double idx = -1;
+    ArgNumber(lua, &idx);
+    g_pageSlot = NULL;
+    if (!mgr || idx < 0 || idx > 255) return Ret(lua, SV_ERR_BAD_ARGS);
+    for (size_t off = 0x28; off < 0x400; off += 8) {
+        if (!Readable(mgr + off, 16)) break;
+        uint8_t* data = *(uint8_t**)(mgr + off);
+        int32_t num = *(int32_t*)(mgr + off + 8), max = *(int32_t*)(mgr + off + 12);
+        if (!data || num <= (int32_t)idx || num > 256 || max < num) continue;
+        uint8_t* e = data + (size_t)idx * MENU_ENTRY_SIZE;
+        if (!Readable(e, MENU_ENTRY_SIZE)) continue;
+        const FString* id = (const FString*)e;
+        size_t n = WLen(kId);
+        if (!id->data || id->num != (int32_t)n + 1 || !Readable(id->data, n * 2) || memcmp(id->data, kId, n * 2)) continue;
+        uint8_t** slot = (uint8_t**)(e + 0x10);
+        if (stock && *slot != stock) continue;
+        g_pageSlot = slot;
+        Log(L"main menu: Survival's pages open through CampaignTraining's page (entry %d, list at manager+%x)", (int32_t)idx, (uint32_t)off);
+        return Ret(lua, 1);
+    }
+    Log(L"main menu: CampaignTraining's entry %d not found in the main menu's page list", (int32_t)idx);
+    return Ret(lua, 0);
+}
+
 /* SV_MenuQuick(code): the mode QUICK START plays (2 SP OFFLINE, 3 COOP HOST, 5 SP ONLINE; Lua's last one). -> 1 */
 static int L_MenuQuick(void* lua)
 {
@@ -2852,7 +2926,7 @@ static void RegisterLua(void* lua)
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting },
-        { "SV_MenuPages", L_MenuPages }, { "SV_MenuQuick", L_MenuQuick }, { "SV_BGMNames", L_BGMNames },
+        { "SV_MenuPages", L_MenuPages }, { "SV_MenuClass", L_MenuClass }, { "SV_MenuSlot", L_MenuSlot }, { "SV_MenuQuick", L_MenuQuick }, { "SV_BGMNames", L_BGMNames },
         { "SV_CoopOpen", L_CoopOpen }, { "SV_CoopClose", L_CoopClose }, { "SV_CoopInfo", L_CoopInfo }, { "SV_CoopSend", L_CoopSend },
         { "SV_CoopRecv", L_CoopRecv }, { "SV_CoopMe", L_CoopMe }, { "SV_CoopPeer", L_CoopPeer }, { "SV_CoopTrack", L_CoopTrack },
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },

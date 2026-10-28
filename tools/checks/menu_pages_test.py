@@ -130,7 +130,7 @@ def main():
             got = [(n, dict((q[1], q[3]) for q in r[2])) for (n, _), r in dt['rows']]
             want = [(f'SV{name}{row}', args, menu_id) for row, args, menu_id in prows]
             ok = [n for n, _ in got] == [w[0] for w in want] and all(
-                f['StringArgs'] == ('str', w[1]) and f['MenuID'] == ('str', w[2]) and f['TitleTextID'] == ('str', f'SV_Pg_{name}_{w[0][2 + len(name):]}')
+                f['StringArgs'] == ('str', w[1]) and f['MenuID'] == ('str', B.page_menu_id(w[2])) and f['TitleTextID'] == ('str', f'SV_Pg_{name}_{w[0][2 + len(name):]}')
                 and f['HelpTextID'] == ('str', f'SV_Pg_{name}_{w[0][2 + len(name):]}_Help') for (_, f), w in zip(got, want))
             check(ok, f'{name}: {len(got)} command rows, their StringArgs, MenuIDs and text keys')
             z = ZenPkg(p(B.UI + f'DA_SV_Pg{name}Settings'))

@@ -1254,6 +1254,15 @@ def build_shop_rows():
 # SV_Page_<page> opens another page, SV_Set_<what> steps a setting in place (main.dll takes the press). Keep the pages
 # and rows in step with Scripts/sv_menu.lua PAGES / SET (checked below).
 DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
+# The main menu opens a row's page by ELiveMenuMainIDs, the game's fixed list of its pages, so a row naming SV_Pg<page>
+# opened nothing (test of 2026-10-29). Every row that opens one of Survival's pages names CAMPAIGN TRAINING's page instead
+# (user, 2026-10-29: "feel free to use the Campaign Training and replace it completely"), and main.dll points that page's
+# entry in the game's page list at the page the press opens (OnMainDecide, SV_MenuSlot). MENU_PAGES keeps which page.
+BORROWED_PAGE = 'CampaignTraining'
+
+
+def page_menu_id(menu):
+    return BORROWED_PAGE if menu.startswith('SV_Pg') else menu
 MENU_PAGES = [
     ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),
                ('Host', 'SV_Mode_Host', 'SV_PgHost'), ('Join', 'SV_Mode_Join', DIFFICULTY_PAGE),
@@ -1347,7 +1356,7 @@ def build_menu_pages():
                 setv(props, 'CommandID', ('name', f'Main_SV_{page_name}_{row}', 0))
                 setv(props, 'TitleTextID', s(f'SV_Pg_{page_name}_{row}'))
                 setv(props, 'HelpTextID', s(f'SV_Pg_{page_name}_{row}_Help'))
-                setv(props, 'MenuID', s(menu))
+                setv(props, 'MenuID', s(page_menu_id(menu)))
                 setv(props, 'StringArgs', s(args))
             edits.append((f'SV{name}{row}', edit))
         build_rows_table(MAIN_COMMANDS, table, 'LiveMenuCommandsDataTable', 'Campaign', edits[0][0], edits[0][1], more=edits[1:])
@@ -1496,11 +1505,11 @@ def edit_setting_row(what):
 
 def edit_pages_row(props):
     """SURVIVAL MODE when the game has Survival's pages (MENU_PAGES; Scripts/sv_menu.lua adds this row or the flat ones):
-    it opens the modes page (MenuID SV_PgModes); main.dll OnMainDecide lets it through only once Lua found the pages in
+    it opens the modes page (through CAMPAIGN TRAINING's: BORROWED_PAGE); main.dll OnMainDecide lets it through only once Lua found the pages in
     the game's page list (SV_MenuPages)."""
     edit_menu_row(props)
     setv(props, 'CommandID', ('name', 'Main_Top_SurvivalMenu', 0))
-    setv(props, 'MenuID', s('SV_PgModes'))
+    setv(props, 'MenuID', s(page_menu_id('SV_PgModes')))
     setv(props, 'StringArgs', s(MENU_PAGES_ARGS))
 
 

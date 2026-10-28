@@ -363,13 +363,13 @@ local function press(name)
 end
 
 ---------------------------------------------------------------------------------------------------- the pages
--- Survival's pages go into the game's table of main-menu pages (MenuID -> widget class; the in-game one's twin is
--- DT_IngameMenuSettingData, where the STORE's pages go): rows from DT_SV_MainMenuClassRows. The game's page list
--- (LiveMenuManager.MenuWidgetClassList) is built from that table; only once our pages are in that list does the main
--- menu get the SURVIVAL MODE row that opens them (dlls/main.dll refuses it otherwise: SV_MenuPages).
-local CLASS_ROWS = "/Game/Mods/SurvivalMode/Data/DT_SV_MainMenuClassRows.DT_SV_MainMenuClassRows"
-local PAGE_IDS = {}                                        -- { row, id, page } (tools/build_survival.py MENU_PAGES)
-for _, pg in ipairs(PAGES) do PAGE_IDS[#PAGE_IDS + 1] = { row = "SVPg" .. pg.name, id = "SV_Pg" .. pg.name, page = pg.name } end
+-- Survival's pages open through CAMPAIGN TRAINING's page (user, 2026-10-29: "feel free to use the Campaign Training and
+-- replace it completely"): the main menu opens a row's page by ELiveMenuMainIDs, the game's fixed list of its pages
+-- (GameTitle ... CampaignTraining), so pages of our own names never opened (test of 2026-10-29: SURVIVAL MODE pressed 25
+-- times, nothing). Every page row names CampaignTraining (tools/build_survival.py BORROWED_PAGE), and dlls/main.dll
+-- points that page's entry in the main menu's page list at the page each press opens (SV_MenuClass: the pages' classes,
+-- in PAGES order; SV_MenuSlot: the entry). Its own row is kept off the main menu meanwhile (sv_core.lua hideRows).
+local BORROWED = "CampaignTraining"
 local function commandTable(page) return string.format("/Game/Mods/SurvivalMode/Data/DT_SV_Pg%sCommands.DT_SV_Pg%sCommands", page, page) end
 -- what the build found in the game (tools/build_survival.py writes Scripts/sv_menu_stock.lua): the stock page the
 -- pages copy (its class name) and the game's main-menu page table
@@ -432,21 +432,6 @@ local function mainManager()
         end
     end
 end
--- Our class rows into a page table (from the main menu on); true when all are in
-local function addRows(game, mine)
-    local all = true
-    for _, p in ipairs(PAGE_IDS) do
-        local _, have = dtCall(game, "FindRow", p.row)
-        if have == nil then
-            -- (never read the row's MenuWidgetReference from Lua: hard rule 29)
-            local okR, r = dtCall(mine, "FindRow", p.row)
-            if okR and r ~= nil then dtCall(game, "AddRow", p.row, r) end
-            local _, now = dtCall(game, "FindRow", p.row)
-            if now == nil then all = false end
-        end
-    end
-    return all
-end
 -- The pages' own command tables, loaded and kept (their pages read them when they open); the rows this game doesn't
 -- show come off: SP ONLINE in the Offline edition, COOP HOST / JOIN without co-op
 local function pageTables()
@@ -463,29 +448,22 @@ local function pageTables()
         end
     end
 end
--- Puts our pages into a live page list (the list was built before our rows were in the table: the first main menu
--- after the game starts, when the table loaded before Survival's Lua ran). Each entry: { MenuIDName, MenuClass }.
-local function lateRegister(mgr, ids)
+-- One pass (every second from the main menu): decides MENU.pages for this main menu
+-- the pages' classes (the stock page's, in Survival's packages), loaded and kept: the game creates a page from its entry's class
+local function pageClasses()
+    if PG.classes then return PG.classes end
     local cls = STOCK.page_class
-    if not cls then say("late", "no stock page class known (Scripts/sv_menu_stock.lua); can't add the pages to the live list"); return false end
-    log("menu pages: adding Survival's pages to the game's live page list (late)")
-    local okAll = true
-    for _, p in ipairs(PAGE_IDS) do
-        if not ids[p.id] then
-            local path = string.format("/Game/Mods/SurvivalMode/UI/WBP_SV_Pg%s.%s", p.page, cls)
-            local c, why = loadObject(path)
-            local ok, err = false, why
-            if c then
-                ok, err = pcall(function()
-                    local list = mgr.MenuWidgetClassList
-                    list[list:GetArrayNum() + 1] = { MenuIDName = p.id, MenuClass = c }
-                end)
-            end
-            log(string.format("menu pages:   %s (%s): %s", p.id, path, ok and "added" or ("NOT added: " .. tostring(err))))
-            okAll = okAll and ok
-        end
+    if not cls then return nil, "no stock page class known (Scripts/sv_menu_stock.lua)" end
+    local out = {}
+    for i, pg in ipairs(PAGES) do
+        local path = string.format("/Game/Mods/SurvivalMode/UI/WBP_SV_Pg%s.%s", pg.name, cls)
+        local c, why = loadObject(path)
+        if not valid(c) then return nil, path .. " didn't load (" .. tostring(why) .. ")" end
+        pin(c, nameOf(c))
+        out[i] = c
     end
-    return okAll
+    PG.classes = out
+    return out
 end
 
 -- One pass (every second from the main menu): decides MENU.pages for this main menu
@@ -493,25 +471,10 @@ function MENU.pagesTick()
     if MENU.pages == false and PG.final then return end
     if not CFG.menu.pages then MENU.pages, PG.final = false, true; say("off", "off (CFG.menu.pages); the flat rows"); return end
     if containerState ~= true then return end
-    if type(SV_MenuPages) ~= "function" then MENU.pages, PG.final = false, true; say("dll", "dlls/main.dll has no page support (0.27.0 or later); the flat rows"); return end
-    local mine = loadObject(CLASS_ROWS)
-    if not valid(mine) then MENU.pages, PG.final = false, true; say("mine", "this build has no pages (DT_SV_MainMenuClassRows); the flat rows"); return end
-    pin(mine, nameOf(mine))
+    if type(SV_MenuSlot) ~= "function" then MENU.pages, PG.final = false, true; say("dll", "dlls/main.dll can't open the pages (0.28.0 or later); the flat rows"); return end
+    local classes, cwhy = pageClasses()
+    if not classes then MENU.pages, PG.final = false, true; say("mine", "this build's pages can't be used: " .. tostring(cwhy) .. "; the flat rows"); return end
     if not PG.tables then PG.tables = true; pageTables() end
-    -- early: the game's page tables the build named, before the main menu's page list is built from them
-    for _, path in ipairs(STOCK.class_tables or {}) do
-        if not PG.early[path] then
-            local game = loadObject(path)
-            if valid(game) then
-                pin(game, nameOf(game))
-                PG.early[path] = addRows(game, mine)
-                say("early" .. path, path .. ": Survival's pages " .. (PG.early[path] and "are in" or "could NOT be added") .. " (" .. rowNames(game) .. ")")
-            else
-                PG.early[path] = false
-                say("early" .. path, "could not load " .. path)
-            end
-        end
-    end
     local mgr, ids, n = mainManager()
     if not mgr then
         if MENU.pages == nil and os.clock() - PG.start > 120 then
@@ -524,28 +487,18 @@ function MENU.pagesTick()
     local a = addrOf(mgr)
     if PG.mgr == a then return end                               -- (this main menu was decided)
     PG.mgr = a
-    local missing = {}
-    for _, p in ipairs(PAGE_IDS) do if not ids[p.id] then missing[#missing + 1] = p.id end end
-    -- the game's own table: ours go in (kept loaded: the next main menu's list has them from the start)
-    local okT, tbl = pcall(function() return mgr.MenuSettingsData.MenuClassTable end)
-    if okT and valid(tbl) then
-        pin(tbl, nameOf(tbl))
-        local all = addRows(tbl, mine)
-        say("table", string.format("the game's main-menu page table is %s (%s); Survival's rows %s", nameOf(tbl), rowNames(tbl),
-            all and "are in" or "could NOT be added"))
+    local idx, why = ids[BORROWED], nil
+    if not idx then
+        why = "the game's page list has no " .. BORROWED
     else
-        say("table", "the game's main-menu page table couldn't be read (" .. tostring(tbl) .. ")")
+        for i, c in ipairs(classes) do SV_MenuClass(i, addrOf(c) or 0) end
+        local okS, stock = pcall(function() return mgr.MenuWidgetClassList[idx + 1].MenuClass end)
+        local r = SV_MenuSlot(a or 0, (okS and valid(stock) and addrOf(stock)) or 0, idx)
+        if r ~= 1 then why = BORROWED .. "'s entry wasn't found in the page list (" .. tostring(r) .. ")" end
     end
-    if #missing > 0 and CFG.menu.late_register then
-        lateRegister(mgr, ids)
-        local ids2, n2 = listIds(mgr)
-        missing = {}
-        for _, p in ipairs(PAGE_IDS) do if not (ids2 and ids2[p.id]) then missing[#missing + 1] = p.id end end
-        n = n2
-    end
-    MENU.pages = #missing == 0
-    say("decided", string.format("the main menu's page list has %d pages; Survival's %s", n,
-        MENU.pages and "are in: SURVIVAL MODE opens them" or ("are missing (" .. table.concat(missing, ", ") .. "): the flat rows")))
+    MENU.pages = why == nil
+    say("decided", MENU.pages and string.format("the main menu's page list has %d pages; Survival's open through %s's (entry %d): SURVIVAL MODE opens them", n, BORROWED, idx)
+        or ("Survival's pages can't open (" .. why .. "): the flat rows"))
     pcall(SV_MenuPages, MENU.pages and 1 or 0)
     -- every live menu page's DeepLevel, once (what Survival's pages should get if cancel on them goes wrong)
     if not PG.levels then
