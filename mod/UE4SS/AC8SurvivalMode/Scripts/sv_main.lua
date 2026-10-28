@@ -267,6 +267,8 @@ local function probeTick(tick)
         for a, t in pairs(SR.levels or {}) do SR.usableLevels[a] = t end
         log(string.format("search: at level load, %d of %d aircraft (and %d ace rows) fly with the %s m search", nS,
             #CFG.aircraft, nA, tostring(CFG.search.radius_m)))
+        local okRl, errRl = pcall(ROLE.levelLoad)        -- (the fighter roles this level has: their rows were in)
+        if not okRl then ROLE.live = nil; log("roles: level load error " .. tostring(errRl) .. "; roles off this level") end
         if H and valid(H.widget) then pcall(function() H.widget:RemoveFromParent() end) end   -- a restart keeps the level
         H, hudTries, hudOff, hudSaid, callouts, survivalPC, A = nil, 0, false, {}, {}, nil, nil
         flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
@@ -304,6 +306,8 @@ local function probeTick(tick)
         if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)
         if not okS then log("search: setup error " .. tostring(errS)); SR.done = true end
+        local okRl, errRl = pcall(rolesSetup)            -- (the fighter roles' behaviour rows, after the search rows)
+        if not okRl then log("roles: setup error " .. tostring(errRl)); RS.done = true end
         local okAc, errAc = pcall(SPC.alicornSetup)
         if not okAc then log("special: Alicorn setup error " .. tostring(errAc)); SPC.alicornDone = true end
         local okL, errL = pcall(SPC.ladonSetup)
@@ -672,7 +676,7 @@ if type(RegisterKeyBind) == "function" and Key then
                     if not D or not D.now or not nativeReady() then log("test: Ctrl+6 outside a Survival run"); return end
                     local unit
                     for _, u in ipairs(CFG.pool) do
-                        if not unit and not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
+                        if not unit and not D.up[u] and not PROBE_OF[u] and not ROLE.sitsOut(u) and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
                     end
                     if not unit then hudCallout("TEST: NO FREE FLIGHT", "TRY AGAIN WHEN SOME ARE DOWN"); return end
                     local r = spawnFlight(unit, true)

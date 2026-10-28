@@ -169,7 +169,8 @@ local KEEP_EVENTS = {
     "^RE_SV_AirfieldOpen$", "^RE_SV_AirfieldClose$",                    -- (the airfield goes as "af")
     "^RE_SV_AnomalyField",     -- each player's own field: a joiner's game runs ANOM.clientTick on its own distance
     "^RE_SV_Radio",            -- the tells' radio lines (sv_tells.lua): each player's own, a joiner's come as "tl"
-}
+    "^RE_SV_WolfTurn",         -- a Wolf trap's LastTGT (P1, sv_spawn.lua WOLF): onto LocalPlayer, the host here
+}                              -- (its holds and frees, RE_SV_WolfHold / WolfFree, are forwarded: a joiner's copies hold too)
 local function mirroredEvent(name)
     name = tostring(name)
     if not name:match("^RE_SV_") then return false end
@@ -361,7 +362,10 @@ local function hostTick()
         local h = M.hunts[i]
         if now >= h.at then
             table.remove(M.hunts, i)
-            if D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
+            if D and D.up and D.up[h.unit] and WOLF and WOLF.holding(h.unit) then
+                -- (a Wolf flight holding its trap, CFG.roles.wolf: the hunt's unit-wide order would free it)
+                log("coop: " .. h.unit .. " holds its Wolf trap; it doesn't go after the joiners")
+            elseif D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
                 log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")")
             end

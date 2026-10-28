@@ -867,8 +867,11 @@ def build_wd_global():
     idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
     sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'SpawnPoint'][0]
     r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
+    top_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'MaxAltitudeInMeter'][0]
+    dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
     POOL_UNITS = set(survival_events.POOL)
-    turned_off = 0
+    survival_events.POOL_OBJS.clear()
+    turned_off, lancers = 0, 0
     behaviours, sized = {}, {}
     used_ids = {q[3][2] for u in units for p in u[2] if p[1] == 'AIObjectDescList' and p[3]
                 for ob in p[3][1] for q in ob[2] if q[1] == 'UniqueID' and q[3]}
@@ -901,16 +904,10 @@ def build_wd_global():
         if radius:
             rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
                 (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', radius)))]
-        row = survival_events.behaviour_row(name)       # the flight's behaviour (survival_events: built at level load)
-        if row:
-            assert row in NPC_ROWS, (name, row)
-            z.nb.add(row)
-            for p in rest_props:
-                if p[1] == 'AIObjectDescList':
-                    for obj in p[3][1]:
-                        assert any(q[1] == 'MissionNpcID' for q in obj[2]), name
-                        obj[2][:] = [(q[0], q[1], False, ('name', row, 0)) if q[1] == 'MissionNpcID' else q for q in obj[2]]
-            behaviours[row] = behaviours.get(row, 0) + 1
+        if survival_events.POOL_ROLE.get(name) == 'lancer':     # the Lancers' band higher (P1: they spawn 2 km up)
+            rest_props = [p for p in rest_props if p[1] != 'MaxAltitudeInMeter'] + [
+                (top_idx, 'MaxAltitudeInMeter', False, ('raw', 'Float', struct.pack('<f', survival_events.LANCER_MAX_ALT_M)))]
+            lancers += 1
         size = survival_events.flight_size(name)
         if size:                               # Survival's flights: 2, 4 or 6 aircraft in a standard formation
             for p in rest_props:
@@ -919,6 +916,23 @@ def build_wd_global():
                     assert any(q[1] == 'bGroupLead' and q[3] == ('raw', 'Bool', b'\x01') for q in objs[0][2]), name
                     set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
                     sized[size] = sized.get(size, 0) + 1
+        # the flight's behaviour (survival_events: built at level load), each object's after sizing: a Wolf flight's bait
+        # and trap objects name different rows (survival_events.behaviour_rows; set_flight_size copies objects 0 / 1)
+        if survival_events.behaviour_row(name):
+            for p in rest_props:
+                if p[1] == 'AIObjectDescList':
+                    rows = []
+                    for k, obj in enumerate(p[3][1]):
+                        row = survival_events.behaviour_rows(name, k)
+                        assert row in NPC_ROWS, (name, k, row)
+                        assert any(q[1] == 'MissionNpcID' for q in obj[2]), name
+                        z.nb.add(row)
+                        obj[2][:] = [(q[0], q[1], False, ('name', row, 0)) if q[1] == 'MissionNpcID' else q for q in obj[2]]
+                        rows.append(row)
+                    key = '+'.join(sorted(set(rows)))
+                    behaviours[key] = behaviours.get(key, 0) + 1
+                    if name in POOL_UNITS:     # the objects' names as event args write them (the Wolf trap's events)
+                        survival_events.POOL_OBJS[name] = [dn([q for q in ob[2] if q[1] == 'Name'][0][3]) for ob in p[3][1]]
         u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
     split_units(units, used_ids, z, top_number)
     ally_units(units, used_ids, z, top_number, v)
@@ -945,7 +959,9 @@ def build_wd_global():
     z.payloads[i] = bytearray(write_props(z, v) + rest)
     chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
     print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}; '
-          f'flight sizes: {sized}')
+          f'flight sizes: {sized}; {lancers} Lancer flights up to {survival_events.LANCER_MAX_ALT_M:.0f} m')
+    assert lancers == sum(1 for u in survival_events.POOL if survival_events.POOL_ROLE[u] == 'lancer'), lancers
+    assert len(survival_events.POOL_OBJS) == len(survival_events.POOL), sorted(set(survival_events.POOL) - set(survival_events.POOL_OBJS))
     retarget_import(z, NPC_TABLE_STOCK, NPC_TABLE)        # Survival's own NPC mission table (build_npc_table)
     save(z, new)
 
@@ -1739,7 +1755,8 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
     (survival_events.SHUTTLE_NPC_ROW, 'sstb_common', survival_events.SHUTTLE_NPC),   # Comona Defense's shuttle (its name)
     (survival_events.VALKA_EML_ROW, 'gepa_common', survival_events.VALKA_EML_NPC),   # VALKA's opener railgun (a turret row)
-]
+] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
+    (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
 SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
@@ -1846,7 +1863,10 @@ def build_npc_table():
 # same file); the package is a copy of a stock LA_ script package with our source and our own module name.
 AI_SRC = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'ai')
 LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'
-LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway', 'LA_SV_TailChase', 'LA_SV_ProvokeNear', 'LA_SV_Escape']
+LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway', 'LA_SV_TailChase', 'LA_SV_ProvokeNear', 'LA_SV_Escape',
+               # the fighter roles' (behaviour roadmap P1, Scripts/sv_config.lua CFG.behaviour_sets): Lancer, Wolf, Skirmisher
+               'LA_SV_LancerPass', 'LA_SV_LancerZoom', 'LA_SV_LancerBreak', 'LA_SV_WolfDrag', 'LA_SV_WolfStrike',
+               'LA_SV_SkirmPass', 'LA_SV_SkirmExtend']
 
 
 # The game's Lua require() (AceCombat8.exe 0x144eb8c00) loads module "A.B.C" with StaticLoadObject from
@@ -1857,6 +1877,13 @@ LUA_DIR = '/Game/LuaSource/SurvivalMode/AI/'
 
 
 def build_lua_scripts():
+    # every script a behaviour set names (Scripts/sv_config.lua CFG.behaviour_sets) is packed: a set naming one that isn't
+    # is never made (setsSetup: "not made (script X not in the container)") and its flights fly the fallback set
+    import re
+    lua = survival_events.runtime_lua()
+    sets = lua[lua.index('behaviour_sets = {'):lua.index('-- reactions (user, 2026-10-22')]
+    named = set(re.findall(r'"(LA_SV_\w+)"', sets))
+    assert named and named <= set(LUA_SCRIPTS), f'behaviour sets name scripts not packed: {sorted(named - set(LUA_SCRIPTS))}'
     for name in LUA_SCRIPTS:
         code = open(os.path.join(AI_SRC, name + '.lua'), encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
         new_path = LUA_DIR + name

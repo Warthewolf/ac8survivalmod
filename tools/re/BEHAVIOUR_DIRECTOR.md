@@ -639,3 +639,177 @@ The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv
 Still open (unchanged): the single COOP_TAG / VERSION bump (61 events, 59 rows: before any co-op build goes to friends);
 COOP.peerPlanes() not exported (P2 uses COOP.players()); the P1 / P2 / P7 tells catalogued but not said, and the
 bracket salvo's frame-accurate lead (P2); no hostSync replay of the RAILGUN WARNING; everything in game.
+
+## Unit 5: fighter roles (P1)
+
+The thesis' P1, "four behaviour sets instead of one": the 24 pool flights are split into role groups at build time,
+each group's world-data descs naming its role's behaviour row, so the behaviour is in place when the level loads (hard
+rule 20); the spawner draws a round's flights by a role mix and gives each its role's airframes. Built with the
+behaviour-pipeline brief's recipes (a) and (b) and the critic's corrections and gap fills (role airframes and fallbacks,
+the Lancers' altitude band, the Skirmishers' health and LAAM, the Wolf trap's per-object hold, the jammer's roles, the
+Lancer / Skirmisher tells). Lua, Scripts/ai (7 new behaviour scripts), survival.default.ini and the build
+(tools/survival_events.py, tools/build_survival.py: 4 new DT_SV_NpcMission rows, per-object behaviour rows and a raised
+altitude band in the world data, 36 new remote events). No COOP_TAG bump of its own (the contract's single bump comes
+last), but the world data, rows and events changed: that bump must come before any co-op build goes out.
+
+| role | the question | behaviour (set) | airframes |
+|---|---|---|---|
+| duelist | can you out-turn me? | today's NLID_SV_Fighter (LA_SV_TailChase, LA_SV_ProvokeNear, LA_SV_Escape, LA_SV_MoveAway) | Su-33, Su-47; Su-35 (10), Rafale, Typhoon (12), Su-57 (16), F-22A (18) |
+| lancer | can you dodge from above? | NLID_SV_Lancer: spawns 2 km above the others; one slashing pass (LA_SV_LancerPass), a zoom back up (LA_SV_LancerZoom); tailed it runs and reverses (LA_SV_LancerBreak, near and mid): never turns with you | F-15E, F-14D, Su-34; F-15C (6) |
+| wolf | will you take the bait? | bait and trap pairs: the even planes (NLID_SV_WolfLead) attack and, tailed, drag you straight (LA_SV_WolfDrag, then the stock 8 s run); the odd ones (NLID_SV_WolfWing: LA_SV_WolfStrike, a close gunfighter) are held at engagement None until sprung; their guns lead you 0.5 s | F-16C, MiG-29, F/A-18E, MiG-21 |
+| skirm | can you finish a fight before the next one starts? | NLID_SV_Skirmisher: in for one shot, breaking off the moment it fires (LA_SV_SkirmPass), a long extend (LA_SV_SkirmExtend); tailed, the stock rookie defence; health x0.75; its special a LAAM copy from 7 km, never inside 2.5 km | F-2A (4), Gripen (7), F-35C (9); before round 4 the Wolf airframes |
+
+(The MiG-31 the thesis names for the Lancer is out of the pool: user, 2026-10-23.)
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| the pool split | tools/survival_events.py `ROLE_BY_FLIGHT`, `POOL_ROLE`, `ROLE_ROW`, `behaviour_row`, `behaviour_rows`; Scripts/sv_config.lua `ROLE_BY_FLIGHT`, `ROLE` | by flight number NN, each role a whole 2 / 4 / 6-ship trio (CFG.squadrons: every role can field a 2-ship from round 1): duelist NN 01-02 (24 aircraft), lancer 03-04 (24), wolf 05-06 (24), skirm 07 and 08's 2-ship (14; 08's Air1 / Air2 are the retired behaviour probe's, never in a round, so the usable pool stays 86). The build checks Lua's list is the same (build_wolf) |
+| the behaviour rows | tools/build_survival.py `NPC_EXTRA` (+ `survival_events.ROLE_NPC`), `build_wd_global` | DT_SV_NpcMission rows sv_role_lancer / sv_role_wolf_lead / sv_role_wolf_wing / sv_role_skirmish (copies of Mission 22's f16c_common, NpcId SV_Role_Lancer / WolfLead / WolfWing / Skirmish). The world data's rows are now set per object after sizing: a Wolf flight's even objects the bait's row, its odd ones the trap's (set_flight_size copies objects 0 / 1, so the parity held before it too; now it's explicit). Build line: `behaviour rows (flights): {... 'f16c_common_sv': 6, 'sv_role_lancer': 6, 'sv_role_wolf_lead+sv_role_wolf_wing': 6, 'sv_role_skirmish': 4, ...}` |
+| the Lancers' band | build_survival.py `build_wd_global`, `survival_events.LANCER_MAX_ALT_M` | MaxAltitudeInMeter 9000 on the six Lancer units (the critic: Mission 22's 4-5 km band would stop their zoom's climb and, above it, maybe send them back into the area, [?]); `6 Lancer flights up to 9000 m` |
+| the scripts | Scripts/ai/LA_SV_LancerPass, LancerZoom, LancerBreak, WolfDrag, WolfStrike, SkirmPass, SkirmExtend; `LUA_SCRIPTS`; `GAME_LUA_STOCK` | every one "stock grammar ok" (shapecheck.py) and walked by roles_test's model of the tree runner (below); packed at /Game/LuaSource/SurvivalMode/AI/<name>; the build checks every script a set names is packed. tools/re/BEHAVIOUR_GUIDE.md 6 has what each does |
+| the sets | sv_config.lua `CFG.behaviour_sets` | NLID_SV_Lancer, NLID_SV_WolfLead, NLID_SV_WolfWing, NLID_SV_Skirmisher, each NLID_0012_CP with its slots (setsSetup, unchanged: `behaviour: set NLID_SV_Lancer in (NLID_0012_CP with ...)`) |
+| the role rows | sv_rows.lua `rolesSetup` (RS), called from sv_main.lua after searchSetup | at the main menu, a DT_NPC row per role (copied from f16c_common's, Survival's search module, the role's set: ROLE.SETS); a set that couldn't be made: the fighters' set (or fallback_luaset); roles off: the fighters' set for every role row (today's behaviour). Made in Lua so a missing set falls back instead of naming a LuaSet row that isn't there (the brief) |
+| the level's roles | sv_spawn.lua `ROLE.levelLoad` (sv_main.lua's level-load block), `ROLE.flight(unit)` | what was in before the level loaded (the behaviour build and the spawner only know those): a role is live (its set), drawn as a duelist (its row flies the fighters' set) or sits out (no row: an older container; ROLE.sitsOut keeps it out of the role-blind picks too: spares, a special's refill, Ctrl+6, as the brief asks: what its desc would build is unknown); roles off: ROLE.live nil and every flight is drawn, armed and paid as before roles |
+| the draw | sv_config.lua `ROLE.mixFor`, `ROLE.quotas`; sv_spawn.lua `ROLE.pickRound`, `ROLE.groups`; sv_rounds.lua `startRound` | the round's fighters by CFG.roles.mix (the band of the latest from_round reached; an ace round by ace_mix: the squadrons keep the duelists' set and its Super branch), each role's share of the round in whole 2-ships (the pairs left drawn by what's left of each share, so round 1's two 2-ships are 60 / 20 / 20 % over many rounds), from its own flights (exactFlights: the free flights whose sizes add up to the share exactly, flown ones first, so a group of six flights doesn't strand a remainder; then startRound's pick takes them); a group short is filled from the rest; the list shuffled so each wave mixes roles. Spares, a special's refill and Ctrl+6 stay role-blind (a flight's role is its unit's anyway) |
+| airframes | sv_spawn.lua `pickAircraft(tier, role)` | the role's own airframes (CFG.roles.aircraft) of what's unlocked (CFG.aircraft + variety.late by round + SR.usable); a signature type only when it's the role's; none yet (the Skirmishers before round 4): the fallback role's (CFG.roles.fallback skirm = wolf), else the whole list; logged once a round. Ace squadrons keep their own rows; the jammer its EA-18G on object 0 |
+| altitude | sv_spawn.lua `spawnFlight` | a Lancer flight spawns CFG.roles.lancer.alt_add_m (2000) higher, at most ROLE.LANCER_TOP_M - 500 (8.5 km) |
+| tells | sv_spawn.lua `ROLE.spawned` | the round's first Lancer and first Skirmisher flight: TELL.say("lancer" / "skirm", TELL.ALL) (P3's HUD-only tells: BANDITS HIGH / THEY WON'T TURN WITH YOU, LONG-RANGE SHOOTERS / CLOSE THE DISTANCE), once a round each, never for an ace squadron; inside roundsTick, so they reach the joiners as "tl" |
+| the jammer | sv_spawn.lua `ROLE.jammerOk`; sv_rounds.lua | the round's jammer leads only a CFG.roles.jammer flight (duelist, skirm): its EA-18G on object 0 never takes a Wolf bait's drag set (the critic) or a Lancer's |
+| escorts | sv_rounds.lua | a raid's escorts are never Wolf flights (the escort order would free the trap); the escorts still come first in the queue |
+| the Wolf trap | survival_events.py `build_wolf`; sv_spawn.lua `WOLF` (WOLF.spawned, WOLF.tick from roundsTick, WOLF.free, WOLF.holding) | per-object remote events on each Wolf flight's odd objects (12 in the 6 flights): RE_SV_WolfHold_<NN><L> (engagement None on that object: Mission 22's MOONCHILD hold, the stock by-object form), RE_SV_WolfFree_<NN><L> (air-only search + PlayerOnlyNoLimit on it), RE_SV_WolfTurn_<NN><L> (LastTGT on it, Mission 6's by-object request). The hold comes hold_after_s (3) after the flight's SV_Up_NN is seen set (its appearance orders, 2 s after it spawns, would undo an earlier one: hard rule 26), never while you're down at the airfield. Freed: at hold_max_s (60), a held plane hit by you or a joiner (that one), its bait (object 0) down (all), or by the squad director's spring (P2, unit 6: `WOLF.free(unit, why, true)` adds the turn). Held again rehold_s (1) after your DECOY's end (its RE_SV_DecoyEnd_NN frees the whole flight). Escorts, ALLY.tick's hunts and the co-op host's split hunts leave a holding flight alone (WOLF.holding). Build line: `wolf trap: 12 held objects in 6 Wolf flights`; `events: 628 triggers, 1360 execs` (was 592 / 1312) |
+| the Wolf guns | sv_rows.lua searchSetup's gun branch (`wolfGun`) | the Wolf airframes' gun rows at every spike level lead you by CFG.roles.wolf.gun_lead_s (rows NPC_FCS_PlaneGun000_SV<level>_WOLF; "guns lead on" can't be switched live: PredictionOffsetTime is on the row). Every plane of those airframes gets it (bait and trap; the Skirmishers' rounds 1-3 fallback too). Only with roles on at the main menu |
+| the Skirmishers' LAAM | sv_rows.lua (`skirmLaam`) | their airframes' special slot (slot 3 on all three) a copy of NPC_FCS_PlaneLAAM000 (NPC_FCS_PlaneLAAM000_SV_SKIRM): lock within 7 km / 45 deg, never inside 2.5 km, 2 s lock, 4 s between, 8 s rest (the stock AI LAAM: 1.5-4 km, what Survival's own missiles already reach). Needs CFG.special on; only with roles on |
+| health | sv_ai.lua `enemyLate`, `scaleHealth` | x CFG.roles.health_x[role] on top of the late rounds' (skirm 0.75; not an ace squadron's): MaxHealth lowered with it so a cut-down plane doesn't read as damaged (the critic; raising it is confirmed, lowering untested). Runs on every game: a joiner's copies by its own ROLE.live |
+| co-op | sv_coop.lua `KEEP_EVENTS`, the host's hunts | `^RE_SV_WolfTurn` kept (LastTGT steers to the host); WolfHold / WolfFree forwarded (a joiner's copy holds its fire too); a hunt queued for a holding Wolf flight is dropped. CFG.roles goes to joiners with the host's settings (data); the role sets and rows are each game's own from the main menu, the same names in every build |
+
+### CFG keys (CFG.roles; `[roles]` and its sections in survival.ini; the host's for the room)
+- `enabled` true (false: today's single set for every flight, drawn and armed as before; rows and sets are made at the
+  main menu, so a change needs a game restart), `tells` true, `jammer` = duelist, skirm.
+- `mix` ([roles.mix]): `from_round` 1, 4, 10; `duelist` 0.6, 0.4, 0.3; `lancer` 0.2, 0.2, 0.25; `wolf` 0.2, 0.2,
+  0.25; `skirm` 0.0, 0.2, 0.2 (each role's share at the band in the same place).
+- `ace_mix` ([roles.ace_mix]): duelist 1.0, the others 0.0 (P9 maps squadrons to roles here).
+- `aircraft` ([roles.aircraft]): each role's airframe rows (above); `fallback` ([roles.fallback]): skirm = wolf.
+- `health_x` ([roles.health_x]): duelist / lancer / wolf 1.0, skirm 0.75.
+- `lancer` ([roles.lancer]): `alt_add_m` 2000.
+- `wolf` ([roles.wolf]): `hold` true, `hold_after_s` 3.0, `hold_max_s` 60, `free_on_hit` true, `free_on_bait_down`
+  true, `rehold_s` 1.0, `gun_lead_s` 0.5.
+- `skirm` ([roles.skirm]): `laam` true, `laam_m` 7000, `laam_min_m` 2500, `laam_angle_deg` 45, `laam_lock_s` 2.0,
+  `laam_interval_s` 4.0, `laam_rest_s` 8.0.
+- Build data outside CFG (not in the ini): `ROLE_BY_FLIGHT`, `ROLE.ROWS`, `ROLE.SETS`, `ROLE.LANCER_TOP_M` (9000;
+  the build checks it against survival_events.LANCER_MAX_ALT_M).
+
+### Log lines to look for in a test
+- Main menu: `behaviour: set NLID_SV_Lancer in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape,
+  MoveAwayFromTargetLua = LA_SV_LancerZoom, ProvokeMidLua = LA_SV_LancerBreak, ProvokeNearLua = LA_SV_LancerBreak,
+  PursueTargetLua = LA_SV_LancerPass)` and the same for NLID_SV_WolfLead / WolfWing / Skirmisher;
+  `game Lua: stock SurvivalMode.AI.LA_SV_LancerPass: true ...` for each new script;
+  `roles: behaviour rows lancer sv_role_lancer -> SV_Role_Lancer flies NLID_SV_Lancer; wolf ...; wolf_wing ...; skirm ...`
+  (a set not made: `... flies NLID_SV_Fighter (wanted NLID_SV_WolfLead: not made)`; an older container:
+  `lancer NOT made (no mission row sv_role_lancer in DT_SV_NpcMission ...)`);
+  `weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_WOLF (the Wolf airframes' gun: ..., leads 0.50 s)`,
+  `weapons: NPC_FCS_PlaneLAAM000 -> NPC_FCS_PlaneLAAM000_SV_SKIRM (the Skirmishers' LAAM: lock within 7000 m / 45 deg,
+  never inside 2500 m, ...)`, `weapons: OP1002_f02a_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)`.
+- Level load: `roles: at level load lancer NLID_SV_Lancer, wolf NLID_SV_WolfLead, skirm NLID_SV_Skirmisher` (or
+  `roles: off; every fighter flight flies the fighters' set, drawn as before`); then, before round 1,
+  `game Lua: built ... LA_SV_LancerPass x1, ... LA_SV_WolfDrag x1, LA_SV_WolfStrike x1, ... LA_SV_SkirmPass x1 ...;
+  errors 0` (each built once a desc's row names its set: the proof the per-object Wolf rows work is WolfDrag AND
+  WolfStrike both built).
+- Each round: `roles: round 10 (the mix from round 10: duelist 0.30, lancer 0.25, wolf 0.25, skirm 0.20): 24 of 24
+  aircraft: duelist 8, lancer 6, wolf 6, skirm 4` (`; short: wolf 24 of 26; filled from skirm 2` when a group runs
+  short; `an ace round's mix` in an ace round); each spawn `round 10: ERA_Unit_03_Dep_Air1 [lancer] as f15c_common_svb
+  (lancer, ...), 21 km out at bearing 140, 5.3 km up: 4 aircraft up`; `roles: no skirm airframe yet in round 2; its
+  flights fly wolf's`.
+- Tells: sv_tells.lua's `tell: lancer: ... tell callout 'BANDITS HIGH'` and `tell: skirm: ...`, once a round each.
+- The Wolf trap: `roles: ERA_Unit_05_Dep_Air1 (wolf) trap 3 s after its orders: held B, D`, then one of
+  `roles: ... trap freed (you hit it): B`, `... freed (its bait is down): D`, `... freed (held 60 s): B, D`,
+  `... trap again after your decoy: held D`; the director's spring (unit 6) `... freed (<why>): B, D, turned onto the
+  player`. Not fired: `... none held (not fired: RE_SV_WolfHold_14B <why>)`; `roles: <unit> (wolf) never got its orders`.
+  Co-op host: `coop: <unit> holds its Wolf trap; it doesn't go after the joiners`.
+- Health: `late: round 5 enemies' health x0.75 (skirm x0.75) (<plane>: 600 -> 450)` (once a round per role).
+- `ai:` lines by role: a Lancer's short PursueTarget then a long MoveAwayFromTarget; a Skirmisher's MoveAwayFromTarget
+  right after a launch; a held Wolf wing in FollowFormation (or Patrol) until freed, then PursueTarget. Errors:
+  `roles: setup error`, `roles: level load error ... roles off this level`, `roles: wolf error ...`.
+
+### Test checklist (in game)
+1. The pipeline: the main-menu lines above, then at level load all seven new modules `built ... x1; errors 0` (with
+   WolfDrag and WolfStrike both built, the per-object rows of one desc work: the brief's open question).
+2. A Lancer flight ([roles.mix] lancer = 1, 1, 1, the others 0): spawns ~2 km above the rest; slashes through once
+   (ai: short PursueTarget) and climbs away (MoveAwayFromTarget ~10 s); no `ReturnToUnit` right after spawning high or
+   at the top of a zoom (the critic's [?] for the raised band); on its tail it runs and reverses, never turns with you.
+3. A Wolf flight ([roles.mix] wolf = 1, 1, 1): the held odd planes stop attacking ~3 s after their orders and follow
+   their lead (FollowFormation [I]); the bait drags when tailed (straight / lazy jinks, then the 8 s run). Shoot a held
+   one: it's freed and attacks. Shoot the bait down: all freed. Wait 60 s: all freed. A DECOY on a Wolf flight: held
+   again a second after it ends. Its guns lead you (gun hits while you jink).
+4. A Skirmisher flight ([roles.mix] skirm = 1, 1, 1, round 9+): a LAAM from 5-7 km, the break-off as it launches (ai:
+   MoveAwayFromTarget right after), back ~12 s later; never closes inside ~3 km; dies quicker (x0.75).
+5. Mixed rounds 1, 4, 10, 20: the `roles: round N` line's shares; the first Lancer / Skirmisher callout once a round;
+   the jammer ([jammer] chance = 1.0, from_round = 2) only on a duelist or Skirmisher flight; a raid's escorts never
+   Wolf flights.
+6. Roles off ([roles] enabled = false, restart): every role row `flies NLID_SV_Fighter`, `roles: off`, no `roles:
+   round` lines: the old game.
+7. Co-op: a joiner's copies of a held Wolf plane don't shoot it; `RE_SV_WolfTurn` never in a joiner's "ev" lines.
+
+### Offline test
+`sh tools/checks/roles_test.sh` (tools/checks/roles_test.lua on the real parts and Scripts/ai, Lua 5.4.6; then a Python
+check of survival_events' split):
+- the 7 scripts built as the game builds them (one root, parents first, unique names, one child per decorator /
+  probability, probabilities under a RandomSelect) and walked through every pick of every RandomSelect by tailed_test's
+  runner model (extended with IsFireMissileFinished and an abort mid-task) in 600 situations (rank 1-5, AI level 1-5,
+  mid / top / floor of the band, a missile counted or not, an abort or not, post-stall or not): the Lancer's pass always
+  the slashing one (lead pursuit, a7 extend, a11 head-on break, KDS blocked) into its zoom; the zoom climbs only below
+  the band's top and always extends (at most 9.8 s); the Lancer break and the Wolf drag each one move under the 6 s
+  blackout (4.7 / 3.5 s), the drag never a hard break; the Wolf strike always pursues close, its Super only at AI 5; the
+  Skirmisher's pass breaks off when its counter trips at entry or mid-pursuit; a fixture shows the model finds the fault
+  of the gate straight in the root (no break-off), the reason for its own LaxSequencer;
+- the rows at the main menu on the real setsSetup / searchSetup / rolesSetup with fake DT_NPC_LuaSet, DT_NPC,
+  DT_SV_NpcMission, DT_NPC_FCS and DT_NPC_Weapon tables: the four sets (their slots, the rest stock), the role rows
+  naming them with Survival's search module, a set not made (its role row on NLID_SV_Fighter, ROLE.levelLoad drawing
+  those flights as duelists), roles off (every role row NLID_SV_Fighter, no Wolf gun lead, no Skirmisher LAAM), no role
+  row (the group sits out); the Wolf airframes' leading gun at every spike level, the Skirmishers' LAAM copy at every
+  level, a duelist's random special;
+- the draw on the real startRound (200 rounds each at rounds 1, 6 and 15): each role's share of the aircraft within
+  0.12 of the mix; round 35's 60 drawn whole by role in every one of 60 rounds (pickFlights alone came up 2-4 short in
+  1 round of 5: the reason for exactFlights); a group too small for its share filled from the rest; an ace round's 24 duelists first; the jammer
+  only on duelist or Skirmisher flights (150 rounds); a raid's escorts never Wolf flights (100 rounds); roles off as
+  before; the probes never; a role sitting out never drawn nor a spare;
+- spawnFlight: each role's airframes at round 10, the Skirmishers' Wolf airframes at round 2 (logged) and their own at
+  round 9, the Lancers 4.0-6.5 km up and 8.5 km at most, the tells once a round each (and none with [roles] tells off),
+  a Wolf 6-ship's trap objects 1, 3, 5;
+- WOLF.tick: no hold before the flight's orders, before hold_after_s or while grounded; held B, D; a hit frees one; a
+  decoy's end holds the rest again once; the bait down frees the rest; hold_max_s frees all; the spring frees and turns;
+  the flight down or a hold event the container hasn't got drops it; hold off; co-op forwards hold / free, keeps turn;
+- enemyLate: a Skirmisher x0.75 with MaxHealth lowered, x0.75 on top of the late rounds', not an ace squadron's,
+  nothing with roles off;
+- the build's split (Python): 24 / 24 / 24 / 14, each flight's row, the Wolf objects' rows by parity, 12 trap objects.
+build_all.sh: `events: 628 triggers, 1360 execs`; the WD's rows and the Lancers' 9 km band read back from the built
+WD_SurvivalMode_global (every Wolf flight `sv_role_wolf_lead, sv_role_wolf_wing, ...`; ep_dump shows
+RE_SV_WolfHold_14B as LiveAIEngagementOrder None on ERA_Obj_01_Air11_su33_7 alone).
+
+### Untested / known limits
+- Everything in game [V at most]. In particular:
+- Different rows on the AI objects of one desc (the Wolf bait / trap): every unit had one row so far (the brief's
+  risk). If WolfStrike never shows as built, the trap flies the bait's set; the hold still works (it's an engagement
+  order, not a behaviour).
+- A per-object LiveAIEngagementOrder / LiveAIRequestUniqueAction on a pool plane (the stock form, never used by
+  Survival); what a later unit-wide order does to a per-object None (every engagement order rewrites the five
+  permission bytes: BEHAVIOUR_NATIVE_LOGIC 8.5, so a hunt, escort or DecoyEnd frees the trap: handled for those three);
+  where a held plane flies (FollowFormation with its lead, or Patrol in its 40 km area [I]); whether None also stops
+  its evasion and flares [I] (a held plane may be a free kill: free_on_hit frees it at the first hit).
+- The Lancers above Mission 22's band: whether 9 km max changes anything else of their unit [?]; whether the zoom's
+  50 deg climb, then FlyStraight (no attitude change: it keeps climbing) and MoveAwayFromTarget leave it too high or too
+  slow for the next pass.
+- IsFireMissileFinished's counter (zeroed by UPDATE_AI_STATE, [I]): if it only resets on a state change, a Skirmisher
+  that fired in its previous pursuit still breaks off at once (the break-off comes either way: its own LaxSequencer).
+- IsAroundPlayer wasn't used (its direction is ambiguous in the notes), so "never inside 3 km" rests on the head-on
+  break (a11-a13, 3 km), the extend when you leave its nose cone and the LAAM copy's 2.5 km minimum.
+- Lowering MaxHealth live (raising it is confirmed: AB.L..IN). SpdRelative 300 with range 1500 on the drag (copied
+  from the stock escape's form; its exact meaning [I]).
+- Role picks run on the host; a joiner's copies fly the same units. A joiner who links after a hold doesn't get it.
+  A joiner can't tell an ace squadron (D.aceSquad is the host's), so its copy of an ace in a Skirmisher flight is cut
+  to x0.75 there too (the host's plane isn't; the host decides the kill).
+- The Wolf airframes' gun lead also arms the Skirmishers' rounds 1-3 fallback flights.
+- Ace squadrons: ace_mix puts them in duelist flights first (they keep the Super pursuit); overflow lands in other
+  groups (the Wolf strike has its own Super; the Lancer pass and Skirmisher pass don't). P9 maps squadrons to roles.
+- No COOP_TAG / VERSION bump yet (the contract's single bump at the end): 36 new events, 4 new mission rows, new world
+  data. A joiner on an older build would spawn the role units with rows it hasn't got.

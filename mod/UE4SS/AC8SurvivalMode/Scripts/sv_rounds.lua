@@ -432,7 +432,14 @@ local function startRound()
             end
         end
     end
-    local fighters, nFighters = pick(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
+    -- (the fighter roles, CFG.roles: each role's share of the round from its own flights, an ace round's by ace_mix;
+    -- roles off or no level snapshot (ROLE.live): the whole pool as before)
+    local fighters, nFighters
+    if ROLE.live and nWant > 0 then
+        fighters, nFighters = ROLE.pickRound(nWant, pick, D.roundTier ~= nil)
+    else
+        fighters, nFighters = pick(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
+    end
     -- the behaviour probe: round 1's first flight flies the package script, round 2's the run-time one
     local pv = CFG.probe.enabled and CFG.probe.behaviour and ((D.round == 1 and "Pkg") or (D.round == 2 and "Rt"))
     local pu = pv and CFG.probe.units[pv]
@@ -444,15 +451,22 @@ local function startRound()
     local nEsc = 0
     if raid and CFG.escorts.enabled and #fighters > 0 then
         local n = math.ceil(#fighters * CFG.escorts.share)
-        for i = 1, math.min(n, #fighters) do
-            if poolIndex(fighters[i]) then D.escortUnits[fighters[i]] = true; nEsc = nEsc + 1 end
+        -- (not a Wolf flight: the escort's engagement order would free its held trap; the escorts first in the queue)
+        local esc, rest = {}, {}
+        for _, u in ipairs(fighters) do
+            if #esc < n and poolIndex(u) and ROLE.flight(u) ~= "wolf" then esc[#esc + 1] = u else rest[#rest + 1] = u end
         end
+        for _, u in ipairs(esc) do D.escortUnits[u] = true; nEsc = nEsc + 1 end
+        for _, u in ipairs(rest) do esc[#esc + 1] = u end
+        fighters = esc
     end
     -- the round's jammer (CFG.jammer): one fighter flight led by an EA-18G
     local jc = CFG.jammer
     D.jammerUnit, D.jammer = nil, nil
     if normal and jc and jc.enabled and D.round >= jc.from_round and math.random() < jc.chance and SR.usable[jc.aircraft] then
-        for _, u in ipairs(fighters) do if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] then D.jammerUnit = u end end
+        for _, u in ipairs(fighters) do                -- (a duelist or Skirmisher flight with roles on: ROLE.jammerOk)
+            if not D.jammerUnit and poolIndex(u) and not PROBE_OF[u] and ROLE.jammerOk(u) then D.jammerUnit = u end
+        end
         if D.jammerUnit then log(string.format("round %d: the jammer flies with %s", D.round, D.jammerUnit)) end
     end
     local cap = waveCap(D.round)
@@ -461,7 +475,7 @@ local function startRound()
     D.wave, D.queue = 1, D.waves[1]
     D.spare = {}
     for _, u in ipairs(CFG.pool) do                 -- spares: free 2-ship flights, for a flight that fails to spawn
-        if not D.up[u] and not taken[u] and not PROBE_OF[u] and flightSize(u) == 2 then D.spare[#D.spare + 1] = u end
+        if not D.up[u] and not taken[u] and not PROBE_OF[u] and not ROLE.sitsOut(u) and flightSize(u) == 2 then D.spare[#D.spare + 1] = u end
     end
     local waveText = ""
     if #D.waves > 1 then
@@ -549,6 +563,8 @@ function roundsTick(now)
     if D.shuttleClock then D.grounded = playerOnAirfield() end   -- (the shuttle's countdown stops while you're down)
     specialTick(now)
     pressureAfterBoss(now)                          -- (the band's attack throttle again once an Anomaly / VALKA is down)
+    local okW, errW = pcall(WOLF.tick, now)          -- (the Wolf trap's holds and releases: CFG.roles.wolf, sv_spawn.lua)
+    if not okW and tostring(errW) ~= D.wolfErr then D.wolfErr = tostring(errW); log("roles: wolf error " .. D.wolfErr) end
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
@@ -588,7 +604,7 @@ function roundsTick(now)
             if not sk.spawn(now) then                -- it can't come: a normal round (its fighters, if it flies alone)
                 local alone = SPC.kindValue(sk.alone)
                 D.special, RUN.specialPick[D.round] = nil, false
-                local f = alone and pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] end) or {}
+                local f = alone and pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] or ROLE.sitsOut(q) end) or {}
                 for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
                 log(string.format("round %d: no %s; %d fighter flights instead", D.round, u:sub(2), #f))
             end

@@ -74,6 +74,18 @@ on KDS for ordinary enemies; Survival's pursuits block it (`blockKDS`).
 | LA_SV_ProvokeNear | ProvokeNearLua | player close behind: break turn (all), brake-and-turn overshoot (rank 2+; only with the pursuer within 50 m, else a break), flare break (rank 3+; the break comes with no flare ready too), cobra bait (AI level 3+, CanCobra; else a break right), kulbit bait (AI level 4+, CanKulbit; else a break left) and scissors (AI level 4+): every pick moves, one move under 5 s (P5, tools/re/BEHAVIOUR_DIRECTOR.md unit 2). CFG.ai.reactions | built, untested |
 | LA_SV_Escape | EscapeFromPursuerLua | rank-weighted: the stock 8 s level-and-straight run (rookies) or the aces' 2 s break up / down / sideways by altitude (EscapeFromPursuer_0400), then a 2 s level turn (P5: an altitude-gated pick that fails near the band's top or floor still turns). CFG.ai.reactions | built, untested |
 
+The fighter roles' scripts (P1, tools/re/BEHAVIOUR_DIRECTOR.md unit 5; each set is NLID_0012_CP with these slots, the
+rest stock; the role groups' world-data descs name them through their own behaviour rows):
+| script | set and slot | what | status |
+|---|---|---|---|
+| LA_SV_LancerPass | NLID_SV_Lancer PursueTargetLua | one slashing pass: 6 s lead pursuit that extends when the target leaves its nose cone for 2 s and breaks off a head-on merge within 2.4 km, KDS blocked; 2 s through at full speed; SetMoveAwayFromTarget | built, untested |
+| LA_SV_LancerZoom | NLID_SV_Lancer MoveAwayFromTargetLua | wings level, a 50 deg pull-up held 3 s (only below its unit band's top less 1 km: UnitAltitudeComparison), then a 4 km / 4 s extend; ~10 s | built, untested |
+| LA_SV_LancerBreak | NLID_SV_Lancer ProvokeNearLua, ProvokeMidLua | tailed: level, 1 s straight at full power, a 3.5 G 180 deg reversal either side (Provoke_0400_l shortened, 4.7 s): never turns with you | built, untested |
+| LA_SV_WolfDrag | NLID_SV_WolfLead ProvokeNearLua (the Wolf bait) | tailed: drags you straight or with a lazy jink, a little faster than you (SpdRelative to the pursuer), 3.5 s; its escape is the stock 8 s run | built, untested |
+| LA_SV_WolfStrike | NLID_SV_WolfWing PursueTargetLua (the Wolf trap) | a gunfighter: a hard turn, then twice 12 s 200 m behind the target (own offset, never giving up, KDS blocked); at AI level 5 half its runs TailChase's "Super" | built, untested |
+| LA_SV_SkirmPass | NLID_SV_Skirmisher PursueTargetLua | an 8 s pursuit under IsFireMissileFinished(false, abort): the first missile it fires aborts it; extends when the target leaves its cone, breaks a head-on merge within 3 km; the gate in a LaxSequencer of its own so the break-off always comes | built, untested |
+| LA_SV_SkirmExtend | NLID_SV_Skirmisher MoveAwayFromTargetLua | MoveAwayFromTarget_0201's extend: out to 4.5 km (7.5 s), then MoveCenterAltitude 5 s | built, untested |
+
 The AI level (AILevel, `InstanceWeightProbabilityAILevel`) is the flight's world-data LevelId / 100 (stock 200 = 2),
 written by `SV_SetLevel(unit, level)` before Survival spawns it; Survival's ranks 6-10 (Mercenary, Legend, Demon,
 Phantom, Reaper: main.lua CFG.tiers) use 3-5, so every AI-level-weighted branch above is off for ranks 1-5.

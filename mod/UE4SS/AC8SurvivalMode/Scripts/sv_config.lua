@@ -117,9 +117,9 @@ CFG = {
     -- the call), a hunting tier's flight within hunt_km of you (hunt, once a flight a round), a bomber raid or strike on
     -- the airfield (raid), the jammer up and down, each later wave from wave_from_round (wave; 0: never), the ALICORN's
     -- railgun (alcn_rail_first, then alcn_rail: lead_s before the order, with CFG.specials.alicorn.rail_alert), dive,
-    -- surfacing and VLS volley, a Ladon's VLS volley. The rest are catalogued for the squad director (P2: pincer, split,
-    -- dive with its clock, drag, lure, trap, cover_ask, six, bracket, regroup, lancer, skirm) and the ALICORN's deck (P7)
-    -- and not said yet.
+    -- surfacing and VLS volley, a Ladon's VLS volley, the round's first Lancer and Skirmisher flight (lancer, skirm: P1's
+    -- fighter roles, CFG.roles tells). The rest are catalogued for the squad director (P2: pincer, split, dive with its
+    -- clock, drag, lure, trap, cover_ask, six, bracket, regroup) and the ALICORN's deck (P7) and not said yet.
     tells = {
         enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
         line_gap_s = 20, hunt_km = 8.0, wave_from_round = 26,
@@ -300,11 +300,35 @@ CFG = {
     -- "sit on the target's tail" branch (PursuerTarget with its own-offset flag: 250 m behind the target, KDS blocked)
     -- that its pilot rank weighs: rank 1 never, 2 10 %, 3 30 %, 4 70 %, 5 always. The skill tiers and difficulty spikes
     -- raise the rank, so the tail chasing grows with the rounds. ai.tail_chase = false keeps the stock pursuit.
+    -- The fighter roles' sets (behaviour roadmap P1, CFG.roles; tools/re/BEHAVIOUR_DIRECTOR.md unit 5), each the
+    -- light-fighter set with the role's slots (a slot left out keeps 0012_CP's stock script):
+    --   NLID_SV_Lancer      boom and zoom: one slashing pass (LA_SV_LancerPass), a zoom climb back to height
+    --                       (LA_SV_LancerZoom), tailed it runs and reverses (LA_SV_LancerBreak), never turning with you
+    --   NLID_SV_WolfLead    the Wolf bait (a Wolf flight's even planes): tailed it drags you straight (LA_SV_WolfDrag,
+    --                       then the stock 8 s escape run)
+    --   NLID_SV_WolfWing    the Wolf trap (its odd planes, held until the trap springs): a gunfighter's close pursuit
+    --                       (LA_SV_WolfStrike)
+    --   NLID_SV_Skirmisher  the stand-off harasser: in for one shot, breaking off as it fires (LA_SV_SkirmPass), then a
+    --                       long extend (LA_SV_SkirmExtend); tailed, the stock rookie defence (it dies fast if caught)
     behaviour_sets = {
         NLID_SV_Fighter = { base = "NLID_0012_CP", slots = { MoveAwayFromTargetLua = "LA_SV_MoveAway",
                                                              PursueTargetLua = "LA_SV_TailChase",
                                                              ProvokeNearLua = "LA_SV_ProvokeNear",
                                                              EscapeFromPursuerLua = "LA_SV_Escape" } },
+        NLID_SV_Lancer = { base = "NLID_0012_CP", slots = { PursueTargetLua = "LA_SV_LancerPass",
+                                                            MoveAwayFromTargetLua = "LA_SV_LancerZoom",
+                                                            ProvokeNearLua = "LA_SV_LancerBreak",
+                                                            ProvokeMidLua = "LA_SV_LancerBreak",
+                                                            EscapeFromPursuerLua = "LA_SV_Escape" } },
+        NLID_SV_WolfLead = { base = "NLID_0012_CP", slots = { PursueTargetLua = "LA_SV_TailChase",
+                                                              MoveAwayFromTargetLua = "LA_SV_MoveAway",
+                                                              ProvokeNearLua = "LA_SV_WolfDrag" } },
+        NLID_SV_WolfWing = { base = "NLID_0012_CP", slots = { PursueTargetLua = "LA_SV_WolfStrike",
+                                                              MoveAwayFromTargetLua = "LA_SV_MoveAway",
+                                                              ProvokeNearLua = "LA_SV_ProvokeNear",
+                                                              EscapeFromPursuerLua = "LA_SV_Escape" } },
+        NLID_SV_Skirmisher = { base = "NLID_0012_CP", slots = { PursueTargetLua = "LA_SV_SkirmPass",
+                                                                MoveAwayFromTargetLua = "LA_SV_SkirmExtend" } },
     },
     -- reactions (user, 2026-10-22: "come up with some new reactions"): LA_SV_ProvokeNear when the player is close on
     -- their tail (break turn, brake-and-turn overshoot, flare break; AI level 3+ cobra bait, 4+ kulbit bait and
@@ -324,6 +348,52 @@ CFG = {
     -- enemyProvoke. The writes read back (0.70.2); whether the game uses them is untested.
     ai = { tail_chase = true, reactions = true, tier_provoke = true, provoke_stricter = true,
            provoke_cone_deg = 0, provoke_time_s = 0.0 },
+    -- Fighter roles (behaviour roadmap P1, "four behaviour sets instead of one": each enemy type asks the player a
+    -- different question; tools/re/BEHAVIOUR_DIRECTOR.md unit 5). The fighter pool is split into role groups at build
+    -- time (ROLE_BY_FLIGHT below, tools/survival_events.py POOL_ROLE), each group's world data naming its role's
+    -- behaviour row, so the behaviour is in place when the level loads (hard rule 20):
+    --   duelist  "can you out-turn me?"      today's fighters (NLID_SV_Fighter)
+    --   lancer   "can you dodge from above?" spawns alt_add_m above the others, slashes through once and zooms back up,
+    --            never turns with you (NLID_SV_Lancer)
+    --   wolf     "will you take the bait?"   bait and trap pairs: the bait drags you when tailed (NLID_SV_WolfLead), its
+    --            wingman (the trap, NLID_SV_WolfWing, a close gunfighter whose gun leads you, wolf.gun_lead_s) holds off
+    --            at engagement None from its appearance until it's sprung (the squad director's, P2), hit, its bait goes
+    --            down or wolf.hold_max_s pass (Scripts/sv_spawn.lua WOLF)
+    --   skirm    "can you finish a fight before the next one starts?" a stand-off harasser: in for one long-range shot
+    --            (its LAAM's copy from skirm.laam_m, never closer than skirm.laam_min_m), breaking off as it fires, then a
+    --            long extend; its health x health_x.skirm (0.75: it dies fast if caught) (NLID_SV_Skirmisher)
+    -- A round's fighters are drawn by mix (the band of the latest from_round the round has reached: each role's share
+    -- of the round's aircraft, in whole 2-ships; a group that runs short is filled from the others, logged), an ace
+    -- round's by ace_mix (the squadrons keep the duelists' set). Each role flies its own airframes (aircraft; signature
+    -- types only when they're the role's), a role with none unlocked yet its fallback role's, then the whole pool. The
+    -- first Lancer and Skirmisher flight of a round call themselves out (tells: CFG.tells lancer / skirm). The round's
+    -- jammer leads a flight of the `jammer` roles only. Rows and sets are made at the main menu: a change needs a game
+    -- restart. enabled = false: every flight flies today's set (the role rows name NLID_SV_Fighter) and the draw,
+    -- airframes and health are as before roles.
+    roles = {
+        enabled = true,
+        mix = { from_round = { 1, 4, 10 }, duelist = { 0.6, 0.4, 0.3 }, lancer = { 0.2, 0.2, 0.25 },
+                wolf = { 0.2, 0.2, 0.25 }, skirm = { 0.0, 0.2, 0.2 } },
+        ace_mix = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 },
+        aircraft = { duelist = { "su33_common", "su47_common", "su35_common", "rflm_common", "typn_common", "su57_common",
+                                 "f22a_common" },
+                     lancer  = { "f15e_common", "f14d_common", "f15c_common", "su34_common" },
+                     wolf    = { "f16c_common", "m29a_common", "f18e_common", "m21b_common" },
+                     skirm   = { "f02a_common", "j39e_common", "f35c_common" } },
+        fallback = { skirm = "wolf" },              -- (the Skirmishers' airframes join at rounds 4 / 7 / 9: CFG.variety.late)
+        health_x = { duelist = 1.0, lancer = 1.0, wolf = 1.0, skirm = 0.75 },
+        tells = true,
+        jammer = { "duelist", "skirm" },
+        lancer = { alt_add_m = 2000 },
+        -- hold_after_s: the trap's hold this long after its flight's orders are seen in (its appearance's come 2 s after
+        -- it spawns and would undo an earlier one: hard rule 26); free_on_hit: a held plane you hit is freed;
+        -- free_on_bait_down: the whole trap when its bait (object 0) goes down; rehold_s: after a unit-wide order (your
+        -- DECOY's end) the planes still held are held again this long after
+        wolf = { hold = true, hold_after_s = 3.0, hold_max_s = 60, free_on_hit = true, free_on_bait_down = true,
+                 rehold_s = 1.0, gun_lead_s = 0.5 },
+        skirm = { laam = true, laam_m = 7000, laam_min_m = 2500, laam_angle_deg = 45, laam_lock_s = 2.0,
+                  laam_interval_s = 4.0, laam_rest_s = 8.0 },
+    },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
@@ -1763,6 +1833,86 @@ function TIER.pressure(round)
     end
     return want
 end
+-- The fighter roles' build data (behaviour roadmap P1, CFG.roles; tools/re/BEHAVIOUR_DIRECTOR.md unit 5), outside CFG so
+-- survival.ini and co-op's settings can't change it: ROLE_BY_FLIGHT[NN] is pool flight NN's role (ERA_Unit_NN_Dep_Air0-2,
+-- tools/survival_events.py ROLE_BY_FLIGHT, which its build checks against this), ROLE.ROWS each role's behaviour row
+-- (DT_SV_NpcMission; the Wolf trap's too) and ROLE.SETS its behaviour set (CFG.behaviour_sets), ROLE.LANCER_TOP_M the
+-- Lancer flights' altitude band top (survival_events.LANCER_MAX_ALT_M, checked the same way). ROLE.of[unit] = its role,
+-- ROLE.units[role] = its flights. Pure maths here; what a level has and the draw are sv_spawn.lua's.
+ROLE_BY_FLIGHT = { "duelist", "duelist", "lancer", "lancer", "wolf", "wolf", "skirm", "skirm" }
+ROLE = { LIST = { "duelist", "lancer", "wolf", "skirm" },
+         ROWS = { lancer = "sv_role_lancer", wolf = "sv_role_wolf_lead", wolf_wing = "sv_role_wolf_wing", skirm = "sv_role_skirmish" },
+         SETS = { duelist = "NLID_SV_Fighter", lancer = "NLID_SV_Lancer", wolf = "NLID_SV_WolfLead", wolf_wing = "NLID_SV_WolfWing",
+                  skirm = "NLID_SV_Skirmisher" },
+         LANCER_TOP_M = 9000, of = {}, units = {} }
+for nn, r in ipairs(ROLE_BY_FLIGHT) do
+    ROLE.units[r] = ROLE.units[r] or {}
+    for k = 0, 2 do
+        local u = string.format("ERA_Unit_%02d_Dep_Air%d", nn, k)
+        ROLE.of[u] = r
+        ROLE.units[r][#ROLE.units[r] + 1] = u
+    end
+end
+-- A Wolf flight's object k is the trap (held until sprung, the trap's row): the odd ones (survival_events.wolf_held).
+function ROLE.wolfHeld(k) return type(k) == "number" and k % 2 == 1 end
+-- The role weights round `round` draws by: CFG.roles.ace_mix in an ace round (ace true), else mix's band of the latest
+-- from_round the round has reached (no band yet: duelists only). Returns { role = weight } and the band's from_round.
+function ROLE.mixFor(round, ace)
+    local c = CFG.roles
+    local w = {}
+    if ace and type(c.ace_mix) == "table" then
+        for _, r in ipairs(ROLE.LIST) do w[r] = math.max(0, tonumber(c.ace_mix[r]) or 0) end
+        return w, "ace"
+    end
+    local m = type(c.mix) == "table" and c.mix or {}
+    local froms, band, at = type(m.from_round) == "table" and m.from_round or {}, nil, -math.huge
+    for i, r in ipairs(froms) do
+        if type(r) == "number" and (round or 1) >= r and r >= at then band, at = i, r end
+    end
+    for _, r in ipairs(ROLE.LIST) do
+        local list = type(m[r]) == "table" and m[r] or {}
+        w[r] = band and math.max(0, tonumber(list[band]) or 0) or (r == "duelist" and 1 or 0)
+    end
+    return w, band and at or nil
+end
+-- `n` aircraft shared out by weights `w` in whole 2-ships: each role its whole share, the pairs left to roles drawn by
+-- what's left of theirs (so over many rounds each gets its share: round 1's two 2-ships at 0.6 / 0.2 / 0.2 are a
+-- duelist pair and a duelist, Lancer or Wolf pair 60 / 20 / 20 %, not always the same one). { role = aircraft }.
+-- Weights all 0: every pair to the duelists.
+function ROLE.quotas(n, w)
+    local pairs2, total, q, rest = math.floor((n or 0) / 2), 0, {}, {}
+    for _, r in ipairs(ROLE.LIST) do total = total + (w[r] or 0) end
+    if total <= 0 then w, total = { duelist = 1 }, 1 end
+    local given = 0
+    for _, r in ipairs(ROLE.LIST) do
+        local exact = pairs2 * (w[r] or 0) / total
+        q[r] = math.floor(exact)
+        given = given + q[r]
+        if exact > q[r] then rest[#rest + 1] = { r = r, f = exact - q[r] } end
+    end
+    for _ = 1, pairs2 - given do
+        if #rest == 0 then q.duelist = q.duelist + 1
+        else
+            local tot = 0
+            for _, x in ipairs(rest) do tot = tot + x.f end
+            local pick, roll = #rest, math.random() * tot
+            for i, x in ipairs(rest) do roll = roll - x.f; if roll <= 0 then pick = i; break end end
+            q[rest[pick].r] = q[rest[pick].r] + 1
+            table.remove(rest, pick)
+        end
+    end
+    for r, v in pairs(q) do q[r] = v * 2 end
+    return q
+end
+-- Airframe `a`'s role by CFG.roles.aircraft (the first role that lists it), or nil.
+function ROLE.ofAircraft(a)
+    local ac = CFG.roles and CFG.roles.aircraft
+    if type(ac) ~= "table" then return nil end
+    for _, r in ipairs(ROLE.LIST) do
+        for _, x in ipairs(type(ac[r]) == "table" and ac[r] or {}) do if x == a then return r end end
+    end
+    return nil
+end
 function TIER.pick(round)
     local tc, i = CFG.tiers, TIER.index(round)
     if i < #tc.list and math.random() < TIER.promoteChance(round) then i = i + 1 end
@@ -1852,7 +2002,12 @@ return table.concat({ _VERSION, "io " .. type(io), "os " .. type(os), "debug " .
 -- Stock scripts instrumented too, to compare: the root tree of every enemy plane and the two pursue scripts in use.
 GAME_LUA_STOCK = { "Chronicle.AI.LA_AIPlane", "Chronicle.AI.LA_PursueTarget_0011", "Chronicle.AI.LA_PursueTarget_0400",
                          "SurvivalMode.AI.LA_SV_MoveAway", "SurvivalMode.AI.LA_SV_TailChase",
-                         "SurvivalMode.AI.LA_SV_ProvokeNear", "SurvivalMode.AI.LA_SV_Escape" }   -- ours too: builds and errors
+                         "SurvivalMode.AI.LA_SV_ProvokeNear", "SurvivalMode.AI.LA_SV_Escape",   -- ours too: builds and errors
+                         -- (the fighter roles', P1: each shows as built once a role flight's desc names its set)
+                         "SurvivalMode.AI.LA_SV_LancerPass", "SurvivalMode.AI.LA_SV_LancerZoom",
+                         "SurvivalMode.AI.LA_SV_LancerBreak", "SurvivalMode.AI.LA_SV_WolfDrag",
+                         "SurvivalMode.AI.LA_SV_WolfStrike", "SurvivalMode.AI.LA_SV_SkirmPass",
+                         "SurvivalMode.AI.LA_SV_SkirmExtend" }
 REQUIRE_AND_WRAP = "local ok, C = pcall(require, %q); if ok then SV_Instrument(%q, C) end; " ..
                          "return tostring(ok) .. ' ' .. tostring(C)"
 
