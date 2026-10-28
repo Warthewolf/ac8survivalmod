@@ -1281,6 +1281,8 @@ def check_menu_pages():
     pages = re.findall(r'\{ name = "(\w+)", rows = \{([^}]*)\} \}', lua)
     assert [(n, re.findall(r'"(\w+)"', r)) for n, r in pages] == [(n, [x[0] for x in rows]) for n, rows in MENU_PAGES], \
         'tools/build_survival.py MENU_PAGES and Scripts/sv_menu.lua PAGES differ'
+    assert re.findall(r'\{ row = "(\w+)", set = "\w+" \}', lua) == SETTING_ROWS, \
+        'tools/build_survival.py SETTING_ROWS and Scripts/sv_menu.lua FLAT differ'
     ids = {'SV_Pg' + n for n, _ in MENU_PAGES} | {DIFFICULTY_PAGE, ''}
     for n, rows in MENU_PAGES:
         for name, args, menu in rows:
@@ -1475,6 +1477,23 @@ def edit_coop_host_row(props): edit_coop_row(props, 'Host', COOP_HOST_ARGS)
 def edit_coop_join_row(props): edit_coop_row(props, 'Join', COOP_JOIN_ARGS)
 
 
+# The main menu's flat settings rows, below SURVIVAL CO-OP: JOIN, for when the game's page list doesn't take Survival's
+# pages (Scripts/sv_menu.lua FLAT: Lua decides what each one steps and shows, STARTING ZOLLARS, ENEMY AIRCRAFT, START AT
+# ROUND and BREAK BETWEEN ROUNDS; main.dll OnMainDecide takes the press, StringArgs SV_Set_<row>, texts
+# SV_Menu_Set<row>Title / Help). The names are coop.11's rows', so its containers' rows work with today's Lua.
+SETTING_ROWS = ['Room', 'Enemies', 'Start', 'Break']
+
+
+def edit_setting_row(what):
+    def edit(props):
+        edit_menu_row(props)
+        setv(props, 'CommandID', ('name', f'Main_Top_SurvivalSet{what}', 0))
+        setv(props, 'TitleTextID', s(f'SV_Menu_Set{what}Title'))
+        setv(props, 'HelpTextID', s(f'SV_Menu_Set{what}Help'))
+        setv(props, 'StringArgs', s(f'SV_Set_{what}'))
+    return edit
+
+
 def edit_pages_row(props):
     """SURVIVAL MODE when the game has Survival's pages (MENU_PAGES; Scripts/sv_menu.lua adds this row or the flat ones):
     it opens the modes page (MenuID SV_PgModes); main.dll OnMainDecide lets it through only once Lua found the pages in
@@ -1644,7 +1663,7 @@ def build_rows():
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
                      more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row),
-                           ('SurvivalMenu', edit_pages_row)])
+                           ('SurvivalMenu', edit_pages_row)] + [(f'SurvivalSet{w}', edit_setting_row(w)) for w in SETTING_ROWS])
 
 
 # ---------------------------------------------------------------- NPC mission table

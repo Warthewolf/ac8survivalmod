@@ -199,6 +199,13 @@ local PAGES = {
     { name = "Rules", rows = { "StartRound", "Break", "Specials", "Airfield", "Pay", "Skill", "Reset" } },
 }
 local PAGE_MODE = { Offline = "offline", Online = "online", Host = "host" }
+-- Without the pages, the main menu's four flat settings rows (DT_SV_MenuRows SurvivalSet<row>, StringArgs SV_Set_<row>,
+-- texts SV_Menu_Set<row>Title / Help: the rows Survival COOP's coop.11 build has) step these settings instead, for
+-- playing alone and hosting alike (SOLO's setup and the host's), as coop.11's rows did. In order on the menu.
+local FLAT = { { row = "Room", set = "Zollars" }, { row = "Enemies", set = "Enemies" }, { row = "Start", set = "StartRound" },
+               { row = "Break", set = "Break" } }
+local FLAT_SET = {}
+for _, f in ipairs(FLAT) do FLAT_SET[f.row] = f.set end
 
 local function valueOf(st, mode)
     if st.coop then return CFG.coop[st.coop] end
@@ -272,6 +279,12 @@ local function allTexts()
             t[key], t[key .. "_Help"] = label or r, help or ""
         end
     end
+    for _, f in ipairs(FLAT) do                                    -- (the flat rows: SOLO's values, the host's the same)
+        local st = SET[f.set]
+        local v = valueOf(st, SOLO)
+        t["SV_Menu_Set" .. f.row .. "Title"] = st.label(v)
+        t["SV_Menu_Set" .. f.row .. "Help"] = (st.help(v):gsub(" Press to change%.$", "")) .. " Alone and when you host. Press to change."
+    end
     return t
 end
 
@@ -322,11 +335,13 @@ local function press(name)
         MENU.texts(true, "reset")
         return
     end
+    local flat = MENU.pages == false and FLAT_SET[name or ""]     -- (a flat row on the main menu: sets SOLO's and the host's)
+    if flat then name = flat end
     local st = SET[name or ""]
     if not st then log("menu: unknown settings row " .. tostring(name)); return end
     local holder, section
     if st.coop then holder, section = CFG.coop, "coop"
-    else local p, n = ownProfile(mode); holder, section = p, "setup." .. n end
+    else local p, n = ownProfile(flat and SOLO or mode); holder, section = p, "setup." .. n end
     local key = st.coop or st.key
     local cur = holder[key]
     local nxt = nil
@@ -337,8 +352,12 @@ local function press(name)
     if nxt == nil then nxt = st.values[1] end
     holder[key] = nxt
     local saved = iniSet(section, key, nxt)
-    log(string.format("menu: %s.%s %s -> %s (%s)", section, key, tostring(cur), tostring(nxt),
-        saved and "saved to survival.ini" or "COULD NOT save survival.ini"))
+    if flat then                                                 -- (the host's the same)
+        local hp = ownProfile("host")
+        if hp ~= holder then hp[key] = nxt; saved = iniSet("setup.host", key, nxt) and saved end
+    end
+    log(string.format("menu: %s.%s %s -> %s (%s%s)", section, key, tostring(cur), tostring(nxt),
+        saved and "saved to survival.ini" or "COULD NOT save survival.ini", flat and ", the host's too: a flat row" or ""))
     MENU.texts(true, name)
     if COOP and COOP.settingsChanged then pcall(COOP.settingsChanged, name) end
 end
@@ -544,7 +563,11 @@ end
 
 -- The rows the main menu gets (sv_core.lua watchRows): nil while that's not decided yet
 local PAGE_ROWS, FLAT_ROWS, FLAT_COOP = { "SurvivalMenu" }, { "SurvivalMode" }, { "SurvivalMode", "SurvivalCoopHost", "SurvivalCoopJoin" }
+for _, f in ipairs(FLAT) do                                         -- (their settings rows below them)
+    FLAT_ROWS[#FLAT_ROWS + 1], FLAT_COOP[#FLAT_COOP + 1] = "SurvivalSet" .. f.row, "SurvivalSet" .. f.row
+end
 MENU.allRows = { "SurvivalMenu", "SurvivalMode", "SurvivalCoopHost", "SurvivalCoopJoin" }
+for _, f in ipairs(FLAT) do MENU.allRows[#MENU.allRows + 1] = "SurvivalSet" .. f.row end
 function MENU.mainRows()
     if MENU.pages == nil then return nil end
     if MENU.pages then return PAGE_ROWS end
