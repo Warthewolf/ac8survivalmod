@@ -540,7 +540,35 @@ CFG = {
     -- The main menu's stock entries taken off it while the game runs (sv_core.lua hideRows; user, 2026-10-26: "hide on
     -- the menu ACE COMBAT STORE, ACE COMBAT ONLINE, CAMPAIGN TRAINING"): rows of DT_LiveMenuMainTopCommands by name
     -- (Shop, Online, CampaignTraining). Only the game's copy in memory: no file changes, back when hide_stock is false.
-    menu = { hide_stock = true, hide = { "Shop", "Online", "CampaignTraining" } },
+    -- Survival's own menu pages (sv_menu.lua; user, 2026-10-27: "when you press Survival Mode, it brings you into
+    -- another Menu, where you can select what version you want to play"): SURVIVAL MODE opens SP OFFLINE / SP ONLINE /
+    -- COOP HOST / COOP JOIN, each but JOIN its own setup page. pages = false: the flat rows instead (SURVIVAL MODE,
+    -- CO-OP HOST / JOIN straight to the difficulty). late_register: when the game built its list of main-menu pages
+    -- before Survival's were in its table, they're put into that list at run time. last: the mode QUICK START plays
+    -- (the last one started; set by the game).
+    menu = { hide_stock = true, hide = { "Shop", "Online", "CampaignTraining" }, pages = true, late_register = true,
+             last = "" },
+    -- The run setups the menu pages edit, one per mode (SP OFFLINE, SP ONLINE, and COOP HOST, which every joiner plays
+    -- with: it's the host's), each saved in survival.ini [setup.offline] / [setup.online] / [setup.host]:
+    --   preset       auto (by the difficulty picked: Casual casual, Ace ace, the others standard) | casual | standard | ace:
+    --                the ammo caps (CFG.ammo.presets), enemy pilot skill (tiers.rank_add) and wave size (waves.max_up_by_preset)
+    --   zollars      zollars at the start (credits.start, if higher, is kept: a test setting)
+    --   enemies      % of each round's and each wave's aircraft
+    --   start_round  the first round (rounds' start_round, if higher, is kept); past 1 a run isn't sent to the leaderboard
+    --   break_s      seconds between rounds (replaces rounds' intermission_s)
+    --   specials     normal | more (twice as often) | fewer (half as often) | off
+    --   airfield     % of the airfield's health (airfield.hp) and of what it comes back with
+    --   pay          % of every zollar earned (kills, round bonuses, special rewards)
+    --   skill        added to every enemy pilot's rank (-1 easier .. 2 brutal)
+    -- An SP ONLINE run goes to the leaderboard only with the shipped setup (custom rules make it unranked).
+    setup = {
+        offline = { preset = "auto", zollars = 0, enemies = 100, start_round = 1, break_s = 20, specials = "normal",
+                    airfield = 100, pay = 100, skill = 0 },
+        online  = { preset = "auto", zollars = 0, enemies = 100, start_round = 1, break_s = 20, specials = "normal",
+                    airfield = 100, pay = 100, skill = 0 },
+        host    = { preset = "auto", zollars = 0, enemies = 100, start_round = 1, break_s = 20, specials = "normal",
+                    airfield = 100, pay = 100, skill = 0 },
+    },
     -- Survival COOP (Scripts/sv_coop.lua, the runtime's coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
     -- called Survival COOP", then "make it so that 4 players can join", 2026-10-26: "allow up to 24"): up to 24 players,
     -- one run. The host's game runs the rounds, the enemies and the specials; the joiner's game mirrors every enemy the

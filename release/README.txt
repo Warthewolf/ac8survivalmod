@@ -25,13 +25,37 @@ Install
 3. Copy the "ue4ss" folder from this zip into
        ...\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\
    and let Windows merge the folders.
-4. Start the game. SURVIVAL MODE is on the main menu, above QUIT GAME.
+4. Start the game. SURVIVAL MODE is on the main menu, above QUIT GAME. (If its pages can't be added on your setup,
+   SURVIVAL MODE goes straight to the difficulty select, with the default rules; please send the logs.)
 
 
 Play
 ----
-Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start over Comona Airport.
-- Shoot down every enemy to clear a round; the next one starts 20 seconds later.
+Main menu -> SURVIVAL MODE -> pick how you play:
+  SURVIVAL MODE SP OFFLINE   alone, with your own rules; nothing is sent anywhere
+ONLINE ONLY BEGIN
+  SURVIVAL MODE SP ONLINE    alone, for the Discord leaderboard (custom rules make a run unranked)
+ONLINE ONLY END
+  SURVIVAL MODE COOP HOST    host a run for your Steam friends (Survival COOP build)
+  SURVIVAL MODE COOP JOIN    join a friend who hosts (straight to the difficulty: you play the host's rules)
+  QUICK START                the last mode you played, with its rules, straight to the difficulty
+Each mode but JOIN opens its RUN SETUP page. Press a row to change it; every mode remembers its own (survival.ini
+[setup.offline] / [setup.host], and [setup.online] in the Online edition):
+  START RUN                  next: the difficulty, then the hangar
+ONLINE ONLY BEGIN
+                             (on SP ONLINE it says RANKED or UNRANKED: only ranked runs go to the leaderboard)
+ONLINE ONLY END
+  PRESET                     AUTO (follows the difficulty), CASUAL, STANDARD or ACE: your ammo caps, enemy skill and
+                             how many enemies fly at once
+  STARTING ZOLLARS           0 to 25,000
+  ENEMY AIRCRAFT             50 % to 200 % of each round's enemies
+  COOP HOST also has         LOBBY (who has joined so far), CO-OP ROOM (how many players) and CO-OP ENEMIES
+  MORE RULES >               START AT ROUND, BREAK BETWEEN ROUNDS, SPECIAL ROUNDS (normal / more / fewer / off),
+                             AIRFIELD HEALTH, ZOLLAR INCOME, ENEMY SKILL, RESET TO DEFAULTS
+The bottom line of the menu explains the row you're on, with numbers (how many enemies round 10 brings, what a kill
+pays ...). Then: pick a difficulty -> hangar -> sortie. You start over Comona Airport.
+- Shoot down every enemy to clear a round; the next one starts after the break (20 seconds, or your BREAK BETWEEN
+  ROUNDS).
 - Big rounds come in WAVES (at most 14 / 18 / 22 aircraft up at once on Casual / Standard / Ace): the next wave comes
   once the last one is down to a few. The ROUND row shows WAVE 2/3. After round 15 rounds stop growing and the
   enemies get tougher instead.

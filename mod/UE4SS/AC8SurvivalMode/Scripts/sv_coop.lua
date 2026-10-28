@@ -1069,97 +1069,43 @@ function COOP.hudLine()
     return string.format("CO-OP %d/%d: %s", n, maxPlayers(), table.concat(names, "  "))
 end
 
--- The main menu's settings rows (user, 2026-10-26: "there needs to be more in game settings for this ... we add a few
--- options for the host"): each press steps one setting to its next value, saves it to survival.ini (iniSet) and shows
--- it on the row (SV_SetText; the row on screen is relabelled in place, as the STORE's are: the game reads a row's text
--- when the menu opens). They're your own settings: a host's apply to everyone in its game (M.sendSettings); a joiner's
--- are kept for when they host or play alone. Rows: tools/build_survival.py SETTING_ROWS, sv_core.lua COOP_ROWS.
-do
-local SETTINGS = {
-    Room = { section = "coop", root = "coop", key = "max_players", values = { 2, 4, 6, 8, 12, 16, 24 },
-             label = function(v) return string.format("CO-OP ROOM: %d PLAYERS", v) end,
-             help = "How many players your game takes when you host, you included. Press to change." },
-    Enemies = { section = "coop", root = "coop", key = "aircraft_per_player", values = { 0, 0.1, 0.15, 0.25, 0.4 },
-                label = function(v)
-                    if v <= 0 then return "CO-OP ENEMIES: AS MANY AS ALONE" end
-                    return string.format("CO-OP ENEMIES: +%d%% FOR EACH PLAYER", math.floor(v * 100 + 0.5))
-                end,
-                help = "When you host, each player past the first brings this many more enemies. Press to change." },
-    Start = { section = "rounds", key = "start_round", values = { 1, 5, 10, 15, 20 },
-              label = function(v) return string.format("START AT ROUND %d", v) end,
-              help = "The round a run starts at, alone or when you host (past round 1 it isn't sent to the leaderboard). Press to change." },
-    Break = { section = "rounds", key = "intermission_s", values = { 10, 15, 20, 30, 45, 60 },
-              label = function(v) return string.format("BREAK BETWEEN ROUNDS: %d S", v) end,
-              help = "Seconds between two rounds, alone or when you host. Press to change." },
-}
-local function holder(st) return st.root and CFG[st.root] or M.ownRoot() end   -- (yours, not the host's you play with)
-local function key(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
-local function relabel(old, new)
-    local n, want = 0, key(old)
-    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
-        if liveWidget(t) then
-            local ok, v = pcall(function() return t:GetText():ToString() end)
-            if ok and type(v) == "string" and key(v) == want and pcall(function() t:SetText(toText(new)) end) then n = n + 1 end
-        end
-    end
-    return n
+-- The menu's view of co-op (sv_menu.lua): the lobby on the COOP HOST page, settings changed there
+function COOP.lobby()
+    local names = {}
+    for sl = 0, MAX_SLOT do if M.roster[sl] or sl == COOP.slot then names[#names + 1] = upperName(playerName(sl), 14) end end
+    return { open = COOP.open, role = COOP.role, n = playerCount(), max = maxPlayers(), names = names, state = M.state }
 end
-
-function M.settingTexts()
-    if type(SV_SetText) ~= "function" then return end
-    for name, st in pairs(SETTINGS) do
-        pcall(SV_SetText, "SV_Menu_Set" .. name .. "Title", st.label(tonumber(holder(st)[st.key]) or st.values[1]))
-        pcall(SV_SetText, "SV_Menu_Set" .. name .. "Help", st.help)
-    end
-end
-
-function M.stepSetting(name)
-    local st = SETTINGS[name or ""]
-    if not st then log("coop: unknown settings row " .. tostring(name)); return end
-    local h = holder(st)
-    local cur = tonumber(h[st.key]) or st.values[1]
-    local nxt = st.values[1]                                  -- (past the last: back to the first)
-    for _, v in ipairs(st.values) do if v > cur + 1e-9 then nxt = v; break end end
-    h[st.key] = nxt
-    local saved = iniSet(st.section, st.key, nxt)
-    local old, new = st.label(cur), st.label(nxt)
-    pcall(SV_SetText, "SV_Menu_Set" .. name .. "Title", new)
-    local okR, shown = pcall(relabel, old, new)
-    log(string.format("settings: %s.%s %s -> %s (%s; %s on screen)", st.section, st.key, tostring(cur), tostring(nxt),
-        saved and "saved to survival.ini" or "COULD NOT save survival.ini", okR and tostring(shown) or ("? " .. tostring(shown))))
+function COOP.settingsChanged(name)
     if COOP.host() and playerCount() > 1 then pcall(M.sendSettings, nil) end      -- (your joiners get it at once)
     if name == "Room" and COOP.host() then
         if playerCount() <= 1 and not D then COOP.reopen("host", "room size changed")
         else log("coop: the new room size applies the next time you host") end
     end
 end
-end
-pcall(M.settingTexts)                                         -- (before the main menu reads the rows' texts)
+-- your own settings (the menu's setups): the host's are in CFG while you play with them
+function COOP.ownRoot() return M.ownRoot() end
+
 
 function COOP.tick(tick)
     local c = cfg()
     if not c.enabled then return end
-    if type(SV_MenuSetting) == "function" then                 -- the main menu's settings rows
-        for _ = 1, 8 do
-            local m = SV_MenuSetting()
-            if not m or m == "" then break end
-            local okS, errS = pcall(M.stepSetting, m:match("^SV_Set_(%w+)$"))
-            if not okS then log("settings: " .. tostring(errS)) end
-        end
-    end
-    -- Co-op opens when the player picks SURVIVAL CO-OP: HOST or JOIN on the main menu, as that role, and closes when
-    -- they pick any other entry (SV_MenuChoice, the runtime's: the entry, 1 SURVIVAL MODE, 3 HOST, 4 JOIN, 0 another,
-    -- + 16 x the picks so far: picking the same entry again retries a co-op that couldn't open, and keeps one that's
-    -- open). An older main.dll without it: open at start with CFG.coop.role, as before.
+    -- Co-op opens when the player picks COOP HOST or COOP JOIN (Survival's menu page, or the flat SURVIVAL CO-OP rows),
+    -- as that role, and closes when they pick any other entry (SV_MenuChoice, the runtime's: the entry, 1 SURVIVAL MODE,
+    -- 2 SP OFFLINE, 3 HOST, 4 JOIN, 5 SP ONLINE, 0 another, + 16 x the picks so far: picking the same entry again
+    -- retries a co-op that couldn't open, and keeps one that's open). 6, SURVIVAL MODE's page opened, leaves co-op as it
+    -- is: you pick the mode next. An older main.dll without it: open at start with CFG.coop.role, as before.
     local raw = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
     if raw == nil then
         if not COOP.open and not M.openTried then M.openTried = true; openCoop("start") end
+    elseif raw ~= M.raw and math.floor(raw) % 16 == 6 then
+        M.raw = raw
     elseif raw ~= M.raw then
         M.raw = raw
         local choice = math.floor(raw) % 16
         local want = (choice == 3 and "host") or (choice == 4 and "join") or nil
         if COOP.open and want ~= M.picked then
-            closeCoop((want and "the other co-op entry picked") or (choice == 1 and "SURVIVAL MODE picked: playing alone")
+            closeCoop((want and "the other co-op entry picked") or
+                      ((choice == 1 or choice == 2 or choice == 5) and "a single-player mode picked: playing alone")
                       or "another main-menu entry picked")
         end
         M.picked = want

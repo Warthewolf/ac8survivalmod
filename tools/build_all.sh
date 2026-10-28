@@ -1,6 +1,7 @@
 #!/bin/sh
 # build_all.sh : full Survival Mode build.
-#   1. pull the stock packages the builder copies from (needs the game + the AES key in ACE8AircraftBuilder's settings)
+#   1. pull the stock packages the builder copies from (needs the game + the AES key in ACE8AircraftBuilder's settings);
+#      tools/menu_stock.py finds and pulls the main-menu page Survival's own menu pages copy (build/menu/stock.json)
 #   2. build the native runtime (runtime/build.sh, LLVM) and generate mod/Content with build_survival.py
 #   3. pack build/out/SurvivalMode_P.utoc/.ucas
 #   4. stage the install folders:
@@ -31,6 +32,8 @@ tools/get_stock.sh \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
   Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset   Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings.uasset   Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.uasset   Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000.uasset
+python -X utf8 -I tools/menu_stock.py   # Survival's menu pages: the stock main-menu page, its settings, the page tables
+python -X utf8 -I tools/checks/menu_pages_test.py > /dev/null || { python -X utf8 -I tools/checks/menu_pages_test.py; exit 1; }
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
@@ -47,6 +50,13 @@ else
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
+# what the build found of the stock main-menu page (build_survival.py; Scripts/sv_menu.lua reads it): only with pages
+if [ -f build/menu/sv_menu_stock.lua ]; then
+    cp build/menu/sv_menu_stock.lua build/install/AC8SurvivalMode/Scripts/
+    echo "staged Survival's menu pages' stock note (Scripts/sv_menu_stock.lua)"
+else
+    echo "no menu pages this build: the main menu has the flat Survival rows"
+fi
 # VALKA's railgun sounds (AC7's Mihaly EML, tools/ac7_sfx.py into build/ac7/sfx; never in git): staged when extracted,
 # under the names CFG.sound.valka plays (Scripts/sv_config.lua)
 SFX=build/ac7/sfx

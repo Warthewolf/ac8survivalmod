@@ -272,7 +272,8 @@ end
 -- The most aircraft a wave holds now (CFG.waves.max_up, by the game's difficulty when max_up_by_preset has it).
 local function waveCap()
     local w = CFG.waves
-    return (w.max_up_by_preset and w.max_up_by_preset[presetName()]) or w.max_up
+    local n = (w.max_up_by_preset and w.max_up_by_preset[presetName()]) or w.max_up
+    return math.max(2, math.floor(n * SETUP.enemyX() + 0.5))      -- (the menu's ENEMY AIRCRAFT %, sv_menu.lua)
 end
 
 local function startRound()
@@ -282,6 +283,7 @@ local function startRound()
     local sk = spikeCfg(spikeLevel(D.round))
     local budget = math.min(CFG.aircraft_round1 + (D.round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0),
         CFG.max_aircraft)
+    budget = math.max(1, math.floor(budget * SETUP.enemyX() + 0.5))     -- (the menu's ENEMY AIRCRAFT %, sv_menu.lua)
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
@@ -598,12 +600,13 @@ function roundsTick(now)
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
         elseif flights == 0 then
             if D.special and D.special.kind == "amphibious" then AMPH.roundOver(now, D.special) end
-            log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, CFG.intermission_s))
+            local gap = SETUP.breakS()                 -- (the menu's BREAK BETWEEN ROUNDS, sv_menu.lua)
+            log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
-            D.state, D.at, D.announced = "wait", now + CFG.intermission_s, false
+            D.state, D.at, D.announced = "wait", now + gap, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
-                       string.format(CFG.hud.text.complete_sub, CFG.intermission_s))
+                       string.format(CFG.hud.text.complete_sub, gap))
             -- who shot down what (CFG.allies.kills; economy review of 2026-10-25: "show what allies do"), when anyone but
             -- you did
             local k = RUN.roundKills
@@ -649,7 +652,7 @@ function airfieldTick(tick)
     -- a hit count below the last one is a mission restart (the flags start over; the restart check resets the run a
     -- tick later): no damage from it (log of 2026-10-22: "health 116" and an AIRFIELD UNDER ATTACK callout on a retry)
     if hits < AF.hits then return end
-    local hp = math.max(0, math.min(CFG.airfield.hp, AF.full - (hits - AF.base) * ac.hit_damage - (AF.bomb - AF.bombBase)))
+    local hp = math.max(0, math.min(AF.max or CFG.airfield.hp, AF.full - (hits - AF.base) * ac.hit_damage - (AF.bomb - AF.bombBase)))
     if hits ~= AF.hits or hp ~= AF.hp then
         AF.hits = hits
         if hp ~= AF.hp then
@@ -676,12 +679,13 @@ function airfieldTick(tick)
     end
     if AF.down and D.state == "wait" and D.round > AF.downRound then
         local reopen = AF.closed
-        AF.down, AF.full, AF.base, AF.bombBase, AF.hp = false, ac.repair_hp, hits, AF.bomb, ac.repair_hp
+        local back = math.max(1, math.floor(ac.repair_hp * SETUP.airfieldX() + 0.5))   -- (the menu's AIRFIELD HEALTH)
+        AF.down, AF.full, AF.base, AF.bombBase, AF.hp = false, back, hits, AF.bomb, back
         AF.closePending, AF.closeHeld, AF.closed, RUN.dirty = false, false, false, true
         hudCallout(t.airfield_up, t.airfield_up_sub)
         if reopen and RUN.captured then                -- captured: it opens when it's retaken (AMPH)
             reopen = false; RUN.captured.closed = true
         end
-        log("airfield: repaired to " .. ac.repair_hp .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
+        log("airfield: repaired to " .. back .. (reopen and (", landing open" .. airfieldEvent("RE_SV_AirfieldOpen")) or ""))
     end
 end

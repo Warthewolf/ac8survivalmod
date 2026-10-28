@@ -151,7 +151,7 @@ local function defenceOffer()
 end
 
 local function airfieldNeedsRepair()
-    return not AF.hp or AF.down or AF.hp < CFG.airfield.hp
+    return not AF.hp or AF.down or AF.hp < (AF.max or CFG.airfield.hp)
 end
 
 -- The player's aircraft health in % (its HealthInternal is health x 10), the last one read when it can't be now.
@@ -300,9 +300,9 @@ local function offer(name)
     elseif o.role == "airfield" then
         o.label = string.format("%s +%d", CFG.shop.items.RepairAirfield.label, it.repair)
         o.help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
-            AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
+            AF.down and "down" or tostring(AF.hp or "?"), AF.max or CFG.airfield.hp)
         if not AF.hp or AF.down then o.why = "THE AIRFIELD IS DOWN."
-        elseif AF.hp >= CFG.airfield.hp then o.why = "THE AIRFIELD IS NOT DAMAGED."
+        elseif AF.hp >= (AF.max or CFG.airfield.hp) then o.why = "THE AIRFIELD IS NOT DAMAGED."
         else o.price = shopPrice(name) end
     elseif o.role == "ally_air" or o.role == "ally_ship" then          -- CFG.allies
         local c = CFG.allies
@@ -510,7 +510,7 @@ function shopBuy(name)
             end
         end
     else                                             -- the airfield
-        AF.full, AF.base, AF.bombBase = math.min(CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
+        AF.full, AF.base, AF.bombBase = math.min(AF.max or CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
         AF.hp = AF.full                             -- airfieldTick works health out from these from now on
         pcall(ALLY.repairDefences)                  -- (its AA guns and SAM sites with it: economy review, "repair them
                                                     -- with the airfield")

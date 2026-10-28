@@ -1,6 +1,6 @@
 -- coop_settings_test.lua <mod dir> <work dir> <role: host|join|guard> (run by tools/checks/coop_settings_test.sh): Survival
 -- COOP's settings sync (sv_coop.lua M.sendSettings / onSettings / restoreMine), the main menu's settings rows
--- (M.stepSetting, iniSet) and the co-op enemy scaling (COOP.more), on the real sv_config.lua and sv_coop.lua (M exposed
+-- (sv_menu.lua's, iniSet) and the co-op enemy scaling (COOP.more), on the real sv_config.lua, sv_menu.lua and sv_coop.lua (M exposed
 -- for the test) with a survival.ini of the role's own. host: writes its settings messages and its synced CFG to <work>;
 -- join: applies the host's messages and checks the result. guard: a joiner fed what a broken or hostile game could
 -- send (bad settings, slots, credits, poses, texts) and the main menu's picks. <work>/<role>/Scripts and /config must
@@ -10,6 +10,10 @@ local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
+do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
+    local rawOpen = io.open
+    io.open = function(p, m) return rawOpen((tostring(p):gsub("\\", "/")), m) end
+end
 
 -- the game's world, stubbed
 local logs = {}
@@ -62,6 +66,7 @@ writeAll(WORK .. "/" .. ROLE .. "/config/survival.ini", ini)
 
 -- load the real parts (sv_coop with its M exposed)
 dofile(MOD .. "/Scripts/sv_config.lua")
+assert(load(readAll(MOD .. "/Scripts/sv_menu.lua"), "=sv_menu.lua"))()
 local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
 assert(load(src, "=sv_coop.lua"))()
 local M = _G.M
@@ -122,28 +127,31 @@ elseif ROLE == "join" then
     check(CFG.waves == waves and CFG.waves.next_at == 6, "join: CFG.waves is the same table, host's next_at 6")
     check(CFG.aircraft == aircraft and #CFG.aircraft == 2 and CFG.aircraft[2] == "su47_common", "join: the aircraft list in place, the host's 2")
     check(CFG.coop.name == "Cress", "join: [coop] stays its own")
-    check(texts["SV_Menu_SetStartTitle"] == "START AT ROUND 1", "join: the START row shows its own setting (" .. tostring(texts["SV_Menu_SetStartTitle"]) .. ")")
-    -- a settings row pressed while playing with the host's: its own value, saved; CFG keeps the host's
-    M.stepSetting("Start")
-    check(CFG.start_round == 5 and M.ownRoot().start_round == 5, "join: START pressed: its own 1 -> 5, CFG still the host's 5")
-    M.stepSetting("Break")
-    check(texts["SV_Menu_SetBreakTitle"] == "BREAK BETWEEN ROUNDS: 30 S", "join: BREAK 20 -> 30 (" .. tostring(texts["SV_Menu_SetBreakTitle"]) .. ")")
-    M.stepSetting("Room")
-    check(CFG.coop.max_players == 2, "join: ROOM 24 -> 2 (wraps)")
-    M.stepSetting("Enemies")
-    check(CFG.coop.aircraft_per_player == 0.25, "join: ENEMIES 0.15 -> 0.25")
+    -- the menu's settings rows pressed while playing with the host's (COOP JOIN picked): its own setup and co-op
+    -- settings change and are saved; CFG keeps the host's
+    local q = {}
+    function SV_MenuSetting() return table.remove(q, 1) or "" end
+    local function menuPress(n) q[#q + 1] = "SV_Set_" .. n; MENU.tick(1) end
+    MENU.mode = "join"
+    local hostStart = CFG.setup.host.start_round
+    menuPress("StartRound"); menuPress("Break"); menuPress("Room"); menuPress("CoopEnemies")
+    check(CFG.setup.host.start_round == hostStart and M.ownRoot().setup.host.start_round == 5,
+          "join: START AT ROUND pressed: its own 1 -> 5, CFG still the host's")
+    check(M.ownRoot().setup.host.break_s == 30, "join: BREAK 20 -> 30 (its own)")
+    check(texts["SV_Pg_Host_Room"] == "CO-OP ROOM: 2 PLAYERS", "join: CO-OP ROOM 24 -> 2 (wraps; " .. tostring(texts["SV_Pg_Host_Room"]) .. ")")
+    check(CFG.coop.max_players == 2 and CFG.coop.aircraft_per_player == 0.25, "join: CO-OP ENEMIES 0.15 -> 0.25")
     local f = readAll(WORK .. "/join/config/survival.ini"):gsub("\r\n", "\n")
-    check(f:find("\nstart_round = 5\n", 1, true) and f:find("\nintermission_s = 30\n", 1, true) and f:find("\nmax_players = 2\n", 1, true)
+    check(f:find("\nstart_round = 5\n", 1, true) and f:find("\nbreak_s = 30\n", 1, true) and f:find("\nmax_players = 2\n", 1, true)
           and f:find("\naircraft_per_player = 0.25\n", 1, true), "join: the four saved to survival.ini")
-    check(not f:find("\n;start_round", 1, true), "join: start_round's switched-off line replaced, not added twice")
+    check(f:find("[setup.host]", 1, true), "join: the setup's under [setup.host]")
     -- co-op closes: its own back (its edits, and the rows' new values)
     M.restoreMine()
-    check(CFG.max_aircraft == 99 and CFG.credits.fighter == 100000 and CFG.start_round == 5 and CFG.intermission_s == 30,
+    check(CFG.max_aircraft == 99 and CFG.credits.fighter == 100000 and CFG.setup.host.start_round == 5 and CFG.setup.host.break_s == 30,
           "join: own settings back (99, 100000, start 5, break 30)")
     check(CFG.waves == waves and CFG.waves.next_at == 4, "join: CFG.waves the same table, own next_at 4")
     -- the saved file reads back the same
     dofile(MOD .. "/Scripts/sv_config.lua")
-    check(CFG.start_round == 5 and CFG.intermission_s == 30 and CFG.coop.max_players == 2, "join: survival.ini read again: the saved values")
+    check(CFG.setup.host.start_round == 5 and CFG.setup.host.break_s == 30 and CFG.coop.max_players == 2, "join: survival.ini read again: the saved values")
     print2("  (log: " .. #logs .. " lines; last: " .. tostring(logs[#logs]) .. ")")
 else                                             -- guard
     -- the main menu's picks (SV_MenuChoice: the entry + 16 x the picks so far)
