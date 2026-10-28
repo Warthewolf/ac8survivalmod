@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.28.0"
+#define RT_VERSION           L"0.28.1"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -415,11 +415,17 @@ static volatile int32_t  g_pagesOk;     /* Lua found Survival's pages in the gam
  * (GameTitle ... CampaignTraining), so pages of our own names never opened (test of 2026-10-29: SURVIVAL MODE pressed 25
  * times, nothing). Survival's page rows name CampaignTraining; Lua hands over the pages' classes (SV_MenuClass) and that
  * page's entry in the main menu manager's MenuWidgetClassList (SV_MenuSlot), and OnMainDecide points the entry at the
- * page each press opens. */
+ * page each press opens. The game doesn't open the page it's on (test of 2026-10-29, runtime 0.28.0: SP OFFLINE / ONLINE /
+ * COOP HOST on the modes page, all CampaignTraining, did nothing), so the setup pages go through a second page the
+ * game never shows on PC, the PS5 DualSense first-start setup (InitialSetting_DualSence), whose own class comes back
+ * as soon as any other main-menu entry is picked: modes and MORE RULES on slot 0, the setup pages on slot 1. */
 #define MENU_PAGE_N 5
 static const wchar_t* const kPageNames[MENU_PAGE_N] = { L"Modes", L"Offline", L"Online", L"Host", L"Rules" };  /* sv_menu.lua PAGES */
+static const int kPageSlotOf[MENU_PAGE_N] = { 0, 1, 1, 1, 0 };   /* tools/build_survival.py page_menu_id */
+static const wchar_t* const kSlotIds[2] = { L"CampaignTraining", L"InitialSetting_DualSence" };
 static uint8_t* volatile  g_pageClass[MENU_PAGE_N];
-static uint8_t** volatile g_pageSlot;   /* &MenuWidgetClassList[CampaignTraining].MenuClass                     */
+static uint8_t** volatile g_pageSlot[2];   /* &MenuWidgetClassList[kSlotIds[n]].MenuClass                        */
+static uint8_t* volatile  g_slotStock[2];  /* what each held (slot 1's goes back after Survival's pages)          */
 static volatile int32_t  g_quickMode = 2; /* the mode QUICK START plays (SV_MenuQuick): 2, 3 or 5              */
 static volatile int32_t  g_menuPicks;   /* how many main-menu entries were picked: Lua sees the same entry picked again */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
@@ -651,11 +657,11 @@ static uintptr_t OnMainDecide(void* widget)
             }
         }
         if (target >= 0) {
-            uint8_t** slot = g_pageSlot;
+            uint8_t** slot = g_pageSlot[kPageSlotOf[target]];
             uint8_t* cls = g_pageClass[target];
             if (!slot || !cls || !Readable(slot, 8)) {
-                Log(L"main menu: Survival's page row '%s': its page (%s) can't open (no CampaignTraining entry or class); refused",
-                    a->data, kPageNames[target]);
+                Log(L"main menu: Survival's page row '%s': its page (%s) can't open (no %s entry or class); refused",
+                    a->data, kPageNames[target], kSlotIds[kPageSlotOf[target]]);
                 return 1;
             }
             *slot = cls;
@@ -670,6 +676,10 @@ static uintptr_t OnMainDecide(void* widget)
         Log(L"main menu: Survival's page row '%s': %s%s", a->data, code ? ModeName(code) : L"no mode",
             start ? L", opening the difficulty select to start" : L"");
         return g_nextMainDecide(widget);
+    }
+    {                                                  /* (not one of Survival's pages: the borrowed second page back) */
+        uint8_t** slot = g_pageSlot[1];
+        if (slot && g_slotStock[1] && Readable(slot, 8) && *slot != g_slotStock[1]) *slot = g_slotStock[1];
     }
     int coop = ArgsEqual(a, SURVIVAL_HOST_ARGS) ? 3 : ArgsEqual(a, SURVIVAL_JOIN_ARGS) ? 4 : 0;
     int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
@@ -2631,19 +2641,21 @@ static int L_MenuClass(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_MenuSlot(manager, class, index) -> 1 when the main menu manager's MenuWidgetClassList entry `index` is found:
- * CampaignTraining's, holding that class (0: any), found by a look through the manager for the list (TArray of
- * { FString MenuIDName, UClass* MenuClass }, 0x18 bytes each); 0 not found */
+/* SV_MenuSlot(manager, class, index, slot) -> 1 when the main menu manager's MenuWidgetClassList entry `index` is found:
+ * kSlotIds[slot]'s (0 CampaignTraining, 1 InitialSetting_DualSence), holding that class (0: any), found by a look through
+ * the manager for the list (TArray of { FString MenuIDName, UClass* MenuClass }, 0x18 bytes each); 0 not found */
 #define MENU_ENTRY_SIZE 0x18
 static int L_MenuSlot(void* lua)
 {
-    static const wchar_t kId[] = L"CampaignTraining";
     uint8_t* mgr = ArgObject(lua);
     uint8_t* stock = ArgObject(lua);
-    double idx = -1;
+    double idx = -1, which = 0;
     ArgNumber(lua, &idx);
-    g_pageSlot = NULL;
-    if (!mgr || idx < 0 || idx > 255) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &which);
+    if (!mgr || idx < 0 || idx > 255 || (which != 0 && which != 1)) return Ret(lua, SV_ERR_BAD_ARGS);
+    int w = (int)which;
+    const wchar_t* want = kSlotIds[w];
+    g_pageSlot[w] = NULL;
     for (size_t off = 0x28; off < 0x400; off += 8) {
         if (!Readable(mgr + off, 16)) break;
         uint8_t* data = *(uint8_t**)(mgr + off);
@@ -2652,15 +2664,16 @@ static int L_MenuSlot(void* lua)
         uint8_t* e = data + (size_t)idx * MENU_ENTRY_SIZE;
         if (!Readable(e, MENU_ENTRY_SIZE)) continue;
         const FString* id = (const FString*)e;
-        size_t n = WLen(kId);
-        if (!id->data || id->num != (int32_t)n + 1 || !Readable(id->data, n * 2) || memcmp(id->data, kId, n * 2)) continue;
+        size_t n = WLen(want);
+        if (!id->data || id->num != (int32_t)n + 1 || !Readable(id->data, n * 2) || memcmp(id->data, want, n * 2)) continue;
         uint8_t** slot = (uint8_t**)(e + 0x10);
         if (stock && *slot != stock) continue;
-        g_pageSlot = slot;
-        Log(L"main menu: Survival's pages open through CampaignTraining's page (entry %d, list at manager+%x)", (int32_t)idx, (uint32_t)off);
+        g_pageSlot[w] = slot;
+        g_slotStock[w] = *slot;
+        Log(L"main menu: Survival's pages open through %s's page (entry %d, list at manager+%x)", want, (int32_t)idx, (uint32_t)off);
         return Ret(lua, 1);
     }
-    Log(L"main menu: CampaignTraining's entry %d not found in the main menu's page list", (int32_t)idx);
+    Log(L"main menu: %s's entry %d not found in the main menu's page list", want, (int32_t)idx);
     return Ret(lua, 0);
 }
 

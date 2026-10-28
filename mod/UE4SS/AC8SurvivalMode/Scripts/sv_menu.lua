@@ -369,7 +369,10 @@ end
 -- times, nothing). Every page row names CampaignTraining (tools/build_survival.py BORROWED_PAGE), and dlls/main.dll
 -- points that page's entry in the main menu's page list at the page each press opens (SV_MenuClass: the pages' classes,
 -- in PAGES order; SV_MenuSlot: the entry). Its own row is kept off the main menu meanwhile (sv_core.lua hideRows).
-local BORROWED = "CampaignTraining"
+-- The game doesn't open the page it's on (test of 2026-10-29: the setup rows on the modes page did nothing), so the
+-- setup pages go through a second page PC players never see, the PS5 DualSense first-start setup, whose own class
+-- main.dll puts back when any other main-menu entry is picked.
+local BORROWED = { "CampaignTraining", "InitialSetting_DualSence" }       -- (main.dll kSlotIds: slots 0 and 1)
 local function commandTable(page) return string.format("/Game/Mods/SurvivalMode/Data/DT_SV_Pg%sCommands.DT_SV_Pg%sCommands", page, page) end
 -- what the build found in the game (tools/build_survival.py writes Scripts/sv_menu_stock.lua): the stock page the
 -- pages copy (its class name) and the game's main-menu page table
@@ -487,17 +490,18 @@ function MENU.pagesTick()
     local a = addrOf(mgr)
     if PG.mgr == a then return end                               -- (this main menu was decided)
     PG.mgr = a
-    local idx, why = ids[BORROWED], nil
-    if not idx then
-        why = "the game's page list has no " .. BORROWED
-    else
-        for i, c in ipairs(classes) do SV_MenuClass(i, addrOf(c) or 0) end
+    local why, at = nil, {}
+    for i, c in ipairs(classes) do SV_MenuClass(i, addrOf(c) or 0) end
+    for slot, id in ipairs(BORROWED) do
+        local idx = ids[id]
+        if not idx then why = why or ("the game's page list has no " .. id); break end
         local okS, stock = pcall(function() return mgr.MenuWidgetClassList[idx + 1].MenuClass end)
-        local r = SV_MenuSlot(a or 0, (okS and valid(stock) and addrOf(stock)) or 0, idx)
-        if r ~= 1 then why = BORROWED .. "'s entry wasn't found in the page list (" .. tostring(r) .. ")" end
+        local r = SV_MenuSlot(a or 0, (okS and valid(stock) and addrOf(stock)) or 0, idx, slot - 1)
+        if r ~= 1 then why = why or (id .. "'s entry wasn't found in the page list (" .. tostring(r) .. ")") end
+        at[#at + 1] = id .. " " .. idx
     end
     MENU.pages = why == nil
-    say("decided", MENU.pages and string.format("the main menu's page list has %d pages; Survival's open through %s's (entry %d): SURVIVAL MODE opens them", n, BORROWED, idx)
+    say("decided", MENU.pages and string.format("the main menu's page list has %d pages; Survival's open through %s: SURVIVAL MODE opens them", n, table.concat(at, ", "))
         or ("Survival's pages can't open (" .. why .. "): the flat rows"))
     pcall(SV_MenuPages, MENU.pages and 1 or 0)
     -- every live menu page's DeepLevel, once (what Survival's pages should get if cancel on them goes wrong)
