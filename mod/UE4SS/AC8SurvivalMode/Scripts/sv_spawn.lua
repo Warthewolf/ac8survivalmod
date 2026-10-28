@@ -342,6 +342,8 @@ end
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 function specialFor(round)
     local sp = CFG.specials
+    local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
+    if sx <= 0 then return nil end
     if sp.enabled and sp.random and #sp.rotation > 0 then
         RUN.specialPick = RUN.specialPick or {}
         local pick = RUN.specialPick
@@ -357,11 +359,11 @@ function specialFor(round)
             -- wanted the Shuttle Launch to ever do"; the others start after it)
             local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
             if inEarly then
-                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and ready(early.kind) and math.random() < (early.chance or 0) then
+                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and ready(early.kind) and math.random() < math.min(0.9, (early.chance or 0) * sx) then
                     kind = early.kind
                     RUN.lastSpecial = kind
                 end
-            elseif round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
+            elseif round >= sp.first and not pick[round - 1] and math.random() < math.min(0.9, sp.chance * sx) then
                 local choices = {}
                 for _, k in ipairs(sp.rotation) do
                     if (k ~= RUN.lastSpecial or #sp.rotation == 1) and ready(k) then choices[#choices + 1] = k end

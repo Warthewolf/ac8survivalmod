@@ -12,10 +12,13 @@ Every package is a stock game file with Survival's changes (Survival Mode uses n
   - EF_SurvivalMode_global     <- EF_Mission022_global holding Survival's int flags (survival_events.INT_FLAGS)
   - DT_SV_MissionRows / DT_SV_MenuRows / DT_SV_ShopRows / DT_SV_NpcRows <- one-table copies of stock rows, added to the
                                   game's tables at run time by Scripts/main.lua; DT_SV_NpcMission <- DT_NPC_Mission022
+  - Survival's main-menu pages (MENU_PAGES): WBP_SV_Pg* <- the game's main-menu page (tools/menu_stock.py finds it),
+                                  DA_SV_Pg*Settings <- its DA_LiveMenuMainTopPageSettings, DT_SV_Pg*Commands <- rows of
+                                  DT_LiveMenuMainTopCommands, DT_SV_MainMenuClassRows <- DT_IngameMenuSettingData's rows
   - /Game/LuaSource/SurvivalMode/AI/*  <- Survival's behaviour scripts (Scripts/ai)
 Stock packages are pulled with tools/get_stock.sh into build/stock first.
 """
-import copy, math, os, re, sys, struct, zlib
+import copy, json, math, os, re, sys, struct, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
@@ -1019,6 +1022,7 @@ LEVEL_ID = 70              # ELiveLevelID Test02: no stock row uses it
 MENU_ARGS = 'SurvivalMode' # must match SURVIVAL_ARGS in runtime/survival_rt.c
 COOP_HOST_ARGS = 'SurvivalHost'   # must match SURVIVAL_HOST_ARGS in runtime/survival_rt.c (SURVIVAL CO-OP: HOST)
 COOP_JOIN_ARGS = 'SurvivalJoin'   # must match SURVIVAL_JOIN_ARGS (SURVIVAL CO-OP: JOIN)
+MENU_PAGES_ARGS = 'SurvivalMenu'  # must match SURVIVAL_MENU_ARGS (SURVIVAL MODE that opens Survival's pages)
 import dtx
 
 
@@ -1238,6 +1242,155 @@ def build_shop_rows():
     save(z, DATA + 'DT_SV_MenuClassRows')
 
 
+# Survival's main-menu pages (user, 2026-10-27: "when you press Survival Mode, it brings you into another Menu, where you
+# can select what version you want to play"; Scripts/sv_menu.lua, tools/re/MENU_PAGES.md). Each page is a copy of the
+# game's own main-menu page (tools/menu_stock.py: the widget blueprint that imports DA_LiveMenuMainTopPageSettings), so
+# its rows' presses reach main.dll's main-menu hook (OnMainDecide, vtable A) as SURVIVAL MODE's always have; its own
+# settings asset (DA_SV_Pg<page>Settings: title, every tab's command table) and command table (DT_SV_Pg<page>Commands:
+# copies of the main menu's Campaign row). DT_SV_MainMenuClassRows names the pages for the game's main-menu page table
+# (MenuID SV_Pg<page>), where Lua adds them at the main menu. A row: (name, StringArgs, MenuID); its texts are
+# SV_Pg_<page>_<name> / _Help (Lua sets them). StringArgs: SV_Mode_<mode> picks a mode (its MenuID opens its setup page,
+# or the difficulty page for Join), SV_Go_<mode> / SV_Quick start (the difficulty page, which starts Survival),
+# SV_Page_<page> opens another page, SV_Set_<what> steps a setting in place (main.dll takes the press). Keep the pages
+# and rows in step with Scripts/sv_menu.lua PAGES / SET (checked below).
+DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
+MENU_PAGES = [
+    ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),
+               ('Host', 'SV_Mode_Host', 'SV_PgHost'), ('Join', 'SV_Mode_Join', DIFFICULTY_PAGE),
+               ('Quick', 'SV_Quick', DIFFICULTY_PAGE)]),
+    ('Offline', [('Go', 'SV_Go_Offline', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+                 ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+    ('Online', [('Go', 'SV_Go_Online', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+                ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+    ('Host', [('Go', 'SV_Go_Host', DIFFICULTY_PAGE), ('Lobby', 'SV_Set_Lobby', ''), ('Room', 'SV_Set_Room', ''),
+              ('CoopEnemies', 'SV_Set_CoopEnemies', ''), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+              ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules')]),
+    ('Rules', [('StartRound', 'SV_Set_StartRound', ''), ('Break', 'SV_Set_Break', ''), ('Specials', 'SV_Set_Specials', ''),
+               ('Airfield', 'SV_Set_Airfield', ''), ('Pay', 'SV_Set_Pay', ''), ('Skill', 'SV_Set_Skill', ''),
+               ('Reset', 'SV_Set_Reset', '')]),
+]
+MENU_STOCK = os.path.join(ROOT, 'build', 'menu', 'stock.json')            # tools/menu_stock.py
+MENU_STOCK_LUA = os.path.join(ROOT, 'build', 'menu', 'sv_menu_stock.lua')  # staged into Scripts/ by build_all.sh
+MAIN_COMMANDS = '/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands'
+
+
+def check_menu_pages():
+    """MENU_PAGES against Scripts/sv_menu.lua: the same pages and rows in the same order, every SV_Set_ row a setting
+    (or action) it knows, every page row's MenuID one of the pages or the difficulty page."""
+    lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_menu.lua'), encoding='utf-8').read()
+    pages = re.findall(r'\{ name = "(\w+)", rows = \{([^}]*)\} \}', lua)
+    assert [(n, re.findall(r'"(\w+)"', r)) for n, r in pages] == [(n, [x[0] for x in rows]) for n, rows in MENU_PAGES], \
+        'tools/build_survival.py MENU_PAGES and Scripts/sv_menu.lua PAGES differ'
+    ids = {'SV_Pg' + n for n, _ in MENU_PAGES} | {DIFFICULTY_PAGE, ''}
+    for n, rows in MENU_PAGES:
+        for name, args, menu in rows:
+            assert menu in ids, (n, name, menu)
+            assert (menu == '') == args.startswith('SV_Set_'), (n, name, args, menu)   # (a setting row opens nothing)
+            if args.startswith('SV_Set_') and args[7:] not in ('Lobby', 'Reset'):
+                assert re.search(r'\n    ' + args[7:] + r' = \{ (key|coop) = ', lua), f'{args}: not in Scripts/sv_menu.lua SET'
+            assert len(f'SV_Pg_{n}_{name}_Help') < 48, name                  # (the runtime's text keys: DYN_KEY 48)
+
+
+def page_settings(stock_da, new_da, table, title):
+    """The main menu's page settings under Survival's name: its title, and every tab's command table ours."""
+    z = ZenPkg(stock(stock_da))
+    rename_package(z, stock_da, new_da)
+    i = z.export_index(new_da.rsplit('/', 1)[1])
+    v, rest = props_of(z, i, 'LiveMenuPageSettingsData')
+    tabs = uprop.get(v, 'TabSettings')
+    assert tabs and tabs[3][0] == 'arr' and tabs[3][1], f'{stock_da}: no TabSettings'
+    short = table.rsplit('/', 1)[1]
+    for n in (table, short):
+        z.nb.add(n)
+    for tab in tabs[3][1]:
+        uprop.setp(tab, 'CommandSettings', ('soft', ('name', table, 0), ('name', short, 0), ''))
+        uprop.setp(tab, 'TabTitleTextID', s(title))
+        tab[2].sort(key=lambda q: q[0])                         # (setp appends; the read-back is in index order)
+    uprop.setp(v, 'TitleTextID', s(title))
+    v[2].sort(key=lambda q: q[0])
+    z.payloads[i] = bytearray(write_props(z, v) + rest)
+    chk, _ = props_of(z, i, 'LiveMenuPageSettingsData')
+    assert chk == v
+    save(z, new_da)
+    return len(tabs[3][1])
+
+
+def drop_menu_pages():
+    """No pages this build: none left from an earlier one either (mod/Content is not cleaned between builds)."""
+    import glob
+    gone = []
+    for pat in (DATA + 'DT_SV_Pg*Commands', UI + 'DA_SV_Pg*Settings', UI + 'WBP_SV_Pg*', DATA + 'DT_SV_MainMenuClassRows'):
+        for f in glob.glob(os.path.join(OUT, pat[len('/Game/'):]) + '.uasset'):
+            os.remove(f); gone.append(os.path.basename(f))
+    if os.path.exists(MENU_STOCK_LUA): os.remove(MENU_STOCK_LUA)
+    if gone: print(f'  menu pages: removed {len(gone)} left from an earlier build')
+
+
+def build_menu_pages():
+    check_menu_pages()
+    os.makedirs(os.path.dirname(MENU_STOCK_LUA), exist_ok=True)
+    st = json.load(open(MENU_STOCK, encoding='utf-8')) if os.path.exists(MENU_STOCK) else {'why': 'no build/menu/stock.json (tools/menu_stock.py)'}
+    if not st.get('page'):
+        print(f"  menu pages: SKIPPED ({st.get('why')}); the main menu keeps the flat rows")
+        drop_menu_pages()
+        return
+    page, cls, settings = st['page'], st['page_class'], st['settings']
+    widgets = []
+    for name, rows in MENU_PAGES:
+        table, da, widget = DATA + f'DT_SV_Pg{name}Commands', UI + f'DA_SV_Pg{name}Settings', UI + f'WBP_SV_Pg{name}'
+        edits = []
+        for row, args, menu in rows:
+            def edit(props, row=row, args=args, menu=menu, page_name=name):
+                edit_menu_row(props)
+                setv(props, 'CommandID', ('name', f'Main_SV_{page_name}_{row}', 0))
+                setv(props, 'TitleTextID', s(f'SV_Pg_{page_name}_{row}'))
+                setv(props, 'HelpTextID', s(f'SV_Pg_{page_name}_{row}_Help'))
+                setv(props, 'MenuID', s(menu))
+                setv(props, 'StringArgs', s(args))
+            edits.append((f'SV{name}{row}', edit))
+        build_rows_table(MAIN_COMMANDS, table, 'LiveMenuCommandsDataTable', 'Campaign', edits[0][0], edits[0][1], more=edits[1:])
+        tabs = page_settings(settings, da, table, f'SV_Pg_{name}_Title')
+        # the page: the main menu's widget blueprint under Survival's path (its objects keep their names: a zen
+        # package's export hashes are package-relative), its settings import retargeted
+        z = ZenPkg(stock(page))
+        z.rename(page, widget)
+        retarget_import(z, settings, da)
+        assert widget in z.names and page not in z.names
+        save(z, widget)
+        widgets.append((f'SV_Pg{name}', widget))
+        print(f'  menu pages: {name}, {len(rows)} rows, {tabs} tab(s)')
+    # the class rows: Survival's pages for the game's main-menu page table (the row struct of the in-game one)
+    z = ZenPkg(stock(MENU_TABLE))
+    rename_package(z, MENU_TABLE, DATA + 'DT_SV_MainMenuClassRows')
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveMenuClassTable')
+    assert o == len(p), (o, len(p))
+    src = dt['rows'][0][1]
+    mc = {n: k for k, (n, t) in uprop.U.schema('LiveMenuClassTable').items()}
+    out = []
+    for menu_id, widget in widgets:
+        row = copy.deepcopy(src)
+        ref = dict((q[1], q[3]) for q in row[2])['MenuWidgetReference']
+        assert ref[0] == 'soft', ref
+        set_prop(row[2], mc['MenuID'], 'MenuID', ('name', menu_id, 0))
+        set_prop(row[2], mc['MenuWidgetReference'], 'MenuWidgetReference', ('soft', ('name', widget, 0), ('name', cls, 0), ref[3]))
+        name = menu_id.replace('_', '')
+        for n in (menu_id, widget, cls, name): z.nb.add(n)
+        out.append(((name, 0), row))
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveMenuClassTable')
+    assert chk['rows'] == dt['rows']
+    save(z, DATA + 'DT_SV_MainMenuClassRows')
+    # what the runtime needs to know of the stock (Scripts/sv_menu.lua reads it; build_all.sh stages it)
+    lua = ['-- made by tools/build_survival.py from tools/menu_stock.py\'s finds: the game\'s main-menu page Survival\'s pages',
+           '-- copy (its class) and the game\'s main-menu page tables (Survival\'s pages go in them at start)',
+           'return {', f'    page_class = "{cls}",',
+           '    class_tables = { ' + ', '.join(f'"{t}"' for t in st.get('class_tables', [])) + ' },', '}', '']
+    open(MENU_STOCK_LUA, 'w', encoding='utf-8', newline='\n').write('\n'.join(lua))
+    print(f'  menu pages: {len(widgets)} pages, copies of {page} ({cls}); page tables {st.get("class_tables")}')
+
+
 def names_in(v):
     """Every FName string a property value uses."""
     out = []
@@ -1322,21 +1475,14 @@ def edit_coop_host_row(props): edit_coop_row(props, 'Host', COOP_HOST_ARGS)
 def edit_coop_join_row(props): edit_coop_row(props, 'Join', COOP_JOIN_ARGS)
 
 
-# The main menu's settings rows, below SURVIVAL CO-OP: JOIN (user, 2026-10-26: "there needs to be more in game settings
-# for this ... we add a few options for the host"): each press changes one setting (main.dll OnMainDecide takes the
-# pick, StringArgs SV_Set_<what>; Scripts/sv_coop.lua cycles the value, saves it to survival.ini and sets the row's
-# texts SV_Menu_Set<what>Title / Help). Keep in step with sv_coop.lua SETTINGS and sv_core.lua COOP_ROWS.
-SETTING_ROWS = ['Room', 'Enemies', 'Start', 'Break']
-
-
-def edit_setting_row(what):
-    def edit(props):
-        edit_menu_row(props)
-        setv(props, 'CommandID', ('name', f'Main_Top_SurvivalSet{what}', 0))
-        setv(props, 'TitleTextID', s(f'SV_Menu_Set{what}Title'))
-        setv(props, 'HelpTextID', s(f'SV_Menu_Set{what}Help'))
-        setv(props, 'StringArgs', s(f'SV_Set_{what}'))
-    return edit
+def edit_pages_row(props):
+    """SURVIVAL MODE when the game has Survival's pages (MENU_PAGES; Scripts/sv_menu.lua adds this row or the flat ones):
+    it opens the modes page (MenuID SV_PgModes); main.dll OnMainDecide lets it through only once Lua found the pages in
+    the game's page list (SV_MenuPages)."""
+    edit_menu_row(props)
+    setv(props, 'CommandID', ('name', 'Main_Top_SurvivalMenu', 0))
+    setv(props, 'MenuID', s('SV_PgModes'))
+    setv(props, 'StringArgs', s(MENU_PAGES_ARGS))
 
 
 def edit_shuttle_npc(props):
@@ -1497,8 +1643,8 @@ def build_rows():
     build_model_rows()
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
-                     more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row)] +
-                          [(f'SurvivalSet{w}', edit_setting_row(w)) for w in SETTING_ROWS])
+                     more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row),
+                           ('SurvivalMenu', edit_pages_row)])
 
 
 # ---------------------------------------------------------------- NPC mission table
@@ -1666,6 +1812,13 @@ if __name__ == '__main__':
     build_npc_table()
     build_shop_rows()
     build_rows()
+    try:
+        build_menu_pages()
+    except Exception:                    # (the rest of the build still comes: the main menu keeps the flat rows)
+        import traceback
+        traceback.print_exc()
+        print('  menu pages: FAILED (above); no pages this build, the main menu keeps the flat rows')
+        drop_menu_pages()
     build_pl()
     build_mc()
     build_wd_global(); build_wd_phase(1); build_wd_phase(2)

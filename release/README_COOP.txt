@@ -2,18 +2,21 @@ SURVIVAL CO-OP (up to 24 players)
 ---------------------------------
 HOW TO PLAY TOGETHER
   1. Everyone installs this same build.
-  2. One of you picks SURVIVAL CO-OP: HOST on the main menu (just under SURVIVAL MODE).
-  3. Everyone else picks SURVIVAL CO-OP: JOIN.
+  2. One of you picks SURVIVAL MODE -> SURVIVAL MODE COOP HOST on the main menu. Your friends can join from now on;
+     the LOBBY row shows who's in. Set the rules, then START RUN.
+  3. Everyone else picks SURVIVAL MODE -> SURVIVAL MODE COOP JOIN, then a difficulty.
   That's all: no settings to edit. The joiners find the host among their Steam friends by themselves (so everyone who
-  joins must be the host's Steam friend). SURVIVAL MODE still plays alone, as before.
+  joins must be the host's Steam friend). SP OFFLINE and SP ONLINE still play alone.
+  (Without Survival's menu pages, the main menu has SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN instead.)
   Big rooms: the host's game sends every plane and enemy to everyone, so the host needs a good upload (about 1 Mbit/s
   for each player who joins). More players bring more enemies.
 
-SETTINGS, on the main menu under JOIN (press a row to change it; it's saved for next time):
-  CO-OP ROOM: 24 PLAYERS                  how many players your game takes when you host
-  CO-OP ENEMIES: +15% FOR EACH PLAYER     how many more enemies each player brings when you host
-  START AT ROUND 1                        skip the first rounds (a run that starts later isn't sent to the leaderboard)
-  BREAK BETWEEN ROUNDS: 20 S              the time between rounds
+SETTINGS, on the COOP HOST page (press a row to change it; it's saved for next time):
+  LOBBY: 2 OF 4 PLAYERS                   who has joined so far
+  CO-OP ROOM: 4 PLAYERS                   how many players your game takes when you host
+  CO-OP ENEMIES: +15% EACH                how many more enemies each player brings
+  PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, and MORE RULES (start round, break, special rounds, airfield health,
+  zollar income, enemy skill)
 Everyone plays with the HOST's settings, survival.ini edits included; yours come back when you play alone or host.
 
 On screen, under AIRFIELD:

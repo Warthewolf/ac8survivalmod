@@ -13,7 +13,7 @@ function enemyTier(p, round, flightTier)
     local i = flightTier or TIER.pick(round)                 -- a fighter flight's was picked at its spawn
     local t = tc.list[i]
     p.tier = t
-    local add = tc.rank_add[presetName()] or 0
+    local add = (tc.rank_add[presetName()] or 0) + SETUP.skillAdd()   -- (+ the menu's ENEMY SKILL, sv_menu.lua)
     local want = math.max(1, math.min(5, t.rank + add, 5))
     local sk = spikeCfg(spikeLevel(round))
     if sk.rank_min then want = math.max(want, math.min(5, sk.rank_min)) end
@@ -346,6 +346,8 @@ RUN = { credits = 0, earned = 0, spent = 0, bought = {}, msg = {}, kills = { you
 
 function addCredits(n, why)
     if n <= 0 then return end
+    local x = SETUP and SETUP.payX and SETUP.payX() or 1          -- (the menu's ZOLLAR INCOME %, sv_menu.lua)
+    if x ~= 1 then n, why = math.max(1, math.floor(n * x + 0.5)), string.format("%s, income x%.2f", why, x) end
     RUN.credits, RUN.earned, RUN.dirty = RUN.credits + n, RUN.earned + n, true
     RUN.msg = {}            -- a shop result ("NOT ENOUGH ZOLLARS ...") is stale once the credits change
     log(string.format("credits: +%d (%s), now %d", n, why, RUN.credits))

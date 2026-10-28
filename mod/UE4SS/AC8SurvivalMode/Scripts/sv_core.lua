@@ -19,10 +19,6 @@
 LEVEL   = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode"
 TAG     = "[AC8SurvivalMode] "
 local ROW     = "SurvivalMode"
--- SURVIVAL CO-OP: HOST / JOIN and the settings rows below them (only when CFG.coop.enabled; tools/build_survival.py
--- SETTING_ROWS, sv_coop.lua SETTINGS)
-local COOP_ROWS = { "SurvivalCoopHost", "SurvivalCoopJoin", "SurvivalSetRoom", "SurvivalSetEnemies", "SurvivalSetStart",
-                    "SurvivalSetBreak" }
 
 -- { our table, the game's table, the row ours goes just above (SURVIVAL MODE sits above QUIT GAME) }
 local TABLES = {
@@ -32,10 +28,11 @@ local TABLES = {
       game = "/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands",
       above = "QuitGame", coop = true },
 }
--- The rows that go into a table: ours, and SURVIVAL CO-OP in the menu table when co-op is on (user, 2026-10-26: "a
--- cleaner way for players to join"; CFG is read when the rows go in, after sv_config has loaded)
+-- The rows that go into a table: the mission row; in the menu table SURVIVAL MODE, which opens Survival's own pages
+-- when the game's page list has them, else the flat rows (SURVIVAL MODE, and CO-OP HOST / JOIN when co-op is on;
+-- sv_menu.lua MENU.mainRows). nil while that isn't decided yet (the menu table waits).
 local function rowsOf(t)
-    if t.coop and CFG and CFG.coop and CFG.coop.enabled then return { ROW, table.unpack(COOP_ROWS) } end
+    if t.coop then return MENU and MENU.mainRows and MENU.mainRows() or nil end
     return { ROW }
 end
 
@@ -340,16 +337,34 @@ function watchRows()
         end
         pin(game, nameOf(game))
         if t.above then hideRows(game) end                 -- (the menu table: the stock entries CFG.menu.hide names)
+        local want = rowsOf(t)
+        if not want then return true end                   -- (the pages aren't decided yet: sv_menu.lua)
+        if t.coop then                                     -- the other set out (the last main menu had it)
+            local key = table.concat(want, ",")
+            if t.rowSet ~= key then
+                if t.rowSet then log("rows: the main menu's Survival rows are now " .. key) end
+                t.rowSet = key
+                local keep = {}
+                for _, r in ipairs(want) do keep[r] = true end
+                for _, r in ipairs(MENU.allRows) do
+                    if not keep[r] then
+                        local _, have = dtCall(game, "FindRow", r)
+                        if have ~= nil then dtCall(game, "RemoveRow", r); log("rows: '" .. r .. "' taken off the main menu") end
+                    end
+                end
+                ready[i] = false
+            end
+        end
         local wasReady = ready[i]
-        for _, row in ipairs(rowsOf(t)) do                 -- (SURVIVAL MODE first, then the co-op ones below it)
+        for _, row in ipairs(want) do                      -- (SURVIVAL MODE first, then the co-op ones below it)
             local r = putRow(t, game, row, wasReady)
             if r == "stop" then return false end
             if r == "wait" then return true end
         end
         if t.above and not wasReady then                   -- placing one row moves `above` too: all of them above it
-            for _ = 1, #rowsOf(t) + 1 do
+            for _ = 1, #want + 1 do
                 local p, all = rowOrder(game), true
-                for _, row in ipairs(rowsOf(t)) do
+                for _, row in ipairs(want) do
                     if not absent[row] and not (p[row] and p[t.above] and p[row] < p[t.above]) then all = false; placeAbove(game, t.above, row) end
                 end
                 if all then break end

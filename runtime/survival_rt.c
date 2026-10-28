@@ -23,11 +23,12 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.26.0"
+#define RT_VERSION           L"0.27.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
 #define SURVIVAL_JOIN_ARGS   L"SurvivalJoin" /* StringArgs of the SURVIVAL CO-OP: JOIN row    */
+#define SURVIVAL_MENU_ARGS   L"SurvivalMenu" /* StringArgs of the SURVIVAL MODE row that opens Survival's pages */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
  * lighting and sublevels belong to, i.e. 10 + the row's TravelHangarMap: Survival's row is Mission 22's, which uses
  * Hangar 04 (TravelHangarMap 5). Hangar 02 with Hangar 004's lighting loads black (test 5).
@@ -406,7 +407,10 @@ static Fn4      g_nextText;
 static volatile int32_t  g_chosen;     /* the Survival entry was picked on the main menu */
 static volatile int32_t  g_savedMode = -1;
 static volatile int32_t  g_menuChoice;  /* the last main-menu entry picked: 0 none yet or another entry, 1 SURVIVAL MODE,
-                                          * 3 CO-OP: HOST, 4 CO-OP: JOIN (settings rows leave it) */
+                                          * 2 SP OFFLINE, 3 CO-OP: HOST, 4 CO-OP: JOIN, 5 SP ONLINE, 6 Survival's pages
+                                          * opened (settings and page rows leave it) */
+static volatile int32_t  g_pagesOk;     /* Lua found Survival's pages in the game's page list (SV_MenuPages)   */
+static volatile int32_t  g_quickMode = 2; /* the mode QUICK START plays (SV_MenuQuick): 2, 3 or 5              */
 static volatile int32_t  g_menuPicks;   /* how many main-menu entries were picked: Lua sees the same entry picked again */
 static void* volatile    g_page;       /* difficulty page seen while chosen               */
 static void* volatile    g_holdPage;
@@ -544,6 +548,45 @@ static int StartSurvival(void* page, void* from, const wchar_t* why)
     return 1;
 }
 
+/* Survival's own main-menu pages (Scripts/sv_menu.lua, tools/build_survival.py MENU_PAGES; runtime 0.27.0) are copies of
+ * the game's main-menu page, so their rows come through OnMainDecide too. Their StringArgs:
+ *   SurvivalMenu     the main menu's SURVIVAL MODE: its MenuID opens the modes page, once Lua found Survival's pages in
+ *                    the game's page list (SV_MenuPages); before that it's refused, never a page that isn't there
+ *   SV_Mode_<mode>   a mode on the modes page: Offline / Online / Host open their setup page (the row's MenuID); Join
+ *                    opens the difficulty page, which starts Survival as SURVIVAL MODE always has
+ *   SV_Go_<mode>     a setup page's START RUN: the difficulty page, then Survival
+ *   SV_Quick         QUICK START: the same, with the mode Lua named (SV_MenuQuick)
+ *   SV_Page_<page>   a row that opens another of Survival's pages (MORE RULES)
+ *   SV_Set_<what>    a setting (below)                                                                              */
+static const struct { const wchar_t* name; int32_t code; } kModes[] = {
+    { L"Offline", 2 }, { L"Host", 3 }, { L"Join", 4 }, { L"Online", 5 },
+};
+static const wchar_t* ModeName(int32_t code)
+{
+    switch (code) {
+    case 1: return L"Survival Mode"; case 2: return L"SP Offline"; case 3: return L"Co-op: Host";
+    case 4: return L"Co-op: Join";   case 5: return L"SP Online";  case 6: return L"Survival's pages";
+    default: return L"?";
+    }
+}
+
+/* the number of characters of `prefix` when s starts with it (and has more after it), else 0 */
+static size_t ArgsPrefix(const FString* s, const wchar_t* prefix)
+{
+    size_t n = WLen(prefix);
+    return s && s->data && (size_t)s->num > n + 1 && !memcmp(s->data, prefix, n * 2) ? n : 0;
+}
+
+/* the mode named after `skip` characters of s (kModes), or 0 */
+static int32_t ModeCode(const FString* s, size_t skip)
+{
+    for (size_t i = 0; i < sizeof(kModes) / sizeof(kModes[0]); ++i) {
+        size_t n = WLen(kModes[i].name);
+        if ((size_t)s->num == skip + n + 1 && !memcmp(s->data + skip, kModes[i].name, n * 2)) return kModes[i].code;
+    }
+    return 0;
+}
+
 /* The main menu's settings rows (StringArgs "SV_Set_<what>", Survival COOP's build; Scripts/sv_coop.lua): a pick waits
  * for Lua (SV_MenuSetting), which changes the setting and the row's text; the decide is taken here, so the menu stays
  * where it is (as the landing menu's shop rows, OnHangarDecide). */
@@ -566,6 +609,37 @@ static uintptr_t OnMainDecide(void* widget)
             Log(L"main menu: setting %s picked", q);
         }
         return 1;
+    }
+    /* Survival's pages: which mode, and whether this row starts the run (the difficulty page it opens starts Survival) */
+    int32_t code = 0, start = 0;
+    int page = 0;                                      /* a row of Survival's pages (or the one that opens them) */
+    size_t k;
+    if (ArgsEqual(a, SURVIVAL_MENU_ARGS)) {
+        if (!g_pagesOk) {
+            Log(L"main menu: SURVIVAL MODE (pages) picked, but Survival's pages aren't in the game's page list; refused");
+            return 1;
+        }
+        page = 1, code = 6;
+    } else if ((k = ArgsPrefix(a, L"SV_Mode_")) != 0) {
+        page = 1, code = ModeCode(a, k), start = code == 4;
+    } else if ((k = ArgsPrefix(a, L"SV_Go_")) != 0) {
+        page = 1, code = ModeCode(a, k), start = code != 0;
+    } else if (ArgsEqual(a, L"SV_Quick")) {
+        page = 1, code = g_quickMode, start = 1;
+    } else if (ArgsPrefix(a, L"SV_Page_")) {
+        page = 1;                                      /* (another of Survival's pages: no mode, no start) */
+    }
+    if (page) {
+        g_chosen = start;
+        if (start) {
+            uint8_t* ctx = Context(widget);
+            g_savedMode = ctx ? ctx[CTX_MODE] : -1;
+            g_page = NULL;
+        }
+        if (code) { g_menuChoice = code; ++g_menuPicks; }
+        Log(L"main menu: Survival's page row '%s': %s%s", a->data, code ? ModeName(code) : L"no mode",
+            start ? L", opening the difficulty select to start" : L"");
+        return g_nextMainDecide(widget);
     }
     int coop = ArgsEqual(a, SURVIVAL_HOST_ARGS) ? 3 : ArgsEqual(a, SURVIVAL_JOIN_ARGS) ? 4 : 0;
     int mine = coop || ArgsEqual(a, SURVIVAL_ARGS);
@@ -642,6 +716,23 @@ static TextRow g_text[] = {
                                 L"SURVIVAL CO-OP: JOIN and fly with you.", { 0 } },
     { L"SV_Menu_CoopJoinTitle", L"SURVIVAL CO-OP: JOIN", { 0 } },
     { L"SV_Menu_CoopJoinHelp",  L"Join a Steam friend who picked SURVIVAL CO-OP: HOST, and fly their run with them.", { 0 } },
+    /* Survival's pages (Scripts/sv_menu.lua sets them all, with the settings' values; these show without Lua) */
+    { L"SV_Pg_Modes_Title",    L"SURVIVAL MODE", { 0 } },
+    { L"SV_Pg_Modes_Offline",  L"SURVIVAL MODE SP OFFLINE", { 0 } },
+    { L"SV_Pg_Modes_Online",   L"SURVIVAL MODE SP ONLINE", { 0 } },
+    { L"SV_Pg_Modes_Host",     L"SURVIVAL MODE COOP HOST", { 0 } },
+    { L"SV_Pg_Modes_Join",     L"SURVIVAL MODE COOP JOIN", { 0 } },
+    { L"SV_Pg_Modes_Quick",    L"QUICK START", { 0 } },
+    { L"SV_Pg_Offline_Title",  L"SURVIVAL MODE SP OFFLINE", { 0 } },
+    { L"SV_Pg_Online_Title",   L"SURVIVAL MODE SP ONLINE", { 0 } },
+    { L"SV_Pg_Host_Title",     L"SURVIVAL MODE COOP HOST", { 0 } },
+    { L"SV_Pg_Rules_Title",    L"MORE RULES", { 0 } },
+    { L"SV_Pg_Offline_Go",     L"START RUN", { 0 } },
+    { L"SV_Pg_Online_Go",      L"START RUN", { 0 } },
+    { L"SV_Pg_Host_Go",        L"START RUN", { 0 } },
+    { L"SV_Pg_Offline_Rules",  L"MORE RULES", { 0 } },
+    { L"SV_Pg_Online_Rules",   L"MORE RULES", { 0 } },
+    { L"SV_Pg_Host_Rules",     L"MORE RULES", { 0 } },
     { L"SV_Mission_Name",      L"Survival Mode", { 0 } },
     { L"SV_Mission_Subtitle",  L"Comona Island", { 0 } },
     { L"SV_Mission_Number",    L"SURVIVAL", { 0 } },
@@ -661,7 +752,7 @@ static void InitText(void)
 
 /* Texts Lua sets at run time (SV_SetText: the shop's rows and prices, the shuttle's and the aces' names). Fixed
  * buffers, rewritten in place on the game thread, so an FString the game was handed never points at freed memory. */
-#define DYN_TEXTS 256          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4; co-op names 24 (0.24.0) */
+#define DYN_TEXTS 320          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4; co-op names 24 (0.24.0); Survival's pages 65 (0.27.0) */
 #define DYN_KEY   48
 #define DYN_CAP   256
 static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
@@ -690,18 +781,19 @@ static uintptr_t OnText(void* table, uintptr_t flag, void* keyp, void* found)
 {
     const FString* key = (const FString*)keyp;
     if (key && key->data && key->num > 4 && key->data[0] == L'S' && key->data[1] == L'V' && key->data[2] == L'_') {
-        for (size_t i = 0; i < sizeof(g_text) / sizeof(g_text[0]); ++i) {
-            size_t n = WLen(g_text[i].key);
-            if ((size_t)key->num == n + 1 && memcmp(key->data, g_text[i].key, n * 2) == 0) {
-                if (found) *(uint8_t*)found = 1;
-                return (uintptr_t)&g_text[i].fs;
-            }
-        }
+        /* Lua's first (0.27.0: Survival's pages have built-in texts here that Lua's replace), then the built-in ones */
         for (int i = 0; i < g_ndyn; ++i) {
             size_t n = WLen(g_dyn[i].key);
             if ((size_t)key->num == n + 1 && memcmp(key->data, g_dyn[i].key, n * 2) == 0) {
                 if (found) *(uint8_t*)found = 1;
                 return (uintptr_t)&g_dyn[i].fs;
+            }
+        }
+        for (size_t i = 0; i < sizeof(g_text) / sizeof(g_text[0]); ++i) {
+            size_t n = WLen(g_text[i].key);
+            if ((size_t)key->num == n + 1 && memcmp(key->data, g_text[i].key, n * 2) == 0) {
+                if (found) *(uint8_t*)found = 1;
+                return (uintptr_t)&g_text[i].fs;
             }
         }
     }
@@ -2174,16 +2266,15 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.19.0" */
-/* SV_MenuChoice() -> the last Survival entry picked on the main menu: 0 none yet, 1 SURVIVAL MODE, 3 SURVIVAL CO-OP:
- * HOST, 4 SURVIVAL CO-OP: JOIN */
-/* SV_MenuChoice() -> the last main-menu entry picked (g_menuChoice) + 16 x how many were picked, so the same entry
+/* SV_Version() -> "0.27.0" */
+/* SV_MenuChoice() -> the last main-menu entry picked (g_menuChoice: 0 none yet or another entry, 1 SURVIVAL MODE, 2 SP
+ * OFFLINE, 3 CO-OP: HOST, 4 CO-OP: JOIN, 5 SP ONLINE, 6 Survival's pages opened) + 16 x how many were picked, so the same entry
  * picked again is seen (a retry after a failed co-op open). Lua: % 16 the entry, // 16 the picks. */
 static int L_MenuChoice(void* lua) { return Ret(lua, (int64_t)g_menuChoice + 16 * (int64_t)g_menuPicks); }
 
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.26.0";
+    static const char v[] = "0.27.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2488,6 +2579,26 @@ static int L_ShopRequest(void* lua)
     return 1;
 }
 
+/* SV_MenuPages(1 | 0): Survival's pages are (not) in the game's page list (Scripts/sv_menu.lua checked it): only then
+ * does the SURVIVAL MODE row that opens them pass. -> 1 */
+static int L_MenuPages(void* lua)
+{
+    double v = 0;
+    if (!ArgNumber(lua, &v)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if ((v != 0) != (g_pagesOk != 0)) Log(L"main menu: Survival's pages %s", v != 0 ? L"are in the game's page list" : L"are not in the game's page list");
+    g_pagesOk = v != 0;
+    return Ret(lua, 1);
+}
+
+/* SV_MenuQuick(code): the mode QUICK START plays (2 SP OFFLINE, 3 COOP HOST, 5 SP ONLINE; Lua's last one). -> 1 */
+static int L_MenuQuick(void* lua)
+{
+    double v = 0;
+    if (!ArgNumber(lua, &v) || !(v == 2 || v == 3 || v == 5)) return Ret(lua, SV_ERR_BAD_ARGS);
+    g_quickMode = (int32_t)v;
+    return Ret(lua, 1);
+}
+
 /* SV_MenuSetting() -> the StringArgs of the oldest settings row picked on the main menu and not yet taken
  * ("SV_Set_..."), or "" when none is waiting */
 static int L_MenuSetting(void* lua)
@@ -2740,7 +2851,8 @@ static void RegisterLua(void* lua)
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
-        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting }, { "SV_BGMNames", L_BGMNames },
+        { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting },
+        { "SV_MenuPages", L_MenuPages }, { "SV_MenuQuick", L_MenuQuick }, { "SV_BGMNames", L_BGMNames },
         { "SV_CoopOpen", L_CoopOpen }, { "SV_CoopClose", L_CoopClose }, { "SV_CoopInfo", L_CoopInfo }, { "SV_CoopSend", L_CoopSend },
         { "SV_CoopRecv", L_CoopRecv }, { "SV_CoopMe", L_CoopMe }, { "SV_CoopPeer", L_CoopPeer }, { "SV_CoopTrack", L_CoopTrack },
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },

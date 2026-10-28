@@ -4,6 +4,10 @@ Both agents: this is the agreed design. Build to this. Stock references come fro
 
 ## 1. Menu flow
 Main Menu -> "SURVIVAL MODE" entry -> difficulty select -> hangar (aircraft/weapon select) -> sortie.
+- Since 2026-10-27 (user): SURVIVAL MODE opens another menu listing SURVIVAL MODE SP OFFLINE, SP ONLINE, COOP HOST and
+  COOP JOIN; each but COOP JOIN opens another menu with presets that can be changed for the run (round starting
+  money, enemy percentage, ...; quality-of-life additions welcome). Then the difficulty select and the hangar as
+  before. Built in Lua 0.71.0 / runtime 0.27.0 (tools/re/MENU_PAGES.md), not yet run in game.
 - Main menu widget: /Game/NUI/Main/WBP_Menu_Main_000 (class LiveNUIMenuMainWidget). Entries are built from
   WBP_Menu_Common_Parts_BtnList_000 + ListCategory_000 + Description_000; preview panel uses PreviewMode_000.
 - Add one entry with a description line, styled like the other entries.

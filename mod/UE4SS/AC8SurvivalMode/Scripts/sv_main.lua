@@ -190,7 +190,8 @@ local function probeTick(tick)
         if type(SV_Reset) == "function" then SV_Reset() end
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
-        D = { round = math.max(1, math.floor(CFG.start_round)) - 1, startRound = math.max(1, math.floor(CFG.start_round)), state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
+        local first = SETUP.startRound()                -- (the menu's START AT ROUND, sv_menu.lua)
+        D = { round = first - 1, startRound = first, state = "wait", at = nil, now = nil, queue = {}, spare = {}, up = {}, flown = {}, announced = false }
         PR.usable = { Pkg = PR.ready.Pkg, Rt = PR.ready.Rt }      -- only rows that were in before this level loaded
         log("probe: at level load, probe rows ready: package " .. tostring(PR.ready.Pkg ~= nil) .. ", run-time " .. tostring(PR.ready.Rt ~= nil))
         SR.usable = {}
@@ -209,8 +210,9 @@ local function probeTick(tick)
         flagCache.at, flagCache.t, flagCache.cs, flagCache.found = -1, nil, nil, -100
         SHUTTLE.obj, SHUTTLE.lookAt = nil, nil          -- (SHUTTLE.gone kept: a restart keeps the level, and its hidden pad)
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
-        AF = { full = CFG.airfield.hp, hp = CFG.airfield.hp, down = false, bomb = 0, bombBase = 0, pending = {} }
-        RUN = { credits = CFG.credits.start, earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
+        local afMax = SETUP.airfieldHP()                -- (the menu's AIRFIELD HEALTH)
+        AF = { max = afMax, full = afMax, hp = afMax, down = false, bomb = 0, bombBase = 0, pending = {} }
+        RUN = { credits = SETUP.zollars(), earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
                 -- kills by who made them (KILL.by), the airframes flown so far (pickAircraft), the tactical items, upgrade
                 -- tiers and SECOND CHANCE held (sv_tactical.lua)
                 kills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }, seenAc = {},
@@ -445,6 +447,8 @@ LoopAsync(250, function()
         local t0 = os.clock()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
+        local okM, errM = pcall(MENU.tick, tick)    -- Survival's menu pages and the run setups (sv_menu.lua)
+        if not okM then log("menu: error " .. tostring(errM)) end
         if COOP and COOP.tick then                  -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
             local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
             if not okC then log("coop: error " .. tostring(errC)) end

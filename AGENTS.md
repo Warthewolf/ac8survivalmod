@@ -232,6 +232,16 @@ Copy a working stock pattern before inventing a new one.
     Its slot 315 fires OnReposition, which resets a player plane's look: move it with AActor::TeleportTo + the flight
     reset only. Confirmed solo 2026-10-25 (runtimes 0.22.2-0.22.7); not yet the co-op stand-in.
 
+## Survival's menu pages (Lua 0.71.0, runtime 0.27.0, 2026-10-27; untested in game)
+SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
+each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES. The pages are copies of
+the game's main-menu page (tools/build_survival.py MENU_PAGES; tools/menu_stock.py finds the stock), so their presses
+reach OnMainDecide; Scripts/sv_menu.lua puts them in the game's main-menu page list and keeps one run setup per mode
+(CFG.setup, survival.ini [setup.*]) that the rounds, store and leaderboard read through SETUP.*. Without the pages the
+main menu has the flat rows. tools/re/MENU_PAGES.md has the design, the log lines and the test checklist. None of it is
+a hard rule until a test confirms it. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh), the build's:
+tools/checks/menu_pages_test.py (build_all.sh runs it).
+
 ## Economy review build (Lua 0.70.x, runtime 0.19.0, 2026-10-25; untested in game)
 The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
 late-round scaling, raids from one direction with escorts, the jammer, more airframes, kill attribution by side
