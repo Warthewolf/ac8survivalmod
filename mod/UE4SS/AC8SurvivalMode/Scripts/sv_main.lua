@@ -243,7 +243,9 @@ local function probeTick(tick)
             end
             log(string.format("special: anomaly sounds and portal systems loaded: %d of %d", got, want))
         end
-        if D and D.special then pcall(SPC.V.cleanup, D.special) end        -- (a restart mid-fight: her effects)
+        if D and D.special then                                            -- (a restart mid-fight: her effects,
+            pcall(SPC.V.cleanup, D.special); pcall(SPC.alicornCleanup, D.special)   -- the Alicorn's RAILGUN WARNING)
+        end
         pcall(SND.stopAll)
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run

@@ -143,6 +143,15 @@ local function railAlert(s, on)
     end
     s.railOffAt = nil
 end
+-- A run restarted with the RAILGUN WARNING up (sv_main.lua's level-load reset, with SPC.V.cleanup): off, as at a dive
+-- or the sink. alicornTick stops with the run, so its alert_s timer would never come (a run left from the level needs
+-- nothing: the level and its HUD go with it)
+function SPC.alicornCleanup(s)
+    if type(s) == "table" and s.kind == "alicorn" and s.railAlertOn then
+        log("special: the Alicorn's RAILGUN WARNING off with the run")
+        railAlert(s, false)
+    end
+end
 
 -- The player's standard missile's damage (LiveWeaponBase.damage, in health points: HealthInternal is health x 10),
 -- from a loaded missile or its class default; nil when none can be read

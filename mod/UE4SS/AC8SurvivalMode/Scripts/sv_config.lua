@@ -102,12 +102,17 @@ CFG = {
     -- text[hud .. "_sub"], %s / %d filled from the tell's numbers (args "compass": bearings named, "clock": an o'clock).
     -- An urgent one cuts in: in front of the callout queue, the banner showing cut short, up hud_s; the others queue.
     -- Each player's tells on their own (co-op: sv_coop.lua PERSONAL, the host's reach a joiner as "tl" and show from the
-    -- joiner's own settings), kept apart by class: an urgent one urgent_gap_s after the last urgent one, one with a
-    -- callout that queues gap_s (the banner's time) after the last such, a radio-only one radio_gap_s after any tell;
-    -- each id no sooner than its cooldown_s; none between rounds, down at the airfield or over the run's summary.
+    -- joiner's own settings, enabled too: a host with tells off still sends them; the host's gaps, cooldowns, leads,
+    -- hunt_km and wave_from_round decide when), kept apart by class: an urgent one urgent_gap_s after the last urgent
+    -- one, one with a callout that queues gap_s (the banner's time) after the last such, a radio-only one radio_gap_s
+    -- after any tell; each id no sooner than its cooldown_s; none between rounds, down at the airfield or over the run's
+    -- summary. A radio line is never asked for again within line_gap_s, by whichever tell (reversal and kulbit share
+    -- theirs; the cloned rows keep the template's RequeueingWaitTime of 20 s, which may skip a group asked for again
+    -- inside it; 0: no such limit): a tell whose lines are all that recent shows its callout only, or isn't said.
     -- lead_s: an action that follows its tell (TELL.after) comes this long after it, at once when the tell wasn't said
     -- or tells are off.
-    -- enabled = false: no tells at all (and every action at once, as before tells); radio / hud: either half off.
+    -- enabled = false: no tells for this game's player (and its own tells' actions at once, as before tells; a co-op
+    -- host still sends its joiners theirs, with its leads); radio / hud: either half off.
     -- Wired to today's threats: an ace's reversal (reversal, kulbit within 900 m: ACE.movesTick, its move lead_s after
     -- the call), a hunting tier's flight within hunt_km of you (hunt, once a flight a round), a bomber raid or strike on
     -- the airfield (raid), the jammer up and down, each later wave from wave_from_round (wave; 0: never), the ALICORN's
@@ -117,7 +122,7 @@ CFG = {
     -- and not said yet.
     tells = {
         enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
-        hunt_km = 8.0, wave_from_round = 26,
+        line_gap_s = 20, hunt_km = 8.0, wave_from_round = 26,
         cooldown_s = { reversal = 20, kulbit = 20, hunt = 45, raid = 30, jammer = 30, jammer_down = 10, wave = 20,
                        alcn_rail_first = 0, alcn_rail = 0, alcn_dive = 0, alcn_up = 0, alcn_vls = 30, alcn_deck = 30,
                        ladon_vls = 15, pincer = 30, split = 20, dive = 20, clock = 0, drag = 30, lure = 30, trap = 20,
