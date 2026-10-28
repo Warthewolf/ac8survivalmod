@@ -688,7 +688,8 @@ end
 -- tier (CFG.tiers.list), or a special's own values (MINDRIPPER's unit, from sv_main.lua's planeSweep).
 --   provokeWant(round, tier[, level])  what a plane should fly: { cone, time, surround = { min m, max m }, level, src }
 --                                      or nil (nothing to write: the game's own row). level: the spike level to use
---                                      (default spikeLevel(round)), so a later part can ask for another.
+--                                      (default levelFor(round): the spike's, or the intensity director's
+--                                      under it), so a later part can ask for another.
 --   enemyProvoke(p, want)              writes want on plane p, only the fields that differ from the last write
 --                                      (p.provokeSet; p.provokeWant = want): fields written, before / after texts.
 --   enemySpike(p, round, tier)         once per plane when it appears (p.spiked): provokeWant + enemyProvoke, a
@@ -711,7 +712,7 @@ local function said(x)                             -- "60 deg / 1.5 s / 40-100 m
 end
 function provokeWant(round, tier, level)
     local ai = CFG.ai or {}
-    level = level or spikeLevel(round)
+    level = level or levelFor(round)
     local sk = spikeCfg(level)
     local s = { cone = sk.provoke_cone_deg, time = sk.provoke_time_s, surround = sk.surround_m }
     local t, test = nil, false
@@ -765,7 +766,7 @@ end
 function enemySpike(p, round, tier)
     if p.spiked ~= nil or not round then return end
     local w = provokeWant(round, tier)
-    p.spiked = w and w.level or spikeLevel(round)
+    p.spiked = w and w.level or levelFor(round)
     if not w then return end
     local n, before, writes, fields = enemyProvoke(p, w)
     local who = isTier(tier) and tier.name or (tier and "special" or "no tier")

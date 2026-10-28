@@ -446,6 +446,42 @@ CFG = {
         pincer = { enabled = true, chance = 0.6, sep_deg = { 90, 150 }, spread_deg = 10, ring_km = { 12, 18 }, ahead = true },
         regroup = { enabled = true, min_size = 4, after_s = 10, hold_s = 7 },
     },
+    -- The intensity director (behaviour roadmap P4, Scripts/sv_director.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 7: "pressure
+    -- follows the player, not the clock"). Every game scores its own player once a second, 0-100:
+    --   intensity  how hard you're pressed (score): the damage you took in the last window_s (full at dmg_full of your
+    --              health), enemy missiles homing on you within msl_km (full at msl_full), enemies within near_km (full at
+    --              near_full) and the health you've lost, weighed damage / missiles / near / health (100 together),
+    --              smoothed (smooth_x: a new second's share of it; 1, none)
+    --   comfort    how easy it is (comfort): time on an enemy's tail (within tail_km / tail_deg of its six) in the last
+    --              window_s (full at tail_full of it), your kills a minute over kills_window_s (full at kpm_full) and
+    --              health above hp_pct %, weighed tail / kills / healthy; `high` is comfortable
+    -- A co-op joiner sends its scores to the host ("in"); the host decides for the room (the hold on the room's highest):
+    --   push   a player comfortable (comfort `comfort.high`+, intensity `low` or under) for calm_s: the squad director
+    --          (CFG.director) lets a held top cover dive on them, else turns the nearest flight that may onto them (its
+    --          "check your six" tell first; a joiner: a hunt with its target kept on them); push.per_round each a round
+    --          from push.from_round, push.cooldown_s apart, within push.range_km
+    --   hold   a player's intensity above `high` for hold.after_s: the next wave (the rest of a later wave still coming
+    --          too) and the top cover's dive wait hold.secs (a random time in it, 30 s at most), one hold at a time, never
+    --          made longer, the next no sooner than hold.gap_s after it, at most hold.per_wave a wave; hold.tactics: no new
+    --          cover, trap or bracket on a player above `high`
+    --   level  the difficulty spikes (CFG.spikes) are the ceiling: the room above `high` for level.down_after_s of a
+    --          fight, enemies that come from then fly one spike level lower (fire control, pilot rank, post-stall,
+    --          provoke, the next round's aircraft_add; the skill tiers stay the floor: CFG.tiers' fcs, rank), at most
+    --          level.max_drop under the round's spike; below level.up_below for level.up_after_s, a level back;
+    --          level.gap_s between two changes. A joiner's copies fly the host's level ("rnd")
+    -- log_s: a line with your scores every log_s seconds of a fight (0: decisions only). Nothing new in a round of
+    -- skip_specials (their own scripts run the fight). enabled = false (or a lever's): as before P4. Untested in game.
+    intensity = {
+        enabled = true, window_s = 30, smooth_x = 0.35, high = 80, low = 35, calm_s = 20, log_s = 10,
+        skip_specials = { "anomaly", "glitch", "valka", "ladon", "alicorn" },
+        score = { damage = 40, missiles = 25, near = 20, health = 15, dmg_full = 0.4, msl_km = 4.0, msl_full = 2,
+                  near_km = 5.0, near_full = 4 },
+        comfort = { tail = 40, kills = 35, healthy = 25, high = 60, tail_km = 3.0, tail_deg = 70, tail_full = 0.5,
+                    kpm_full = 2.0, kills_window_s = 60, hp_pct = 70 },
+        push = { enabled = true, from_round = 3, per_round = 2, cooldown_s = 40, range_km = 8.0 },
+        hold = { enabled = true, after_s = 3, secs = { 15, 20 }, gap_s = 20, per_wave = 1, tactics = true },
+        level = { enabled = true, max_drop = 1, down_after_s = 30, up_below = 50, up_after_s = 60, gap_s = 45 },
+    },
     -- Post-stall manoeuvres (Pugachev's cobra, kulbit): every stock behaviour gates them on the plane's
     -- bCanManeuverPugachevsCobra / bCanManeuverKulbit; on each enemy that appears both are turned off unless its
     -- model is listed here (the code in its blueprint name, BP_OPnnnn_<code>_...: thrust-vectoring and Flanker-family
@@ -1783,6 +1819,16 @@ function spikeLevel(round)
     return math.min(#sp.levels, #SPIKE_SUFFIX, (round - 1) // math.max(1, math.floor(sp.every)))
 end
 function spikeCfg(level) return level > 0 and CFG.spikes.levels[level] or {} end
+-- The difficulty level the enemies of round `round` fly (their fire-control rows, rank_min, post_stall_all, provoke,
+-- aircraft_add): the intensity director's (CFG.intensity.level, sv_director.lua DIR.level: spikeLevel's the ceiling, at
+-- most level.max_drop under it while the room's been under heavy pressure), else spikeLevel's
+function levelFor(round)
+    if DIR and DIR.level then
+        local ok, l = pcall(DIR.level, round)
+        if ok and type(l) == "number" then return l end
+    end
+    return spikeLevel(round)
+end
 -- The tier index (CFG.tiers.list) a flight spawning in round `round` flies: the round's, one higher at promote_chance.
 -- The skill tiers (CFG.tiers): TIER.index(round) the round's own tier, TIER.pick(round) that or (promote_chance) the
 -- one above it, TIER.pay(base, i) a kill's zollars at tier i (CFG.credits.tier_pay, rounded to 10) and its multiplier.
@@ -1827,9 +1873,10 @@ function TIER.roundCap(round)
     return cap
 end
 -- Round `round`'s aircraft: aircraft_round1, aircraft_per_round more a round and the difficulty spike's aircraft_add,
--- within the round's cap (the thesis: "spikes still add their aircraft_add on top, within the cap")
-function TIER.roundBudget(round)
-    local sk = spikeCfg(spikeLevel(round))
+-- within the round's cap (the thesis: "spikes still add their aircraft_add on top, within the cap"). level: the spike
+-- level whose aircraft_add counts (startRound's levelFor: the intensity director's), default spikeLevel(round)'s
+function TIER.roundBudget(round, level)
+    local sk = spikeCfg(level or spikeLevel(round))
     return math.min(CFG.aircraft_round1 + (round - 1) * CFG.aircraft_per_round + (sk.aircraft_add or 0), TIER.roundCap(round))
 end
 -- A co-op room's most aircraft in round `round` (COOP.more's cap, sv_rounds.lua startRound): CFG.coop.max_aircraft,

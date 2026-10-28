@@ -227,6 +227,16 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   Wolf trap's held planes have no such replay). The host's DECOY: nothing of the director's frees a decoyed flight; at
   the decoy's end the director fires RE_SV_DirFree_NN (forwarded), since the kept RE_SV_DecoyEnd_NN never reaches the
   joiners' copies. A joiner's own decoy can still be cut short by a forwarded DirFree. Untested in game.
+- The intensity director (behaviour roadmap P4, BEHAVIOUR_DIRECTOR.md unit 7): each game scores its own player once a
+  second (intensity, comfort); a joiner sends its scores to the host as "in" (joiner -> host, unreliable, 1 Hz:
+  intensity and comfort 0-100, health %, missiles on it; COOP.sendIntensity). The host keeps each joiner's last
+  (COOP.intensityOf, at most 3 s old; a bad or non-finite number, its own slot or a slot past 24 dropped, values clamped,
+  more than ~4 a second from one player dropped) and decides for the room: the next wave held on the room's highest
+  intensity (named after that player in the log), a push on the most comfortable player (a joiner's: the six tell by
+  "tl", a hunt with its TargetActor on their stand-in, as a cover), the spike level eased for the room. "rnd" carries
+  the level as an 8th field (a whole 0-3, else ignored; an older host's "rnd" has none): a joiner's copies fly it
+  (levelFor: rank_min, post-stall, provoke at their first sweep; the enemies up written again when it changes); their
+  fire-control rows already come with the host's "sp". Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.

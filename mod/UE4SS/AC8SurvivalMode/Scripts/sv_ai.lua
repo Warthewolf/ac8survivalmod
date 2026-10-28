@@ -15,7 +15,8 @@ function enemyTier(p, round, flightTier)
     p.tier = t
     local add = (tc.rank_add[presetName()] or 0) + SETUP.skillAdd()   -- (+ the menu's ENEMY SKILL, sv_menu.lua)
     local want = math.max(1, math.min(5, t.rank + add, 5))
-    local sk = spikeCfg(spikeLevel(round))
+    p.rankBase = want                                        -- (before the spike's rank_min: P4 writes it again live)
+    local sk = spikeCfg(levelFor(round))                    -- (the spike's, or the intensity director's under it)
     if sk.rank_min then want = math.max(want, math.min(5, sk.rank_min)) end
     local ok0, r0 = pcall(function() return p.obj.PilotRank end)
     local okW, err = pcall(function() p.obj.PilotRank = want end)
@@ -47,7 +48,7 @@ function enemyManeuvers(p, round)
     local allow = false
     for _, m in ipairs(CFG.maneuvers.post_stall) do if m == model then allow = true end end
     if p.tier and not p.tier.post_stall then allow = false end
-    local all = spikeCfg(spikeLevel(round)).post_stall_all      -- a difficulty spike: every airframe
+    local all = spikeCfg(levelFor(round)).post_stall_all        -- a difficulty spike: every airframe
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
     if fl and fl.post_stall then all = true end                    -- (a top tier: on, whatever its blueprint)
     local function read()

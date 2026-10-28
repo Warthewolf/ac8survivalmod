@@ -140,7 +140,7 @@ local function spawnBomber(unit)
     local ac = list[math.random(#list)]
     -- strike aircraft spawn on their Survival row (search range + Survival's missile fire control); their behaviour
     -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
-    if not heavy then ac = searchAircraft(ac, spikeLevel(D.round)) end
+    if not heavy then ac = searchAircraft(ac, levelFor(D.round)) end   -- (the spike's, or the intensity director's)
     local set = SV_SetAircraft(unit, ac)
     -- a raid's bombers from one direction (CFG.airfield.bombers.one_bearing; D.raidBearing, picked in startRound)
     local raid = D.raidBearing and D.raidUnits and D.raidUnits[unit]
@@ -273,7 +273,8 @@ function spawnFlight(unit, maxLevel)
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
     local topSpike = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
-    local fcsLevel = math.max(maxLevel and topSpike or spikeLevel(D.round), tier.fcs or 0)
+    -- (the round's spike level, or the intensity director's under it: CFG.intensity.level; the tier's fcs the floor)
+    local fcsLevel = math.max(maxLevel and topSpike or levelFor(D.round), tier.fcs or 0)
     local role = ROLE.flight(unit)                    -- (its fighter role, CFG.roles: nil with roles off)
     D.flightRole = D.flightRole or {}
     D.flightRole[unit] = role

@@ -1,5 +1,6 @@
 -- sv_director.lua: the squad director, the behaviour roadmap's P2 ("one Lua part that watches the whole sky and fires
--- remote events on the right plane"; tools/re/BEHAVIOUR_DIRECTOR.md unit 6). P4's intensity director joins it here later.
+-- remote events on the right plane"; tools/re/BEHAVIOUR_DIRECTOR.md unit 6), and the intensity director, P4 (its own
+-- block at the end, CFG.intensity: "pressure follows the player, not the clock"; unit 7).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local (tools/lua_split.py).
 --
@@ -12,8 +13,8 @@
 -- cover, pincer arrival, regroup. Each comes after its tell (P3, sv_tells.lua: the action its lead_s later), has a
 -- cooldown and a budget a round, and is counted and logged by STATS.tactic (a "director:" line; the planes involved
 -- tagged p.dirTag = { tactic, at }, which P8's kill bonus pays on).
--- The host's (or solo): DIR.tick runs from sv_main.lua's probeTick every 250 ms (timed "director"); on a co-op joiner it
--- does nothing of its own (P4's DIR.clientTick, once there is one). A tactic is aimed at a player (COOP.players(): a
+-- The host's (or solo): DIR.tick runs from sv_main.lua's probeTick every 250 ms (timed "director"), P4's part first; on
+-- a co-op joiner only P4's DIR.clientTick (its own scores to the host). A tactic is aimed at a player (COOP.players(): a
 -- slot): the host's own through the events above; a joiner, whom LastTGT can't reach (it steers by LocalPlayer, the
 -- host's plane here), through a hunt (RE_SV_Hunt_NN, AIFirst: the joiners' planes) with the flight's TargetActor kept on
 -- that joiner's stand-in for a while, and a salvo fired on that joiner's own copies ("dv", sv_coop.lua COOP.dispatch).
@@ -28,7 +29,9 @@
 --   DIR.holding(unit)                 a flight the director holds back (hunts and the aces' moves leave it alone)
 --   DIR.aimed(p)                      a plane whose TargetActor the director keeps on a joiner (ACE.hunt leaves it)
 --   DIR.release(unit, why)            let a held flight go now (P4: "the director ... releases a held flight")
+--   DIR.push(slot, why, km)           P4's push on a comfortable player: a held top cover dives, else a flight turns in
 --   DIR.holds()                       the holds in force, RE_SV_DirHold_NN (sv_coop.lua: a joiner who links later)
+--   P4 (below): DIR.level, DIR.holdWave, DIR.holdOn, DIR.hot, DIR.intensityTick, DIR.clientTick
 DIR = { SALVO_FCS_SLOT = 2 }   -- (the fighters' missile slot, WN_WEAPON_3; tools/survival_events.py SALVO_SLOT checks it)
 
 do
@@ -100,6 +103,9 @@ local function blockedBy(s, tactic, slot, now, noGap)
     if not noGap and s.lastAt and now - s.lastAt < num(cfg().gap_s, 0) then
         return string.format("the director's gap, %.1f s after its last", now - s.lastAt)
     end
+    -- (P4: no new pressure on a player the intensity director has above its high mark, CFG.intensity.hold.tactics)
+    local hot = slot ~= nil and not ROOM_TACTIC[tactic] and DIR.hot and DIR.hot(slot)
+    if hot then return string.format("under pressure: intensity %.0f", hot) end
     return nil
 end
 local function spend(s, tactic, slot, now, noGap)
@@ -122,8 +128,8 @@ end
 
 ---------------------------------------------------------------------------------------------------- players, tells
 -- the players a tactic may be aimed at (COOP.players(): you first, then the others; solo or the Offline edition: you):
--- alive, flying, their state fresh; past CFG.director.players, you and the others round-robin
-local function players(s)
+-- alive, flying, their state fresh (flying()); past CFG.director.players, you and the others round-robin (players(s))
+local function flying()
     local all = nil
     if COOP and COOP.players then
         local ok, l = pcall(COOP.players)
@@ -142,6 +148,10 @@ local function players(s)
     for _, e in ipairs(all) do
         if e.at and e.alive ~= false and e.fresh ~= false and not e.onAirfield then out[#out + 1] = e end
     end
+    return out
+end
+local function players(s)
+    local out = flying()
     local max = math.max(1, math.floor(num(cfg().players, 4)))
     if #out <= max then return out end
     local pick, rest = {}, {}
@@ -342,9 +352,10 @@ end
 -- the flight that covers plane p for player e: the nearest plane of another pool flight within cover.range_km of e that
 -- may turn (a duelist's or an ace squadron's: a Lancer, Wolf or Skirmisher flight keeps its role, ROLE.ownSet; not an
 -- escort over the airfield, whose small area beats the move, nor the jammer's, nor one held, aimed, decoyed, holding its
--- Wolf trap or still in a reversal, D.aceMoveAt, shared with ACE.movesTick)
-local function coverer(s, p, e, now)
-    local rng = num(tc("cover").range_km, 6)
+-- Wolf trap or still in a reversal, D.aceMoveAt, shared with ACE.movesTick). rng: another range (P4's push, with p a
+-- plane of no flight: {})
+local function coverer(s, p, e, now, rng)
+    rng = rng or num(tc("cover").range_km, 6)
     local best, bd
     D.aceMoveAt = D.aceMoveAt or {}
     for _, q in ipairs(planes) do
@@ -652,6 +663,13 @@ local function heldTick(s, now, ps)
             release(s, unit, "you hit it while it was held")
         elseif not othersUp(s, unit) and not (D.state == "spawning" and D.queue and #D.queue > 0) then
             release(s, unit, string.format("the round's last flight (%s)", tostring(D.state)))
+        elseif h.kind == "top" and DIR.holdOn and DIR.holdOn(now) then
+            -- (P4's intensity hold: its dive and its max_s wait for the hold's end, 30 s at most; hit, or the last
+            -- flight up, it still goes, above)
+            if h.intHold ~= DIR.holdOn(now) then
+                h.intHold = DIR.holdOn(now)
+                log(string.format("director: %s (top cover) waits for the intensity hold (%.0f s more)", unit, h.intHold - now))
+            end
         elseif h.kind == "regroup" then
             if now >= (h.untilT or now) then release(s, unit, "regrouped") end
         elseif held >= num(c.max_s, 45) then
@@ -879,6 +897,64 @@ function DIR.release(unit, why)
     return release(s, unit, why)
 end
 
+-- P4's "spends a tactic or releases a held flight" on player `slot` (the intensity director: that player's been
+-- comfortable calm_s): a held top cover (the one nearest them; none while the intensity hold is on or inside your decoy)
+-- dives on them after its tell; else the nearest flight that may turn (cover's choice: a duelist's or an ace squadron's
+-- within rangeKm; its next move no sooner than cover.move_s) turns onto them after "check your six" (a joiner: the hunt,
+-- its TargetActor on their stand-in for cover.aim_s), counted and tagged "push". The director's gap applies; its tell
+-- must be sayable (need_tell). Returns what it did, or nil and why not.
+function DIR.push(slot, why, rangeKm)
+    local s = st()
+    if not (s and D and D.round) then return nil, "no run" end
+    if not on() then return nil, "the squad director is off ([director] enabled)" end
+    local now = D.now or 0
+    local e = nil
+    for _, x in ipairs(flying()) do if x.slot == slot then e = x end end
+    if not e then return nil, "not flying" end
+    if s.lastAt and now - s.lastAt < num(cfg().gap_s, 0) then
+        return nil, string.format("the director's gap, %.1f s after its last", now - s.lastAt)
+    end
+    why = "the intensity director: " .. tostring(why or "comfortable")
+    if not (DIR.holdOn and DIR.holdOn(now)) then
+        local bu, bd = nil, nil
+        for unit, h in pairs(s.held) do
+            if h.kind == "top" and not h.diving and not decoyed(unit, now) then
+                local _, d = nearestOf(unit, e.at)
+                if d and (not bd or d < bd) then bu, bd = unit, d end
+            end
+        end
+        if bu then
+            if not tellReady("dive", e) then return nil, "the dive's tell can't be said now" end
+            dive(s, bu, e, now, why)
+            return string.format("held %s dives on %s (%.1f km off)", bu, who(e), bd)
+        end
+    end
+    local rng = num(rangeKm, num(tc("cover").range_km, 6))
+    local q, d = coverer(s, {}, e, now, rng)
+    if not q then return nil, string.format("no flight within %.0f km may turn onto %s", rng, who(e)) end
+    if not tellReady("six", e) then return nil, "its tell can't be said now" end
+    local c, unit, i = tc("cover"), q.unit, poolIndex(q.unit)
+    s.lastAt = now
+    local lead = (TELL and TELL.leadS) and num(TELL.leadS("six"), 0) or 0
+    D.aceMoveAt[unit] = now + lead + num(c.move_s, 30)
+    local fn
+    if e.isMe then
+        local ev = string.format("RE_SV_AceTurn_%02d", i)
+        fn = function() log(string.format("director: push: %s %s", ev, (fire(ev)))) end
+    else                                              -- (a joiner: LastTGT would turn onto the host)
+        fn = function()
+            if alive(unit) <= 0 then return end
+            local h = string.format("RE_SV_Hunt_%02d", i)
+            log(string.format("director: push on player %d: %s %s", e.slot + 1, h, (fire(h))))
+            aim(s, unit, nil, e, c.aim_s, "push", true)
+        end
+    end
+    local said = tellAfter("six", e, fn)
+    pcall(STATS.tactic, "push", unit, e.slot, string.format("%s; %s %.1f km from %s turns in", why, q.name, d, who(e)),
+        said and "six" or nil)
+    return string.format("%s turns onto %s (%.1f km off)", unit, who(e), d)
+end
+
 -- The holds in force now: RE_SV_DirHold_NN of each flight held (a top cover, a regroup; one diving or inside your decoy
 -- too: its release follows). A co-op joiner who links after a hold was forwarded missed it: sv_coop.lua's hostSync sends
 -- these once its copies are up, read then
@@ -895,9 +971,13 @@ function DIR.holds()
 end
 
 function DIR.tick(now, paused)
-    if client() then                                  -- (a joiner: the host directs; P4's own sampler, later)
+    if client() then                                  -- (a joiner: the host directs; P4's sampler and "in", below)
         if DIR.clientTick then return DIR.clientTick(now, paused) end
         return
+    end
+    if DIR.intensityTick then                         -- (P4: the scores, the hold, a push, the level; its own switch)
+        local okI, errI = pcall(DIR.intensityTick, now, paused)
+        if not okI and D and not D.intErr then D.intErr = true; log("intensity: error " .. tostring(errI)) end
     end
     if not (on() and now and D and D.round and not paused) then return end
     local state = D.state
@@ -915,5 +995,517 @@ function DIR.tick(now, paused)
     end
     if skipped() or #ps == 0 then return end
     fastTick(s, now, ps)
+end
+end
+
+---------------------------------------------------------------------------------------------------- P4: the intensity director
+-- The thesis' P4: "Track a 0-100 intensity score from damage taken in the last 30 s, missiles inbound, enemies within
+-- 5 km and health. Track a comfort score from time spent on an enemy's tail, kills per minute and health above 70 %.
+-- When comfort is high and intensity low for 20 s, the director spends a tactic or releases a held flight. When
+-- intensity stays above 80, it holds the next wave and the top cover back for 15-20 s. Tiers stay as the floor; spikes
+-- become the director's ceiling." (runtime-ai steps 7-9, coop-perf step 6; CFG.intensity says what each setting does;
+-- tools/re/BEHAVIOUR_DIRECTOR.md unit 7.)
+--   Every game, every tick: your health's drops (HIT.h, HP x10). Once a second on the round clock (not in a pause):
+--     your scores from what's kept already: the drops of the last window_s, HIT.msl's missiles within msl_km homing on
+--     your pawn (TargetToHome; one within MSL_NEAR_M whose target can't be read counts), the sweep's p.dist (2 s old at
+--     most), your tail (each plane's last pose against where you were then, p.youAt, else now), RUN.kills.you, health
+--     (MaxHealth read every 5 s). A co-op joiner sends its own to the host ("in", sv_coop.lua) and its copies fly the
+--     host's level ("rnd").
+--   The host (or solo), once a second for the room: per player (COOP.players(): flying, fresh; a joiner's last "in"
+--     under 3 s old) how long it's been hot (intensity above high) or calm (comfort comfort.high+, intensity low or
+--     under), in fights only (spawning, wave, fighting; not a boss round of skip_specials); then the hold, a push, the
+--     level. Every decision logged ("intensity:"), the scores every log_s.
+--   DIR.level(round)          the spike level enemies of round `round` fly (sv_config.lua levelFor's)
+--   DIR.holdWave(now, what)   the wave gate / a later wave's spawns wait while the hold is on (sv_rounds.lua)
+--   DIR.holdOn(now)           the hold's end while it's on, else false (heldTick: the top cover's dive waits)
+--   DIR.hot(slot)             that player's intensity while above high (hold.tactics), else false (blockedBy)
+--   DIR.intensityTick(now, paused), DIR.clientTick(now, paused)   DIR.tick's P4 part: the host's (solo's), a joiner's
+-- State in D.int (a new level or run clears it with D); the level's ease carries over the run's rounds.
+do
+local FIGHT = { spawning = true, wave = true, fighting = true }
+local MSL_NEAR_M = 1000                     -- (a missile this close whose target can't be read: counted as on you)
+local HOLD_MAX_S = 30                       -- (a hold's hard limit, whatever hold.secs says)
+local PUSH_RETRY_S = 5                      -- (a push that found nothing to send: tried again this much later)
+
+local function icfg() return CFG.intensity or {} end
+local function ion() local c = CFG.intensity; return c ~= nil and c.enabled ~= false end
+local function sub(name) local t = icfg()[name]; return type(t) == "table" and t or {} end
+local function leverOn(name) return ion() and sub(name).enabled ~= false end
+local function num(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
+local function client() return (COOP and COOP.client and COOP.client()) and true or false end
+local function whoOf(e) return (e.isMe or not (COOP and COOP.open)) and "you" or string.format("player %d", (e.slot or 0) + 1) end
+local function angle(ax, ay, az, bx, by, bz)          -- between two vectors, degrees (180 when one has no length)
+    local la, lb = math.sqrt(ax * ax + ay * ay + az * az), math.sqrt(bx * bx + by * by + bz * bz)
+    if la == 0 or lb == 0 then return 180 end
+    return math.deg(math.acos(math.max(-1, math.min(1, (ax * bx + ay * by + az * bz) / (la * lb)))))
+end
+local function st()
+    if not D then return nil end
+    local s = D.int
+    if not s then
+        s = { dmg = {}, tail = {}, kills = {}, pl = {}, ease = 0, hotFor = 0, coolFor = 0, holdsWave = {}, pushN = {},
+              pushNext = {}, said = {} }
+        D.int = s
+    end
+    return s
+end
+local function skipped()                              -- a boss round whose own script runs the fight (skip_specials)
+    local sp = D and D.special
+    if not sp then return false end
+    for _, k in ipairs(icfg().skip_specials or {}) do if k == sp.kind then return true end end
+    return false
+end
+local function once(s, key, msg)                      -- once a round
+    if s.said[key] == D.round then return end
+    s.said[key] = D.round
+    log(msg)
+end
+local function prune(ring, now, secs)                 -- a ring's entries ({ t, v }) younger than secs
+    local keep = {}
+    for _, x in ipairs(ring) do if now - x.t < secs then keep[#keep + 1] = x end end
+    return keep
+end
+local function total(ring) local n = 0; for _, x in ipairs(ring) do n = n + x.v end; return n end
+
+---------------------------------------------------------------------------------------------------- the scores (every game)
+-- your health's drops since the last sample (HIT.h every tick; a new aircraft, HIT.pawn, starts over)
+local function healthTick(s)
+    local h = HIT and HIT.h
+    if type(h) ~= "number" then return end
+    if s.hKey ~= HIT.pawn then s.hKey, s.hLast = HIT.pawn, h; return end
+    if s.hLast and h < s.hLast then s.drop = (s.drop or 0) + (s.hLast - h) end
+    s.hLast = h
+end
+-- this game's player: { obj, at, hp (%), onAirfield }, or nil (COOP.me(): its pawn read once a tick, shared)
+local function mine(s, now)
+    local e = (COOP and COOP.me) and COOP.me() or nil
+    local pawn = (e and e.obj) or (survivalPC and valid(survivalPC) and survivalPC.Pawn) or nil
+    if not valid(pawn) then return nil end
+    local key = HIT and HIT.pawn
+    if now >= (s.maxAt or 0) or s.maxKey ~= key then
+        local ok, mh = pcall(function() return pawn.MaxHealth end)
+        if ok and type(mh) == "number" and mh > 0 then s.maxHp = mh end
+        s.maxAt, s.maxKey = now + 5, key
+    end
+    local at = (e and e.at) or playerLocation()
+    local h = HIT and HIT.h
+    local hp = (type(h) == "number" and s.maxHp) and clamp(h / 10 / s.maxHp * 100, 0, 100) or (e and e.hpPct) or nil
+    local onA = e and e.onAirfield
+    if onA == nil then
+        local ok, v = pcall(playerOnAirfield, at)
+        onA = ok and v == true
+    end
+    return { obj = pawn, at = at, hp = hp, onAirfield = onA }
+end
+-- enemy missiles homing on you within km (HIT.msl: seen in the last second)
+local function missilesOn(me, now, km_)
+    local list = HIT and HIT.msl
+    if not (list and me.obj) then return 0 end
+    local pa, n, lim = addrOf(me.obj), 0, km_ * 1000
+    for _, m in ipairs(list) do
+        if m.d and m.d <= lim and now - (m.seen or -1e9) <= 1.0 and valid(m.obj) then
+            local ok, t = pcall(function() return m.obj.TargetToHome end)
+            if ok and valid(t) then
+                if addrOf(t) == pa then n = n + 1 end
+            elseif m.d <= MSL_NEAR_M then
+                n = n + 1
+            end
+        end
+    end
+    return n
+end
+-- you on an enemy's tail (within tail_km / tail_deg of its six): each plane's last pose (the sweep's, 2 s old at most)
+-- against where you were at that sample (p.youAt, sv_stats.lua), else where you are now
+local function onTail(me, cc)
+    local tkm, tdeg = num(cc.tail_km, 3), num(cc.tail_deg, 70)
+    for _, p in ipairs(planes) do
+        if not p.down and p.at and p.fwd and p.dist and p.dist <= tkm + 1 then
+            local y = p.youAt or me.at
+            if y then
+                local dx, dy, dz = y.X - p.at.X, y.Y - p.at.Y, y.Z - p.at.Z
+                if math.sqrt(dx * dx + dy * dy + dz * dz) <= tkm * 100000
+                    and angle(-p.fwd.X, -p.fwd.Y, -p.fwd.Z, dx, dy, dz) <= tdeg then return true end
+            end
+        end
+    end
+    return false
+end
+-- this second's scores: s.me = { i (smoothed), c, raw, dmg %, msl, near, hp, tailS, kpm, win, onAirfield }, or nil
+local function sample(s, now)
+    local c, sc, cc = icfg(), sub("score"), sub("comfort")
+    local win = math.max(1, num(c.window_s, 30))
+    local kw = math.max(1, num(cc.kills_window_s, 60))
+    local me = mine(s, now)
+    local drop = s.drop or 0
+    s.drop = 0
+    s.dmg, s.tail, s.kills = prune(s.dmg, now, win), prune(s.tail, now, win), prune(s.kills, now, kw)
+    if drop > 0 and s.maxHp then s.dmg[#s.dmg + 1] = { t = now, v = drop / 10 / s.maxHp * 100 } end
+    local k = (RUN and RUN.kills and tonumber(RUN.kills.you)) or 0
+    if s.kLast and k > s.kLast then s.kills[#s.kills + 1] = { t = now, v = k - s.kLast } end
+    s.kLast = k
+    if not me then s.me = nil; return nil end
+    local dmg, msl, near = total(s.dmg), missilesOn(me, now, num(sc.msl_km, 4)), 0
+    local nkm = num(sc.near_km, 5)
+    for _, p in ipairs(planes) do if not p.down and p.dist and p.dist <= nkm then near = near + 1 end end
+    if onTail(me, cc) then s.tail[#s.tail + 1] = { t = now, v = 1 } end
+    local tailS, kpm, hp = total(s.tail), total(s.kills) * 60 / kw, me.hp or 100
+    local raw = num(sc.damage, 40) * clamp(dmg / math.max(1, num(sc.dmg_full, 0.4) * 100), 0, 1)
+        + num(sc.missiles, 25) * clamp(msl / math.max(1, num(sc.msl_full, 2)), 0, 1)
+        + num(sc.near, 20) * clamp(near / math.max(1, num(sc.near_full, 4)), 0, 1)
+        + num(sc.health, 15) * clamp(1 - hp / 100, 0, 1)
+    raw = clamp(raw, 0, 100)
+    local x = clamp(num(c.smooth_x, 0.35), 0.01, 1)
+    local i = s.i and (s.i + (raw - s.i) * x) or raw
+    local comfort = num(cc.tail, 40) * clamp(tailS / (win * clamp(num(cc.tail_full, 0.5), 0.01, 1)), 0, 1)
+        + num(cc.kills, 35) * clamp(kpm / math.max(0.01, num(cc.kpm_full, 2)), 0, 1)
+        + num(cc.healthy, 25) * ((hp > num(cc.hp_pct, 70)) and 1 or 0)
+    s.i = i
+    s.me = { i = i, c = clamp(comfort, 0, 100), raw = raw, dmg = dmg, msl = msl, near = near, hp = hp, tailS = tailS,
+             kpm = kpm, win = win, onAirfield = me.onAirfield }
+    return s.me
+end
+
+---------------------------------------------------------------------------------------------------- the level (the spikes a ceiling)
+-- every live enemy flown again at spike level `level`, as it would have been given at its first sweep: its provoke
+-- (sv_rows.lua provokeWant / enemyProvoke: only the fields that change; MINDRIPPER's and the Ladons' keep their own) and
+-- its PilotRank (enemyTier's, p.rankBase, raised to the level's rank_min; p.rankSet, which the jammer's boost goes back
+-- to: a plane near the jammer keeps its boost on it, sv_ai.lua JAM.tick). Its fire control and post-stall stay as it
+-- spawned (rows are set at spawn; post-stall is every spike level's)
+local function reapply(level, why)
+    if not (provokeWant and enemyProvoke and D and D.round) then return end
+    local an = CFG.specials and CFG.specials.anomaly
+    local rmin = spikeCfg(level).rank_min
+    local n, m, nr = 0, 0, 0
+    for _, p in ipairs(planes) do
+        if not p.down and p.unit and not p.unit:find("^SV_Unit_Ladon") and not (an and p.unit == an.unit) and valid(p.obj) then
+            if p.spiked ~= nil then
+                local ft = D.flightTier and D.flightTier[p.unit]
+                local okW, w = pcall(provokeWant, D.round, ft and CFG.tiers.list[ft] or nil, level)
+                if okW and w then
+                    m = m + 1
+                    local okP, k = pcall(enemyProvoke, p, w)
+                    if okP and (k or 0) > 0 then n = n + 1 end
+                    p.spiked = w.level
+                end
+            end
+            if p.rankBase and p.rankSet then
+                local want = rmin and math.max(p.rankBase, math.min(5, rmin)) or p.rankBase
+                if want ~= p.rankSet then
+                    p.rankSet = want
+                    local jam = p.jammed and CFG.jammer and tonumber(CFG.jammer.rank_add) or 0
+                    if pcall(function() p.obj.PilotRank = math.min(5, want + jam) end) then nr = nr + 1 end
+                end
+            end
+        end
+    end
+    log(string.format("intensity: level %d on the enemies up (%s): provoke written again on %d of %d, PilotRank on %d", level,
+        why, n, m, nr))
+end
+local function maxDrop() return clamp(math.floor(num(sub("level").max_drop, 1)), 0, 3) end
+-- the room above high for down_after_s of fighting: a level down (to max_drop under the spikes); below up_below for
+-- up_after_s: a level back; gap_s between two changes. The room's hot / cool time only runs in fights with a player up.
+local function levelTick(s, now, dt, room, by, high)
+    local lc = sub("level")
+    if not leverOn("level") then
+        if s.ease ~= 0 then s.ease = 0; log("intensity: level off: enemies fly the spikes' levels again") end
+        return
+    end
+    if room > high then s.hotFor, s.coolFor = s.hotFor + dt, 0
+    elseif room < num(lc.up_below, 50) then s.coolFor, s.hotFor = s.coolFor + dt, 0
+    else s.hotFor, s.coolFor = 0, 0 end
+    if s.levelAt and now - s.levelAt < num(lc.gap_s, 45) then return end
+    local ceil, was = spikeLevel(D.round), DIR.level(D.round)
+    if s.hotFor >= num(lc.down_after_s, 30) and s.ease < maxDrop() and was > 0 then
+        s.ease, s.levelAt, s.hotFor = s.ease + 1, now, 0
+        local lv = DIR.level(D.round)
+        log(string.format("intensity: round %d: the room above %.0f for %.0f s of fighting (%s at %.0f): enemies from now fly "
+            .. "difficulty level %d (the spikes' %d, at most %d under)", D.round, high, num(lc.down_after_s, 30),
+            by and whoOf(by.e) or "?", room, lv, ceil, maxDrop()))
+        reapply(lv, "eased")
+    elseif s.coolFor >= num(lc.up_after_s, 60) and s.ease > 0 then
+        s.ease, s.levelAt, s.coolFor = s.ease - 1, now, 0
+        local lv = DIR.level(D.round)
+        log(string.format("intensity: round %d: the room below %.0f for %.0f s of fighting: enemies from now fly difficulty "
+            .. "level %d (the spikes' %d)", D.round, num(lc.up_below, 50), num(lc.up_after_s, 60), lv, ceil))
+        reapply(lv, "back up")
+    end
+end
+
+---------------------------------------------------------------------------------------------------- the hold
+-- what a hold keeps back now: the next wave (state "wave"), the rest of a later wave still coming, a top cover the
+-- squad director holds; nil: nothing (a round's last wave all up, no top cover held). Its wave: the one held (the next
+-- one in state "wave"), hold.per_wave's count
+local function holdWhat()
+    local parts, w = {}, D.wave or 1
+    if D.state == "wave" then
+        w = w + 1
+        parts[#parts + 1] = string.format("wave %d", w)
+    elseif D.state == "spawning" and w > 1 and D.queue and #D.queue > 0 then
+        parts[#parts + 1] = string.format("the rest of wave %d", w)
+    end
+    local units = {}
+    for unit, h in pairs((D.dir and D.dir.held) or {}) do if h.kind == "top" and not h.diving then units[#units + 1] = unit end end
+    table.sort(units)
+    if #units > 0 then parts[#parts + 1] = "the top cover (" .. table.concat(units, ", ") .. ")" end
+    if #parts == 0 then return nil, w end
+    return table.concat(parts, " and "), w
+end
+local function roomText(ps)
+    if #ps < 2 then return "" end
+    local t = {}
+    for _, q in ipairs(ps) do t[#t + 1] = string.format("%s %.0f", whoOf(q.e), q.x.i) end
+    return "; the room: " .. table.concat(t, ", ")
+end
+local function holdEnd(s, now, why)
+    local h = s.hold
+    s.hold, s.holdEnd = nil, math.min(now, h.untilT)
+    if s.rs and s.rs.round == h.round then s.rs.holdS = s.rs.holdS + (s.holdEnd - h.at) end
+    log(string.format("intensity: hold over after %.0f s (%s)%s", s.holdEnd - h.at, h.what, why and (": " .. why) or ""))
+end
+-- a player above high for hold.after_s: the hold (hold.secs, at most HOLD_MAX_S), one at a time, never made longer,
+-- hold.gap_s after the last, at most hold.per_wave a wave, only when there's something to keep back
+local function holdTick(s, now, ps, high)
+    if s.hold or not leverOn("hold") then return end
+    local hc = sub("hold")
+    local best, bpl = nil, nil
+    for _, q in ipairs(ps) do
+        local pl = s.pl[q.e.slot or 0]
+        if pl and pl.hotFor >= num(hc.after_s, 3) and (not best or q.x.i > best.x.i) then best, bpl = q, pl end
+    end
+    if not best then return end
+    local what, wave = holdWhat()
+    if not what then return end
+    local key = D.round .. "|" .. wave
+    local whoS = whoOf(best.e)
+    if s.holdEnd and now - s.holdEnd < num(hc.gap_s, 20) then
+        once(s, "gap|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; the last ended %.0f s ago, hold.gap_s %.0f)",
+            whoS, best.x.i, now - s.holdEnd, num(hc.gap_s, 20)))
+        return
+    end
+    local per = math.max(0, math.floor(num(hc.per_wave, 1)))
+    if (s.holdsWave[key] or 0) >= per then
+        once(s, "wave|" .. key, string.format("intensity: hold not now (%s at intensity %.0f; wave %d had its %d)", whoS, best.x.i,
+            wave, per))
+        return
+    end
+    local r = type(hc.secs) == "table" and hc.secs or { 15, 20 }
+    local lo = num(r[1], 15)
+    local hi = num(r[2], lo)
+    local secs = clamp(lo + math.random() * math.max(0, hi - lo), 0, HOLD_MAX_S)
+    if secs <= 0 then return end
+    s.holdsWave[key] = (s.holdsWave[key] or 0) + 1
+    s.hold = { at = now, untilT = now + secs, round = D.round, slot = best.e.slot, what = what, said = {} }
+    if s.rs then s.rs.holds = s.rs.holds + 1 end
+    log(string.format("intensity: round %d: held %.0f s (%s at intensity %.0f, above %.0f for %.0f s): %s wait%s",
+        D.round, secs, whoS, best.x.i, high, bpl.hotFor, what, roomText(ps)))
+end
+
+---------------------------------------------------------------------------------------------------- a push
+-- the most comfortable player calm for calm_s: the squad director spends a tactic on them (DIR.push: a held top cover
+-- dives, else a flight turns onto them); push.per_round each a round from push.from_round, cooldown_s apart
+local function pushTick(s, now, ps)
+    if not leverOn("push") then return end
+    local pc, calm = sub("push"), num(icfg().calm_s, 20)
+    if (D.round or 0) < num(pc.from_round, 1) then return end
+    local best, bpl = nil, nil
+    for _, q in ipairs(ps) do
+        local pl = s.pl[q.e.slot or 0]
+        if pl and pl.calmFor >= calm and (not best or q.x.c > best.x.c) then best, bpl = q, pl end
+    end
+    if not best then return end
+    local slot, whoS = best.e.slot or 0, whoOf(best.e)
+    local what = string.format("%s comfortable %.0f s (comfort %.0f, intensity %.0f)", whoS, bpl.calmFor, best.x.c, best.x.i)
+    local used, max = s.pushN[slot] or 0, math.max(0, math.floor(num(pc.per_round, 2)))
+    local why = (used >= max and string.format("its %d this round", max))
+        or (now < (s.pushNext[slot] or 0) and string.format("its cooldown, %.0f s more", s.pushNext[slot] - now)) or nil
+    if why then
+        once(s, "push|" .. slot .. "|" .. (why:match("^[%a ]+") or why), "intensity: " .. what .. ": no push (" .. why .. ")")
+        return
+    end
+    local okP, did, whyNot = pcall(DIR.push, slot, what, num(pc.range_km, 8))
+    if not okP then did, whyNot = nil, "error " .. tostring(did) end
+    if did then
+        s.pushN[slot], s.pushNext[slot], bpl.calmFor = used + 1, now + num(pc.cooldown_s, 40), 0
+        if s.rs then s.rs.pushes = s.rs.pushes + 1 end
+        log("intensity: " .. what .. ": " .. did)
+    else
+        bpl.calmFor = math.max(0, calm - PUSH_RETRY_S)
+        once(s, "nopush|" .. slot .. "|" .. (tostring(whyNot):match("^[%a ']+") or "?"),
+            "intensity: " .. what .. ": nothing sent (" .. tostring(whyNot) .. ")")
+    end
+end
+
+---------------------------------------------------------------------------------------------------- rounds, lines
+local function roundLine(s, now)
+    local r = s.rs
+    if not r or r.said then return end
+    r.said = true
+    if s.hold and s.hold.round == r.round then holdEnd(s, now, "the round's over") end
+    if r.n == 0 then return end
+    local ceil, lv = spikeLevel(r.round), DIR.level(r.round)
+    log(string.format("intensity: round %d: you avg %.0f, peak %.0f, above %.0f for %d s; comfort avg %.0f%s; level %d%s", r.round,
+        r.sumI / r.n, r.peak, num(icfg().high, 80), r.hotS, r.sumC / r.n,
+        client() and "" or string.format("; held %d (%.0f s), pushes %d", r.holds, r.holdS, r.pushes),
+        lv, lv ~= ceil and string.format(" (the spikes' %d%s)", ceil, client() and ", the host's" or "") or ""))
+end
+-- the round the scores count for (a fight of D.round): its sums; its line once it's over (D.state "wait", or the next)
+local function roundTrack(s, now)
+    if not (D.round and FIGHT[D.state]) then
+        if s.rs and not s.rs.said then roundLine(s, now) end
+        return
+    end
+    if not s.rs or s.rs.round ~= D.round then
+        if s.rs and not s.rs.said then roundLine(s, now) end
+        s.rs = { round = D.round, n = 0, sumI = 0, peak = 0, hotS = 0, sumC = 0, holds = 0, holdS = 0, pushes = 0 }
+        s.pushN = {}
+        local ceil, lv = spikeLevel(D.round), DIR.level(D.round)
+        if lv ~= ceil and not client() then
+            log(string.format("intensity: round %d: enemies fly difficulty level %d (the spikes' %d, eased for the room's pressure)",
+                D.round, lv, ceil))
+        end
+    end
+    local m = s.me
+    if m and not m.onAirfield then
+        local r = s.rs
+        r.n, r.sumI, r.sumC, r.peak = r.n + 1, r.sumI + m.i, r.sumC + m.c, math.max(r.peak, m.i)
+        if m.i > num(icfg().high, 80) then r.hotS = r.hotS + 1 end
+    end
+end
+-- your scores every log_s seconds of a fight (the host's: the other players' last too, a hold on; a level eased)
+local function scoreLine(s, now)
+    local every, m = num(icfg().log_s, 10), s.me
+    if every <= 0 or not m or m.onAirfield or not (D.round and FIGHT[D.state]) or now < (s.logAt or 0) then return end
+    s.logAt = now + every
+    local parts = { string.format("intensity: round %d: you %.0f (damage %.0f%% of your health in %.0f s, %d missile%s on you, " ..
+        "%d enem%s within %.0f km, health %.0f%%), comfort %.0f (on a tail %.0f s of %.0f, %.1f kills a minute)", D.round, m.i,
+        m.dmg, m.win, m.msl, m.msl == 1 and "" or "s", m.near, m.near == 1 and "y" or "ies", num(sub("score").near_km, 5), m.hp,
+        m.c, m.tailS, m.win, m.kpm) }
+    if not client() then
+        local slots = {}
+        for slot, pl in pairs(s.pl) do if not pl.isMe and pl.i then slots[#slots + 1] = slot end end
+        table.sort(slots)
+        for _, slot in ipairs(slots) do
+            local pl = s.pl[slot]
+            parts[#parts + 1] = string.format("player %d %.0f, comfort %.0f", slot + 1, pl.i, pl.c or 0)
+        end
+        if s.hold then parts[#parts + 1] = string.format("holding %s (%.0f s more)", s.hold.what, s.hold.untilT - now) end
+    end
+    local ceil, lv = spikeLevel(D.round), DIR.level(D.round)
+    if lv ~= ceil then parts[#parts + 1] = string.format("level %d (the spikes' %d)", lv, ceil) end
+    log(table.concat(parts, "; "))
+end
+
+---------------------------------------------------------------------------------------------------- the room (the host)
+local function decide(s, now, dt)
+    local c = icfg()
+    local high, low, cHigh = num(c.high, 80), num(c.low, 35), num(sub("comfort").high, 60)
+    local fight = D.round and FIGHT[D.state] and not skipped()
+    local ps = {}
+    if fight then
+        local all = nil
+        if COOP and COOP.players then
+            local ok, l = pcall(COOP.players)
+            if ok and type(l) == "table" then all = l end
+        end
+        for _, e in ipairs(all or { { slot = 0, isMe = true } }) do
+            local x = nil
+            if e.isMe then x = s.me elseif COOP and COOP.intensityOf then x = COOP.intensityOf(e.slot) end
+            if x and e.alive ~= false and e.fresh ~= false and not e.onAirfield and not x.onAirfield then ps[#ps + 1] = { e = e, x = x } end
+        end
+    end
+    local seen, room, by = {}, 0, nil
+    for _, q in ipairs(ps) do
+        local slot = q.e.slot or 0
+        local pl = s.pl[slot] or {}
+        s.pl[slot], seen[slot] = pl, true
+        pl.i, pl.c, pl.isMe = q.x.i, q.x.c, q.e.isMe
+        pl.hotFor = (q.x.i > high) and (pl.hotFor or 0) + dt or 0
+        pl.calmFor = (q.x.c >= cHigh and q.x.i <= low) and (pl.calmFor or 0) + dt or 0
+        if q.x.i > room then room, by = q.x.i, q end
+    end
+    for slot, pl in pairs(s.pl) do if not seen[slot] then pl.i, pl.hotFor, pl.calmFor = nil, 0, 0 end end
+    if s.hold and (not fight or now >= s.hold.untilT) then holdEnd(s, now, (not fight) and "no fight to hold" or nil) end
+    if not fight then return end
+    holdTick(s, now, ps, high)
+    if #ps > 0 then levelTick(s, now, dt, room, by, high) end
+    pushTick(s, now, ps)
+end
+
+---------------------------------------------------------------------------------------------------- the API
+function DIR.level(round)
+    local ceil = spikeLevel(round)
+    if ceil <= 0 or not leverOn("level") then return ceil end
+    if client() then                                  -- (the host's, from its "rnd": sv_coop.lua clientRounds)
+        local x = D and D.intLevel
+        if x and x.round == round and type(x.level) == "number" then return clamp(math.floor(x.level), 0, ceil) end
+        return ceil
+    end
+    local s = D and D.int
+    return math.max(0, ceil - math.min(s and s.ease or 0, maxDrop()))
+end
+
+function DIR.holdOn(now)
+    local h = D and D.int and D.int.hold
+    if h and h.round == D.round and now and now < h.untilT then return h.untilT end
+    return false
+end
+
+function DIR.holdWave(now, what)
+    local h = D and D.int and D.int.hold
+    if not (h and h.round == D.round and now and now < h.untilT) then return false end
+    if not h.said[what] then
+        h.said[what] = true
+        log(string.format("round %d: %s waits for the intensity hold (%.0f s more)", D.round, what == "wave"
+            and string.format("wave %d", (D.wave or 1) + 1) or string.format("the rest of wave %d", D.wave or 1), h.untilT - now))
+    end
+    return true
+end
+
+function DIR.hot(slot)
+    local s = D and D.int
+    if not (s and leverOn("hold") and sub("hold").tactics ~= false) then return false end
+    local pl = s.pl[slot or 0]
+    if pl and pl.i and pl.i > num(icfg().high, 80) then return pl.i end
+    return false
+end
+
+function DIR.intensityTick(now, paused)
+    local s = st()
+    if not (s and now and ion()) then return end
+    healthTick(s)
+    if paused or now < (s.at or 0) then return end
+    local dt = clamp(now - (s.last or (now - 1)), 0, 2)
+    s.at, s.last = now + 1, now
+    sample(s, now)
+    roundTrack(s, now)
+    decide(s, now, dt)
+    scoreLine(s, now)
+end
+
+-- a joiner: its own scores to the host ("in", once a second), the host's level on its copies when it changes
+function DIR.clientTick(now, paused)
+    local s = st()
+    if not (s and now and ion()) then return end
+    healthTick(s)
+    if paused or now < (s.at or 0) then return end
+    s.at, s.last = now + 1, now
+    sample(s, now)
+    roundTrack(s, now)
+    local x = D.intLevel
+    if x and x.round == D.round and type(x.level) == "number" then
+        local key = x.round .. ":" .. x.level
+        if key ~= s.lvKey then
+            local ceil = spikeLevel(D.round)
+            if x.level ~= ceil or s.lvRound == D.round then
+                log(string.format("intensity: the host's difficulty level for round %d: %d (the spikes' %d)", D.round, DIR.level(D.round), ceil))
+                reapply(DIR.level(D.round), "the host's level")
+            end
+            s.lvKey, s.lvRound = key, D.round
+        end
+    end
+    scoreLine(s, now)
+    local m = s.me
+    if m and COOP and COOP.sendIntensity then pcall(COOP.sendIntensity, m.i, m.c, m.hp, m.msl) end
 end
 end

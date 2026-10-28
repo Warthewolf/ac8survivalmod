@@ -323,9 +323,10 @@ local function startRound()
     pruneDown()
     D.events = {}
     -- the round's aircraft (TIER.roundBudget: the spike's aircraft_add within the round's cap, which grows from
-    -- CFG.late.aircraft_from_round), then a special's extra, then the menu's ENEMY AIRCRAFT %, then co-op (below): the
-    -- caps before the % (CFG.setup's "% of each round's and each wave's aircraft")
-    local budget = TIER.roundBudget(D.round)
+    -- CFG.late.aircraft_from_round; the spike level the intensity director's, levelFor, when it's eased under the
+    -- spike: P4), then a special's extra, then the menu's ENEMY AIRCRAFT %, then co-op (below): the caps before the %
+    -- (CFG.setup's "% of each round's and each wave's aircraft")
+    local budget = TIER.roundBudget(D.round, levelFor(D.round))
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
@@ -588,15 +589,24 @@ function roundsTick(now)
             else
                 hudCallout(string.format(t.start, D.round + 1), t.start_sub)
             end
-            local level = spikeLevel(D.round + 1)
-            if level > spikeLevel(D.round) then
+            local level = levelFor(D.round + 1)           -- (the spike's, or the intensity director's under it: P4)
+            if level > levelFor(D.round) then
                 hudCallout(t.spike, t.spike_sub)
-                log(string.format("spikes: round %d, difficulty level %d", D.round + 1, level))
+                local ceil = spikeLevel(D.round + 1)
+                log(string.format("spikes: round %d, difficulty level %d%s", D.round + 1, level,
+                    ceil ~= level and string.format(" (the spikes' %d, eased by the intensity director)", ceil) or ""))
             end
         end
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
+        -- (the intensity director's hold, P4: the rest of a later wave waits while a player's under heavy pressure;
+        -- never a round's first wave or a special's entry; the hold's own length is its limit)
+        local nq = D.queue and D.queue[1]
+        if (D.wave or 1) > 1 and type(nq) == "string" and nq:sub(1, 1) ~= "@" and DIR and DIR.holdWave and DIR.holdWave(now, "spawning") then
+            D.at = now + 1
+            return
+        end
         if playerOnAirfield() then                 -- the landing menu may be up, and a flight that appears then gets no orders
             if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end
             D.at = now + 1
@@ -642,9 +652,9 @@ function roundsTick(now)
         end
         local w = CFG.waves
         local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
-        -- (the intensity director's hook, behaviour roadmap P4: "above 80 intensity it holds the next wave back, so a
-        -- bigger round is longer, not denser" adds `and not hold` here, a hold with a hard limit)
-        if alive <= w.next_at or timedOut then
+        -- (the intensity director, behaviour roadmap P4: "above 80 intensity it holds the next wave back, so a bigger
+        -- round is longer, not denser": DIR.holdWave while its hold is on, which ends by itself, 30 s at most)
+        if (alive <= w.next_at or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave")) then
             D.wave, D.waveAt = D.wave + 1, now
             D.queue = D.waves[D.wave]
             local n = 0
