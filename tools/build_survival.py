@@ -1258,10 +1258,16 @@ DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
 # opened nothing (test of 2026-10-29). Every row that opens one of Survival's pages names CAMPAIGN TRAINING's page instead
 # (user, 2026-10-29: "feel free to use the Campaign Training and replace it completely"), and main.dll points that page's
 # entry in the game's page list at the page the press opens (OnMainDecide, SV_MenuSlot). MENU_PAGES keeps which page.
+# The game doesn't open the page it's on (test of 2026-10-29: the setup rows on the modes page did nothing), so the
+# setup pages go through a second page PC players never see, the PS5 DualSense first-start setup (main.dll kSlotIds,
+# kPageSlotOf; its own class comes back when any other main-menu entry is picked).
 BORROWED_PAGE = 'CampaignTraining'
+BORROWED_PAGE_2 = 'InitialSetting_DualSence'
+SECOND_SLOT_PAGES = ('SV_PgOffline', 'SV_PgOnline', 'SV_PgHost')
 
 
 def page_menu_id(menu):
+    if menu in SECOND_SLOT_PAGES: return BORROWED_PAGE_2
     return BORROWED_PAGE if menu.startswith('SV_Pg') else menu
 MENU_PAGES = [
     ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),
