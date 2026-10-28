@@ -394,5 +394,6 @@ function INS.tick(now)
         log(string.format("insurance: SECOND CHANCE used at %.1f HP: repaired (event %s), %d s invulnerable", h / 10,
             r == 1 and "fired" or tostring(r), c.safe_s))
         LB.stat("second_chance", 1)
+        pcall(STATS.death, "saved")                      -- (what brought you down to it: sv_stats.lua)
     end
 end

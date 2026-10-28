@@ -106,7 +106,8 @@ end
 
 -- Credits for an enemy aircraft that went down (probeTick's plane watch), by its flight's role: a bomber flight pays
 -- bomber (heavy for CFG.airfield.bombers.heavy models), any other flight fighter. Only when the plane's flight
--- couldn't be read does its model decide (CFG.credits.models).
+-- couldn't be read does its model decide (CFG.credits.models). Returns who shot it down (KILL.by's side, "airstrike"),
+-- for the measurements (STATS.down); nil for a Ladon.
 local function creditKill(p)
     if p.unit and p.unit:find("^SV_Unit_Ladon") then return end   -- (a Ladon pays its own reward: SPC.ladonTick)
     local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
@@ -145,6 +146,7 @@ local function creditKill(p)
     LB.stat("air", 1)
     if by == "allies" or by == "ships" then LB.stat("by_allies", 1) elseif by == "defences" then LB.stat("by_defences", 1) end
     if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
+    return by
 end
 
 local function timed(name, fn, ...)                -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
@@ -158,6 +160,55 @@ local function timed(name, fn, ...)                -- pcall(fn, ...), its time a
         e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
     end
     return ok, err
+end
+
+-- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away, and
+-- every 10 s the nearest enemy's distance: the check that they come for the player. Each aircraft every 2 s, an eighth
+-- of them each tick (all of them on one tick every 2 s was a hitch with 60 aircraft up: user, 2026-10-23, "the custom
+-- HUD ... seems a bit laggy"). Timed as "planes" in the perf line (coop-perf step 10). Returns where you are (or nil
+-- / false) when a plane was visited this tick.
+local function planeSweep(slot)
+    local you = nil
+    for i, p in ipairs(planes) do
+        if not p.down and i % 8 == slot then
+            if you == nil then you = playerLocation() or false end
+            local up = valid(p.obj)
+            if up then
+                local ok, h = pcall(function() return p.obj.HealthInternal end)
+                if ok and type(h) == "number" and h <= 0 then up = false end
+            end
+            if up then
+                pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
+                pcall(planeUnit, p)
+                local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
+                if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
+                local an = CFG.specials.anomaly
+                local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
+                    provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
+                    or (ft and CFG.tiers.list[ft])
+                if not own then pcall(enemySpike, p, D and D.round, tierFor) end
+                if D then pcall(enemyLate, p, D.round) end                         -- (CFG.late: late rounds' health)
+                pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
+                pcall(KILL.read, p)                                                -- (who's hurt it so far)
+                p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
+                p.dist = (p.at and you) and km(p.at, you) or nil
+                pcall(STATS.track, p, you or nil, D and D.now)                     -- (the measurements, sv_stats.lua)
+            else
+                p.down = true
+                pcall(KILL.read, p)                                                -- (the last hits, if it's still there)
+                log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
+                    p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
+                local okG, g = pcall(KILL.geom, p, you or nil)                     -- (its aspect and your last shots)
+                if not okG then g = nil end
+                pcall(probeKill, p, you or nil, g)
+                local okC, by = pcall(creditKill, p)
+                if not okC then log("credits: error " .. tostring(by)); by = nil end
+                pcall(STATS.down, p, g, by, D and D.now)
+            end
+        end
+    end
+    return you
 end
 
 local function probeTick(tick)
@@ -360,7 +411,7 @@ local function probeTick(tick)
             if not okIn and not D.insErr then D.insErr = true; log("insurance: error " .. tostring(errIn)) end
         end
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
-        local okMv, errMv = pcall(ACE.movesTick, now, D)                      -- top-tier reversals (CFG.aces.flight)
+        local okMv, errMv = timed("moves", ACE.movesTick, now, D)              -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
@@ -372,51 +423,19 @@ local function probeTick(tick)
     local keep = {}
     for _, p in ipairs(pending) do
         p.age = p.age + 1
-        if p.age >= 2 then pcall(logPlane, p.obj, p.unit) else keep[#keep + 1] = p end
+        if p.age >= 2 then pcall(logPlane, p.obj, p.unit, p.k) else keep[#keep + 1] = p end
     end
     pending = keep
     if not levelTick then return end                                -- the rest in Survival only
-    -- Each aircraft's last position, so a loss shows whether it was shot down near the player or crashed far away,
-    -- and every 10 s the nearest enemy's distance: the check that they come for the player. Each aircraft every 2 s,
-    -- an eighth of them each tick (all of them on one tick every 2 s was a hitch with 60 aircraft up: user,
-    -- 2026-10-23, "the custom HUD ... seems a bit laggy").
-    local slot, you = tick % 8, nil
-    for i, p in ipairs(planes) do
-        if not p.down and i % 8 == slot then
-            if you == nil then you = playerLocation() or false end
-            local up = valid(p.obj)
-            if up then
-                local ok, h = pcall(function() return p.obj.HealthInternal end)
-                if ok and type(h) == "number" and h <= 0 then up = false end
-            end
-            if up then
-                pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
-                local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
-                pcall(planeUnit, p)
-                local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
-                if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
-                local an = CFG.specials.anomaly
-                local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
-                    provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
-                    or (ft and CFG.tiers.list[ft])
-                if not own then pcall(enemySpike, p, D and D.round, tierFor) end
-                if D then pcall(enemyLate, p, D.round) end                         -- (CFG.late: late rounds' health)
-                pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
-                pcall(KILL.read, p)                                                -- (who's hurt it so far)
-                p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
-                p.dist = (p.at and you) and km(p.at, you) or nil
-            else
-                p.down = true
-                pcall(KILL.read, p)                                                -- (the last hits, if it's still there)
-                log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
-                    p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
-                pcall(probeKill, p, you or nil)
-                local okC, errC = pcall(creditKill, p)
-                if not okC then log("credits: error " .. tostring(errC)) end
-            end
-        end
+    local slot = tick % 8
+    local okPl, you = timed("planes", planeSweep, slot)            -- (each aircraft every 2 s: planeSweep above)
+    if not okPl then
+        if not (D and D.planesErr) then log("round probe: planes error " .. tostring(you)) end
+        if D then D.planesErr = true end
+        you = nil
     end
     if slot ~= 0 then return end                                    -- every 2 s: the summaries
+    if D then pcall(STATS.sample, D.now, you or nil) end            -- (the measurements' time down at the airfield)
     local okJ, errJ = pcall(JAM.tick)                               -- (the jammer's boost on the enemies near it)
     if not okJ and not D.jamErr then D.jamErr = true; log("jammer: error " .. tostring(errJ)) end
     local fl, flagged = flagLine()

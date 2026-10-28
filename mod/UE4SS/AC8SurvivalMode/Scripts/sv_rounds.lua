@@ -434,13 +434,14 @@ local function startRound()
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
     RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
+    pcall(STATS.roundStart, D.now)                  -- (the round's measurements, sv_stats.lua)
 end
 
 -- The player on the ground at the airfield (landed, rolling or in the landing menu): within 3 km of the runway and
 -- under 100 m, or nowhere to be read (the landing menu may hide the aircraft). Landing isn't closed under a player
--- who may be down there, so they can always take off again.
-function playerOnAirfield()
-    local you = playerLocation()
+-- who may be down there, so they can always take off again. you: where the player is, when already read this tick.
+function playerOnAirfield(you)
+    you = you or playerLocation()
     if not you then return true end
     local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
     return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
@@ -618,6 +619,7 @@ function roundsTick(now)
                     hudCallout(string.format(t.kills, D.round), string.format(t.kills_sub, k.you + k.airstrike, k.allies, k.ships, k.defences))
                 end
             end
+            pcall(STATS.roundEnd, now)                -- (its "stats:" line a few seconds on: sv_stats.lua)
             pcall(ALLY.repairAll)                     -- (CFG.allies.repair: allies and defences back to full)
         end
     end

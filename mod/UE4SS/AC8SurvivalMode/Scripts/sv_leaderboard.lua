@@ -107,7 +107,10 @@ function LB.deathCheck(pc)
     if h > 0 then st.flying, st.downs = true, 0                  -- (a pawn reads 0 while it's spawned: not a death)
     elseif st.flying then
         st.downs = (st.downs or 0) + 1
-        if st.downs >= 2 then LB.finish("died") end
+        if st.downs >= 2 then
+            pcall(STATS.death, "died")                   -- (what hit you, what you had left: sv_stats.lua)
+            LB.finish("died")
+        end
     end
 end
 
@@ -117,6 +120,7 @@ function LB.finish(how)
     local st = stats()
     if st.ended then return end                         -- (shot down, then restarted: one record)
     st.ended = how
+    pcall(STATS.runEnd, how)                            -- (the run's measurements in the log, sv_stats.lua; not sent)
     local c = CFG.leaderboard
     local id = {}
     for _ = 1, 32 do id[#id + 1] = string.format("%x", math.random(0, 15)) end

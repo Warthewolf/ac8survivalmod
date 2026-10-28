@@ -24,6 +24,7 @@ local MODULES = {
     "sv_shop",
     "sv_allies",
     "sv_tactical",
+    "sv_stats",                    -- the behaviour roadmap's measurements (tools/re/BEHAVIOUR_DIRECTOR.md)
     "sv_menu",
     "sv_coop",
     "sv_main",
