@@ -655,7 +655,7 @@ last), but the world data, rows and events changed: that bump must come before a
 | role | the question | behaviour (set) | airframes |
 |---|---|---|---|
 | duelist | can you out-turn me? | today's NLID_SV_Fighter (LA_SV_TailChase, LA_SV_ProvokeNear, LA_SV_Escape, LA_SV_MoveAway) | Su-33, Su-47; Su-35 (10), Rafale, Typhoon (12), Su-57 (16), F-22A (18) |
-| lancer | can you dodge from above? | NLID_SV_Lancer: spawns 2 km above the others; one slashing pass (LA_SV_LancerPass), a zoom back up (LA_SV_LancerZoom); tailed it runs and reverses (LA_SV_LancerBreak, near and mid): never turns with you | F-15E, F-14D, Su-34; F-15C (6) |
+| lancer | can you dodge from above? | NLID_SV_Lancer: spawns 2 km above the others; one slashing pass (LA_SV_LancerPass), a zoom back up (LA_SV_LancerZoom); tailed it runs and reverses (LA_SV_LancerBreak, near, mid and far): never turns with you | F-15E, F-14D, Su-34; F-15C (6) |
 | wolf | will you take the bait? | bait and trap pairs: the even planes (NLID_SV_WolfLead) attack and, tailed, drag you straight (LA_SV_WolfDrag, then the stock 8 s run); the odd ones (NLID_SV_WolfWing: LA_SV_WolfStrike, a close gunfighter) are held at engagement None until sprung; their guns lead you 0.5 s | F-16C, MiG-29, F/A-18E, MiG-21 |
 | skirm | can you finish a fight before the next one starts? | NLID_SV_Skirmisher: in for one shot, breaking off the moment it fires (LA_SV_SkirmPass), a long extend (LA_SV_SkirmExtend); tailed, the stock rookie defence; health x0.75; its special a LAAM copy from 7 km, never inside 2.5 km | F-2A (4), Gripen (7), F-35C (9); before round 4 the Wolf airframes |
 
@@ -677,7 +677,7 @@ last), but the world data, rows and events changed: that bump must come before a
 | tells | sv_spawn.lua `ROLE.spawned` | the round's first Lancer and first Skirmisher flight: TELL.say("lancer" / "skirm", TELL.ALL) (P3's HUD-only tells: BANDITS HIGH / THEY WON'T TURN WITH YOU, LONG-RANGE SHOOTERS / CLOSE THE DISTANCE), once a round each, never for an ace squadron; inside roundsTick, so they reach the joiners as "tl" |
 | the jammer | sv_spawn.lua `ROLE.jammerOk`; sv_rounds.lua | the round's jammer leads only a CFG.roles.jammer flight (duelist, skirm): its EA-18G on object 0 never takes a Wolf bait's drag set (the critic) or a Lancer's |
 | escorts | sv_rounds.lua | a raid's escorts are never Wolf flights (the escort order would free the trap); the escorts still come first in the queue |
-| the Wolf trap | survival_events.py `build_wolf`; sv_spawn.lua `WOLF` (WOLF.spawned, WOLF.tick from roundsTick, WOLF.free, WOLF.holding) | per-object remote events on each Wolf flight's odd objects (12 in the 6 flights): RE_SV_WolfHold_<NN><L> (engagement None on that object: Mission 22's MOONCHILD hold, the stock by-object form), RE_SV_WolfFree_<NN><L> (air-only search + PlayerOnlyNoLimit on it), RE_SV_WolfTurn_<NN><L> (LastTGT on it, Mission 6's by-object request). The hold comes hold_after_s (3) after the flight's SV_Up_NN is seen set (its appearance orders, 2 s after it spawns, would undo an earlier one: hard rule 26), never while you're down at the airfield. Freed: at hold_max_s (60), a held plane hit by you or a joiner (that one), its bait (object 0) down (all), or by the squad director's spring (P2, unit 6: `WOLF.free(unit, why, true)` adds the turn). Held again rehold_s (1) after your DECOY's end (its RE_SV_DecoyEnd_NN frees the whole flight). Escorts, ALLY.tick's hunts and the co-op host's split hunts leave a holding flight alone (WOLF.holding). Build line: `wolf trap: 12 held objects in 6 Wolf flights`; `events: 628 triggers, 1360 execs` (was 592 / 1312) |
+| the Wolf trap | survival_events.py `build_wolf`; sv_spawn.lua `WOLF` (WOLF.spawned, WOLF.tick from roundsTick, WOLF.free, WOLF.holding) | per-object remote events on each Wolf flight's odd objects (12 in the 6 flights): RE_SV_WolfHold_<NN><L> (engagement None on that object: Mission 22's MOONCHILD hold, the stock by-object form), RE_SV_WolfFree_<NN><L> (air-only search + PlayerOnlyNoLimit on it), RE_SV_WolfTurn_<NN><L> (LastTGT on it, Mission 6's by-object request). The hold comes hold_after_s (3) after the flight's SV_Up_NN is seen set (its appearance orders, 2 s after it spawns, would undo an earlier one: hard rule 26), never while you're down at the airfield. Freed: at hold_max_s (60), a held plane hit by you or a joiner (that one), its own bait (the plane before it, k - 1) down (that one; the flight's lead, object 0, down: all), or by the squad director's spring (P2, unit 6: `WOLF.free(unit, why, true)` adds the turn). A held plane shot down is dropped (nothing fired). Nothing is freed or sprung while your DECOY stands the flight down (the releases come after it; `WOLF.free` answers 0). Held again rehold_s (1) after your DECOY's end (its RE_SV_DecoyEnd_NN frees the whole flight). Escorts, ALLY.tick's hunts and the co-op host's split hunts leave a holding flight alone (WOLF.holding). Build line: `wolf trap: 12 held objects in 6 Wolf flights`; `events: 628 triggers, 1360 execs` (was 592 / 1312) |
 | the Wolf guns | sv_rows.lua searchSetup's gun branch (`wolfGun`) | the Wolf airframes' gun rows at every spike level lead you by CFG.roles.wolf.gun_lead_s (rows NPC_FCS_PlaneGun000_SV<level>_WOLF; "guns lead on" can't be switched live: PredictionOffsetTime is on the row). Every plane of those airframes gets it (bait and trap; the Skirmishers' rounds 1-3 fallback too). Only with roles on at the main menu |
 | the Skirmishers' LAAM | sv_rows.lua (`skirmLaam`) | their airframes' special slot (slot 3 on all three) a copy of NPC_FCS_PlaneLAAM000 (NPC_FCS_PlaneLAAM000_SV_SKIRM): lock within 7 km / 45 deg, never inside 2.5 km, 2 s lock, 4 s between, 8 s rest (the stock AI LAAM: 1.5-4 km, what Survival's own missiles already reach). Needs CFG.special on; only with roles on |
 | health | sv_ai.lua `enemyLate`, `scaleHealth` | x CFG.roles.health_x[role] on top of the late rounds' (skirm 0.75; not an ace squadron's): MaxHealth lowered with it so a cut-down plane doesn't read as damaged (the critic; raising it is confirmed, lowering untested). Runs on every game: a joiner's copies by its own ROLE.live |
@@ -701,8 +701,8 @@ last), but the world data, rows and events changed: that bump must come before a
 
 ### Log lines to look for in a test
 - Main menu: `behaviour: set NLID_SV_Lancer in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape,
-  MoveAwayFromTargetLua = LA_SV_LancerZoom, ProvokeMidLua = LA_SV_LancerBreak, ProvokeNearLua = LA_SV_LancerBreak,
-  PursueTargetLua = LA_SV_LancerPass)` and the same for NLID_SV_WolfLead / WolfWing / Skirmisher;
+  MoveAwayFromTargetLua = LA_SV_LancerZoom, ProvokeFarLua = LA_SV_LancerBreak, ProvokeMidLua = LA_SV_LancerBreak,
+  ProvokeNearLua = LA_SV_LancerBreak, PursueTargetLua = LA_SV_LancerPass)` and the same for NLID_SV_WolfLead / WolfWing / Skirmisher;
   `game Lua: stock SurvivalMode.AI.LA_SV_LancerPass: true ...` for each new script;
   `roles: behaviour rows lancer sv_role_lancer -> SV_Role_Lancer flies NLID_SV_Lancer; wolf ...; wolf_wing ...; skirm ...`
   (a set not made: `... flies NLID_SV_Fighter (wanted NLID_SV_WolfLead: not made)`; an older container:
@@ -722,8 +722,9 @@ last), but the world data, rows and events changed: that bump must come before a
   flights fly wolf's`.
 - Tells: sv_tells.lua's `tell: lancer: ... tell callout 'BANDITS HIGH'` and `tell: skirm: ...`, once a round each.
 - The Wolf trap: `roles: ERA_Unit_05_Dep_Air1 (wolf) trap 3 s after its orders: held B, D`, then one of
-  `roles: ... trap freed (you hit it): B`, `... freed (its bait is down): D`, `... freed (held 60 s): B, D`,
-  `... trap again after your decoy: held D`; the director's spring (unit 6) `... freed (<why>): B, D, turned onto the
+  `roles: ... trap freed (you hit it): B`, `... freed (its bait C is down): D`, `... freed (its lead, bait A, is down): B, D`,
+  `... freed (held 60 s): B, D`, `... trap: B down while held`, `... trap again after your decoy: held D`; inside your
+  decoy `... trap kept (<why>): your decoy stands its flight down for 25 s more[; not sprung]` (once a decoy); the director's spring (unit 6) `... freed (<why>): B, D, turned onto the
   player`. Not fired: `... none held (not fired: RE_SV_WolfHold_14B <why>)`; `roles: <unit> (wolf) never got its orders`.
   Co-op host: `coop: <unit> holds its Wolf trap; it doesn't go after the joiners`.
 - Health: `late: round 5 enemies' health x0.75 (skirm x0.75) (<plane>: 600 -> 450)` (once a round per role).
@@ -739,7 +740,8 @@ last), but the world data, rows and events changed: that bump must come before a
    at the top of a zoom (the critic's [?] for the raised band); on its tail it runs and reverses, never turns with you.
 3. A Wolf flight ([roles.mix] wolf = 1, 1, 1): the held odd planes stop attacking ~3 s after their orders and follow
    their lead (FollowFormation [I]); the bait drags when tailed (straight / lazy jinks, then the 8 s run). Shoot a held
-   one: it's freed and attacks. Shoot the bait down: all freed. Wait 60 s: all freed. A DECOY on a Wolf flight: held
+   one: it's freed and attacks. Shoot bait C of a 4-ship down: D alone freed; the lead (A): all freed. Wait 60 s: all
+   freed. A DECOY on a Wolf flight: nothing freed inside it (shoot a held one then: freed when the decoy ends), held
    again a second after it ends. Its guns lead you (gun hits while you jink).
 4. A Skirmisher flight ([roles.mix] skirm = 1, 1, 1, round 9+): a LAAM from 5-7 km, the break-off as it launches (ai:
    MoveAwayFromTarget right after), back ~12 s later; never closes inside ~3 km; dies quicker (x0.75).
@@ -777,8 +779,14 @@ check of survival_events' split):
   round 9, the Lancers 4.0-6.5 km up and 8.5 km at most, the tells once a round each (and none with [roles] tells off),
   a Wolf 6-ship's trap objects 1, 3, 5;
 - WOLF.tick: no hold before the flight's orders, before hold_after_s or while grounded; held B, D; a hit frees one; a
-  decoy's end holds the rest again once; the bait down frees the rest; hold_max_s frees all; the spring frees and turns;
+  decoy's end holds the rest again once; the lead down frees the rest; hold_max_s frees all; the spring frees and turns;
   the flight down or a hold event the container hasn't got drops it; hold off; co-op forwards hold / free, keeps turn;
+  (review fixes) bait C down frees D alone; a held plane shot down is dropped, nothing fired; a recycled flight's earlier
+  planes free nothing; inside a decoy (the real sv_tactical TAC.decoyed) a hit, the lead down and hold_max_s free
+  nothing and the spring answers 0 (logged once), after it the hit one is freed, the rest held again, then the timer;
+- a tier's levers (ACE.hunt, ACE.movesTick on stubbed planes, the Reaper tier): a duelist reverses and loses its
+  provoke as before; a Lancer, Wolf and Skirmisher flight does neither (logged); an ace squadron in a Lancer flight does;
+  roles off as before;
 - enemyLate: a Skirmisher x0.75 with MaxHealth lowered, x0.75 on top of the late rounds', not an ace squadron's,
   nothing with roles off;
 - the build's split (Python): 24 / 24 / 24 / 14, each flight's row, the Wolf objects' rows by parity, 12 trap objects.
@@ -813,3 +821,36 @@ RE_SV_WolfHold_14B as LiveAIEngagementOrder None on ERA_Obj_01_Air11_su33_7 alon
   groups (the Wolf strike has its own Super; the Lancer pass and Skirmisher pass don't). P9 maps squadrons to roles.
 - No COOP_TAG / VERSION bump yet (the contract's single bump at the end): 36 new events, 4 new mission rows, new world
   data. A joiner on an older build would spawn the role units with rows it hasn't got.
+
+### Review fixes (after unit 5's review; not yet run in game)
+1. Your DECOY now wins over the Wolf trap's releases. A decoy (RE_SV_Decoy_NN, unit-wide engagement None for decoy_s)
+   on a Wolf flight while its trap was held: shooting the bait down, a hit or hold_max_s ending inside it fired
+   RE_SV_WolfFree_<NN><L> (PlayerOnlyNoLimit on that object), and the trap planes came back while the item should keep
+   the flight stood down (forwarded to the joiners' copies too). Now WOLF.tick releases nothing inside a decoy
+   (TAC.decoyed): the reasons are states (the timer, a plane down, its damage), so the releases come at its end, and the
+   rest are held again rehold_s later, as before. `WOLF.free` (U6's spring) answers 0 inside one, fires nothing (no
+   free, no turn) and logs `roles: <unit> (wolf) trap kept (<why>): your decoy stands its flight down for N s more; not
+   sprung` once a decoy: call it again after. Its optional 5th argument is the round clock (D.now when nil).
+2. The trap releases by pair: each held plane (odd k) is freed when its own bait, the plane before it (k - 1), goes
+   down (`... freed (its bait C is down): D`); the flight's lead (object 0) down still frees them all (`... (its lead,
+   bait A, is down)`). In a 4- or 6-ship, bait C or E down left D or F held for up to 60 s before. A held plane shot
+   down is dropped without an event (`... trap: B down while held`), so a flight whose held planes are all down stops
+   counting as holding (WOLF.holding: the hunts skipped it until hold_max_s). Only this spawn's planes count (p.born at
+   or after its WOLF.spawned): a recycled flight's earlier planes stay on the list, down, until the round's end.
+3. A skill tier's no_provoke and moves (CFG.aces.flight; the Reaper's, which every ordinary flight is from round 28:
+   TIER.pick) no longer apply to Lancer, Wolf or Skirmisher flights (ROLE.ownSet, sv_spawn.lua; ACE.hunt and
+   ACE.movesTick, sv_ai.lua): no_provoke switched bPermissionToProvoke off every 2 s, so LA_SV_LancerBreak, LA_SV_WolfDrag
+   and the Skirmishers' defence never ran, and the reversal (RE_SV_AceTurn_NN, LastTGT on every plane of the flight)
+   turned Lancers with you and the held Wolf trap onto you: late rounds lost the roles. Duelists (a role flying the
+   fighters' set counts) and ace squadrons in any flight keep their tier's levers; the hunt itself (TargetActor kept on
+   you, its tell) stays on every flight of the tier; roles off, as before. Logged once a flight a round: `aces: <unit>
+   (lancer) keeps its role's own provoke and pursuit (the Reaper tier's no_provoke / moves are for duelists and ace
+   squadrons)`.
+4. NLID_SV_Lancer's ProvokeFarLua is LA_SV_LancerBreak too (the brief's near / mid / far): far it kept NLID_0012_CP's
+   Provoke_0011_CP_l, TurnNormal turns of up to 180 deg against the pursuer, so a Lancer tailed from far turned with
+   you. The set's main-menu line now lists ProvokeFarLua.
+Still open (unchanged): the single COOP_TAG / VERSION bump; the Wolf events through the plain "ev" forward (no "dv"
+timing guard against a joiner's own appearance orders) and no hostSync replay of a hold to a joiner who links late; the
+spring itself (U6: it must pick the bait it watches by pair and goes through WOLF.free, which now waits out a decoy); the
+Wolf bait's ProvokeMid / Far stay stock 0012_CP turns (the drag only when tailed close); ace rounds' overflow into role
+flights until P9; everything in game.

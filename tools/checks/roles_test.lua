@@ -16,9 +16,12 @@
 --   4. spawnFlight: each role's airframes (the Skirmishers' fallback before round 4), the Lancers 2 km higher within
 --      their band, the first Lancer / Skirmisher flight of a round called out once, a Wolf flight's trap registered;
 --   5. the Wolf trap (WOLF.tick): held hold_after_s after its orders are seen in (not while you're grounded), freed by
---      the timer, a hit, its bait going down or the director's spring (with the turn), held again after your decoy,
---      dropped with its flight; the events co-op forwards (hold, free) and keeps (turn);
---   6. enemyLate: a Skirmisher's health x0.75 (MaxHealth lowered too), with the late rounds', not an ace squadron's.
+--      the timer, a hit, its own bait (or the lead) going down or the director's spring (with the turn), a held plane
+--      shot down dropped, a recycled flight's earlier planes ignored, nothing freed or sprung inside your decoy (after
+--      it, then), held again after it, dropped with its flight; the events co-op forwards (hold, free) and keeps (turn);
+--   6. enemyLate: a Skirmisher's health x0.75 (MaxHealth lowered too), with the late rounds', not an ace squadron's;
+--   7. a tier's no_provoke and moves (the Reaper's, every ordinary flight's from round 28) on duelists and ace squadrons
+--      only, not on Lancer, Wolf or Skirmisher flights.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -228,7 +231,7 @@ local zoomWorst = every(T.LA_SV_LancerZoom, "LA_SV_LancerZoom: climbs unless nea
     if ran[#ran].name ~= "LZ_Extend" then return "no extend" end
 end)
 check(zoomWorst <= 11, string.format("LA_SV_LancerZoom: at most ~11 s (%.1f)", zoomWorst))
-every(T.LA_SV_LancerBreak, "LA_SV_LancerBreak (tailed, near and mid): every pick runs and reverses, never turn-fights, " ..
+every(T.LA_SV_LancerBreak, "LA_SV_LancerBreak (tailed, near, mid and far): every pick runs and reverses, never turn-fights, " ..
     "under 5 s (the blackout's 6)", function(ran)
     if seconds(ran) > 5 then return "too long" end
     if not (ranAny(ran, "_Run$") and ranAny(ran, "_Turn$")) then return "no run and reversal" end
@@ -458,7 +461,8 @@ for _, set in ipairs({ "NLID_SV_Lancer", "NLID_SV_WolfLead", "NLID_SV_WolfWing",
 end
 local lr = tbl.ls.rows.NLID_SV_Lancer
 check(lr and lr.LuaAsetts.PursueTargetLua.LuaScript.full == "LA_SV_LancerPass" and lr.LuaAsetts.ProvokeMidLua.LuaScript.full == "LA_SV_LancerBreak"
-      and lr.LuaAsetts.EvadeLua.LuaScript == "stock EvadeLua", "NLID_SV_Lancer: its pass, zoom, break (near and mid), the rest stock")
+      and lr.LuaAsetts.ProvokeNearLua.LuaScript.full == "LA_SV_LancerBreak" and lr.LuaAsetts.ProvokeFarLua.LuaScript.full == "LA_SV_LancerBreak"
+      and lr.LuaAsetts.EvadeLua.LuaScript == "stock EvadeLua", "NLID_SV_Lancer: its pass, zoom, break (near, mid and far: never the stock far turns), the rest stock")
 check(tbl.ls.rows.NLID_SV_WolfLead.LuaAsetts.EscapeFromPursuerLua.LuaScript == "stock EscapeFromPursuerLua",
       "NLID_SV_WolfLead keeps the stock 8 s escape run (the drag)")
 for key, set in pairs({ lancer = "NLID_SV_Lancer", wolf = "NLID_SV_WolfLead", wolf_wing = "NLID_SV_WolfWing", skirm = "NLID_SV_Skirmisher" }) do
@@ -795,6 +799,64 @@ CFG.roles.wolf.hold = false
 fresh(10); WOLF.spawned(U, 4, 500)
 check(not (D.wolf and D.wolf[U]) and not WOLF.holding(U), "[roles.wolf] hold = false: no trap held")
 CFG.roles.wolf.hold = true
+-- each held plane's own bait (the plane before it); a held plane shot down (U5's review)
+fresh(10); events = {}
+WOLF.spawned(U, 4, 600); mkPlanes(U, 4); FLAGS.SV_Up_14 = 1
+WOLF.tick(600); WOLF.tick(603.1)
+events = {}
+planes[3].down = true                                  -- bait C (k 2)
+WOLF.tick(604.5)
+check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_14D" and D.wolf[U].held[1] and WOLF.holding(U)
+      and has(line("roles: ERA_Unit_05_Dep_Air1 (wolf) trap freed (its bait C is down)"), ": D"),
+      "a 4-ship's second bait (C) down: its own trap plane (D) freed alone, B still held")
+events = {}
+planes[2].down = true; planes[2].dmg = { you = 100 }   -- B shot down while held
+WOLF.tick(606)
+check(#events == 0 and not WOLF.holding(U) and has(line("roles: ERA_Unit_05_Dep_Air1 (wolf) trap: B down"), "while held"),
+      "a held plane shot down: dropped (nothing fired at it), the trap done")
+-- a recycled flight: its earlier spawn's planes (down, born before this one) aren't its baits, whatever the list's order
+fresh(10); events = {}
+WOLF.spawned(U, 4, 700); FLAGS.SV_Up_14 = 1
+planes = {}
+for k = 0, 3 do planes[#planes + 1] = { unit = U, k = k, name = "new_" .. k, obj = {}, born = 701 } end
+planes[#planes + 1] = { unit = U, k = 0, name = "old_0", obj = {}, down = true, born = 650 }
+planes[#planes + 1] = { unit = U, k = 2, name = "old_2", obj = {}, down = true, born = 650 }
+WOLF.tick(700); WOLF.tick(703.1)
+events = {}
+WOLF.tick(705)
+check(#events == 0 and D.wolf[U].held[1] and D.wolf[U].held[3], "a recycled flight: the earlier spawn's downed lead and bait free nothing")
+-- your DECOY on a holding flight: nothing freed or sprung inside it (the item keeps the flight stood down, the joiners'
+-- copies too); after its end the releases it held back, then the rest held again rehold_s on
+run("sv_tactical.lua")
+fresh(10); events = {}
+WOLF.spawned(U, 4, 800); mkPlanes(U, 4); FLAGS.SV_Up_14 = 1
+WOLF.tick(800); WOLF.tick(803.1)
+events = {}
+D.decoyed = { [U] = 840 }                              -- stood down until 840
+planes[2].dmg = { you = 20 }                           -- B hit inside it
+WOLF.tick(812)
+check(#events == 0 and D.wolf[U].held[1] and D.wolf[U].held[3], "your decoy: a held plane you hit isn't freed inside it")
+D.now = 815
+check(WOLF.free(U, "the director springs it", true) == 0 and #events == 0
+      and has(line("roles: ERA_Unit_05_Dep_Air1 (wolf) trap kept (the director springs it)"), "not sprung"),
+      "... nor sprung (WOLF.free answers 0, logged): the turn would send them at you")
+WOLF.free(U, "again", true)
+check(#events == 0 and not has(line("roles: ERA_Unit_05_Dep_Air1 (wolf) trap kept (again)"), "kept"), "... logged once a decoy")
+WOLF.tick(840.2)
+check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_14B" and has(line("roles: ERA_Unit_05_Dep_Air1 (wolf) trap freed (you hit it)"), ": B"),
+      "its end: the hit one freed then (B)")
+events = {}
+WOLF.tick(841.3)
+check(evs("^RE_SV_Wolf") == "RE_SV_WolfHold_14D", "rehold_s after it: the other held again (D)")
+-- hold_max_s and the lead down inside a decoy: both wait for its end
+events = {}
+D.decoyed[U] = 900
+planes[1].down = true                                  -- the lead down inside it
+WOLF.tick(870)                                         -- (and 66 s held)
+check(#events == 0 and D.wolf[U].held[3], "hold_max_s and the lead down inside a decoy: nothing freed")
+WOLF.tick(900.5)
+check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_14D" and not WOLF.holding(U), "... at its end: freed")
+D.decoyed = nil
 -- co-op: the holds and frees go to the joiners, the turn stays the host's
 check(mirroredEvent("RE_SV_WolfHold_14B") and mirroredEvent("RE_SV_WolfFree_14D") and not mirroredEvent("RE_SV_WolfTurn_14B"),
       "co-op: RE_SV_WolfHold / WolfFree forwarded to joiners, RE_SV_WolfTurn kept (LastTGT steers to the host)")
@@ -829,6 +891,49 @@ local off = plane("ERA_Unit_07_Dep_Air1", 60)
 enemyLate(off, 5)
 check(off.obj.HealthInternal == 600, "roles off: untouched")
 ROLE.live = saveLive
+
+---------------------------------------------------------------------------------------------------- 7. a tier's levers
+print("a tier's no_provoke and moves leave role flights alone (ACE.hunt, ACE.movesTick; U5's review)")
+do
+    local reaper
+    for _, t in ipairs(CFG.tiers.list) do if t.name:lower() == "reaper" then reaper = t end end
+    local youAt = { X = 0, Y = 0, Z = 300000 }
+    local pawn = { addr = 0x9, full = "BP_PlayerPlane_PP1000_f16c_C_1", MaxHealth = 100, HealthInternal = 800 }
+    function pawn:K2_GetActorLocation() return youAt end
+    survivalPC = { Pawn = pawn }
+    local bb = { GetValueAsObject = function() return pawn end, SetValueAsObject = function() end }
+    local function acePlane(unit)                      -- 1.5 km ahead of you, you on its six
+        local o = { addr = 0x500, loc = { X = 150000, Y = 0, Z = 300000 }, fwd = { X = 1, Y = 0, Z = 0 }, full = "BP_OP_x_C_1",
+                    bPermissionToProvoke = true, AIStateComponent = { BlackboardComponent = bb } }
+        function o:K2_GetActorLocation() return self.loc end
+        function o:GetActorForwardVector() return self.fwd end
+        return { obj = o, name = o.full, unit = unit, k = 0, tier = reaper }
+    end
+    local function moves(unit, aceSquad)
+        fresh(30); D.aceSquad = aceSquad; events = {}
+        local p = acePlane(unit)
+        planes = { p }
+        ACE.movesTick(100, D)
+        pcall(ACE.hunt, p)
+        return table.concat(events, ","), p.obj.bPermissionToProvoke
+    end
+    ROLE.live = { duelist = true, lancer = true, wolf = true, skirm = true }
+    check(reaper and CFG.aces.flight.reaper.moves and CFG.aces.flight.reaper.no_provoke, "the Reaper tier has moves and no_provoke")
+    local ev, prov = moves("ERA_Unit_01_Dep_Air0")
+    check(ev == "RE_SV_AceTurn_01" and prov == false, "a Reaper-tier duelist: the reversal (" .. ev .. ") and no provoke, as before")
+    for _, u in ipairs({ "ERA_Unit_03_Dep_Air0", "ERA_Unit_05_Dep_Air1", "ERA_Unit_07_Dep_Air0" }) do
+        ev, prov = moves(u)
+        check(ev == "" and prov == true and has(line("aces: " .. u), "keeps its role's own provoke and pursuit"),
+              string.format("a Reaper-tier %s flight: no reversal, its own provoke (LancerBreak / WolfDrag / the defence), logged",
+                  ROLE.flight(u)))
+    end
+    ev, prov = moves("ERA_Unit_03_Dep_Air0", { ERA_Unit_03_Dep_Air0 = true })
+    check(ev == "RE_SV_AceTurn_07" and prov == false, "an ace squadron in a Lancer flight: its tier's reversal and no provoke")
+    ROLE.live = nil
+    ev, prov = moves("ERA_Unit_03_Dep_Air0")
+    check(ev == "RE_SV_AceTurn_07" and prov == false, "roles off: every Reaper-tier flight as before")
+    ROLE.live = saveLive
+end
 
 logFile:close()
 print(fails == 0 and "roles test: all passed" or ("roles test: " .. fails .. " FAILED"))

@@ -259,7 +259,9 @@ CFG = {
         -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you);
         -- moves: when you get behind one of its aircraft (within 3 km, inside 70 deg of its tail; ACE.movesTick, 4 times
         -- a second) its flight does the campaign aces' LastTGT reversal, or within 900 m the Shadow kulbit
-        -- (tools/survival_events.py build_ace_moves), each flight at most every 20 s
+        -- (tools/survival_events.py build_ace_moves), each flight at most every 20 s. no_provoke and moves are a tier's
+        -- duelists' and ace squadrons': a fighter role's Lancer, Wolf or Skirmisher flight keeps its own set's provoke
+        -- and pursuit (ROLE.ownSet; CFG.roles)
         flight = {
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
                        health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true },
@@ -319,6 +321,7 @@ CFG = {
                                                             MoveAwayFromTargetLua = "LA_SV_LancerZoom",
                                                             ProvokeNearLua = "LA_SV_LancerBreak",
                                                             ProvokeMidLua = "LA_SV_LancerBreak",
+                                                            ProvokeFarLua = "LA_SV_LancerBreak",
                                                             EscapeFromPursuerLua = "LA_SV_Escape" } },
         NLID_SV_WolfLead = { base = "NLID_0012_CP", slots = { PursueTargetLua = "LA_SV_TailChase",
                                                               MoveAwayFromTargetLua = "LA_SV_MoveAway",
@@ -387,8 +390,9 @@ CFG = {
         lancer = { alt_add_m = 2000 },
         -- hold_after_s: the trap's hold this long after its flight's orders are seen in (its appearance's come 2 s after
         -- it spawns and would undo an earlier one: hard rule 26); free_on_hit: a held plane you hit is freed;
-        -- free_on_bait_down: the whole trap when its bait (object 0) goes down; rehold_s: after a unit-wide order (your
-        -- DECOY's end) the planes still held are held again this long after
+        -- free_on_bait_down: a held plane when its own bait (the plane before it) goes down, the whole trap when the
+        -- flight's lead (object 0) does; nothing is freed while your DECOY stands the flight down (after it, then);
+        -- rehold_s: after a unit-wide order (your DECOY's end) the planes still held are held again this long after
         wolf = { hold = true, hold_after_s = 3.0, hold_max_s = 60, free_on_hit = true, free_on_bait_down = true,
                  rehold_s = 1.0, gun_lead_s = 0.5 },
         skirm = { laam = true, laam_m = 7000, laam_min_m = 2500, laam_angle_deg = 45, laam_lock_s = 2.0,
