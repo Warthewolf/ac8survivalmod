@@ -90,9 +90,10 @@ local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 -- 2 s each enemy's AI state (blackboard key AIState, ELiveAIState) and target (blackboard key TargetActor), logged
 -- when either changes, with its distance to the player and to the airfield. (AIStateComponent.LuaAssets is not the set
 -- in use: it read LA_MoveAwayFromTarget_0000 on planes whose set was built with LA_SV_MoveAway.)
-local AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
-                   "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
-                   "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
+-- (a global: sv_stats.lua's tail watch names the states it reads with it)
+AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
+             "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
+             "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
 -- Both are read every time, the log on or off (coop-perf step 10), and kept for later parts: p.aiState, and p.aiTarget /
 -- p.aiTargetAddr (the object it's after and its address, for COOP.slotOfAddr; nil for none). The measurements time
 -- Provoke episodes from the state (CFG.stats: STATS.aiState, sv_stats.lua); the target's name (nameOf) only for the log.

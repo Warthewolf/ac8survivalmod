@@ -3,6 +3,9 @@ function LA_SV_Escape:Ctor()
 self:GenerateBehavior()
 self:AddRootComposite("LaxSequencer", self:InstanceLaxSequencer())
 self:AddComposite("LaxSequencer", "Style", self:InstanceRandomSelect())
+-- Plain (low ranks): stock EscapeFromPursuer_0000_CP verbatim, about 8 s of level, straight flight, then a 4 s run away.
+-- (With the pursuer 1 km or more away when the state began, its level / straight parts are skipped: the first gate's
+-- failure ends their LaxSequencer. Stock does the same, and its 4 s run always comes.)
 self:AddProbability("Style", "PlainW", self:InstanceWeightProbabilityPilotRank(10.0, 7.0, 3.0, 1.0, 0.0))
 self:AddComposite("PlainW", "Plain", self:InstanceLaxSequencer())
 self:AddComposite("Plain", "LaxSequencer_Level", self:InstanceLaxSequencer())
@@ -16,6 +19,11 @@ self:AddTask("BlackboardFloat_Straight_1000mUnder", "FlyStraight_1000mUnder", se
 self:AddDecorator("LaxSequencer_Straight", "BlackboardFloat_Straight_1000mOver", self:InstanceDecoratorBlackboardFloat("PursuerDistance", 100000.0, EArithmeticKeyOperation.GreaterOrEqual, false))
 self:AddTask("BlackboardFloat_Straight_1000mOver", "FlyStraight_1000mOver", self:InstanceManeuverFlyStraight("TargetActor", ELiveAIManeuverSpeedType.SpdConstant, 1000.0, 1.0, false, 1500.0))
 self:AddTask("Plain", "MoveAwayFromTarget", self:InstanceMoveAwayFromTarget(4.0, "SelfActor", 6000.0, false))
+-- Sharp (rank 2+): the aces' break from stock EscapeFromPursuer_0400, then a hard level turn (P5, 2026-10-29). Stock
+-- picks one of eight moves, six of them gated on the unit's altitude band: within 1 km of its top (above 3 km for most
+-- pool flights, which spawn at 2-4.5 km) the climbs fail, within 1 km of its floor the dives, and a failed pick is
+-- never retried, so 3 picks in 8 did nothing there. Now the gated move comes first (it may do nothing), and the turn
+-- always follows: 2-4 s of breaking (Escape isn't Provoke: no blackout timer runs here).
 self:AddProbability("Style", "SharpW", self:InstanceWeightProbabilityPilotRank(0.0, 3.0, 7.0, 9.0, 10.0))
 self:AddComposite("SharpW", "Sharp", self:InstanceLaxSequencer())
 self:AddComposite("Sharp", "SharpPick", self:InstanceRandomSelect())
@@ -27,16 +35,17 @@ self:AddDecorator("SharpPick", "PD", self:InstanceDecoratorUnitAltitudeCompariso
 self:AddComposite("PD", "PitchDown", self:InstanceSequencer())
 self:AddTask("PitchDown", "PD_Level", self:InstanceManeuverLevel(1.0, 1.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 0.3, false))
 self:AddTask("PitchDown", "PD_Pitch", self:InstanceManeuverPitch(-1.0, 70.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 1.5, false))
-self:AddTask("SharpPick", "LeftTurn", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, -90.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
 self:AddDecorator("SharpPick", "LUT", self:InstanceDecoratorUnitAltitudeComparison(false, 1000.0))
 self:AddTask("LUT", "LeftTurnUp", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, -60.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
 self:AddDecorator("SharpPick", "LDT", self:InstanceDecoratorUnitAltitudeComparison(true, 1000.0))
 self:AddTask("LDT", "LeftTurnDown", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, -120.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
-self:AddTask("SharpPick", "RightTurn", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, 90.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
 self:AddDecorator("SharpPick", "RUT", self:InstanceDecoratorUnitAltitudeComparison(false, 1000.0))
 self:AddTask("RUT", "RightTurnUp", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, 60.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
 self:AddDecorator("SharpPick", "RDT", self:InstanceDecoratorUnitAltitudeComparison(true, 1000.0))
 self:AddTask("RDT", "RightTurnDown", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, 120.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
+self:AddComposite("Sharp", "SharpTurn", self:InstanceRandomSelect())
+self:AddTask("SharpTurn", "LeftTurn", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, -90.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
+self:AddTask("SharpTurn", "RightTurn", self:InstanceManeuverTurnNormal(1.0, 90.0, 1.0, 90.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 2.0, false))
 self:EndGenerateBehavior()
 end
 return LA_SV_Escape

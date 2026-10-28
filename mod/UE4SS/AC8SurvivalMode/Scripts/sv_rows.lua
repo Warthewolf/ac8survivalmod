@@ -580,36 +580,109 @@ function specialSetup()
         c.name, named and "set" or "not set (no text slot)"))
 end
 
--- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
--- A difficulty spike's pursuit on an enemy (CFG.spikes: provoke_cone_deg / provoke_time_s / surround_m), once.
-enemySpike = nil
+-- The live provoke on an enemy (a harder tailed plane, P5 of tools/re/BEHAVIOUR_DIRECTOR.md; CFG.ai tier_provoke,
+-- provoke_stricter, provoke_cone_deg / provoke_time_s): how soon a tailed plane notices you (ProvokeConditionConeAngle
+-- deg, ProvokeDeterminationTime s: you inside that cone of its six for that long puts it in Provoke) and how close its
+-- pursuit sits (SurroundPursuitMin/MaxRange, cm), from the round's difficulty spike (CFG.spikes) and the plane's skill
+-- tier (CFG.tiers.list), or a special's own values (MINDRIPPER's unit, from sv_main.lua's planeSweep).
+--   provokeWant(round, tier[, level])  what a plane should fly: { cone, time, surround = { min m, max m }, level, src }
+--                                      or nil (nothing to write: the game's own row). level: the spike level to use
+--                                      (default spikeLevel(round)), so a later part can ask for another.
+--   enemyProvoke(p, want)              writes want on plane p, only the fields that differ from the last write
+--                                      (p.provokeSet; p.provokeWant = want): fields written, before / after texts.
+--   enemySpike(p, round, tier)         once per plane when it appears (p.spiked): provokeWant + enemyProvoke, a
+--                                      "provoke:" line once per spike level and tier.
+-- Later parts (the intensity director, P4) change a live plane's values with enemyProvoke(p, provokeWant(...)).
+-- Writes read back (0.70.2's log); whether the game's provoke decision uses them is untested.
+provokeWant, enemyProvoke, enemySpike = nil, nil, nil
 do
-local spikeSaid = {}
+local provokeSaid = {}
+local FIELDS = { { "ProvokeConditionConeAngle", "cone" }, { "ProvokeDeterminationTime", "time" },
+                 { "SurroundPursuitMinRange", "smin" }, { "SurroundPursuitMaxRange", "smax" } }
+local function isTier(t) return type(t) == "table" and t.name ~= nil and t.rank ~= nil end   -- (a CFG.tiers.list entry)
+local function stricter(a, b) if a == nil then return b elseif b == nil then return a end return math.min(a, b) end
+local function said(x)                             -- "60 deg / 1.5 s / 40-100 m"
+    local t = {}
+    if x.cone then t[#t + 1] = string.format("%g deg", x.cone) end
+    if x.time then t[#t + 1] = string.format("%g s", x.time) end
+    if x.surround then t[#t + 1] = string.format("%g-%g m", x.surround[1], x.surround[2]) end
+    return table.concat(t, " / ")
+end
+function provokeWant(round, tier, level)
+    local ai = CFG.ai or {}
+    level = level or spikeLevel(round)
+    local sk = spikeCfg(level)
+    local s = { cone = sk.provoke_cone_deg, time = sk.provoke_time_s, surround = sk.surround_m }
+    local t, test = nil, false
+    if tier and (not isTier(tier) or ai.tier_provoke ~= false) then          -- (a special's own: whatever the switch)
+        t = { cone = tier.provoke_cone_deg, time = tier.provoke_time_s, surround = tier.surround_m }
+        if isTier(tier) and (t.cone or t.time) then                           -- the A/B test values: every tier with its own
+            if (ai.provoke_cone_deg or 0) > 0 then t.cone, test = ai.provoke_cone_deg, true end
+            if (ai.provoke_time_s or 0) > 0 then t.time, test = ai.provoke_time_s, true end
+        end
+        if not (t.cone or t.time or t.surround) then t = nil end
+    end
+    local hasS = s.cone or s.time or s.surround
+    if not (t or hasS) then return nil end
+    local w, strict = { level = level }, ai.provoke_stricter ~= false
+    if t and strict then
+        w.cone, w.time = stricter(s.cone, t.cone), stricter(s.time, t.time)
+        if s.surround and t.surround then
+            w.surround = { math.min(s.surround[1], t.surround[1]), math.min(s.surround[2], t.surround[2]) }
+        else
+            w.surround = t.surround or s.surround
+        end
+    else                                               -- (the tier's, field by field, over the spike's: as before P5)
+        w.cone, w.time, w.surround = (t and t.cone) or s.cone, (t and t.time) or s.time, (t and t.surround) or s.surround
+    end
+    local from = {}
+    if t then from[#from + 1] = (isTier(tier) and tier.name or "special") .. " " .. said(t) .. (test and " (CFG.ai test values)" or "") end
+    if hasS then from[#from + 1] = "spike " .. level .. " " .. said(s) end
+    w.src = table.concat(from, ", ") .. ((t and hasS) and (strict and ": the stricter" or ": the tier's over the spike's") or "")
+    return w
+end
+function enemyProvoke(p, want)
+    if not (p and want and valid(p.obj)) then return 0, "", "", {} end
+    local set = p.provokeSet or {}
+    local sr = want.surround
+    local value = { cone = want.cone, time = want.time, smin = sr and sr[1] * 100 or nil, smax = sr and sr[2] * 100 or nil }
+    local before, writes, fields, n = {}, {}, {}, 0
+    for _, f in ipairs(FIELDS) do
+        local field, key = f[1], f[2]
+        local v = value[key]
+        if v ~= nil and set[key] ~= v then
+            local okR, old = pcall(function() return p.obj[field] end)
+            before[#before + 1] = field .. " " .. (okR and tostring(old) or "?")
+            local okW, e = pcall(function() p.obj[field] = v end)
+            if okW then set[key], n = v, n + 1; fields[#fields + 1] = field end
+            writes[#writes + 1] = okW and (field .. " " .. tostring(v)) or (field .. " FAILED: " .. tostring(e))
+        end
+    end
+    p.provokeSet, p.provokeWant = set, want
+    return n, table.concat(before, ", "), table.concat(writes, ", "), fields
+end
 function enemySpike(p, round, tier)
     if p.spiked ~= nil or not round then return end
-    local level = spikeLevel(round)
-    p.spiked = level
-    local sk = withLevel(spikeCfg(level), tier and { provoke_cone_deg = tier.provoke_cone_deg,
-        provoke_time_s = tier.provoke_time_s, surround_m = tier.surround_m } or nil)
-    if level == 0 and not (tier and tier.provoke_cone_deg) then return end
-    local before, writes = {}, {}
-    local function set(field, value)
-        if value == nil then return end
-        local okR, v = pcall(function() return p.obj[field] end)
-        before[#before + 1] = field .. " " .. (okR and tostring(v) or "?")
-        local okW, e = pcall(function() p.obj[field] = value end)
-        writes[#writes + 1] = okW and (field .. " " .. tostring(value)) or (field .. " FAILED: " .. tostring(e))
+    local w = provokeWant(round, tier)
+    p.spiked = w and w.level or spikeLevel(round)
+    if not w then return end
+    local n, before, writes, fields = enemyProvoke(p, w)
+    local who = isTier(tier) and tier.name or (tier and "special" or "no tier")
+    local key = w.level .. "|" .. who
+    if provokeSaid[key] and not writes:find("FAILED", 1, true) then return end
+    provokeSaid[key] = true
+    local back = {}
+    for _, field in ipairs(fields) do
+        local okB, v = pcall(function() return p.obj[field] end)
+        back[#back + 1] = okB and tostring(v) or "?"
     end
-    set("ProvokeConditionConeAngle", sk.provoke_cone_deg)
-    set("ProvokeDeterminationTime", sk.provoke_time_s)
-    if sk.surround_m then set("SurroundPursuitMinRange", sk.surround_m[1] * 100); set("SurroundPursuitMaxRange", sk.surround_m[2] * 100) end
-    if not spikeSaid[level] then
-        spikeSaid[level] = true
-        log(string.format("spikes: level %d on %s: was %s; now %s", level, p.name, table.concat(before, ", "), table.concat(writes, ", ")))
-    end
+    log(string.format("provoke: round %d, spike level %d, %s (%s): was %s; now %s; reads back %s (%s)", round, w.level, who,
+        p.name, before ~= "" and before or "-", writes ~= "" and writes or "-", #back > 0 and table.concat(back, ", ") or "-",
+        w.src))
 end
 end
 
+-- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
 function searchAircraft(a, level)
     local sv = SR.usable[a]
     if not (sv and SR.tables) then return a end
