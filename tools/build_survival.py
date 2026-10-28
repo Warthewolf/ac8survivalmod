@@ -1065,6 +1065,8 @@ RADIO_DROP_IN = ('01_Countdown_intermission_1st', '01_Countdown_mainEngine', '01
 # and MOONCHILD's takeoff is the mercenary's line alone (user, 2026-10-23): Singleton's "We're joining the fight in
 # aircraft we took back from Sotoa." and Tasha's "Okay!" go
 RADIO_DROP_LINES = {('01_Wave1_Ally_Take_Off', 'v2216_0002'), ('01_Wave1_Ally_Take_Off', 'v0003_1682')}
+# the voice bank every line's <TextID>_Play event is in (build_radio checks the tells' lines against it)
+VOICE_DB = '/Game/WwiseAssets/Database/DA_SoundDB_AKB_Voice'
 # Speakers aren't the level's to change: the game reads them from the game instance's own DT_SpeakerTable (a copy for
 # the level, 2026-10-23, changed nothing), so Scripts/main.lua switches the Savian mercenary leader to ally colours at
 # run time (CFG.allies.ally_speakers).
@@ -1094,12 +1096,36 @@ def build_radio():
         keep.append((k, row))
     assert done == set(RADIO_REPLACE), done
     assert dropped == 7, dropped        # Baxter x3 + Tasha x1 in the countdown, Baxter on the first hit, 2 at takeoff
+    # the tells' lines (behaviour roadmap P3, survival_events.TELL_LINES): one row each, a group of its own, cloned from
+    # row 382 (01_Wave4_Reinforcements_Attacker: one AWACS line, Scenario on the Main channel, priority 20, shown in the
+    # com window, every mission flag on) with only its group, line and speaker changed, as RADIO_REPLACE's confirmed
+    # route; LimitPlayCount 0 (the play-by-play rows' "any number of times"), 'now' lines sooner and interrupting
+    tpl = dict(keep)[('382', 0)]
+    assert (full(field(tpl, 'TextID')), field(tpl, 'SpeakerID')[1]) == ('v0001_2857', 'LIVE_AWACS'), 'row 382 moved'
+    have = {full(field(row, 'RadioGroupID')) for _, row in keep}
+    voice = set(ZenPkg(stock(VOICE_DB)).names)
+    tells = 0
+    for grp, tid, spk, opts in survival_events.TELL_LINES:
+        assert grp not in have, f'{grp}: a group Mission 22 has, or twice'
+        assert tid + '_Play' in voice, f'{tid}: no voice in {VOICE_DB}'
+        row = copy.deepcopy(tpl)
+        setf(row, 'RadioGroupID', survival_events.fname(grp))
+        setf(row, 'TextID', survival_events.fname(tid))
+        setf(row, 'SpeakerID', ('str', spk))
+        setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+        if opts.get('now'):
+            setf(row, 'StartDelay', ('raw', 'Float', struct.pack('<f', survival_events.TELL_START_DELAY_S)))
+            setf(row, 'Channel', ('enum', 'ELiveRadioChannel', ('raw', 'Byte', bytes([survival_events.TELL_CHANNEL_INTERRUPT]))))
+        for n in (survival_events.fname(grp)[1], survival_events.fname(tid)[1], spk): z.nb.add(n)
+        keep.append(((grp, 0), row))
+        have.add(grp)
+        tells += 1
     dt['rows'] = keep
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
     assert chk['rows'] == dt['rows']
     save(z, RADIO)
-    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced)')
+    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell lines)')
 
 
 # The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).

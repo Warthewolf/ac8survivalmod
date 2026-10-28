@@ -94,6 +94,91 @@ CFG = {
     stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
               bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
               pawn_history = true, tail_watch = true, watch_km = 4.5, watch_max = 4, watch_grace_s = 2.0 },
+    -- Tells (the behaviour roadmap's P3, Scripts/sv_tells.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 4: "a radio line or
+    -- HUD callout before each coordinated threat"): a tell is an id of `list`, said by TELL.say. Its radio line is one
+    -- of `radio` (RE_SV_Radio<Suffix>: a stock AC8 line cloned into DT_SV_Radio at build time, tools/survival_events.py
+    -- TELL_LINES; the build fails on a name here it didn't make), at random but never the same twice running, or the
+    -- a-th with pick = "a"; chain: another tell's line after it (picked the same way). Its HUD callout is text[hud] /
+    -- text[hud .. "_sub"], %s / %d filled from the tell's numbers (args "compass": bearings named, "clock": an o'clock).
+    -- An urgent one cuts in: in front of the callout queue, the banner showing cut short, up hud_s; the others queue.
+    -- Each player's tells on their own (co-op: sv_coop.lua PERSONAL, the host's reach a joiner as "tl" and show from the
+    -- joiner's own settings), kept apart by class: an urgent one urgent_gap_s after the last urgent one, one with a
+    -- callout that queues gap_s (the banner's time) after the last such, a radio-only one radio_gap_s after any tell;
+    -- each id no sooner than its cooldown_s; none between rounds, down at the airfield or over the run's summary.
+    -- lead_s: an action that follows its tell (TELL.after) comes this long after it, at once when the tell wasn't said
+    -- or tells are off.
+    -- enabled = false: no tells at all (and every action at once, as before tells); radio / hud: either half off.
+    -- Wired to today's threats: an ace's reversal (reversal, kulbit within 900 m: ACE.movesTick, its move lead_s after
+    -- the call), a hunting tier's flight within hunt_km of you (hunt, once a flight a round), a bomber raid or strike on
+    -- the airfield (raid), the jammer up and down, each later wave from wave_from_round (wave; 0: never), the ALICORN's
+    -- railgun (alcn_rail_first, then alcn_rail: lead_s before the order, with CFG.specials.alicorn.rail_alert), dive,
+    -- surfacing and VLS volley, a Ladon's VLS volley. The rest are catalogued for the squad director (P2: pincer, split,
+    -- dive with its clock, drag, lure, trap, cover_ask, six, bracket, regroup, lancer, skirm) and the ALICORN's deck (P7)
+    -- and not said yet.
+    tells = {
+        enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
+        hunt_km = 8.0, wave_from_round = 26,
+        cooldown_s = { reversal = 20, kulbit = 20, hunt = 45, raid = 30, jammer = 30, jammer_down = 10, wave = 20,
+                       alcn_rail_first = 0, alcn_rail = 0, alcn_dive = 0, alcn_up = 0, alcn_vls = 30, alcn_deck = 30,
+                       ladon_vls = 15, pincer = 30, split = 20, dive = 20, clock = 0, drag = 30, lure = 30, trap = 20,
+                       cover_ask = 20, six = 20, bracket = 15, regroup = 30, lancer = 60, skirm = 60 },
+        lead_s = { reversal = 1.0, kulbit = 0.5, alcn_rail = 5.0, alcn_vls = 1.0, ladon_vls = 0.0, dive = 1.0, trap = 1.0,
+                   six = 1.0, bracket = 1.0 },
+        list = {
+            reversal        = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, hud = "reversal", urgent = true },
+            kulbit          = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, hud = "kulbit", urgent = true },
+            hunt            = { radio = { "RE_SV_RadioHuntA", "RE_SV_RadioHuntB" }, hud = "hunt" },
+            raid            = { radio = { "RE_SV_RadioRaidA", "RE_SV_RadioRaidB", "RE_SV_RadioRaidC" } },
+            jammer          = { radio = { "RE_SV_RadioJam" } },
+            jammer_down     = { radio = { "RE_SV_RadioJamDown" } },
+            wave            = { radio = { "RE_SV_RadioWaveA", "RE_SV_RadioWaveB", "RE_SV_RadioWaveC", "RE_SV_RadioWaveD" } },
+            alcn_rail_first = { radio = { "RE_SV_RadioAlcnRailFirst" }, hud = "alcn_rail", urgent = true },
+            alcn_rail       = { radio = { "RE_SV_RadioAlcnRailA", "RE_SV_RadioAlcnRailB" }, hud = "alcn_rail", urgent = true },
+            alcn_dive       = { radio = { "RE_SV_RadioAlcnDive" } },
+            alcn_up         = { radio = { "RE_SV_RadioAlcnUp" } },
+            alcn_vls        = { radio = { "RE_SV_RadioAlcnVls" }, hud = "alcn_vls", urgent = true },
+            alcn_deck       = { radio = { "RE_SV_RadioAlcnDeck" } },
+            ladon_vls       = { radio = { "RE_SV_RadioLadonVlsA", "RE_SV_RadioLadonVlsB" }, hud = "ladon_vls", urgent = true },
+            pincer          = { radio = { "RE_SV_RadioPincerA", "RE_SV_RadioPincerB", "RE_SV_RadioPincerC", "RE_SV_RadioPincerD" },
+                                hud = "pincer", args = "compass" },
+            split           = { hud = "split", urgent = true },
+            dive            = { radio = { "RE_SV_RadioDiveA", "RE_SV_RadioDiveB", "RE_SV_RadioDiveC", "RE_SV_RadioDiveD" },
+                                hud = "dive", args = "clock", urgent = true, chain = "clock" },
+            clock           = { radio = { "RE_SV_RadioClockA", "RE_SV_RadioClockB", "RE_SV_RadioClockC", "RE_SV_RadioClockD",
+                                          "RE_SV_RadioClockE", "RE_SV_RadioClockF", "RE_SV_RadioClockG", "RE_SV_RadioClockH",
+                                          "RE_SV_RadioClockI", "RE_SV_RadioClockJ", "RE_SV_RadioClockK", "RE_SV_RadioClockL" },
+                                pick = "a" },
+            drag            = { radio = { "RE_SV_RadioDrag" }, hud = "drag" },
+            lure            = { radio = { "RE_SV_RadioEnLureA", "RE_SV_RadioEnLureB" } },
+            trap            = { radio = { "RE_SV_RadioTrap", "RE_SV_RadioEnTrap" }, hud = "trap", urgent = true },
+            cover_ask       = { radio = { "RE_SV_RadioEnCoverA", "RE_SV_RadioEnCoverB", "RE_SV_RadioEnCoverC" } },
+            six             = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" },
+                                hud = "cover", urgent = true },
+            bracket         = { radio = { "RE_SV_RadioBracketA", "RE_SV_RadioBracketB", "RE_SV_RadioBracketC" },
+                                hud = "bracket", urgent = true },
+            regroup         = { radio = { "RE_SV_RadioRegroupA", "RE_SV_RadioRegroupB" }, hud = "regroup" },
+            lancer          = { hud = "lancer" },
+            skirm           = { hud = "skirm" },
+        },
+        text = {
+            reversal  = "ACE REVERSAL",            reversal_sub  = "HE'S TURNING INTO YOU",
+            kulbit    = "ACE POST-STALL",          kulbit_sub    = "DON'T OVERSHOOT",
+            hunt      = "YOU ARE BEING HUNTED",    hunt_sub      = "ACES CLOSING ON YOU",
+            alcn_rail = "WARNING: RAILGUN",        alcn_rail_sub = "BUILD SPEED, THEN BREAK",
+            alcn_vls  = "VLS LAUNCH",              alcn_vls_sub  = "ALICORN MISSILES INBOUND",
+            ladon_vls = "VLS LAUNCH",              ladon_vls_sub = "LADON MISSILES INBOUND",
+            pincer    = "TWO GROUPS INBOUND",      pincer_sub    = "FROM THE %s AND THE %s",
+            split     = "BANDITS SPLITTING",       split_sub     = "WATCH YOUR FLANKS",
+            dive      = "BANDIT DIVING",           dive_sub      = "HIGH, %d O'CLOCK",
+            drag      = "HE'S DRAGGING YOU",       drag_sub      = "CHECK YOUR TAIL",
+            trap      = "IT'S A TRAP",             trap_sub      = "BANDIT ON YOUR SIX",
+            cover     = "BANDIT CUTTING IN",       cover_sub     = "CHECK YOUR SIX",
+            bracket   = "MISSILES FROM TWO SIDES", bracket_sub   = "BREAK NOW",
+            regroup   = "BANDITS REGROUPING",
+            lancer    = "BANDITS HIGH",            lancer_sub    = "THEY WON'T TURN WITH YOU",
+            skirm     = "LONG-RANGE SHOOTERS",     skirm_sub     = "CLOSE THE DISTANCE",
+        },
+    },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
     -- PilotRank when it appears (1-5: how often it picks the better evasions and flares of its behaviour set; a live
     -- write sticks, test 16), plus rank_add for the difficulty, kept within 1-5. A tier without post_stall never
@@ -753,8 +838,13 @@ CFG = {
         -- (health_per_round 0.05, health_max_x 1.4: were 0.03 / 1.0, economy review of 2026-10-25)
         -- It counts as surfaced once it's back within surfaced_m of where it sailed (the order sent again every
         -- resurface_s while it isn't rising, resurface_tries times at most; up anyway after up_wait_s).
+        -- rail_alert (behaviour roadmap P3/P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 4): Mission 18's RAILGUN WARNING on
+        -- every game (RE_SV_AlcnAlertOn, forwarded) with the railgun's tell (CFG.tells alcn_rail, its lead_s before the
+        -- order), off alert_s after the order (it aims ~7 s and preps ~2 s: tools/re/ALICORN.md), at a dive and when it
+        -- sinks (hard rule 45); false: no warning (the tell still comes with tells on)
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
                     surfaced_m = 3, resurface_s = 8, resurface_tries = 4, up_wait_s = 60,
+                    rail_alert = { enabled = true, alert_s = 12 },
                     volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
                     weapon_missiles = 3, railgun_missiles = 4,

@@ -131,6 +131,18 @@ local function fire(ev)
     local r = type(SV_Event) == "function" and SV_Event(ev) or -5
     if r ~= 1 then log("special: " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
 end
+-- a tell to every player (behaviour roadmap P3, sv_tells.lua), when tells are in
+local function tell(id) if TELL then pcall(TELL.say, id, TELL.ALL) end end
+-- Mission 18's RAILGUN WARNING on / off (CFG.specials.alicorn.rail_alert: RE_SV_AlcnAlertOn / Off, forwarded, so every
+-- game shows its own; hard rule 45)
+local function railAlert(s, on)
+    if on then
+        if not s.railAlertOn then fire("RE_SV_AlcnAlertOn"); s.railAlertOn = true end
+    elseif s.railAlertOn then
+        fire("RE_SV_AlcnAlertOff"); s.railAlertOn = nil
+    end
+    s.railOffAt = nil
+end
 
 -- The player's standard missile's damage (LiveWeaponBase.damage, in health points: HealthInternal is health x 10),
 -- from a loaded missile or its class default; nil when none can be read
@@ -185,6 +197,8 @@ function SPC.alicornTick(now, s)
     if not s.dived and now >= s.nextDive then
         s.dived, s.surfaceAt, s.surfaceSent = true, now + c.dive_for_s, nil
         fire("RE_SV_AlcnDive"); hudCallout(t.alicorn_dive, nil); log("special: the Alicorn dives")
+        tell("alcn_dive")
+        railAlert(s, false); s.railWarned = nil              -- (no railgun under water: warned again once it's up)
     elseif s.dived and now >= s.surfaceAt then
         local down = (z and s.seaZ) and (s.seaZ - z) / 100 or nil
         if not s.surfaceSent then
@@ -195,6 +209,7 @@ function SPC.alicornTick(now, s)
             s.dived, s.nextDive = false, now + c.dive_every_s
             s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
             hudCallout(t.alicorn_surface, nil)
+            tell("alcn_up")
             log(string.format("special: the Alicorn surfaces, %.0f s after the order (%d sent%s)", now - s.surfaceSent, s.surfaceTry,
                 (down and down > (c.surfaced_m or 3)) and string.format(", still %.0f m down: counted up after up_wait_s", down) or ""))
         elseif now - s.lastZAt >= (c.resurface_s or 8) then
@@ -207,8 +222,32 @@ function SPC.alicornTick(now, s)
             s.lastZ, s.lastZAt = z, now
         end
     end
-    if not s.dived and now >= s.nextRail then s.nextRail = now + c.railgun_every_s; fire("RE_SV_AlcnRailgun") end
-    if not s.dived and now >= s.nextVolley then s.nextVolley = now + c.volley_every_s; fire("RE_SV_AlcnVolley") end
+    -- the railgun's tell (behaviour roadmap P3; it fired without a warning before): its lead_s (CFG.tells alcn_rail)
+    -- before each order the radio call and WARNING: RAILGUN on every game (the first time "the railgun has been
+    -- activated"), and the RAILGUN WARNING (rail_alert) from then until alert_s after the order. The order's time is
+    -- as it was; the railgun then aims ~7 s and preps ~2 s (tools/re/ALICORN.md)
+    local ra = c.rail_alert or {}
+    if s.railOffAt and now >= s.railOffAt then railAlert(s, false) end
+    local lead = TELL and TELL.leadS("alcn_rail") or 0
+    if not s.dived and not s.railWarned and now >= s.nextRail - lead then
+        s.railWarned = true
+        if TELL then
+            local okT, said = pcall(TELL.say, s.railSaid and "alcn_rail" or "alcn_rail_first", TELL.ALL)
+            if okT and said then s.railSaid = true end
+        end
+        if ra.enabled then railAlert(s, true) end
+        log(string.format("special: the Alicorn's railgun in %.0f s: warned", math.max(0, s.nextRail - now)))
+    end
+    if not s.dived and now >= s.nextRail then
+        s.nextRail, s.railWarned = now + c.railgun_every_s, nil
+        fire("RE_SV_AlcnRailgun")
+        if s.railAlertOn then s.railOffAt = now + (tonumber(ra.alert_s) or 12) end
+    end
+    if not s.dived and now >= s.nextVolley then          -- (its VLS volley: the tell's lead_s after it, P3)
+        s.nextVolley = now + c.volley_every_s
+        local function volley() if s.state == "sail" and not s.dived then fire("RE_SV_AlcnVolley") end end
+        if TELL then TELL.after("alcn_vls", TELL.ALL, volley) else volley() end
+    end
     -- its parts, every 2 s
     if now < (s.partsAt or 0) then return end
     s.partsAt = now + 2
@@ -302,6 +341,7 @@ function SPC.alicornTick(now, s)
     local hull = SV_UnitAlive(UNIT)
     if (s.coreOpen and s.coreSeen and not coreUp) or hull == 0 or hull == -7 then
         s.state = "done"
+        railAlert(s, false)                              -- (its warning off with it)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "the Alicorn sunk")
         LB.stat("ground", 1); LB.special("alicorn", true, now - s.at)

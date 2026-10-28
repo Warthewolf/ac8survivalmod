@@ -200,6 +200,11 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
 ## 7. Since coop.4 (coop.5-coop.11, runtimes 0.23.0-0.26.0, 2026-10-26; untested in game)
 - Events: the host forwards every RE_SV_* event it fires ("ev") but each player's own (sv_coop.lua KEEP_EVENTS); a
   joiner fires them once its level is ready. (Nagase's radio and the shuttle never ran on the joiners in coop.4.)
+- Tells (behaviour roadmap P3, BEHAVIOUR_DIRECTOR.md unit 4): "tl" from the host to one joiner or every joiner, a
+  tell id and up to two numbers only (COOP.tell). The joiner plays it from its own CFG.tells (lines, texts, switches:
+  PERSONAL) if it knows the id, the numbers are finite, its level is ready ([coop] callouts on), at most 4 a second,
+  never queued. A tell's radio events (RE_SV_Radio*) are in KEEP_EVENTS, and sv_tells.lua plays the host's own
+  through the unwrapped hudCallout / SV_Event, so a tell never also goes out as "co" or "ev". Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.
@@ -220,7 +225,7 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   CFG_DEFAULTS (the shipped CFG, copied before survival.ini and survival_config.lua apply), as data only (a small
   token format, no code). The joiner puts every shared section back to CFG_DEFAULTS and applies them, in place (other
   parts hold CFG's tables), and gets its own back when co-op closes or it hosts. Its own: coop, hud, sound, music,
-  leaderboard (and probe, ai_watch). presetName() answers the host's preset on a joiner.
+  leaderboard, tells (and probe, ai_watch, stats). presetName() answers the host's preset on a joiner.
 - Settings rows under JOIN: CO-OP ROOM, CO-OP ENEMIES, START AT ROUND, BREAK BETWEEN ROUNDS (StringArgs SV_Set_<what>).
   main.dll's OnMainDecide queues the pick and doesn't call the stock decide (as the landing menu's SV_Buy_ rows), Lua
   (SV_MenuSetting) steps the value, saves it with iniSet and relabels the row's live TextBlock. A run that started past

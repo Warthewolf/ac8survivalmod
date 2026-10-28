@@ -150,6 +150,7 @@ local function creditKill(p)
     if p.jammer then
         local t = CFG.hud.text
         hudCallout(t.jammer_down, string.format(t.jammer_down_sub, pay))
+        if TELL then pcall(TELL.say, "jammer_down", TELL.ALL) end   -- (the jamming's lifted, every player: P3's tells)
     end
     LB.stat("air", 1)
     if by == "allies" or by == "ships" then LB.stat("by_allies", 1) elseif by == "defences" then LB.stat("by_defences", 1) end
@@ -421,6 +422,10 @@ local function probeTick(tick)
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         local okMv, errMv = timed("moves", ACE.movesTick, now, D)              -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
+        if now and TELL then                                            -- actions told lead_s ago (sv_tells.lua)
+            local okTl, errTl = timed("tells", TELL.tick, now)
+            if not okTl and not D.tellErr then D.tellErr = true; log("tell: tick error " .. tostring(errTl)) end
+        end
         if now and not paused then                                      -- P5's gate: you on an enemy's tail (sv_stats.lua)
             local okTw, errTw = timed("tail watch", STATS.tailTick, now)
             if not okTw and not D.twErr then D.twErr = true; log("stats: tail watch error " .. tostring(errTw)) end
@@ -688,6 +693,32 @@ if type(RegisterKeyBind) == "function" and Key then
                     hudCallout("TEST: VALKA PAINT " .. s.paintK, n)
                 end)
                 if not ok then log("test: Ctrl+9 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+0 in a run: the next line of the tells' catalog (CFG.tells, sv_tells.lua: every radio line of every tell in
+    -- turn, then the HUD-only ones), said here whatever the gaps, with its callout, to hear and see each one (the
+    -- behaviour roadmap P3's test list, tools/re/BEHAVIOUR_DIRECTOR.md unit 4)
+    if Key.ZERO then
+        pcall(RegisterKeyBind, Key.ZERO, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now or not TELL then log("test: Ctrl+0 outside a Survival run"); return end
+                    local ids, all = {}, {}
+                    for id in pairs(CFG.tells.list) do ids[#ids + 1] = id end
+                    table.sort(ids)
+                    for _, id in ipairs(ids) do
+                        local radio = CFG.tells.list[id].radio or {}
+                        for i, line in ipairs(radio) do all[#all + 1] = { id, line, i } end
+                        if #radio == 0 then all[#all + 1] = { id } end
+                    end
+                    D.tellTest = (D.tellTest or 0) % #all + 1
+                    local e = all[D.tellTest]
+                    local said, why = TELL.play(e[1], e[3] or 3, 270, nil, true, e[2])
+                    log(string.format("test: Ctrl+0, tell line %d of %d: %s %s (%s)", D.tellTest, #all, e[1], tostring(e[2] or "(HUD only)"),
+                        said and "said" or tostring(why)))
+                end)
+                if not ok then log("test: Ctrl+0 error " .. tostring(err)) end
             end)
         end)
     end

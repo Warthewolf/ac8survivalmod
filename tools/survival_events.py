@@ -22,6 +22,8 @@ by events: the game never spawns a desc again while its shot-down flight is stil
   RE_SV_BombRun_NN    (one per bomber flight) both aircraft drop BOMB_COUNT bombs (weapon slot 4); Scripts/main.lua
                       fires it when a Tu-95 / Tu-160 of that flight is over the airfield
   SV_Shuttle*         Comona Defense (build_shuttle, SHUTTLE_*): countdown, liftoff, hits, loss
+  RE_SV_Radio<Suffix> a tell's radio line (TELL_LINES, build_tells: one DT_SV_Radio group each), fired by
+                      Scripts/sv_tells.lua (behaviour roadmap P3)
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -503,6 +505,86 @@ def behaviour_row(unit):
     if unit in BOMBERS: return HEAVY_BEHAVIOUR_ROW if unit in HEAVY_BOMBERS else STRIKE_BEHAVIOUR_ROW
     if unit in POOL: return POOL_BEHAVIOUR_ROW
     return None
+
+
+# The tells' radio lines (behaviour roadmap P3; Scripts/sv_config.lua CFG.tells, Scripts/sv_tells.lua,
+# tools/re/BEHAVIOUR_DIRECTOR.md unit 4): (group, TextID, SpeakerID, options), all stock AC8 lines (never AC7 voice).
+# build_survival.py build_radio adds each as a one-row group of DT_SV_Radio, a clone of Mission 22's AWACS row 382 with
+# this line (its voice the global AKB_Voice bank's <TextID>_Play, its subtitle the TextID's text: hard rule 33; the
+# build checks every _Play is there), LimitPlayCount 0; build_tells a remote event RE_SV_Radio<Suffix> (tell_event)
+# that plays it, the only way Lua plays radio. Group suffixes are letters only (hard rule 17). Options: 'now' = StartDelay
+# 0.1 s and Channel InterruptMain (Mission 3's row 233), for the lines an action follows by a short lead. Enemy lines of a
+# named unit speak as a Sotoan fighter (Common_Enemy_Fighter_*), so no campaign squadron's name shows. Wingmen's lines
+# (Kate, Coster, Baxter) are left out: they aren't flying (the user had Baxter's and Tasha's cut, 2026-10-23).
+TELL_LINES = [
+    # ace reversal / kulbit (ACE.movesTick)
+    ('SV_Radio_TurnA', 'v0001_1928', 'LIVE_AWACS', {'now': True}),        # "That's a sudden turn - coming straight at you!" (ST_ms029 418)
+    ('SV_Radio_TurnB', 'v0417_0002', 'Common_Enemy_Fighter_A', {'now': True}),   # "He's mine!" (PByP 3071, Shadow 160th's)
+    # a hunting tier's flight closing in (ACE.hunt)
+    ('SV_Radio_HuntA', 'v1236_0019', 'ms12_Enemy_Commander', {}),         # "Hunt down the Wings of Theve, and I promise you a war medal!" (ST_ms012 408)
+    ('SV_Radio_HuntB', 'v0929_0001', 'Common_Enemy_Fighter_A', {}),       # "I see our prey." (PByP 3397, Shadow 150th's)
+    # a raid / strike on the airfield (Mission 22's airfield is "the eastern airfield")
+    ('SV_Radio_RaidA', 'v0001_2784', 'LIVE_AWACS', {}),                   # "Joker Flight, enemy aircraft approaching the eastern airfield." (ST_ms022 123)
+    ('SV_Radio_RaidB', 'v0001_2240', 'LIVE_AWACS', {}),                   # "Enemy attackers closing on the base." (ST_ms004 499)
+    ('SV_Radio_RaidC', 'v0001_2223', 'LIVE_AWACS', {}),                   # "Shoot down the bombers. Protect the base." (ST_ms004 304)
+    # the jammer
+    ('SV_Radio_Jam', 'v0001_1694', 'LIVE_AWACS', {}),                     # "The enemy's jamming you with a powerful ECM." (ST_ms016 70)
+    ('SV_Radio_JamDown', 'v0001_0536', 'LIVE_AWACS', {}),                 # "Hostile EW aircraft destroyed! Jamming has been lifted!" (ST_ms012 91)
+    # a late round's next wave
+    ('SV_Radio_WaveA', 'v0001_2072', 'LIVE_AWACS', {}),                   # "New enemy aircraft detected. Look sharp!" (ST_ms021 47)
+    ('SV_Radio_WaveB', 'v0001_1862', 'LIVE_AWACS', {}),                   # "Enemy reinforcements!" (ST_ms028 235)
+    ('SV_Radio_WaveC', 'v0001_4111', 'LIVE_AWACS', {}),                   # "Bandits inbound! More reinforcements!" (ST_ms028 685)
+    ('SV_Radio_WaveD', 'v0001_2071', 'LIVE_AWACS', {}),                   # "Enemy reinforcements spotted, closing fast." (ST_ms011 247)
+    # the ALICORN
+    ('SV_Radio_AlcnRailFirst', 'v0001_2389', 'LIVE_AWACS', {}),           # "Joker Flight, the railgun has been activated." (ST_ms030 713)
+    ('SV_Radio_AlcnRailA', 'v0001_2391', 'LIVE_AWACS', {}),               # "Enemy railgun's ready to fire." (ST_ms024 585)
+    ('SV_Radio_AlcnRailB', 'v0001_3510', 'LIVE_AWACS', {}),               # "Railguns are getting ready to fire!" (ST_ms027 28)
+    ('SV_Radio_AlcnDive', 'v0001_3342', 'LIVE_AWACS', {}),                # "Enemy submarine diving!" (ST_ms030 654)
+    ('SV_Radio_AlcnUp', 'v0001_3344', 'LIVE_AWACS', {}),                  # "Submarine has surfaced. Begin attack!" (ST_ms030 671)
+    ('SV_Radio_AlcnVls', 'v0001_2895', 'LIVE_AWACS', {}),                 # "Missile launch from VLS!" (ST_ms025_1 74)
+    ('SV_Radio_AlcnDeck', 'v0001_3037', 'LIVE_AWACS', {}),                # "Planes launching from the carrier!" (ST_ms026 105; P7)
+    # a Ladon's VLS volley
+    ('SV_Radio_LadonVlsA', 'v0001_1709', 'LIVE_AWACS', {}),               # "Large aircraft has launched missile." (ST_ms016 378)
+    ('SV_Radio_LadonVlsB', 'v0001_1710', 'LIVE_AWACS', {}),               # "The bomber has launched a missile!" (ST_ms016 380)
+    # the squad director's (P2; catalogued, not said yet)
+    ('SV_Radio_PincerA', 'v0001_2608', 'LIVE_AWACS', {}),                 # "More hostiles from two new bearings!" (ST_ms003 15)
+    ('SV_Radio_PincerB', 'v0001_2860', 'LIVE_AWACS', {}),                 # "If we defend one side, the other one'll get us." (ST_ms022 392)
+    ('SV_Radio_PincerC', 'v0001_1885', 'LIVE_AWACS', {}),                 # "Coming at us from two directions, with reinforcements!" (ST_ms028 432)
+    ('SV_Radio_PincerD', 'v0001_1886', 'LIVE_AWACS', {}),                 # "Make sure they don't surround you! Intercept with full force!" (ST_ms028 450)
+    ('SV_Radio_DiveA', 'v0001_1926', 'LIVE_AWACS', {'now': True}),        # "Joker 1, right above you!" (ST_ms029 607)
+    ('SV_Radio_DiveB', 'v0001_3067', 'LIVE_AWACS', {'now': True}),        # "Enemy aircraft diving!" (ST_ms026 467)
+    ('SV_Radio_DiveC', 'v0001_1703', 'LIVE_AWACS', {'now': True}),        # "The aircraft is diving!" (ST_ms016 122)
+    ('SV_Radio_DiveD', 'v0001_3111', 'LIVE_AWACS', {'now': True}),        # "Bandit's coming straight down toward you!" (ST_ms026 769)
+] + [(f'SV_Radio_Clock{chr(65 + k)}', f'v0001_{307 + k:04d}', 'LIVE_AWACS', {})   # "Bandit at 1..12 o'clock!" (PByP 7283-7294)
+     for k in range(12)] + [
+    ('SV_Radio_Drag', 'v0001_1857', 'LIVE_AWACS', {}),                    # "Don't chase them, there's reinforcements inbound!" (ST_ms028 170)
+    ('SV_Radio_EnLureA', 'v1900_0009', 'Common_Enemy_Fighter_B', {}),     # "I'll lure him into your sights!" (ST_ms019 646, Shadow 140th's)
+    ('SV_Radio_EnLureB', 'v0929_0061', 'Common_Enemy_Fighter_C', {}),     # "I'll fake an opening to lure 'em in." (ST_ms009 1001, Shadow 150th's)
+    ('SV_Radio_Trap', 'v0001_4058', 'LIVE_AWACS', {'now': True}),         # "Multiple enemies confirmed! It's an ambush!" (ST_ms021 312)
+    ('SV_Radio_EnTrap', 'v1903_0001', 'ms19_Enemy_Fighter_Mob_A', {'now': True}),   # "We'll trap this one between us." (ST_ms019 618)
+    ('SV_Radio_EnCoverA', 'v4204_0017', 'Common_Enemy_Fighter_E', {}),    # "Someone cover me!" (PByP 5226)
+    ('SV_Radio_EnCoverB', 'v4206_0017', 'Common_Enemy_Fighter_G', {}),    # "Somebody help me!" (PByP 5230)
+    ('SV_Radio_EnCoverC', 'v4207_0017', 'Common_Enemy_Fighter_H', {}),    # "Assistance! I need assistance!" (PByP 5232)
+    ('SV_Radio_SixA', 'v0001_0026', 'LIVE_AWACS', {'now': True}),         # "Joker 1! Check your six!" (PByP 28)
+    ('SV_Radio_SixB', 'v0001_0028', 'LIVE_AWACS', {'now': True}),         # "Enemy on your six!" (PByP 30)
+    ('SV_Radio_SixC', 'v0001_0025', 'LIVE_AWACS', {'now': True}),         # "Joker 1, enemy on your tail." (PByP 27)
+    ('SV_Radio_SixD', 'v0001_0027', 'LIVE_AWACS', {'now': True}),         # "Enemy behind you!" (PByP 29)
+    ('SV_Radio_BracketA', 'v0001_0016', 'LIVE_AWACS', {'now': True}),     # "Missiles! Joker 1, break off!" (PByP 18)
+    ('SV_Radio_BracketB', 'v0001_0014', 'LIVE_AWACS', {'now': True}),     # "Missile closing in! Evasive action!" (PByP 16)
+    ('SV_Radio_BracketC', 'v0001_4034', 'LIVE_AWACS', {'now': True}),     # "Incoming barrage!" (ST_ms020 434)
+    ('SV_Radio_RegroupA', 'v0001_3003', 'LIVE_AWACS', {}),                # "They're trying to regroup." (ST_ms025_1 791)
+    ('SV_Radio_RegroupB', 'v0001_1884', 'LIVE_AWACS', {}),                # "They tricked us! The aircraft that retreated regrouped and are back!" (ST_ms028 431)
+]
+TELL_START_DELAY_S = 0.1                              # the 'now' lines' StartDelay (the template row's is 0.6 s)
+TELL_CHANNEL_INTERRUPT = 6                            # ELiveRadioChannel InterruptMain (Main is 2)
+
+
+def tell_event(group):
+    """The remote event that plays tell group SV_Radio_<Suffix>: RE_SV_Radio<Suffix>."""
+    assert group.startswith('SV_Radio_'), group
+    return 'RE_SV_Radio' + group[len('SV_Radio_'):]
+
+
 KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
 # SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (its orders
 # came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
@@ -798,6 +880,7 @@ def build_events(stock_ep):
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
     build_alicorn(g, flag, stock_ep)
+    build_tells(g)
     build_ace_moves(g, flag, stock_ep)
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
     return g
@@ -1091,6 +1174,41 @@ def build_alicorn(g, flag, stock_ep):
         g.execute(t_vls, 'RE_SV_AlcnVolley', {1: f'{ALCN_OBJ}_{v}', 2: 'Player'}, delay=0.2 + 0.3 * k)
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AlcnRemove')
     g.execute(t_remove, 'RE_SV_AlcnRemove', {0: 'NoneSelect', 1: ALCN_UNIT, 2: 'NoneSelect'})
+    # its railgun's RAILGUN WARNING (behaviour roadmap P3/P7; Scripts/sv_alicorn.lua railAlert, with the railgun's tell):
+    # Mission 18's LiveSetRailgunAlertEnable, as VALKA's (hard rule 45), under the Alicorn's own names so it doesn't
+    # depend on hers (foreign_template imports the class once)
+    m18 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission018', 'EP_Mission018_global.uasset')
+    t_alert = g.foreign_template(m18, 'LiveSetRailgunAlertEnable', 'RemoteEvent_OverAltitude')     # {0 bool}
+    assert arg_values(t_alert) == ['true'], arg_values(t_alert)
+    for ev, on in (('RE_SV_AlcnAlertOn', 'true'), ('RE_SV_AlcnAlertOff', 'false')):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_alert, ev, {0: on})
+
+
+def build_tells(g):
+    """The tells' radio (behaviour roadmap P3): a remote event RE_SV_Radio<Suffix> for each TELL_LINES group, playing it
+    (Mission 22's LiveRadioPlayExecution, the shuttle countdown's template; no conditions: hard rule 26). Lua's
+    CFG.tells names exactly these events (both ways checked here, so the catalog and the event package can't drift)."""
+    import re
+    t_radio = g.exec_template('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
+    groups = [l[0] for l in TELL_LINES]
+    assert len(set(groups)) == len(groups), 'TELL_LINES: a group twice'
+    for grp in groups:
+        suffix = grp[len('SV_Radio_'):]
+        assert grp.startswith('SV_Radio_') and suffix.isalpha() and suffix.isascii(), f'{grp}: letters only (hard rule 17)'
+        assert survival_fname_plain(grp), grp
+        ev = tell_event(grp)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                 # a remote event Lua fires (SV_Event)
+        g.execute(t_radio, ev, {0: grp})
+    built = {tell_event(x) for x in groups}
+    used = set(re.findall(r'RE_SV_Radio\w+', runtime_lua()))
+    assert used <= built, f'Lua fires radio tells the build has no line for: {sorted(used - built)}'
+    assert built <= used, f'TELL_LINES groups no CFG.tells tell names: {sorted(built - used)}'
+
+
+def survival_fname_plain(name):
+    """True when name is stored whole as an FName (no numeric tail split off: hard rule 17)."""
+    return fname(name) == ('name', name, 0)
 
 
 def build_repair(g, stock_ep):
