@@ -227,6 +227,12 @@ function ammoTick(tick, pc)
         -- has raised it again (at once, here) a count under what you had is that reload, not shots; then what you had
         -- goes back in (a run of 2026-10-24: 36/36 specials bought, 24/36 after take-off, the rest gone).
         local over, ground, back = {}, playerOnAirfield(), {}
+        -- the gun's shots for the measurements (STATS.fired, kind 0): what it lost since the last count it had (the 2 s
+        -- refill below sets that to full, so a refill is never taken for shots)
+        if s[0] >= 0 then
+            if A.gunLast and s[0] < A.gunLast and not ground then pcall(STATS.fired, 0, A.gunLast - s[0]) end
+            A.gunLast = s[0]
+        end
         for k = 1, 3 do
             local m, want = SV_Ammo(k, 1), A.bays and A.bays[k]
             if want and m >= 0 and m < want and not (A.reload and A.reload[k] and tick - A.reload[k] > 40) then
@@ -268,6 +274,7 @@ function ammoTick(tick, pc)
                 SV_SetAmmo(k, cap)
                 over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
             elseif cap and s[k] >= 0 and s[k] < cap and not ground then
+                pcall(STATS.fired, k, cap - s[k])           -- (shots: the measurements, sv_stats.lua)
                 A.caps[k] = s[k]
                 RUN.dirty = true                    -- the shop's help lines show the counts
             end
@@ -287,7 +294,7 @@ function ammoTick(tick, pc)
     end
     if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
         local n, max = SV_Ammo(0), SV_Ammo(0, 1)
-        if n >= 0 and n < max then SV_SetAmmo(0, -1) end
+        if n >= 0 and n < max then SV_SetAmmo(0, -1); A.gunLast = max end
     end
     if tick % 40 == 0 then                                                     -- every 10 s: the counts, when they change
         local line = ammoLine()

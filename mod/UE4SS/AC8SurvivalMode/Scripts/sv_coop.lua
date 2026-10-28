@@ -484,10 +484,10 @@ local function doSpawn(q)
     local old = M.cunits[unit]
     local same = old and old.gen == q.gen
     M.cunits[unit] = { gen = q.gen, n = 0, planes = {}, binds = same and old.binds or {}, gbinds = same and old.gbinds or {} }
-    spawningUnit = unit
+    spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
-    spawningUnit = nil
+    spawningUnit, spawningIdx = nil, nil
     if r == -6 or r == -1 then                           -- (this game's level isn't ready: again in a second)
         q.tries = (q.tries or 0) + 1
         if q.tries < 30 then q.at = os.clock() + 1; M.cunits[unit] = old; return false end
@@ -514,10 +514,15 @@ local function clientRounds(now)
     D.now = now
     local r = M.rnd
     if r then
+        -- (the measurements' rounds, sv_stats.lua: a joiner runs no startRound or clear of its own, so the host's round
+        -- number changing starts one and the host's state going back to "wait" ends it)
         if r.round ~= D.round then
+            if STATS then pcall(STATS.roundEnd, now) end
             D.round = r.round
             RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
+            if STATS and r.round >= 1 and r.state ~= "wait" then pcall(STATS.roundStart, now) end
         end
+        if STATS and r.state == "wait" and D.state ~= "wait" then pcall(STATS.roundEnd, now) end
         D.state = r.state
         if r.state == "wait" then D.at = now + r.secs - (os.clock() - r.got) else D.at = now end
         D.wave = r.wave > 0 and r.wave or nil
@@ -602,6 +607,17 @@ local function peerTick(slot)
     local fresh = #f >= 10 and f[10] < 3000 and (math.floor(f[9]) % 2 == 1)        -- (flag 1: in Survival's level)
     local P = M.peers[slot] or {}
     M.peers[slot] = P
+    -- what that player's game says of them, kept for COOP.players(): position (cm), rotation, health (x 10) and full
+    -- health, flags (1 in Survival's level, 2 alive, 4 down at the airfield) and its age (ms)
+    if #f >= 10 and finite(f[1], 1e10) and finite(f[2], 1e10) and finite(f[3], 1e10) and finite(f[10], 1e9) then
+        local fl = finite(f[9], 1e6) and math.floor(f[9]) or 0
+        P.at, P.rot = { X = f[1], Y = f[2], Z = f[3] }, { f[4], f[5], f[6] }
+        P.hp, P.maxHp, P.flags, P.age = f[7], f[8], fl, f[10]
+        P.hpPct = (finite(f[7], 1e12) and finite(f[8], 1e9) and f[8] > 0) and math.max(0, math.min(100, f[7] / 10 / f[8] * 100)) or nil
+        P.alive, P.onAirfield, P.fresh = fl % 4 >= 2, fl % 8 >= 4, fl % 2 == 1 and f[10] < 1000
+    else
+        P.at, P.fresh = nil, false
+    end
     if not D then return end
     if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
     local unit = PEER_UNITS[slot]
@@ -629,6 +645,61 @@ local function peerTick(slot)
     end
 end
 
+---------------------------------------------------------------------------------------------------- the players, for other parts
+-- COOP.players(): every player this game knows the whereabouts of, for the behaviour director (it picks a player slot
+-- to aim a tactic at; tools/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }.
+-- The local player comes first (your pawn: its position read once a tick, shared with ACE.movesTick through COOP.me();
+-- health from HIT.h, its full health read every 5 s), then each other player from what peerTick already keeps of
+-- SV_CoopPeerAt every tick (no native call more): obj / addr their stand-in here, fresh when their game's state is under
+-- a second old. Solo, or co-op closed: only you (slot 0).
+local meCache = {}
+local function localPlayer()
+    -- (once a tick: the run's clock D.now is set first thing in each tick, by roundsTick; no clock, no keeping)
+    local now = D and D.now
+    if now ~= nil and meCache.D == D and meCache.now == now then return meCache.e end
+    meCache.D, meCache.now = D, now
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then meCache.e = nil; return nil end
+    local e = { slot = COOP.slot or 0, obj = pawn, addr = addrOf(pawn), fresh = true, isMe = true }
+    pcall(function() local v = pawn:K2_GetActorLocation(); e.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+    if meCache.maxAddr ~= e.addr or os.clock() >= (meCache.maxAt or 0) then
+        local okM, mh = pcall(function() return pawn.MaxHealth end)
+        meCache.max, meCache.maxAddr, meCache.maxAt = (okM and type(mh) == "number" and mh > 0) and mh or nil, e.addr, os.clock() + 5
+    end
+    local h = HIT and HIT.h
+    if type(h) ~= "number" then local okH, v = pcall(function() return pawn.HealthInternal end); h = okH and type(v) == "number" and v or nil end
+    e.hpPct = (h and meCache.max) and math.max(0, math.min(100, h / 10 / meCache.max * 100)) or nil
+    e.alive = h == nil or h > 0
+    local okA, on = pcall(playerOnAirfield, e.at)
+    e.onAirfield = okA and on == true
+    meCache.e = e
+    return e
+end
+function COOP.me() return localPlayer() end
+function COOP.players()
+    local out = {}
+    local e = localPlayer()
+    if e then out[1] = e end
+    if not COOP.open then return out end
+    for s = 0, MAX_SLOT do
+        local P = M.peers[s]
+        if s ~= COOP.slot and P and P.at then
+            out[#out + 1] = { slot = s, obj = P.obj, addr = P.addr, at = P.at, hpPct = P.hpPct, alive = P.alive,
+                              onAirfield = P.onAirfield, fresh = P.fresh }
+        end
+    end
+    return out
+end
+-- The player slot whose plane is at addr here (your pawn, or another player's stand-in), or nil: kills and damage by
+-- player on the host (hostHit's causer is the joiner's stand-in)
+function COOP.slotOfAddr(addr)
+    if not addr then return nil end
+    local e = localPlayer()
+    if e and e.addr == addr then return e.slot end
+    for s, P in pairs(M.peers) do if P.addr and P.addr == addr then return s end end
+    return nil
+end
+
 ---------------------------------------------------------------------------------------------------- messages
 local function sendHi()
     local row = myAirframe()
@@ -648,7 +719,8 @@ end
 -- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard) and
 -- the host's difficulty preset is used for everyone (presetName).
 do
-local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true }
+local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
+                   stats = true }
 -- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
 -- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
 local function structural(path)
@@ -1064,14 +1136,14 @@ addCredits = function(n, why)
     if COOP.host() and M.mirror > 0 and type(why) == "string" and not why:find(" down %(") and n > 0 then send(true, "cr", n, why) end
 end
 local rawLogPlane = logPlane
-logPlane = function(o, unit)
+logPlane = function(o, unit, k)
     local slot = unit and SLOT_OF[unit]
     if slot then
         local ok, err = pcall(COOP.peerPlane, o, slot)
         if not ok then log("coop: player plane error " .. tostring(err)) end
         return
     end
-    rawLogPlane(o, unit)
+    rawLogPlane(o, unit, k)
     if COOP.open and unit and valid(o) and inSurvival(o) then
         local ok, err = pcall(COOP.host() and hostPlane or clientPlane, o, unit)
         if not ok then log("coop: plane error " .. tostring(err)) end

@@ -181,10 +181,10 @@ local function at(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
 end
-local function owner(o)                                    -- who fired it (its owner, else its instigator), or nil
+local function owner(o)                                    -- who fired it (its owner, else its instigator) and that actor, or nil
     for _, f in ipairs({ function() return o:GetOwner() end, function() return o.Instigator end }) do
         local ok, w = pcall(f)
-        if ok and valid(w) then return short(w) end
+        if ok and valid(w) then return short(w), w end
     end
     return nil
 end
@@ -277,7 +277,11 @@ function HIT.tick(pc, now)
     local keep = {}
     for _, m in ipairs(HIT.msl) do                         -- where each one is (kept 2 s after it's gone)
         if valid(m.obj) and now - m.born < 30 then
-            m.from = m.from or owner(m.obj)
+            if not m.from then                             -- (its shooter's address: which plane, for the measurements)
+                local nm, w = owner(m.obj)
+                m.from = nm
+                if w then m.fromAddr = addrOf(w) end
+            end
             local v = me and at(m.obj)
             if v then m.d, m.seen = km(v, me) * 1000, now end
             keep[#keep + 1] = m
@@ -294,6 +298,7 @@ function HIT.tick(pc, now)
     if last and h < last then
         if not HIT.sum then HIT.sum, HIT.n, HIT.near = 0, 0, me and around(me, now) or "?" end   -- (as it was at the first)
         HIT.sum, HIT.n = HIT.sum + (last - h), HIT.n + 1
+        pcall(STATS.hit, now, (last - h) / 10, pawn)     -- (each drop by its source: the measurements, sv_stats.lua)
     end
     if HIT.sum and now - (HIT.logged or -1e9) >= 1 then
         local okM, maxHp = pcall(function() return pawn.MaxHealth end)

@@ -147,9 +147,9 @@ local function spawnBomber(unit)
     local yaw = raid and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
     local band = heavy and b.altitude_m or b.strike_altitude_m
     local alt = band[1] + math.random() * (band[2] - band[1])
-    spawningUnit = unit
+    spawningUnit, spawningIdx = unit, 0                    -- (each plane's index in the flight: sv_core.lua p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
-    spawningUnit = nil
+    spawningUnit, spawningIdx = nil, nil
     log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
         unit, ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
@@ -254,9 +254,12 @@ function spawnFlight(unit, maxLevel)
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
-    spawningUnit = unit
+    -- a lead on its own row (the ace's, the jammer's): its airframe, for the spawn index's check (sv_core.lua leadCheck)
+    D.leadRow = D.leadRow or {}
+    D.leadRow[unit] = (ace and ace.lead and { row = ace.lead, code = ace.key }) or (jam and { row = jam, code = "e18g" }) or nil
+    spawningUnit, spawningIdx = unit, 0                                       -- (each plane's index in the flight: p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
-    spawningUnit = nil
+    spawningUnit, spawningIdx = nil, nil
     log(string.format("round %d: %s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
         jam and (", led by the jammer " .. jam) or "", dist, bearing, alt / 1000,

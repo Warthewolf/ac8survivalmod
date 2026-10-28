@@ -93,17 +93,23 @@ local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 local AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
                    "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
                    "Group", "Patrol", "UniqueAction", "CloudAvoidance", "Idle" }
+-- The state is read for the measurements too (CFG.stats: STATS.aiState times Provoke episodes, sv_stats.lua) with the log
+-- off; it's kept as p.aiState for later parts. The target (a name lookup) only for the log line.
 function aiWatch(p, you)
-    if not CFG.ai_watch then return end
+    local measure = CFG.stats and CFG.stats.enabled
+    if not (CFG.ai_watch or measure) then return end
     local st, tgt = "?", "?"
     pcall(function()
         local bb = p.obj.AIStateComponent.BlackboardComponent
         local okS, v = pcall(function() return bb:GetValueAsEnum(FName("AIState")) end)
         if okS and type(v) == "number" then st = AI_STATE[v] or tostring(v) end
+        if not CFG.ai_watch then return end
         local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
         if okT then tgt = valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none" end
     end)
-    if st .. "|" .. tgt == p.aiKey then return end
+    if st ~= "?" then p.aiState = st end
+    if measure then pcall(STATS.aiState, p, st, D and D.now) end
+    if not CFG.ai_watch or st .. "|" .. tgt == p.aiKey then return end
     p.aiKey = st .. "|" .. tgt
     local air = p.at and math.sqrt((p.at.X - AIRFIELD.X) ^ 2 + (p.at.Y - AIRFIELD.Y) ^ 2) / 100000
     log(string.format("ai: %s (%s) %s, target %s; %s km from you, %s km from the airfield", p.name, tostring(p.unit or "?"),
@@ -146,7 +152,11 @@ end
 local function vec(v) return { X = v.X, Y = v.Y, Z = v.Z } end
 -- CFG.aces.flight <tier>.moves: the reversals (RE_SV_AceTurn_NN / RE_SV_AceKulbit_NN on the plane's pool flight)
 function ACE.movesTick(now, D)
-    if not (D and D.round and type(SV_Event) == "function") then return end
+    -- (not on a co-op joiner: its enemies are copies of the host's, moved every frame, whose reversals the host makes
+    -- and the plane stream shows; fired here they'd only put a copy in UniqueAction, and the kulbit fires its special.
+    -- Nor before the round clock runs: now nil)
+    if COOP and COOP.client and COOP.client() then return end
+    if not (now and D and D.round and type(SV_Event) == "function") then return end
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     local me
@@ -156,7 +166,10 @@ function ACE.movesTick(now, D)
         if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) then
             local pn, pk = p.unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
             if pn then
-                me = me or vec(pawn:K2_GetActorLocation())
+                if not me then                      -- (your position as read once this tick: sv_coop.lua COOP.me)
+                    local L = COOP and COOP.me and COOP.me()
+                    me = (L and L.at) or vec(pawn:K2_GetActorLocation())
+                end
                 local at, fwd = vec(p.obj:K2_GetActorLocation()), vec(p.obj:GetActorForwardVector())
                 local toMe = { X = me.X - at.X, Y = me.Y - at.Y, Z = me.Z - at.Z }
                 local range = km(at, me) * 1000
@@ -167,6 +180,7 @@ function ACE.movesTick(now, D)
                     local r = SV_Event(ev)
                     D.aceMoveAt[p.unit] = now + (kulbit and 12 or 20)
                     D.aceMoves = (D.aceMoves or 0) + 1
+                    pcall(STATS.tactic, "reversal", p.unit, nil, string.format("%.0f m, %.0f deg", range, offTail))
                     if D.aceMoves <= 5 or D.aceMoves % 20 == 0 then
                         log(string.format("aces: %s has you %.0f m behind it, %.0f deg off its tail: %s (%s), %d so far", p.name,
                             range, offTail, ev, tostring(r), D.aceMoves))
@@ -179,31 +193,18 @@ end
 
 end
 
-function probeKill(p, you)
+-- g: its KILL.geom (worked out here when not given)
+function probeKill(p, you, g)
     if not (CFG.probe.enabled and CFG.probe.kills) then return end
-    local aspect, dz = "?", "?"
-    if p.at and you and p.fwd then
-        local tx, ty, tz = you.X - p.at.X, you.Y - p.at.Y, you.Z - p.at.Z
-        local len = math.sqrt(tx * tx + ty * ty + tz * tz)
-        if len > 0 then
-            local c = (p.fwd.X * tx + p.fwd.Y * ty + p.fwd.Z * tz) / len      -- 1: you were ahead of it, -1: on its tail
-            aspect = string.format("%.0f deg off its nose", math.deg(math.acos(math.max(-1, math.min(1, c)))))
-        end
-        dz = string.format("%+.1f km", (you.Z - p.at.Z) / 100000)
-    end
-    local used = {}                                                           -- ammo spent in the last ~6 s
-    local h = PR.ammo
+    g = g or KILL.geom(p, you)
+    local used = {}
     for k = 0, 4 do
-        local spent = 0
-        for i = 2, #h do
-            local a, b = h[i - 1][k], h[i][k]
-            if a and b and a >= 0 and b >= 0 and b < a then spent = spent + (a - b) end
-        end
-        if spent > 0 then used[#used + 1] = AMMO_SHORT[k] .. " x" .. spent end
+        local n = g.used[AMMO_SHORT[k]] or 0
+        if n > 0 then used[#used + 1] = AMMO_SHORT[k] .. " x" .. n end
     end
     log(string.format("kill: %s; you were %s away, %s, altitude %s; you fired %s in the last 6 s",
-        p.name, p.at and you and string.format("%.1f km", km(p.at, you)) or "?",
-        aspect, dz, #used > 0 and table.concat(used, ", ") or "nothing seen"))
+        p.name, g.km and string.format("%.1f km", g.km) or "?", g.offNose and string.format("%.0f deg off its nose", g.offNose) or "?",
+        g.dz and string.format("%+.1f km", g.dz) or "?", #used > 0 and table.concat(used, ", ") or "nothing seen"))
 end
 
 ---------------------------------------------------------------------------------------------------- who shot it down
@@ -214,6 +215,36 @@ end
 -- BP_GR005_avng_*) "defences". A kill is yours when you hit it at all (or nothing could be read); else the side that
 -- did it the most damage.
 KILL = {}
+-- A plane's kill at one moment (the kill log's and the measurements', sv_stats.lua STATS.down): offNose, the angle off
+-- its nose of the line to you (0 you were ahead of it, 180 on its tail); km, the range; dz, your height over it (km);
+-- used, your shots of each kind in the last ~6 s (PR.ammo, a row every 0.5 s: shots at anything); wpn, the weapon kind
+-- (gun, msl, sp1, sp2) whose count dropped last. Your position is the one from its own last sample (p.youAt, the
+-- plane's 2 s sweep visit), so the aspect isn't mixed from two reads up to 2 s apart; else `you`.
+function KILL.geom(p, you)
+    you = p.youAt or you
+    local g = { used = {} }
+    if p.at and you then
+        local tx, ty, tz = you.X - p.at.X, you.Y - p.at.Y, you.Z - p.at.Z
+        local len = math.sqrt(tx * tx + ty * ty + tz * tz)
+        g.km, g.dz = len / 100000, tz / 100000
+        if p.fwd and len > 0 then
+            local c = (p.fwd.X * tx + p.fwd.Y * ty + p.fwd.Z * tz) / len      -- 1: you were ahead of it, -1: on its tail
+            g.offNose = math.deg(math.acos(math.max(-1, math.min(1, c))))
+        end
+    end
+    local h, lastAt = PR.ammo, nil
+    for k = 0, 4 do
+        local spent, at = 0, nil
+        for i = 2, #h do
+            local a, b = h[i - 1][k], h[i][k]
+            if a and b and a >= 0 and b >= 0 and b < a then spent, at = spent + (a - b), i end
+        end
+        g.used[AMMO_SHORT[k]] = spent
+        if at and k <= 3 and (not lastAt or at >= lastAt) then g.wpn, lastAt = AMMO_SHORT[k], at end
+    end
+    return g
+end
+
 function KILL.side(o, pawnAddr)
     local a = addrOf(o)
     if a and a == pawnAddr then return "you" end

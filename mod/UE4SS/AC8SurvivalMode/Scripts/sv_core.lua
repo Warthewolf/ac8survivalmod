@@ -439,8 +439,16 @@ function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~= nil 
 -- Callbacks only record: all logging runs in the one game-thread tick below. A plane made during an SV_Spawn call is
 -- tagged with the flight being spawned (spawningUnit, set around the call): GetUnitName() reads back empty (test of
 -- 2026-10-22), and the world data's object names don't follow their flights' names.
-spawningUnit = nil
-pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o) pending[#pending + 1] = { obj = o, age = 0, unit = spawningUnit } end)
+-- spawningIdx (0 before a pool or bomber flight's SV_Spawn, nil otherwise): each plane's index in its flight, p.k, in the
+-- order the spawner makes them, 0 the lead (desc 0: SV_SetAircraft(unit, row, 0) puts an ace or the jammer there).
+-- The squad director's per-plane events go by it (tools/re/BEHAVIOUR_DIRECTOR.md, unit 1); creation order = desc order
+-- is [I] until a test's "spawn index:" line shows the lead's own airframe at k 0.
+spawningUnit, spawningIdx = nil, nil
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o)
+    local k = spawningIdx
+    if k then spawningIdx = k + 1 end
+    pending[#pending + 1] = { obj = o, age = 0, unit = spawningUnit, k = k }
+end)
 
 -- Comona Defense's shuttle (special rounds): its actor, for its health on the HUD. It may come as a LiveAIPlane
 -- (OP0057_sstb); it's then kept out of `planes`, so it never counts, tiers or pays as an enemy.
@@ -460,7 +468,25 @@ LB = { queue = {}, jobs = {}, show = nil }
 ANOMALY_CAMERAS = { "LookAt_Event_Camera", "LookAt_Event_Camera_ms08-01", "LookAt_Event_Camera_ms04-01",
                           "LookAt_Event_Camera_ms23-01", "LookAt_Event_Camera_ms22-01" }
 
-function logPlane(o, unit)
+-- The spawn index's check: a flight whose lead got its own row (an ace's, the jammer's; sv_spawn.lua D.leadRow) says,
+-- once its k 0 and k 1 are both in, which airframe each flies. The lead's at k 0 if the spawner makes desc 0 first.
+local LEAD_CODE = { typhoon = "typn", rafale = "rflm", adfx02 = "adfx" }   -- (an ace key's blueprint code, where it differs)
+local function leadCheck(rec)
+    local L = D and D.leadRow and D.leadRow[rec.unit]
+    if not L or L.said then return end
+    L.codes = L.codes or {}
+    L.codes[rec.k] = rec.name:match("^BP_OP%d+_(%w+)_") or rec.name
+    if not (L.codes[0] and L.codes[1]) then return end
+    L.said = true
+    local want = LEAD_CODE[L.code] or L.code
+    local verdict = (L.codes[0] == want and L.codes[1] ~= want and "k 0 is the lead: creation order = desc order")
+        or (L.codes[1] == want and L.codes[0] ~= want and "k 0 is NOT the lead: creation order isn't desc order")
+        or "can't tell from these two"
+    log(string.format("spawn index: %s, lead row %s (%s): k 0 is a %s, k 1 a %s; %s", rec.unit, tostring(L.row), tostring(want),
+        L.codes[0], L.codes[1], verdict))
+end
+
+function logPlane(o, unit, k)
     if not valid(o) or not inSurvival(o) then return end
     local n = nameOf(o)
     local short = n:match("([^%.:]+)$") or n
@@ -476,7 +502,8 @@ function logPlane(o, unit)
     end
     if n:find("Wingman", 1, true) then log("planes: wingman " .. short .. " (not an enemy)"); return end
     if unit and SPC.alicornPooled and SPC.alicornPooled(o, short, unit) then return end   -- (the Alicorn's parked pools)
-    local rec = { obj = o, name = short, unit = unit }
+    -- (k: its index in the flight; born: the round clock when it's first logged, for the measurements' kill times)
+    local rec = { obj = o, name = short, unit = unit, k = k, born = D and D.now or nil }
     planes[#planes + 1] = rec
     local where = ""
     pcall(function()
@@ -485,7 +512,8 @@ function logPlane(o, unit)
         where = string.format(" at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield",
             l.X / 100000, l.Y / 100000, l.Z / 100000, math.sqrt(dx * dx + dy * dy) / 100000)
     end)
-    log("round probe: AI aircraft created #" .. #planes .. ": " .. short .. (unit and (" (" .. unit .. ")") or "") .. where)
+    log("round probe: AI aircraft created #" .. #planes .. ": " .. short .. (unit and (" (" .. unit .. (k and (", k " .. k) or "") .. ")") or "") .. where)
+    if k and unit then pcall(leadCheck, rec) end
 end
 
 -- Survival's int flags (SV_*), read from the event containers' FlagData.IntegerFiled. The per-flight SV_Up_NN flags
