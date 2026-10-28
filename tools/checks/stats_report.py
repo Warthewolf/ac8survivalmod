@@ -4,7 +4,9 @@
 "kill-time:" lines' time to kill over every run, and the "death:", "director:" and "spawn index:" lines; P5's tail
 watch (unit 2): the run line's Veteran+ figures, the "tailed:" episodes by tier and by the provoke values they flew (an
 A/B of the live provoke), and the "provoke:" writes; P4's intensity director (unit 7): its "intensity:" round lines and
-how often it held a wave, pushed a comfortable player and eased the spikes' level. Works on a friend's release log as
+how often it held a wave, pushed a comfortable player and eased the spikes' level; P6's learning layer (unit 8): its
+"learning:" lines, your habits each round with what they turned on, each run's habits and the saved profile. Works on a
+friend's release log as
 well (none of these lines is TEST ONLY) and on UE4SS.log (the same lines behind its tag).
 Exit 1 when a file has no measurement lines at all.
 """
@@ -23,7 +25,7 @@ TARGETS = {
     'behind': ('under 70 %', lambda v: 'ok' if v < 70 else 'HIGH'),
 }
 KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:', 'tailed:', 'provoke:',
-         'intensity:')
+         'intensity:', 'learning:')
 
 
 def secs(text):
@@ -200,6 +202,32 @@ def intensity_lines(ls):
                   f'{m.group(8) or "-":>6} {m.group(9) or "-":>6} {lv}')
 
 
+LEARN_HABIT = re.compile(r'(missile|gun|tail|high|airfield) ([\d.]+|-)(?: \(over [\d.]+, strength ([\d.]+)\))?')
+LEARN_ROUND = re.compile(r'learning: round (\d+): habits (.*?) \(this run (\d+) of your kills, (\d+) s flown; the profile ([^)]*)\) -> (.*)$')
+
+
+def learning_lines(ls):
+    """P6's learning layer: a row per round (each habit's share, * where it was countered, and what was turned on), each
+    run's end (learnt from or only counted) and the profile as read"""
+    lr = [l for l in ls if l.startswith('learning:')]
+    if not lr:
+        return
+    rounds = [m for m in (LEARN_ROUND.match(l) for l in lr) if m]
+    runs = [l for l in lr if l.startswith('learning: run over')]
+    learnt = sum(1 for l in runs if '; learnt from;' in l)
+    print(f'\nlearning lines: {len(lr)}: rounds countered {sum(1 for m in rounds if m.group(6) != "nothing to counter")} '
+          f'of {len(rounds)}, runs over {len(runs)} (learnt from {learnt})')
+    if rounds:
+        print(f'  {"round":>5} {"missile":>8} {"gun":>6} {"tail":>6} {"high":>6} {"airfield":>8} {"kills":>5} {"flown":>6}  counters')
+        for m in rounds:
+            h = {k: (v + ('*' if st else '')) for k, v, st in LEARN_HABIT.findall(m.group(2))}
+            print(f'  {m.group(1):>5} {h.get("missile", "?"):>8} {h.get("gun", "?"):>6} {h.get("tail", "?"):>6} '
+                  f'{h.get("high", "?"):>6} {h.get("airfield", "?"):>8} {m.group(3):>5} {m.group(4) + " s":>6}  {m.group(6)[:110]}')
+    for l in lr:
+        if l.startswith('learning: run over') or l.startswith('learning: profile at') or l.startswith("learning: the AI's flares"):
+            print('  ' + l[:220])
+
+
 def report(path):
     ls = lines_of(path)
     print(f'stats_report: {path}: {len(ls)} measurement lines')
@@ -247,6 +275,7 @@ def report(path):
         print(f'\ndirector lines: {len(dirs)}: ' + ', '.join(f'{k} x{v}' for k, v in sorted(count.items())))
     tailed_lines(ls)
     intensity_lines(ls)
+    learning_lines(ls)
     idx = [l for l in ls if l.startswith('spawn index:')]
     if idx:
         print(f'\nspawn index lines (creation order = desc order is confirmed by "k 0 is the lead"): {len(idx)}')

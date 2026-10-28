@@ -23,7 +23,7 @@ rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
-      "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv
+      "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv "$mod"/config/survival_profile.ini*
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
 suffix=
 if [ "$NOVALKA" = 1 ]; then

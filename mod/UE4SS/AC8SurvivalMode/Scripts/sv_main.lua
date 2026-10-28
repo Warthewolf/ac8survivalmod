@@ -285,6 +285,8 @@ local function probeTick(tick)
                 stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
                           by_allies = 0, by_defences = 0, specials = {} } }
         pcall(TAC.reset)                                -- (the gun's class default back to stock, the ECM / decoy off)
+        local okPf, errPf = pcall(PROF.levelLoad)       -- (the learning layer's saved profile read again: P6, sv_stats.lua)
+        if not okPf then PROF.saved = nil; log("learning: level load error " .. tostring(errPf)) end
         ALLY.run, KILL.fired = nil, {}             -- (a new level: no allies up, nothing fired at)
         if type(SV_MusicPlayer) == "function" then
             local old = SV_MusicPlayer(CFG.music.pause_player and 1 or 0)
@@ -302,6 +304,10 @@ local function probeTick(tick)
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
         if not okG then log("game Lua: error " .. tostring(errG)) end
+        if not PROF.menuDone then                        -- (the learning layer's saved profile, once a session: P6; the AI's
+            local okPf, errPf = pcall(PROF.menu)         -- flare row below, searchSetup, comes from it)
+            if not okPf then PROF.menuDone = true; log("learning: profile error " .. tostring(errPf)) end
+        end
         local okB, errB = pcall(setsSetup)
         if not okB then log("behaviour: setup error " .. tostring(errB)); BS.done = true end
         local okS, errS = pcall(searchSetup)

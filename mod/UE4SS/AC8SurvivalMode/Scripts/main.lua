@@ -24,7 +24,7 @@ local MODULES = {
     "sv_shop",
     "sv_allies",
     "sv_tactical",
-    "sv_stats",                    -- the behaviour roadmap's measurements (tools/re/BEHAVIOUR_DIRECTOR.md)
+    "sv_stats",                    -- the behaviour roadmap's measurements and P6's learning layer (BEHAVIOUR_DIRECTOR.md)
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps hudCallout / SV_Event as they were unwrapped)
     "sv_director",                 -- P2's squad director (calls hudCallout / SV_Event by name at run time: sv_coop wraps them)
     "sv_menu",

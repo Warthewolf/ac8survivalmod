@@ -305,6 +305,10 @@ function spawnFlight(unit, maxLevel)
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
     if role == "lancer" then                          -- (the Lancers come from above: CFG.roles.lancer, within their band)
         alt = math.min(alt + (tonumber(CFG.roles.lancer and CFG.roles.lancer.alt_add_m) or 0), ROLE.LANCER_TOP_M - 500)
+        -- (above your usual height against a player who stays high: P6's learning layer, sv_stats.lua PROF.lancerAlt)
+        local okHi, hi = true, nil
+        if PROF and PROF.lancerAlt then okHi, hi = pcall(PROF.lancerAlt) end
+        if okHi and type(hi) == "number" and hi > alt then alt = math.min(hi, ROLE.LANCER_TOP_M - 500) end
     end
     -- a lead on its own row (the ace's, the jammer's): its airframe, for the spawn index's check (sv_core.lua leadCheck)
     D.leadRow = D.leadRow or {}
@@ -450,6 +454,17 @@ end
 -- (shuffled, so each wave asks different questions) and their aircraft, as pick does.
 function ROLE.pickRound(nWant, pick, ace)
     local w, band = ROLE.mixFor(D.round, ace)
+    -- (not an ace round's: the learning layer's role weights, P6: your habits, sv_stats.lua PROF.roleW; a role the band
+    -- has no share for stays out)
+    local hw, habits = nil, false
+    if not ace and PROF and PROF.roleW then
+        local okW, x = pcall(PROF.roleW)
+        if okW and type(x) == "table" then hw = x end
+    end
+    for _, r in ipairs(ROLE.LIST) do
+        local x = hw and tonumber(hw[r]) or 1
+        if x ~= 1 and (w[r] or 0) > 0 then w[r], habits = w[r] * x, true end
+    end
     local groups = ROLE.groups()
     for _, r in ipairs(ROLE.LIST) do if #groups[r] == 0 then w[r] = 0 end end
     local q = ROLE.quotas(nWant, w)
@@ -488,9 +503,9 @@ function ROLE.pickRound(nWant, pick, ace)
     for _, r in ipairs(ROLE.LIST) do parts[#parts + 1] = string.format("%s %d", r, by[r] or 0) end
     local wt = {}
     for _, r in ipairs(ROLE.LIST) do wt[#wt + 1] = string.format("%s %.2f", r, w[r] or 0) end
-    log(string.format("roles: round %d (%s: %s): %d of %d aircraft: %s%s%s", D.round,
+    log(string.format("roles: round %d (%s%s: %s): %d of %d aircraft: %s%s%s", D.round,
         band == "ace" and "an ace round's mix" or band and ("the mix from round " .. band) or "no mix band: duelists",
-        table.concat(wt, ", "), got, nWant, table.concat(parts, ", "),
+        habits and ", weighed by your habits" or "", table.concat(wt, ", "), got, nWant, table.concat(parts, ", "),
         #short > 0 and ("; short: " .. table.concat(short, ", ")) or "", fill))
     return shuffled(out), got
 end

@@ -357,6 +357,17 @@ function searchSetup()
         end, string.format("the Skirmishers' LAAM: lock within %.0f m / %.0f deg, never inside %.0f m, lock %.1f s, %.1f s between, rest %.1f s",
             s.laam_m, s.laam_angle_deg, s.laam_min_m, s.laam_lock_s, s.laam_interval_s, s.laam_rest_s), "_skirm")
     end
+    -- The AI's flares (CFG.flares; P6's missile counter, the critic's lever): the saved profile had you missile-heavy at
+    -- the main menu (sv_stats.lua PROF.menu, before this; PROF.flareWant): every fighter's flare slot (stock
+    -- NPC_FCS_PlaneFlr000: 10 in the magazine, 25 s to reload) onto a copy that holds more and reloads sooner (row
+    -- NPC_FCS_PlaneFlr000_SV_FLR, one for every level); the specials' own keep theirs. nil: the stock row
+    local flr = PROF and PROF.flareWant
+    local function aiFlares(src)
+        if type(flr) ~= "table" then return nil end
+        return copy(fcs, src, function(r) r.MagazineCapacity, r.ReloadTime = flr.magazine, flr.reload_s end,
+            string.format("the AI's flares, against your missiles: %d in the magazine, %.1f s to reload", flr.magazine,
+            flr.reload_s), "_flr")
+    end
     -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
     local function glitchGun(src)
         local GL = CFG.specials.glitch
@@ -522,6 +533,8 @@ function searchSetup()
                                         or (acRole == "wolf" and wolfGun(id, level)) or svGun(id, level)
                                 elseif glitch and id:find("ECM", 1, true) then
                                     new = anomEcm(id)                                -- its pod always up
+                                elseif flr and id:find("^NPC_FCS_PlaneFlr") and not (mind or glitch or valka) then
+                                    new = aiFlares(id)                               -- (P6: your missile habit)
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
                                 if new then r["NpcFCSId" .. i] = FName(new) end
                             end)
