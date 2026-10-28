@@ -232,15 +232,27 @@ Copy a working stock pattern before inventing a new one.
     Its slot 315 fires OnReposition, which resets a player plane's look: move it with AActor::TeleportTo + the flight
     reset only. Confirmed solo 2026-10-25 (runtimes 0.22.2-0.22.7); not yet the co-op stand-in.
 
-## Survival's menu pages (Lua 0.71.0, runtime 0.27.0, 2026-10-27; untested in game)
+52. The main menu opens a row's page (its MenuID) through ELiveMenuMainIDs, the game's FIXED enum of its pages
+    (GameTitle ... CampaignTraining, MAX): a page of a new name never opens, whatever the page list holds (25 presses,
+    nothing). New pages borrow a stock id instead: main.dll points that id's MenuWidgetClassList entry (manager+0x118,
+    { FString, UClass* } 0x18 each) at the page's class just before the press goes on (SV_MenuClass / SV_MenuSlot).
+    The game ignores a request for the page shown, and goes BACK to a page already open under it rather than open it
+    again: consecutive pages need different ids (Survival: CampaignTraining, InitialSetting_DualSence,
+    InitialSetting_Accessibility), and a BACK row naming the page under it is a working way back. Copies of the main
+    menu's top page have no cancel. Confirmed by the tests of 2026-10-29 (runtimes 0.27.0-0.28.3).
+
+## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
-each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES. The pages are copies of
-the game's main-menu page (tools/build_survival.py MENU_PAGES; tools/menu_stock.py finds the stock), so their presses
-reach OnMainDecide; Scripts/sv_menu.lua puts them in the game's main-menu page list and keeps one run setup per mode
-(CFG.setup, survival.ini [setup.*]) that the rounds, store and leaderboard read through SETUP.*. Without the pages the
-main menu has the flat rows. tools/re/MENU_PAGES.md has the design, the log lines and the test checklist. None of it is
-a hard rule until a test confirms it. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh), the build's:
-tools/checks/menu_pages_test.py (build_all.sh runs it).
+each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
+page. The pages are copies of the game's main-menu page (tools/build_survival.py MENU_PAGES; tools/menu_stock.py finds the
+stock), so their presses reach OnMainDecide; they open through borrowed stock page ids (hard rule 52; the user gave
+CAMPAIGN TRAINING over completely, 2026-10-29, and its row stays hidden; the two first-start pages get their own class
+back when any other main-menu entry is picked). Scripts/sv_menu.lua keeps one run setup per mode (CFG.setup,
+survival.ini [setup.*]) that the rounds, store and leaderboard read through SETUP.*. Without the pages ([menu] pages =
+false) the main menu has the flat rows. Confirmed 2026-10-29: the pages open, settings step in place and save, BACK
+works all the way out. Not yet: B / Esc on the pages (no cancel), a whole run started from a setup page with its rules.
+tools/re/MENU_PAGES.md has the design and log lines. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh),
+the build's: tools/checks/menu_pages_test.py (build_all.sh runs it).
 
 ## Economy review build (Lua 0.70.x, runtime 0.19.0, 2026-10-25; untested in game)
 The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
