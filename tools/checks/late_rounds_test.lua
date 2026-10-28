@@ -504,7 +504,8 @@ local function body(name, from)
     return src:sub(a, b)
 end
 local sr = body("sv_rounds.lua", "\nlocal function startRound%(%)")
-check(has(sr, "TIER.roundBudget(D.round)") and has(sr, "waveCap(D.round)") and has(sr, "pcall(roundPressure, special)")
+-- (the spike level the intensity director's, levelFor: unit 7, P4)
+check(has(sr, "TIER.roundBudget(D.round, levelFor(D.round))") and has(sr, "waveCap(D.round)") and has(sr, "pcall(roundPressure, special)")
       and has(sr, 'COOP.more(budget, "max_aircraft", TIER.coopCap(D.round))') and has(sr, 'COOP.more(cap, "max_up")'),
       "startRound: the helpers, co-op (the room's cap by round) and the throttle")
 check(has(body("sv_rounds.lua", "\nfunction roundsTick%(now%)"), "pressureAfterBoss(now)"), "roundsTick: pressureAfterBoss every tick")

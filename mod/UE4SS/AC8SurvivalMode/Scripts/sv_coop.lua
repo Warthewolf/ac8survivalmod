@@ -15,7 +15,7 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev, tl, dv (host), hi, jn, ht (joiner). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+-- ev, tl, dv (host), hi, jn, ht, in (joiner; in unreliable). SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
 do
@@ -141,6 +141,25 @@ function COOP.dispatch(slot, ev, unit, delay)
     local d = tonumber(delay) or 0
     if not finite(d, 1e6) then d = 0 end
     return sendTo(slot, true, "dv", ev, short(unit, 96), string.format("%.2f", math.max(0, math.min(DV_MAX_S, d))))
+end
+-- The intensity director's scores (sv_director.lua, P4): a joiner sends its player's to the host once a second ("in",
+-- unreliable: intensity and comfort 0-100, health %, missiles homing on it), clamped here and there; the host keeps each
+-- player's last (IN_FRESH_S old at most) for the room's decisions. Nothing but those four numbers crosses.
+local IN_FRESH_S, IN_MIN_GAP_S, IN_MSL_MAX = 3, 0.25, 20
+local function inNum(v, hi)
+    v = tonumber(v)
+    if not (v and finite(v, 1e9)) then return nil end
+    return math.max(0, math.min(hi, v))
+end
+function COOP.sendIntensity(i, c, hp, m)
+    if not COOP.client() then return false end
+    local function f(v, hi) local x = inNum(v, hi); return x and string.format("%.1f", x) or "" end
+    return send(false, "in", f(i, 100), f(c, 100), f(hp, 100), f(m, IN_MSL_MAX))
+end
+function COOP.intensityOf(slot)
+    local x = M.ints and M.ints[slot]
+    if not x or os.clock() - x.at > IN_FRESH_S then return nil end
+    return x
 end
 -- The host's split-hunt flight (it went after the joiners' planes, RE_SV_Hunt_NN, this spawn): the director gives it its
 -- hunt back after a hold
@@ -397,7 +416,12 @@ local function hostTick()
         local alive = 0
         for _, p in ipairs(planes or {}) do if not p.down then alive = alive + 1 end end
         local secs = (D.state == "wait" and D.at and D.now) and math.max(0, D.at - D.now) or 0
-        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive)
+        local lv = ""                                      -- (the intensity director's spike level: the copies fly it, P4)
+        if DIR and DIR.level and D.round then
+            local okL, l = pcall(DIR.level, D.round)
+            if okL and type(l) == "number" then lv = l end
+        end
+        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv)
     end
     if AF and now >= M.nextAf then
         local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down)
@@ -610,6 +634,7 @@ local function clientRounds(now)
         D.state = r.state
         if r.state == "wait" then D.at = now + r.secs - (os.clock() - r.got) else D.at = now end
         D.wave = r.wave > 0 and r.wave or nil
+        D.intLevel = r.level and { round = r.round, level = r.level } or nil   -- (the copies fly it: DIR.level, P4)
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
     end
@@ -1030,6 +1055,14 @@ local function onHostMessage(from, f)
         hostRosterSelf()
     elseif k == "jn" then hostSync(from)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
+    elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
+        local i, c = inNum(f[2], 100), inNum(f[3], 100)
+        local now = os.clock()
+        M.ints = M.ints or {}
+        local last = M.ints[from]
+        if slotOk(from) and from ~= COOP.slot and i and c and not (last and now - last.at < IN_MIN_GAP_S) then
+            M.ints[from] = { i = i, c = c, hp = inNum(f[4], 100), m = inNum(f[5], IN_MSL_MAX), at = now }
+        end
     end
 end
 
@@ -1037,8 +1070,10 @@ local function onJoinerMessage(f)
     local k = f[1]
     if k == "cf" then M.onSettings(f)
     elseif k == "rnd" then
+        local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
+        if not (lv and lv == math.floor(lv) and lv >= 0 and lv <= #SPIKE_SUFFIX) then lv = nil end
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
-                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, got = os.clock() }
+                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, got = os.clock() }
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end

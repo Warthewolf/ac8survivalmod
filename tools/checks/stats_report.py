@@ -3,8 +3,9 @@
 "stats: run over" line as a table against the behaviour thesis' targets, one row per "stats: round" line, the
 "kill-time:" lines' time to kill over every run, and the "death:", "director:" and "spawn index:" lines; P5's tail
 watch (unit 2): the run line's Veteran+ figures, the "tailed:" episodes by tier and by the provoke values they flew (an
-A/B of the live provoke), and the "provoke:" writes. Works on a friend's release log as well (none of these lines is
-TEST ONLY) and on UE4SS.log (the same lines behind its tag).
+A/B of the live provoke), and the "provoke:" writes; P4's intensity director (unit 7): its "intensity:" round lines and
+how often it held a wave, pushed a comfortable player and eased the spikes' level. Works on a friend's release log as
+well (none of these lines is TEST ONLY) and on UE4SS.log (the same lines behind its tag).
 Exit 1 when a file has no measurement lines at all.
 """
 import re
@@ -21,7 +22,8 @@ TARGETS = {
     'tactics': ('3-6 a round', lambda v: 'LOW' if v < 3 else 'HIGH' if v > 6 else 'ok'),
     'behind': ('under 70 %', lambda v: 'ok' if v < 70 else 'HIGH'),
 }
-KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:', 'tailed:', 'provoke:')
+KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:', 'tailed:', 'provoke:',
+         'intensity:')
 
 
 def secs(text):
@@ -171,6 +173,33 @@ def tailed_lines(ls):
             print('  ' + l[:220])
 
 
+INT_ROUND = re.compile(r"intensity: round (\d+): you avg (\d+), peak (\d+), above (\d+) for (\d+) s; comfort avg (\d+)"
+                       r"(?:; held (\d+) \((\d+) s\), pushes (\d+))?; level (\d+)(?: \(the spikes' (\d+)(?:, the host's)?\))?$")
+
+
+def intensity_lines(ls):
+    """P4's intensity director: its round lines (your intensity and comfort, the host's holds and pushes, the level the
+    enemies flew) and its decisions: holds, pushes (and the ones held back), the level eased and back"""
+    ints = [l for l in ls if l.startswith('intensity:')]
+    if not ints:
+        return
+    holds = sum(1 for l in ints if re.match(r'intensity: round \d+: held \d+ s', l))
+    refused = sum(1 for l in ints if l.startswith('intensity: hold not now'))
+    pushed = sum(1 for l in ints if re.search(r' comfortable \d+ s \([^)]*\): (?!no push|nothing sent)', l))
+    nopush = sum(1 for l in ints if re.search(r' comfortable \d+ s \([^)]*\): (no push|nothing sent)', l))
+    down = sum(1 for l in ints if re.search(r': the room above \d+ for \d+ s of fighting', l))
+    up = sum(1 for l in ints if re.search(r': the room below \d+ for \d+ s of fighting', l))
+    print(f'\nintensity lines: {len(ints)}: holds {holds} (not now {refused}), pushes {pushed} (held back {nopush}), '
+          f'level eased {down}, back up {up}')
+    rows = [m for m in (INT_ROUND.match(l) for l in ints) if m]
+    if rows:
+        print(f'  {"round":>5} {"avg":>4} {"peak":>4} {"hot s":>5} {"comfort":>7} {"held":>4} {"held s":>6} {"pushes":>6} level')
+        for m in rows:
+            lv = m.group(10) + (f' (spikes {m.group(11)})' if m.group(11) else '')
+            print(f'  {m.group(1):>5} {m.group(2):>4} {m.group(3):>4} {m.group(5):>5} {m.group(6):>7} {m.group(7) or "-":>4} '
+                  f'{m.group(8) or "-":>6} {m.group(9) or "-":>6} {lv}')
+
+
 def report(path):
     ls = lines_of(path)
     print(f'stats_report: {path}: {len(ls)} measurement lines')
@@ -217,6 +246,7 @@ def report(path):
                 count[m.group(1)] = count.get(m.group(1), 0) + 1
         print(f'\ndirector lines: {len(dirs)}: ' + ', '.join(f'{k} x{v}' for k, v in sorted(count.items())))
     tailed_lines(ls)
+    intensity_lines(ls)
     idx = [l for l in ls if l.startswith('spawn index:')]
     if idx:
         print(f'\nspawn index lines (creation order = desc order is confirmed by "k 0 is the lead"): {len(idx)}')
