@@ -203,7 +203,8 @@ def intensity_lines(ls):
 
 
 LEARN_HABIT = re.compile(r'(missile|gun|tail|high|airfield) ([\d.]+|-)(?: \(over [\d.]+, strength ([\d.]+)\))?')
-LEARN_ROUND = re.compile(r'learning: round (\d+): habits (.*?) \(this run (\d+) of your kills, (\d+) s flown; the profile ([^)]*)\) -> (.*)$')
+LEARN_ROUND = re.compile(r'learning: round (\d+): habits (.*?) \(this run (\d+) of your kills(?:, \d+ of fighters)?, (\d+) s flown; '
+                         r'the profile ([^)]*)\) -> (.*)$')
 
 
 def learning_lines(ls):

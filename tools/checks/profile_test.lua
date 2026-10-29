@@ -3,20 +3,26 @@
 -- sv_rounds (startRound exposed), sv_leaderboard, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop (M exposed),
 -- the game stubbed:
 --   survival.ini's [profile] sections and [flares]; every switch on as shipped;
---   the classification: your kills (yours only: KILL.by "you") by weapon and aspect, your flying every 2 s (high over the
---     enemies near, high alone, near the airfield, on a tail from p.youAt; on the ground, between rounds and a paused
---     clock not counted; landings), the shares, the five habits, the strengths over their thresholds;
+--   the classification: your kills (yours only: KILL.by "you"; the shares from fighters only, not a bomber's, a Ladon's
+--     or a special's) by weapon and aspect, your flying every 2 s (high over the enemies near, high alone, near the
+--     airfield, on a tail from p.youAt; on the ground, between rounds and a paused clock not counted; landings; the
+--     airfield's time: not while bombers or a Ladon are up, not just after a takeoff, a landing's approach taken back),
+--     the real sweep (sv_main.lua planeSweep) with fewer than 8 planes up: STATS.sample reads where you are, the shares,
+--     the five habits, the strengths over their thresholds;
 --   the counters: this run's shares once live_kills / live_samples, a saved profile weighed against them (prior_*),
 --     D.counter (the jammer's and the strike's chance, PilotRank from Veteran, post-stall from Regular, cover and trap,
---     role weights, the Lancers' height), each habit's switch, [profile] off, a co-op joiner (none: the host's);
+--     role weights, the Lancers' height, the top cover), each habit's switch, [profile] off, a co-op joiner (none: the
+--     host's);
 --   the levers on the real code: startRound's strike and jammer picks, the role mix (ROLE.pickRound), the squad
---     director's budgets (DIR.roundStart), enemyTier's rank, enemyManeuvers' post-stall, spawnFlight's Lancer height,
+--     director's budgets (DIR.roundStart: cover and trap, the top cover), enemyTier's rank, enemyManeuvers' post-stall,
+--     spawnFlight's Lancer height,
 --     searchSetup's flare row (fake tables) from PROF.menu's read of the saved profile;
 --   the file (config/survival_profile.ini): a run's end written and read back the same (the round trip), a second run
 --     blended in, a short run and a head start counted only, a round's checkpoint ([run]) learnt from once at the next
 --     start (the game closed mid-run), a wrong format, broken values, no file, a folder that can't be written (a
---     neutral profile, never an error), save off; LB.finish -> STATS.runEnd -> PROF.fold (with [stats] off too), a co-op
---     host's new run (STATS.hostReset), a joiner's own kills;
+--     neutral profile, never an error; this session's kept at the next load), save off; LB.finish -> STATS.runEnd ->
+--     PROF.fold (with [stats] off too), a co-op host's new run (STATS.hostReset), a joiner's own kills; min_samples (a
+--     run's few samples never stand as the profile's time habits or height);
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -149,20 +155,26 @@ local function geo(wpn, offNose, km)                -- a kill's KILL.geom: your 
     elseif wpn == "both" then used.msl, used.gun = 1, 5 end
     return { used = used, offNose = offNose, km = km }
 end
-for _ = 1, 4 do PROF.kill({}, geo("msl", 170, 1.5), "you") end      -- missiles from behind
-for _ = 1, 2 do PROF.kill({}, geo("msl", 20, 2.5), "you") end       -- missiles head on
-PROF.kill({}, geo("sp1", 160, 1.0), "you")                           -- a special from behind, close
-for _ = 1, 2 do PROF.kill({}, geo("gun", 175, 0.6), "you") end      -- the gun from behind, close
-PROF.kill({}, geo("both", 30, 0.9), "you")                           -- gun and a missile: the gun's, close, head on
-PROF.kill({}, geo("msl", 170, 1.5), "wingmate")                      -- (not yours: none of these count)
-PROF.kill({}, geo("msl", 170, 1.5), "allies")
-PROF.kill({}, geo("msl", 170, 1.5), nil)
-PROF.kill({}, nil, "you")                                            -- yours, nothing read: a kill only
-PROF.kill({}, geo("none", 100, 4), "you")                            -- nothing fired seen; 100 deg at 4 km: not behind
+local function F() return { unit = "ERA_Unit_03_Dep_Air1" } end      -- (a pool flight's fighter)
+for _ = 1, 4 do PROF.kill(F(), geo("msl", 170, 1.5), "you") end      -- missiles from behind
+for _ = 1, 2 do PROF.kill(F(), geo("msl", 20, 2.5), "you") end       -- missiles head on
+PROF.kill(F(), geo("sp1", 160, 1.0), "you")                           -- a special from behind, close
+for _ = 1, 2 do PROF.kill(F(), geo("gun", 175, 0.6), "you") end      -- the gun from behind, close
+PROF.kill(F(), geo("both", 30, 0.9), "you")                           -- gun and a missile: the gun's, close, head on
+PROF.kill(F(), geo("msl", 170, 1.5), "wingmate")                      -- (not yours: none of these count)
+PROF.kill(F(), geo("msl", 170, 1.5), "allies")
+PROF.kill(F(), geo("msl", 170, 1.5), nil)
+PROF.kill(F(), nil, "you")                                            -- yours, nothing read: a kill only
+PROF.kill(F(), geo("none", 100, 4), "you")                            -- nothing fired seen; 100 deg at 4 km: not behind
+-- yours, but not a fighter's: a raid's bomber, a Ladon, a special (and a plane with no flight): kills, not the shares
+PROF.kill({ unit = CFG.airfield.bombers.pool[1] }, geo("msl", 175, 1.5), "you")
+PROF.kill({ unit = "SV_Unit_LadonA" }, geo("msl", 175, 1.5), "you")
+PROF.kill({ unit = CFG.specials.anomaly.unit }, geo("msl", 175, 1.5), "you")
+PROF.kill({}, geo("msl", 175, 1.5), "you")
 local h = RUN.habit
-check(h and h.K == 12 and h.Kw == 10 and h.Km == 7 and h.Kg == 3 and h.Kgeo == 11 and h.Kc == 4 and h.Kb == 7,
-      string.format("your kills only: K %s, with a weapon %s (missiles %s, gun %s), with an aspect %s (close %s, behind %s)",
-      h and h.K, h and h.Kw, h and h.Km, h and h.Kg, h and h.Kgeo, h and h.Kc, h and h.Kb))
+check(h and h.K == 16 and h.Kf == 12 and h.Kw == 10 and h.Km == 7 and h.Kg == 3 and h.Kgeo == 11 and h.Kc == 4 and h.Kb == 7,
+      string.format("your kills only: K %s (of fighters %s), with a weapon %s (missiles %s, gun %s), with an aspect %s (close %s, behind %s)",
+      h and h.K, h and h.Kf, h and h.Kw, h and h.Km, h and h.Kg, h and h.Kgeo, h and h.Kc, h and h.Kb))
 -- your flying (every 2 s of the round clock): you 30 km east of the airfield
 local AF = AIRFIELD
 local function pt(dx, z) return { X = AF.X + dx * 100000, Y = AF.Y, Z = z * 100 } end
@@ -184,51 +196,101 @@ local E2 = enemy(pt(31, 2500), { X = 1, Y = 0, Z = 0 }, 1.1)
 E2.youAt = pt(30, 3000)                                              -- 1 km behind it, 500 m over: 27 deg off its six
 planes = { E2 }
 PROF.sample(112, pt(90, 3000))
-check(h.S == 6 and h.Sh == 2 and h.Sa == 1 and h.St == 1,
-      string.format("6 samples: high 2 (over the enemies near, alone over 5 km), near the airfield 1, on a tail 1 (p.youAt): %d / %d / %d / %d",
-      h.S, h.Sh, h.Sa, h.St))
+check(h.S == 6 and h.Sh == 2 and h.Sa == 1 and h.SaN == 6 and h.St == 1,
+      string.format("6 samples: high 2 (over the enemies near, alone over 5 km), near the airfield 1 of 6, on a tail 1 (p.youAt): %d / %d / %d of %d / %d",
+      h.S, h.Sh, h.Sa, h.SaN, h.St))
 PROF.sample(113, pt(30, 3000))
 check(h.S == 6, "a second sample within 1.5 s of the round clock (a pause): not counted")
 grounded = true
 PROF.sample(116, pt(1, 10))
-check(h.S == 6 and h.landings == 1, "on the ground: not a sample; a landing counted")
+check(h.S == 6 and h.landings == 1 and h.Sa == 0 and h.SaN == 5,
+      "on the ground: not a sample; a landing counted, its approach (the airfield sample 6 s before) taken back")
 grounded = false
 D.state = "wait"
 PROF.sample(120, pt(30, 6000))
 check(h.S == 6 and h.landings == 1, "between rounds: not a sample")
 D.state = "fighting"
+planes = {}
+PROF.sample(130, pt(5, 2000))                                        -- 14 s after you were on the ground: the climb-out
+check(h.S == 7 and h.Sa == 0 and h.SaN == 5, "over the airfield 14 s after a takeoff (after_takeoff_s 45): not the airfield's")
+PROF.sample(170, pt(5, 2000))                                        -- 54 s after
+check(h.S == 8 and h.Sa == 1 and h.SaN == 6, "over the airfield 54 s after: the airfield's")
+local BMB = { unit = CFG.airfield.bombers.pool[1], at = pt(60, 3000), dist = 55, obj = {} }
+planes = { BMB }
+PROF.sample(172, pt(5, 2000))
+check(h.S == 9 and h.Sa == 1 and h.SaN == 6 and h.Sh == 2, "a raid's bomber up (skip_raids): not the airfield's time (nor an enemy near)")
+planes = { { unit = "SV_Unit_LadonB", at = pt(9, 3000), dist = 4, obj = {} } }
+PROF.sample(174, pt(5, 2000))
+check(h.S == 10 and h.SaN == 6, "a Ladon up: not the airfield's either")
+P.airfield.skip_raids = false
+PROF.sample(176, pt(5, 2000))
+P.airfield.skip_raids = true
+check(h.S == 11 and h.Sa == 2 and h.SaN == 7, "skip_raids off: counted")
+planes = {}
+PROF.sample(178, pt(30, 4000))
+check(h.S == 12 and h.Sa == 2 and h.SaN == 8, "away from the airfield: the airfield's time, not near it")
 local s = PROF.runShares(h)
-check(near(s.missile, 0.7) and near(s.gun, 4 / 11) and near(s.behind, 7 / 11) and near(s.tail_time, (1 / 6) / 0.3)
-      and near(s.high, 2 / 6) and near(s.airfield, 1 / 6),
-      string.format("the shares: missile %.3f, gun %.3f (the bigger of gun 0.30 and close 0.36), behind %.3f, tail time %.3f, high %.3f, airfield %.3f",
+check(near(s.missile, 0.7) and near(s.gun, 4 / 11) and near(s.behind, 7 / 11) and near(s.tail_time, (1 / 12) / 0.3)
+      and near(s.high, 2 / 12) and near(s.airfield, 2 / 8),
+      string.format("the shares: missile %.3f, gun %.3f (the bigger of gun 0.30 and close 0.36), behind %.3f, tail time %.3f, high %.3f, airfield %.3f (2 of 8)",
       s.missile, s.gun, s.behind, s.tail_time, s.high, s.airfield))
 local hb = PROF.habitsOf(s)
-check(near(hb.tail, 0.6 * 7 / 11 + 0.4 * (1 / 6) / 0.3), string.format("tail = 0.6 behind + 0.4 its time: %.3f", hb.tail))
+check(near(hb.tail, 0.6 * 7 / 11 + 0.4 * (1 / 12) / 0.3), string.format("tail = 0.6 behind + 0.4 its time: %.3f", hb.tail))
 check(PROF.strength("missile", 0.7) == 0 and near(PROF.strength("gun", 4 / 11), (4 / 11 - 0.35) / 0.65)
       and PROF.strength("tail", hb.tail) == 0 and PROF.strength("missile", 0.9) == 0.5 and PROF.strength("missile", 1) == 1
       and PROF.strength("missile", 0.8) == 0 and PROF.strength("high", nil) == 0, "the strengths: 0 at or under each threshold, 1 at 1.0")
 local cur = PROF.current(h, nil)
 check(near(cur.missile, 0.7) and cur.high == nil and cur.tail_time == nil and cur.airfield == nil,
-      "this run's: its kills' shares (12 >= live_kills 5), not yet its time's (6 < live_samples 30)")
-local h3 = { K = 3, Kw = 3, Km = 3, Kg = 0, Kgeo = 3, Kc = 0, Kb = 3, S = 0, Sh = 0, Sa = 0, St = 0, alt = {} }
-check(PROF.current(h3, nil).missile == nil, "3 kills (under live_kills 5): nothing of this run's yet")
+      "this run's: its kills' shares (12 of fighters >= live_kills 5), not yet its time's (12 < live_samples 30)")
+local h3 = { K = 9, Kf = 3, Kw = 3, Km = 3, Kg = 0, Kgeo = 3, Kc = 0, Kb = 3, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0, alt = {} }
+check(PROF.current(h3, nil).missile == nil, "9 kills, 3 of fighters (under live_kills 5): nothing of this run's yet")
 local saved = { learnt = 3, runs = 4, missile = 0.5, high = 0.9 }
 check(near(PROF.current(h3, saved).missile, 0.5) and near(PROF.current(h3, saved).high, 0.9),
       "a saved profile alone until then")
-local h10 = { K = 10, Kw = 10, Km = 10, Kg = 0, Kgeo = 10, Kc = 0, Kb = 0, S = 30, Sh = 0, Sa = 0, St = 0, alt = {} }
+local h10 = { K = 10, Kf = 10, Kw = 10, Km = 10, Kg = 0, Kgeo = 10, Kc = 0, Kb = 0, S = 30, Sh = 0, Sa = 0, SaN = 30, St = 0, alt = {} }
 local c10 = PROF.current(h10, saved)
 check(near(c10.missile, (20 * 0.5 + 10 * 1) / 30) and near(c10.high, (150 * 0.9 + 30 * 0) / 180),
       string.format("this run's against the profile's as prior_kills 20 / prior_samples 150 of its own: missile %.3f, high %.3f",
       c10.missile, c10.high))
 check(PROF.current(h10, { learnt = 0, runs = 2, missile = 0.1 }).missile == 1, "a profile learnt from no run: not weighed")
+-- through the real sweep (sv_main.lua planeSweep on its slot 0, then STATS.sample as probeTick calls it) with fewer than
+-- 8 planes up: the sweep reads where you are only when it visits a plane (on slot 0 the 8th, 16th ...), so it read
+-- nothing; STATS.sample reads it then, once for both (the U8 review: rounds 1-2 had no samples, later rounds none once
+-- their 8th plane was down)
+do
+    local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
+    local cA, cB = mainSrc:find("\nlocal function creditKill%(p%)"), mainSrc:find("\nlocal function probeTick%(tick%)")
+    local _, timedM, sweep = assert(load(mainSrc:sub(cA, cB) .. "\nreturn creditKill, timed, planeSweep\n", "=sv_main.lua"))()
+    RUN = {}
+    D = { round = 1, startRound = 1, state = "fighting", now = 200, up = {}, flown = {}, queue = {}, spare = {} }
+    local reads, rawLoc = 0, playerLocation
+    playerLocation = function() reads = reads + 1; return pt(30, 6000) end
+    planes = { enemy(pt(33, 3000), { X = -1, Y = 0, Z = 0 }, 3), enemy(pt(34, 3000), { X = -1, Y = 0, Z = 0 }, 4),
+               enemy(pt(35, 3000), { X = -1, Y = 0, Z = 0 }, 5), enemy(pt(36, 3000), { X = -1, Y = 0, Z = 0 }, 6) }
+    local swept = 0                                   -- (sweeps that read you, or failed)
+    for i = 1, 5 do
+        D.now = 200 + 2 * i
+        local okPl, you = timedM("planes", sweep, 0)
+        if not okPl or you ~= nil then swept = swept + 1 end
+        if D then pcall(STATS.sample, D.now, you or nil) end
+    end
+    playerLocation = rawLoc
+    local hs = RUN.habit
+    check(swept == 0 and hs and hs.S == 5 and hs.Sh == 5 and reads == 5,
+          string.format("4 planes up: the sweep's slot 0 read nothing, STATS.sample read you (%d reads): 5 samples, 5 high (%s / %s)",
+          reads, tostring(hs and hs.S), tostring(hs and hs.Sh)))
+    local probe = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+    check(has(probe, "pcall(STATS.sample, D.now, you or nil)") and has(body("sv_stats.lua", "\nfunction STATS.sample%("),
+          "if not you then you = playerLocation() end"), "probeTick passes the sweep's you; STATS.sample reads it when that's nil")
+end
 
 ---------------------------------------------------------------------------------------------------- counters
 print("the counters (PROF.weights)")
 -- a run with every habit: 20 kills, 19 with missiles, 12 close, 18 from behind; 100 samples, 80 high, 70 near the
 -- airfield, 30 on a tail, all at 6 km
 local function strong()
-    return { id = "abc123", K = 20, Kw = 20, Km = 19, Kg = 1, Kgeo = 20, Kc = 12, Kb = 18, S = 100, Sh = 80, Sa = 70, St = 30,
-             landings = 2, alt = { [24] = 100 } }
+    return { id = "abc123", K = 20, Kf = 20, Kw = 20, Km = 19, Kg = 1, Kgeo = 20, Kc = 12, Kb = 18, S = 100, Sh = 80, Sa = 70,
+             SaN = 100, St = 30, landings = 2, alt = { [24] = 100 } }
 end
 RUN = { habit = strong() }
 PROF.saved = nil
@@ -251,8 +313,10 @@ check(near(C.tail, 0.8) and near(C.roleW.duelist, 1 + (0.6 - 0.35) / 0.65) and n
       string.format("cover and trap +0.80; role weights duelist %.2f, wolf %.2f, lancer %.2f, skirm %.2f", C.roleW.duelist,
       C.roleW.wolf, C.roleW.lancer, C.roleW.skirm))
 check(PROF.lancerAlt() == 6125 + 1000, "the Lancers at your usual 6.1 km + above_m 1000 (" .. tostring(PROF.lancerAlt()) .. ")")
+check(near(C.top, 0.6), "the top cover: top_cover_x 1.0 x the high habit's 0.60 (" .. tostring(C.top) .. ")")
 local wl = line("learning: round 12: habits", from)
-check(has(wl, "missile 0.95 (over 0.80, strength 0.75)") and has(wl, "this run 20 of your kills, 200 s flown; the profile none")
+check(has(wl, "missile 0.95 (over 0.80, strength 0.75)") and has(wl, "this run 20 of your kills, 20 of fighters, 200 s flown; the profile none")
+      and has(wl, "Lancers from 7.1 km up (your usual 6.1 km), top cover x1.60")
       and has(wl, "the jammer's chance 0.50 -> 0.87") and has(wl, "PilotRank +1 from Veteran")
       and has(wl, "post-stall on every airframe from Regular") and has(wl, "cover and trap x1.80")
       and has(wl, "Lancers from 7.1 km up (your usual 6.1 km)") and has(wl, "the strike's chance 0.35 -> 0.52")
@@ -266,14 +330,15 @@ check(D.counter.strength.missile == 0 and not D.counter.jammerX and PROF.rankAdd
 P.missile.enabled = true
 P.high.enabled, P.airfield.enabled = false, false
 PROF.weights(12)
-check(near(D.counter.roleW.lancer, 1) and near(D.counter.roleW.skirm, 1) and PROF.lancerAlt() == nil and PROF.chance("strike", 0.35) == 0.35,
-      "[profile.high] / [profile.airfield] off: no Lancer, Skirmisher or strike counter")
+check(near(D.counter.roleW.lancer, 1) and near(D.counter.roleW.skirm, 1) and PROF.lancerAlt() == nil and PROF.chance("strike", 0.35) == 0.35
+      and D.counter.top == nil, "[profile.high] / [profile.airfield] off: no Lancer, top cover, Skirmisher or strike counter")
 P.high.enabled, P.airfield.enabled = true, true
 P.enabled = false
 PROF.weights(12)
 check(D.counter == nil and PROF.chance("jammer", 0.5) == 0.5 and PROF.rankAdd(VET) == 0, "[profile] off: no counters")
 P.enabled = true
-RUN = { habit = { id = "e1", K = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, St = 0, landings = 0, alt = {} } }
+RUN = { habit = { id = "e1", K = 0, Kf = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0,
+                  landings = 0, alt = {} } }
 from = #logs + 1
 PROF.weights(13)
 check(D.counter and has(line("learning: round 13", from), "-> nothing to counter"), "no habits: nothing to counter (logged)")
@@ -284,8 +349,8 @@ check(D.counter == nil, "a co-op joiner: no counters of its own (its enemies are
 D.counter = { jammerX = 2, rank = 1, rankFrom = 1, postStallFrom = 1, roleW = { lancer = 3 }, lancerAlt = 8000 }
 check(PROF.chance("jammer", 0.5) == 0.5 and PROF.rankAdd(VET) == 0 and not PROF.postStall(VET) and PROF.roleW() == nil
       and PROF.lancerAlt() == nil, "a joiner reads none (its copies fly the host's)")
-PROF.kill({}, geo("gun", 175, 0.5), "you"); PROF.kill({}, geo("msl", 170, 1.5), "wingmate")
-check(RUN.habit.K == 21 and RUN.habit.Kg == 2, "a joiner's own kills count in its own profile, a partner's don't")
+PROF.kill(F(), geo("gun", 175, 0.5), "you"); PROF.kill(F(), geo("msl", 170, 1.5), "wingmate")
+check(RUN.habit.K == 21 and RUN.habit.Kf == 21 and RUN.habit.Kg == 2, "a joiner's own kills count in its own profile, a partner's don't")
 COOP.open, COOP.role = false, nil
 
 ---------------------------------------------------------------------------------------------------- the levers
@@ -345,7 +410,8 @@ local function play(habit)
     startRound()
     return f
 end
-local f0 = play({ id = "e2", K = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, St = 0, landings = 0, alt = {} })
+local f0 = play({ id = "e2", K = 0, Kf = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0,
+                  landings = 0, alt = {} })
 local function since(f, pat) for i = f, #logs do if logs[i]:find(pat, 1, true) then return logs[i] end end return nil end
 check(R and not since(f0, "a strike package") and not since(f0, "the jammer flies with") and has(since(f0, "learning: round " .. R), "nothing to counter"),
       "round " .. tostring(R) .. ", no habits: no strike (0.5 over 0.35), no jammer (0.5 not under 0.5)")
@@ -361,6 +427,12 @@ check(has(rl, "weighed by your habits") and near(tonumber(rl and rl:match("lance
       "the role mix weighed by your habits (" .. tostring(rl) .. ")")
 check(has(since(f1, "director: round " .. R .. "'s budgets"), "cover and trap x1.80 (your tail chasing)") and D.dir and near(D.dir.factor, 1.8),
       "DIR.roundStart: cover and trap budgets x1.80 (D.counter.tail)")
+local bl = since(f1, "director: round " .. R .. "'s budgets")
+local bl0 = since(f0, "director: round " .. R .. "'s budgets")
+local top0, top1 = tonumber(bl0 and bl0:match("top_cover (%d+)")), tonumber(bl and bl:match("top_cover (%d+)"))
+check(has(bl, "; top cover x1.60 (you stay high)") and near(D.dir.topFactor, 1.6) and top0 and top1
+      and top1 == math.floor(top0 * 1.6 + 0.5) and not has(bl0, "top cover x"),
+      string.format("DIR.roundStart: the top cover's budget x1.60 (D.counter.top): %s -> %s", tostring(top0), tostring(top1)))
 math.random = rawRandom
 -- searchSetup's flare row (fake tables, as roles_test's): from PROF.menu's read of the saved profile
 local function copyRow(r)
@@ -466,8 +538,8 @@ local ro = line("learning: run over (died)", from)
 check(has(text, "[profile]") and has(text, "version = 1") and has(text, "runs = 1") and has(text, "learnt = 1")
       and has(text, "kills = 20") and has(text, "missile = 0.9500") and has(text, "alt_m = 6125") and not has(text, "[run]"),
       "the run's end: the profile written (runs 1, learnt 1, your 20 kills, missile 0.95, your height)")
-check(has(ro, "20 of your kills (missiles 19, gun 1, of 20 with a weapon seen; close 12, from behind 18, of 20 with an aspect)")
-      and has(ro, "200 s flown (high 80%, near the airfield 70%, on a tail 30%, usually 6.1 km up), 2 landings")
+check(has(ro, "20 of your kills (20 of fighters: missiles 19, gun 1, of 20 with a weapon seen; close 12, from behind 18, of 20 with an aspect)")
+      and has(ro, "200 s flown (high 80%, near the airfield 70% of 200 s it didn't need you, on a tail 30%, usually 6.1 km up), 2 landings")
       and has(ro, "; learnt from; the profile now 1 runs (1 learnt from)") and has(ro, "saved to config\\survival_profile.ini"),
       "its run-over line (" .. tostring(ro) .. ")")
 local before = #logs
@@ -485,8 +557,8 @@ PROF.weights(1)
 check(D.counter and near(D.counter.strength.missile, 0.75) and near(D.counter.roleW.lancer, 1.9) and D.counter.lancerAlt == 7125,
       "the next run's first round: the saved profile's counters (role mix, the Lancers' height) before a kill")
 -- a second run blended in: 30 kills at missile 0.5 (a = min(0.5, 30 / 60) = 0.5), 300 samples none high
-RUN.habit = { id = "b2", K = 30, Kw = 30, Km = 15, Kg = 15, Kgeo = 30, Kc = 0, Kb = 30, S = 300, Sh = 0, Sa = 0, St = 90,
-              landings = 0, alt = { [12] = 300 } }
+RUN.habit = { id = "b2", K = 30, Kf = 30, Kw = 30, Km = 15, Kg = 15, Kgeo = 30, Kc = 0, Kb = 30, S = 300, Sh = 0, Sa = 0,
+              SaN = 300, St = 90, landings = 0, alt = { [12] = 300 } }
 PROF.fold("restart")
 PROF.saved = nil
 PROF.load("level load")
@@ -495,37 +567,43 @@ check(sv.runs == 2 and sv.learnt == 2 and sv.kills == 50 and near(sv.missile, 0.
       and near(sv.gun, 0.55, 1e-4) and near(sv.alt_m, 0.5 * 6125 + 0.5 * 3125, 1),
       string.format("a second run blended in (each a = min(run_weight_max 0.5, n / (n + fold_*))): missile %.3f, high %.3f", sv.missile, sv.high))
 -- a short run and a head start: counted, not learnt from
-RUN.habit = { id = "c3", K = 5, Kw = 5, Km = 5, Kg = 0, Kgeo = 5, Kc = 0, Kb = 0, S = 40, Sh = 40, Sa = 0, St = 0, landings = 0, alt = {} }
+RUN.habit = { id = "c3", K = 9, Kf = 5, Kw = 5, Km = 5, Kg = 0, Kgeo = 5, Kc = 0, Kb = 0, S = 40, Sh = 40, Sa = 0, SaN = 40, St = 0,
+              landings = 0, alt = {} }
 from = #logs + 1
 PROF.fold("died")
-check(PROF.saved.runs == 3 and PROF.saved.learnt == 2 and PROF.saved.kills == 55 and near(PROF.saved.missile, 0.725, 1e-4)
-      and has(line("learning: run over (died)", from), "counted, not learnt from (only 5 of your kills, min_kills 8)"),
-      "5 of your kills: counted, not learnt from")
+check(PROF.saved.runs == 3 and PROF.saved.learnt == 2 and PROF.saved.kills == 59 and near(PROF.saved.missile, 0.725, 1e-4)
+      and has(line("learning: run over (died)", from), "counted, not learnt from (only 5 of your kills of fighters, min_kills 8)"),
+      "9 of your kills, 5 of fighters: counted, not learnt from")
 D.startRound = 4
-RUN.habit = { id = "d4", K = 12, Kw = 12, Km = 0, Kg = 12, Kgeo = 12, Kc = 12, Kb = 0, S = 40, Sh = 0, Sa = 0, St = 0, landings = 0, alt = {} }
+RUN.habit = { id = "d4", K = 12, Kf = 12, Kw = 12, Km = 0, Kg = 12, Kgeo = 12, Kc = 12, Kb = 0, S = 40, Sh = 0, Sa = 0, SaN = 40,
+              St = 0, landings = 0, alt = {} }
 from = #logs + 1
 PROF.fold("died")
 check(PROF.saved.runs == 4 and PROF.saved.learnt == 2 and near(PROF.saved.gun, 0.55, 1e-4)
       and has(line("learning: run over (died)", from), "(a head start at round 4)"), "a head start (round 4): counted, not learnt from")
 D.startRound = 1
-RUN.habit = { id = "e5", K = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, St = 0, landings = 0, alt = {} }
+RUN.habit = { id = "e5", K = 0, Kf = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0,
+              landings = 0, alt = {} }
 PROF.fold("left")
 check(PROF.saved.runs == 4, "nothing flown: not a run")
 -- a round's checkpoint, then the game closes: learnt from at the next start, once
-RUN = { habit = { id = "f6", K = 9, Kw = 9, Km = 9, Kg = 0, Kgeo = 9, Kc = 0, Kb = 9, S = 40, Sh = 0, Sa = 0, St = 0,
-                  landings = 1, alt = { [10] = 40 } } }
+RUN = { habit = { id = "f6", K = 9, Kf = 9, Kw = 9, Km = 9, Kg = 0, Kgeo = 9, Kc = 0, Kb = 9, S = 40, Sh = 0, Sa = 0, SaN = 40,
+                  St = 0, landings = 1, alt = { [10] = 40 } } }
 D.round = 3
 STATS.roundEnd(600)                                  -- (the clear's own call: PROF.checkpoint)
 text = readAll(PFILE)
-check(has(text, "[run]") and has(text, "id = f6") and has(text, "round = 3") and has(text, "K = 9") and has(text, "S = 40")
-      and has(text, "alt_m = 2625") and has(text, "runs = 4"), "a round's end: the run so far in [run], the profile kept")
+check(has(text, "[run]") and has(text, "id = f6") and has(text, "round = 3") and has(text, "K = 9") and has(text, "Kf = 9")
+      and has(text, "S = 40") and has(text, "SaN = 40") and has(text, "alt_m = 2625") and has(text, "runs = 4"),
+      "a round's end: the run so far in [run], the profile kept")
+local hiBefore = PROF.saved.high
 RUN = {}                                             -- (the game closed: no fold; the next start)
 from = #logs + 1
 PROF.load("the main menu")
 local ml = line("learning: profile at the main menu", from)
-check(PROF.saved.runs == 5 and PROF.saved.learnt == 3 and PROF.saved.kills == 76
-      and has(ml, "the run the game closed in (round 3, 9 of your kills) learnt from first") and not has(readAll(PFILE), "[run]"),
-      "the next start: the unfinished run learnt from first, [run] gone (" .. tostring(ml) .. ")")
+check(PROF.saved.runs == 5 and PROF.saved.learnt == 3 and PROF.saved.kills == 80
+      and has(ml, "the run the game closed in (round 3, 9 of your kills) learnt from, not its tail_time, high, airfield, height (40 samples")
+      and has(ml, "min_samples 60) first") and near(PROF.saved.high, hiBefore, 1e-4) and not has(readAll(PFILE), "[run]"),
+      "the next start: the unfinished run learnt from first (its 40 samples not: min_samples 60), [run] gone (" .. tostring(ml) .. ")")
 writeAll(PFILE, text)                                -- (its [run] again, as if the write had failed)
 from = #logs + 1
 PROF.load("level load")
@@ -559,6 +637,11 @@ local okF = pcall(PROF.fold, "died")
 SCRIPT_DIR = dir
 check(okF and PROF.saved.learnt == 1 and has(line("learning: can't write", from), "the profile stays this session's")
       and has(line("learning: run over (died)", from), "NOT saved"), "can't write: logged, the profile kept for the session")
+from = #logs + 1
+PROF.load("level load")                              -- (the next level load: the file on disk is the binary one above)
+check(PROF.saved and PROF.saved.learnt == 1 and PROF.saved.runs == 1
+      and has(line("learning: profile at level load", from), "this session's kept (config\\survival_profile.ini couldn't be written"),
+      "the next level load after a failed write: this session's profile kept, not the older file")
 -- save off: nothing read or written
 os.remove(PFILE)
 P.save = false
@@ -580,6 +663,9 @@ D = { round = 7, startRound = 1, state = "fighting", now = 700, up = {}, flown =
 pcall(LB.finish, "died")
 check(has(line("learning: run over (died)"), "learnt from") and has(readAll(PFILE), "learnt = 1"),
       "LB.finish: the run learnt from and saved (the measurements off)")
+PROF.saved.runs = 99                                 -- (a write landed: the next load reads the file again)
+PROF.load("level load")
+check(PROF.saved.runs == 1, "a write landed again: the next load reads the file")
 CFG.stats.enabled = true
 -- a co-op host's new run (a joiner told "rs"): this run learnt from, the next one empty
 RUN = { habit = strong(), kills = {} }
@@ -591,6 +677,28 @@ check(has(line("learning: run over (the host started over)", from), "learnt from
 RUN.habit = strong(); RUN.habit.id = "h8"
 STATS.hostReset(801, true)
 check(RUN.habit ~= nil and RUN.habit.id == "h8", "a resync: the run goes on")
+-- min_samples: a run learnt from with few samples keeps its time shares and height out of the profile (they'd stand as
+-- the profile, weighed as prior_samples 150, for runs to come: the U8 review); a later run's are its own then
+os.remove(PFILE)
+PROF.load("level load")
+D.startRound = 1
+RUN = { habit = { id = "m9", K = 10, Kf = 10, Kw = 10, Km = 10, Kg = 0, Kgeo = 10, Kc = 0, Kb = 10, S = 10, Sh = 10, Sa = 10,
+                  SaN = 10, St = 10, landings = 0, alt = { [30] = 10 } } }
+from = #logs + 1
+PROF.fold("died")
+sv = PROF.saved
+local mr = line("learning: run over (died)", from)
+check(sv.learnt == 1 and near(sv.missile, 1) and near(sv.behind, 1) and sv.high == nil and sv.airfield == nil and sv.tail_time == nil
+      and sv.alt_m == nil and has(mr, "; learnt from; not its tail_time, high, airfield, height (10 samples, 10 of them for the airfield; min_samples 60)"),
+      "10 samples (under min_samples 60): its kill shares learnt, not its time shares or height (" .. tostring(mr) .. ")")
+RUN = { habit = { id = "n10", K = 10, Kf = 10, Kw = 10, Km = 5, Kg = 5, Kgeo = 10, Kc = 0, Kb = 10, S = 100, Sh = 50, Sa = 0,
+                  SaN = 80, St = 0, landings = 0, alt = { [20] = 100 } } }
+PROF.fold("died")
+sv = PROF.saved
+check(sv.learnt == 2 and near(sv.missile, 0.875) and near(sv.high, 0.5) and near(sv.airfield, 0) and sv.alt_m == 5125,
+      string.format("the next run's 100 samples: its time shares and height the profile's own (high %s), its kill shares blended (missile %s)",
+      tostring(sv.high), tostring(sv.missile)))
+D.counter = nil
 
 ---------------------------------------------------------------------------------------------------- hooks
 print("the hooks by their place in the source")

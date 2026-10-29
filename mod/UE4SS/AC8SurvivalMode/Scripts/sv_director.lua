@@ -77,13 +77,17 @@ end
 
 ---------------------------------------------------------------------------------------------------- budgets, cooldowns
 -- a tactic's budget this round: CFG.director.budget's band of the latest from_round reached, cover and trap x the
--- habit counter's factor (P6: D.counter.tail, more of them against a tail chaser; the critic's gap fill)
+-- habit counter's factor (P6: D.counter.tail, more of them against a tail chaser; the critic's gap fill), the top cover
+-- x its own (P6: D.counter.top, more of it against a player who stays high; the U8 review)
 local function bandOf(round)
     local i = 0
     for k, r in ipairs((cfg().budget or {}).from_round or {}) do if (round or 0) >= (tonumber(r) or math.huge) then i = k end end
     return i
 end
-local function factor(s, tactic) return (tactic == "cover" or tactic == "trap") and (s.factor or 1) or 1 end
+local function factor(s, tactic)
+    if tactic == "cover" or tactic == "trap" then return s.factor or 1 end
+    return tactic == "top_cover" and (s.topFactor or 1) or 1
+end
 local function budgetOf(s, tactic)
     local list, i = (cfg().budget or {})[tactic], bandOf(D.round)
     local n = (type(list) == "table" and i > 0) and num(list[i], 0) or 0
@@ -776,17 +780,19 @@ function DIR.roundStart(now)
     if not s then return end
     s.round, s.spent, s.next, s.spawns, s.pincer, s.engaged, s.held, s.aims = D.round, {}, {}, {}, nil, {}, {}, {}
     s.after = {}
-    local tail = D.counter and tonumber(D.counter.tail) or 0          -- (P6's habit counter, when it's there)
-    s.factor = 1 + math.max(0, tail or 0)
+    local tail = D.counter and tonumber(D.counter.tail) or 0          -- (P6's habit counters, when they're there)
+    local top = D.counter and tonumber(D.counter.top) or 0
+    s.factor, s.topFactor = 1 + math.max(0, tail or 0), 1 + math.max(0, top or 0)
     if not on() then return end
     local parts = {}
     for _, t in ipairs({ "cover", "trap", "bracket", "top_cover", "pincer", "regroup" }) do
         parts[#parts + 1] = string.format("%s %d%s", t, budgetOf(s, t), tacticOn(t) and "" or " (off)")
     end
     local i = bandOf(D.round)
-    log(string.format("director: round %d's budgets (from round %s): %s%s", D.round,
+    log(string.format("director: round %d's budgets (from round %s): %s%s%s", D.round,
         tostring(((cfg().budget or {}).from_round or {})[i] or "-"), table.concat(parts, ", "),
-        s.factor ~= 1 and string.format("; cover and trap x%.2f (your tail chasing)", s.factor) or ""))
+        s.factor ~= 1 and string.format("; cover and trap x%.2f (your tail chasing)", s.factor) or "",
+        s.topFactor ~= 1 and string.format("; top cover x%.2f (you stay high)", s.topFactor) or ""))
 end
 
 function DIR.spawned(unit, role, n, ace)

@@ -620,7 +620,11 @@ end
 
 -- Every 2 s (the sweep's summaries): the round's time down at the airfield while it's being fought (game clock, so a
 -- pause in the landing store doesn't count), and a cleared round's line once the sweep has seen its last planes.
+-- you: where the sweep read you this tick, or nil: it reads you only when it visits a plane, and this is its slot 0
+-- (the 8th, 16th ... plane of the list), so with fewer than 8 up, or once the 8th is down, it read nothing. Read here
+-- then, once for both (P6's habits sampled every 2 s, not only while an 8th plane is up: the U8 review).
 function STATS.sample(now, you)
+    if not you then you = playerLocation() end
     if PROF.sample then pcall(PROF.sample, now, you) end  -- (P6's habits: where you fly)
     local rs = D and D.rs
     if not (on() and rs and now) then return end
@@ -726,7 +730,8 @@ STATS.median, STATS.classify = median, classify
 -- countering what this player keeps doing; across runs the profile is saved and picks the next run's role mix; the
 -- metrics brief's steps 11-13, the critic's flare row and squad-director hook; CFG.profile, CFG.flares;
 -- tools/re/BEHAVIOUR_DIRECTOR.md unit 8):
---   PROF.kill(p, g, by)      STATS.down, every game (a co-op joiner learns from its own kills): yours only (by "you")
+--   PROF.kill(p, g, by)      STATS.down, every game (a co-op joiner learns from its own kills): yours only (by "you"),
+--                            the shares from your kills of fighters only (Kf: not a bomber's, a Ladon's or a special's)
 --   PROF.sample(now, you)    STATS.sample, every 2 s: a fight's time in the air (high, near the airfield, on a tail)
 --   PROF.weights(round)      sv_rounds.lua startRound (the host or solo), before its picks: D.counter, the round's line
 --   PROF.chance, rankAdd, postStall, roleW, lancerAlt   the counters where each acts (sv_rounds, sv_ai, sv_spawn); a co-op
@@ -745,11 +750,12 @@ local FILE, FORMAT = "survival_profile.ini", 1
 local HABITS = { "missile", "gun", "tail", "high", "airfield" }
 local PARTS = { "missile", "gun", "behind", "tail_time", "high", "airfield" }     -- the file's shares (tail from two)
 local BY_KILL = { missile = true, gun = true, behind = true }                     -- (weighed by kills; the rest by time)
-local RUN_KEYS = { "round", "from", "K", "Kw", "Km", "Kg", "Kgeo", "Kc", "Kb", "S", "Sh", "Sa", "St", "landings" }
+local RUN_KEYS = { "round", "from", "K", "Kf", "Kw", "Km", "Kg", "Kgeo", "Kc", "Kb", "S", "Sh", "Sa", "SaN", "St",
+                   "landings" }
 local ROLE_GAIN = { gun = { "duelist", "wolf" }, tail = { "wolf" }, high = { "lancer" }, airfield = { "skirm" } }
 local ALT_BIN, ALT_BINS = 250, 80                  -- (your height's histogram: 250 m bins up to 20 km)
 local seen = {}                                    -- (run ids learnt from this session: a checkpoint is never learnt twice)
-local wrote = { said = false }
+local wrote = { said = false, failed = false }     -- (failed: the last write didn't land, the file's older than PROF.saved)
 
 local function pcfg() return CFG.profile or {} end
 local function pon() local c = CFG.profile; return c ~= nil and c.enabled ~= false end
@@ -768,7 +774,8 @@ local function newHabit()                          -- (its id from the clocks an
     nHabits = nHabits + 1
     return { id = string.format("%08x%05x%02x", os.time() % 0x100000000, math.floor(os.clock() * 1000) % 0x100000,
                                 nHabits % 0x100),
-             K = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, St = 0, landings = 0, alt = {} }
+             K = 0, Kf = 0, Kw = 0, Km = 0, Kg = 0, Kgeo = 0, Kc = 0, Kb = 0, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0,
+             landings = 0, alt = {}, aq = {} }
 end
 local function habit()                             -- this run's counts (made at its first kill, sample or round)
     local h = RUN and RUN.habit
@@ -787,15 +794,22 @@ local function altMedian(h)                        -- your usual height (m): the
     return h.altM
 end
 -- a run's shares (nil: nothing seen for one): missile Km / Kw (kills with a weapon seen), gun the bigger of Kg / Kw and
--- Kc / Kgeo (kills with an aspect), behind Kb / Kgeo, tail_time (St / S) / tail.time_full at most 1, high Sh / S,
--- airfield Sa / S
+-- Kc / Kgeo (kills with an aspect), behind Kb / Kgeo (all of your kills of fighters), tail_time (St / S) /
+-- tail.time_full at most 1, high Sh / S, airfield Sa / SaN (the samples the airfield didn't need you: PROF.sample)
 local function runShares(h)
     local s, tf = {}, math.max(0.01, num(hcfg("tail").time_full, 0.3))
     if h.Kw > 0 then s.missile = h.Km / h.Kw end
     if h.Kw > 0 or h.Kgeo > 0 then s.gun = math.max(h.Kw > 0 and h.Kg / h.Kw or 0, h.Kgeo > 0 and h.Kc / h.Kgeo or 0) end
     if h.Kgeo > 0 then s.behind = h.Kb / h.Kgeo end
-    if h.S > 0 then s.tail_time, s.high, s.airfield = math.min(1, h.St / h.S / tf), h.Sh / h.S, h.Sa / h.S end
+    if h.S > 0 then s.tail_time, s.high = math.min(1, h.St / h.S / tf), h.Sh / h.S end
+    if (h.SaN or 0) > 0 then s.airfield = h.Sa / h.SaN end
     return s
+end
+-- what run h's share k rests on: its kills of fighters (the kill shares), its samples (the airfield's: SaN)
+local function evidence(h, k)
+    if BY_KILL[k] then return h.Kf or 0 end
+    if k == "airfield" then return h.SaN or 0 end
+    return h.S or 0
 end
 local function habitsOf(x)                         -- the five habits from the shares (tail: 0.6 behind + 0.4 its time)
     local t = { missile = x.missile, gun = x.gun, high = x.high, airfield = x.airfield }
@@ -809,7 +823,7 @@ local function current(h, sv)
     local learnt = sv ~= nil and (sv.learnt or 0) > 0
     for _, k in ipairs(PARTS) do
         local kill = BY_KILL[k]
-        local have = kill and h.K or h.S
+        local have = evidence(h, k)
         local x = s[k]
         if x ~= nil and have < num(kill and c.live_kills or c.live_samples, kill and 5 or 30) then x = nil end
         local prior = learnt and sv[k] or nil
@@ -833,11 +847,17 @@ end
 
 ---------------------------------------------------------------------------------------------------- your kills, your flying
 -- One of your kills (STATS.down, the sweep's death branch: g its KILL.geom). The weapon: your shots in the 6 s before
--- (g.used: the gun's, else a missile's or a special's; nothing seen: no weapon), the aspect from its last sample.
+-- (g.used: the gun's, else a missile's or a special's; nothing seen: no weapon), the aspect from its last sample. The
+-- shares count your kills of fighters only (Kf: a pool flight's plane, as isOrdinary and the high habit's enemies near):
+-- a raid's or a strike package's bombers fly straight and fall to missiles from behind, and a Ladon, a special or its
+-- guards are fights of their own; they'd make anyone missile-heavy and a tail chaser (the U8 review). K: all of them.
 function PROF.kill(p, g, by)
     if not (pon() and by == "you" and D) then return end
     local h = habit()
     h.K = h.K + 1
+    local unit = type(p) == "table" and p.unit or nil
+    if not (unit and poolIndex(unit) and not BOMBER_UNIT[unit]) then return end
+    h.Kf = h.Kf + 1
     if not g then return end
     local u, sc = g.used or {}, CFG.stats or {}
     local gun = (u.gun or 0) > 0
@@ -852,18 +872,30 @@ function PROF.kill(p, g, by)
     end
 end
 
--- Every 2 s (STATS.sample, the sweep's summaries; `you` read by the sweep): a sample of a fight (spawning, wave,
--- fighting) in the air: your height (its histogram), high (high.over_m over the enemy fighters within high.near_km by
--- their last sample, none near: above high.alone_m), near the airfield (airfield.km of the runway), on an enemy's tail
--- (CFG.stats tail_km / tail_deg of its six, from where you were at its sample, p.youAt); and your landings. Cached
--- fields only: no reads.
+-- Every 2 s (STATS.sample, the sweep's summaries; `you` read by the sweep, else by STATS.sample): a sample of a fight
+-- (spawning, wave, fighting) in the air: your height (its histogram), high (high.over_m over the enemy fighters within
+-- high.near_km by their last sample, none near: above high.alone_m), near the airfield (airfield.km of the runway), on
+-- an enemy's tail (CFG.stats tail_km / tail_deg of its six, from where you were at its sample, p.youAt); and your
+-- landings. The airfield habit counts only the time the airfield doesn't need you there (SaN, the U8 review: its
+-- counter, the strike package, would otherwise feed it): not while bombers or Ladons are up (airfield.skip_raids), not
+-- in the after_takeoff_s after you were on the ground, and a landing takes back the before_landing_s of airfield
+-- samples before it (the approach). Cached fields only: no reads.
 function PROF.sample(now, you)
     if not (pon() and D and now and you and you.Z) then return end
     local h = habit()
     if h.sampleAt and now - h.sampleAt < 1.5 then return end      -- (a pause: the round clock stands still)
     h.sampleAt = now
+    local ac = hcfg("airfield")
+    local back = num(ac.before_landing_s, 45)
+    local q = h.aq or {}
+    h.aq = q
+    while #q > 0 and now - q[1] > back do table.remove(q, 1) end   -- (the airfield samples of the last before_landing_s)
     local ground = playerOnAirfield(you)
-    if h.wasGround == false and ground then h.landings = h.landings + 1 end
+    if h.wasGround == false and ground then
+        h.landings = h.landings + 1
+        h.Sa, h.SaN = math.max(0, h.Sa - #q), math.max(0, h.SaN - #q)   -- (they were coming in to land)
+    end
+    if ground then h.groundAt, h.aq = now, {} end
     h.wasGround = ground
     if ground or not (D.state == "spawning" or D.state == "wave" or D.state == "fighting") then return end
     h.S = h.S + 1
@@ -872,9 +904,12 @@ function PROF.sample(now, you)
     h.alt[b] = (h.alt[b] or 0) + 1
     local hc, sc = hcfg("high"), CFG.stats or {}
     local nearKm, tkm, tdeg = num(hc.near_km, 15), (sc.tail_km or 3) * 100000, sc.tail_deg or 70
-    local sum, n, tailing = 0, 0, false
+    local sum, n, tailing, raid = 0, 0, false, false
     for _, p in ipairs(planes or {}) do
-        if not p.down and p.at and p.dist and p.dist <= nearKm and not (p.unit and BOMBER_UNIT[p.unit]) then
+        local u = p.unit
+        if p.down then                                              -- (gone)
+        elseif u and (BOMBER_UNIT[u] or u:find("^SV_Unit_Ladon")) then raid = true   -- (the airfield needs you)
+        elseif p.at and p.dist and p.dist <= nearKm then
             sum, n = sum + p.at.Z / 100, n + 1
             local me = p.youAt or you
             if not tailing and p.fwd then
@@ -884,8 +919,11 @@ function PROF.sample(now, you)
         end
     end
     if (n > 0 and m >= sum / n + num(hc.over_m, 1000)) or (n == 0 and m >= num(hc.alone_m, 5000)) then h.Sh = h.Sh + 1 end
-    local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
-    if math.sqrt(dx * dx + dy * dy) / 100000 <= num(hcfg("airfield").km, 8) then h.Sa = h.Sa + 1 end
+    if not ((raid and ac.skip_raids ~= false) or (h.groundAt and now - h.groundAt < num(ac.after_takeoff_s, 45))) then
+        h.SaN = h.SaN + 1
+        local dx, dy = you.X - AIRFIELD.X, you.Y - AIRFIELD.Y
+        if math.sqrt(dx * dx + dy * dy) / 100000 <= num(ac.km, 8) then h.Sa = h.Sa + 1; q[#q + 1] = now end
+    end
     if tailing then h.St = h.St + 1 end
 end
 
@@ -938,6 +976,10 @@ function PROF.weights(round)
         else
             parts[#parts + 1] = "Lancers' height: yours not known yet"
         end
+        -- (the squad director's top cover more often: DIR.roundStart's top_cover budget x (1 + top), with roles off too,
+        -- where it holds any flight; the U8 review's scope gap)
+        ctr.top = math.max(0, num(hcfg("high").top_cover_x, 0)) * st.high
+        if ctr.top > 0 then parts[#parts + 1] = string.format("top cover x%.2f", 1 + ctr.top) end
     end
     if st.airfield > 0 then
         local c, sk = hcfg("airfield"), CFG.strike or {}
@@ -956,8 +998,8 @@ function PROF.weights(round)
         hp[#hp + 1] = string.format("%s %s%s", k, f2(hab[k]), st[k] > 0 and string.format(" (over %s, strength %.2f)",
             f2(num(hcfg(k).threshold, 1)), st[k]) or "")
     end
-    log(string.format("learning: round %d: habits %s (this run %d of your kills, %d s flown; the profile %s) -> %s", round,
-        table.concat(hp, ", "), h.K, h.S * 2,
+    log(string.format("learning: round %d: habits %s (this run %d of your kills, %d of fighters, %d s flown; the profile %s)" ..
+        " -> %s", round, table.concat(hp, ", "), h.K, h.Kf or 0, h.S * 2,
         sv and string.format("%d runs, %d learnt from", sv.runs or 0, sv.learnt or 0) or "none",
         #parts > 0 and table.concat(parts, ", ") or "nothing to counter"))
 end
@@ -1057,11 +1099,13 @@ local function render(sv, h)
     end
     return table.concat(L, "\n") .. "\n"
 end
--- written whole: <file>.tmp, then the old one removed and the new one moved in (as survival.ini's update)
+-- written whole: <file>.tmp, then the old one removed and the new one moved in (as survival.ini's update). One that
+-- doesn't land leaves wrote.failed: PROF.load then keeps this session's profile (the file's older) until one does.
 local function write(sv, h)
     local p = filePath()
     local f = io.open(p .. ".tmp", "w")
     if not f then
+        wrote.failed = true
         if not wrote.said then wrote.said = true; log("learning: can't write config\\" .. FILE .. ": the profile stays this session's") end
         return false
     end
@@ -1070,35 +1114,47 @@ local function write(sv, h)
     os.remove(p)
     local ok, err = os.rename(p .. ".tmp", p)
     if not ok and not wrote.said then wrote.said = true; log("learning: " .. FILE .. " not moved in: " .. tostring(err)) end
+    wrote.failed = not ok
     return ok and true or false
 end
 
 -- run h (this run's counts, or an unfinished one's from the file) into profile sv: its runs and kills always; its
--- shares (each weighed by its evidence: K / (K + fold_kills), S / (S + fold_samples), at most run_weight_max; the first
--- run learnt from: its own) when it has min_kills of your kills and started at round 1. nil, or why it wasn't learnt.
+-- shares (each weighed by its evidence: Kf / (Kf + fold_kills), S / (S + fold_samples), at most run_weight_max; a share
+-- the profile has none of yet: the run's own) when it has min_kills of your kills of fighters and started at round 1;
+-- its time shares and height only with min_samples samples (SaN for the airfield's: a first run's few samples would
+-- otherwise stand as the profile for runs to come, the U8 review). nil and a note (what wasn't learnt), or why not.
 local function foldInto(sv, h, from)
     local c = pcfg()
     sv.runs, sv.kills = (sv.runs or 0) + 1, (sv.kills or 0) + h.K
-    local minK = num(c.min_kills, 8)
-    if h.K < minK then return string.format("only %d of your kills, min_kills %d", h.K, minK) end
+    local minK, kf = num(c.min_kills, 8), h.Kf or 0
+    if kf < minK then return string.format("only %d of your kills of fighters, min_kills %d", kf, minK) end
     if (from or 1) > 1 then return string.format("a head start at round %d", from) end
-    local s, first = runShares(h), (sv.learnt or 0) == 0
-    local maxW = math.max(0, math.min(1, num(c.run_weight_max, 0.5)))
+    local s = runShares(h)
+    if (sv.learnt or 0) == 0 then                  -- (the first run learnt from: its own, nothing older left in)
+        for _, k in ipairs(PARTS) do sv[k] = nil end
+        sv.alt_m = nil
+    end
+    local maxW, minS = math.max(0, math.min(1, num(c.run_weight_max, 0.5))), num(c.min_samples, 60)
     local function w(ev, fold) return math.min(maxW, ev / (ev + math.max(1, fold))) end
+    local short = {}
     for _, k in ipairs(PARTS) do
-        local x = s[k]
+        local x, ev = s[k], evidence(h, k)
+        if x ~= nil and not BY_KILL[k] and ev < minS then short[#short + 1] = k; x = nil end
         if x ~= nil then
-            local a = BY_KILL[k] and w(h.K, num(c.fold_kills, 30)) or w(h.S, num(c.fold_samples, 300))
-            if first or sv[k] == nil then sv[k] = x else sv[k] = (1 - a) * sv[k] + a * x end
+            local a = BY_KILL[k] and w(ev, num(c.fold_kills, 30)) or w(ev, num(c.fold_samples, 300))
+            if sv[k] == nil then sv[k] = x else sv[k] = (1 - a) * sv[k] + a * x end
         end
     end
-    local alt = altMedian(h)
+    local alt = (h.S or 0) >= minS and altMedian(h) or nil
     if alt then
         local a = w(h.S, num(c.fold_samples, 300))
-        if first or not sv.alt_m then sv.alt_m = alt else sv.alt_m = (1 - a) * sv.alt_m + a * alt end
+        if not sv.alt_m then sv.alt_m = alt else sv.alt_m = (1 - a) * sv.alt_m + a * alt end
+    elseif altMedian(h) then
+        short[#short + 1] = "height"
     end
     sv.learnt = (sv.learnt or 0) + 1
-    return nil
+    return nil, #short > 0 and string.format("not its %s (%d samples, %d of them for the airfield; min_samples %d)",
+        table.concat(short, ", "), h.S or 0, h.SaN or 0, minS) or nil
 end
 local function profileText(sv)
     local hb, t = habitsOf(sv), {}
@@ -1110,16 +1166,23 @@ local function runText(h)
     local s, t = habitsOf(runShares(h)), {}
     for _, k in ipairs(HABITS) do t[#t + 1] = k .. " " .. f2(s[k]) end
     local alt = altMedian(h)
-    return string.format("%d of your kills (missiles %d, gun %d, of %d with a weapon seen; close %d, from behind %d, of %d " ..
-        "with an aspect), %d s flown (high %s, near the airfield %s, on a tail %s%s), %d landings: %s", h.K, h.Km, h.Kg, h.Kw,
-        h.Kc, h.Kb, h.Kgeo, h.S * 2, share(h.Sh, h.S), share(h.Sa, h.S), share(h.St, h.S),
-        alt and string.format(", usually %.1f km up", alt / 1000) or "", h.landings or 0, table.concat(t, ", "))
+    return string.format("%d of your kills (%d of fighters: missiles %d, gun %d, of %d with a weapon seen; close %d, from " ..
+        "behind %d, of %d with an aspect), %d s flown (high %s, near the airfield %s of %d s it didn't need you, on a tail " ..
+        "%s%s), %d landings: %s", h.K, h.Kf or 0, h.Km, h.Kg, h.Kw, h.Kc, h.Kb, h.Kgeo, h.S * 2, share(h.Sh, h.S),
+        share(h.Sa, h.SaN), (h.SaN or 0) * 2, share(h.St, h.S), alt and string.format(", usually %.1f km up", alt / 1000) or "",
+        h.landings or 0, table.concat(t, ", "))
 end
 
 -- The profile from its file (where: "the main menu", "level load"). A [run] left in it (the game closed mid-run) is
 -- learnt from first, once a session. A missing, broken or other-format file: a neutral profile and a line, never an
--- error (hard rule 50). save off: no profile (each run on its own).
+-- error (hard rule 50). save off: no profile (each run on its own). A write that didn't land this session (wrote.failed:
+-- the folder can't be written): this session's profile is kept, not the older file (the U8 review).
 function PROF.load(where)
+    if wrote.failed and PROF.saved and pon() and pcfg().save ~= false then
+        log(string.format("learning: profile at %s: this session's kept (config\\%s couldn't be written: the file's older): %s",
+            where, FILE, profileText(PROF.saved)))
+        return
+    end
     PROF.saved = nil
     if not pon() then return end
     if pcfg().save == false then log("learning: [profile] save off: each run learns on its own"); return end
@@ -1147,10 +1210,10 @@ function PROF.load(where)
         local h = newHabit()
         for _, k in ipairs(RUN_KEYS) do h[k] = run[k] or 0 end
         h.id, h.alt, h.altM = run.id, nil, run.alt_m
-        local why = foldInto(sv, h, run.from or 1)
+        local why, note = foldInto(sv, h, run.from or 1)
         write(sv, nil)
         extra = string.format("; the run the game closed in (round %d, %d of your kills) %s first", run.round or 0, h.K,
-            why and ("counted, not learnt from (" .. why .. ")") or "learnt from")
+            why and ("counted, not learnt from (" .. why .. ")") or ("learnt from" .. (note and (", " .. note) or "")))
     end
     PROF.saved = sv
     log(string.format("learning: profile at %s from config\\%s: %s%s%s", where, FILE, profileText(sv), extra,
@@ -1204,12 +1267,12 @@ function PROF.fold(how)
         return
     end
     local sv = PROF.saved or neutral()
-    local why = foldInto(sv, h, D and D.startRound or 1)
+    local why, note = foldInto(sv, h, D and D.startRound or 1)
     PROF.saved = sv
     local ok = write(sv, nil)
     log(string.format("learning: run over (%s): %s; %s; the profile now %s%s", tostring(how), runText(h),
-        why and ("counted, not learnt from (" .. why .. ")") or "learnt from", profileText(sv),
-        ok and (", saved to config\\" .. FILE) or ", NOT saved"))
+        why and ("counted, not learnt from (" .. why .. ")") or ("learnt from" .. (note and ("; " .. note) or "")),
+        profileText(sv), ok and (", saved to config\\" .. FILE) or ", NOT saved"))
 end
 
 -- A co-op host's new run while this game's level goes on (STATS.hostReset): this one's over, the next starts empty

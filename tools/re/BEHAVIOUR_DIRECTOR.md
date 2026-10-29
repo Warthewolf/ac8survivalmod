@@ -1309,25 +1309,26 @@ pass unchanged but one source check in late_rounds_test.lua (startRound's `TIER.
 The thesis' P6: "The kill log already records aspect, altitude and weapons used for every kill. Build a per-run profile
 and counter it with live levers [...] Across runs, save the profile to config and pick the next run's role mix from it
 at level load." Built in Scripts/sv_stats.lua as PROF (its own `do ... end` block at the end of the part; the part is
-at 62 of 200 locals), from the measurements' own hooks (unit 1), with the levers in sv_rounds, sv_ai, sv_spawn, sv_rows
+at 64 of 200 locals), from the measurements' own hooks (unit 1), with the levers in sv_rounds, sv_ai, sv_spawn, sv_rows
 and sv_main (the metrics brief's steps 11-13, coop-perf step 8, the critic's flare row and squad-director hook). Lua,
 survival.default.ini, stats_report.py and the packaging rm lists only: no build change, no new event, row or behaviour
 script, no co-op message (the profile is each game's own; contract: never synced). No COOP_TAG / VERSION bump (the
 contract's single bump comes last). Every habit has its own switch; nothing here has run in game.
 
-| habit | measured (your kills: KILL.by "you" only; your flying: every 2 s of a fight in the air) | countered by (its strength s, 0-1) | where it acts |
+| habit | measured (your kills of fighters: KILL.by "you" only, a pool flight's plane, not a bomber's, a Ladon's or a special's; your flying: every 2 s of a fight in the air) | countered by (its strength s, 0-1) | where it acts |
 |---|---|---|---|
 | missile-heavy | kills with a missile or a special spent in the 6 s before and the gun not (KILL.geom's `used`), of your kills with a weapon seen | the jammer more often: its chance x (1 + jammer_x 1.0 x s), at most jammer_max 0.9; PilotRank +rank_add 1 from tier rank_from Veteran (more flare and strong-evasion picks in Survival's sets); the AI's flares refilled (the critic's lever: a copy of NPC_FCS_PlaneFlr000 holding 20 and reloading in 8 s on every fighter's flare slot; chosen at the main menu from the saved profile, so from the next game session) | startRound's jammer pick; enemyTier; searchSetup's slot loop (PROF.menu decides) |
 | gun / close fights | the bigger of: kills with the gun spent, of your kills with a weapon seen; kills within CFG.stats close_km 1.2, of your kills with an aspect | post-stall (cobra, kulbit) on every airframe from tier post_stall_from Regular (as a spike's post_stall_all does); Duelists x (1 + 1.0 s) and Wolf pairs x (1 + 0.5 s) in the round's role mix | enemyManeuvers; ROLE.pickRound |
 | tail-chaser | 0.6 x kills from behind (CFG.stats tail_km 3 / tail_deg 70: the kill-time line's test) + 0.4 x time on an enemy's tail (an enemy within tail_km with you within tail_deg of its six, from where you were at its sample, p.youAt), full at tail.time_full 0.3 of your time | the squad director's cover-the-tailed and trap: budgets x (1 + budget_x 1.0 x s), their cooldowns as much shorter (the critic's hook: D.counter.tail in DIR.roundStart); Wolf pairs x (1 + 1.0 s) | DIR.roundStart; ROLE.pickRound |
-| stays high | time high.over_m 1000 above the mean height of the enemy fighters within high.near_km 15 (none near: above high.alone_m 5000) | Lancers x (1 + 1.5 s) in the mix, and they come in above_m 1000 over your usual height (the median of your heights; within their band, at most 8.5 km; only when that's above their own 4-6.5 km), so the top cover (P2 holds Lancers) sits above you | ROLE.pickRound; spawnFlight |
-| hugs the airfield / AA | time within airfield.km 8 of the runway | the airfield's strike package more often: its chance x (1 + strike_x 1.0 x s), at most strike_max 0.9; Skirmishers x (1 + 1.5 s) (they stand off) | startRound's strike pick; ROLE.pickRound |
+| stays high | time high.over_m 1000 above the mean height of the enemy fighters within high.near_km 15 (none near: above high.alone_m 5000) | Lancers x (1 + 1.5 s) in the mix, and they come in above_m 1000 over your usual height (the median of your heights; within their band, at most 8.5 km; only when that's above their own 4-6.5 km), so the top cover (P2 holds Lancers) sits above you; the squad director's top cover: its budget x (1 + top_cover_x 1.0 x s), its cooldown as much shorter (with roles off too, where it holds any flight) | ROLE.pickRound; spawnFlight; DIR.roundStart |
+| hugs the airfield / AA | time within airfield.km 8 of the runway, of the time the airfield didn't need you there (SaN: no bomber or Ladon up, skip_raids; not in the after_takeoff_s 45 after you were on the ground; a landing takes back the before_landing_s 45 of airfield samples before it, the approach) | the airfield's strike package more often: its chance x (1 + strike_x 1.0 x s), at most strike_max 0.9; Skirmishers x (1 + 1.5 s) (they stand off) | startRound's strike pick; ROLE.pickRound |
 
 The maths (CFG.profile; every share 0-1):
 
     the run's shares   missile = Km / Kw, gun = max(Kg / Kw, Kc / Kgeo), behind = Kb / Kgeo,
-                       tail_time = min(1, (St / S) / tail.time_full), high = Sh / S, airfield = Sa / S
-                       (K your kills, Kw of them with a weapon seen, Kgeo with an aspect; S samples of 2 s)
+                       tail_time = min(1, (St / S) / tail.time_full), high = Sh / S, airfield = Sa / SaN
+                       (Kf your kills of fighters, Kw of them with a weapon seen, Kgeo with an aspect; S samples of
+                       2 s, SaN of them the airfield's: no raid up, not just after a takeoff, not a landing's approach)
     tail               0.6 x behind + 0.4 x tail_time
     in force           this run's share once it has live_kills 5 of your kills (live_samples 30 samples for the time
                        shares), weighed against the saved profile's as if that were prior_kills 20 kills (prior_samples
@@ -1335,9 +1336,11 @@ The maths (CFG.profile; every share 0-1):
     strength           0 at or under the habit's threshold (missile 0.8, gun 0.35, tail 0.7, high 0.5, airfield 0.4),
                        (share - threshold) / (1 - threshold) over it: 1 at a share of 1.0
     a run learnt from  each saved share = (1 - a) x saved + a x the run's, a = n / (n + fold_kills 30) for the kill
-                       shares (n = K), n / (n + fold_samples 300) for the time shares and your height (n = S), at most
-                       run_weight_max 0.5; the first run learnt from: its own. Only a run with min_kills 8 of your
-                       kills that started at round 1 (START AT ROUND > 1, a head start, is counted, not learnt from)
+                       shares (n = Kf), n / (n + fold_samples 300) for the time shares and your height (n = S; SaN
+                       for the airfield's), at most run_weight_max 0.5; a share the profile has none of yet (the first
+                       run learnt from: all of them): the run's own. Only a run with min_kills 8 of your kills of
+                       fighters that started at round 1 (START AT ROUND > 1, a head start, is counted, not learnt
+                       from); its time shares and height only with min_samples 60 samples (2 minutes)
     role weights       each role's share of the round's mix x (1 + the sum of its habits' gain x strength); a role the
                        band has no share for stays out (rounds 1-3 have no Skirmishers); never an ace round's ace_mix
 
@@ -1347,12 +1350,12 @@ player. The thresholds and gains are a first guess; the round lines log the raw 
 ### What was built
 | piece | where | what it does |
 |---|---|---|
-| your kills | `PROF.kill(p, g, by)` from STATS.down (the sweep's death branch, every game; before the measurements' own switch, so [stats] off still learns) | yours only (by "you": a co-op partner's are "wingmate", an ally's "allies", a Ladon's nil); the weapon from g.used (the gun's shots in the 6 s before, else a missile's or a special's; nothing seen: no weapon), close and behind from its aspect (p.youAt's, unit 1) |
-| your flying | `PROF.sample(now, you)` from STATS.sample (every 2 s, the sweep's summaries) | a fight's sample (D.state spawning / wave / fighting, not on the ground: playerOnAirfield): your height into a 250 m histogram, high, near the airfield, on a tail; a landing (in the air, then on the ground) counted. Not twice within 1.5 s of the round clock (a pause). Cached fields only (p.at, p.fwd, p.dist, p.youAt): no reads |
+| your kills | `PROF.kill(p, g, by)` from STATS.down (the sweep's death branch, every game; before the measurements' own switch, so [stats] off still learns) | yours only (by "you": a co-op partner's are "wingmate", an ally's "allies", a Ladon's nil), K all of them; the shares from your kills of fighters only (Kf: p.unit a pool flight's, not a bomber's; a Ladon or a special has no pool flight); the weapon from g.used (the gun's shots in the 6 s before, else a missile's or a special's; nothing seen: no weapon), close and behind from its aspect (p.youAt's, unit 1) |
+| your flying | `PROF.sample(now, you)` from STATS.sample (every 2 s, the sweep's summaries) | a fight's sample (D.state spawning / wave / fighting, not on the ground: playerOnAirfield): your height into a 250 m histogram, high, near the airfield, on a tail; a landing (in the air, then on the ground) counted. The airfield's own count (SaN) leaves out the time while a bomber or a Ladon is up, the after_takeoff_s after you were on the ground, and a landing's before_landing_s approach (taken back). Not twice within 1.5 s of the round clock (a pause). Cached fields only (p.at, p.fwd, p.dist, p.youAt); where you are from the sweep, else STATS.sample reads it (one read every 2 s: the sweep's slot 0 visits only the 8th, 16th ... plane) |
 | the counters | `PROF.weights(round)` from startRound (the host or solo), before its strike, jammer and fighter picks; `D.counter` | each habit's share in force, its strength, and what that turns on (`jammerX`, `rank` / `rankFrom`, `postStallFrom`, `tail`, `lancerAlt`, `strikeX`, `roleW`); one "learning: round N" line a round with every share next to every decision |
-| the levers | `PROF.chance` (sv_rounds.lua startRound: the strike's and the jammer's `math.random() <` chance), `PROF.rankAdd` (sv_ai.lua enemyTier, before p.rankBase: P4's live rewrite and the jammer's boost keep it), `PROF.postStall` (enemyManeuvers' `all`), `PROF.roleW` (sv_spawn.lua ROLE.pickRound: the mix's weights; its "roles:" line says "weighed by your habits"), `PROF.lancerAlt` (spawnFlight's Lancer height), D.counter.tail (sv_director.lua DIR.roundStart, unit 6's hook: "cover and trap xN (your tail chasing)") | each a pcall'd read of D.counter; on a co-op joiner each gives the base / 0 / false / nil (its enemies are the host's copies) |
+| the levers | `PROF.chance` (sv_rounds.lua startRound: the strike's and the jammer's `math.random() <` chance), `PROF.rankAdd` (sv_ai.lua enemyTier, before p.rankBase: P4's live rewrite and the jammer's boost keep it), `PROF.postStall` (enemyManeuvers' `all`), `PROF.roleW` (sv_spawn.lua ROLE.pickRound: the mix's weights; its "roles:" line says "weighed by your habits"), `PROF.lancerAlt` (spawnFlight's Lancer height), D.counter.tail (sv_director.lua DIR.roundStart, unit 6's hook: "cover and trap xN (your tail chasing)"), D.counter.top (DIR.roundStart: the top cover's budget and cooldown, "top cover xN (you stay high)") | each a pcall'd read of D.counter; on a co-op joiner each gives the base / 0 / false / nil (its enemies are the host's copies) |
 | the AI's flares | `PROF.menu()` from sv_main.lua's main-menu block, once a session, before setsSetup / searchSetup; sv_rows.lua searchSetup's slot loop (`aiFlares`) | the profile read; with the saved missile habit (strength > 0) or `[flares] always`: PROF.flareWant = { magazine, reload_s }, and every fighter row's NPC_FCS_PlaneFlr* slot (aces' too; not MINDRIPPER's, AB.L..IN's or VALKA's) onto `<row>_SV_FLR` (one row for every spike level). Rows are made once a session (cloneRow keeps a row), so a new habit shows from the next game start |
-| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written whole (`.tmp`, the old one removed, the new one moved in) at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range |
+| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written whole (`.tmp`, the old one removed, the new one moved in) at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range. A write that didn't land (the folder can't be written) leaves this session's profile in force: PROF.load keeps it until a write lands |
 | packaging | tools/package_release.sh, tools/package_test.sh, .gitignore | a dev's survival_profile.ini never ships or goes into git |
 | report | tools/checks/stats_report.py `learning_lines` | a row per round (each habit's share, * where countered, the counters), each run's end and the profile lines |
 
@@ -1379,14 +1382,16 @@ The file (made by the game; a player may delete it to start over):
     round = 3 ... alt_m = 2625
 
 ### CFG keys (CFG.profile, CFG.flares; `[profile]`, `[profile.<habit>]`, `[flares]` in survival.ini; PERSONAL in co-op)
-- `profile`: `enabled` true, `save` true, `checkpoint` true, `min_kills` 8, `live_kills` 5, `live_samples` 30,
+- `profile`: `enabled` true, `save` true, `checkpoint` true, `min_kills` 8 (of fighters), `min_samples` 60, `live_kills` 5, `live_samples` 30,
   `prior_kills` 20, `prior_samples` 150, `fold_kills` 30, `fold_samples` 300, `run_weight_max` 0.5.
 - `profile.missile`: `enabled`, `threshold` 0.8, `jammer_x` 1.0, `jammer_max` 0.9, `rank_add` 1, `rank_from` Veteran
   (a CFG.tiers.list name, any case).
 - `profile.gun`: `enabled`, `threshold` 0.35, `post_stall_from` Regular, `duelist` 1.0, `wolf` 0.5.
 - `profile.tail`: `enabled`, `threshold` 0.7, `time_full` 0.3, `budget_x` 1.0, `wolf` 1.0.
-- `profile.high`: `enabled`, `threshold` 0.5, `over_m` 1000, `alone_m` 5000, `near_km` 15.0, `lancer` 1.5, `above_m` 1000.
-- `profile.airfield`: `enabled`, `threshold` 0.4, `km` 8.0, `strike_x` 1.0, `strike_max` 0.9, `skirm` 1.5.
+- `profile.high`: `enabled`, `threshold` 0.5, `over_m` 1000, `alone_m` 5000, `near_km` 15.0, `lancer` 1.5, `above_m` 1000,
+  `top_cover_x` 1.0.
+- `profile.airfield`: `enabled`, `threshold` 0.4, `km` 8.0, `skip_raids` true, `after_takeoff_s` 45, `before_landing_s` 45,
+  `strike_x` 1.0, `strike_max` 0.9, `skirm` 1.5.
 - `flares`: `enabled` true, `always` false (every session: a test), `magazine` 20 (stock 10), `reload_s` 8.0 (stock 25).
 - Both sections are PERSONAL (sv_coop.lua): a host's settings never change a joiner's learning or its flare row, and
   the file is not CFG at all (M.sendSettings never sees it). Only the host's counters reach the room (its startRound
@@ -1394,15 +1399,17 @@ The file (made by the game; a player may delete it to start over):
 
 ### Log lines to look for in a test
 - Each round's start (the host or solo): `learning: round 12: habits missile 0.95 (over 0.80, strength 0.75), gun 0.60
-  (over 0.35, strength 0.38), tail 0.94 (...), high 0.80 (...), airfield 0.70 (...) (this run 20 of your kills, 200 s
-  flown; the profile 1 runs, 1 learnt from) -> the jammer's chance 0.50 -> 0.87, PilotRank +1 from Veteran, the AI's
-  flares refilled (this session's), post-stall on every airframe from Regular, cover and trap x1.80, Lancers from 7.1 km
-  up (your usual 6.1 km), the strike's chance 0.35 -> 0.52, role mix duelist x1.38, lancer x1.90, wolf x1.99, skirm
-  x1.75` (`-` for a share not known yet; `-> nothing to counter`; `(roles off: no effect)` with roles off).
+  (over 0.35, strength 0.38), tail 0.94 (...), high 0.80 (...), airfield 0.70 (...) (this run 20 of your kills, 20 of
+  fighters, 200 s flown; the profile 1 runs, 1 learnt from) -> the jammer's chance 0.50 -> 0.87, PilotRank +1 from
+  Veteran, the AI's flares refilled (this session's), post-stall on every airframe from Regular, cover and trap x1.80,
+  Lancers from 7.1 km up (your usual 6.1 km), top cover x1.60, the strike's chance 0.35 -> 0.52, role mix duelist
+  x1.38, lancer x1.90, wolf x1.99, skirm x1.75` (`-` for a share not known yet; `-> nothing to counter`; `(roles off:
+  no effect)` with roles off).
 - What it turns on: `roles: round 12 (the mix from round 10, weighed by your habits: duelist 0.42, lancer 0.48, ...)`,
-  `director: round 12's budgets (...); cover and trap x1.80 (your tail chasing)`, `round 12: the jammer flies with ...`,
-  `round 12: a strike package (...) goes for the airfield`, `tiers: round 12 Veteran (...): PilotRank 2 -> 5`,
-  `maneuvers: f16c (...) post-stall allowed: ...`, the Lancers' spawn lines `..., 7.1 km up`.
+  `director: round 12's budgets (...); cover and trap x1.80 (your tail chasing); top cover x1.60 (you stay high)`,
+  `round 12: the jammer flies with ...`, `round 12: a strike package (...) goes for the airfield`, `tiers: round 12
+  Veteran (...): PilotRank 2 -> 5`, `maneuvers: f16c (...) post-stall allowed: ...`, the Lancers' spawn lines `..., 7.1
+  km up`.
 - The main menu: `learning: profile at the main menu from config\survival_profile.ini: 2 runs (2 learnt from), 50 of
   your kills; missile 0.72, gun 0.55, tail 0.97, high 0.40, airfield 0.35, your usual height 4.6 km`, then `learning:
   the AI's flares refilled this session (your saved missile share 0.85, over 0.80): 20 in the magazine, 8.0 s to reload`
@@ -1410,13 +1417,17 @@ The file (made by the game; a player may delete it to start over):
   `learning: the AI's flares stay stock this session (your saved missile share 0.72; its threshold 0.80)`.
 - Each level load: `learning: profile at level load ...` (`none yet (...made at your first run's end)`; `... is format 2,
   not 1: starting from a neutral profile`; `; N lines skipped`; `; the run the game closed in (round 3, 9 of your kills)
-  learnt from first`).
-- A run's end: `learning: run over (died): 23 of your kills (missiles 15, gun 5, of 20 with a weapon seen; close 3, from
-  behind 12, of 21 with an aspect), 812 s flown (high 30%, near the airfield 5%, on a tail 20%, usually 3.9 km up), 2
-  landings: missile 0.75, gun 0.25, tail 0.43, high 0.30, airfield 0.05; learnt from; the profile now 8 runs (6 learnt
-  from), ...; saved to config\survival_profile.ini` (`counted, not learnt from (only 5 of your kills, min_kills 8)` / `(a
-  head start at round 16)`; `, NOT saved` with `learning: can't write config\survival_profile.ini: the profile stays
-  this session's`; `; not saved ([profile] save off)`).
+  learnt from[, not its tail_time, high, airfield, height (40 samples, ...; min_samples 60)] first`; after a failed
+  write: `learning: profile at level load: this session's kept (config\survival_profile.ini couldn't be written: the
+  file's older): ...`).
+- A run's end: `learning: run over (died): 23 of your kills (21 of fighters: missiles 15, gun 5, of 20 with a weapon
+  seen; close 3, from behind 12, of 21 with an aspect), 812 s flown (high 30%, near the airfield 5% of 640 s it didn't
+  need you, on a tail 20%, usually 3.9 km up), 2 landings: missile 0.75, gun 0.25, tail 0.43, high 0.30, airfield
+  0.05; learnt from; the profile now 8 runs (6 learnt from), ...; saved to config\survival_profile.ini` (`learnt from;
+  not its tail_time, high, airfield, height (24 samples, 20 of them for the airfield; min_samples 60)`; `counted, not
+  learnt from (only 5 of your kills of fighters, min_kills 8)` / `(a head start at round 16)`; `, NOT saved` with
+  `learning: can't write config\survival_profile.ini: the profile stays this session's`; `; not saved ([profile] save
+  off)`).
 - Errors: `learning: error ...` (startRound), `learning: profile error ...` (the main menu), `learning: level load error
   ...`.
 - `python tools/checks/stats_report.py AC8SurvivalMode_lua.log`: `learning lines: N: rounds countered C of R, runs over
@@ -1434,8 +1445,13 @@ The file (made by the game; a player may delete it to start over):
    CFG.maneuvers), more duelists and Wolf pairs in the `roles:` lines.
 4. Tail habit (sit on tails): `cover and trap x1.xx (your tail chasing)` in the director's budget line, more `cover` /
    `trap` director lines a round than without.
-5. High habit (fly 2 km over the fight): more Lancers, and their spawn lines' height about 1 km over yours.
-6. Airfield habit (stay over the runway with its AA): the strike package more often (rounds 6+), more Skirmishers.
+5. High habit (fly 2 km over the fight): more Lancers, and their spawn lines' height about 1 km over yours; `top cover
+   xN (you stay high)` in the director's budget line, more `top_cover` director lines a round (with roles off too).
+6. Airfield habit (stay over the runway with its AA): the strike package more often (rounds 6+), more Skirmishers. Then
+   defend the airfield against a raid and land to rearm: the run-over line's "near the airfield N% of M s it didn't
+   need you" should not grow from that (M less than the time flown).
+6a. Rounds 1-2 (4 and 6 enemies): the round lines' "N s flown" grows every round (the samples no longer need an 8th
+   plane up).
 7. A crash mid-run (close the game after a round's clear): the next start's `the run the game closed in ... learnt from
    first`, once.
 8. Co-op: each game's own file from its own kills (a joiner's run-over line has only its kills); only the host logs
@@ -1446,33 +1462,40 @@ The file (made by the game; a player may delete it to start over):
 ### Offline test
 `sh tools/checks/profile_test.sh` (tools/checks/profile_test.lua on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
 sv_spawn, sv_rounds, sv_leaderboard, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop, Lua 5.4.6; then
-stats_report.py on its log), 81 checks:
+stats_report.py on its log), 95 checks:
 - survival.ini's [profile] sections and [flares] read (an integer stays one, a tier name in any case); every switch on
   as shipped;
-- the classification: 12 of your kills by weapon (missiles, a special, the gun, gun and a missile: the gun's, nothing
-  seen) and aspect (behind, head on, close; none read), a partner's / an ally's / a Ladon's not counted; six samples
-  (high over the enemies near, not high, high alone, not high alone, near the airfield, on a tail from p.youAt while
-  you're 60 km off), a pause, the ground (a landing), between rounds; the shares, tail's 0.6 / 0.4, the strengths at,
-  under and over their thresholds; this run's shares only from live_kills / live_samples, the saved profile alone until
-  then, weighed as prior_kills / prior_samples after, a profile learnt from no run not weighed;
+- the classification: 12 of your kills of fighters by weapon (missiles, a special, the gun, gun and a missile: the
+  gun's, nothing seen) and aspect (behind, head on, close; none read), a partner's / an ally's / a Ladon's not counted;
+  your kills of a raid's bomber, a Ladon, a special and a plane with no flight counted as kills, not in the shares;
+  twelve samples (high over the enemies near, not high, high alone, not high alone, near the airfield, on a tail from
+  p.youAt while you're 60 km off; over the airfield 14 s and 54 s after a takeoff, with a bomber up, with a Ladon up,
+  skip_raids off, away from it), a pause, the ground (a landing, its approach taken back), between rounds; the shares,
+  tail's 0.6 / 0.4, the strengths at, under and over their thresholds; this run's shares only from live_kills /
+  live_samples, the saved profile alone until then, weighed as prior_kills / prior_samples after, a profile learnt from
+  no run not weighed; the real sweep (sv_main.lua planeSweep's slot 0, then STATS.sample as probeTick calls it) with 4
+  planes up: the sweep reads nothing, STATS.sample reads where you are, every sample counted;
 - the counters: every habit at once (strengths 0.75 / 0.38 / 0.80 / 0.60 / 0.50): the jammer's and the strike's
   chances (capped, never lowered), PilotRank from Veteran, post-stall from Regular, cover and trap, the role weights, the
-  Lancers' height, the round's line word for word; each habit's switch, [profile] off, no habits ("nothing to
+  Lancers' height, the top cover's factor, the round's line word for word; each habit's switch, [profile] off, no habits ("nothing to
   counter"), a co-op joiner (no counters; a counter left in D read as none; its own kills counted, a partner's not);
 - the levers on the real code: enemyTier (a Veteran 4 + 1 = 5, rankBase too; a Regular 3) and enemyManeuvers (a
   Regular's F-16C cobra and kulbit) with and without a counter; spawnFlight's Lancer at your usual height + 1 km, capped
   at 8.5 km, a duelist's own; startRound at round 10 with math.random fixed at 0.5: no strike and no jammer without
-  habits, both with them, the role mix weighed and the director's cover and trap x1.80 (DIR.roundStart); searchSetup on
+  habits, both with them, the role mix weighed and the director's cover and trap x1.80 and top cover x1.60 (its budget
+  that much higher; DIR.roundStart); searchSetup on
   fake tables: the flare row made and on every fighter row at every spike level (the stock one untouched) after
   PROF.menu read a missile-heavy file, stock under the threshold, [flares] always and off;
 - the file: none (neutral, logged); a run's end written and read back the same (the round trip) and its line; a run
   learnt from once; the next run's first round countered from the file alone; a second run blended (0.725 / 0.400); 5
-  kills and a head start counted only; nothing flown not a run; a round's checkpoint ([run]) learnt from at the next
-  start and gone from the file, never twice in a session; another format, no version line, broken values (clamped,
-  skipped, a bad [run] id never learnt from), a binary file: neutral, never an error; a folder that can't be written
-  (logged once, the profile kept for the session); save off (no profile, no file); LB.finish -> STATS.runEnd ->
-  PROF.fold with [stats] off; a co-op host's new run (STATS.hostReset: learnt from, the next one empty) and a resync
-  (goes on);
+  kills of fighters (of 9) and a head start counted only; nothing flown not a run; a round's checkpoint ([run], Kf and
+  SaN in it) learnt from at the next start (its 40 samples not: min_samples) and gone from the file, never twice in a
+  session; another format, no version line, broken values (clamped, skipped, a bad [run] id never learnt from), a
+  binary file: neutral, never an error; a folder that can't be written (logged once, the profile kept for the session,
+  and kept at the next level load over the older file; read from the file again once a write lands); save off (no
+  profile, no file); LB.finish -> STATS.runEnd -> PROF.fold with [stats] off; a co-op host's new run
+  (STATS.hostReset: learnt from, the next one empty) and a resync (goes on); min_samples: a run of 10 samples learnt
+  from for its kills only (its time shares and height left out, said in its line), the next run's 100 samples its own;
 - the hooks by their place in the source, and no math.random draw in PROF (the rounds' odds and the other units'
   seeded tests untouched), no FindAllOf or nameOf.
 The other units' tests pass unchanged (their startRound now also logs a `learning: round N ... nothing to counter` line).
@@ -1492,15 +1515,54 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
 - The aspect and the samples are up to 2 s old (the sweep); a kill read after its plane's last visit uses that visit.
 - The high habit's height counter only moves Lancers: every other pool flight's world-data band tops out at 4-5 km (the
   critic), so spawning them higher would pull them back down (ReturnToUnit). With roles off there are no Lancers: the
-  high habit then changes nothing (the top cover holds any flight but can't be put above you).
+  high habit then gives the squad director more top cover (its budget, any flight held) but can't put it above you.
 - The tail habit doesn't give non-ace tiers the aces' reversals (the metrics brief's optional lever): the squad
   director's cover-the-tailed (unit 6) is that lever now, and it's what the counter scales.
 - The role weights only move shares the round band has: Skirmishers start in round 4's band, so the airfield habit
   can't bring them earlier; an ace round's ace_mix is never weighed.
 - Co-op: only the host's habits pick the room's counters (contract). A joiner's habits aren't sent (a "pf" summary is
   out of scope); its copies' PilotRank comes from its own re-rolled enemyTier, without the host's rank counter
-  (coop-perf: "live rank and flare counters don't reach joiners' copies"); its flare row is its own profile's.
+  (coop-perf: "live rank and flare counters don't reach joiners' copies"); its flare row is its own profile's. That
+  part is per player as it should be: a joiner's missiles are decoyed by its own game's copies, so a missile-heavy
+  joiner meets refilled flares from its own file whatever the host's says.
+- The airfield habit's exclusions are judged from the planes list (any bomber or Ladon not down, wherever it is) and
+  your ground contacts; a raid's escorts alone (bombers down) count again. A landing takes back only the airfield
+  samples of its last before_landing_s, not a longer loiter before it.
 - A game that closes before a round's clear loses that round's counts (the checkpoint is at each clear). Runs with the
   test-only keys aren't flagged: a test run is learnt from like any other; delete the file after testing.
 - The thresholds and gains are guesses; the shares are logged every round to tune them.
 - No COOP_TAG / VERSION bump yet (the contract's single bump at the end): nothing new crosses the link.
+
+### Review fixes (after unit 8's review; not yet run in game)
+- **The samples stopped with fewer than 8 planes up (blocking).** PROF.sample needs where you are, and the 2 s
+  summaries passed only the sweep's read: the sweep reads you when it visits a plane, and the summaries run on its slot
+  0 (planes 8, 16, ...). Rounds 1-2 (4 and 6 enemies) gave no samples at all, later rounds none once their 8th plane was
+  down, so the time habits, your usual height and the landings came from a biased few. STATS.sample now reads you
+  itself when the sweep didn't (`if not you then you = playerLocation() end`: one read every 2 s, shared with the
+  airfield time it already read for). The offline test drives the real planeSweep with 4 planes up.
+- **min_samples (minor).** foldInto took a first run's time shares and height outright however few samples it had,
+  and current() then weighed them as prior_samples 150 for runs to come. Now a run's time shares and height go into
+  the profile only with min_samples 60 samples (SaN for the airfield's), its line says which were left out ("learnt
+  from; not its tail_time, high, airfield, height (10 samples, ...)"), and a share the profile has none of yet takes
+  the next run's own. The first run learnt from clears any older shares first (a hand-edited file).
+- **Fighters only in the kill shares (minor).** PROF.kill counted every kill of yours: a raid's or a strike package's
+  bombers (straight and level, shot from behind with missiles), Ladons and specials made anyone missile-heavy and a
+  tail chaser. The shares now come from your kills of fighters (Kf: p.unit a pool flight's, not a bomber's), as the
+  high habit's enemies near already did; min_kills counts them and they're the kill shares' evidence (live_kills,
+  fold_kills). K stays all your kills (the profile's total). Kf goes into [run].
+- **The airfield habit's feedback loop (minor).** Time near the runway included defending it against the raids and
+  strike packages its own counter sends, and every rearm's climb-out and approach. It's now the share of the time the
+  airfield didn't need you (SaN): not while a bomber or a Ladon is up (skip_raids), not in after_takeoff_s 45 after you
+  were on the ground, and a landing takes back the airfield samples of its before_landing_s 45 (the approach). SaN goes
+  into [run].
+- **A failed write lost the session's profile (minor).** PROF.load at the next level load replaced PROF.saved with the
+  older file (or a neutral profile). A write that doesn't land now sets wrote.failed, and PROF.load keeps this
+  session's profile ("profile at level load: this session's kept (... couldn't be written: the file's older)") until a
+  write lands.
+- **Scope: top cover above you with roles off too.** The high habit now also scales the squad director's top cover:
+  D.counter.top = top_cover_x 1.0 x strength, DIR.roundStart's top_cover budget x (1 + top) and its cooldown divided by
+  it ("; top cover x1.60 (you stay high)" in the budget line). With roles on the top cover is the Lancers, which come
+  in above your usual height; with roles off it holds any flight (not above you, their bands top out at 4-5 km).
+- Not changed: the tail habit's non-ace reversals (unit spec: the squad director's cover is the lever), sending
+  joiners' habits to the host (contract: the host's profile picks the room's mix), weighing the profile by its own
+  evidence in current() (prior_kills / prior_samples stay fixed weights; min_kills / min_samples are the guards).
