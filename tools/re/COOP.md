@@ -446,7 +446,9 @@ stand-ins' afterburner) is the runtime's (its notes in section 2).
   <SV_CoopFire's result>`; `SV_CoopFire(player N's plane, slot S) refused: <code>`; `player N's shots dropped: <n>
   <why>` (once a reason); `your gear down / up`, `player N's gear down here: EnableLandingGear done`; `your throttle
   0.950: afterburner on`; `copy N lost X, Y of it another player's stand-in's here`; the minute's tally `60 s: N shots
-  sent, N received (N fired here, N refused, N dropped, ...), your gun N bursts, your flares N, ...`.
+  sent, N received (N fired here, N refused, N dropped, ...), your gun N bursts, your flares N, ..., throttle up to N
+  (ab_throttle 0.9)` (full throttle's reading, to calibrate ab_throttle). SV_CoopFire's codes read through SV_ERR
+  (sv_ai.lua): -10 rate, -11 the game refused it, -13 not an AI plane with fire control, -14 a bad target.
 - **Test key** (TEST ONLY, stripped from releases): Ctrl+F5 in a run with MOONCHILD or VIPER up (bought in the STORE):
   each press the next step on that plane at your current target (SV_PlayerTarget): 1 missiles (slot 2) with its fire
   permission off, 2 with it on, 3 its gun, 4 its flares, 5 gear down, 6 gear up; `coopfire: test <n>: <plane> (<unit>)
@@ -464,3 +466,90 @@ stand-ins' afterburner) is the runtime's (its notes in section 2).
   stand-in's gear; SV_CoopFire works with the stand-in's fire permission off; zeroed weapon rows deal no damage
   (damage and AreaOfEffectDamage are all the row's damage); slot 2 is the missile slot of every stand-in airframe's row
   (sv_rows.lua's director line logs which rows carry their missiles in slot 2; specials use it too for now).
+
+## 9. Revives and the spectator camera (Lua 0.72.2, runtime 0.28.5, 2026-10-29; untested in game)
+The user: "is there a revive option we could possibly add for COOP only? like say if you die, HOST or JOINER, someone
+could land at the airfield and buy you back, lets say that when you die, you get put into a spectator camera and you can
+switch between the players currently active". Lua: Scripts/sv_down.lua (after sv_coop in main.lua's MODULES); the
+native half SV_Down (the loiter autopilot) and SV_Respawn: KILLS_HEALTH_DEATH.md 7. Co-op only: another game linked and
+a run on; solo stays exactly as before (no floor, the game's death, LB.deathCheck's run end).
+- **The floor**: sv_tactical.lua INS.tick sets MinHealth to the higher of SECOND CHANCE's (when held) and floor_hp (0.1
+  HP: HealthInternal 1) and, while revives are on, reads it back every pass and sets it again (`insurance: your
+  aircraft's floor was put back by the game`). A SECOND CHANCE held fires first (its 4 % floor), then the revives'.
+- **DOWN** (HealthInternal <= floor_hp x 10, in round 1 or later, no SECOND CHANCE held): invincible, hidden, collision
+  off, bEnableWeaponInput / bEnableFlareInput false, bIsWeaponSystemDisabled true, the plane's attacker limits
+  (MaxPlaneAttackerMissiles, MaxPursuitAttackers, MaxNonPlaneAttackerMissiles) 0 [a guess: the enemies' throttle on
+  attacking you], each value kept for the way back; `SV_Down(pawn, AIRFIELD.X, AIRFIELD.Y, alt_m, radius_m)` (again
+  every 5 s: the runtime only moves the circle; the first DOWN of a session spends 3-5 s learning the input signs);
+  state bit 8 and not 2; "dw"; YOU'RE DOWN; STATS.death("down"). The plane's tick is never switched off. Other games:
+  bit 8 hides the stand-in (and its collision; SV_CoopPeer 0) and makes COOP.players() say down, alive false, so
+  othersFlying, the squad and intensity directors, the aces' first contacts and the spawn holds count them out; the
+  CO-OP rows say DOWN.
+- **The host down**: its rounds go on (it's in the air, not on the airfield: nothing holds them). Its own-plane events
+  aren't fired on its game (sv_coop.lua HOST_DOWN_SKIPS: RE_SV_Salvo_, RE_SV_WolfTurn, RE_SV_AceTurn_ / AceKulbit_,
+  RE_SV_WraithBlink, RE_SV_GlitchBlink / GlitchTurn / GlitchGun, RE_SV_ValkaTp_, RE_SV_AnomalyPackSpring; SV_ERR[-20]);
+  what's forwarded still goes to the joiners; `coop: <event> not fired here: you're down (N skipped)`.
+- **The spectator camera**: COOP.watchable() (the other players' stand-ins shown, fresh, not DOWN, slot order); a
+  CameraComponent added to the watched one once (AddComponentByClass, back_m behind, up_m above, pitched down at it),
+  `survivalPC:SetViewTargetWithBlend(stand-in, blend_s, 0, 0, false)`; each pass GetViewTarget is checked and the view
+  put back (counted) if the game took it; the next player by the key (O, [coop.revive] key / ctrl, each player's own)
+  or by itself when the one watched goes down, leaves or is hidden; nobody to watch: your own plane and `DOWN: WAITING
+  FOR A REVIVE`, else the NEXT row `DOWN: WATCHING <NAME>  [O] NEXT` (sv_hud.lua).
+- **Revive**: the STORE's AIRFIELD page's sixth row, REVIVE (tools/build_survival.py STORE_PAGES; CFG.shop.items.Revive,
+  role "revive": sv_shop.lua offer / shopBuy -> DOWN.offer / DOWN.buy): `REVIVE <NAME>` the one down longest, `(+N)`
+  for more, price x raise ^ (the run's revives, the host's count); else `CO-OP ONLY.`, `NOBODY IS DOWN.`, `YOU'RE
+  DOWN.`, `ASKED: WAITING FOR THE HOST.`. The host buying checks itself; a joiner pays at once, sends "rv" and is
+  refunded on "rx" or after 10 s with no answer. The host's checks: both slots real and different, the target down
+  (bit 8 in its fresh state, or the host itself), no revive of it in the last 15 s, the price the count's, the reviver
+  on the ground at its airfield (bit 4 in its fresh state; the host: playerOnAirfield). Then "rb" to everyone: the
+  downed game comes back, the others call `<NAME> BACK` / `REVIVED BY <NAME>`.
+- **Back**: SV_Down(0), shown, collision on, inputs and attacker limits back (a limit only if still 0), the view on
+  your plane, RE_SV_RepairAircraft and HealthInternal written full, safe_s invincible; respawn "loiter" stays where it
+  was flown, "native" calls SV_Respawn 4 km out from the runway (1609574, -435747) along its heading (yaw -23), 500 m
+  up, yaw -23; `revive: respawn d=<m> m` half a second on (where you are against where it was asked). A downed player
+  keeps zollars, items, upgrades and allies, and gets round bonuses unless down_round_bonus = false (then the host's
+  own and a joiner's "cr" are skipped while down).
+- **Run over**: the host, every pass: every player present (you; others in the level and heard from in 5 s) not alive
+  for 3 s -> "ro|<round>" to everyone and its own run over (also when the last joiner has gone with the host down). On
+  "ro" each game: the view back, STATS.death("died"), LB.finish("died"), RE_SV_RunOver (tools/survival_events.py
+  build_run_over: Mission 15's LiveMissionFinishExecution MissionFailed, false, true: the retry menu; kept, never "ev").
+  No event: the fallback, the loiter off and the plane mortal (MinHealth 0, invincible off, the floor off). A joiner
+  down with the host's link gone 10 s ends its own. sv_leaderboard.lua's death check ends nothing while revives hold
+  the run (co-op, linked): only "ro" does. The host's "rs" (a new run) brings a downed joiner back and refunds an open
+  revive; a new level clears everything.
+- **Protocol** (reliable; guards: slots 0-23, whole numbers, text cut to 60 capitals; at most 4 a second from a joiner,
+  60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host -> everyone
+  `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>`, `ro|<round>`; host -> one joiner
+  `rx|<slot>|<why>|<count>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>` with a `dw ... q` for each one down.
+- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 5000, raise 1.5, safe_s 5, respawn loiter |
+  native, key O, ctrl false, down_round_bonus true; [coop.revive.loiter] alt_m 2500, radius_m 4000;
+  [coop.revive.camera] back_m 30, up_m 8, blend_s 0.5. [coop] is PERSONAL, but sv_coop.lua's SHARED_IN makes
+  coop.revive the host's for everyone except OWN_IN (key, ctrl, camera).
+- **Log lines**: `insurance: your aircraft's floor 0.1 HP (co-op's revives)`; `down: you're down at 0.1 HP in round N:
+  hidden, no collision, ...; loiter round the airfield at 2500 m, 4000 m round: on`; `down: loiter <km> / <m> (from
+  the airfield / up; watching <name>)` every 5 s (every 30 s after a minute); `spectate: view <NAME> (<why>), reverted N
+  times`, `spectate: view put back on <NAME> (the game took it back N times)`; `down: player N (<NAME>) is down`;
+  `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K)`
+  or `... refused: <WHY>`; `revive: back (revived by <NAME>) after N s down: repaired (event fired, health written), 5 s
+  invincible, <where>`; `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
+  over in round N`; `down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): fired`.
+- **Test keys** (TEST ONLY, stripped): T1 Ctrl+F6, the floor solo on / off (`down-test: health N (floor 0.1),
+  MinHealth M` once a second: let an enemy shoot you down to 0.1 HP and stay there); T2 Ctrl+END (each press: 1 DOWN
+  solo, watching MOONCHILD / VIPER, else the nearest enemies, O the next; 2 back by the loiter; 3 DOWN; 4 back by
+  SV_Respawn): `down-test: T2 step N`, `spectate: view ...`, `down: loiter ...`, `revive: respawn d=...`. If UE4SS has
+  no END key the log says `test: T2 not bound`.
+- **In-game checklist**: (1) T1: the health stops at 0.1 under fire (no death), MinHealth reads 0.1 and comes back after
+  a repair. (2) T2: the plane vanishes, flies itself round the airfield (the loiter lines: ~4 km, ~2500 m after the
+  sign probes), the view swings to MOONCHILD (or an enemy) from behind and above, O moves it on, it stays there (the
+  revert count stays 0 or low); no enemy chases the hidden plane; back by the loiter: you fly again at full health,
+  invincible 5 s; back by SV_Respawn: 4 km out along the runway at 500 m (d near 0). (3) co-op, three players: one
+  shot down goes DOWN (everyone sees <NAME> DOWN, their plane gone) and watches the others; another lands, the AIRFIELD
+  page shows REVIVE <NAME> 5000 Z, buying it brings them back (everyone sees <NAME> BACK); the next costs 7500; a joiner
+  buying in the air is refused and refunded. (4) the host down: rounds go on for the others, no salvo or blink aimed at
+  the host's empty sky. (5) everyone down: RUN OVER on every screen and the retry menu (RE_SV_RunOver), the summary.
+- **Guesses the design relies on**: SetViewTargetWithBlend on an AI plane with our CameraComponent shows that camera
+  (AC8's camera manager may override it: the revert count says); hiding, collision off and the attacker limits keep the
+  enemies off a downed plane; bEnableWeaponInput / bEnableFlareInput / bIsWeaponSystemDisabled stop its weapons;
+  MinHealth 0.1 holds against every kind of hit (KILLS_HEALTH_DEATH.md: a crash may pass it; such a plane dies as the
+  game does and that player's game ends their run); the game puts MinHealth back on a restore (read back every pass
+  anyway); Mission 15's MissionFailed record ends Survival's mission as a failure with the retry menu.

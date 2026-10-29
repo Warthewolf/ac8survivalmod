@@ -1044,6 +1044,7 @@ def build_events(stock_ep):
     build_glitch(g, t_search, t_engage, stock_ep)
     build_valka(g, flag, t_search, t_engage, stock_ep)
     build_repair(g, stock_ep)
+    build_run_over(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
@@ -1614,6 +1615,19 @@ def build_repair(g, stock_ep):
     t_restore = g.foreign_template(tr, 'LiveRestorePlayerPlaneExecution')
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_RepairAircraft')
     g.execute(t_restore, 'RE_SV_RepairAircraft')
+
+
+def build_run_over(g, stock_ep):
+    """RE_SV_RunOver: a co-op run's end (Scripts/sv_down.lua: every player down, the host's "ro"; each game fires its
+    own, Scripts/sv_coop.lua KEEP_EVENTS): Mission 15's LiveMissionFinishExecution MissionFailed, false, true (the retry
+    menu, no debriefing, no save: tools/re/KILLS_HEALTH_DEATH.md 3, 4). A remote event Lua fires, no conditions."""
+    m15 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission015', 'EP_Mission015_global.uasset')
+    t_fail = g.foreign_template(m15, 'LiveMissionFinishExecution', pred=lambda a, e: a[0] == 'MissionFailed')
+    assert arg_values(t_fail) == ['MissionFailed', 'false', 'true'], arg_values(t_fail)
+    lua = runtime_lua()
+    assert '"RE_SV_RunOver"' in lua and '"^RE_SV_RunOver$"' in lua, 'Scripts/sv_down.lua never fires RE_SV_RunOver, or sv_coop.lua forwards it'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_RunOver')
+    g.execute(t_fail, 'RE_SV_RunOver')
 
 
 def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):

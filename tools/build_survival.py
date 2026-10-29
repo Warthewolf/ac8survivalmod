@@ -1218,14 +1218,15 @@ SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/ma
 # too"). The economy review (2026-10-25) added UPGRADES and TACTICAL and moved the allies onto the DOCKS page (shown as
 # ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. 0.72.1's CIWS (user,
 # 2026-10-29) left the AIRFIELD page a row short, so the AA gun, SAM site and CIWS rows have a DEFENCES page (25) of
-# their own: AIRFIELD (21) > DEFENCES (25) > ALLIES (22), AIRFIELD's own ALLIES > kept. The menu-class rows go into the
-# game's table in this list's order, so the menu ids 20-25 follow it: keep it in Scripts/sv_flights.lua SHOP.menuRows'
-# order.
+# their own: AIRFIELD (21) > DEFENCES (25) > ALLIES (22), AIRFIELD's own ALLIES > kept. 0.72.2 put co-op's REVIVE
+# (Scripts/sv_down.lua; user, 2026-10-29: "someone could land at the airfield and buy you back") in the AIRFIELD page's
+# sixth row. The menu-class rows go into the game's table in this list's order, so the menu ids 20-25 follow it: keep it
+# in Scripts/sv_flights.lua SHOP.menuRows' order.
 STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
     ('SV_Store', 'Store', 'SV_Store_Title',
      ['Rearm', 'Missiles', 'Special', 'Flares', ('SVStoreToUpgrades', 'SV_Store_ToUpgrades', '23'), 'takeoff']),
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
-     ['RepairAircraft', 'RepairAirfield', ('SVStoreToDefences', 'SV_Store_ToDefences', '25'),
+     ['RepairAircraft', 'RepairAirfield', 'Revive', ('SVStoreToDefences', 'SV_Store_ToDefences', '25'),
       ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
     ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
      ['Wingmen', 'Moonchild', 'ShipAegis', 'Orders', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),

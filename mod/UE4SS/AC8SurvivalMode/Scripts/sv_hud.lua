@@ -365,6 +365,8 @@ function hudTick(now, paused, pc)
         local n = raidLeft()
         if n > 0 then nextS = string.format(t.raid_row, n, compassName(D.raidBearing)) end
     end
+    local okDn, downS = pcall(function() return DOWN and DOWN.hudLine and DOWN.hudLine() end)   -- (co-op: you're down,
+    if okDn and downS then nextS = downS end                                                    -- watching: sv_down.lua)
     stackText(H.next, "nextStr", nextS)
     -- the info rows: the allies', the tactical items' and co-op's (once a second is plenty; at once when the info key
     -- flips them)

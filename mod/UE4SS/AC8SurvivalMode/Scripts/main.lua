@@ -29,6 +29,7 @@ local MODULES = {
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
     "sv_menu",
     "sv_coop",
+    "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_main",
 }
 

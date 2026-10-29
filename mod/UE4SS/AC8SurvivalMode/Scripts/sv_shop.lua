@@ -302,6 +302,9 @@ local function offer(name)
         o.label = string.format("%s: %s", it.label, now:upper())
         o.help = "Press for the next order: HUNT (anywhere), COVER (stay with you), DEFEND (the airfield). Ctrl+F4 in flight. Free."
         o.price = 0
+    elseif o.role == "revive" then                   -- co-op: a player who's down bought back (sv_down.lua DOWN.offer)
+        local r = (DOWN and DOWN.offer) and DOWN.offer() or { label = it.label, why = "CO-OP ONLY." }
+        o.label, o.help, o.price, o.why, o.slot = r.label or it.label, r.help or "", r.price, r.why, r.slot
     elseif o.role == "aircraft" then
         local hp = aircraftHealth()
         o.label, o.price = CFG.shop.items.RepairAircraft.label, aircraftRepairPrice(hp)
@@ -467,6 +470,11 @@ function shopBuy(name)
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
         return done(string.format("SECOND CHANCE HELD for %d.", price))
+    elseif o.role == "revive" then                   -- co-op: the host's say (a joiner's refunded on a refusal)
+        local ok, msg = DOWN.buy(price)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        return done(msg)
     elseif o.role == "aircraft" then
         -- the stock repair (RE_SV_RepairAircraft: health and armour pool) and the health written straight onto the
         -- aircraft, then read back: paid only once it reads full (test of 2026-10-23: the event alone left it at 63%
