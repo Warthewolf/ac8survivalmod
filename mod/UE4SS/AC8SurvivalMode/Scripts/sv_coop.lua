@@ -61,6 +61,7 @@ local function short(v, n) return (tostring(v or ""):sub(1, n)) end
 local function finite(v, lim) return type(v) == "number" and v == v and v > -lim and v < lim end
 local HIT_MAX, CREDITS_MAX = 100000, 1000000                -- (one hit's damage; one round bonus's zollars)
 local TL_PER_S = 4                                          -- (the host's tells a joiner plays in a second, at most)
+local AIRFRAME_WAIT_S = 5                                   -- (s a stand-in waits for its player's airframe: peerTick)
 local function slotOk(s) return type(s) == "number" and s == math.floor(s) and s >= 0 and s <= MAX_SLOT end
 local knownRows = {}
 local function knownRow(row)                                -- a row of Survival's NPC table here (DT_SV_NpcMission)
@@ -858,15 +859,23 @@ local function peerTick(slot)
     if not D then return end
     if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
     local unit = PEER_UNITS[slot]
-    if fresh and not P.obj and not P.spawning and levelReady() then          -- (not while this level loads)
-        local r0 = M.roster[slot]
+    -- Their airframe comes in their "hi" (or the host's "pi") once their plane is up, and their state can come first:
+    -- the stand-in spawned on the empty row of their main-menu "hi" flew the default, F-16C, for the whole run (the
+    -- user's co-op run of 2026-10-29: "players are flying F-16's on my side but different aircraft on their side"; an
+    -- AI plane up can't change airframe). So it waits up to AIRFRAME_WAIT_S for a row, then flies the default.
+    P.freshAt = fresh and (P.freshAt or os.clock()) or nil
+    local r0 = M.roster[slot]
+    local known = r0 and type(r0.row) == "string" and r0.row ~= ""
+    if fresh and not P.obj and not P.spawning and levelReady()                 -- (not while this level loads)
+        and (known or os.clock() - P.freshAt >= AIRFRAME_WAIT_S) then
         local row = standInRow(r0 and r0.row)
         rawSetAircraft(unit, row)
         spawningUnit = unit
         local r = rawSpawn(unit)
         spawningUnit = nil
-        P.spawning = os.clock()
-        log(string.format("coop: player %d's plane as %s: %s", slot + 1, row,
+        P.spawning, P.row = os.clock(), row
+        log(string.format("coop: player %d's plane as %s%s: %s", slot + 1, row,
+            known and "" or string.format(" (no airframe from them in %d s)", AIRFRAME_WAIT_S),
             (type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     elseif P.spawning and os.clock() - P.spawning > 10 then
         P.spawning = nil                                  -- (it never came: again)
@@ -1158,18 +1167,30 @@ local function onHostMessage(from, f)
     if k == "hi" then
         local ver, rt, row, name = short(f[2], 32), short(f[3], 16), short(f[4], 64), short(f[5], 32)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
-        local first = not M.roster[from]
+        local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
         M.roster[from] = { row = row or "", ver = ver, name = name }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
-                tostring(rt), tostring(row)))
+                tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
             callout(string.upper(tostring(name)) .. " JOINED", string.format("PLAYERS %d/%d", playerCount(), maxPlayers()))
             if ver ~= VERSION then
                 log("coop: WARNING: player " .. (from + 1) .. " runs Survival " .. tostring(ver) .. ", you " .. VERSION)
                 callout("CO-OP VERSION MISMATCH", string.upper(tostring(name)) .. " HAS " .. tostring(ver))
             end
+            -- (the user's run of 2026-10-29: both friends' dlls/main.dll was 0.27.0 under 0.72.0's Lua, which wants
+            -- 0.28.3: a zip unpacked with the game open leaves the old one in place)
+            local mine = type(SV_Version) == "function" and SV_Version() or nil
+            if mine and rt and rt ~= "" and rt ~= "?" and rt ~= mine then
+                log("coop: WARNING: player " .. (from + 1) .. " runs runtime " .. tostring(rt) .. ", you " .. tostring(mine)
+                    .. " (their dlls/main.dll is another build's: unzip again with the game closed)")
+                callout("CO-OP RUNTIME MISMATCH", string.upper(tostring(name)) .. " HAS MAIN.DLL " .. tostring(rt))
+            end
             local okS, errS = pcall(M.sendSettings, from)
             if not okS then log("coop: settings not sent: " .. tostring(errS)) end
+        elseif row and row ~= "" and row ~= was then
+            local P = M.peers[from]
+            log(string.format("coop: player %d flies %s%s", from + 1, row, (P and P.obj and P.row and P.row ~= standInRow(row))
+                and string.format(" (their plane here stays %s until their next sortie)", P.row) or ""))
         end
         hostRosterSelf()
     elseif k == "jn" then hostSync(from)
@@ -1199,8 +1220,13 @@ local function onJoinerMessage(f)
         local s = tonumber(f[2])
         if not slotOk(s) then return end
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
-        local first = not M.roster[s]
+        local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
         M.roster[s] = { row = f[3], ver = f[4], name = f[5] }
+        if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
+            local P = M.peers[s]
+            log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
+                and string.format(" (their plane here stays %s until their next sortie)", P.row) or ""))
+        end
         if first and s ~= COOP.slot then
             log(string.format("coop: player %d is %s (Survival %s, flies %s)", s + 1, tostring(f[5]), tostring(f[4]), tostring(f[3])))
             if s == 0 then
