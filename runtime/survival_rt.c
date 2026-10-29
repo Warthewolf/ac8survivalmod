@@ -2774,7 +2774,12 @@ static int L_Reset(void* lua)
  * submit_cfg.h, never in git); a build without them answers SV_ERR_NO_SERVER. Only that host is ever contacted.
  * SV_PostResult(job) -> 0 while sending, then the HTTP status, or < 0 when it couldn't get through: minus WinHTTP's
  * error (e.g. -12007 the name didn't resolve, -12029 no connection, -12002 timed out, -12175 TLS failed), or -1 / -2
- * when Windows gave none; the job is freed once its result is read. SV_PostReply(job) -> the Worker's reply. */
+ * when Windows gave none; the job is freed once its result is read. SV_PostReply(job) -> the Worker's reply.
+ * The build (runtime 0.28.6; user, 2026-10-30: "we need a way that the Leaderboards can detect if a run has been edited
+ * from the stock run"): the mod's files are hashed when the game starts (build_hash.c, on a thread of its own) and again
+ * for every send; the send carries that hash in X-SV-Build and is signed over "<hash>\n<body>", so the Worker counts a
+ * run only from a build the user registered (leaderboard/README.md). A hash that changed since the start is logged.
+ * SV_BuildHash() -> the hash (64 hex characters), "" while it's worked out or when it couldn't be (the log says why). */
 #if __has_include("submit_cfg.h")
 #include "submit_cfg.h"
 #endif
@@ -2805,38 +2810,78 @@ typedef BOOL   (*HttpQueryFn)(HANDLE, DWORD, const wchar_t*, void*, DWORD*, DWOR
 typedef BOOL   (*HttpReadFn)(HANDLE, void*, DWORD, DWORD*);
 typedef BOOL   (*HttpCloseFn)(HANDLE);
 typedef BOOL   (*HttpTimeoutsFn)(HANDLE, int, int, int, int);
-typedef int32_t (*BcOpenFn)(HANDLE*, const wchar_t*, const wchar_t*, DWORD);
-typedef int32_t (*BcCreateFn)(HANDLE, HANDLE*, uint8_t*, DWORD, uint8_t*, DWORD, DWORD);
-typedef int32_t (*BcDataFn)(HANDLE, uint8_t*, DWORD, DWORD);
-typedef int32_t (*BcFinishFn)(HANDLE, uint8_t*, DWORD, DWORD);
-typedef int32_t (*BcDestroyFn)(HANDLE);
-typedef int32_t (*BcCloseFn)(HANDLE, DWORD);
+#include "build_hash.c"                               /* the build hash and the HMAC (runtime 0.28.6) */
 
-/* HMAC-SHA256 of the body under the build's key, as 64 hex characters (wide, for the header); 0 if bcrypt failed */
-static int SignBody(const char* body, DWORD len, wchar_t* hex)
+/* HMAC-SHA256 under the build's key of build + "\n" + body (build: a build hash, or NULL: the body alone, as before
+ * 0.28.6), as 64 hex characters (wide, for the header); 0 if bcrypt failed */
+static int SignBody(const char* build, const char* body, DWORD len, wchar_t* hex)
 {
-    HANDLE bc = LoadLibraryW(L"bcrypt.dll");
-    if (!bc) return 0;
-    BcOpenFn open = (BcOpenFn)GetProcAddress(bc, "BCryptOpenAlgorithmProvider");
-    BcCreateFn create = (BcCreateFn)GetProcAddress(bc, "BCryptCreateHash");
-    BcDataFn data = (BcDataFn)GetProcAddress(bc, "BCryptHashData");
-    BcFinishFn finish = (BcFinishFn)GetProcAddress(bc, "BCryptFinishHash");
-    BcDestroyFn destroy = (BcDestroyFn)GetProcAddress(bc, "BCryptDestroyHash");
-    BcCloseFn close = (BcCloseFn)GetProcAddress(bc, "BCryptCloseAlgorithmProvider");
-    if (!open || !create || !data || !finish || !destroy || !close) return 0;
     static const char key[] = SV_SUBMIT_KEY;
-    HANDLE alg = NULL, h = NULL;
-    uint8_t mac[32];
-    int ok = open(&alg, L"SHA256", NULL, 0x8 /* BCRYPT_ALG_HANDLE_HMAC_FLAG */) == 0
-          && create(alg, &h, NULL, 0, (uint8_t*)key, (DWORD)(sizeof(key) - 1), 0) == 0
-          && data(h, (uint8_t*)body, len, 0) == 0
-          && finish(h, mac, 32, 0) == 0;
-    if (h) destroy(h);
-    if (alg) close(alg, 0);
-    if (!ok) return 0;
-    static const char digits[] = "0123456789abcdef";
-    for (int i = 0; i < 32; ++i) { hex[2 * i] = (wchar_t)digits[mac[i] >> 4]; hex[2 * i + 1] = (wchar_t)digits[mac[i] & 15]; }
-    hex[64] = 0;
+    char pre[66], mac[65];
+    size_t preLen = 0;
+    if (build) {
+        while (build[preLen] && preLen < 64) { pre[preLen] = build[preLen]; ++preLen; }
+        pre[preLen++] = '\n';
+    }
+    if (!BhHmac(key, sizeof(key) - 1, pre, preLen, body, len, mac)) return 0;
+    for (int i = 0; i <= 64; ++i) hex[i] = (wchar_t)mac[i];
+    return 1;
+}
+
+/* The build hash: worked out on a thread when the game starts (BuildHashThread), then again for each send */
+static char             g_buildHex[65];             /* "" until it's known */
+static volatile int32_t g_buildLock;
+static wchar_t          g_ioDir[PATH_CAP];          /* ...\Mods\IoStoreLoaderMod\SurvivalMode (set in start_mod) */
+
+static void BuildHexGet(char* out)
+{
+    while (__sync_lock_test_and_set(&g_buildLock, 1)) Sleep(0);
+    memcpy(out, g_buildHex, sizeof(g_buildHex));
+    __sync_lock_release(&g_buildLock);
+}
+
+static void BuildHexSet(const char* hex)
+{
+    while (__sync_lock_test_and_set(&g_buildLock, 1)) Sleep(0);
+    memcpy(g_buildHex, hex, sizeof(g_buildHex));
+    __sync_lock_release(&g_buildLock);
+}
+
+static void WidenHex(const char* hex, wchar_t* out) { int i = 0; for (; i < 64 && hex[i]; ++i) out[i] = (wchar_t)hex[i]; out[i] = 0; }
+
+/* The build hash now into hex (65 characters), 1; 0 (logged) when it couldn't be worked out. why: the log line's start */
+static int BuildHashNow(char* hex, const wchar_t* why)
+{
+    BhRun r;
+    memset(&r, 0, sizeof(r));
+    uint64_t t0 = GetTickCount64();
+    if (!g_modRoot[0] || !g_ioDir[0] || !BuildHash(g_modRoot, g_ioDir, hex, &r)) {
+        Log(L"leaderboard: %s: no build hash (%s%s%s); runs go without one", why, g_modRoot[0] ? (r.why ? r.why : L"?") : L"no mod folder",
+            r.whyFile[0] && g_modRoot[0] ? L": " : L"", g_modRoot[0] ? r.whyFile : L"");
+        return 0;
+    }
+    wchar_t w[65];
+    WidenHex(hex, w);
+    Log(L"leaderboard: %s: build hash %s (%d scripts, %d behaviour scripts, the ini, main.dll and the container: %d files, %d KB, %d ms)",
+        why, w, (int32_t)r.scripts, (int32_t)r.ai, (int32_t)r.files, (int32_t)(r.bytes / 1024), (int32_t)(GetTickCount64() - t0));
+    return 1;
+}
+
+static DWORD WINAPI BuildHashThread(void* arg)
+{
+    (void)arg;
+    char hex[65];
+    if (BuildHashNow(hex, L"the game started")) BuildHexSet(hex);
+    return 0;
+}
+
+static int L_BuildHash(void* lua)
+{
+    char hex[65];
+    BuildHexGet(hex);
+    size_t n = 0;
+    while (n < 64 && hex[n]) ++n;
+    U.luaSetString(lua, hex, n == 64 ? 64 : 0);
     return 1;
 }
 
@@ -2854,17 +2899,37 @@ static DWORD WINAPI PostWorker(void* arg)
     HttpReadFn hRead = wh ? (HttpReadFn)GetProcAddress(wh, "WinHttpReadData") : NULL;
     HttpCloseFn hClose = wh ? (HttpCloseFn)GetProcAddress(wh, "WinHttpCloseHandle") : NULL;
     HttpTimeoutsFn hTimeouts = wh ? (HttpTimeoutsFn)GetProcAddress(wh, "WinHttpSetTimeouts") : NULL;
-    wchar_t headers[160], sig[65];
-    if (!hOpen || !hConnect || !hRequest || !hSend || !hReceive || !hQuery || !hRead || !hClose || !SignBody(j->body, j->len, sig)) {
+    wchar_t headers[320], sig[65];
+    /* the build as it is now (the files may have changed since the game started: then this one, and it's logged) */
+    char build[65], was[65];
+    int haveBuild = BuildHashNow(build, L"sending a run");
+    if (haveBuild) {
+        BuildHexGet(was);
+        if (was[0] && memcmp(was, build, 64) != 0) {
+            wchar_t a[65];
+            WidenHex(was, a);
+            Log(L"leaderboard: the mod's files changed since the game started (its build hash was %s): this run goes as the files are now", a);
+        }
+        BuildHexSet(build);
+    }
+    if (!hOpen || !hConnect || !hRequest || !hSend || !hReceive || !hQuery || !hRead || !hClose
+        || !SignBody(haveBuild ? build : NULL, j->body, j->len, sig)) {
         Log(L"leaderboard: WinHTTP or bcrypt missing; run not sent");
         j->state = 2;
         return 0;
     }
     static const wchar_t head[] = L"Content-Type: application/json\r\nX-SV-Signature: ";
+    static const wchar_t bhead[] = L"X-SV-Build: ";
     size_t n = 0;
     for (size_t i = 0; head[i]; ++i) headers[n++] = head[i];
     for (size_t i = 0; sig[i]; ++i) headers[n++] = sig[i];
-    headers[n++] = L'\r'; headers[n++] = L'\n'; headers[n] = 0;
+    headers[n++] = L'\r'; headers[n++] = L'\n';
+    if (haveBuild) {
+        for (size_t i = 0; bhead[i]; ++i) headers[n++] = bhead[i];
+        for (size_t i = 0; i < 64; ++i) headers[n++] = (wchar_t)build[i];
+        headers[n++] = L'\r'; headers[n++] = L'\n';
+    }
+    headers[n] = 0;
     /* Each proxy mode in turn (automatic, the system's, none), with TLS 1.2 / 1.3 switched on: WinHTTP's own defaults
      * can leave TLS 1.2 off (older or tweaked Windows), which Cloudflare refuses at once (a friend's test of 2026-10-23:
      * the browser reached the Worker, the game failed in 0.25 s). */
@@ -3000,6 +3065,7 @@ static void RegisterLua(void* lua)
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
+        { "SV_BuildHash", L_BuildHash },
 #endif
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
@@ -3301,6 +3367,14 @@ EXPORT void* start_mod(void)
         Log(L"AC8 Survival Mode runtime %s", RT_VERSION);
         HANDLE th = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
         if (th) CloseHandle(th); else Log(L"could not start the install thread");
+#ifndef SV_OFFLINE
+        /* the build hash (the leaderboard's), off the game's thread: the files are read once, a few MB */
+        static const wchar_t kIo[] = L"\\IoStoreLoaderMod\\SurvivalMode";
+        size_t k = WLen(g_modsDir);
+        if (k && k + sizeof(kIo) / 2 < PATH_CAP) { memcpy(g_ioDir, g_modsDir, k * 2); memcpy(g_ioDir + k, kIo, sizeof(kIo)); }
+        HANDLE bt = CreateThread(NULL, 0, BuildHashThread, NULL, 0, NULL);
+        if (bt) CloseHandle(bt); else Log(L"leaderboard: could not start the build hash thread");
+#endif
     }
     return mod;
 }

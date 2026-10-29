@@ -24,6 +24,8 @@ typedef int32_t  BOOL;
 #define FILE_SHARE_WRITE          2u
 #define CREATE_ALWAYS             2u
 #define FILE_ATTRIBUTE_NORMAL     0x80u
+#define FILE_ATTRIBUTE_DIRECTORY  0x10u
+#define FILE_SHARE_DELETE         4u
 #define CP_UTF8                   65001u
 #define PAGE_EXECUTE_READ         0x20u
 #define PAGE_EXECUTE_READWRITE    0x40u
@@ -72,7 +74,17 @@ typedef struct {
     DWORD    pad1;
 } MEMORY_BASIC_INFORMATION;
 
+typedef struct {                                   /* WIN32_FIND_DATAW (FindFirstFileW: the build hash, build_hash.c) */
+    DWORD    dwFileAttributes;
+    DWORD    ftCreationTime[2], ftLastAccessTime[2], ftLastWriteTime[2];
+    DWORD    nFileSizeHigh, nFileSizeLow;
+    DWORD    dwReserved0, dwReserved1;
+    wchar_t  cFileName[260];
+    wchar_t  cAlternateFileName[14];
+} WIN32_FIND_DATAW;
+
 _Static_assert(sizeof(MEMORY_BASIC_INFORMATION) == 48, "MEMORY_BASIC_INFORMATION layout");
+_Static_assert(sizeof(WIN32_FIND_DATAW) == 592, "WIN32_FIND_DATAW layout");
 _Static_assert(sizeof(wchar_t) == 2, "wchar_t must be UTF-16");
 _Static_assert(sizeof(THREADENTRY32) == 28, "THREADENTRY32 layout");
 _Static_assert(sizeof(CONTEXT64) == 0x4D0, "CONTEXT size");
@@ -94,6 +106,9 @@ IMPORT BOOL   WINAPI ReadFile(HANDLE h, void* buf, DWORD n, DWORD* got, void* ov
 IMPORT BOOL   WINAPI GetFileSizeEx(HANDLE h, int64_t* size);
 IMPORT BOOL   WINAPI CloseHandle(HANDLE h);
 IMPORT DWORD  WINAPI GetFileAttributesW(const wchar_t* path);
+IMPORT HANDLE WINAPI FindFirstFileW(const wchar_t* pattern, WIN32_FIND_DATAW* found);
+IMPORT BOOL   WINAPI FindNextFileW(HANDLE find, WIN32_FIND_DATAW* found);
+IMPORT BOOL   WINAPI FindClose(HANDLE find);
 IMPORT int    WINAPI WideCharToMultiByte(DWORD cp, DWORD flags, const wchar_t* in, int inLen,
                                          char* out, int outCap, const char* def, BOOL* used);
 IMPORT void*  WINAPI VirtualAlloc(void* addr, size_t size, DWORD type, DWORD protect);
