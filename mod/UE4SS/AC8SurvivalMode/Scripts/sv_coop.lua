@@ -1591,6 +1591,7 @@ local function diff(cur, def, path, out)                   -- leaves (and whole 
         if cur[k] == nil then local p = { table.unpack(path) }; p[#p + 1] = k; out[#out + 1] = { p } end
     end
 end
+COOP.cfgDiff = diff                                        -- (the leaderboard's edited check too: LB.edited)
 local function fill(into, from)                            -- `into` made to hold a copy of `from`, in place
     for k in pairs(into) do if from[k] == nil then into[k] = nil end end
     for k, v in pairs(from) do

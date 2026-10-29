@@ -278,10 +278,17 @@ local function allTexts()
                 label = "QUICK START: " .. (MODE_NAME[quick] or "SP OFFLINE")
                 help = "Straight to the difficulty select with your " .. (MODE_NAME[quick] or "") .. " setup: " .. summary(quick)
             elseif r == "Go" then
-                local ranked = mode == "online" and rankedProfile(ownProfile(mode))
+                -- (edited settings, survival.ini's or a survival_config.lua: LB.edited, the Online edition's; unranked too)
+                local okE, edited = false, nil
+                if mode == "online" and LB and LB.edited then okE, edited = pcall(LB.edited, false) end
+                local editedKey = okE and type(edited) == "table" and edited[1] or nil
+                local custom = mode == "online" and not rankedProfile(ownProfile(mode))
+                local ranked = mode == "online" and not custom and not editedKey
                 label = mode == "online" and (ranked and "START RUN: RANKED" or "START RUN: UNRANKED") or "START RUN"
                 help = "Next: the difficulty, then the hangar. " .. summary(mode) ..
-                    (mode == "online" and (ranked and " This run goes to the leaderboard." or " Custom rules: this run isn't sent (RESET TO DEFAULTS in MORE RULES).") or "")
+                    (mode == "online" and (ranked and " This run goes to the leaderboard."
+                        or custom and " Custom rules: this run isn't sent (RESET TO DEFAULTS in MORE RULES)."
+                        or (" Edited settings (" .. tostring(editedKey):sub(1, 40) .. "): this run isn't ranked.")) or "")
             elseif r == "Lobby" then label, help = lobby()
             elseif r == "Rules" then label, help = "MORE RULES", "Start round, break between rounds, special rounds, airfield health, zollar income, enemy skill."
             elseif r == "Reset" then label, help = "RESET TO DEFAULTS", "Puts every " .. (MODE_NAME[mode] or "") .. " setting back to the defaults."
@@ -576,7 +583,13 @@ function MENU.tick(tick)
             local m = MENU.mode or "solo"
             local q = (m == "solo") and SOLO or m
             log(string.format("menu: the run plays %s's setup (%s): %s; leaderboard: %s", MODE_NAME[m] or m, profileName(m),
-                summary(m), (function() local ok, why = SETUP.ranked(); return ok and "ranked" or tostring(why) end)()))
+                summary(m), (function()
+                    local ok, why = SETUP.ranked()
+                    local okE, ed = false, nil
+                    if ok and LB and LB.edited then okE, ed = pcall(LB.edited, COOP and COOP.open) end
+                    if okE and type(ed) == "table" and #ed > 0 then return "edited (" .. table.concat(ed, ", ") .. ")" end
+                    return ok and "ranked" or tostring(why)
+                end)()))
             if QUICK_CODE[q] and CFG.menu.last ~= q then
                 CFG.menu.last = q
                 iniSet("menu", "last", q)

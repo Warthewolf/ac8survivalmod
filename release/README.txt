@@ -124,7 +124,13 @@ Leaderboard (Discord)
 Every run you finish (shot down, restarted, or left) is submitted to the Survival leaderboard on Discord, and a summary
 shows how it went: round, score, kills, specials beaten, time. You appear under your Steam name; to use another, set
 pilot = Your Name  under [leaderboard] in survival.ini. If you're offline the run is kept and sent next time. Only the
-leaderboard's own server is contacted; nothing about your PC is sent besides the run.
+leaderboard's own server is contacted; nothing about your PC is sent besides the run and a fingerprint (hash) of
+Survival Mode's own files, so the leaderboard can tell a released copy from an edited one.
+Only stock runs are ranked. A run isn't sent (its summary says NOT RANKED: EDITED and the log, AC8SurvivalMode_lua.log,
+names what's changed) when a gameplay setting in survival.ini differs from the shipped one (the HUD, sound, music, your
+pilot name, key bindings and texts don't count), when there's a Scripts\survival_config.lua, or when it started past
+round 1. Runs from changed mod files are refused by the leaderboard (NOT ACCEPTED: EDITED OR UNKNOWN BUILD): put the
+release back, and install it into a clean folder so no files of an older version are left in Scripts.
 If the summary always says NO CONNECTION while your internet works, a firewall or antivirus is blocking the game:
 allow AceCombat8.exe outbound access. Runs kept until then are sent automatically afterwards.
 Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
