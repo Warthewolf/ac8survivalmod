@@ -737,9 +737,9 @@ end
 -- CFG.allies.kills (economy review of 2026-10-25: "no line records an ally's or a defence's kills"): each enemy's
 -- DamageHistoryMap (attacker -> its total damage; tools/re/KILLS_HEALTH_DEATH.md 1) is read while it flies, with its
 -- position, and once more as it goes down. Attackers by side: your aircraft "you", MOONCHILD's / the WINGMEN's planes
--- "allies", the Aegis's hull and turrets (BP_VE002_aegs_*) "ships", the AA guns and SAM sites (BP_GR002_gepa_*,
--- BP_GR005_avng_*) "defences". A kill is yours when you hit it at all (or nothing could be read); else the side that
--- did it the most damage.
+-- "allies", the Aegis's hull and turrets (BP_VE002_aegs_*) "ships", the AA guns, SAM sites and CIWS (BP_GR002_gepa_*,
+-- BP_GR005_avng_*, BP_GR033_ciws_*: the land Phalanx, no enemy's) "defences". A kill is yours when you hit it at all (or
+-- nothing could be read); else the side that did it the most damage.
 KILL = {}
 -- A plane's kill at one moment (the kill log's and the measurements', sv_stats.lua STATS.down): offNose, the angle off
 -- its nose of the line to you (0 you were ahead of it, 180 on its tail); km, the range; dz, your height over it (km);
@@ -776,7 +776,7 @@ function KILL.side(o, pawnAddr)
     if a and a == pawnAddr then return "you" end
     local n = nameOf(o)
     if n:find("BP_VE002_aegs", 1, true) then return "ships" end
-    if n:find("_gepa_", 1, true) or n:find("_avng_", 1, true) then return "defences" end
+    if n:find("_gepa_", 1, true) or n:find("_avng_", 1, true) or n:find("GR033_ciws", 1, true) then return "defences" end
     local R = ALLY.run
     if R and a then for _, q in ipairs(R.planes) do if addrOf(q.obj) == a then return "allies" end end end
     if n:find("PlayerPlane", 1, true) then return "you" end

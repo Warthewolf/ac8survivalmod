@@ -362,7 +362,115 @@ SV_FlightUp/Down_NN, RE_SV_Chase*). Add, all from M22 templates (no new imports)
 5. Optional `RemainingBullets` warnings with ms22_Ammo_* radio, re-armed on FinishInGameHangar (M22 1528-1536).
 
 ---------------------------------------------------------------------------------------------------------------------
-## Open questions (test before building on them)
+## 4. Stronger defences and the CIWS (0.72.1)
+User, 2026-10-29: "make Allied SAMs and Anti Air Guns more effective, increase their lock on range, also increase the
+lifetime of the missile they fire, increase their abilities and Add CIWS that can be purchased and placed around the
+airfield" ("fixed spots around the runway are fine"). Branch TestBranch_Behavioural, VERSION unchanged. **None of it has
+run in game [I].** Offline: `sh tools/checks/defences_test.sh` (ALLY.setup on stub tables with the stock rows' numbers,
+the STORE, the ALLIES row, losses, repairs, kill credit; then `defences_spots_check.py` on the spots).
+
+### 4a. The AA guns and SAM sites (Scripts/sv_allies.lua ALLY.setup, CFG.shop.items.Airfield.defences.fcs)
+Their weapons already had fire control of their own (`<FCS>_SVA_Defence` in DT_NPC_FCS, made at the main menu, set on
+Survival's rows SV_Def_Gepa / SV_Def_Avng only, never on a stock row). The ships' mechanism (CFG.allies.ships.Aegis.fcs)
+now runs for the key "Defence" too. Stock numbers from build/stock's DT_NPC_FCS / DT_NPC_Weapon / DT_NPC_AIModule:
+
+| | stock | 0.72.0 | 0.72.1 (CFG key) |
+|---|---|---|---|
+| AA gun lock-on (NPC_FCS_VehicleAAGun000 CaptureDistance) | 2200 m | 3520 m (the allies' x1.6) | 4400 m (`range_x` 2.0) |
+| AA gun flak: AAGUN_Ground_000 is an emitter whose damage is a cylinder `DamageAreaLengthMeters` x `DamageAreaRadiusMeters` (its LifeTime 3 s is the burst, not a reach) | 2000 x 20 m | the same: locked at 3.5 km, hurt only inside 2 km | 4400 x 30 m (`round_reach`, `round_width_x` 1.5) |
+| SAM lock-on (NPC_FCS_VehicleSAM001) | 3000 m | 4800 m | 8000 m (`missile.range_m`) |
+| SAM missile (SAM_Ground_000) | 7.3 s from 500 km/h, +300 km/h a second to 3000, turn 15, cloud 0.5: ~3.2 km straight | the same: shots past 3.2 km fell short | 14 s, +600 to 3600, turn 22.5, no cloud loss: ~11.8 km straight (`missile.life_s`, `accel_x`, `speed_max_kmph`, `turn_x`) |
+| search (the FCS row's AI module, and the SV_Def_* rows') | GroundVehicle000 / Turret000: 6000 m, lost in cloud | the same | NPC_AIModule_SV_Defence (a Turret000 copy): 10000 m, not lost in cloud (`search_m`) |
+| turret slew (YawSpeed / PitchSpeed) | 30 / 30 deg/s | the same | 60 / 60 (`slew_x` 2.0) |
+| health (DT_NPC_Model MaxHealth 20; the row's MaxHealthDifference) | 20 | 20 | 60 (`aa.health_add`, `sam.health_add` 40; an enemy missile's damage is 40) |
+| fire rate (arm, lock, between, rest; x0.5 x `lock_x` 0.75 / `fire_x` 0.5) | AA 0.5 / 2 / 2 / 1 s, SAM 2 / 5 / 5 / 10 s | AA 0.19 / 0.75 / 0.5 / 0.25, SAM 0.75 / 1.88 / 1.25 / 2.5 | kept |
+| unit area (WD; turrets engage only inside it: the Aegis's 20 km missiles stopped at its 10 km) | 6 km, 500-6000 m | the same | 25 km, 0-15000 m (survival_events.DEFENCE_AREA_M / DEFENCE_ALT_M, build) |
+
+`yaw_full` puts every defence's fire control all the way round (the AA guns' and SAM sites' already are; the CIWS's is
+a ship mount's). The allies' cone (x1.5), spread (x0.4) and AA lead (x1.5: 0.8 -> 1.2 s) stay as they were. The Aegis's
+own clones are unchanged (its `fcs` has no slew_x / yaw_full / round_reach); its log line now shows before -> after too.
+
+### 4b. The CIWS
+- **The model.** The game's land Phalanx, GR033_ciws: BP_GR033_ciws_Base (BP_AITurret_Pawn) carries one arms,
+  LiveFCSModule_AIControlCIWS + LauncherBoneControl (TurretPoseableMesh, BN_turret_yaw -180..180 at 180 deg/s,
+  BN_turret_pitch to 60) + ProjectileCommon (BP_wp_ciws_turret), with its own fire control in the bone control (2500 m,
+  30 deg, arm 0.5 s, lock 2 s, 2-round bursts, 1 s between, rest 1 s). DT_NPC GR033_ciws_01 / _Megafloat name no
+  NpcFCSId (Online Mode's GR033_ciws_01 and its Aegis Ashore CIWS neither). The game's DT_NPC_Model has a row
+  **GR033_ciws_Ally** whose blueprint is BP_GR033_ciws_CP_Ally (no DT_NPC row of the game uses it): BP_GR033_ciws_CP with
+  an ally's destruction (no extra effect, no induced explosion), as GR002_gepa_Ally is the Gepard's. Allied or not is the
+  unit's Faction: Mission 22's own allied AA guns, SAM sites and Aegis turrets fly the plain blueprints with faction 1.
+- **Where Mission 27 has it.** WD_Mission027_global EA_Unit_01_Ground_Ciws0 / EE_Unit_01_Ground_Ciws0: two AI objects
+  each (not one), GR033_ciws_Megafloat (BP_GR033_ciws_CP_MS27, its own weapon BP_wp_ciws_Megafloat), on the Megafloat's
+  deck 120 m up, Faction 2, tags Obj_NoLockOn / Obj_CiwsDestory. Not ported: an AI object desc carries nothing a land
+  CIWS needs that Mission 22's allied airport objects lack (AIObjectClass none, no children, LevelId 200, the same cone),
+  so Survival's are copies of its own allied AA gun unit.
+- **Build** (tools/survival_events.py DEFENCE_CIWS*, build_survival.py ciws_units / build_npc_rows / build_npc_table):
+  units SV_Unit_Ciws_A-D, objects SV_Obj_CiwsA-D, copies of SV_Unit_AAGun_A (move_object's copy of AB_Unit_01_Ground0:
+  faction 1, TAG_Ground / TAG_GroundAlly, bIsLanding, a target box, the defences' area), on mission row sv_def_ciws (a
+  copy of Mission 22's gepa_common) -> DT_SV_NpcRows SV_Def_Ciws, a copy of DT_NPC GR033_ciws_01 with ModelId
+  GR033_ciws_Ally (the build checks that model row's blueprint in build/stock's DT_NPC_Model, now pulled by
+  build_all.sh). AIObjectClass none, no children: the spawner loads the blueprint from the model row (hard rule 31).
+- **Spots** (km along Mission 22's runway axis from its centre, + ENE; across it, + SSE; z 5 m like every airport
+  object; facing along the runway, yaw -23):
+
+  | unit | along, across | map (x, y) km | nearest airport object | off the axis | troops' drives |
+  |---|---|---|---|---|---|
+  | SV_Unit_Ciws_A (WSW end, north) | -0.70, -0.25 | 15.354, -4.314 | 291 m (dummy 0) | 250 m | 87 m |
+  | SV_Unit_Ciws_B (WSW end, south) | -0.75, +0.25 | 15.503, -3.834 | 336 m (SAM site 0) | 250 m | 84 m |
+  | SV_Unit_Ciws_C (ENE end, north) | +0.80, -0.17 | 16.766, -4.827 | 209 m (AA gun 2) | 170 m | 147 m |
+  | SV_Unit_Ciws_D (ENE end, south) | +0.85, +0.20 | 16.956, -4.505 | 171 m (AA gun 3) | 200 m | 212 m |
+
+  All 0.74-0.87 km from the airfield, 184 m or more from the scramble jets' taxi, inside the beaches the coast marks
+  give (0.45-0.55 km off the axis by the runway's middle). The runway is 1.79 x 0.03 km (VolumeBox_LandingArea0), its
+  approach box 98 m wide. The amphibious troops' drives (survival_events.lcac_craft) sweep both sides of the WSW half,
+  so the WSW spots sit 250 m out. The terrain there was never traced [I].
+- **Fire control: NpcFCSId0 = NPC_FCS_VesselCIWS000 (the ships' Mk 15's), boosted as the AA guns'.** Set at the main
+  menu on Survival's SV_Def_Ciws (ALLY.setup, `ciws.fcs_row`; only when DT_NPC_FCS has the row), then cloned to
+  NPC_FCS_VesselCIWS000_SVA_Defence by the same code. Why: GR033's arms is the Mk 15 blueprint's module trio
+  (AIControlCIWS + LauncherBoneControl + ProjectileCommon), and the row's FCSBlueprintClass, BP_FCS_Vessel_CIWS_00, drives
+  a TurretPoseableMesh's BN_turret_yaw / BN_turret_pitch, the very names GR033's base blueprint has; Survival's Aegis
+  already fires its Mk 15 on a clone of this row; and only a row can be boosted and logged (the blueprint's own numbers
+  live in its bone control). The row is a ship mount's (+-60 deg at 37.5 deg/s), so `yaw_full` / `slew_x` give the
+  clone -180..180 at 75 deg/s. Its weapon CIWS_Vessel_000 is an interceptor too (InterceptDistance 2500 m, SearchType 1):
+  it may shoot at missiles near it [I]. `fcs_row = none` leaves the blueprint's own (2500 m, not boosted) for an A/B.
+  Numbers: lock-on 2500 -> 5000 m, rounds 3.0 -> 6.0 s of flight (x the range's growth), arm 0.5 -> 0.19 s, lock 3 ->
+  1.12 s, 3 -> 0.75 s between, rest 1 -> 0.25 s, lead 0.8 -> 1.2 s, search 10 km, health 20 -> 60 (`ciws.health_add`).
+- **STORE.** The AIRFIELD page had no row left, so the AA gun, SAM site and CIWS rows have a page of their own,
+  **DEFENCES** (in-game menu 25: WBP_SV_StoreDefences / DA_SV_StoreDefencesSettings / DT_SV_StoreDefencesCommands; Lua
+  SHOP.menuRows' sixth row SVStoreDefences): BUILD AA GUN, BUILD SAM SITE, BUILD CIWS, ALLIES >, TAKE OFF. AIRFIELD (21):
+  REPAIR AIRCRAFT, REPAIR AIRFIELD, DEFENCES > ("25"), ALLIES >, TAKE OFF. CFG.shop.items.Ciws (role "ciws") ->
+  Airfield.defences.ciws: 6000 Z, raise 1.12 (6000, 6720, 7530, 8430), its units built in order, ALL BUILT; NOT
+  AVAILABLE while SV_Def_Ciws isn't in DT_NPC (ALLY.ciwsReady false). The old fourth row's turn order (no STORE pages)
+  has the CIWS 4th, 8th, 10th and 11th. Icons: T_HUD_w_mgp_a0 (the CIWS), T_Icon_Radar_Gnd_000 (DEFENCES >).
+- **The rest, as the AA guns and SAM sites:** the ALLIES row ("AA n  SAM n  CIWS n (hp %)", CIWS only once one is
+  up), "CIWS LOST" when one goes, repairs between rounds and with the airfield (class BP_GR033_ciws_CP_Ally_C), kill
+  credit "defences" (KILL.side: "GR033_ciws", never the ALICORN's alcn_ciws). Co-op: nothing of its own, as theirs
+  (the host's SV_Spawn of a unit is mirrored to the joiners; each player's own STORE).
+
+### 4c. Log lines to look for (a test's AC8SurvivalMode_lua.log)
+- Main menu: `allies: the airfield defences' turrets search 10000 m (NPC_AIModule_SV_Defence, was 6000 m), not lost in
+  cloud`; `allies: the CIWS's gun on NPC_FCS_VesselCIWS000: set (boosted below)`; `allies: the airfield's AA GUN +40 HP
+  (SV_Def_Gepa's MaxHealthDifference now 40)` (SAM SITE, CIWS the same); `allies: the ships' and the airfield's own fire
+  control: NPC_FCS_VesselCIWS000_SVA_Defence (within 2500 -> 5000 m, ..., yaw -60..60 at 37.5 -> -180..180 at 75.0
+  deg/s, rounds CIWS_Vessel_000_SVA_Defence: 3.0 -> 6.0 s of flight), NPC_FCS_VehicleAAGun000_SVA_Defence (within 2200
+  -> 4400 m, ..., rounds AAGUN_Ground_000_SVA_Defence: hurt out to 2000 -> 4400 m, 20 -> 30 m round),
+  NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 8000 m, ..., missile SAM_Ground_000_SVA_Defence: 7.3 -> 14 s, up to
+  3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5)`; `allies: 8 of 8 rows in DT_NPC, WINGMEN in, CIWS
+  in, ...`; `shop: store page SVStoreDefences: ...` and `shop: the store's pages in the in-game menu table: ...,
+  SVStoreDefences at 25 (want 25)`.
+- In a run: `shop: Ciws: CIWS BUILT for 6000 (SV_Unit_Ciws_A).`; `allies: CIWS (SV_Unit_Ciws_B) lost in round N`;
+  `allies: N airfield defences repaired with the airfield`; `kills: ... went down to the defences (damage: ...
+  defences N)`.
+
+### 4d. Untested [I] (everything in game), what to look at
+1. The DEFENCES page opens from AIRFIELD's DEFENCES > and its rows buy; the AIRFIELD page's 5 rows.
+2. A CIWS spawns at each spot on the ground (not floating, not buried, not in the sea), allied (an ally's target
+   box), and fires at enemy aircraft all the way round out to ~5 km; whether NpcFCSId0 on GR033 is honoured at all
+   (else `fcs_row = none` for its own); whether it shoots down enemy missiles.
+3. AA guns reach 4.4 km (flak bursts on targets out there, kills credited "defences"); SAM sites launch at 8 km and the
+   missiles arrive; the 25 km unit area doesn't change what they pick.
+4. 60 HP: a defence lasts two enemy missiles; the ALLIES row's % and the repairs read the new health right.
+5. MOONCHILD's taxi and takeoff and the amphibious troops' drives go past the CIWS (A and B 84-87 m off two drives).
 1. Does `MissedWeapon_V2` count hits on invincible dummies as well as misses? (M004 and M22 assume yes.) Does the first
    event get dropped (hard rule 6)?
 2. Does the M22 strike AI (engagement target `AB_Unit_01_Ground2`, GROUND_ONLY) fire at the dummies when spawned by

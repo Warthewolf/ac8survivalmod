@@ -438,6 +438,44 @@ DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}', 'gepa_common
 # (Survival's mission row, its DT_SV_NpcRows copy of the DT_NPC row), so Scripts/main.lua can give their weapons fire
 # control of their own (CFG.shop.items.Airfield.defences.fcs) without touching the stock rows
 DEFENCE_ROWS = {'gepa_common': ('sv_def_gepa', 'SV_Def_Gepa'), 'avng_common': ('sv_def_avng', 'SV_Def_Avng')}
+# The STORE's CIWS (0.72.1; user, 2026-10-29: "Add CIWS that can be purchased and placed around the airfield", "fixed
+# spots around the runway are fine"): the game's land Phalanx, GR033_ciws (BP_AITurret_Pawn; one arms of
+# LiveFCSModule_AIControlCIWS / LauncherBoneControl / ProjectileCommon on TurretPoseableMesh, all the way round). Four
+# units of their own, each a copy of Survival's first AA gun unit (Mission 22's allied airport unit: faction 1, its
+# tags, its ground objects' flags) on mission row DEFENCE_CIWS_ROW[0] (a copy of gepa_common's) -> DT_SV_NpcRows'
+# DEFENCE_CIWS_ROW[1], a copy of DT_NPC's DEFENCE_CIWS_NPC on the game's own allied model row DEFENCE_CIWS_MODEL
+# (BP_GR033_ciws_CP_Ally: BP_GR033_ciws_CP with an ally's destruction effects). Scripts/sv_config.lua
+# CFG.shop.items.Airfield.defences.ciws sells them, in DEFENCE_CIWS's order (keep its units in step).
+# Spots: km along Mission 22's runway axis from its centre (+ ENE) and across it (+ SSE), by its two ends, each side;
+# >= 170 m from every airport object (AA guns, SAM sites, dummies, the parked F/A-18s, the scramble taxi), >= 170 m off
+# the axis (the runway is 30 m wide, its approach box 98 m), >= 80 m from the amphibious troops' drives (lcac_craft),
+# well inside the beaches the coast marks give (LCAC_LANES: 0.45-0.55 km off the axis by the runway's middle); on the
+# ground at the airport objects' 5 m.
+# Every defence unit's area (0.72.1): Mission 22's airport unit has 6 km and 500-6000 m, and turrets engage only inside
+# their unit's area (the Aegis's 20 km missiles stopped at its 10 km: ALLY_SHIP_AREA_M), which would hold the SAM
+# sites' 8 km lock-on and the defences' 10 km search (CFG.shop.items.Airfield.defences.fcs) in; the ships' then.
+DEFENCE_AREA_M, DEFENCE_ALT_M = 25000.0, (0.0, 15000.0)
+DEFENCE_CIWS_ROW = ('sv_def_ciws', 'SV_Def_Ciws')
+DEFENCE_CIWS_MISSION_SOURCE = 'gepa_common'
+DEFENCE_CIWS_NPC = 'GR033_ciws_01'
+DEFENCE_CIWS_MODEL = 'GR033_ciws_Ally'
+DEFENCE_CIWS_SOURCE_UNIT = 'SV_Unit_AAGun_A'     # (DEFENCES' first unit: made by build_survival.py split_units)
+DEFENCE_CIWS_Z_CM = 500.0
+DEFENCE_CIWS = [  # (unit, object, km along, km across)
+    ('SV_Unit_Ciws_A', 'SV_Obj_CiwsA', -0.70, -0.25),     # the WSW end, north side
+    ('SV_Unit_Ciws_B', 'SV_Obj_CiwsB', -0.75, +0.25),     # the WSW end, south side
+    ('SV_Unit_Ciws_C', 'SV_Obj_CiwsC', +0.80, -0.17),     # the ENE end, north side
+    ('SV_Unit_Ciws_D', 'SV_Obj_CiwsD', +0.85, +0.20),     # the ENE end, south side
+]
+
+
+def defence_ciws():
+    """[(unit, object, (x, y, z) cm, yaw deg)]: DEFENCE_CIWS on the runway (LCAC_RUNWAY: Mission 22's), facing along it."""
+    import math
+    (rx, ry), ryaw = LCAC_RUNWAY
+    ux, uy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
+    return [(unit, obj, (rx + (al * ux - ac * uy) * 1e5, ry + (al * uy + ac * ux) * 1e5, DEFENCE_CIWS_Z_CM), ryaw)
+            for unit, obj, al, ac in DEFENCE_CIWS]
 # Allies the STORE sells (user, 2026-10-23: "buy Allied Aircraft from the Store from the Airfield Page ... a Docks Page
 # ... Different Allied Ships that will cruise around on the water ... expensive ... boost their FCS ... enemies can
 # target these ... Allied Aircraft are F-22's and they spawn in at the Airfield, Take Off from the airfield and their

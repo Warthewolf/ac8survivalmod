@@ -27,6 +27,12 @@ for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.u
 -- WINGMEN's DT_SV_NpcRows row (the review build's: tools/build_survival.py, its F-16C under SV_Wingmen); apart from
 -- ROWS, so a container without it still sells the rest
 local WINGMEN_ROW = "SV_Ally_Wingmen"
+-- the CIWS's (0.72.1: tools/build_survival.py build_npc_rows, the game's land Phalanx GR033_ciws_01 on its allied model
+-- row GR033_ciws_Ally), apart from ROWS as WINGMEN's; the airfield's defences as the Aegis's turrets, and each defence
+-- row's kind (its health_add: CFG.shop.items.Airfield.defences[kind])
+local CIWS_ROW = "SV_Def_Ciws"
+ROW_SHIP[CIWS_ROW] = "Defence"
+local DEF_ROW_KIND = { SV_Def_Gepa = "aa", SV_Def_Avng = "sam", [CIWS_ROW] = "ciws" }
 
 function ALLY.setup()
     if ALLY.setupDone or not CFG.allies.enabled or not gameInstance() or not SR.done then return end
@@ -44,16 +50,20 @@ function ALLY.setup()
     local modules = loadObject(SEARCH_MODULE.path)
     if modules then
         pin(modules, nameOf(modules))
-        for key, sh in pairs(CFG.allies.ships) do
-            local sf = sh.fcs
+        local fcsOf = { Defence = CFG.shop.items.Airfield.defences.fcs }    -- (the ships' and the airfield's defences')
+        for key, sh in pairs(CFG.allies.ships) do fcsOf[key] = sh.fcs end
+        for key, sf in pairs(fcsOf) do
             if sf and sf.search_m then
-                local row = "NPC_AIModule_SV_" .. key
+                local row, was = "NPC_AIModule_SV_" .. key, nil
                 if cloneRow(modules, "NPC_AIModule_Turret000", row, function(r)
+                    pcall(function() was = r.Radius end)
                     r.Radius = sf.search_m
                     pcall(function() r.bEnableLostTargetInClouds = false end)
                 end) then
                     shipModule[key] = row
-                    log(string.format("allies: %s's turrets search %d m (%s)", key, sf.search_m, row))
+                    log(string.format("allies: %s turrets search %d m (%s%s), not lost in cloud",
+                        key == "Defence" and "the airfield defences'" or (key .. "'s"), sf.search_m, row,
+                        type(was) == "number" and string.format(", was %d m", math.floor(was)) or ""))
                 end
             end
         end
@@ -65,10 +75,28 @@ function ALLY.setup()
         local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
         if made[new] == nil then
             made[new] = cloneRow(fcs, src, new, function(r)
+                local was = {}                       -- (the stock row's, for the log's before -> after)
+                for _, f in ipairs({ "CaptureDistance", "ActivationTime", "TriggeringTime", "ShotIntervalTime", "RestingTime",
+                                     "YawAngleMin", "YawAngleMax", "YawSpeed" }) do
+                    pcall(function() was[f] = r[f] end)
+                end
                 pcall(function() r.CaptureDistance = r.CaptureDistance * (sf and sf.range_x or c.range_x) end)
                 pcall(function() r.CaptureAngleRange = math.min(180, r.CaptureAngleRange * c.angle_x) end)
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
+                end
+                local arc = ""                       -- (the turret: quicker round, all the way round)
+                if sf and (sf.slew_x or sf.yaw_full) then
+                    if sf.slew_x then
+                        pcall(function() r.YawSpeed = r.YawSpeed * sf.slew_x end)
+                        pcall(function() r.PitchSpeed = r.PitchSpeed * sf.slew_x end)
+                    end
+                    -- (a land mount on a ship mount's fire control, the CIWS's: +-60 deg of its front)
+                    if sf.yaw_full then pcall(function() r.YawAngleMin, r.YawAngleMax = -180, 180 end) end
+                    pcall(function()
+                        arc = string.format(", yaw %.0f..%.0f at %.1f -> %.0f..%.0f at %.1f deg/s", was.YawAngleMin, was.YawAngleMax,
+                            was.YawSpeed, r.YawAngleMin, r.YawAngleMax, r.YawSpeed)
+                    end)
                 end
                 -- (CFG.allies.magazine_min: an ally that lasts round after round never runs dry)
                 pcall(function() r.MagazineCapacity = math.max(r.MagazineCapacity, CFG.allies.magazine_min or 0) end)
@@ -99,15 +127,44 @@ function ALLY.setup()
                         pcall(function() homing = x.bIsHoming == true end)
                         if mc and homing then        -- a homing missile: flies long enough to reach range_m
                             missile = true
+                            local w0 = {}
+                            for _, f in ipairs({ "LifeTime", "SpeedMaxKmph", "AccelerationKmph", "MaxRotationAngle" }) do
+                                pcall(function() w0[f] = x[f] end)
+                            end
                             pcall(function() x.LifeTime = math.max(x.LifeTime, mc.life_s) end)
                             pcall(function() x.AccelerationKmph = x.AccelerationKmph * mc.accel_x end)
                             pcall(function() x.SpeedMaxKmph = math.max(x.SpeedMaxKmph, mc.speed_max_kmph) end)
                             pcall(function() x.MaxRotationAngle = x.MaxRotationAngle * mc.turn_x end)
                             pcall(function() x.HomingReductionInCloud = 0 end)
                             pcall(function()
-                                what = string.format(", missile %s: %.0f s at up to %.0f km/h (+%.0f km/h a second), turns %.0f",
-                                    wn, x.LifeTime, x.SpeedMaxKmph, x.AccelerationKmph, x.MaxRotationAngle)
+                                what = string.format(", missile %s: %.1f -> %.0f s, up to %.0f -> %.0f km/h, +%.0f -> +%.0f km/h a second, turns %.1f -> %.1f",
+                                    wn, w0.LifeTime, x.LifeTime, w0.SpeedMaxKmph, x.SpeedMaxKmph, w0.AccelerationKmph,
+                                    x.AccelerationKmph, w0.MaxRotationAngle, x.MaxRotationAngle)
                             end)
+                        elseif sf and sf.round_reach and not homing then
+                            -- a gun's rounds out to its new lock-on range (r's, already grown): the AA guns' flak hurts
+                            -- only inside its damage area (AAGUN_Ground_000: 2000 m long, 20 m round), the CIWS's
+                            -- rounds fly LifeTime s (CIWS_Vessel_000: 3), longer by the range's growth
+                            local len = 0
+                            pcall(function() len = x.DamageAreaLengthMeters end)
+                            if type(len) == "number" and len > 0 then
+                                pcall(function()
+                                    local rad = x.DamageAreaRadiusMeters
+                                    x.DamageAreaLengthMeters = math.max(len, r.CaptureDistance)
+                                    x.DamageAreaRadiusMeters = rad * (sf.round_width_x or 1)
+                                    what = string.format(", rounds %s: hurt out to %.0f -> %.0f m, %.0f -> %.0f m round", wn,
+                                        len, x.DamageAreaLengthMeters, rad, x.DamageAreaRadiusMeters)
+                                end)
+                            else
+                                pcall(function()
+                                    local life, grow = x.LifeTime, 1
+                                    if type(was.CaptureDistance) == "number" and was.CaptureDistance > 0 then
+                                        grow = math.max(1, r.CaptureDistance / was.CaptureDistance)
+                                    end
+                                    x.LifeTime = life * grow
+                                    what = string.format(", rounds %s: %.1f -> %.1f s of flight", wn, life, x.LifeTime)
+                                end)
+                            end
                         end
                     end) then
                         r.NpcWeaponId = FName(wn)
@@ -119,11 +176,13 @@ function ALLY.setup()
                         if missile then pcall(function() r.CaptureDistance = mc.range_m end) end
                     end
                 end)
-                if sf then
+                if sf then                           -- (the stock row's -> its own)
                     pcall(function()
-                        shipSaid[#shipSaid + 1] = string.format("%s (within %d m, arm %.2f s, lock %.2f s, %.2f s between, rest %.2f s%s)",
-                            new, math.floor(r.CaptureDistance), r.ActivationTime, r.TriggeringTime, r.ShotIntervalTime,
-                            r.RestingTime, what)
+                        shipSaid[#shipSaid + 1] = string.format("%s (within %d -> %d m, arm %.2f -> %.2f s, lock %.2f -> %.2f s, "
+                            .. "%.2f -> %.2f s between, rest %.2f -> %.2f s%s%s%s)", new, math.floor(was.CaptureDistance or 0),
+                            math.floor(r.CaptureDistance), was.ActivationTime or 0, r.ActivationTime, was.TriggeringTime or 0,
+                            r.TriggeringTime, was.ShotIntervalTime or 0, r.ShotIntervalTime, was.RestingTime or 0, r.RestingTime,
+                            shipModule[key] and (", search " .. shipModule[key]) or "", arc, what)
                     end)
                 end
             end) and true or false
@@ -131,8 +190,9 @@ function ALLY.setup()
         return made[new] and new or nil
     end
     local n = 0
-    local all = { WINGMEN_ROW }
+    local all = { WINGMEN_ROW, CIWS_ROW }
     for _, row in ipairs(ROWS) do all[#all + 1] = row end
+    local defs = CFG.shop.items.Airfield.defences
     for _, row in ipairs(all) do
         local _, have = dtCall(npc, "FindRow", row)
         if have == nil then
@@ -140,14 +200,34 @@ function ALLY.setup()
             if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
         end
         if row == WINGMEN_ROW then ALLY.wingmenReady = have ~= nil end
-        if have ~= nil and row ~= WINGMEN_ROW then n = n + 1 end
+        if row == CIWS_ROW then ALLY.ciwsReady = have ~= nil end
+        if have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW then n = n + 1 end
         local sh = ROW_SHIP[row] and CFG.allies.ships[ROW_SHIP[row]]
-        if have ~= nil and sh and sh.health_add and row == "SV_Ally_" .. ROW_SHIP[row] then   -- a hull: its own health
+        local dk = DEF_ROW_KIND[row] and defs[DEF_ROW_KIND[row]]
+        local add = (sh and row == "SV_Ally_" .. ROW_SHIP[row] and sh.health_add) or (dk and dk.health_add) or nil
+        if have ~= nil and add and add ~= 0 then             -- a hull or an airfield defence: its own health
             local okH, h = pcall(function()                -- (once a session: ALLY.setup runs once, the row stays in)
-                have.MaxHealthDifference = (have.MaxHealthDifference or 0) + sh.health_add
+                have.MaxHealthDifference = (have.MaxHealthDifference or 0) + add
                 return have.MaxHealthDifference
             end)
-            log(string.format("allies: %s's hull %+d HP (MaxHealthDifference now %s)", sh.name, sh.health_add, okH and tostring(h) or "NOT set"))
+            log(string.format("allies: %s %+d HP (%s's MaxHealthDifference now %s)", sh and (sh.name .. "'s hull") or
+                ("the airfield's " .. (dk.label or row)), add, row, okH and tostring(h) or "NOT set"))
+        end
+        -- the CIWS's gun on fire control of its own (CFG.shop.items.Airfield.defences.ciws.fcs_row: the ships' Mk 15's,
+        -- then the airfield's boost below); the game's GR033_ciws_01 names none, its blueprint's own arms fire (2500 m)
+        if have ~= nil and row == CIWS_ROW then
+            local fr = tostring(defs.ciws and defs.ciws.fcs_row or "")
+            local cur = "?"
+            pcall(function() cur = have.NpcFCSId0:ToString() end)
+            if fr == "" or fr:lower() == "none" then
+                log("allies: the CIWS fires on its blueprint's own fire control (fcs_row none; NpcFCSId0 " .. cur .. ")")
+            elseif cur == "None" or cur == "" then
+                local _, fr0 = dtCall(fcs, "FindRow", fr)
+                local okF = false
+                if fr0 ~= nil then okF = pcall(function() have.NpcFCSId0 = FName(fr) end) end
+                log(string.format("allies: the CIWS's gun on %s: %s", fr, okF and "set (boosted below)"
+                    or "NOT set (no such row in DT_NPC_FCS): its blueprint's own fire control"))
+            end
         end
         if have ~= nil then
             for i = 0, 5 do
@@ -178,9 +258,9 @@ function ALLY.setup()
     ALLY.ready = n == #ROWS
     if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
     if #gunSaid > 0 then log("allies: guns: " .. table.concat(gunSaid, ", ")) end
-    log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
+    log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, CIWS %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", ALLY.wingmenReady and "in" or "NOT in",
-        boosted, c.range_x, c.time_x, names))
+        ALLY.ciwsReady and "in" or "NOT in", boosted, c.range_x, c.time_x, names))
 end
 
 -- CFG.allies.ally_speakers: on while a run is on (`want`), back to the game's values after it.
@@ -302,9 +382,10 @@ end
 
 -- CFG.allies.repair: between rounds every allied aircraft, ship (hull and turrets) and airfield defence still up back
 -- to full health (economy review of 2026-10-25: "allies who last"). The ships' and defences' actors are found by their
--- classes (BP_VE002_aegs_* / BP_GR002_gepa_CP / BP_GR005_avng_CP: the names the AI watch logged), once a round.
+-- classes (BP_VE002_aegs_* / BP_GR002_gepa_CP / BP_GR005_avng_CP: the names the AI watch logged; the CIWS's
+-- BP_GR033_ciws_CP_Ally, its DT_NPC_Model row GR033_ciws_Ally's blueprint), once a round.
 local SHIP_CLASSES = { "BP_VE002_aegs_CP_C", "BP_VE002_aegs_mk15_01_CP_C", "BP_VE002_aegs_mk41_CP_C", "BP_VE002_aegs_mk45_CP_C" }
-local DEF_CLASSES = { "BP_GR002_gepa_CP_C", "BP_GR005_avng_CP_C" }
+local DEF_CLASSES = { "BP_GR002_gepa_CP_C", "BP_GR005_avng_CP_C", "BP_GR033_ciws_CP_Ally_C" }
 local function repairActors(classes)
     local n = 0
     for _, cls in ipairs(classes) do
@@ -323,7 +404,8 @@ end
 -- The airfield defences' health in % (their actors within 4 km of the runway, found again every 30 s or when one is
 -- built or lost; read every 2 s), or nil when none is up
 local function defenceHealth(R, now)
-    local n = R.defCount and (R.defCount.aa + R.defCount.sam) or 0
+    local n = 0
+    for _, kind in ipairs(DEF_KINDS) do n = n + (R.defCount and R.defCount[kind] or 0) end
     if n == 0 then R.defActors = nil; return nil end
     if not R.defActors or R.defActorsN ~= n or now >= (R.defActorsAt or 0) then
         R.defActors, R.defActorsN, R.defActorsAt = {}, n, now + 30
@@ -409,8 +491,10 @@ function ALLY.hudLine()
     local ships = #ALLY.shipsAtSea()
     if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships; news[#news + 1] = "SHIPS" end
     local dc = R.defCount
-    if dc and (dc.aa > 0 or dc.sam > 0) then
-        parts[#parts + 1] = string.format("AA %d  SAM %d", dc.aa, dc.sam) .. (R.defHp and string.format(" (%d%%)", R.defHp) or "")
+    local ciws = dc and dc.ciws or 0
+    if dc and (dc.aa > 0 or dc.sam > 0 or ciws > 0) then
+        parts[#parts + 1] = string.format("AA %d  SAM %d", dc.aa, dc.sam) .. (ciws > 0 and string.format("  CIWS %d", ciws) or "")
+            .. (R.defHp and string.format(" (%d%%)", R.defHp) or "")
         news[#news + 1] = "DEFENCES"
     end
     local k = RUN.kills or {}
@@ -524,9 +608,9 @@ function ALLY.tick(now)
         end
         -- the airfield's defences: how many are up, and a warning for each one lost (economy review: "warn when one is lost")
         local d = CFG.shop.items.Airfield.defences
-        R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0 }
-        for _, kind in ipairs({ "aa", "sam" }) do
-            for _, u in ipairs(d[kind].units) do
+        R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0, ciws = 0 }
+        for _, kind in ipairs(DEF_KINDS) do
+            for _, u in ipairs(d[kind] and d[kind].units or {}) do
                 local up = SV_UnitAlive(u) > 0
                 if up then R.defCount[kind] = R.defCount[kind] + 1 end
                 if R.defUp[u] and not up then
