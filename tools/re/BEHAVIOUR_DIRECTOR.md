@@ -224,7 +224,7 @@ What a pilot flies now (default settings; the surround is the spike's until Reap
 ### Log lines to look for in a test
 - Main menu, unchanged: `behaviour: set NLID_SV_Fighter in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, ...
   ProvokeNearLua = LA_SV_ProvokeNear, ...)` and `game Lua: stock SurvivalMode.AI.LA_SV_ProvokeNear: true ...`. In the
-  level before round 1: `game Lua: built ... LA_SV_Escape x1, ... LA_SV_ProvokeNear x1 ...; errors 0` (a Ctor error in
+  level before round 1: `game Lua: built ... LA_SV_Escape x1, ... LA_SV_ProvokeNear x1 ...; all fine` (before 0.72.4: `errors 0`) (a Ctor error in
   the changed scripts shows here: both are in GAME_LUA_STOCK).
 - `provoke: round 7, spike level 0, Veteran (BP_...): was ProvokeConditionConeAngle 85.0, ProvokeDeterminationTime 2.5;
   now ProvokeConditionConeAngle 60, ProvokeDeterminationTime 1.5; reads back 60.0, 1.5 (Veteran 60 deg / 1.5 s)`; from
@@ -772,7 +772,7 @@ last), but the world data, rows and events changed: that bump must come before a
   `roles: off; every fighter flight flies the fighters' set, drawn as before (the Lancer units keep their 9 km band)`);
   then, before round 1,
   `game Lua: built ... LA_SV_LancerPass x1, ... LA_SV_WolfDrag x1, LA_SV_WolfStrike x1, ... LA_SV_SkirmPass x1 ...;
-  errors 0` (each built once a desc's row names its set: the proof the per-object Wolf rows work is WolfDrag AND
+  all fine` (each built once a desc's row names its set: the proof the per-object Wolf rows work is WolfDrag AND
   WolfStrike both built).
 - Each round: `roles: round 10 (the mix from round 10: duelist 0.30, lancer 0.25, wolf 0.25, skirm 0.20): 24 of 24
   aircraft: duelist 8, lancer 6, wolf 6, skirm 4` (`; short: wolf 24 of 26; filled from skirm 2` when a group runs
@@ -799,7 +799,7 @@ last), but the world data, rows and events changed: that bump must come before a
   `roles: setup error`, `roles: level load error ... roles off this level`, `roles: wolf error ...`.
 
 ### Test checklist (in game)
-1. The pipeline: the main-menu lines above, then at level load all seven new modules `built ... x1; errors 0` (with
+1. The pipeline: the main-menu lines above, then at level load all seven new modules `built ... x1; all fine` (with
    WolfDrag and WolfStrike both built, the per-object rows of one desc work: the brief's open question).
 2. A Lancer flight ([roles.mix] lancer = 1, 1, 1, the others 0): spawns ~2 km above the rest; slashes through once
    (ai: short PursueTarget) and climbs away (MoveAwayFromTarget ~10 s); no `ReturnToUnit` right after spawning high or
@@ -2193,7 +2193,7 @@ with `[log] verbose = true`: set it in survival.ini for this test, as several it
 
 **0. The build and the measurements (unit 1)**
 - Main menu: every `behaviour: set NLID_SV_<X> in (...)` (Fighter, Lancer, WolfLead, WolfWing, Skirmisher) and `game Lua:
-  stock SurvivalMode.AI.LA_SV_<X>: true`; level load: `game Lua: built ... ; errors 0` with all eleven LA_SV_ modules,
+  stock SurvivalMode.AI.LA_SV_<X>: true`; level load: `game Lua: built ... ; all fine` with all eleven LA_SV_ modules,
   `roles: at level load lancer NLID_SV_Lancer, wolf ..., skirm ...`; `[AC8SurvivalMode] loaded, version 0.72.0`.
 - `round probe: AI aircraft created #N: ... (<unit>, k N)`; a jammer or Harvest flight's `spawn index: ... k 0 is the
   lead: creation order = desc order` (THE check for every per-plane event: salvos, Wolf traps, blinks).
