@@ -244,8 +244,11 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   (RE_SV_GlitchBlink_*, kept), its "glitch_six" tell the host's; its phase 3 LastTGT (RE_SV_GlitchTurn) is kept by
   mirroredEvent's RE_SV_Glitch rule, its "glitch_allout" tell goes to every player ("tl"), and its gun events
   (RE_SV_GlitchGun, forwarded) fire on each joiner's copy at that joiner while the host is close in front of it; the
-  host stops RE_SV_GlitchEcm (forwarded, so a joiner's copy's pod lapses too; its own row refires it at most once a
-  minute there) and switches its own pods off (the joiners' aren't). A Ladon's RE_SV_LadonRage<Key> is forwarded
+  host stops RE_SV_GlitchEcm (forwarded) and switches its own pods off, and its "rnd" carries AB.L..IN's phase (the
+  9th field: 1-3, else empty; a joiner takes only 1-3 as D.glitchPhase), so a joiner's ANOM.clientGlitch switches its
+  copy's pods off too every ecm_check_s while the host's is in phase 3 (its own row would refire them every 14 s; code
+  review of unit 9). The phase tells are sure ones: the host sends them through its gaps, and a joiner with tells off
+  (or one refused there) still shows the callout. A Ladon's RE_SV_LadonRage<Key> is forwarded
   (harmless: the copies follow the stream); its callout is the round's ("co"), its tell every player's. The ALICORN's
   deck launches go through spawnFlight with a pose, which the SV_Spawn wrapper mirrors (pose, aircraft, level); its
   callout is the round's, its "alcn_deck" tell every player's. Untested in game.

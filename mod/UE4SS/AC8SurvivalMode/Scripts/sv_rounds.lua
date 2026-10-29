@@ -403,6 +403,7 @@ local function startRound()
         and (D.round - b.first_raid) % math.max(1, math.floor(b.raid_every)) == 0
     local bombers, nBombers = {}, 0
     local taken = {}                                -- (flights already picked this round: one pick never takes them again)
+    D.taken = taken                                 -- (and the ALICORN's deck never launches one: sv_alicorn.lua deckFlight)
     local function pick(units, n, skip)
         local out, got = pickFlights(units, n, function(u) return taken[u] or (skip and skip(u)) end)
         for _, u in ipairs(out) do taken[u] = true end

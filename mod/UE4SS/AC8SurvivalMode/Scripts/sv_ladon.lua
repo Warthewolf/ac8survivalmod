@@ -80,10 +80,11 @@ function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
 
 -- Ladon `downKey` shot down: the other one, still up, is enraged (CFG.specials.ladon.rage; behaviour roadmap P7, "after
 -- one Ladon dies the other changes route and volleys faster"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
--- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next within rage.first_s (once you're in
--- range), and RE_SV_LadonRage<Key> sets its flag, so its next pass over the airfield ends on the tighter, faster rage
--- circuit (tools/survival_events.py LADON_RAGE: its PathFinish records pick the path by the flag; never a path changed
--- mid-way). Forwarded to co-op joiners (their copies are moved by the host's stream; harmless). The tell and a callout
+-- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next rage.first_s on (once you're in
+-- range; its callout and tell first, never in the same second: with the other's gap gone it had come with them, code
+-- review of unit 9), and RE_SV_LadonRage<Key> sets its flag, so its next pass over the airfield ends on the tighter,
+-- faster rage circuit (tools/survival_events.py LADON_RAGE: its PathFinish records pick the path by the flag; never a
+-- path changed mid-way). Forwarded to co-op joiners (their copies are moved by the host's stream; harmless). The tell and a callout
 -- with its name to every player. Once a round.
 function SPC.ladonRage(now, s, downKey)
     local c, t = CFG.specials.ladon, CFG.hud.text
@@ -92,7 +93,7 @@ function SPC.ladonRage(now, s, downKey)
     for k2, L2 in pairs(s.units or {}) do
         if k2 ~= downKey and L2.alive and SV_UnitAlive(L2.unit) > 0 then       -- (both down in one second: no rage)
             s.raged, L2.rage, L2.rageAt = k2, true, now
-            L2.volleyAt = math.min(L2.volleyAt or now, now + (tonumber(rg.first_s) or 0))
+            L2.volleyAt = now + math.max(1, tonumber(rg.first_s) or 0)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5
             local name = c.names[k2] or k2:upper()
             hudCallout(string.format(t.ladon_rage, name), t.ladon_rage_sub)
@@ -136,11 +137,12 @@ function SPC.ladonTick(now, s)
                 L.inRangeAt = L.inRangeAt or now                       -- (the first volley: once in range volley_warn_s)
                 -- one Ladon's volley at a time, volley_gap_s apart (a friend's test of 2026-10-23: both came into range
                 -- together and fired in the same second, and the player was down 20 s later): the other one waits.
-                -- Enraged (the other one down: rage, P7) its own rage.volley_every_s / volley_warn_s; still one
-                -- launcher a volley (both at once killed players in 9 s)
+                -- Enraged (the other one down: rage, P7) its own rage.volley_every_s / volley_warn_s and no gap (the
+                -- other's last volley held a rage volley_every_s under it, and its first, up to 22 s: code review of
+                -- unit 9); still one launcher a volley (both at once killed players in 9 s)
                 local rg = L.rage and c.rage or nil
                 local every = rg and tonumber(rg.volley_every_s) or c.volley_every_s
-                local gap = c.volley_gap_s or c.volley_every_s / 2
+                local gap = rg and 0 or (c.volley_gap_s or c.volley_every_s / 2)
                 local warn = rg and tonumber(rg.volley_warn_s) or (c.volley_warn_s or 0)
                 if now - L.inRangeAt >= warn and now - (s.volleyAny or -1e9) >= gap then
                     L.volleyAt, s.volleyAny, s.volleyWho = now + every, now, c.names[k] or k
@@ -149,8 +151,8 @@ function SPC.ladonTick(now, s)
                     local function volley()
                         local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
                         log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s%s", c.names[k] or k, near, ev,
-                            tostring(r), first and string.format(", one every %d s in range, %d s after the other's",
-                            every, gap) or "", rg and ", enraged" or ""))
+                            tostring(r), first and string.format(", one every %d s in range%s", every,
+                            rg and "" or string.format(", %d s after the other's", gap)) or "", rg and ", enraged" or ""))
                     end
                     -- its tell first (behaviour roadmap P3, CFG.tells ladon_vls: "large aircraft has launched missile",
                     -- every player, as the volley's forwarded), the volley its lead_s after (0: with it; the hatch opens first)

@@ -424,7 +424,10 @@ local function hostTick()
             local okL, l = pcall(DIR.level, D.round)
             if okL and type(l) == "number" then lv = l end
         end
-        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv)
+        local gp = ""                                      -- (AB.L..IN's phase, P7: a joiner switches its copy's pods off in 3)
+        local sp = D.special
+        if sp and sp.kind == "glitch" and sp.state == "hunt" and type(sp.phase) == "number" then gp = sp.phase end
+        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp)
     end
     if AF and now >= M.nextAf then
         local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down)
@@ -638,6 +641,7 @@ local function clientRounds(now)
         if r.state == "wait" then D.at = now + r.secs - (os.clock() - r.got) else D.at = now end
         D.wave = r.wave > 0 and r.wave or nil
         D.intLevel = r.level and { round = r.round, level = r.level } or nil   -- (the copies fly it: DIR.level, P4)
+        D.glitchPhase = r.glitchPhase                    -- (AB.L..IN's on the host: ANOM.clientGlitch, P7)
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
     end
@@ -656,6 +660,10 @@ local function clientRounds(now)
     if ANOM and ANOM.clientTick then                     -- the Anomaly's field on your own distance to its copy
         local okA, errA = pcall(ANOM.clientTick)
         if not okA then once("anomField", "coop: anomaly field error " .. tostring(errA)) end
+    end
+    if ANOM and ANOM.clientGlitch then                   -- AB.L..IN's copy in its phase 3: its ECM pods off here too
+        local okG, errG = pcall(ANOM.clientGlitch, now)
+        if not okG then once("glitchPods", "coop: AB.L..IN pods error " .. tostring(errG)) end
     end
     for i = #M.spawnQ, 1, -1 do
         local q = M.spawnQ[i]
@@ -1075,8 +1083,10 @@ local function onJoinerMessage(f)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
         if not (lv and lv == math.floor(lv) and lv >= 0 and lv <= #SPIKE_SUFFIX) then lv = nil end
+        local gp = tonumber(f[9])                         -- (AB.L..IN's phase, P7: 1-3, else none)
+        if not (gp == 1 or gp == 2 or gp == 3) then gp = nil end
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
-                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, got = os.clock() }
+                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock() }
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end
