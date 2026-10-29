@@ -15,7 +15,8 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev, tl, dv (host), hi, jn, ht, in (joiner; in unreliable). SV_CoopRecv hands them over as "<sender's slot>|<message>".
+-- ev, tl, dv (host), hi, jn, ht, in (joiner; in unreliable), fx (either: a player's shots, relayed by the host).
+-- SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
 do
@@ -331,7 +332,7 @@ local function hostPlane(o, unit)
     M.nextId = M.nextId % 65535 + 1
     local id = M.nextId
     u.planes[u.n] = { id = id }
-    M.byId[id] = { obj = o, unit = unit, ord = u.n }
+    M.byId[id] = { obj = o, unit = unit, ord = u.n, addr = a }          -- (addr: a shot's target by its stream id, "fx")
     if type(SV_CoopTrack) == "function" and a then SV_CoopTrack(id, a) end
     send(true, "bd", unit, u.gen, u.n, id)
     -- split the fighters between you: a pool flight goes after the joiners' planes (allied aircraft here) with
@@ -349,7 +350,7 @@ hostGround = function(o, unit)
     M.nextId = M.nextId % 65535 + 1
     local id = M.nextId
     u.ground[key] = { id = id }
-    M.byId[id] = { obj = o, unit = unit, key = key }
+    M.byId[id] = { obj = o, unit = unit, key = key, addr = addrOf(o) }
     send(true, "gd", unit, u.gen, key, id)
 end
 
@@ -596,7 +597,7 @@ end
 local function bindGround(id, o)
     if M.dead[id] then killCopy(id, o); M.copies[id] = nil; return end
     pcall(function() o:SetMinHealth(0.1) end)
-    M.copies[id] = { obj = o, exp = health(o) or 0 }
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o) }  -- (addr: a shot's target, "fx")
 end
 clientGround = function(o, unit)
     local cu = M.cunits[unit]
@@ -796,12 +797,31 @@ local function clientRounds(now)
 end
 
 local function clientTick()
-    -- the copies' hits: what each lost since last time goes to the host
+    -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
+    -- here (their own hits come from their game: the stand-ins fly damage-0 rows, COOP.syncSetup; this is the backstop)
+    local ins = nil
     for id, c in pairs(M.copies) do
         if valid(c.obj) then
             local h = health(c.obj)
             if h and h < c.exp then
-                send(true, "ht", id, string.format("%.1f", (c.exp - h) / 10))
+                local loss = c.exp - h
+                ins = ins or (M.standInSet and M.standInSet()) or {}
+                if next(ins) and M.standInDamage then
+                    local sd = M.standInDamage(c.obj, ins)
+                    local inc = sd - (c.sdmg or 0)
+                    c.sdmg = sd
+                    if inc > 0 then
+                        local cut = math.min(loss, inc * 10)                   -- (DamageHistoryMap: health, not x 10)
+                        loss = loss - cut
+                        M.backstops = (M.backstops or 0) + 1
+                        if M.backstops <= 5 or M.backstops % 50 == 0 then
+                            log(string.format("coopfire: copy %d lost %.1f, %.1f of it another player's stand-in's here: %s "
+                                .. "(%d times)", id, (loss + cut) / 10, cut / 10, loss > 0 and string.format("%.1f sent", loss / 10)
+                                or "nothing sent", M.backstops))
+                        end
+                    end
+                end
+                if loss > 0 then send(true, "ht", id, string.format("%.1f", loss / 10)) end
                 c.exp = h
             elseif h and h > c.exp then
                 c.exp = h                                  -- (raised here: CFG.late, a repair)
@@ -833,6 +853,7 @@ function COOP.peerPlane(o, slot)
     local P = M.peers[slot] or {}
     M.peers[slot] = P
     P.obj, P.addr, P.spawning, P.shown = o, addrOf(o), nil, nil
+    P.gear, P.flare, P.gunNext, P.flareNext = nil, nil, nil, nil       -- (the sync's: a new plane comes gear up)
     local r = type(SV_CoopPeer) == "function" and P.addr and SV_CoopPeer(slot, P.addr) or -9
     log(string.format("coop: player %d's plane is up (%s, %s)", slot + 1, nameOf(o):match("([^%.:]+)$") or "?",
         r == 1 and "moved every frame" or ("NOT moved: " .. tostring(r))))
@@ -869,12 +890,13 @@ local function peerTick(slot)
     if fresh and not P.obj and not P.spawning and levelReady()                 -- (not while this level loads)
         and (known or os.clock() - P.freshAt >= AIRFRAME_WAIT_S) then
         local row = standInRow(r0 and r0.row)
-        rawSetAircraft(unit, row)
+        local fly = M.flyRow and M.flyRow(row) or row        -- (its damage-0 copy, <row>_svcp: the sync's)
+        rawSetAircraft(unit, fly)
         spawningUnit = unit
         local r = rawSpawn(unit)
         spawningUnit = nil
         P.spawning, P.row = os.clock(), row
-        log(string.format("coop: player %d's plane as %s%s: %s", slot + 1, row,
+        log(string.format("coop: player %d's plane as %s%s: %s", slot + 1, fly,
             known and "" or string.format(" (no airframe from them in %d s)", AIRFRAME_WAIT_S),
             (type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     elseif P.spawning and os.clock() - P.spawning > 10 then
@@ -945,6 +967,444 @@ function COOP.slotOfAddr(addr)
     if e and e.addr == addr then return e.slot end
     for s, P in pairs(M.peers) do if P.addr and P.addr == addr then return s end end
     return nil
+end
+
+---------------------------------------------------------------------------------------------------- weapons, gear, afterburner
+-- The other players' planes do what theirs do (user, 2026-10-29, three players on 0.72.0: "can you please work out
+-- aircraft syncing, such as missiles being fired", "when allies land at the airfield, their gear doesn't deploy on my
+-- screen, nor do I see their afterburners"; tools/re/COOP.md 8). Each game watches its own plane and tells the others,
+-- whose stand-in of it (SV_Unit_CoopPeer<A-X>) does the same there:
+--   missiles     the pawn's FiredExplosiveWeapons (its missiles in flight; pooled objects, so an address that wasn't in
+--                it last tick is a shot, its class the kind, its TargetToHome the target): "fx" to the host, which
+--                fires them from the shooter's stand-in and relays them to the others; SV_CoopFire (runtime 0.28.5)
+--                fires the stand-in's fire-control slot 2 at that target here (its copy on a joiner), or at none
+--   gun          SV_Ammo(0) dropping (read before Survival's own refill: COOP.ammoRead) -> state bit 64 while it does;
+--                the others fire the stand-in's gun (slot 1) every GUN_EVERY_S at its target ("fx" g: your target)
+--   flares       SV_Ammo(4) dropping -> bit 128; the others fire the stand-in's flares (slot 0) as it comes on
+--   gear         LandingGearOnMesh shown -> bit 16; the others call the stand-in's EnableLandingGear as it flips
+--   afterburner  SV_InputNow's throttle at ab_throttle or over -> bit 32; the runtime lights the stand-in's itself
+-- Never twice: a stand-in flies its airframe's damage-0 copy (<row>_svcp, COOP.syncSetup), so what it fires here only
+-- shows; a joiner takes any stand-in's damage out of what it sends the host anyway (clientTick: the backstop).
+-- "fx" (reliable, a tick's shots in one): shooter -> host "fx|<k>:<id>:<age>;..." (k: m a missile, s a special weapon,
+-- g the gun's target; id: the target's stream id, 0 none; age: ms since it was seen); host -> the others
+-- "fx|<shooter's slot>|..." (never back to the shooter; the host's own as slot 0). Guards: a known slot, not your own;
+-- at most FX_PER_S shots a second a shooter and FX_MAX entries a message; a shot older than FX_STALE_MS (its age and
+-- half the round trip of each leg) or from a shooter whose state is over a second old dropped; an id not known here
+-- fired with no target.
+do
+local FX_PER_S, FX_MAX, FX_STALE_MS, FLAG_HOLD_S, GUN_EVERY_S, FLARE_EVERY_S = 12, 32, 1500, 0.5, 0.2, 1.0
+local BIT_GEAR, BIT_AB, BIT_GUN, BIT_FLARE = 16, 32, 64, 128
+local MISSION_TABLE = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
+local S = { seen = {}, kinds = {}, rate = {}, n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 } }
+M.fxS = S
+local function sc() local s = cfg().sync; return type(s) == "table" and s or {} end
+local function bit(flags, b) return type(flags) == "number" and math.floor(flags / b) % 2 == 1 end
+local function on(k) local s = sc(); return s.enabled == true and s[k] ~= false end
+
+-- the stream id of the enemy at address a (the host: its own, M.byId; a joiner: its copy of the host's, M.copies), or 0
+local function idOfAddr(a)
+    if not a then return 0 end
+    if COOP.host() then
+        for id, e in pairs(M.byId) do if e.addr == a and not e.dead then return id end end
+    else
+        for id, c in pairs(M.copies) do if c.addr == a then return id end end
+    end
+    return 0
+end
+-- the actor here of stream id `id` (the host: its enemy; a joiner: its copy), or nil
+local function addrOfId(id)
+    if type(id) ~= "number" or id <= 0 then return nil end
+    if COOP.host() then
+        local e = M.byId[id]
+        return e and not e.dead and valid(e.obj) and e.addr or nil
+    end
+    local c = M.copies[id]
+    return c and not M.dead[id] and valid(c.obj) and c.addr or nil
+end
+-- the stand-ins' damage-0 mission row for airframe row `row`, when it was made before this level loaded
+function M.flyRow(row)
+    return sc().enabled == true and M.svcpUsable and M.svcpUsable[row] or row
+end
+-- every other player's stand-in here, by address (the backstop's keys)
+function M.standInSet()
+    local set = {}
+    for s, P in pairs(M.peers) do if s ~= COOP.slot and P.addr then set[P.addr] = s end end
+    return set
+end
+-- what the stand-ins in `set` have done to o so far (its DamageHistoryMap, in health: KILLS_HEALTH_DEATH.md 1)
+function M.standInDamage(o, set)
+    local sum = 0
+    pcall(function()
+        o.DamageHistoryMap:ForEach(function(k, v)
+            local okK, a = pcall(function() return k:get():GetAddress() end)
+            local okV, x = pcall(function() return v:get() end)
+            if okK and okV and set[a] and type(x) == "number" and x > 0 then sum = sum + x end
+        end)
+    end)
+    return sum
+end
+
+-- your weapon's kind by its class: "m" the standard missile (BP_plwp_msl_*), "s" a special weapon (the stand-ins fire
+-- their missile slot 2 for both, for now), false the gun's and the flares' (the state bits carry those)
+local function kindOf(w)
+    local cls = nameOf(w):match("^(%S+)") or "?"
+    local k = S.kinds[cls]
+    if k == nil then
+        local l = cls:lower()
+        if l:find("^bp_plwp_msl") then k = "m"
+        elseif l:find("gun", 1, true) or l:find("flr", 1, true) or l:find("flare", 1, true) then k = false
+        else k = "s" end
+        S.kinds[cls] = k
+        log(string.format("coopfire: your weapon %s: %s", cls, k == "m" and "a missile (the stand-ins' slot 2)"
+            or k == "s" and "a special weapon (the stand-ins' missile slot 2 for now)" or "not sent (the state bits)"))
+    end
+    return k
+end
+-- your missiles in flight against last tick's: the new ones' entries into out ("k:id:0"); the first read after your
+-- plane changes only learns what's up already
+local function watchShots(pawn, out)
+    local okA, arr = pcall(function() return pawn.FiredExplosiveWeapons end)
+    if not (okA and arr) then once("fxarr", "coopfire: your plane's FiredExplosiveWeapons can't be read: your missiles aren't sent"); return end
+    local list, cur = {}, {}
+    local okL = pcall(function() arr:ForEach(function(_, e) list[#list + 1] = e:get() end) end)
+    if not okL then once("fxeach", "coopfire: your plane's FiredExplosiveWeapons can't be walked: your missiles aren't sent"); return end
+    for _, w in ipairs(list) do
+        local a = valid(w) and addrOf(w)
+        if a then
+            cur[a] = true
+            if S.primed and not S.seen[a] then
+                local k = kindOf(w)
+                if k then
+                    local okT, t = pcall(function() return w.TargetToHome end)
+                    out[#out + 1] = string.format("%s:%d:0", k, (okT and valid(t)) and idOfAddr(addrOf(t)) or 0)
+                end
+            end
+        end
+    end
+    S.seen, S.primed = cur, true
+end
+
+-- (sv_main.lua, just before ammoTick: before Survival's own refill) your gun's and flares' counts against what they
+-- were after last tick's: a drop away from the airfield is fire
+function COOP.ammoRead()
+    if not (COOP.open and D and sc().enabled == true and type(SV_Ammo) == "function") then return end
+    local now = os.clock()
+    if playerOnAirfield() then return end                  -- (a rearm down there)
+    local g, f = SV_Ammo(0), SV_Ammo(4)
+    if on("guns") and type(g) == "number" and g >= 0 and S.gunLast and g < S.gunLast then
+        if not S.gunAt or now - S.gunAt > FLAG_HOLD_S then S.n.bursts = (S.n.bursts or 0) + 1 end
+        S.gunAt = now
+    end
+    if on("flares") and type(f) == "number" and f >= 0 and S.flrLast and f < S.flrLast then
+        S.n.flares = (S.n.flares or 0) + 1
+        S.flrAt = now
+    end
+end
+-- (COOP.tick, after ammoTick) the counts the next read goes by
+local function ammoAfter()
+    if type(SV_Ammo) ~= "function" then return end
+    local g, f = SV_Ammo(0), SV_Ammo(4)
+    S.gunLast = (type(g) == "number" and g >= 0) and g or nil
+    S.flrLast = (type(f) == "number" and f >= 0) and f or nil
+end
+
+-- this game's state bits for its own plane (SV_CoopMe): 16 gear down, 32 afterburner, 64 gun firing, 128 flares
+function M.syncBits(pawn, now)
+    if sc().enabled ~= true or not valid(pawn) then return 0 end
+    local b = 0
+    if on("gear") then
+        local down = nil
+        pcall(function()
+            local comp = pawn.LandingGearOnMesh
+            if valid(comp) then local v = comp:IsVisible(); if type(v) == "boolean" then down = v end end
+        end)
+        if down == nil then once("gearread", "coopfire: your gear can't be read (LandingGearOnMesh): not sent")
+        elseif down ~= S.gear then
+            S.gear, S.n.gear = down, S.n.gear + 1
+            if S.n.gear <= 6 then log("coopfire: your gear " .. (down and "down" or "up") .. " (LandingGearOnMesh " .. (down and "shown" or "hidden") .. ")") end
+        end
+        if down then b = b + BIT_GEAR end
+    end
+    if on("afterburner") and type(SV_InputNow) == "function" then
+        local okI, s = pcall(SV_InputNow)
+        local th = okI and type(s) == "string" and tonumber(s:match("^[^,]*,[^,]*,[^,]*,([^,]*)")) or nil
+        if th then
+            local ab = th / 1000 >= (tonumber(sc().ab_throttle) or 0.9)
+            if ab ~= S.ab then
+                S.ab, S.n.ab = ab, S.n.ab + 1
+                if S.n.ab <= 4 then log(string.format("coopfire: your throttle %.3f: afterburner %s (ab_throttle %s)", th / 1000,
+                    ab and "on" or "off", tostring(sc().ab_throttle))) end
+            end
+            if ab then b = b + BIT_AB end
+        else
+            once("abread", "coopfire: SV_InputNow gave no throttle (" .. tostring(s) .. "): your afterburner isn't sent")
+        end
+    end
+    if on("guns") and S.gunAt and now - S.gunAt <= FLAG_HOLD_S then b = b + BIT_GUN end
+    if on("flares") and S.flrAt and now - S.flrAt <= FLAG_HOLD_S then b = b + BIT_FLARE end
+    return b
+end
+
+-- a stand-in's fire: player slot's plane here fires fire-control slot fcs at the actor at target (nil: none)
+local function standInAddr(slot)
+    local P = M.peers[slot]
+    return P and P.obj and P.shown and valid(P.obj) and P.addr or nil
+end
+local FCS_NAME = { [0] = "flares", "gun", "missiles" }
+local function coopFire(slot, fcs, target)
+    local a = standInAddr(slot)
+    if not a then S.n.noPlane = (S.n.noPlane or 0) + 1; return nil end
+    if type(SV_CoopFire) ~= "function" then
+        once("nofire", "coopfire: dlls/main.dll has no SV_CoopFire (runtime 0.28.5 or later): the other players' fire isn't shown")
+        return nil
+    end
+    local okF, r = pcall(SV_CoopFire, a, fcs, target or 0)
+    if not okF then r = tostring(r) end
+    if r == 1 then S.n.fired = S.n.fired + 1 else S.n.failed = S.n.failed + 1 end
+    once("first" .. slot .. "/" .. fcs, string.format("coopfire: player %d's first %s here (their plane %X, %s): %s", slot + 1,
+        FCS_NAME[fcs] or tostring(fcs), a, target and string.format("at %X", target) or "no target", tostring(r)))
+    if r ~= 1 then
+        once("fail" .. fcs .. "/" .. tostring(r), string.format("coopfire: SV_CoopFire(player %d's plane, slot %d) refused: %s",
+            slot + 1, fcs, tostring(r)))
+    end
+    return r
+end
+local function halfRtt(slot) return math.floor(((M.rtt and M.rtt[slot]) or 100) / 2) end
+-- player slot's shots (entries "k:id:age"; extraMs: this leg's half round trip): each one that passes the guards fired
+-- from their plane here; those entries (their ages grown) for the host to relay
+local function fireShots(slot, body, extraMs)
+    local passed = {}
+    if not (slotOk(slot) and slot ~= COOP.slot and type(body) == "string") then
+        once("fxslot", "coopfire: shots from a slot that isn't another player's dropped (" .. tostring(slot) .. ")")
+        return passed
+    end
+    local P, now = M.peers[slot], os.clock()
+    local R = S.rate[slot] or { at = now, n = 0 }
+    S.rate[slot] = R
+    if now - R.at >= 1 then R.at, R.n = now, 0 end
+    local lagging = P and type(P.age) == "number" and P.age > 1000      -- (their state over a second old)
+    local why, n = {}, 0
+    for e in body:gmatch("[^;]+") do
+        n = n + 1
+        local k, id, age = e:match("^([msg]):(%d+):(%d+)$")
+        id, age = tonumber(id), tonumber(age)
+        local bad = (n > FX_MAX and "more than " .. FX_MAX .. " in a message") or ((not k or id > 65535 or age > 600000) and "unreadable")
+        if not bad and k == "g" then                         -- (the gun's target: no shot)
+            if P then P.gunTarget = id end
+            passed[#passed + 1] = string.format("g:%d:%d", id, age + extraMs)
+        elseif not bad then
+            age = age + extraMs
+            bad = ((age > FX_STALE_MS or lagging) and "stale") or (R.n >= FX_PER_S and "over " .. FX_PER_S .. " a second") or nil
+            if not bad then
+                R.n, S.n.got = R.n + 1, S.n.got + 1
+                passed[#passed + 1] = string.format("%s:%d:%d", k, id, age)
+                local t = addrOfId(id)
+                if id > 0 and not t then S.n.untargeted = (S.n.untargeted or 0) + 1 end
+                if on("missiles") then coopFire(slot, 2, t) end
+            end
+        end
+        if bad then
+            why[bad] = (why[bad] or 0) + 1
+            S.n.dropped = S.n.dropped + 1
+        end
+    end
+    for w, c in pairs(why) do once("fxdrop" .. slot .. w, string.format("coopfire: player %d's shots dropped: %d %s", slot + 1, c, w)) end
+    return passed
+end
+-- (the host) a joiner's "fx|entries": fired here, then to every other joiner as "fx|<slot>|entries"
+function M.fxFromJoiner(from, f)
+    local ok = fireShots(from, f[2], halfRtt(from))
+    if #ok == 0 then return end
+    local body = table.concat(ok, ";")
+    for s in pairs(M.roster) do
+        if s ~= 0 and s ~= from and s ~= COOP.slot then sendTo(s, true, "fx", from, body) end
+    end
+end
+-- (a joiner) the host's "fx|<slot>|entries": the host's own or another joiner's, relayed
+function M.fxFromHost(f)
+    fireShots(tonumber(f[2]), f[3], halfRtt(0))
+end
+
+-- the other players' state bits on their planes here: gear flips, gun bursts, flares
+local function peersTick(now)
+    for s, P in pairs(M.peers) do
+        if s ~= COOP.slot and P.obj and P.shown and P.fresh and valid(P.obj) and type(P.flags) == "number" then
+            local fl = P.flags
+            if on("gear") then
+                local g = bit(fl, BIT_GEAR)
+                if g ~= P.gear then
+                    local first = P.gear == nil
+                    P.gear = g
+                    if not (first and not g) then                     -- (a new plane comes gear up: only "down" to say)
+                        local okG, err = pcall(function() P.obj:EnableLandingGear(g, 1.0) end)
+                        P.gearFlips = (P.gearFlips or 0) + 1
+                        if P.gearFlips <= 4 or not okG then
+                            log(string.format("coopfire: player %d's gear %s here: %s", s + 1, g and "down" or "up",
+                                okG and "EnableLandingGear done" or ("EnableLandingGear failed: " .. tostring(err))))
+                        end
+                    end
+                end
+            end
+            if on("guns") and bit(fl, BIT_GUN) and now >= (P.gunNext or 0) then
+                P.gunNext = now + GUN_EVERY_S
+                coopFire(s, 1, addrOfId(P.gunTarget))
+            end
+            if on("flares") then
+                local f = bit(fl, BIT_FLARE)
+                if f and (not P.flare or now >= (P.flareNext or 0)) then
+                    P.flareNext = now + FLARE_EVERY_S
+                    coopFire(s, 0, nil)
+                end
+                P.flare = f
+            end
+        end
+    end
+end
+
+-- (COOP.tick, after the state went out) this game's shots to the others, theirs shown here, the ammo counts kept
+function M.syncTick(now, pawn)
+    if sc().enabled ~= true then return end
+    if valid(pawn) then
+        local out = {}
+        local pa = addrOf(pawn)
+        if pa ~= S.pawn then S.pawn, S.seen, S.primed = pa, {}, false end
+        if on("missiles") then watchShots(pawn, out) end
+        -- the gun's target, as the gun starts or the target changes while it fires (the stand-ins aim there)
+        local gun = on("guns") and S.gunAt and now - S.gunAt <= FLAG_HOLD_S
+        if gun and type(SV_PlayerTarget) == "function" and pa then
+            local okT, t = pcall(SV_PlayerTarget, pa)
+            local id = (okT and type(t) == "number" and t > 0) and idOfAddr(t) or 0
+            if id ~= S.gunTarget or not S.gunOn then out[#out + 1] = string.format("g:%d:0", id); S.gunTarget = id end
+        end
+        S.gunOn = gun
+        if #out > FX_MAX then for i = #out, FX_MAX + 1, -1 do out[i] = nil end end
+        local shots = 0
+        for _, e in ipairs(out) do if e:sub(1, 1) ~= "g" then shots = shots + 1 end end
+        if #out > 0 and (M.linkedPeers or 0) > 0 then
+            local body = table.concat(out, ";")
+            if COOP.host() then send(true, "fx", COOP.slot or 0, body) else send(true, "fx", body) end
+            S.n.sent = S.n.sent + shots
+            if shots > 0 then once("fxsent", "coopfire: your first shot sent (" .. body .. ")") end
+        end
+    end
+    peersTick(now)
+    ammoAfter()
+    if now >= (S.statAt or now + 60) then                   -- (a minute's tally, when anything happened)
+        local n = S.n
+        if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) > 0 then
+            log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
+                .. "their target not here, %d with no plane here), your gun %d bursts, your flares %d, your gear flips %d, "
+                .. "afterburner flips %d", n.sent, n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0,
+                n.bursts or 0, n.flares or 0, n.gear, n.ab))
+        end
+        S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
+        S.statAt = now + 60
+    end
+    S.statAt = S.statAt or now + 60
+end
+
+-- The stand-ins' damage-0 rows, made at the main menu (sv_main.lua, every second until done): the spawner reads the
+-- world data's mission rows' DT_NPC rows when the level loads (hard rule 20, sv_rows.lua searchSetup), so for every
+-- airframe a stand-in flies (CFG.coop.airframes, default) the mission row <row>_svcp (tools/build_survival.py,
+-- COOP_STANDIN_SUFFIX) names <its NpcId>_SVCP, made here as a copy of <row>'s DT_NPC row with each fire-control slot on
+-- <FCS>_SVCP and that one's weapon on <W>_SVCP: damage and AreaOfEffectDamage 0 (the allies' <FCS>_SVA way). A slot
+-- whose weapon can't be made harmless is emptied. M.svcpReady[row] once made; a level that loads after flies them.
+function COOP.syncSetup()
+    local c = cfg()
+    if M.svcpDone or not c.enabled or not gameInstance() then return end
+    M.svcpTries = (M.svcpTries or 0) + 1
+    local npc, mission, fcs, wpn = loadObject(PROBE_TABLES[2].path), loadObject(MISSION_TABLE), loadObject(FCS_TABLE), loadObject(WEAPON_TABLE)
+    if not (npc and mission and fcs and wpn) then
+        if M.svcpTries >= 20 then
+            M.svcpDone = true
+            log("coopfire: the stand-ins' tables didn't load: they fly their airframes' own rows (what they fire could do damage)")
+        end
+        return
+    end
+    M.svcpDone, M.svcpReady = true, {}
+    for _, t in ipairs({ npc, mission, fcs, wpn }) do pin(t, nameOf(t)) end
+    local made, emptied, lost = {}, {}, {}
+    local function harmless(id)                           -- id .. "_SVCP": its weapon's damage 0, or nil
+        local new = id .. "_SVCP"
+        if made[new] == nil then
+            made[new] = cloneRow(fcs, id, new, function(r)
+                local w = r.NpcWeaponId:ToString()
+                if w == "None" or w == "" then return end
+                local wn = w .. "_SVCP"
+                local okW, whyW = cloneRow(wpn, w, wn, function(x)
+                    x.damage = 0
+                    pcall(function() x.AreaOfEffectDamage = 0 end)
+                end)
+                if not okW then error("weapon " .. w .. ": " .. tostring(whyW), 0) end
+                local _, xr = dtCall(wpn, "FindRow", wn)
+                if not (xr ~= nil and xr.damage == 0) then error("weapon " .. wn .. " doesn't read back damage 0", 0) end
+                r.NpcWeaponId = FName(wn)
+            end) and true or false
+        end
+        return made[new] and new or nil
+    end
+    local rows, seen = {}, {}
+    for _, r in pairs(c.airframes or {}) do if not seen[r] then seen[r] = true; rows[#rows + 1] = r end end
+    if c.default and not seen[c.default] then rows[#rows + 1] = c.default end
+    table.sort(rows)
+    for _, row in ipairs(rows) do
+        local ok, err = pcall(function()
+            local _, base = dtCall(mission, "FindRow", row)
+            local _, mr = dtCall(mission, "FindRow", row .. "_svcp")
+            if base == nil or mr == nil then error("no mission row " .. (base == nil and row or row .. "_svcp") .. " in DT_SV_NpcMission", 0) end
+            local src, dst = base.NpcId:ToString(), mr.NpcId:ToString()
+            local okR, whyR = cloneRow(npc, src, dst, function(r)
+                for i = 0, 5 do
+                    local id = r["NpcFCSId" .. i]:ToString()
+                    if id ~= "None" and id ~= "" and not id:find("_SVCP$") then
+                        local new = harmless(id)
+                        if new then r["NpcFCSId" .. i] = FName(new)
+                        else r["NpcFCSId" .. i] = FName("None"); emptied[#emptied + 1] = dst .. " slot " .. i .. " (" .. id .. ")" end
+                    end
+                end
+            end)
+            if not okR then error(dst .. ": " .. tostring(whyR), 0) end
+            M.svcpReady[row] = row .. "_svcp"
+        end)
+        if not ok then lost[#lost + 1] = row .. " (" .. tostring(err) .. ")" end
+    end
+    local n = 0
+    for _ in pairs(M.svcpReady) do n = n + 1 end
+    log(string.format("coopfire: the stand-ins' damage-0 rows: %d of %d airframes%s%s", n, #rows,
+        #emptied > 0 and ("; weapons left off: " .. table.concat(emptied, ", ")) or "",
+        #lost > 0 and ("; not made (their own rows): " .. table.concat(lost, "; ")) or ""))
+end
+
+-- TEST ONLY BEGIN (Ctrl+F5, sv_main.lua: the co-op fire path on an allied plane, solo; tools/re/COOP.md 8)
+-- Each press the next step on the first allied fighter up (MOONCHILD or VIPER, bought in the STORE), aimed at your
+-- current target (SV_PlayerTarget, or none): 1 its missiles (slot 2) with its fire permission off, 2 the same with it
+-- on, 3 its gun (slot 1), 4 its flares (slot 0), 5 its gear down, 6 its gear up; each "coopfire: test ..."
+function COOP.fireTest()
+    local R = ALLY and ALLY.run
+    local ally = nil
+    for _, p in ipairs(R and R.planes or {}) do if not ally and valid(p.obj) and (health(p.obj) or 0) > 0 then ally = p end end
+    if not ally then log("coopfire: test: no allied plane up (buy MOONCHILD or VIPER in the STORE)"); hudCallout("TEST: NO ALLIED PLANE UP", "BUY ONE IN THE STORE"); return end
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    local t = (valid(pawn) and type(SV_PlayerTarget) == "function") and SV_PlayerTarget(addrOf(pawn)) or 0
+    t = (type(t) == "number" and t > 0) and t or 0
+    S.test = (S.test or 0) % 6 + 1
+    local a, step, r = addrOf(ally.obj), S.test, nil
+    local fire = type(SV_CoopFire) == "function" and SV_CoopFire or function() return "no SV_CoopFire" end
+    local what
+    if step <= 2 then
+        pcall(function() ally.obj.bPermissionToFire = step == 2 end)
+        local okP, perm = pcall(function() return ally.obj.bPermissionToFire end)
+        r, what = fire(a, 2, t), string.format("missiles (slot 2), fire permission %s", okP and tostring(perm) or "?")
+    elseif step == 3 then r, what = fire(a, 1, t), "gun (slot 1)"
+    elseif step == 4 then r, what = fire(a, 0, 0), "flares (slot 0)"
+    else
+        local okG, err = pcall(function() ally.obj:EnableLandingGear(step == 5, 1.0) end)
+        r, what = okG and "done" or ("failed: " .. tostring(err)), "EnableLandingGear(" .. tostring(step == 5) .. ", 1.0)"
+    end
+    log(string.format("coopfire: test %d: %s (%s) %s at %s: %s", step, ally.name, ally.unit, what, t > 0 and string.format("%X", t) or "no target", tostring(r)))
+    hudCallout("TEST " .. step .. ": " .. what:upper(), tostring(r))
+end
+-- TEST ONLY END
 end
 
 ---------------------------------------------------------------------------------------------------- messages
@@ -1195,6 +1655,7 @@ local function onHostMessage(from, f)
         hostRosterSelf()
     elseif k == "jn" then hostSync(from)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
+    elseif k == "fx" then M.fxFromJoiner(from, f)       -- a joiner's shots: its plane here fires them, the others told
     elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
         local i, c = inNum(f[2], 100), inNum(f[3], 100)
         local now = os.clock()
@@ -1209,6 +1670,7 @@ end
 local function onJoinerMessage(f)
     local k = f[1]
     if k == "cf" then M.onSettings(f)
+    elseif k == "fx" then M.fxFromHost(f)               -- a player's shots (the host's, or a joiner's relayed)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
         if not (lv and lv == math.floor(lv) and lv >= 0 and lv <= #SPIKE_SUFFIX) then lv = nil end
@@ -1652,10 +2114,12 @@ function COOP.tick(tick)
         M.nextInfo = now + 5
         local info = SV_CoopInfo()
         local st = info:match("state=(%a+)")
-        M.linkNames = {}
+        M.linkNames, M.rtt = {}, {}
         M.linkedPeers = 0
-        for s, st, name in (info:match("peers=(.*)$") or ""):gmatch("(%d+)/(%a+)/%-?%d+/%-?%d+/([^,]*)") do
+        for s, st, rtt, name in (info:match("peers=(.*)$") or ""):gmatch("(%d+)/(%a+)/(%-?%d+)/%-?%d+/([^,]*)") do
             M.linkNames[tonumber(s)] = name
+            local ms = tonumber(rtt)                         -- (the link's round trip: a shot's age, "fx")
+            if ms and ms >= 0 and ms < 10000 then M.rtt[tonumber(s)] = ms end
             if st == "linked" then M.linkedPeers = M.linkedPeers + 1 end
         end
         if st ~= M.state then
@@ -1685,6 +2149,8 @@ function COOP.tick(tick)
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
         M.replays, groundNew, M.holdQ = {}, {}, nil
+        M.svcpUsable = {}                                              -- (the stand-ins' damage-0 rows in before it loaded)
+        for row, sv in pairs(M.svcpReady or {}) do M.svcpUsable[row] = sv end
         if D then
             if COOP.host() then send(true, "rs") else M.jnAt = os.clock(); send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
@@ -1710,13 +2176,16 @@ function COOP.tick(tick)
         end
         if M.unpauses == 1 then callout("CO-OP: THE GAME KEEPS RUNNING", "OTHER PLAYERS ARE STILL FLYING") end
     end
-    -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield)
+    -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield; the sync's 16 gear down,
+    -- 32 afterburner, 64 gun firing, 128 flares)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if valid(pawn) then
         local flags = 1
         local h = health(pawn)
         if h and h > 0 then flags = flags + 2 end
         if playerOnAirfield() then flags = flags + 4 end
+        local okB, bits = pcall(M.syncBits, pawn, now)
+        if okB then flags = flags + bits else once("syncBits", "coopfire: state bits error " .. tostring(bits)) end
         SV_CoopMe(addrOf(pawn) or 0, flags)
         local row = myAirframe()
         if row and row ~= M.myRow then
@@ -1734,6 +2203,8 @@ function COOP.tick(tick)
     end
     local okG, errG = pcall(groundTick)
     if not okG then once("groundTick", "coop: ship / vehicle error " .. tostring(errG)) end
+    local okF, errF = pcall(M.syncTick, now, pawn)                   -- (weapons, gear: the sync's)
+    if not okF then once("syncTick", "coopfire: sync error " .. tostring(errF)) end
     if COOP.host() then
         local okH, errH = pcall(hostTick)
         if not okH then once("hostTick", "coop: host error " .. tostring(errH)) end

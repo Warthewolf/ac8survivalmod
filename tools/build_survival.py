@@ -1854,6 +1854,24 @@ POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01'),
               ('su57_common', 'su33_common', 'OP1021_su57_01'),
               ('f22a_common', 'f15e_common', 'OP1005_f22a_01'),
               ('e18g_common', 'f18e_common', 'OP1010_e18g_01')]
+# Survival COOP's stand-ins (Scripts/sv_coop.lua, the weapon sync; tools/re/COOP.md 8): each other player's plane flies
+# <row>_svcp for its airframe's row (Scripts/sv_config.lua CFG.coop.airframes and default, read from the Lua), whose
+# NpcId <its NpcId>_SVCP is the DT_NPC copy sv_coop.lua COOP.syncSetup makes at the main menu with every weapon on
+# damage-0 rows, so what a stand-in fires on another game only shows (user, 2026-10-29: "work out aircraft syncing,
+# such as missiles being fired"). Letters at the end: hard rule 17.
+COOP_STANDIN_SUFFIX = ('_svcp', '_SVCP')
+
+
+def coop_standin_rows():
+    """The mission rows a co-op stand-in flies: CFG.coop.airframes' values and its default, from the Lua."""
+    lua = survival_events.runtime_lua()
+    m = re.search(r'\n    coop = \{.*?airframes = \{([^}]*)\},\s*default = "(\w+)"', lua, re.S)
+    assert m, 'Scripts/sv_config.lua: no CFG.coop.airframes / default'
+    rows = sorted(set(re.findall(r'=\s*"(\w+)"', m.group(1))) | {m.group(2)})
+    assert rows and all(not r[-1:].isdigit() for r in rows), rows
+    return rows
+
+
 # Difficulty spikes (main.lua CFG.spikes; user, 2026-10-22: "every 7 rounds ... a difficulty spike across the board"):
 # each level after the first gets its own rows, <row>_sv<letter> -> <NpcId>_SV<LETTER>, whose DT_NPC copies main.lua
 # gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
@@ -1883,6 +1901,15 @@ def build_npc_table():
         extra.append((src + '_sv', src, base + '_SV'))
         for suf in SPIKE_SUFFIXES:
             extra.append((src + '_sv' + suf, src, base + '_SV' + suf.upper()))
+    # the co-op stand-ins' damage-0 rows (COOP_STANDIN_SUFFIX): <row>_svcp -> <its NpcId>_SVCP, made by Lua
+    standins = coop_standin_rows()
+    missing = [r for r in standins if (r, 0) not in rows]
+    assert not missing, f'CFG.coop.airframes names rows DT_SV_NpcMission lacks: {missing}'
+    for src in standins:
+        npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]
+        base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
+        extra.append((src + COOP_STANDIN_SUFFIX[0], src, base + COOP_STANDIN_SUFFIX[1]))
+    print(f'  co-op stand-ins: {len(standins)} damage-0 rows ({", ".join(r + COOP_STANDIN_SUFFIX[0] for r in standins)})')
     # the aces (ACES): <row> -> its DT_SV_NpcRows row, and like the search aircraft <row>_sv[b|c|d] -> <that>_SV[B|C|D]
     for tier, key, _, _ in ACES:
         for row, npc, _ in ace_rows(tier, key):

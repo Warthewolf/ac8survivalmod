@@ -339,3 +339,70 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   rotations), sv_coop.lua knownRow / standInRow / slotOk / short / finite, the settings sync's fits (same type and
   size as the shipped setting; build data such as unit lists never synced). tools/checks/coop_settings_test.sh's
   "guard" role and coop_test.sh's guard line test them.
+
+## 8. Weapons, gear and afterburner (Lua 0.72.2, runtime 0.28.5, 2026-10-29; untested in game)
+The user, playing three-player co-op on 0.72.0: "can you please work out aircraft syncing, such as missiles being fired",
+"when allies land at the airfield, their gear doesn't deploy on my screen, nor do I see their afterburners or
+animations". Each game watches its own plane and tells the others; their stand-in of it (SV_Unit_CoopPeer<A-X>) does
+the same there. Lua: sv_coop.lua's "weapons, gear, afterburner" block; the native half (SV_CoopFire, SV_InputNow, the
+stand-ins' afterburner) is the runtime's (its notes in section 2).
+- **Read, each game, its own plane, every Lua tick (250 ms)**:
+  - missiles: the pawn's reflected `FiredExplosiveWeapons` (TArray<UObject*>, its missiles in flight). Weapons are
+    pooled (LiveWeaponBase < LiveObjectPoolItem: NotifyOnNewObject never sees a reused one), so an address that wasn't
+    in the array last tick is a shot (one gone and back is a new shot; the first read after your plane changes only
+    learns what's up). Its class gives the kind: `BP_plwp_msl_*` the standard missile (`m`), anything else but a
+    gun / flare class a special weapon (`s`); its `TargetToHome` the target, mapped to the co-op stream id (the host: its
+    own enemy, M.byId by address; a joiner: its copy, M.copies[id].addr; 0 for none or one not linked).
+  - gun and flares: SV_Ammo(0) / SV_Ammo(4) dropping, read before Survival's own refill (sv_main.lua calls
+    COOP.ammoRead just before ammoTick; COOP.tick keeps the counts after it), never on the airfield (a rearm).
+  - gear: `pawn.LandingGearOnMesh:IsVisible()` (the gear-down mesh shown).
+  - afterburner: SV_InputNow()'s throttle (x1000) at `ab_throttle` or over.
+- **Sent**: state flag bits on SV_CoopMe (16 gear down, 32 afterburner, 64 gun firing: held 0.5 s after the last drop,
+  128 flares: the same), and the shots as `fx` (reliable, one message a tick): shooter -> host `fx|k:id:age;...`
+  (k: m missile, s special weapon, g the gun's target, sent as the gun starts or the target changes; id the target's
+  stream id, 0 none; age ms), the host -> every other joiner `fx|<shooter's slot>|...` (never back to the shooter; its
+  own as slot 0), each age grown by half that link's round trip (SV_CoopInfo's rtt).
+- **Shown**: each shot fired from the shooter's stand-in, `SV_CoopFire(stand-in, 2, the target's actor here or 0)`; a
+  peer's bit 64 fires its stand-in's gun (slot 1) every 0.2 s (each Lua tick) at its `g` target; bit 128's rising
+  edge its flares (slot 0), again every second held; a flip of bit 16 the stand-in's `EnableLandingGear(down, 1.0)`
+  (LiveAIPlane UFUNCTION; a new stand-in seen gear up calls nothing); bit 32 the runtime lights by itself each frame.
+- **Guards** (each game, on what another sends; keep them when adding kinds): a known slot that isn't yours; at most
+  12 shots a second a shooter (`g` entries not counted) and 32 entries a message; a shot older than 1.5 s (its age with
+  half each leg's round trip) or from a shooter whose state is over a second old dropped; unreadable entries dropped;
+  an id not known here fired with no target; no stand-in of theirs here: nothing fired (the host still relays).
+  The runtime holds each shooter to 25 SV_CoopFire calls a second.
+- **Never counted twice**: a stand-in flies its airframe's damage-0 row. tools/build_survival.py adds a mission row
+  `<row>_svcp` (COOP_STANDIN_SUFFIX) for every row of CFG.coop.airframes and its default, NpcId `<its NpcId>_SVCP`;
+  COOP.syncSetup (sv_main.lua's main-menu pass, before the level loads: hard rule 20's timing, as searchSetup's
+  `_sv` rows) makes that DT_NPC row a copy of the airframe's with each fire-control slot on `<FCS>_SVCP` and its weapon
+  on `<W>_SVCP`, damage and AreaOfEffectDamage 0 (read back); a slot whose weapon can't be made harmless is emptied.
+  The stand-ins fly them (peerTick, M.flyRow) only in a level that loaded after they were made, and only with sync on.
+  The backstop: a joiner's clientTick takes any stand-in's DamageHistoryMap growth on a copy (x10: the map is in
+  health, HealthInternal is x10) out of what it sends the host as "ht". (The host has no backstop: a stand-in's hit on
+  its own enemy would be real damage there if a `_SVCP` row ever weren't harmless.)
+- **Settings** [coop.sync] (CFG.coop.sync, each player's own: [coop] is PERSONAL): enabled, missiles, guns, flares,
+  gear, afterburner, ab_throttle (0.9). enabled = false: nothing sent or shown and the stand-ins on their own rows.
+- **Log lines** (`coopfire:`): `the stand-ins' damage-0 rows: N of 21 airframes` (with `weapons left off` / `not
+  made`); `coop: player N's plane as <row>_svcp: spawned`; `your weapon <class>: a missile / a special weapon / not sent`
+  (once a class); `your first shot sent (...)`; `player N's first missiles / gun / flares here (their plane X, at Y):
+  <SV_CoopFire's result>`; `SV_CoopFire(player N's plane, slot S) refused: <code>`; `player N's shots dropped: <n>
+  <why>` (once a reason); `your gear down / up`, `player N's gear down here: EnableLandingGear done`; `your throttle
+  0.950: afterburner on`; `copy N lost X, Y of it another player's stand-in's here`; the minute's tally `60 s: N shots
+  sent, N received (N fired here, N refused, N dropped, ...), your gun N bursts, your flares N, ...`.
+- **Test key** (TEST ONLY, stripped from releases): Ctrl+F5 in a run with MOONCHILD or VIPER up (bought in the STORE):
+  each press the next step on that plane at your current target (SV_PlayerTarget): 1 missiles (slot 2) with its fire
+  permission off, 2 with it on, 3 its gun, 4 its flares, 5 gear down, 6 gear up; `coopfire: test <n>: <plane> (<unit>)
+  <what> at <target>: <result>`.
+- **In-game checklist**: (1) solo, Ctrl+F5 through all six: do the missiles leave the ally with permission off (decides
+  whether the stand-ins, permission off, can fire at all), at your target; the gun and flares visible; the gear moves.
+  (2) co-op, two players: each sees the other's missiles leave their plane and fly at the right enemy, the gun's
+  tracers, flares, the gear on the runway and in the landing pattern, the afterburner's glow at full throttle; no
+  enemy dies twice or to a stand-in's missile (the log's `copy N lost ... another player's stand-in's` should never
+  appear; kills only by the shooter, "wingmate" on the others). (3) the tally line's dropped and refused counts near 0.
+  (4) the `throttle` lines: does 0.9 match the afterburner? Calibrate ab_throttle.
+- **Guesses the design relies on** (from the research, not seen in game): FiredExplosiveWeapons holds exactly your
+  missiles in flight (not the gun's rounds or flares); TargetToHome is the locked target; LandingGearOnMesh shows when
+  the gear is down; the throttle input is 0..1 with the afterburner at full; EnableLandingGear(bool, float) is the
+  stand-in's gear; SV_CoopFire works with the stand-in's fire permission off; zeroed weapon rows deal no damage
+  (damage and AreaOfEffectDamage are all the row's damage); slot 2 is the missile slot of every stand-in airframe's row
+  (sv_rows.lua's director line logs which rows carry their missiles in slot 2; specials use it too for now).

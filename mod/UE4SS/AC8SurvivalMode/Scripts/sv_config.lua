@@ -1069,7 +1069,15 @@ CFG = {
                            su34 = "su34_common", su47 = "su47_common", m29a = "m29a_common", m21b = "m21b_common",
                            m31b = "m31b_common", rflm = "rflm_common", typn = "typn_common", j39e = "j39e_common",
                            e18g = "e18g_common", a10c = "a10c_common" },
-             default = "f16c_common" },
+             default = "f16c_common",
+             -- each other player's weapons, gear and afterburner shown on their plane here (sv_coop.lua's sync,
+             -- tools/re/COOP.md 8; user, 2026-10-29: "can you please work out aircraft syncing, such as missiles being
+             -- fired", "their gear doesn't deploy on my screen, nor do I see their afterburners"): your missiles, gun,
+             -- flares, gear and afterburner go to the others, theirs show here. ab_throttle: the throttle input (0-1)
+             -- from which you're on afterburner. The stand-ins fly damage-0 copies of their airframes' rows (<row>_svcp),
+             -- so what they fire only shows; enabled = false: none of it, and their airframes' own rows as before
+             sync = { enabled = true, missiles = true, guns = true, flares = true, gear = true, afterburner = true,
+                      ab_throttle = 0.9 } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
