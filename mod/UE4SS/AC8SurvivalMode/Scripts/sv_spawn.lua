@@ -392,7 +392,11 @@ do
 function ROLE.levelLoad()
     ROLE.live = nil
     local c = CFG.roles
-    if not (c and c.enabled) then log("roles: off; every fighter flight flies the fighters' set, drawn as before"); return end
+    if not (c and c.enabled) then                    -- (the Lancer units' band is build data: CFG.roles' comment)
+        log(string.format("roles: off; every fighter flight flies the fighters' set, drawn as before (the Lancer units "
+            .. "keep their %.0f km band)", ROLE.LANCER_TOP_M / 1000))
+        return
+    end
     local live, parts = { duelist = true }, {}
     for _, r in ipairs(ROLE.LIST) do
         if r ~= "duelist" then
@@ -469,7 +473,8 @@ end
 -- A round's fighters by its role mix (ROLE.mixFor: CFG.roles mix or, in an ace round, ace: true or the round's tier's
 -- key, the squadron's roles (P9) or ace_mix): each role's share in whole
 -- 2-ships (ROLE.quotas) from its own flights (exactFlights, then through `pick`: startRound's, pickFlights with the
--- round's taken flights skipped); what a role's flights can't field comes from the rest. Returns the flights
+-- round's taken flights skipped); what a role's flights can't field comes from the rest (a duelists' squadron's from
+-- the Wolf pairs' first). Returns the flights
 -- (shuffled, so each wave asks different questions) and their aircraft, as pick does.
 function ROLE.pickRound(nWant, pick, ace)
     local w, band = ROLE.mixFor(D.round, ace)
@@ -504,9 +509,20 @@ function ROLE.pickRound(nWant, pick, ace)
     end
     local fill = ""
     if nWant - got >= 2 then                          -- (a group short: the rest of the pool, any role)
-        local all = {}
-        for _, r in ipairs(ROLE.LIST) do for _, u in ipairs(groups[r]) do all[#all + 1] = u end end
-        local f, n = pick(all, nWant - got)
+        -- (an ace round whose squadron flies the duelists' set alone, Inferno, Wraith, Harvest or ace_mix's: the Wolf
+        -- pairs' flights first, whose pursuits keep the Super branch it's on the duelists for (LA_SV_TailChase,
+        -- LA_SV_WolfStrike); the Lancers' and Skirmishers' have none. F1's review)
+        local first = (ace and (w.duelist or 0) > 0) and groups.wolf or nil
+        for _, r in ipairs(ROLE.LIST) do if first and r ~= "duelist" and (w[r] or 0) > 0 then first = nil end end
+        local f, n = {}, 0
+        if first then f, n = pick(first, nWant - got) end
+        if nWant - got - n >= 2 then
+            local all = {}
+            for _, r in ipairs(ROLE.LIST) do for _, u in ipairs(groups[r]) do all[#all + 1] = u end end
+            local f2, n2 = pick(all, nWant - got - n)
+            for _, u in ipairs(f2) do f[#f + 1] = u end
+            n = n + n2
+        end
         local from = {}
         for _, u in ipairs(f) do
             out[#out + 1] = u
@@ -517,7 +533,10 @@ function ROLE.pickRound(nWant, pick, ace)
         got = got + n
         local ft = {}
         for _, r in ipairs(ROLE.LIST) do if from[r] then ft[#ft + 1] = r .. " " .. from[r] end end
-        if n > 0 then fill = "; filled from " .. table.concat(ft, ", ") end
+        if n > 0 then
+            fill = "; filled from " .. table.concat(ft, ", ")
+                .. ((first and (from.wolf or 0) > 0) and " (the Wolf pairs first: they keep the Super pursuit)" or "")
+        end
     end
     for _, r in ipairs(ROLE.LIST) do parts[#parts + 1] = string.format("%s %d", r, by[r] or 0) end
     local wt = {}
@@ -541,14 +560,25 @@ function ROLE.jammerOk(unit)
     return false
 end
 
--- Flight `unit` flies a role set of its own (a Lancer, Wolf or Skirmisher flight, not an ace squadron's: that keeps its
--- tier's levers). A skill tier's no_provoke and moves (CFG.aces.flight; from round 28 every ordinary flight is Reaper
--- tier, TIER.pick) leave it alone (ACE.hunt, ACE.movesTick; U5's review): no_provoke keeps a plane out of its Provoke
--- slot (no LA_SV_LancerBreak, no LA_SV_WolfDrag, no Skirmisher defence), and a reversal (RE_SV_AceTurn_NN, LastTGT on
--- every plane of the flight) turns a Lancer with you and a held Wolf trap onto you. False for duelists and roles off.
-function ROLE.ownSet(unit)
+-- Flight `unit` flies a role set of its own (a Lancer, Wolf or Skirmisher flight). A skill tier's no_provoke and moves
+-- (CFG.aces.flight; from round 28 every ordinary flight is Reaper tier, TIER.pick) leave it alone (ACE.hunt,
+-- ACE.movesTick; U5's review), and so do the squad director's cover turn and P4's push (sv_director.lua coverer):
+-- no_provoke keeps a plane out of its Provoke slot (no LA_SV_LancerBreak, no LA_SV_WolfDrag, no Skirmisher defence), and
+-- a reversal (RE_SV_AceTurn_NN, LastTGT on every plane of the flight) turns a Lancer with you and a held Wolf trap onto
+-- you. An ace squadron's role flight is its role's own too, unless its tier has those levers (moves, or hunt with
+-- no_provoke, as ACE.movesTick / ACE.hunt read them: Harvest's): then the tier's win (F1's review: the director turned
+-- Bounty's Lancers, which "never turn with you", P9). False for duelists and roles off. tier: the plane's (p.tier),
+-- else its flight's (D.flightTier).
+function ROLE.ownSet(unit, tier)
     local r = unit and ROLE.flight(unit)
-    return r ~= nil and r ~= "duelist" and not (D and D.aceSquad and D.aceSquad[unit])
+    if r == nil or r == "duelist" then return false end
+    if not (D and D.aceSquad and D.aceSquad[unit]) then return true end
+    if type(tier) ~= "table" then
+        local ti = D.flightTier and D.flightTier[unit]
+        tier = ti and CFG.tiers.list[ti]
+    end
+    local fl = type(tier) == "table" and tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()]
+    return not (type(fl) == "table" and (fl.moves or (fl.hunt and fl.no_provoke)))
 end
 
 -- A role flight is up (spawnFlight, inside roundsTick: n planes): the round's first Lancer and first Skirmisher flight

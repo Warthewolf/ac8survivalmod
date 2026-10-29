@@ -6,7 +6,8 @@
 --   each tactic's trigger: its geometry, its tell first and its action lead_s later (TELL.tick), its budget, cooldown
 --     and the director's gap, what it leaves alone:
 --     cover (you on a plane's tail 3 s: the nearest other duelist flight's RE_SV_AceTurn_NN; never a Lancer's or an
---       escort's; cover_ask at 1.5 s; tells off: at once; grounded, a boss round, off, a joiner: nothing),
+--       escort's; cover_ask at 1.5 s; tells off: at once; grounded, a boss round, off, a joiner: nothing; an ace round:
+--       Bounty's Lancer flights never, nor by P4's push, Harvest's in a Lancer flight may be),
 --     the trap (you on a Wolf bait's tail: drag at 1 s, the trap's free and turn on its own wingman at 2.5 s; not in your
 --       decoy),
 --     the bracket (two noses on you 60-120 deg apart within 4 km: both RE_SV_Salvo_<NN><L> a lead after the tell; not
@@ -270,6 +271,36 @@ check(evs("^RE_SV_Ace") == "" and has(line("director: cover not now", from), "no
 coverScene(); CFG.tells.enabled = false; tickTo(100, 103)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and evs("^RE_SV_Radio") == "", "tells off here: the cover at 3 s, without a tell")
 CFG.tells.enabled = true
+-- an ace round's squadron in role flights (F1's review): Bounty's Lancers (the Mercenary tier has no reversals) are
+-- never the cover nor P4's push; Harvest's in the same Lancer flights (the Reaper tier's moves) may be, as a duelist
+local function squadScene(round, tierName)
+    fresh(round)
+    local ti
+    for i, t in ipairs(CFG.tiers.list) do if t.name == tierName then ti = i end end
+    local B1, B2 = "ERA_Unit_03_Dep_Air1", "ERA_Unit_04_Dep_Air1"      -- (Lancer flights, pool 08 and 11)
+    local b1 = plane(B1, 0, KM(1, 0), DIRV(1, 0))                       -- you on its tail
+    local b2 = plane(B2, 0, KM(0, 3), DIRV(0, -1))                      -- the other 3 km off
+    b1.tier, b2.tier = CFG.tiers.list[ti], CFG.tiers.list[ti]
+    D.roundTier, D.flightTier, D.aceSquad = ti, { [B1] = ti, [B2] = ti }, { [B1] = true, [B2] = true }
+    D.up = { [B1] = true, [B2] = true }
+    return ti
+end
+squadScene(16, "Mercenary")
+from = #logs + 1
+tickTo(100, 110)
+check(evs("^RE_SV_Ace") == "" and has(line("director: cover not now", from), "no flight within 6 km"),
+      "Bounty's round: on one Lancer flight's tail, another 3 km off: no cover turn (its Lancers keep their role)")
+local pushed, pushWhy = DIR.push(0, "test", 8)
+check(pushed == nil and evs("^RE_SV_Ace") == "" and has(pushWhy, "no flight within 8 km may turn"),
+      "... nor P4's push (" .. tostring(pushWhy) .. ")")
+local bountyOwn = ROLE.ownSet("ERA_Unit_04_Dep_Air1")                    -- (by its flight's tier, D.flightTier)
+local legend = squadScene(19, "Legend")
+check(bountyOwn and ROLE.ownSet("ERA_Unit_04_Dep_Air1", CFG.tiers.list[legend]),
+      "ROLE.ownSet: a Bounty or Valkyrie squadron's role flight is its role's own (by its flight's tier or the plane's)")
+squadScene(28, "Reaper")
+tickTo(100, 104)
+check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_11" and not ROLE.ownSet("ERA_Unit_04_Dep_Air1"),
+      "Harvest's in a Lancer flight keeps its tier's levers: the cover turns it (" .. evs("^RE_SV_Ace") .. ")")
 
 ---------------------------------------------------------------------------------------------------- the reads
 print("fresh reads a tick")

@@ -354,17 +354,17 @@ end
 
 ---------------------------------------------------------------------------------------------------- cover the tailed
 -- the flight that covers plane p for player e: the nearest plane of another pool flight within cover.range_km of e that
--- may turn (a duelist's or an ace squadron's: a Lancer, Wolf or Skirmisher flight keeps its role, ROLE.ownSet; not an
--- escort over the airfield, whose small area beats the move, nor the jammer's, nor one held, aimed, decoyed, holding its
--- Wolf trap or still in a reversal, D.aceMoveAt, shared with ACE.movesTick). rng: another range (P4's push, with p a
--- plane of no flight: {})
+-- may turn (a duelist's, or a squadron's whose tier has the reversals, Harvest's: a Lancer, Wolf or Skirmisher flight,
+-- Bounty's and Valkyrie's too, keeps its role, ROLE.ownSet; not an escort over the airfield, whose small area beats the
+-- move, nor the jammer's, nor one held, aimed, decoyed, holding its Wolf trap or still in a reversal, D.aceMoveAt, shared
+-- with ACE.movesTick). rng: another range (P4's push, with p a plane of no flight: {})
 local function coverer(s, p, e, now, rng)
     rng = rng or num(tc("cover").range_km, 6)
     local best, bd
     D.aceMoveAt = D.aceMoveAt or {}
     for _, q in ipairs(planes) do
         local u = q.unit
-        if q ~= p and u ~= p.unit and q.at and poolPlane(q) and not (ROLE and ROLE.ownSet and ROLE.ownSet(u))
+        if q ~= p and u ~= p.unit and q.at and poolPlane(q) and not (ROLE and ROLE.ownSet and ROLE.ownSet(u, q.tier))
             and not (D.escortUnits and D.escortUnits[u]) and not (D.jammer and D.jammer.unit == u) and not busy(s, u, now)
             and not (WOLF and WOLF.holding and WOLF.holding(u)) and now >= (D.aceMoveAt[u] or 0) then
             local d = km(q.at, e.at)
@@ -906,10 +906,10 @@ end
 
 -- P4's "spends a tactic or releases a held flight" on player `slot` (the intensity director: that player's been
 -- comfortable calm_s): a held top cover (the one nearest them; none while its intensity hold is on or inside your decoy)
--- dives on them after its tell; else the nearest flight that may turn (cover's choice: a duelist's or an ace squadron's
--- within rangeKm; its next move no sooner than cover.move_s) turns onto them after "check your six" (a joiner: the hunt,
--- its TargetActor on their stand-in for cover.aim_s), counted and tagged "push". The director's gap applies; its tell
--- must be sayable (need_tell). Returns what it did, or nil and why not.
+-- dives on them after its tell; else the nearest flight that may turn (cover's choice: a duelist's, or a squadron's whose
+-- tier has the reversals, within rangeKm; its next move no sooner than cover.move_s) turns onto them after "check your
+-- six" (a joiner: the hunt, its TargetActor on their stand-in for cover.aim_s), counted and tagged "push". The
+-- director's gap applies; its tell must be sayable (need_tell). Returns what it did, or nil and why not.
 function DIR.push(slot, why, rangeKm)
     local s = st()
     if not (s and D and D.round) then return nil, "no run" end

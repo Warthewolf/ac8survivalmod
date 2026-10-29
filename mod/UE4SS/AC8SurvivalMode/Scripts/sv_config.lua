@@ -355,8 +355,9 @@ CFG = {
         -- a second) its flight does the campaign aces' LastTGT reversal, or within 900 m the Shadow kulbit
         -- (tools/survival_events.py build_ace_moves); a flight's next move no sooner than 30 s after a reversal (its
         -- LastTGT's length; CFG.director.cover.move_s), 12 s after a kulbit, from the move. no_provoke and moves are a tier's
-        -- duelists' and ace squadrons': a fighter role's Lancer, Wolf or Skirmisher flight keeps its own set's provoke
-        -- and pursuit (ROLE.ownSet; CFG.roles)
+        -- duelists' and its squadron's: a fighter role's Lancer, Wolf or Skirmisher flight keeps its own set's provoke
+        -- and pursuit (ROLE.ownSet; CFG.roles), and so does a squadron's role flight on a tier without them (Bounty's
+        -- Lancers, Valkyrie's Wolf pairs: never turned by the squad director's cover or push either)
         -- The squadrons' personalities (behaviour roadmap P9, "each named squadron should be recognisable within 10
         -- seconds"; `personality` below, tools/re/BEHAVIOUR_DIRECTOR.md unit 10), a squadron's only (never its tier's
         -- ordinary flights): roles, its ace round's role mix (as CFG.roles.mix's, in place of CFG.roles.ace_mix; a
@@ -513,7 +514,10 @@ CFG = {
     -- first Lancer and Skirmisher flight of a round call themselves out (tells: CFG.tells lancer / skirm). The round's
     -- jammer leads a flight of the `jammer` roles only. Rows and sets are made at the main menu: a change needs a game
     -- restart. enabled = false: every flight flies today's set (the role rows name NLID_SV_Fighter) and the draw,
-    -- airframes and health are as before roles.
+    -- airframes, spawn heights (altitude_m) and health are as before roles. Not reverted: the six Lancer units'
+    -- (ERA_Unit_03 / 04_Dep_Air0-2) world-data band top of 9 km (ROLE.LANCER_TOP_M, build data: a unit's band can't
+    -- change at run time), so LA_SV_Escape's altitude-gated climbs pass higher on those flights than under the others'
+    -- 4-5 km.
     roles = {
         enabled = true,
         mix = { from_round = { 1, 4, 10 }, duelist = { 0.6, 0.4, 0.3 }, lancer = { 0.2, 0.2, 0.25 },

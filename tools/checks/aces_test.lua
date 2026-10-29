@@ -6,7 +6,8 @@
 --     blink) read;
 --   the build data (ACE.BLINK, ACE.blinkEvent: a duelist flight's lead only, letters only);
 --   each squadron's ace-round role mix (ROLE.mixFor and the real startRound: Bounty the Lancers, Valkyrie the Wolf pairs,
---     Inferno / Wraith / Harvest the duelists, filled from the rest when short; personality off: ace_mix);
+--     Inferno / Wraith / Harvest the duelists, filled from the rest when short, theirs from the Wolf pairs first;
+--     personality off: ace_mix);
 --   spawnFlight's opener (each tier's openers in turn, a blink only on a duelist flight, else a kulbit), "high"'s
 --     altitude (off a Lancer flight, top_m), a Valkyrie Wolf flight's trap held (ROLE.spawned), ACE.squadUp's line;
 --   ACE.squadTick: first contact within the opener's km, the squadron's tell first (its name in the callout, the round's
@@ -14,7 +15,8 @@
 --     planes able to, gap_s apart), trap (sprung spring_s later after the "trap" tell: free and LastTGT; waits while the
 --     trap's pending, gives up after wait_s; not a Wolf flight: the pack's reversal), kulbit (the flight's
 --     RE_SV_AceKulbit_NN), blink (the lead to a spot behind and beside you, ground clearance, smoke); the blink tick (you
---     on its six, a hit; every_s; the reversals held move_gap_s; Harvest's blink before its reversal); your decoy;
+--     on its six, a hit, none for a hit inside every_s; every_s; the reversals held move_gap_s; Harvest's blink before its
+--     reversal); your decoy;
 --     personality off; the round line's counts;
 --   co-op: a joiner who meets a squadron first (its tell by "tl", the salvo on its copies by "dv", no blink round it),
 --     a joiner's game (nothing), KEEP_EVENTS (^RE_SV_WraithBlink kept);
@@ -284,9 +286,34 @@ check(has(line("roles: round 16", from), "the Bounty squadron's roles") and has(
 aceRoundOf("Legend", 19)
 by, total = roundPicks()
 check((by.wolf or 0) == 24 and total >= 28, string.format("round 19, Valkyrie's: the Wolf pairs' 24 (wolf %d of %d)", by.wolf or 0, total))
-aceRoundOf("Demon", 22)
+from = aceRoundOf("Demon", 22)
 by, total = roundPicks()
 check((by.duelist or 0) == 24 and total >= 28, string.format("round 22, Inferno's: the duelists' 24 (duelist %d of %d)", by.duelist or 0, total))
+-- (F1's review: a duelists' squadron's rest from the Wolf pairs first, whose pursuits keep the Super branch)
+check((by.wolf or 0) == total - 24 and (by.lancer or 0) + (by.skirm or 0) == 0
+      and has(line("roles: round 22", from), "(the Wolf pairs first: they keep the Super pursuit)"),
+      string.format("... the rest from the Wolf pairs first, none from the Lancers or Skirmishers (wolf %d, lancer %d, skirm %d)",
+          by.wolf or 0, by.lancer or 0, by.skirm or 0))
+local bigWolf, bigOk = 0, true
+for _ = 1, 20 do                                  -- (a Harvest round past the Wolf pairs' 24: the rest from any group)
+    aceRoundOf("Reaper", 28)
+    D.waves = {}
+    local taken = {}
+    local f, n = ROLE.pickRound(56, function(units, want)
+        local o, g = pickFlights(units, want, function(u) return taken[u] end)
+        for _, u in ipairs(o) do taken[u] = true end
+        return o, g
+    end, "reaper")
+    local b2 = {}
+    for _, u in ipairs(f) do local r = ROLE.flight(u) or "?"; b2[r] = (b2[r] or 0) + flightSize(u) end
+    if (b2.duelist or 0) ~= 24 or (b2.wolf or 0) ~= 24 or n ~= 56 then bigOk = false end
+    bigWolf = math.max(bigWolf, b2.wolf or 0)
+end
+check(bigOk, "a Harvest round of 56: the duelists' 24, the Wolf pairs' 24, the last 8 from the Lancers / Skirmishers (wolf " .. bigWolf .. ")")
+aceRoundOf("Mercenary", 16)
+by, total = roundPicks()
+check((by.lancer or 0) == 24 and not has(line("roles: round 16"), "Wolf pairs first"),
+      "Bounty's round: its rest from any group, as before (no Wolf-first)")
 AC.personality.enabled = false
 from = aceRoundOf("Mercenary", 16)
 check(has(line("roles: round 16", from), "an ace round's mix"), "personality off: ace_mix's line, as before")
@@ -625,6 +652,18 @@ lead.dmg = { you = 30 }
 from_ = #logs + 1
 tickTo(100.75, 101.5)
 check(evs("^RE_SV_WraithBlink") ~= "" and has(line("aces: " .. U .. "'s lead", from_), "you hit it"), "Wraith's lead hit by you: it blinks (on_hit)")
+-- a hit inside every_s (F1's review): no blink for it once every_s is over; a hit after it, one
+local nHit = #evs("^RE_SV_WraithBlink"):gsub("[^;]", "")
+tickTo(101.75, 106)
+lead.dmg = { you = 60 }                            -- (5 s after the blink)
+from_ = #logs + 1
+tickTo(106.25, 124)
+check(#evs("^RE_SV_WraithBlink"):gsub("[^;]", "") == nHit and since(from_, "you hit it") == 0,
+      "hit again 5 s after its blink: no blink for it when every_s 20 is over (" .. evs("^RE_SV_WraithBlink") .. ")")
+lead.dmg = { you = 90 }
+tickTo(124.25, 125)
+check(#evs("^RE_SV_WraithBlink"):gsub("[^;]", "") == nHit + 1 and has(line("aces: " .. U .. "'s lead", from_), "you hit it"),
+      "a hit after every_s: it blinks")
 -- Harvest: on its lead's six, the blink first, its reversal held move_gap_s
 fresh(28, "Reaper")
 U = "ERA_Unit_01_Dep_Air0"
