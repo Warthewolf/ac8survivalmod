@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
-import worker, { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed } from "../src/index.js";
+import worker, { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed, commandReply, commandFollowUp } from "../src/index.js";
 
 const db = new DatabaseSync(":memory:");
 // (the oldest database: schema_console.sql's runs, specials and settings only, as the first deploys made it; the Worker
@@ -289,6 +289,28 @@ check("nothing left to undo", a.status === 404 && a.j.status.undo === null);
   const e = await boardEmbeds(env);
   const ace = e[0].fields.find((f) => f.name === "Ace").value;
   check(`the boards are back: ${JSON.stringify(ace.split("\n")[0])}`, ace.includes("round 50"));
+}
+// the slash commands answered late (2026-10-30: "The application did not respond"): the board is made and edited into
+// the "thinking..." answer through the interaction's webhook; a failure says so there
+{
+  const reply = await commandReply(env, { data: { name: "leaderboard", options: [{ name: "board", value: "round" }] } });
+  check("/leaderboard round: embeds made", Array.isArray(reply.embeds) && reply.embeds.length > 0);
+  const pilot = await commandReply(env, { data: { name: "pilot", options: [{ name: "name", value: "naish" }] } });
+  check("/pilot: one embed", Array.isArray(pilot.embeds) && pilot.embeds.length === 1);
+  calls.length = 0;
+  const seen = [];
+  const rawFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { seen.push({ url, init }); return new Response("{}", { status: 200 }); };
+  await commandFollowUp(env, { token: "tok123", data: { name: "leaderboard", options: [] } });
+  check("the follow-up edits the interaction's original answer",
+        seen.length === 1 && seen[0].init.method === "PATCH" && seen[0].url.endsWith("/webhooks/1/tok123/messages/@original")
+        && JSON.parse(seen[0].init.body).embeds.length > 0);
+  seen.length = 0;
+  const brokenEnv = { ...env, DB: { prepare: () => { throw new Error("D1 down"); }, batch: async () => { throw new Error("D1 down"); } } };
+  await commandFollowUp(brokenEnv, { token: "tok9", data: { name: "leaderboard", options: [] } });
+  check("a board that can't be read says so instead of hanging",
+        seen.length === 1 && /couldn't be read/.test(JSON.parse(seen[0].init.body).content || ""));
+  globalThis.fetch = rawFetch;
 }
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);
