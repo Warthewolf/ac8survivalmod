@@ -2357,7 +2357,9 @@ function SV_Report()
     local t = {}
     for k, v in pairs(SV_B.built) do t[#t + 1] = k .. " x" .. v end
     table.sort(t)
-    local s = "built " .. (#t > 0 and table.concat(t, ", ") or "nothing yet") .. "; errors " .. SV_B.nerr
+    -- ("all fine" rather than "errors 0": the ACE8 Mod Launcher showed every such line flagged, user 2026-10-30)
+    local s = "built " .. (#t > 0 and table.concat(t, ", ") or "nothing yet") .. "; "
+        .. (SV_B.nerr == 0 and "all fine" or (SV_B.nerr .. " failed"))
     for i, e in ipairs(SV_B.errors) do s = s .. "\n    [" .. i .. "] " .. e end
     return s
 end
