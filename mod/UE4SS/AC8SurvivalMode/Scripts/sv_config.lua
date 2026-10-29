@@ -1730,6 +1730,7 @@ CFG = {
             lb_sent      = "SUBMITTED: SCORE %s",
             lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
             lb_refused   = "NOT ACCEPTED: %s",
+            lb_unranked  = "NOT RANKED: %s",              -- (an edited run: LB.edited, sv_leaderboard.lua)
 
             alicorn_sub  = "SUBMARINE CONTACT",
             alicorn_go   = "THE ALICORN",
@@ -1992,6 +1993,14 @@ do  -- optional overrides: Scripts/survival_config.lua returning a table with an
         end
     end
     local ok, user = pcall(require, "survival_config")
+    -- (any survival_config.lua found, even one that failed or returned nothing, ran code of its own: the leaderboard
+    -- doesn't rank a run with one, LB.edited in sv_leaderboard.lua)
+    if ok or not tostring(user):find("module 'survival_config' not found", 1, true) then
+        CFG_USER_FILE = "survival_config.lua"
+        -- ONLINE ONLY BEGIN (tools/edition.py)
+        log("config: a survival_config.lua is there: runs with it aren't ranked on the leaderboard")
+        -- ONLINE ONLY END
+    end
     if ok and type(user) == "table" then
         merge(CFG, user)
         log("config: survival_config.lua loaded")

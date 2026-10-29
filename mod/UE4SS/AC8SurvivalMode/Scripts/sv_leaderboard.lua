@@ -37,13 +37,98 @@ local function json(r)
     for _, x in ipairs(r.specials) do
         sp[#sp + 1] = string.format('{"kind":%s,"round":%d,"seconds":%d,"won":%s}', jstr(x.kind), x.round, x.seconds, tostring(x.won))
     end
+    -- (0.72.x: what was found edited, always [] in a run that's sent, and the build hash the game started with; the
+    -- Worker refuses a run that says it was edited or that comes from other files than it's sent from)
+    local ed = {}
+    for i, k in ipairs(r.edited or {}) do if i <= 8 then ed[#ed + 1] = jstr(tostring(k):sub(1, 80)) end end
     return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
         .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"how":%s,"aces":%d,"allies":%d,"af_down":%d,'
-        .. '"captured":%d,"specials":[%s]%s%s}', jstr(r.run_id), jstr(r.pilot),
+        .. '"captured":%d,"specials":[%s],"edited":[%s]%s%s%s}', jstr(r.run_id), jstr(r.pilot),
         jstr(r.difficulty), r.round, jstr(r.mod), r.kills.air, r.kills.ground, r.zollars.earned, r.zollars.spent, r.time_s,
-        jstr(r.ended), jstr(r.how), r.aces, r.allies, r.af_down, r.captured, table.concat(sp, ","),
+        jstr(r.ended), jstr(r.how), r.aces, r.allies, r.af_down, r.captured, table.concat(sp, ","), table.concat(ed, ","),
         (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "",
-        (r.tier and r.tier:match("^%a+$")) and (',"tier":' .. jstr(r.tier)) or "")
+        (r.tier and r.tier:match("^%a+$")) and (',"tier":' .. jstr(r.tier)) or "",
+        (type(r.build) == "string" and r.build:match("^%x+$") and #r.build == 64) and (',"build":' .. jstr(r.build:lower())) or "")
+end
+
+-- An edited run isn't ranked (user, 2026-10-30: "we need a way that the Leaderboards can detect if a run has been edited
+-- from the stock run", "An edited run shouldn't count toward the leaderboard"). LB.edited(coopRun) -> the list of what's
+-- edited (empty: a stock run), and the same with values for the log. Edited:
+--   - a gameplay setting that differs from the shipped one: CFG against CFG_DEFAULTS (survival.ini and
+--     survival_config.lua both), by sv_coop.lua's settings diff (COOP.cfgDiff), but for
+--       sections that are each player's own or only on screen / in the log: hud, sound, music, log, ai_watch, stats,
+--         leaderboard (your pilot name), menu, setup (the menu's run setups: SETUP.ranked checks SP ONLINE's), coop (the
+--         link, your name, your keys and camera);
+--       in any section: texts (a "text" or "sounds" table, labels, display names, ace callsigns: translations), key
+--         bindings (key, keys, ctrl, *_key) and camera settings;
+--     in a co-op run (sent only with [coop] leaderboard = true) the room's rules count too: the host's setup and
+--     [coop] aircraft_per_player, max_aircraft, max_up, split_share and the revives (but for each player's key and camera).
+--     Counted although co-op leaves them to each player: tells (their lead times hold the enemies' moves), profile and
+--     flares (the learning layer), probe (it flies its own enemies);
+--   - a Scripts/survival_config.lua (CFG_USER_FILE, sv_config.lua: it can change anything);
+--   - a test key pressed in the run (or at the main menu before it: a dev build's; releases have none);
+--   - (a head start, start_round, and SP ONLINE's custom rules are refused before this: LB.send, SETUP.ranked)
+-- The build itself (an edited script or container) is the runtime's build hash's: the Worker refuses an unknown build.
+local EDIT_FREE = { hud = true, sound = true, music = true, log = true, ai_watch = true, stats = true, leaderboard = true,
+                    menu = true, setup = true, coop = true }
+local EDIT_FREE_PART = { text = true, sounds = true, camera = true }
+local EDIT_FREE_LEAF = { key = true, keys = true, ctrl = true, label = true, what = true, name = true, squadron = true,
+                         title = true, help = true }
+local EDIT_COOP = { aircraft_per_player = true, max_aircraft = true, max_up = true, split_share = true, revive = true }
+local function editFree(p, v, coopRun)
+    local top = p[1]
+    if top == "coop" then
+        if not (coopRun and EDIT_COOP[p[2]]) then return true end
+    elseif top == "setup" then
+        if not (coopRun and p[2] == "host") then return true end
+    elseif EDIT_FREE[top] then return true end
+    for j = 2, #p do if EDIT_FREE_PART[p[j]] then return true end end
+    local leaf = tostring(p[#p])
+    if EDIT_FREE_LEAF[leaf] or leaf:match("_key$") or leaf:match("sound") then return true end
+    if top == "aces" and #p == 3 and p[2] ~= "flight" and type(v) == "string" then return true end   -- (callsigns)
+    return false
+end
+local function shown(v)
+    if type(v) == "table" then return "{" .. (#v > 0 and (#v .. " items") or "...") .. "}" end
+    if type(v) == "string" then return '"' .. v:sub(1, 40) .. '"' end
+    return tostring(v)
+end
+function LB.edited(coopRun)
+    local out, detail = {}, {}
+    if CFG_USER_FILE then out[#out + 1] = CFG_USER_FILE; detail[#detail + 1] = CFG_USER_FILE .. " is in Scripts" end
+    local tk = (D and RUN and RUN.stats and RUN.stats.test_key) or LB.menuTestKey
+    if tk then out[#out + 1] = "test key " .. tk; detail[#detail + 1] = "test key " .. tk .. " pressed" end
+    if type(CFG_DEFAULTS) ~= "table" or not (COOP and COOP.cfgDiff) then return out, detail end
+    local d = {}
+    COOP.cfgDiff(CFG, CFG_DEFAULTS, {}, d)
+    local keys = {}
+    for _, e in ipairs(d) do
+        if not editFree(e[1], e[2], coopRun) then
+            local q = {}
+            local def = CFG_DEFAULTS
+            for j = 1, #e[1] do
+                q[j] = tostring(e[1][j])
+                if type(def) == "table" then def = def[e[1][j]] else def = nil end
+            end
+            keys[#keys + 1] = { table.concat(q, "."), e[2], def }
+        end
+    end
+    table.sort(keys, function(a, b) return a[1] < b[1] end)
+    for _, k in ipairs(keys) do
+        out[#out + 1] = k[1]
+        detail[#detail + 1] = k[1] .. " = " .. shown(k[2]) .. " (shipped " .. shown(k[3]) .. ")"
+    end
+    return out, detail
+end
+
+-- A test key (the dev keys bound in sv_main.lua: a dev build's, none in a release) pressed: the run it's pressed in isn't
+-- ranked, nor the next one when it's pressed at the main menu (Ctrl+F8 opens the level from there)
+function LB.testKey(key)
+    local name = tostring(key)
+    if type(Key) == "table" then for n, v in pairs(Key) do if v == key then name = tostring(n); break end end end
+    name = "Ctrl+" .. name
+    if D and RUN and RUN.stats then RUN.stats.test_key = RUN.stats.test_key or name else LB.menuTestKey = LB.menuTestKey or name end
+    log("leaderboard: test key " .. name .. " pressed: " .. (D and "this run" or "the next run") .. " won't be ranked")
 end
 
 local function configDir() return SCRIPT_DIR .. "..\\config\\" end
@@ -149,6 +234,7 @@ function LB.finish(how)
         LB.show.state, LB.show.why = "refused", "error"
         log("leaderboard: the run couldn't be sent: " .. tostring(err))
     end
+    LB.menuTestKey = nil                                -- (a test key pressed at the main menu: that run's, now over)
 -- ONLINE ONLY END
 --OFFLINE:     LB.show.state = "local"                           -- (the Offline edition: shown here only)
 end
@@ -171,6 +257,20 @@ function LB.send(sh)
         log("leaderboard: the run started at round " .. D.startRound .. " (start_round); not sent")
         return
     end
+    -- edited from the shipped Survival Mode (LB.edited): not sent, the summary says why, the log names all of it (a
+    -- check that fails sends nothing either)
+    local okE, ed, detail = pcall(LB.edited, COOP and COOP.open)
+    if not okE or type(ed) ~= "table" then ed, detail = { "check failed" }, { "the check failed: " .. tostring(ed) } end
+    if #ed > 0 then
+        sh.state, sh.why = "unranked", "edited (" .. tostring(ed[1]):sub(1, 28) .. ")"     -- (the summary panel's width)
+        log("leaderboard: not sent: the run was edited from the shipped Survival Mode (" .. #ed .. "): " .. table.concat(detail, "; "))
+        return
+    end
+    sh.run.edited = ed
+    -- the build hash the game started with (dlls/main.dll 0.28.6; the send itself carries the files' hash as they are then)
+    local bh = type(SV_BuildHash) == "function" and tostring(SV_BuildHash() or "") or nil
+    if bh and bh ~= "" then sh.run.build = bh
+    elseif bh then log("leaderboard: no build hash (the runtime's log, AC8SurvivalMode.log, says why): the run goes unverified") end
     local body = json(sh.run)
     LB.queue[#LB.queue + 1] = body; saveQueue()
     local id = post(body, sh)
@@ -238,6 +338,7 @@ function LB.hud(now)
                     t.lb_lines[7] and string.format(t.lb_lines[7], r.by_allies or 0, r.by_defences or 0) or "" }
     lines[8] = (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
         or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
+        or (sh.state == "unranked" and string.format(t.lb_unranked or "NOT RANKED: %s", tostring(sh.why):upper():sub(1, 48)))
         or ""
     setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
     for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end
@@ -252,6 +353,19 @@ end
 -- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
 -- The runs not yet answered for good: read at the start, sent one at a time (at the main menu or in a run).
 function LB.queueTick()
+    -- (once: this build's hash when the runtime has it, and settings that make every run unranked, so the log says so
+    -- before the first run)
+    if not LB.toldBuild and type(SV_BuildHash) == "function" then
+        local h = tostring(SV_BuildHash() or "")
+        if h ~= "" then LB.toldBuild = true; log("leaderboard: this build's hash is " .. h .. " (runs count only from a registered build)") end
+    end
+    if not LB.toldEdited then
+        LB.toldEdited = true
+        local ok, ed, detail = pcall(LB.edited, false)
+        if ok and type(ed) == "table" and #ed > 0 then
+            log("leaderboard: this game differs from the shipped Survival Mode, so its runs won't be ranked: " .. table.concat(detail, "; "))
+        end
+    end
     if not LB.loaded then
         LB.loaded = true
         local f = io.open(configDir() .. "pending_runs.txt", "r")

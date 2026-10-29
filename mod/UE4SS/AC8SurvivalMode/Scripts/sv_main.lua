@@ -607,6 +607,14 @@ end
 if type(RegisterKeyBind) == "function" and Key then
     local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
     -- TEST ONLY BEGIN
+    do
+    -- (every test key below, pressed, makes its run unranked: LB.testKey, sv_leaderboard.lua)
+    local RegisterKeyBind = function(key, m, fn)
+        return RegisterKeyBind(key, m, function(...)
+            if LB and LB.testKey then pcall(LB.testKey, key) end
+            return fn(...)
+        end)
+    end
     -- Ctrl+F8 on the main menu opens PL_SurvivalMode directly
     if Key.F8 then
         pcall(RegisterKeyBind, Key.F8, mods, function()
@@ -863,6 +871,7 @@ if type(RegisterKeyBind) == "function" and Key then
         else
             log("test: " .. t[1] .. " not bound: UE4SS has no key " .. key)
         end
+    end
     end
     -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
