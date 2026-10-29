@@ -325,6 +325,18 @@ function searchSetup()
             r.MagazineCapacity = 999
         end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km)", "x")
     end
+    -- AB.L..IN's own with its phases (CFG.specials.glitch.phases ecm_row; P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): its
+    -- pod is held up by RE_SV_GlitchEcm every ecm_every_s (hard rule 40) until its phase 3 drops it, so its own row fires
+    -- a pod by itself at most once a minute (anomEcm's values, 60 s between and 60 s rest), else the 14 s refire of
+    -- anomEcm would keep the ECM up whatever the phase (rows _SVE; MINDRIPPER keeps anomEcm)
+    local function glitchEcm(src)
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.ActivationTime = 20000, 0.5
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 15.0, 60.0, 60.0
+            r.MagazineCapacity = 999
+        end, "ECM pod (AB.L..IN's, its phases): by its events, the row's own at most once a minute (60 s between, 60 s rest)", "e")
+    end
+    local GPH = CFG.specials.glitch.phases
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
         local reach, acc = AN.gun_reach_x or 1, AN.gun_accuracy_x or 1
@@ -531,8 +543,8 @@ function searchSetup()
                                     new = ((mind or valka) and anomGun(id)) or (glitch and glitchGun(id))
                                         or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a]))
                                         or (acRole == "wolf" and wolfGun(id, level)) or svGun(id, level)
-                                elseif glitch and id:find("ECM", 1, true) then
-                                    new = anomEcm(id)                                -- its pod always up
+                                elseif glitch and id:find("ECM", 1, true) then        -- its pod always up (to its phase 3)
+                                    new = (type(GPH) == "table" and GPH.enabled and GPH.ecm_row and glitchEcm(id)) or anomEcm(id)
                                 elseif flr and id:find("^NPC_FCS_PlaneFlr") and not (mind or glitch or valka) then
                                     new = aiFlares(id)                               -- (P6: your missile habit)
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
@@ -561,6 +573,17 @@ function searchSetup()
                     end
                     local set = CFG.search.luaset
                     if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
+                    -- the Anomaly's guards (its wing row, every level: the world data names the level-0 one and the
+                    -- behaviour is built from it at level load, hard rule 20) fly its pack's set (CFG.specials.anomaly
+                    -- .pack guard_luaset, P7: the Wolf trap's close gunfighter; never NLID_0400_CP, hard rule 22)
+                    local pk = AN.pack
+                    local gs = a == ACE.row("anomaly", "f04e", "w") and type(pk) == "table" and pk.enabled
+                        and type(pk.guard_luaset) == "string" and pk.guard_luaset ~= "" and pk.guard_luaset or nil
+                    if gs and CFG.behaviour_sets[gs] and BS.ready[gs] then set = gs
+                    elseif gs and level == 0 then
+                        log("special: the Anomaly's guards keep " .. tostring(set) .. " (their set " .. gs .. " isn't in)")
+                    end
+                    if gs and set == gs and level == 0 then log("special: the Anomaly's guards (" .. svNpc .. ") fly " .. gs .. " (its pack)") end
                     if set then r.LuaSetId = FName(set) end
                 end)
                 if not okR then error(svNpc .. ": " .. tostring(whyR)) end

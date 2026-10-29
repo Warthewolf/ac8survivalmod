@@ -471,7 +471,7 @@ do
     local sb = body("sv_spawn.lua", "\nlocal function spawnBomber%(unit%)")
     check(has(sb, 'pcall(TELL.say, "raid", TELL.ALL)') and sb:find("t.raid_sub", 1, true) < sb:find('"raid", TELL.ALL', 1, true),
           "spawnBomber: the raid's call to every player after its callout")
-    local sf = body("sv_spawn.lua", "\nfunction spawnFlight%(unit, maxLevel%)")
+    local sf = body("sv_spawn.lua", "\nfunction spawnFlight%(unit, maxLevel")      -- (, pose: P7's deck launches)
     check(has(sf, 'pcall(TELL.say, "jammer", TELL.ALL)'), "spawnFlight: the jammer's call")
     check(has(body("sv_main.lua", "\nlocal function creditKill%(p%)"), 'pcall(TELL.say, "jammer_down", TELL.ALL)'), "creditKill: the jammer down")
     local rt = body("sv_rounds.lua", "\nfunction roundsTick%(now%)")

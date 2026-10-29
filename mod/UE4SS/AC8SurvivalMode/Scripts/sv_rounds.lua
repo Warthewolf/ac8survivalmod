@@ -468,6 +468,20 @@ local function startRound()
             end
         end
     end
+    -- the ALICORN's deck launches (CFG.specials.alicorn.deck, P7; sv_alicorn.lua SPC.alicornDeck): flights +
+    -- flights_per_round a round, at most max_flights; its escorts (above) off the deck too, in flights of its size, none
+    -- from a spawn point (escorts false: they come as before)
+    D.deckLeft = nil
+    local dk = special == "alicorn" and sp.alicorn and sp.alicorn.deck
+    if type(dk) == "table" and dk.enabled then
+        local n = math.min(math.floor(tonumber(dk.max_flights) or 0),
+            math.floor(tonumber(dk.flights) or 0) + math.floor(D.round * (tonumber(dk.flights_per_round) or 0)))
+        local esc = 0
+        if dk.escorts and nWant > 0 then esc, nWant = math.ceil(nWant / math.max(1, math.floor(tonumber(dk.size) or 2))), 0 end
+        D.deckLeft = math.max(0, n) + esc
+        log(string.format("round %d: the Alicorn's deck launches up to %d flights of %d%s", D.round, D.deckLeft,
+            math.floor(tonumber(dk.size) or 2), esc > 0 and string.format(" (%d of them its escorts)", esc) or ""))
+    end
     -- (the fighter roles, CFG.roles: each role's share of the round from its own flights, an ace round's by ace_mix;
     -- roles off or no level snapshot (ROLE.live): the whole pool as before)
     local fighters, nFighters

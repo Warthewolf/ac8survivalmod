@@ -237,6 +237,18 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   the level as an 8th field (a whole 0-3, else ignored; an older host's "rnd" has none): a joiner's copies fly it
   (levelFor: rank_min, post-stall, provoke at their first sweep; the enemies up written again when it changes); their
   fire-control rows already come with the host's "sp". Untested in game.
+- Boss phases (behaviour roadmap P7, BEHAVIOUR_DIRECTOR.md unit 9) run on the host only (the specials' ticks are
+  roundsTick's). MINDRIPPER's pack springs on the host's field alone: RE_SV_AnomalyPackSpring / Hold are in
+  KEEP_EVENTS (its LastTGT steers to LocalPlayer; the guards are puppets on a joiner), and the "pack" tell is the
+  host's own; a joiner's own field (ANOM.clientTick) never springs it. AB.L..IN's phase 2 blinks are around the host
+  (RE_SV_GlitchBlink_*, kept), its "glitch_six" tell the host's; its phase 3 LastTGT (RE_SV_GlitchTurn) is kept by
+  mirroredEvent's RE_SV_Glitch rule, its "glitch_allout" tell goes to every player ("tl"), and its gun events
+  (RE_SV_GlitchGun, forwarded) fire on each joiner's copy at that joiner while the host is close in front of it; the
+  host stops RE_SV_GlitchEcm (forwarded, so a joiner's copy's pod lapses too; its own row refires it at most once a
+  minute there) and switches its own pods off (the joiners' aren't). A Ladon's RE_SV_LadonRage<Key> is forwarded
+  (harmless: the copies follow the stream); its callout is the round's ("co"), its tell every player's. The ALICORN's
+  deck launches go through spawnFlight with a pose, which the SV_Spawn wrapper mirrors (pose, aircraft, level); its
+  callout is the round's, its "alcn_deck" tell every player's. Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.

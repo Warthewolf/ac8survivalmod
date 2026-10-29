@@ -265,8 +265,9 @@ function pickAircraft(tier, role)
 end
 
 -- maxLevel (the dev key Ctrl+6): the top skill tier's squadron (its ace leading) on the top fire-control level,
--- whatever the round
-function spawnFlight(unit, maxLevel)
+-- whatever the round. pose (optional: { x, y, z (cm), yaw (deg), why }): spawned there instead of at a spawn point (the
+-- ALICORN's deck launches, P7: CFG.specials.alicorn.deck); the rest (tier, airframe, orders) as any flight's
+function spawnFlight(unit, maxLevel, pose)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
     local ti = CFG.tiers.enabled and (maxLevel and #CFG.tiers.list or D.roundTier or TIER.pick(D.round)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
@@ -297,13 +298,17 @@ function spawnFlight(unit, maxLevel)
     local x, y, dist, bearing = spawnPoint()
     local yaw = (bearing + 180) % 360                                          -- facing the airfield
     local pin = nil                         -- (a pincer wave's flight: its side's bearing, P2's director, sv_director.lua)
-    if DIR and DIR.spawnAt then
+    if DIR and DIR.spawnAt and not pose then
         local okPn, pn = pcall(DIR.spawnAt, unit)
         if okPn then pin = pn else log("director: pincer error " .. tostring(pn)) end
     end
     if pin then x, y, dist, bearing, yaw = pin.x, pin.y, pin.d, pin.b, pin.yaw end
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
-    if role == "lancer" then                          -- (the Lancers come from above: CFG.roles.lancer, within their band)
+    if pose then                                      -- (where its caller says: the ALICORN's deck)
+        x, y, yaw, alt = pose.x, pose.y, (tonumber(pose.yaw) or yaw) % 360, pose.z / 100
+        dist = math.sqrt((x - AIRFIELD.X) ^ 2 + (y - AIRFIELD.Y) ^ 2) / 100000
+        bearing = math.deg(math.atan(y - AIRFIELD.Y, x - AIRFIELD.X)) % 360
+    elseif role == "lancer" then                      -- (the Lancers come from above: CFG.roles.lancer, within their band)
         alt = math.min(alt + (tonumber(CFG.roles.lancer and CFG.roles.lancer.alt_add_m) or 0), ROLE.LANCER_TOP_M - 500)
         -- (above your usual height against a player who stays high: P6's learning layer, sv_stats.lua PROF.lancerAlt)
         local okHi, hi = true, nil
@@ -320,7 +325,8 @@ function spawnFlight(unit, maxLevel)
     spawningUnit, spawningIdx = nil, nil
     log(string.format("round %d: %s%s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round, unit,
         role and (" [" .. role .. "]") or "", D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
-        jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side") or "",
+        jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side")
+            or (pose and (", at " .. tostring(pose.why or "its caller's pose"))) or "",
         alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r > 0 and role then pcall(ROLE.spawned, unit, role, r, ace) end   -- (its tell, the Wolf trap's hold: below)
     if r > 0 and DIR and DIR.spawned then pcall(DIR.spawned, unit, role, r, ace) end   -- (the director's top cover, regroup)

@@ -341,7 +341,9 @@ function hudTick(now, paused, pc)
         nextS = string.format(t.captured_row, left, left == 1 and "" or "S", ashore)
     elseif D.special and D.special.kind == "glitch" and D.special.state == "hunt" and D.special.dist then
         local gl = CFG.specials.glitch
-        nextS = D.special.frenzyUntil and string.format(t.glitch_row_frenzy, gl.name) or string.format(t.glitch_row, gl.name, D.special.dist)
+        nextS = D.special.frenzyUntil and string.format(t.glitch_row_frenzy, gl.name)
+            or (D.special.phase == 3 and t.glitch_row_allout and string.format(t.glitch_row_allout, gl.name, D.special.dist))   -- (P7)
+            or string.format(t.glitch_row, gl.name, D.special.dist)
     elseif D.special and D.special.kind == "valka" and D.special.state == "hunt" and D.special.dist then
         local sp, va = D.special, CFG.specials.valka
         nextS = sp.chargeAt and string.format(t.valka_row_charge, va.name)

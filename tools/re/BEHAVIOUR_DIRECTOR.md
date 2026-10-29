@@ -1566,3 +1566,154 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
 - Not changed: the tail habit's non-ace reversals (unit spec: the squad director's cover is the lever), sending
   joiners' habits to the host (contract: the host's profile picks the room's mix), weighing the profile by its own
   evidence in current() (prior_kills / prior_samples stay fixed weights; min_kills / min_samples are the guards).
+
+## Unit 9: boss phases (P7)
+
+The thesis' P7: "Give each boss two or three phases with a different counter each, and pair it with a role squad
+instead of raw health: MINDRIPPER: PHANTASM guards fly as a Wolf pack that springs while your controls are scrambled.
+AB.L..IN: after two frenzies it starts blinking behind you, not just around you; a third phase drops ECM and goes all-out
+guns. Ladons: escorts fly top cover; after one Ladon dies the other changes route and volleys faster. ALICORN: surfaced
+phase spawns Skirmishers from its deck; the railgun is telegraphed with a radio call." Built from the specials brief's
+plans with the critic's corrections. **The Ladons stay alone** (user, 2026-10-25: "during a ladon round, only the
+ladon's spawn, no other aircraft should"): no escorts, no top cover; only the rage. The ALICORN's railgun tell is unit
+4's (the call and RAILGUN WARNING lead_s before the order, off alert_s after it, at a dive and the sink): this unit adds
+only its deck. VALKA is parked and shipped off: untouched. Lua, survival.default.ini and the build (survival_events.py,
+build_survival.py): new remote events, two flags, a path per Ladon and two radio lines, so the next friend build needs
+the contract's single COOP_TAG bump (it comes last). Every piece has its own `enabled`; nothing here has run in game.
+
+| boss | phase / squad | what happens | the counter | where |
+|---|---|---|---|---|
+| MINDRIPPER | its field (as before) | within field_km 3.2 your controls scramble | fight it from outside 3.2 km | sv_anomalies.lua ANOM.tick |
+| | the PHANTASM pack (pack) | the guards fly the Wolf trap's close gunfighter (NLID_SV_WolfWing: a hard turn, then 200 m behind you with a leading gun; half its runs the "Super" pursuit at AI level 5). spring_delay_s 1.5 after the field scrambles you, its tell first ("pack": THE PACK SPRINGS / GET OUT OF THE FIELD, an ambush line), then RE_SV_AnomalyPackSpring: you only anywhere, their area over the whole zone, every guard LastTGT onto you. Once you've been out of the field hold_after_s 4, and at least min_s 12 after the spring, RE_SV_AnomalyPackHold (back round it: PlayerOnly, the 2 km following area); cooldown_s 20 before the next | get out of the field when the call comes; don't dogfight it inside 3.2 km | `ANOM.packTick`, `ANOM.packHeld`; sv_rows.lua searchSetup (the guard row's LuaSetId); sv_ai.lua ACE.hunt (hunt_only_sprung) |
+| AB.L..IN | phase 1 (as before) | each hit outside a frenzy: 6 s of blinks round you, its gun firing | keep turning, hit it again after | `ANOM.glitchTick`, `glitchFrenzy` |
+| | phase 2 (two frenzies over) | behind_share 0.5 of its blinks at the spot nearest your six (your heading from your velocity, SPC.V.heading; the nearest 30-degree spot, at most 15 deg off dead six, either ring; the last blink's bearing no bar; ground clearance as before); its tell "glitch_six" (IT'S ON YOUR SIX, a check-your-six line) | never fly straight through a frenzy | `blinkSpot`, `glitchPhase` |
+| | phase 3 (at allout_hp 35 % of its health as it appeared) | no more frenzies or blinks; its ECM down (no RE_SV_GlitchEcm; its own pod row refires at most once a minute, ecm_row; its pods up switched off every ecm_check_s 3, ecm_pods_off); its gun at you whenever you're within allout_range_km 1.5 and allout_cone_deg 20 of its nose (RE_SV_GlitchGun every allout_gun_s 0.5 and the led shots each tick); LastTGT onto you (RE_SV_GlitchTurn) every allout_turn_s 10, and at once (allout_behind_s 3 apart) with you behind it within allout_behind_km 3; its tell "glitch_allout" to every player (ITS ECM IS DOWN / MISSILES WORK: STAY OFF ITS NOSE, "it's not jamming anymore") | missiles work now: stay off its nose and shoot from range | `glitchPhase`, `glitchPodsOff`; sv_rows.lua `glitchEcm`; sv_hud.lua's row (glitch_row_allout) |
+| KOT / MISHKA | the rage (one shot down) | the other, still up: RE_SV_LadonRage<Key> (its flag), its callout (`<NAME> ENRAGED` / NEW HEADING, FASTER VOLLEYS) and tell ("ladon_rage": "the hostile's changed course"), volleys every rage.volley_every_s 25 (was 45; the next within first_s 5 once you're in range; still one launcher a volley); from its next pass over the airfield it flies the rage circuit (LADON_RAGE: ~35 km, ~42 s a lap at 3000 km/h, so each pass still bombs under the 30 s debounce) | finish the second one fast, or keep it off the airfield | sv_ladon.lua `SPC.ladonRage`; survival_events.py LADON_RAGE, build_ladon; build_survival.py ladon_units |
+| ALICORN | its deck (while surfaced) | a free pool flight of size 2 (a Skirmisher's own with the roles on; any role's when none is free; any with roles off) off its bow: ahead_m 800 along its heading (its core's forward; towards you when it can't be read), alt_m 600 over the sea; first_s 25 after it appears, every every_s 35, and after_surface_s 6 after each surfacing; warn_s 3 before each its callout (PLANES LAUNCHING / FIGHTERS OFF THE ALICORN'S DECK) and tell ("alcn_deck": "planes launching from the carrier"); at most max_up 2 of its flights up, never while you're down at the airfield (tried each second), none while dived. A round's launches (D.deckLeft): flights 2 + flights_per_round 0.15 x the round, at most max_flights 6; from specials.escort_from 12 its escorts come off the deck too (their aircraft in flights of 2; escorts true), none from a spawn point | kill the deck flights, or sink it before the next launch | sv_alicorn.lua `SPC.alicornDeck`, `deckFlight`, `partAt`; sv_spawn.lua spawnFlight's `pose`; sv_rounds.lua startRound (D.deckLeft) |
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| the pack's events | survival_events.py build_anomaly | RE_SV_AnomalyPackSpring: t_engage {guards, PlayerOnlyNoLimit}, t_move {guards, AREA_RADIUS_M} (the down records' "loose"), Mission 6's LiveAIRequestUniqueAction {NoneSelect, guards, LastTGT, OneShot, Below_Return} (hard rule 37). RE_SV_AnomalyPackHold: t_engage {guards, PlayerOnly}, t_move {guards, on MINDRIPPER's object, 2000 m, follow} (the appearance's). No flags, conditions or delays (hard rule 26). The build checks that Lua fires both and keeps ^RE_SV_AnomalyPack |
+| the pack's tick | sv_anomalies.lua `ANOM.packTick(now, s, c)`, called at the end of ANOM.tick (the host's; never ANOM.clientTick or setField, which joiners run) | s.pack nil (held) -> "armed" (the field on, its cooldown over: the tell, s.packAt) -> "sprung" (s.packSince; the field off before the spring: held again, nothing fired) -> nil (called back, s.packCool). s.fieldOffAt from ANOM.on. No guard alive: nothing. MINDRIPPER down: ANOM.tick returns before it (the down records loose the guards) |
+| the guards' set | sv_rows.lua searchSetup (the slot loop's LuaSetId) | the Anomaly's wing row (ACE.row("anomaly", "f04e", "w"), every spike level: the world data names the level-0 one, hard rule 20) gets pack.guard_luaset (NLID_SV_WolfWing; only one of CFG.behaviour_sets that setsSetup made, never NLID_0400_CP: hard rule 22); "" or a set that isn't in: the fighters'. At the main menu: a game restart to change |
+| hunt_only_sprung | `ANOM.packHeld(p)`; sv_ai.lua ACE.hunt (after no_provoke) | off by default (the brief's): on, a guard's TargetActor isn't forced onto you (the top tier's hunt) until the pack springs; false on a joiner (no D.special there) and outside MINDRIPPER's round |
+| AB.L..IN's phase state | sv_anomalies.lua glitchTick (its arrival: s.phase 1, s.hp0 = its health after the round's scaling), `glitchPhase(c, s, n, now, why)` | 1 -> 2 in the frenzy-over branch once frenzies >= behind_after; -> 3 when its health <= hp0 x allout_hp (from 1 or 2; mid-blink it comes back first: frenzyUntil cut to now, the vanished branch brings it back, the next tick ends the frenzy). Each change logged and told |
+| the frenzy | `glitchFrenzy(c, s, o, at, you, now)` (the old frenzy body, moved out so phase 3's guns run without a frenzy) | as before: the blink check a tick on, vanish / back at a blink spot / frenzy over |
+| the behind blinks | `blinkSpot` | in phase 2, a draw under behind_share: the wanted bearing your heading + 180, the jitter and the last-blink penalty dropped for that pick; returns behind and the heading for the log (the first three, then every 10th) |
+| phase 3's ECM | glitchTick (no RE_SV_GlitchEcm in phase 3); `glitchPodsOff` (FindAllOf("BP_wp_ecm_a0_C") every ecm_check_s, only pods whose owner or instigator is AB.L..IN: bJammingEnable / bSupportEnable false, the before / after logged once; never destroyed); sv_rows.lua `glitchEcm` (row NPC_FCS_ECM000_SVE: anomEcm's values with 60 s between shots and 60 s rest; MINDRIPPER keeps anomEcm's _SVX) | phases 1-2 keep the pod up by its event every ecm_every_s 14 (hard rule 40: the confirmed mechanism); the row no longer refires it every 14 s on its own, so phase 3's drop holds (at most a pod a minute, which the pods-off check catches) |
+| phase 3's guns and turns | glitchTick: offNose (its forward against you, as VALKA's), `hot3`, `gunsHot`; RE_SV_GlitchTurn (survival_events.py GLITCH_POST_STALL gains ('Turn', 'LastTGT'); never one of the random post_stall_moves: the build checks) | gunsHot = in a frenzy and not gone, or phase 3 with you close in front of it; the event's cadence allout_gun_s outside a frenzy. A LastTGT pushes the post-stalls 3 s on (VALKA's pattern) |
+| the rage | sv_ladon.lua `SPC.ladonRage(now, s, downKey)` (from the kill branch), the volley block (L.rage: rage.volley_every_s / volley_warn_s) | once a round, only when the other Ladon is still up (both down in one second: none); its pass lines say "(enraged N s ago)" |
+| the rage circuit | survival_events.py LADON_RAGE (from LADON_LOOP[0], just past the airfield, to LADON_AIRFIELD: hard rule 2), LADON_RAGE_SPEED '3000.0', ladons()' rage / rage_lap / rage_flag / rage_ev, INT_FLAGS SV_LadonRage<Key>; build_ladon: the appearance clears the flag, RE_SV_LadonRage<Key> sets it, and each PathFinish (the route's, the circuit's and the rage circuit's own, SV_LadonRageLap<Key>) adds its bombing pass and starts the circuit when the flag is 0, the rage circuit when it's 1 (two flag-gated executions, no delay); build_survival.py ladon_units: the path (make_path smooth: ControlType 1, no tube data, hard rules 34 / 35), its points inside the area's 0.9 | the switch at its next pass over the airfield, never mid-path (whether a replaced path fires its old PathFinish is unknown) |
+| the deck | sv_alicorn.lua `SPC.alicornDeck(now, s, c)` (alicornTick, each second while it sails), `deckFlight(dk)`, `partAt(o)`; the surfacing branch sets s.deckNext; sv_spawn.lua `spawnFlight(unit, maxLevel, pose)` (pose { x, y, z, yaw, why }: no spawn point, no pincer, no Lancer offset; logged "at the Alicorn's deck"); sv_rounds.lua startRound | the flight is an ordinary round flight: its tier, airframes (pickAircraft by its role), orders (ordersTick), D.up (the round waits for it after the sink), kill pay |
+| the radio | survival_events.py TELL_LINES: SV_Radio_GlitchEcm (v0001_2693 "It's not jamming anymore!", ST_ms023 02_Jamming_Off), SV_Radio_LadonRage (v0001_3110 "The hostile's changed course.", ST_ms026 03_Nightmare_Assault), both LIVE_AWACS; the pack reuses Trap / EnTrap, phase 2 the Six lines, the deck AlcnDeck (unit 4's) | radio: 721 rows (61 tell lines); events: 771 triggers, 1540 execs (were 762 / 1518) |
+| co-op | sv_coop.lua KEEP_EVENTS gains ^RE_SV_AnomalyPack | tools/re/COOP.md's boss phases bullet |
+
+### CFG keys (CFG.specials.<boss>; `[specials.<boss>.<part>]` in survival.ini; the host's for the room)
+- `anomaly.pack` ([specials.anomaly.pack]): `enabled` true, `spring_delay_s` 1.5, `min_s` 12, `hold_after_s` 4,
+  `cooldown_s` 20, `hunt_only_sprung` false, `guard_luaset` "NLID_SV_WolfWing" (main menu; "" the fighters').
+- `glitch.phases` ([specials.glitch.phases]): `enabled` true, `behind_after` 2, `behind_share` 0.5, `allout_hp` 0.35,
+  `allout_range_km` 1.5, `allout_cone_deg` 20, `allout_gun_s` 0.5, `allout_turn_s` 10, `allout_behind_s` 3,
+  `allout_behind_km` 3, `ecm_row` true (main menu), `ecm_pods_off` true, `ecm_check_s` 3. (No key ends in gun_every_s:
+  build_glitch's regex takes the first one.)
+- `ladon.rage` ([specials.ladon.rage]): `enabled` true, `volley_every_s` 25, `volley_warn_s` 0, `first_s` 5.
+- `alicorn.deck` ([specials.alicorn.deck]): `enabled` true, `first_s` 25, `every_s` 35, `after_surface_s` 6, `warn_s` 3,
+  `size` 2, `max_up` 2, `flights` 2, `flights_per_round` 0.15, `max_flights` 6, `escorts` true, `alt_m` 600, `ahead_m` 800.
+- CFG.tells: `pack`, `glitch_six`, `glitch_allout`, `ladon_rage` (cooldowns 20 / 0 / 0 / 0) and their texts; `alcn_deck`
+  (unit 4's) now said. CFG.hud.text: `ladon_rage` / `_sub`, `alicorn_deck` / `_sub`, `glitch_row_allout`.
+
+### Log lines to look for in a test
+- `special: the Anomaly's guards (SV_Ace_anomaly_f04e_W_SV) fly NLID_SV_WolfWing (its pack)` (main menu), or `... keep
+  NLID_SV_Fighter (their set NLID_SV_WolfWing isn't in)`
+- `special: MINDRIPPER's pack: your controls scrambled 2.5 km from it; PHANTASM springs in 1.5 s (told)` and the tell's
+  `tell: pack: RE_SV_RadioTrap (fired), tell callout 'THE PACK SPRINGS'`
+- `special: MINDRIPPER's pack sprung (N): PHANTASM loose on you (LastTGT), 4 of 4 guards up, ...`; then the guards'
+  `ai:` lines (CFG.ai_watch) should show them leave the 2 km area and go UniqueAction
+- `special: MINDRIPPER's pack held: back round MINDRIPPER N s after it sprang (N s out of the field)`,
+  `special: MINDRIPPER's pack: you left the field first; not sprung`, `... every guard down (N springs)`
+- `special: round R, MINDRIPPER shot down N s after it appeared (its pack sprang N times)`
+- `weapons: NPC_FCS_ECM000 -> NPC_FCS_ECM000_SVE (ECM pod (AB.L..IN's, its phases): ...)` (main menu)
+- `special: AB.L..IN phase 2 (from 1): 2 frenzies over; 50 % of its blinks behind you`
+- `special: AB.L..IN blink N behind you (M behind so far): your heading H -> spot D (RE_SV_GlitchBlink_XG, 500 m)`,
+  then the usual `special: AB.L..IN blink N (...): a tick on it's ... m from you, ..., flight path X deg off you`
+- `special: AB.L..IN phase 3 (from 2): at 34 % of its health (h of hp0); no more frenzies, its ECM down (its pod's own
+  row: once a minute at most), its gun at you within 1.5 km and 20 deg of its nose every 0.5 s, LastTGT every 10 s`
+- `special: AB.L..IN's ECM pods off: 1 of 1 (jamming/support true/true -> false/false)`
+- `special: AB.L..IN's guns all out: you 1.0 km off its nose (6 deg)`, `special: AB.L..IN LastTGT N (1), you behind it, ...`
+- `special: round R, AB.L..IN shot down ... (F frenzies, B blinks; phase 3, N blinks behind you, T LastTGT)`
+- `special: Ladon MISHKA enraged (KOT down): volleys every 25 s, the rage circuit from its next pass (RE_SV_LadonRageMishka fired)`
+- `special: Ladon MISHKA fires a launcher at you (...), enraged`, `special: Ladon MISHKA's pass over the airfield (N): -D (enraged S s ago)`
+- `round R: the Alicorn's deck launches up to N flights of 2[ (E of them its escorts)]`
+- `tell: alcn_deck: RE_SV_RadioAlcnDeck (fired)`; `round R: ERA_Unit_07_Dep_Air0 [skirm] as f02a_common (...), ..., at the
+  Alicorn's deck, 0.6 km up: 2 aircraft up`; `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at 600 m,
+  L launches left this round`; `special: the Alicorn's deck waits: 2 of its flights up`
+- `special: round R, the Alicorn sunk ... (core down, hull H; N deck launches)`
+- Errors: `special: pack error ...`, `special: the Alicorn's deck: error ...`, `special: RE_SV_AnomalyPackSpring not fired: ...`
+
+### Test checklist (in game)
+1. MINDRIPPER (a test build's Anomaly key, or a run to an Anomaly round): fly into its field and stay: the ambush call
+   and THE PACK SPRINGS, then 1.5 s later the guards break off it and come at you (ai: UniqueAction, then
+   PursueTarget); leave the field for 4 s+ (12 s+ after the spring): they go back round it. Are the guards gunfighters
+   near you on the Wolf trap's set (their guns lead 0.85 s)? Too much while scrambled: raise spring_delay_s, or lower
+   hold_after_s.
+2. AB.L..IN (a glitch round): hit it twice, let both frenzies run out: IT'S ON YOUR SIX, and the next frenzy's blinks
+   come in behind you (the blink check line: 500 / 800 m behind, flight path toward you). Fair? behind_share.
+3. ... bring it under 35 %: ITS ECM IS DOWN, the radar's jamming ring gone within ~15 s and not back, your missiles
+   track; in front of it within 1.5 km its gun fires, beside or behind it it doesn't, and it reverses onto you (LastTGT)
+   every 10 s and when you get behind it. The ring back within a minute means the pods-off write didn't take
+   (ecm_pods_off) or the row's refire beats it: send both lines.
+4. A Ladon round: shoot one down: <NAME> ENRAGED, "the hostile's changed course", its volleys 25 s apart; at its next
+   pass over the airfield it flies the tighter circuit (minimap) and keeps bombing once a lap, not every second (hard
+   rule 35's symptom), and doesn't turn back west (its area holds the circuit).
+5. An ALICORN round: 22 s in "planes launching from the carrier" and PLANES LAUNCHING, 25 s in a 2-ship climbs away
+   from its bow at ~600 m and gets its orders (no "never got its orders"); a Skirmisher's LAAM from 7 km. No more than
+   two of its flights up at once; none while it's dived; one 6 s after it surfaces. They don't hit the hull or the sea
+   (AvoidObstacle / ReturnToWorld in the ai: lines would say so; alt_m, ahead_m).
+6. Co-op (a host and a joiner): the joiner alone in MINDRIPPER's field doesn't spring the pack; the host's spring turns
+   the guards onto the host only; AB.L..IN's phase 3 ECM drop shows on the joiner's radar too; the deck flights appear on
+   the joiner's game.
+
+### Offline test
+`sh tools/checks/bosses_test.sh` (real parts, the game stubbed; in tools/README.md's checks row): survival.ini's four
+new sections read; the pack's whole cycle on the real ANOM.tick (armed with its tell, the spring at spring_delay_s, the
+hold only after min_s and hold_after_s, the cooldown, leaving the field before the spring, every guard down, pack off),
+hunt_only_sprung through the real ACE.hunt; AB.L..IN on the real glitchTick (phase 2 after two frenzies with its tell;
+every blink at your six with behind_share 1, following your heading; behind_share 0 as before; phase 3 at 34 % with its
+tell, no more ECM events, only its own pod switched off, no frenzy on a hit, LastTGT every 3 s behind it and every 10 s
+off its tail, its gun only within 1.5 km in front of it; phase 3 mid-blink; phases off); the rage on the real ladonTick
+(its event, callout, tell, 25 s volleys, the enraged pass line; both down in one second; rage off); the deck on the real
+alicornTick (the warning 3 s before, a Skirmisher 2-ship 800 m off the bow at 600 m along its heading, every 35 s,
+max_up, the airfield, D.deckLeft to 0, dived and surfaced, roles off, deck off); startRound's D.deckLeft (rounds 8 / 14 /
+40, escorts folded in or not, deck off, another special); the guards' set on every level and AB.L..IN's own ECM row
+(MINDRIPPER's kept) from the real searchSetup on fake tables, and with them off; co-op's keep list; the hooks. Then
+bosses_build_check.py on survival_events.py: the rage circuit (start / end, area, a 42 s lap, its speed, letters,
+flags), GLITCH_POST_STALL's Turn, the radio lines, the Lua names the build checks. Three mutants (the ECM event still
+fired in phase 3, a rage with both Ladons down, a launch while you're at the airfield) each fail it.
+
+### Untested / known limits
+- [I] Nothing here has run in game. The mechanisms are confirmed ones (unique actions by unit, hard rule 37; the blink
+  teleports, 39; WN_WEAPON slots, 40; flag-gated records checked when their event fires, 26; spawnFlight's pose through
+  SV_Spawn as ANOM.spawn uses it), but each use here is new.
+- [I] The guards on NLID_SV_WolfWing: their behaviour changes from the fighters' set (the confirmed guarding);
+  guard_luaset "" puts it back. Set at the main menu: a game restart to change.
+- [I] The pack keys on the host's field only (a joiner's own field never springs it; its LastTGT would turn the guards
+  onto the host anyway). The spring's LastTGT on the guard unit (not a pool flight) is the stock form, untested here.
+- [T] The ECM drop: the pods-off write (bJammingEnable / bSupportEnable on BP_wp_ecm_a0) and the new row's once-a-minute
+  refire are untested; phases 1-2 now keep the pod up by its event alone (the row's own 14 s refire is gone): if the
+  ring flickers in phases 1-2, ecm_row = false puts anomEcm back (and phase 3's ECM then stays up). A joiner's copy's
+  pods aren't switched off (only its events stop).
+- [I] Phase 2's "behind" is your heading in the horizontal plane at your height: a steep climb or dive isn't behind in
+  3D; the spot is up to 15 deg off dead six plus your turn in the 250 ms tick. Its smoke there is out of view, so the
+  tell and behind_share are the fairness levers.
+- [I] Phase 3's guns fire RE_SV_GlitchGun (forwarded) on the host's geometry: a joiner's copy fires at the joiner
+  while the host is close in front of it, wherever the joiner is (as the frenzy's gun always has).
+- [I] The rage circuit: its heights follow the old circuit's nearest points (1.25-2.0 km); the terrain under it isn't
+  checked. The switch waits for the survivor's next pass (~42-72 s on the circuit, ~3 min if it's still inbound). The
+  Ladon may not reach 3000 km/h (its row's top speed); a slower lap is longer, never shorter.
+- [I] The deck: spawned 600 m over the sea next to a big hull, AvoidObstacle or the sea are risks; s.depthPart is nil
+  until the first parts pass (2 s), so the first launch (25 s) has it. The hull's forward is read from its core part
+  (attached, so the hull's), else "towards you". D.deckLeft doesn't grow with co-op's player count except through its
+  folded escorts (COOP.more scales those).
+- Not built: the Ladons' top cover (against the user's 2026-10-25 instruction; the brief's step 6 off by default would
+  still have changed that rule, so it's left out), MINDRIPPER's optional third phase (a wider field under 40 % health: a
+  joiner's own field couldn't follow it without a new "rnd" field), a closer blink ring.
