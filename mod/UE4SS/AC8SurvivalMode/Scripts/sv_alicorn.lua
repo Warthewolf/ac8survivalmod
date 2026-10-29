@@ -209,27 +209,34 @@ end
 -- Its railguns (LiveAIRailgun, not their hatches: railgun_R's can't be destroyed, ALICORN.md 1.2) and its VLS: once a
 -- kind is down its tells and orders stop (code review of 2026-10-29: WARNING: RAILGUN, Mission 18's RAILGUN WARNING and
 -- VLS LAUNCH came every minute after the player had shot them all). A kind's parts are looked for (FindAllOf) until
--- some are found, then kept (s.arms, as s.depthPart); how many of them are still there, and how many are up (a health
--- that can't be read counts as up, as the tanks')
+-- some are found, then kept (s.arms, as s.depthPart), and looked for again before the kind counts as down (armsLook:
+-- one found a pass after its siblings, the railguns being their hatches' grandchildren, would otherwise be silenced
+-- with them; F4's review); how many of them are still there, and how many are up (a health that can't be read counts
+-- as up, as the tanks')
 local ARMS = { { key = "rail", what = "railguns", after = "its RAILGUN WARNING off, no more railgun warnings or orders",
                  classes = { "BP_BA002_alcn_emls_Base_C" } },
                { key = "vls", what = "VLS", after = "no more VLS calls or volleys",
                  classes = { "BP_BA002_alcn_vlsL1_Base_C", "BP_BA002_alcn_vlsL2_Base_C", "BP_BA002_alcn_vlsR1_Base_C",
                              "BP_BA002_alcn_vlsR2_Base_C", "BP_BA002_alcn_vls_Base_C" } } }
-local function armsUp(s, a)
-    s.arms = s.arms or {}
-    local list = s.arms[a.key]
-    if not list then
-        local seen = {}
-        list = {}
-        for _, cls in ipairs(a.classes) do                -- (vls_Base may list its subclasses' parts too)
-            for _, o in ipairs(parts(cls)) do
-                local key = addrOf(o) or nameOf(o)
-                if not seen[key] then seen[key] = true; list[#list + 1] = o end
-            end
+-- (the parts found now merged into the kind's kept list by address; how many are new)
+local function armsLook(s, a)
+    s.arms, s.armsKeys = s.arms or {}, s.armsKeys or {}
+    local list, keys, more = s.arms[a.key] or {}, s.armsKeys[a.key] or {}, 0
+    for _, cls in ipairs(a.classes) do                    -- (vls_Base may list its subclasses' parts too)
+        for _, o in ipairs(parts(cls)) do
+            local key = addrOf(o) or nameOf(o)
+            if not keys[key] then keys[key] = true; list[#list + 1] = o; more = more + 1 end
         end
-        if #list == 0 then return 0, 0 end
-        s.arms[a.key] = list
+    end
+    if #list > 0 then s.arms[a.key], s.armsKeys[a.key] = list, keys end
+    return more
+end
+local function armsUp(s, a)
+    local list = s.arms and s.arms[a.key]
+    if not list then
+        if armsLook(s, a) == 0 then return 0, 0 end
+        list = s.arms[a.key]
+        log(string.format("special: the Alicorn's %s found: %d (kept; looked for again before they count as down)", a.what, #list))
     end
     local n, up = 0, 0
     for _, o in ipairs(list) do
@@ -302,7 +309,8 @@ function SPC.alicornDeck(now, s, c)
     end
     if not s.deckWarned then                              -- (its tell, then the launch warn_s on)
         -- (another tell's gap holds it a second, twice at most: after a surfacing the railgun's warning comes radio_gap_s
-        -- after "submarine has surfaced", a second before this call; code review of 2026-10-29)
+        -- after "submarine has surfaced", a second before this call; code review of 2026-10-29. A host with tells off
+        -- gets its joiners' gap here: TELL.say)
         local said, kind = false, nil
         if TELL then
             local okT, r, _, k = pcall(TELL.say, "alcn_deck", TELL.ALL)
@@ -486,13 +494,20 @@ function SPC.alicornTick(now, s)
     end
     -- its railguns and VLS (ARMS): a kind is down once a part of it was seen up and none is now (one gone, no longer
     -- valid, counts as down, as a tank), for good (a part shot down doesn't come back); one never seen up (a 0 read as
-    -- it appears) isn't
+    -- it appears) isn't. Looked for again first (one FindAllOf burst): a part found then keeps it up, and new ones get
+    -- a pass of their own before it can count as down (their first read may be a 0 as they appear)
     s.armsSeen, s.armsDown = s.armsSeen or {}, s.armsDown or {}
     for _, a in ipairs(ARMS) do
         if not s.armsDown[a.key] then
             local n, up = armsUp(s, a)
+            local more = 0
+            if up == 0 and s.armsSeen[a.key] then more = armsLook(s, a) end
+            if more > 0 then
+                n, up = armsUp(s, a)
+                log(string.format("special: the Alicorn's %s: %d more found (%d in all, %d up)", a.what, more, #s.arms[a.key], up))
+            end
             if up > 0 then s.armsSeen[a.key] = true
-            elseif s.armsSeen[a.key] then
+            elseif s.armsSeen[a.key] and more == 0 then
                 s.armsDown[a.key] = true
                 if a.key == "rail" then railAlert(s, false) end
                 log(string.format("special: the Alicorn's %s are down (%d found, none up): %s", a.what, n, a.after))

@@ -10,8 +10,9 @@
 --                              player's slot (only the host sends another player's: "tl", sv_coop.lua COOP.tell). a, b:
 --                              numbers its text shows (bearings, an o'clock) or its line is picked by. Returns true when
 --                              said (here, or sent), else false, why, and a kind ("off", "state", "gap", "cooldown",
---                              "line", "empty"), and for this game's own, true when a sure tell (its catalog entry's
---                              sure: a boss's phase change) wasn't said but its callout showed anyway
+--                              "line", "empty"; TELL.ALL on a host with tells off: the send's), and for this game's
+--                              own, true when a sure tell (its catalog entry's sure: a boss's phase change) wasn't
+--                              said but its callout showed anyway
 --   TELL.after(id, slot, fn, a, b, need)   say it, then run fn its lead_s later (CFG.tells.lead_s; TELL.tick, every
 --                              250 ms, on the round clock: a pause holds it); not said: fn at once (never with need).
 --                              Returns whether it was said
@@ -289,7 +290,10 @@ function TELL.say(id, slot, a, b)
     if slot == TELL.ALL then
         local said, why, kind = TELL.play(id, a, b)
         if isHost() and not roomBlocked(false) then              -- (each joiner checks its own airfield and gaps)
-            if send(s, "all", nil, id, a, b) then said = true end
+            local sent, whyS, kindS = send(s, "all", nil, id, a, b)
+            -- (tells off here: the send's refusal is the answer, so a caller can wait out its gap; F4's review: the
+            -- deck's call, refused for the joiners' gap, read "off" and was dropped)
+            if sent then said = true elseif kind == "off" then why, kind = whyS, kindS end
         end
         return said, why, kind
     end
