@@ -342,6 +342,15 @@ false` (CFG.log, logVerbose()) keeps out the `ai:` lines, the flags line on ever
 nearest and the intensity scores every 10 s; `ammo: now` comes at most once a minute, `perf:` every 5 minutes; true
 brings them all back.
 
+0.72.1-coop.19 (runtime 0.28.4; the user's requests while playing 0.72.0, 2026-10-29; none of it run in game yet): that
+clean up; the music player's pause hold from Survival's spawner's game instance (it never engaged before: every log's
+"clock held 0 ms"; tools/re/MUSIC_RADIO_CAMERA.md); SV_Version() the build's own version (was a fixed "0.27.0"); the
+heavy bombers' routes over the runway and figure-8s across it (tools/re/AIRFIELD_SUPPLY.md 2); the jammer's ECM pod
+fired every 14 s (RE_SV_JamEcm_NN); the Ladons' VLS missiles 10 damage, half the turn rate, also on pooled ones in
+flight; co-op stand-ins wait up to 5 s for their player's airframe (COOP.md 5); stronger AA guns / SAM sites and a STORE
+CIWS at four spots by the runway on a new DEFENCES page (AIRFIELD_SUPPLY.md 4). Planned next (researched, not built):
+co-op weapon / gear / afterburner sync and a co-op revive with a spectator camera.
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
