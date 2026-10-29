@@ -200,11 +200,13 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
 ## 7. Since coop.4 (coop.5-coop.11, runtimes 0.23.0-0.26.0, 2026-10-26; untested in game)
 - Events: the host forwards every RE_SV_* event it fires ("ev") but each player's own (sv_coop.lua KEEP_EVENTS); a
   joiner fires them once its level is ready. (Nagase's radio and the shuttle never ran on the joiners in coop.4.)
-- Tells (behaviour roadmap P3, BEHAVIOUR_DIRECTOR.md unit 4): "tl" from the host to one joiner or every joiner, a
-  tell id and up to two numbers only (COOP.tell). The joiner plays it from its own CFG.tells (lines, texts, switches:
-  PERSONAL) if it knows the id, the numbers are finite, its level is ready ([coop] callouts on), at most 4 a second,
-  never queued. A tell's radio events (RE_SV_Radio*) are in KEEP_EVENTS, and sv_tells.lua plays the host's own
-  through the unwrapped hudCallout / SV_Event, so a tell never also goes out as "co" or "ev". Untested in game.
+- Tells (behaviour roadmap P3, BEHAVIOUR_DIRECTOR.md unit 4; radio lines only since the clean up of 2026-10-29, no
+  HUD callout): "tl" from the host to one joiner or every joiner, a tell id and the number its line is picked by
+  (the o'clock) only: `tl|<id>|<a>` (COOP.tell; it carried a second number for the callouts' texts before). The joiner
+  plays it from its own CFG.tells (lines, switches: PERSONAL) if it knows the id, the number is finite, its level is
+  ready, at most 4 a second, never queued; [coop] callouts (the host's banners, "co") no longer gates it. A tell's radio
+  events (RE_SV_Radio*) are in KEEP_EVENTS, and sv_tells.lua plays the host's own through the unwrapped SV_Event, so a
+  tell never also goes out as "ev". Untested in game.
 - Fighter roles (behaviour roadmap P1, BEHAVIOUR_DIRECTOR.md unit 5): the host draws the round by role and its
   joiners' copies fly the same world-data units (their behaviour doesn't matter on a joiner: puppets). The Wolf trap's
   per-object holds and frees (RE_SV_WolfHold_<NN><L> / RE_SV_WolfFree_<NN><L>) are forwarded, so a joiner's copy of a
@@ -254,15 +256,16 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   host stops RE_SV_GlitchEcm (forwarded) and switches its own pods off, and its "rnd" carries AB.L..IN's phase (the
   9th field: 1-3, else empty; a joiner takes only 1-3 as D.glitchPhase), so a joiner's ANOM.clientGlitch switches its
   copy's pods off too every ecm_check_s while the host's is in phase 3 (its own row would refire them every 14 s; code
-  review of unit 9). The phase tells are sure ones: the host sends them through its gaps, and a joiner with tells off
-  (or one refused there) still shows the callout. A Ladon's RE_SV_LadonRage<Key> is forwarded
-  (harmless: the copies follow the stream); its callout is the round's ("co"), its tell every player's. The ALICORN's
-  deck launches go through spawnFlight with a pose, which the SV_Spawn wrapper mirrors (pose, aircraft, level); its
-  callout is the round's, its "alcn_deck" tell every player's. Untested in game.
+  review of unit 9). The phase tells are sure ones: the host sends them through its gaps, and a joiner says them
+  through its own gap and their cooldown (not with its tells off, at its airfield or within the lines' line_gap_s). A
+  Ladon's RE_SV_LadonRage<Key> is forwarded (harmless: the copies follow the stream); its tell is every player's (its
+  ENRAGED callout is gone: the clean up of 2026-10-29). The ALICORN's deck launches go through spawnFlight with a pose,
+  which the SV_Spawn wrapper mirrors (pose, aircraft, level); its "alcn_deck" tell is every player's (no PLANES
+  LAUNCHING callout now). Untested in game.
 - Ace personalities (behaviour roadmap P9, BEHAVIOUR_DIRECTOR.md unit 10) run on the host only (ACE.squadTick returns on
   a joiner; the squadrons' role mix is the host's startRound, the openers its sv_main tick). A squadron flight opens on
-  whichever player (COOP.players()) its planes reach first: that player's squadron tell ("tl": its id and the tier's
-  index, the joiner naming the squadron from its own CFG.aces), and what reaches them: the "high" salvo on that joiner's
+  whichever player (COOP.players()) its planes reach first: that player's squadron tell ("tl": its id; a radio line,
+  no squadron-named callout since the clean up of 2026-10-29), and what reaches them: the "high" salvo on that joiner's
   own copies ("dv", RE_SV_Salvo_<NN><L>, gap_s apart), the kulbit (RE_SV_AceKulbit_NN, kept: the planes' own move the
   stream shows), the trap freed without its turn (RE_SV_WolfFree forwarded; WolfTurn would steer to the host); a blink is
   round the host's plane only (RE_SV_WraithBlink<K><J> in KEEP_EVENTS: its "Player" is the host), so a joiner gets only
@@ -310,8 +313,8 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   token format, no code). The joiner puts every shared section back to CFG_DEFAULTS and applies them, in place (other
   parts hold CFG's tables), and gets its own back when co-op closes or it hosts. Its own (sv_coop.lua PERSONAL): coop,
   hud (the info key's [hud.info] too), sound, music, leaderboard, menu, tells, profile and flares (P6's learning layer:
-  each game's own habits and AI flare row), and probe, ai_watch, stats (the test logs). presetName() answers the host's
-  preset on a joiner.
+  each game's own habits and AI flare row), and probe, ai_watch, stats, log (the test logs; [log] verbose).
+  presetName() answers the host's preset on a joiner.
 - Settings rows under JOIN: CO-OP ROOM, CO-OP ENEMIES, START AT ROUND, BREAK BETWEEN ROUNDS (StringArgs SV_Set_<what>).
   main.dll's OnMainDecide queues the pick and doesn't call the stock decide (as the landing menu's SV_Buy_ rows), Lua
   (SV_MenuSetting) steps the value, saves it with iniSet and relabels the row's live TextBlock. A run that started past

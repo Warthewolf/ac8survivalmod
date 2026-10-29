@@ -299,9 +299,9 @@ The Claude Docs thesis "AC8 Survival Mode: Enemy Behaviour Reference & Challenge
 branch `TestBranch_Behavioural` (from tag stable-1, 2026-10-29), COOP_TAG -coop.18: fighter roles (P1: the pool split
 into Duelists, Lancers, Wolf bait-and-trap pairs and Skirmishers, each its own behaviour set and airframes; 7 new
 Scripts/ai scripts), the squad director (P2: cover the tailed, spring the trap, bracket salvos, top cover, pincers,
-regroup; Scripts/sv_director.lua), tells (P3: a radio line and / or callout before each threat, 61 stock lines cloned
-into DT_SV_Radio; Scripts/sv_tells.lua, co-op "tl"), the intensity director (P4: each player's intensity and comfort, wave
-holds, pushes, the spikes as a ceiling; co-op "in"), a harder tailed plane (P5: every reaction pick moves, live provoke
+regroup; Scripts/sv_director.lua), tells (P3: a radio line before each threat, 61 stock lines cloned into DT_SV_Radio,
+no HUD callout since the clean up below; Scripts/sv_tells.lua, co-op "tl"), the intensity director (P4: each player's
+intensity and comfort, wave holds, pushes, the spikes as a ceiling; co-op "in"), a harder tailed plane (P5: every reaction pick moves, live provoke
 60 deg / 1.5 s from Veteran, a 4 Hz tail watch), the learning layer (P6: your habits countered, kept in
 config/survival_profile.ini, each game's own), boss phases (P7: MINDRIPPER's pack, AB.L..IN's three phases, a Ladon's
 rage, the ALICORN's deck launches), late rounds (P8: +3 aircraft a round from 26 to 60 by 35 in more waves, health
@@ -331,6 +331,16 @@ lost (.tmp / .bak / .old); cover and the trap work for joiners past [director] p
 longer holds the room while another player flies (the co-op section above); and, at the user's request, the HUD info
 key: I ([hud.info]) keeps the CO-OP, ALLIES and ITEMS rows hidden until pressed, each shown peek_s 5 when its news
 changes, open the CO-OP row has a line a player (tools/re/HUD_LAYOUT.md; a release key, not a test key; keyboard only).
+Clean up of 2026-10-29 for the next build (user, playing 0.72.0: "remove the hud warnings that we added, it's too much,
+keep the Voice lines though", "keep the bomber direction warnings"; not yet run in game; BEHAVIOUR_DIRECTOR.md's "Clean
+up of 2026-10-29" section): every tell is a radio line only (CFG.tells' hud / urgent / text and the HUD's urgent path
+gone, the HUD-only lancer / skirm / split tells and [roles] tells too, the ALICORN's deck and a Ladon's rage callouts),
+one gap (radio_gap_s) between any two tells, a `sure` tell (a boss's phase, a squadron's first call) said through the
+gap and its cooldown; "tl" carries one number. stable-1's callouts stay (ROUND, the specials', BOMBER RAID FROM THE
+<DIRECTION> and the NEXT row's raid line), as do the stock RAILGUN WARNING and the I key. Quieter logs: `[log] verbose =
+false` (CFG.log, logVerbose()) keeps out the `ai:` lines, the flags line on every counter's change, the enemies alive /
+nearest and the intensity scores every 10 s; `ammo: now` comes at most once a minute, `perf:` every 5 minutes; true
+brings them all back.
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES

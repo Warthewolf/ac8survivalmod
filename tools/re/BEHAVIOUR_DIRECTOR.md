@@ -6,8 +6,16 @@ director (P2), tells for every coordinated threat (P3), an intensity director (P
 learning layer (P6), boss phases (P7), late rounds (P8) and ace personalities (P9). They are built on branch
 `TestBranch_Behavioural` (from tag `stable-1`) one unit at a time. Each unit adds a section here: what was built, its
 CFG keys, the log lines a test should look for, and what is untested. The branch ends at Lua 0.72.0 / COOP_TAG
--coop.18 (unit 10); "Test checklist: every unit (P1-P9), in game" is the one list for a playtest of all of it, and the
-last section, "Code review of 2026-10-29", what the review after the build found and changed (fix units F1-F7).
+-coop.18 (unit 10); "Test checklist: every unit (P1-P9), in game" is the one list for a playtest of all of it,
+"Code review of 2026-10-29" what the review after the build found and changed (fix units F1-F7), and the last section,
+"Clean up of 2026-10-29: HUD warnings removed, quieter logs", what the next build changes after the user played 0.72.0.
+
+Read every unit below through that clean up: the tells are radio lines only (no HUD callout of any tell, the ALICORN's
+deck launch or a Ladon's rage; no urgent callout path; the HUD-only tells lancer, skirm and split gone; a sure tell goes
+through the gap and its cooldown instead of showing its callout), every tell is radio_gap_s after the last, and the
+`ai:` lines, the flags line on every change, the enemies alive and nearest and the intensity scores every 10 s need
+`[log] verbose = true` (survival.ini [log]). Unit 4 and the playtest checklist are written for it; the other units'
+"what was built" and review sections are left as they were built, their log-line and checklist items brought up to date.
 
 Labels as in the other RE notes: [V] verified (read in the code or the cooked data, or by an offline test under
 tools/checks), [T] tested in game, [I] inferred. Nothing on this branch has run in game yet: every mechanism here is
@@ -503,75 +511,78 @@ are new: it must come before any co-op build goes to friends).
 
 The thesis' P3: "a radio line (DT_SV_Radio, hard rule 33) or HUD callout before each director action ... add a 1 s
 callout lead. This turns cheap-feeling deaths into readable ones." Built: the tells' catalog and machinery (a new part,
-`Scripts/sv_tells.lua`, global TELL), 59 stock AC8 radio lines cloned into DT_SV_Radio with a remote event each, an
-urgent path in the HUD's callout queue, the co-op channel "tl", and tells wired to the threats that exist today. The
-squad director (P2) and the specials (P7) say their own tells through the same API later; their lines are in the
-catalog already (said by nothing yet). Lua, survival.default.ini and the build (tools/survival_events.py,
-tools/build_survival.py: 61 new remote events, 59 new radio rows; no new flags, world data or imports). No COOP_TAG
-bump of its own (the contract's single bump comes last), but the events and rows are new: that bump must come before
-any co-op build goes out, or an older joiner hears nothing ("not fired" in its tell lines).
+`Scripts/sv_tells.lua`, global TELL), 59 stock AC8 radio lines cloned into DT_SV_Radio with a remote event each, the
+co-op channel "tl", and tells wired to the threats that exist today. The squad director (P2), the specials (P7) and the
+ace squadrons (P9) say their own tells through the same API. Lua, survival.default.ini and the build
+(tools/survival_events.py, tools/build_survival.py: 61 new remote events, 59 new radio rows; no new flags, world data or
+imports). No COOP_TAG bump of its own (the contract's single bump comes last), but the events and rows are new: that bump
+must come before any co-op build goes out, or an older joiner hears nothing ("not fired" in its tell lines).
+
+Radio lines only since the clean up of 2026-10-29 (its own section at the end; user: "remove the hud warnings that we
+added, it's too much, keep the Voice lines though"): unit 4 also built a HUD callout for most tells (ACE REVERSAL,
+WARNING: RAILGUN, VLS LAUNCH, ...; CFG.tells.text) and an urgent path through the HUD's callout queue (a tell's callout
+in front of the queue, cutting the banner short). Both are gone, with the tells that were HUD only (lancer, skirm,
+split); the tables below describe the tells as they are now. The stock RAILGUN WARNING (Mission 18's, below) stays.
 
 ### What was built
 | piece | where | what it does |
 |---|---|---|
-| the radio lines | tools/survival_events.py `TELL_LINES`, `tell_event`; tools/build_survival.py `build_radio` | (group, TextID, SpeakerID, options) for every line: one DT_SV_Radio row each, a group of its own (`SV_Radio_<letters>`, hard rule 17), cloned from Mission 22's AWACS row 382 with only its group, line and speaker changed (the confirmed RADIO_REPLACE route, hard rule 33), LimitPlayCount 0. 'now' lines (the ones an action follows by a short lead: reversal, dive, trap, six, bracket) get StartDelay 0.1 s (the template's 0.6) and Channel InterruptMain (6, Mission 3's row 233). Enemy lines of a named campaign unit speak as a Sotoan fighter (Common_Enemy_Fighter_*), so no squadron's name shows; wingmen's lines (Kate, Coster, Baxter) are left out. The build checks: groups unique and not Mission 22's, letters only, every `<TextID>_Play` in the voice bank (DA_SoundDB_AKB_Voice, now pulled by build_all.sh), row 382 still the template, the table parses back (`radio: 719 rows (7 dropped, 1 replaced, 59 tell lines)`) |
-| the remote events | survival_events.py `build_tells` | RE_SV_Radio<Suffix> for each group: Mission 22's LiveRadioPlayExecution (the shuttle countdown's template), no conditions (hard rule 26). Checked both ways against the Lua runtime: every RE_SV_Radio* Lua names is built, every built one is named in CFG.tells (`events: 592 triggers, 1312 execs`) |
-| the ALICORN's RAILGUN WARNING | survival_events.py `build_alicorn` | RE_SV_AlcnAlertOn / Off: Mission 18's LiveSetRailgunAlertEnable true / false (as VALKA's, hard rule 45), under the Alicorn's own names; forwarded in co-op (each game shows its own) |
-| the catalog | sv_config.lua `CFG.tells` | each tell: its radio events (`radio`: one at random, never the same twice running, or the a-th with pick "a"; `chain`: another tell's line after it), its callout (`hud`, a key of `text`, %s / %d filled from the tell's numbers with `args` "compass" or "clock"), `urgent` (cuts in), its cooldown_s and lead_s. PERSONAL in co-op |
-| TELL | sv_tells.lua | `TELL.say(id, slot, a, b)` (slot nil: this game's player; TELL.ALL: every player; a number: that player, the host only, "tl"; not said: why and a kind, and with TELL.ALL on a host with tells off the send's, so a caller can wait out the joiners' gap: F4's review), `TELL.after(id, slot, fn, ...)` (the action lead_s after the tell, run by `TELL.tick` every 250 ms on the round clock; at once when not said; never with `need`), `TELL.leadS(id)` (0 with this game's tells off, unless it hosts co-op), `TELL.ready(id, slot)`, `TELL.play` (this game only: the joiner's "tl" and the test key end here), `TELL.known(id)`, `TELL.hunted(p)` (the hunt's trigger). Keeps hudCallout and SV_Event as they were before sv_coop.lua wraps them (the contract's exception): a tell never goes out again as the host's "co" callout or "ev" event |
-| rate limiting | sv_tells.lua `classOf`, `wait` | each receiver (this game's player, each joiner the host sends to, "every joiner") on its own: an urgent tell urgent_gap_s (2.5) after the last urgent one; a tell with a queued callout gap_s (4, the banner's own time) after the last such; a radio-only one radio_gap_s (2) after any tell; each id its cooldown_s; none between rounds (a joiner plays the host's anyway: its mirrored state may lag), down at the airfield or over the run's summary. A radio line is never asked for again within line_gap_s (20 s, the cloned rows' RequeueingWaitTime) by whichever tell (`lineFree`, D.tells.evAt, set when its event fired): reversal and kulbit share their two lines, and an ace can kulbit 12 s after its reversal; a tell whose lines are all that recent shows its callout only, or isn't said (kind "line"). Refusals are logged once a round per tell and reason |
-| the urgent callout | sv_hud.lua `hudCallout(text, sub, big, urgent)`, `calloutNext(now)` | an urgent callout (a tell's) goes in front of the queue, in place of a tell still waiting there (one waits at a time), a full queue (4) losing its last callout for it (logged); the next HUD tick puts it up at once, cutting the banner's callout short (put back right after the tell when more than 1.5 s of it was left, a full queue then losing its last, logged; a tell never cuts a tell), for CFG.tells.hud_s (2.5 s). Before, a callout could come up to 16 s late behind four round callouts (the brief). sv_coop's wrapper passes urgent on |
-| co-op | sv_coop.lua `COOP.tell`, the joiner's "tl" handler, KEEP_EVENTS, PERSONAL | "tl" (id, a, b) from the host to a joiner's slot or to every joiner; the joiner plays it only if it knows the id (its own catalog), a / b are finite (or absent), its level is ready, [coop] callouts is on, and at most 4 came that second; dropped, never queued (a late tell misleads). `^RE_SV_Radio` is in KEEP_EVENTS (no "ev", and a joiner refuses one); `tells` is PERSONAL (each player's switches, texts and lines). CFG.tells.enabled is each game's own: a host with tells off still sends "tl" (TELL.say checks it only for its own TELL.play) and its leads stand (TELL.leadS); a joiner with tells off plays none. The host's gaps, cooldowns, leads, hunt_km and wave_from_round decide when a tell is sent |
+| the radio lines | tools/survival_events.py `TELL_LINES`, `tell_event`; tools/build_survival.py `build_radio` | (group, TextID, SpeakerID, options) for every line: one DT_SV_Radio row each, a group of its own (`SV_Radio_<letters>`, hard rule 17), cloned from Mission 22's AWACS row 382 with only its group, line and speaker changed (the confirmed RADIO_REPLACE route, hard rule 33), LimitPlayCount 0. 'now' lines (the ones an action follows by a short lead: reversal, dive, trap, six, bracket) get StartDelay 0.1 s (the template's 0.6) and Channel InterruptMain (6, Mission 3's row 233). Enemy lines of a named campaign unit speak as a Sotoan fighter (Common_Enemy_Fighter_*), so no squadron's name shows; wingmen's lines (Kate, Coster, Baxter) are left out. The build checks: groups unique and not Mission 22's, letters only, every `<TextID>_Play` in the voice bank (DA_SoundDB_AKB_Voice, now pulled by build_all.sh), row 382 still the template, the table parses back (`radio: 721 rows (7 dropped, 1 replaced, 61 tell lines)` with the later units' lines) |
+| the remote events | survival_events.py `build_tells` | RE_SV_Radio<Suffix> for each group: Mission 22's LiveRadioPlayExecution (the shuttle countdown's template), no conditions (hard rule 26). Checked both ways against the Lua runtime: every RE_SV_Radio* Lua names is built, every built one is named in CFG.tells |
+| the ALICORN's RAILGUN WARNING | survival_events.py `build_alicorn` | RE_SV_AlcnAlertOn / Off: Mission 18's LiveSetRailgunAlertEnable true / false (as VALKA's, hard rule 45), under the Alicorn's own names; forwarded in co-op (each game shows its own). The game's own warning, not one of Survival's callouts: it stays |
+| the catalog | sv_config.lua `CFG.tells` | each tell: its radio events (`radio`: one at random, never the same twice running, or the a-th with pick "a"; `chain`: another tell's line after it), `sure` (a boss's phase change, a squadron's first call: through the gap and its cooldown), its cooldown_s and lead_s. PERSONAL in co-op |
+| TELL | sv_tells.lua | `TELL.say(id, slot, a)` (slot nil: this game's player; TELL.ALL: every player; a number: that player, the host only, "tl"; a: the number its line is picked by, the o'clock; not said: why and a kind, and with TELL.ALL on a host with tells off the send's, so a caller can wait out the joiners' gap: F4's review), `TELL.after(id, slot, fn, a, need)` (the action lead_s after the tell, run by `TELL.tick` every 250 ms on the round clock; at once when not said; never with `need`), `TELL.leadS(id)` (0 with this game's tells off, unless it hosts co-op), `TELL.ready(id, slot)`, `TELL.play(id, a, from, force, line)` (this game only: the joiner's "tl" and the test key end here), `TELL.known(id)`, `TELL.hunted(p)` (the hunt's trigger). Keeps SV_Event as it was before sv_coop.lua wraps it (the contract's exception): a tell never goes out again as the host's "ev" event |
+| rate limiting | sv_tells.lua `wait` | each receiver (this game's player, each joiner the host sends to, "every joiner") on its own: radio_gap_s (2) after its last tell of any id (one gap for every tell since the clean up; before it, urgent tells and tells with a queued callout had gaps of their own, so a reversal could come in the same second as a radio-only line); each id its cooldown_s; a sure tell goes through both; none between rounds (a joiner plays the host's anyway: its mirrored state may lag), down at the airfield or over the run's summary, a sure one neither. A radio line is never asked for again within line_gap_s (20 s, the cloned rows' RequeueingWaitTime) by whichever tell (`lineFree`, D.tells.evAt, set when its event fired): reversal and kulbit share their two lines, and an ace can kulbit 12 s after its reversal; a tell whose lines are all that recent isn't said (kind "line"), a sure one neither. Refusals are logged once a round per tell and reason |
+| co-op | sv_coop.lua `COOP.tell`, the joiner's "tl" handler, KEEP_EVENTS, PERSONAL | "tl" (id, a) from the host to a joiner's slot or to every joiner; the joiner plays it only if it knows the id (its own catalog), a is finite (or absent), its level is ready and at most 4 came that second; dropped, never queued (a late tell misleads). `^RE_SV_Radio` is in KEEP_EVENTS (no "ev", and a joiner refuses one); `tells` is PERSONAL (each player's switches and lines). CFG.tells.enabled is each game's own: a host with tells off still sends "tl" (TELL.say checks it only for its own TELL.play) and its leads stand (TELL.leadS); a joiner with tells off plays none. The host's gaps, cooldowns, leads, hunt_km and wave_from_round decide when a tell is sent. ([coop] callouts, the host's banners, gated "tl" too while tells had callouts; no longer) |
 
 Tells wired now (the threats that exist today):
 
-| tell | when | where | to | shows | lead |
+| tell | when | where | to | says | lead |
 |---|---|---|---|---|---|
-| reversal / kulbit | you on a move tier's (Reaper's) tail within 3 km / 70 deg (kulbit within 900 m) | sv_ai.lua ACE.movesTick (host / solo only) | you | "That's a sudden turn - coming straight at you!" or "He's mine!"; ACE REVERSAL / HE'S TURNING INTO YOU (ACE POST-STALL / DON'T OVERSHOOT), urgent; a repeat kulbit (lead_s + 12 s on) told too: cooldown_s kulbit 12 (code review of 2026-10-29: at 20 every other one came untold) | the move (RE_SV_AceTurn_NN / AceKulbit_NN) 1.0 s (0.5 s) after the tell (TELL.after); at once without a tell, as before |
-| hunt | a hunting tier's flight (Reaper: ACE.hunt keeps its target on you) first within hunt_km 8 of you, once a flight a round (the sweep's p.dist of that visit: code review of 2026-10-29, it read the last sweep's, 2 s late) | sv_ai.lua ACE.hunt -> TELL.hunted (not on a joiner) | you | "Hunt down the Wings of Theve ..." or "I see our prey."; YOU ARE BEING HUNTED / ACES CLOSING ON YOU (queued) | - |
-| raid | a raid's, strike's or bombers' callout (the round's first bomber flight) | sv_spawn.lua spawnBomber | everyone | "Joker Flight, enemy aircraft approaching the eastern airfield." (Survival's airfield is Mission 22's eastern one) or two others; radio only (the round's callout stays) | - |
-| jammer / jammer_down | the jammer up; shot down | sv_spawn.lua spawnFlight; sv_main.lua creditKill | everyone | "The enemy's jamming you with a powerful ECM." / "Hostile EW aircraft destroyed! Jamming has been lifted!"; radio only | - |
-| wave | each later wave of a round from wave_from_round 26 (the late rounds' growth) | sv_rounds.lua roundsTick's wave branch | everyone | "New enemy aircraft detected. Look sharp!" or three others; radio only | - |
-| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; WARNING: RAILGUN / BUILD SPEED, THEN BREAK, urgent; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive, when it sinks or when the run restarts (SPC.alicornCleanup, from sv_main.lua's level-load reset). None once both railguns are down (the 2 s parts pass, `ARMS`: a kind seen up and none up now, or gone; looked for again first, `armsLook`, so one found a pass after its siblings isn't silenced with them: F4's review): the warning off at once, no more calls, warnings or orders (code review of 2026-10-29: they came every minute after the player had shot them) | the order's time is unchanged (after a surfacing: below); the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
-| alcn_dive / alcn_up | its dive; counted surfaced | sv_alicorn.lua | everyone | "Enemy submarine diving!" / "Submarine has surfaced. Begin attack!"; radio only (its callouts stay; not on each resurface order) | alcn_up said: the railgun's warning no sooner than radio_gap_s 2 after it, its order lead_s after the warning (code review of 2026-10-29: with an order due under water both lines went out in the same second); nothing said: the order 5 s on, as before |
-| alcn_vls | its VLS volley, until every VLS is down (as the railguns) | sv_alicorn.lua | everyone | "Missile launch from VLS!"; VLS LAUNCH / ALICORN MISSILES INBOUND, urgent | RE_SV_AlcnVolley 1.0 s after (not if it dived, or its VLS went down, meanwhile) |
-| ladon_vls | a Ladon's VLS volley | sv_ladon.lua ladonTick | everyone (the volley's forwarded: each game's copy fires at its own player) | "Large aircraft has launched missile." / "The bomber has launched a missile!"; VLS LAUNCH / LADON MISSILES INBOUND, urgent | 0 (with it: the hatch opens first) |
+| reversal / kulbit | you on a move tier's (Reaper's) tail within 3 km / 70 deg (kulbit within 900 m) | sv_ai.lua ACE.movesTick (host / solo only) | you | "That's a sudden turn - coming straight at you!" or "He's mine!"; a repeat kulbit (lead_s + 12 s on) told too: cooldown_s kulbit 12 (code review of 2026-10-29: at 20 every other one came untold) | the move (RE_SV_AceTurn_NN / AceKulbit_NN) 1.0 s (0.5 s) after the tell (TELL.after); at once without a tell, as before |
+| hunt | a hunting tier's flight (Reaper: ACE.hunt keeps its target on you) first within hunt_km 8 of you, once a flight a round (the sweep's p.dist of that visit: code review of 2026-10-29, it read the last sweep's, 2 s late) | sv_ai.lua ACE.hunt -> TELL.hunted (not on a joiner) | you | "Hunt down the Wings of Theve ..." or "I see our prey." | - |
+| raid | a raid's, strike's or bombers' callout (the round's first bomber flight) | sv_spawn.lua spawnBomber | everyone | "Joker Flight, enemy aircraft approaching the eastern airfield." (Survival's airfield is Mission 22's eastern one) or two others; the round's callout (BOMBER RAID FROM THE <DIRECTION>, stable-1's) stays | - |
+| jammer / jammer_down | the jammer up; shot down | sv_spawn.lua spawnFlight; sv_main.lua creditKill | everyone | "The enemy's jamming you with a powerful ECM." / "Hostile EW aircraft destroyed! Jamming has been lifted!" | - |
+| wave | each later wave of a round from wave_from_round 26 (the late rounds' growth) | sv_rounds.lua roundsTick's wave branch | everyone | "New enemy aircraft detected. Look sharp!" or three others | - |
+| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive, when it sinks or when the run restarts (SPC.alicornCleanup, from sv_main.lua's level-load reset). None once both railguns are down (the 2 s parts pass, `ARMS`: a kind seen up and none up now, or gone; looked for again first, `armsLook`, so one found a pass after its siblings isn't silenced with them: F4's review): the warning off at once, no more calls, warnings or orders (code review of 2026-10-29: they came every minute after the player had shot them) | the order's time is unchanged (after a surfacing: below); the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
+| alcn_dive / alcn_up | its dive; counted surfaced | sv_alicorn.lua | everyone | "Enemy submarine diving!" / "Submarine has surfaced. Begin attack!" (its stable-1 callouts stay; not on each resurface order) | alcn_up said: the railgun's warning no sooner than radio_gap_s 2 after it, its order lead_s after the warning (code review of 2026-10-29: with an order due under water both lines went out in the same second); nothing said: the order 5 s on, as before |
+| alcn_vls | its VLS volley, until every VLS is down (as the railguns) | sv_alicorn.lua | everyone | "Missile launch from VLS!" | RE_SV_AlcnVolley 1.0 s after (not if it dived, or its VLS went down, meanwhile) |
+| ladon_vls | a Ladon's VLS volley | sv_ladon.lua ladonTick | everyone (the volley's forwarded: each game's copy fires at its own player) | "Large aircraft has launched missile." / "The bomber has launched a missile!" | 0 (with it: the hatch opens first) |
 
-Catalogued for later units (lines, events and texts in, said by nothing yet): pincer (4 AWACS lines; TWO GROUPS INBOUND /
-FROM THE %s AND THE %s by compass), split (HUD only), dive (4 lines, urgent, then the o'clock: `chain` clock, 12 lines
-"Bandit at N o'clock!" picked by a; BANDIT DIVING / HIGH, %d O'CLOCK), drag, lure (2 enemy lines), trap (AWACS and enemy,
-urgent), cover_ask (3 "cover me" enemy lines), six (4 lines, urgent), bracket (3 lines, urgent), regroup, lancer and
-skirm (HUD only), alcn_deck (P7). Their lead_s are set (dive, trap, six, bracket 1.0); the bracket salvo's 1 s should
-still be the event package's delay on its salvo records, timed with TELL.leadS("bracket") (frame accurate: hard rule 40).
+The later units' tells (lines and events in the catalog): P2's pincer (4 AWACS lines), dive (4 lines, then the o'clock:
+`chain` clock, 12 lines "Bandit at N o'clock!" picked by a), drag, lure (2 enemy lines: [director.trap] warn's other
+choice), trap (AWACS and enemy), cover_ask (3 "cover me" enemy lines), six (4 lines), bracket (3 lines), regroup; P7's
+alcn_deck, pack, glitch_six, glitch_allout, ladon_rage; P9's <tier>_in and blink. Their lead_s are set (dive, trap, six,
+bracket 1.0); the bracket salvo's 1 s should still be the event package's delay on its salvo records, timed with
+TELL.leadS("bracket") (frame accurate: hard rule 40).
 
 ### CFG keys
 - `CFG.tells` ([tells] in survival.ini; PERSONAL in co-op): `enabled` true (false: no tells here, every action of
-  this game's own tells at once as before; a co-op host still sends its joiners theirs), `radio` true, `hud` true,
-  `hud_s` 2.5, `gap_s` 4.0, `urgent_gap_s` 2.5, `radio_gap_s` 2.0, `line_gap_s` 20 (0: a line may come again at once),
-  `hunt_km` 8.0, `wave_from_round` 26 (0: never).
+  this game's own tells at once as before; a co-op host still sends its joiners theirs), `radio` true (false: no lines,
+  the leads kept), `radio_gap_s` 2.0, `line_gap_s` 20 (0: a line may come again at once), `hunt_km` 8.0,
+  `wave_from_round` 26 (0: never). (`hud`, `hud_s`, `gap_s`, `urgent_gap_s` and `text` went with the clean up.)
 - `CFG.tells.cooldown_s` ([tells.cooldown_s]): reversal 20, kulbit 12 (was 20: ACE.movesTick's kulbit gap is lead_s +
   12 s), hunt 45, raid 30, jammer 30, jammer_down 10, wave 20, alcn_vls 30, ladon_vls 15 (and 0 for the ALICORN's other
   calls; the later units' set too).
 - `CFG.tells.lead_s` ([tells.lead_s]): reversal 1.0, kulbit 0.5, alcn_rail 5.0, alcn_vls 1.0, ladon_vls 0.0 (dive,
   trap, six, bracket 1.0 for P2).
-- `CFG.tells.list`, `CFG.tells.text`: the catalog and its texts (build data and wording; not in the ini).
+- `CFG.tells.list`: the catalog (build data; not in the ini).
 - `CFG.specials.alicorn.rail_alert` ([specials.alicorn.rail_alert]): `enabled` true, `alert_s` 12.
 
 ### Log lines to look for in a test
-- `tell: reversal: RE_SV_RadioTurnA (fired), tell callout 'ACE REVERSAL'`, then about a second later the unchanged
+- `tell: reversal: RE_SV_RadioTurnA (fired)`, then about a second later the unchanged
   `aces: <plane> has you 1500 m behind it, 3 deg off its tail: RE_SV_AceTurn_13 (1), 1 so far`.
 - `tell: raid: RE_SV_RadioRaidB (fired)` and in co-op `tell: raid to every joiner ("tl")`; on the joiner
   `tell: raid (the host's): RE_SV_RadioRaidB (fired)`.
-- `tell: alcn_rail_first: RE_SV_RadioAlcnRailFirst (fired), tell callout 'WARNING: RAILGUN'` with
-  `special: the Alicorn's railgun in 5 s: warned`; a radio event that didn't fire: `... (not fired: <SV_ERR>)`.
-- Refusals, once a round each: `tell: kulbit not said (1.0 s after reversal, its gap 2.5 s)`, `tell: hunt not said
-  (its cooldown, 45 s)`, `tell: bracket not said (down at the airfield)`, `... (between rounds)`,
-  `... (nothing to show: its radio or HUD half is off)`, `... (each of its lines played within line_gap_s 20 s)`.
-- A tell whose lines were all asked for within line_gap_s: `tell: kulbit: no line (each played within line_gap_s),
-  tell callout 'ACE POST-STALL'`.
-- The HUD: `hud: tell 'ACE REVERSAL' / 'HE'S TURNING INTO YOU'`, and `hud: callout '<text>' dropped for a tell (the queue
-  was full)` when four callouts were waiting, `hud: callout '<text>' dropped (a tell cut in)` when the callout a tell
-  cut short went back into a full queue.
+- `tell: alcn_rail_first: RE_SV_RadioAlcnRailFirst (fired)` with `special: the Alicorn's railgun in 5 s: warned`; a radio
+  event that didn't fire: `... (not fired: <SV_ERR>)`.
+- A sure tell through its gap or cooldown: `tell: glitch_allout: RE_SV_RadioGlitchEcm (fired), a sure tell through 0.5 s
+  after reversal, its gap 2.0 s` (`... through its cooldown, 20 s`).
+- Refusals, once a round each: `tell: kulbit not said (1.0 s after reversal, its gap 2.0 s)`, `tell: hunt not said
+  (its cooldown, 45 s)`, `tell: bracket not said (down at the airfield)`, `... (between rounds)`, `... (no line: [tells]
+  radio is off)`, `... (each of its lines played within line_gap_s 20 s)`.
+- Never now: `tell callout '...'`, `hud: tell '...'`, `... its callout '...' shown anyway`, `hud: callout '...' dropped
+  for a tell`.
 - A restart with the ALICORN's RAILGUN WARNING up: `special: the Alicorn's RAILGUN WARNING off with the run`.
 - Its railguns or VLS shot down (code review of 2026-10-29), once each: `special: the Alicorn's railguns are down (2
   found, none up): its RAILGUN WARNING off, no more railgun warnings or orders`, `special: the Alicorn's VLS are down (4
@@ -582,63 +593,64 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
 - Errors: `tell: <id>'s action failed: ...`, `tell: tick error ...`, `coop: tell error ...`.
 
 ### Test checklist (in game)
-1. Every line: Ctrl+0 (test builds) says the catalog's next line, every radio line of every tell in turn, then the
-   HUD-only ones, past the gaps: voice, subtitle and speaker name each (AWACS, or a Sotoan fighter / commander in enemy
-   colours); `test: Ctrl+0, tell line N of 64: <id> <event> (said)`.
+1. Every line: Ctrl+0 (test builds) says the catalog's next line, every radio line of every tell in turn, past the
+   gaps: voice, subtitle and speaker name each (AWACS, or a Sotoan fighter / commander in enemy colours); `test: Ctrl+0,
+   tell line N of M: <id> <event> (said)`. No HUD callout with any of them.
 2. Repeats: the same tell twice within 20 s and again a round later (LimitPlayCount 0, RequeueingWaitTime 20 s on the
    template row: does a group asked again within 20 s play?).
 3. A 'now' line (reversal, six) over a playing line (the MOONCHILD takeoff, the shuttle's countdown): does InterruptMain
    cut in, and does StartDelay 0.1 bring the voice inside the 1 s lead?
-4. An ace reversal (Reaper, round 28+, or Ctrl+6): the call and ACE REVERSAL, the turn about a second later; the HUD
-   banner cut short and the round's callout back after the tell.
+4. An ace reversal (Reaper, round 28+, or Ctrl+6): the call, the turn about a second later; no callout.
 5. The ALICORN (Ctrl+5): the first call 5 s before the first order, the RAILGUN WARNING on until about 12 s after it, off
    at a dive and when it sinks; then log the seconds from RE_SV_AlcnRailgun to the first hit (HIT.tick) and tune
    lead_s / alert_s. The VLS volley a second after its call. After a surfacing "submarine has surfaced" first, the
-   railgun's call 2 s later (not over it). Shoot both railguns (4 missiles each): the RAILGUN WARNING off at once and
-   no WARNING: RAILGUN or call again; every VLS: no more VLS LAUNCH (the `are down` lines).
+   railgun's call 2 s later (not over it). Shoot both railguns (4 missiles each): the RAILGUN WARNING off at once and no
+   railgun call again; every VLS: no more VLS calls (the `are down` lines).
 6. A Ladon round (Ctrl+4): the volley's call with each volley.
 7. A raid (round 3, 6, ...), the jammer ([jammer] chance = 1.0, from_round = 2), a late wave ([rounds] start_round = 26).
 8. Whether the game's own play-by-play "Joker 1! Check your six!" already plays in Survival; if so, the six tell (P2)
    doubles it.
 9. Co-op: a TELL.ALL tell on every game (each from its own catalog), nothing on a joiner while its level loads; no `ev`
    lines for RE_SV_Radio* in a joiner's log; a host with [tells] enabled = false: its joiners still hear theirs, a
-   joiner with it false hears none. (A slot's own tell comes with P2.)
+   joiner with it false hears none.
 10. The ALICORN's RAILGUN WARNING on, then a pause-menu restart: the warning gone in the new run.
 
 ### Offline test
 `sh tools/checks/tells_test.sh` (tools/checks/tells_test.lua, then tools/checks/tells_lines_check.py), on the real
 sv_core, sv_config, sv_ai, sv_hud, sv_spawn, sv_stats, sv_tells, sv_alicorn, sv_ladon and sv_coop (M, mirroredEvent
-exposed):
-1. The catalog: every tell's events RE_SV_Radio<letters>, texts present, chains / args / keys known, the twelve o'clock
-   lines; MODULES order.
-2. The HUD: a tell in front of the queue, replacing a waiting tell, a full queue losing its last (logged); calloutNext
-   cutting a callout short and putting it back (3 s left; into a full queue: its last dropped, logged), not (1 s left),
-   never cutting a tell; hudTick uses it.
-3. Saying: a line at random then the other, the gaps by class (urgent after urgent, radio after any, urgent right after
-   a radio-only one, queued callouts 4 s apart), cooldowns, pick a, the dive's chained o'clock, compass and o'clock texts,
-   a failed event logged, between rounds / at the airfield / over the summary, radio, hud and all off, TELL.ready, the
-   forced line; line_gap_s: the kulbit takes the line its reversal didn't, the reversal its own again 21 s on, both lines
-   recent: the callout only (logged), with hud off not said (kind "line"), a line that didn't fire not counted, pick a,
-   0 = no limit.
+exposed), every hudCallout call counted:
+1. The catalog: every tell a radio line (RE_SV_Radio<letters>), no key but radio / chain / pick / sure, no HUD settings or
+   HUD-only tells left, chains and keys known, the twelve o'clock lines, lure kept for [director.trap] warn; MODULES
+   order.
+2. The HUD: hudCallout as in stable-1 (every callout queued in order, the queue at 4, no urgent path, calloutNext gone,
+   hudTick's banner for callout_s); sv_tells.lua never names hudCallout; the raid's BOMBER RAID FROM THE %s, its NEXT
+   row and ROUND N COMPLETE still in the source.
+3. Saying: a line at random then the other, one gap for every tell (the railgun's call 2 s after "submarine has
+   surfaced", no longer in the same second), cooldowns, pick a, the dive's chained o'clock, a failed event logged,
+   between rounds / at the airfield / over the summary, radio and all off, TELL.ready, the forced line, not one callout;
+   sure tells: through the gap (logged) and the cooldown, not within line_gap_s, not between rounds, at the airfield,
+   over the summary or with tells off; line_gap_s: the kulbit takes the line its reversal didn't, the reversal its own
+   again 21 s on, both lines recent: not said (kind "line"), a line that didn't fire not counted, pick a, 0 = no limit.
 4. The lead: an action 1 s after its tell (not at 0.75 s), at once unsaid, never with need, lead 0, a failing action
    logged, tells off, dropped with D.
 5. The wiring: ACE.movesTick's reversal (tell, then RE_SV_AceTurn_13 1 s later) and kulbit (0.5 s), at once with tells
    off; ACE.hunt's tell within 8 km once a flight a round, a second flight in the cooldown marked done, none on a joiner;
    the ALICORN second by second (call and warning at 95 for the order at 100, warning off at 112, the volley's call at
    130 and the volley at 131, the next call at 155, a dive at 157 turning it off, no order while dived, the sink turning
-   it off, rail_alert off, tells off: the warning with the order, SPC.alicornCleanup turning it off once and the
-   level-load reset calling it); a Ladon's volley after its call; raid, jammer,
-   jammer_down, wave, TELL.tick and Ctrl+0 by their place in the source. The code review of 2026-10-29 added: the
-   Reaper's next kulbit 12.5 s on told too, cooldown_s kulbit within ACE.movesTick's 12 s gap; stats_test: the sweep's
-   ACE.hunt reading that visit's p.dist; bosses_test: the railguns' and VLS' tells and orders stopping once they're
-   down, and the calls after a surfacing kept apart (unit 9's offline list).
-6. Co-op: a host's tell inside its mirrored rounds sends no "co" / "ev" (a round callout and the railgun warning still
-   do); TELL.ALL plays here and sends "tl" to every joiner; a slot's tell goes to that slot only, with its own gaps;
+   it off, rail_alert off, tells off: the warning with the order, its only callouts stable-1's THE ALICORN IS DIVING and
+   ... IS SINKING, SPC.alicornCleanup turning it off once and the level-load reset calling it); a Ladon's volley after
+   its call; raid, jammer, jammer_down, wave, TELL.tick and Ctrl+0 by their place in the source; ROLE.spawned with no
+   call-out, the deck launch and a Ladon's rage with their radio calls and no callout. The code review of 2026-10-29
+   added: the Reaper's next kulbit 12.5 s on told too, cooldown_s kulbit within ACE.movesTick's 12 s gap; stats_test:
+   the sweep's ACE.hunt reading that visit's p.dist; bosses_test: the railguns' and VLS' tells and orders stopping once
+   they're down, and the calls after a surfacing kept apart (unit 9's offline list).
+6. Co-op: a host's tell inside its mirrored rounds sends no "ev" and no callout (a round callout and the railgun warning
+   still go); TELL.ALL plays here and sends "tl" to every joiner; a slot's tell goes to that slot only, with its own gaps;
    with the host's tells off both still go, its lead stands (alcn_vls' action 1 s on) and nothing plays on the host;
-   numbers sent, a NaN not; COOP.tell refuses bad slots and ids; the wrapper passes urgent on; the joiner drops a tell
-   while loading, plays the host's from its own catalog, drops unknown or long ids and huge numbers, at most 4 a second,
-   none with [coop] callouts off or its own tells off, plays one while its mirrored state still says "wait", and tells
-   no one else.
+   its number sent (one only), a NaN not; COOP.tell refuses bad slots and ids; the wrapped hudCallout takes stable-1's
+   three arguments; the joiner drops a tell while loading, plays the host's from its own catalog with no callout, drops
+   unknown or long ids and huge numbers, at most 4 a second, still plays one with [coop] callouts off, none with its
+   own tells off, plays one while its mirrored state still says "wait", and tells no one else.
 7. tells_lines_check.py: TELL_LINES' groups letters only and whole FNames, TextIDs and speakers well formed, every event
    named by the Lua catalog and back (the build checks the same, plus every voice in the bank).
 The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv_tells (TELL nil: the move at once).
@@ -667,6 +679,7 @@ The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv
   A run left from the level doesn't fire RE_SV_AlcnAlertOff (the level and its HUD go with it); a restart does.
 
 ### Review fixes (after unit 4's review; not yet run in game)
+(As made then; the callouts named here went with the clean up of 2026-10-29.)
 1. CFG.tells.enabled is each game's own, as the ini always said (tells are PERSONAL): a co-op host with tells off no
    longer silences its joiners. TELL.say checks the switch only for this game's own TELL.play; the host still sends
    "tl" (to a slot or every joiner), TELL.leadS keeps its leads on a host, TELL.after waits its lead whenever the tell
@@ -766,7 +779,8 @@ last), but the world data, rows and events changed: that bump must come before a
   short; `an ace round's mix` in an ace round); each spawn `round 10: ERA_Unit_03_Dep_Air1 [lancer] as f15c_common_svb
   (lancer, ...), 21 km out at bearing 140, 5.3 km up: 4 aircraft up`; `roles: no skirm airframe yet in round 2; its
   flights fly wolf's`.
-- Tells: sv_tells.lua's `tell: lancer: ... tell callout 'BANDITS HIGH'` and `tell: skirm: ...`, once a round each.
+- (No tells of their own since the clean up of 2026-10-29: `lancer` / `skirm` were HUD only, BANDITS HIGH and LONG-RANGE
+  SHOOTERS, and went with the HUD warnings, [roles] tells with them.)
 - The Wolf trap: `roles: ERA_Unit_05_Dep_Air1 (wolf) trap 3 s after its orders: held B, D`
   (a co-op host down at the airfield with another player flying: `... trap 3 s after its orders, you down at the airfield
   (1 other player flying): held B, D`), then one of
@@ -780,7 +794,7 @@ last), but the world data, rows and events changed: that bump must come before a
   <unit> held its Wolf trap 481 s; it doesn't go after the joiners`).
 - Health: `late: round 5 enemies' health x0.75 (skirm x0.75) (<plane>: 600 -> 450)` (once a round per role); on a
   co-op joiner no `ht` goes to the host for it (the host's log shows no "wingmate" damage on a fresh Skirmisher).
-- `ai:` lines by role: a Lancer's short PursueTarget then a long MoveAwayFromTarget; a Skirmisher's MoveAwayFromTarget
+- `ai:` lines (with [log] verbose) by role: a Lancer's short PursueTarget then a long MoveAwayFromTarget; a Skirmisher's MoveAwayFromTarget
   right after a launch; a held Wolf wing in FollowFormation (or Patrol) until freed, then PursueTarget. Errors:
   `roles: setup error`, `roles: level load error ... roles off this level`, `roles: wolf error ...`.
 
@@ -797,8 +811,8 @@ last), but the world data, rows and events changed: that bump must come before a
    again a second after it ends. Its guns lead you (gun hits while you jink).
 4. A Skirmisher flight ([roles.mix] skirm = 1, 1, 1, round 9+): a LAAM from 5-7 km, the break-off as it launches (ai:
    MoveAwayFromTarget right after), back ~12 s later; never closes inside ~3 km; dies quicker (x0.75).
-5. Mixed rounds 1, 4, 10, 20: the `roles: round N` line's shares; the first Lancer / Skirmisher callout once a round;
-   the jammer ([jammer] chance = 1.0, from_round = 2) only on a duelist or Skirmisher flight; a raid's escorts never
+5. Mixed rounds 1, 4, 10, 20: the `roles: round N` line's shares; no Lancer / Skirmisher callout (the clean up); the
+   jammer ([jammer] chance = 1.0, from_round = 2) only on a duelist or Skirmisher flight; a raid's escorts never
    Wolf flights.
 6. Roles off ([roles] enabled = false, restart): every role row `flies NLID_SV_Fighter`, `roles: off; ... (the Lancer
    units keep their 9 km band)`, no `roles: round` lines: the old game but for that band. The six Lancer units
@@ -986,7 +1000,8 @@ for a flight the co-op host had sent after the joiners (COOP.hunted) or one aime
   (a row listed there never fires the salvo).
 - Each round: `director: round 12's budgets (from round 10): cover 2, trap 2, bracket 1, top_cover 1, pincer 1, regroup 1`
   (`; cover and trap x1.50 (your tail chasing)` once P6 sets its counter).
-- Each tactic: STATS.tactic's `director: round R +T s: <tactic> on <unit> (n planes)[, player N] (<why>); callout "<tell>"`
+- Each tactic: STATS.tactic's `director: round R +T s: <tactic> on <unit> (n planes)[, player N] (<why>); told "<tell>"`
+  (`callout "<tell>"` before the clean up of 2026-10-29)
   (bracket and pincer `on the round`, the planes named in the why), then its action:
   `director: cover: RE_SV_AceTurn_05 fired` (a joiner: `director: cover for player 2: RE_SV_Hunt_05 fired`),
   `roles: <unit> (wolf) trap freed (the director's spring: you chased bait A): B, turned onto the player`,
@@ -1001,8 +1016,10 @@ for a flight the co-op host had sent after the joiners (COOP.hunted) or one aime
   end` / `...: its orders back at the decoy's end`, then `director: <unit> back in the fight (<why>, after your decoy): ...`,
   `director: pincer: wave N's flights didn't come from two sides (...): no pincer, not counted`, `coop: player N brought
   up to date: RE_SV_DirHold_07` (a joiner who linked during a hold).
-- The tells, unit 4's: `tell: cover_ask: RE_SV_RadioEnCoverA (fired)`, `tell: six: ..., tell callout 'BANDIT CUTTING IN'`,
-  `hud: tell 'BANDIT DIVING' / 'HIGH, 3 O'CLOCK'`, `tell: dive: RE_SV_RadioDiveB (fired), then RE_SV_RadioClockC (fired)`, ...
+- The tells, unit 4's (radio lines only): `tell: cover_ask: RE_SV_RadioEnCoverA (fired)`, `tell: six: RE_SV_RadioSixB
+  (fired)`, `tell: dive: RE_SV_RadioDiveB (fired), then RE_SV_RadioClockC (fired)`, ... Two tells are radio_gap_s 2
+  apart (one gap for all since the clean up): the cover's six comes 2 s after its ask (3.5 s on the tail with ask_s 1.5,
+  tail_s 3; `director: cover not now (its tell can't be said now)` at 3 s), the trap's spring 2 s after the drag.
 - Held back (once a round per tactic, player and kind of reason): `director: cover not now (its budget, 1 of 1 this
   round)`, `(its cooldown, 12 s more)`, `(the director's gap, 2.0 s after its last)`, `(no flight within 6 km to cover
   <plane>)`, `(its tell can't be said now)`; `director: top cover: <unit> waits for another flight up (the only one; 2
@@ -1018,19 +1035,19 @@ for a flight the co-op host had sent after the joiners (COOP.hunted) or one aime
   `director: wave error`, `director: pincer error`.
 
 ### Test checklist (in game)
-1. Round 3+: get on a fighter's tail and stay there 3 s with another duelist flight within 6 km: "Someone cover me!",
-   then BANDIT CUTTING IN, and a second later that flight turns in (`ai:` lines: UniqueAction). Its kill pays
-   `director cover x1.5` within 20 s.
-2. Wolf flights ([roles.mix] wolf = 1, 1, 1): chase a bait 2.5 s: HE'S DRAGGING YOU at 1 s, IT'S A TRAP at 2.5 s, its
-   own wingman (held: FollowFormation) turns onto you a second later (`ai:` PursueTarget / UniqueAction).
-3. Round 5+: two fighters coming at you from about 90 deg apart within 4 km: MISSILES FROM TWO SIDES, two missile
-   alerts a second later. Check the main-menu salvo line first; whether a forced shot needs a lock is the open question.
+1. Round 3+: get on a fighter's tail and stay there 3.5 s with another duelist flight within 6 km: "Someone cover me!",
+   then a check-your-six call 2 s later, and a second after it that flight turns in (`ai:` lines with [log] verbose:
+   UniqueAction). Its kill pays `director cover x1.5` within 20 s.
+2. Wolf flights ([roles.mix] wolf = 1, 1, 1): chase a bait 3 s: "he's dragging you" at 1 s, "it's a trap" at 3 s (2 s
+   after it), its own wingman (held: FollowFormation) turns onto you a second later (`ai:` PursueTarget / UniqueAction).
+3. Round 5+: two fighters coming at you from about 90 deg apart within 4 km: a "missiles from two sides" call, two
+   missile alerts a second later. Check the main-menu salvo line first; whether a forced shot needs a lock is the open question.
 4. Lancers ([roles.mix] lancer = 0.5): a Lancer flight holds (no attack; `ai:` FollowFormation / Patrol) until you've
-   fought another flight ~3 s (it's held 8 s+), then BANDIT DIVING / HIGH, n O'CLOCK (the o'clock right?) and it
-   attacks. Shoot one while it waits: it comes at once, no tell.
-5. Round 5+ waves ([director.pincer] chance = 1.0): TWO GROUPS INBOUND / FROM THE x AND THE y, contacts from two sides
-   12-18 km out (the minimap), none from behind with ahead = true.
-6. Round 10+: shoot two of a 4-ship: BANDITS REGROUPING, they break off ~7 s, then come back.
+   fought another flight ~3 s (it's held 8 s+), then a diving-bandit call and "Bandit at n o'clock!" (the o'clock
+   right?) and it attacks. Shoot one while it waits: it comes at once, no tell.
+5. Round 5+ waves ([director.pincer] chance = 1.0): an AWACS call of two groups, contacts from two sides 12-18 km out
+   (the minimap), none from behind with ahead = true.
+6. Round 10+: shoot two of a 4-ship: a regroup call, they break off ~7 s, then come back.
 7. Perf: the `perf:` line's director worst under ~3 ms with 26+ planes up.
 8. Co-op (a host and a joiner): the joiner tails a fighter: the tell on the joiner only, a hunt (`ai:` target = the
    joiner's stand-in); a bracket around the joiner: its own copies fire (`coop: director RE_SV_Salvo_... fired here`),
@@ -1234,7 +1251,8 @@ plus two kills a minute (60).
 - Not PERSONAL in co-op: a joiner's scores are weighed with the host's settings (they arrive with the host's "cf").
 
 ### Log lines to look for in a test
-- Every log_s 10 s of a fight (each game): `intensity: round 12: you 34 (damage 12% of your health in 30 s, 1 missile on
+- With `[log] verbose = true` (the clean up of 2026-10-29: off by default), every log_s 10 s of a fight (each game):
+  `intensity: round 12: you 34 (damage 12% of your health in 30 s, 1 missile on
   you, 3 enemies within 5 km, health 81%), comfort 55 (on a tail 8 s of 30, 2.0 kills a minute)`; the host adds
   `; player 2 71, comfort 20`, `; holding wave 3 (12 s more)`, `; level 1 (the spikes' 2)`.
 - The hold: `intensity: round 12: held 17 s (player 2 at intensity 86, above 80 for 24 s): wave 3 wait; the room: you
@@ -1251,7 +1269,7 @@ plus two kills a minute (60).
 - hold.tactics: `director: cover not now (under pressure: intensity 84)` (trap, bracket the same).
 - A push: `intensity: you comfortable 20 s (comfort 60, intensity 3): ERA_Unit_02_Dep_Air1 turns onto you (7.0 km off)`
   or `...: held ERA_Unit_03_Dep_Air0 dives on you (10.2 km off)`; STATS' `director: round 6 +40 s: push on
-  ERA_Unit_02_Dep_Air1 (2 planes) (the intensity director: you comfortable 20 s (...); ... turns in); callout "six"`;
+  ERA_Unit_02_Dep_Air1 (2 planes) (the intensity director: you comfortable 20 s (...); ... turns in); told "six"`;
   `director: push: RE_SV_AceTurn_05 fired` (a joiner: `director: push on player 2: RE_SV_Hunt_05 fired` and the
   TargetActor line). Held back: `intensity: you comfortable ...: no push (its cooldown, 20 s more)` / `(its 2 this
   round)`, `...: nothing sent (no flight within 8 km may turn onto you)` / `(the squad director is off ([director]
@@ -1273,7 +1291,7 @@ plus two kills a minute (60).
   (held back n), level eased D, back up U` and a row per round (avg, peak, hot s, comfort, held, held s, pushes, level).
 
 ### Test checklist (in game)
-1. The scores: fly a normal round 8+ and read the 10 s lines against what happened: damage % after a hit, `N missiles on
+1. The scores ([log] verbose = true): fly a normal round 8+ and read the 10 s lines against what happened: damage % after a hit, `N missiles on
    you` while the missile alert sounds (this checks the TargetToHome read), enemies within 5 km, comfort rising while
    you sit on a tail with kills. A missile counts when its TargetToHome is your pawn; only one whose TargetToHome can't
    be read (or isn't a valid object) falls back to counting within 1 km. So 0 throughout with alerts means the read
@@ -1284,14 +1302,14 @@ plus two kills a minute (60).
    the rest down to 4: the `held N s ... wave 2 wait` line comes at that kill (not before, however long you were hot),
    with `waits for the intensity hold`; wave 2 only after the hold (its `wave 2 of N` line 15-20 s after the `held`
    line). Not again within 20 s (`hold not now ... wave 3 comes`). While pressed, a wave's flights ~6 s apart, not 3.
-3. A push: round 3+, health above 70 %, kill steadily or sit on a tail: after ~20 s BANDIT CUTTING IN and a flight turns
-   onto you (`ai:` UniqueAction); its kill pays `director push x1.5`. With Lancers held ([roles.mix] lancer = 0.5): the
-   top cover dives instead (BANDIT DIVING / HIGH, n O'CLOCK).
+3. A push: round 3+, health above 70 %, kill steadily or sit on a tail: after ~20 s a check-your-six call and a flight
+   turns onto you (`ai:` UniqueAction); its kill pays `director push x1.5`. With Lancers held ([roles.mix] lancer =
+   0.5): the top cover dives instead (a diving-bandit call and its o'clock).
 4. The level: round 15+ ([spikes] on), stay under heavy pressure 30 s: `the room above 80 ... level 1`, the next flights'
    rows `_svb` instead of `_svc`, the `level 1 on the enemies up` line; ease off for 60 s: back to 2. Round 26+: the
    `pressure: ... preset B (was C, ...)` line with it, and fewer enemies pressing you at once.
-5. hold.tactics: while pressed, tail a plane 3 s: no BANDIT CUTTING IN (`cover not now (under pressure ...)`).
-6. Co-op (a host and a joiner): the host's score lines list `player 2 N, comfort C` (the joiner's "in"); a hold named
+5. hold.tactics: while pressed, tail a plane 3 s: no cover call (`cover not now (under pressure ...)`).
+6. Co-op (a host and a joiner): with [log] verbose the host's score lines list `player 2 N, comfort C` (the joiner's "in"); a hold named
    after player 2; a push on player 2 (the tell on the joiner only, `ai:` target = their stand-in); the joiner's `the
    host's difficulty level` line once the host eases.
 7. Off: [intensity] enabled = false (or each lever's): no `intensity:` lines, the waves and spikes as before.
@@ -1778,12 +1796,13 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
 - `special: the Anomaly's guards (SV_Ace_anomaly_f04e_W_SV) fly NLID_SV_WolfWing (its pack)` (main menu), or `... keep
   NLID_SV_Fighter (their set NLID_SV_WolfWing isn't in)`
 - `special: MINDRIPPER's pack: your controls scrambled 2.5 km from it; PHANTASM springs in 1.5 s (told)` and the tell's
-  `tell: pack: RE_SV_RadioTrap (fired), tell callout 'THE PACK SPRINGS'`; or `(its callout only: <why>)` with
-  `tell: pack not said (<why>): a sure tell, its callout 'THE PACK SPRINGS' shown anyway`
+  `tell: pack: RE_SV_RadioTrap (fired)` (a sure tell: `..., a sure tell through <its gap or cooldown>`); or `(not told:
+  <why>)` with tells off, within its lines' line_gap_s or at the airfield (no callout in its place since the clean up of
+  2026-10-29: it said `its callout only` then)
 - `special: MINDRIPPER's pack not sprung (its event not fired); armed again in 20 s` (after `special:
   RE_SV_AnomalyPackSpring not fired: ...`)
 - `special: MINDRIPPER's pack sprung (N): PHANTASM loose on you (LastTGT), 4 of 4 guards up, ...`; then the guards'
-  `ai:` lines (CFG.ai_watch) should show them leave the 2 km area and go UniqueAction
+  `ai:` lines (CFG.ai_watch, with [log] verbose) should show them leave the 2 km area and go UniqueAction
 - `special: MINDRIPPER's pack held: back round MINDRIPPER N s after it sprang (N s out of the field)`,
   `special: MINDRIPPER's pack: you left the field first; not sprung`, `... every guard down (N springs)`
 - `special: round R, MINDRIPPER shot down N s after it appeared (its pack sprang N times)`
@@ -1799,8 +1818,8 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
 - `special: AB.L..IN's ECM pods off: 1 of 1 (jamming/support true/true -> false/false)`; none its own (once, then the
   line above when one is): `special: AB.L..IN's ECM pods off: none of its own found (N BP_wp_ecm_a0 up, none its own by
   owner or instigator); looked for again every ecm_check_s`
-- tells off, a sure tell at the airfield / between rounds / over the summary: `tell: glitch_allout not said (down at the
-  airfield)` (no callout)
+- a sure tell at the airfield / between rounds / over the summary: `tell: glitch_allout not said (down at the
+  airfield)`; with tells off nothing (no callout in its place now)
 - `special: AB.L..IN's guns all out: you 1.0 km off its nose (6 deg)`, `special: AB.L..IN LastTGT N (1), you behind it, ...`;
   a co-op host: `special: AB.L..IN's phase-3 gun events on the host alone (its joiners' copies fire their own)` (once)
 - `special: round R, AB.L..IN shot down ... (F frenzies, B blinks; phase 3, N blinks behind you, T LastTGT)`
@@ -1820,34 +1839,35 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
 
 ### Test checklist (in game)
 1. MINDRIPPER (a test build's Anomaly key, or a run to an Anomaly round): fly into its field and stay: the ambush call
-   and THE PACK SPRINGS, then 1.5 s later the guards break off it and come at you (ai: UniqueAction, then
+   (no callout), then 1.5 s later the guards break off it and come at you (ai: UniqueAction, then
    PursueTarget); leave the field for 4 s+ (12 s+ after the spring): they go back round it. Are the guards gunfighters
    near you on the Wolf trap's set (their guns lead 0.85 s)? Too much while scrambled: raise spring_delay_s, or lower
    hold_after_s.
-2. AB.L..IN (a glitch round): hit it twice, let both frenzies run out: IT'S ON YOUR SIX, and the next frenzy's blinks
+2. AB.L..IN (a glitch round): hit it twice, let both frenzies run out: a check-your-six call, and the next frenzy's blinks
    come in behind you (the blink check line: 500 / 800 m behind, flight path toward you). Fair? behind_share.
 3. ... first, phases 1-2's ECM: its jamming ring up the whole time before 35 % (as hard rule 40's test; ecm_row is off,
-   so this is the confirmed row and event). Then bring it under 35 %: ITS ECM IS DOWN, the radar's jamming ring gone
+   so this is the confirmed row and event). Then bring it under 35 %: "it's not jamming anymore", the radar's jamming ring gone
    within ~2 s and not back (a flicker every 14 s, at most ecm_check_s long, is the row's next pod before the check),
    your missiles track; in front of it within 1.5 km its gun fires, beside or behind it it doesn't, and it reverses onto
    you (LastTGT) every 10 s and when you get behind it. The ring back for good means the pods-off write didn't take
    ("ECM pods off: ... -> true/true"): send the line; ecm_row = true (a game restart) is the other lever.
-4. A Ladon round: shoot one down: <NAME> ENRAGED, "the hostile's changed course", its volleys 25 s apart; at its next
+4. A Ladon round: shoot one down: "the hostile's changed course" (no ENRAGED callout now), its volleys 25 s apart; at its next
    pass over the airfield it flies the tighter circuit (minimap) and keeps bombing once a lap, not every second (hard
    rule 35's symptom), and doesn't turn back west (its area holds the circuit).
-5. An ALICORN round: 22 s in "planes launching from the carrier" and PLANES LAUNCHING, 25 s in a 2-ship appears off
+5. An ALICORN round: 22 s in "planes launching from the carrier" (no callout now), 25 s in a 2-ship appears off
    its bow at ~1200 m and gets its orders (no "never got its orders"); a Skirmisher's LAAM from 7 km. No more than two of
-   its flights up at once, and with two up no PLANES LAUNCHING until one is down (then the call, 3 s later the launch);
+   its flights up at once, and with two up no call until one is down (then the call, 3 s later the launch);
    none while it's dived; one 6 s after it surfaces. They don't hit the hull or the sea, and don't turn away to climb
    or go back to their unit area right after the launch (AvoidObstacle / ReturnToWorld / ReturnToUnit in the ai: lines
    would say so; alt_m, ahead_m).
 6. Co-op (a host and a joiner): the joiner alone in MINDRIPPER's field doesn't spring the pack; the host's spring turns
    the guards onto the host only; AB.L..IN's phase 3 ECM drop shows on the joiner's radar too (the joiner's log: "coop:
    AB.L..IN in its phase 3 on the host ..."); the deck flights appear on the joiner's game.
-7. Tells off (survival.ini [tells] enabled = false): THE PACK SPRINGS, IT'S ON YOUR SIX and ITS ECM IS DOWN still show
-   (callouts only, no radio), but not while you're down at the airfield, between rounds or over the summary.
-8. An ALICORN round (code review of 2026-10-29): destroy both railguns (and every VLS): no more railgun warnings, RAILGUN
-   WARNING, VLS LAUNCH or volleys. Does a destroyed railgun or VLS read HealthInternal 0, or go (`0 found`)? Either
+7. Tells off (survival.ini [tells] enabled = false): no pack, phase 2 or phase 3 call, and no callout in their place
+   (the clean up of 2026-10-29); the phases come all the same. Tells on, a phase change right after another tell: its
+   call comes anyway (a sure tell through the gap).
+8. An ALICORN round (code review of 2026-10-29): destroy both railguns (and every VLS): no more railgun calls, RAILGUN
+   WARNING, VLS calls or volleys. Does a destroyed railgun or VLS read HealthInternal 0, or go (`0 found`)? Either
    counts as down; one that stays above 0 while wrecked would keep its tells (the `are down` line never comes). The
    `found:` lines should say 2 railguns and 4 VLS; fewer, or a `more found` line, means some appear after the
    first parts pass (looked for again before a kind counts as down).
@@ -2043,9 +2063,9 @@ objects), offsets 1000 m round, yaw facing back.
   `aces: ERA_Unit_02_Dep_Air1 (Wraith squadron, duelist) opens with blink at first contact (within 4.0 km); its lead
   blinks off your six (every 20 s at most)`; `aces: <unit> (Wraith squadron, lancer) can't show blink (a blink needs a
   duelist flight's lead): it opens with a kulbit`
-- `aces: <unit> (Inferno squadron) meets you 2.2 km off (BP_...): told (demon_in); its kulbit in 0.5 s` (or `demon_in's
-  callout only: <why>`, `... meets player 2 ...`), with `tell: demon_in: RE_SV_RadioTurnA (fired), tell callout
-  'INFERNO: POST-STALL ACES'`
+- `aces: <unit> (Inferno squadron) meets you 2.2 km off (BP_...): told (demon_in); its kulbit in 0.5 s` (or `demon_in not
+  told: <why>`, `... meets player 2 ...`), with `tell: demon_in: RE_SV_RadioTurnA (fired)` (a sure tell: `..., a sure
+  tell through ...` right after another tell; no INFERNO: POST-STALL ACES callout since the clean up of 2026-10-29)
 - `aces: <unit> (Inferno squadron) kulbits as one: RE_SV_AceKulbit_NN fired`
 - `aces: <unit>'s opening salvo: RE_SV_Salvo_08A fired` then `... RE_SV_Salvo_08B fired`; `... on player 2's copies
   ("dv"): RE_SV_Salvo_08A sent, ...`; `... none of its planes can fire at you (range, missile slot)`
@@ -2079,19 +2099,19 @@ spawnFlight's opener (Bounty high on a Lancer flight and 2 km higher off one, at
 Wolf 6-ship; Inferno filled into a Wolf flight: no hold; Harvest's openers in turn, a blink skipped on a Lancer flight;
 Wraith off the duelists: a kulbit, logged; an ordinary flight clearing the entry; personality off; openers none: its
 tell alone); first contact
-(not before the opener's km; the squadron tell with its name, then its opener lead_s later; once a flight; the round's
+(not before the opener's km; the squadron tell (a radio line, no callout), then its opener lead_s later; once a flight; the round's
 second flight with the opener's own tell); Bounty's salvo (the two nearest able planes, gap_s apart; none with the
-missiles in another slot); Valkyrie's trap (sprung spring_s later after IT'S A TRAP, free + turn on B, D, F; waiting
+missiles in another slot); Valkyrie's trap (sprung spring_s later after its trap tell, free + turn on B, D, F; waiting
 while pending; the pack's reversal off a Wolf flight); Wraith's blink opener (135 / 225 deg, smoke, its cooldowns; the
 ground: dead six, or none); the blink tick (not 90 deg off its tail, on its six, every_s, a hit; Harvest: the blink
 first, its reversal held move_gap_s, then the reversal; no blink on a hit); your decoy; personality off; the round
-line's counts; co-op (the keep list; a joiner meeting Bounty: mercenary_in by "tl" with the tier's index, the salvo by
-"dv"; a joiner meeting Wraith: its tell, no blink; a joiner's game: nothing); the tells' squadron text (a renamed
-squadron, a tier off the list); the hooks by their place. Then stats_report.py on its log (its squadron lines) and the
+line's counts; co-op (the keep list; a joiner meeting Bounty: mercenary_in by "tl" (its id only now), the salvo by
+"dv"; a joiner meeting Wraith: its tell, no blink; a joiner's game: nothing); the squadron tells radio lines only (sure, no
+text: the clean up of 2026-10-29; the squadron-named text checks went with it); the hooks by their place. Then stats_report.py on its log (its squadron lines) and the
 build's half (WRAITH_BLINK_* against ACE.BLINK, 48 names on the 6 duelist flights in letters, each once, the pool
 letters as Lua's poolIndex, the Lua and the keep list naming them, COOP_TAG -coop.18). Mutants that each fail it: no
 move_gap after a blink, Valkyrie's trap not held, the blink not kept in co-op, the squadron tell on every flight, no
-ground clearance, the tailed blink without its cone. tells_test (args "squadron") and roles_test (an ace round: the
+ground clearance, the tailed blink without its cone. tells_test (the catalog) and roles_test (an ace round: the
 Bounty squadron's Lancers; personality off: ace_mix's duelists) were updated for it. After the review (WOLF.tick
 running): a Valkyrie trap still held 87 s on without a contact and sprung when met at 190 s; let go 60 s after the
 contact (or the hold, the later) when its spring never comes (your decoy); let go hold_max_s after the hold when nobody
@@ -2163,11 +2183,13 @@ when every_s is over, one for a hit after it (each fails on the code before the 
 
 ## Test checklist: every unit (P1-P9), in game
 
-One list for a playtest of TestBranch_Behavioural (Lua 0.72.0, COOP_TAG -coop.18), by proposal: what to look at, and
-the log lines (AC8SurvivalMode_lua.log, or UE4SS.log behind its tag) that prove it. Run
+One list for a playtest of TestBranch_Behavioural (Lua 0.72.0, COOP_TAG -coop.18; the clean up of 2026-10-29 below), by
+proposal: what to look at, and the log lines (AC8SurvivalMode_lua.log, or UE4SS.log behind its tag) that prove it. Run
 `python -X utf8 -I tools/checks/stats_report.py <log>` on the log afterwards: it tabulates most of them. Each item's
 switch is in survival.ini (a restart where a row or set is made at the main menu). Each unit's own section above has
-the details.
+the details. Since the clean up of 2026-10-29 the tells are radio lines only (no HUD warning comes with any of them),
+and the log's periodic lines (`ai:`, the flags, the enemies alive and nearest, the intensity scores every 10 s) come only
+with `[log] verbose = true`: set it in survival.ini for this test, as several items below read `ai:` lines.
 
 **0. The build and the measurements (unit 1)**
 - Main menu: every `behaviour: set NLID_SV_<X> in (...)` (Fighter, Lancer, WolfLead, WolfWing, Skirmisher) and `game Lua:
@@ -2178,39 +2200,58 @@ the details.
 - Each round's `stats: round N (...)` a few seconds after its clear, `kill-time:` lines, `death:` at death, `stats: run
   over (...)` at the end; the seven metrics against their targets in stats_report's run table.
 
+**The clean up (2026-10-29)**
+- No HUD warning from a tell: ACE REVERSAL, WARNING: RAILGUN, VLS LAUNCH, BANDIT CUTTING IN, IT'S A TRAP, THE PACK
+  SPRINGS, the squadrons' names, BANDITS HIGH, LONG-RANGE SHOOTERS, PLANES LAUNCHING, <NAME> ENRAGED and the rest never
+  show; their radio lines still play (`tell: <id>: RE_SV_Radio<X> (fired)`, never `tell callout`, never `hud: tell`).
+- Still there, as in stable-1: ROUND N / HOSTILES INBOUND, ROUND N COMPLETE, the specials' own callouts (THE ALICORN IS
+  DIVING, LADONS FROM THE WEST, ...), a raid's BOMBER RAID FROM THE <DIRECTION> and its NEXT row `RAID: N BOMBERS FROM THE
+  <DIRECTION>`, the stock RAILGUN WARNING 5 s before the ALICORN's shot, the I key's info rows.
+- Two tells never within radio_gap_s 2 of each other now (one gap for all of them): the director's cover turns in about
+  half a second later than before (its "check your six" 2 s after "cover me"), the Wolf trap's spring likewise (2 s after
+  "he's dragging you"); a boss's phase change and a squadron's first call (sure tells) come through the gap
+  (`tell: <id>: ..., a sure tell through ...`).
+- With `[log] verbose = false` (the default) over a few rounds: no `ai:`, `enemies: nearest`, `round probe: AI aircraft
+  alive` or `intensity: round N: you I (...)` lines; `round probe: flags` once a level and again only when a flag that
+  isn't a counter changes; `ammo: now` at most once a minute, `perf:` every 5 minutes. The round and run summaries, each
+  decision (`director:`, `tell:`, `roles:`, `learning:`, `intensity: round N: held ...`) and the measurements as before.
+
 **P1 fighter roles (unit 5)**
 - `roles: round N (the mix from round X: ...)`; spawn lines with `[lancer]` / `[wolf]` / `[skirm]`.
 - Lancers ~2 km above the rest, one slashing pass then a zoom (`ai:` short PursueTarget, ~10 s MoveAwayFromTarget), no
-  ReturnToUnit after spawning high; tailed they run and reverse, never turn with you. BANDITS HIGH once a round.
+  ReturnToUnit after spawning high; tailed they run and reverse, never turn with you. (No call-out of their own: their
+  BANDITS HIGH callout went with the clean up.)
 - Wolf flights: the odd planes hold (`roles: <unit> (wolf) trap N s after its orders: held B, D`), follow their lead; the
   bait drags you when tailed; a held plane you hit, or whose bait goes down, is freed (`trap freed (...)`); their guns
   lead you.
-- Skirmishers: a LAAM from 5-7 km, `ai:` MoveAwayFromTarget right after the shot; LONG-RANGE SHOOTERS once a round;
-  x0.75 health (`late: ... (skirm x0.75)`).
+- Skirmishers: a LAAM from 5-7 km, `ai:` MoveAwayFromTarget right after the shot; x0.75 health (`late: ... (skirm
+  x0.75)`).
 - `weapons: ... _SV_WOLF (... leads 0.50 s)`, `... NPC_FCS_PlaneLAAM000_SV_SKIRM ...` at the main menu.
 
 **P2 squad director (unit 6)**
 - `director: round N's budgets (from round X): ...`; each tactic's `director: round R +T s: <tactic> on <unit> ...;
-  callout "..."` and its action line: cover (`director: cover: RE_SV_AceTurn_NN fired` after "Someone cover me!" / BANDIT
-  CUTTING IN), trap (IT'S A TRAP, `roles: ... trap freed (the director's spring ...), turned onto the player`), bracket
-  (MISSILES FROM TWO SIDES, `director: bracket: RE_SV_Salvo_..A fired, ...`, two missile alerts), top cover (`... held at
-  engagement None ...`, then BANDIT DIVING / HIGH, n O'CLOCK and `back in the fight`), pincer (TWO GROUPS INBOUND, `director:
-  pincer: wave N's K fighter flights from two sides ...`), regroup (BANDITS REGROUPING, `breaks off for 7 s`).
+  told "..."` and its action line: cover (`director: cover: RE_SV_AceTurn_NN fired` after "Someone cover me!" and a
+  check-your-six call 2 s later), trap ("it's a trap", `roles: ... trap freed (the director's spring ...), turned onto
+  the player`), bracket (a "missiles from two sides" call, `director: bracket: RE_SV_Salvo_..A fired, ...`, two missile
+  alerts), top cover (`... held at engagement None ...`, then a diving-bandit call and "Bandit at n o'clock!", and `back
+  in the fight`), pincer (an AWACS "two groups" call, `director: pincer: wave N's K fighter flights from two sides ...`),
+  regroup (a regroup call, `breaks off for 7 s`).
 - The kill bonus: `credits: ... director <tactic> x1.5` on your kill of a tagged plane within 20 s.
-- The round line's `director tactics N (...; M callouts)`: the thesis' 3-6 a round, each with a callout.
+- The round line's `director tactics N (...; M told)`: the thesis' 3-6 a round, each told first.
 - `perf: ...` director worst under ~3 ms with 26+ up.
 
 **P3 tells (unit 4)**
-- `tell: <id>: RE_SV_Radio<X> (fired), tell callout '<TEXT>'` before each told threat: an ace's reversal / kulbit
-  (ACE REVERSAL a second before the turn), the Reaper hunt, raids, the jammer, late waves (26+), the ALICORN's railgun
-  (5 s early, RAILGUN WARNING, off ~12 s after), its dive / surfacing / VLS, a Ladon's volley, and every P1 / P2 / P7 /
-  P9 tell. A test build's Ctrl+0 walks every catalog line (`test: Ctrl+0, tell line N of M: ...`).
+- `tell: <id>: RE_SV_Radio<X> (fired)` before each told threat: an ace's reversal / kulbit (its call a second before the
+  turn), the Reaper hunt, raids, the jammer, late waves (26+), the ALICORN's railgun (5 s early, with the stock RAILGUN
+  WARNING, off ~12 s after), its dive / surfacing / VLS, a Ladon's volley, and every P2 / P7 / P9 tell. A test build's
+  Ctrl+0 walks every catalog line (`test: Ctrl+0, tell line N of M: ...`). No HUD warning with any of them.
 - Refusals are logged once a round: `tell: <id> not said (<why>)`. Repeats within 20 s skipped? (line_gap_s).
-- Co-op: a joiner hears its own copy ("tl"), never an RE_SV_Radio in its `ev` lines.
+- Co-op: a joiner hears its own copy ("tl", `tell: <id> (the host's): ...`), never an RE_SV_Radio in its `ev` lines.
 
 **P4 intensity director (unit 7)**
-- `intensity: round N: you I (damage ..., N missiles on you, N enemies within 5 km, health ...), comfort C (...)` every
-  10 s; does it match what happened (the missile count while the alert sounds)?
+- With `[log] verbose = true`: `intensity: round N: you I (damage ..., N missiles on you, N enemies within 5 km, health
+  ...), comfort C (...)` every 10 s; does it match what happened (the missile count while the alert sounds)? Either way
+  each round's `intensity: round N: you avg ...` summary.
 - Pressed down to the wave gate: `intensity: round N: held S s (...): wave W waits` and `round N: wave W waits for the
   intensity hold`, the wave 15-20 s later; never twice within 20 s.
 - Comfortable 20 s: `intensity: you comfortable 20 s ...: <unit> turns onto you` (or a held top cover dives), its kill
@@ -2235,38 +2276,40 @@ the details.
   and trap x1.xx` / `top cover x1.xx`, more Lancers above you, the strike package and Skirmishers.
 
 **P7 boss phases (unit 9)**
-- MINDRIPPER: in its field THE PACK SPRINGS, then `special: MINDRIPPER's pack sprung (N): PHANTASM loose on you`; out
-  of the field `... pack held ...`.
-- AB.L..IN: after two frenzies IT'S ON YOUR SIX and `blink N behind you`; at 35 % ITS ECM IS DOWN, `ECM pods off`, `guns
-  all out`, `LastTGT`.
-- Ladons: one down: `<NAME> ENRAGED`, `special: Ladon X enraged (Y down): volleys every 25 s, the rage circuit from its
-  next pass`, the tighter circuit on the minimap.
-- ALICORN: PLANES LAUNCHING, `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at 1200 m`.
+- MINDRIPPER: in its field an ambush call ("it's a trap"), then `special: MINDRIPPER's pack sprung (N): PHANTASM loose on
+  you`; out of the field `... pack held ...`.
+- AB.L..IN: after two frenzies a check-your-six call and `blink N behind you`; at 35 % "it's not jamming anymore", `ECM
+  pods off`, `guns all out`, `LastTGT`.
+- Ladons: one down: "the hostile's changed course", `special: Ladon X enraged (Y down): volleys every 25 s, the rage
+  circuit from its next pass`, the tighter circuit on the minimap.
+- ALICORN: "planes launching from the carrier", `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at
+  1200 m`.
 - The round line's special length against the thesis' 5-8 min.
 
 **P8 late rounds (unit 3)**
 - START AT ROUND 30 / 35: `round 35: 60 aircraft: ... ; cap 60, up to 26 at once` (Standard), the waves at 4 left; `late:
   ... health x1.50`; `pressure: round 26: preset C (was B)`, `round 31: preset D`; a boss round's `... again once it's
   down`.
-- Frame time with 26-30 up: the `perf:` lines; the throttle A/B ([late.pressure] enabled = false) by time to kill and
-  damage at death.
+- Frame time with 26-30 up: the `perf:` lines (every minute with `[log] verbose`); the throttle A/B ([late.pressure]
+  enabled = false) by time to kill and damage at death.
 
 **P9 ace personalities (unit 10)**
 - Ace rounds (16, 19, 22, 25, 28, ...; START AT ROUND, or a test build's Ctrl+6 for a Harvest flight): `roles: round N
   (the <Squadron> squadron's roles: ...)` and each squadron flight's `aces: <unit> (<Squadron> squadron, <role>) opens
   with <op> at first contact (within N km)`.
-- Recognisable within 10 s of meeting each one (the thesis' gate), its tell first:
-  - Bounty: BOUNTY: FROM ABOVE and "right above you!", then two missiles from above (`opening salvo: RE_SV_Salvo_..
-    fired`, two missile alerts); Lancers' slash and zoom after.
-  - Valkyrie: VALKYRIE: THE PACK and a lure line; half the pack hangs back (`trap ... held B, D, F`), 8 s on IT'S A TRAP
-    and they turn in on you (`trap freed (Valkyrie's trap springs): ..., turned onto the player`). Held until it meets
-    you however long that takes (no `trap freed (held 60 s)` first); do its held planes keep formation that long?
-  - Inferno: INFERNO: POST-STALL ACES at 2.5 km, then the whole flight kulbits (`kulbits as one: RE_SV_AceKulbit_NN
-    fired`; `ai:` UniqueAction).
-  - Wraith: WRAITH: THEY BLINK, then its lead appears 1 km behind and beside you in smoke (`blinks (its opener): your
-    heading H -> spot D deg`); sit on that lead's tail: IT BLINKED and it jumps again (`blinks (you N m on its six ...)`),
-    not more than every 20 s; hit it: again.
-  - Harvest: THE HARVEST, then its flights open with a kulbit, a blink or a missile pair in turn; tail its lead: a blink,
+- Recognisable within 10 s of meeting each one (the thesis' gate), its tell first (a radio call, `aces: ... meets you ...:
+  told (<tier>_in)`; no callout with its name now):
+  - Bounty: a dive call ("right above you!"), then two missiles from above (`opening salvo: RE_SV_Salvo_.. fired`, two
+    missile alerts); Lancers' slash and zoom after.
+  - Valkyrie: a lure line; half the pack hangs back (`trap ... held B, D, F`), 8 s on "it's a trap" and they turn in on
+    you (`trap freed (Valkyrie's trap springs): ..., turned onto the player`). Held until it meets you however long that
+    takes (no `trap freed (held 60 s)` first); do its held planes keep formation that long?
+  - Inferno: a reversal call at 2.5 km, then the whole flight kulbits (`kulbits as one: RE_SV_AceKulbit_NN fired`; `ai:`
+    UniqueAction).
+  - Wraith: a check-your-six call, then its lead appears 1 km behind and beside you in smoke (`blinks (its opener): your
+    heading H -> spot D deg`); sit on that lead's tail: another check-your-six call and it jumps again (`blinks (you N m
+    on its six ...)`), not more than every 20 s; hit it: again.
+  - Harvest: a hunt call, then its flights open with a kulbit, a blink or a missile pair in turn; tail its lead: a blink,
     tail a wingman: a reversal. No reversal in the same second as an opener (`ace reversal` lines only after it).
 - The blink lands near the spot (`special:`-style check by eye: 1 km off, behind your wing), never into terrain at low
   level (`didn't blink ... no spot clear of the ground`), and the lead keeps fighting after it (no ReturnToUnit).
@@ -2279,7 +2322,8 @@ the details.
 **Co-op, every unit (COOP_TAG -coop.18 on every game)**
 - Every game on the same tag, linked; a joiner's `ev` lines never carry a kept event (RE_SV_Radio, RE_SV_Salvo_,
   RE_SV_WolfTurn, RE_SV_AnomalyPack, RE_SV_WraithBlink); its "tl" / "dv" lines arrive with the host's tells and salvos;
-  the host's `intensity:` lines list each joiner's "in"; "rnd" carries the level and AB.L..IN's phase.
+  with `[log] verbose` the host's `intensity: round N: you ...` lines list each joiner's "in"; "rnd" carries the level
+  and AB.L..IN's phase.
 
 ## Code review of 2026-10-29
 
@@ -2496,8 +2540,8 @@ staying silent when k 0 never reaches logPlane (diagnostics only, on an unconfir
 ### In game, on top of the checklist above
 - Bounty round (16): its Lancers never turn onto you after "Someone cover me!" (`director: cover` names a duelist or a
   Harvest flight only); an Inferno round past 24 aircraft: `filled from wolf N (the Wolf pairs first ...)`.
-- ALICORN: shoot both railguns: `railguns are down`, the RAILGUN WARNING gone, no more WARNING: RAILGUN; every VLS:
-  `VLS are down`, no VLS LAUNCH. After a surfacing: "submarine has surfaced", the railgun's warning ~2 s later.
+- ALICORN: shoot both railguns: `railguns are down`, the RAILGUN WARNING gone, no more railgun calls; every VLS:
+  `VLS are down`, no VLS call. After a surfacing: "submarine has surfaced", the railgun's warning ~2 s later.
 - Co-op, the host lands while a joiner flies: `spawns go on while you're down at the airfield`, the joiner keeps
   meeting flights, `orders: <unit> appeared without its orders while you're down at the airfield (...);
   RE_SV_FlightOrders_NN fired (again every 5 s ...)` then `... has its orders now (N fired while you were down at the
@@ -2520,3 +2564,113 @@ tailed_test, late_rounds_test, tells_test, roles_test, director_test, intensity_
 aces_test: all passed. `sh tools/build_all.sh` exits 0 with the build lines unchanged by the review: `events: 819
 triggers, 1588 execs`, `radio: 721 rows (... 61 tell lines)`, `wolf trap: 12 held objects in 6 Wolf flights`,
 `director: 86 salvo objects in 22 flights`, `6 Lancer flights up to 9000 m`.
+
+## Clean up of 2026-10-29: HUD warnings removed, quieter logs
+
+The user, playing 0.72.0-coop.18: "in the next build do a clean up, also remove the hud warnings that we added, it's too
+much, keep the Voice lines though" and "keep the bomber direction warnings"; asked what the clean up covers, "code clean
+up" (leftovers of this branch, no gameplay change) and "quieter logs" (lines that repeat every few seconds trimmed, the
+per-round summaries kept). No VERSION or COOP_TAG bump here (one for the whole next build); the "tl" message changed
+(below), so that bump must come before a co-op build goes out. Not yet run in game.
+
+### 1. The HUD warnings the branch added: gone, their voice lines kept
+- Every tell is a radio line only. Gone: each catalog entry's `hud`, `urgent` and `args`; CFG.tells `hud`, `hud_s`,
+  `gap_s`, `urgent_gap_s` and `text` (their [tells] lines too); sv_tells.lua's callout half (play()'s text, `fill`, the
+  sure tell's `sureHud` and the TELL.play wrapper, the copy of hudCallout it kept at load, `classOf`'s urgent / hud
+  classes). The callouts that went: ACE REVERSAL, ACE POST-STALL, YOU ARE BEING HUNTED, WARNING: RAILGUN, VLS LAUNCH
+  (the ALICORN's and the Ladons'), TWO GROUPS INBOUND, BANDIT DIVING / HIGH, n O'CLOCK, HE'S DRAGGING YOU, IT'S A TRAP,
+  BANDIT CUTTING IN, MISSILES FROM TWO SIDES, BANDITS REGROUPING, THE PACK SPRINGS, IT'S ON YOUR SIX, ITS ECM IS DOWN,
+  the squadrons' (BOUNTY: FROM ABOVE, VALKYRIE: THE PACK, INFERNO: POST-STALL ACES, WRAITH: THEY BLINK, HARVEST: THE
+  HARVEST), IT BLINKED.
+- The HUD-only tells, with nothing to say now: `lancer` and `skirm` (BANDITS HIGH, LONG-RANGE SHOOTERS: ROLE.spawned's
+  first-flight-of-a-round call-out, D.roleSaid, CFG.roles.tells and its [roles] line) and `split` (catalogued, never
+  said). `lure` stays: it has lines and is [director.trap] warn's other choice.
+- The branch's direct callouts: the ALICORN's deck launch (PLANES LAUNCHING / FIGHTERS OFF THE ALICORN'S DECK) and a
+  Ladon enraged (<NAME> ENRAGED / NEW HEADING, FASTER VOLLEYS), their CFG.hud.text keys too; their tells (alcn_deck,
+  ladon_rage) stay.
+- The urgent path: sv_hud.lua's hudCallout is stable-1's again (text, sub, big: a queue of 4, the 5th dropped), its
+  calloutNext and the banner's cut-in gone, hudTick puts the queue's first up once the banner is free for callout_s
+  (H.calloutCur gone); sv_coop.lua's wrapper takes the three arguments again.
+- Kept, as in stable-1: ROUND N / HOSTILES INBOUND, ROUND N COMPLETE, every special's own callout (THE ALICORN IS DIVING,
+  LADONS FROM THE WEST, ...), ACE INBOUND, the co-op ones, and the bomber direction warnings: a raid's BOMBER RAID FROM
+  THE <DIRECTION> callout and the NEXT row's `RAID: N BOMBERS FROM THE <DIRECTION>`. Kept from the branch: the stock
+  RAILGUN WARNING (Mission 18's LiveSetRailgunAlertEnable, CFG.specials.alicorn.rail_alert) on lead_s 5 s before the
+  ALICORN's shot, AB.L..IN's phase-3 NEXT row (`<NAME>: ECM DOWN  N KM`, a row, not a warning) and the HUD info key (I,
+  [hud.info], review fix F6: the user asked for it).
+- One gap: a tell comes radio_gap_s (2 s) after the last tell of any id (the urgent and queued-callout classes had gaps
+  of their own, so a reversal or the railgun's call could come in the same second as a radio-only line; leftover U4's
+  "alcn_up and alcn_rail in the same frame" can't happen now). Its effect on timing: the director's cover says "check
+  your six" 2 s after "cover me" (ask_s 1.5, tail_s 3.0: the cover turns 0.5 s later than before, `director: cover not
+  now (its tell can't be said now)` at 3 s), the Wolf trap springs 2 s after "he's dragging you" (drag_s 1.0, spring_s
+  2.5: 0.5 s later), a joiner's cover and push the same; with need_tell off they'd go on time untold. The defaults
+  (ask_s, drag_s, radio_gap_s) are unchanged: shorten radio_gap_s or move ask_s / drag_s if the half second matters.
+- `sure` (the bosses' phases, the squadrons' first call): its radio line goes through radio_gap_s and its cooldown
+  (`tell: <id>: ..., a sure tell through <why>`); still never with tells off, between rounds, down at the airfield,
+  over the summary or within its lines' line_gap_s (before: not said, its callout showed anyway). A host still sends a
+  sure tell to its joiners through its gaps. TELL.play / TELL.say lost their 4th result ("callout shown instead"): sv_ai's
+  squadron `tell` and the pack's line in sv_anomalies say `not told: <why>` where they said `callout only`.
+- Co-op: "tl" carries the tell's id and one number (the line it's picked by: the o'clock), `tl|<id>|<a>`; the second
+  number filled the callouts' texts (the pincer's bearings, the squadron's tier index) and went with them, so TELL.say,
+  TELL.play, TELL.after, COOP.tell and the director's tellSay / tellAfter lost that argument. The joiner's "tl" no longer
+  needs [coop] callouts (the host's banners: tells are its own radio lines now, by its own [tells]).
+- The round line's `director tactics N (...; M callouts)` reads `(...; M told)`, and a tactic's `director:` line
+  `told "<id>"` (was `callout "<id>"`): what was counted (a tactic whose tell was said) is unchanged; stats_report.py
+  reads neither.
+
+### 2. Code clean up (no gameplay change)
+- Dead with the HUD half: `fill`, `sureHud`, the TELL.play wrapper, `classOf` / GAP_KEY, `rawHud`, `calloutNext`,
+  H.calloutCur, ROLE.spawned's `local c`, alicornDeck's and ladonRage's `local t`, the `_in` tells' number (sv_ai.lua's
+  open(): the tier index only named the squadron in the callout), the pincer's two bearings to TELL, Ctrl+0's HUD-only
+  entries ("(HUD only)": every tell has lines now), the round record's unread `callouts` field (sv_stats.lua m.rounds),
+  stale comments (main.lua's MODULES notes, sv_alicorn's railgun and ARMS notes, sv_anomalies' joiner phase-3 note,
+  sv_config's [roles], [director] and deck notes, the ini's [tells], [roles], [director], [specials.alicorn.deck],
+  [specials.anomaly.pack], [specials.glitch.phases] and [aces.personality] comments).
+- The review leftovers (scratchpad review/leftovers.json): only no-behaviour-change ones qualified. U7's shadowed
+  `levelTick` was already renamed (`easeTick`); U4's same-frame alcn_up / alcn_rail is gone with the one gap; U9's sure
+  callout with tells off is gone with the callouts; U7's missilesOn text was fixed by F7. Every other leftover changes
+  behaviour (U1, U2, U3, U5, U6, U8, U9's ECM log, U10): left for a later build.
+- Every feature's `enabled` switch is kept; [tells] radio stays (false: no lines, the leads kept).
+
+### 3. Quieter logs
+In ~23 minutes of the user's 0.72.0 log (1856 Survival lines) the repeaters were `round probe: flags` 159, `round probe:
+AI ...` 155 (created and alive), `ai:` 116, `enemies: nearest` 41, `intensity: round N: you ...` 36, `ammo: now` 17 and
+`perf:`. A new switch, `[log] verbose = false` (CFG.log.verbose, sv_core.lua logVerbose(); PERSONAL in co-op), brings
+each back as it was:
+
+| line | before | now (verbose false) | verbose true |
+|---|---|---|---|
+| `round probe: flags ...` (sv_main.lua probeTick) | on every change of any SV_ flag: SV_Beat, the heartbeat, every 10 s, so a ~1000-character line every 10 s | the level's first, then only when a flag that isn't a counter changes (flagLine's key leaves out SV_Beat, SV_Kills, SV_AirHits, SV_Alive, SV_ShuttleHits and the flights up); the whole line each time | as before |
+| `round probe: AI aircraft alive N (created so far M)` | each change (twice a plane) | none (the round's own `round N: X aircraft in Y flights left` says the same) | as before |
+| `enemies: nearest X km from you; N flights up` | every 10 s | none | as before |
+| `ai: <plane> (<unit>) <state>, target ...` (sv_ai.lua aiWatch) | each change of a plane's AI state or target (CFG.ai_watch) | none (the state is still read every sweep for the measurements) | as before (CFG.ai_watch still its own switch) |
+| `intensity: round N: you I (damage ...), comfort C (...)` (sv_director.lua scoreLine) | every log_s 10 s of a fight | none; each round's `intensity: round N: you avg ...` summary and every decision line as before | every log_s, as before |
+| `ammo: now ...` (sv_flights.lua ammoTick) | every 10 s when it changed | every 60 s when it changed | every 10 s |
+| `perf: tick avg ...` (sv_main.lua) | every minute (240 ticks) | every 5 minutes (1200 ticks; avg and worst over them) | every minute |
+
+Unchanged: every event and decision line (`director:`, `tell:`, `roles:`, `learning:`, `aces:`, `special:`, round
+starts and clears, kills, credits, `round probe: AI aircraft created` per plane, `spawn index:`), the measurement lines
+stats_report.py reads (`stats:`, `kill-time:`, `death:`, `tailed:`, the intensity round summary) and the `bombers:`
+lines (the bomber rework's). The checklists above that read `ai:` lines or the 10 s scores say to set verbose.
+
+### Offline checks
+- tells_test: the catalog without HUD keys or HUD-only tells; hudCallout stable-1's again and every call counted: not one
+  from a tell, the ALICORN's only stable-1's (DIVING, SINKING); the raid's direction callout, its NEXT row and ROUND N
+  COMPLETE in the source; one gap (the railgun's call 2 s after "submarine has surfaced"); sure tells through the gap
+  (logged) and the cooldown, not within line_gap_s, between rounds, at the airfield, over the summary or with tells off;
+  co-op "tl" with one number, a joiner playing it with [coop] callouts off and no callout.
+- bosses_test, aces_test: the pack, AB.L..IN's phases, a Ladon's rage, the deck and the squadrons' first calls as radio
+  lines with no callout (a co-op host down at the airfield: the deck's call to its joiners only), sure tells as above.
+- director_test, intensity_test: the cover's six and the trap's spring 0.5 s later (one gap), `told "six"`, "tl" with one
+  number; the intensity score line only with verbose (none in 19 s of a fight without it, 3 in 25 s with it).
+- roles_test: no Lancer / Skirmisher tell, no [roles] tells. stats_test: `told`, the `ai:` lines only with verbose,
+  flagLine's key, probeTick's, perf's, ammo's and the scores' gating by their place in the source.
+- Every check of the contract and `sh tools/build_all.sh` (exit 0; `events: 819 triggers, 1588 execs`, `radio: 721 rows
+  (7 dropped, 1 replaced, 61 tell lines)`: the build is unchanged, no radio line was removed).
+
+### Untested / open
+- [I] All of it in game. The half-second later cover and trap spring are by design of the one gap; whether a "check your
+  six" that close after "cover me" was audible over it before is what the gap is for.
+- [I] Without the callouts a tell whose radio line doesn't play (a group skipped inside its RequeueingWaitTime, checklist
+  item 2 of unit 4) leaves no warning at all; the sure tells too (they showed their callout before).
+- A perf window of 5 minutes reports the worst tick over 5 minutes: the checklists' "director worst under ~3 ms" reads
+  the same; a spike is harder to place in time (verbose gives the minute).
