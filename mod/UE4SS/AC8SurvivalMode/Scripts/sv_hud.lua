@@ -249,8 +249,9 @@ end
 
 -- One info row (CFG.hud.info): text s shown while the info key has them open, or for peek_s once its news (what it
 -- says that's worth a look, not a count that keeps ticking; the text itself without one) differs from the last, or it
--- comes back; else collapsed. A peek waits for the HUD to be up (not paused, not at the landing menu); news seen with
--- the rows open is no peek once they're shut. True if shown.
+-- comes back; else collapsed. A peek waits for the HUD to be up (H.shown: not paused, a plane, the game HUD on; solo
+-- that covers the STORE, which pauses, but in co-op it doesn't pause: untested there); news seen with the rows open is
+-- no peek once they're shut. True if shown.
 local function infoRow(w, key, s, news, now)
     local ic = CFG.hud.info
     if not ic.enabled then stackText(w, key, s); return s ~= nil end

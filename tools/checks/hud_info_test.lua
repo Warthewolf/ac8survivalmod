@@ -11,8 +11,8 @@
 --     (paused) peeks once it's back up;
 --   the key's press: the rows shown on the next pass (not the next second's), logged "hud: info rows shown (I)", hidden
 --     again on the next press; outside a run nothing; the rows read once a second, not every pass;
---   co-op: the compact row peeks when a player joins, drops or is shot down or a link is lost, not for health or the
---     airfield; open, "CO-OP n/max" and a line a player (FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION,
+--   co-op: the compact row peeks when a player joins, drops or is shot down or a link is lost, not for health, the
+--     airfield or a state gone stale (a downed player's too); open, "CO-OP n/max" and a line a player (FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION,
 --     health), the fourth "+N MORE" in a bigger room; a joiner still looking for its host has the one row.
 local WORK = arg[1]
 local fails = 0
@@ -307,7 +307,7 @@ fresh(); now = 300
 COOP.open, COOP.role, COOP.slot = true, "host", 0
 M.state = "linked"
 M.roster = { [0] = { name = "War" }, [1] = { name = "Cressendo" } }
-M.peers = { [1] = { at = { X = 0, Y = 0, Z = 0 }, fresh = true, alive = true, onAirfield = false, hpPct = 87.4 } }
+M.peers = { [1] = { at = { X = 0, Y = 0, Z = 0 }, flags = 3, fresh = true, alive = true, onAirfield = false, hpPct = 87.4 } }
 M.wasLost = nil
 tick(0)
 local maxP = math.max(2, math.min(24, math.floor(tonumber(CFG.coop.max_players) or 24)))
@@ -322,10 +322,22 @@ check(not shown("Coop"), "a player's health and landing: no peek")
 M.peers[1].fresh = false
 tick(2)
 check(not shown("Coop"), "a player's state gone stale (a lag): no peek")
-M.peers[1].fresh, M.peers[1].alive = true, false
+M.peers[1].fresh, M.peers[1].alive, M.peers[1].flags = true, false, 1     -- (as peerTick keeps it: flag 2 alive gone)
 tick(1)
 check(shown("Coop"), "a player shot down: a peek")
 tick(6)
+do                                      -- (a downed player's link lagging: their state stale 1 s in every 4)
+    local up = 0
+    for _ = 1, 3 do
+        M.peers[1].fresh = false
+        tick(1)
+        if shown("Coop") then up = up + 1 end
+        M.peers[1].fresh = true
+        tick(3)
+        if shown("Coop") then up = up + 1 end
+    end
+    check(up == 0, "a downed player's state gone stale and fresh again: no peek (" .. up .. " of 6 looks shown)")
+end
 M.roster[2] = { name = "Reaper" }
 tick(1)
 check(shown("Coop") and has(text("Coop"), "REAPER"), "a player joins: a peek")
@@ -340,7 +352,7 @@ check(shown("Coop") and text("Coop") == string.format("CO-OP 3/%d", maxP), "open
 check(text("CoopPlayer1") == "  WAR (HOST)   FLYING  100%" and text("CoopPlayer2") == "  CRESSENDO   DOWN"
       and text("CoopPlayer3") == "  REAPER (LOST)   NOT IN THE MISSION" and not shown("CoopPlayer4"),
       "... a line a player: " .. tostring(text("CoopPlayer1")) .. " / " .. tostring(text("CoopPlayer2")) .. " / " .. tostring(text("CoopPlayer3")))
-M.peers[1].alive = true
+M.peers[1].alive, M.peers[1].flags = true, 3
 onAirfield = true
 tick(1)
 check(text("CoopPlayer1") == "  WAR (HOST)   AT THE AIRFIELD  100%" and text("CoopPlayer2") == "  CRESSENDO   AT THE AIRFIELD  40%",
