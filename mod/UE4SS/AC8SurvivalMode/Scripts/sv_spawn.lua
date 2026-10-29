@@ -160,6 +160,7 @@ local function spawnBomber(unit)
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.shipStrike and D.shipStrike[unit] then ALLY.strike(unit, D.shipStrike[unit]) end   -- (its own callout)
+        if heavy and not (D.shipStrike and D.shipStrike[unit]) then pcall(HEAVY.route, unit, x, y) end   -- (sv_flights.lua)
         if D.bomberCallout ~= D.round and (not D.special or D.special.kind == "amphibious")
             and not (D.shipStrike and D.shipStrike[unit]) then
             D.bomberCallout = D.round

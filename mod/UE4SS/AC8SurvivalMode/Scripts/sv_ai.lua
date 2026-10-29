@@ -900,6 +900,22 @@ function JAM.tick()
         end
     end
     if n ~= j.n then j.n = n; log(string.format("jammer: %d enemies sharpened near it", n)) end
+    -- its ECM pod (CFG.jammer.ecm), the flight's lead's (RE_SV_JamEcm_NN fires object 0's slot 4): once it's up, then
+    -- every ecm_every_s; the first answer and any that isn't 1 logged
+    local idx = on and c.ecm and type(SV_Event) == "function" and D.now and poolIndex(j.unit)
+    if idx and (j.p.k or 0) == 0 and D.now >= (j.ecmAt or 0) then         -- (k unknown: the jammer leads)
+        j.ecmAt = D.now + math.max(2, tonumber(c.ecm_every_s) or 14)
+        local ev = string.format("RE_SV_JamEcm_%02d", idx)
+        local r = SV_Event(ev)
+        if not j.ecmSaid or r ~= 1 then
+            j.ecmSaid = true
+            log(string.format("jammer: its ECM pod on (%s %s), again every %d s", ev, r == 1 and "fired" or ("not fired: "
+                .. (SV_ERR[r] or tostring(r))), math.max(2, tonumber(c.ecm_every_s) or 14)))
+        end
+    elseif on and c.ecm and (j.p.k or 0) ~= 0 and not j.ecmSaid then
+        j.ecmSaid = true
+        log("jammer: " .. j.p.name .. " isn't its flight's lead (object " .. tostring(j.p.k) .. "): no ECM pod (RE_SV_JamEcm fires object 0's)")
+    end
     if not on then D.jammer = nil end
 end
 

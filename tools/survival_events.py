@@ -514,10 +514,31 @@ POOL_BEHAVIOUR_ROW = 'f16c_common_sv'      # its DT_NPC row is made by Scripts/m
 PROBE_UNITS = {'Pkg': 'ERA_Unit_08_Dep_Air2', 'Rt': 'ERA_Unit_08_Dep_Air1'}   # main.lua CFG.probe.units
 PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # build_survival.py NPC_EXTRA
 HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
-# Their unit area (RadiusInMeter, moved onto the airfield by SV_BomberUp_NN): Tu-95s / Tu-160s circle inside it, and
-# with Mission 22's 6 km they circled 8-12 km out and never crossed the runway, so the scripted bomb run never fired
-# (test of 2026-10-22: "TU160's didn't do anything when reaching the airfield"). 1.5 km keeps their orbit over it.
-HEAVY_AREA_RADIUS_M = 1500.0
+# Their unit area (RadiusInMeter, moved onto the airfield by SV_BomberUp_NN). With Mission 22's 6 km they circled 8-12 km
+# out and never crossed the runway, so the scripted bomb run never fired (test of 2026-10-22: "TU160's didn't do anything
+# when reaching the airfield"); with 1.5 km (0.20-0.72.0) they still circled 6-8 km out (the user's run of 2026-10-29:
+# "tu-95's aren't attacking the base, they fly around nearby and do nothing"). So they fly paths now (HEAVY_ROUTE*), and
+# their area takes in every point of them, so they never count as outside it and turn back ("ReturnToWorld").
+HEAVY_AREA_RADIUS_M = 40000.0
+# The heavies' routes: a Ladon's way (hard rules 1, 2, 35: smooth ControlType 1 paths, PathFinish records). Lua
+# (Scripts/sv_flights.lua HEAVY.route, from spawnBomber) fires RE_SV_HeavyRoute_<NN><S> for the compass sector S its
+# flight spawned in: its lead flies in from that side, over the runway and on (the route), then at its end a figure-8
+# along the same line (the loop) that crosses the runway twice a lap and ends over it, each PathFinish starting it again;
+# the bomb run is Lua's, within CFG.airfield.bombers.drop_km of the runway (bombTick). Only the lead flies them (its
+# wingmen keep formation on it); when it's shot down Lua fires RE_SV_HeavyLoop_<NN><L><S> for the next of the flight
+# (object L). The second heavy flight's tracks sit 1 km to the side and 400 m up. A sector's route starts nearer where
+# the zone's edge is closer (east of the airfield), and a loop shrinks to fit.
+HEAVY_SECTORS = 'ABCDEFGH'                  # compass 0, 45 ... 315 degrees from the airfield (north -y, east +x)
+HEAVY_ROUTE_KM = 22.0                       # the route's first point (or nearer, inside the zone), then these shares of it
+HEAVY_ROUTE_FRAC = (1.0, 0.55, 0.18)
+HEAVY_PAST_KM = 4.0                         # the route's end, past the runway; the loop starts 2 km on (hard rule 2)
+HEAVY_LOOP = [(6.0, 0.8), (9.0, 3.0), (11.5, 0.0), (9.0, -3.0), (5.0, -1.2), (0.0, 0.0),        # (km on, km aside)
+              (-5.0, 1.2), (-9.0, 3.0), (-11.5, 0.0), (-9.0, -3.0), (-5.0, -1.2), (0.0, 0.0)]
+HEAVY_ALT_KM = (2.2, 1.9, 1.7, 1.6)          # the route's heights in (the rest of it and the loop the last)
+HEAVY_TRACKS = {'EA_Unit_01_Air1': (0.0, 0.0), 'EA_Unit_01_Air2': (-1.0, 0.4)}   # (km aside, km up) a heavy flight
+HEAVY_SPEED = '850.0'                       # km/h (the user's Tu-95s of 2026-10-29 came in at ~830)
+AIRFIELD_KM = (16.09639, -4.36414)          # Scripts/sv_core.lua AIRFIELD (cm / 100000)
+ZONE_KM = ((-7.07336, -2.61895), 37.0)      # Scripts/sv_ai.lua ZONE (centre, half), its 3 km margin in it
 STRIKE_BEHAVIOUR_ROW = 'su34_common'       # Mission 22's strike Su-34s (0021_CP)
 HEAVY_BEHAVIOUR_ROW = 't160_common'        # Mission 4's Tu-160 (NLID_1000: large aircraft, no dogfighting)
 
@@ -555,6 +576,40 @@ LANCER_MAX_ALT_M = 9000.0
 # Every pool flight's AI object names after sizing (event-arg form, 'Base_N-1'), filled by build_survival.py
 # build_wd_global before the event package is built: the Wolf trap's per-object events need them.
 POOL_OBJS = {}
+
+
+def heavy_routes():
+    """One dict per heavy flight and compass sector (HEAVY_*): unit, its BOMBERS index n, sector letter and bearing,
+    the route's and loop's path names and points (cm), and the route's event."""
+    import math
+    (zx, zy), half = ZONE_KM
+
+    def inside(p):
+        return abs(p[0] - zx) < half - 1.0 and abs(p[1] - zy) < half - 1.0
+    out = []
+    for unit, (side, up) in HEAVY_TRACKS.items():
+        n = BOMBERS.index(unit) + 1
+        for k, s in enumerate(HEAVY_SECTORS):
+            b = math.radians(45.0 * k)
+            on, aside = (-math.sin(b), math.cos(b)), (-math.cos(b), -math.sin(b))   # (away from the sector's side)
+
+            def at(u, v):
+                return AIRFIELD_KM[0] + u * on[0] + v * aside[0], AIRFIELD_KM[1] + u * on[1] + v * aside[1]
+            d = HEAVY_ROUTE_KM
+            while d > 8.0 and not inside(at(-d, side)): d -= 0.5
+            f = 1.0
+            while f > 0.6 and not all(inside(at(u * f, v + side)) for u, v in HEAVY_LOOP): f -= 0.05
+            route = [at(-d * r, side) for r in HEAVY_ROUTE_FRAC] + [at(0.0, side), at(HEAVY_PAST_KM, side)]
+            loop = [at(u * f, v + side) for u, v in HEAVY_LOOP]
+            assert all(inside(p) for p in route + loop), (unit, s, 'a heavy track leaves the zone')
+            alts = list(HEAVY_ALT_KM) + [HEAVY_ALT_KM[-1]] * (len(route) - len(HEAVY_ALT_KM))
+
+            def cm(pts, a):
+                return [(x * 100000.0, y * 100000.0, (h + up) * 100000.0) for (x, y), h in zip(pts, a)]
+            out.append(dict(unit=unit, n=n, sector=s, bearing=45 * k, route_km=d, loop_x=f,
+                            path=f'SV_Path_Heavy{n}{s}', loop=f'SV_Path_Heavy{n}{s}Loop', ev=f'RE_SV_HeavyRoute_{n:02d}{s}',
+                            route=cm(route, alts), circuit=cm(loop, [HEAVY_ALT_KM[-1]] * len(loop))))
+    return out
 
 
 def wolf_held(k):
@@ -960,6 +1015,8 @@ def build_events(stock_ep):
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
     build_wolf(g, stock_ep, t_search, t_engage)
     build_director(g, stock_ep, t_search, t_engage)
+    build_heavy(g, stock_ep)
+    build_jammer(g, stock_ep)
     build_wraith(g)
     return g
 
@@ -1137,6 +1194,69 @@ def build_director(g, stock_ep, t_search, t_engage):
             n += 1
     print(f'  director: {n} salvo objects in {len(POOL) - len(probes)} flights (RE_SV_Salvo_<NN><L>, {SALVO_SLOT}), '
           f'{len(POOL)} flights held / freed (RE_SV_DirHold / DirFree_NN)')
+
+
+def build_heavy(g, stock_ep):
+    """The heavies' routes (HEAVY_*), on Mission 16's Ladon path record and Mission 22's PathFinish trigger, as the
+    Ladons': RE_SV_HeavyRoute_<NN><S> -> the lead's route; its end -> the loop; each loop's end -> the loop again;
+    RE_SV_HeavyLoop_<NN><L><S> -> object L on the loop (the next lead when the one before is shot down)."""
+    import re
+    lua = runtime_lua()
+    for fmt in ('"RE_SV_HeavyRoute_%02d%s"', '"RE_SV_HeavyLoop_%02d%s%s"'):
+        assert fmt in lua, f'Scripts/sv_flights.lua never fires {fmt}'
+    m = re.search(r'AIRFIELD = \{ X = ([-\d.]+), Y = ([-\d.]+) \}', lua)
+    assert m and abs(float(m.group(1)) / 100000 - AIRFIELD_KM[0]) < 1e-6 and \
+        abs(float(m.group(2)) / 100000 - AIRFIELD_KM[1]) < 1e-6, 'AIRFIELD_KM != Scripts/sv_core.lua AIRFIELD'
+    m = re.search(r'ZONE = \{ X = ([-\d.]+), Y = ([-\d.]+), HALF = ([\d.]+) \}', lua)
+    (zx, zy), half = ZONE_KM
+    assert m and abs(float(m.group(1)) / 100000 - zx) < 1e-6 and abs(float(m.group(2)) / 100000 - zy) < 1e-6 and \
+        abs(float(m.group(3)) / 100000 - half) < 1e-6, 'ZONE_KM != Scripts/sv_ai.lua ZONE'
+    assert f'HEAVY_SECTORS = "{HEAVY_SECTORS}"' in lua, 'Scripts/sv_flights.lua HEAVY_SECTORS != HEAVY_SECTORS'
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    objs = unit_objects(stock_ep, list(HEAVY_TRACKS))
+    n = 0
+    for H in heavy_routes():
+        obs = objs[H['unit']][:BOMBER_SIZES[H['unit']]]
+        g.trigger('RE_SpawnEnemy_kokatu_1st', H['ev'])                          # a remote event Lua fires
+        g.execute(t_path, H['ev'], {0: obs[0], 2: H['path'], 4: HEAVY_SPEED})
+        g.trigger(finish, f'SV_HeavyIn{H["n"]}{H["sector"]}', arg_changes={0: obs[0], 2: H['path']})
+        g.execute(t_path, f'SV_HeavyIn{H["n"]}{H["sector"]}', {0: obs[0], 2: H['loop'], 4: HEAVY_SPEED})
+        for j, ob in enumerate(obs):
+            ev, lap = f'RE_SV_HeavyLoop_{H["n"]:02d}{chr(65 + j)}{H["sector"]}', f'SV_HeavyLap{H["n"]}{chr(65 + j)}{H["sector"]}'
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_path, ev, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
+            g.trigger(finish, lap, arg_changes={0: ob, 2: H['loop']})
+            g.execute(t_path, lap, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
+        n += 1
+    print(f'  heavies: {n} routes and loops ({len(HEAVY_SECTORS)} sectors x {len(HEAVY_TRACKS)} flights, '
+          f'RE_SV_HeavyRoute_<NN><S> / HeavyLoop_<NN><L><S>, {HEAVY_SPEED} km/h)')
+
+
+JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)
+
+
+def build_jammer(g, stock_ep):
+    """The jammer's ECM pod (CFG.jammer.ecm; user, 2026-10-29: "the EA-18G never activated it's ECM": the AI never
+    switches it on by itself, as AB.L..IN's needed RE_SV_GlitchEcm): RE_SV_JamEcm_NN fires JAM_ECM_SLOT on pool
+    flight NN's lead (the jammer leads its flight), as build_director's salvos; Scripts/sv_ai.lua JAM.tick fires it
+    every ecm_every_s while the jammer is up. Forwarded in co-op: each joiner's copy jams there too."""
+    lua = runtime_lua()
+    assert '"RE_SV_JamEcm_%02d"' in lua, 'Scripts/sv_ai.lua JAM.tick never fires RE_SV_JamEcm_NN'
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    probes = set(PROBE_UNITS.values())
+    n = 0
+    for k, unit in enumerate(POOL):
+        if unit in probes: continue
+        objs = POOL_OBJS.get(unit)
+        assert objs, unit                                                        # (build_wd_global runs first)
+        ev = f'RE_SV_JamEcm_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_fire, ev, {0: JAM_ECM_SLOT, 1: objs[0]})
+        n += 1
+    print(f'  jammer: its ECM pod on {n} flights\' leads (RE_SV_JamEcm_NN, {JAM_ECM_SLOT})')
 
 
 def wraith_blinks():

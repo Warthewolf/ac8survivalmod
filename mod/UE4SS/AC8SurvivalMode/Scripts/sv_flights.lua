@@ -18,11 +18,51 @@ function planeUnit(p)
 end
 end
 
+-- The heavies' routes (CFG.airfield.bombers.heavy_route; tools/survival_events.py HEAVY_*; user, 2026-10-29: "tu-95's
+-- aren't attacking the base, they fly around nearby and do nothing": over the runway they circled 6-8 km out and never
+-- came within drop_km): a heavy flight's lead flies the route in from the compass sector it spawned in, over the runway,
+-- then a figure-8 crossing it twice a lap (RE_SV_HeavyRoute_<NN><S>, queued route_delay_s after its appearance's
+-- orders); shot down, the next of its flight takes the loop (RE_SV_HeavyLoop_<NN><L><S>). D.heavyPath[unit] = { s, k }.
+HEAVY = {}
+HEAVY_SECTORS = "ABCDEFGH"                           -- (compass 0, 45 ... 315 from the airfield: survival_events)
+function HEAVY.route(unit, x, y)
+    local b = CFG.airfield.bombers
+    if not (b.heavy_route and D and BOMBER_INDEX[unit] and x and y) then return end
+    local bearing = math.deg(math.atan(x - AIRFIELD.X, -(y - AIRFIELD.Y))) % 360    -- (compass: north -y, east +x)
+    local i = math.floor((bearing + 22.5) / 45) % 8 + 1
+    local s = HEAVY_SECTORS:sub(i, i)
+    D.heavyPath = D.heavyPath or {}
+    D.heavyPath[unit] = { s = s, k = 0 }
+    queueEvent((D.now or 0) + (b.route_delay_s or 3), string.format("RE_SV_HeavyRoute_%02d%s", BOMBER_INDEX[unit], s),
+        string.format("%s's route in from bearing %.0f", unit, bearing))
+end
+-- (every second, from bombTick) a flight whose lead on the path is down: its next aircraft up takes the loop
+local function heavyNext()
+    for unit, h in pairs(D.heavyPath or {}) do
+        local lead, nk = false, nil
+        for _, p in ipairs(planes) do
+            if p.unit == unit and not p.down and valid(p.obj) then
+                if p.k == h.k then lead = true elseif p.k and (not nk or p.k < nk) then nk = p.k end
+            end
+        end
+        if not lead and nk and nk < 26 then
+            h.k = nk
+            local ev = string.format("RE_SV_HeavyLoop_%02d%s%s", BOMBER_INDEX[unit], string.char(65 + nk), h.s)
+            local r = SV_Event(ev)
+            log(string.format("bombers: %s's lead down: object %d takes the loop (%s %s)", unit, nk, ev,
+                r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+        elseif not lead and not nk then
+            D.heavyPath[unit] = nil                                              -- (the whole flight down)
+        end
+    end
+end
+
 -- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
 -- damage. If a plane's flight can't be read, every heavy flight that is up drops.
 function bombTick(tick)
     local b = CFG.airfield.bombers
     if not CFG.airfield.enabled or not D or not D.heavy or tick % 4 ~= 2 or type(SV_Event) ~= "function" then return end
+    if D.heavyPath then pcall(heavyNext) end
     local heavy = {}
     for _, a in ipairs(b.heavy) do heavy[a:match("^(%w+)_") or a] = true end      -- "tu95_common" -> tu95
     D.bombAt = D.bombAt or {}
@@ -33,7 +73,7 @@ function bombTick(tick)
             local dx, dy = ok and l and (l.X - AIRFIELD.X), ok and l and (l.Y - AIRFIELD.Y)
             local dist = dx and math.sqrt(dx * dx + dy * dy)
             if dist and (not p.closest or dist < p.closest) then p.closest = dist end
-            if dist and tick % 40 == 2 then
+            if dist and tick % ((CFG.log and CFG.log.verbose) and 40 or 120) == 2 then   -- (10 s verbose, else 30 s)
                 log(string.format("bombers: %s %.1f km from the airfield, %.1f km up (closest %.1f km; drop within %.1f km)",
                     p.name, dist / 100000, l.Z / 100000, p.closest / 100000, b.drop_km))
             end

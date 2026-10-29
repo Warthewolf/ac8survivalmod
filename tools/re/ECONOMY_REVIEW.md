@@ -41,7 +41,7 @@ Mechanisms to confirm:
 | escorts: half a raid's fighter flights hold over the airfield (area 8 km, air-only, PlayerFirst) | RE_SV_Escort_NN | `events: RE_SV_Escort_NN (...) fired` |
 | strike package: from round 6, 35 % of normal rounds, a 2-ship at the airfield | startRound | `a strike package (...) goes for the airfield` |
 | hunters: at least one flight a round on the allied aircraft while they fly | ALLY.tick | `hunts the allied aircraft` |
-| jammer: from round 8, 50 % of normal rounds, an EA-18G leads a flight; enemies within 6 km +1 PilotRank; pays x3 | JAM.tick | `jammer: ...` |
+| jammer: from round 8, 50 % of normal rounds, an EA-18G leads a flight; enemies within 6 km +1 PilotRank; pays x3; its ECM pod fired every 14 s (0.72.1: "the EA-18G never activated it's ECM"; RE_SV_JamEcm_NN, slot 4 as AB.L..IN's) | JAM.tick | `jammer: ...`, `jammer: its ECM pod on (RE_SV_JamEcm_NN fired)` |
 | more airframes from their round: F-2A 4, F-15C 6, Gripen 7, F-35C 9, Su-35 10, Rafale / Typhoon 12, Su-57 16, F-22A 18; unseen weighting; signature types from Mercenary | pickAircraft (POOL_EXTRA rows) | `round N: ERA_... as f15c_common_sv (pool, ...)` |
 | specials: Ladons / Alicorn / AB.L..IN bring escorts from round 12; more health a round (MINDRIPPER's new) | startRound, ANOM.tick | `the alicorn brings N escorts` |
 | airfield: hit_damage 3, bomb_damage 10 (were 4, 12) | CFG | |
