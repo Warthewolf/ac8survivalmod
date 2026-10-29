@@ -9,8 +9,9 @@
 --   the hold: intensity above high for after_s, the next wave held hold.secs once it's due (the real roundsTick's gate
 --     open; hot long before that: no hold until then, the review of unit 7's case) and let go after, never made longer,
 --     gap_s after the last, per_wave a wave, the rest of a later wave at its next flight (not wave 1's); the spawn gap's
---     add while hot; the top cover's own hold (its dive / max_s waiting, P2's heldTick), a wave due during or just after
---     it held all the same, the top cover not held twice in a row; nothing to hold: none; a boss round, the lever off;
+--     add while hot; the top cover's own hold (its dive / max_s waiting, P2's heldTick; as the round's last flight up
+--     too, at most 30 s from then, a hold that never ends or not), a wave due during or just after it held all the
+--     same, the top cover not held twice in a row; nothing to hold: none; a boss round, the lever off;
 --   hold.tactics: the squad director's cover refused on a player above high (and given with it off);
 --   a push: comfortable for calm_s: a duelist flight turned onto you after "check your six", counted and tagged; a held
 --     top cover dives instead (not while its hold is on); per_round, cooldown_s, from_round; the director off, nothing in
@@ -400,6 +401,43 @@ check(evs("^RE_SV_DirFree") == "" and D.dir.held[L] ~= nil and has(line("directo
       "its max_s (115) passed inside the hold: still held (P2's heldTick waits)")
 tickTo(holdUntil, holdUntil + 1.5, true)
 check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_07" and D.dir.held[L] == nil, "the hold's end: let go (RE_SV_DirFree_07)")
+-- the round's last flight up inside the hold: it waits for the hold's end too (the review of unit 7: it went onto you
+-- at once), and never longer than 30 s from when it was the last, whatever the hold does (never a stall)
+holdScene(10, "fighting")
+D.waves = nil
+plane(L, 0, KM(10, 10, 5), DIRV(1, 0))
+alive[L] = 1
+D.up[L] = true
+D.dir.held[L] = { kind = "top", at = 95, dmg = 0, why = "top cover" }
+tickTo(100, 106, true)
+check(D.int.cover ~= nil and D.dir.held[L] ~= nil, "(the top cover's hold on)")
+for _, x in ipairs(planes) do if x.unit == U1 then x.down = true end end   -- (the other flight down: the hold stands)
+D.up[U1], alive[U1] = nil, 0
+events = {}
+from = #logs + 1
+holdUntil = D.int.cover.untilT
+tickTo(106.25, holdUntil - 0.25, true)
+check(evs("^RE_SV_DirFree") == "" and D.dir.held[L] ~= nil and has(line("director: ERA_Unit_03_Dep_Air0 (top cover), the round's last "
+      .. "flight up, waits for the intensity hold too", from), "s at most)"),
+      "the other flight down inside the hold: the top cover, the round's last flight up now, waits for its end (logged)")
+tickTo(holdUntil, holdUntil + 1.5, true)
+check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_07" and D.dir.held[L] == nil
+      and has(line("director: ERA_Unit_03_Dep_Air0 back in the fight", from), "the round's last flight (fighting)"),
+      "... let go at the hold's end, as the round's last flight")
+holdScene(10, "fighting")
+D.waves = nil
+plane(L, 0, KM(10, 10, 5), DIRV(1, 0))
+alive[L] = 1
+D.up = { [L] = true }
+D.dir.held[L] = { kind = "top", at = 95, dmg = 0, why = "top cover" }
+local rawHoldOn = DIR.holdOn
+DIR.holdOn = function(now) return now + 10 end          -- (a hold that never ends: say hold.gap_s 0, a player always hot)
+events = {}
+tickTo(100, 129.75)
+check(evs("^RE_SV_DirFree") == "" and D.dir.held[L] ~= nil, "a hold that never ends: the last flight up kept 30 s")
+tickTo(130, 131.5)
+check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_07" and D.dir.held[L] == nil, "... then let go all the same (never a stall)")
+DIR.holdOn = rawHoldOn
 -- a wave due while the top cover's hold is on: a hold of its own; the top cover not held twice in a row
 holdScene()
 plane(L, 0, KM(10, 10, 5), DIRV(1, 0))

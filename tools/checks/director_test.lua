@@ -15,10 +15,12 @@
 --     top cover (a Lancer flight held once its orders are in, its dive with the o'clock once you've fought another
 --       flight; let go when hit, as the last flight up but held ones in any round state (not while a wave still spawns;
 --       two held flights: one let go), at max_s, at your decoy's end with its orders (a dive inside your decoy waits for
---       its end); roles off: any flight),
+--       its end); a wave's first flight up with more to spawn waits for another, refused once the wave's out; roles off:
+--       any flight),
 --     the pincer (a wave's flights alternating on two bearings around you, noses on you, its tell once both sides have
---       a flight; tagged and counted once they're up, a flight that fell back to a normal point left out; one side only:
---       no pincer, its budget back; not a special's or a raid's wave; co-op: around the airfield; the zone's edge),
+--       a flight up, not one SV_Spawn refused; tagged and counted once they're up, a flight that fell back to a normal
+--       point left out; one side only: no pincer, its budget back; not a special's or a raid's wave; co-op: around the
+--       airfield; the zone's edge),
 --     regroup (a 4-ship down to 2: the tell, held hold_s, back; not the only flight up);
 --   the aces' own reversal: its flight's next move no sooner than lead_s + cover.move_s (the kulbit's 12 s);
 --   the fresh reads a tick (at most `reads`, a plane you're likely on the tail of first; shared with the tail watch);
@@ -27,7 +29,8 @@
 --     stand-in, ACE.hunt leaving it, the orders back after aim_s; inside your decoy: at its end), the split hunt waiting
 --     out a hold however long it lasts and given back after it (COOP.hunted), the holds in force sent to a joiner who
 --     links later (and not one let go meanwhile), KEEP_EVENTS, and the joiner's "dv" guards (names, its flight, a live
---     copy, the delay, the rate, a level still loading, "rs");
+--     copy, the delay, the rate, a level still loading, "rs"); past `players` (5 and 24 up) a joiner's tail episode
+--     kept on the ticks they aren't looked at (cover for them), over when they land or fly off its plane; solo's 1 s;
 --   the hooks in sv_main, sv_rounds, sv_spawn, sv_allies, sv_ai and main.lua by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -497,6 +500,33 @@ tickTo(238.25, 240)
 local freed = evs("^RE_SV_DirFree")
 check((freed == "RE_SV_DirFree_07" or freed == "RE_SV_DirFree_10") and (DIR.holding(LA) ~= DIR.holding(LB)),
       "the other flight down: one of them let go at once (" .. freed .. "), the other still held over it")
+-- a wave's first flight up with more of it to spawn: not refused as the only one (the review of unit 6), held once
+-- another's up; refused for good once its wave's out with nothing else up
+local function firstScene()
+    fresh(6, "spawning")
+    FLAGS = { SV_Up_07 = 1 }
+    plane(L, 0, KM(0, 8, 5), DIRV(0, -1)); plane(L, 1, KM(0.3, 8.2, 5), DIRV(0, -1))
+    D.up, D.queue, D.wave = { [L] = true }, { F }, 1
+    D.now = 200
+    DIR.spawned(L, "lancer", 2)
+end
+firstScene()
+from = #logs + 1
+tickTo(200, 206)
+check(evs("^RE_SV_Dir") == "" and D.dir.spawns[L].top == nil and since(from, "^director: top_cover not now") == 0
+      and has(line("director: top cover: ERA_Unit_03_Dep_Air0 waits for another flight up", from), "1 more of wave 1 to come")
+      and since(from, "waits for another flight up") == 1,
+      "the wave's first flight up, one more to spawn: not refused, it waits (logged once)")
+plane(F, 0, KM(12, 0), DIRV(-1, 0)); D.up[F], D.queue = true, {}
+tickTo(206.25, 208)
+check(evs("^RE_SV_Dir") == "RE_SV_DirHold_07" and DIR.holding(L), "... held once the next flight's up")
+firstScene()
+tickTo(200, 204)
+D.queue = {}
+from = #logs + 1
+tickTo(204.25, 206)
+check(evs("^RE_SV_Dir") == "" and D.dir.spawns[L].top == false and has(line("director: top_cover not now", from), "it's the only flight up"),
+      "... refused for good once the wave's spawned with nothing else up")
 topScene(3); tickTo(200, 206)
 check(evs("^RE_SV_Dir") == "", "round 3 (top_cover budget 0): no hold")
 ROLE.live = nil
@@ -591,6 +621,16 @@ check(evs("^RE_SV_RadioPincer") == "" and not anyTag and since(from, "pincer on 
       and has(line("director: pincer: wave 1's flights didn't come from two sides", from), "no pincer")
       and (D.dir.spent.room and D.dir.spent.room.pincer or 0) == 0,
       "one side only: no tell, no tags, not counted, its budget back")
+-- both sides placed, side 2's flight refused by SV_Spawn: no tell (said on SV_Spawn's word: DIR.spawned; review of unit 6)
+fresh(6); D.queue, D.wave = { P1, P2 }, 1; D.now = 300; DIR.wave(300)
+nCompass, failOn = 0, function() return false end
+local rawSpawn = SV_Spawn
+SV_Spawn = function(unit, ...) if unit == P2 then return 0 end return rawSpawn(unit, ...) end
+from = #logs + 1; spawns = {}
+for _, u in ipairs({ P1, P2 }) do spawnFlight(u) end
+SV_Spawn = rawSpawn
+check(evs("^RE_SV_RadioPincer") == "" and since(from, "^tell: pincer") == 0 and has(line("round 6: ERA_Unit_02_Dep_Air0", from), "not spawned"),
+      "both sides placed, side 2's flight not spawned: no pincer tell")
 spawnPoint = rawSpawnPoint
 CFG.director.pincer.chance = DEF.pincer.chance
 
@@ -804,7 +844,54 @@ clock = clock + 13
 COOP.tick(18)
 check(sentOf("ev|RE_SV_DirHold") == "", "... none for a flight let go meanwhile")
 CFG.coop.enabled = false
+-- past CFG.director.players (4) flying, the others looked at in turn: a joiner's tail episode stands on the ticks they
+-- aren't (the review's director-2: with 5 up it ended each tick player 2 wasn't picked, so no cover ever came)
+local peers0 = M.peers
+local function room(n, nearYou)                  -- you and n joiners; player 2 1 km behind a duelist, another 3 km off
+    fresh(6)
+    COOP.open, COOP.role, COOP.slot = true, "host", 0
+    local p2 = nearYou and KM(0, 4) or KM(50, 0)
+    local pa = nearYou and plane(A, 0, KM(0, 3), DIRV(0, -1)) or plane(A, 0, KM(51, 0), DIRV(1, 0))
+    local pq = nearYou and plane(Q, 0, KM(0, 7), DIRV(1, 0)) or plane(Q, 0, KM(50, 3), DIRV(0, -1))
+    D.up = { [A] = true, [Q] = true }
+    M.peers = {}
+    for slot = 1, n do
+        local at = slot == 1 and p2 or KM(-50, slot * 20)
+        local so = mkObj("BP_OP1022_f16c_CoopPeer_C_" .. slot, at, DIRV(1, 0))
+        M.peers[slot] = { obj = so, addr = so.addr, at = at, rot = { 0, 0, 0 }, alive = true, fresh = true,
+                          onAirfield = false, hpPct = 100 }
+    end
+    sent = {}
+    return pa, pq
+end
+room(4)
+tickTo(100, 106)
+check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and sentOf("^1>tl|six") ~= "",
+      "5 players up (players = 4), player 2 on a duelist's tail 50 km from the rest: the six tell to player 2, then the hunt")
+room(23, true)
+tickTo(100, 106)
+check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and sentOf("^1>tl|six") ~= "",
+      "24 players up (3 joiners looked at a tick), player 2 on the tail of a plane 3 km from you: the same")
+p = room(4)
+tickTo(100, 101)
+check(p.dirTail and p.dirTail.slot == 1, "(player 2's episode open)")
+M.peers[1].onAirfield = true
+tickTo(101.25, 101.25)
+check(p.dirTail == nil, "... over at once when player 2 isn't flying (on the airfield)")
+p = room(4)
+tickTo(100, 101)
+M.peers[1].at = KM(60, 0)
+tickTo(101.25, 101.25)
+check(p.dirTail == nil, "... or 9 km off its plane (looked at that tick or not)")
+M.peers = peers0
 COOP.open, COOP.role, COOP.slot = false, nil, nil
+p = coverScene()                                 -- (solo: off its tail, it ends TAIL_GRACE_S 1 s on, as before)
+tickTo(100, 101)
+move(p, KM(1, 0), DIRV(-1, 0))
+tickTo(101.25, 102)
+local keptS = p.dirTail ~= nil
+tickTo(102.25, 102.25)
+check(keptS and p.dirTail == nil, "solo: off its tail, the episode stands 1 s and ends the tick after")
 
 print("co-op: the joiner's \"dv\"")
 do
