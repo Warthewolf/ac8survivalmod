@@ -12,7 +12,7 @@
 --     kills (not sorted into ordinary), the host's restart and a resync ("rs");
 --   the code review of 2026-10-29: a special's guard kept out of the run line's Veteran+ figures, p.youAt kept by the
 --     sweep with [stats] off (a kill's aspect for P6), a hook's first error logged once (hookErr), a joiner's round and
---     run lines saying the tail watch isn't measured there.
+--     run lines saying the tail watch isn't measured there, ACE.hunt (the hunt tell) reading this visit's p.dist.
 -- Its log lines also go to <work dir>/test_lua.log, for stats_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -366,6 +366,18 @@ you.X = 0
 check(has(line("kill: " .. QY.name), "0.5 km away, 180 deg off its nose") and RUN.habit and RUN.habit.Kb == kb + 1,
       "[stats] off: the kill's aspect from p.youAt (P6 counts it from behind)")
 CFG.stats.enabled = true
+-- ACE.hunt (its hunt tell, TELL.hunted, reads p.dist) after this visit's p.dist (code review of 2026-10-29: it read the
+-- last sweep's, 2 s late, and none at a plane's first visit)
+do
+    local rawHunt, seenD = ACE.hunt, "not called"
+    ACE.hunt = function(p) seenD = p.dist end
+    local QH = sweepPlane("f16c", "ERA_Unit_09_Dep_Air0", 0)
+    QH.obj.loc = x(6)
+    planes = { QH }
+    planeSweep(1)
+    ACE.hunt = rawHunt
+    check(seenD == 6, "planeSweep: ACE.hunt reads this visit's p.dist (6 km at its first visit: " .. tostring(seenD) .. ")")
+end
 -- a hook that fails: its first error logged, once (code review of 2026-10-29: a bare pcall dropped it)
 local function count(prefix) local n = 0; for _, l in ipairs(logs) do if l:sub(1, #prefix) == prefix then n = n + 1 end end return n end
 local rawKill, rawTrack = PROF.kill, STATS.track

@@ -513,14 +513,14 @@ Tells wired now (the threats that exist today):
 
 | tell | when | where | to | shows | lead |
 |---|---|---|---|---|---|
-| reversal / kulbit | you on a move tier's (Reaper's) tail within 3 km / 70 deg (kulbit within 900 m) | sv_ai.lua ACE.movesTick (host / solo only) | you | "That's a sudden turn - coming straight at you!" or "He's mine!"; ACE REVERSAL / HE'S TURNING INTO YOU (ACE POST-STALL / DON'T OVERSHOOT), urgent | the move (RE_SV_AceTurn_NN / AceKulbit_NN) 1.0 s (0.5 s) after the tell (TELL.after); at once without a tell, as before |
-| hunt | a hunting tier's flight (Reaper: ACE.hunt keeps its target on you) first within hunt_km 8 of you, once a flight a round | sv_ai.lua ACE.hunt -> TELL.hunted (not on a joiner) | you | "Hunt down the Wings of Theve ..." or "I see our prey."; YOU ARE BEING HUNTED / ACES CLOSING ON YOU (queued) | - |
+| reversal / kulbit | you on a move tier's (Reaper's) tail within 3 km / 70 deg (kulbit within 900 m) | sv_ai.lua ACE.movesTick (host / solo only) | you | "That's a sudden turn - coming straight at you!" or "He's mine!"; ACE REVERSAL / HE'S TURNING INTO YOU (ACE POST-STALL / DON'T OVERSHOOT), urgent; a repeat kulbit (lead_s + 12 s on) told too: cooldown_s kulbit 12 (code review of 2026-10-29: at 20 every other one came untold) | the move (RE_SV_AceTurn_NN / AceKulbit_NN) 1.0 s (0.5 s) after the tell (TELL.after); at once without a tell, as before |
+| hunt | a hunting tier's flight (Reaper: ACE.hunt keeps its target on you) first within hunt_km 8 of you, once a flight a round (the sweep's p.dist of that visit: code review of 2026-10-29, it read the last sweep's, 2 s late) | sv_ai.lua ACE.hunt -> TELL.hunted (not on a joiner) | you | "Hunt down the Wings of Theve ..." or "I see our prey."; YOU ARE BEING HUNTED / ACES CLOSING ON YOU (queued) | - |
 | raid | a raid's, strike's or bombers' callout (the round's first bomber flight) | sv_spawn.lua spawnBomber | everyone | "Joker Flight, enemy aircraft approaching the eastern airfield." (Survival's airfield is Mission 22's eastern one) or two others; radio only (the round's callout stays) | - |
 | jammer / jammer_down | the jammer up; shot down | sv_spawn.lua spawnFlight; sv_main.lua creditKill | everyone | "The enemy's jamming you with a powerful ECM." / "Hostile EW aircraft destroyed! Jamming has been lifted!"; radio only | - |
 | wave | each later wave of a round from wave_from_round 26 (the late rounds' growth) | sv_rounds.lua roundsTick's wave branch | everyone | "New enemy aircraft detected. Look sharp!" or three others; radio only | - |
-| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; WARNING: RAILGUN / BUILD SPEED, THEN BREAK, urgent; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive, when it sinks or when the run restarts (SPC.alicornCleanup, from sv_main.lua's level-load reset) | the order's time is unchanged; the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
-| alcn_dive / alcn_up | its dive; counted surfaced | sv_alicorn.lua | everyone | "Enemy submarine diving!" / "Submarine has surfaced. Begin attack!"; radio only (its callouts stay; not on each resurface order) | - |
-| alcn_vls | its VLS volley | sv_alicorn.lua | everyone | "Missile launch from VLS!"; VLS LAUNCH / ALICORN MISSILES INBOUND, urgent | RE_SV_AlcnVolley 1.0 s after (not if it dived meanwhile) |
+| alcn_rail_first / alcn_rail | lead_s 5 s before each railgun order (it fired without a warning before) | sv_alicorn.lua alicornTick | everyone | "Joker Flight, the railgun has been activated." the first time, then "Enemy railgun's ready to fire." / "Railguns are getting ready to fire!"; WARNING: RAILGUN / BUILD SPEED, THEN BREAK, urgent; with CFG.specials.alicorn.rail_alert the RAILGUN WARNING on (RE_SV_AlcnAlertOn) until alert_s 12 after the order, at a dive, when it sinks or when the run restarts (SPC.alicornCleanup, from sv_main.lua's level-load reset). None once both railguns are down (the 2 s parts pass, `ARMS`: a kind seen up and none up now, or gone): the warning off at once, no more calls, warnings or orders (code review of 2026-10-29: they came every minute after the player had shot them) | the order's time is unchanged (after a surfacing: below); the warning comes earlier (the railgun then aims ~7 s and preps ~2 s: ALICORN.md) |
+| alcn_dive / alcn_up | its dive; counted surfaced | sv_alicorn.lua | everyone | "Enemy submarine diving!" / "Submarine has surfaced. Begin attack!"; radio only (its callouts stay; not on each resurface order) | alcn_up said: the railgun's warning no sooner than radio_gap_s 2 after it, its order lead_s after the warning (code review of 2026-10-29: with an order due under water both lines went out in the same second); nothing said: the order 5 s on, as before |
+| alcn_vls | its VLS volley, until every VLS is down (as the railguns) | sv_alicorn.lua | everyone | "Missile launch from VLS!"; VLS LAUNCH / ALICORN MISSILES INBOUND, urgent | RE_SV_AlcnVolley 1.0 s after (not if it dived, or its VLS went down, meanwhile) |
 | ladon_vls | a Ladon's VLS volley | sv_ladon.lua ladonTick | everyone (the volley's forwarded: each game's copy fires at its own player) | "Large aircraft has launched missile." / "The bomber has launched a missile!"; VLS LAUNCH / LADON MISSILES INBOUND, urgent | 0 (with it: the hatch opens first) |
 
 Catalogued for later units (lines, events and texts in, said by nothing yet): pincer (4 AWACS lines; TWO GROUPS INBOUND /
@@ -535,8 +535,9 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
   this game's own tells at once as before; a co-op host still sends its joiners theirs), `radio` true, `hud` true,
   `hud_s` 2.5, `gap_s` 4.0, `urgent_gap_s` 2.5, `radio_gap_s` 2.0, `line_gap_s` 20 (0: a line may come again at once),
   `hunt_km` 8.0, `wave_from_round` 26 (0: never).
-- `CFG.tells.cooldown_s` ([tells.cooldown_s]): reversal 20, kulbit 20, hunt 45, raid 30, jammer 30, jammer_down 10,
-  wave 20, alcn_vls 30, ladon_vls 15 (and 0 for the ALICORN's other calls; the later units' set too).
+- `CFG.tells.cooldown_s` ([tells.cooldown_s]): reversal 20, kulbit 12 (was 20: ACE.movesTick's kulbit gap is lead_s +
+  12 s), hunt 45, raid 30, jammer 30, jammer_down 10, wave 20, alcn_vls 30, ladon_vls 15 (and 0 for the ALICORN's other
+  calls; the later units' set too).
 - `CFG.tells.lead_s` ([tells.lead_s]): reversal 1.0, kulbit 0.5, alcn_rail 5.0, alcn_vls 1.0, ladon_vls 0.0 (dive,
   trap, six, bracket 1.0 for P2).
 - `CFG.tells.list`, `CFG.tells.text`: the catalog and its texts (build data and wording; not in the ini).
@@ -558,6 +559,9 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
   was full)` when four callouts were waiting, `hud: callout '<text>' dropped (a tell cut in)` when the callout a tell
   cut short went back into a full queue.
 - A restart with the ALICORN's RAILGUN WARNING up: `special: the Alicorn's RAILGUN WARNING off with the run`.
+- Its railguns or VLS shot down (code review of 2026-10-29), once each: `special: the Alicorn's railguns are down (2
+  found, none up): its RAILGUN WARNING off, no more railgun warnings or orders`, `special: the Alicorn's VLS are down (4
+  found, none up): no more VLS calls or volleys` (`0 found` when their actors went).
 - `perf: ...` shows `tells x/y` only when it's among the four worst parts (it does almost nothing).
 - Errors: `tell: <id>'s action failed: ...`, `tell: tick error ...`, `coop: tell error ...`.
 
@@ -573,7 +577,9 @@ still be the event package's delay on its salvo records, timed with TELL.leadS("
    banner cut short and the round's callout back after the tell.
 5. The ALICORN (Ctrl+5): the first call 5 s before the first order, the RAILGUN WARNING on until about 12 s after it, off
    at a dive and when it sinks; then log the seconds from RE_SV_AlcnRailgun to the first hit (HIT.tick) and tune
-   lead_s / alert_s. The VLS volley a second after its call.
+   lead_s / alert_s. The VLS volley a second after its call. After a surfacing "submarine has surfaced" first, the
+   railgun's call 2 s later (not over it). Shoot both railguns (4 missiles each): the RAILGUN WARNING off at once and
+   no WARNING: RAILGUN or call again; every VLS: no more VLS LAUNCH (the `are down` lines).
 6. A Ladon round (Ctrl+4): the volley's call with each volley.
 7. A raid (round 3, 6, ...), the jammer ([jammer] chance = 1.0, from_round = 2), a late wave ([rounds] start_round = 26).
 8. Whether the game's own play-by-play "Joker 1! Check your six!" already plays in Survival; if so, the six tell (P2)
@@ -606,7 +612,10 @@ exposed):
    130 and the volley at 131, the next call at 155, a dive at 157 turning it off, no order while dived, the sink turning
    it off, rail_alert off, tells off: the warning with the order, SPC.alicornCleanup turning it off once and the
    level-load reset calling it); a Ladon's volley after its call; raid, jammer,
-   jammer_down, wave, TELL.tick and Ctrl+0 by their place in the source.
+   jammer_down, wave, TELL.tick and Ctrl+0 by their place in the source. The code review of 2026-10-29 added: the
+   Reaper's next kulbit 12.5 s on told too, cooldown_s kulbit within ACE.movesTick's 12 s gap; stats_test: the sweep's
+   ACE.hunt reading that visit's p.dist; bosses_test: the railguns' and VLS' tells and orders stopping once they're
+   down, and the calls after a surfacing kept apart (unit 9's offline list).
 6. Co-op: a host's tell inside its mirrored rounds sends no "co" / "ev" (a round callout and the railgun warning still
    do); TELL.ALL plays here and sends "tl" to every joiner; a slot's tell goes to that slot only, with its own gaps;
    with the host's tells off both still go, its lead stands (alcn_vls' action 1 s on) and nothing plays on the host;
@@ -635,7 +644,8 @@ The earlier units' tests still pass: stats_test's ACE.movesTick case loads no sv
   until checklist item 5.
 - The lead runs on Lua's 250 ms tick (0-250 ms late); a frame-accurate lead is an event-package delay (TELL.leadS).
 - Several Reaper flights: the reversal's 20 s cooldown means a second flight's reversal within it comes without a tell
-  (at once, as before). The hunt tell is the host's only (its planes hunt the host); a joiner hears none.
+  (at once, as before); so does another flight's kulbit within the kulbit's 12 s (one flight's own repeats are told).
+  The hunt tell is the host's only (its planes hunt the host); a joiner hears none.
 - A tell that can't be said is dropped, not queued (e.g. a raid's call within 2 s of another tell).
 - The RAILGUN WARNING of a joiner who links mid-warning stays off until the next one (hostSync doesn't replay it).
   A run left from the level doesn't fire RE_SV_AlcnAlertOff (the level and its HUD go with it); a restart does.
@@ -1680,14 +1690,14 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
 | AB.L..IN's phase state | sv_anomalies.lua glitchTick (its arrival: s.phase 1, s.hp0 = its health after the round's scaling), `glitchPhase(c, s, n, now, why)` | 1 -> 2 in the frenzy-over branch once frenzies >= behind_after; -> 3 when its health <= hp0 x allout_hp (from 1 or 2; mid-blink it comes back first: frenzyUntil cut to now, the vanished branch brings it back, the next tick ends the frenzy). Each change logged and told |
 | the frenzy | `glitchFrenzy(c, s, o, at, you, now)` (the old frenzy body, moved out so phase 3's guns run without a frenzy) | as before: the blink check a tick on, vanish / back at a blink spot / frenzy over |
 | the behind blinks | `blinkSpot` | in phase 2, a draw under behind_share: the wanted bearing your heading + 180, the jitter and the last-blink penalty dropped for that pick; returns behind and the heading for the log (the first three, then every 10th) |
-| phase 3's ECM | glitchTick (no RE_SV_GlitchEcm in phase 3); `glitchPodsOff` (FindAllOf("BP_wp_ecm_a0_C") every ecm_check_s, only pods whose owner or instigator is AB.L..IN: bJammingEnable / bSupportEnable false, the before / after logged once; never destroyed); a joiner's copy: `ANOM.clientGlitch` (below); sv_rows.lua `glitchEcm` (ecm_row, off by default: row NPC_FCS_ECM000_SVE, anomEcm's values with 60 s between shots and 60 s rest; MINDRIPPER keeps anomEcm's _SVX) | phases 1-2 keep the pod up by its event every ecm_every_s 14 and anomEcm's 14 s row, together (hard rule 40's confirmed "up all fight"); phase 3 drops it by the pods-off write alone: the row's next pod (every 14 s) jams until the next check, at most ecm_check_s 2. ecm_row true takes the row's refire away too (at most a pod a minute), at the risk of phases 1-2's continuity |
+| phase 3's ECM | glitchTick (no RE_SV_GlitchEcm in phase 3); `glitchPodsOff` (FindAllOf("BP_wp_ecm_a0_C") every ecm_check_s, only pods whose owner or instigator is AB.L..IN: bJammingEnable / bSupportEnable false, the before / after logged once, and once when none of the pods up is its own (code review of 2026-10-29: a tester greps "ECM pods off"); never destroyed); a joiner's copy: `ANOM.clientGlitch` (below); sv_rows.lua `glitchEcm` (ecm_row, off by default: row NPC_FCS_ECM000_SVE, anomEcm's values with 60 s between shots and 60 s rest; MINDRIPPER keeps anomEcm's _SVX) | phases 1-2 keep the pod up by its event every ecm_every_s 14 and anomEcm's 14 s row, together (hard rule 40's confirmed "up all fight"); phase 3 drops it by the pods-off write alone: the row's next pod (every 14 s) jams until the next check, at most ecm_check_s 2. ecm_row true takes the row's refire away too (at most a pod a minute), at the risk of phases 1-2's continuity |
 | phase 3's guns and turns | glitchTick: offNose (its forward against you, as VALKA's), `hot3`, `gunsHot`; RE_SV_GlitchTurn (survival_events.py GLITCH_POST_STALL gains ('Turn', 'LastTGT'); never one of the random post_stall_moves: the build checks) | gunsHot = in a frenzy and not gone, or phase 3 with you close in front of it; the event's cadence allout_gun_s outside a frenzy. A LastTGT pushes the post-stalls 3 s on (VALKA's pattern) |
 | the rage | sv_ladon.lua `SPC.ladonRage(now, s, downKey)` (from the kill branch), the volley block (L.rage: rage.volley_every_s / volley_warn_s) | once a round, only when the other Ladon is still up (both down in one second: none); its pass lines say "(enraged N s ago)" |
 | the rage circuit | survival_events.py LADON_RAGE (from LADON_LOOP[0], just past the airfield, to LADON_AIRFIELD: hard rule 2), LADON_RAGE_SPEED '3000.0', ladons()' rage / rage_lap / rage_flag / rage_ev, INT_FLAGS SV_LadonRage<Key>; build_ladon: the appearance clears the flag, RE_SV_LadonRage<Key> sets it, and each PathFinish (the route's, the circuit's and the rage circuit's own, SV_LadonRageLap<Key>) adds its bombing pass and starts the circuit when the flag is 0, the rage circuit when it's 1 (two flag-gated executions, no delay); build_survival.py ladon_units: the path (make_path smooth: ControlType 1, no tube data, hard rules 34 / 35), its points inside the area's 0.9 | the switch at its next pass over the airfield, never mid-path (whether a replaced path fires its old PathFinish is unknown) |
-| the deck | sv_alicorn.lua `SPC.alicornDeck(now, s, c)` (alicornTick, each second while it sails), `deckFlight(dk)`, `partAt(o)`; the surfacing branch sets s.deckNext; sv_spawn.lua `spawnFlight(unit, maxLevel, pose)` (pose { x, y, z, yaw, why }: no spawn point, no pincer, no Lancer offset; logged "at the Alicorn's deck"); sv_rounds.lua startRound | the flight is an ordinary round flight: its tier, airframes (pickAircraft by its role), orders (ordersTick), D.up (the round waits for it after the sink), kill pay |
+| the deck | sv_alicorn.lua `SPC.alicornDeck(now, s, c)` (alicornTick, each second while it sails), `deckFlight(dk)`, `partAt(o)`; the surfacing branch sets s.deckNext; sv_spawn.lua `spawnFlight(unit, maxLevel, pose)` (pose { x, y, z, yaw, why }: no spawn point, no pincer, no Lancer offset; logged "at the Alicorn's deck"); sv_rounds.lua startRound | the flight is an ordinary round flight: its tier, airframes (pickAircraft by its role), orders (ordersTick), D.up (the round waits for it after the sink), kill pay. Its call held a second by another tell's gap (kind "gap"), twice at most, then the launch goes with its callout alone: after a surfacing the railgun's warning now comes radio_gap_s after "submarine has surfaced", a second before the deck's after_surface_s call (code review of 2026-10-29) |
 | the radio | survival_events.py TELL_LINES: SV_Radio_GlitchEcm (v0001_2693 "It's not jamming anymore!", ST_ms023 02_Jamming_Off), SV_Radio_LadonRage (v0001_3110 "The hostile's changed course.", ST_ms026 03_Nightmare_Assault), both LIVE_AWACS; the pack reuses Trap / EnTrap, phase 2 the Six lines, the deck AlcnDeck (unit 4's) | radio: 721 rows (61 tell lines); events: 771 triggers, 1540 execs (were 762 / 1518) |
 | co-op | sv_coop.lua KEEP_EVENTS gains ^RE_SV_AnomalyPack; the host's "rnd" gains AB.L..IN's phase (its 9th field: 1-3, else empty; a joiner keeps it as D.glitchPhase); `ANOM.clientGlitch(now)` (clientRounds, after ANOM.clientTick) switches the joiner's copy's pods off every ecm_check_s while the host's is in phase 3 | tools/re/COOP.md's boss phases bullet |
-| sure tells | sv_tells.lua TELL.play (`sureHud`), `send`; CFG.tells.list's `sure` on pack, glitch_six, glitch_allout | a sure tell not said (tells off, a gap, its cooldown, its lines) shows its callout anyway (raw, no radio; TELL.play's 4th value true), never between rounds, at the airfield or over the summary; a host sends one to its joiners through its gaps, and each joiner's own TELL.play does the same |
+| sure tells | sv_tells.lua TELL.play (`sureHud`), `send`; CFG.tells.list's `sure` on pack, glitch_six, glitch_allout | a sure tell not said (tells off, a gap, its cooldown, its lines) shows its callout anyway (raw, no radio; TELL.play's 4th value true), never between rounds, at the airfield or over the summary (with tells off too: play() returned "tells off" before it looked at the state, so TELL.play checks it again for a sure tell; code review of 2026-10-29); a host sends one to its joiners through its gaps, and each joiner's own TELL.play does the same |
 
 ### CFG keys (CFG.specials.<boss>; `[specials.<boss>.<part>]` in survival.ini; the host's for the room)
 - `anomaly.pack` ([specials.anomaly.pack]): `enabled` true, `spring_delay_s` 1.5, `min_s` 12, `hold_after_s` 4,
@@ -1725,14 +1735,19 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
   off every 2 s), its gun at you within 1.5 km and 20 deg of its nose every 0.5 s, LastTGT every 10 s`
 - a co-op joiner: `coop: AB.L..IN in its phase 3 on the host: its copy's ECM pods switched off here every 2 s`, then its
   own `special: AB.L..IN's ECM pods off: 1 of 1 (...)`
-- `special: AB.L..IN's ECM pods off: 1 of 1 (jamming/support true/true -> false/false)`
+- `special: AB.L..IN's ECM pods off: 1 of 1 (jamming/support true/true -> false/false)`; none its own (once, then the
+  line above when one is): `special: AB.L..IN's ECM pods off: none of its own found (N BP_wp_ecm_a0 up, none its own by
+  owner or instigator); looked for again every ecm_check_s`
+- tells off, a sure tell at the airfield / between rounds / over the summary: `tell: glitch_allout not said (down at the
+  airfield)` (no callout)
 - `special: AB.L..IN's guns all out: you 1.0 km off its nose (6 deg)`, `special: AB.L..IN LastTGT N (1), you behind it, ...`
 - `special: round R, AB.L..IN shot down ... (F frenzies, B blinks; phase 3, N blinks behind you, T LastTGT)`
 - `special: Ladon MISHKA enraged (KOT down): volleys every 25 s, the rage circuit from its next pass (RE_SV_LadonRageMishka fired)`
 - `special: Ladon MISHKA fires a launcher at you (...), enraged`, `special: Ladon MISHKA's pass over the airfield (N): -D (enraged S s ago)`
 - `round R: the Alicorn's deck launches up to N flights of 2[ (E of them its escorts)]`
-- `tell: alcn_deck: RE_SV_RadioAlcnDeck (fired)`; `round R: ERA_Unit_07_Dep_Air0 [skirm] as f02a_common (...), ..., at the
-  Alicorn's deck, 1.2 km up: 2 aircraft up`; `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at 1200 m,
+- `tell: alcn_deck: RE_SV_RadioAlcnDeck (fired)` (after a surfacing a second later than before, after `tell: alcn_deck
+  not said (1.0 s after alcn_rail_first, its gap 2.0 s)` when the railgun was warned 2 s after it surfaced);
+  `round R: ERA_Unit_07_Dep_Air0 [skirm] as f02a_common (...), ..., at the Alicorn's deck, 1.2 km up: 2 aircraft up`; `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at 1200 m,
   L launches left this round` (`at 1100 m (alt_m under the pool's floor)` with a lower alt_m); `special: the Alicorn's
   deck waits: 2 of its flights up`; `special: the Alicorn's deck: <unit> didn't launch (...); again in 8 s, told first`
 - `special: round R, the Alicorn sunk ... (core down, hull H; N deck launches)`
@@ -1765,7 +1780,10 @@ the contract's single COOP_TAG bump (it comes last). Every piece has its own `en
    the guards onto the host only; AB.L..IN's phase 3 ECM drop shows on the joiner's radar too (the joiner's log: "coop:
    AB.L..IN in its phase 3 on the host ..."); the deck flights appear on the joiner's game.
 7. Tells off (survival.ini [tells] enabled = false): THE PACK SPRINGS, IT'S ON YOUR SIX and ITS ECM IS DOWN still show
-   (callouts only, no radio).
+   (callouts only, no radio), but not while you're down at the airfield, between rounds or over the summary.
+8. An ALICORN round (code review of 2026-10-29): destroy both railguns (and every VLS): no more railgun warnings, RAILGUN
+   WARNING, VLS LAUNCH or volleys. Does a destroyed railgun or VLS read HealthInternal 0, or go (`0 found`)? Either
+   counts as down; one that stays above 0 while wrecked would keep its tells (the `are down` line never comes).
 
 ### Offline test
 `sh tools/checks/bosses_test.sh` (real parts, the game stubbed; in tools/README.md's checks row): survival.ini's four
@@ -1789,7 +1807,14 @@ bosses_build_check.py on survival_events.py: the rage circuit (start / end, area
 flags), GLITCH_POST_STALL's Turn, the radio lines, the Lua names the build checks. Three mutants (the ECM event still
 fired in phase 3, a rage with both Ladons down, a launch while you're at the airfield) each fail it; so do the review
 fixes' five (the deck taking a round's flight, the rage under the gap, no sure callout, a joiner's pods off in phase 2,
-the deck told while you're at the airfield).
+the deck told while you're at the airfield). The code review of 2026-10-29 added (each fails on aa96bc1's parts): the
+ALICORN's railguns and VLS (both railguns shot inside a warning: the RAILGUN WARNING off at once, no order, call or
+warning for 135 s while its VLS go on; every VLS down: no call, callout or volley; a VLS down in its call's lead: no
+volley; railguns gone: down; regression guards: one of two down, railguns never read up or unreadable, warned and fired
+as before), the calls after a surfacing (alcn_up at 31, the railgun's warning at 33 and its order at 38, the deck's call
+held to 35 by that gap and launched at 38; a gap that won't end: held twice, its callout alone at 36, the launch at 39;
+tells off: the order at 36 as before), a sure tell with tells off at the airfield, between rounds and over the summary
+(none; a joiner's from the host between rounds still shows), and AB.L..IN's pods-off line when none is its own.
 
 ### Untested / known limits
 - [I] Nothing here has run in game. The mechanisms are confirmed ones (unique actions by unit, hard rule 37; the blink
@@ -1818,6 +1843,12 @@ the deck told while you're at the airfield).
   until the first parts pass (2 s), so the first launch (25 s) has it. The hull's forward is read from its core part
   (attached, so the hull's), else "towards you". D.deckLeft doesn't grow with co-op's player count except through its
   folded escorts (COOP.more scales those).
+- [I] The ALICORN's railguns / VLS down (code review of 2026-10-29): read from BP_BA002_alcn_emls_Base_C (LiveAIRailgun)
+  and the vls*_Base_C parts' HealthInternal in the 2 s parts pass (FindAllOf until some are found, then those kept), so
+  the warning may stand up to 2 s after the last is shot. Whether a destroyed part reads 0 or goes (no longer valid) is
+  unknown (both count); one never read above 0 is never counted down.
+  Whether the game drops one of two radio lines asked for in the same frame is unknown too: after a surfacing they're
+  now radio_gap_s apart (the order 2 s later than before when it was due under water).
 - Not built: the Ladons' top cover (against the user's 2026-10-25 instruction; the brief's step 6 off by default would
   still have changed that rule, so it's left out), MINDRIPPER's optional third phase (a wider field under 40 % health: a
   joiner's own field couldn't follow it without a new "rnd" field), a closer blink ring.

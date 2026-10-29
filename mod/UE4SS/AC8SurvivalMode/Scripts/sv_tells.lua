@@ -249,10 +249,13 @@ local function sureHud(id, a, b, why)
     return okH
 end
 -- (said: true; not: false, why, kind, and true when a sure tell's callout showed instead. Nothing between rounds, down
--- at the airfield or over the summary: kind "state", a sure one too)
+-- at the airfield or over the summary: kind "state", a sure one too, with tells off as well: play() says "tells off"
+-- before it looks, so the state is checked here again (code review of 2026-10-29: the callout came over the landing))
 function TELL.play(id, a, b, from, force, line)
     local said, why, kind = play(id, a, b, from, force, line)
     if said or kind == "state" or not TELL.known(id) then return said, why, kind end
+    local held = isSure(id) and not force and blocked(from ~= nil)
+    if held then refused(st(), id, held, "state"); return false, held, "state" end
     if sureHud(id, a, b, why) then return false, why, kind, true end
     return said, why, kind
 end
