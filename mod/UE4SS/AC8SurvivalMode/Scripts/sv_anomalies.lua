@@ -458,11 +458,13 @@ end
 -- Its ECM pods switched off (phase 3, ecm_pods_off; untested in game: a live write to the pod weapon's fields,
 -- tools/re/MINIMAP_MARKERS.md 3: LiveElectronicSupportMeasures bJammingEnable / bSupportEnable). Never destroyed (a
 -- weapon actor destroyed from Lua crashed the game: sv_ladon.lua). Its pods: BP_wp_ecm_a0 actors whose owner (or
--- instigator) is AB.L..IN; the first time, the log says what each read before and after.
+-- instigator) is AB.L..IN; the first time, the log says what each read before and after (and once when none of the
+-- pods up is its own: a tester greps "ECM pods off" either way; code review of 2026-10-29).
 local function glitchPodsOff(c, s, o)
     local mine = addrOf(o)
-    local found, off, said = 0, 0, {}
+    local found, off, said, pods = 0, 0, {}, 0
     for _, w in ipairs(FindAllOf("BP_wp_ecm_a0_C") or {}) do
+        pods = pods + 1
         local okO, own = pcall(function() return w:GetOwner() end)
         local okI, ins = pcall(function() return w:GetInstigator() end)
         local ours = (okO and valid(own) and addrOf(own) == mine) or (okI and valid(ins) and addrOf(ins) == mine)
@@ -478,6 +480,10 @@ local function glitchPodsOff(c, s, o)
     if not s.podsSaid and found > 0 then
         s.podsSaid = true
         log(string.format("special: %s's ECM pods off: %d of %d (jamming/support %s)", c.name, off, found, table.concat(said, ", ")))
+    elseif not s.podsSaid and not s.podsNoneSaid and found == 0 then
+        s.podsNoneSaid = true
+        log(string.format("special: %s's ECM pods off: none of its own found (%d BP_wp_ecm_a0 up, none its own by "
+            .. "owner or instigator); looked for again every ecm_check_s", c.name, pods))
     end
     return found, off
 end

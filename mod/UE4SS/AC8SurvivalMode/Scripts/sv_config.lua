@@ -166,9 +166,11 @@ CFG = {
     -- inside it; 0: no such limit): a tell whose lines are all that recent shows its callout only, or isn't said.
     -- sure = true (the bosses' phase changes, P7: the warning before a change that must come, code review of unit 9):
     -- not said for its switches, a gap, its cooldown or its lines, its callout shows anyway (no radio); between rounds,
-    -- down at the airfield or over the summary nothing, as any tell; a host sends it to its joiners whatever its gaps.
+    -- down at the airfield or over the summary nothing, as any tell (with tells off too: code review of 2026-10-29); a
+    -- host sends it to its joiners whatever its gaps.
     -- lead_s: an action that follows its tell (TELL.after) comes this long after it, at once when the tell wasn't said
-    -- or tells are off.
+    -- or tells are off. cooldown_s kulbit 12: an ace's next kulbit comes its lead + 12 s after the last (ACE.movesTick),
+    -- so each is told (code review of 2026-10-29: at 20 every other one came untold).
     -- enabled = false: no tells for this game's player (and its own tells' actions at once, as before tells; a co-op
     -- host still sends its joiners theirs, with its leads); radio / hud: either half off.
     -- Wired to today's threats: an ace's reversal (reversal, kulbit within 900 m: ACE.movesTick, its move lead_s after
@@ -183,7 +185,7 @@ CFG = {
     tells = {
         enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
         line_gap_s = 20, hunt_km = 8.0, wave_from_round = 26,
-        cooldown_s = { reversal = 20, kulbit = 20, hunt = 45, raid = 30, jammer = 30, jammer_down = 10, wave = 20,
+        cooldown_s = { reversal = 20, kulbit = 12, hunt = 45, raid = 30, jammer = 30, jammer_down = 10, wave = 20,
                        alcn_rail_first = 0, alcn_rail = 0, alcn_dive = 0, alcn_up = 0, alcn_vls = 30, alcn_deck = 30,
                        ladon_vls = 15, pincer = 30, split = 20, dive = 20, clock = 0, drag = 30, lure = 30, trap = 20,
                        cover_ask = 20, six = 20, bracket = 15, regroup = 30, lancer = 60, skirm = 60,
@@ -1158,19 +1160,22 @@ CFG = {
         -- rail_alert (behaviour roadmap P3/P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 4): Mission 18's RAILGUN WARNING on
         -- every game (RE_SV_AlcnAlertOn, forwarded) with the railgun's tell (CFG.tells alcn_rail, its lead_s before the
         -- order), off alert_s after the order (it aims ~7 s and preps ~2 s: tools/re/ALICORN.md), at a dive and when it
-        -- sinks (hard rule 45); false: no warning (the tell still comes with tells on)
+        -- sinks (hard rule 45); false: no warning (the tell still comes with tells on). After a surfacing the warning
+        -- comes no sooner than radio_gap_s after "submarine has surfaced" (the order its lead after it). Once you've
+        -- destroyed both railguns: the warning off, no more warnings, tells or orders; every VLS: no more VLS calls or
+        -- volleys (code review of 2026-10-29)
         -- deck (behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck"; tools/re/BEHAVIOUR_DIRECTOR.md
         -- unit 9): while it's up it launches fighters: a free pool flight of `size` (the Skirmishers' own with the fighter
         -- roles on, CFG.roles; else any) spawned alt_m above it, ahead_m off its bow, along its heading (Survival's spawner
         -- with a pose, not Online Mode's launches, whose pooled fighters stay put away; never one of the round's own
         -- flights still to come). The first first_s after it appears, then every every_s, and after_surface_s after each
         -- surfacing; warn_s before each its radio call (CFG.tells alcn_deck) and a callout, only once the launch can go
-        -- (a launch held is told again warn_s before it goes); never more than max_up of its flights up at once, never
-        -- while you're down at the airfield (a flight that appears in the landing menu gets no orders). alt_m: at least
-        -- 1100 (the pool's 2-ship units fly 1000 m and up: survival WD's MinAltitudeInMeter, code review of unit 9). A
-        -- round's launches: `flights` + flights_per_round x the round, at most max_flights; from specials.escort_from its
-        -- escorts come off the deck too (escorts: their aircraft in flights of `size`, none from a spawn point). false: no
-        -- launches (its escorts as before)
+        -- (a launch held is told again warn_s before it goes; another tell's gap holds it a second, twice at most); never
+        -- more than max_up of its flights up at once, never while you're down at the airfield (a flight that appears in
+        -- the landing menu gets no orders). alt_m: at least 1100 (the pool's 2-ship units fly 1000 m and up: survival
+        -- WD's MinAltitudeInMeter, code review of unit 9). A round's launches: `flights` + flights_per_round x the round,
+        -- at most max_flights; from specials.escort_from its escorts come off the deck too (escorts: their aircraft in
+        -- flights of `size`, none from a spawn point). false: no launches (its escorts as before)
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
                     surfaced_m = 3, resurface_s = 8, resurface_tries = 4, up_wait_s = 60,
                     rail_alert = { enabled = true, alert_s = 12 },

@@ -9,7 +9,8 @@
 --     airfield or over the summary, radio / hud / all off; no radio line asked for again within line_gap_s by any tell
 --     (reversal and kulbit share theirs: the callout only, or not said), a line that didn't fire not counted;
 --   TELL.after: the action lead_s later (TELL.tick, on the round clock), at once unsaid or with tells off, never with need;
---   the wiring: an ace's reversal and kulbit (ACE.movesTick: the call, the move lead_s later), the hunt (ACE.hunt), the
+--   the wiring: an ace's reversal and kulbit (ACE.movesTick: the call, the move lead_s later; its next kulbit 12.5 s on
+--     told too: cooldown_s kulbit fits the gap, code review of 2026-10-29), the hunt (ACE.hunt), the
 --     ALICORN's railgun (the call and RAILGUN WARNING lead_s before the order, off alert_s after it, at a dive, at the
 --     sink; the first call "activated", then the others), its dive, surfacing and VLS volley (after its call), a Ladon's
 --     volley, and the raid, jammer, wave and Ctrl+0 hooks by their place in the source;
@@ -359,6 +360,18 @@ do
     check(count(events, "^RE_SV_RadioTurn") == 1 and callouts[1].text == "ACE POST-STALL", "within 900 m: the kulbit's tell")
     D.now = 125.5; TELL.tick(125.5)
     check(events[#events] == "RE_SV_AceKulbit_13", "... the kulbit 0.5 s later")
+    -- its next kulbit lead_s + 12 s on (ACE.movesTick's gap) is told too: cooldown_s kulbit fits the gap (code review of
+    -- 2026-10-29: at 20 every other kulbit came with no call, callout or lead)
+    callouts = {}
+    local fK = #logs + 1
+    D.now = 137.5
+    ACE.movesTick(137.5, D)
+    check(callouts[1] and callouts[1].text == "ACE POST-STALL" and count(events, "^RE_SV_RadioTurn") == 2 and line("tell: kulbit not said", fK) == nil
+          and events[#events]:match("^RE_SV_RadioTurn") ~= nil, "the next kulbit 12.5 s on: told (the other line), the move not yet")
+    D.now = 138; TELL.tick(138)
+    check(events[#events] == "RE_SV_AceKulbit_13", "... then the kulbit")
+    local sai = readAll(MOD .. "/Scripts/sv_ai.lua")
+    check(DEF.cooldown_s.kulbit <= 12 and has(sai, "(kulbit and 12 or"), "cooldown_s kulbit " .. tostring(DEF.cooldown_s.kulbit) .. " within ACE.movesTick's 12 s kulbit gap")
     CFG.tells.enabled = false; D.aceMoveAt = {}; events = {}
     ACE.movesTick(150, D)
     check(events[1] == "RE_SV_AceKulbit_13" and #events == 1, "tells off: the move at once, no line (as before)")

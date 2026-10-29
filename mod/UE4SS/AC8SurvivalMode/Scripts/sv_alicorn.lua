@@ -131,8 +131,12 @@ local function fire(ev)
     local r = type(SV_Event) == "function" and SV_Event(ev) or -5
     if r ~= 1 then log("special: " .. ev .. " not fired: " .. (SV_ERR[r] or tostring(r))) end
 end
--- a tell to every player (behaviour roadmap P3, sv_tells.lua), when tells are in
-local function tell(id) if TELL then pcall(TELL.say, id, TELL.ALL) end end
+-- a tell to every player (behaviour roadmap P3, sv_tells.lua), when tells are in; whether it was said (here or sent)
+local function tell(id)
+    if not TELL then return false end
+    local ok, said = pcall(TELL.say, id, TELL.ALL)
+    return ok and said == true
+end
 -- Mission 18's RAILGUN WARNING on / off (CFG.specials.alicorn.rail_alert: RE_SV_AlcnAlertOn / Off, forwarded, so every
 -- game shows its own; hard rule 45)
 local function railAlert(s, on)
@@ -202,6 +206,43 @@ local function partAt(o)
     return l, n > 0.1 and { X = f.X / n, Y = f.Y / n } or nil
 end
 
+-- Its railguns (LiveAIRailgun, not their hatches: railgun_R's can't be destroyed, ALICORN.md 1.2) and its VLS: once a
+-- kind is down its tells and orders stop (code review of 2026-10-29: WARNING: RAILGUN, Mission 18's RAILGUN WARNING and
+-- VLS LAUNCH came every minute after the player had shot them all). A kind's parts are looked for (FindAllOf) until
+-- some are found, then kept (s.arms, as s.depthPart); how many of them are still there, and how many are up (a health
+-- that can't be read counts as up, as the tanks')
+local ARMS = { { key = "rail", what = "railguns", after = "its RAILGUN WARNING off, no more railgun warnings or orders",
+                 classes = { "BP_BA002_alcn_emls_Base_C" } },
+               { key = "vls", what = "VLS", after = "no more VLS calls or volleys",
+                 classes = { "BP_BA002_alcn_vlsL1_Base_C", "BP_BA002_alcn_vlsL2_Base_C", "BP_BA002_alcn_vlsR1_Base_C",
+                             "BP_BA002_alcn_vlsR2_Base_C", "BP_BA002_alcn_vls_Base_C" } } }
+local function armsUp(s, a)
+    s.arms = s.arms or {}
+    local list = s.arms[a.key]
+    if not list then
+        local seen = {}
+        list = {}
+        for _, cls in ipairs(a.classes) do                -- (vls_Base may list its subclasses' parts too)
+            for _, o in ipairs(parts(cls)) do
+                local key = addrOf(o) or nameOf(o)
+                if not seen[key] then seen[key] = true; list[#list + 1] = o end
+            end
+        end
+        if #list == 0 then return 0, 0 end
+        s.arms[a.key] = list
+    end
+    local n, up = 0, 0
+    for _, o in ipairs(list) do
+        if valid(o) then
+            n = n + 1
+            local h = hp(o)
+            if h == nil or h > 0 then up = up + 1 end
+        end
+    end
+    return n, up
+end
+local function armsDown(s, key) return s.armsDown ~= nil and s.armsDown[key] == true end
+
 -- Its deck (CFG.specials.alicorn.deck; behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck";
 -- tools/re/BEHAVIOUR_DIRECTOR.md unit 9): while it's up (sailing, not dived) a free pool flight of deck.size is launched
 -- off its bow (Survival's spawner with a pose, spawnFlight: ahead_m along its heading, alt_m above the sea; Online
@@ -260,9 +301,19 @@ function SPC.alicornDeck(now, s, c)
         return hold(5)
     end
     if not s.deckWarned then                              -- (its tell, then the launch warn_s on)
-        s.deckWarned = true
+        -- (another tell's gap holds it a second, twice at most: after a surfacing the railgun's warning comes radio_gap_s
+        -- after "submarine has surfaced", a second before this call; code review of 2026-10-29)
+        local said, kind = false, nil
+        if TELL then
+            local okT, r, _, k = pcall(TELL.say, "alcn_deck", TELL.ALL)
+            said, kind = okT and r == true, okT and k or nil
+        end
+        if not said and kind == "gap" and (s.deckGaps or 0) < 2 then
+            s.deckGaps = (s.deckGaps or 0) + 1
+            return hold(1)
+        end
+        s.deckWarned, s.deckGaps = true, nil
         hudCallout(t.alicorn_deck, t.alicorn_deck_sub)
-        if TELL then pcall(TELL.say, "alcn_deck", TELL.ALL) end
     end
     if now < s.deckNext then return end
     if not fwd then                                       -- (no bow to read: the launch towards you)
@@ -315,12 +366,17 @@ function SPC.alicornTick(now, s)
             log(string.format("special: the Alicorn surfacing (%s down)", down and string.format("%.0f m", down) or "depth unknown"))
         elseif not down or down <= (c.surfaced_m or 3) or now - s.surfaceSent >= (c.up_wait_s or 60) then
             s.dived, s.nextDive = false, now + c.dive_every_s
-            s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
             if c.deck and c.deck.enabled then            -- (a launch off its deck soon after: P7)
                 s.deckNext, s.deckWarned = now + (tonumber(c.deck.after_surface_s) or 0), nil
             end
             hudCallout(t.alicorn_surface, nil)
-            tell("alcn_up")
+            -- its call, then the railgun's warning no sooner than that call's gap on (radio_gap_s), the order its lead
+            -- after the warning (code review of 2026-10-29: with an order due under water both lines went out in the
+            -- same second); nothing said: the order 5 s on, as before
+            local gap = tell("alcn_up") and math.max(0, tonumber(CFG.tells.radio_gap_s) or 0) or 0
+            local warnLead = gap > 0 and TELL and TELL.leadS("alcn_rail") or 0
+            s.nextRail = math.max(s.nextRail, now + 5, now + gap + warnLead)
+            s.nextVolley = math.max(s.nextVolley, now + 8)
             log(string.format("special: the Alicorn surfaces, %.0f s after the order (%d sent%s)", now - s.surfaceSent, s.surfaceTry,
                 (down and down > (c.surfaced_m or 3)) and string.format(", still %.0f m down: counted up after up_wait_s", down) or ""))
         elseif now - s.lastZAt >= (c.resurface_s or 8) then
@@ -336,11 +392,13 @@ function SPC.alicornTick(now, s)
     -- the railgun's tell (behaviour roadmap P3; it fired without a warning before): its lead_s (CFG.tells alcn_rail)
     -- before each order the radio call and WARNING: RAILGUN on every game (the first time "the railgun has been
     -- activated"), and the RAILGUN WARNING (rail_alert) from then until alert_s after the order. The order's time is
-    -- as it was; the railgun then aims ~7 s and preps ~2 s (tools/re/ALICORN.md)
+    -- as it was (but after a surfacing: above); the railgun then aims ~7 s and preps ~2 s (tools/re/ALICORN.md). Its
+    -- railguns down (ARMS): none of it
     local ra = c.rail_alert or {}
     if s.railOffAt and now >= s.railOffAt then railAlert(s, false) end
     local lead = TELL and TELL.leadS("alcn_rail") or 0
-    if not s.dived and not s.railWarned and now >= s.nextRail - lead then
+    local railUp, vlsUp = not armsDown(s, "rail"), not armsDown(s, "vls")
+    if not s.dived and railUp and not s.railWarned and now >= s.nextRail - lead then
         s.railWarned = true
         if TELL then
             local okT, said = pcall(TELL.say, s.railSaid and "alcn_rail" or "alcn_rail_first", TELL.ALL)
@@ -349,14 +407,16 @@ function SPC.alicornTick(now, s)
         if ra.enabled then railAlert(s, true) end
         log(string.format("special: the Alicorn's railgun in %.0f s: warned", math.max(0, s.nextRail - now)))
     end
-    if not s.dived and now >= s.nextRail then
+    if not s.dived and railUp and now >= s.nextRail then
         s.nextRail, s.railWarned = now + c.railgun_every_s, nil
         fire("RE_SV_AlcnRailgun")
         if s.railAlertOn then s.railOffAt = now + (tonumber(ra.alert_s) or 12) end
     end
-    if not s.dived and now >= s.nextVolley then          -- (its VLS volley: the tell's lead_s after it, P3)
+    if not s.dived and vlsUp and now >= s.nextVolley then   -- (its VLS volley: the tell's lead_s after it, P3)
         s.nextVolley = now + c.volley_every_s
-        local function volley() if s.state == "sail" and not s.dived then fire("RE_SV_AlcnVolley") end end
+        local function volley()                          -- (not if it dived, or its VLS went down, in the lead)
+            if s.state == "sail" and not s.dived and not armsDown(s, "vls") then fire("RE_SV_AlcnVolley") end
+        end
         if TELL then TELL.after("alcn_vls", TELL.ALL, volley) else volley() end
     end
     local okDk, errDk = pcall(SPC.alicornDeck, now, s, c)    -- (fighters off its deck while it's up: P7)
@@ -422,6 +482,21 @@ function SPC.alicornTick(now, s)
         if n > 0 then
             log(string.format("special: Alicorn weapons: %d parts lowered to %d missiles (railguns %d)", n,
                 math.floor((c.weapon_missiles or 0) * growth + 0.5), math.floor((c.railgun_missiles or 0) * growth + 0.5)))
+        end
+    end
+    -- its railguns and VLS (ARMS): a kind is down once a part of it was seen up and none is now (one gone, no longer
+    -- valid, counts as down, as a tank), for good (a part shot down doesn't come back); one never seen up (a 0 read as
+    -- it appears) isn't
+    s.armsSeen, s.armsDown = s.armsSeen or {}, s.armsDown or {}
+    for _, a in ipairs(ARMS) do
+        if not s.armsDown[a.key] then
+            local n, up = armsUp(s, a)
+            if up > 0 then s.armsSeen[a.key] = true
+            elseif s.armsSeen[a.key] then
+                s.armsDown[a.key] = true
+                if a.key == "rail" then railAlert(s, false) end
+                log(string.format("special: the Alicorn's %s are down (%d found, none up): %s", a.what, n, a.after))
+            end
         end
     end
     local tanks, seen = 0, #tankList

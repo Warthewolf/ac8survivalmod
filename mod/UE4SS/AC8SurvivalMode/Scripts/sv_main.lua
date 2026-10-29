@@ -188,6 +188,7 @@ local function planeSweep(slot)
             end
             if up then
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+                p.dist = (p.at and you) and km(p.at, you) or nil                   -- (ACE.hunt's tell reads it)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
                 pcall(planeUnit, p)
                 local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
@@ -201,7 +202,6 @@ local function planeSweep(slot)
                 pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
-                p.dist = (p.at and you) and km(p.at, you) or nil
                 hookErr("stats: STATS.track", pcall(STATS.track, p, you or nil, D and D.now))   -- (sv_stats.lua)
             else
                 p.down = true
