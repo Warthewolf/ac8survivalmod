@@ -339,8 +339,9 @@ function spawnFlight(unit, maxLevel, pose)
         jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side")
             or (pose and (", at " .. tostring(pose.why or "its caller's pose"))) or "",
         alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r > 0 and role then pcall(ROLE.spawned, unit, role, r, ace) end   -- (its tell, the Wolf trap's hold: below)
-    if r > 0 and DIR and DIR.spawned then pcall(DIR.spawned, unit, role, r, ace) end   -- (the director's top cover, regroup)
+    -- (a role flight's tell and the Wolf trap's hold: below; the director's top cover and regroup)
+    if r > 0 and role then hookErr("roles: ROLE.spawned", pcall(ROLE.spawned, unit, role, r, ace)) end
+    if r > 0 and DIR and DIR.spawned then hookErr("director: DIR.spawned", pcall(DIR.spawned, unit, role, r, ace)) end
     if jam and r > 0 then
         D.jammer = { unit = unit, at = D.now }
         local t = CFG.hud.text
@@ -356,7 +357,7 @@ function spawnFlight(unit, maxLevel, pose)
         end
         D.aceSquad = D.aceSquad or {}
         D.aceSquad[unit] = ace and true or nil                -- (the leaderboard's ace squadron kills)
-        if ACE.squadUp then pcall(ACE.squadUp, unit, ace, role, r) end   -- (its opener waits for first contact: P9)
+        if ACE.squadUp then hookErr("aces: ACE.squadUp", pcall(ACE.squadUp, unit, ace, role, r)) end   -- (its opener, P9)
         D.orders = D.orders or {}
         D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
         if ace then

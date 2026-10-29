@@ -202,7 +202,7 @@ local function planeSweep(slot)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
                 p.dist = (p.at and you) and km(p.at, you) or nil
-                pcall(STATS.track, p, you or nil, D and D.now)                     -- (the measurements, sv_stats.lua)
+                hookErr("stats: STATS.track", pcall(STATS.track, p, you or nil, D and D.now))   -- (sv_stats.lua)
             else
                 p.down = true
                 pcall(KILL.read, p)                                                -- (the last hits, if it's still there)
@@ -213,7 +213,7 @@ local function planeSweep(slot)
                 pcall(probeKill, p, you or nil, g)
                 local okC, by = pcall(creditKill, p)
                 if not okC then log("credits: error " .. tostring(by)); by = nil end
-                pcall(STATS.down, p, g, by, D and D.now)
+                hookErr("stats: STATS.down", pcall(STATS.down, p, g, by, D and D.now))
             end
         end
     end
@@ -472,7 +472,7 @@ local function probeTick(tick)
         you = nil
     end
     if slot ~= 0 then return end                                    -- every 2 s: the summaries
-    if D then pcall(STATS.sample, D.now, you or nil) end            -- (the measurements' time down at the airfield)
+    if D then hookErr("stats: STATS.sample", pcall(STATS.sample, D.now, you or nil)) end   -- (the measurements, P6's samples)
     local okJ, errJ = pcall(JAM.tick)                               -- (the jammer's boost on the enemies near it)
     if not okJ and not D.jamErr then D.jamErr = true; log("jammer: error " .. tostring(errJ)) end
     local fl, flagged = flagLine()

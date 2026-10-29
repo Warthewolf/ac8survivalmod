@@ -36,7 +36,8 @@ Shared contract every unit follows (the integration contract of the build):
 | timed parts | sv_main.lua | the per-plane sweep is `planeSweep`, timed as "planes"; ACE.movesTick timed as "moves": both show in the `perf:` line's worst four |
 | the measurements | sv_stats.lua (new), hooks in sv_main, sv_ai, sv_flights, sv_ladon, sv_leaderboard, sv_tactical, sv_rounds, sv_coop | the thesis' seven test metrics (below), logged only; nothing sent |
 | `STATS.tactic(name, unit, slot, why, callout)` | sv_stats.lua | the one entry point later units call for a director tactic: a `director:` line, counted per round (callouts too), and the unit's live planes tagged `p.dirTag = { tactic, at }`. ACE.movesTick's reversals come in as "reversal": counted apart ("ace reversals"), never tagged |
-| `KILL.geom(p, you)` | sv_ai.lua | a kill's aspect, range, height and your last 6 s of shots from ONE moment (the plane's own last sample, `p.youAt`), plus the weapon kind that dropped last; the `kill:` line now comes from it |
+| `KILL.geom(p, you)` | sv_ai.lua | a kill's aspect, range, height and your last 6 s of shots from ONE moment (the plane's own last sample, `p.youAt`), plus the weapon kind that dropped last; the `kill:` line now comes from it. STATS.track keeps `p.youAt` at every sweep visit with `[stats] enabled = false` too: P6's kill aspects, its tail samples and P4's tail read it (code review of 2026-10-29: with the measurements off they took your position 2 s on against the plane's older one) |
+| `hookErr(what, pcall(...))`, `logOnce(key, msg)` | sv_core.lua (code review of 2026-10-29) | the hooks one part calls in another (the sweep's STATS.track / STATS.down, probeTick's STATS.sample, STATS' calls to PROF, spawnFlight's ROLE.spawned / DIR.spawned / ACE.squadUp) log their first error once a session, `<what> error <message> (its first: not logged again)`, instead of a bare pcall that made a failing hook read as one that never ran |
 | `creditKill` returns its side | sv_main.lua | "you", "allies", "ships", "defences", "airstrike" ("wingmate" in co-op); nil for a Ladon |
 | `playerOnAirfield(you)` | sv_rounds.lua | takes a position already read (optional; callers without one are unchanged) |
 
@@ -44,7 +45,7 @@ Shared contract every unit follows (the integration contract of the build):
 | metric (thesis target) | measured as | log line |
 |---|---|---|
 | time to kill an ordinary fighter, rounds 7-12 (20-40 s) | death minus the first sweep sample within `engage_km` (also since spawn, since your first hit); only your kills of pool fighters that aren't bombers, ace squadrons (`p.ace`, else `D.aceSquad`, so a plane the sweep never saw alive too), the jammer (`p.jammer`, else an EA-18G in a flight the jammer led) or probes. A co-op joiner can't tell aces and the jammer from ordinary fighters (only the host's spawner knows), so its pool-fighter kills are "ordinary ?" and left out | `kill-time:` per kill; round line median; run line "time to kill rounds 7-12" |
-| a tailed enemy's survival (8 s+ at Veteran) | AI: the first Provoke / EscapeFromPursuer sample to death (AttackAvoidance, Blackout, UniqueAction keep it open; anything else is an escape). Geometric: you within `tail_km` and `tail_deg` of its six (the reversal test) to death | `kill-time:` "tailed X (AI Provoke Y)"; round line medians with died / escaped counts; run line "Veteran+" |
+| a tailed enemy's survival (8 s+ at Veteran) | AI: the first Provoke / EscapeFromPursuer sample to death (AttackAvoidance, Blackout, UniqueAction keep it open; anything else is an escape). Geometric: you within `tail_km` and `tail_deg` of its six (the reversal test) to death | `kill-time:` "tailed X (AI Provoke Y)"; round line medians with died / escaped counts; run line "Veteran+" (not a special's or its guards' kills: their top tier is given, not a skill band; code review of 2026-10-29) |
 | special round length (5-8 min) | the round's length on the game clock (and time down at the airfield), next to the special's own LB.special seconds | round line "(<tier>, <kind> S s)" and "length"; run line "specials", "special rounds" |
 | missiles left at death (under 40) | A.caps[1] (the count held), else the last ammo read | `death:`; run line "missiles left at the end" |
 | damage sources at death (varied) | each drop of your HealthInternal classed at the tick it happens: "missile" (an enemy missile within 800 m seen in the last 0.6 s, the HIT log's test; one homing on someone else skipped), "gun/close" (no missile, an enemy within `gun_km`), "unknown"; a bracket = missiles of two shooters within `bracket_km` in the last second. At death also your aircraft's own DamageHistoryMap (`pawn_history`, metrics brief step 6.3): each attacker's damage since it took off, the armour's share too, read as KILL.read reads an enemy's | `death:` (last `death_window_s`: shares, hits, shooters, brackets, top shooters; "; record: N attackers, <flight or name> <damage>, ..." or "; record: not read"); round line "you took"; run line "damage taken" |
@@ -92,6 +93,9 @@ STATS.tactic tags planes whether or not `enabled` is on (later units' kill bonus
   "(n 0; N of your kills left out: a co-op joiner can't tell aces)".
 - `director: round 8 +95 s: <tactic> on <unit> (2 planes)[, player N] (<why>); callout "..."` (from unit 2 on).
 - `perf: ... parts avg/worst ms: planes x/y, moves x/y, ...`.
+- A hook that throws (should be none): `stats: STATS.track error <message> (its first: not logged again)`, likewise
+  `stats: STATS.down`, `stats: STATS.sample`, `learning: PROF.kill` / `PROF.sample` / `PROF.checkpoint` /
+  `PROF.roundStart` / `PROF.fold` / `PROF.newRun`, `roles: ROLE.spawned`, `director: DIR.spawned`, `aces: ACE.squadUp`.
 
 ### Offline test and the log report
 `sh tools/checks/stats_test.sh` (tools/checks/stats_test.lua) runs the real sv_core, sv_config, sv_ai, sv_spawn,
@@ -107,7 +111,11 @@ sv_flights.lua's ammoTick (a missile and gun rounds to STATS.fired), sv_leaderbo
 their place in the source. Then co-op: COOP.players solo, as a host (another player's state, a stale one, a broken one)
 and COOP.slotOfAddr; ACE.movesTick fires solo and not on a joiner; a joiner's rounds from the host's round messages, its
 kills "ordinary ?", the host's restart (round cut short, run line, records afresh) and a resync (round cut short, run
-kept) [V].
+kept) [V]. The code review of 2026-10-29 added: a special's guard (top tier, tailed 17 s) kept out of the run line's
+Veteran+ figures; [stats] off: the real sweep keeps p.youAt and a kill from 500 m behind reads 180 deg at 0.5 km (P6
+counts it from behind); a hook that throws (PROF.kill under STATS.down, STATS.track under the sweep) logged once; the
+hookErr calls by their place in the source; a joiner's round and run lines saying the tail watch isn't measured there.
+Each fails on the code before the fix.
 
 The test's log lines then go through `tools/checks/stats_report.py` (metrics brief step 10.5). It reads any test log
 (`python -X utf8 -I tools/checks/stats_report.py <AC8SurvivalMode_lua.log>`, read only): each run's seven metrics as a
@@ -167,7 +175,7 @@ exclusive fallback; Escape's sharp break puts its turn after them instead.
 | live provoke, tiers | sv_config.lua CFG.tiers.list | Veteran, Elite, Ace, Mercenary, Legend, Demon: `provoke_cone_deg = 60, provoke_time_s = 1.5` (the doc's 60 deg / 1.5 s; Phantom 50 / 1.0 and Reaper 45 / 0.8 / 40-100 m as before). The game's own rows: 85 deg / 2.5 s (NPID_00) |
 | the merge | sv_rows.lua `provokeWant(round, tier[, level])` | the stricter of the tier's and the round's spike's (narrower cone, quicker decision, closer surround min / max), field by field. Before, the tier's simply replaced the spike's (withLevel), so with these tier fields a Demon at rounds 22-24 would have dropped from spike 3's 50 / 1.0 to 60 / 1.5. A special's own values (MINDRIPPER's unit) go through the same merge, whatever `tier_provoke` says. `level`: another spike level than the round's, for a later part |
 | the writes | sv_rows.lua `enemyProvoke(p, want)`, `enemySpike(p, round, tier)` | enemyProvoke writes ProvokeConditionConeAngle, ProvokeDeterminationTime, SurroundPursuitMin/MaxRange (cm) where they differ from its last write (`p.provokeSet`; `p.provokeWant` = what it should fly) and returns the fields written and before / after texts: the hook for the intensity director (P4) to rewrite a live plane (runtime-ai step 10's "DIR.plane writes again"). enemySpike (the sweep, once per plane: `p.spiked`) = provokeWant + enemyProvoke, and a `provoke:` line once per tier and spike level with the values read back (it replaces the old `spikes: level N on ...` line) |
-| the tail watch | sv_stats.lua `STATS.tailTick` (sv_main.lua probeTick, every 250 ms, timed "tail watch"), `tailEnd`, `tailCut`; sv_ai.lua's `AI_STATE` now a global | the host or solo (a joiner's enemies are the host's). The enemies with a skill tier (no bombers) within `watch_km` of you by the sweep's last sample, at most `watch_max` a tick, are read afresh: position and heading. Those you're likely behind come first (the sweep's `p.tailing`, or the sweep's last pose of the plane against your position now: plain maths, no read), then the nearest, so in a furball a plane you chase at 2.5 km isn't crowded out by four nearer ones. You within `tail_km` / `tail_deg` of a live one's six (the sweep's own test; its HealthInternal is read before an episode opens, so a wreck the 2 s sweep hasn't marked down never opens one) opens an episode (p.tw): its provoke values in force are read (Survival's write or the game's row), then every tick its AI state (Provoke / EscapeFromPursuer / AttackAvoidance / Blackout / UniqueAction / other, timed). A plane already in Provoke, EscapeFromPursuer or Blackout at the episode's first read was defending before you got there (another pursuer, or you closed from beyond `tail_km` inside its provoke cone): "already defending", kept out of "Provoke after" and "after its Provoke" (its Provoke began before t0) and counted apart. It ends when the plane dies (the watch's own check, or the sweep's death first: STATS.down), once you've been off its tail `watch_grace_s` (escaped), or when the run ends with it open (STATS.runEnd, before the last round's line: "still up"); an escape or still-up under 1 s held is a flicker at the cone's edge, dropped. Up to 16 property reads a tick at watch_max 4 (one more as an episode opens) |
+| the tail watch | sv_stats.lua `STATS.tailTick` (sv_main.lua probeTick, every 250 ms, timed "tail watch"), `tailEnd`, `tailCut`; sv_ai.lua's `AI_STATE` now a global | the host or solo (a joiner's enemies are the host's). Pool flights' enemies with a skill tier (no bombers; no special or its guards: MINDRIPPER's, AB.L..IN's and VALKA's top tier is given, not a skill band, so they skewed the Veteran+ figures; code review of 2026-10-29) within `watch_km` of you by the sweep's last sample, at most `watch_max` a tick, are read afresh: position and heading (one without an episode open checked alive first: a wreck is never read). Those you're likely behind come first (the sweep's `p.tailing`, or the sweep's last pose of the plane against your position now: plain maths, no read), then the nearest, so in a furball a plane you chase at 2.5 km isn't crowded out by four nearer ones. You within `tail_km` / `tail_deg` of a live one's six (the sweep's own test; its HealthInternal is read before an episode opens, so a wreck the 2 s sweep hasn't marked down never opens one) opens an episode (p.tw): its provoke values in force are read (Survival's write or the game's row), then every tick its AI state (Provoke / EscapeFromPursuer / AttackAvoidance / Blackout / UniqueAction / other, timed). A plane already in Provoke, EscapeFromPursuer or Blackout at the episode's first read was defending before you got there (another pursuer, or you closed from beyond `tail_km` inside its provoke cone): "already defending", kept out of "Provoke after" and "after its Provoke" (its Provoke began before t0) and counted apart. It ends when the plane dies (the watch's own check, or the sweep's death first: STATS.down), once you've been off its tail `watch_grace_s` (escaped), or when the run ends with it open (STATS.runEnd, before the last round's line: "still up"); an escape or still-up under 1 s held is a flicker at the cone's edge, dropped. Up to 16 property reads a tick at watch_max 4 (one more as an episode opens) |
 | the lines | sv_stats.lua | a `tailed:` line per episode; the round line ends "; tail watch: ..." and the run line "; tail watch Veteran+: ... [8 s+]" (U1's 2 s "AI Provoke" and geometric figures stay) |
 | the report | tools/checks/stats_report.py | the run table's tail watch rows (verdict on "died while tailed" against 8 s+), a "watch" column per round, the `tailed:` episodes by tier and by the provoke values in force (the A/B), the `provoke:` writes |
 | offline test | tools/checks/tailed_test.sh / tailed_test.lua | below |
@@ -210,7 +218,9 @@ What a pilot flies now (default settings; the surround is the spike's until Reap
   (n 1), escaped 2 (held median 2.5 s), still up at the end 1, Provoke after median 1.5 s (none in 4, already defending
   1), blackouts 0` ("Provoke after" and "none" are the fresh episodes only); the run line's:
   `; tail watch Veteran+: died after median ... on your tail (n N), ..., still up at the end U, Provoke after median ...
-  (none in X, already defending Y), blackouts B [8 s+]`.
+  (none in X, already defending Y), blackouts B [8 s+]`. On a co-op joiner (the watch doesn't run there) the round
+  line ends `; tail watch: not measured on a co-op joiner (its enemies are the host's)` and a run of its rounds `; tail
+  watch Veteran+: not measured on a co-op joiner` (code review of 2026-10-29: it logged 0 episodes as if it had).
 - `perf: ... tail watch x/y` among the worst parts only if it costs.
 - `stats_report.py <log>`: "tailed lines: N" with a table by tier and one by "provoke in force" (e.g. `60 deg / 1.5 s
   (Survival's)` against `85 deg / 2.5 s (the game's)`): n, died, died after, escaped, up (still up at the run's end),
@@ -257,7 +267,9 @@ Test checklist:
    reaction time, nothing "after its Provoke"; two planes you're behind (one by the sweep's p.tailing, one by its cached
    pose) read before four nearer ones beside you; an episode still open when the run ends (shot down) ending as "still
    up" in the round line (cut short) and the run line; then stats_report.py on its log. Each of the review's three
-   fixes was checked to fail its case when undone (a scratch copy with the fix reverted).
+   fixes was checked to fail its case when undone (a scratch copy with the fix reverted). The code review of
+   2026-10-29 added: a special's guard on your guns beside a pool fighter never watched (no episode, no read); a wreck
+   not even read (alive checked before the read); both fail on the code before.
 
 ### Untested / known limits
 - [I] Everything in game. The trees' "always one move" is [V] against the runner model only; the model follows
@@ -1350,17 +1362,23 @@ The maths (CFG.profile; every share 0-1):
                        (Kf your kills of fighters, Kw of them with a weapon seen, Kgeo with an aspect; S samples of
                        2 s, SaN of them the airfield's: no raid up, not just after a takeoff, not a landing's approach)
     tail               0.6 x behind + 0.4 x tail_time
-    in force           this run's share once it has live_kills 5 of your kills (live_samples 30 samples for the time
-                       shares), weighed against the saved profile's as if that were prior_kills 20 kills (prior_samples
-                       150 samples): (prior x p + n x r) / (prior + n); before that the profile's alone; neither: none
+    in force           this run's share once its own count has live_kills 5 kills (missile Kw, behind Kgeo, gun its
+                       half's: a half on fewer is left out of its max) or live_samples 30 samples for the time shares,
+                       weighed against the saved profile's as if that were prior_kills 20 kills (prior_samples 150
+                       samples): (prior x p + n x r) / (prior + n), n that count; before that the profile's alone;
+                       neither: none (code review of 2026-10-29: every kill share used to rest on Kf, so one missile
+                       kill seen among 5 kills of fighters stood as a missile share of 1.0)
     strength           0 at or under the habit's threshold (missile 0.8, gun 0.35, tail 0.7, high 0.5, airfield 0.4),
                        (share - threshold) / (1 - threshold) over it: 1 at a share of 1.0
     a run learnt from  each saved share = (1 - a) x saved + a x the run's, a = n / (n + fold_kills 30) for the kill
-                       shares (n = Kf), n / (n + fold_samples 300) for the time shares and your height (n = S; SaN
-                       for the airfield's), at most run_weight_max 0.5; a share the profile has none of yet (the first
-                       run learnt from: all of them): the run's own. Only a run with min_kills 8 of your kills of
-                       fighters that started at round 1 (START AT ROUND > 1, a head start, is counted, not learnt
-                       from); its time shares and height only with min_samples 60 samples (2 minutes)
+                       shares (n = the share's own count, as in force: Kw, Kgeo, the gun's half's; a tie between the
+                       gun's halves goes to the one on more kills), n / (n + fold_samples 300) for the time shares and
+                       your height (n = S; SaN for the airfield's), at most run_weight_max 0.5; a share the profile has
+                       none of yet (the first run learnt from: all of them): the run's own. Only a run with min_kills 8
+                       of your kills of fighters that started at round 1 (START AT ROUND > 1, a head start, is counted,
+                       not learnt from; a co-op joiner's run starts at the first host round it sees start, PROF.roundStart:
+                       one that links at round 20 is a head start, though its own D.startRound is 1); its time shares
+                       and height only with min_samples 60 samples (2 minutes)
     role weights       each role's share of the round's mix x (1 + the sum of its habits' gain x strength); a role the
                        band has no share for stays out (rounds 1-3 have no Skirmishers); never an ace round's ace_mix
 
@@ -1370,12 +1388,12 @@ player. The thresholds and gains are a first guess; the round lines log the raw 
 ### What was built
 | piece | where | what it does |
 |---|---|---|
-| your kills | `PROF.kill(p, g, by)` from STATS.down (the sweep's death branch, every game; before the measurements' own switch, so [stats] off still learns) | yours only (by "you": a co-op partner's are "wingmate", an ally's "allies", a Ladon's nil), K all of them; the shares from your kills of fighters only (Kf: p.unit a pool flight's, not a bomber's; a Ladon or a special has no pool flight); the weapon from g.used (the gun's shots in the 6 s before, else a missile's or a special's; nothing seen: no weapon), close and behind from its aspect (p.youAt's, unit 1) |
+| your kills | `PROF.kill(p, g, by)` from STATS.down (the sweep's death branch, every game; before the measurements' own switch, so [stats] off still learns) | yours only (by "you": a co-op partner's are "wingmate", an ally's "allies", a Ladon's nil), K all of them; the shares from your kills of fighters only (Kf: p.unit a pool flight's, not a bomber's; a Ladon or a special has no pool flight); the weapon from g.used (the gun's shots in the 6 s before, else a missile's or a special's; nothing seen: no weapon), close and behind from its aspect (p.youAt's, unit 1; kept by the sweep with [stats] off too since the code review of 2026-10-29) |
 | your flying | `PROF.sample(now, you)` from STATS.sample (every 2 s, the sweep's summaries) | a fight's sample (D.state spawning / wave / fighting, not on the ground: playerOnAirfield): your height into a 250 m histogram, high, near the airfield, on a tail; a landing (in the air, then on the ground) counted. The airfield's own count (SaN) leaves out the time while a bomber or a Ladon is up, the after_takeoff_s after you were on the ground, and a landing's before_landing_s approach (taken back). Not twice within 1.5 s of the round clock (a pause). Cached fields only (p.at, p.fwd, p.dist, p.youAt); where you are from the sweep, else STATS.sample reads it (one read every 2 s: the sweep's slot 0 visits only the 8th, 16th ... plane) |
 | the counters | `PROF.weights(round)` from startRound (the host or solo), before its strike, jammer and fighter picks; `D.counter` | each habit's share in force, its strength, and what that turns on (`jammerX`, `rank` / `rankFrom`, `postStallFrom`, `tail`, `lancerAlt`, `strikeX`, `roleW`); one "learning: round N" line a round with every share next to every decision |
 | the levers | `PROF.chance` (sv_rounds.lua startRound: the strike's and the jammer's `math.random() <` chance), `PROF.rankAdd` (sv_ai.lua enemyTier, before p.rankBase: P4's live rewrite and the jammer's boost keep it), `PROF.postStall` (enemyManeuvers' `all`), `PROF.roleW` (sv_spawn.lua ROLE.pickRound: the mix's weights; its "roles:" line says "weighed by your habits"), `PROF.lancerAlt` (spawnFlight's Lancer height), D.counter.tail (sv_director.lua DIR.roundStart, unit 6's hook: "cover and trap xN (your tail chasing)"), D.counter.top (DIR.roundStart: the top cover's budget and cooldown, "top cover xN (you stay high)") | each a pcall'd read of D.counter; on a co-op joiner each gives the base / 0 / false / nil (its enemies are the host's copies) |
 | the AI's flares | `PROF.menu()` from sv_main.lua's main-menu block, once a session, before setsSetup / searchSetup; sv_rows.lua searchSetup's slot loop (`aiFlares`) | the profile read; with the saved missile habit (strength > 0) or `[flares] always`: PROF.flareWant = { magazine, reload_s }, and every fighter row's NPC_FCS_PlaneFlr* slot (aces' too; not MINDRIPPER's, AB.L..IN's or VALKA's) onto `<row>_SV_FLR` (one row for every spike level). Rows are made once a session (cloneRow keeps a row), so a new habit shows from the next game start |
-| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written whole (`.tmp`, the old one removed, the new one moved in) at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range. A write that didn't land (the folder can't be written) leaves this session's profile in force: PROF.load keeps it until a write lands |
+| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.roundStart` (STATS.roundStart: the round the run began in), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range. A write that didn't land (the folder can't be written) leaves this session's profile in force: PROF.load keeps it until a write lands. Never lost (code review of 2026-10-29; the old write ignored write / close failures, removed the file before the rename and never read its `.tmp`, and a read that failed was followed by a neutral profile written over the file at round 1's clear): written whole to `.tmp` (its last line `; end of the profile`; write and close checked, a failure removes the .tmp and leaves the file as it was), the old file moved aside to `.bak` (Windows' rename never replaces a file), the `.tmp` moved in (the .bak put back if that fails), then the .bak removed. No file: a whole `.tmp` (it has its end line), else the `.bak` a write the game didn't finish left is read and moved back in. A file that's there but can't be opened now (another program holds it; errno other than 2): no profile this session (PROF.saved nil: each run on its own), nothing written until a load reads it. A file that isn't a profile of this version (broken, another format): neutral, and the first write moves it aside as `.old` (kept; one) and says so. PROF.saved is set only once a load has gone through, and checkpoint / fold never write without one, so a level load error (sv_main.lua leaves PROF.saved nil) never has a neutral profile written over the file. Each failure logged once a load |
 | packaging | tools/package_release.sh, tools/package_test.sh, .gitignore | a dev's survival_profile.ini never ships or goes into git |
 | report | tools/checks/stats_report.py `learning_lines` | a row per round (each habit's share, * where countered, the counters), each run's end and the profile lines |
 
@@ -1400,6 +1418,7 @@ The file (made by the game; a player may delete it to start over):
     [run]               (only while a run is on: its counts at its last round's end)
     id = ...
     round = 3 ... alt_m = 2625
+    ; end of the profile  (the last line: a .tmp with it was written whole)
 
 ### CFG keys (CFG.profile, CFG.flares; `[profile]`, `[profile.<habit>]`, `[flares]` in survival.ini; PERSONAL in co-op)
 - `profile`: `enabled` true, `save` true, `checkpoint` true, `min_kills` 8 (of fighters), `min_samples` 60, `live_kills` 5, `live_samples` 30,
@@ -1439,17 +1458,32 @@ The file (made by the game; a player may delete it to start over):
   not 1: starting from a neutral profile`; `; N lines skipped`; `; the run the game closed in (round 3, 9 of your kills)
   learnt from[, not its tail_time, high, airfield, height (40 samples, ...; min_samples 60)] first`; after a failed
   write: `learning: profile at level load: this session's kept (config\survival_profile.ini couldn't be written: the
-  file's older): ...`).
+  file's older): ...`). Since the code review of 2026-10-29: `... is format 2, not 1: starting from a neutral profile
+  (the file's kept as survival_profile.ini.old once a new one is written)` (`has no version line`, `not readable`), then
+  at the first write `learning: config\survival_profile.ini (has no version line at its load) kept as
+  survival_profile.ini.old; a new profile written`; `learning: profile at level load from
+  config\survival_profile.ini.bak (a write the game didn't finish left it; moved back in): ...` (`.tmp`; `...; <file>
+  couldn't be moved back in (...): the file not written this session`); `learning: profile at level load:
+  config\survival_profile.ini couldn't be read (<error>): no profile this session (each run learns on its own), the file
+  not written until a load reads it`.
+- A write that fails (each once a load; the file as it was): `learning: can't write config\survival_profile.ini
+  (<error>); the profile stays this session's`, `learning: config\survival_profile.ini not written (No space left on
+  device): the old one kept; ...`, `... not replaced: it couldn't be moved aside (...), it's kept; ...`, `... not moved
+  in (...): the old one put back; ...` (or `the new one left as survival_profile.ini.tmp, read at the next start`);
+  nothing written: `learning: config\survival_profile.ini not written: no profile was loaded (left as it is)` (a level
+  load error or an unreadable file), `... not written: survival_profile.ini.bak couldn't be moved back in (...) (left as
+  it is)`.
 - A run's end: `learning: run over (died): 23 of your kills (21 of fighters: missiles 15, gun 5, of 20 with a weapon
   seen; close 3, from behind 12, of 21 with an aspect), 812 s flown (high 30%, near the airfield 5% of 640 s it didn't
   need you, on a tail 20%, usually 3.9 km up), 2 landings: missile 0.75, gun 0.25, tail 0.43, high 0.30, airfield
   0.05; learnt from; the profile now 8 runs (6 learnt from), ...; saved to config\survival_profile.ini` (`learnt from;
   not its tail_time, high, airfield, height (24 samples, 20 of them for the airfield; min_samples 60)`; `counted, not
-  learnt from (only 5 of your kills of fighters, min_kills 8)` / `(a head start at round 16)`; `, NOT saved` with
-  `learning: can't write config\survival_profile.ini: the profile stays this session's`; `; not saved ([profile] save
-  off)`).
+  learnt from (only 5 of your kills of fighters, min_kills 8)` / `(a head start at round 16)` (a co-op joiner linked at
+  the host's round 20: `(a head start at round 20)`); `, NOT saved (<why>)` with a failed write's line; `; not saved
+  ([profile] save off)`; `; not learnt from or saved (no profile was loaded: config\survival_profile.ini left as it
+  is)`).
 - Errors: `learning: error ...` (startRound), `learning: profile error ...` (the main menu), `learning: level load error
-  ...`.
+  ...`, `learning: PROF.<hook> error ... (its first: not logged again)` (STATS' calls, hookErr).
 - `python tools/checks/stats_report.py AC8SurvivalMode_lua.log`: `learning lines: N: rounds countered C of R, runs over
   n (learnt from l)` and a row per round.
 
@@ -1478,11 +1512,16 @@ The file (made by the game; a player may delete it to start over):
    `learning: round` lines (a joiner has none); a joiner's own flare row from its own file.
 9. Off: [profile] enabled = false: no `learning:` lines but the main menu's flare line; save = false: no file.
 10. Tuning: from friends' logs, stats_report's per-round shares say where the thresholds sit; move them in survival.ini.
+11. The file (code review of 2026-10-29): after a few runs config holds survival_profile.ini only (no .tmp or .bak
+    left), its last line `; end of the profile`. Write some junk into it, start a run: `... has no version line: starting
+    from a neutral profile (the file's kept as survival_profile.ini.old ...)`; at round 1's clear `... kept as
+    survival_profile.ini.old; a new profile written`, and the .old holds the junk. Co-op: join a room past round 1 and
+    die: the joiner's run-over line says `(a head start at round N)`.
 
 ### Offline test
 `sh tools/checks/profile_test.sh` (tools/checks/profile_test.lua on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
 sv_spawn, sv_rounds, sv_leaderboard, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop, Lua 5.4.6; then
-stats_report.py on its log), 95 checks:
+stats_report.py on its log), 116 checks:
 - survival.ini's [profile] sections and [flares] read (an integer stays one, a tier name in any case); every switch on
   as shipped;
 - the classification: 12 of your kills of fighters by weapon (missiles, a special, the gun, gun and a missile: the
@@ -1516,6 +1555,16 @@ stats_report.py on its log), 95 checks:
   profile, no file); LB.finish -> STATS.runEnd -> PROF.fold with [stats] off; a co-op host's new run
   (STATS.hostReset: learnt from, the next one empty) and a resync (goes on); min_samples: a run of 10 samples learnt
   from for its kills only (its time shares and height left out, said in its line), the next run's 100 samples its own;
+- the code review of 2026-10-29: each kill share on its own count (3 kills with a weapon seen and 2 with an aspect of
+  20: none in force; the gun's weapon half in force while its thin range half is left out; folded at 3 / 33 for the
+  missile share, not Kf's 20 / 50); a co-op joiner linked at the host's round 20 (its D.startRound 1): [run] from = 20,
+  counted, not learnt from; one from round 1 learnt from; the file never lost: written whole (its end line, no .tmp or
+  .bak left), a full disk at the .tmp's write and at its close and a refused move in leave the old file byte for byte
+  (logged; the run-over line `NOT saved (<why>)`), no file but its .bak (a cut-off .tmp passed over) or a whole .tmp
+  read and moved back in, the next write removing the .bak left over, a junk file neutral and kept as .old by the first
+  write (logged; a later write keeps the .old), a file that can't be opened now (errno 13) and a level load error never
+  written over (the run's line says not learnt from or saved), read again once a load can. Each case fails on the code
+  before the fix;
 - the hooks by their place in the source, and no math.random draw in PROF (the rounds' odds and the other units'
   seeded tests untouched), no FindAllOf or nameOf.
 The other units' tests pass unchanged (their startRound now also logs a `learning: round N ... nothing to counter` line).
@@ -1550,6 +1599,11 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
   samples of its last before_landing_s, not a longer loiter before it.
 - A game that closes before a round's clear loses that round's counts (the checkpoint is at each clear). Runs with the
   test-only keys aren't flagged: a test run is learnt from like any other; delete the file after testing.
+- The file's safety [V offline on Windows, I in game]: the failures were made by stubbing io.open / os.rename in Lua
+  5.4.6 (clang, the Windows CRT); "no such file" is io.open's errno 2 (ENOENT), anything else (13, a file held open
+  without sharing) counts as there. A file another program holds while the game reads it means no profile that
+  session (its runs learn on their own and aren't saved). A crash between the move aside and the move in leaves only
+  the .bak and the .tmp: the next start reads the .tmp if its end line is there, else the .bak. Only one .old is kept.
 - The thresholds and gains are guesses; the shares are logged every round to tune them.
 - No COOP_TAG / VERSION bump yet (the contract's single bump at the end): nothing new crosses the link.
 

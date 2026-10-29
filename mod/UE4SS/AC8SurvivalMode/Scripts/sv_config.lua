@@ -118,14 +118,17 @@ CFG = {
     --   high      lancer as above, the Lancers come in above_m over your usual height (within their band), and the
     --             squad director's top cover: budget x (1 + top_cover_x x strength), its cooldown that much shorter
     --   airfield  the airfield's strike package more often (strike_x, strike_max as the jammer's); skirm as above
-    -- The run's own shares count from live_kills of your kills (live_samples samples for the time habits), weighed
-    -- against the saved profile as if it were prior_kills kills (prior_samples samples). save: the profile is kept in
-    -- config/survival_profile.ini (the game's own file next to survival.ini, never sent; delete it to start over), read
-    -- at the main menu and at each level load (a run's first rounds are countered from it), written at each run's end
-    -- (checkpoint: and at each round's end, so a game that closes mid-run doesn't lose it: learnt from at the next
-    -- start). A run of fewer than min_kills of your kills of fighters, or one started past round 1, is counted but not
-    -- learnt from, and its time habits and height only with min_samples samples; a run weighs K / (K + fold_kills) in
-    -- the profile (S / (S + fold_samples) for the time habits), at most run_weight_max.
+    -- The run's own shares count once each has live_kills of the kills it's taken from (missile: your kills with a
+    -- weapon seen; behind: those with an aspect; gun: either half's) and live_samples samples for the time habits,
+    -- weighed against the saved profile as if it were prior_kills kills (prior_samples samples). save: the profile is
+    -- kept in config/survival_profile.ini (the game's own file next to survival.ini, never sent; delete it to start
+    -- over), read at the main menu and at each level load (a run's first rounds are countered from it), written at each
+    -- run's end (checkpoint: and at each round's end, so a game that closes mid-run doesn't lose it: learnt from at the
+    -- next start); never in place (a .tmp, the old one aside as .bak until the new one's in; one that wasn't a profile
+    -- kept as .old). A run of fewer than min_kills of your kills of fighters, or one started past round 1 (a co-op
+    -- joiner's: the host's round it joined in), is counted but not learnt from, and its time habits and height only
+    -- with min_samples samples; each share of a run weighs n / (n + fold_kills) in the profile, n its own count
+    -- (n / (n + fold_samples) for the time habits), at most run_weight_max.
     -- Each player's own in co-op (sv_coop.lua PERSONAL); only the host's counters reach the room. enabled = false: no
     -- profile and no counters; save = false: each run learns on its own (nothing read or written). Untested in game.
     profile = {
