@@ -127,10 +127,11 @@ function aiWatch(p, you)
         st, tgt, (p.at and you) and string.format("%.1f", km(p.at, you)) or "?", air and string.format("%.1f", air) or "?"))
 end
 
--- A fighter role flight (CFG.roles: a Lancer, Wolf or Skirmisher flight, not an ace squadron's) flies its own set's
--- provoke and pursuit: its tier's no_provoke and moves leave it alone (ROLE.ownSet, sv_spawn.lua; logged once a round)
+-- A fighter role flight (CFG.roles: a Lancer, Wolf or Skirmisher flight, not a squadron's of a tier with these levers)
+-- flies its own set's provoke and pursuit: its tier's no_provoke and moves leave it alone (ROLE.ownSet, sv_spawn.lua;
+-- logged once a round)
 local function roleOwn(p)
-    if not (p.unit and ROLE.ownSet and ROLE.ownSet(p.unit)) then return false end
+    if not (p.unit and ROLE.ownSet and ROLE.ownSet(p.unit, p.tier)) then return false end
     if D and D.roleOwnSaid ~= nil and D.roleOwnSaid[p.unit] == D.round then return true end
     if D then
         D.roleOwnSaid = D.roleOwnSaid or {}
@@ -628,12 +629,23 @@ local function act(unit, sq, now)
     end
 end
 
+-- your hits on flight unit's lead so far, none of them a reason for a later blink (sq.dmgSeen): taken while it couldn't
+-- blink (every_s, an opener or a blink on its way, your decoy, a director hold), a hit isn't news once it can (F1's
+-- review: one hit in each cooldown made on_hit a blink every every_s)
+local function hitsSeen(unit, sq)
+    local lead = leadOf(unit)
+    sq.dmgSeen = math.max(sq.dmgSeen or 0, lead and lead.dmg and tonumber(lead.dmg.you) or 0)
+end
+
 -- a blinking tier's lead (CFG.aces.flight <tier>.blink): you on its six within tailed_km and tail_deg (its position read
 -- afresh only when the sweep had it within tailed_km + 1.5 of you), or (on_hit) your hit on it since the last look: the
 -- "blink" tell, the blink its lead_s later (sq.blinkGo), its next no sooner than every_s, the flight's reversals no
 -- sooner than move_gap_s (D.aceMoveAt)
 local function blinkCheck(unit, sq, b, now, me)
-    if sq.actAt or sq.blinkGo or sq.springAt or decoyed(unit, now) or (DIR and DIR.holding and DIR.holding(unit)) then return end
+    if sq.actAt or sq.blinkGo or sq.springAt or decoyed(unit, now) or (DIR and DIR.holding and DIR.holding(unit)) then
+        hitsSeen(unit, sq)
+        return
+    end
     local lead = leadOf(unit)
     if not (lead and ACE.blinkEvent(unit, 0)) then return end
     local why = nil
@@ -696,10 +708,13 @@ function ACE.squadTick(now, D, paused)
                 blinkNow(unit, sq, now, g.why)
             end
             local b = fcfg(sq.tk).blink
-            -- (only once it's met someone: no blink before its squadron's tell and opener, U10's review)
-            if sq.contact and type(b) == "table" and b.enabled ~= false and now >= (sq.blinkAt or 0) then
-                if not meRead then me, meRead = myAt(), true end
-                if me then blinkCheck(unit, sq, b, now, me) end
+            -- (only once it's met someone: no blink before its squadron's tell and opener, U10's review; inside every_s
+            -- your hits are seen at the scan's pace, the sweep's damage reads being 2 s apart)
+            if sq.contact and type(b) == "table" and b.enabled ~= false then
+                if now >= (sq.blinkAt or 0) then
+                    if not meRead then me, meRead = myAt(), true end
+                    if me then blinkCheck(unit, sq, b, now, me) else hitsSeen(unit, sq) end
+                elseif scan then hitsSeen(unit, sq) end
             end
         end
     end

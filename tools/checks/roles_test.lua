@@ -8,13 +8,15 @@
 --      level 5), the Skirmisher breaks off when its missile counter trips (at entry or mid-pursuit, an abort);
 --   2. the rows at the main menu, on the real setsSetup / searchSetup / rolesSetup with fake tables (DT_NPC_LuaSet,
 --      DT_NPC, DT_SV_NpcMission, DT_NPC_FCS, DT_NPC_Weapon): the four role sets, the role DT_NPC rows naming them, a set
---      that can't be made falling back, roles off naming the fighters' set; the Wolf airframes' leading gun rows at
+--      that can't be made falling back, roles off naming the fighters' set (its level-load line naming the Lancer
+--      units' band, which stays: build data); the Wolf airframes' leading gun rows at
 --      every spike level and the Skirmishers' LAAM copy in their special slot (and neither with roles off);
 --   3. ROLE's level snapshot (what a level has), the mix bands and quotas, the round's draw on the real startRound (each
 --      role's share from its own flights, a short group filled from the rest, an ace round's duelists, the probes never,
 --      the jammer only on a duelist or Skirmisher flight, no Wolf escort), roles off as before;
 --   4. spawnFlight: each role's airframes (the Skirmishers' fallback before round 4), the Lancers 2 km higher within
---      their band, the first Lancer / Skirmisher flight of a round called out once, a Wolf flight's trap registered;
+--      their band (roles off: in altitude_m as any flight), the first Lancer / Skirmisher flight of a round called out
+--      once, a Wolf flight's trap registered;
 --   5. the Wolf trap (WOLF.tick): held hold_after_s after its orders are seen in (not while you're grounded), freed by
 --      the timer, a hit, its own bait (or the lead) going down or the director's spring (with the turn), a held plane
 --      shot down dropped, a recycled flight's earlier planes ignored, nothing freed or sprung inside your decoy (after
@@ -505,6 +507,8 @@ check(tbl.npc.rows.OP_f16c_common_SV.NpcFCSId1:ToString() == "NPC_FCS_PlaneGun00
 ROLE.levelLoad()
 check(ROLE.live == nil and ROLE.flight("ERA_Unit_03_Dep_Air0") == nil and has(line("roles: off"), "drawn as before"),
       "roles off: ROLE.live nil, no flight has a role")
+check(has(line("roles: off"), "(the Lancer units keep their 9 km band)"), "... and says what it doesn't revert (F1's review): "
+      .. tostring(line("roles: off")))
 CFG.roles.enabled = true
 ROLE.levelLoad()                                       -- (the rows made with roles off, roles on by the level's load)
 check(ROLE.live.lancer == "duelist" and ROLE.live.wolf == "duelist" and ROLE.flight("ERA_Unit_07_Dep_Air0") == "duelist",
@@ -702,6 +706,14 @@ CFG.altitude_m = { 8000, 8000 }
 local _, _, zTop = spawnOf("ERA_Unit_04_Dep_Air1", 10)
 check(zTop == (ROLE.LANCER_TOP_M - 500) * 100, "... kept 500 m under their band's top (" .. zTop / 100000 .. " km)")
 CFG.altitude_m = { 2000, 4500 }
+do                                                     -- (roles off: their 9 km band is build data, their height isn't)
+    local live, offMax = ROLE.live, 0
+    ROLE.live = nil
+    for _ = 1, 40 do D.up = {}; local _, _, z = spawnOf("ERA_Unit_03_Dep_Air0", 10); offMax = math.max(offMax, z) end
+    ROLE.live = live
+    check(offMax <= CFG.altitude_m[2] * 100, string.format("roles off: a Lancer unit spawns in altitude_m as any flight "
+        .. "(at most %.1f km), not above the duelists' band (F1's review)", offMax / 100000))
+end
 from = #logs + 1
 local fb = true
 for _ = 1, 20 do local _, row = spawnOf("ERA_Unit_07_Dep_Air1", 2); if not inList(base(row), CFG.roles.aircraft.wolf) then fb = false end end
