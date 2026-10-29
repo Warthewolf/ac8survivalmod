@@ -1518,7 +1518,7 @@ end
 -- With lines > 0 (the HUD's info key open, CFG.hud.info) the row is "CO-OP 3/4" and up to that many lines follow it,
 -- one a player (name, HOST, FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION, health), the last "+N MORE" when
 -- they don't all fit. Its second value is the row's news for the info key: who's in, links lost and who's shot down
--- (not health or where they are).
+-- (not health, where they are or a state gone stale).
 local HUD_NAMES = 6
 local function hudState(s)              -- a player's state and health % for their line, from COOP.players()'s sources
     local e
@@ -1546,7 +1546,10 @@ function COOP.hudLine(lines)
             if M.wasLost and M.wasLost[s] then nm = nm .. " (LOST)" end
             if n <= HUD_NAMES then names[#names + 1] = nm end       -- (a big room: the first few, then "+N")
             local st, hp = hudState(s)
-            news[#news + 1] = s .. nm .. (st == "DOWN" and " DOWN" or "")
+            -- (shot down by the last state their game sent, not by its freshness: a lagging link flips that)
+            local P, down = M.peers[s], st == "DOWN"
+            if s ~= COOP.slot then down = P ~= nil and (P.flags or 0) % 2 == 1 and P.alive == false end
+            news[#news + 1] = s .. nm .. (down and " DOWN" or "")
             if #list < lines then
                 list[#list + 1] = "  " .. nm .. (st ~= "" and "   " .. st or "") .. (hp and string.format("  %d%%", hp) or "")
             end

@@ -94,9 +94,13 @@ constantly are hidden unless the player wants to see them".
 - Closed, an info row still shows `peek_s` (5 s, up to the next second's read) when its news changes or it comes back
   after having nothing. Each row's news is its line function's second value: ALLY.hudLine's which flights, ships and
   defences are there and the order (not their counts, health or the kills), TAC.line's the items carried and SECOND
-  CHANCE (not the ECM's seconds), COOP.hudLine's who's in, a link lost (LOST) and who's DOWN (not health, the airfield or
-  a state gone stale). A peek waits for the HUD to be up (not paused, at the landing menu or the game HUD off: the rows
-  are read again the moment it's back). News seen with the rows open is no peek once they're shut.
+  CHANCE (not the ECM's seconds), COOP.hudLine's who's in, a link lost (LOST) and who's DOWN by the last state their
+  game sent (not health, the airfield or a state gone stale, a downed player's too: a lagging link would peek every few
+  seconds). A peek waits only while the HUD is down (paused, no player aircraft or the game HUD off: the rows are read
+  again the moment it's back), not for the landing menu as such: solo the STORE pauses the game, so an item bought
+  there peeks after takeoff; in co-op it doesn't pause (sv_coop.lua's online-style pause), so unless AC8 turns its HUD
+  off at the landing menu the peek runs there and may be over by takeoff (untested). News seen with the rows open is no
+  peek once they're shut.
 - Open, the CO-OP row is `CO-OP 3/4` and each player has a line: `  WAR (HOST)   FLYING  87%`, `  CRESSENDO   DOWN`,
   `  REAPER (LOST)   NOT IN THE MISSION`, AT THE AIRFIELD (from COOP.players()'s sources: your pawn, each other player's
   SV_CoopPeerAt state; NOT IN THE MISSION when it isn't fresh). A bigger room: three players and `  +N MORE`. A joiner
@@ -122,7 +126,7 @@ Log lines:
 - `hud: info rows shown (I)` / `hud: info rows hidden (I)` on each press in a run
 - `hud: co-op row error <msg>` (once a level; the row hidden)
 
-Offline test: `sh tools/checks/hud_info_test.sh` (63 checks, on the real sv_core, sv_config, sv_ai, sv_hud, sv_allies,
+Offline test: `sh tools/checks/hud_info_test.sh` (64 checks, on the real sv_core, sv_config, sv_ai, sv_hud, sv_allies,
 sv_tactical and sv_coop after strip_test_only, the widgets stubbed): the bind and its fallbacks, the stack's order and
 its end above the minimap, each row's peeks and non-peeks, a change while paused, the press, co-op's rows and player
 lines, enabled = false, start_open.
@@ -130,13 +134,16 @@ lines, enabled = false, start_open.
 Test checklist (in game):
 1. Solo, a run's start: ROUND, ZOLLARS, AIRFIELD (and NEXT ROUND in the break) only. The log has the `hud: info key I:`
    line.
-2. Buy an item in the STORE: after takeoff the ITEMS row shows about 5 s, then goes. Use one (Ctrl+F1-F3): it shows
+2. Solo, buy an item in the STORE: after takeoff the ITEMS row shows about 5 s, then goes. Use one (Ctrl+F1-F3): it shows
    again; an ECM burst's seconds don't keep it up. Buy WINGMEN: ALLIES shows when they're up; Ctrl+F4 shows it again.
 3. Press I: ALLIES and ITEMS show at once (`hud: info rows shown (I)`); press again: gone. Does the game do anything on
    I too (a camera, a view)? If so, note it: [hud.info] key should default to another key.
 4. Co-op (2+ players): the CO-OP row shows when someone joins, drops or is shot down, not when they land or lose health.
    Press I: `CO-OP n/max` and a line a player, FLYING / AT THE AIRFIELD / DOWN with health. At your resolution, do the
-   four player lines and ALLIES / ITEMS stay clear of the minimap?
+   four player lines and ALLIES / ITEMS stay clear of the minimap? Buy an item in the STORE with another player
+   linked: does ITEMS peek after takeoff, or while the store is up (is Survival's HUD drawn over it there)? A downed
+   player on a lagging link: the CO-OP row shouldn't keep coming back.
 
 Untested [I]: whether a bind with no modifier still fires with Ctrl held (UE4SS's modifier match), whether AC8 binds I,
-the player lines' width beside the game's HUD, and a peek's timing around the STORE (the round clock stops while paused).
+the player lines' width beside the game's HUD, and a peek's timing around the STORE (solo the round clock stops while
+paused; in co-op the game isn't paused there, so the peek may run while the store is up).
