@@ -79,3 +79,64 @@ Run-time check: Ctrl+F7 in game (Ctrl+F9 before Lua 0.38.3) writes the live HUD 
 - The mission info text is UI_FontSet_ja's `HUD` typeface (0710_AcesSleipnirTextHUD-Regular, monospaced, slashed
   zero). A SetFont table with TypefaceFontName "HUD" still rendered the set's default proportional face; 0.7.1 writes
   the typeface into the TextBlock's own Font and copies the live PrivateScore label's Font once the panel exists.
+
+## Survival's rows and the info key (code review F6 of 2026-10-29; not yet run in game)
+The user (2026-10-29, a screenshot of a 3-player co-op HUD): "assign a hotkey like 'i' for information, say it'll open up
+a hud on the screen that shows you some details, just to help clean the HUD up so that details that don't need to be seen
+constantly are hidden unless the player wants to see them".
+- The rows (sv_hud.lua hudBuild, CFG.hud): ROUND (y 312, WAVE n/m in a waved round), ZOLLARS (380), AIRFIELD and its bar
+  (448), then the stack from 516, its shown rows one `line` (68) apart (stackRows): NEXT ROUND / the special's row,
+  ALLIES, ITEMS, CO-OP and up to 4 player lines under it. All eight shown, the last is at 992: the stack ends above the
+  minimap (MIniMapCanvas, top 1108), which is why there are 4 player lines and not more. The game's own SCORE / TARGET
+  stay as they are.
+- Always shown: ROUND / WAVE, ZOLLARS, AIRFIELD and NEXT. Behind the key (the info rows): ALLIES, ITEMS and CO-OP. NEXT
+  comes first so it stays put while they open or peek; CO-OP comes last so its length moves nothing.
+- Closed, an info row still shows `peek_s` (5 s, up to the next second's read) when its news changes or it comes back
+  after having nothing. Each row's news is its line function's second value: ALLY.hudLine's which flights, ships and
+  defences are there and the order (not their counts, health or the kills), TAC.line's the items carried and SECOND
+  CHANCE (not the ECM's seconds), COOP.hudLine's who's in, a link lost (LOST) and who's DOWN (not health, the airfield or
+  a state gone stale). A peek waits for the HUD to be up (not paused, at the landing menu or the game HUD off: the rows
+  are read again the moment it's back). News seen with the rows open is no peek once they're shut.
+- Open, the CO-OP row is `CO-OP 3/4` and each player has a line: `  WAR (HOST)   FLYING  87%`, `  CRESSENDO   DOWN`,
+  `  REAPER (LOST)   NOT IN THE MISSION`, AT THE AIRFIELD (from COOP.players()'s sources: your pawn, each other player's
+  SV_CoopPeerAt state; NOT IN THE MISSION when it isn't fresh). A bigger room: three players and `  +N MORE`. A joiner
+  still looking for its host has the one row.
+- The key: CFG.hud.info `{ enabled, key = "I", ctrl = false, start_open = false, peek_s = 5.0 }` (survival.ini
+  `[hud.info]`; hud is PERSONAL in co-op, each player's own). sv_hud.lua binds it at load with RegisterKeyBind (pcall,
+  no modifier, or Ctrl with ctrl); the callback (ExecuteInGameThread) only flips the open flag, and only in a run (D),
+  so a press on the menus can't change the next run's HUD; hudTick applies it on its next pass and reads the rows at
+  once. A release feature: not in a TEST ONLY block, so strip_test_only.py leaves it (hud_info_test.sh runs on stripped
+  parts). The rows are read once a second as before; nothing per frame.
+- UE4SS's key binds are keyboard only and don't take the key from the game: if AC8 does something on I, both happen
+  ([hud.info] key picks another: a UE4SS Key name, any case). A pad button would need the runtime's input hook
+  (BuildFlightInput's detour, hard rule 28): not done.
+- Fallbacks: a key name UE4SS doesn't know, no RegisterKeyBind, or a bind that errors turns the key off for the session
+  (the rows always shown, never hidden for good). enabled = false: today's HUD (CO-OP first, every row shown whenever it
+  has something, the compact co-op row).
+
+Log lines:
+- `hud: info key I: the CO-OP, ALLIES and ITEMS rows hidden until it's pressed, each shown 5.0 s when it changes` (at
+  load; `open at the start` with start_open; `Ctrl+I` with ctrl)
+- `hud: info key <K> not bound (<why>): the info rows always shown` (`'X' isn't a key name UE4SS knows: [hud.info] key`,
+  `UE4SS has no key binds here`, or the bind's error)
+- `hud: info rows shown (I)` / `hud: info rows hidden (I)` on each press in a run
+- `hud: co-op row error <msg>` (once a level; the row hidden)
+
+Offline test: `sh tools/checks/hud_info_test.sh` (63 checks, on the real sv_core, sv_config, sv_ai, sv_hud, sv_allies,
+sv_tactical and sv_coop after strip_test_only, the widgets stubbed): the bind and its fallbacks, the stack's order and
+its end above the minimap, each row's peeks and non-peeks, a change while paused, the press, co-op's rows and player
+lines, enabled = false, start_open.
+
+Test checklist (in game):
+1. Solo, a run's start: ROUND, ZOLLARS, AIRFIELD (and NEXT ROUND in the break) only. The log has the `hud: info key I:`
+   line.
+2. Buy an item in the STORE: after takeoff the ITEMS row shows about 5 s, then goes. Use one (Ctrl+F1-F3): it shows
+   again; an ECM burst's seconds don't keep it up. Buy WINGMEN: ALLIES shows when they're up; Ctrl+F4 shows it again.
+3. Press I: ALLIES and ITEMS show at once (`hud: info rows shown (I)`); press again: gone. Does the game do anything on
+   I too (a camera, a view)? If so, note it: [hud.info] key should default to another key.
+4. Co-op (2+ players): the CO-OP row shows when someone joins, drops or is shot down, not when they land or lose health.
+   Press I: `CO-OP n/max` and a line a player, FLYING / AT THE AIRFIELD / DOWN with health. At your resolution, do the
+   four player lines and ALLIES / ITEMS stay clear of the minimap?
+
+Untested [I]: whether a bind with no modifier still fires with Ctrl held (UE4SS's modifier match), whether AC8 binds I,
+the player lines' width beside the game's HUD, and a peek's timing around the STORE (the round clock stops while paused).

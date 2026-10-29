@@ -60,9 +60,12 @@ function TAC.line(now)
         local n = RUN.items and RUN.items[k] or 0
         if n > 0 then parts[#parts + 1] = TEXT[k] .. " " .. n end
     end
+    -- (its news for the HUD's info key, sv_hud.lua: what you carry, not the ECM's seconds)
+    local news = table.concat(parts, " ") .. (RUN.insured and " SECOND CHANCE" or "")
     if TAC.ecmUntil and now and now < TAC.ecmUntil then parts[#parts + 1] = string.format("ECM ON %d S", math.ceil(TAC.ecmUntil - now)) end
     if RUN.insured then parts[#parts + 1] = "SECOND CHANCE" end
-    return #parts > 0 and table.concat(parts, "   ") or nil
+    if #parts == 0 then return nil end
+    return table.concat(parts, "   "), news
 end
 
 -- Use one `kind` now (how: "key" or "auto"); true when it went.

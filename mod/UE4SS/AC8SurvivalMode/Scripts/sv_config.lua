@@ -1609,6 +1609,15 @@ CFG = {
         callout_s        = 4,                   -- how long a callout stays up
         start_callout_lead_s = 3,               -- "ROUND n" this long before the round's first flight
         zorder           = 0,
+        -- The info key (user, 2026-10-29: "assign a hotkey like 'i' for information ... details that don't need to be
+        -- seen constantly are hidden unless the player wants to see them"): the CO-OP, ALLIES and ITEMS rows stay hidden
+        -- until `key` (a UE4SS Key name: a letter, F5, ...; with Ctrl when ctrl) opens them, under NEXT ROUND, and each
+        -- shows peek_s when its news changes (a player joins, drops or is shot down; an ally flight, ship or defence
+        -- comes or goes, or the allies' order changes; an item bought or used), the CO-OP row with a line a player while
+        -- they're open. Only in a run (a press elsewhere does nothing). Keyboard only: a UE4SS key bind (a pad button
+        -- would need the runtime's input hook), and the game gets the key too. enabled = false: those rows always
+        -- shown, as before. Each player's own (co-op never syncs hud).
+        info             = { enabled = true, key = "I", ctrl = false, start_open = false, peek_s = 5.0 },
         text = {
             round        = "ROUND: %d",
             next_round   = "NEXT ROUND: %s",
