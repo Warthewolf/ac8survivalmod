@@ -285,6 +285,7 @@ local function probeTick(tick)
                 stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
                           by_allies = 0, by_defences = 0, specials = {} } }
         pcall(TAC.reset)                                -- (the gun's class default back to stock, the ECM / decoy off)
+        if DOWN and DOWN.reset then pcall(DOWN.reset, "a new level", true) end   -- (co-op: nobody down, no revives yet)
         local okPf, errPf = pcall(PROF.levelLoad)       -- (the learning layer's saved profile read again: P6, sv_stats.lua)
         if not okPf then PROF.saved = nil; log("learning: level load error " .. tostring(errPf)) end
         ALLY.run, KILL.fired = nil, {}             -- (a new level: no allies up, nothing fired at)
@@ -366,6 +367,7 @@ local function probeTick(tick)
             if D.special then pcall(SPC.V.cleanup, D.special) end
             pcall(SND.stopAll)
             pcall(TAC.reset)                       -- (the gun's class default back to stock)
+            if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
             D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
             planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
             ALLY.run = nil
@@ -434,6 +436,10 @@ local function probeTick(tick)
             if not okT and not D.tacErr then D.tacErr = true; log("tactical: error " .. tostring(errT)) end
             local okIn, errIn = pcall(INS.tick, now)
             if not okIn and not D.insErr then D.insErr = true; log("insurance: error " .. tostring(errIn)) end
+            if DOWN and DOWN.tick then                  -- co-op's revives and the spectator camera (sv_down.lua)
+                local okDn, errDn = pcall(DOWN.tick)
+                if not okDn and D and not D.downErr then D.downErr = true; log("down: error " .. tostring(errDn)) end
+            end
         end
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
         if ACE.squadTick then                   -- the ace squadrons' openers and blinks (P9, sv_ai.lua; before the reversals)
@@ -839,6 +845,24 @@ if type(RegisterKeyBind) == "function" and Key then
                 if not ok then log("test: Ctrl+F5 error " .. tostring(err)) end
             end)
         end)
+    end
+    -- co-op's revives solo (sv_down.lua; tools/re/COOP.md 9): T1 Ctrl+F6 the floor on / off (down-test: lines once a
+    -- second), T2 Ctrl+END each press the next step: down (watching MOONCHILD / VIPER or an enemy; the revive key the
+    -- next), back by the loiter, down, back by SV_Respawn
+    for key, t in pairs({ F6 = { "T1", "testFloor" }, END = { "T2", "testDown" } }) do
+        if Key[key] then
+            pcall(RegisterKeyBind, Key[key], mods, function()
+                ExecuteInGameThread(function()
+                    local ok, err = pcall(function()
+                        if not D or not DOWN or not DOWN[t[2]] then log("test: " .. t[1] .. " (Ctrl+" .. key .. ") outside a Survival run"); return end
+                        DOWN[t[2]]()
+                    end)
+                    if not ok then log("test: " .. t[1] .. " (Ctrl+" .. key .. ") error " .. tostring(err)) end
+                end)
+            end)
+        else
+            log("test: " .. t[1] .. " not bound: UE4SS has no key " .. key)
+        end
     end
     -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)

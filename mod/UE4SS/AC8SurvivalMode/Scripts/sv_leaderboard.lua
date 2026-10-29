@@ -105,6 +105,10 @@ function LB.deathCheck(pc)
     local ok, h = pcall(function() return pc.Pawn.HealthInternal end)
     if not ok or type(h) ~= "number" then return end
     if h > 0 then st.flying, st.downs = true, 0                  -- (a pawn reads 0 while it's spawned: not a death)
+    elseif DOWN and DOWN.holdsRun and DOWN.holdsRun() then
+        -- (co-op with revives, sv_down.lua: a shot-down player is DOWN at its floor and the run ends for everyone on the
+        -- host's "ro"; a plane that died all the same, past its floor, leaves the run as the game does)
+        if st.flying and not st.coopSaid then st.coopSaid = true; log("leaderboard: your plane is gone; in co-op the run ends when every player is down") end
     elseif st.flying then
         st.downs = (st.downs or 0) + 1
         if st.downs >= 2 then

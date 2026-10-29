@@ -15,7 +15,8 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev, tl, dv (host), hi, jn, ht, in (joiner; in unreliable), fx (either: a player's shots, relayed by the host).
+-- ev, tl, dv, rb, rx, ro, rc (host), hi, jn, ht, in, rv (joiner; in unreliable), fx and dw (either: a player's shots,
+-- a player down; the host relays them; sv_down.lua has the revives').
 -- SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
 
@@ -231,6 +232,7 @@ local KEEP_EVENTS = {
     "^RE_SV_Salvo_",           -- the squad director's missile shots at "Player" (P2): the host's own; a joiner's by "dv"
     "^RE_SV_AnomalyPack",      -- PHANTASM's pack (P7): sprung on the host's field, its LastTGT onto the host (puppets there)
     "^RE_SV_WraithBlink",      -- an ace squadron lead's blink (P9): a spot round "Player", the host here (the stream shows it)
+    "^RE_SV_RunOver$",         -- a co-op run's end (sv_down.lua): each game fires its own on the host's "ro"
 }                              -- (holds and frees, RE_SV_WolfHold / WolfFree and RE_SV_DirHold / DirFree, are forwarded:
                                -- a joiner's copies hold too; so is a Ladon's rage, RE_SV_LadonRage<Key>, P7: harmless,
                                -- the copies are moved by the stream. AB.L..IN's LastTGT, RE_SV_GlitchTurn, is the host's
@@ -244,10 +246,31 @@ local function mirroredEvent(name)
     for _, p in ipairs(KEEP_EVENTS) do if name:match(p) then return false end end
     return true
 end
+-- The host's events aimed at its own plane ("Player" / LocalPlayer there) aren't fired on the host's game while the host
+-- is DOWN (sv_down.lua: hidden, flown round the airfield, out of the fight): the squad director's salvos, a Wolf trap's
+-- and AB.L..IN's LastTGT, the aces' turns and kulbits, the blinks round it (Wraith's, AB.L..IN's, VALKA's), MINDRIPPER's
+-- pack, AB.L..IN's gun; what's forwarded still goes to the joiners. SV_ERR[-20] says so.
+local HOST_DOWN_SKIPS = { "^RE_SV_Salvo_", "^RE_SV_WolfTurn", "^RE_SV_AceTurn_", "^RE_SV_AceKulbit_", "^RE_SV_WraithBlink",
+                          "^RE_SV_GlitchBlink", "^RE_SV_GlitchTurn", "^RE_SV_GlitchGun", "^RE_SV_ValkaTp_", "^RE_SV_AnomalyPackSpring" }
+local function hostDownSkips(name)
+    if not (COOP.host() and DOWN and DOWN.me and DOWN.me()) then return false end
+    name = tostring(name)
+    for _, p in ipairs(HOST_DOWN_SKIPS) do
+        if name:match(p) then
+            M.downSkips = (M.downSkips or 0) + 1
+            if M.downSkips <= 5 or M.downSkips % 50 == 0 then
+                log(string.format("coop: %s not fired here: you're down (%d skipped)", name, M.downSkips))
+            end
+            return true
+        end
+    end
+    return false
+end
 local rawEvent = SV_Event
 if rawEvent then
     SV_Event = function(name, ...)
-        local r = rawEvent(name, ...)
+        local r
+        if hostDownSkips(name) then r = -20 else r = rawEvent(name, ...) end
         if COOP.host() and mirroredEvent(name) then send(true, "ev", name) end
         return r
     end
@@ -257,6 +280,7 @@ end
 -- host was close in front of it (code review of 2026-10-29); its frenzies' are still forwarded
 function COOP.eventHere(name)
     local fire = rawEvent or SV_Event
+    if hostDownSkips(name) then return -20 end
     return type(fire) == "function" and fire(name) or -5
 end
 
@@ -532,6 +556,10 @@ local function hostSync(to)
         M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, fn = DIR.holds }
     end
     M.afKey, M.nextRnd, M.nextAf = nil, 0, 0
+    if DOWN and DOWN.syncTo then                    -- (who's down now and the room's revives: sv_down.lua)
+        local okD, errD = pcall(DOWN.syncTo, to)
+        if not okD then log("coop: down list not sent: " .. tostring(errD)) end
+    end
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end
 
@@ -867,15 +895,17 @@ local function peerTick(slot)
     local P = M.peers[slot] or {}
     M.peers[slot] = P
     -- what that player's game says of them, kept for COOP.players(): position (cm), rotation, health (x 10) and full
-    -- health, flags (1 in Survival's level, 2 alive, 4 down at the airfield) and its age (ms)
+    -- health, flags (1 in Survival's level, 2 alive, 4 down at the airfield, 8 DOWN: shot down and waiting for a revive,
+    -- sv_down.lua; the sync's 16-128) and its age (ms)
     if #f >= 10 and finite(f[1], 1e10) and finite(f[2], 1e10) and finite(f[3], 1e10) and finite(f[10], 1e9) then
         local fl = finite(f[9], 1e6) and math.floor(f[9]) or 0
         P.at, P.rot = { X = f[1], Y = f[2], Z = f[3] }, { f[4], f[5], f[6] }
         P.hp, P.maxHp, P.flags, P.age = f[7], f[8], fl, f[10]
         P.hpPct = (finite(f[7], 1e12) and finite(f[8], 1e9) and f[8] > 0) and math.max(0, math.min(100, f[7] / 10 / f[8] * 100)) or nil
-        P.alive, P.onAirfield, P.fresh = fl % 4 >= 2, fl % 8 >= 4, fl % 2 == 1 and f[10] < 1000
+        P.down = fl % 16 >= 8
+        P.alive, P.onAirfield, P.fresh = fl % 4 >= 2 and not P.down, fl % 8 >= 4, fl % 2 == 1 and f[10] < 1000
     else
-        P.at, P.fresh = nil, false
+        P.at, P.fresh, P.down = nil, false, nil
     end
     if not D then return end
     if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
@@ -903,12 +933,15 @@ local function peerTick(slot)
         P.spawning = nil                                  -- (it never came: again)
     end
     if P.obj then
-        local show = fresh and true or false
+        -- (hidden while they're DOWN too, sv_down.lua: flown round their airfield out of the fight, nothing to see or hit)
+        local show = (fresh and not P.down) and true or false
         if show ~= P.shown then
             P.shown = show
             pcall(function() P.obj:SetActorHiddenInGame(not show) end)
+            pcall(function() P.obj:SetActorEnableCollision(show) end)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
-            log(string.format("coop: player %d's plane %s", slot + 1, show and "shown" or "hidden (not in the mission)"))
+            log(string.format("coop: player %d's plane %s", slot + 1, show and "shown"
+                or (fresh and "hidden (down)" or "hidden (not in the mission)")))
         end
     end
 end
@@ -916,7 +949,8 @@ end
 ---------------------------------------------------------------------------------------------------- the players, for other parts
 -- COOP.players(): every player this game knows the whereabouts of, for the behaviour director (it picks a player slot
 -- to aim a tactic at; tools/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }
--- (another player's has rot too: pitch, yaw, roll from their game; yours isMe).
+-- (another player's has rot too: pitch, yaw, roll from their game, and age (ms) and inLevel; yours isMe). down: shot down
+-- and waiting for a revive (sv_down.lua; alive false then).
 -- The local player comes first (your pawn: its position read once a tick, shared with ACE.movesTick through COOP.me();
 -- health from HIT.h, its full health read every 5 s), then each other player from what peerTick already keeps of
 -- SV_CoopPeerAt every tick (no native call more): obj / addr their stand-in here, fresh when their game's state is under
@@ -938,7 +972,8 @@ local function localPlayer()
     local h = HIT and HIT.h
     if type(h) ~= "number" then local okH, v = pcall(function() return pawn.HealthInternal end); h = okH and type(v) == "number" and v or nil end
     e.hpPct = (h and meCache.max) and math.max(0, math.min(100, h / 10 / meCache.max * 100)) or nil
-    e.alive = h == nil or h > 0
+    e.down = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true          -- (shot down, waiting for a revive: sv_down.lua)
+    e.alive = (h == nil or h > 0) and not e.down
     local okA, on = pcall(playerOnAirfield, e.at)
     e.onAirfield = okA and on == true
     meCache.e = e
@@ -954,7 +989,8 @@ function COOP.players()
         local P = M.peers[s]
         if s ~= COOP.slot and P and P.at then
             out[#out + 1] = { slot = s, obj = P.obj, addr = P.addr, at = P.at, hpPct = P.hpPct, alive = P.alive,
-                              onAirfield = P.onAirfield, fresh = P.fresh, rot = P.rot }     -- (rot: pitch, yaw, roll)
+                              onAirfield = P.onAirfield, fresh = P.fresh, rot = P.rot,      -- (rot: pitch, yaw, roll)
+                              down = P.down, age = P.age, inLevel = (P.flags or 0) % 2 == 1 }   -- (sv_down.lua's)
         end
     end
     return out
@@ -967,6 +1003,24 @@ function COOP.slotOfAddr(addr)
     if e and e.addr == addr then return e.slot end
     for s, P in pairs(M.peers) do if P.addr and P.addr == addr then return s end end
     return nil
+end
+-- For sv_down.lua (revives, the spectator camera): a reliable message to slot `to` (nil: everyone; a joiner's all go to
+-- the host), a player's name, a slot's check, how many other games are linked, what this game keeps of another player
+-- (peerTick's P), and the other players' planes here to watch (shown, their state fresh, not DOWN), in slot order
+function COOP.msg(to, ...) return sendTo(to, true, ...) end
+function COOP.name(slot) return playerName(slot) end
+COOP.slotOk = slotOk
+function COOP.linked() return COOP.open and (M.linkedPeers or 0) or 0 end
+function COOP.peerInfo(slot) return M.peers[slot] end
+function COOP.watchable()
+    local out = {}
+    for s = 0, MAX_SLOT do
+        local P = M.peers[s]
+        if s ~= COOP.slot and P and P.obj and P.shown and P.fresh and not P.down and valid(P.obj) and P.addr then
+            out[#out + 1] = { slot = s, obj = P.obj, addr = P.addr, name = playerName(s) }
+        end
+    end
+    return out
 end
 
 ---------------------------------------------------------------------------------------------------- weapons, gear, afterburner
@@ -1129,6 +1183,7 @@ function M.syncBits(pawn, now)
         local okI, s = pcall(SV_InputNow)
         local th = okI and type(s) == "string" and tonumber(s:match("^[^,]*,[^,]*,[^,]*,([^,]*)")) or nil
         if th then
+            S.n.thMax = math.max(S.n.thMax or 0, th)              -- (the tally's: what full throttle reads, to calibrate)
             local ab = th / 1000 >= (tonumber(sc().ab_throttle) or 0.9)
             if ab ~= S.ab then
                 S.ab, S.n.ab = ab, S.n.ab + 1
@@ -1161,11 +1216,12 @@ local function coopFire(slot, fcs, target)
     local okF, r = pcall(SV_CoopFire, a, fcs, target or 0)
     if not okF then r = tostring(r) end
     if r == 1 then S.n.fired = S.n.fired + 1 else S.n.failed = S.n.failed + 1 end
+    local said = r == 1 and "queued" or (SV_ERR[r] and (tostring(r) .. " " .. SV_ERR[r]) or tostring(r))
     once("first" .. slot .. "/" .. fcs, string.format("coopfire: player %d's first %s here (their plane %X, %s): %s", slot + 1,
-        FCS_NAME[fcs] or tostring(fcs), a, target and string.format("at %X", target) or "no target", tostring(r)))
+        FCS_NAME[fcs] or tostring(fcs), a, target and string.format("at %X", target) or "no target", said))
     if r ~= 1 then
         once("fail" .. fcs .. "/" .. tostring(r), string.format("coopfire: SV_CoopFire(player %d's plane, slot %d) refused: %s",
-            slot + 1, fcs, tostring(r)))
+            slot + 1, fcs, said))
     end
     return r
 end
@@ -1294,8 +1350,9 @@ function M.syncTick(now, pawn)
         if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) > 0 then
             log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
                 .. "their target not here, %d with no plane here), your gun %d bursts, your flares %d, your gear flips %d, "
-                .. "afterburner flips %d", n.sent, n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0,
-                n.bursts or 0, n.flares or 0, n.gear, n.ab))
+                .. "afterburner flips %d, throttle up to %.3f (ab_throttle %s)", n.sent, n.got, n.fired, n.failed, n.dropped,
+                n.untargeted or 0, n.noPlane or 0, n.bursts or 0, n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000,
+                tostring(sc().ab_throttle)))
         end
         S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
         S.statAt = now + 60
@@ -1424,12 +1481,28 @@ end
 -- survival.ini and survival_config.lua both), as data only ("cf", in chunks); the joiner's CFG goes back to the shipped
 -- settings and takes the host's on top, in place (other parts hold CFG's tables), and its own come back when co-op
 -- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard,
--- the menu's, tells, P6's profile and flares, the test logs' probe / ai_watch / stats / log) and the host's difficulty preset
--- is used for everyone (presetName).
+-- the menu's, tells, P6's profile and flares, the test logs' probe / ai_watch / stats / log; of [coop] the host's
+-- revives all the same, SHARED_IN, but for the key and camera) and the host's difficulty preset is used for everyone
+-- (presetName).
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
                    stats = true, tells = true, profile = true, flares = true,   -- (profile, flares: P6's, each player's own)
                    log = true }                                                 -- ([log] verbose: each game's log)
+-- Inside a PERSONAL section, the host's all the same: the run's revives ([coop.revive], sv_down.lua: one price and floor
+-- for the room) but for what's each player's own there (OWN_IN: the next-player key and the spectator camera)
+local SHARED_IN = { { "coop", "revive" } }
+local OWN_IN = { ["coop.revive.key"] = true, ["coop.revive.ctrl"] = true, ["coop.revive.camera"] = true }
+local function pathStr(p, n) local q = {}; for j = 1, n or #p do q[j] = tostring(p[j]) end; return table.concat(q, ".") end
+local function ownPath(p) for j = 1, #p do if OWN_IN[pathStr(p, j)] then return true end end; return false end
+local function sharedPath(p)
+    for _, s in ipairs(SHARED_IN) do
+        local m = #p >= #s
+        for j = 1, #s do if p[j] ~= s[j] then m = false end end
+        if m then return true end
+    end
+    return false
+end
+local function at(t, p) for j = 1, #p do if type(t) ~= "table" then return nil end; t = t[p[j]] end; return t end
 -- world-data unit lists (CFG.pool, airfield.bombers.pool / heavy_units, allies' units): build data, the same in the same
 -- build, and other parts' lookup tables are made from them at load (code review: BOMBER_UNIT, HEAVY_UNIT, ALLY.unit)
 local function structural(path)
@@ -1546,7 +1619,11 @@ function M.sendSettings(to)
         if type(v) == "table" and type(d) == "table" and not isList(v) and not isList(d) then diff(v, d, { k }, out)
         elseif not same(v, d) then out[#out + 1] = { { k }, v } end
     end
-    for i = #out, 1, -1 do if structural(out[i][1]) then table.remove(out, i) end end
+    for _, s in ipairs(SHARED_IN) do                       -- (the host's part of a PERSONAL section)
+        local v, d = at(CFG, s), at(CFG_DEFAULTS, s)
+        if type(v) == "table" and type(d) == "table" then diff(v, d, { table.unpack(s) }, out) end
+    end
+    for i = #out, 1, -1 do if structural(out[i][1]) or ownPath(out[i][1]) then table.remove(out, i) end end
     local tk = {}
     local pname, pdiff = presetName()
     enc({ ver = VERSION, preset = pname, pdiff = pdiff, max = maxPlayers(), diff = out }, tk)
@@ -1572,14 +1649,29 @@ function M.onSettings(f)
     local ok, s = pcall(dec, tk, 1, 0)
     if not ok or type(s) ~= "table" or type(s.diff) ~= "table" then log("coop: the host's settings could not be read: " .. tostring(s)); return end
     if not M.mine then                                    -- (your own, for when co-op closes or you host)
-        M.mine = {}
+        M.mine, M.mineIn = {}, {}
         for k in pairs(synced()) do M.mine[k] = deepCopy(CFG[k]) end
+        for _, sp in ipairs(SHARED_IN) do M.mineIn[pathStr(sp)] = deepCopy(at(CFG, sp)) end
     end
     for k in pairs(synced()) do put(k, CFG_DEFAULTS[k]) end
+    for _, sp in ipairs(SHARED_IN) do                      -- (the shipped ones, but what's each player's own there)
+        local cur, d = at(CFG, sp), at(CFG_DEFAULTS, sp)
+        if type(cur) == "table" and type(d) == "table" then
+            local keep = {}
+            for k, v in pairs(cur) do
+                local q = { table.unpack(sp) }
+                q[#q + 1] = k
+                if ownPath(q) then keep[k] = deepCopy(v) end
+            end
+            fill(cur, d)
+            for k, v in pairs(keep) do if type(v) == "table" and type(cur[k]) == "table" then fill(cur[k], v) else cur[k] = v end end
+        end
+    end
     local names, skipped = {}, 0
     for i, e in ipairs(s.diff) do
         local p = type(e) == "table" and e[1]
-        local ok = i <= 5000 and type(p) == "table" and #p >= 1 and #p <= 12 and not PERSONAL[p[1]] and not structural(p)
+        local ok = i <= 5000 and type(p) == "table" and #p >= 1 and #p <= 12 and (not PERSONAL[p[1]] or sharedPath(p))
+            and not ownPath(p) and not structural(p)
         local d = ok and shipped(p)
         if not ok or d == nil or e[2] == nil or not fits(e[2], d) then
             skipped = skipped + 1
@@ -1607,7 +1699,11 @@ end
 function M.restoreMine()
     if not M.mine then return end
     for k in pairs(synced()) do put(k, M.mine[k]) end
-    M.mine, M.hostPreset, M.hostDiff, M.hostMax = nil, nil, nil, nil
+    for _, sp in ipairs(SHARED_IN) do
+        local cur, mine = at(CFG, sp), M.mineIn and M.mineIn[pathStr(sp)]
+        if type(cur) == "table" and type(mine) == "table" then fill(cur, mine) end
+    end
+    M.mine, M.mineIn, M.hostPreset, M.hostDiff, M.hostMax = nil, nil, nil, nil, nil
     log("coop: your own settings are back")
 end
 
@@ -1656,6 +1752,7 @@ local function onHostMessage(from, f)
     elseif k == "jn" then hostSync(from)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
     elseif k == "fx" then M.fxFromJoiner(from, f)       -- a joiner's shots: its plane here fires them, the others told
+    elseif (k == "dw" or k == "rv") and DOWN and DOWN.onHost then DOWN.onHost(from, f)   -- (down, a revive: sv_down.lua)
     elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
         local i, c = inNum(f[2], 100), inNum(f[3], 100)
         local now = os.clock()
@@ -1671,6 +1768,7 @@ local function onJoinerMessage(f)
     local k = f[1]
     if k == "cf" then M.onSettings(f)
     elseif k == "fx" then M.fxFromHost(f)               -- a player's shots (the host's, or a joiner's relayed)
+    elseif (k == "dw" or k == "rb" or k == "rx" or k == "ro" or k == "rc") and DOWN and DOWN.onJoiner then DOWN.onJoiner(f)   -- (sv_down.lua)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
         if not (lv and lv == math.floor(lv) and lv >= 0 and lv <= #SPIKE_SUFFIX) then lv = nil end
@@ -1740,7 +1838,10 @@ local function onJoinerMessage(f)
         end
     elseif k == "cr" then
         local n = tonumber(f[2]) or 0
-        if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX then addCredits(math.floor(n), short(f[3], 80) .. " (the host's round)") end
+        if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX then
+            if M.noDownBonus() then log("revive: the host's round bonus (" .. math.floor(n) .. ") not paid: you're down (down_round_bonus off)")
+            else addCredits(math.floor(n), short(f[3], 80) .. " (the host's round)") end
+        end
     elseif k == "sp" then
         local unit, pose, ops = short(f[2], 96), nil, {}
         if f[3] and f[3] ~= "-" then
@@ -1809,6 +1910,7 @@ local function onJoinerMessage(f)
     elseif k == "rs" then
         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
         killAllCopies("the host's run started over")
+        if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)
         -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
         -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
         if STATS and D then pcall(STATS.hostReset, D.now, M.jnAt ~= nil and os.clock() - M.jnAt < 15) end
@@ -1897,9 +1999,19 @@ hudCallout = function(text, sub, big)
     if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
 end
 local rawAddCredits = addCredits
+-- (a round's bonus while you're DOWN, sv_down.lua: paid unless [coop.revive] down_round_bonus is off)
+function M.noDownBonus()
+    local rv = CFG.coop and CFG.coop.revive
+    return DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true and type(rv) == "table" and rv.down_round_bonus == false
+end
 addCredits = function(n, why)
-    rawAddCredits(n, why)
-    if COOP.host() and M.mirror > 0 and type(why) == "string" and not why:find(" down %(") and n > 0 then send(true, "cr", n, why) end
+    local bonus = M.mirror > 0 and type(why) == "string" and not why:find(" down %(") and n > 0
+    if COOP.host() and bonus and M.noDownBonus() then
+        log("revive: the round's bonus (" .. tostring(n) .. ") not paid: you're down (down_round_bonus off)")
+    else
+        rawAddCredits(n, why)
+    end
+    if COOP.host() and bonus then send(true, "cr", n, why) end
 end
 local rawLogPlane = logPlane
 logPlane = function(o, unit, k)
@@ -2176,13 +2288,15 @@ function COOP.tick(tick)
         end
         if M.unpauses == 1 then callout("CO-OP: THE GAME KEEPS RUNNING", "OTHER PLAYERS ARE STILL FLYING") end
     end
-    -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield; the sync's 16 gear down,
-    -- 32 afterburner, 64 gun firing, 128 flares)
+    -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield, 8 DOWN: shot down and
+    -- waiting for a revive, sv_down.lua, not "alive" then; the sync's 16 gear down, 32 afterburner, 64 gun firing,
+    -- 128 flares)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if valid(pawn) then
         local flags = 1
         local h = health(pawn)
-        if h and h > 0 then flags = flags + 2 end
+        local down = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
+        if down then flags = flags + 8 elseif h and h > 0 then flags = flags + 2 end
         if playerOnAirfield() then flags = flags + 4 end
         local okB, bits = pcall(M.syncBits, pawn, now)
         if okB then flags = flags + bits else once("syncBits", "coopfire: state bits error " .. tostring(bits)) end

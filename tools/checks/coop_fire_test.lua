@@ -266,12 +266,13 @@ tick()
 check(fired() == "" and fx("2") ~= "", "no plane of player 2's here: nothing fired, still relayed to player 3")
 P1.gone = nil
 COOP.peerPlane(P1, 1)
-fireR = -3
+fireR = -11
 fires, sent = {}, {}
 tick(1.1)
 inbox[#inbox + 1] = "1|fx|m:5:0"
 tick()
-check(line("coopfire: SV_CoopFire%(player 2's plane, slot 2%) refused: %-3", from) ~= nil, "SV_CoopFire's refusal logged with its code")
+check(line("coopfire: SV_CoopFire%(player 2's plane, slot 2%) refused: %-11 the game refused it", from) ~= nil,
+      "SV_CoopFire's refusal logged with its code and SV_ERR's words")
 fireR = 1
 
 ---------------------------------------------------------------------------------------------------- a joiner

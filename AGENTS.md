@@ -353,7 +353,11 @@ co-op weapon / gear / afterburner sync and a co-op revive with a spectator camer
 0.72.2 (runtime 0.28.5; the user's co-op requests of 2026-10-29; not yet run in game): each player's missiles, gun,
 flares, gear and afterburner shown on their stand-in on the other games (tools/re/COOP.md 8: "fx" shots relayed by the
 host, state bits 16 / 32 / 64 / 128, SV_CoopFire / SV_InputNow; the stand-ins fly damage-0 `<row>_svcp` rows, a
-joiner's "ht" backstop; [coop.sync]; tools/checks/coop_fire_test.sh).
+joiner's "ht" backstop; [coop.sync]; tools/checks/coop_fire_test.sh); co-op revives (Scripts/sv_down.lua, COOP.md 9):
+held at a 0.1 HP floor, a shot-down player is DOWN (hidden, flown round the airfield by SV_Down, watching another
+player's plane through a camera added to it, O the next), any other player at their airfield buys them back from the
+STORE's AIRFIELD page (REVIVE <NAME>, 5000 x 1.5 a revive, checked by the host: dw / rv / rb / rx / ro / rc), everyone
+down ends the run (RE_SV_RunOver, Mission 15's MissionFailed); [coop.revive]; tools/checks/coop_revive_test.sh.
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES

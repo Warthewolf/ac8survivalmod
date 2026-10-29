@@ -364,10 +364,13 @@ end
 -- RUN.insured (CFG.insurance): the aircraft's MinHealth held at `floor` of its full health (the game clamps every hit
 -- at it: KILLS_HEALTH_DEATH.md 2), so a shoot-down stops there; at the floor it's repaired (RE_SV_RepairAircraft, as the
 -- STORE's repair, and its health written), invulnerable for safe_s, and the SECOND CHANCE is used up.
+-- Co-op's revives (sv_down.lua, CFG.coop.revive) hold a floor of their own under it, always while they're on: the higher
+-- of the two is set, and theirs is read back and set again every pass (the game puts MinHealth back on a restore).
 INS = {}
 function INS.tick(now)
     local c = CFG.insurance
-    if not (c.enabled and D) then return end
+    local fl = (DOWN and DOWN.floor) and DOWN.floor() or 0        -- (co-op's floor_hp, or 0: solo as ever)
+    if not (D and (c.enabled or fl > 0)) then return end
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     if INS.safeUntil and now >= INS.safeUntil then
@@ -376,15 +379,29 @@ function INS.tick(now)
     end
     local okM, mh = pcall(function() return pawn.MaxHealth end)
     if not (okM and type(mh) == "number" and mh > 0) then return end
-    local want = RUN.insured and mh * c.floor or 0
-    if INS.min ~= want or INS.pawn ~= addrOf(pawn) then
+    local insured = c.enabled and RUN.insured
+    local want = insured and math.max(mh * c.floor, fl) or fl
+    local reset = false
+    if fl > 0 and INS.min == want and INS.pawn == addrOf(pawn) then
+        local okR, cur = pcall(function() return pawn.MinHealth end)
+        reset = okR and type(cur) == "number" and math.abs(cur - want) > 0.001
+    end
+    if INS.min ~= want or INS.pawn ~= addrOf(pawn) or reset then
         local ok = pcall(function() pawn:SetMinHealth(want) end)
         if not ok then ok = pcall(function() pawn.MinHealth = want end) end
+        if reset then                                             -- (the game's: set again, counted)
+            INS.resets = (INS.resets or 0) + 1
+            if INS.resets <= 3 or INS.resets % 20 == 0 then
+                log(string.format("insurance: your aircraft's floor was put back by the game; %.1f HP again%s (%d times)", want,
+                    ok and "" or " (NOT set)", INS.resets))
+            end
+        else
+            log(string.format("insurance: your aircraft's floor %.1f HP (%s)%s", want, insured and "SECOND CHANCE held"
+                or (fl > 0 and "co-op's revives" or "none"), ok and "" or " (NOT set)"))
+        end
         INS.min, INS.pawn = want, addrOf(pawn)
-        log(string.format("insurance: your aircraft's floor %.1f HP (%s)%s", want, RUN.insured and "SECOND CHANCE held" or "none",
-            ok and "" or " (NOT set)"))
     end
-    if not RUN.insured then return end
+    if not insured then return end
     local okH, h = pcall(function() return pawn.HealthInternal end)
     if okH and type(h) == "number" and h > 0 and h <= mh * 10 * c.floor + 1 then
         RUN.insured, RUN.dirty = false, true

@@ -708,6 +708,9 @@ CFG = {
             RepairAircraft = { role = "aircraft", label = "REPAIR AIRCRAFT", price = 600, min_price = 100, raise = 1.0 },
             -- (raise 1.0, was 1.25: airfield repairs are upkeep every raid, and 1.25 compounding made the 20th one 21700)
             RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 60, price = 300, raise = 1.0 },
+            -- co-op: a player who's down bought back (user, 2026-10-29: "someone could land at the airfield and buy you
+            -- back"; Scripts/sv_down.lua: its label, price and refusals; prices: coop.revive)
+            Revive         = { role = "revive", label = "REVIVE" },
             AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
             -- (user, 2026-10-29: "Add CIWS that can be purchased and placed around the airfield"; on the STORE's
@@ -1077,7 +1080,20 @@ CFG = {
              -- from which you're on afterburner. The stand-ins fly damage-0 copies of their airframes' rows (<row>_svcp),
              -- so what they fire only shows; enabled = false: none of it, and their airframes' own rows as before
              sync = { enabled = true, missiles = true, guns = true, flares = true, gear = true, afterburner = true,
-                      ab_throttle = 0.9 } },
+                      ab_throttle = 0.9 },
+             -- revives (Scripts/sv_down.lua, tools/re/COOP.md 9; user, 2026-10-29: "if you die, HOST or JOINER, someone
+             -- could land at the airfield and buy you back ... you get put into a spectator camera and you can switch
+             -- between the players currently active"). Co-op only: your plane is held at floor_hp; there you're DOWN,
+             -- flown round the airfield (loiter: alt_m up, radius_m round) and watch another player; any other player at
+             -- their airfield buys you back from the STORE's AIRFIELD page for price, x raise for each revive in the run
+             -- (the host's count), and you're back repaired, safe_s seconds invincible, where the loiter left you
+             -- (respawn "loiter") or 4 km out from the runway at 500 m ("native"). Everyone down: the run's over.
+             -- down_round_bonus: a downed player still gets the round bonuses. key / ctrl: the next player to watch;
+             -- camera: back_m behind and up_m above the plane you watch, blend_s to swing over. key, ctrl and camera
+             -- are each player's own, the rest the host's.
+             revive = { enabled = true, floor_hp = 0.1, price = 5000, raise = 1.5, safe_s = 5,
+                        loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", key = "O", ctrl = false,
+                        camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around

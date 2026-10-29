@@ -922,7 +922,11 @@ end
 ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin
 SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found",
-                 [-6] = "the level is still loading" }
+                 [-6] = "the level is still loading",
+                 -- (runtime 0.28.5's SV_CoopFire / SV_Down / SV_Respawn: tools/re/COOP.md 2, KILLS_HEALTH_DEATH.md 7)
+                 [-10] = "rate: that shooter's 25 a second used up", [-11] = "the game refused it (inactive, dead or no fire control)",
+                 [-12] = "not your own plane", [-13] = "not an AI plane with fire control", [-14] = "a bad target",
+                 [-20] = "not fired: the co-op host is down (sv_coop.lua)" }
 D = nil                      -- the run in progress: { round, state, at, now, queue, spare, up, flown }
 -- The run's money and purchases: { credits, earned, spent, bought = { [item] = n },
 -- msg = { [item] = last result }, dirty (shop texts need updating) }. Reset when Survival's level loads.
