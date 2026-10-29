@@ -1393,15 +1393,15 @@ player. The thresholds and gains are a first guess; the round lines log the raw 
 | the counters | `PROF.weights(round)` from startRound (the host or solo), before its strike, jammer and fighter picks; `D.counter` | each habit's share in force, its strength, and what that turns on (`jammerX`, `rank` / `rankFrom`, `postStallFrom`, `tail`, `lancerAlt`, `strikeX`, `roleW`); one "learning: round N" line a round with every share next to every decision |
 | the levers | `PROF.chance` (sv_rounds.lua startRound: the strike's and the jammer's `math.random() <` chance), `PROF.rankAdd` (sv_ai.lua enemyTier, before p.rankBase: P4's live rewrite and the jammer's boost keep it), `PROF.postStall` (enemyManeuvers' `all`), `PROF.roleW` (sv_spawn.lua ROLE.pickRound: the mix's weights; its "roles:" line says "weighed by your habits"), `PROF.lancerAlt` (spawnFlight's Lancer height), D.counter.tail (sv_director.lua DIR.roundStart, unit 6's hook: "cover and trap xN (your tail chasing)"), D.counter.top (DIR.roundStart: the top cover's budget and cooldown, "top cover xN (you stay high)") | each a pcall'd read of D.counter; on a co-op joiner each gives the base / 0 / false / nil (its enemies are the host's copies) |
 | the AI's flares | `PROF.menu()` from sv_main.lua's main-menu block, once a session, before setsSetup / searchSetup; sv_rows.lua searchSetup's slot loop (`aiFlares`) | the profile read; with the saved missile habit (strength > 0) or `[flares] always`: PROF.flareWant = { magazine, reload_s }, and every fighter row's NPC_FCS_PlaneFlr* slot (aces' too; not MINDRIPPER's, AB.L..IN's or VALKA's) onto `<row>_SV_FLR` (one row for every spike level). Rows are made once a session (cloneRow keeps a row), so a new habit shows from the next game start |
-| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.roundStart` (STATS.roundStart: the round the run began in), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range. A write that didn't land (the folder can't be written) leaves this session's profile in force: PROF.load keeps it until a write lands. Never lost (code review of 2026-10-29; the old write ignored write / close failures, removed the file before the rename and never read its `.tmp`, and a read that failed was followed by a neutral profile written over the file at round 1's clear): written whole to `.tmp` (its last line `; end of the profile`; write and close checked, a failure removes the .tmp and leaves the file as it was), the old file moved aside to `.bak` (Windows' rename never replaces a file), the `.tmp` moved in (the .bak put back if that fails), then the .bak removed. No file: a whole `.tmp` (it has its end line), else the `.bak` a write the game didn't finish left is read and moved back in. A file that's there but can't be opened now (another program holds it; errno other than 2): no profile this session (PROF.saved nil: each run on its own), nothing written until a load reads it. A file that isn't a profile of this version (broken, another format): neutral, and the first write moves it aside as `.old` (kept; one) and says so. PROF.saved is set only once a load has gone through, and checkpoint / fold never write without one, so a level load error (sv_main.lua leaves PROF.saved nil) never has a neutral profile written over the file. Each failure logged once a load |
+| the file | `PROF.load` (the main menu; `PROF.levelLoad` at each level load: sv_main.lua after RUN's reset), `PROF.roundStart` (STATS.roundStart: the round the run began in), `PROF.checkpoint` (STATS.roundEnd: the clear on the host, a joiner's round change), `PROF.fold(how)` (STATS.runEnd from LB.finish: died, restart, left), `PROF.newRun` (STATS.hostReset: a co-op host's new run while this game's level goes on) | config/survival_profile.ini, written at a run's end and, with `checkpoint`, at each round's end with the run so far in [run]; a [run] found at the next start (the game closed mid-run) is learnt from first, once a session (its id). Read with io, never run as code: known keys only, every value a number clamped to its range. A write that didn't land (the folder can't be written) leaves this session's profile in force: PROF.load keeps it until a write lands. Never lost (code review of 2026-10-29; the old write ignored write / close failures, removed the file before the rename and never read its `.tmp`, and a read that failed was followed by a neutral profile written over the file at round 1's clear): written whole to `.tmp` (its last line `; end of the profile`; write and close checked, a failure removes the .tmp and leaves the file as it was), the old file moved aside to `.bak` (Windows' rename never replaces a file), the `.tmp` moved in (the .bak put back if that fails), then the .bak removed (one it can't remove, another program holding it: logged, left, removed by the next write). No file: a whole `.tmp` (it has its end line), else the `.bak` a write the game didn't finish left is read and moved back in, only with a `.tmp` beside it (F3 round 2: a write stopped between the move aside and the move in leaves both; a `.bak` alone is a finished write's it couldn't remove, older than the file a player deleted to start over, and is passed over). A file that's there but can't be opened now (another program holds it; errno other than 2): no profile this session (PROF.saved nil: each run on its own), nothing written until a load reads it. A file that isn't a profile of this version (broken, another format): neutral, and the first write moves it aside as `.old` (kept; one) and says so. PROF.saved is set only once a load has gone through, and checkpoint / fold never write without one, so a level load error (sv_main.lua leaves PROF.saved nil) never has a neutral profile written over the file. Each failure logged once a load |
 | packaging | tools/package_release.sh, tools/package_test.sh, .gitignore | a dev's survival_profile.ini never ships or goes into git |
 | report | tools/checks/stats_report.py `learning_lines` | a row per round (each habit's share, * where countered, the counters), each run's end and the profile lines |
 
 The file (made by the game; a player may delete it to start over):
 
     ; AC8 Survival Mode: how you fly, learnt from your runs (the learning layer: [profile] in survival.ini).
-    ; Written by the game at each run's end; delete this file to start over. Yours only: never sent, never
-    ; shared in co-op.
+    ; Written by the game at each run's end; delete this file (and any .tmp / .bak beside it) to start over.
+    ; Yours only: never sent, never shared in co-op.
     [profile]
     version = 1
     runs = 2            (runs counted: something flown)
@@ -1454,14 +1454,15 @@ The file (made by the game; a player may delete it to start over):
   the AI's flares refilled this session (your saved missile share 0.85, over 0.80): 20 in the magazine, 8.0 s to reload`
   and `weapons: NPC_FCS_PlaneFlr000 -> NPC_FCS_PlaneFlr000_SV_FLR (the AI's flares, against your missiles: ...)`, or
   `learning: the AI's flares stay stock this session (your saved missile share 0.72; its threshold 0.80)`.
-- Each level load: `learning: profile at level load ...` (`none yet (...made at your first run's end)`; `... is format 2,
-  not 1: starting from a neutral profile`; `; N lines skipped`; `; the run the game closed in (round 3, 9 of your kills)
-  learnt from[, not its tail_time, high, airfield, height (40 samples, ...; min_samples 60)] first`; after a failed
-  write: `learning: profile at level load: this session's kept (config\survival_profile.ini couldn't be written: the
-  file's older): ...`). Since the code review of 2026-10-29: `... is format 2, not 1: starting from a neutral profile
-  (the file's kept as survival_profile.ini.old once a new one is written)` (`has no version line`, `not readable`), then
-  at the first write `learning: config\survival_profile.ini (has no version line at its load) kept as
-  survival_profile.ini.old; a new profile written`; `learning: profile at level load from
+- Each level load: `learning: profile at level load ...` (`none yet (...made at your first run's end)`, with `;
+  survival_profile.ini.bak passed over: an older one a write that went in left, removed at the next write` for a .bak
+  alone; `... is format 2, not 1: starting from a neutral profile`; `; N lines skipped`; `; the run the game closed in
+  (round 3, 9 of your kills) learnt from[, not its tail_time, high, airfield, height (40 samples, ...; min_samples 60)]
+  first`; after a failed write: `learning: profile at level load: this session's kept (config\survival_profile.ini
+  couldn't be written: the file's older): ...`). Since the code review of 2026-10-29: `... is format 2, not 1: starting
+  from a neutral profile (the file's kept as survival_profile.ini.old once a new one is written)` (`has no version
+  line`, `not readable`), then at the first write `learning: config\survival_profile.ini (has no version line at its
+  load) kept as survival_profile.ini.old; a new profile written`; `learning: profile at level load from
   config\survival_profile.ini.bak (a write the game didn't finish left it; moved back in): ...` (`.tmp`; `...; <file>
   couldn't be moved back in (...): the file not written this session`); `learning: profile at level load:
   config\survival_profile.ini couldn't be read (<error>): no profile this session (each run learns on its own), the file
@@ -1469,10 +1470,12 @@ The file (made by the game; a player may delete it to start over):
 - A write that fails (each once a load; the file as it was): `learning: can't write config\survival_profile.ini
   (<error>); the profile stays this session's`, `learning: config\survival_profile.ini not written (No space left on
   device): the old one kept; ...`, `... not replaced: it couldn't be moved aside (...), it's kept; ...`, `... not moved
-  in (...): the old one put back; ...` (or `the new one left as survival_profile.ini.tmp, read at the next start`);
-  nothing written: `learning: config\survival_profile.ini not written: no profile was loaded (left as it is)` (a level
-  load error or an unreadable file), `... not written: survival_profile.ini.bak couldn't be moved back in (...) (left as
-  it is)`.
+  in (...): the old one put back; ...` (or `the new one left as survival_profile.ini.tmp, read at the next start`); a
+  write that went in but couldn't remove the old one: `learning: config\survival_profile.ini.bak (the profile before
+  this one) couldn't be removed (Permission denied): left beside the new one, never read back without a .tmp; the next
+  write removes it`; nothing written: `learning: config\survival_profile.ini not written: no profile was loaded (left as
+  it is)` (a level load error or an unreadable file), `... not written: survival_profile.ini.bak couldn't be moved back
+  in (...) (left as it is)`.
 - A run's end: `learning: run over (died): 23 of your kills (21 of fighters: missiles 15, gun 5, of 20 with a weapon
   seen; close 3, from behind 12, of 21 with an aspect), 812 s flown (high 30%, near the airfield 5% of 640 s it didn't
   need you, on a tail 20%, usually 3.9 km up), 2 landings: missile 0.75, gun 0.25, tail 0.43, high 0.30, airfield
@@ -1521,7 +1524,7 @@ The file (made by the game; a player may delete it to start over):
 ### Offline test
 `sh tools/checks/profile_test.sh` (tools/checks/profile_test.lua on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
 sv_spawn, sv_rounds, sv_leaderboard, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop, Lua 5.4.6; then
-stats_report.py on its log), 116 checks:
+stats_report.py on its log), 119 checks:
 - survival.ini's [profile] sections and [flares] read (an integer stays one, a tier name in any case); every switch on
   as shipped;
 - the classification: 12 of your kills of fighters by weapon (missiles, a special, the gun, gun and a missile: the
@@ -1561,10 +1564,11 @@ stats_report.py on its log), 116 checks:
   counted, not learnt from; one from round 1 learnt from; the file never lost: written whole (its end line, no .tmp or
   .bak left), a full disk at the .tmp's write and at its close and a refused move in leave the old file byte for byte
   (logged; the run-over line `NOT saved (<why>)`), no file but its .bak (a cut-off .tmp passed over) or a whole .tmp
-  read and moved back in, the next write removing the .bak left over, a junk file neutral and kept as .old by the first
-  write (logged; a later write keeps the .old), a file that can't be opened now (errno 13) and a level load error never
-  written over (the run's line says not learnt from or saved), read again once a load can. Each case fails on the code
-  before the fix;
+  read and moved back in, the next write removing the .bak left over, a .bak a finished write couldn't remove (logged)
+  passed over once the player deletes the file (a neutral profile, the next write removing it; F3 round 2: it used to
+  come back as a write the game didn't finish), a junk file neutral and kept as .old by the first write (logged; a later
+  write keeps the .old), a file that can't be opened now (errno 13) and a level load error never written over (the run's
+  line says not learnt from or saved), read again once a load can. Each case fails on the code before the fix;
 - the hooks by their place in the source, and no math.random draw in PROF (the rounds' odds and the other units'
   seeded tests untouched), no FindAllOf or nameOf.
 The other units' tests pass unchanged (their startRound now also logs a `learning: round N ... nothing to counter` line).
@@ -1603,7 +1607,8 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
   5.4.6 (clang, the Windows CRT); "no such file" is io.open's errno 2 (ENOENT), anything else (13, a file held open
   without sharing) counts as there. A file another program holds while the game reads it means no profile that
   session (its runs learn on their own and aren't saved). A crash between the move aside and the move in leaves only
-  the .bak and the .tmp: the next start reads the .tmp if its end line is there, else the .bak. Only one .old is kept.
+  the .bak and the .tmp: the next start reads the .tmp if its end line is there, else the .bak; a .bak with no .tmp
+  beside it is never read (a write that went in left it). Only one .old is kept.
 - The thresholds and gains are guesses; the shares are logged every round to tune them.
 - No COOP_TAG / VERSION bump yet (the contract's single bump at the end): nothing new crosses the link.
 

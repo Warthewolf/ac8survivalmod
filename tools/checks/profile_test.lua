@@ -27,8 +27,9 @@
 --     Kf; a co-op joiner linked at the host's round 20 counted, not learnt from (from round 1: learnt); the file never
 --     lost: written whole (its end line), a full disk at the .tmp's write or close and a failed move in leave the old
 --     file as it was (logged), a .bak (or a whole .tmp, never a cut-off one) a write the game didn't finish left read
---     and moved back in, a file that isn't a profile kept as .old by the first write (logged), a file that can't be
---     read now and a failed level load never written over;
+--     and moved back in (a .bak only beside a .tmp: one a finished write couldn't remove is logged, then passed over
+--     once the file's deleted), a file that isn't a profile kept as .old by the first write (logged), a file that can't
+--     be read now and a failed level load never written over;
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -850,6 +851,36 @@ RUN.habit.id = "a7"
 D.round = 8
 STATS.roundEnd(1260)
 check(has(readAll(PFILE), "id = a7") and not exists(PFILE .. ".bak"), "the next write: the .bak left over removed")
+-- a write that went in but couldn't remove its .bak (another program held it), then the file deleted to start over:
+-- the .bak (older) never moved back in without a .tmp beside it (F3 round 2: the review's p6 probe), the next write
+-- removes it
+do
+    local keepRemove = os.remove
+    os.remove = function(p) if tostring(p):find("%.bak$") then return nil, "Permission denied", 13 end return keepRemove(p) end
+    RUN = { habit = strong() }
+    RUN.habit.id = "c1"
+    from = #logs + 1
+    STATS.roundEnd(1262)
+    os.remove = keepRemove
+    check(has(readAll(PFILE), "id = c1") and has(readAll(PFILE .. ".bak"), "id = a7")
+          and has(line("learning: config\\survival_profile.ini.bak (the profile before this one) couldn't be removed", from),
+                  "(Permission denied): left beside the new one, never read back without a .tmp; the next write removes it"),
+          "a .bak a write that went in couldn't remove: the new file in, the .bak left, logged")
+    os.remove(PFILE)                                 -- (the player starts over)
+    from = #logs + 1
+    PROF.load("level load")
+    check(PROF.saved and PROF.saved.runs == 0 and not exists(PFILE) and exists(PFILE .. ".bak")
+          and has(line("learning: profile at level load", from), "none yet (config\\survival_profile.ini is made at your " ..
+              "first run's end; survival_profile.ini.bak passed over: an older one a write that went in left, removed at " ..
+              "the next write)"),
+          "the file deleted, its .bak alone: passed over (it used to come back as a write the game didn't finish)")
+    RUN = { habit = strong() }
+    RUN.habit.id = "c2"
+    STATS.roundEnd(1264)
+    local c2 = readAll(PFILE)
+    check(has(c2, "id = c2") and has(c2, "\nruns = 0") and not exists(PFILE .. ".bak"),
+          "the next write: the new profile from none, the .bak removed")
+end
 -- a file that isn't a profile: neutral, kept as .old by the first write, said so
 writeAll(PFILE, "\0\0garbage")
 from = #logs + 1
