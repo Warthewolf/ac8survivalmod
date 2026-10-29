@@ -300,8 +300,10 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
 - The host's settings for everyone: on a joiner's first hello the host sends "cf" chunks of its CFG's differences from
   CFG_DEFAULTS (the shipped CFG, copied before survival.ini and survival_config.lua apply), as data only (a small
   token format, no code). The joiner puts every shared section back to CFG_DEFAULTS and applies them, in place (other
-  parts hold CFG's tables), and gets its own back when co-op closes or it hosts. Its own: coop, hud, sound, music,
-  leaderboard, tells (and probe, ai_watch, stats). presetName() answers the host's preset on a joiner.
+  parts hold CFG's tables), and gets its own back when co-op closes or it hosts. Its own (sv_coop.lua PERSONAL): coop,
+  hud (the info key's [hud.info] too), sound, music, leaderboard, menu, tells, profile and flares (P6's learning layer:
+  each game's own habits and AI flare row), and probe, ai_watch, stats (the test logs). presetName() answers the host's
+  preset on a joiner.
 - Settings rows under JOIN: CO-OP ROOM, CO-OP ENEMIES, START AT ROUND, BREAK BETWEEN ROUNDS (StringArgs SV_Set_<what>).
   main.dll's OnMainDecide queues the pick and doesn't call the stock decide (as the landing menu's SV_Buy_ rows), Lua
   (SV_MenuSetting) steps the value, saves it with iniSet and relabels the row's live TextBlock. A run that started past

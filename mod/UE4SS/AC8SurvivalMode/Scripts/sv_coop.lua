@@ -955,7 +955,8 @@ end
 -- survival.ini and survival_config.lua both), as data only ("cf", in chunks); the joiner's CFG goes back to the shipped
 -- settings and takes the host's on top, in place (other parts hold CFG's tables), and its own come back when co-op
 -- closes or it hosts. Each player keeps their own PERSONAL sections (name and link, HUD, sound, music, leaderboard,
--- tells) and the host's difficulty preset is used for everyone (presetName).
+-- the menu's, tells, P6's profile and flares, the test logs' probe / ai_watch / stats) and the host's difficulty preset
+-- is used for everyone (presetName).
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
                    stats = true, tells = true, profile = true, flares = true }   -- (profile, flares: P6's, each player's own)
