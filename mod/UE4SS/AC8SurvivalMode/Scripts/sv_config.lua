@@ -1369,7 +1369,10 @@ CFG = {
         -- fire on their own. (Was both launchers every 20 s within 12 km: the player was down within 9 s of the first
         -- volley, test of 2026-10-23; then both Ladons fired together, a friend's test the same day.)
         -- missile_*: their VLS missiles (BP_wp_vls_ladon: 15 damage, 60 deg homing cone) as they appear in Survival:
-        -- damage x missile_damage_x, homing cone x missile_homing_x (user, 2026-10-24: "tone that down too, only minorly").
+        -- damage missile_damage (user, 2026-10-29: "make the missile damage they have at 10"; was x0.8, 12), homing cone
+        -- x missile_homing_x (user, 2026-10-24: "tone that down too, only minorly"), turn rate (MaxRotationAngle and
+        -- its not-captured one) x missile_turn_x (user, 2026-10-29: "make their missiles turn less faster, they're
+        -- almost unavoidable").
         -- Their own fire control's sure kill (BP_wp_vls_certain_ladon) is made one of those (a run of 2026-10-24:
         -- "Ladons shooting down players with one missile").
         -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
@@ -1384,7 +1387,7 @@ CFG = {
                   bomb_per_round = 1, health_per_round = 0.05, health_max_x = 2.5,
                   rage = { enabled = true, volley_every_s = 25, volley_warn_s = 0, first_s = 5 },
                   volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
-                  missile_damage_x = 0.8, missile_homing_x = 0.85,
+                  missile_damage = 10, missile_homing_x = 0.85, missile_turn_x = 0.5,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
         -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on

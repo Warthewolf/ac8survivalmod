@@ -230,18 +230,32 @@ local function owner(o)                                    -- who fired it (its 
     return nil
 end
 
+-- its turn rates from `base` (the class default) x missile_turn_x (user, 2026-10-29: "make their missiles turn less
+-- faster, they're almost unavoidable"): "a -> b deg/s" for the log
+local function slower(o, base)
+    local x = tonumber(CFG.specials.ladon.missile_turn_x) or 1
+    local r0 = base.MaxRotationAngle
+    o.MaxRotationAngle = r0 * x
+    pcall(function()                                       -- (its turn before it has a lock, where it has one)
+        local n0 = base.MaxRotationAngleNotCaptured
+        if type(n0) == "number" and n0 > 0 then o.MaxRotationAngleNotCaptured = n0 * x end
+    end)
+    return string.format("%.0f -> %.0f deg/s", r0, o.MaxRotationAngle)
+end
+
 local function nerf(o)
     local c = CFG.specials.ladon
     if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
     local base = valid(HIT.cdo) and HIT.cdo or o
     local ok, err = pcall(function()
         local d0, a0 = base.damage, base.MaxHomingAngle
-        o.damage = d0 * (c.missile_damage_x or 1)
+        o.damage = tonumber(c.missile_damage) or d0
         o.MaxHomingAngle = a0 * (c.missile_homing_x or 1)
+        local turn = slower(o, base)
         if not HIT.nerfSaid then
             HIT.nerfSaid = true
-            log(string.format("hits: the Ladons' missile %s toned down: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg (from %s)",
-                LADON_MSL, d0, o.damage, a0, o.MaxHomingAngle, base == o and "the missile itself" or "its class default"))
+            log(string.format("hits: the Ladons' missile %s toned down: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg, turn %s (from %s)",
+                LADON_MSL, d0, o.damage, a0, o.MaxHomingAngle, turn, base == o and "the missile itself" or "its class default"))
         end
     end)
     if not ok and not HIT.nerfErr then HIT.nerfErr = true; log("hits: the Ladons' missile NOT toned down: " .. tostring(err)) end
@@ -250,20 +264,21 @@ end
 -- Mission 16's scripted sure kill, BP_wp_vls_certain_ladon (hard rule 36): Survival's volleys fire the ordinary
 -- missile, but the Ladon's own fire control can pick it too (a run of 2026-10-24: one shot down the player from 198 HP
 -- with three airframe upgrades, 15 s after a volley). Each one is made the ordinary missile, as toned down above
--- (damage and homing cone from BP_wp_vls_ladon's class default). Never destroyed: a missile destroyed from Lua stays
+-- (missile_damage; homing cone and turn rate from BP_wp_vls_ladon's class default). Never destroyed: a missile destroyed from Lua stays
 -- counted in flight and on the missile alert, and the game crashed (the ECM burst, 2026-10-25).
 local function certain(o)
     local c = CFG.specials.ladon
     if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
     local ok, err = pcall(function()
         local d0, a0 = o.damage, o.MaxHomingAngle
-        local d1 = valid(HIT.cdo) and HIT.cdo.damage * (c.missile_damage_x or 1) or 12
+        local d1 = tonumber(c.missile_damage) or 10
         local a1 = valid(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
         o.damage, o.MaxHomingAngle = d1, math.min(a0, a1)
+        local turn = slower(o, valid(HIT.cdo) and HIT.cdo or o)
         if not HIT.certainSaid then
             HIT.certainSaid = true
-            log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg",
-                d0, o.damage, a0, o.MaxHomingAngle))
+            log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg, turn %s",
+                d0, o.damage, a0, o.MaxHomingAngle, turn))
         end
     end)
     if not ok and not HIT.certainErr then HIT.certainErr = true; log("hits: the Ladons' sure-kill missile NOT toned down: " .. tostring(err)) end
