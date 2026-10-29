@@ -1118,8 +1118,8 @@ local function parse(text)
 end
 local function render(sv, h)
     local L = { "; AC8 Survival Mode: how you fly, learnt from your runs (the learning layer: [profile] in survival.ini).",
-                "; Written by the game at each run's end; delete this file to start over. Yours only: never sent, never",
-                "; shared in co-op.", "[profile]", "version = " .. FORMAT,
+                "; Written by the game at each run's end; delete this file (and any .tmp / .bak beside it) to start over.",
+                "; Yours only: never sent, never shared in co-op.", "[profile]", "version = " .. FORMAT,
                 string.format("runs = %d", sv.runs or 0), string.format("learnt = %d", sv.learnt or 0),
                 string.format("kills = %d", sv.kills or 0) }
     for _, k in ipairs(PARTS) do if sv[k] then L[#L + 1] = string.format("%s = %.4f", k, sv[k]) end end
@@ -1146,10 +1146,11 @@ end
 -- Written whole and never in place (code review of 2026-10-29: a full disk put a cut-off file in place of the profile,
 -- and a remove-then-rename could leave it only in the .tmp, which nothing read): <file>.tmp written and closed (both
 -- checked: a failure leaves the old file as it is), the old one moved aside to <file>.bak (Windows' rename never
--- replaces a file), the new one moved in (the old one back if that fails), then the .bak removed. PROF.load reads the
--- .tmp or .bak a write the game didn't finish leaves. A file that wasn't a profile at its load (oldWhy) goes aside as
--- <file>.old and stays. kept: why this session leaves the file alone. One that doesn't land leaves wrote.failed:
--- PROF.load then keeps this session's profile (the file's older) until one does. Each failure logged once a load.
+-- replaces a file), the new one moved in (the old one back if that fails), then the .bak removed (one it can't: logged,
+-- left, never read back alone). PROF.load reads the .tmp or .bak a write the game didn't finish leaves. A file that
+-- wasn't a profile at its load (oldWhy) goes aside as <file>.old and stays. kept: why this session leaves the file
+-- alone. One that doesn't land leaves wrote.failed: PROF.load then keeps this session's profile (the file's older)
+-- until one does. Each failure logged once a load.
 local function write(sv, h)
     if kept then
         once("kept", "learning: config\\" .. FILE .. " not written: " .. kept .. " (left as it is)")
@@ -1188,7 +1189,11 @@ local function write(sv, h)
         return fail("move", string.format("config\\%s not moved in (%s): %s", FILE, tostring(eR),
             back and "the old one put back" or ("the new one left as " .. FILE .. ".tmp, read at the next start")))
     end
-    os.remove(bak)                                 -- (the old one goes only now the new one's in)
+    local okB, eB, cB = os.remove(bak)             -- (the old one goes only now the new one's in)
+    if not okB and cB ~= NO_FILE then              -- (another program holds it: older than the file, never read back alone)
+        once("bak", string.format("learning: config\\%s.bak (the profile before this one) couldn't be removed (%s): left " ..
+            "beside the new one, never read back without a .tmp; the next write removes it", FILE, tostring(eB)))
+    end
     if had and oldWhy then
         log(string.format("learning: config\\%s (%s at its load) kept as %s.old; a new profile written", FILE, oldWhy, FILE))
     end
@@ -1273,8 +1278,9 @@ end
 
 -- The profile from its file (where: "the main menu", "level load"). A [run] left in it (the game closed mid-run) is
 -- learnt from first, once a session. Never an error (hard rule 50), and never a neutral profile written over a real
--- one (code review of 2026-10-29): no file, and a write the game didn't finish left its .tmp whole or its .bak: that
--- one, moved back in; no file at all: a neutral profile ("none yet"); a file that's there but can't be read now (in
+-- one (code review of 2026-10-29): no file, and a write the game didn't finish left its .tmp whole or its .bak (beside
+-- a .tmp): that one, moved back in; no file at all: a neutral profile ("none yet"; a .bak alone passed over: a finished
+-- write's it couldn't remove, older than the file the player deleted); a file that's there but can't be read now (in
 -- use by another program): no profile this session (PROF.saved nil: each run learns on its own, nothing written) until
 -- a load reads it; one that isn't a profile of this version (broken, another format): a neutral profile, the file kept
 -- as .old when the first write replaces it. save off: no profile. A write that didn't land this session (wrote.failed:
@@ -1306,16 +1312,21 @@ function PROF.load(where)
             return
         end
     else                                           -- (none: a write the game didn't finish may have left one)
+        local cut = present(p .. ".tmp")           -- (a write stopped between the move aside and the move in leaves both)
         for _, x in ipairs({ ".tmp", ".bak" }) do
             local t = readText(p .. x)
-            if not sv and t and (x == ".bak" or t:find(END_LINE, 1, true)) then   -- (a .tmp only when written whole)
+            -- a .tmp only when written whole; a .bak only beside a .tmp (one alone is a write's that went in, then
+            -- couldn't remove it: older than the file the player deleted to start over, the review's p6 probe)
+            if not sv and t and (x == ".tmp" and t:find(END_LINE, 1, true) or x == ".bak" and cut) then
                 sv, run, skipped = profileOf(t)
                 if sv then from = x end
             end
         end
         if not sv then
             PROF.saved = neutral()
-            log(string.format("learning: profile at %s: none yet (config\\%s is made at your first run's end)", where, FILE))
+            log(string.format("learning: profile at %s: none yet (config\\%s is made at your first run's end%s)", where, FILE,
+                not cut and present(p .. ".bak") and string.format("; %s.bak passed over: an older one a write that went " ..
+                    "in left, removed at the next write", FILE) or ""))
             return
         end
         local okM, eM = os.rename(p .. from, p)
