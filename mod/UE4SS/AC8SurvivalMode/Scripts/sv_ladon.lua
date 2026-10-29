@@ -81,13 +81,13 @@ function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
 -- Ladon `downKey` shot down: the other one, still up, is enraged (CFG.specials.ladon.rage; behaviour roadmap P7, "after
 -- one Ladon dies the other changes route and volleys faster"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
 -- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next rage.first_s on (once you're in
--- range; its callout and tell first, never in the same second: with the other's gap gone it had come with them, code
--- review of unit 9), and RE_SV_LadonRage<Key> sets its flag, so its next pass over the airfield ends on the tighter,
--- faster rage circuit (tools/survival_events.py LADON_RAGE: its PathFinish records pick the path by the flag; never a
--- path changed mid-way). Forwarded to co-op joiners (their copies are moved by the host's stream; harmless). The tell and a callout
--- with its name to every player. Once a round.
+-- range; its tell first, never in the same second: with the other's gap gone it had come with it, code review of unit
+-- 9), and RE_SV_LadonRage<Key> sets its flag, so its next pass over the airfield ends on the tighter, faster rage
+-- circuit (tools/survival_events.py LADON_RAGE: its PathFinish records pick the path by the flag; never a path changed
+-- mid-way). Forwarded to co-op joiners (their copies are moved by the host's stream; harmless). The tell (its radio
+-- call) to every player. Once a round.
 function SPC.ladonRage(now, s, downKey)
-    local c, t = CFG.specials.ladon, CFG.hud.text
+    local c = CFG.specials.ladon
     local rg = c.rage
     if not (rg and rg.enabled) or s.raged then return false end
     for k2, L2 in pairs(s.units or {}) do
@@ -96,7 +96,6 @@ function SPC.ladonRage(now, s, downKey)
             L2.volleyAt = now + math.max(1, tonumber(rg.first_s) or 0)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5
             local name = c.names[k2] or k2:upper()
-            hudCallout(string.format(t.ladon_rage, name), t.ladon_rage_sub)
             if TELL then pcall(TELL.say, "ladon_rage", TELL.ALL) end
             log(string.format("special: Ladon %s enraged (%s down): volleys every %d s, the rage circuit from its next pass (RE_SV_LadonRage%s %s)",
                 name, c.names[downKey] or downKey, tonumber(rg.volley_every_s) or c.volley_every_s, k2,

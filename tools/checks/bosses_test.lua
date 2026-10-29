@@ -13,9 +13,9 @@
 --     off, its gun only with you close in front of it, LastTGT every allout_turn_s and when you're behind it; none of the
 --     pods up its own logged once; a co-op host's phase-3 gun events its own, never forwarded, a frenzy's forwarded),
 --     phase 3 mid-blink (it comes back first), phases off (as before);
---   a Ladon's rage (SPC.ladonTick): the other one shot down: RE_SV_LadonRage<Key>, its callout and tell, volleys every
+--   a Ladon's rage (SPC.ladonTick): the other one shot down: RE_SV_LadonRage<Key>, its tell (no callout), volleys every
 --     25 s; both down in one second: none; rage off: none;
---   the ALICORN's deck (SPC.alicornTick): its tell and callout warn_s before, a Skirmisher 2-ship spawned alt_m over the
+--   the ALICORN's deck (SPC.alicornTick): its tell warn_s before (no callout), a Skirmisher 2-ship spawned alt_m over the
 --     sea ahead_m off its bow along its heading, every every_s, no more than max_up up, none while dived or while you're
 --     at the airfield (a co-op host's while another player flies: launched), after_surface_s after it surfaces,
 --     D.deckLeft counted down, any free 2-ship with roles off; its tell only once nothing holds the launch (max_up, the
@@ -31,9 +31,9 @@
 --     off: the order 5 s on as before;
 --   the main menu's rows (searchSetup on fake tables): the guards' set on every level, AB.L..IN's ECM row (anomEcm's by
 --     default, its own with ecm_row);
---   sure tells (the pack's, AB.L..IN's): their callout with tells off or a tell refused, a joiner's from the host too,
---     a host's to its joiners through the gaps; nothing between rounds, at the airfield or over the summary, with tells
---     off too (code review of 2026-10-29); other tells as before;
+--   sure tells (the pack's, AB.L..IN's; radio lines only since the clean up of 2026-10-29): said through the gap and
+--     their cooldown, a host's to its joiners through the gaps too; never with tells off, between rounds, at the
+--     airfield or over the summary, nor within their lines' line_gap_s; no callout in any case; other tells as before;
 --   the pack's spring when its event doesn't fire (not logged as sprung); an enraged Ladon's volleys under the gap;
 --   co-op: KEEP_EVENTS (the pack and AB.L..IN's LastTGT kept, a Ladon's rage forwarded), AB.L..IN's phase in "rnd" and
 --     a joiner's copy's pods switched off in phase 3 (ANOM.clientGlitch);
@@ -99,7 +99,7 @@ function SV_CoopPeerAt() return "" end
 SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end, breakS = function() return 20 end,
           skillAdd = function() return 0 end }
 local callouts = {}
-function hudCallout(text, sub, big, urgent) callouts[#callouts + 1] = { text = text, sub = sub, urgent = urgent } end
+function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
 local function part(name, chunk, edits)
@@ -124,7 +124,7 @@ part("sv_config.lua")
 local cfgLine = nil
 for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l end end
 part("sv_rows.lua"); part("sv_ai.lua")
-hudCallout = function(text, sub, big, urgent) callouts[#callouts + 1] = { text = text, sub = sub, urgent = urgent } end
+hudCallout = function(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
 part("sv_ladon.lua"); part("sv_alicorn.lua"); part("sv_stats.lua"); part("sv_tells.lua")
@@ -220,8 +220,8 @@ local f0 = #logs + 1
 atk(2.5); tickA(2.25, 2.25)
 check(ANOM.on == true and s.pack == "armed" and has(line("special: MINDRIPPER's pack: your controls", f0), "springs in 1.5 s (told)"),
       "in the field: armed, its tell said: " .. tostring(line("special: MINDRIPPER's pack", f0)))
-check(said("THE PACK SPRINGS") and said("THE PACK SPRINGS").urgent and evs("^RE_SV_Radio(E?n?Trap)") ~= "",
-      "the tell: THE PACK SPRINGS (urgent) and an ambush line")
+check(not said("THE PACK SPRINGS") and evs("^RE_SV_Radio(E?n?Trap)") ~= "",
+      "the tell: an ambush line, no callout (the field's own callout as ever)")
 tickA(2.5, 3.5)
 check(evs("^RE_SV_AnomalyPack") == "", "not before spring_delay_s")
 tickA(3.75, 3.75)
@@ -251,22 +251,26 @@ s = anomalyRound(); AN.pack.enabled = false
 atk(2.5); tickA(0, 3)
 check(ANOM.on == true and s.pack == nil and evs("Pack") == "", "pack off: the field as before, no pack")
 AN.pack.enabled = true
--- its tell is a sure one (code review of unit 9): tells off, or the tell refused by its cooldown, its callout still shows
+-- its tell is a sure one (code review of unit 9; a radio line only since the clean up of 2026-10-29): tells off, none
+-- (the pack springs anyway); inside its cooldown, said through it
 CFG.tells.enabled = false
 s = anomalyRound()
 f0 = #logs + 1
 atk(2.5); tickA(0, 0)
-check(s.pack == "armed" and said("THE PACK SPRINGS") and said("THE PACK SPRINGS").urgent and evs("^RE_SV_Radio") == ""
-      and has(line("special: MINDRIPPER's pack: your controls", f0), "(its callout only: tells off)"),
-      "tells off: THE PACK SPRINGS shown anyway, no radio (" .. tostring(line("special: MINDRIPPER's pack: your controls", f0)) .. ")")
+check(s.pack == "armed" and not said("THE PACK SPRINGS") and evs("^RE_SV_Radio") == ""
+      and has(line("special: MINDRIPPER's pack: your controls", f0), "(not told: tells off)"),
+      "tells off: armed, no line, no callout (" .. tostring(line("special: MINDRIPPER's pack: your controls", f0)) .. ")")
+tickA(0.25, 1.5)
+check(s.pack == "sprung", "... and it springs spring_delay_s on all the same")
 CFG.tells.enabled = true
 s = anomalyRound()
-TELL.say("pack")                                          -- (said just now: its cooldown refuses the next)
+TELL.say("pack")                                          -- (said just now: its cooldown would refuse the next)
 callouts, events = {}, {}
 f0 = #logs + 1
-atk(2.5); tickA(3, 3)                                     -- (past urgent_gap_s 2.5, inside its cooldown 20 s)
-check(said("THE PACK SPRINGS") and evs("^RE_SV_Radio") == "" and has(line("special: MINDRIPPER's pack: your controls", f0), "its callout only: its cooldown"),
-      "its tell refused by its cooldown: its callout anyway (" .. tostring(line("special: MINDRIPPER's pack: your controls", f0)) .. ")")
+atk(2.5); tickA(3, 3)                                     -- (past radio_gap_s, inside its cooldown 20 s)
+check(evs("^RE_SV_Radio(E?n?Trap)") ~= "" and not said("THE PACK SPRINGS") and has(line("special: MINDRIPPER's pack: your controls", f0), "(told)")
+      and has(line("tell: pack", f0), "a sure tell through its cooldown"),
+      "inside its cooldown: said through it, the other ambush line (" .. tostring(line("tell: pack", f0)) .. ")")
 -- its spring's event not fired: not sprung (and not logged as sprung), armed again after cooldown_s
 s = anomalyRound()
 atk(2.5); tickA(0, 1.25)
@@ -334,7 +338,7 @@ local c1 = #callouts + 1
 frenzy(10)
 check(s.frenzies == 2 and s.phase == 2 and has(line("special: AB.L..IN phase 2 (from 1)", f1), "2 frenzies over"),
       "two frenzies over: phase 2 (" .. tostring(line("special: AB.L..IN phase 2", f1)) .. ")")
-check(said("IT'S ON YOUR SIX", c1) and evs("^RE_SV_RadioSix") ~= "", "its tell: IT'S ON YOUR SIX and a check-your-six line")
+check(not said("IT'S ON YOUR SIX", c1) and evs("^RE_SV_RadioSix") ~= "", "its tell: a check-your-six line, no callout")
 -- phase 2: the blinks at your six (you fly +X, heading 0: your six is bearing 180, spot G on ring A or B)
 GL.phases.behind_share = 1.0
 local b0, n0 = #events + 1, s.blinks
@@ -374,8 +378,8 @@ glitch.HealthInternal = math.floor(s.hp0 * 0.34)
 you = KM(3, 0)                                            -- (2 km behind it: it flies -X, you're east of it)
 tickG(50, 50)
 check(s.phase == 3 and has(line("special: AB.L..IN phase 3 (from 2)", f1), "at 34 % of its health"), "at 34 % of its health: phase 3")
-check(said("ITS ECM IS DOWN", c1) and said("ITS ECM IS DOWN", c1).urgent and evs("^RE_SV_RadioGlitchEcm", g3) == "RE_SV_RadioGlitchEcm",
-      "its tell: ITS ECM IS DOWN (urgent) and \"it's not jamming anymore\"")
+check(not said("ITS ECM IS DOWN", c1) and evs("^RE_SV_RadioGlitchEcm", g3) == "RE_SV_RadioGlitchEcm",
+      "its tell: \"it's not jamming anymore\", no callout")
 check(pod.bJammingEnable == false and pod.bSupportEnable == false and other_pod.bJammingEnable == true
       and has(line("special: AB.L..IN's ECM pods off"), "1 of 1"), "its own pods switched off (not another plane's)")
 tickG(50.25, 80)
@@ -506,8 +510,7 @@ local mv1 = count("^RE_SV_LadonVolleyMishka")
 local M_ = s.units.Mishka
 check(M_.rage and s.raged == "Mishka" and evs("^RE_SV_LadonRage") == "RE_SV_LadonRageMishka",
       "KOT down: MISHKA enraged (RE_SV_LadonRageMishka)")
-check(said("MISHKA ENRAGED") and said("MISHKA ENRAGED").sub == "NEW HEADING, FASTER VOLLEYS" and evs("^RE_SV_RadioLadonRage") ~= "",
-      "its callout and the tell's \"the hostile's changed course\"")
+check(not said("MISHKA ENRAGED") and evs("^RE_SV_RadioLadonRage") ~= "", "its tell, \"the hostile's changed course\" (no callout)")
 check(has(line("special: Ladon MISHKA enraged", f1), "volleys every 25 s"), "logged: " .. tostring(line("special: Ladon MISHKA enraged", f1)))
 local va = {}
 for t = 42, 120 do
@@ -575,10 +578,10 @@ local function tickC(from, to)
 end
 s = alicornRound()
 tickC(0, 21)
-check(#spawns == 0 and not said("PLANES LAUNCHING"), "nothing off its deck before first_s - warn_s")
+check(#spawns == 0 and evs("^RE_SV_RadioAlcnDeck") == "", "nothing off its deck before first_s - warn_s")
 tickC(22, 22)
-check(said("PLANES LAUNCHING") and said("PLANES LAUNCHING").sub == "FIGHTERS OFF THE ALICORN'S DECK" and evs("^RE_SV_RadioAlcnDeck") ~= "",
-      "warn_s 3 before: its callout and \"planes launching from the carrier\"")
+check(evs("^RE_SV_RadioAlcnDeck") ~= "" and not said("PLANES LAUNCHING") and #callouts == 0,
+      "warn_s 3 before: \"planes launching from the carrier\" (no callout)")
 tickC(23, 25)
 local sp1 = spawns[1]
 check(#spawns == 1 and ROLE.of[sp1.unit] == "skirm" and flightSize(sp1.unit) == 2, "first_s 25: a Skirmisher 2-ship (" .. tostring(sp1 and sp1.unit) .. ")")
@@ -599,14 +602,14 @@ alive[sp2.unit] = 2
 local cw, ew = #callouts + 1, #events + 1
 tickC(61, 100)
 check(#spawns == 2 and has(line("special: the Alicorn's deck waits"), "2 of its flights up"), "max_up 2 up: the deck waits")
-check(not said("PLANES LAUNCHING", cw) and evs("^RE_SV_RadioAlcnDeck", ew) == "", "... untold while it waits (its tell only once the launch can go)")
+check(evs("^RE_SV_RadioAlcnDeck", ew) == "", "... untold while it waits (its tell only once the launch can go)")
 alive[sp1.unit] = 0; D.up[sp1.unit] = nil
 grounded = true
 tickC(101, 104)
-check(#spawns == 2 and not said("PLANES LAUNCHING", cw), "one down, but you're at the airfield: waits, untold")
+check(#spawns == 2 and evs("^RE_SV_RadioAlcnDeck", ew) == "", "one down, but you're at the airfield: waits, untold")
 grounded = false
 tickC(105, 105)
-check(#spawns == 2 and said("PLANES LAUNCHING", cw) and evs("^RE_SV_RadioAlcnDeck", ew) ~= "", "you took off: its tell first")
+check(#spawns == 2 and evs("^RE_SV_RadioAlcnDeck", ew) ~= "" and #callouts == 0, "you took off: its tell first")
 tickC(106, 107)
 check(#spawns == 2, "... and the launch not before warn_s")
 tickC(108, 108)
@@ -620,7 +623,7 @@ s.nextDive = 10
 tickC(0, 10)                                              -- (the dive at 10 s: where it sailed, -5 m)
 core.at = { X = core.at.X, Y = core.at.Y, Z = -500000 }   -- (down under the sea while dived)
 tickC(11, 40)
-check(s.dived and #spawns == 0 and not said("PLANES LAUNCHING"), "dived from 10 s (still 5 km down at 40 s): no launch, no call")
+check(s.dived and #spawns == 0 and evs("^RE_SV_RadioAlcnDeck") == "", "dived from 10 s (still 5 km down at 40 s): no launch, no call")
 core.at = { X = core.at.X, Y = core.at.Y, Z = -500 }
 tickC(41, 41)
 check(not s.dived and s.deckNext == 41 + AL.deck.after_surface_s, "surfaced: the next launch after_surface_s (6) on")
@@ -650,13 +653,14 @@ do
     grounded = true
     local f0 = #logs + 1
     tickC(0, 25)
-    check(#spawns == 1 and said("PLANES LAUNCHING") and has(line("special: the Alicorn's deck launch 1", f0), "you're down at the airfield, 1 other player(s) flying"),
-          "a co-op host down at the airfield, player 2 flying: launched at first_s (logged)")
+    check(#spawns == 1 and has(line("tell: alcn_deck to every joiner", f0), "(\"tl\")") and evs("^RE_SV_RadioAlcnDeck") == ""
+          and has(line("special: the Alicorn's deck launch 1", f0), "you're down at the airfield, 1 other player(s) flying"),
+          "a co-op host down at the airfield, player 2 flying: its call to the joiners only (the host's down), launched at first_s (logged)")
     M.peers[1].onAirfield = true
     s = alicornRound()
     grounded = true
     tickC(0, 40)
-    check(#spawns == 0 and not said("PLANES LAUNCHING"), "... player 2 down at the airfield too: waits, untold")
+    check(#spawns == 0 and evs("^RE_SV_RadioAlcnDeck") == "", "... player 2 down at the airfield too: waits, untold")
     M.peers, COOP.open, COOP.role, COOP.slot = peersWas, false, nil, nil
     grounded = false
 end
@@ -718,16 +722,16 @@ rails[2].HealthInternal = 0                               -- (the other shot dow
 tickT(66, 200)
 local railDown = line("special: the Alicorn's railguns are down", f0)
 check((s.armsDown or {}).rail and at("^RE_SV_AlcnAlertOff$", 66) == "66" and at("^RE_SV_AlcnRailgun$", 66) == ""
-      and at("^RE_SV_RadioAlcnRail", 66) == "" and at("WARNING: RAILGUN", 66) == "" and at("^RE_SV_AlcnAlertOn$", 66) == "",
+      and at("^RE_SV_RadioAlcnRail", 66) == "" and at("^RE_SV_AlcnAlertOn$", 66) == "",
       "both down: the RAILGUN WARNING off at once (66), no order at 70, no warning or call for 135 s after")
 check(has(railDown, "(2 found, none up): its RAILGUN WARNING off, no more railgun warnings or orders"), "... logged: " .. tostring(railDown))
 check(at("^RE_SV_RadioAlcnVls$", 66) == "102,147,192" and at("^RE_SV_AlcnVolley$", 66) == "103,148,193", "... its VLS still called and fired every 45 s")
 for _, o in ipairs(vlss) do o.HealthInternal = 0 end
 f0 = #logs + 1
 tickT(201, 400)
-check((s.armsDown or {}).vls and at("^RE_SV_RadioAlcnVls$", 201) == "" and at("VLS LAUNCH", 201) == "" and at("^RE_SV_AlcnVolley$", 201) == ""
+check((s.armsDown or {}).vls and at("^RE_SV_RadioAlcnVls$", 201) == "" and at("^RE_SV_AlcnVolley$", 201) == ""
       and has(line("special: the Alicorn's VLS are down", f0), "(4 found, none up): no more VLS calls or volleys"),
-      "every VLS down: no call, callout or volley (" .. tostring(line("special: the Alicorn's VLS are down", f0)) .. ")")
+      "every VLS down: no call or volley (" .. tostring(line("special: the Alicorn's VLS are down", f0)) .. ")")
 local nDown = 0
 for _, l in ipairs(logs) do if l:find("^special: the Alicorn's %a+ are down") then nDown = nDown + 1 end end
 check(nDown == 2, "... each logged once (" .. nDown .. ")")
@@ -818,10 +822,10 @@ check(at("^RE_SV_RadioAlcnUp$") == "31" and at("^RE_SV_RadioAlcnRailFirst$") == 
       and at("^RE_SV_AlcnRailgun$") == "38",
       string.format("surfaced at 31: its call, the railgun's 2 s later (33, was 31), the order lead_s 5 after it (38; up %s, rail %s, order %s)",
           at("^RE_SV_RadioAlcnUp$"), at("^RE_SV_RadioAlcnRailFirst$"), at("^RE_SV_AlcnRailgun$")))
-check(at("^RE_SV_RadioAlcnDeck$") == "35" and at("PLANES LAUNCHING") == "35" and early == 0 and #spawns == 1 and D.deckLeft == 0
+check(at("^RE_SV_RadioAlcnDeck$") == "35" and early == 0 and #spawns == 1 and D.deckLeft == 0
       and has(line("tell: alcn_deck not said", f0), "1.0 s after alcn_rail_first, its gap 2.0 s"),
       "the deck's call held a second by the railgun's gap (35, not 34) and its launch warn_s after (" .. tostring(line("tell: alcn_deck not said", f0)) .. ")")
--- a gap that won't end: the call twice held, then the launch untold (its callout still shows)
+-- a gap that won't end: the call twice held, then the launch untold
 s = surfaceRound()
 tickT(0, 33)
 local gap0 = CFG.tells.radio_gap_s
@@ -830,8 +834,8 @@ tickT(34, 38)
 early = #spawns
 tickT(39, 45)
 CFG.tells.radio_gap_s = gap0
-check(at("^RE_SV_RadioAlcnDeck$") == "" and at("PLANES LAUNCHING") == "36" and early == 0 and #spawns == 1,
-      "a gap that won't end: held twice (34, 35), then its callout alone at 36, the launch at 39 (" .. at("PLANES LAUNCHING") .. ")")
+check(at("^RE_SV_RadioAlcnDeck$") == "" and early == 0 and #spawns == 1,
+      "a gap that won't end: held twice (34, 35), then untold at 36, the launch at 39 (" .. tostring(early) .. " by 38)")
 -- tells off: nothing said, the order 5 s after the surfacing as before
 CFG.tells.enabled = false
 s = surfaceRound()
@@ -853,7 +857,7 @@ do
     CFG.tells.enabled = true
     COOP.host, COOP.tell = host0, tell0
     local out = table.concat(sent, ",")
-    check(has(out, "alcn_up@31,alcn_rail_first@33,alcn_deck@35") and at("PLANES LAUNCHING") == "35" and #spawns == 1
+    check(has(out, "alcn_up@31,alcn_rail_first@33,alcn_deck@35") and #spawns == 1
           and has(line("tell: alcn_deck not said", f0), "every joiner: 1.0 s after alcn_rail_first"),
           "a host with tells off: its joiners' deck call held a second by their gap, sent at 35, the launch after (" .. out .. ")")
 end
@@ -1022,51 +1026,45 @@ GL.phases.ecm_row = false
 print("sure tells (TELL.say / TELL.play)")
 run(20)
 callouts, events = {}, {}
-CFG.tells.enabled = false
-local _, _, _, shownA = TELL.play("glitch_allout")
-check(shownA == true and said("ITS ECM IS DOWN") and said("ITS ECM IS DOWN").urgent and evs("^RE_SV_Radio") == "",
-      "tells off: glitch_allout's callout shown anyway (urgent), no radio")
-callouts = {}
-TELL.say("glitch_six", TELL.ALL)
-check(said("IT'S ON YOUR SIX"), "... said to every player too")
-callouts = {}
-TELL.play("glitch_allout", nil, nil, 0)
-check(said("ITS ECM IS DOWN"), "... and a joiner's from the host (\"tl\")")
-callouts = {}
+-- with tells on: through the gap and the cooldown (the pack's above), never a callout
 TELL.say("reversal")
-check(not said("ACE REVERSAL"), "not a sure tell: nothing with tells off, as before")
+events = {}
+local fT = #logs + 1
+check(TELL.say("glitch_allout", TELL.ALL) == true and evs("^RE_SV_RadioGlitchEcm") ~= ""
+      and has(line("tell: glitch_allout", fT), "a sure tell through"), "said right after another tell: through its gap, to every player")
+check(TELL.say("glitch_six") == true and evs("^RE_SV_RadioSix") ~= "", "... and AB.L..IN's other one right after it too")
+check(TELL.play("glitch_allout", nil, "the host") == false and #callouts == 0, "a joiner's from the host within line_gap_s: not said (its one line)")
+check(#callouts == 0, "no callout from any of them")
+CFG.tells.enabled = false
+events = {}
+local saidA, whyA, kindA, shownA = TELL.play("glitch_allout")
+check(saidA == false and whyA == "tells off" and kindA == "off" and shownA == nil and #callouts == 0 and evs("^RE_SV_Radio") == "",
+      "tells off: nothing (no callout in its place now; no 4th result)")
+TELL.say("glitch_six", TELL.ALL)
+TELL.play("glitch_allout", nil, "the host")
+TELL.say("reversal")
+check(#callouts == 0 and evs("^RE_SV_Radio") == "", "... to every player, from the host, or another tell: nothing either")
 CFG.tells.enabled = true
 D.state = "wait"
-callouts = {}
-TELL.say("glitch_six")
-check(not said("IT'S ON YOUR SIX"), "between rounds: not even a sure tell's callout")
+D.now = 60
+check(not TELL.say("glitch_six") and #callouts == 0 and evs("^RE_SV_Radio") == "", "between rounds: not a sure tell either")
 D.state = "fighting"
--- tells off: a sure tell's callout keeps to the state as well (code review of 2026-10-29: play() said "tells off" before
--- it looked, so ITS ECM IS DOWN came up over the landing, between rounds and over the summary)
-CFG.tells.enabled = false
 grounded = true
-callouts = {}
 local fS = #logs + 1
-local saidS, whyS, kindS, shownS = TELL.play("glitch_allout")
-local _, _, kindJ = TELL.play("glitch_allout", nil, nil, "the host")
-TELL.say("pack")
-check(saidS == false and whyS == "down at the airfield" and kindS == "state" and not shownS and kindJ == "state"
-      and not said("ITS ECM IS DOWN") and not said("THE PACK SPRINGS") and has(line("tell: glitch_allout not said", fS), "(down at the airfield)"),
-      "tells off, down at the airfield: no sure callout, here or from the host's \"tl\" (kind state, logged)")
+local saidS, whyS, kindS = TELL.play("glitch_six")
+local _, _, kindJ = TELL.play("glitch_six", nil, "the host")
+check(saidS == false and whyS == "down at the airfield" and kindS == "state" and kindJ == "state" and #callouts == 0
+      and has(line("tell: glitch_six not said", fS), "(down at the airfield)"),
+      "down at the airfield: not said, here or from the host's \"tl\" (kind state, logged)")
 grounded = false
 D.state = "wait"
-callouts = {}
-TELL.say("glitch_six")
-check(not said("IT'S ON YOUR SIX"), "tells off, between rounds: none either")
-TELL.play("glitch_six", nil, nil, "the host")
-check(said("IT'S ON YOUR SIX"), "... a joiner's from the host still shows (its mirrored state may lag), as with tells on")
+check(TELL.play("glitch_six", nil, "the host") == true and evs("^RE_SV_RadioSix") ~= "",
+      "... a joiner's from the host while its mirrored state still says wait: said (the host checked its round)")
 D.state = "fighting"
-callouts = {}
 LB.show = true
-TELL.say("glitch_six")
+D.now = 90
+check(not TELL.say("glitch_allout"), "over the run's summary: none")
 LB.show = nil
-check(not said("IT'S ON YOUR SIX"), "tells off, over the run's summary: none")
-CFG.tells.enabled = true
 do                                                        -- (a host's to its joiners: a sure one through the gaps)
     local host0, tell0 = COOP.host, COOP.tell
     local sent = {}
@@ -1074,7 +1072,7 @@ do                                                        -- (a host's to its jo
     COOP.tell = function(slot, id) sent[#sent + 1] = id; return true end
     run(20)
     TELL.say("glitch_allout", TELL.ALL); TELL.say("glitch_allout", TELL.ALL)
-    D.now = 3                                             -- (past urgent_gap_s: the next urgent tell may go)
+    D.now = 3                                             -- (past radio_gap_s: the next tell may go)
     TELL.say("reversal", TELL.ALL); TELL.say("reversal", TELL.ALL)
     COOP.host, COOP.tell = host0, tell0
     local n = { glitch_allout = 0, reversal = 0 }
@@ -1082,7 +1080,6 @@ do                                                        -- (a host's to its jo
     check(n.glitch_allout == 2 and n.reversal == 1, string.format("a host's sure tell to its joiners through its gap (%d sent), another tell not (%d)",
         n.glitch_allout, n.reversal))
 end
-
 ---------------------------------------------------------------------------------------------------- co-op: AB.L..IN on a joiner
 print("co-op: a joiner's copy of AB.L..IN in its phase 3")
 onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "", "3" })

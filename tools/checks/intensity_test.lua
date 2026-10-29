@@ -532,8 +532,8 @@ check(evs("^RE_SV_") == "" and D.int.pl[0].calmFor >= 18, "comfort 60, intensity
 tickTo(119, 119)
 check(evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_Ace") == "" and has(line("intensity: you comfortable", from), "ERA_Unit_02_Dep_Air1 turns onto you (7.0 km off)"),
       "20 s: the six tell, then its flight turns in (" .. tostring(line("intensity: you comfortable", from)) .. ")")
-check(has(line("director: round 6", from), "push on ERA_Unit_02_Dep_Air1 (1 planes)") and has(line("director: round 6", from), 'callout "six"'),
-      "counted and logged by STATS.tactic (push), its callout")
+check(has(line("director: round 6", from), "push on ERA_Unit_02_Dep_Air1 (1 planes)") and has(line("director: round 6", from), 'told "six"'),
+      "counted and logged by STATS.tactic (push), its tell")
 tickTo(119.25, 120)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and type(q.dirTag) == "table" and q.dirTag.tactic == "push"
       and D.aceMoveAt[Q] == 119 + 1 + 30, "lead_s after: RE_SV_AceTurn_05, the plane tagged push, its next move 31 s on")
@@ -815,7 +815,7 @@ for t = 100, 122 do
     inMsg("1|in|10|80|90|0")
     tickTo(t, t + 0.75)
 end
-check(sentOf("tl|six") == "1>tl|six||" and has(line("intensity: player 2 comfortable", from), "ERA_Unit_02_Dep_Air1 turns onto player 2"),
+check(sentOf("tl|six") == "1>tl|six|" and has(line("intensity: player 2 comfortable", from), "ERA_Unit_02_Dep_Air1 turns onto player 2"),
       "player 2 comfortable 20 s: the six tell to player 2 only (\"tl\"), a flight turns onto them")
 check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and evs("^RE_SV_Ace") == "" and jq.obj.tgt == standIn,
       "... a hunt (RE_SV_Hunt_05, not LastTGT) with its TargetActor on player 2's stand-in")

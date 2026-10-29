@@ -226,35 +226,36 @@ tickTo(100, 101.25)
 check(evs("^RE_SV_Radio") == "", "1.25 s on its tail: nothing yet")
 tickTo(101.5, 101.5)
 check(evs("^RE_SV_RadioEnCover") ~= "", "1.5 s: the tailed one calls for help (cover_ask: " .. evs("^RE_SV_Radio") .. ")")
-tickTo(101.75, 102.75)
-check(evs("^RE_SV_RadioSix") == "" and evs("^RE_SV_Ace") == "", "... nothing more before 3 s")
-tickTo(103, 103)
-check(evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_Ace") == "" and has(line("tell: six", from), "BANDIT CUTTING IN"),
-      "3 s: the six tell (BANDIT CUTTING IN), the turn not yet")
-check(has(line("director: round 3", from), "cover on ERA_Unit_02_Dep_Air1 (1 planes)") and has(line("director: round 3", from), 'callout "six"'),
-      "... counted and logged by STATS.tactic, its callout")
-tickTo(103.25, 103.75)
+tickTo(101.75, 103.25)
+check(evs("^RE_SV_RadioSix") == "" and evs("^RE_SV_Ace") == "" and has(line("director: cover not now", from), "its tell can't be said now"),
+      "... nothing more before 3.5 s: at 3 s the six tell can't be said yet (radio_gap_s 2 after the ask: one gap for every tell)")
+tickTo(103.5, 103.5)
+check(evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_Ace") == "" and has(line("tell: six", from), "RE_SV_RadioSix")
+      and line("hud: ", from) == nil, "3.5 s: the six tell (a radio line, no callout), the turn not yet")
+check(has(line("director: round 3", from), "cover on ERA_Unit_02_Dep_Air1 (1 planes)") and has(line("director: round 3", from), 'told "six"'),
+      "... counted and logged by STATS.tactic, its tell")
+tickTo(103.75, 104.25)
 check(evs("^RE_SV_Ace") == "", "... nor 0.75 s on")
-tickTo(104, 104)
+tickTo(104.5, 104.5)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and has(line("director: cover: RE_SV_AceTurn_05"), "fired"),
       "lead_s (1 s) after its tell: the duelist flight's reversal, RE_SV_AceTurn_05 (not the Lancer's, not the escort's)")
-check(type(q.dirTag) == "table" and q.dirTag.tactic == "cover" and q.dirTag.at == 103 and p.dirTag == nil,
+check(type(q.dirTag) == "table" and q.dirTag.tactic == "cover" and q.dirTag.at == 103.5 and p.dirTag == nil,
       "the covering plane tagged { tactic = cover, at }, the tailed one not")
-check(D.aceMoveAt[Q] == 103 + 1 + 30, "its flight's next reversal no sooner than move_s after the turn (D.aceMoveAt, shared with the aces')")
+check(D.aceMoveAt[Q] == 103.5 + 1 + 30, "its flight's next reversal no sooner than move_s after the turn (D.aceMoveAt, shared with the aces')")
 from = #logs + 1
-tickTo(104.25, 120)
+tickTo(104.75, 120)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and has(line("director: cover not now", from), "its budget, 1 of 1 this round"),
       "still on its tail: no second cover (its budget, logged once)")
 check(since(from, "^director: cover not now") == 1, "... logged once a round")
 -- round 12 (budget 2): the cooldown, then the next one
 p, _, _, q = coverScene(12)
-tickTo(100, 104)
+tickTo(100, 104.5)
 D.aceMoveAt[Q] = 0                                     -- (as if its reversal were over: the director's own cooldown counts)
 from = #logs + 1
-tickTo(104.25, 132.75)
+tickTo(104.75, 133.25)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and has(line("director: cover not now", from), "its cooldown"),
       "round 12: a second cover waits out its cooldown (30 s)")
-tickTo(133, 136)
+tickTo(133.5, 137)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05,RE_SV_AceTurn_05", "... and comes after it")
 -- the director's gap between tactics
 coverScene(12)
@@ -305,7 +306,7 @@ local legend = squadScene(19, "Legend")
 check(bountyOwn and ROLE.ownSet("ERA_Unit_04_Dep_Air1", CFG.tiers.list[legend]),
       "ROLE.ownSet: a Bounty or Valkyrie squadron's role flight is its role's own (by its flight's tier or the plane's)")
 squadScene(28, "Reaper")
-tickTo(100, 104)
+tickTo(100, 104.5)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_11" and not ROLE.ownSet("ERA_Unit_04_Dep_Air1"),
       "Harvest's in a Lancer flight keeps its tier's levers: the cover turns it (" .. evs("^RE_SV_Ace") .. ")")
 
@@ -341,14 +342,14 @@ from = #logs + 1
 tickTo(100, 100.75)
 check(evs("^RE_SV_") == "", "0.75 s on the bait's tail: nothing")
 tickTo(101, 101)
-check(evs("^RE_SV_RadioDrag") ~= "" and has(line("tell: drag", from), "HE'S DRAGGING YOU"), "1 s: \"he's dragging you\" (trap.warn)")
-tickTo(101.25, 102.25)
-check(evs("^RE_SV_Wolf") == "", "... the trap not before 2.5 s")
-tickTo(102.5, 102.5)
-check(evs("^RE_SV_RadioTrap") ~= "" or evs("^RE_SV_RadioEnTrap") ~= "", "2.5 s: the trap tell")
+check(evs("^RE_SV_RadioDrag") ~= "" and has(line("tell: drag", from), "RE_SV_RadioDrag (fired)"), "1 s: \"he's dragging you\" (trap.warn)")
+tickTo(101.25, 102.75)
+check(evs("^RE_SV_Wolf") == "" and evs("^RE_SV_Radio(E?n?Trap)") == "", "... the trap not at 2.5 s: its tell radio_gap_s 2 after the drag's")
+tickTo(103, 103)
+check(evs("^RE_SV_RadioTrap") ~= "" or evs("^RE_SV_RadioEnTrap") ~= "", "3 s: the trap tell")
 check(has(line("director: round 3", from), "trap on ERA_Unit_05_Dep_Air1") and has(line("director: round 3", from), "its wingman B springs"),
       "... counted (STATS.tactic trap: bait A, wingman B)")
-tickTo(102.75, 103.5)
+tickTo(103.25, 104)
 check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_14B,RE_SV_WolfTurn_14B" and D.wolf[W].held[1] == nil and D.wolf[W].held[3] == true,
       "lead_s after: its own wingman B freed and turned onto you (WOLF.free), D still held")
 check(evs("^RE_SV_Ace") == "", "... and the bait isn't covered by another flight instead")
@@ -373,8 +374,8 @@ end
 local a, b = bracketScene()
 from = #logs + 1
 tickTo(100, 100)
-check(evs("^RE_SV_RadioBracket") ~= "" and evs("^RE_SV_Salvo") == "" and has(line("tell: bracket", from), "MISSILES FROM TWO SIDES"),
-      "two noses on you 90 deg apart within 4 km: the bracket tell first (MISSILES FROM TWO SIDES)")
+check(evs("^RE_SV_RadioBracket") ~= "" and evs("^RE_SV_Salvo") == "" and has(line("tell: bracket", from), "RE_SV_RadioBracket"),
+      "two noses on you 90 deg apart within 4 km: the bracket tell first (a radio line)")
 tickTo(100.25, 100.75)
 check(evs("^RE_SV_Salvo") == "", "... no shot within its lead")
 tickTo(101, 101)
@@ -426,8 +427,8 @@ move(f1, KM(2, 0), DIRV(-1, 0))                                -- you're in a fi
 tickTo(203.25, 210.75)
 check(evs("^RE_SV_DirFree") == "" and evs("^RE_SV_RadioDive") == "", "held under min_s (8 s): no dive yet")
 tickTo(211, 211)
-check(evs("^RE_SV_RadioDive") ~= "" and evs("^RE_SV_RadioClockC") ~= "" and has(line("hud: tell 'BANDIT DIVING'", from), "HIGH, 3 O'CLOCK"),
-      "8 s held, you 3+ s in another fight: the dive tell, \"high, 3 o'clock\" (they're off your right wing) and its o'clock line")
+check(evs("^RE_SV_RadioDive") ~= "" and evs("^RE_SV_RadioClockC") ~= "" and line("hud: ", from) == nil,
+      "8 s held, you 3+ s in another fight: the dive tell and its o'clock line, \"3 o'clock\" (they're off your right wing)")
 check(has(line("director: round 6", from), "top_cover on ERA_Unit_03_Dep_Air0") and has(line("director: round 6", from), "3 o'clock"),
       "... counted (STATS.tactic top_cover)")
 tickTo(211.25, 212)
@@ -568,9 +569,8 @@ end
 check(#spawns == 3 and okSide, "its flights alternate on the two bearings (within spread_deg)")
 check(okRange and okYaw, "12-18 km from you (ring_km), each nose on you")
 check(has(line("round 6: ERA_Unit_02_Dep_Air0", from), "a pincer side"), "the spawn line says so")
-check(evs("^RE_SV_RadioPincer") ~= "" and since(from, "^tell: pincer") == 1 and since(from, "^tell: pincer") == 1
-      and has(line("hud: callout 'TWO GROUPS INBOUND'", from), "FROM THE " .. compassName(pc.b1) .. " AND THE " .. compassName(pc.b2)),
-      "the pincer tell once, naming both bearings (" .. compassName(pc.b1) .. ", " .. compassName(pc.b2) .. ")")
+check(evs("^RE_SV_RadioPincer") ~= "" and since(from, "^tell: pincer") == 1 and line("hud: ", from) == nil,
+      "the pincer tell once, a radio line (no TWO GROUPS INBOUND callout; " .. compassName(pc.b1) .. ", " .. compassName(pc.b2) .. ")")
 for _, u in ipairs({ P1, P2, P3 }) do for k = 0, flightSize(u) - 1 do plane(u, k, KM(15, 0), DIRV(-1, 0)) end end
 tickTo(300, 302)
 check(has(line("director: round 6", from), "pincer on the round") and has(line("director: round 6", from), "3 of 3 flights (8 planes)"),
@@ -748,7 +748,7 @@ joiner(KM(50, 0))
 move(a, KM(53, 0), DIRV(-1, 0)); move(b, KM(50, 3), DIRV(0, -1))
 tickTo(100, 102)
 local function sentOf(pat) local t = {}; for _, s in ipairs(sent) do if s:find(pat) then t[#t + 1] = s end end; return table.concat(t, ";") end
-check(sentOf("tl|bracket") == "1>tl|bracket||", "the bracket tell to player 2 only (\"tl\")")
+check(sentOf("tl|bracket") == "1>tl|bracket|", "the bracket tell to player 2 only (\"tl\")")
 check(sentOf(">dv|") == "1>dv|RE_SV_Salvo_02A|ERA_Unit_01_Dep_Air1|1.00;1>dv|RE_SV_Salvo_04B|ERA_Unit_02_Dep_Air0|1.00",
       "both shots to player 2's own copies by \"dv\", with the tell's lead (1 s) timed there")
 check(evs("^RE_SV_Salvo") == "" and has(line("director: bracket on player 2's copies"), "sent"), "... none fired here (the host's own shots aim at the host)")
@@ -763,20 +763,20 @@ move(p, KM(51, 0), DIRV(1, 0)); move(q, KM(50, 3), DIRV(0, -1))
 for _, x in ipairs(planes) do if x.unit == L or x.unit == E then move(x, KM(-30, 0)) end end
 sent = {}
 from = #logs + 1
-tickTo(100, 103)
-check(sentOf("tl|six") == "1>tl|six||" and evs("^RE_SV_RadioSix") == "", "player 2 on a plane's tail 3 s: the six tell to player 2, not played here")
-tickTo(103.25, 104)
+tickTo(100, 103.5)
+check(sentOf("tl|six") == "1>tl|six|" and evs("^RE_SV_RadioSix") == "", "player 2 on a plane's tail 3 s: the six tell to player 2, not played here")
+tickTo(103.75, 104.5)
 check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_05" and evs("^RE_SV_Ace") == "" and has(line("director: cover for player 2", from), "RE_SV_Hunt_05 fired"),
       "lead_s after: its flight hunts (RE_SV_Hunt_05, AIFirst), no LastTGT (it would turn onto the host)")
-tickTo(104.25, 105)
+tickTo(104.75, 105.5)
 check(q.obj.tgt == standIn and q.obj.tgtKey == "TargetActor" and has(line("director: ERA_Unit_02_Dep_Air1's TargetActor kept on player 2's plane", from), "cover"),
       "its TargetActor kept on player 2's stand-in (logged once)")
 q.tier = CFG.tiers.list[#CFG.tiers.list]                       -- (a Reaper: ACE.hunt keeps its target on the host)
 ACE.hunt(q)
 check(q.obj.tgt == standIn and DIR.aimed(q), "ACE.hunt leaves an aimed plane's TargetActor alone")
-tickTo(105.25, 123.75)
+tickTo(105.75, 124.25)
 check(evs("^RE_SV_DirFree") == "", "... for aim_s (20 s from the hunt)")
-tickTo(124, 124)
+tickTo(124.5, 125)
 check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_05" and not DIR.aimed(q) and has(line("director: ERA_Unit_02_Dep_Air1 back in the fight", from), "its aim on player 2 over"),
       "then its orders back (RE_SV_DirFree_05)")
 -- your decoy on that flight while its aim's on: the aim's over, its orders back at the decoy's end (not before)

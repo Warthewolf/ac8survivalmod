@@ -175,40 +175,9 @@ end
 
 callouts = {}                -- waiting callouts, shown one after another
 
--- shown on the next HUD tick (callers are in roundsTick); big: a scale. urgent (a tell, sv_tells.lua): in front of the
--- queue, in place of a tell still waiting there, and up at once, the banner showing cut short (calloutNext); a full
--- queue (4) loses its last callout to it. Without urgent a 5th callout is dropped, as ever.
-function hudCallout(text, sub, big, urgent)
-    if urgent then
-        for i = #callouts, 1, -1 do if callouts[i].urgent then table.remove(callouts, i) end end
-        table.insert(callouts, 1, { text = text, sub = sub, big = big, urgent = true })
-        if #callouts > 4 then
-            local d = table.remove(callouts)
-            log("hud: callout '" .. tostring(d.text) .. "' dropped for a tell (the queue was full)")
-        end
-    elseif #callouts < 4 then callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
-    log("hud: " .. (urgent and "tell" or "callout") .. " '" .. text .. "'" .. (sub and (" / '" .. sub .. "'") or ""))
-end
-
--- The callout to put on the banner now (taken off the queue), or nil: the queue's first once the banner is free, or
--- an urgent one (a tell) at once, cutting the banner's callout short: that one goes back in the queue after the tell
--- when more than 1.5 s of it was left (a tell never cuts another tell: TELL keeps them urgent_gap_s apart)
-function calloutNext(now)
-    local c = callouts[1]
-    if not c then return nil end
-    if H.calloutUntil then
-        local cur = H.calloutCur
-        if not (c.urgent and cur and not cur.urgent) then return nil end
-        if H.calloutUntil - now > 1.5 then
-            table.insert(callouts, 2, cur)
-            if #callouts > 4 then                       -- (the queue's last makes room for it, logged as hudCallout's)
-                local d = table.remove(callouts)
-                log("hud: callout '" .. tostring(d.text) .. "' dropped (a tell cut in)")
-            end
-        end
-        H.calloutUntil = nil
-    end
-    return table.remove(callouts, 1)
+function hudCallout(text, sub, big)   -- shown on the next HUD tick (callers are in roundsTick); big: a scale
+    if #callouts < 4 then callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
+    log("hud: callout '" .. text .. "'" .. (sub and (" / '" .. sub .. "'") or ""))
 end
 
 function setText(w, key, s)
@@ -417,8 +386,8 @@ function hudTick(now, paused, pc)
     end
     stackRows()
 
-    local c = calloutNext(now)
-    if c then
+    if #callouts > 0 and not H.calloutUntil then
+        local c = table.remove(callouts, 1)
         setText(H.bannerText, "bannerStr", c.text)
         -- box width: the text's own width when the game can lay it out now, else ~32 units a letter (measured on the
         -- user's screenshot of 2026-10-22: "BOMBERS INBOUND" overran a 24-a-letter box), plus banner_pad each side
@@ -436,14 +405,12 @@ function hudTick(now, paused, pc)
         H.banner:SetRenderOpacity(1); H.sub:SetRenderOpacity(CFG.hud.opacity)
         H.banner:SetVisibility(VIS.HitTestInvisible)
         H.sub:SetVisibility(c.sub and VIS.HitTestInvisible or VIS.Collapsed)
-        -- (a tell, urgent: CFG.tells.hud_s)
-        local tellS = c.urgent and CFG.tells and tonumber(CFG.tells.hud_s)
-        H.calloutCur, H.calloutUntil = c, now + (tellS or CFG.hud.callout_s * (c.big and 1.5 or 1))
+        H.calloutUntil = now + CFG.hud.callout_s * (c.big and 1.5 or 1)
     end
     if H.calloutUntil then
         local left = H.calloutUntil - now
         if left <= 0 then
-            H.banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed); H.calloutUntil, H.calloutCur = nil, nil
+            H.banner:SetVisibility(VIS.Collapsed); H.sub:SetVisibility(VIS.Collapsed); H.calloutUntil = nil
         else
             local a = CFG.hud.opacity * math.min(1, left / 0.75)                     -- fades over the last 0.75 s
             H.banner:SetRenderOpacity(a / CFG.hud.opacity); H.sub:SetRenderOpacity(a)
