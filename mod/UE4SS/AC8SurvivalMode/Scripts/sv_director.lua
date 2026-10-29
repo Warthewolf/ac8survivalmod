@@ -1059,7 +1059,7 @@ end
 --     under 3 s old) how long it's been hot (intensity above high) or calm (comfort comfort.high+, intensity low or
 --     under), in fights only (spawning, wave, fighting; not a boss round of skip_specials); then the top cover's hold,
 --     the level, a push. The wave hold starts when roundsTick asks (a wave due: DIR.holdWave). Every decision logged
---     ("intensity:"), the scores every log_s.
+--     ("intensity:"), the scores every log_s with [log] verbose, the round's summary at its end.
 --   DIR.level(round)          the spike level enemies of round `round` fly (sv_config.lua levelFor's)
 --   DIR.holdWave(now, what)   a wave due (roundsTick: its gate open, or a later wave's next flight): wait? The wave
 --                             hold on, or one started now (sv_rounds.lua)
@@ -1485,10 +1485,12 @@ local function roundTrack(s, now)
         if m.i > num(icfg().high, 80) then r.hotS = r.hotS + 1 end
     end
 end
--- your scores every log_s seconds of a fight (the host's: the other players' last too, a hold on; a level eased)
+-- your scores every log_s seconds of a fight, with [log] verbose (the host's: the other players' last too, a hold on;
+-- a level eased); the round's summary (roundLine) either way
 local function scoreLine(s, now)
     local every, m = num(icfg().log_s, 10), s.me
-    if every <= 0 or not m or m.onAirfield or not (D.round and FIGHT[D.state]) or now < (s.logAt or 0) then return end
+    if every <= 0 or not logVerbose() or not m or m.onAirfield or not (D.round and FIGHT[D.state])
+        or now < (s.logAt or 0) then return end
     s.logAt = now + every
     local parts = { string.format("intensity: round %d: you %.0f (damage %.0f%% of your health in %.0f s, %d missile%s on you, " ..
         "%d enem%s within %.0f km, health %.0f%%), comfort %.0f (on a tail %.0f s of %.0f, %.1f kills a minute)", D.round, m.i,

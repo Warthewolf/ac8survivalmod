@@ -13,7 +13,9 @@
 --   the code review of 2026-10-29: a special's guard kept out of the run line's Veteran+ figures, p.youAt kept by the
 --     sweep with [stats] off (a kill's aspect for P6), a hook's first error logged once (hookErr), a joiner's round and
 --     run lines saying the tail watch isn't measured there, ACE.hunt (the hunt tell) reading this visit's p.dist;
---   STATS.tactic's "told" (a tell said with a tactic: a radio line, no callout since the clean up of 2026-10-29).
+--   quieter logs (the clean up of 2026-10-29): the "ai:" lines only with [log] verbose, flagLine's key without the
+--     counters, probeTick's flags / alive / nearest, the perf and ammo intervals and the intensity scores by their place
+--     in the source; STATS.tactic's "told" (a tell said with a tactic: a radio line, no callout).
 -- Its log lines also go to <work dir>/test_lua.log, for stats_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -219,6 +221,22 @@ visit(P1, 108, x(1.5), AHEAD, 8)
 visit(P1, 110, x(1.4), AHEAD, 5)
 check(P1.engagedAt == 104 and P1.hitAt == 106 and P1.tailAt == 108 and P1.provokeAt == 108, "P1: engaged, first hit, tail and Provoke times")
 check(P1.aiState == "AttackAvoidance" and not line("ai: "), "aiWatch keeps p.aiState with the ai: log off, logs nothing")
+-- the "ai:" lines need [log] verbose too now (the clean up of 2026-10-29: quieter logs), CFG.ai_watch on or not
+do
+    local w = { obj = plane("aiw"), name = "BP_OP1022_aiw_CP_C_1", unit = "ERA_Unit_12_Dep_Air0", at = x(2) }
+    CFG.ai_watch = true
+    aiWatch(w, you)
+    check(w.aiState == "PursueTarget" and not line("ai: "), "ai_watch on, [log] verbose off (the default): its state kept, no ai: line")
+    CFG.log.verbose = true
+    w.obj.state = 8
+    aiWatch(w, you)
+    check(w.aiState == "Provoke" and has(line("ai: BP_OP1022_aiw_CP_C_1"), "Provoke, target none"), "[log] verbose: the ai: line on a change")
+    local n = #logs
+    aiWatch(w, you)
+    check(#logs == n, "... and only on a change")
+    CFG.log.verbose, CFG.ai_watch = false, false
+    check(CFG_DEFAULTS.log.verbose == false and logVerbose() == false, "[log] verbose ships false")
+end
 -- P2: tailed at 104 and Provoke, both gone at 106 (escapes), shot down by allies at 114
 visit(P2, 102, x(3), AHEAD, 10)
 visit(P2, 104, x(1), AHEAD, 8)
@@ -544,6 +562,47 @@ inbox[1] = "0|rs"
 COOP.tick(6)
 check(has(line("stats: round 9"), "(cut short: co-op resync)") and runLines() == runs0 + 1 and RUN.metrics ~= nil,
       "joiner: a resync cuts the round short and keeps the run")
+
+---------------------------------------------------------------------------------------------------- quieter logs
+-- The clean up of 2026-10-29 (user: quieter logs, the per-round summaries kept): the periodic diagnostic lines come as
+-- before only with [log] verbose (CFG.log.verbose, logVerbose()); without it on change, at a longer interval, or not.
+print("quieter logs ([log] verbose)")
+do
+    local flagsWas = svFlags
+    local F = { SV_Beat = 3, SV_Kills = 0, SV_AirHits = 0, SV_Alive = 2, SV_ShuttleHits = 0, SV_LadonRunKot = 0,
+                SV_Up_01 = 1, SV_Up_02 = 0 }
+    svFlags = function() return F end
+    local fl, up, key = flagLine()
+    check(has(fl, "SV_Beat=3") and has(fl, "SV_LadonRunKot=0") and has(fl, "flights up (SV_Up_*)=1") and up == 1,
+          "flagLine: the whole line, every flag and the flights up, as before")
+    check(key == "SV_LadonRunKot=0", "... and its key: the flags that aren't counters (" .. tostring(key) .. ")")
+    F.SV_Beat, F.SV_Kills, F.SV_AirHits, F.SV_Alive, F.SV_ShuttleHits, F.SV_Up_02 = 4, 3, 2, 5, 1, 1
+    local fl2, _, key2 = flagLine()
+    check(fl2 ~= fl and key2 == key, "the heartbeat, kills, hits and flights up change the line, not its key")
+    F.SV_LadonRunKot = 1
+    local _, _, key3 = flagLine()
+    check(key3 ~= key, "a state flag changes the key")
+    svFlags = flagsWas
+    local function body(file, from)
+        local src = readAll(MOD .. "/Scripts/" .. file)
+        local a = src:find(from)
+        local b = a and src:find("\nend\r?\n", a + 1)
+        return a and src:sub(a, b or #src) or ""
+    end
+    local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+    local iF, iR, iA, iE = pt:find("local key = verbose and fl or flagKey", 1, true), pt:find("if not verbose then return end", 1, true),
+                           pt:find("round probe: AI aircraft alive", 1, true), pt:find("enemies: nearest", 1, true)
+    check(iF and iR and iA and iE and iF < iR and iR < iA and iR < iE and has(pt, "if fl and key ~= lastFlags then"),
+          "probeTick: the flags line on its key without [log] verbose; the planes alive and the nearest only with it")
+    local mainSrc2 = readAll(MOD .. "/Scripts/sv_main.lua")
+    check(has(mainSrc2, "if tick - pf.at >= (logVerbose() and 240 or 1200) then"), "the perf line every minute with [log] verbose, else every 5")
+    local fs = readAll(MOD .. "/Scripts/sv_flights.lua")
+    check(has(fs, "if tick % (logVerbose() and 40 or 240) == 0 then") and has(fs, 'if line ~= A.lastLine then log("ammo: now " .. line)'),
+          "ammo: now every 10 s with [log] verbose, else every 60 s, each on a change")
+    check(has(body("sv_director.lua", "\nlocal function scoreLine%(s, now%)"), "not logVerbose()"),
+          "the intensity score line only with [log] verbose (its round summary either way: intensity_test)")
+    check(type(CFG.log) == "table" and CFG.log.verbose == false, "CFG.log.verbose false as shipped")
+end
 
 logFile:close()
 print(fails == 0 and "stats: all passed" or ("stats: " .. fails .. " FAILED"))

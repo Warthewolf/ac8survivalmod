@@ -66,6 +66,9 @@ do
         return ok, ...
     end
 end
+-- [log] verbose (CFG.log, read when called: CFG comes with sv_config.lua): the periodic diagnostic lines as often as they
+-- came before the clean up of 2026-10-29 (round probe flags and counts, enemies, ai:, the intensity scores, ammo, perf)
+function logVerbose() return CFG ~= nil and type(CFG.log) == "table" and CFG.log.verbose == true end
 
 function valid(o)
     local ok, v = pcall(function() return o ~= nil and o:IsValid() end)
@@ -442,7 +445,9 @@ end
 
 ---------------------------------------------------------------------------------------------------- round diagnostics
 -- Milestone 2 round probe: logs every AI aircraft created in Survival's level (with where it appeared), the number
--- still alive when it changes, Survival's SV_* flags when they change, and the game's difficulty at mission start.
+-- still alive when it changes and Survival's SV_* flags when they change (both with [log] verbose; without, the flags
+-- once a level and when one that isn't a counter changes: sv_main.lua probeTick), and the game's difficulty at mission
+-- start.
 planes = {}                  -- created AI aircraft in this level: { obj, name }
 pending = {}                 -- AI aircraft just created, logged on a later tick (position is set by then)
 AIRFIELD = { X = 1609639.0, Y = -436414.0 }   -- Comona Airport runway (cm), the spawn anchor
@@ -579,20 +584,25 @@ function svFlags()
     return t
 end
 
+-- The flags that count things (SV_Beat, the heartbeat, every 10 s; kills; airfield and shuttle hits): the third value,
+-- the line's key for the log, leaves them and the flights up out (sv_main.lua probeTick: the line again for them only
+-- with [log] verbose)
+local FLAG_COUNTERS = { SV_Alive = true, SV_Kills = true, SV_AirHits = true, SV_Beat = true, SV_ShuttleHits = true }
 function flagLine()
     local t = svFlags()
     if not t then return nil end
-    local parts, up = {}, 0
+    local parts, keys, up = {}, {}, 0
     for name, val in pairs(t) do
         if name:sub(1, 6) == "SV_Up_" then
             if val >= 1 then up = up + 1 end
         else
             parts[#parts + 1] = name .. "=" .. tostring(val)
+            if not FLAG_COUNTERS[name] then keys[#keys + 1] = parts[#parts] end
         end
     end
     if #parts == 0 then return nil, up end
-    table.sort(parts)
-    return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up, up
+    table.sort(parts); table.sort(keys)
+    return table.concat(parts, " ") .. " flights up (SV_Up_*)=" .. up, up, table.concat(keys, " ")
 end
 
 survivalPC = nil             -- the player controller in Survival's level (found by probeTick, then reused)
