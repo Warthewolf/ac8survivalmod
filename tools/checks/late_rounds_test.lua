@@ -11,8 +11,8 @@
 --     above 100 % (no longer cut back to 30), [late] grow off;
 --   the attack throttle: RE_SV_Pressure<X> fired by startRound when the band's preset changes and in a run's first round
 --     (B too: a restart keeps an earlier run's preset, the review's repro), none in an Anomaly or VALKA round, the band's
---     again 3 s after its boss is down (pressureAfterBoss) or the round after, a failed fire kept, forwarded to joiners,
---     re-sent by hostSync (B too; not while a boss is up);
+--     again 3 s after its boss is down (pressureAfterBoss) or the round after, at once when it can't come (the real
+--     roundsTick), a failed fire kept, forwarded to joiners, re-sent by hostSync (B too; not while a boss is up);
 --   the director kill bonus: creditKill pays x1.5 for your kill of a plane STATS.tactic tagged (p.dirTag = { tactic,
 --     at }) within tag_s, nothing past it, for an ally's kill, a bare string tag or with it off.
 local MOD, WORK = arg[1], arg[2]
@@ -391,6 +391,37 @@ check(f == "RE_SV_PressureB" and D.pressure == nil and has(pl, "not fired"), "a 
 eventResult = 1
 f, pl = pressureRound(6)
 check(f == "RE_SV_PressureB" and D.pressure == "B", "fired again the next round")
+-- an Anomaly round whose boss can't come (its spawn refused, the real roundsTick: a normal round instead): its records
+-- never ran, so the band's preset at once against the one in force before it (review of unit 3: B said, none fired)
+SPC.kinds.anomaly.spawn = function() return false end
+ANOM.fx = ANOM.fx or {}                                -- (roundsTick's specialTick: parts not loaded here)
+AMPH.runTick = AMPH.runTick or function() end
+local function noBoss()                                -- the round's "@anomaly" refused: the events fired, its pressure line
+    local from, ev = #logs + 1, #events
+    D.state, D.at, D.queue = "spawning", 0, { "@anomaly" }
+    local rawOn = playerOnAirfield
+    playerOnAirfield = function() return false end      -- (sv_rounds.lua's own reads the pawn)
+    roundsTick(D.now)
+    playerOnAirfield = rawOn
+    local fired = {}
+    for i = ev + 1, #events do if events[i]:find("^RE_SV_Pressure") then fired[#fired + 1] = events[i] end end
+    local l = nil
+    for i = from, #logs do if logs[i]:find("^pressure:") then l = logs[i] end end
+    return table.concat(fired, ","), l, line("round 31: no anomaly", from) or line("round 30: no anomaly", from)
+end
+pressureRound(30)
+f = pressureRound(31, "anomaly")
+check(f == "" and D.pressure == "B", "(round 31 an Anomaly's: B said, C in force)")
+local rl
+f, pl, rl = noBoss()
+check(f == "RE_SV_PressureD" and D.pressure == "D" and D.special == nil and rl ~= nil
+      and pl == "pressure: round 31: preset D (was C, no anomaly this round)",
+      "its boss can't come: the band's D fired at once (" .. tostring(pl) .. ")")
+pressureRound(29)
+pressureRound(30, "anomaly")
+f, pl = noBoss()
+check(f == "" and D.pressure == "C", "... a band whose preset is in force already: none fired, C known again (not B: hostSync's)")
+SPC.kinds.anomaly.spawn = nil
 -- co-op: forwarded (not in KEEP_EVENTS), and the one in force re-sent to a joiner who links later
 check(mirroredEvent("RE_SV_PressureC") == true and mirroredEvent("RE_SV_AceTurn_03") == false,
       "RE_SV_Pressure* is forwarded to the joiners (the contract's table)")

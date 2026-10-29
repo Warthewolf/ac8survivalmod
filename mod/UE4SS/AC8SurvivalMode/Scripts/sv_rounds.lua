@@ -283,11 +283,11 @@ end
 -- or D on the host and on every joiner (whose "rs" doesn't reset their level either): review of unit 3. An Anomaly or
 -- VALKA round (TIER.PRESSURE_OWN) fires none: their own records set their throttle and put B back as they end, so
 -- D.pressure is B there, and pressureAfterBoss fires the band's preset again once the boss is down (or the next round
--- does). Forwarded to co-op joiners (each game's throttle limits attacks on its own player; a joiner who links later
--- gets the one in force from hostSync, sv_coop.lua). The intensity director (P4) turns the same dial: while it has
--- the room's level eased under the spikes, the band's preset a letter gentler (DIR.pressure: never under
--- CFG.intensity.level.pressure_min, B), fired again when its ease changes (pressureNow, below). `why`: the log's reason
--- for a fire outside startRound.
+-- does; pressureNoBoss at once when it can't come). Forwarded to co-op joiners (each game's throttle limits attacks on
+-- its own player; a joiner who links later gets the one in force from hostSync, sv_coop.lua). The intensity director
+-- (P4) turns the same dial: while it has the room's level eased under the spikes, the band's preset a letter gentler
+-- (DIR.pressure: never under CFG.intensity.level.pressure_min, B), fired again when its ease changes (pressureNow,
+-- below). `why`: the log's reason for a fire outside startRound.
 local function roundPressure(special, why)
     local band = TIER.pressure(D.round)
     if not band then return end
@@ -299,7 +299,7 @@ local function roundPressure(special, why)
     if want ~= band then why = (why and (why .. "; ") or "") .. string.format("the band's %s, a letter gentler", band) end
     local was = D.pressure
     if special and TIER.PRESSURE_OWN[special] then
-        D.pressure = "B"
+        D.pressure, D.pressureWas = "B", was                -- (the one in force till its boss comes: pressureNoBoss)
         log(string.format("pressure: round %d is the %s's: its own throttle, then preset B%s", D.round, special,
             want ~= "B" and string.format("; preset %s again once it's down", want) or ""))
         return
@@ -326,7 +326,17 @@ local function pressureAfterBoss(now)
     if not okP then log("pressure: error " .. tostring(errP)) end
 end
 
--- The intensity director's ease changed (P4, sv_director.lua levelTick): the round's preset again, eased or back
+-- An Anomaly or VALKA round whose boss can't come (its spawn refused: a normal round instead): its records never ran,
+-- so the throttle in force is still the one before the round (D.pressureWas; D.pressure said B): the band's preset
+-- now, as a normal round's (review of unit 3: none fired, and hostSync sent B to a joiner who linked then)
+local function pressureNoBoss(kind)
+    if not TIER.PRESSURE_OWN[kind] then return end
+    D.pressure, D.pressureWas = D.pressureWas, nil
+    local okP, errP = pcall(roundPressure, nil, "no " .. kind .. " this round")
+    if not okP then log("pressure: error " .. tostring(errP)) end
+end
+
+-- The intensity director's ease changed (P4, sv_director.lua easeTick): the round's preset again, eased or back
 -- (DIR.pressure), when it isn't the one in force. Not while an Anomaly / VALKA fight's own throttle is up: its
 -- pressureAfterBoss fires the band's (eased as it is then) once the boss is down. The host's (or solo's) only.
 function pressureNow(why)
@@ -677,6 +687,7 @@ function roundsTick(now)
             if not sk.spawn(now) then                -- it can't come: a normal round (its fighters, if it flies alone)
                 local alone = SPC.kindValue(sk.alone)
                 D.special, RUN.specialPick[D.round] = nil, false
+                pressureNoBoss(u:sub(2))
                 local f = alone and pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] or ROLE.sitsOut(q) end) or {}
                 for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
                 log(string.format("round %d: no %s; %d fighter flights instead", D.round, u:sub(2), #f))

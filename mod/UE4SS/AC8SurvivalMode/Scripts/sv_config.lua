@@ -560,8 +560,9 @@ CFG = {
     --   top_cover  a Lancer flight (top_cover.roles; with roles off any flight, any_without_roles) held at engagement None
     --              hold_after_s after its orders are in, until you've fought another flight within engage_km for
     --              engaged_s and it's been held min_s: it dives on you after the dive tell (its o'clock). Let go quietly
-    --              at max_s, when you hit it, or when no flight it doesn't hold is up (the round's or a wave's last);
-    --              inside your DECOY at the decoy's end
+    --              at max_s, when you hit it, or when no flight it doesn't hold is up (the round's or a wave's last;
+    --              inside P4's hold at its end, 30 s at most); inside your DECOY at the decoy's end. The first flight
+    --              up while more of its wave are to spawn waits for another (30 s at most)
     --   pincer     a new wave of 2+ fighter flights (not a special's or a raid's), with chance: its flights come from two
     --              bearings sep_deg apart, spread_deg either way, around you (ring_km; ahead: either side of your nose)
     --              solo, around the airfield in co-op; the pincer tell names both once each side has a flight (a flight
@@ -608,9 +609,10 @@ CFG = {
     --   hold   a player's intensity above `high` for hold.after_s: the next wave waits hold.secs (a random time in it,
     --          30 s at most) once it's due (its gate open: the last wave down to waves.next_at, or its timeout; the rest
     --          of a later wave still coming, at its next flight), at most hold.per_wave a wave; a top cover the squad
-    --          director holds: its dive waits the same. Each hold never made longer, the next of its kind no sooner than
-    --          hold.gap_s after it; spawn_gap_add_s more between a wave's flights while a player's that hot (0: none);
-    --          hold.tactics: no new cover, trap or bracket on a player above `high`
+    --          director holds: its dive waits the same (as the round's last flight up its release too, 30 s at most
+    --          from then: a held flight never stalls the round). Each hold never made longer, the next of its kind no
+    --          sooner than hold.gap_s after it; spawn_gap_add_s more between a wave's flights while a player's that hot
+    --          (0: none); hold.tactics: no new cover, trap or bracket on a player above `high`
     --   level  the difficulty spikes (CFG.spikes) are the ceiling: the room above `high` for level.down_after_s of a
     --          fight, enemies that come from then fly one spike level lower (fire control, pilot rank, provoke, the next
     --          round's aircraft_add; post-stall as each spawned; the skill tiers stay the floor: CFG.tiers' fcs, rank),
