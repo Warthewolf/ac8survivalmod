@@ -15,6 +15,10 @@
 --   the Wolf trap's hold: solo, held at your takeoff (as ever); a co-op host with another player flying holds it
 --     hold_after_s after its orders while still down (logged so) and lets it go after hold_max_s there; held at your
 --     takeoff again when nobody else flies (F5's review, round 2: it was held at the host's takeoff, mid-fight);
+--   the shuttle's countdown: solo, held and the shuttle invulnerable while you're down (as ever); a co-op host with
+--     another player flying runs it on, never invulnerable (logged once, not as the count of others changes: the user,
+--     2026-10-29: "Keep it running while others are flying"), held and invulnerable again when nobody else flies, can
+--     be hit again at their takeoff or yours; it lifts off and is lost with you down; a joiner runs none of its own;
 --   a joiner's rounds hold nothing on the host's landing;
 --   the hooks by their place in the source (the ALICORN's deck: bosses_test.sh).
 local MOD, WORK = arg[1], arg[2]
@@ -385,6 +389,111 @@ p2(FLYING); room(true)
 wolfTicks(130.25, 131)
 check(evs("^RE_SV_WolfHold") == HOLD and D.wolf[W].state == "held", "... player 2 takes off, you still down: held then")
 
+---------------------------------------------------------------------------------------------------- the shuttle
+print("the shuttle's countdown and invulnerability while you're down at the airfield")
+local SH = CFG.specials.shuttle
+SPC.kinds = SPC.kinds or {}                          -- (specialTick: sv_anomalies.lua not loaded here)
+local inv = {}                                       -- the shuttle's SetIsInvincible calls, in order
+local shuttle = { full = "BP_OP0057_sstb_CP_C_1", addr = 7, MaxHealth = 100, HealthInternal = 1000 }
+function shuttle:SetIsInvincible(on) inv[#inv + 1] = tostring(on) end
+function shuttle:K2_GetActorLocation() return { X = 0, Y = 0, Z = 0 } end
+local function shuttleScene(coop)                    -- the shuttle on its pad, its countdown at 0 s at 100, a flight up
+    fresh(5, "fighting")
+    if coop then p2(FLYING) end
+    room(coop)
+    alive[SH.unit], alive[U1], D.up[U1] = 1, 2, true  -- (the round isn't cleared under it)
+    D.special = { kind = "shuttle", state = "countdown", at = 100 }
+    D.shuttleClock = { cd = 0, fired = 0, at = 100, s = D.special }
+    SHUTTLE.obj, inv = shuttle, {}
+end
+local function cd() return D.shuttleClock and D.shuttleClock.cd or -1 end
+local function nT() return select(2, evs("^RE_SV_ShuttleT_"):gsub("RE_SV_ShuttleT_", "")) end
+local function invs() return table.concat(inv, ",") end
+local HELD, RUNS, DOWN = "special: shuttle countdown held (you're down at the airfield) at ", "special: shuttle countdown running at ",
+    "special: shuttle countdown running while you're down at the airfield ("
+local INV, HIT = "special: shuttle invulnerable while the countdown is held", "special: shuttle can be hit again"
+-- solo: held and invulnerable while you're down, as ever (user, 2026-10-23)
+shuttleScene(false)
+grounded = true
+from = #logs + 1
+ticks(100, 120)
+check(cd() == 0 and nT() == 0 and invs() == "true" and line(HELD .. "0 s", from) ~= nil and line(INV, from) ~= nil,
+      "solo, down at the airfield 20 s: the countdown held at 0 s, the shuttle invulnerable (logged)")
+grounded = false
+ticks(120.25, 130)
+check(cd() == 10 and nT() == 10 and invs() == "true,false" and line(RUNS .. "0 s", from) ~= nil and line(HIT, from) ~= nil,
+      "... you take off: it runs (10 s in 10 s, RE_SV_ShuttleT_1-10), the shuttle can be hit again (logged)")
+-- co-op, player 2 flying: it runs with you down, never invulnerable, said once
+shuttleScene(true)
+grounded = true
+from = #logs + 1
+ticks(100, 120)
+check(cd() == 20 and nT() == 20 and invs() == "" and line(INV, from) == nil,
+      "co-op, you down 20 s, player 2 flying: the countdown runs (" .. cd() .. " s, " .. nT() .. " events), not invulnerable")
+check(line(DOWN .. "1 other player flying) at 0 s", from) ~= nil and since(from, "^special: shuttle countdown") == 1,
+      "... logged once (" .. tostring(line("special: shuttle countdown", from)) .. ")")
+local rawOthers = othersFlying                       -- (a third player takes off: the count changes, not the state)
+othersFlying = function() return 2 end
+ticks(120.25, 125)
+othersFlying = rawOthers
+check(cd() == 25 and since(from, "^special: shuttle countdown") == 1, "... 2 others flying, then 1 again: still running, not logged again")
+-- player 2 lands too: held and invulnerable; they take off again: running, can be hit again
+p2(P2_DOWN); room(true)
+ticks(125.25, 135)
+check(cd() == 25 and nT() == 25 and invs() == "true" and line(HELD .. "25 s", from) ~= nil and line(INV, from) ~= nil,
+      "player 2 down at the airfield too: held at 25 s, invulnerable (logged)")
+p2(FLYING); room(true)
+ticks(135.25, 140)
+check(cd() == 30 and invs() == "true,false" and line(DOWN .. "1 other player flying) at 25 s", from) ~= nil and line(HIT, from) ~= nil,
+      "player 2 takes off, you still down: runs again, can be hit again (logged)")
+p2(P2_DOWN); room(true)
+ticks(140.25, 145)
+check(cd() == 30 and invs() == "true,false,true", "player 2 down again: held, invulnerable")
+grounded = false
+ticks(145.25, 150)
+check(cd() == 35 and nT() == 35 and invs() == "true,false,true,false" and line(RUNS .. "30 s", from) ~= nil
+      and since(from, "^" .. HIT) == 2, "... you take off: it runs, the shuttle can be hit again (logged)")
+for _, st in ipairs({ { P2_DEAD, 100, "shot down" }, { P2_OUT, 100, "out of the mission" }, { FLYING, 5000, "not heard from" } }) do
+    shuttleScene(true); p2(st[1], st[2]); room(true)
+    grounded = true
+    ticks(100, 105)
+    check(cd() == 0 and invs() == "true", "player 2 " .. st[3] .. ", you down: held, invulnerable")
+end
+-- co-op, you down all the countdown with player 2 flying: it lifts off and the clock ends, never invulnerable
+shuttleScene(true)
+grounded = true
+from = #logs + 1
+ticks(100, 100 + SH.countdown_s + 31)
+check(D.special.state == "done" and not D.special.lost and has(line("special: round 5, the shuttle lifted off", from), "countdown over")
+      and D.shuttleClock == nil and nT() == SH.countdown_s + 30 and invs() == "",
+      "... down all " .. (SH.countdown_s + 30) .. " s with player 2 flying: lifted off, every second's event, the clock ended, never invulnerable")
+-- lost while held (solo, you down): the invulnerability off as the clock ends
+shuttleScene(false)
+grounded = true
+from = #logs + 1
+ticks(100, 105)
+FLAGS.SV_ShuttleLost = 1
+ticks(105.25, 106)
+check(D.special.lost and D.shuttleClock == nil and invs() == "true,false" and line(HIT, from) ~= nil,
+      "solo, lost while held: the clock ends, the shuttle can be hit again")
+-- lost while running with you down (co-op): the clock ends, nothing to undo
+shuttleScene(true)
+grounded = true
+ticks(100, 105)
+FLAGS.SV_ShuttleLost = 1
+ticks(105.25, 106)
+check(D.special.lost and D.shuttleClock == nil and invs() == "", "co-op, lost while running with you down: the clock ends, never invulnerable")
+-- a joiner runs no countdown of its own (the host's RE_SV_ShuttleT_* come forwarded) and never makes it invulnerable
+shuttleScene(false)
+COOP.open, COOP.role, COOP.slot, CFG.coop.enabled = true, "join", 1, true
+clock = clock + 0.25
+COOP.tick(0)
+grounded = true
+local k = D.shuttleClock
+roundsTick(100); roundsTick(110)
+check(k.cd == 0 and nT() == 0 and invs() == "", "a joiner, down at the airfield: no countdown or invulnerability of its own")
+room(false)
+
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
 do
@@ -394,8 +503,6 @@ do
           "sv_rounds: the spawns and the wave clock ask othersFlying")
     check(has(sr, "local flying = down and othersFlying() or 0") and has(sr, "elseif not t or (down and flying == 0) then"),
           "sv_rounds: ordersTick's grounded wait asks othersFlying")
-    check(has(sr, "if D.shuttleClock then D.grounded = playerOnAirfield() end"),
-          "sv_rounds: the shuttle's countdown still holds for the host alone (not new enemies)")
     local al = readAll(MOD .. "/Scripts/sv_alicorn.lua")
     check(has(al, "local flying = playerOnAirfield() and othersFlying()") and has(al, "if flying == 0 then return hold(1) end"),
           "sv_alicorn: the deck's airfield hold asks othersFlying")
