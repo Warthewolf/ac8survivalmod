@@ -322,6 +322,10 @@ local function probeTick(tick)
         if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
         local okAs, errAs = pcall(ALLY.setup)
         if not okAs then log("allies: setup error " .. tostring(errAs)); ALLY.setupDone = true end
+        if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
+            local okCs, errCs = pcall(COOP.syncSetup)
+            if not okCs then log("coopfire: setup error " .. tostring(errCs)) end
+        end
         local okP, errP = pcall(probeSetup)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
         local okM, errM = pcall(SHOP.menuSetup)
@@ -449,6 +453,10 @@ local function probeTick(tick)
         if now and not paused then                                      -- P5's gate: you on an enemy's tail (sv_stats.lua)
             local okTw, errTw = timed("tail watch", STATS.tailTick, now)
             if not okTw and not D.twErr then D.twErr = true; log("stats: tail watch error " .. tostring(errTw)) end
+        end
+        if COOP and COOP.ammoRead then                   -- (co-op: your gun and flares firing, before the refill below)
+            local okAr, errAr = pcall(COOP.ammoRead)
+            if not okAr and not D.ammoReadErr then D.ammoReadErr = true; log("coopfire: ammo read error " .. tostring(errAr)) end
         end
         local okA, errA = pcall(ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
@@ -815,6 +823,20 @@ if type(RegisterKeyBind) == "function" and Key then
                     log("test: Ctrl+F12 second player plane removed: " .. tostring(SV_CoopKillPP()))
                 end)
                 if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+F5 in a run: the co-op fire path (SV_CoopFire, runtime 0.28.5) on an allied plane, solo, each press the next
+    -- step: its missiles with its fire permission off, then on, its gun, its flares, its gear down, up (sv_coop.lua
+    -- COOP.fireTest; tools/re/COOP.md 8)
+    if Key.F5 then
+        pcall(RegisterKeyBind, Key.F5, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not COOP or not COOP.fireTest then log("test: Ctrl+F5 outside a Survival run"); return end
+                    COOP.fireTest()
+                end)
+                if not ok then log("test: Ctrl+F5 error " .. tostring(err)) end
             end)
         end)
     end

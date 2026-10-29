@@ -350,6 +350,10 @@ fired every 14 s (RE_SV_JamEcm_NN); the Ladons' VLS missiles 10 damage, half the
 flight; co-op stand-ins wait up to 5 s for their player's airframe (COOP.md 5); stronger AA guns / SAM sites and a STORE
 CIWS at four spots by the runway on a new DEFENCES page (AIRFIELD_SUPPLY.md 4). Planned next (researched, not built):
 co-op weapon / gear / afterburner sync and a co-op revive with a spectator camera.
+0.72.2 (runtime 0.28.5; the user's co-op requests of 2026-10-29; not yet run in game): each player's missiles, gun,
+flares, gear and afterburner shown on their stand-in on the other games (tools/re/COOP.md 8: "fx" shots relayed by the
+host, state bits 16 / 32 / 64 / 128, SV_CoopFire / SV_InputNow; the stand-ins fly damage-0 `<row>_svcp` rows, a
+joiner's "ht" backstop; [coop.sync]; tools/checks/coop_fire_test.sh).
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
