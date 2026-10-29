@@ -12,6 +12,9 @@
 --     the tries after your takeoff as ever; "has its orders now" with how many were fired;
 --   the wave clock (waves.timeout_s): stopped while you're down solo, running in co-op while another player flies;
 --   the Wolf trap's 30 s for its orders: your time down at the airfield not counted (U5's review), solo and co-op;
+--   the Wolf trap's hold: solo, held at your takeoff (as ever); a co-op host with another player flying holds it
+--     hold_after_s after its orders while still down (logged so) and lets it go after hold_max_s there; held at your
+--     takeoff again when nobody else flies (F5's review, round 2: it was held at the host's takeoff, mid-fight);
 --   a joiner's rounds hold nothing on the host's landing;
 --   the hooks by their place in the source (the ALICORN's deck: bosses_test.sh).
 local MOD, WORK = arg[1], arg[2]
@@ -335,6 +338,53 @@ grounded = true
 wolfTicks(100, 160)
 check(D.wolf[W] and D.wolf[W].state == "pending", "co-op, you down 60 s with player 2 flying: its trap still pending (not counted)")
 
+print("the Wolf trap's hold while you're down at the airfield (F5's review, round 2)")
+local WUP = string.format("SV_Up_%02d", poolIndex(W))
+local HOLD = string.format("RE_SV_WolfHold_%02dB,RE_SV_WolfHold_%02dD", poolIndex(W), poolIndex(W))
+-- solo: its orders in while you're down: held only at your takeoff, as ever
+wolfScene(false)
+grounded = true
+FLAGS[WUP] = 1
+events = {}
+wolfTicks(100, 160)
+check(evs("^RE_SV_WolfHold") == "" and D.wolf[W].state == "pending" and WOLF.holding(W),
+      "solo, its orders in while you're down 60 s: not held (pending)")
+grounded = false
+wolfTicks(160.25, 161)
+check(evs("^RE_SV_WolfHold") == HOLD and D.wolf[W].state == "held", "... you take off: held then")
+-- co-op, player 2 flying: held hold_after_s after its orders, you still down; let go after hold_max_s, you still down
+wolfScene(true)
+grounded = true
+FLAGS[WUP] = 1
+events = {}
+from = #logs + 1
+local hAfter, hMax = CFG.roles.wolf.hold_after_s, CFG.roles.wolf.hold_max_s
+wolfTicks(100, 100 + hAfter - 0.25)
+check(evs("^RE_SV_WolfHold") == "", "co-op, you down, player 2 flying: not before hold_after_s")
+wolfTicks(100 + hAfter, 100 + hAfter)
+check(evs("^RE_SV_WolfHold") == HOLD and D.wolf[W].state == "held"
+      and has(line("roles: " .. W .. " (wolf) trap ", from), "after its orders, you down at the airfield (1 other player flying): held B, D"),
+      "... at hold_after_s: held with you down (" .. tostring(line("roles: " .. W .. " (wolf) trap ", from)) .. ")")
+wolfTicks(100 + hAfter + 0.25, 100 + hAfter + hMax + 1)
+check(D.wolf[W].state == "free" and not WOLF.holding(W) and evs("^RE_SV_WolfFree") ~= ""
+      and has(line("roles: " .. W .. " (wolf) trap freed", from), "held " .. hMax .. " s"),
+      "... hold_max_s on, you still down: let go (its co-op hunt then goes on)")
+grounded = false
+events = {}
+wolfTicks(100 + hAfter + hMax + 1.25, 100 + hAfter + hMax + 5)
+check(evs("^RE_SV_WolfHold") == "", "... you take off: not held again")
+-- co-op, player 2 down at the airfield too: held at your takeoff, as solo
+wolfScene(true)
+p2(P2_DOWN); room(true)
+grounded = true
+FLAGS[WUP] = 1
+events = {}
+wolfTicks(100, 130)
+check(evs("^RE_SV_WolfHold") == "" and D.wolf[W].state == "pending", "co-op, player 2 down at the airfield too: not held")
+p2(FLYING); room(true)
+wolfTicks(130.25, 131)
+check(evs("^RE_SV_WolfHold") == HOLD and D.wolf[W].state == "held", "... player 2 takes off, you still down: held then")
+
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
 do
@@ -352,6 +402,8 @@ do
     local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
     check(has(sp, "if not down then w.waited = (w.waited or 0) + (now - (w.waitAt or w.at)) end"),
           "sv_spawn: the Wolf trap's wait for its orders counts your flying only")
+    check(has(sp, "local flying = down and othersFlying() or 0") and has(sp, "and not (down and flying == 0) then"),
+          "sv_spawn: the Wolf trap's hold asks othersFlying")
 end
 
 print(fails == 0 and "co-op landing test: all passed" or ("co-op landing test: " .. fails .. " FAILED"))
