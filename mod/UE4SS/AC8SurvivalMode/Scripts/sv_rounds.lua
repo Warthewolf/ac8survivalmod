@@ -43,7 +43,15 @@ function SPC.shuttleClockTick(now)
     local last = CFG.specials.shuttle.countdown_s + 30
     while k.fired < math.min(math.floor(k.cd), last) do
         k.fired = k.fired + 1
-        if type(SV_Event) == "function" then SV_Event("RE_SV_ShuttleT_" .. k.fired) end
+        local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleT_" .. k.fired) or -5
+        -- (running with you down, your landing menu may be up: whether its events take there isn't known; the first
+        -- one not fired is logged, once a clock. A 1 says it was sent, not that its records ran: the lift-off line's
+        -- "event package" or "countdown over" tells)
+        if r ~= 1 and D.grounded and not k.downErr then
+            k.downErr = true
+            log(string.format("special: shuttle countdown event RE_SV_ShuttleT_%d not fired (%s) while you're down at the "
+                .. "airfield", k.fired, SV_ERR[r] or tostring(r)))
+        end
     end
     if k.fired >= last or k.s.lost then
         if k.inv then SPC.shuttleInvincible(false) end

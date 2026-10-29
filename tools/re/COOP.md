@@ -289,10 +289,12 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   while another player flies (solo, or with nobody else flying, at the host's takeoff: F5's review, round 2). The
   shuttle's countdown runs on too and the shuttle isn't made invulnerable (user, 2026-10-29: "Keep it running while
   others are flying"; `special: shuttle countdown running while you're down at the airfield (1 other player flying) at
-  N s`, logged as it's held or runs, not as the count changes); with nobody else flying it's held and invulnerable as
-  solo, and can be hit again at another player's takeoff or the host's. A joiner's game holds nothing on the host's
-  landing (its copies come as the host's "sp" do; it runs no countdown of its own, the host's RE_SV_ShuttleT_* come
-  forwarded). Untested in game (tools/checks/coop_landing_test.sh).
+  N s`, logged as it's held or runs, not as the count changes; whether its events take with the landing menu up is
+  unknown: the first not sent then is logged, `special: shuttle countdown event RE_SV_ShuttleT_N not fired (...)
+  while you're down at the airfield`, and the lift-off line says `event package` or `countdown over`); with nobody
+  else flying it's held and invulnerable as solo, and can be hit again at another player's takeoff or the host's. A
+  joiner's game holds nothing on the host's landing (its copies come as the host's "sp" do; it runs no countdown of
+  its own, the host's RE_SV_ShuttleT_* come forwarded). Untested in game (tools/checks/coop_landing_test.sh).
 - Protocol 3, up to 24 players: a joiner sends its own plane to the host (P, 30 Hz); the host sends each joiner one Q
   packet of every other player's latest state (49-byte records: 23 fit in 1132 bytes), at 30 Hz up to 6 players and
   20 Hz past that (relaying every P to every joiner was n x n packets: ~16,000 a second at 24). Message slots are
