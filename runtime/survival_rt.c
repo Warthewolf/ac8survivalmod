@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.28.3"
+#define RT_VERSION           L"0.28.4"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -1744,7 +1744,11 @@ static int InSurvivalMission(void* obj)
  * the game is paused, when the BGM channel (and with it the track) is paused too; free flight re-posts the track at the
  * clock when its pause menu closes, other modes don't, so in Survival every pause cut the playing track short by the time
  * paused (user, 2026-10-22: "music skipped on round change"). While Survival's mission runs and LiveSoundManager's BGM
- * channel is paused, the clock is held. PlayNext is logged with its caller and the clock, to confirm it in a test. */
+ * channel is paused, the clock is held. PlayNext is logged with its caller and the clock, to confirm it in a test.
+ * Until 0.28.4 the game instance came from the controller's Outer chain (controller -> manager -> game instance) and
+ * the hold never came on: every PlayNext of every test log read "clock held 0 ms", and the user's 24 s pause of
+ * 2026-10-29 cut the playing track 24 s short ("song skipped randomly"). Now it's the game instance of Survival's
+ * level, from the spawner Lua's calls keep found (as BgmController), and the manager PlayNext is called on. */
 #define UOBJ_OUTER        0x20
 #define GI_SOUND_MANAGER  0x908          /* LiveSoundManager                                                     */
 #define SM_CHANNELS       0x78           /* its channel data: 8 bytes each (SFX, Voice, BGM), +7 = paused now     */
@@ -1762,6 +1766,8 @@ static volatile int32_t g_musicClockHold = 1;     /* SV_MusicClock(on) */
 static volatile int32_t g_musicForceHold;         /* SV_MusicHold(on): Lua holds it (the landing store)             */
 static int32_t      g_musicHeldMs;                /* clock held since the last track change                        */
 static int32_t      g_musicHolding;               /* the SoundController's clock is held now                       */
+static uint8_t*     g_musicMgr;                   /* the music player manager (PlayNext's, or the controller's Outer) */
+static uint8_t*     g_musicGiSeen;                /* the Survival game instance last logged (once a level)          */
 
 static uint8_t* PtrAt(uint8_t* p, size_t off)
 {
@@ -1770,6 +1776,19 @@ static uint8_t* PtrAt(uint8_t* p, size_t off)
 
 static int32_t Ms(float s) { return (int32_t)(s * 1000.0f); }
 
+/* The game instance while Survival's mission runs, else NULL: its level's spawner (found and kept by Lua's SV_* calls;
+ * never searched for here, every frame and in the menus too) -> world -> game instance, its context's mission ours. */
+static uint8_t* MusicSurvivalGi(void)
+{
+    if (!g_spawner || !LiveObject(g_spawner) || *(void**)g_spawner != g_spawnerVt) return NULL;
+    uint8_t* world = (uint8_t*)VCall(g_spawner, VF_WORLD);
+    if (!world || !LiveObject(world)) return NULL;
+    uint8_t* gi = PtrAt(world, WORLD_GAME_INSTANCE);
+    uint8_t* ctx = PtrAt(gi, GI_CAMPAIGN_CONTEXT);
+    if (!ctx || !Readable(ctx + CTX_MISSION_ID, 4) || *(int32_t*)(ctx + CTX_MISSION_ID) != SURVIVAL_MISSION_ID) return NULL;
+    return gi;
+}
+
 static void CoopFrame(int fromMusic);            /* coop.c: Survival COOP's per-frame work */
 
 static void OnMusicTick(void* tickable, float dt)
@@ -1777,15 +1796,29 @@ static void OnMusicTick(void* tickable, float dt)
     CoopFrame(1);
     if (g_musicClockHold) {
         uint8_t* co = (uint8_t*)tickable - 0x28;
-        uint8_t* mgr = PtrAt(co, UOBJ_OUTER);             /* the music player manager, a GameInstance subsystem */
-        uint8_t* gi = PtrAt(mgr, UOBJ_OUTER);
-        uint8_t* ctx = PtrAt(gi, GI_CAMPAIGN_CONTEXT);
+        uint8_t* outer = PtrAt(co, UOBJ_OUTER);
+        if (!g_musicMgr && PtrAt(outer, MPM_CONTROLLER) == co) g_musicMgr = outer;
+        static int said;
+        if (!said) {                                      /* (the test of 2026-10-25 never saw this tick in a mission) */
+            said = 1;
+            Log(L"music player clock: ticking (controller %p, its Outer %p %s the manager)", co, outer,
+                g_musicMgr == outer ? L"is" : L"isn't");
+        }
+        uint8_t* gi = MusicSurvivalGi();
         uint8_t* ch = PtrAt(PtrAt(gi, GI_SOUND_MANAGER), SM_CHANNELS);
+        int paused = ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED];
+        if (gi != g_musicGiSeen) {
+            g_musicGiSeen = gi;
+            if (gi) Log(L"music player clock: Survival's mission (game instance %p, sound channels %p, BGM %s)", gi, ch,
+                        paused ? L"paused" : L"playing");
+        }
         /* (user, 2026-10-24: "music skipped": the landing store plays its own supply music without pausing the BGM
          * channel, so the track's clock ran out in the store; Lua holds it there with SV_MusicHold) */
-        int hold = ctx && Readable(ctx + CTX_MISSION_ID, 4) && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID &&
-                   (g_musicForceHold || (ch && Readable(ch + SM_BGM_PAUSED, 1) && ch[SM_BGM_PAUSED]));
-        int track = PtrAt(mgr, MPM_CONTROLLER) == co;     /* the SoundController; the ambience controller is held too */
+        int hold = gi && (g_musicForceHold || paused);
+        /* the SoundController (the manager's +0x100; the ambience controller is held too); before the manager is known,
+         * a controller with a track that's playing */
+        int track = g_musicMgr ? PtrAt(g_musicMgr, MPM_CONTROLLER) == co
+                               : Readable(co + MPC_CLOCK, 0xD) && *(float*)(co + MPC_LENGTH) > 0 && !co[0x64];
         if (track && hold != g_musicHolding && Readable(co + MPC_CLOCK, 8)) {
             g_musicHolding = hold;
             Log(L"music player: BGM %s, track clock %s at %d of %d ms", hold ? (g_musicForceHold ? L"held by Survival" : L"paused") : L"playing again",
@@ -1802,6 +1835,7 @@ static void OnMusicTick(void* tickable, float dt)
 static void OnMusicNext(void* manager)
 {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
+    g_musicMgr = (uint8_t*)manager;
     uint8_t* co = PtrAt((uint8_t*)manager, MPM_CONTROLLER);
     int32_t clock = -1, length = -1;
     if (co && Readable(co + MPC_CLOCK, 8)) { clock = Ms(*(float*)(co + MPC_CLOCK)); length = Ms(*(float*)(co + MPC_LENGTH)); }

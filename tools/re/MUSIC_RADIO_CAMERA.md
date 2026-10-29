@@ -233,6 +233,21 @@ is paused (`s+0x78` data `+0x17` != 0), return without calling the original. The
 paused, and the track ends on time and resumes where it paused. Don't copy free flight's Resume-on-close instead: it
 jumps the audio forward by the paused time. Lua can't do either: pos/duration aren't reflected.
 
+**The hold as built never came on (runtime 0.11-0.28.3) [V].** Every `music player: next track` line of every test log
+reads `clock held 0 ms during this track`, and no `music player: BGM ... track clock held` line was ever logged, the
+landing store's SV_MusicHold included. The user's run of 2026-10-29 (0.72.0): a 24 s pause at 21:50:33, then the track
+cut at 21:52:28, `clock 203552 of 203550 ms; clock held 0 ms` ("song skipped randomly"). The detour took the game
+instance from the controller's Outer chain (controller -> manager -> game instance) and held only when that chain led to
+Survival's context. Runtime 0.28.4 takes it as BgmController does (Survival's spawner -> world -> game instance, the
+spawner never searched for from the tick) and the manager from PlayNext's argument (or the controller's Outer when its
++0x100 is the controller). New log lines, to read in the next test (AC8SurvivalMode.log):
+- `music player clock: ticking (controller ..., its Outer ... is|isn't the manager)` once: the detour is reached at all
+  (coop.c's follow diag of 2026-10-25 counted 0 music ticks in a mission; then the clock is advanced by another path
+  and this fix can't work).
+- `music player clock: Survival's mission (game instance ..., sound channels ..., BGM playing|paused)` once a level.
+- `music player: BGM paused, track clock held at N of M ms` / `BGM playing again, track clock running ...` on each pause,
+  and `clock held N ms during this track` above 0 at the next track change. [I] until then.
+
 ## C. Radio (backlog 6)
 Scratch: `build/research/audio/radio/` (`ms022_rows.tsv` = all 667 rows of Mission 22's table, `radio_execs.txt` =
 every radio exec in the M06/08/13/15/22/23 EPs, `pbyp_cp_rows.tsv`).
