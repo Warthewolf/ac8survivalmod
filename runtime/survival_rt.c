@@ -24,6 +24,7 @@
 #include "sigs.h"
 
 #define RT_VERSION           L"0.28.4"
+#define RT_VERSION_A         "0.28.4"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -2344,7 +2345,8 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.27.0" */
+/* SV_Version() -> RT_VERSION_A (until 0.28.4 a fixed "0.27.0", whatever the build: co-op's "hi" said every player ran
+ * 0.27.0, and a stale main.dll couldn't be told from a current one) */
 /* SV_MenuChoice() -> the last main-menu entry picked (g_menuChoice: 0 none yet or another entry, 1 SURVIVAL MODE, 2 SP
  * OFFLINE, 3 CO-OP: HOST, 4 CO-OP: JOIN, 5 SP ONLINE, 6 Survival's pages opened) + 16 x how many were picked, so the same entry
  * picked again is seen (a retry after a failed co-op open). Lua: % 16 the entry, // 16 the picks. */
@@ -2352,7 +2354,7 @@ static int L_MenuChoice(void* lua) { return Ret(lua, (int64_t)g_menuChoice + 16 
 
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.27.0";
+    static const char v[] = RT_VERSION_A;
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }

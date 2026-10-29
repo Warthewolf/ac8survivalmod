@@ -101,8 +101,9 @@ plane flies the enemy NPC row of its airframe (an enemy paint). Allies a joiner 
   is logged (`coop: player N flies <row> (their plane here stays <row> until their next sortie)`): an AI plane that's up
   can't change airframe, and there's no despawn for a stand-in. tools/checks/coop_landing_test.sh has the cases.
 - Each player's runtime: the host compares a joiner's "hi" runtime with its own (`coop: WARNING: player N runs runtime
-  ...`, a CO-OP RUNTIME MISMATCH callout). The same run: both friends' dlls/main.dll was 0.27.0 under 0.72.0's Lua
-  (built for 0.28.3), a zip unpacked with the game open.
+  ...`, a CO-OP RUNTIME MISMATCH callout). Until runtime 0.28.4 SV_Version() answered a fixed "0.27.0" whatever the
+  build (so the same run's "runtime 0.27.0" for both friends, and for the host, said nothing about their main.dll);
+  from 0.28.4 it's the build's own (RT_VERSION_A).
 
 ## 6. A second player plane (research of 2026-10-25, runtimes 0.21.0-0.22.2; probe partly run)
 Goal (user, 2026-10-25): the other player as a real player plane, their own aircraft and paint, targeted by the
