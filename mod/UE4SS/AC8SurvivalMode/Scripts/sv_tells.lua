@@ -155,12 +155,18 @@ local function pickLine(s, id, e, a, now)
     return opts[math.random(#opts)]
 end
 
--- a text with the tell's numbers in it (args: "compass" names bearings, "clock" an o'clock); nil stays nil
+-- a text with the tell's numbers in it (args: "compass" names bearings, "clock" an o'clock, "squadron" the squadron
+-- of skill tier a, CFG.tiers.list's index: its name from this game's CFG.aces, P9's ace personalities); nil stays nil
 local function fill(fmt, kind, a, b)
     if type(fmt) ~= "string" or not fmt:find("%", 1, true) then return fmt end
     local x, y = tonumber(a) or 0, tonumber(b) or 0
     if kind == "compass" and type(compassName) == "function" then x, y = compassName(x % 360), compassName(y % 360)
-    elseif kind == "clock" then x = math.max(1, math.min(12, math.floor(x + 0.5))) end
+    elseif kind == "clock" then x = math.max(1, math.min(12, math.floor(x + 0.5)))
+    elseif kind == "squadron" then
+        local t = CFG.tiers and CFG.tiers.list and CFG.tiers.list[math.floor(x)]
+        local ac = type(t) == "table" and type(t.name) == "string" and CFG.aces and CFG.aces[t.name:lower()]
+        x = string.upper(tostring(type(ac) == "table" and ac.squadron or "ACE SQUADRON"))
+    end
     local ok, out = pcall(string.format, fmt, x, y)
     return ok and out or fmt
 end

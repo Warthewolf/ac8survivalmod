@@ -31,7 +31,9 @@ do
 local AMMO_KEY = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 local OPEN_STATES = { Provoke = true, EscapeFromPursuer = true }                   -- it's defending: you're on its tail
 local KEEP_STATES = { AttackAvoidance = true, Blackout = true, UniqueAction = true } -- (mid-defence: still the same one)
-local NOT_DIRECTOR = { reversal = true }  -- the aces' own reversals (ACE.movesTick): counted apart, never tagged
+-- the aces' own moves, counted apart, never tagged: their reversals (ACE.movesTick), a squadron's opener and its lead's
+-- blinks (P9's ace personalities, ACE.squadTick)
+local NOT_DIRECTOR = { reversal = true, opener = true, blink = true }
 local MAX_KILLS = 4000                    -- a run's kill records (60 a round for 35 rounds still fits)
 
 local function on() local c = CFG.stats; return c ~= nil and c.enabled ~= false end
@@ -590,7 +592,10 @@ local function flushRound()
         sec(median(rs.tailedGeo)), #rs.tailedGeo, rs.tailEscaped, rs.behind, rs.mineGeo, share(rs.behind, rs.mineGeo),
         w.msl or 0, w.gun or 0, w.special or 0, w.none or 0, rs.close, tostring(rs.mslLeft or "?"), f[1] or 0, rs.hp,
         share(rs.dmg.missile, rs.hp), share(rs.dmg["gun/close"], rs.hp), share(rs.dmg.unknown, rs.hp), rs.nTactics,
-        #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0) .. watchPart(rs.tw))
+        #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0)
+        .. (((rs.moves.opener or 0) + (rs.moves.blink or 0) > 0)       -- (the squadrons', P9: only when there were any)
+            and string.format(", squadron openers %d, blinks %d", rs.moves.opener or 0, rs.moves.blink or 0) or "")
+        .. watchPart(rs.tw))
     if #m.rounds < 500 then
         m.rounds[#m.rounds + 1] = { round = rs.round, kind = kind, len = len, ground = rs.ground, special = spS,
                                     tactics = rs.nTactics, callouts = rs.callouts }

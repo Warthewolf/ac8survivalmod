@@ -236,6 +236,449 @@ end
 
 end
 
+---------------------------------------------------------------------------------------------------- ace personalities
+-- The named squadrons' personalities (behaviour roadmap P9: "Bounty fights as Lancers, Valkyrie as a Wolf pack, Inferno
+-- as Duelists with post-stall, Wraith blinks like a lesser AB.L..IN, Harvest combines all of them. Each squadron should
+-- be recognisable within 10 seconds"; tools/re/BEHAVIOUR_DIRECTOR.md unit 10; CFG.aces.personality and CFG.aces.flight
+-- <tier>.roles / openers / blink). The behaviour pipeline's recipe c1: a squadron flies the behaviour set of the role
+-- flights its ace round draws (ROLE.mixFor; a tree is its desc's, hard rule 20), and the rest is what Lua fires on it:
+-- one opener per flight at first contact, after its tell, and a Wraith (or Harvest) lead blinking off your six (Mission
+-- 22's teleport, hard rule 39: RE_SV_WraithBlink<K><J>, ACE.BLINK). A squadron's flights only (D.aceSquad: never its
+-- tier's ordinary ones), the host's (or solo): a joiner's copies are moved by the plane stream.
+--   ACE.pickOpener(unit, tk, role)   spawnFlight, before the spawn: the opener this squadron flight shows (its tier's
+--                                    openers in turn; a blink only where its lead has blink events; none fits: kulbit;
+--                                    openers "none": nil, the squadron's tell alone at first contact)
+--   ACE.highAlt(alt)                 spawnFlight: a "high" flight's altitude off a Lancer flight (+ alt_add_m, top_m)
+--   ACE.squadUp(unit, ace, role, n)  spawnFlight: a flight is up (a squadron's waits for first contact; any other flight
+--                                    clears what a recycled one had)
+--   ACE.blinkEvent(unit, j)          flight unit's lead's blink to bearing j (0 = A), or nil (no events for it)
+--   ACE.squadTick(now, D, paused)    every 250 ms (sv_main.lua, timed "squads", before ACE.movesTick): first contacts,
+--                                    the openers, the blinks
+do
+local OPEN_TELL = { high = "dive", trap = "drag", kulbit = "kulbit", blink = "blink" }   -- (a later flight's own tell)
+local KNOWN = { high = true, trap = true, kulbit = true, blink = true }
+local SCAN_S = 0.5                                   -- (first contacts looked for this often: p.at is the 2 s sweep's)
+local function pc() local c = CFG.aces.personality; return type(c) == "table" and c or {} end
+local function on() local c = CFG.aces.personality; return CFG.aces.enabled and type(c) == "table" and c.enabled ~= false end
+local function oc(op) local o = pc().openers; o = type(o) == "table" and o[op]; return type(o) == "table" and o or {} end
+local function fcfg(tk) local f = CFG.aces.flight and CFG.aces.flight[tk]; return type(f) == "table" and f or {} end
+local function num(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local function client() return (COOP and COOP.client and COOP.client()) and true or false end
+local function squadName(tk) local a = CFG.aces[tk]; return tostring(type(a) == "table" and a.squadron or tk) end
+local function who(e) return (not e or e.isMe or not (COOP and COOP.open)) and "you" or string.format("player %d", (e.slot or 0) + 1) end
+local function fire(ev)                              -- (SV_Event by name at run time: sv_coop wraps it, KEEP_EVENTS)
+    local ok, r = pcall(function() return type(SV_Event) == "function" and SV_Event(ev) or -5 end)
+    if not ok then return "error " .. tostring(r), false end
+    if r == 1 then return "fired", true end
+    return "not fired: " .. tostring(SV_ERR and SV_ERR[r] or r), false
+end
+local function alive(u)
+    local ok, n = pcall(SV_UnitAlive, u)
+    return (ok and type(n) == "number") and n or 0
+end
+local function decoyed(u, now) return (TAC and TAC.decoyed and TAC.decoyed(u, now)) and true or false end
+local function heldTrap(u, k) local w = D.wolf and D.wolf[u]; return w ~= nil and k ~= nil and w.held[k] == true end
+local function angle(ax, ay, az, bx, by, bz)          -- between two vectors, degrees (180 when one has no length)
+    local la, lb = math.sqrt(ax * ax + ay * ay + az * az), math.sqrt(bx * bx + by * by + bz * bz)
+    if la == 0 or lb == 0 then return 180 end
+    return math.deg(math.acos(math.max(-1, math.min(1, (ax * bx + ay * by + az * bz) / (la * lb)))))
+end
+local function leadS(id)                             -- (a tell's lead_s, whether or not it was said: the action waits it)
+    local l = CFG.tells and CFG.tells.lead_s
+    return math.max(0, num(type(l) == "table" and l[id], 0))
+end
+-- this game's own player where they are now (COOP.me's read of this tick), or nil (none, or down at the airfield)
+local function myAt()
+    local e = COOP and COOP.me and COOP.me() or nil
+    local at = (e and e.at) or playerLocation()
+    if not at then return nil end
+    local okA, onA = pcall(playerOnAirfield, at)
+    if okA and onA == true then return nil end
+    return at
+end
+-- the players a squadron can meet (COOP.players(): you first; solo or the Offline edition: you): alive, flying, their
+-- state fresh, not down at the airfield
+local function players()
+    local all = nil
+    if COOP and COOP.players then
+        local ok, l = pcall(COOP.players)
+        if ok and type(l) == "table" then all = l end
+    end
+    if not all then
+        local at = playerLocation()
+        all = at and { { slot = 0, isMe = true, at = at, alive = true, obj = survivalPC and valid(survivalPC) and survivalPC.Pawn } } or {}
+    end
+    local out = {}
+    for _, e in ipairs(all) do
+        if e.at and e.alive ~= false and e.fresh ~= false then
+            local down = e.onAirfield
+            if down == nil and e.isMe then local okA, a = pcall(playerOnAirfield, e.at); down = okA and a == true end
+            if not down then out[#out + 1] = e end
+        end
+    end
+    return out
+end
+-- the player a flight met (sq.contact), as they are now; nil when they're gone (down, landed)
+local function targetOf(sq)
+    local c = sq.contact
+    if not c then return nil end
+    for _, e in ipairs(players()) do
+        if (c.isMe and e.isMe) or (not c.isMe and not e.isMe and e.slot == c.slot) then return e end
+    end
+    return nil
+end
+local function leadOf(unit)                          -- flight unit's lead (object 0), alive as the sweep last saw it
+    for _, p in ipairs(planes) do
+        if p.unit == unit and p.k == 0 and not p.down and valid(p.obj) then return p end
+    end
+    return nil
+end
+-- a tell to player e (nil: this game's own); said, and what the log says about it
+local function tell(id, e, a)
+    if not (id and TELL and TELL.say and TELL.known and TELL.known(id)) then return false, "no tell" end
+    local ok, said, why, _, shown = pcall(TELL.say, id, (e and not e.isMe) and e.slot or nil, a)
+    if not ok then return false, "tell error " .. tostring(said) end
+    if said == true then return true, "told (" .. id .. ")" end
+    if shown == true then return true, string.format("%s's callout only: %s", id, tostring(why)) end
+    return false, string.format("%s not told: %s", id, tostring(why))
+end
+
+function ACE.blinkEvent(unit, j)
+    local b = ACE.BLINK
+    local i = unit and poolIndex(unit)
+    if not (type(b) == "table" and i and ROLE and ROLE.of and ROLE.of[unit] == b.ROLE and not PROBE_OF[unit]) then return nil end
+    local n = math.floor(360 / b.STEP_DEG)
+    if type(j) ~= "number" or j < 0 or j >= n or j ~= math.floor(j) then return nil end
+    return string.format("RE_SV_WraithBlink%s%s", string.char(64 + i), string.char(65 + j))
+end
+
+function ACE.pickOpener(unit, tk, role)
+    if not (on() and D and tk) then return nil end
+    local list = fcfg(tk).openers
+    if type(list) ~= "table" or #list == 0 or (#list == 1 and tostring(list[1]) == "none") then return nil end   -- ("none")
+    D.openerNext = D.openerNext or {}
+    local start = math.floor(num(D.openerNext[tk], 1))
+    for i = 0, #list - 1 do
+        local idx = (start - 1 + i) % #list + 1
+        local op = tostring(list[idx])
+        if KNOWN[op] and (op ~= "blink" or ACE.blinkEvent(unit, 0)) then
+            D.openerNext[tk] = idx % #list + 1
+            return op
+        end
+    end
+    D.openerNoFit = D.openerNoFit or {}
+    if D.openerNoFit[tk] ~= D.round then             -- (once a round per tier)
+        D.openerNoFit[tk] = D.round
+        local t = {}
+        for _, x in ipairs(list) do t[#t + 1] = tostring(x) end
+        log(string.format("aces: %s (%s squadron%s) can't show %s (a blink needs a %s flight's lead): it opens with a kulbit",
+            unit, squadName(tk), role and (", " .. role) or "", table.concat(t, " / "), tostring(ACE.BLINK and ACE.BLINK.ROLE)))
+    end
+    return "kulbit"
+end
+
+function ACE.highAlt(alt)
+    local h = oc("high")
+    return math.max(alt, math.min(alt + num(h.alt_add_m, 0), num(h.top_m, 4500)))
+end
+
+function ACE.squadUp(unit, ace, role, n)
+    if not D then return end
+    D.squad = D.squad or {}
+    D.squad[unit] = nil                              -- (a recycled flight: what it had is gone)
+    if not (type(ace) == "table" and ace.tier and on()) then return end
+    local tk, op = ace.tier, ace.opener
+    local sq = { tk = tk, ti = D.flightTier and D.flightTier[unit], op = op, role = role, n = n, at = D.now or 0, dmgSeen = 0,
+                 blinks = 0 }
+    D.squad[unit] = sq
+    local b = fcfg(tk).blink
+    local blinks = type(b) == "table" and b.enabled ~= false and ACE.blinkEvent(unit, 0) ~= nil
+    log(string.format("aces: %s (%s squadron%s) opens with %s at first contact (within %.1f km)%s", unit, squadName(tk),
+        role and (", " .. role) or "", op or "nothing", num(oc(op or "").km, 4),
+        blinks and string.format("; its lead blinks off your six (every %.0f s at most)", num(b.every_s, 20)) or ""))
+end
+
+-- a flight's first contact: player e d km from its plane p. Its squadron's tell to them (the round's first flight of
+-- it they meet: <tier>_in, its name; a later one its opener's own), the opener the tell's lead_s on (sq.actAt)
+local function open(unit, sq, e, d, p, now)
+    sq.contact = { at = now, slot = e.slot, isMe = e.isMe == true, d = d }
+    local tk, op = sq.tk, sq.op
+    D.squadSaid = D.squadSaid or {}
+    local key = tk .. "|" .. (e.isMe and "me" or tostring(e.slot))
+    local first = D.squadSaid[key] ~= D.round
+    D.squadSaid[key] = D.round
+    local id = (first and pc().tells ~= false) and (tk .. "_in") or (op and OPEN_TELL[op]) or nil
+    local a = nil
+    if id == tk .. "_in" then a = sq.ti
+    elseif id == "dive" and DIR and DIR.oclock and p.at then
+        local okC, h = pcall(DIR.oclock, e, p.at)
+        a = okC and h or 12
+    end
+    local said, how = tell(id, e, a)
+    local lead = id and leadS(id) or 0
+    if op then sq.actAt = now + lead end
+    log(string.format("aces: %s (%s squadron) meets %s %.1f km off (%s): %s; %s", unit, squadName(tk), who(e), d, p.name or "?",
+        id and how or "no tell", op and string.format("its %s in %.1f s", op, lead) or "no opener"))
+    pcall(STATS.tactic, "opener", unit, e.slot, string.format("%s, %s", squadName(tk), tostring(op)), said and id or nil)
+end
+
+-- its planes able to fire the opening salvo at e: index 0-5, its row's missiles in the salvo's slot (the director's
+-- check: SR.mslSlot, DIR.SALVO_FCS_SLOT), not a held Wolf trap, within range; the nearest first, at most max
+local function shooters(unit, e, rangeKm, max)
+    local list = {}
+    for _, p in ipairs(planes) do
+        if p.unit == unit and not p.down and valid(p.obj) and p.k and p.k <= 5 and p.at and not heldTrap(unit, p.k) then
+            local lr = p.k == 0 and D.leadRow and D.leadRow[unit]
+            local row = (lr and lr.row) or (D.flightRow and D.flightRow[unit])
+            if row and SR and SR.mslSlot and DIR and SR.mslSlot[row] == DIR.SALVO_FCS_SLOT then
+                local d = km(p.at, e.at)
+                if d <= rangeKm then list[#list + 1] = { p = p, d = d } end
+            end
+        end
+    end
+    table.sort(list, function(x, y) return x.d < y.d end)
+    local out = {}
+    for i = 1, math.min(max, #list) do out[i] = list[i].p end
+    return out
+end
+local function salvoName(p) return string.format("RE_SV_Salvo_%02d%s", poolIndex(p.unit), string.char(65 + p.k)) end
+local function shotsTick(unit, sq, now)
+    local keep, out = {}, {}
+    for _, s in ipairs(sq.shots) do
+        if now >= s.at then
+            if not s.p.down and valid(s.p.obj) then out[#out + 1] = s.ev .. " " .. (fire(s.ev))
+            else out[#out + 1] = s.ev .. " (down first)" end
+        else keep[#keep + 1] = s end
+    end
+    sq.shots = #keep > 0 and keep or nil
+    if #out > 0 then log(string.format("aces: %s's opening salvo: %s", unit, table.concat(out, ", "))) end
+end
+local function high(unit, sq, e, now)
+    local h = oc("high")
+    local list = shooters(unit, e, num(h.range_km, 5), math.max(0, math.floor(num(h.salvo, 0))))
+    if #list == 0 then
+        log(string.format("aces: %s's opening salvo: none of its planes can fire at %s (range, missile slot)", unit, who(e)))
+        return
+    end
+    local gap = math.max(0, num(h.gap_s, 0))
+    if e.isMe or not (COOP and COOP.dispatch) then
+        sq.shots = {}
+        for i, p in ipairs(list) do sq.shots[#sq.shots + 1] = { at = now + (i - 1) * gap, p = p, ev = salvoName(p) } end
+        shotsTick(unit, sq, now)
+    else                                             -- (a joiner: its own copies fire at it, "dv")
+        local out = {}
+        for i, p in ipairs(list) do
+            local ev = salvoName(p)
+            local okD, sent = pcall(COOP.dispatch, e.slot, ev, unit, (i - 1) * gap)
+            out[#out + 1] = ev .. ((okD and sent) and " sent" or " not sent")
+        end
+        log(string.format("aces: %s's opening salvo on %s's copies (\"dv\"): %s", unit, who(e), table.concat(out, ", ")))
+    end
+end
+-- the flight's reversal onto player e (the campaign aces' LastTGT, RE_SV_AceTurn_NN; a joiner, whom LastTGT can't reach:
+-- the hunt, RE_SV_Hunt_NN); its next move no sooner than cover.move_s (D.aceMoveAt, shared with ACE.movesTick)
+local function turn(unit, sq, e, now, why)
+    local i = poolIndex(unit)
+    if not i then return end
+    D.aceMoveAt = D.aceMoveAt or {}
+    local cv = CFG.director and CFG.director.cover
+    D.aceMoveAt[unit] = math.max(D.aceMoveAt[unit] or 0, now + num(cv and cv.move_s, 30))
+    local ev = string.format(e.isMe and "RE_SV_AceTurn_%02d" or "RE_SV_Hunt_%02d", i)
+    log(string.format("aces: %s (%s squadron) %s: %s %s", unit, squadName(sq.tk), why, ev, (fire(ev))))
+end
+local function trap(unit, sq, e, now)
+    local t = oc("trap")
+    if WOLF and WOLF.holding and WOLF.holding(unit) then
+        sq.springAt = now + math.max(0, num(t.spring_s, 8))
+        sq.springBy = sq.springAt + math.max(0, num(t.wait_s, 15))
+        log(string.format("aces: %s (%s squadron): its trap springs in %.0f s", unit, squadName(sq.tk), sq.springAt - now))
+    else                                             -- (not a Wolf flight holding its trap: the pack turns on you)
+        turn(unit, sq, e, now, "has no trap held: its pack turns on " .. who(e))
+    end
+end
+local function springTick(unit, sq, now)
+    local w = D.wolf and D.wolf[unit]
+    if w and w.state == "pending" and now < (sq.springBy or now) then return end   -- (not held yet: it waits)
+    sq.springAt = nil
+    if not (WOLF and WOLF.holding and WOLF.holding(unit)) then
+        log(string.format("aces: %s (%s squadron): its trap isn't held any more (sprung, freed or down); nothing to spring",
+            unit, squadName(sq.tk)))
+        return
+    end
+    local e = targetOf(sq)
+    local _, how = tell("trap", e)
+    sq.freeAt = now + leadS("trap")
+    log(string.format("aces: %s (%s squadron): its trap springs on %s in %.1f s (%s)", unit, squadName(sq.tk), who(e),
+        sq.freeAt - now, how))
+end
+local function free(unit, sq, now)
+    local e = targetOf(sq)
+    -- (the turn, LastTGT, steers to this game's player: a joiner's trap is only let go)
+    local okF, n = pcall(WOLF.free, unit, string.format("%s's trap springs", squadName(sq.tk)), (e and e.isMe) == true, nil, now)
+    if not okF then log("aces: trap error " .. tostring(n)) end
+end
+local function kulbit(unit, sq, now)
+    local i = poolIndex(unit)
+    if not i then return end
+    D.aceMoveAt = D.aceMoveAt or {}
+    D.aceMoveAt[unit] = math.max(D.aceMoveAt[unit] or 0, now + 12)       -- (a OneShot: the reversals wait it out)
+    local ev = string.format("RE_SV_AceKulbit_%02d", i)
+    log(string.format("aces: %s (%s squadron) kulbits as one: %s %s", unit, squadName(sq.tk), ev, (fire(ev))))
+end
+
+-- flight unit's lead blinks to a spot behind and beside you (your heading +-135 deg, ACE.BLINK's ring; else dead six,
+-- else abeam), clear of the ground (ground_clear_m, or 80 % of your own height over it when you fly lower, as AB.L..IN's),
+-- smoke where it left and where it came out. Whether it went
+local function blinkNow(unit, sq, now, why)
+    local lead, me, b = leadOf(unit), myAt(), ACE.BLINK
+    if not (lead and me and ACE.blinkEvent(unit, 0)) then
+        log(string.format("aces: %s's lead didn't blink (%s): %s", unit, why,
+            not lead and "its lead is down" or (not me and "you're not flying" or "no blink events for it")))
+        return false
+    end
+    local n = math.floor(360 / b.STEP_DEG)
+    local head = SPC and SPC.V and SPC.V.heading and SPC.V.heading() or nil
+    local side = math.random() < 0.5 and 1 or -1
+    local wants = head and { head + 135 * side, head - 135 * side, head + 180, head + 90 * side, head - 90 * side }
+        or { math.random() * 360, math.random() * 360, math.random() * 360 }
+    local ground = ANOM and ANOM.groundAt
+    local under = ground and ground(me.X, me.Y)
+    local clear = math.max(0, num(pc().ground_clear_m, 150)) * 100
+    if under then clear = math.max(0, math.min(clear, (me.Z - under) * 0.8)) end
+    local tried = {}
+    for _, want in ipairs(wants) do
+        local j = math.floor((want % 360) / b.STEP_DEG + 0.5) % n
+        if not tried[j] then
+            tried[j] = true
+            local dg = j * b.STEP_DEG
+            local to = { X = me.X + b.RING_M * 100 * math.cos(math.rad(dg)), Y = me.Y + b.RING_M * 100 * math.sin(math.rad(dg)), Z = me.Z }
+            local g = ground and ground(to.X, to.Y)
+            if not g or to.Z >= g + clear then
+                local okW, was = pcall(function() local v = lead.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+                local ev = ACE.blinkEvent(unit, j)
+                local res, ok = fire(ev)
+                if ok and pc().smoke ~= false and ANOM and ANOM.smokeAt then
+                    if okW and was then pcall(ANOM.smokeAt, was) end
+                    pcall(ANOM.smokeAt, to)
+                end
+                sq.blinks = sq.blinks + (ok and 1 or 0)
+                log(string.format("aces: %s's lead %s blinks (%s): your heading %s -> spot %.0f deg, %d m (%s %s)", unit,
+                    lead.name or "?", why, head and string.format("%.0f", head % 360) or "?", dg, b.RING_M, ev, res))
+                if ok then pcall(STATS.tactic, "blink", unit, nil, why) end
+                return ok
+            end
+        end
+    end
+    log(string.format("aces: %s's lead didn't blink (%s): no spot clear of the ground round you", unit, why))
+    return false
+end
+
+-- the opener's action, its tell's lead_s after the first contact
+local function act(unit, sq, now)
+    local op, e = sq.op, targetOf(sq)
+    if not op then return end
+    if decoyed(unit, now) or (DIR and DIR.holding and DIR.holding(unit)) then
+        log(string.format("aces: %s's %s not shown: your decoy (or the director) stands it down", unit, op))
+        return
+    end
+    if op == "kulbit" then kulbit(unit, sq, now); return end
+    if not e then
+        log(string.format("aces: %s's %s not shown: %s left the fight (down, or at the airfield)", unit, op, who(sq.contact)))
+        return
+    end
+    if op == "high" then high(unit, sq, e, now)
+    elseif op == "trap" then trap(unit, sq, e, now)
+    elseif op == "blink" then
+        if e.isMe then
+            local b = fcfg(sq.tk).blink
+            if blinkNow(unit, sq, now, "its opener") and type(b) == "table" then
+                sq.blinkAt = now + num(b.every_s, 20)
+                D.aceMoveAt = D.aceMoveAt or {}
+                D.aceMoveAt[unit] = math.max(D.aceMoveAt[unit] or 0, now + num(b.move_gap_s, 10))
+            end
+        else
+            log(string.format("aces: %s's blink is round the host's plane only: none for %s (its tell only)", unit, who(e)))
+        end
+    end
+end
+
+-- a blinking tier's lead (CFG.aces.flight <tier>.blink): you on its six within tailed_km and tail_deg (its position read
+-- afresh only when the sweep had it within tailed_km + 1.5 of you), or (on_hit) your hit on it since the last look: the
+-- "blink" tell, the blink its lead_s later (sq.blinkGo), its next no sooner than every_s, the flight's reversals no
+-- sooner than move_gap_s (D.aceMoveAt)
+local function blinkCheck(unit, sq, b, now, me)
+    if sq.actAt or sq.blinkGo or sq.springAt or decoyed(unit, now) or (DIR and DIR.holding and DIR.holding(unit)) then return end
+    local lead = leadOf(unit)
+    if not (lead and ACE.blinkEvent(unit, 0)) then return end
+    local why = nil
+    local dmg = lead.dmg and tonumber(lead.dmg.you) or 0
+    if b.on_hit and dmg > (sq.dmgSeen or 0) then why = "you hit it" end
+    sq.dmgSeen = math.max(sq.dmgSeen or 0, dmg)
+    local reach = num(b.tailed_km, 2.5)
+    if not why and lead.dist and lead.dist <= reach + 1.5 then
+        local ok, at, fwd = pcall(function()
+            local v, f = lead.obj:K2_GetActorLocation(), lead.obj:GetActorForwardVector()
+            return { X = v.X, Y = v.Y, Z = v.Z }, { X = f.X, Y = f.Y, Z = f.Z }
+        end)
+        if ok and at and fwd then
+            local range = km(at, me) * 1000
+            local off = angle(-fwd.X, -fwd.Y, -fwd.Z, me.X - at.X, me.Y - at.Y, me.Z - at.Z)
+            if range <= reach * 1000 and off <= num(b.tail_deg, 70) then
+                why = string.format("you %.0f m on its six, %.0f deg off its tail", range, off)
+            end
+        end
+    end
+    if not why then return end
+    local _, how = tell("blink", nil)
+    local l = leadS("blink")
+    sq.blinkGo = { at = now + l, why = why .. "; " .. how }
+    sq.blinkAt = now + num(b.every_s, 20)
+    D.aceMoveAt = D.aceMoveAt or {}
+    D.aceMoveAt[unit] = math.max(D.aceMoveAt[unit] or 0, now + l + num(b.move_gap_s, 10))
+end
+
+function ACE.squadTick(now, D, paused)
+    if paused or not (now and D and D.round and D.squad and next(D.squad)) then return end
+    if client() or not on() then return end
+    local scan = now >= (D.squadScanAt or 0)
+    if scan then D.squadScanAt = now + SCAN_S end
+    local ps, me, meRead = nil, nil, false
+    for unit, sq in pairs(D.squad) do
+        if scan and now - sq.at > 10 and alive(unit) <= 0 then
+            D.squad[unit] = nil                      -- (down, or never came: its opener goes with it)
+        else
+            if not sq.contact and scan then
+                ps = ps or players()
+                local km0, best, bd, bp = num(oc(sq.op or "").km, 4), nil, nil, nil
+                for _, p in ipairs(planes) do
+                    if p.unit == unit and not p.down and p.at then
+                        for _, e in ipairs(ps) do
+                            local d = km(p.at, e.at)
+                            if d <= km0 and (not bd or d < bd) then best, bd, bp = e, d, p end
+                        end
+                    end
+                end
+                if best then open(unit, sq, best, bd, bp, now) end
+            end
+            if sq.actAt and now >= sq.actAt then sq.actAt = nil; act(unit, sq, now) end
+            if sq.shots then shotsTick(unit, sq, now) end
+            if sq.springAt and now >= sq.springAt then springTick(unit, sq, now) end
+            if sq.freeAt and now >= sq.freeAt then sq.freeAt = nil; free(unit, sq, now) end
+            if sq.blinkGo and now >= sq.blinkGo.at then
+                local g = sq.blinkGo
+                sq.blinkGo = nil
+                blinkNow(unit, sq, now, g.why)
+            end
+            local b = fcfg(sq.tk).blink
+            if type(b) == "table" and b.enabled ~= false and now >= (sq.blinkAt or 0) then
+                if not meRead then me, meRead = myAt(), true end
+                if me then blinkCheck(unit, sq, b, now, me) end
+            end
+        end
+    end
+end
+end
+
 -- g: its KILL.geom (worked out here when not given)
 function probeKill(p, you, g)
     if not (CFG.probe.enabled and CFG.probe.kills) then return end

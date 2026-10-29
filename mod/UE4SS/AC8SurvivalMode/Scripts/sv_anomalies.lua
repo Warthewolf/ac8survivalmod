@@ -294,6 +294,13 @@ local function glitchSmoke(s, at)
         log("special: AB.L..IN's smoke " .. c.smoke .. " didn't spawn")
     end
 end
+-- (for the ace squadrons' blinks, P9: sv_ai.lua ACE.squadTick) the ground's height under a point (nil: no hit), and
+-- AB.L..IN's smoke at a point (how many systems came up)
+ANOM.groundAt = groundAt
+function ANOM.smokeAt(at)
+    local c = CFG.specials.glitch
+    return fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s)
+end
 
 -- Its dead look (user, 2026-10-23: "I want the aircraft to look spooky like its the dead flying"): its own airframe
 -- in its wreck's burnt material (each slot's <material>_DAM, the one the game puts on the wreck; dead_material when a

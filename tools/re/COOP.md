@@ -252,6 +252,15 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   (harmless: the copies follow the stream); its callout is the round's ("co"), its tell every player's. The ALICORN's
   deck launches go through spawnFlight with a pose, which the SV_Spawn wrapper mirrors (pose, aircraft, level); its
   callout is the round's, its "alcn_deck" tell every player's. Untested in game.
+- Ace personalities (behaviour roadmap P9, BEHAVIOUR_DIRECTOR.md unit 10) run on the host only (ACE.squadTick returns on
+  a joiner; the squadrons' role mix is the host's startRound, the openers its sv_main tick). A squadron flight opens on
+  whichever player (COOP.players()) its planes reach first: that player's squadron tell ("tl": its id and the tier's
+  index, the joiner naming the squadron from its own CFG.aces), and what reaches them: the "high" salvo on that joiner's
+  own copies ("dv", RE_SV_Salvo_<NN><L>, gap_s apart), the kulbit (RE_SV_AceKulbit_NN, kept: the planes' own move the
+  stream shows), the trap freed without its turn (RE_SV_WolfFree forwarded; WolfTurn would steer to the host); a blink is
+  round the host's plane only (RE_SV_WraithBlink<K><J> in KEEP_EVENTS: its "Player" is the host), so a joiner gets only
+  the tell. The blink tick reads the host's player alone. A blinking lead's new place reaches joiners in the plane
+  stream. The next friend build: COOP_TAG -coop.18 (new events). Untested in game.
 - Joining: SURVIVAL CO-OP: HOST and SURVIVAL CO-OP: JOIN on the main menu (DT_SV_MenuRows rows with StringArgs
   SurvivalHost / SurvivalJoin; OnMainDecide sets SV_MenuChoice 3 / 4; Lua opens co-op as that role, no ini). JOIN
   never hosts by itself; TWO HOSTS says only one picks HOST.

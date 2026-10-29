@@ -184,9 +184,11 @@ CFG = {
                        alcn_rail_first = 0, alcn_rail = 0, alcn_dive = 0, alcn_up = 0, alcn_vls = 30, alcn_deck = 30,
                        ladon_vls = 15, pincer = 30, split = 20, dive = 20, clock = 0, drag = 30, lure = 30, trap = 20,
                        cover_ask = 20, six = 20, bracket = 15, regroup = 30, lancer = 60, skirm = 60,
-                       pack = 20, glitch_six = 0, glitch_allout = 0, ladon_rage = 0 },
+                       pack = 20, glitch_six = 0, glitch_allout = 0, ladon_rage = 0,
+                       mercenary_in = 0, legend_in = 0, demon_in = 0, phantom_in = 0, reaper_in = 0, blink = 10 },
         lead_s = { reversal = 1.0, kulbit = 0.5, alcn_rail = 5.0, alcn_vls = 1.0, ladon_vls = 0.0, dive = 1.0, trap = 1.0,
-                   six = 1.0, bracket = 1.0 },
+                   six = 1.0, bracket = 1.0, mercenary_in = 1.0, legend_in = 0.0, demon_in = 0.5, phantom_in = 0.5,
+                   reaper_in = 0.5, blink = 0.5 },
         list = {
             reversal        = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, hud = "reversal", urgent = true },
             kulbit          = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, hud = "kulbit", urgent = true },
@@ -230,6 +232,23 @@ CFG = {
                                 hud = "glitch_six", urgent = true, sure = true },
             glitch_allout   = { radio = { "RE_SV_RadioGlitchEcm" }, hud = "glitch_allout", urgent = true, sure = true },
             ladon_rage      = { radio = { "RE_SV_RadioLadonRage" } },
+            -- the ace squadrons' (behaviour roadmap P9, CFG.aces.personality: tools/re/BEHAVIOUR_DIRECTOR.md unit 10): a
+            -- squadron's first contact of a round, its name in the callout (args "squadron": a, its tier's index in
+            -- CFG.tiers.list, its name from CFG.aces) and what to watch for, sure (its callout when it can't be said),
+            -- its opener the tell's lead_s on; blink: a Wraith (or Harvest) lead blinking off your six. The lines are
+            -- other tells' (no new radio rows)
+            mercenary_in    = { radio = { "RE_SV_RadioDiveA", "RE_SV_RadioDiveB", "RE_SV_RadioDiveC", "RE_SV_RadioDiveD" },
+                                hud = "mercenary_in", args = "squadron", urgent = true, sure = true },
+            legend_in       = { radio = { "RE_SV_RadioEnLureA", "RE_SV_RadioEnLureB" }, hud = "legend_in", args = "squadron",
+                                urgent = true, sure = true },
+            demon_in        = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, hud = "demon_in", args = "squadron",
+                                urgent = true, sure = true },
+            phantom_in      = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" },
+                                hud = "phantom_in", args = "squadron", urgent = true, sure = true },
+            reaper_in       = { radio = { "RE_SV_RadioHuntA", "RE_SV_RadioHuntB" }, hud = "reaper_in", args = "squadron",
+                                urgent = true, sure = true },
+            blink           = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" },
+                                hud = "blink", urgent = true },
         },
         text = {
             reversal  = "ACE REVERSAL",            reversal_sub  = "HE'S TURNING INTO YOU",
@@ -251,6 +270,12 @@ CFG = {
             pack      = "THE PACK SPRINGS",        pack_sub      = "GET OUT OF THE FIELD",
             glitch_six = "IT'S ON YOUR SIX",       glitch_six_sub = "IT BLINKS BEHIND YOU NOW",
             glitch_allout = "ITS ECM IS DOWN",     glitch_allout_sub = "MISSILES WORK: STAY OFF ITS NOSE",
+            mercenary_in = "%s: FROM ABOVE",       mercenary_in_sub = "THEY STRIKE AND CLIMB: DON'T FOLLOW THEM UP",
+            legend_in = "%s: THE PACK",            legend_in_sub = "THE ONES HANGING BACK ARE THE TRAP",
+            demon_in  = "%s: POST-STALL ACES",     demon_in_sub  = "THEY KULBIT: DON'T OVERSHOOT",
+            phantom_in = "%s: THEY BLINK",         phantom_in_sub = "THEIR LEAD JUMPS TO YOUR SIX",
+            reaper_in = "%s: THE HARVEST",         reaper_in_sub = "THEY KULBIT, BLINK AND TURN ON YOU",
+            blink     = "IT BLINKED",              blink_sub     = "CHECK YOUR SIX",
         },
     },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
@@ -332,10 +357,52 @@ CFG = {
         -- LastTGT's length; CFG.director.cover.move_s), 12 s after a kulbit, from the move. no_provoke and moves are a tier's
         -- duelists' and ace squadrons': a fighter role's Lancer, Wolf or Skirmisher flight keeps its own set's provoke
         -- and pursuit (ROLE.ownSet; CFG.roles)
+        -- The squadrons' personalities (behaviour roadmap P9, "each named squadron should be recognisable within 10
+        -- seconds"; `personality` below, tools/re/BEHAVIOUR_DIRECTOR.md unit 10), a squadron's only (never its tier's
+        -- ordinary flights): roles, its ace round's role mix (as CFG.roles.mix's, in place of CFG.roles.ace_mix; a
+        -- squadron flies its role's behaviour set, its own airframes): Bounty the Lancers', Valkyrie the Wolf pairs',
+        -- Inferno, Wraith and Harvest the duelists' (LA_SV_TailChase's AI-level-5 "Super" pursuit is only in that set:
+        -- the critic's caveat); openers, what each flight shows at first contact, in turn ("high", "trap", "kulbit",
+        -- "blink": personality); blink, its lead blinking behind and beside you while you sit on its six (tailed_km,
+        -- tail_deg; on_hit: or once you hit it), at most every every_s, the flight's reversals no sooner than move_gap_s
+        -- after (D.aceMoveAt, shared with moves). Harvest combines them: its flights open in turn with a kulbit, a blink
+        -- and a dive from high, its lead blinks off your six, and it keeps its reversals and hunt.
         flight = {
+            mercenary = { roles = { duelist = 0.0, lancer = 1.0, wolf = 0.0, skirm = 0.0 }, openers = { "high" } },
+            legend    = { roles = { duelist = 0.0, lancer = 0.0, wolf = 1.0, skirm = 0.0 }, openers = { "trap" } },
+            demon     = { roles = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 }, openers = { "kulbit" } },
+            phantom   = { roles = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 }, openers = { "blink" },
+                          blink = { enabled = true, every_s = 20, tailed_km = 2.5, tail_deg = 70, on_hit = true,
+                                    move_gap_s = 10 } },
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
-                       health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true },
+                       health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true,
+                       roles = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 },
+                       openers = { "kulbit", "blink", "high" },
+                       blink = { enabled = true, every_s = 30, tailed_km = 2.5, tail_deg = 70, on_hit = false,
+                                 move_gap_s = 10 } },
         },
+        -- Ace personalities (P9): a squadron flight's opener the first time one of its aircraft comes within its km of a
+        -- player (the 2 s sweep's positions), after its squadron's tell (tells: CFG.tells <tier>_in, its name and what
+        -- to watch for, to that player; the round's first flight of the squadron; a later one says its opener's own:
+        -- dive, drag, kulbit, blink) and the tell's lead_s:
+        --   high    spawned openers.high.alt_add_m higher (up to top_m; a Lancer flight is already 2 km up), a missile
+        --           from up to salvo of its aircraft within range_km of you, gap_s apart (RE_SV_Salvo_<NN><L>: the
+        --           fighters' missile slot, P2's bracket's)
+        --   trap    a Wolf flight's trap (its odd aircraft held at engagement None from its appearance, as CFG.roles.wolf;
+        --           held, freed when hit or its bait is down) springs spring_s after contact: the "trap" tell, then free
+        --           and LastTGT onto you (RE_SV_WolfFree / WolfTurn); not held yet, it waits up to wait_s more. A
+        --           squadron flight off the Wolf pairs: the pack turns on you instead (RE_SV_AceTurn_NN, LastTGT)
+        --   kulbit  every aircraft of the flight kulbits as one, firing its special (RE_SV_AceKulbit_NN: the Shadows')
+        --   blink   its lead (object 0) blinks to a spot behind and beside you (RE_SV_WraithBlink<K><J>, ACE.BLINK's ring,
+        --           a duelist flight's lead only; ground_clear_m over the ground), smoke where it left and came out (smoke)
+        -- The host's (or solo). A co-op joiner who meets a squadron first gets its tell ("tl") and what reaches them: a
+        -- salvo on their own copies ("dv"), the kulbit, the trap freed without the turn; a blink is round the host only.
+        -- enabled = false: ace rounds draw CFG.roles.ace_mix, no openers or blinks (the Reaper's own levers stay).
+        personality = { enabled = true, tells = true, ground_clear_m = 150, smoke = true,
+                        openers = { high = { km = 5.0, alt_add_m = 2000, top_m = 4500, salvo = 2, gap_s = 0.6, range_km = 5.0 },
+                                    trap = { km = 4.0, spring_s = 8, wait_s = 15 },
+                                    kulbit = { km = 2.5 },
+                                    blink = { km = 4.0 } } },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
@@ -437,7 +504,9 @@ CFG = {
     --            long extend; its health x health_x.skirm (0.75: it dies fast if caught) (NLID_SV_Skirmisher)
     -- A round's fighters are drawn by mix (the band of the latest from_round the round has reached: each role's share
     -- of the round's aircraft, in whole 2-ships; a group that runs short is filled from the others, logged), an ace
-    -- round's by ace_mix (the squadrons keep the duelists' set). Each role flies its own airframes (aircraft; signature
+    -- round's by its squadron's roles (CFG.aces.flight <tier>.roles, P9's ace personalities: Bounty the Lancers',
+    -- Valkyrie the Wolf pairs', the rest the duelists'), else ace_mix (personalities off: the squadrons keep the
+    -- duelists' set). Each role flies its own airframes (aircraft; signature
     -- types only when they're the role's), a role with none unlocked yet its fallback role's, then the whole pool. The
     -- first Lancer and Skirmisher flight of a round call themselves out (tells: CFG.tells lancer / skirm). The round's
     -- jammer leads a flight of the `jammer` roles only. Rows and sets are made at the main menu: a change needs a game
@@ -1941,6 +2010,12 @@ ACE = {
     model_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_ModelRows.DT_SV_ModelRows",
     model_table = "/Game/Datatables/AI/NPC/Model/DT_NPC_Model.DT_NPC_Model",
 }
+-- The ace squadrons' blink spots (behaviour roadmap P9, CFG.aces.flight <tier>.blink and the "blink" opener; build data,
+-- outside CFG: tools/survival_events.py WRAITH_BLINK_*, whose build checks these): RE_SV_WraithBlink<K><J>, K the
+-- flight's pool index as a letter (A = ERA_Unit_01_Dep_Air0), J the bearing's (A = 0 deg, world: 0 = +X, AB.L..IN's
+-- convention), every STEP_DEG round, RING_M from the player at their height, facing them; one set per flight of the
+-- ROLE group (its lead, object 0, only: the squadrons that blink fly that group's flights, and the events stay few).
+ACE.BLINK = { STEP_DEG = 45, RING_M = 1000, ROLE = "duelist" }
 function spikeLevel(round)
     local sp = CFG.spikes
     if not sp.enabled or not round or round < 1 or #sp.levels == 0 then return 0 end
@@ -2082,11 +2157,24 @@ for nn, r in ipairs(ROLE_BY_FLIGHT) do
 end
 -- A Wolf flight's object k is the trap (held until sprung, the trap's row): the odd ones (survival_events.wolf_held).
 function ROLE.wolfHeld(k) return type(k) == "number" and k % 2 == 1 end
--- The role weights round `round` draws by: CFG.roles.ace_mix in an ace round (ace true), else mix's band of the latest
--- from_round the round has reached (no band yet: duelists only). Returns { role = weight } and the band's from_round.
+-- The role weights round `round` draws by: in an ace round (ace true, or its tier's key) the squadron's own roles (P9's
+-- ace personalities: CFG.aces.flight <tier>.roles, band "ace:<tier>") or CFG.roles.ace_mix (band "ace"), else mix's band
+-- of the latest from_round the round has reached (no band yet: duelists only). Returns { role = weight } and the band.
 function ROLE.mixFor(round, ace)
     local c = CFG.roles
     local w = {}
+    local pc = CFG.aces and CFG.aces.personality
+    local fl = type(ace) == "string" and CFG.aces.enabled and type(pc) == "table" and pc.enabled ~= false
+        and type(CFG.aces.flight) == "table" and CFG.aces.flight[ace]
+    if type(fl) == "table" and type(fl.roles) == "table" then
+        local any = false
+        for _, r in ipairs(ROLE.LIST) do
+            w[r] = math.max(0, tonumber(fl.roles[r]) or 0)
+            if w[r] > 0 then any = true end
+        end
+        if any then return w, "ace:" .. ace end
+        w = {}                                       -- (every weight 0: ace_mix's)
+    end
     if ace and type(c.ace_mix) == "table" then
         for _, r in ipairs(ROLE.LIST) do w[r] = math.max(0, tonumber(c.ace_mix[r]) or 0) end
         return w, "ace"

@@ -28,6 +28,8 @@ by events: the game never spawns a desc again while its shot-down flight is stil
                       fighter roles), fired by Scripts/sv_spawn.lua WOLF
   RE_SV_Salvo_<NN><L> one pool object's missile at the player; RE_SV_DirHold_NN / RE_SV_DirFree_NN a pool flight's
                       engagement held (None) and given back (build_director; P2's squad director, Scripts/sv_director.lua)
+  RE_SV_WraithBlink<K><J>  an ace squadron flight's lead teleported to bearing J round the player (build_wraith; P9's
+                      ace personalities, Scripts/sv_ai.lua ACE.squadTick)
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -365,6 +367,17 @@ GLITCH_GUN_EVERY_S = 0.1
 GLITCH_GUN_SHOTS = 5
 GLITCH_BLINK_STEP_DEG = 30
 GLITCH_BLINK_RINGS_M = (500, 800)
+
+
+# The ace squadrons' blinks (behaviour roadmap P9: "Wraith blinks like a lesser AB.L..IN"; tools/re/BEHAVIOUR_DIRECTOR.md
+# unit 10): AB.L..IN's teleport (Mission 22's LiveActorTeleportExecution: the object onto the player plus a world offset,
+# facing back at them; hard rule 39) for the lead (object 0) of each pool flight of WRAITH_BLINK_ROLE's group (the
+# squadrons that blink fly those flights: Scripts/sv_config.lua CFG.aces.flight <tier>.roles), to a spot every
+# WRAITH_BLINK_STEP_DEG round, WRAITH_BLINK_RING_M out at the player's height. Scripts/sv_config.lua ACE.BLINK is the same
+# (build_wraith checks it); Scripts/sv_ai.lua ACE.squadTick picks the spot.
+WRAITH_BLINK_STEP_DEG = 45
+WRAITH_BLINK_RING_M = 1000
+WRAITH_BLINK_ROLE = 'duelist'
 
 
 def glitch_blinks():
@@ -946,6 +959,7 @@ def build_events(stock_ep):
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
     build_wolf(g, stock_ep, t_search, t_engage)
     build_director(g, stock_ep, t_search, t_engage)
+    build_wraith(g)
     return g
 
 
@@ -1122,6 +1136,48 @@ def build_director(g, stock_ep, t_search, t_engage):
             n += 1
     print(f'  director: {n} salvo objects in {len(POOL) - len(probes)} flights (RE_SV_Salvo_<NN><L>, {SALVO_SLOT}), '
           f'{len(POOL)} flights held / freed (RE_SV_DirHold / DirFree_NN)')
+
+
+def wraith_blinks():
+    """[(unit, event, bearing deg)]: RE_SV_WraithBlink<K><J>, K the flight's pool index as a letter (A = POOL[0]), J the
+    bearing's (A = 0 deg); letters only (hard rule 17). The lead of each WRAITH_BLINK_ROLE flight, not the probes'."""
+    out = []
+    probes = set(PROBE_UNITS.values())
+    for k, unit in enumerate(POOL):
+        if POOL_ROLE[unit] != WRAITH_BLINK_ROLE or unit in probes: continue
+        for j, deg in enumerate(range(0, 360, WRAITH_BLINK_STEP_DEG)):
+            out.append((unit, f'RE_SV_WraithBlink{chr(65 + k)}{chr(65 + j)}', deg))
+    return out
+
+
+def build_wraith(g):
+    """The ace squadrons' blinks (see WRAITH_BLINK_*): one remote event per lead and spot, fired by Scripts/sv_ai.lua
+    ACE.squadTick (kept on a co-op host: "Player" is each game's own, sv_coop.lua KEEP_EVENTS)."""
+    import math
+    import re
+    lua = runtime_lua()
+    m = re.search(r'BLINK = \{ STEP_DEG = (\d+), RING_M = (\d+), ROLE = "(\w+)" \}', lua)
+    assert m and int(m.group(1)) == WRAITH_BLINK_STEP_DEG and int(m.group(2)) == WRAITH_BLINK_RING_M and (
+        m.group(3) == WRAITH_BLINK_ROLE), 'Scripts/sv_config.lua ACE.BLINK != WRAITH_BLINK_*'
+    assert '"RE_SV_WraithBlink%s%s"' in lua, 'Scripts/sv_ai.lua never fires RE_SV_WraithBlink<K><J>'
+    assert '"^RE_SV_WraithBlink"' in lua, 'Scripts/sv_coop.lua KEEP_EVENTS has no ^RE_SV_WraithBlink'
+    t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
+    v = arg_values(t_tp)
+    assert v[2] == 'Player' and v[13] == 'Absolute' and v[8] == 'NoneSelect', v
+    n, units = 0, set()
+    for unit, ev, deg in wraith_blinks():
+        objs = POOL_OBJS.get(unit)
+        assert objs and len(objs) == flight_size(unit), (unit, objs)       # (build_wd_global runs first)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                          # a remote event Lua fires
+        r = WRAITH_BLINK_RING_M * 100
+        dx, dy = r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg))
+        yaw = (deg + 180 + 180) % 360 - 180                                 # facing back at the player
+        g.execute(t_tp, ev, {1: objs[0], 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
+        n += 1
+        units.add(unit)
+    assert n > 0, 'no blink events'
+    print(f'  wraith blinks: {n} spots for the leads of {len(units)} {WRAITH_BLINK_ROLE} flights (RE_SV_WraithBlink<K><J>, '
+          f'{WRAITH_BLINK_RING_M} m every {WRAITH_BLINK_STEP_DEG} deg)')
 
 
 def build_allies(g, flag, t_search, t_move, t_bsearch):
