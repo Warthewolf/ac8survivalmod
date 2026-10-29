@@ -399,10 +399,17 @@ function ACE.squadUp(unit, ace, role, n)
 end
 
 -- a flight's first contact: player e d km from its plane p. Its squadron's tell to them (the round's first flight of
--- it they meet: <tier>_in, its name; a later one its opener's own), the opener the tell's lead_s on (sq.actAt)
+-- it they meet: <tier>_in, its name; a later one its opener's own), the opener the tell's lead_s on (sq.actAt). The
+-- flight's reversals (ACE.movesTick, after this tick's squads) and the director's cover turn wait until the opener's
+-- gone (sq.holdTo through D.aceMoveAt; U10's review: one fired in between and the opener cut each other); a move already
+-- in flight is the opener's to wait out (act). A held trap's hold_max_s runs from here (WOLF.contact); a hit on its
+-- lead from before counts for no blink (sq.dmgSeen)
 local function open(unit, sq, e, d, p, now)
     sq.contact = { at = now, slot = e.slot, isMe = e.isMe == true, d = d }
     local tk, op = sq.tk, sq.op
+    if WOLF and WOLF.contact then WOLF.contact(unit, now) end
+    local ld = leadOf(unit)
+    sq.dmgSeen = math.max(sq.dmgSeen or 0, ld and ld.dmg and tonumber(ld.dmg.you) or 0)
     D.squadSaid = D.squadSaid or {}
     local key = tk .. "|" .. (e.isMe and "me" or tostring(e.slot))
     local first = D.squadSaid[key] ~= D.round
@@ -416,7 +423,14 @@ local function open(unit, sq, e, d, p, now)
     end
     local said, how = tell(id, e, a)
     local lead = id and leadS(id) or 0
-    if op then sq.actAt = now + lead end
+    if op then
+        sq.actAt = now + lead
+        local span = 1                               -- (a salvo: its last shot gap_s apart)
+        if op == "high" then span = span + math.max(0, num(oc("high").gap_s, 0)) * math.max(0, math.floor(num(oc("high").salvo, 0)) - 1) end
+        sq.holdTo = sq.actAt + span
+        D.aceMoveAt = D.aceMoveAt or {}
+        D.aceMoveAt[unit] = math.max(D.aceMoveAt[unit] or 0, sq.holdTo)
+    end
     log(string.format("aces: %s (%s squadron) meets %s %.1f km off (%s): %s; %s", unit, squadName(tk), who(e), d, p.name or "?",
         id and how or "no tell", op and string.format("its %s in %.1f s", op, lead) or "no opener"))
     pcall(STATS.tactic, "opener", unit, e.slot, string.format("%s, %s", squadName(tk), tostring(op)), said and id or nil)
@@ -573,12 +587,22 @@ local function blinkNow(unit, sq, now, why)
     return false
 end
 
--- the opener's action, its tell's lead_s after the first contact
+-- the opener's action, its tell's lead_s after the first contact. A kulbit, or the turn of a trap with none held, is a
+-- unique action that would cut a move of the flight still in flight (a reversal from before the contact, the director's
+-- cover turn: D.aceMoveAt past the opener's own hold) and is cut by it: it waits that move out, once
 local function act(unit, sq, now)
     local op, e = sq.op, targetOf(sq)
     if not op then return end
     if decoyed(unit, now) or (DIR and DIR.holding and DIR.holding(unit)) then
         log(string.format("aces: %s's %s not shown: your decoy (or the director) stands it down", unit, op))
+        return
+    end
+    local busy = D.aceMoveAt and D.aceMoveAt[unit] or 0
+    if not sq.waited and busy > now and busy > (sq.holdTo or 0) + 0.01
+        and (op == "kulbit" or (op == "trap" and not (WOLF and WOLF.holding and WOLF.holding(unit)))) then
+        sq.waited, sq.actAt = true, busy
+        log(string.format("aces: %s's %s waits %.1f s: a move of the flight is in flight (a reversal, the director's turn)",
+            unit, op, busy - now))
         return
     end
     if op == "kulbit" then kulbit(unit, sq, now); return end
@@ -589,7 +613,9 @@ local function act(unit, sq, now)
     if op == "high" then high(unit, sq, e, now)
     elseif op == "trap" then trap(unit, sq, e, now)
     elseif op == "blink" then
-        if e.isMe then
+        if sq.blinkGo or now < (sq.blinkAt or 0) then
+            log(string.format("aces: %s's blink opener not shown: its lead blinked already", unit))
+        elseif e.isMe then
             local b = fcfg(sq.tk).blink
             if blinkNow(unit, sq, now, "its opener") and type(b) == "table" then
                 sq.blinkAt = now + num(b.every_s, 20)
@@ -670,7 +696,8 @@ function ACE.squadTick(now, D, paused)
                 blinkNow(unit, sq, now, g.why)
             end
             local b = fcfg(sq.tk).blink
-            if type(b) == "table" and b.enabled ~= false and now >= (sq.blinkAt or 0) then
+            -- (only once it's met someone: no blink before its squadron's tell and opener, U10's review)
+            if sq.contact and type(b) == "table" and b.enabled ~= false and now >= (sq.blinkAt or 0) then
                 if not meRead then me, meRead = myAt(), true end
                 if me then blinkCheck(unit, sq, b, now, me) end
             end

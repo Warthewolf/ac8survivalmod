@@ -555,11 +555,17 @@ end
 -- call themselves out to every player (CFG.roles.tells; P3's tells "lancer" / "skirm", HUD only), a Wolf flight's trap
 -- is held once its orders are in (WOLF). An ace squadron in a role flight neither calls out nor holds, but one whose
 -- opener is the trap (P9's ace personalities: Valkyrie's pack, ace.opener from sv_ai.lua ACE.pickOpener) holds it as
--- any Wolf flight does, and ACE.squadTick springs it after first contact.
+-- any Wolf flight does, and ACE.squadTick springs it after first contact: its hold_max_s runs from that contact (WOLF.contact),
+-- held till then for up to CFG.aces.personality.openers.trap hold_max_s (U10's review: flights meet you minutes after
+-- they're up, and the trap freed at 60 s left Valkyrie's opener nothing to spring)
 function ROLE.spawned(unit, role, n, ace)
     local c = CFG.roles
     if ace then
-        if role == "wolf" and ace.opener == "trap" then WOLF.spawned(unit, n, D.now) end
+        if role == "wolf" and ace.opener == "trap" then
+            local pc = CFG.aces.personality
+            local t = type(pc) == "table" and type(pc.openers) == "table" and pc.openers.trap
+            WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)
+        end
         return
     end
     if (role == "lancer" or role == "skirm") and c.tells and TELL then
@@ -609,8 +615,10 @@ local function decoyEnd(unit, now)
     return D.decoyed and D.decoyed[unit] or now
 end
 
--- flight `unit` (n planes) is up: its trap's objects, to hold once its orders are in
-function WOLF.spawned(unit, n, now)
+-- flight `unit` (n planes) is up: its trap's objects, to hold once its orders are in. untilContact (s > 0; P9's ace trap
+-- opener, ROLE.spawned): hold_max_s runs from the flight's first contact (WOLF.contact), not from the hold, and the trap
+-- is let go untilContact s after the hold when nobody's met it by then (its other releases stand: a hit, its bait down)
+function WOLF.spawned(unit, n, now, untilContact)
     D.wolf = D.wolf or {}
     D.wolf[unit] = nil
     local c = cfg()
@@ -618,7 +626,16 @@ function WOLF.spawned(unit, n, now)
     local keys = {}
     for k = 0, (n or 0) - 1 do if ROLE.wolfHeld(k) then keys[#keys + 1] = k end end
     if #keys == 0 then return end
-    D.wolf[unit] = { at = now, keys = keys, held = {}, state = "pending" }
+    untilContact = tonumber(untilContact)
+    D.wolf[unit] = { at = now, keys = keys, held = {}, state = "pending",
+                     untilContact = (untilContact and untilContact > 0) and untilContact or nil }
+end
+
+-- Flight `unit` met a player (sv_ai.lua ACE.squadTick, a trap opener's first contact): its hold_max_s runs from now.
+function WOLF.contact(unit, now)
+    local w = D and D.wolf and D.wolf[unit]
+    if not (w and w.untilContact and now) then return end
+    w.untilContact, w.maxFrom = nil, now
 end
 
 -- Whether any of flight `unit`'s trap is held (or about to be): hunts and escort duty leave it alone.
@@ -715,8 +732,11 @@ function WOLF.tick(now)
             if not next(w.held) then
                 w.state = "free"
             elseif not decoyEnd(unit, now) then               -- (your decoy: nothing released inside it; after it, then)
-                if now - w.heldAt >= (tonumber(c.hold_max_s) or 60) then
-                    WOLF.free(unit, string.format("held %.0f s", now - w.heldAt), false, nil, now)
+                -- (hold_max_s from the hold, or from an ace trap's first contact; no contact yet: its own cap)
+                local from = math.max(w.heldAt, w.maxFrom or 0)
+                if now - from >= (w.untilContact or tonumber(c.hold_max_s) or 60) then
+                    WOLF.free(unit, string.format("held %.0f s%s", now - w.heldAt, w.untilContact and ", nobody met it" or
+                        (w.maxFrom and string.format(", %.0f s since it met you", now - w.maxFrom) or "")), false, nil, now)
                 elseif c.free_on_bait_down and mine[0] and mine[0].down then
                     WOLF.free(unit, "its lead, bait A, is down", false, nil, now)     -- (the flight's lead: all of them)
                 else

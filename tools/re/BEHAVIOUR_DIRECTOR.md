@@ -1820,7 +1820,7 @@ those too, and the Lancer must never turn with you).
 | the role mix | sv_config.lua `ROLE.mixFor(round, ace)` (ace now true or the round's tier key), CFG.aces.flight <tier>.roles; sv_rounds.lua startRound passes the key; sv_spawn.lua ROLE.pickRound's line | an ace round draws its squadron's roles (band "ace:<tier>": `the Bounty squadron's roles`); all 0 or personality off: CFG.roles.ace_mix as before. A group of 24 aircraft fills the rest of a 30 round from the others (logged "filled from") |
 | the opener | sv_ai.lua `ACE.pickOpener(unit, tk, role)` (spawnFlight, before the spawn; `ace.opener`) | the tier's `openers` in turn (D.openerNext); a blink only where the lead has blink events (ACE.blinkEvent); none fits: kulbit (logged once a round) |
 | high's altitude | `ACE.highAlt(alt)`; spawnFlight's altitude branch | off a Lancer flight: + alt_add_m 2000, at most top_m 4500 (the pool's band; a Lancer flight already flies 2 km up in its raised band) |
-| Valkyrie's trap | sv_spawn.lua ROLE.spawned | an ace flight in a Wolf flight whose opener is the trap holds its trap as P1's Wolf flights do (WOLF.spawned); any other ace flight still neither calls out nor holds |
+| Valkyrie's trap | sv_spawn.lua ROLE.spawned, WOLF.spawned(unit, n, now, untilContact), WOLF.contact | an ace flight in a Wolf flight whose opener is the trap holds its trap as P1's Wolf flights do, but until its first contact: roles.wolf's hold_max_s runs from the contact (or the hold, the later), and a trap nobody meets is let go openers.trap hold_max_s after the hold (U10's review); any other ace flight still neither calls out nor holds |
 | the squadron | `ACE.squadUp(unit, ace, role, n)` (spawnFlight, every flight up: a non-squadron clears a recycled one) | D.squad[unit] = { tk, ti, op, ... }; its line: `aces: <unit> (<Squadron> squadron, <role>) opens with <op> at first contact (within N km)[; its lead blinks off your six (every N s at most)]` |
 | first contact, the openers, the blinks | `ACE.squadTick(now, D, paused)` (sv_main.lua, timed "squads", before ACE.movesTick); its local `open`, `act`, `high`, `trap`, `springTick`, `free`, `kulbit`, `turn`, `blinkNow`, `blinkCheck` | every 0.5 s a not-yet-met flight's planes (the sweep's p.at) against every flying player (COOP.players()); the first in its opener's km: the tell (the squadron's `<tier>_in` the first time this round that player meets it, its name from a = the tier's index; later flights the opener's own: dive, drag, kulbit, blink), the opener its lead_s later (the catalog's lead_s, said or not). A blink reads the lead and you afresh only when the sweep had it within tailed_km + 1.5 (the contract's read budget). Your DECOY (or a director hold) on the flight: the opener isn't shown, no blink |
 | the blink spots | sv_config.lua `ACE.BLINK = { STEP_DEG = 45, RING_M = 1000, ROLE = "duelist" }`, `ACE.blinkEvent(unit, j)`; survival_events.py WRAITH_BLINK_*, `wraith_blinks()`, `build_wraith(g)` (end of build_events) | RE_SV_WraithBlink<K><J>: K the flight's pool letter (A = ERA_Unit_01_Dep_Air0 ... F = 02_Air2), J the bearing (A = 0 deg, world +X; every 45), 1000 m from the player at their height, facing them: AB.L..IN's record (Mission 22's LiveActorTeleportExecution, {1 object 0 of the flight (POOL_OBJS), 2 Player, 4-6 offset, 11 yaw, 13 Absolute}). 6 duelist flights x 8 = 48. The build checks ACE.BLINK, that the Lua fires the name and that co-op keeps it |
@@ -1838,7 +1838,8 @@ objects), offsets 1000 m round, yaw facing back.
 ### CFG keys (CFG.aces.personality, CFG.aces.flight.<tier>; in survival.ini; the host's for the room)
 - `personality` ([aces.personality]): `enabled` true, `tells` true, `ground_clear_m` 150, `smoke` true; `openers`
   ([aces.personality.openers.<op>]): `high` { km 5.0, alt_add_m 2000, top_m 4500, salvo 2, gap_s 0.6, range_km 5.0 },
-  `trap` { km 4.0, spring_s 8, wait_s 15 }, `kulbit` { km 2.5 }, `blink` { km 4.0 }.
+  `trap` { km 4.0, spring_s 8, wait_s 15, hold_max_s 300 (the trap held till first contact at most this long from
+  its hold; 0: as any Wolf flight's, roles.wolf hold_max_s from the hold) }, `kulbit` { km 2.5 }, `blink` { km 4.0 }.
 - `flight.<tier>` ([aces.flight.<tier>], [aces.flight.<tier>.roles], [aces.flight.<tier>.blink]): `roles` (duelist /
   lancer / wolf / skirm weights: mercenary lancer 1, legend wolf 1, demon / phantom / reaper duelist 1), `openers`
   (mercenary high, legend trap, demon kulbit, phantom blink, reaper kulbit, blink, high; "none": its tell alone, at
@@ -1872,6 +1873,11 @@ objects), offsets 1000 m round, yaw facing back.
   `aces: <unit>'s lead didn't blink (<why>): no spot clear of the ground round you` / `its lead is down`
 - `aces: <unit>'s blink is round the host's plane only: none for player 2 (its tell only)`; `aces: <unit>'s kulbit not
   shown: your decoy (or the director) stands it down`
+- A Valkyrie trap met late: `roles: <unit> (wolf) trap N s after its orders: held B, D, F`, no `trap freed (held 60 s)`
+  before its `meets you` line; one never met: `trap freed (held 300 s, nobody met it)`; a spring that never came (your
+  decoy): `trap freed (held 60 s, N s since it met you)`.
+- `aces: <unit>'s kulbit waits N s: a move of the flight is in flight (a reversal, the director's turn)` (the opener
+  after a reversal from before the contact); `aces: <unit>'s blink opener not shown: its lead blinked already`.
 - The round line: `...; ace reversals N, squadron openers N, blinks M; tail watch: ...`; `perf: ... squads x/y` only
   when it costs; errors `aces: squadron error ...`, `aces: opener error ...`, `aces: trap error ...`.
 - stats_report.py: `squadron lines: N first contacts, M blinks, K openers / blinks not shown`, a row per squadron
@@ -1901,7 +1907,14 @@ build's half (WRAITH_BLINK_* against ACE.BLINK, 48 names on the 6 duelist flight
 letters as Lua's poolIndex, the Lua and the keep list naming them, COOP_TAG -coop.18). Mutants that each fail it: no
 move_gap after a blink, Valkyrie's trap not held, the blink not kept in co-op, the squadron tell on every flight, no
 ground clearance, the tailed blink without its cone. tells_test (args "squadron") and roles_test (an ace round: the
-Bounty squadron's Lancers; personality off: ace_mix's duelists) were updated for it.
+Bounty squadron's Lancers; personality off: ace_mix's duelists) were updated for it. After the review (WOLF.tick
+running): a Valkyrie trap still held 87 s on without a contact and sprung when met at 190 s; let go 60 s after the
+contact (or the hold, the later) when its spring never comes (your decoy); let go hold_max_s after the hold when nobody
+meets it; hold_max_s 0 as before. Wraith's lead hit from 6 km before it's met: no blink, then one (the opener's) at
+contact and none for that hit after every_s. Harvest met with you 2.4 km behind a wingman: no reversal in that tick,
+the kulbit, the reversal only after its 12 s; a reversal in flight till 120 s: the kulbit waits, then goes. Mutants that
+each fail it: hold_max_s from the hold for an ace trap, no WOLF.contact, no opener hold on the reversals, blinks before
+the contact, no wait for a move in flight, the hit from before the contact not seeded.
 
 ### Untested / known limits
 - [I] Nothing here has run in game. The mechanisms are confirmed ones (unique actions by unit, hard rule 37; the
@@ -1918,8 +1931,40 @@ Bounty squadron's Lancers; personality off: ace_mix's duelists) were updated for
 - [I] Ace rounds of 30 draw 24 aircraft from a squadron's group (each group holds 24); the other 6 come from the rest and
   show whatever opener fits there (a Wraith off the duelists kulbits). In co-op (up to 60-80) most of a squadron is
   then off its group.
+- [I] A Valkyrie trap held at engagement None for minutes, until first contact (P1's per-object hold was planned for
+  under 60 s): whether its held planes keep with their formation that long, and what a unit-wide order in between (the
+  chase's area move is not one; a director hold or your decoy is) does to it. Hunts leave a held trap alone (WOLF.holding)
+  for that longer time too: the allies' hunt comes after the release, and a co-op hunt after a joiner ordered while it's
+  held is dropped (`coop: <unit> holds its Wolf trap; it doesn't go after the joiners`, as P1's Wolf flights inside
+  their 60 s), so in co-op a Valkyrie flight usually meets the host first.
 - Not built: recipe c2 (one set per squadron on new descs: ~15 descs, load cost untested), AI-level ace branches in the
   role scripts, a closer blink ring.
+
+### Review fixes (after unit 10's review; not yet run in game)
+- **Valkyrie's trap freed before it was met (minor).** An ace Wolf flight's hold went through the ordinary WOLF.tick,
+  which let it go roles.wolf's hold_max_s (60 s) after the hold, about 5 s after the spawn. Flights spawn 18-25 km out
+  and meet you at 4 km, often more than a minute later, so the trap opener found nothing held and fell back to the
+  pack's reversal while VALKYRIE: THE PACK said the ones hanging back were the trap. Now ROLE.spawned passes
+  openers.trap's new `hold_max_s` (300) to WOLF.spawned as `untilContact`: until its first contact (WOLF.contact, from
+  ACE.squadTick's open) WOLF.tick lets the trap go only that long after the hold; after it, roles.wolf's hold_max_s runs
+  from the contact (or the hold, the later). Its other releases (a hit, its bait down, your decoy's rules) stand.
+- **An opener and a reversal cutting each other (minor).** open() only scheduled the opener, so ACE.movesTick (after
+  the squads in the same tick) could fire a Harvest reversal as the kulbit was told, and the kulbit 0.5 s later cut it.
+  open() now holds the flight's reversals and the director's cover turn (D.aceMoveAt) until the opener's gone
+  (sq.holdTo: its action + 1 s, a salvo's last shot on top). A move already in flight at the contact (a reversal from
+  before it, at 3 km where the kulbit's km is 2.5) is waited out by a kulbit, or a trap's turn with none held, once
+  (`... waits N s`).
+- **A blink before the squadron was met (minor).** The blink tick ran from the spawn, so a Wraith lead hit from beyond
+  4 km blinked behind you with IT BLINKED before WRAITH: THEY BLINK, then blinked again as its opener ~1 s later. The
+  blink tick now runs only once the flight has met someone, open() takes the lead's damage so far as seen (a hit from
+  before the contact never makes a blink), and the blink opener is skipped if its lead blinked already.
+- **The squadron tell's cooldown comment (minor).** survival.default.ini said cooldown_s 0 repeats a squadron's call for
+  every flight; the call is said once a round per player, for the first of its flights they meet (later ones call their
+  opener). The comment says so now.
+- Not changed (the review's scope notes): Harvest still flies the duelists' flights only (the critic's Super-branch
+  caveat: a Lancer must never turn with you and the Wolf / Lancer sets have no ace branch), combining the others through
+  its openers (kulbit, blink, high) and its lead's blinks; recipe c2 and AI-level ace branches not built; co-op blinks
+  round the host only, and no squadron tell for a player meeting an already-opened flight (all above, [I]).
 
 ### The branch's wrap-up (unit 10)
 - main.lua VERSION 0.72.0; tools/coop_edition.py COOP_TAG -coop.18 (units 5, 7, 9 and 10 changed the world data, rows,
@@ -2025,14 +2070,15 @@ the details.
   - Bounty: BOUNTY: FROM ABOVE and "right above you!", then two missiles from above (`opening salvo: RE_SV_Salvo_..
     fired`, two missile alerts); Lancers' slash and zoom after.
   - Valkyrie: VALKYRIE: THE PACK and a lure line; half the pack hangs back (`trap ... held B, D, F`), 8 s on IT'S A TRAP
-    and they turn in on you (`trap freed (Valkyrie's trap springs): ..., turned onto the player`).
+    and they turn in on you (`trap freed (Valkyrie's trap springs): ..., turned onto the player`). Held until it meets
+    you however long that takes (no `trap freed (held 60 s)` first); do its held planes keep formation that long?
   - Inferno: INFERNO: POST-STALL ACES at 2.5 km, then the whole flight kulbits (`kulbits as one: RE_SV_AceKulbit_NN
     fired`; `ai:` UniqueAction).
   - Wraith: WRAITH: THEY BLINK, then its lead appears 1 km behind and beside you in smoke (`blinks (its opener): your
     heading H -> spot D deg`); sit on that lead's tail: IT BLINKED and it jumps again (`blinks (you N m on its six ...)`),
     not more than every 20 s; hit it: again.
   - Harvest: THE HARVEST, then its flights open with a kulbit, a blink or a missile pair in turn; tail its lead: a blink,
-    tail a wingman: a reversal.
+    tail a wingman: a reversal. No reversal in the same second as an opener (`ace reversal` lines only after it).
 - The blink lands near the spot (`special:`-style check by eye: 1 km off, behind your wing), never into terrain at low
   level (`didn't blink ... no spot clear of the ground`), and the lead keeps fighting after it (no ReturnToUnit).
 - The round line's `squadron openers N, blinks M`; stats_report's `squadron lines`.

@@ -445,6 +445,65 @@ check(D.squad[U].springAt ~= nil and evs("^RE_SV_Wolf") == "", "the trap not hel
 D.wolf[U].state, D.wolf[U].heldAt = "held", 109
 tickTo(109.25, 111)
 check(evs("^RE_SV_WolfFree") == "RE_SV_WolfFree_15B", "held then: sprung")
+-- held until first contact (U10's review): a flight that meets you after roles.wolf's hold_max_s still has its trap
+local function wolfTo(t0, t1)
+    for i = 0, math.floor((t1 - t0) / 0.25 + 0.5) do
+        local t = t0 + i * 0.25
+        D.now = t; WOLF.tick(t); ACE.squadTick(t, D, false); TELL.tick(t)
+    end
+end
+FLAGS["SV_Up_15"] = 1
+fresh(19, "Legend")
+spawnFlight(U)
+check(D.wolf[U].untilContact == 300 and CFG.roles.wolf.hold_max_s == 60,
+      "a Valkyrie trap: held until first contact (300 s at most: openers.trap hold_max_s; roles.wolf's 60 s from the contact)")
+for k = 0, 5 do plane(U, k, KM(20 + k * 0.2, 0), DIRV(-1, 0), tierOf("Legend")) end
+from_ = #logs + 1
+wolfTo(100, 190)
+check(WOLF.holding(U) and D.wolf[U].state == "held" and evs("^RE_SV_WolfHold") == "RE_SV_WolfHold_15B;RE_SV_WolfHold_15D;RE_SV_WolfHold_15F"
+      and evs("^RE_SV_WolfFree") == "" and since(from_, "trap freed") == 0,
+      "held 87 s without meeting anyone (past roles.wolf's 60 s): still held")
+for _, x in ipairs(planes) do move(x, KM(3.8 + x.k * 0.05, 0)) end
+wolfTo(190.25, 200)
+check(said("VALKYRIE: THE PACK") and D.wolf[U].untilContact == nil and D.wolf[U].maxFrom == 190.5
+      and evs("^RE_SV_Wolf[FT]") == "RE_SV_WolfFree_15B;RE_SV_WolfTurn_15B;RE_SV_WolfFree_15D;RE_SV_WolfTurn_15D;RE_SV_WolfFree_15F;RE_SV_WolfTurn_15F"
+      and has(line("roles: " .. U .. " (wolf) trap freed (Valkyrie's trap springs)", from_), "turned onto the player"),
+      "met at last (190 s): VALKYRIE: THE PACK, its trap springs on you then (" .. evs("^RE_SV_Wolf[FT]") .. ")")
+-- the contact's own hold_max_s: a spring that never comes (your decoy) is let go roles.wolf's 60 s after the contact
+fresh(19, "Legend")
+spawnFlight(U)
+for k = 0, 5 do plane(U, k, KM(3.8 + k * 0.05, 0), DIRV(-1, 0), tierOf("Legend")) end
+D.decoyed = { [U] = 104 }
+local saveDec = TAC.decoyed
+TAC.decoyed = function(u, now) return D.decoyed and D.decoyed[u] and now < D.decoyed[u] end
+wolfTo(100, 101)                                   -- (met at once, its trap pending: the opener stood down by the decoy)
+check(D.wolf[U].maxFrom == 100 and has(line("aces: " .. U .. "'s trap not shown"), "decoy"), "met inside your decoy: the trap opener not shown")
+TAC.decoyed = saveDec
+D.decoyed = nil
+from_ = #logs + 1
+wolfTo(101.25, 162.75)
+check(WOLF.holding(U) and evs("^RE_SV_WolfFree") == "", "held (at 103), not sprung: kept until 60 s after the contact or the hold, the later")
+wolfTo(163, 164)
+check(evs("^RE_SV_WolfFree") == "RE_SV_WolfFree_15B;RE_SV_WolfFree_15D;RE_SV_WolfFree_15F" and evs("^RE_SV_WolfTurn") == ""
+      and has(line("roles: " .. U .. " (wolf) trap freed (held", from_), "since it met you"),
+      "60 s after the contact: let go (" .. tostring(line("roles: " .. U .. " (wolf) trap freed", from_)) .. ")")
+-- nobody meets it: let go hold_max_s after the hold
+AC.personality.openers.trap.hold_max_s = 120
+fresh(19, "Legend")
+spawnFlight(U)
+for k = 0, 5 do plane(U, k, KM(30, k * 0.2), DIRV(0, 1), tierOf("Legend")) end
+from_ = #logs + 1
+wolfTo(100, 222.75)
+check(WOLF.holding(U), "nobody met it: still held before openers.trap hold_max_s (120 s from the hold at 103)")
+wolfTo(223, 224)
+check(not WOLF.holding(U) and has(line("roles: " .. U .. " (wolf) trap freed (held", from_), "nobody met it"),
+      "let go then: " .. tostring(line("roles: " .. U .. " (wolf) trap freed", from_)))
+AC.personality.openers.trap.hold_max_s = 0
+fresh(19, "Legend")
+spawnFlight(U)
+check(D.wolf[U].untilContact == nil, "openers.trap hold_max_s 0: held as any Wolf pack's (roles.wolf's hold_max_s from the hold)")
+AC.personality.openers.trap.hold_max_s = CFG_DEFAULTS.aces.personality.openers.trap.hold_max_s
+FLAGS["SV_Up_15"] = nil
 -- not a Wolf flight: the pack turns on you
 U = "ERA_Unit_01_Dep_Air0"
 fresh(19, "Legend")
@@ -485,6 +544,52 @@ you = KM(0, 0, 3.0)
 tickTo(100, 100.5)
 check(evs("^RE_SV_WraithBlink") == "" and has(line("aces: " .. U .. "'s lead didn't blink"), "no spot clear of the ground"),
       "every spot under the ground's clearance: no blink (logged)")
+
+-- Wraith hit before it's met (U10's review): no blink before its tell; met, one blink (its opener), the hit not again
+U = "ERA_Unit_01_Dep_Air1"
+fresh(25, "Phantom")
+groundFn = function() return 0 end
+spawnFlight(U)
+lead = plane(U, 0, KM(6, 0), DIRV(-1, 0), tierOf("Phantom"))
+lead.dmg = { you = 30 }
+callouts = {}
+tickTo(100, 102)
+check(evs("^RE_SV_WraithBlink") == "" and not said("IT BLINKED") and D.squad[U].contact == nil,
+      "Wraith's lead hit from 6 km, before it's met: no blink, no IT BLINKED (its blinks wait for first contact)")
+move(lead, KM(3.9, 0))
+from_ = #logs + 1
+tickTo(102.25, 103)
+check(said("WRAITH: THEY BLINK") and evs("^RE_SV_WraithBlink") ~= "" and not evs("^RE_SV_WraithBlink"):find(";", 1, true)
+      and since(from_, "blinks %(its opener%)") == 1, "met at 3.9 km: its tell, then one blink, the opener's")
+tickTo(103.25, 126)
+check(not evs("^RE_SV_WraithBlink"):find(";", 1, true) and not said("IT BLINKED"),
+      "every_s on: no blink for the hit from before it was met (" .. evs("^RE_SV_WraithBlink") .. ")")
+-- Harvest met with you behind one of its planes (U10's review): its kulbit, no reversal in the same tick or until it's over
+U = "ERA_Unit_01_Dep_Air0"
+fresh(28, "Reaper")
+spawnFlight(U)
+check(D.squad[U].op == "kulbit", "Harvest's first flight: the kulbit opener")
+plane(U, 0, KM(2.45, 0.3), DIRV(-1, 0), tierOf("Reaper"))       -- (its lead head-on: no reversal, no blink for it)
+plane(U, 1, KM(2.4, 0), DIRV(1, 0), tierOf("Reaper"))           -- (you 2.4 km on this one's six: a reversal's range)
+from_ = #logs + 1
+tickTo(100, 100.25, true)
+check(said("HARVEST: THE HARVEST") and evs("^RE_SV_AceTurn") == "" and D.aceMoveAt[U] >= 101.5,
+      "met at 2.4 km: its tell; the reversal held until the opener's gone (" .. tostring(D.aceMoveAt[U]) .. ")")
+tickTo(100.5, 112.25, true)
+check(evs("^RE_SV_AceKulbit") == "RE_SV_AceKulbit_01" and evs("^RE_SV_AceTurn") == "", "its kulbit, and no reversal inside its 12 s")
+tickTo(112.5, 115, true)
+check(evs("^RE_SV_AceTurn") == "RE_SV_AceTurn_01", "after it: the reversal")
+-- a move already in flight at the contact (a reversal from before it): the kulbit waits it out
+fresh(28, "Reaper")
+spawnFlight(U)
+plane(U, 0, KM(2.2, 0), DIRV(-1, 0), tierOf("Reaper"))
+D.aceMoveAt = { [U] = 120 }
+from_ = #logs + 1
+tickTo(100, 119.75, true)
+check(evs("^RE_SV_Ace") == "" and has(line("aces: " .. U .. "'s kulbit waits", from_), "a move of the flight is in flight"),
+      "a reversal in flight till 120 s: no kulbit before it's over (" .. tostring(line("aces: " .. U .. "'s kulbit waits", from_)) .. ")")
+tickTo(120, 120.5, true)
+check(evs("^RE_SV_Ace") == "RE_SV_AceKulbit_01" and D.aceMoveAt[U] >= 132, "then the kulbit, the reversals 12 s after it")
 
 ---------------------------------------------------------------------------------------------------- the blink tick
 print("the blink tick: on your six, a hit, every_s, Harvest's reversal after")
@@ -642,7 +747,8 @@ local s2 = s1 and spawnSrc:find("local r = SV_Spawn(unit, x, y, alt * 100, yaw)"
 local s3 = spawnSrc:find("pcall(ACE.squadUp, unit, ace, role, r)", 1, true)
 local s4 = spawnSrc:find("pcall(ROLE.spawned, unit, role, r, ace)", 1, true)
 check(s1 and s2 and s3 and s4 and s1 < s2 and s2 < s4 and s4 < s3, "sv_spawn.lua: the opener picked before the spawn, ROLE.spawned then ACE.squadUp after it")
-check(has(spawnSrc, 'if role == "wolf" and ace.opener == "trap" then WOLF.spawned(unit, n, D.now) end'), "ROLE.spawned: a trap squadron holds its trap")
+check(has(spawnSrc, 'if role == "wolf" and ace.opener == "trap" then') and has(spawnSrc, 'WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)'),
+      "ROLE.spawned: a trap squadron holds its trap until first contact")
 check(has(roundsSrc, "ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)"), "sv_rounds.lua: an ace round draws by its tier's key")
 check(has(readAll(MOD .. "/Scripts/main.lua"), 'VERSION = "0.72.0"'), "main.lua VERSION 0.72.0")
 
