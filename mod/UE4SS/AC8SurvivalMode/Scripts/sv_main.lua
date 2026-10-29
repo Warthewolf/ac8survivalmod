@@ -432,6 +432,10 @@ local function probeTick(tick)
             if not okIn and not D.insErr then D.insErr = true; log("insurance: error " .. tostring(errIn)) end
         end
         if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
+        if ACE.squadTick then                   -- the ace squadrons' openers and blinks (P9, sv_ai.lua; before the reversals)
+            local okSq, errSq = timed("squads", ACE.squadTick, now, D, paused)
+            if not okSq and D and not D.squadErr then D.squadErr = true; log("aces: squadron error " .. tostring(errSq)) end
+        end
         local okMv, errMv = timed("moves", ACE.movesTick, now, D)              -- top-tier reversals (CFG.aces.flight)
         if not okMv and not D.movesErr then D.movesErr = true; log("aces: moves error " .. tostring(errMv)) end
         if DIR and DIR.tick then                                        -- the squad director (P2, sv_director.lua)

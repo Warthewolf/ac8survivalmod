@@ -500,7 +500,8 @@ function searchSetup()
                     end
                     local ft = a:match("^sv_ace_(%a+)_")                    -- a tier's squadron: CFG.aces.flight
                     local fl = ft and CFG.aces.flight and CFG.aces.flight[ft]
-                    if fl then
+                    -- (only a tier that flies beyond stock: P9 gave every squadron an entry, its roles and openers)
+                    if type(fl) == "table" and type(fl.turn_add) == "table" then
                         local okF, errF = pcall(function()
                             r.PitchSpeedDifference = (r.PitchSpeedDifference or 0) + fl.turn_add.pitch
                             r.RollSpeedDifference = (r.RollSpeedDifference or 0) + fl.turn_add.roll

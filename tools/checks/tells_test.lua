@@ -132,7 +132,7 @@ do
         if e.hud and not C.text[e.hud] then bad[#bad + 1] = id .. ": no text " .. e.hud end
         if not (e.radio or e.hud) then bad[#bad + 1] = id .. ": neither a line nor a callout" end
         if e.chain and not C.list[e.chain] then bad[#bad + 1] = id .. ": chain " .. e.chain end
-        if e.args and e.args ~= "compass" and e.args ~= "clock" then bad[#bad + 1] = id .. ": args " .. e.args end
+        if e.args and e.args ~= "compass" and e.args ~= "clock" and e.args ~= "squadron" then bad[#bad + 1] = id .. ": args " .. e.args end
         if C.cooldown_s[id] == nil then bad[#bad + 1] = id .. ": no cooldown_s" end
     end
     for id in pairs(C.cooldown_s) do if not C.list[id] then bad[#bad + 1] = "cooldown_s." .. id end end

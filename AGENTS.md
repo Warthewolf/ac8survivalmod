@@ -286,6 +286,29 @@ Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12
 that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).
 Player guide: Claude Docs "Survival COOP: Player Guide".
 
+## Enemy behaviour build (Lua 0.72.0, TestBranch_Behavioural; untested in game)
+The Claude Docs thesis "AC8 Survival Mode: Enemy Behaviour Reference & Challenge Thesis"'s nine proposals, all built on
+branch `TestBranch_Behavioural` (from tag stable-1, 2026-10-29), COOP_TAG -coop.18: fighter roles (P1: the pool split
+into Duelists, Lancers, Wolf bait-and-trap pairs and Skirmishers, each its own behaviour set and airframes; 7 new
+Scripts/ai scripts), the squad director (P2: cover the tailed, spring the trap, bracket salvos, top cover, pincers,
+regroup; Scripts/sv_director.lua), tells (P3: a radio line and / or callout before each threat, 61 stock lines cloned
+into DT_SV_Radio; Scripts/sv_tells.lua, co-op "tl"), the intensity director (P4: each player's intensity and comfort, wave
+holds, pushes, the spikes as a ceiling; co-op "in"), a harder tailed plane (P5: every reaction pick moves, live provoke
+60 deg / 1.5 s from Veteran, a 4 Hz tail watch), the learning layer (P6: your habits countered, kept in
+config/survival_profile.ini, each game's own), boss phases (P7: MINDRIPPER's pack, AB.L..IN's three phases, a Ladon's
+rage, the ALICORN's deck launches), late rounds (P8: +3 aircraft a round from 26 to 60 by 35 in more waves, health
+capped at x1.5, the attack throttle's presets) and ace personalities (P9: each squadron's own roles, an opener at first
+contact after its tell, Wraith's and Harvest's lead blinking off your six), plus the roadmap's seven measurements
+(Scripts/sv_stats.lua: `stats:`, `kill-time:`, `death:`, `tailed:` lines). Every mechanism has its own `enabled` in
+survival.ini. tools/re/BEHAVIOUR_DIRECTOR.md has each unit's build, CFG keys, log lines and untested pieces, and one
+test checklist for the whole branch (per proposal: what to look at in game, which log lines prove it);
+`python -X utf8 -I tools/checks/stats_report.py <log>` tabulates a test log. None of it is a hard rule until a test
+confirms it. Checks without the game: the contract's (lua_check on Scripts/*.lua and Scripts/ai/*.lua, shapecheck on
+changed behaviour scripts, lua_load_test, menu_test, coop_settings_test, coop_ground_test, ini_check, menu_pages_test),
+each unit's own (stats_test, tailed_test, late_rounds_test, tells_test, roles_test, director_test, intensity_test,
+profile_test, bosses_test, aces_test: tools/README.md's checks row) and a full `sh tools/build_all.sh` (819 triggers,
+1588 execs, 721 radio rows).
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime

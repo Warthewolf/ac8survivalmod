@@ -5,7 +5,9 @@ that make Survival's enemies ask the player new questions instead of only gettin
 director (P2), tells for every coordinated threat (P3), an intensity director (P4), a harder tailed plane (P5), a
 learning layer (P6), boss phases (P7), late rounds (P8) and ace personalities (P9). They are built on branch
 `TestBranch_Behavioural` (from tag `stable-1`) one unit at a time. Each unit adds a section here: what was built, its
-CFG keys, the log lines a test should look for, and what is untested.
+CFG keys, the log lines a test should look for, and what is untested. The branch ends at Lua 0.72.0 / COOP_TAG
+-coop.18 (unit 10), and the last section, "Test checklist: every unit (P1-P9), in game", is the one list for a
+playtest of all of it.
 
 Labels as in the other RE notes: [V] verified (read in the code or the cooked data, or by an offline test under
 tools/checks), [T] tested in game, [I] inferred. Nothing on this branch has run in game yet: every mechanism here is
@@ -1782,3 +1784,264 @@ the deck told while you're at the airfield).
   contract's "never RE_SV_Glitch" guards against an event kept on the host by accident; GlitchTurn, a LastTGT onto the
   host, is meant to be kept, and mirroredEvent's RE_SV_Glitch rule does that; the test checks it), and the COOP_TAG /
   VERSION bump (the contract's last unit).
+
+## Unit 10: ace personalities (P9), and the branch's wrap-up
+
+The thesis' P9: "Give each named squadron its own set built from the stock ace scripts (minus the KDS gates): Bounty
+fights as Lancers, Valkyrie as a Wolf pack, Inferno as Duelists with post-stall, Wraith blinks like a lesser AB.L..IN,
+Harvest combines all of them. Each squadron should be recognisable within 10 seconds." Built as the behaviour
+pipeline's recipe c1 (the cheap first build; c2, one set per squadron on new descs, only if c1's squadrons don't feel
+distinct) with the critic's gap fills: a squadron flies the behaviour set of the role flights its ace round draws (a
+tree is its world-data desc's, hard rule 20; the squadrons spawn into pool flights), and its identity is what Lua
+fires on it: a one-shot **opener** per flight at first contact, after its squadron's **tell**, and Wraith's (and
+Harvest's) lead **blinking** off your six (Mission 22's teleport, hard rule 39, as AB.L..IN's). A squadron's flights
+only (D.aceSquad: never its tier's ordinary flights between ace rounds); the host's or solo. Lua (sv_ai.lua's new block,
+hooks in sv_spawn, sv_rounds, sv_rows, sv_anomalies, sv_director, sv_stats, sv_tells, sv_coop, sv_main),
+survival.default.ini and the build (tools/survival_events.py: 48 new remote events). Every piece has its own switch;
+nothing here has run in game.
+
+| squadron (tier, ace rounds) | flies (its ace round's roles) | opener at first contact (its km) | the rest |
+|---|---|---|---|
+| Bounty (Mercenary, 16+) | the Lancers' flights (NLID_SV_Lancer: slash and zoom, never turns with you; 2 km higher) | **high** (5 km): BOUNTY: FROM ABOVE and a dive line; 1 s on, a missile from each of up to 2 of its planes within 5 km, 0.6 s apart (RE_SV_Salvo_<NN><L>, P2's) | a Bounty flight filled from another group spawns 2 km higher too (up to 4.5 km: the pool's band) |
+| Valkyrie (Legend, 19+) | the Wolf pairs' flights (NLID_SV_WolfLead baits, NLID_SV_WolfWing traps) | **trap** (4 km): VALKYRIE: THE PACK and a lure line; its trap (every second plane, held at engagement None since its appearance, as P1's) springs 8 s later after IT'S A TRAP: free and LastTGT onto you (WOLF.free with the turn) | a Valkyrie flight off the Wolf pairs: the pack turns on you instead (RE_SV_AceTurn_NN); P2's spring tactic can spring it sooner |
+| Inferno (Demon, 22+) | the duelists' (NLID_SV_Fighter: LA_SV_TailChase's AI-level-5 Super pursuit) | **kulbit** (2.5 km): INFERNO: POST-STALL ACES and a reversal line; 0.5 s on, every plane of the flight kulbits as one, firing its special (RE_SV_AceKulbit_NN, the Shadows') | post-stall on, as its tier's (F-22A / Su-57 in CFG.maneuvers.post_stall: no change needed) |
+| Wraith (Phantom, 25+) | the duelists' | **blink** (4 km): WRAITH: THEY BLINK and a check-your-six line; 0.5 s on, its lead blinks to 1 km behind and beside you (your heading +-135 deg; over high ground dead six, then abeam; ground_clear_m), smoke where it left and came out | its lead blinks again whenever you sit within 2.5 km and 70 deg of its six, or you hit it, at most every 20 s (IT BLINKED, 0.5 s before) |
+| Harvest (Reaper, 28+) | the duelists' (Super pursuit, with its own airframe boosts) | in turn per flight: **kulbit**, **blink**, **high** (a blink only on a duelist flight's lead) | its lead blinks off your six (every 30 s, not on a hit); its reversals (moves), hunt and no_provoke as before; a blink holds its flight's reversal 10 s (move_gap_s), so tailing its lead gets a blink, its wingman a reversal |
+
+The critic's caveat on the Super branch: LA_SV_TailChase's AI-level-5 "Super" pursuit is only in the duelists' set, and
+only Demon, Phantom and Reaper fly at AI level 5 (Mercenary 3, Legend 4: Bounty and Valkyrie never had it). So Inferno,
+Wraith and Harvest stay on the duelists' flights, and Harvest "combines" the others through its openers and blinks
+rather than their sets (no AI-level branch was added to the Lancer / Wolf pursuits: ordinary AI-level-5 flights fly
+those too, and the Lancer must never turn with you).
+
+### What was built
+| piece | where | what it does |
+|---|---|---|
+| the role mix | sv_config.lua `ROLE.mixFor(round, ace)` (ace now true or the round's tier key), CFG.aces.flight <tier>.roles; sv_rounds.lua startRound passes the key; sv_spawn.lua ROLE.pickRound's line | an ace round draws its squadron's roles (band "ace:<tier>": `the Bounty squadron's roles`); all 0 or personality off: CFG.roles.ace_mix as before. A group of 24 aircraft fills the rest of a 30 round from the others (logged "filled from") |
+| the opener | sv_ai.lua `ACE.pickOpener(unit, tk, role)` (spawnFlight, before the spawn; `ace.opener`) | the tier's `openers` in turn (D.openerNext); a blink only where the lead has blink events (ACE.blinkEvent); none fits: kulbit (logged once a round) |
+| high's altitude | `ACE.highAlt(alt)`; spawnFlight's altitude branch | off a Lancer flight: + alt_add_m 2000, at most top_m 4500 (the pool's band; a Lancer flight already flies 2 km up in its raised band) |
+| Valkyrie's trap | sv_spawn.lua ROLE.spawned | an ace flight in a Wolf flight whose opener is the trap holds its trap as P1's Wolf flights do (WOLF.spawned); any other ace flight still neither calls out nor holds |
+| the squadron | `ACE.squadUp(unit, ace, role, n)` (spawnFlight, every flight up: a non-squadron clears a recycled one) | D.squad[unit] = { tk, ti, op, ... }; its line: `aces: <unit> (<Squadron> squadron, <role>) opens with <op> at first contact (within N km)[; its lead blinks off your six (every N s at most)]` |
+| first contact, the openers, the blinks | `ACE.squadTick(now, D, paused)` (sv_main.lua, timed "squads", before ACE.movesTick); its local `open`, `act`, `high`, `trap`, `springTick`, `free`, `kulbit`, `turn`, `blinkNow`, `blinkCheck` | every 0.5 s a not-yet-met flight's planes (the sweep's p.at) against every flying player (COOP.players()); the first in its opener's km: the tell (the squadron's `<tier>_in` the first time this round that player meets it, its name from a = the tier's index; later flights the opener's own: dive, drag, kulbit, blink), the opener its lead_s later (the catalog's lead_s, said or not). A blink reads the lead and you afresh only when the sweep had it within tailed_km + 1.5 (the contract's read budget). Your DECOY (or a director hold) on the flight: the opener isn't shown, no blink |
+| the blink spots | sv_config.lua `ACE.BLINK = { STEP_DEG = 45, RING_M = 1000, ROLE = "duelist" }`, `ACE.blinkEvent(unit, j)`; survival_events.py WRAITH_BLINK_*, `wraith_blinks()`, `build_wraith(g)` (end of build_events) | RE_SV_WraithBlink<K><J>: K the flight's pool letter (A = ERA_Unit_01_Dep_Air0 ... F = 02_Air2), J the bearing (A = 0 deg, world +X; every 45), 1000 m from the player at their height, facing them: AB.L..IN's record (Mission 22's LiveActorTeleportExecution, {1 object 0 of the flight (POOL_OBJS), 2 Player, 4-6 offset, 11 yaw, 13 Absolute}). 6 duelist flights x 8 = 48. The build checks ACE.BLINK, that the Lua fires the name and that co-op keeps it |
+| the ground and the smoke | sv_anomalies.lua `ANOM.groundAt` (its groundAt), `ANOM.smokeAt(at)` (AB.L..IN's smoke) | the spot's clearance: ground_clear_m 150, or 80 % of your own height when you fly lower (AB.L..IN's rule) |
+| the dive's o'clock | sv_director.lua `DIR.oclock` (its oclock, exported) | a later Bounty flight's "dive" tell names its o'clock |
+| tells | CFG.tells.list `mercenary_in`, `legend_in`, `demon_in`, `phantom_in`, `reaper_in` (urgent, sure: their callout even when the tell can't be said), `blink` (urgent); args "squadron" (sv_tells.lua fill: the tier's squadron name from this game's CFG.aces; ACE SQUADRON off the list) | other tells' radio lines (Dive, EnLure, Turn, Six, Hunt; no new rows); text e.g. `BOUNTY: FROM ABOVE / THEY STRIKE AND CLIMB: DON'T FOLLOW THEM UP` |
+| counts | sv_stats.lua NOT_DIRECTOR gains opener and blink (counted apart, never tagged: no director kill bonus); the round line's `, squadron openers N, blinks M` after "ace reversals" (only when there were any); stats_report.py `squad_lines` | |
+| co-op | sv_coop.lua KEEP_EVENTS gains ^RE_SV_WraithBlink; ACE.squadTick returns on a joiner | a joiner first met: its tell ("tl"), the salvo on its copies ("dv"), the kulbit, the trap freed without the turn; no blink round it (tools/re/COOP.md) |
+| the searchSetup guard | sv_rows.lua (a squadron's airframe boost only for an entry with turn_add) | every tier now has a CFG.aces.flight entry (roles, openers); only Reaper's flies beyond stock |
+
+Build: events 819 triggers, 1588 execs (were 771 / 1540); radio unchanged (721 rows, 61 tell lines). ep_dump of the
+built package shows RE_SV_WraithBlinkAA .. FH as Mission 22's teleport on the flights' object 0 (the salvo records'
+objects), offsets 1000 m round, yaw facing back.
+
+### CFG keys (CFG.aces.personality, CFG.aces.flight.<tier>; in survival.ini; the host's for the room)
+- `personality` ([aces.personality]): `enabled` true, `tells` true, `ground_clear_m` 150, `smoke` true; `openers`
+  ([aces.personality.openers.<op>]): `high` { km 5.0, alt_add_m 2000, top_m 4500, salvo 2, gap_s 0.6, range_km 5.0 },
+  `trap` { km 4.0, spring_s 8, wait_s 15 }, `kulbit` { km 2.5 }, `blink` { km 4.0 }.
+- `flight.<tier>` ([aces.flight.<tier>], [aces.flight.<tier>.roles], [aces.flight.<tier>.blink]): `roles` (duelist /
+  lancer / wolf / skirm weights: mercenary lancer 1, legend wolf 1, demon / phantom / reaper duelist 1), `openers`
+  (mercenary high, legend trap, demon kulbit, phantom blink, reaper kulbit, blink, high; "none": its tell alone, at
+  4 km), `blink` (phantom: enabled
+  true, every_s 20, tailed_km 2.5, tail_deg 70, on_hit true, move_gap_s 10; reaper: every_s 30, on_hit false). Reaper's
+  turn_add / speed_x / cruise_x / health_add / post_stall / hunt / no_provoke / moves unchanged.
+- CFG.tells: the six tells above, cooldown_s (the `_in` ones 0, blink 10), lead_s (mercenary_in 1.0, legend_in 0,
+  demon_in / phantom_in / reaper_in / blink 0.5), texts. [tells.cooldown_s] and [tells.lead_s] list them.
+- Build data outside CFG: `ACE.BLINK` (survival_events.py WRAITH_BLINK_*; the build checks them).
+
+### Log lines to look for in a test
+- `roles: round 16 (the Bounty squadron's roles: duelist 0.00, lancer 1.00, wolf 0.00, skirm 0.00): 30 of 30 aircraft:
+  duelist 4, lancer 24, wolf 2, skirm 0; short: lancer 24 of 30; filled from duelist 4, wolf 2`
+- `round 16: ERA_Unit_03_Dep_Air1 [lancer] as sv_ace_mercenary_f15c_w (ace squadron, ...), ..., 4.3 km up: 4 aircraft up`
+- `aces: ERA_Unit_03_Dep_Air1 (Bounty squadron, lancer) opens with high at first contact (within 5.0 km)`;
+  `aces: ERA_Unit_02_Dep_Air1 (Wraith squadron, duelist) opens with blink at first contact (within 4.0 km); its lead
+  blinks off your six (every 20 s at most)`; `aces: <unit> (Wraith squadron, lancer) can't show blink (a blink needs a
+  duelist flight's lead): it opens with a kulbit`
+- `aces: <unit> (Inferno squadron) meets you 2.2 km off (BP_...): told (demon_in); its kulbit in 0.5 s` (or `demon_in's
+  callout only: <why>`, `... meets player 2 ...`), with `tell: demon_in: RE_SV_RadioTurnA (fired), tell callout
+  'INFERNO: POST-STALL ACES'`
+- `aces: <unit> (Inferno squadron) kulbits as one: RE_SV_AceKulbit_NN fired`
+- `aces: <unit>'s opening salvo: RE_SV_Salvo_08A fired` then `... RE_SV_Salvo_08B fired`; `... on player 2's copies
+  ("dv"): RE_SV_Salvo_08A sent, ...`; `... none of its planes can fire at you (range, missile slot)`
+- `aces: <unit> (Valkyrie squadron): its trap springs in 8 s`, `... its trap springs on you in 1.0 s (told (trap))`, then
+  `roles: <unit> (wolf) trap freed (Valkyrie's trap springs): B, D, F, turned onto the player`; `... its trap isn't held
+  any more (sprung, freed or down); nothing to spring`; `aces: <unit> (Valkyrie squadron) has no trap held: its pack
+  turns on you: RE_SV_AceTurn_NN fired`
+- `aces: <unit>'s lead BP_... blinks (its opener): your heading 12 -> spot 135 deg, 1000 m (RE_SV_WraithBlinkBD fired)`;
+  `... blinks (you 1500 m on its six, 4 deg off its tail; told (blink)): ...`; `... blinks (you hit it; ...)`;
+  `aces: <unit>'s lead didn't blink (<why>): no spot clear of the ground round you` / `its lead is down`
+- `aces: <unit>'s blink is round the host's plane only: none for player 2 (its tell only)`; `aces: <unit>'s kulbit not
+  shown: your decoy (or the director) stands it down`
+- The round line: `...; ace reversals N, squadron openers N, blinks M; tail watch: ...`; `perf: ... squads x/y` only
+  when it costs; errors `aces: squadron error ...`, `aces: opener error ...`, `aces: trap error ...`.
+- stats_report.py: `squadron lines: N first contacts, M blinks, K openers / blinks not shown`, a row per squadron
+  (`Wraith met 4 times (told 4): blink x4`), `blinks: on its six xN, the opener xN, you hit it xN`.
+
+### Test checklist (in game)
+In the all-units checklist below (P9).
+
+### Offline test
+`sh tools/checks/aces_test.sh` (real parts, the game stubbed; in tools/README.md's checks row): survival.ini's new
+sections; ACE.BLINK and ACE.blinkEvent (a duelist flight's lead only, letters); each squadron's mix (ROLE.mixFor; the
+real startRound at rounds 16 / 19 / 22: 24 of its group's aircraft, the rest filled; personality off: ace_mix's line);
+spawnFlight's opener (Bounty high on a Lancer flight and 2 km higher off one, at most 4.5 km; Valkyrie's trap held on a
+Wolf 6-ship; Inferno filled into a Wolf flight: no hold; Harvest's openers in turn, a blink skipped on a Lancer flight;
+Wraith off the duelists: a kulbit, logged; an ordinary flight clearing the entry; personality off; openers none: its
+tell alone); first contact
+(not before the opener's km; the squadron tell with its name, then its opener lead_s later; once a flight; the round's
+second flight with the opener's own tell); Bounty's salvo (the two nearest able planes, gap_s apart; none with the
+missiles in another slot); Valkyrie's trap (sprung spring_s later after IT'S A TRAP, free + turn on B, D, F; waiting
+while pending; the pack's reversal off a Wolf flight); Wraith's blink opener (135 / 225 deg, smoke, its cooldowns; the
+ground: dead six, or none); the blink tick (not 90 deg off its tail, on its six, every_s, a hit; Harvest: the blink
+first, its reversal held move_gap_s, then the reversal; no blink on a hit); your decoy; personality off; the round
+line's counts; co-op (the keep list; a joiner meeting Bounty: mercenary_in by "tl" with the tier's index, the salvo by
+"dv"; a joiner meeting Wraith: its tell, no blink; a joiner's game: nothing); the tells' squadron text (a renamed
+squadron, a tier off the list); the hooks by their place. Then stats_report.py on its log (its squadron lines) and the
+build's half (WRAITH_BLINK_* against ACE.BLINK, 48 names on the 6 duelist flights in letters, each once, the pool
+letters as Lua's poolIndex, the Lua and the keep list naming them, COOP_TAG -coop.18). Mutants that each fail it: no
+move_gap after a blink, Valkyrie's trap not held, the blink not kept in co-op, the squadron tell on every flight, no
+ground clearance, the tailed blink without its cone. tells_test (args "squadron") and roles_test (an ace round: the
+Bounty squadron's Lancers; personality off: ace_mix's duelists) were updated for it.
+
+### Untested / known limits
+- [I] Nothing here has run in game. The mechanisms are confirmed ones (unique actions by unit, hard rule 37; the
+  teleport, 39; a forced shot on WN_WEAPON_3, 40; per-object engagement, P1's [I]), each used in a new place.
+- [I] Teleporting a pool flight's plane (confirmed on AB.L..IN's own unit only; the critic's open risk), and that object
+  0 of the desc is the plane the sweep calls k 0 (unit 1's "spawn index" line: Harvest flights give the verdict).
+- [I] Bounty's opening salvo: whether a forced LiveFireOneShotWeapon at 4-5 km needs a lock (the director's bracket has
+  the same question; P2's checklist item 3).
+- [I] The kulbit at 2.5 km (the Shadows' OneShot: a short straight, a kulbit, its special fired): whether a whole flight
+  doing it at once reads as "Inferno" or as noise; tune `kulbit.km`.
+- [I] The squadron tell is said to the player a flight meets first; another player meeting a different flight of the
+  same squadron later gets it then (D.squadSaid per player), but one who meets an already-opened flight gets nothing.
+- [I] Blinks round the host only (the teleport's "Player"); a joiner sees the lead jump in the plane stream.
+- [I] Ace rounds of 30 draw 24 aircraft from a squadron's group (each group holds 24); the other 6 come from the rest and
+  show whatever opener fits there (a Wraith off the duelists kulbits). In co-op (up to 60-80) most of a squadron is
+  then off its group.
+- Not built: recipe c2 (one set per squadron on new descs: ~15 descs, load cost untested), AI-level ace branches in the
+  role scripts, a closer blink ring.
+
+### The branch's wrap-up (unit 10)
+- main.lua VERSION 0.72.0; tools/coop_edition.py COOP_TAG -coop.18 (units 5, 7, 9 and 10 changed the world data, rows,
+  events and messages: games with an older tag refuse to link).
+- AGENTS.md: "Enemy behaviour build (Lua 0.72.0, TestBranch_Behavioural; untested in game)".
+- The test checklist for the whole branch below.
+
+## Test checklist: every unit (P1-P9), in game
+
+One list for a playtest of TestBranch_Behavioural (Lua 0.72.0, COOP_TAG -coop.18), by proposal: what to look at, and
+the log lines (AC8SurvivalMode_lua.log, or UE4SS.log behind its tag) that prove it. Run
+`python -X utf8 -I tools/checks/stats_report.py <log>` on the log afterwards: it tabulates most of them. Each item's
+switch is in survival.ini (a restart where a row or set is made at the main menu). Each unit's own section above has
+the details.
+
+**0. The build and the measurements (unit 1)**
+- Main menu: every `behaviour: set NLID_SV_<X> in (...)` (Fighter, Lancer, WolfLead, WolfWing, Skirmisher) and `game Lua:
+  stock SurvivalMode.AI.LA_SV_<X>: true`; level load: `game Lua: built ... ; errors 0` with all eleven LA_SV_ modules,
+  `roles: at level load lancer NLID_SV_Lancer, wolf ..., skirm ...`; `[AC8SurvivalMode] loaded, version 0.72.0`.
+- `round probe: AI aircraft created #N: ... (<unit>, k N)`; a jammer or Harvest flight's `spawn index: ... k 0 is the
+  lead: creation order = desc order` (THE check for every per-plane event: salvos, Wolf traps, blinks).
+- Each round's `stats: round N (...)` a few seconds after its clear, `kill-time:` lines, `death:` at death, `stats: run
+  over (...)` at the end; the seven metrics against their targets in stats_report's run table.
+
+**P1 fighter roles (unit 5)**
+- `roles: round N (the mix from round X: ...)`; spawn lines with `[lancer]` / `[wolf]` / `[skirm]`.
+- Lancers ~2 km above the rest, one slashing pass then a zoom (`ai:` short PursueTarget, ~10 s MoveAwayFromTarget), no
+  ReturnToUnit after spawning high; tailed they run and reverse, never turn with you. BANDITS HIGH once a round.
+- Wolf flights: the odd planes hold (`roles: <unit> (wolf) trap N s after its orders: held B, D`), follow their lead; the
+  bait drags you when tailed; a held plane you hit, or whose bait goes down, is freed (`trap freed (...)`); their guns
+  lead you.
+- Skirmishers: a LAAM from 5-7 km, `ai:` MoveAwayFromTarget right after the shot; LONG-RANGE SHOOTERS once a round;
+  x0.75 health (`late: ... (skirm x0.75)`).
+- `weapons: ... _SV_WOLF (... leads 0.50 s)`, `... NPC_FCS_PlaneLAAM000_SV_SKIRM ...` at the main menu.
+
+**P2 squad director (unit 6)**
+- `director: round N's budgets (from round X): ...`; each tactic's `director: round R +T s: <tactic> on <unit> ...;
+  callout "..."` and its action line: cover (`director: cover: RE_SV_AceTurn_NN fired` after "Someone cover me!" / BANDIT
+  CUTTING IN), trap (IT'S A TRAP, `roles: ... trap freed (the director's spring ...), turned onto the player`), bracket
+  (MISSILES FROM TWO SIDES, `director: bracket: RE_SV_Salvo_..A fired, ...`, two missile alerts), top cover (`... held at
+  engagement None ...`, then BANDIT DIVING / HIGH, n O'CLOCK and `back in the fight`), pincer (TWO GROUPS INBOUND, `director:
+  pincer: wave N's K fighter flights from two sides ...`), regroup (BANDITS REGROUPING, `breaks off for 7 s`).
+- The kill bonus: `credits: ... director <tactic> x1.5` on your kill of a tagged plane within 20 s.
+- The round line's `director tactics N (...; M callouts)`: the thesis' 3-6 a round, each with a callout.
+- `perf: ...` director worst under ~3 ms with 26+ up.
+
+**P3 tells (unit 4)**
+- `tell: <id>: RE_SV_Radio<X> (fired), tell callout '<TEXT>'` before each told threat: an ace's reversal / kulbit
+  (ACE REVERSAL a second before the turn), the Reaper hunt, raids, the jammer, late waves (26+), the ALICORN's railgun
+  (5 s early, RAILGUN WARNING, off ~12 s after), its dive / surfacing / VLS, a Ladon's volley, and every P1 / P2 / P7 /
+  P9 tell. A test build's Ctrl+0 walks every catalog line (`test: Ctrl+0, tell line N of M: ...`).
+- Refusals are logged once a round: `tell: <id> not said (<why>)`. Repeats within 20 s skipped? (line_gap_s).
+- Co-op: a joiner hears its own copy ("tl"), never an RE_SV_Radio in its `ev` lines.
+
+**P4 intensity director (unit 7)**
+- `intensity: round N: you I (damage ..., N missiles on you, N enemies within 5 km, health ...), comfort C (...)` every
+  10 s; does it match what happened (the missile count while the alert sounds)?
+- Pressed down to the wave gate: `intensity: round N: held S s (...): wave W waits` and `round N: wave W waits for the
+  intensity hold`, the wave 15-20 s later; never twice within 20 s.
+- Comfortable 20 s: `intensity: you comfortable 20 s ...: <unit> turns onto you` (or a held top cover dives), its kill
+  `director push x1.5`.
+- Pressed 30 s from round 15: `the room above 80 for 30 s ...: enemies from now fly difficulty level L`, `level L on the
+  enemies up`, and back after 60 s calm; from round 26 with it `pressure: ... preset B (was C, the intensity director's
+  level down ...)`.
+
+**P5 a harder tailed plane (unit 2)**
+- `provoke: round 7, spike level 0, Veteran (...): was ... 85.0 ... 2.5; now ... 60 ... 1.5; reads back 60.0, 1.5`.
+- `tailed: ... Provoke after X s ...; died Y s after` episodes; the round line's `tail watch: ...`; the run line's
+  `tail watch Veteran+: died after median ... [8 s+]` (the P5 gate).
+- The A/B: round 7 with `[ai] tier_provoke = false` (restart) against the default: stats_report's "Provoke after" by the
+  provoke in force (fresh episodes only).
+- Under 50 m behind one: the decel overshoot; farther out, a break, never a 300 km/h crawl.
+
+**P6 the learning layer (unit 8)**
+- `learning: profile at the main menu: ...` / `at level load ...`; each round's `learning: round N: habits ... ->
+  <counters>`; `learning: run over (...): ...; learnt from` and config\survival_profile.ini written.
+- Fly to a habit (missiles only, guns close, tails, high, the airfield) and see its counter: the jammer and PilotRank
+  (`tiers:`), `the AI's flares refilled this session` (next game start), post-stall on Regulars, the director's `cover
+  and trap x1.xx` / `top cover x1.xx`, more Lancers above you, the strike package and Skirmishers.
+
+**P7 boss phases (unit 9)**
+- MINDRIPPER: in its field THE PACK SPRINGS, then `special: MINDRIPPER's pack sprung (N): PHANTASM loose on you`; out
+  of the field `... pack held ...`.
+- AB.L..IN: after two frenzies IT'S ON YOUR SIX and `blink N behind you`; at 35 % ITS ECM IS DOWN, `ECM pods off`, `guns
+  all out`, `LastTGT`.
+- Ladons: one down: `<NAME> ENRAGED`, `special: Ladon X enraged (Y down): volleys every 25 s, the rage circuit from its
+  next pass`, the tighter circuit on the minimap.
+- ALICORN: PLANES LAUNCHING, `special: the Alicorn's deck launch N: <unit> (skirm), 2 aircraft at 1200 m`.
+- The round line's special length against the thesis' 5-8 min.
+
+**P8 late rounds (unit 3)**
+- START AT ROUND 30 / 35: `round 35: 60 aircraft: ... ; cap 60, up to 26 at once` (Standard), the waves at 4 left; `late:
+  ... health x1.50`; `pressure: round 26: preset C (was B)`, `round 31: preset D`; a boss round's `... again once it's
+  down`.
+- Frame time with 26-30 up: the `perf:` lines; the throttle A/B ([late.pressure] enabled = false) by time to kill and
+  damage at death.
+
+**P9 ace personalities (unit 10)**
+- Ace rounds (16, 19, 22, 25, 28, ...; START AT ROUND, or a test build's Ctrl+6 for a Harvest flight): `roles: round N
+  (the <Squadron> squadron's roles: ...)` and each squadron flight's `aces: <unit> (<Squadron> squadron, <role>) opens
+  with <op> at first contact (within N km)`.
+- Recognisable within 10 s of meeting each one (the thesis' gate), its tell first:
+  - Bounty: BOUNTY: FROM ABOVE and "right above you!", then two missiles from above (`opening salvo: RE_SV_Salvo_..
+    fired`, two missile alerts); Lancers' slash and zoom after.
+  - Valkyrie: VALKYRIE: THE PACK and a lure line; half the pack hangs back (`trap ... held B, D, F`), 8 s on IT'S A TRAP
+    and they turn in on you (`trap freed (Valkyrie's trap springs): ..., turned onto the player`).
+  - Inferno: INFERNO: POST-STALL ACES at 2.5 km, then the whole flight kulbits (`kulbits as one: RE_SV_AceKulbit_NN
+    fired`; `ai:` UniqueAction).
+  - Wraith: WRAITH: THEY BLINK, then its lead appears 1 km behind and beside you in smoke (`blinks (its opener): your
+    heading H -> spot D deg`); sit on that lead's tail: IT BLINKED and it jumps again (`blinks (you N m on its six ...)`),
+    not more than every 20 s; hit it: again.
+  - Harvest: THE HARVEST, then its flights open with a kulbit, a blink or a missile pair in turn; tail its lead: a blink,
+    tail a wingman: a reversal.
+- The blink lands near the spot (`special:`-style check by eye: 1 km off, behind your wing), never into terrain at low
+  level (`didn't blink ... no spot clear of the ground`), and the lead keeps fighting after it (no ReturnToUnit).
+- The round line's `squadron openers N, blinks M`; stats_report's `squadron lines`.
+- Co-op: a joiner who meets a squadron first gets its tell (`tell: mercenary_in (the host's)...` on the joiner) and a
+  Bounty salvo from its own copies (`coop: director RE_SV_Salvo_.. fired here`); no blink round the joiner (`... blink is
+  round the host's plane only`).
+- Off: [aces.personality] enabled = false: no `opens with` lines, `roles: round 16 (an ace round's mix ...)`.
+
+**Co-op, every unit (COOP_TAG -coop.18 on every game)**
+- Every game on the same tag, linked; a joiner's `ev` lines never carry a kept event (RE_SV_Radio, RE_SV_Salvo_,
+  RE_SV_WolfTurn, RE_SV_AnomalyPack, RE_SV_WraithBlink); its "tl" / "dv" lines arrive with the host's tells and salvos;
+  the host's `intensity:` lines list each joiner's "in"; "rnd" carries the level and AB.L..IN's phase.

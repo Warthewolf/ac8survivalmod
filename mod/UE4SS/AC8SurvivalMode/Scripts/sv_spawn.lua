@@ -283,6 +283,14 @@ function spawnFlight(unit, maxLevel, pose)
     local ac = searchAircraft(base, fcsLevel)
     local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
     if ace then ac, how = ace.wing, "ace squadron" end
+    -- (a squadron's opener at first contact, P9's ace personalities: its tier's openers in turn, sv_ai.lua ACE.pickOpener;
+    -- "high" spawns it higher, "trap" holds a Wolf flight's trap: ROLE.spawned)
+    local op = nil
+    if ace and ACE.pickOpener then
+        local okO, o = pcall(ACE.pickOpener, unit, ace.tier, role)
+        if okO then op = o else log("aces: opener error " .. tostring(o)) end
+        ace.opener = op
+    end
     -- the round's jammer (CFG.jammer; D.jammerUnit, picked in startRound): its lead an EA-18G
     local jam = D.jammerUnit == unit and not ace and SR.usable[CFG.jammer.aircraft] and searchAircraft(CFG.jammer.aircraft, fcsLevel)
     local pv = PROBE_OF[unit]
@@ -314,6 +322,9 @@ function spawnFlight(unit, maxLevel, pose)
         local okHi, hi = true, nil
         if PROF and PROF.lancerAlt then okHi, hi = pcall(PROF.lancerAlt) end
         if okHi and type(hi) == "number" and hi > alt then alt = math.min(hi, ROLE.LANCER_TOP_M - 500) end
+    elseif op == "high" and ACE.highAlt then          -- (a squadron that comes in high, P9: off a Lancer flight, within its band)
+        local okA, a = pcall(ACE.highAlt, alt)
+        if okA and type(a) == "number" then alt = a end
     end
     -- a lead on its own row (the ace's, the jammer's): its airframe, for the spawn index's check (sv_core.lua leadCheck)
     D.leadRow = D.leadRow or {}
@@ -345,6 +356,7 @@ function spawnFlight(unit, maxLevel, pose)
         end
         D.aceSquad = D.aceSquad or {}
         D.aceSquad[unit] = ace and true or nil                -- (the leaderboard's ace squadron kills)
+        if ACE.squadUp then pcall(ACE.squadUp, unit, ace, role, r) end   -- (its opener waits for first contact: P9)
         D.orders = D.orders or {}
         D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
         if ace then
@@ -454,7 +466,8 @@ local function exactFlights(units, want)
     return best
 end
 
--- A round's fighters by its role mix (ROLE.mixFor: CFG.roles mix or, ace true, ace_mix): each role's share in whole
+-- A round's fighters by its role mix (ROLE.mixFor: CFG.roles mix or, in an ace round, ace: true or the round's tier's
+-- key, the squadron's roles (P9) or ace_mix): each role's share in whole
 -- 2-ships (ROLE.quotas) from its own flights (exactFlights, then through `pick`: startRound's, pickFlights with the
 -- round's taken flights skipped); what a role's flights can't field comes from the rest. Returns the flights
 -- (shuffled, so each wave asks different questions) and their aircraft, as pick does.
@@ -509,8 +522,11 @@ function ROLE.pickRound(nWant, pick, ace)
     for _, r in ipairs(ROLE.LIST) do parts[#parts + 1] = string.format("%s %d", r, by[r] or 0) end
     local wt = {}
     for _, r in ipairs(ROLE.LIST) do wt[#wt + 1] = string.format("%s %.2f", r, w[r] or 0) end
+    local sq = type(band) == "string" and band:match("^ace:(.+)$")     -- (a squadron's own roles: P9)
     log(string.format("roles: round %d (%s%s: %s): %d of %d aircraft: %s%s%s", D.round,
-        band == "ace" and "an ace round's mix" or band and ("the mix from round " .. band) or "no mix band: duelists",
+        (band == "ace" and "an ace round's mix")
+            or (sq and string.format("the %s squadron's roles", tostring(type(CFG.aces[sq]) == "table" and CFG.aces[sq].squadron or sq)))
+            or (band and ("the mix from round " .. band)) or "no mix band: duelists",
         habits and ", weighed by your habits" or "", table.concat(wt, ", "), got, nWant, table.concat(parts, ", "),
         #short > 0 and ("; short: " .. table.concat(short, ", ")) or "", fill))
     return shuffled(out), got
@@ -537,10 +553,15 @@ end
 
 -- A role flight is up (spawnFlight, inside roundsTick: n planes): the round's first Lancer and first Skirmisher flight
 -- call themselves out to every player (CFG.roles.tells; P3's tells "lancer" / "skirm", HUD only), a Wolf flight's trap
--- is held once its orders are in (WOLF). An ace squadron in a role flight neither calls out nor holds.
+-- is held once its orders are in (WOLF). An ace squadron in a role flight neither calls out nor holds, but one whose
+-- opener is the trap (P9's ace personalities: Valkyrie's pack, ace.opener from sv_ai.lua ACE.pickOpener) holds it as
+-- any Wolf flight does, and ACE.squadTick springs it after first contact.
 function ROLE.spawned(unit, role, n, ace)
     local c = CFG.roles
-    if ace then return end
+    if ace then
+        if role == "wolf" and ace.opener == "trap" then WOLF.spawned(unit, n, D.now) end
+        return
+    end
     if (role == "lancer" or role == "skirm") and c.tells and TELL then
         D.roleSaid = D.roleSaid or {}
         if D.roleSaid[role] ~= D.round then

@@ -5,8 +5,9 @@
 watch (unit 2): the run line's Veteran+ figures, the "tailed:" episodes by tier and by the provoke values they flew (an
 A/B of the live provoke), and the "provoke:" writes; P4's intensity director (unit 7): its "intensity:" round lines and
 how often it held a wave, pushed a comfortable player and eased the spikes' level; P6's learning layer (unit 8): its
-"learning:" lines, your habits each round with what they turned on, each run's habits and the saved profile. Works on a
-friend's release log as
+"learning:" lines, your habits each round with what they turned on, each run's habits and the saved profile; P9's ace
+personalities (unit 10): each squadron's first contacts ("aces: ... meets"), the openers they showed and its leads'
+blinks. Works on a friend's release log as
 well (none of these lines is TEST ONLY) and on UE4SS.log (the same lines behind its tag).
 Exit 1 when a file has no measurement lines at all.
 """
@@ -25,7 +26,7 @@ TARGETS = {
     'behind': ('under 70 %', lambda v: 'ok' if v < 70 else 'HIGH'),
 }
 KINDS = ('stats: run over', 'stats: round', 'kill-time:', 'death:', 'director:', 'spawn index:', 'tailed:', 'provoke:',
-         'intensity:', 'learning:')
+         'intensity:', 'learning:', 'aces:')
 
 
 def secs(text):
@@ -229,6 +230,39 @@ def learning_lines(ls):
             print('  ' + l[:220])
 
 
+SQUAD_MEET = re.compile(r'aces: (\S+) \((.+?) squadron\) meets (you|player \d+) ([\d.]+) km off \([^)]*\): (.*); '
+                        r'(?:its (\w+) in [\d.]+ s|no opener)$')
+SQUAD_BLINK = re.compile(r"aces: (\S+)'s lead \S+ blinks \((.*)\): your heading")
+
+
+def squad_lines(ls):
+    """P9's ace personalities: each squadron's first contacts by the opener its flight showed (and how many were told),
+    its leads' blinks by why (the opener, you on its six, a hit), the openers that didn't show"""
+    meets = [m for m in (SQUAD_MEET.match(l) for l in ls) if m]
+    blinks = [m for m in (SQUAD_BLINK.match(l) for l in ls) if m]
+    missed = [l for l in ls if l.startswith('aces: ') and (' not shown: ' in l or "'s lead didn't blink" in l)]
+    if not (meets or blinks or missed):
+        return
+    print(f'\nsquadron lines: {len(meets)} first contacts, {len(blinks)} blinks, {len(missed)} openers / blinks not shown')
+    by = {}
+    for m in meets:
+        sq = by.setdefault(m.group(2), {'n': 0, 'told': 0, 'ops': {}})
+        sq['n'] += 1
+        sq['told'] += 1 if m.group(5).startswith('told') else 0
+        op = m.group(6) or 'none'
+        sq['ops'][op] = sq['ops'].get(op, 0) + 1
+    for name, sq in sorted(by.items()):
+        print(f'  {name:<12} met {sq["n"]} times (told {sq["told"]}): ' + ', '.join(f'{k} x{v}' for k, v in sorted(sq['ops'].items())))
+    why = {}
+    for m in blinks:
+        k = 'the opener' if m.group(2).startswith('its opener') else ('you hit it' if m.group(2).startswith('you hit it') else 'on its six')
+        why[k] = why.get(k, 0) + 1
+    if why:
+        print('  blinks: ' + ', '.join(f'{k} x{v}' for k, v in sorted(why.items())))
+    for l in missed:
+        print('  ' + l[:200])
+
+
 def report(path):
     ls = lines_of(path)
     print(f'stats_report: {path}: {len(ls)} measurement lines')
@@ -277,6 +311,7 @@ def report(path):
     tailed_lines(ls)
     intensity_lines(ls)
     learning_lines(ls)
+    squad_lines(ls)
     idx = [l for l in ls if l.startswith('spawn index:')]
     if idx:
         print(f'\nspawn index lines (creation order = desc order is confirmed by "k 0 is the lead"): {len(idx)}')

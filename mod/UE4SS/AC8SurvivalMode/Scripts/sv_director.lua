@@ -595,6 +595,7 @@ local function oclock(e, at)
     local h = math.floor(rel / 30 + 0.5) % 12
     return h == 0 and 12 or h
 end
+DIR.oclock = oclock                                  -- (P9's squadrons: a dive opener's o'clock, sv_ai.lua ACE.squadTick)
 local function dive(s, unit, e, now, why)
     local h = s.held[unit]
     if not h then return false end

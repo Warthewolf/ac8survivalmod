@@ -483,11 +483,13 @@ local function startRound()
         log(string.format("round %d: the Alicorn's deck launches up to %d flights of %d%s", D.round, D.deckLeft,
             math.floor(tonumber(dk.size) or 2), esc > 0 and string.format(" (%d of them its escorts)", esc) or ""))
     end
-    -- (the fighter roles, CFG.roles: each role's share of the round from its own flights, an ace round's by ace_mix;
-    -- roles off or no level snapshot (ROLE.live): the whole pool as before)
+    -- (the fighter roles, CFG.roles: each role's share of the round from its own flights, an ace round's by its
+    -- squadron's roles, P9's ace personalities (CFG.aces.flight <tier>.roles), else ace_mix; roles off or no level
+    -- snapshot (ROLE.live): the whole pool as before)
     local fighters, nFighters
     if ROLE.live and nWant > 0 then
-        fighters, nFighters = ROLE.pickRound(nWant, pick, D.roundTier ~= nil)
+        local aceKey = D.roundTier and CFG.tiers.list[D.roundTier] and CFG.tiers.list[D.roundTier].name:lower() or nil
+        fighters, nFighters = ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)
     else
         fighters, nFighters = pick(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
     end
