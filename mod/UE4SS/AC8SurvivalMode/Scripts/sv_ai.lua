@@ -97,8 +97,8 @@ local AMMO_SHORT = { [0] = "gun", "msl", "sp1", "sp2", "flr" }
 
 -- AI watch (CFG.ai_watch; user, 2026-10-22: "they fly towards the airfield instead of targeting the player"): every
 -- 2 s each enemy's AI state (blackboard key AIState, ELiveAIState) and target (blackboard key TargetActor), logged
--- when either changes, with its distance to the player and to the airfield. (AIStateComponent.LuaAssets is not the set
--- in use: it read LA_MoveAwayFromTarget_0000 on planes whose set was built with LA_SV_MoveAway.)
+-- when either changes ([log] verbose), with its distance to the player and to the airfield. (AIStateComponent.LuaAssets
+-- is not the set in use: it read LA_MoveAwayFromTarget_0000 on planes whose set was built with LA_SV_MoveAway.)
 -- (a global: sv_stats.lua's tail watch names the states it reads with it)
 AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingman", "ReturnToUnit", "AttackAvoidance",
              "EscapeFromPursuer", "Blackout", "Provoke", "MoveAwayFromTarget", "PursueTarget", "FollowFormation",
@@ -118,7 +118,7 @@ function aiWatch(p, you)
     if st ~= "?" then p.aiState = st end
     if read then p.aiTarget, p.aiTargetAddr = tobj, tobj and addrOf(tobj) or nil end
     if CFG.stats and CFG.stats.enabled then pcall(STATS.aiState, p, st, D and D.now) end
-    if not CFG.ai_watch then return end
+    if not (CFG.ai_watch and logVerbose()) then return end    -- (the "ai:" lines: [log] verbose, the clean up of 2026-10-29)
     local tgt = (not read and "?") or (tobj and (nameOf(tobj):match("([^%.:]+)$") or "?")) or "none"
     if st .. "|" .. tgt == p.aiKey then return end
     p.aiKey = st .. "|" .. tgt

@@ -529,6 +529,8 @@ local q = calmScene()
 from = #logs + 1
 tickTo(100, 118.75)
 check(evs("^RE_SV_") == "" and D.int.pl[0].calmFor >= 18, "comfort 60, intensity 3: nothing before calm_s 20")
+check(since(from, "^intensity: round 6: you %d+ %(damage") == 0,
+      "19 s of a fight, [log] verbose off (the default): no periodic score line (the clean up of 2026-10-29)")
 tickTo(119, 119)
 check(evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_Ace") == "" and has(line("intensity: you comfortable", from), "ERA_Unit_02_Dep_Air1 turns onto you (7.0 km off)"),
       "20 s: the six tell, then its flight turns in (" .. tostring(line("intensity: you comfortable", from)) .. ")")
@@ -537,9 +539,13 @@ check(has(line("director: round 6", from), "push on ERA_Unit_02_Dep_Air1 (1 plan
 tickTo(119.25, 120)
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and type(q.dirTag) == "table" and q.dirTag.tactic == "push"
       and D.aceMoveAt[Q] == 119 + 1 + 30, "lead_s after: RE_SV_AceTurn_05, the plane tagged push, its next move 31 s on")
+local fV = #logs + 1
+CFG.log.verbose = true
 tickTo(120.25, 145)
+CFG.log.verbose = false
 check(evs("^RE_SV_Ace") == "RE_SV_AceTurn_05" and has(line("intensity: you comfortable", from), "no push (its cooldown"),
       "still comfortable 20 s later: its cooldown_s 40 (logged)")
+check(since(fV, "^intensity: round 6: you %d+ %(damage") >= 2, "[log] verbose: the score line every log_s 10 (" .. since(fV, "^intensity: round 6: you %d+ %(damage") .. ")")
 RUN.kills.you = 4                                                  -- (two more: comfortable on)
 D.aceMoveAt[Q] = 0
 tickTo(145.25, 162)

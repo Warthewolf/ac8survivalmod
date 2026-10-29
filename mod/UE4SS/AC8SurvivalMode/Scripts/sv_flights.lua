@@ -296,7 +296,8 @@ function ammoTick(tick, pc)
         local n, max = SV_Ammo(0), SV_Ammo(0, 1)
         if n >= 0 and n < max then SV_SetAmmo(0, -1); A.gunLast = max end
     end
-    if tick % 40 == 0 then                                                     -- every 10 s: the counts, when they change
+    -- every 10 s with [log] verbose, else every 60 s: the counts, when they change
+    if tick % (logVerbose() and 40 or 240) == 0 then
         local line = ammoLine()
         if line ~= A.lastLine then log("ammo: now " .. line); A.lastLine = line end
     end

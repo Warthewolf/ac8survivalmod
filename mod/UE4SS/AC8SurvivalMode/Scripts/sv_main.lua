@@ -475,8 +475,13 @@ local function probeTick(tick)
     if D then hookErr("stats: STATS.sample", pcall(STATS.sample, D.now, you or nil)) end   -- (the measurements, P6's samples)
     local okJ, errJ = pcall(JAM.tick)                               -- (the jammer's boost on the enemies near it)
     if not okJ and not D.jamErr then D.jamErr = true; log("jammer: error " .. tostring(errJ)) end
-    local fl, flagged = flagLine()
-    if fl and fl ~= lastFlags then log("round probe: flags " .. fl); lastFlags = fl end
+    -- (the log's diagnostics: with [log] verbose the flags on every change, the planes alive, the nearest every 10 s;
+    -- without, the flags once a level and when one that isn't a counter changes, flagLine's key)
+    local verbose = logVerbose()
+    local fl, flagged, flagKey = flagLine()
+    local key = verbose and fl or flagKey
+    if fl and key ~= lastFlags then log("round probe: flags " .. fl); lastFlags = key end
+    if not verbose then return end
     local alive, nearest = 0, nil
     for _, p in ipairs(planes) do
         if not p.down then
@@ -529,7 +534,7 @@ LoopAsync(250, function()
             D.perf = pf
             local dt = (os.clock() - t0) * 1000
             pf.n, pf.sum, pf.max = pf.n + 1, pf.sum + dt, math.max(pf.max, dt)
-            if tick - pf.at >= 240 then
+            if tick - pf.at >= (logVerbose() and 240 or 1200) then   -- (a minute's ticks; five without [log] verbose)
                 local parts = {}
                 for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v } end
                 table.sort(parts, function(a, b) return a[2].max > b[2].max end)

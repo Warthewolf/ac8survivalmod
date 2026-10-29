@@ -72,7 +72,16 @@ CFG = {
     -- units: the probe's own flights (tools/survival_events.py PROBE_UNITS: their world data names the probe rows, as
     -- the game builds behaviour at level load); they fly only as round 1's (package script) and round 2's (run-time
     -- script) first flight, never in the normal rotation.
-    ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines)
+    ai_watch = true,                            -- log each enemy's AI state and target when they change ("ai:" lines,
+                                                -- with CFG.log.verbose)
+    -- The log's periodic lines (CFG.log; [log] in survival.ini; the clean up of 2026-10-29, user: quieter logs, the
+    -- per-round summaries kept). verbose = false: "round probe: flags" once a level and when a flag that isn't a counter
+    -- changes (SV_Beat, the heartbeat, every 10 s; kills; airfield and shuttle hits; flights up); no "ai:" lines
+    -- (CFG.ai_watch), no "round probe: AI aircraft alive" (the round's "N aircraft in N flights left" says it), no
+    -- "enemies: nearest" every 10 s, no "intensity: round N: you ..." every CFG.intensity.log_s (its round summary
+    -- stays); "ammo: now" every 60 s when it changed (else 10 s), "perf:" every 5 minutes (else every minute). true: all
+    -- of them as before, for debugging. Each player's own in co-op (sv_coop.lua PERSONAL).
+    log = { verbose = false },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
@@ -576,8 +585,9 @@ CFG = {
     --          at most level.max_drop under the round's spike; below level.up_below for level.up_after_s, a level back;
     --          level.gap_s between two changes; level.pressure: the game's attack throttle (CFG.late.pressure's preset)
     --          a letter gentler too, never under level.pressure_min. A joiner's copies fly the host's level ("rnd")
-    -- log_s: a line with your scores every log_s seconds of a fight (0: decisions only). Nothing new in a round of
-    -- skip_specials (their own scripts run the fight). enabled = false (or a lever's): as before P4. Untested in game.
+    -- log_s: with CFG.log.verbose, a line with your scores every log_s seconds of a fight (0: decisions only; the
+    -- round's summary either way). Nothing new in a round of skip_specials (their own scripts run the fight).
+    -- enabled = false (or a lever's): as before P4. Untested in game.
     intensity = {
         enabled = true, window_s = 30, smooth_x = 0.35, high = 80, low = 35, calm_s = 20, log_s = 10,
         skip_specials = { "anomaly", "glitch", "valka", "ladon", "alicorn" },
