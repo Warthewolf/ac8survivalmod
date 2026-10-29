@@ -155,6 +155,7 @@ function ACE.hunt(p)
         end
     end
     if DIR and DIR.aimed and DIR.aimed(p) then return end    -- (the squad director keeps it on a co-op joiner for now)
+    if ANOM and ANOM.packHeld and ANOM.packHeld(p) then return end   -- (a PHANTASM guard till its pack springs: P7, off by default)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     local bb = p.obj.AIStateComponent.BlackboardComponent

@@ -171,15 +171,17 @@ CFG = {
     -- railgun (alcn_rail_first, then alcn_rail: lead_s before the order, with CFG.specials.alicorn.rail_alert), dive,
     -- surfacing and VLS volley, a Ladon's VLS volley, the round's first Lancer and Skirmisher flight (lancer, skirm: P1's
     -- fighter roles, CFG.roles tells), and the squad director's tactics (P2, CFG.director: cover_ask and six for cover,
-    -- drag and trap for the Wolf trap, bracket, dive with its clock for top cover, pincer, regroup). split, lure and the
-    -- ALICORN's deck (P7) are catalogued and not said yet.
+    -- drag and trap for the Wolf trap, bracket, dive with its clock for top cover, pincer, regroup), and the bosses'
+    -- phases (P7, CFG.specials: the ALICORN's deck launch alcn_deck, MINDRIPPER's pack springing, AB.L..IN behind you
+    -- glitch_six and its ECM down glitch_allout, a Ladon enraged ladon_rage). split and lure are catalogued and not said yet.
     tells = {
         enabled = true, radio = true, hud = true, hud_s = 2.5, gap_s = 4.0, urgent_gap_s = 2.5, radio_gap_s = 2.0,
         line_gap_s = 20, hunt_km = 8.0, wave_from_round = 26,
         cooldown_s = { reversal = 20, kulbit = 20, hunt = 45, raid = 30, jammer = 30, jammer_down = 10, wave = 20,
                        alcn_rail_first = 0, alcn_rail = 0, alcn_dive = 0, alcn_up = 0, alcn_vls = 30, alcn_deck = 30,
                        ladon_vls = 15, pincer = 30, split = 20, dive = 20, clock = 0, drag = 30, lure = 30, trap = 20,
-                       cover_ask = 20, six = 20, bracket = 15, regroup = 30, lancer = 60, skirm = 60 },
+                       cover_ask = 20, six = 20, bracket = 15, regroup = 30, lancer = 60, skirm = 60,
+                       pack = 20, glitch_six = 0, glitch_allout = 0, ladon_rage = 0 },
         lead_s = { reversal = 1.0, kulbit = 0.5, alcn_rail = 5.0, alcn_vls = 1.0, ladon_vls = 0.0, dive = 1.0, trap = 1.0,
                    six = 1.0, bracket = 1.0 },
         list = {
@@ -217,6 +219,14 @@ CFG = {
             regroup         = { radio = { "RE_SV_RadioRegroupA", "RE_SV_RadioRegroupB" }, hud = "regroup" },
             lancer          = { hud = "lancer" },
             skirm           = { hud = "skirm" },
+            -- the bosses' phases (behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): MINDRIPPER's pack springing
+            -- (the host's own: CFG.specials.anomaly.pack), AB.L..IN's phase 2 (behind you: the host's own) and 3 (ECM down,
+            -- guns: every player), a Ladon enraged (every player; its callout, with its name, is the round's own)
+            pack            = { radio = { "RE_SV_RadioTrap", "RE_SV_RadioEnTrap" }, hud = "pack", urgent = true },
+            glitch_six      = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" },
+                                hud = "glitch_six", urgent = true },
+            glitch_allout   = { radio = { "RE_SV_RadioGlitchEcm" }, hud = "glitch_allout", urgent = true },
+            ladon_rage      = { radio = { "RE_SV_RadioLadonRage" } },
         },
         text = {
             reversal  = "ACE REVERSAL",            reversal_sub  = "HE'S TURNING INTO YOU",
@@ -235,6 +245,9 @@ CFG = {
             regroup   = "BANDITS REGROUPING",
             lancer    = "BANDITS HIGH",            lancer_sub    = "THEY WON'T TURN WITH YOU",
             skirm     = "LONG-RANGE SHOOTERS",     skirm_sub     = "CLOSE THE DISTANCE",
+            pack      = "THE PACK SPRINGS",        pack_sub      = "GET OUT OF THE FIELD",
+            glitch_six = "IT'S ON YOUR SIX",       glitch_six_sub = "IT BLINKS BEHIND YOU NOW",
+            glitch_allout = "ITS ECM IS DOWN",     glitch_allout_sub = "MISSILES WORK: STAY OFF ITS NOSE",
         },
     },
     -- Enemy skill tiers (user, 2026-10-22: early fighters must not fly like aces). Every enemy gets its tier's
@@ -1061,9 +1074,21 @@ CFG = {
         -- every game (RE_SV_AlcnAlertOn, forwarded) with the railgun's tell (CFG.tells alcn_rail, its lead_s before the
         -- order), off alert_s after the order (it aims ~7 s and preps ~2 s: tools/re/ALICORN.md), at a dive and when it
         -- sinks (hard rule 45); false: no warning (the tell still comes with tells on)
+        -- deck (behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck"; tools/re/BEHAVIOUR_DIRECTOR.md
+        -- unit 9): while it's up it launches fighters: a free pool flight of `size` (the Skirmishers' own with the fighter
+        -- roles on, CFG.roles; else any) spawned alt_m above it, ahead_m off its bow, along its heading (Survival's spawner
+        -- with a pose, not Online Mode's launches, whose pooled fighters stay put away). The first first_s after it
+        -- appears, then every every_s, and after_surface_s after each surfacing; warn_s before each its radio call
+        -- (CFG.tells alcn_deck) and a callout; never more than max_up of its flights up at once, never while you're down at
+        -- the airfield (a flight that appears in the landing menu gets no orders). A round's launches: `flights` +
+        -- flights_per_round x the round, at most max_flights; from specials.escort_from its escorts come off the deck too
+        -- (escorts: their aircraft in flights of `size`, none from a spawn point). false: no launches (its escorts as before)
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
                     surfaced_m = 3, resurface_s = 8, resurface_tries = 4, up_wait_s = 60,
                     rail_alert = { enabled = true, alert_s = 12 },
+                    deck = { enabled = true, first_s = 25, every_s = 35, after_surface_s = 6, warn_s = 3, size = 2,
+                             max_up = 2, flights = 2, flights_per_round = 0.15, max_flights = 6, escorts = true,
+                             alt_m = 600, ahead_m = 800 },
                     volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
                     weapon_missiles = 3, railgun_missiles = 4,
@@ -1133,6 +1158,20 @@ CFG = {
                      -- post_stall_gap_s apart; its own cobra / kulbit are on whatever the round
                      post_stall = true, post_stall_every_s = 6, post_stall_gap_s = 3, post_stall_range_km = 3,
                      post_stall_behind_km = 1.5, post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
+                     -- its phases (behaviour roadmap P7: "after two frenzies it starts blinking behind you, not just
+                     -- around you; a third phase drops ECM and goes all-out guns"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9).
+                     -- Phase 2 once behind_after frenzies are over: behind_share of its blinks at the spot nearest your
+                     -- six (your heading, at your height; the tell "glitch_six" first). Phase 3 at allout_hp of its health
+                     -- (as it appeared): no more frenzies or blinks, its ECM pod down (no RE_SV_GlitchEcm; ecm_row: its own
+                     -- pod's row refires it by itself at most once a minute, made at the main menu, a game restart to change;
+                     -- ecm_pods_off: the pods up switched off, checked every ecm_check_s), its gun at you whenever you're
+                     -- within allout_range_km and allout_cone_deg of its nose (every allout_gun_s, led as a frenzy's), and
+                     -- LastTGT onto you every allout_turn_s and at once (allout_behind_s apart) when you're behind it
+                     -- within allout_behind_km (the tell "glitch_allout" first). false: one phase, as before
+                     phases = { enabled = true, behind_after = 2, behind_share = 0.5, allout_hp = 0.35,
+                                allout_range_km = 1.5, allout_cone_deg = 20, allout_gun_s = 0.5, allout_turn_s = 10,
+                                allout_behind_s = 3, allout_behind_km = 3, ecm_row = true, ecm_pods_off = true,
+                                ecm_check_s = 3 },
                      -- the dead flying (user: "look spooky like its the dead flying"): its airframe in the wreck's
                      -- burnt material, no pilot or stores, the damaged-plane smoke and fire on it
                      dead_look = true, dead_fx_scale = 1.0,
@@ -1271,8 +1310,15 @@ CFG = {
         -- "Ladons shooting down players with one missile").
         -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
         -- (health_per_round 0.05, health_max_x 2.5: were 0.03 / 2.0, economy review of 2026-10-25)
+        -- rage (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster"; their round
+        -- stays theirs alone, user 2026-10-25, so no escorts; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): one shot down, the
+        -- other is enraged: its volleys every rage.volley_every_s (the first within first_s, rage.volley_warn_s in range),
+        -- and from its next pass over the airfield it flies a tighter circuit at the build's faster speed
+        -- (tools/survival_events.py LADON_RAGE: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
+        -- path). false: as before
         ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.05, health_max_x = 2.5,
+                  rage = { enabled = true, volley_every_s = 25, volley_warn_s = 0, first_s = 5 },
                   volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
                   missile_damage_x = 0.8, missile_homing_x = 0.85,
                   reward = 6000, reward_per_round = 200,
@@ -1349,6 +1395,18 @@ CFG = {
                      -- its guards' search range: they see you only this close, so they stay circling it and jump you
                      -- when you come near (test of 2026-10-22: with the 40 km search they left it for you and the airfield)
                      guard_search_m = 5000,
+                     -- its pack (behaviour roadmap P7: "PHANTASM guards fly as a Wolf pack that springs while your controls
+                     -- are scrambled"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): spring_delay_s after its field scrambles
+                     -- you, its tell first ("pack"), the guards are let loose (RE_SV_AnomalyPackSpring: you only, anywhere,
+                     -- and every one of them the campaign aces' LastTGT onto you); once you've been out of the field
+                     -- hold_after_s, and at least min_s after the spring, they're called back round it
+                     -- (RE_SV_AnomalyPackHold, their appearance's orders), cooldown_s before the next. The host's field
+                     -- only (LastTGT steers to the host; a co-op joiner's own field doesn't spring it). guard_luaset: the
+                     -- behaviour set the guards fly (the Wolf trap's close gunfighter, CFG.behaviour_sets; set at the main
+                     -- menu: a game restart to change; "" the fighters'). hunt_only_sprung: their target kept on you
+                     -- (the top tier's hunt) only while sprung. false: no pack (the guards as before)
+                     pack = { enabled = true, spring_delay_s = 1.5, min_s = 12, hold_after_s = 4, cooldown_s = 20,
+                              hunt_only_sprung = false, guard_luaset = "NLID_SV_WolfWing" },
                      -- its weapon slots after the gun and missiles: two special weapons and the E-18G ace's ECM pod
                      -- (user, 2026-10-22: "a warning to the minimap for MINDRIPPER, similar to what the ECM uses": the
                      -- game draws an ECM carrier's area on the radar itself; it also makes your missiles miss near it)
@@ -1484,6 +1542,7 @@ CFG = {
             glitch_sub   = "IFF: FATAL ERROR",
             glitch_row   = "%s: %.1f KM",
             glitch_row_frenzy = "%s: SIGNAL UNSTABLE",
+            glitch_row_allout = "%s: ECM DOWN  %.1f KM",  -- (its phase 3: CFG.specials.glitch.phases)
             valka_sub    = "ELECTROMAGNETIC LAUNCHER DETECTED",
             valka_charge = "WARNING: RAILGUN",
             valka_charge_sub = "EML CHARGING",
@@ -1558,6 +1617,10 @@ CFG = {
             ladon_run_sub = "THE AIRFIELD IS HIT",
             ladon_down   = "%s DOWN",
             ladon_down_sub = "+%d ZOLLARS",
+            ladon_rage   = "%s ENRAGED",               -- (behaviour roadmap P7: the other Ladon down, CFG.specials.ladon.rage)
+            ladon_rage_sub = "NEW HEADING, FASTER VOLLEYS",
+            alicorn_deck = "PLANES LAUNCHING",         -- (P7: CFG.specials.alicorn.deck)
+            alicorn_deck_sub = "FIGHTERS OFF THE ALICORN'S DECK",
             amphib_sub   = "LANDING CRAFT INBOUND",
             amphib_go    = "AMPHIBIOUS ASSAULT",
             amphib_go_sub = "STOP THE LANDING CRAFT BEFORE THEY REACH THE BEACH",

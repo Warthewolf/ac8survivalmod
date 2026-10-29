@@ -383,12 +383,20 @@ end
 -- their height, nose on them: the flight model undoes a Lua move). Anywhere round the player, but at least
 -- blink_turn_deg round from the last one (user, 2026-10-23: "it teleports but only to one spot on me": behind its own
 -- flight path it kept the same side, as it flies at the player), and never one under ground_clear_m above the ground
--- (less when the player flies lower than that).
--- Returns its event, the point, its distance (cm), the ground and its bearing, or nil.
+-- (less when the player flies lower than that). Its phase 2 (CFG.specials.glitch.phases, P7): behind_share of the
+-- blinks at the spot nearest the player's six instead (their heading, SPC.V.heading: world degrees, 0 = +X, the
+-- spots' own; the nearest 30-degree spot, at most 15 off dead six, either ring, the last one's bearing no bar).
+-- Returns its event, the point, its distance (cm), the ground, its bearing and whether it was a behind pick (and the
+-- heading it was behind), or nil.
 local function blinkSpot(c, s, you)
     local bl = c.blinks
     local want = math.random() * 360
     if s.lastDeg then want = s.lastDeg + c.blink_turn_deg + math.random() * (360 - 2 * c.blink_turn_deg) end
+    local ph, behind, head = c.phases, false, nil
+    if s.phase == 2 and ph and ph.enabled and math.random() < (tonumber(ph.behind_share) or 0) and SPC.V and SPC.V.heading then
+        head = SPC.V.heading()
+        if head then want, behind = (head + 180) % 360, true end
+    end
     local spots = {}
     for ring, m in ipairs(bl.rings_m) do
         for k = 0, math.floor(360 / bl.step_deg) - 1 do
@@ -396,8 +404,8 @@ local function blinkSpot(c, s, you)
             local off = math.abs((deg - want + 180) % 360 - 180)
             local fromLast = s.lastDeg and math.abs((deg - s.lastDeg + 180) % 360 - 180) or 360
             spots[#spots + 1] = { ev = "RE_SV_GlitchBlink_" .. string.char(64 + ring) .. string.char(65 + k), deg = deg, d = m * 100,
-                                  off = off + math.random() * bl.step_deg            -- (either ring, near the bearing wanted)
-                                        + (fromLast < c.blink_turn_deg and 1000 or 0) }   -- (last resort: near the last)
+                                  off = off + (behind and 0 or math.random() * bl.step_deg)   -- (either ring, near the bearing wanted)
+                                        + ((not behind and fromLast < c.blink_turn_deg) and 1000 or 0) }   -- (last resort: near the last)
         end
     end
     table.sort(spots, function(p, q) return p.off < q.off end)
@@ -409,9 +417,117 @@ local function blinkSpot(c, s, you)
     for _, p in ipairs(spots) do
         local to = { X = you.X + p.d * math.cos(math.rad(p.deg)), Y = you.Y + p.d * math.sin(math.rad(p.deg)), Z = you.Z }
         local ground = groundAt(to.X, to.Y)
-        if not ground or to.Z >= ground + clear then return p.ev, to, p.d, ground, p.deg end
+        if not ground or to.Z >= ground + clear then return p.ev, to, p.d, ground, p.deg, behind, head end
     end
     return nil
+end
+
+-- AB.L..IN's phases (CFG.specials.glitch.phases; behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): 1 as it
+-- always was (a frenzy of blinks round you each time it's hit); 2 once behind_after frenzies are over (its blinks
+-- behind you: blinkSpot); 3 at allout_hp of its health as it appeared (no more frenzies, its ECM down, its gun at you
+-- whenever you're close in front of it, LastTGT onto you). Each change logged and told first ("glitch_six": the host's,
+-- the blinks are round the host; "glitch_allout": every player).
+local function glitchPhase(c, s, n, now, why)
+    if s.phase == n then return end
+    local was = s.phase or 1
+    s.phase = n
+    local ph = c.phases
+    if n == 3 then
+        if s.frenzyUntil then s.frenzyUntil = math.min(s.frenzyUntil, now) end    -- (back from a blink, then it's over)
+        s.ecmFireAt, s.podsAt = nil, now                    -- (no more ECM events; the pods up off: glitchPodsOff)
+        s.turnAt = now + 1
+    end
+    if TELL then pcall(TELL.say, n == 3 and "glitch_allout" or "glitch_six", n == 3 and TELL.ALL or nil) end
+    log(string.format("special: %s phase %d (from %d): %s; %s", c.name, n, was, why, n == 2
+        and string.format("%.0f %% of its blinks behind you", (tonumber(ph.behind_share) or 0) * 100)
+        or string.format("no more frenzies, its ECM down%s, its gun at you within %.1f km and %.0f deg of its nose every %.1f s, LastTGT every %.0f s",
+            ph.ecm_row and " (its pod's own row: once a minute at most)" or "", ph.allout_range_km, ph.allout_cone_deg,
+            ph.allout_gun_s, ph.allout_turn_s)))
+end
+
+-- Its ECM pods switched off (phase 3, ecm_pods_off; untested in game: a live write to the pod weapon's fields,
+-- tools/re/MINIMAP_MARKERS.md 3: LiveElectronicSupportMeasures bJammingEnable / bSupportEnable). Never destroyed (a
+-- weapon actor destroyed from Lua crashed the game: sv_ladon.lua). Its pods: BP_wp_ecm_a0 actors whose owner (or
+-- instigator) is AB.L..IN; the first time, the log says what each read before and after.
+local function glitchPodsOff(c, s, o)
+    local mine = addrOf(o)
+    local found, off, said = 0, 0, {}
+    for _, w in ipairs(FindAllOf("BP_wp_ecm_a0_C") or {}) do
+        local okO, own = pcall(function() return w:GetOwner() end)
+        local okI, ins = pcall(function() return w:GetInstigator() end)
+        local ours = (okO and valid(own) and addrOf(own) == mine) or (okI and valid(ins) and addrOf(ins) == mine)
+        if valid(w) and ours then
+            found = found + 1
+            local okB, before = pcall(function() return tostring(w.bJammingEnable) .. "/" .. tostring(w.bSupportEnable) end)
+            local okW = pcall(function() w.bJammingEnable = false; w.bSupportEnable = false end)
+            local okA, after = pcall(function() return tostring(w.bJammingEnable) .. "/" .. tostring(w.bSupportEnable) end)
+            if okW then off = off + 1 end
+            said[#said + 1] = string.format("%s -> %s", okB and before or "?", okA and after or "?")
+        end
+    end
+    if not s.podsSaid and found > 0 then
+        s.podsSaid = true
+        log(string.format("special: %s's ECM pods off: %d of %d (jamming/support %s)", c.name, off, found, table.concat(said, ", ")))
+    end
+    return found, off
+end
+
+-- A frenzy's blinks (each hit outside one starts one, phases 1 and 2): every blink_every_s it vanishes in a puff and
+-- comes back the next tick at a blink spot round you (blinkSpot), until frenzy_s are up; the first three blinks
+-- checked a tick on (where it really is)
+local function glitchFrenzy(c, s, o, at, you, now)
+    if s.check and at and you then                      -- the last blink, a tick on: where it really is
+        local k, to = s.check.n, s.check.to
+        local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) or 0
+        local off = -1                                    -- the angle between its flight path and the player
+        if speed > 0 then
+            local ax, ay, az = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+            local n = math.sqrt(ax * ax + ay * ay + az * az)
+            off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed)))))
+        end
+        log(string.format("special: %s blink %d (%s): a tick on it's %.0f m from the spot, %.0f m from you, %.0f m/s, flight path %.0f deg off you",
+            c.name, k, s.check.ev, math.sqrt((at.X - to.X) ^ 2 + (at.Y - to.Y) ^ 2 + (at.Z - to.Z) ^ 2) / 100,
+            math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100, speed / 100, off))
+        s.check = nil
+    end
+    if s.vanished then                                  -- back, around the player at their height, nose on them
+        local ev, to, d, ground, deg, behind, head
+        if you then ev, to, d, ground, deg, behind, head = blinkSpot(c, s, you) end
+        if ev then
+            s.lastDeg = deg
+            local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+            s.blinks = (s.blinks or 0) + 1
+            if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
+            if behind then                              -- (phase 2: at your six; the first few, and every 10th, logged)
+                s.behindBlinks = (s.behindBlinks or 0) + 1
+                if s.behindBlinks <= 3 or s.behindBlinks % 10 == 0 then
+                    log(string.format("special: %s blink %d behind you (%d behind so far): your heading %.0f -> spot %d (%s, %.0f m)",
+                        c.name, s.blinks, s.behindBlinks, head or -1, deg, ev, d / 100))
+                end
+            end
+            if s.blinks <= 3 or (behind and s.behindBlinks == 1) then
+                s.check = { n = s.blinks, ev = ev, to = to }
+                log(string.format("special: %s blink %d: %s, %.0f m from you, ground %s", c.name, s.blinks, ev, d / 100,
+                    ground and string.format("%.0f m", ground / 100) or "?"))
+            end
+            glitchSmoke(s, to)
+        end
+        setGone(o, false)
+        s.vanished, s.nextBlink = false, now + c.blink_every_s
+    elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
+        s.frenzyUntil = nil
+        log(string.format("special: %s's frenzy %d over (%d blinks, %d gun orders so far)", c.name, s.frenzies or 0,
+            s.blinks or 0, s.shots or 0))
+        local ph = c.phases                             -- (behind_after frenzies over: phase 2, P7)
+        if ph and ph.enabled and (s.phase or 1) == 1 and (s.frenzies or 0) >= (tonumber(ph.behind_after) or math.huge) then
+            glitchPhase(c, s, 2, now, string.format("%d frenzies over", s.frenzies))
+        end
+    elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
+        glitchSmoke(s, at)
+        setGone(o, true)
+        s.vanished = true
+    end
 end
 
 -- Every tick of AB.L..IN's round: its arrival in smoke, its frenzies (a hit starts one: it blinks around the player,
@@ -447,6 +563,7 @@ function ANOM.glitchTick(now, s)
         if c.dead_look then pcall(glitchDeadLook, c, o) end
         glitchSmoke(s, where(o))
         s.state = "hunt"
+        s.phase, s.hp0 = 1, (okN and type(hn) == "number" and hn > 0) and hn or nil   -- (its phases: their health mark)
         hudCallout(c.name, c.squadron)
         log(string.format("special: %s (%s) appears in smoke, health x%.2f (%s)", c.name, c.squadron, hx, tostring(okH and h0)))
         return
@@ -460,8 +577,8 @@ function ANOM.glitchTick(now, s)
         addCredits(pay, c.name .. " down")
         LB.special("glitch", true, now - s.at)
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
-        log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks)", D.round, c.name,
-            now - s.at, s.frenzies or 0, s.blinks or 0))
+        log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks; phase %d, %d blinks behind you, %d LastTGT)",
+            D.round, c.name, now - s.at, s.frenzies or 0, s.blinks or 0, s.phase or 1, s.behindBlinks or 0, s.turns or 0))
         return
     end
     if not o then return end
@@ -470,7 +587,12 @@ function ANOM.glitchTick(now, s)
     if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
     local okH, h = pcall(function() return o.HealthInternal end)
     h = okH and type(h) == "number" and h or nil
-    if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil then      -- hit: a frenzy
+    local ph = c.phases
+    local phased = ph and ph.enabled
+    if phased and h and s.hp0 and s.phase ~= 3 and h <= s.hp0 * (tonumber(ph.allout_hp) or 0) then   -- (phase 3: P7)
+        glitchPhase(c, s, 3, now, string.format("at %.0f %% of its health (%.0f of %.0f)", h / s.hp0 * 100, h, s.hp0))
+    end
+    if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil and s.phase ~= 3 then      -- hit: a frenzy
         s.frenzyUntil, s.nextBlink = now + c.frenzy_s, now
         s.frenzies = (s.frenzies or 0) + 1
         local okD, dmg = pcall(function() return o:GetDamagePercentage() end)
@@ -478,10 +600,33 @@ function ANOM.glitchTick(now, s)
             okD and string.format("%.0f", dmg) or "?", s.frenzies, c.frenzy_s))
     end
     s.lastHp = h or s.lastHp
-    if now >= (s.ecmFireAt or 0) then                   -- its ECM pod up (fired by event: hard to keep up by its FCS)
+    if s.phase ~= 3 and now >= (s.ecmFireAt or 0) then  -- its ECM pod up (fired by event: hard to keep up by its FCS)
         s.ecmFireAt = now + c.ecm_every_s
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchEcm") or -5
         if r ~= 1 and not s.ecmSaid then s.ecmSaid = true; log("special: RE_SV_GlitchEcm not fired: " .. (SV_ERR[r] or tostring(r))) end
+    end
+    local offNose = nil                                 -- (phase 3: you off its nose, degrees, as VALKA's)
+    if s.phase == 3 and at and you then
+        local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local tx, ty, tz = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+        local n = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if okF and n > 0 then offNose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
+        if ph.ecm_pods_off and now >= (s.podsAt or 0) then           -- (its pods up switched off, every ecm_check_s)
+            s.podsAt = now + math.max(1, tonumber(ph.ecm_check_s) or 3)
+            pcall(glitchPodsOff, c, s, o)
+        end
+        -- LastTGT onto you every allout_turn_s, and at once (allout_behind_s apart) when you're behind it (VALKA's; not
+        -- straight into a post-stall)
+        local behind = offNose and offNose > 110 and s.dist and s.dist <= (tonumber(ph.allout_behind_km) or 3)
+        if type(SV_Event) == "function" and (now >= (s.turnAt or 0) or (behind and now >= (s.behindAt or 0))) then
+            s.turnAt, s.behindAt, s.turns = now + ph.allout_turn_s, now + ph.allout_behind_s, (s.turns or 0) + 1
+            s.psAt, s.psGapAt = math.max(s.psAt or 0, now + 3), math.max(s.psGapAt or 0, now + 3)
+            local r = SV_Event("RE_SV_GlitchTurn")
+            if s.turns <= 5 or s.turns % 10 == 0 then
+                log(string.format("special: %s LastTGT %d (%s)%s, %.1f km from you", c.name, s.turns, tostring(r),
+                    behind and ", you behind it" or "", s.dist or -1))
+            end
+        end
     end
     if c.post_stall and not s.frenzyUntil and at and you and s.dist and s.dist <= c.post_stall_range_km then
         if not s.psOn then                              -- its own cobra / kulbit too, whatever the round's spike
@@ -506,50 +651,18 @@ function ANOM.glitchTick(now, s)
             end
         end
     end
-    if not s.frenzyUntil then return end
-    if s.check and at and you then                      -- the last blink, a tick on: where it really is
-        local k, to = s.check.n, s.check.to
-        local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
-        local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) or 0
-        local off = -1                                    -- the angle between its flight path and the player
-        if speed > 0 then
-            local ax, ay, az = you.X - at.X, you.Y - at.Y, you.Z - at.Z
-            local n = math.sqrt(ax * ax + ay * ay + az * az)
-            off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed)))))
-        end
-        log(string.format("special: %s blink %d (%s): a tick on it's %.0f m from the spot, %.0f m from you, %.0f m/s, flight path %.0f deg off you",
-            c.name, k, s.check.ev, math.sqrt((at.X - to.X) ^ 2 + (at.Y - to.Y) ^ 2 + (at.Z - to.Z) ^ 2) / 100,
-            math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100, speed / 100, off))
-        s.check = nil
+    if s.frenzyUntil then glitchFrenzy(c, s, o, at, you, now) end
+    -- its gun at where you'll be, every tick of a frenzy, and in phase 3 whenever you're within allout_range_km and
+    -- allout_cone_deg of its nose (P7: "goes all-out guns"; its gun's own row aims as before)
+    local hot3 = s.phase == 3 and not s.vanished and s.dist and s.dist <= ph.allout_range_km and offNose
+        and offNose <= ph.allout_cone_deg
+    local gunsHot = (s.frenzyUntil and not s.vanished) or hot3
+    if hot3 and not s.hotSaid then
+        s.hotSaid = true
+        log(string.format("special: %s's guns all out: you %.1f km off its nose (%.0f deg)", c.name, s.dist, offNose))
     end
-    if s.vanished then                                  -- back, around the player at their height, nose on them
-        local ev, to, d, ground, deg
-        if you then ev, to, d, ground, deg = blinkSpot(c, s, you) end
-        if ev then
-            s.lastDeg = deg
-            local r = type(SV_Event) == "function" and SV_Event(ev) or -5
-            s.blinks = (s.blinks or 0) + 1
-            if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
-            if s.blinks <= 3 then
-                s.check = { n = s.blinks, ev = ev, to = to }
-                log(string.format("special: %s blink %d: %s, %.0f m from you, ground %s", c.name, s.blinks, ev, d / 100,
-                    ground and string.format("%.0f m", ground / 100) or "?"))
-            end
-            glitchSmoke(s, to)
-        end
-        setGone(o, false)
-        s.vanished, s.nextBlink = false, now + c.blink_every_s
-    elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
-        s.frenzyUntil = nil
-        log(string.format("special: %s's frenzy %d over (%d blinks, %d gun orders so far)", c.name, s.frenzies or 0,
-            s.blinks or 0, s.shots or 0))
-    elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
-        glitchSmoke(s, at)
-        setGone(o, true)
-        s.vanished = true
-    end
-    local led = false                                   -- its gun at where you'll be, every tick of the frenzy
-    if s.frenzyUntil and not s.vanished and you and (c.gun_lead_s or 0) > 0 and not s.leadFail then
+    local led = false
+    if gunsHot and you and (c.gun_lead_s or 0) > 0 and not s.leadFail then
         local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
         local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
         if okV and v then
@@ -566,14 +679,15 @@ function ANOM.glitchTick(now, s)
             end
             if led and not s.leadSaid then
                 s.leadSaid = true
-                log(string.format("special: %s's frenzy gun leads you %.1f s (%.0f m ahead), %d shots a tick%s", c.name, L,
+                log(string.format("special: %s's gun leads you %.1f s (%.0f m ahead), %d shots a tick%s", c.name, L,
                     math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) * L / 100, c.gun_lead_shots or 1,
                     c.gun_lead_event and ", the event's too" or ""))
             end
         end
     end
-    if s.frenzyUntil and not s.vanished and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
-        s.gunAt = now + c.gun_every_s                   -- (the event: 5 shots 0.1 s apart, at you)
+    if gunsHot and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
+        -- (the event: 5 shots 0.1 s apart, at you; phase 3 outside a frenzy every allout_gun_s)
+        s.gunAt = now + ((hot3 and not s.frenzyUntil) and ph.allout_gun_s or c.gun_every_s)
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
         s.shots = (s.shots or 0) + 1
         if r ~= 1 and not s.gunSaid then s.gunSaid = true; log("special: RE_SV_GlitchGun not fired: " .. (SV_ERR[r] or tostring(r))) end
@@ -1865,6 +1979,75 @@ SPC.kinds = {
 -- a kind's field that may be a function (alone, aircraft, sub)
 function SPC.kindValue(v, ...) if type(v) == "function" then return v(...) end return v end
 
+-- PHANTASM's pack (CFG.specials.anomaly.pack; behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): the guards
+-- spring while the field scrambles you, spring_delay_s after it comes on (the tell "pack" first: an ambush call and THE
+-- PACK SPRINGS), then are called back round MINDRIPPER once you've been out of the field hold_after_s, at least min_s
+-- after the spring, cooldown_s before the next. Two remote events (tools/survival_events.py build_anomaly):
+-- RE_SV_AnomalyPackSpring (you only, anywhere, the campaign aces' LastTGT onto you by unit) and RE_SV_AnomalyPackHold
+-- (their appearance's orders: you only near it, their area on it). The host's (or solo): its field (ANOM.on) springs it,
+-- the LastTGT steers to the host's plane, so both are kept there (sv_coop.lua KEEP_EVENTS ^RE_SV_AnomalyPack); a
+-- joiner's own field never springs it. After MINDRIPPER is down nothing: its down records loose the guards anyway.
+-- s.pack: nil (held), "armed" (the tell said, the spring due at s.packAt) or "sprung" (since s.packSince).
+function ANOM.packTick(now, s, c)
+    local pk = c.pack
+    if not (pk and pk.enabled and s and s.state == "hunt") or type(SV_Event) ~= "function" then return end
+    if ANOM.on == true then s.fieldOffAt = nil elseif not s.fieldOffAt then s.fieldOffAt = now end
+    if SV_UnitAlive(c.guard_unit) <= 0 then                 -- (no guard left: nothing to spring or call back)
+        if s.pack and not s.packGoneSaid then
+            s.packGoneSaid = true
+            log(string.format("special: %s's pack: every guard down (%d springs)", c.name, s.packSprings or 0))
+        end
+        s.pack = nil
+        return
+    end
+    local function fire(ev)
+        local r = SV_Event(ev)
+        if r ~= 1 then log(string.format("special: %s not fired: %s", ev, SV_ERR and SV_ERR[r] or tostring(r))) end
+        return r == 1
+    end
+    if s.pack == nil then
+        if ANOM.on == true and now >= (s.packCool or 0) then
+            s.pack, s.packAt = "armed", now + (tonumber(pk.spring_delay_s) or 0)
+            local said = false
+            if TELL then
+                local okT, r = pcall(TELL.say, "pack")             -- (this game's player: the host's, as the spring)
+                said = okT and r == true
+            end
+            log(string.format("special: %s's pack: your controls scrambled %.1f km from it; %s springs in %.1f s (%s)",
+                c.name, s.dist or -1, c.guards_name, s.packAt - now, said and "told" or "not told"))
+        end
+    elseif s.pack == "armed" then
+        if ANOM.on ~= true then                                  -- (out of the field before it sprang: held)
+            s.pack = nil
+            log(string.format("special: %s's pack: you left the field first; not sprung", c.name))
+        elseif now >= s.packAt then
+            local ok = fire("RE_SV_AnomalyPackSpring")
+            s.packSprings = (s.packSprings or 0) + (ok and 1 or 0)
+            if ok then s.pack, s.packSince = "sprung", now
+            else s.pack, s.packCool = nil, now + (tonumber(pk.cooldown_s) or 0) end
+            log(string.format("special: %s's pack sprung (%d): %s loose on you (LastTGT), %d of %d guards up, %.1f km from %s",
+                c.name, s.packSprings, c.guards_name, SV_UnitAlive(c.guard_unit), c.guards or 4, s.dist or -1, c.name))
+        end
+    elseif s.pack == "sprung" and ANOM.on ~= true and now - (s.packSince or now) >= (tonumber(pk.min_s) or 0)
+        and s.fieldOffAt and now - s.fieldOffAt >= (tonumber(pk.hold_after_s) or 0) then
+        fire("RE_SV_AnomalyPackHold")
+        s.pack, s.packCool = nil, now + (tonumber(pk.cooldown_s) or 0)
+        log(string.format("special: %s's pack held: back round %s %.0f s after it sprang (%.0f s out of the field)",
+            c.name, c.name, now - s.packSince, now - s.fieldOffAt))
+    end
+end
+
+-- A guard of the Anomaly whose hunt waits for its pack (pack.hunt_only_sprung: ACE.hunt keeps a top-tier plane's target
+-- on you; held, it guards MINDRIPPER instead). False with it off, on a co-op joiner (no D.special there) and after
+-- MINDRIPPER's round.
+function ANOM.packHeld(p)
+    local c = CFG.specials.anomaly
+    local pk = c and c.pack
+    if not (pk and pk.enabled and pk.hunt_only_sprung and p and p.unit == c.guard_unit) then return false end
+    local s = D and D.special
+    return s ~= nil and s.kind == "anomaly" and s.state == "hunt" and s.pack ~= "sprung"
+end
+
 -- Every tick of a running Anomaly: its distance (the field) and its end.
 function ANOM.tick(now, s)
     local c, t = CFG.specials.anomaly, CFG.hud.text
@@ -1883,7 +2066,8 @@ function ANOM.tick(now, s)
         addCredits(pay, c.name .. " down")
         LB.special("anomaly", true, now - s.at)
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
-        log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
+        log(string.format("special: round %d, %s shot down %.0f s after it appeared (its pack sprang %d times)", D.round,
+            c.name, now - s.at, s.packSprings or 0))
         return
     end
     local p
@@ -1909,6 +2093,8 @@ function ANOM.tick(now, s)
     if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end   -- a new plane: switch again
     if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
     elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end      -- (0.3 km: no flicker)
+    local okP, errP = pcall(ANOM.packTick, now, s, c)                                       -- (its pack: P7)
+    if not okP and tostring(errP) ~= s.packErr then s.packErr = tostring(errP); log("special: pack error " .. s.packErr) end
 end
 
 -- A Survival COOP joiner's own field (sv_coop.lua clientRounds; code review of 2026-10-26: the host's field events

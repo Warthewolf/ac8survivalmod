@@ -196,6 +196,15 @@ LADON_AIRFIELD = (16.1, -4.4, 1.2)
 LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
                (7, -19, 2.0), (12, -11, 1.6), LADON_AIRFIELD]
 LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), LADON_AIRFIELD]
+# The enraged Ladon's circuit (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster";
+# Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): a tighter loop
+# round the airfield (~35 km, ~42 s a lap at LADON_RAGE_SPEED, so each pass still bombs: Lua counts one in 30 s at
+# most), from the same point just past the airfield as LADON_LOOP (hard rule 2) to over it, at the circuit's heights
+# where it runs near them. Lua fires RE_SV_LadonRage<Key>, which sets SV_LadonRage<Key>; each PathFinish then starts the
+# rage circuit instead of the old one (flag-gated records, no delay: hard rule 26), so the switch comes at its next pass
+# over the airfield, never mid-path.
+LADON_RAGE = [(16.72, -3.03, 1.25), (21.0, 0.5, 1.5), (23.0, -7.0, 1.8), (15.5, -11.5, 2.0), (10.5, -7.0, 1.8), LADON_AIRFIELD]
+LADON_RAGE_SPEED = '3000.0'                  # km/h (Mission 16's Ladon: 1200-3200)
 # the Ladons' unit area (a unit only fights inside it; build_survival.ladon_units): centred on the whole job, not the
 # spawn, big enough for all of it (code review of 2026-10-23: 40 km round the spawn left the airfield 59 km out, so the
 # AI kept turning them back west)
@@ -231,7 +240,10 @@ def ladons():
                         npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
                         loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
                         over=f'SV_LadonOver{key}', lap=f'SV_LadonLap{key}',
-                        route=place(LADON_ROUTE), circuit=place(LADON_LOOP)))
+                        route=place(LADON_ROUTE), circuit=place(LADON_LOOP),
+                        # its rage (P7, LADON_RAGE): path, its PathFinish trigger, the flag and Lua's remote event
+                        rage=f'SV_Path_Ladon{key}Rage', rage_lap=f'SV_LadonRageLap{key}', rage_flag=f'SV_LadonRage{key}',
+                        rage_ev=f'RE_SV_LadonRage{key}', rage_route=place(LADON_RAGE)))
     return out
 
 
@@ -345,8 +357,10 @@ GLITCH_ECM_SLOT = 'WN_WEAPON_4'
 # 0.1"; Lua's tick is 250 ms, so the repeat is the record's: delay + loop, as the bombers' runs); main.lua fires the
 # event every GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S (CFG.specials.glitch.gun_every_s: keep in step)
 # its post-stalls, RE_SV_Glitch<name> -> the stock unique action (Mission 28's Shadows', Mission 19's Toprak's kulbit,
-# Mission 2's Tasha's cobra); main.lua CFG.specials.glitch.post_stall_moves names the same <name>s
-GLITCH_POST_STALL = (('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
+# Mission 2's Tasha's cobra); main.lua CFG.specials.glitch.post_stall_moves names the same <name>s. 'Turn' (the campaign
+# aces' LastTGT, RE_SV_GlitchTurn) is its phase 3's (behaviour roadmap P7, CFG.specials.glitch.phases: onto you every
+# allout_turn_s and when you're behind it), never one of post_stall_moves, which are picked at random
+GLITCH_POST_STALL = (('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'), ('Turn', 'LastTGT'))
 GLITCH_GUN_EVERY_S = 0.1
 GLITCH_GUN_SHOTS = 5
 GLITCH_BLINK_STEP_DEG = 30
@@ -617,6 +631,9 @@ TELL_LINES = [
     ('SV_Radio_BracketC', 'v0001_4034', 'LIVE_AWACS', {'now': True}),     # "Incoming barrage!" (ST_ms020 434)
     ('SV_Radio_RegroupA', 'v0001_3003', 'LIVE_AWACS', {}),                # "They're trying to regroup." (ST_ms025_1 791)
     ('SV_Radio_RegroupB', 'v0001_1884', 'LIVE_AWACS', {}),                # "They tricked us! The aircraft that retreated regrouped and are back!" (ST_ms028 431)
+    # the bosses' phases (P7; MINDRIPPER's pack reuses Trap / EnTrap, AB.L..IN behind you the Six lines)
+    ('SV_Radio_GlitchEcm', 'v0001_2693', 'LIVE_AWACS', {}),               # "It's not jamming anymore!" (ST_ms023 02_Jamming_Off)
+    ('SV_Radio_LadonRage', 'v0001_3110', 'LIVE_AWACS', {}),               # "The hostile's changed course." (ST_ms026 03_Nightmare_Assault)
 ]
 TELL_START_DELAY_S = 0.1                              # the 'now' lines' StartDelay (the template row's is 0.6 s)
 TELL_CHANNEL_INTERRUPT = 6                            # ELiveRadioChannel InterruptMain (Main is 2)
@@ -637,7 +654,8 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp'])
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp']
+             + [f'SV_LadonRage{key}' for key, _, _ in LADONS])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -1286,10 +1304,22 @@ def build_ladon(g, flag, stock_ep):
             # BP_wp_vls_certain_ladon, the scripted sure kill it fires at the allied F/A-18s: flares did nothing
             # against it (user, 2026-10-23: "the VLS guidance needs to be nerfed ... Flares don't even work")
             g.execute(t_vls, volley, {0: 'WN_WEAPON_1', 1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
-        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
+        # its rage (P7, LADON_RAGE): Lua's RE_SV_LadonRage<Key> sets the flag (its appearance clears it), and each
+        # PathFinish starts the old circuit or, enraged, the rage circuit (conditions checked as the PathFinish fires, after
+        # Lua set the flag: hard rule 26), so the switch is at its next pass over the airfield
+        flag(L['up'], L['rage_flag'], 'Set', 0)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', L['rage_ev'])
+        flag(L['rage_ev'], L['rage_flag'], 'Set', 1)
+        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop']), (L['rage_lap'], L['rage'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
-            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED})
+            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
+            g.execute(t_path, ev, {0: L['obj'], 2: L['rage'], 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
+    import re
+    lua = runtime_lua()
+    assert '"RE_SV_LadonRage"' in lua, 'Scripts/sv_ladon.lua never fires RE_SV_LadonRage<Key>'
+    m = re.search(r'names = \{ Kot = "\w+", Mishka = "\w+" \}', lua)
+    assert m and all(f'{k} = ' in m.group(0) for k, _, _ in LADONS), 'Scripts/sv_config.lua CFG.specials.ladon.names != LADONS'
 
 
 def build_alicorn(g, flag, stock_ep):
@@ -1425,6 +1455,30 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     g.execute(t_engage, guards, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnly'}, delay=2.0)
     g.execute(t_move, guards, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}',
                                10: 'true'}, delay=2.5)
+    # PHANTASM's pack (behaviour roadmap P7: "guards fly as a Wolf pack that springs while your controls are scrambled";
+    # Scripts/sv_anomalies.lua ANOM.packTick, CFG.specials.anomaly.pack; tools/re/BEHAVIOUR_DIRECTOR.md unit 9), remote
+    # events Lua fires, no conditions or flags (hard rule 26):
+    #   RE_SV_AnomalyPackSpring  the guards loose (the down records' PlayerOnlyNoLimit and the area over the whole zone)
+    #                            and every one of them the campaign aces' LastTGT onto the player (Mission 6's
+    #                            EnemyBehind_LastTGT by unit, OneShot, Below_Return: hard rule 37)
+    #   RE_SV_AnomalyPackHold    back round MINDRIPPER: their appearance's PlayerOnly and following area
+    # Both kept on the co-op host (Scripts/sv_coop.lua KEEP_EVENTS ^RE_SV_AnomalyPack): sprung on the host's field, the
+    # LastTGT steers to LocalPlayer
+    assert '"^RE_SV_AnomalyPack"' in lua, 'Scripts/sv_coop.lua KEEP_EVENTS has no ^RE_SV_AnomalyPack'
+    for ev in ('RE_SV_AnomalyPackSpring', 'RE_SV_AnomalyPackHold'):
+        assert f'"{ev}"' in lua, f'Scripts/sv_anomalies.lua never fires {ev}'
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
+    spring, hold = 'RE_SV_AnomalyPackSpring', 'RE_SV_AnomalyPackHold'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', spring)
+    g.execute(t_engage, spring, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnlyNoLimit'})
+    g.execute(t_move, spring, {0: ANOMALY_GUARD_UNIT, 5: f'{AREA_RADIUS_M}'})
+    g.execute(t_req, spring, {0: 'NoneSelect', 1: ANOMALY_GUARD_UNIT, 2: '', 3: 'LastTGT', 4: 'OneShot', 5: 'Below_Return',
+                              6: 'NoneSelect', 7: 'false'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', hold)
+    g.execute(t_engage, hold, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnly'})
+    g.execute(t_move, hold, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}', 10: 'true'})
     flag(up, 'SV_AnomalyUp', 'Set', 1)
     attack(up, ANOMALY_ATTACK)
     g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
@@ -1495,6 +1549,9 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
     t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
     assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
+    assert '"RE_SV_GlitchTurn"' in lua, 'Scripts/sv_anomalies.lua never fires RE_SV_GlitchTurn (its phase 3)'
+    m_ps = re.search(r'post_stall_moves = \{ ([^}]*) \},', lua)
+    assert m_ps and 'Turn' not in re.findall(r'"(\w+)"', m_ps.group(1)), 'CFG.specials.glitch.post_stall_moves: never "Turn"'
     for name, action in GLITCH_POST_STALL:
         ev = f'RE_SV_Glitch{name}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)

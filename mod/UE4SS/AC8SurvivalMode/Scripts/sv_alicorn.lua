@@ -191,6 +191,94 @@ local function partZ(o)                                 -- a part's height (cm),
     local ok, l = pcall(function() return o:K2_GetActorLocation() end)
     return ok and l and type(l.Z) == "number" and l.Z or nil
 end
+-- a part's location and its heading (a level unit vector: the hull's bow, for the deck), or nil; heading nil when its
+-- forward can't be read or points straight up / down
+local function partAt(o)
+    if not (o and valid(o)) then return nil end
+    local ok, l = pcall(function() local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (ok and l and type(l.X) == "number") then return nil end
+    local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y } end)
+    local n = okF and f and math.sqrt(f.X * f.X + f.Y * f.Y) or 0
+    return l, n > 0.1 and { X = f.X / n, Y = f.Y / n } or nil
+end
+
+-- Its deck (CFG.specials.alicorn.deck; behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck";
+-- tools/re/BEHAVIOUR_DIRECTOR.md unit 9): while it's up (sailing, not dived) a free pool flight of deck.size is launched
+-- off its bow (Survival's spawner with a pose, spawnFlight: ahead_m along its heading, alt_m above the sea; Online
+-- Mode's ALCN_LaunchAir would launch the hull's pooled fighters, which stay put away), the Skirmishers' own flights
+-- with the fighter roles on (CFG.roles; any role's when none is free, any flight with roles off): the round's D.deckLeft
+-- launches (sv_rounds.lua startRound), first_s after it appears, every every_s after a launch and after_surface_s after
+-- each surfacing; warn_s before each the tell alcn_deck (its radio call) and a callout, every player. Never more than
+-- max_up of its flights up at once, never while you're down at the airfield (retried each second: a flight that
+-- appears in the landing menu gets no orders). The host's (or solo): roundsTick's; spawnFlight mirrors the spawn.
+local function deckFlight(dk)
+    local size = math.floor(tonumber(dk.size) or 2)
+    local function free(u)
+        return flightSize(u) == size and not (D.up and D.up[u]) and SV_UnitAlive(u) <= 0 and not PROBE_OF[u]
+            and poolIndex(u) ~= nil and not ROLE.sitsOut(u)
+    end
+    local own = ROLE.live and ROLE.groups().skirm or {}
+    local opts = {}
+    for _, u in ipairs(own) do if free(u) then opts[#opts + 1] = u end end
+    if #opts > 0 then return opts[math.random(#opts)], "skirm" end
+    for _, u in ipairs(CFG.pool) do if free(u) then opts[#opts + 1] = u end end
+    if #opts > 0 then return opts[math.random(#opts)], ROLE.live and "no Skirmisher free" or "roles off" end
+    return nil
+end
+function SPC.alicornDeck(now, s, c)
+    local dk = c.deck
+    if not (dk and dk.enabled) or (D.deckLeft or 0) <= 0 or s.state ~= "sail" or s.dived then return end
+    local t = CFG.hud.text
+    s.deck = s.deck or {}
+    s.deckNext = s.deckNext or (s.at + (tonumber(dk.first_s) or 0))
+    if not s.deckWarned and now >= s.deckNext - (tonumber(dk.warn_s) or 0) then     -- (its tell, then the launch)
+        s.deckWarned = true
+        hudCallout(t.alicorn_deck, t.alicorn_deck_sub)
+        if TELL then pcall(TELL.say, "alcn_deck", TELL.ALL) end
+    end
+    if now < s.deckNext then return end
+    local up = 0
+    for u in pairs(s.deck) do if SV_UnitAlive(u) > 0 then up = up + 1 end end
+    if up >= (tonumber(dk.max_up) or 2) then
+        if not s.deckFullSaid then s.deckFullSaid = true; log(string.format("special: the Alicorn's deck waits: %d of its flights up", up)) end
+        s.deckNext = now + 1
+        return
+    end
+    if playerOnAirfield() then s.deckNext = now + 1; return end
+    local part = (s.depthPart and valid(s.depthPart) and s.depthPart) or parts(c.core_class)[1]
+    local at, fwd = partAt(part)
+    if not at then
+        if not s.deckNoPartSaid then s.deckNoPartSaid = true; log("special: the Alicorn's deck: none of its parts read yet; waiting") end
+        s.deckNext = now + 2
+        return
+    end
+    if not fwd then                                       -- (no bow to read: the launch towards you)
+        local you = playerLocation()
+        local dx, dy = you and you.X - at.X or 1, you and you.Y - at.Y or 0
+        local n = math.sqrt(dx * dx + dy * dy)
+        fwd = n > 0 and { X = dx / n, Y = dy / n } or { X = 1, Y = 0 }
+    end
+    local u, how = deckFlight(dk)
+    if not u then
+        if not s.deckNoneSaid then s.deckNoneSaid = true; log(string.format("special: the Alicorn's deck: no free %d-ship to launch", dk.size)) end
+        s.deckNext = now + 5
+        return
+    end
+    local ahead = (tonumber(dk.ahead_m) or 0) * 100
+    local pose = { x = at.X + fwd.X * ahead, y = at.Y + fwd.Y * ahead, z = math.max(at.Z, 0) + (tonumber(dk.alt_m) or 600) * 100,
+                   yaw = math.deg(math.atan(fwd.Y, fwd.X)) % 360, why = "the Alicorn's deck" }
+    local r = spawnFlight(u, nil, pose)
+    if r > 0 then
+        s.deck[u], s.deckN = true, (s.deckN or 0) + 1
+        D.deckLeft = D.deckLeft - 1
+        s.deckNext, s.deckWarned, s.deckFullSaid = now + (tonumber(dk.every_s) or 35), nil, nil
+        log(string.format("special: the Alicorn's deck launch %d: %s (%s), %d aircraft at %.0f m, %d launches left this round",
+            s.deckN, u, how, r, pose.z / 100, D.deckLeft))
+    else
+        s.deckNext = now + 5
+        log(string.format("special: the Alicorn's deck: %s didn't launch (%s); again in 5 s", u, SV_ERR and SV_ERR[r] or tostring(r)))
+    end
+end
 
 function SPC.alicornTick(now, s)
     if s.state == "sail" then poolTick(now) end
@@ -217,6 +305,9 @@ function SPC.alicornTick(now, s)
         elseif not down or down <= (c.surfaced_m or 3) or now - s.surfaceSent >= (c.up_wait_s or 60) then
             s.dived, s.nextDive = false, now + c.dive_every_s
             s.nextRail, s.nextVolley = math.max(s.nextRail, now + 5), math.max(s.nextVolley, now + 8)
+            if c.deck and c.deck.enabled then            -- (a launch off its deck soon after: P7)
+                s.deckNext, s.deckWarned = now + (tonumber(c.deck.after_surface_s) or 0), nil
+            end
             hudCallout(t.alicorn_surface, nil)
             tell("alcn_up")
             log(string.format("special: the Alicorn surfaces, %.0f s after the order (%d sent%s)", now - s.surfaceSent, s.surfaceTry,
@@ -257,6 +348,8 @@ function SPC.alicornTick(now, s)
         local function volley() if s.state == "sail" and not s.dived then fire("RE_SV_AlcnVolley") end end
         if TELL then TELL.after("alcn_vls", TELL.ALL, volley) else volley() end
     end
+    local okDk, errDk = pcall(SPC.alicornDeck, now, s, c)    -- (fighters off its deck while it's up: P7)
+    if not okDk and tostring(errDk) ~= s.deckErr then s.deckErr = tostring(errDk); log("special: the Alicorn's deck: error " .. s.deckErr) end
     -- its parts, every 2 s
     if now < (s.partsAt or 0) then return end
     s.partsAt = now + 2
@@ -355,8 +448,8 @@ function SPC.alicornTick(now, s)
         addCredits(pay, "the Alicorn sunk")
         LB.stat("ground", 1); LB.special("alicorn", true, now - s.at)
         hudCallout(t.alicorn_down, string.format(t.alicorn_down_sub, pay))
-        log(string.format("special: round %d, the Alicorn sunk %.0f s after it appeared (core %s, hull %d)", D.round, now - s.at,
-            coreUp and "up" or "down", hull))
+        log(string.format("special: round %d, the Alicorn sunk %.0f s after it appeared (core %s, hull %d; %d deck launches)", D.round,
+            now - s.at, coreUp and "up" or "down", hull, s.deckN or 0))
         D.alicornRemoveAt = now + 20                    -- (off once it has gone down)
     elseif not s.partsSaid and now - s.at > 30 then
         s.partsSaid = true
