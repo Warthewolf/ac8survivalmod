@@ -702,9 +702,21 @@ function ANOM.glitchTick(now, s)
         end
     end
     if gunsHot and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
-        -- (the event: 5 shots 0.1 s apart, at you; phase 3 outside a frenzy every allout_gun_s)
-        s.gunAt = now + ((hot3 and not s.frenzyUntil) and ph.allout_gun_s or c.gun_every_s)
-        local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
+        -- (the event: 5 shots 0.1 s apart, at you; phase 3 outside a frenzy every allout_gun_s, and a co-op host's then
+        -- on its own game alone: hot3 is the host's geometry, and forwarded it fired each joiner's copy at that joiner;
+        -- code review of 2026-10-29. A frenzy's are forwarded as before)
+        local allout = hot3 and not s.frenzyUntil
+        s.gunAt = now + (allout and ph.allout_gun_s or c.gun_every_s)
+        local r
+        if allout and COOP and COOP.host() and COOP.eventHere then
+            r = COOP.eventHere("RE_SV_GlitchGun")
+            if not s.gunHereSaid then
+                s.gunHereSaid = true
+                log(string.format("special: %s's phase-3 gun events on the host alone (its joiners' copies fire their own)", c.name))
+            end
+        else
+            r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
+        end
         s.shots = (s.shots or 0) + 1
         if r ~= 1 and not s.gunSaid then s.gunSaid = true; log("special: RE_SV_GlitchGun not fired: " .. (SV_ERR[r] or tostring(r))) end
     end

@@ -931,7 +931,8 @@ CFG = {
     -- the next wave comes when the last thins out"): a round's flights come in waves of at most max_up aircraft
     -- (max_up_by_preset by the game's difficulty), the special and the bombers in the first; the next wave once next_at or
     -- fewer of the round's aircraft are left, or (timeout_s > 0) timeout_s after the last wave's last flight came, not
-    -- counting time down at the airfield. enabled = false: all at once. timeout_s 0, by kills only (a run of 2026-10-24:
+    -- counting time down at the airfield (a co-op host's while another player flies counts: othersFlying). enabled =
+    -- false: all at once. timeout_s 0, by kills only (a run of 2026-10-24:
     -- "Wave 2 sometimes comes right after Wave 1 spawns ... instead changing it to be based on kills"; was 150 s from
     -- the round's start, which a long stop at the airfield used up). From CFG.late.aircraft_from_round max_up grows
     -- with late.max_up_per_round a round, up to late.max_up_cap (TIER.maxUp).
@@ -1051,7 +1052,9 @@ CFG = {
     -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
     -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
     -- max_players: the host's room, 2 to 24 (you included; user, 2026-10-26: "allow up to 24 players in a lobby ... leave
-    -- it there for choice"); joiners link to the host only, which relays their planes.
+    -- it there for choice"); joiners link to the host only, which relays their planes. The host down at the airfield
+    -- holds the new enemies only while nobody else flies (user, 2026-10-29: "the game isn't paused for the other
+    -- players"; sv_rounds.lua othersFlying).
     coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 24,
              split_share = 0.5, callouts = true, leaderboard = false,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
@@ -1172,7 +1175,8 @@ CFG = {
         -- surfacing; warn_s before each its radio call (CFG.tells alcn_deck) and a callout, only once the launch can go
         -- (a launch held is told again warn_s before it goes; another tell's gap holds it a second, twice at most); never
         -- more than max_up of its flights up at once, never while you're down at the airfield (a flight that appears in
-        -- the landing menu gets no orders). alt_m: at least 1100 (the pool's 2-ship units fly 1000 m and up: survival
+        -- the landing menu gets no orders) but on a co-op host while another player flies (sv_rounds.lua othersFlying;
+        -- ordersTick gives it its orders). alt_m: at least 1100 (the pool's 2-ship units fly 1000 m and up: survival
         -- WD's MinAltitudeInMeter, code review of unit 9). A round's launches: `flights` + flights_per_round x the round,
         -- at most max_flights; from specials.escort_from its escorts come off the deck too (escorts: their aircraft in
         -- flights of `size`, none from a spawn point). false: no launches (its escorts as before)

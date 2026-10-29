@@ -589,22 +589,53 @@ function playerOnAirfield(you)
     return math.sqrt(dx * dx + dy * dy) < 300000 and you.Z < 10000
 end
 
+-- The other players flying (a co-op host's: alive, in the mission, not down at the airfield themselves; COOP.players()),
+-- 0 solo or on a joiner. While you're down at the airfield, the spawns, a flight's orders, the wave clock, the Wolf trap's
+-- clock and the ALICORN's deck wait for your takeoff only when it's 0 (user, 2026-10-29: "when the HOST is landed at the
+-- airfield that the game isn't paused for the other players"; Shazzy's host log of 2026-10-25: holds of 10-43 s).
+function othersFlying()
+    if not (COOP and COOP.host and COOP.host()) then return 0 end
+    local n = 0
+    for _, e in ipairs(COOP.players()) do
+        if not e.isMe and e.alive and e.fresh and not e.onAirfield then n = n + 1 end
+    end
+    return n
+end
+local function flyingText(n) return n == 1 and "1 other player flying" or (n .. " other players flying") end
+
 local ordersTick
 do
 -- A fighter flight's orders (player only, air search) come from its appearance trigger, which also sets SV_Up_NN. One
 -- that appeared while the landing menu was up never got them (test of 2026-10-22: two F-16 flights attacked the
--- airfield), so a flight still unflagged CFG.orders_check_s after spawning gets them from RE_SV_FlightOrders_NN.
+-- airfield), so a flight still unflagged CFG.orders_check_s after spawning gets them from RE_SV_FlightOrders_NN. Down at
+-- the airfield its tries wait for your takeoff; in co-op with another player flying it's fired then too, again every
+-- 5 s while you're down and not counted as a try (whether it fires with your landing menu up isn't known), and the
+-- tries come after your takeoff as ever.
 function ordersTick(now)
     for u, o in pairs(D.orders) do
         if now >= o.at then
             local i, t = poolIndex(u), svFlags()
+            local down = t and playerOnAirfield()
+            local flying = down and othersFlying() or 0
             if not i or SV_UnitAlive(u) <= 0 then
                 D.orders[u] = nil
-            elseif not t or playerOnAirfield() then      -- grounded: the landing menu may be up
+            elseif not t or (down and flying == 0) then  -- grounded: the landing menu may be up
                 o.at = now + 1
             elseif (t[string.format("SV_Up_%02d", i)] or 0) >= 1 then
-                if o.tries > 0 then log("orders: " .. u .. " has its orders now") end
+                if o.tries > 0 or o.downTries then
+                    log("orders: " .. u .. " has its orders now" .. (o.downTries and string.format(" (%d fired while you were "
+                        .. "down at the airfield)", o.downTries) or ""))
+                end
                 D.orders[u] = nil
+            elseif down and type(SV_Event) == "function" then  -- (co-op: you down, another player flying)
+                o.downTries, o.at = (o.downTries or 0) + 1, now + 5
+                local ev = string.format("RE_SV_FlightOrders_%02d", i)
+                local r = SV_Event(ev)
+                if o.downTries == 1 then
+                    log(string.format("orders: %s appeared without its orders while you're down at the airfield (%s); %s %s "
+                        .. "(again every 5 s while you're down, not a try)", u, flyingText(flying), ev,
+                        r == 1 and "fired" or ("not fired (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+                end
             elseif o.tries >= 3 or type(SV_Event) ~= "function" then
                 log("orders: " .. u .. " never got its orders (SV_Up_" .. string.format("%02d", i) .. " still 0)")
                 D.orders[u] = nil
@@ -667,10 +698,16 @@ function roundsTick(now)
         if now >= D.at then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
-        if playerOnAirfield() then                 -- the landing menu may be up, and a flight that appears then gets no orders
+        local flying = playerOnAirfield() and othersFlying()
+        if flying == 0 then                        -- the landing menu may be up, and a flight that appears then gets no orders
             if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end
             D.at = now + 1
             return
+        elseif flying then                         -- (co-op: not while another player flies; ordersTick gives them orders)
+            if D.held == D.round or D.goneOn ~= D.round then
+                D.held, D.goneOn = nil, D.round
+                log(string.format("round %d: spawns go on while you're down at the airfield (%s)", D.round, flyingText(flying)))
+            end
         end
         if D.held == D.round then D.held = nil; log(string.format("round %d: you took off, spawns go on", D.round)) end
         -- (the intensity director's hold, P4: the rest of a later wave waits while a player's under heavy pressure, a
@@ -717,7 +754,8 @@ function roundsTick(now)
     elseif D.state == "wave" then                    -- (CFG.waves) the round's aircraft left, once a second
         if now < D.at then return end
         D.at = now + 1
-        if playerOnAirfield() then D.waveAt = D.waveAt + (now - (D.waveSeen or now)) end   -- (the clock stops while you're down)
+        -- (the clock stops while you're down, but not in co-op while another player flies)
+        if playerOnAirfield() and othersFlying() == 0 then D.waveAt = D.waveAt + (now - (D.waveSeen or now)) end
         D.waveSeen = now
         local alive = 0
         for u in pairs(D.up) do

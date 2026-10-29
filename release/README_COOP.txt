@@ -27,9 +27,10 @@ Each friend's plane carries their name on its target box. "<NAME> JOINED" shows 
 
 The host's game runs the rounds and every enemy; the others fight the same enemies, see the same rounds, callouts and
 airfield, and everyone sees everyone else's plane. Each of you earns your own zollars: an enemy you hit at all pays you
-in full, one only your wingmates hit pays half. Each of you lands and shops at your own airfield store. If one of you is
-shot down, retry: you rejoin the same run. If the host retries, the run starts over for everyone. Co-op runs are not
-sent to the leaderboard.
+in full, one only your wingmates hit pays half. Each of you lands and shops at your own airfield store; while the host
+is down at the airfield new enemies keep coming as long as someone else is flying (alone, they wait for the host's
+takeoff). If one of you is shot down, retry: you rejoin the same run. If the host retries, the run starts over for
+everyone. Co-op runs are not sent to the leaderboard.
 
 Optional settings (none are needed), in ...\Win64\ue4ss\Mods\AC8SurvivalMode\config\survival.ini under a [coop] line
 (made the first time Survival Mode runs; edit survival.ini, not survival.default.ini; restart the game after a change):

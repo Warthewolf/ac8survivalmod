@@ -117,8 +117,10 @@ end
 -- that game so its own copies shoot at it, never by "ev" to every joiner): "dv", the event, its flight and a delay (the
 -- tell's lead, timed there so the link's latency doesn't eat it). Only RE_SV_Salvo_<NN><L>, RE_SV_Dir*_<NN> and
 -- RE_SV_Wolf*_<NN><L> names, the flight the event's own (NN its pool index); the delay 0-3 s; the joiner drops it when
--- its level isn't ready, it has no live copy of that plane (or flight), or more than DV_PER_S came that second.
-local DV_PER_S, DV_MAX_S = 8, 3.0
+-- its level isn't ready, it has no live copy of that plane (or flight), or more than DV_PER_S came that second, and one
+-- still queued DV_LATE_S past its time (its level stopped being ready meanwhile: a salvo seconds late misleads; code
+-- review of 2026-10-29).
+local DV_PER_S, DV_MAX_S, DV_LATE_S = 8, 3.0, 1.0
 local function dvName(ev)
     return type(ev) == "string" and #ev <= 64 and (ev:match("^RE_SV_Salvo_%d%d%u$") or ev:match("^RE_SV_Dir%a+_%d%d$")
         or ev:match("^RE_SV_Wolf%a+_%d%d%u$")) ~= nil
@@ -248,6 +250,13 @@ if rawEvent then
         return r
     end
 end
+-- An event fired on this game alone, whatever mirroredEvent says of its name: AB.L..IN's phase-3 gun (RE_SV_GlitchGun
+-- outside a frenzy) is aimed on the host's geometry, and forwarded it fired each joiner's copy at that joiner while the
+-- host was close in front of it (code review of 2026-10-29); its frenzies' are still forwarded
+function COOP.eventHere(name)
+    local fire = rawEvent or SV_Event
+    return type(fire) == "function" and fire(name) or -5
+end
 
 ---------------------------------------------------------------------------------------------------- host
 local function opsText(ops)
@@ -357,6 +366,14 @@ local function holdWaitS()
     local tc = CFG.director and CFG.director.top_cover
     return (tonumber(tc and tc.max_s) or 45) + 120
 end
+-- ... and a Wolf trap at most: an ace trap's wait for its first contact (P9), the trap's hold_max_s after it, with its
+-- orders' wait and your decoy over them
+local function wolfWaitS()
+    local w, pc = CFG.roles and CFG.roles.wolf, CFG.aces and CFG.aces.personality
+    local trap = type(pc) == "table" and type(pc.openers) == "table" and pc.openers.trap
+    return (type(trap) == "table" and tonumber(trap.hold_max_s) or 300)
+        + (type(w) == "table" and tonumber(w.hold_max_s) or 60) + 120
+end
 
 local function hostTick()
     local now = os.clock()
@@ -442,9 +459,18 @@ local function hostTick()
         local h = M.hunts[i]
         if now >= h.at then
             table.remove(M.hunts, i)
-            if D and D.up and D.up[h.unit] and WOLF and WOLF.holding(h.unit) then
-                -- (a Wolf flight holding its trap, CFG.roles.wolf: the hunt's unit-wide order would free it)
-                log("coop: " .. h.unit .. " holds its Wolf trap; it doesn't go after the joiners")
+            local wolf = D and D.up and D.up[h.unit] and WOLF and WOLF.holding(h.unit)
+            if wolf and now - (h.wolfAt or now) < wolfWaitS() then
+                -- (a Wolf flight holding its trap, CFG.roles.wolf: the hunt's unit-wide order would free it, so it waits
+                -- for the trap's release; it was dropped, and a trap is still pending or held at +5 s, so no Wolf
+                -- flight ever went after the joiners: code review of 2026-10-29)
+                if not h.wolfAt then
+                    log("coop: " .. h.unit .. " holds its Wolf trap; it goes after the joiners once that's let go")
+                end
+                h.at, h.wolfAt = now + 2, h.wolfAt or now
+                M.hunts[#M.hunts + 1] = h
+            elseif wolf then
+                log(string.format("coop: %s held its Wolf trap %.0f s; it doesn't go after the joiners", h.unit, now - h.wolfAt))
             elseif D and D.up and D.up[h.unit] and DIR and DIR.holding and DIR.holding(h.unit) and now - (h.since or now) < holdWaitS() then
                 -- (one the squad director holds back, CFG.director: the hunt again once it's let go, which gives it back;
                 -- the hunt's unit-wide order would free it while it's still held, here and not on the joiners' copies)
@@ -453,7 +479,8 @@ local function hostTick()
             elseif D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
                 if r == 1 and M.units[h.unit] then M.hunted = M.hunted or {}; M.hunted[h.unit] = M.units[h.unit].gen end
-                log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")")
+                log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")" ..
+                    (h.wolfAt and string.format(", its Wolf trap let go after %.0f s", now - h.wolfAt) or ""))
             end
         end
     end
@@ -539,7 +566,20 @@ local function bindCopy(id, o)
     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
     pcall(function() o:SetMinHealth(0.1) end)               -- (it goes down when the host's does)
-    M.copies[id] = { obj = o, exp = health(o) or 0 }
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a }
+end
+
+-- (a joiner) copy o's health scaled here (sv_ai.lua enemyLate: CFG.late, a Skirmisher's x0.75, as the host scales its
+-- own): what it's expected to have moves with it, so clientTick sends the host only the hits since (code review of
+-- 2026-10-29: a joiner's x0.75 went to the host as that player's hit, x0.5 there). Whether o is a bound copy.
+function COOP.copyScaled(o, h0, h1)
+    if not (COOP.client() and type(h0) == "number" and type(h1) == "number") then return false end
+    local a = addrOf(o)
+    if not a then return false end
+    for _, c in pairs(M.copies) do
+        if c.addr == a then c.exp = c.exp + (h1 - h0); return true end
+    end
+    return false
 end
 
 local function clientPlane(o, unit)
@@ -570,7 +610,7 @@ end
 local function killAllCopies(why)
     local n = 0
     for id, c in pairs(M.copies) do killCopy(id, c.obj); n = n + 1 end
-    M.copies, M.cunits, M.spawnQ, M.dead = {}, {}, {}, {}
+    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
     if n > 0 then log("coop: " .. n .. " copies taken down (" .. why .. ")") end
 end
 
@@ -610,6 +650,8 @@ local function doSpawn(q)
     M.lastSpawnAt = os.clock()
     if type(r) ~= "number" or r <= 0 then
         log("coop: the host's " .. unit .. " not spawned here (" .. (SV_ERR[r] or tostring(r)) .. ")")
+    else
+        M.cunits[unit].upAt = M.lastSpawnAt                  -- (its appearance orders 2 s on: holdDue)
     end
     return true
 end
@@ -622,6 +664,53 @@ local function levelReady()
     if not (D and valid(pawn)) then M.readyAt = nil; return false end
     M.readyAt = M.readyAt or (os.clock() + READY_S)
     return os.clock() >= M.readyAt
+end
+
+-- A forwarded hold (RE_SV_DirHold_NN, the squad director's; RE_SV_WolfHold_<NN><L>, a Wolf trap's) waits here until
+-- that flight's copy has had its appearance orders (2 s after it appears; they'd undo an earlier hold, hard rule 26): the
+-- host holds its own 3 s after its orders, but a copy spawned late here (doSpawn's retries, a level still loading) got
+-- the hold first and lost it (review of unit 6). Its flight's release (RE_SV_DirFree_NN; that plane's RE_SV_WolfFree)
+-- drops a hold still waiting; one whose copy isn't up HOLD_MAX_S on is dropped.
+local HOLD_AFTER_S, HOLD_MAX_S = 3, 30
+local function holdOf(name, kind)                       -- a hold's (or a release's) flight NN and plane letter, or nil
+    local nn = name:match("^RE_SV_Dir" .. kind .. "_(%d%d)$")
+    if nn then return tonumber(nn), nil end
+    local wn, L = name:match("^RE_SV_Wolf" .. kind .. "_(%d%d)(%u)$")
+    if wn then return tonumber(wn), L end
+    return nil
+end
+local function holdDue(nn)                              -- when flight NN's copy here can take a hold: nil, at once (none)
+    for _, q in ipairs(M.spawnQ) do if poolIndex(q.unit) == nn then return math.huge end end
+    for unit, cu in pairs(M.cunits) do
+        if poolIndex(unit) == nn then return cu.upAt and cu.upAt + HOLD_AFTER_S or math.huge end
+    end
+    return nil
+end
+local function freeWaiting(name)                       -- a release fired here: the holds it ends that still wait
+    local fn, fL = holdOf(name, "Free")
+    if not (fn and M.holdQ) then return end
+    for i = #M.holdQ, 1, -1 do
+        local q = M.holdQ[i]
+        if q.nn == fn and (fL == nil or q.L == fL) then
+            table.remove(M.holdQ, i)
+            log("coop: the host's " .. q.name .. " dropped here (" .. name .. " came before it could go)")
+        end
+    end
+end
+local function hostEvent(name)                          -- (a joiner) one of the host's events, here
+    local nn, L = holdOf(name, "Hold")
+    local due = nn and holdDue(nn)
+    if due and os.clock() < due then
+        M.holdQ = M.holdQ or {}
+        if #M.holdQ < 32 then
+            M.holdQ[#M.holdQ + 1] = { name = name, nn = nn, L = L, at = os.clock() }
+            log("coop: the host's " .. name .. " waits for its copy here to have its own orders")
+        end
+        return
+    end
+    freeWaiting(name)
+    local r = rawEvent(name)
+    if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
 end
 
 local function clientRounds(now)
@@ -651,12 +740,31 @@ local function clientRounds(now)
         local keep = {}
         for _, q in ipairs(M.dvQ) do
             if os.clock() < q.at then keep[#keep + 1] = q
+            elseif os.clock() > q.at + DV_LATE_S then
+                once("dvlate", string.format("coop: the host's director event %s dropped (%.1f s past its time: this level "
+                    .. "wasn't ready)", q.name, os.clock() - q.at))
             elseif dvCopy(q.name, q.unit) then
+                freeWaiting(q.name)
                 local r = rawEvent(q.name)
                 log(string.format("coop: director %s fired here (%s): %s", q.name, q.unit, r == 1 and "fired" or (SV_ERR[r] or tostring(r))))
             end
         end
         M.dvQ = keep
+    end
+    if M.holdQ and #M.holdQ > 0 then                     -- the host's holds once their copies have had their orders
+        local keep, t = {}, os.clock()
+        for _, q in ipairs(M.holdQ) do
+            local due = holdDue(q.nn)
+            if due and t < due and t - q.at < HOLD_MAX_S then keep[#keep + 1] = q
+            elseif due and t < due then
+                log(string.format("coop: the host's %s dropped here (its copy wasn't up %d s on)", q.name, HOLD_MAX_S))
+            else
+                local r = rawEvent(q.name)
+                log(string.format("coop: the host's %s fired here %.1f s after it came (its copy's orders first): %s", q.name,
+                    t - q.at, r == 1 and "fired" or (SV_ERR[r] or tostring(r))))
+            end
+        end
+        M.holdQ = keep
     end
     if ANOM and ANOM.clientTick then                     -- the Anomaly's field on your own distance to its copy
         local okA, errA = pcall(ANOM.clientTick)
@@ -681,10 +789,7 @@ local function clientRounds(now)
         local q = M.evQ
         M.evQ = nil
         for _, e in ipairs(q) do
-            if os.clock() - e.at < 60 then
-                local r = rawEvent(e.name)
-                if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. e.name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
-            end
+            if os.clock() - e.at < 60 then hostEvent(e.name) end      -- (a hold: once its copy has had its orders)
         end
     end
 end
@@ -1209,11 +1314,10 @@ local function onJoinerMessage(f)
             M.evQ = M.evQ or {}
             if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock() } end
         elseif mirroredEvent(f[2]) and D and rawEvent then
-            local r = rawEvent(f[2])
-            if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. tostring(f[2]) .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+            hostEvent(f[2])
         end
     elseif k == "rs" then
-        M.evQ, M.dvQ = nil, nil
+        M.evQ, M.dvQ, M.holdQ = nil, nil, nil
         killAllCopies("the host's run started over")
         -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
         -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
@@ -1521,7 +1625,7 @@ function COOP.tick(tick)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj) } or {}
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
-        M.replays, groundNew = {}, {}
+        M.replays, groundNew, M.holdQ = {}, {}, nil
         if D then
             if COOP.host() then send(true, "rs") else M.jnAt = os.clock(); send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
