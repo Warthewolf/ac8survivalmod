@@ -129,6 +129,13 @@ local function shopClosed()
     return u ~= nil and D ~= nil and (D.round < u or (D.round == u and D.state ~= "wait"))
 end
 
+-- The airfield defences' kinds (CFG.shop.items.Airfield.defences: AA guns, SAM sites and, from 0.72.1, the CIWS), in
+-- the order the STORE, the HUD's ALLIES row and sv_allies.lua's watch list them.
+DEF_KINDS = { "aa", "sam", "ciws" }
+
+-- A defence of `kind` the STORE can't build in this game: the CIWS while its DT_NPC row isn't in (ALLY.setup)
+local function defenceMissing(kind) return kind == "ciws" and ALLY.ciwsReady == false end
+
 -- The airfield row's offer once the airfield is whole: the next defence to build ({ kind, unit, def, price }), or nil
 -- when every one is up.
 local function defenceOffer()
@@ -136,10 +143,13 @@ local function defenceOffer()
     if not d or not D or not nativeReady() then return nil end
     RUN.defences = RUN.defences or { built = 0, bought = {} }
     local function free(kind)
+        if defenceMissing(kind) then return nil end
         for _, u in ipairs(d[kind].units) do if SV_UnitAlive(u) <= 0 then return u end end
     end
     local first = d.order[RUN.defences.built % #d.order + 1]
-    for _, kind in ipairs({ first, first == "aa" and "sam" or "aa" }) do
+    local kinds = { first }                          -- (its turn's kind first, then the others)
+    for _, k in ipairs(DEF_KINDS) do if k ~= first then kinds[#kinds + 1] = k end end
+    for _, kind in ipairs(kinds) do
         local u = d[kind] and d[kind].units and free(kind)
         if u then
             local def = d[kind]
@@ -189,7 +199,7 @@ end
 local function defenceFor(kind)
     local d = CFG.shop.items.Airfield.defences
     local def = d and d[kind]
-    if not (def and D and nativeReady()) then return nil end
+    if not (def and D and nativeReady()) or defenceMissing(kind) then return nil end
     RUN.defences = RUN.defences or { built = 0, bought = {} }
     for _, u in ipairs(def.units) do
         if SV_UnitAlive(u) <= 0 then
@@ -322,16 +332,21 @@ local function offer(name)
         if not c.enabled or not ALLY.ready or (it.ally == "wingmen" and not ALLY.wingmenReady) then o.why = "NOT AVAILABLE."
         elseif not free then o.why = o.role == "ally_air" and "BOTH ALLIED FLIGHTS ARE UP." or string.format("ALL %d ARE AT SEA.", #units)
         else o.price, o.unit = shopPrice(name), free end
-    else                                             -- a defence: aa / sam, or the old row's next one in turn
+    else                                             -- a defence: aa / sam / ciws, or the old row's next one in turn
         local aa, aaMax = defencesUp("aa")
         local sam, samMax = defencesUp("sam")
-        local up = string.format(" (AA guns %d of %d, SAM sites %d of %d up)", aa, aaMax, sam, samMax)
+        local ciws, ciwsMax = defencesUp("ciws")
+        local up = string.format(" (AA guns %d of %d, SAM sites %d of %d, CIWS %d of %d up)", aa, aaMax, sam, samMax, ciws, ciwsMax)
         local f = (o.role == "defence") and defenceOffer() or defenceFor(o.role)
         local def = CFG.shop.items.Airfield.defences[o.role] or (f and f.def)
         o.label = f and ("BUILD " .. f.def.label) or ((o.role == "defence" and "AIRFIELD DEFENCES" or ("BUILD " .. def.label)) .. ": ALL BUILT")
-        o.help = f and string.format("Builds %s at the airfield for the rest of the run%s.", f.def.what, up)
+        o.help = f and string.format("Builds %s %s for the rest of the run%s.", f.def.what,
+                                     f.kind == "ciws" and "by the runway" or "at the airfield", up)
             or ("Every one is up" .. up .. ".")
-        if f then o.price, o.unit, o.kind, o.def = f.price, f.unit, f.kind, f.def else o.why = "ALL BUILT." end
+        if f then o.price, o.unit, o.kind, o.def = f.price, f.unit, f.kind, f.def
+        elseif defenceMissing(o.role) then
+            o.label, o.why, o.help = "BUILD " .. def.label, "NOT AVAILABLE.", "Not in this game's tables" .. up .. "."
+        else o.why = "ALL BUILT." end
     end
     return o
 end
@@ -385,7 +400,9 @@ function shopTexts()
         { key = "Tactical", title = "SV_Store_TitleTactical", landing = "SV_Shop_StoreTac", name = "TACTICAL",
           what = "Airstrikes, ECM bursts, decoys and the SECOND CHANCE." },
         { key = "Airfield", title = "SV_Store_TitleAirfield", landing = "SV_Shop_StoreAf", name = "AIRFIELD",
-          what = "Aircraft and airfield repairs, AA guns and SAM sites." },
+          what = "Aircraft and airfield repairs, and the airfield's defences." },
+        { key = "Defences", title = "SV_Store_TitleDefences", name = "DEFENCES",
+          what = "AA guns, SAM sites and CIWS around the runway." },
         { key = "Docks", title = "SV_Store_TitleDocks", name = "ALLIES",
           what = "Allied fighters and ships, and the allies' orders." },
     }
@@ -512,7 +529,7 @@ function shopBuy(name)
     else                                             -- the airfield
         AF.full, AF.base, AF.bombBase = math.min(AF.max or CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
         AF.hp = AF.full                             -- airfieldTick works health out from these from now on
-        pcall(ALLY.repairDefences)                  -- (its AA guns and SAM sites with it: economy review, "repair them
+        pcall(ALLY.repairDefences)                  -- (its AA guns, SAM sites and CIWS with it: economy review, "repair them
                                                     -- with the airfield")
     end
     RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price

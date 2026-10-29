@@ -380,15 +380,16 @@ SHOP = {
     rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
     all = { "SVShopStore", "SVShopStoreUp", "SVShopStoreTac", "SVShopStoreAf", "SVShopMissiles", "SVShopSpecial",
             "SVShopFlares", "SVShopAirfield" },
-    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20-24 (SUPPLIES, AIRFIELD, ALLIES, UPGRADES,
-    -- TACTICAL: rows "20" .. "24" open them), added to the in-game menu table at the main menu, before a level builds its
-    -- menu list from it
+    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20-25 (SUPPLIES, AIRFIELD, ALLIES, UPGRADES,
+    -- TACTICAL, DEFENCES: rows "20" .. "25" open them), added to the in-game menu table at the main menu, before a level
+    -- builds its menu list from it
     menuMine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows",
     menuGame = "/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData",
     menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 },
                  { row = "SVStoreDocks", id = "SV_StoreDocks", index = 22 },
                  { row = "SVStoreUpgrades", id = "SV_StoreUpgrades", index = 23 },
-                 { row = "SVStoreTactical", id = "SV_StoreTactical", index = 24 } },
+                 { row = "SVStoreTactical", id = "SV_StoreTactical", index = 24 },
+                 { row = "SVStoreDefences", id = "SV_StoreDefences", index = 25 } },
     -- each row's icon (stock textures; the aircraft repair shows the player's own plane when the game has its icon)
     icons = {
         Missiles = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
@@ -399,6 +400,7 @@ SHOP = {
         Airfield = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
         AAGun    = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
+        Ciws     = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_mgp_a0",                    -- (a gun pod's)
         Moonchild   = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
         ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",   -- (no ship icon in the game: an ally's)
         -- (the review build's rows: stock textures already used above)
@@ -418,6 +420,7 @@ SHOP = {
         ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                    -- ALLIES >
         ["23"]   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_qaam_a0",                 -- UPGRADES >
         ["24"]   = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",            -- TACTICAL >
+        ["25"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Gnd_000",                          -- DEFENCES >
     },
 }
 SH = { added = false, addr = nil, warned = {}, decor = {} }

@@ -1,0 +1,361 @@
+-- defences_test.lua <mod dir> <work dir> (run by tools/checks/defences_test.sh): the stronger airfield defences and the
+-- STORE's CIWS (0.72.1; user, 2026-10-29: "make Allied SAMs and Anti Air Guns more effective, increase their lock on
+-- range, also increase the lifetime of the missile they fire, increase their abilities and Add CIWS that can be
+-- purchased and placed around the airfield"), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn,
+-- sv_rounds, sv_flights, sv_shop, sv_allies and sv_tactical, the game's tables stubbed with the stock rows' numbers
+-- (DT_NPC_FCS, DT_NPC_Weapon and DT_NPC_AIModule as build/stock has them; DT_NPC and DT_SV_NpcRows):
+--   ALLY.setup: each defence's fire control <FCS>_SVA_Defence, before -> after in its log line: the AA guns' lock-on
+--     range, flak reach and width, the SAM sites' missile, the CIWS's gun on the ships' Mk 15 fire control all the way
+--     round with its rounds' flight, faster turrets, the fire-rate boost kept, the search module, each defence row's
+--     health; the Aegis's own as before (its Mk 15 still +-60, its rounds as they were); CIWS fcs_row none or a row the
+--     game hasn't; a container without the CIWS row (the rest still sold, the CIWS NOT AVAILABLE);
+--   the STORE: the DEFENCES page's CIWS row (its price and raise, its four units in order, ALL BUILT), the old fourth
+--     row's turn takes the CIWS;
+--   ALLY.tick / hudLine: the CIWS on the ALLIES row, a lost one's callout and line; repairs; KILL.side's "defences";
+--   the build in step: build_survival.py's DEFENCES page and model check, sv_flights' SHOP.menuRows and icons.
+local MOD, WORK = arg[1], arg[2]
+local fails = 0
+local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
+local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
+local function near(a, b) return type(a) == "number" and math.abs(a - b) < 1e-6 end
+do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
+    local rawOpen = io.open
+    io.open = function(p, m) return rawOpen((tostring(p):gsub("\\", "/")), m) end
+end
+writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
+
+local clock = 1000
+os.clock = function() return clock end           -- luacheck: ignore
+
+-- the game's world, stubbed
+VERSION = "0.72.1-defences.test"
+local FNm = { __index = { ToString = function(self) return self.s end }, __tostring = function(self) return self.s end }
+function FName(s) return setmetatable({ s = tostring(s) }, FNm) end
+local nextAddr = 100
+local function addr() nextAddr = nextAddr + 1; return nextAddr end
+-- a DataTable: FindRow hands back the row itself (edited in place, as UE4SS's), AddRow copies it in
+local DTm = {}
+DTm.__index = DTm
+function DTm:FindRow(n) return self.rows[tostring(n)] end
+function DTm:AddRow(n, r)
+    n = tostring(n)
+    local c = {}
+    for k, v in pairs(r) do c[k] = v end
+    if not self.rows[n] then self.order[#self.order + 1] = n end
+    self.rows[n] = c
+end
+function DTm:RemoveRow(n)
+    n = tostring(n)
+    self.rows[n] = nil
+    for i, o in ipairs(self.order) do if o == n then table.remove(self.order, i); break end end
+end
+function DTm:GetRowNames() return self.order end
+local function dt(full, rows)
+    local t = setmetatable({ full = full, addr = addr(), rows = {}, order = {} }, DTm)
+    for _, r in ipairs(rows or {}) do t:AddRow(r[1], r[2]) end
+    return t
+end
+local NONE = FName("None")
+local function npcRow(fcs0, extra)                -- a DT_NPC row: NpcFCSId0 (or None) and nothing else of note
+    local r = { NpcAIModuleId = NONE, MaxHealthDifference = 0 }
+    for i = 0, 5 do r["NpcFCSId" .. i] = NONE end
+    if fcs0 then r.NpcFCSId0 = FName(fcs0) end
+    for k, v in pairs(extra or {}) do r[k] = v end
+    return r
+end
+-- the stock rows' numbers (build/stock: DT_NPC_FCS, DT_NPC_Weapon, DT_NPC_AIModule; tools/re/AIRFIELD_SUPPLY.md 4)
+local FCS_ROWS = {
+    { "NPC_FCS_VehicleAAGun000", { NpcAIModuleId = FName("NPC_AIModule_GroundVehicle000"), NpcWeaponId = FName("AAGUN_Ground_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 0.8, CaptureDistance = 2200.0, CaptureAngleRange = 30.0, ActivationTime = 0.5,
+      TriggeringTime = 2.0, TriggerCount = 1, ShotIntervalTime = 2.0, RestingTime = 1.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 30.0, YawAngleMin = -180.0, YawAngleMax = 180.0, PitchSpeed = 30.0, PitchAngleMin = 0.0, PitchAngleMax = 85.0 } },
+    { "NPC_FCS_VehicleSAM001", { NpcAIModuleId = FName("NPC_AIModule_Turret000"), NpcWeaponId = FName("SAM_Ground_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 0.0, CaptureDistance = 3000.0, CaptureAngleRange = 30.0, ActivationTime = 2.0,
+      TriggeringTime = 5.0, TriggerCount = 1, ShotIntervalTime = 5.0, RestingTime = 10.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 30.0, YawAngleMin = -180.0, YawAngleMax = 180.0, PitchSpeed = 30.0, PitchAngleMin = 0.0, PitchAngleMax = 45.0 } },
+    { "NPC_FCS_VesselCIWS000", { NpcAIModuleId = FName("NPC_AIModule_Turret000"), NpcWeaponId = FName("CIWS_Vessel_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 0.8, CaptureDistance = 2500.0, CaptureAngleRange = 30.0, ActivationTime = 0.5,
+      TriggeringTime = 3.0, TriggerCount = 1, ShotIntervalTime = 3.0, RestingTime = 1.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 37.5, YawAngleMin = -60.0, YawAngleMax = 60.0, PitchSpeed = 30.0, PitchAngleMin = 1.0, PitchAngleMax = 60.0 } },
+}
+local WPN_ROWS = {
+    { "AAGUN_Ground_000", { MaxSpawnAngle = 1.0, LifeTime = 3.0, bIsHoming = false, DamageAreaLengthMeters = 2000.0,
+      DamageAreaRadiusMeters = 20.0 } },
+    { "SAM_Ground_000", { MaxSpawnAngle = 0.0, LifeTime = 7.3, bIsHoming = true, AccelerationKmph = 300.0, SpeedMaxKmph = 3000.0,
+      MaxRotationAngle = 15.0, HomingReductionInCloud = 0.5, DamageAreaLengthMeters = 0.0, DamageAreaRadiusMeters = 0.0 } },
+    { "CIWS_Vessel_000", { MaxSpawnAngle = 1.0, LifeTime = 3.0, bIsHoming = false, DamageAreaLengthMeters = 0.0,
+      DamageAreaRadiusMeters = 0.0 } },
+}
+local MINE_ROWS = {                               -- DT_SV_NpcRows' allies (tools/build_survival.py build_npc_rows)
+    { "SV_Ally_Moonchild", npcRow() }, { "SV_Ally_Wingmen", npcRow() }, { "SV_Ally_Aegis", npcRow() },
+    { "SV_Def_Gepa", npcRow("NPC_FCS_VehicleAAGun000") }, { "SV_Def_Avng", npcRow("NPC_FCS_VehicleSAM001") },
+    { "SV_Def_Ciws", npcRow() },                  -- (GR033_ciws_01's: no fire control row of its own)
+    { "SV_Turret_aegs_mk15_Ally", npcRow("NPC_FCS_VesselCIWS000") }, { "SV_Turret_aegs_mk41_Ally", npcRow() },
+    { "SV_Turret_aegs_mk45_Ally", npcRow() }, { "SV_Turret_aegs_artillery_Ally", npcRow() },
+}
+local T = {}
+local function tables(mineRows)
+    T.npc, T.mine = dt("DT_NPC"), dt("DT_SV_NpcRows", mineRows or MINE_ROWS)
+    T.fcs, T.wpn = dt("DT_NPC_FCS", FCS_ROWS), dt("DT_NPC_Weapon", WPN_ROWS)
+    T.mod = dt("DT_NPC_AIModule", { { "NPC_AIModule_Turret000", { Radius = 6000.0, bEnableLostTargetInClouds = true } } })
+end
+tables()
+local GI = { full = "GameInstance", addr = 1 }
+local objects = {}                                -- FindAllOf's answers by class
+function NotifyOnNewObject() end
+function FindAllOf(c) return objects[c] or {} end
+function FindFirstOf(c) if c == "BP_LiveGameInstance_C" then return GI end return nil end
+local paths                                       -- (sv_config / sv_rows' table paths, filled once they're loaded)
+function StaticFindObject(p) return paths and paths[p] or nil end
+local events, alive, spawned = {}, {}, {}
+function SV_Event(name) events[#events + 1] = name; return 1 end
+function SV_UnitAlive(u) return alive[u] or 0 end
+function SV_SetAircraft() return 1 end
+function SV_SetLevel() return 1 end
+function SV_Spawn(u) spawned[#spawned + 1] = u; alive[u] = 1; return 1 end
+local texts = {}
+function SV_SetText(k, v) texts[k] = v; return 1 end
+local requests = {}
+function SV_ShopRequest(probe)
+    if probe then return 1 end
+    return table.remove(requests, 1) or ""
+end
+SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end, breakS = function() return 20 end,
+          skillAdd = function() return 0 end }
+
+local function part(name, chunk)
+    assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))()
+end
+part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
+local logs = {}
+local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
+function log(s) logs[#logs + 1] = s; logFile:write(os.date("%H:%M:%S ") .. s .. "\n") end
+function valid(o) return type(o) == "table" and not o.gone end
+function nameOf(o) return type(o) == "table" and (o.full or "?") or "?" end
+function addrOf(o) return type(o) == "table" and o.addr or nil end
+part("sv_config.lua")
+part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
+part("sv_flights.lua"); part("sv_shop.lua"); part("sv_allies.lua"); part("sv_tactical.lua")
+local onAirfield = true
+function playerOnAirfield() return onAirfield end
+local callouts = {}
+function hudCallout(t, sub) callouts[#callouts + 1] = tostring(t) .. " / " .. tostring(sub) end
+local function setPaths()
+    paths = { [PROBE_TABLES[2].path] = T.npc, [CFG.specials.shuttle.npc_rows] = T.mine, [FCS_TABLE] = T.fcs,
+              [WEAPON_TABLE] = T.wpn, [SEARCH_MODULE.path] = T.mod }
+end
+local function line(pat, from)
+    for i = #logs, from or 1, -1 do if logs[i]:find(pat, 1, true) then return logs[i] end end
+    return nil
+end
+local function setup(mineRows)
+    tables(mineRows)
+    setPaths()
+    ALLY.setupDone, ALLY.tries, ALLY.ready, ALLY.ciwsReady, ALLY.wingmenReady = nil, nil, nil, nil, nil
+    SR.done = true
+    local from = #logs + 1
+    ALLY.setup()
+    return from
+end
+local DEF = CFG.shop.items.Airfield.defences
+local SHIPCFG = CFG.allies.ships.Aegis
+
+---------------------------------------------------------------------------------------------------- ALLY.setup
+print("ALLY.setup: the airfield defences' fire control, search and health")
+local from = setup()
+local fcsLine = line("allies: the ships' and the airfield's own fire control: ", from)
+check(ALLY.ready == true and ALLY.ciwsReady == true and has(line("allies: 8 of 8 rows in DT_NPC", from), "CIWS in"),
+      "every ally row in DT_NPC, the CIWS's too (" .. tostring(line("rows in DT_NPC", from)) .. ")")
+local mod = T.mod:FindRow("NPC_AIModule_SV_Defence")
+check(mod and mod.Radius == DEF.fcs.search_m and mod.bEnableLostTargetInClouds == false
+      and has(line("allies: the airfield defences' turrets search 10000 m (NPC_AIModule_SV_Defence, was 6000 m)", from), "not lost in cloud"),
+      "the defences' search module: 6000 -> 10000 m, not lost in cloud, logged")
+-- the AA guns
+local aa = T.fcs:FindRow("NPC_FCS_VehicleAAGun000_SVA_Defence")
+local tx = CFG.allies.fcs.time_x
+check(T.npc:FindRow("SV_Def_Gepa").NpcFCSId0:ToString() == "NPC_FCS_VehicleAAGun000_SVA_Defence", "SV_Def_Gepa on NPC_FCS_VehicleAAGun000_SVA_Defence")
+check(aa and near(aa.CaptureDistance, 2200 * DEF.fcs.range_x) and aa.CaptureDistance == 4400, "AA guns: lock-on 2200 -> 4400 m (was 3520 with the allies' x1.6)")
+check(aa and near(aa.ActivationTime, 0.5 * tx * DEF.fcs.lock_x) and near(aa.ShotIntervalTime, 2.0 * tx * DEF.fcs.fire_x)
+      and near(aa.RestingTime, 1.0 * tx * DEF.fcs.fire_x) and near(aa.TriggeringTime, 2.0 * tx * DEF.fcs.lock_x),
+      string.format("AA guns: the fire-rate boost kept (arm %.3f s, lock %.2f s, %.2f s between, rest %.2f s)", aa.ActivationTime,
+                    aa.TriggeringTime, aa.ShotIntervalTime, aa.RestingTime))
+check(aa and aa.YawSpeed == 60 and aa.PitchSpeed == 60 and aa.YawAngleMin == -180 and aa.YawAngleMax == 180
+      and aa.NpcAIModuleId:ToString() == "NPC_AIModule_SV_Defence" and aa.bEnableLostTargetInClouds == false
+      and near(aa.PredictionOffsetTime, 0.8 * CFG.allies.fcs.aa_lead_x),
+      "AA guns: turrets 30 -> 60 deg/s, the defences' search, no cloud loss, the AA lead kept")
+local aaw = T.wpn:FindRow("AAGUN_Ground_000_SVA_Defence")
+check(aa and aa.NpcWeaponId:ToString() == "AAGUN_Ground_000_SVA_Defence" and aaw and aaw.DamageAreaLengthMeters == 4400
+      and aaw.DamageAreaRadiusMeters == 30 and near(aaw.MaxSpawnAngle, 0.4) and aaw.LifeTime == 3.0,
+      "AA guns' flak: hurts out to 2000 -> 4400 m, 20 -> 30 m round, spread x0.4, its 3 s burst as it was")
+check(has(fcsLine, "NPC_FCS_VehicleAAGun000_SVA_Defence (within 2200 -> 4400 m, arm 0.50 -> 0.1")   -- (0.1875: printf's tie)
+      and has(fcsLine, " s, lock 2.00 -> 0.75 s, "
+                   .. "2.00 -> 0.50 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Defence, yaw -180..180 at 30.0 -> "
+                   .. "-180..180 at 60.0 deg/s, rounds AAGUN_Ground_000_SVA_Defence: hurt out to 2000 -> 4400 m, 20 -> 30 m round)"),
+      "the log line: the AA guns' before -> after")
+-- the SAM sites
+local sam = T.fcs:FindRow("NPC_FCS_VehicleSAM001_SVA_Defence")
+local samw = T.wpn:FindRow("SAM_Ground_000_SVA_Defence")
+local mc = DEF.fcs.missile
+check(sam and sam.CaptureDistance == mc.range_m and mc.range_m == 8000, "SAM sites: lock-on 3000 -> 8000 m (was 4800)")
+check(samw and samw.LifeTime == 14 and samw.AccelerationKmph == 600 and samw.SpeedMaxKmph == 3600 and near(samw.MaxRotationAngle, 22.5)
+      and samw.HomingReductionInCloud == 0 and sam.NpcWeaponId:ToString() == "SAM_Ground_000_SVA_Defence",
+      "SAM missiles: 7.3 -> 14 s, 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15 -> 22.5, no cloud loss")
+do                                                -- (its reach: from 500 km/h, at that acceleration to that top speed)
+    local v0, a, vmax = 500 / 3.6, samw.AccelerationKmph / 3.6, samw.SpeedMaxKmph / 3.6
+    local t1 = math.min(samw.LifeTime, (vmax - v0) / a)
+    local reach = v0 * t1 + a * t1 * t1 / 2 + vmax * (samw.LifeTime - t1)
+    check(reach > 1.4 * sam.CaptureDistance, string.format("SAM missiles reach %.1f km straight out, past the %.0f km lock-on (was %.1f km)",
+          reach / 1000, sam.CaptureDistance / 1000, (500 / 3.6 * 7.3 + 300 / 3.6 * 7.3 * 7.3 / 2) / 1000))
+end
+check(has(fcsLine, "NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 8000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.8")
+      and has(fcsLine, " s, 5.00 -> 1.25 s between, rest 10.00 -> 2.50 s")
+      and has(fcsLine, "missile SAM_Ground_000_SVA_Defence: 7.3 -> 14 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5"),
+      "the log line: the SAM sites' before -> after")
+-- the CIWS
+local ciwsRow = T.npc:FindRow("SV_Def_Ciws")
+local cw = T.fcs:FindRow("NPC_FCS_VesselCIWS000_SVA_Defence")
+local cww = T.wpn:FindRow("CIWS_Vessel_000_SVA_Defence")
+check(ciwsRow and ciwsRow.NpcFCSId0:ToString() == "NPC_FCS_VesselCIWS000_SVA_Defence"
+      and has(line("allies: the CIWS's gun on NPC_FCS_VesselCIWS000: set", from), "boosted"),
+      "SV_Def_Ciws: its gun on the Mk 15's fire control (fcs_row), then the airfield's boost; logged")
+check(cw and cw.CaptureDistance == 5000 and cw.YawAngleMin == -180 and cw.YawAngleMax == 180 and cw.YawSpeed == 75
+      and near(cw.PredictionOffsetTime, 0.8 * CFG.allies.fcs.aa_lead_x) and cw.NpcAIModuleId:ToString() == "NPC_AIModule_SV_Defence",
+      "CIWS: lock-on 2500 -> 5000 m, all the way round (a ship mount's +-60 on land), 37.5 -> 75 deg/s, the AA lead, the search")
+check(cww and near(cww.LifeTime, 6.0) and cw.NpcWeaponId:ToString() == "CIWS_Vessel_000_SVA_Defence",
+      "CIWS rounds: 3.0 -> 6.0 s of flight (x the range's growth)")
+check(has(fcsLine, "NPC_FCS_VesselCIWS000_SVA_Defence (within 2500 -> 5000 m") and has(fcsLine, "yaw -60..60 at 37.5 -> -180..180 at 75.0 deg/s")
+      and has(fcsLine, "rounds CIWS_Vessel_000_SVA_Defence: 3.0 -> 6.0 s of flight"), "the log line: the CIWS's before -> after")
+-- health
+for _, c in ipairs({ { "SV_Def_Gepa", "AA GUN" }, { "SV_Def_Avng", "SAM SITE" }, { "SV_Def_Ciws", "CIWS" } }) do
+    local r = T.npc:FindRow(c[1])
+    check(r and r.MaxHealthDifference == 40 and line(string.format("allies: the airfield's %s +40 HP (%s's MaxHealthDifference now 40)", c[2], c[1]), from),
+          c[1] .. ": +40 HP (the game's 20 -> 60), logged")
+    check(r and r.NpcAIModuleId:ToString() == "NPC_AIModule_SV_Defence", c[1] .. ": the defences' search module on its row")
+end
+-- the Aegis: as before
+local mk15 = T.fcs:FindRow("NPC_FCS_VesselCIWS000_SVA_Aegis")
+local mk15w = T.wpn:FindRow("CIWS_Vessel_000_SVA_Aegis")
+check(mk15 and mk15.CaptureDistance == 2500 * SHIPCFG.fcs.range_x and mk15.YawAngleMin == -60 and mk15.YawSpeed == 37.5
+      and mk15w and mk15w.LifeTime == 3.0 and T.npc:FindRow("SV_Ally_Aegis").MaxHealthDifference == SHIPCFG.health_add
+      and T.mod:FindRow("NPC_AIModule_SV_Aegis") and T.mod:FindRow("NPC_AIModule_SV_Aegis").Radius == SHIPCFG.fcs.search_m,
+      "the Aegis's Mk 15 its own row as before (x2 range, +-60, rounds 3 s), its hull +300, its 25 km search")
+
+print("ALLY.setup: the CIWS's fire control choices, a container without its row")
+DEF.ciws.fcs_row = "none"
+from = setup()
+check(T.npc:FindRow("SV_Def_Ciws").NpcFCSId0:ToString() == "None" and T.fcs:FindRow("NPC_FCS_VesselCIWS000_SVA_Defence") == nil
+      and line("allies: the CIWS fires on its blueprint's own fire control (fcs_row none", from) and ALLY.ciwsReady,
+      "fcs_row none: its blueprint's own fire control, logged")
+DEF.ciws.fcs_row = "NPC_FCS_NotThere000"
+from = setup()
+check(T.npc:FindRow("SV_Def_Ciws").NpcFCSId0:ToString() == "None"
+      and line("allies: the CIWS's gun on NPC_FCS_NotThere000: NOT set (no such row in DT_NPC_FCS)", from),
+      "a row DT_NPC_FCS hasn't: not set, logged")
+DEF.ciws.fcs_row = "NPC_FCS_VesselCIWS000"
+local noCiws = {}
+for _, r in ipairs(MINE_ROWS) do if r[1] ~= "SV_Def_Ciws" then noCiws[#noCiws + 1] = r end end
+from = setup(noCiws)
+check(ALLY.ready == true and ALLY.ciwsReady == false and has(line("rows in DT_NPC", from), "CIWS NOT in")
+      and has(line("rows in DT_NPC", from), "missing: SV_Def_Ciws"), "a container without the CIWS row: the rest sold, CIWS NOT in")
+
+---------------------------------------------------------------------------------------------------- the STORE
+print("the STORE: the DEFENCES page's CIWS row")
+D = { round = 3, state = "wait", now = 100, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+RUN.credits, RUN.spent, RUN.bought, RUN.msg, RUN.defences, RUN.offerShown = 100000, 0, {}, {}, nil, nil
+local tick = 0
+local function shop(...)
+    for _, r in ipairs({ ... }) do requests[#requests + 1] = "SV_Buy_" .. r end
+    RUN.dirty = true
+    tick = tick + 1
+    shopTick(tick)
+    tick = tick + 1
+    RUN.dirty = true
+    shopTick(tick)
+end
+shop()
+check(texts.SV_Shop_Ciws == "BUILD CIWS   NOT AVAILABLE." or texts.SV_Shop_Ciws == "BUILD CIWS",
+      "the CIWS row while its row isn't in DT_NPC: " .. tostring(texts.SV_Shop_Ciws))
+check(has(texts.SV_Shop_Ciws_Help, "Not in this game's tables"), "... its help says why: " .. tostring(texts.SV_Shop_Ciws_Help))
+local spent0 = RUN.spent
+shop("Ciws")
+check(#spawned == 0 and RUN.spent == spent0 and RUN.msg.Ciws == "NOT AVAILABLE.", "... and isn't sold: " .. tostring(RUN.msg.Ciws))
+spawned = {}
+setup()                                           -- (the CIWS's row in: sold)
+shop()
+check(texts.SV_Shop_Ciws == "BUILD CIWS   6000 Z" and has(texts.SV_Shop_Ciws_Help, "Builds a CIWS by the runway")
+      and has(texts.SV_Shop_Ciws_Help, "CIWS 0 of 4 up"), "the CIWS row: BUILD CIWS 6000 Z (" .. tostring(texts.SV_Shop_Ciws_Help) .. ")")
+check(texts.SV_Store_TitleDefences and has(texts.SV_Store_TitleDefences, "AIRFIELD STORE: DEFENCES") and texts.SV_Store_ToDefences == "DEFENCES >"
+      and has(texts.SV_Store_ToDefences_Help, "CIWS"), "the DEFENCES page's title and the AIRFIELD page's DEFENCES > row")
+local prices = {}
+for k = 1, 4 do
+    local before = RUN.credits
+    shop("Ciws")
+    prices[k] = before - RUN.credits
+end
+check(table.concat(spawned, ",") == "SV_Unit_Ciws_A,SV_Unit_Ciws_B,SV_Unit_Ciws_C,SV_Unit_Ciws_D",
+      "four bought: its units in order (" .. table.concat(spawned, ",") .. ")")
+check(prices[1] == 6000 and prices[2] == 6720 and prices[3] == math.floor(6000 * 1.12 ^ 2 / 10 + 0.5) * 10
+      and prices[4] == math.floor(6000 * 1.12 ^ 3 / 10 + 0.5) * 10, "each dearer by raise 1.12: " .. table.concat(prices, ", "))
+check(line("shop: Ciws: CIWS BUILT for 6000 (SV_Unit_Ciws_A).") ~= nil and line("shop: text error") == nil, "a purchase logged: CIWS BUILT for 6000 (SV_Unit_Ciws_A)")
+shop("Ciws")
+check(#spawned == 4 and RUN.msg.Ciws == "ALL BUILT." and texts.SV_Shop_Ciws == "BUILD CIWS: ALL BUILT", "all four up: ALL BUILT")
+check(RUN.defences.bought.ciws == 4 and RUN.defences.built == 4, "counted as defences built")
+check(has(texts.SV_Shop_AAGun_Help, "CIWS 4 of 4 up") and texts.SV_Shop_AAGun == "BUILD AA GUN   4000 Z", "the AA gun row's help counts them too")
+-- the old fourth row (no STORE pages): its turn order reaches the CIWS
+spawned, alive, RUN.defences = {}, {}, { built = 3, bought = {} }
+AF.hp, AF.max, AF.down = CFG.airfield.hp, CFG.airfield.hp, false
+RUN.acHp = 100
+survivalPC = nil
+shop()
+check(texts.SV_Shop_Airfield == "BUILD CIWS   6000 Z", "the old fourth row, 4th in turn (order[4] = ciws): " .. tostring(texts.SV_Shop_Airfield))
+for _, u in ipairs(DEF.ciws.units) do alive[u] = 1 end
+shop()
+check(texts.SV_Shop_Airfield == "BUILD AA GUN   4000 Z", "... every CIWS up: the next kind (" .. tostring(texts.SV_Shop_Airfield) .. ")")
+
+---------------------------------------------------------------------------------------------------- the ALLIES row, losses, repairs, kills
+print("ALLY.tick / hudLine: the CIWS on the ALLIES row; a lost one; repairs; kill credit")
+alive = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1, SV_Unit_Ciws_B = 1 }
+ALLY.run = nil
+local R = ALLY.state()
+from = #logs + 1
+ALLY.tick(200)
+check(R.defCount.aa == 1 and R.defCount.sam == 0 and R.defCount.ciws == 2 and ALLY.hudLine():find("AA 1  SAM 0  CIWS 2", 1, true),
+      "the ALLIES row: " .. tostring(ALLY.hudLine()))
+alive.SV_Unit_Ciws_B = 0
+callouts = {}
+ALLY.tick(203)
+check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub and line("allies: CIWS (SV_Unit_Ciws_B) lost in round 3", from)
+      and has(ALLY.hudLine(), "CIWS 1"), "a CIWS lost: CIWS LOST, logged, the row counts 1")
+alive = { SV_Unit_AAGun_A = 1 }
+ALLY.tick(206)
+check(ALLY.hudLine():find("AA 1  SAM 0", 1, true) and not has(ALLY.hudLine(), "CIWS"), "none up: no CIWS on the row (" .. ALLY.hudLine() .. ")")
+local lvl = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel."
+local c1 = { full = "BP_GR033_ciws_CP_Ally_C " .. lvl .. "BP_GR033_ciws_CP_Ally_C_1", addr = addr(), HealthInternal = 200, MaxHealth = 60 }
+local g1 = { full = "BP_GR002_gepa_CP_C " .. lvl .. "BP_GR002_gepa_CP_C_1", addr = addr(), HealthInternal = 600, MaxHealth = 60 }
+objects = { BP_GR033_ciws_CP_Ally_C = { c1 }, BP_GR002_gepa_CP_C = { g1 } }
+check(ALLY.repairDefences() == 1 and c1.HealthInternal == 600 and g1.HealthInternal == 600, "repairs: a damaged CIWS back to full (200 -> 600), a whole AA gun left")
+check(KILL.side({ full = "BP_GR033_ciws_CP_Ally_C_3", addr = addr() }, 9) == "defences"
+      and KILL.side({ full = "BP_BA002_alcn_ciws_Base_C_1", addr = addr() }, 9) ~= "defences"
+      and KILL.side({ full = "BP_GR002_gepa_CP_C_2", addr = addr() }, 9) == "defences",
+      "kill credit: the CIWS's is the defences', the ALICORN's CIWS isn't")
+
+---------------------------------------------------------------------------------------------------- the build in step
+print("the build in step")
+do
+    local bs = readAll(MOD .. "/../../../tools/build_survival.py")
+    check(has(bs, "('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',") and has(bs, "['AAGun', 'SAM', 'Ciws', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']")
+          and has(bs, "('SVStoreToDefences', 'SV_Store_ToDefences', '25')"), "build_survival.py: the DEFENCES page (25) and AIRFIELD's DEFENCES > row")
+    local last = SHOP.menuRows[#SHOP.menuRows]
+    check(#SHOP.menuRows == 6 and last.row == "SVStoreDefences" and last.id == "SV_StoreDefences" and last.index == 25
+          and SHOP.icons.Ciws and SHOP.icons["25"], "sv_flights: SHOP.menuRows' sixth page at 25, the CIWS's and its row's icons")
+    check(has(bs, "bp[2][1] == 'BP_GR033_ciws_CP_Ally_C'") and has(readAll(MOD .. "/Scripts/sv_allies.lua"), '"BP_GR033_ciws_CP_Ally_C"'),
+          "the model row's blueprint the build checks is the class repairs and health look for")
+    check(CFG.shop.items.Ciws and CFG.shop.items.Ciws.role == "ciws" and #DEF.ciws.units == 4 and DEF.ciws.price == 6000,
+          "CFG: the STORE's Ciws item, 4 units, 6000 Z")
+end
+
+print(fails == 0 and "defences test: all passed" or ("defences test: " .. fails .. " FAILED"))
+logFile:close()
+os.exit(fails == 0 and 0 or 1)

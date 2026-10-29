@@ -266,6 +266,15 @@ def clear_flags(u, flags):
         ob[2][:] = [(q[0], q[1], True, None) if q[1] in flags else q for q in ob[2]]
 
 
+def unit_area(u, radius_m, alt_m):
+    """Unit desc `u`'s area: radius_m around its point, alt_m (min, max) high (its turrets engage only inside it)."""
+    area = {'RadiusInMeter': radius_m, 'MinAltitudeInMeter': alt_m[0], 'MaxAltitudeInMeter': alt_m[1]}
+    idx = {n: k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n in area}
+    assert len(idx) == 3, idx
+    u[2][:] = sorted([p for p in u[2] if p[1] not in area] + [(idx[n], n, False, ('raw', 'Float', struct.pack('<f', v)))
+                     for n, v in area.items()], key=lambda p: p[0])
+
+
 def retag_turrets(children, owner, rows, used_ids, z):
     """A copied ship's turret descs (ChildAIObjectDescs / GrandChildrens): named after their new owner as Mission 22
     names them (<owner>_<component>), new UniqueIDs, and Survival's mission rows (`rows`: stock row -> Survival's)."""
@@ -838,6 +847,28 @@ def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name
     return names
 
 
+def ciws_units(units, used_ids, z, top_number):
+    """The STORE's CIWS (survival_events.DEFENCE_CIWS*): one-object units copied from Survival's first AA gun unit
+    (Mission 22's allied airport unit: faction 1, its tags, its ground objects' flags, the defences' area), each at its
+    spot by the runway, facing along it, on the CIWS's mission row. Allied as the AA guns are: by the unit's faction
+    (Mission 22's own allied AA guns, SAM sites and Aegis turrets fly the plain blueprints, no _Ally ones)."""
+    unit_by = lambda n: [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == n][0]
+    src = unit_by(survival_events.DEFENCE_CIWS_SOURCE_UNIT)
+    assert [p for p in src[2] if p[1] == 'Faction'][0][3] == ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x01')), 'not allied'
+    for unit, obj, point, yaw in survival_events.defence_ciws():
+        names = copy_unit(units, used_ids, z, survival_events.DEFENCE_CIWS_SOURCE_UNIT, unit, 1, top_number, obj,
+                          survival_events.DEFENCE_CIWS_ROW[0])
+        assert names == [obj], names
+        u = unit_by(unit)
+        set_unit_point(u, point)
+        for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
+            assert any(q[1] == 'Rotation' and q[3] for q in ob[2]), unit
+            ob[2][:] = [(q[0], q[1], False, vec(0.0, yaw, 0.0, 'Rotator')) if q[1] == 'Rotation' else q for q in ob[2]]
+    print(f'  CIWS: {len(survival_events.DEFENCE_CIWS)} units from {survival_events.DEFENCE_CIWS_SOURCE_UNIT} on '
+          f'{survival_events.DEFENCE_CIWS_ROW[0]}: ' + ', '.join(f'{o} ({p[0] / 1e5:.3f}, {p[1] / 1e5:.3f}) km'
+                                                                   for _, o, p, _ in survival_events.defence_ciws()))
+
+
 def split_units(units, used_ids, z, top_number):
     """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special, and the
     pad's invincible dummies one of theirs (PAD_DUMMY_UNIT, spawned once a run: a unit with anything alive can't be
@@ -854,9 +885,14 @@ def split_units(units, used_ids, z, top_number):
     left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.PAD_DUMMIES, survival_events.PAD_DUMMY_UNIT)
     print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}), '
           f'{len(survival_events.PAD_DUMMIES)} dummies in {survival_events.PAD_DUMMY_UNIT}; {survival_events.PAD_UNIT} keeps {left} objects')
+    unit_by = lambda n: [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == n][0]
     for new_unit, obj, mrow in survival_events.DEFENCES:
         move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit, survival_events.DEFENCE_ROWS[mrow][0])
-    print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')
+        # (0.72.1: an area their longer lock-on and search fit in, survival_events.DEFENCE_AREA_M)
+        unit_area(unit_by(new_unit), survival_events.DEFENCE_AREA_M, survival_events.DEFENCE_ALT_M)
+    print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}, area '
+          f'{survival_events.DEFENCE_AREA_M:.0f} m, {survival_events.DEFENCE_ALT_M[0]:.0f}-{survival_events.DEFENCE_ALT_M[1]:.0f} m up')
+    ciws_units(units, used_ids, z, top_number)
     # The Anomaly (survival_events.ANOMALY_*): MINDRIPPER alone, and its guards
     # (user, 2026-10-22: "make mindripper an F-4": its NPC row is the F-4E one in the world data too, not only at spawn)
     (lead, _, _), (wing, _, _) = ace_rows('anomaly', 'f04e')
@@ -1180,20 +1216,25 @@ SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/ma
 # STORE ("20"). Lua checks the game's menu list for them; without them it falls back to the 4 SHOP_ITEMS rows.
 # A page lists 6 rows at most, so the pages link in a ring, each with TAKE OFF (user, 2026-10-23: "add a Docks Page
 # too"). The economy review (2026-10-25) added UPGRADES and TACTICAL and moved the allies onto the DOCKS page (shown as
-# ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. The menu-class rows
-# go into the game's table in this list's order, so the menu ids 20-24 follow it: keep it in Scripts/sv_flights.lua
-# SHOP.menuRows' order.
+# ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. 0.72.1's CIWS (user,
+# 2026-10-29) left the AIRFIELD page a row short, so the AA gun, SAM site and CIWS rows have a DEFENCES page (25) of
+# their own: AIRFIELD (21) > DEFENCES (25) > ALLIES (22), AIRFIELD's own ALLIES > kept. The menu-class rows go into the
+# game's table in this list's order, so the menu ids 20-25 follow it: keep it in Scripts/sv_flights.lua SHOP.menuRows'
+# order.
 STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
     ('SV_Store', 'Store', 'SV_Store_Title',
      ['Rearm', 'Missiles', 'Special', 'Flares', ('SVStoreToUpgrades', 'SV_Store_ToUpgrades', '23'), 'takeoff']),
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
-     ['RepairAircraft', 'RepairAirfield', 'AAGun', 'SAM', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
+     ['RepairAircraft', 'RepairAirfield', ('SVStoreToDefences', 'SV_Store_ToDefences', '25'),
+      ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
     ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
      ['Wingmen', 'Moonchild', 'ShipAegis', 'Orders', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
     ('SV_StoreUpgrades', 'StoreUpgrades', 'SV_Store_TitleUpgrades',
      ['UpAirframe', 'UpBays', 'UpGun', 'UpFlares', ('SVStoreToTactical', 'SV_Store_ToTactical', '24'), 'takeoff']),
     ('SV_StoreTactical', 'StoreTactical', 'SV_Store_TitleTactical',
      ['Airstrike', 'Ecm', 'Decoy', 'Insurance', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
+    ('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',
+     ['AAGun', 'SAM', 'Ciws', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
 ]
 STORE_MENU_FIRST = 20       # the first page's menu id (the game's table has 20 rows): Scripts/sv_flights.lua SHOP.menuRows
 # the landing page's rows, one per page they open (it lists 4 of Survival's beside its 2 stock rows): Scripts/sv_flights.lua
@@ -1638,6 +1679,7 @@ ACE_MODELS = {
     ('reaper', 'adfx02'): ('SV_Model_adfx', 'OP1038_adfx02_L001', 'SV_Ac_adfx'),
 }
 MODEL_ON = '/Game/OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON'
+MODEL_CP = '/Game/Datatables/AI/NPC/Model/DT_NPC_Model'          # (the campaign's: the CIWS's model row is checked there)
 
 
 def ace_rows(tier, key):
@@ -1687,6 +1729,17 @@ def build_npc_rows():
         row = copy.deepcopy(rows[(f[1], f[2])])
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
         out.append(((npc, 0), row))
+    # the STORE's CIWS (survival_events.DEFENCE_CIWS*): the game's land Phalanx on its allied model row (no NpcFCSId: its
+    # blueprint's own arms fire, until main.lua gives it one: CFG.shop.items.Airfield.defences.ciws.fcs_row)
+    f = survival_events.fname(survival_events.DEFENCE_CIWS_NPC)
+    ciws = copy.deepcopy(rows[(f[1], f[2])])
+    assert not any(q[1].startswith('NpcFCSId') and q[3] for q in ciws[2]), 'the CIWS row names a fire control now'
+    zm = ZenPkg(stock(MODEL_CP))                       # (the game's model row, never ours: its blueprint is the ally's)
+    dm, _ = dtx.parse(uprop.Ctx(bytes(zm.payloads[0]), zm.names), 0, 'LiveModelDataTable')
+    bp = dict((q[1], q[3]) for q in dict(dm['rows'])[(survival_events.DEFENCE_CIWS_MODEL, 0)][2])['BlueprintClass']
+    assert bp[0] == 'soft' and bp[2][1] == 'BP_GR033_ciws_CP_Ally_C', bp            # (Scripts/sv_allies.lua DEF_CLASSES)
+    set_prop(ciws[2], model_idx, 'ModelId', ('name', survival_events.DEFENCE_CIWS_MODEL, 0))
+    out.append(((survival_events.DEFENCE_CIWS_ROW[1], 0), ciws))
     # the Ladons (survival_events.LADON*): the stock Ladon under each one's name key (main.lua: name, health, speed)
     for L in survival_events.ladons():
         row = copy.deepcopy(rows[(survival_events.LADON_NPC_SOURCE, 0)])
@@ -1703,7 +1756,8 @@ def build_npc_rows():
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcDataTable')
     assert chk['rows'] == dt['rows']
-    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies)')
+    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies, the CIWS on '
+          f'{survival_events.DEFENCE_CIWS_MODEL})')
     save(z, DATA + 'DT_SV_NpcRows')
 
 
@@ -1841,6 +1895,8 @@ def build_npc_table():
     extra.append((survival_events.ALLY_WINGMEN_ROW, 'f18e_common', survival_events.ALLY_WINGMEN_NPC))
     for src, (row, npc) in survival_events.DEFENCE_ROWS.items():           # the airfield's AA guns and SAM sites
         extra.append((row, src, npc))
+    extra.append((survival_events.DEFENCE_CIWS_ROW[0], survival_events.DEFENCE_CIWS_MISSION_SOURCE,   # and the CIWS
+                  survival_events.DEFENCE_CIWS_ROW[1]))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         row, npc, _ = survival_events.ally_ship_rows(key)
         extra.append((row, hull, npc))

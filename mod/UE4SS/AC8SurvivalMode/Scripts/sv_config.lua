@@ -702,13 +702,17 @@ CFG = {
             -- DEFENCES), built in `order`; a destroyed one can be built again. Each kind's price rises `raise` times.
             -- The STORE's own rows (user, 2026-10-23: "a special tab ... for the store items with their own icons";
             -- tools/re/AIRFIELD_SHOP_UI.md): one per job on its two pages, SUPPLIES (missiles, special weapon, flares,
-            -- aircraft repair) and AIRFIELD (airfield repair, AA gun, SAM site). Without the STORE pages the four rows
-            -- above stand in, with Airfield doing three jobs in turn.
+            -- aircraft repair) and AIRFIELD (airfield repair, AA gun, SAM site; from 0.72.1 the AA gun, SAM site and CIWS
+            -- on a DEFENCES page of their own). Without the STORE pages the four rows above stand in, with Airfield
+            -- doing three jobs in turn.
             RepairAircraft = { role = "aircraft", label = "REPAIR AIRCRAFT", price = 600, min_price = 100, raise = 1.0 },
             -- (raise 1.0, was 1.25: airfield repairs are upkeep every raid, and 1.25 compounding made the 20th one 21700)
             RepairAirfield = { role = "airfield", label = "REPAIR AIRFIELD", repair = 60, price = 300, raise = 1.0 },
             AAGun          = { role = "aa",  label = "BUILD AA GUN" },          -- (prices: Airfield.defences)
             SAM            = { role = "sam", label = "BUILD SAM SITE" },
+            -- (user, 2026-10-29: "Add CIWS that can be purchased and placed around the airfield"; on the STORE's
+            -- DEFENCES page with the AA guns and SAM sites)
+            Ciws           = { role = "ciws", label = "BUILD CIWS" },
             -- Allies (CFG.allies; user, 2026-10-23: "make it so that these Allied Aircraft and Ships are expensive"):
             -- MOONCHILD on the AIRFIELD page, the ships on the DOCKS page; each purchase of one makes the next dearer
             Moonchild      = { role = "ally_air", ally = "moonchild", label = "MOONCHILD: 2 x F-22", price = 15000, raise = 1.25 },
@@ -739,16 +743,36 @@ CFG = {
             -- (defences' raise 1.12, was 1.25: "the sixth AA gun cost 12,210, three times the first")
             Airfield = { role = "combined", repair = 60, price = 300, raise = 1.0, label = "REPAIR AIRFIELD",
                          defences = {
-                             order = { "aa", "aa", "sam", "aa", "aa", "sam", "aa" },
-                             aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.12,
+                             order = { "aa", "aa", "sam", "ciws", "aa", "aa", "sam", "ciws", "aa", "ciws", "ciws" },
+                             -- health_add: HP on each one's own (user, 2026-10-29: "make Allied SAMs and Anti Air Guns
+                             -- more effective ... increase their abilities"; the game's 20 went to one missile): its
+                             -- DT_SV_NpcRows row's MaxHealthDifference
+                             aa  = { label = "AA GUN", what = "an AA gun", price = 4000, raise = 1.12, health_add = 40,
                                      units = { "SV_Unit_AAGun_A", "SV_Unit_AAGun_B", "SV_Unit_AAGun_C", "SV_Unit_AAGun_D",
                                                "SV_Unit_AAGun_E" } },
-                             sam = { label = "SAM SITE", what = "a SAM site", price = 8000, raise = 1.12,
+                             sam = { label = "SAM SITE", what = "a SAM site", price = 8000, raise = 1.12, health_add = 40,
                                      units = { "SV_Unit_SAM_A", "SV_Unit_SAM_B" } },
+                             -- the CIWS (tools/survival_events.py DEFENCE_CIWS: the game's land Phalanx, four fixed spots by
+                             -- the runway's ends): fcs_row, the fire control its gun gets (the ships' Mk 15's, boosted as
+                             -- the others are below; "none": the blueprint's own, 2500 m, not boosted)
+                             ciws = { label = "CIWS", what = "a CIWS", price = 6000, raise = 1.12, health_add = 40,
+                                      fcs_row = "NPC_FCS_VesselCIWS000",
+                                      units = { "SV_Unit_Ciws_A", "SV_Unit_Ciws_B", "SV_Unit_Ciws_C", "SV_Unit_Ciws_D" } },
                              -- their fire control (user, 2026-10-23: "increase the fire rate of the Airfield"): the
-                             -- allies' (CFG.allies.fcs: x0.5 times, x1.6 range, x1.5 cone), then arming / lock x lock_x
-                             -- and time between shots / rest x fire_x (0.5: twice as often again, 4x the stock rate)
-                             fcs = { lock_x = 0.75, fire_x = 0.5 },
+                             -- allies' (CFG.allies.fcs: x0.5 times, x1.5 cone), then arming / lock x lock_x and time
+                             -- between shots / rest x fire_x (0.5: twice as often again, 4x the stock rate). User,
+                             -- 2026-10-29 ("increase their lock on range, also increase the lifetime of the missile they
+                             -- fire"): lock-on range x range_x of the stock (in place of the allies' 1.6); search_m, the
+                             -- farthest they see anything (a copy of NPC_AIModule_Turret000, 6000 m: NPC_AIModule_SV_Defence),
+                             -- not lost in cloud; turret slewing x slew_x; yaw_full: all the way round (the CIWS's
+                             -- fire control is a ship mount's, +-60 deg); round_reach: a gun's rounds reach the new
+                             -- range (the AA guns' flak only hurts within its 2000 m damage area, round_width_x as wide;
+                             -- the CIWS's rounds fly 3 s, longer by the range's growth); missile: the SAM's own
+                             -- (SAM_Ground_000: 7.3 s from 500 km/h, +300 km/h a second to 3000, turning 15, about 3.2
+                             -- km of flight, so the 4.8 km lock-on fell short), as the Aegis's (CFG.allies.ships)
+                             fcs = { lock_x = 0.75, fire_x = 0.5, range_x = 2.0, search_m = 10000, slew_x = 2.0, yaw_full = true,
+                                     round_reach = true, round_width_x = 1.5,
+                                     missile = { range_m = 8000, life_s = 14, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5 } },
                          } },
         },
     },
