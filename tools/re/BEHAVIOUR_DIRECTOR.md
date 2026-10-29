@@ -6,12 +6,17 @@ director (P2), tells for every coordinated threat (P3), an intensity director (P
 learning layer (P6), boss phases (P7), late rounds (P8) and ace personalities (P9). They are built on branch
 `TestBranch_Behavioural` (from tag `stable-1`) one unit at a time. Each unit adds a section here: what was built, its
 CFG keys, the log lines a test should look for, and what is untested. The branch ends at Lua 0.72.0 / COOP_TAG
--coop.18 (unit 10), and the last section, "Test checklist: every unit (P1-P9), in game", is the one list for a
-playtest of all of it.
+-coop.18 (unit 10); "Test checklist: every unit (P1-P9), in game" is the one list for a playtest of all of it, and the
+last section, "Code review of 2026-10-29", what the review after the build found and changed (fix units F1-F7).
 
 Labels as in the other RE notes: [V] verified (read in the code or the cooked data, or by an offline test under
 tools/checks), [T] tested in game, [I] inferred. Nothing on this branch has run in game yet: every mechanism here is
-[V] at most until a test says otherwise, and each can be switched off in survival.ini.
+[V] at most until a test says otherwise, and each can be switched off in survival.ini but two pieces that are build data
+(code review of 2026-10-29, config-3 / roles-2): P5's reworked reaction trees (Scripts/ai LA_SV_ProvokeNear and
+LA_SV_Escape are packaged behaviour scripts, built when the level loads, hard rule 20; `[ai] reactions = false` puts
+in the stock 0012_CP slots, not stable-1's Survival trees; P5's live provoke has its own switches, `[ai] tier_provoke`,
+`provoke_stricter` and the test values `provoke_cone_deg` / `provoke_time_s`) and P1's Lancer band (the six Lancer
+units' 9 km MaxAltitudeInMeter in the world data, kept with `[roles] enabled = false`: unit 5).
 
 Shared contract every unit follows (the integration contract of the build):
 - New Lua parts: `sv_stats.lua` (measurements; P6's profile), `sv_tells.lua` (P3), `sv_director.lua` (P2, P4), loaded in
@@ -22,6 +27,10 @@ Shared contract every unit follows (the integration contract of the build):
   co-op channels "tl" (tells), "dv" (host-ordered events on one joiner's copies) and "in" (a joiner's intensity).
 - Offline checks for every unit: lua_check (Scripts/*.lua and Scripts/ai/*.lua), lua_load_test, menu_test,
   coop_settings_test, coop_ground_test, ini_check, menu_pages_test, plus each unit's own test (stats_test for unit 1).
+  A changed behaviour script also goes through shapecheck (`python shapecheck.py <file>` from build/research/ai/survey/:
+  every node and argument shape must occur in a stock LA_ script). It isn't in the repo: it's research output on the
+  build machine, with the stock scripts it reads (extracted under build/research/ai), gitignored with the rest of
+  build/; a fresh clone can't run it, and build_all.sh doesn't (it runs lua_check on Scripts/ai).
 
 ## Unit 1: foundations and measurements (Lua only; nothing built, no new events)
 
@@ -185,7 +194,10 @@ exclusive fallback; Escape's sharp break puts its turn after them instead.
   `tier_provoke` (true: the tiers' provoke values are written; false: only the spikes' and the specials', so a round-7
   Veteran keeps the game's 85 / 2.5), `provoke_stricter` (true; false: the tier's over the spike's, as before),
   `provoke_cone_deg` (0) / `provoke_time_s` (0.0): above 0, an A/B test value for every tier that has its own. The
-  reaction scripts are switched with `reactions` as before (false: the stock 0012_CP slots).
+  reaction scripts are switched with `reactions` as before (false: the stock 0012_CP slots). Nothing switches P5's trees
+  back to stable-1's LA_SV_ProvokeNear / LA_SV_Escape: they're packaged scripts, built when the level loads (hard rule
+  20), and stable-1's aren't packed under other names, so an A/B of the trees against stable-1's needs a stable-1 build
+  (code review of 2026-10-29, config-3). The live provoke's A/B is `tier_provoke` and the test values above.
 - `CFG.tiers.list[*].provoke_cone_deg / provoke_time_s` (Veteran-Demon 60 / 1.5): survival_config.lua only (the ini can't
   reach a list of tables).
 - `CFG.stats` ([stats], each player's own in co-op): `tail_watch` (true), `watch_km` 4.5, `watch_max` 4,
@@ -242,8 +254,8 @@ Test checklist:
 4. Close in under 50 m behind one (hard): the decel overshoot should show (a sudden slow-down); farther out no enemy
    should slow to 300 km/h when you get behind it.
 5. With `[spikes] enabled = false` and a Mercenary+ round (AI level 3+) on an airframe outside CFG.maneuvers.post_stall:
-   the cobra / kulbit picks should break instead of flying straight (by default spike 2's post_stall_all lets every
-   airframe post-stall from round 15, so this fallback rarely runs).
+   the cobra / kulbit picks should break instead of flying straight (by default every spike level has post_stall_all,
+   so every airframe post-stalls from spike 1, round 8, and this fallback rarely runs).
 
 ### Offline test
 `sh tools/checks/tailed_test.sh` (tools/checks/tailed_test.lua):
@@ -288,8 +300,10 @@ Test checklist:
 - The decel overshoot now needs you within 50 m when Provoke begins (stock's gate): rare in practice, so most former
   decel picks are breaks. The sharp escape is 2-4 s instead of 1.5-2 s, and out of Provoke the blackout timer counts
   down [C], so a long run of reactions should blackout less; watch "blackouts" in the lines.
-- The cobra / kulbit picks need AI level 3 / 4 (round 16 / 19 on), where spike 2's post_stall_all already lets every
-  airframe post-stall: their fallback runs only with spikes off or a special that turns post-stall off.
+- The cobra / kulbit picks need AI level 3 / 4 (round 16 / 19 on), where the spikes' post_stall_all (every level, from
+  spike 1 at round 8; P4's ease, level.max_drop 1, never takes round 15+ to 0) already lets every airframe post-stall:
+  their fallback runs only with spikes off or a special that turns post-stall off (code review of 2026-10-29: this
+  note and checklist item 5 said spike 2's, round 15).
 - The tail watch: the host or solo only, your own tails only (not a joiner's stand-in on the host's game: U1's 2 s
   geometric metric covers each joiner on its own game); 250 ms resolution; the AI state is read only while an episode
   is open, so a plane defending at its first read is "already defending" (no reaction time; it can also be one that
@@ -696,11 +710,11 @@ last), but the world data, rows and events changed: that bump must come before a
 |---|---|---|
 | the pool split | tools/survival_events.py `ROLE_BY_FLIGHT`, `POOL_ROLE`, `ROLE_ROW`, `behaviour_row`, `behaviour_rows`; Scripts/sv_config.lua `ROLE_BY_FLIGHT`, `ROLE` | by flight number NN, each role a whole 2 / 4 / 6-ship trio (CFG.squadrons: every role can field a 2-ship from round 1): duelist NN 01-02 (24 aircraft), lancer 03-04 (24), wolf 05-06 (24), skirm 07 and 08's 2-ship (14; 08's Air1 / Air2 are the retired behaviour probe's, never in a round, so the usable pool stays 86). The build checks Lua's list is the same (build_wolf) |
 | the behaviour rows | tools/build_survival.py `NPC_EXTRA` (+ `survival_events.ROLE_NPC`), `build_wd_global` | DT_SV_NpcMission rows sv_role_lancer / sv_role_wolf_lead / sv_role_wolf_wing / sv_role_skirmish (copies of Mission 22's f16c_common, NpcId SV_Role_Lancer / WolfLead / WolfWing / Skirmish). The world data's rows are now set per object after sizing: a Wolf flight's even objects the bait's row, its odd ones the trap's (set_flight_size copies objects 0 / 1, so the parity held before it too; now it's explicit). Build line: `behaviour rows (flights): {... 'f16c_common_sv': 6, 'sv_role_lancer': 6, 'sv_role_wolf_lead+sv_role_wolf_wing': 6, 'sv_role_skirmish': 4, ...}` |
-| the Lancers' band | build_survival.py `build_wd_global`, `survival_events.LANCER_MAX_ALT_M` | MaxAltitudeInMeter 9000 on the six Lancer units (the critic: Mission 22's 4-5 km band would stop their zoom's climb and, above it, maybe send them back into the area, [?]); `6 Lancer flights up to 9000 m` |
+| the Lancers' band | build_survival.py `build_wd_global`, `survival_events.LANCER_MAX_ALT_M` | MaxAltitudeInMeter 9000 on the six Lancer units (the critic: Mission 22's 4-5 km band would stop their zoom's climb and, above it, maybe send them back into the area, [?]); `6 Lancer flights up to 9000 m`. Build data, whatever [roles] enabled says: with roles off those units are drawn as ordinary fighters and spawn within altitude_m like every flight, but keep the 9 km band, so their fighters'-set escape climbs (LA_SV_Escape's band-gated picks) can go higher than the others' (code review of 2026-10-29, roles-2 / build-1 / config-2: an A/B of roles against the old game carries that difference; leaving them out of the draw would have cut the pool to 62, under co-op's 80) |
 | the scripts | Scripts/ai/LA_SV_LancerPass, LancerZoom, LancerBreak, WolfDrag, WolfStrike, SkirmPass, SkirmExtend; `LUA_SCRIPTS`; `GAME_LUA_STOCK` | every one "stock grammar ok" (shapecheck.py) and walked by roles_test's model of the tree runner (below); packed at /Game/LuaSource/SurvivalMode/AI/<name>; the build checks every script a set names is packed. tools/re/BEHAVIOUR_GUIDE.md 6 has what each does |
 | the sets | sv_config.lua `CFG.behaviour_sets` | NLID_SV_Lancer, NLID_SV_WolfLead, NLID_SV_WolfWing, NLID_SV_Skirmisher, each NLID_0012_CP with its slots (setsSetup, unchanged: `behaviour: set NLID_SV_Lancer in (NLID_0012_CP with ...)`) |
 | the role rows | sv_rows.lua `rolesSetup` (RS), called from sv_main.lua after searchSetup | at the main menu, a DT_NPC row per role (copied from f16c_common's, Survival's search module, the role's set: ROLE.SETS); a set that couldn't be made: the fighters' set (or fallback_luaset); roles off: the fighters' set for every role row (today's behaviour). Made in Lua so a missing set falls back instead of naming a LuaSet row that isn't there (the brief) |
-| the level's roles | sv_spawn.lua `ROLE.levelLoad` (sv_main.lua's level-load block), `ROLE.flight(unit)` | what was in before the level loaded (the behaviour build and the spawner only know those): a role is live (its set), drawn as a duelist (its row flies the fighters' set) or sits out (no row: an older container; ROLE.sitsOut keeps it out of the role-blind picks too: spares, a special's refill, Ctrl+6, as the brief asks: what its desc would build is unknown); roles off: ROLE.live nil and every flight is drawn, armed and paid as before roles |
+| the level's roles | sv_spawn.lua `ROLE.levelLoad` (sv_main.lua's level-load block), `ROLE.flight(unit)` | what was in before the level loaded (the behaviour build and the spawner only know those): a role is live (its set), drawn as a duelist (its row flies the fighters' set) or sits out (no row: an older container; ROLE.sitsOut keeps it out of the role-blind picks too: spares, a special's refill, Ctrl+6, as the brief asks: what its desc would build is unknown); roles off: ROLE.live nil and every flight is drawn, armed and paid as before roles (the Lancer units' 9 km band stays: the row above) |
 | the draw | sv_config.lua `ROLE.mixFor`, `ROLE.quotas`; sv_spawn.lua `ROLE.pickRound`, `ROLE.groups`; sv_rounds.lua `startRound` | the round's fighters by CFG.roles.mix (the band of the latest from_round reached; an ace round by ace_mix: the squadrons keep the duelists' set and its Super branch), each role's share of the round in whole 2-ships (the pairs left drawn by what's left of each share, so round 1's two 2-ships are 60 / 20 / 20 % over many rounds), from its own flights (exactFlights: the free flights whose sizes add up to the share exactly, flown ones first, so a group of six flights doesn't strand a remainder; then startRound's pick takes them); a group short is filled from the rest; the list shuffled so each wave mixes roles. Spares, a special's refill and Ctrl+6 stay role-blind (a flight's role is its unit's anyway) |
 | airframes | sv_spawn.lua `pickAircraft(tier, role)` | the role's own airframes (CFG.roles.aircraft) of what's unlocked (CFG.aircraft + variety.late by round + SR.usable); a signature type only when it's the role's; none yet (the Skirmishers before round 4): the fallback role's (CFG.roles.fallback skirm = wolf), else the whole list; logged once a round. Ace squadrons keep their own rows; the jammer its EA-18G on object 0 |
 | altitude | sv_spawn.lua `spawnFlight` | a Lancer flight spawns CFG.roles.lancer.alt_add_m (2000) higher, at most ROLE.LANCER_TOP_M - 500 (8.5 km) |
@@ -714,8 +728,9 @@ last), but the world data, rows and events changed: that bump must come before a
 | co-op | sv_coop.lua `KEEP_EVENTS`, the host's hunts | `^RE_SV_WolfTurn` kept (LastTGT steers to the host); WolfHold / WolfFree forwarded (a joiner's copy holds its fire too; a hold waits on a joiner until that copy has had its own appearance orders: unit 6's co-op row); the host's split hunt for a Wolf flight waits while its trap is pending or held and goes once it's let go, at most an ace trap's 300 s + hold_max_s + 120 s (code review of 2026-10-29, coop-2: it was dropped, and a trap is still pending or held at +5 s, so no Wolf flight ever split). CFG.roles goes to joiners with the host's settings (data); the role sets and rows are each game's own from the main menu, the same names in every build |
 
 ### CFG keys (CFG.roles; `[roles]` and its sections in survival.ini; the host's for the room)
-- `enabled` true (false: today's single set for every flight, drawn and armed as before; rows and sets are made at the
-  main menu, so a change needs a game restart), `tells` true, `jammer` = duelist, skirm.
+- `enabled` true (false: today's single set for every flight, drawn and armed as before, the six Lancer units keeping
+  their 9 km band, which is build data; rows and sets are made at the main menu, so a change needs a game restart),
+  `tells` true, `jammer` = duelist, skirm.
 - `mix` ([roles.mix]): `from_round` 1, 4, 10; `duelist` 0.6, 0.4, 0.3; `lancer` 0.2, 0.2, 0.25; `wolf` 0.2, 0.2,
   0.25; `skirm` 0.0, 0.2, 0.2 (each role's share at the band in the same place).
 - `ace_mix` ([roles.ace_mix]): duelist 1.0, the others 0.0 (P9 maps squadrons to roles here).
@@ -785,8 +800,11 @@ last), but the world data, rows and events changed: that bump must come before a
 5. Mixed rounds 1, 4, 10, 20: the `roles: round N` line's shares; the first Lancer / Skirmisher callout once a round;
    the jammer ([jammer] chance = 1.0, from_round = 2) only on a duelist or Skirmisher flight; a raid's escorts never
    Wolf flights.
-6. Roles off ([roles] enabled = false, restart): every role row `flies NLID_SV_Fighter`, `roles: off`, no `roles:
-   round` lines: the old game.
+6. Roles off ([roles] enabled = false, restart): every role row `flies NLID_SV_Fighter`, `roles: off; ... (the Lancer
+   units keep their 9 km band)`, no `roles: round` lines: the old game but for that band. The six Lancer units
+   (ERA_Unit_03 / 04) are drawn and spawn within altitude_m like every flight, but their escape climbs can go higher
+   than the others' (the code review of 2026-10-29's roles-2): an A/B of roles against the old game carries that
+   difference; only a build without the band (or stable-1) is the old game exactly.
 7. Co-op: a joiner's copies of a held Wolf plane don't shoot it; `RE_SV_WolfTurn` never in a joiner's "ev" lines.
 
 ### Offline test
@@ -848,7 +866,9 @@ RE_SV_WolfHold_14B as LiveAIEngagementOrder None on ERA_Obj_01_Air11_su33_7 alon
   its evasion and flares [I] (a held plane may be a free kill: free_on_hit frees it at the first hit).
 - The Lancers above Mission 22's band: whether 9 km max changes anything else of their unit [?]; whether the zoom's
   50 deg climb, then FlyStraight (no attitude change: it keeps climbing) and MoveAwayFromTarget leave it too high or too
-  slow for the next pass.
+  slow for the next pass. The band stays with roles off (build data): those six units' escape climbs (LA_SV_Escape's
+  picks gated within 1 km of the band's top) pass up to ~8 km where the others' fail above ~3 km [I: the gate's reading
+  of the band].
 - IsFireMissileFinished's counter (zeroed by UPDATE_AI_STATE, [I]): if it only resets on a state change, a Skirmisher
   that fired in its previous pursuit still breaks off at once (the break-off comes either way: its own LaxSequencer).
 - IsAroundPlayer wasn't used (its direction is ambiguous in the notes), so "never inside 3 km" rests on the head-on
@@ -895,10 +915,11 @@ RE_SV_WolfHold_14B as LiveAIEngagementOrder None on ERA_Obj_01_Air11_su33_7 alon
    Provoke_0011_CP_l, TurnNormal turns of up to 180 deg against the pursuer, so a Lancer tailed from far turned with
    you. The set's main-menu line now lists ProvokeFarLua.
 Still open (unchanged): the single COOP_TAG / VERSION bump; the Wolf events through the plain "ev" forward (no "dv"
-timing guard against a joiner's own appearance orders) and no hostSync replay of a hold to a joiner who links late; the
-spring itself (U6: it must pick the bait it watches by pair and goes through WOLF.free, which now waits out a decoy); the
-Wolf bait's ProvokeMid / Far stay stock 0012_CP turns (the drag only when tailed close); ace rounds' overflow into role
-flights until P9; everything in game.
+timing guard against a joiner's own appearance orders; since the code review of 2026-10-29 a forwarded WolfHold waits
+on a joiner until its copy has had its own orders: unit 6's "a hold on a joiner") and no hostSync replay of a hold to a
+joiner who links late (still none); the spring itself (U6: it must pick the bait it watches by pair and goes through
+WOLF.free, which now waits out a decoy); the Wolf bait's ProvokeMid / Far stay stock 0012_CP turns (the drag only when
+tailed close); ace rounds' overflow into role flights until P9; everything in game.
 
 ## Unit 6: the squad director (P2)
 
@@ -1086,6 +1107,13 @@ ERA_Obj_01_Air9_su33_0, Player}, RE_SV_DirHold_07 = LiveAIEngagementOrder None o
   isn't); a forwarded hold on a joiner's copies (the Wolf trap's is the same, also untested), and whether 3 s after a
   copy appears is enough for its appearance orders to have come [I: they're 2 s after the appearance trigger, as on the
   host]; "dv" end to end.
+- Co-op: the trap sprung for a joiner (doTrap with the turn off): the bait's held wingman gets RE_SV_WolfFree_<NN><L>
+  (air-only search, PlayerOnlyNoLimit on that object; no hunt, so not AIFirst) and its TargetActor written onto that
+  player's stand-in once a second for trap.aim_s 20. Whether PlayerOnlyNoLimit lets it chase a stand-in (an allied AI
+  plane, not a player) or its own pick takes it back to the host at once is untested [I] (code review of 2026-10-29,
+  U6's leftover). Look for `roles: <unit> (wolf) trap freed (the director's spring: ...): B` (no ", turned onto the
+  player") and `director: <unit> B's TargetActor kept on player 2's plane for 20 s (1 planes; the trap)`, then whether
+  that plane goes for player 2 (`ai:` target = their stand-in).
 - Regroup is the brief's v1 (break off, close up, come back): rejoining another flight (an area move onto its lead) is
   left out: putting the 40 km area back afterwards needs NearPlayer moves on pool flights, untested, and an area that
   doesn't cover the plane sends it back (ReturnToUnit beats everything).
@@ -1246,8 +1274,12 @@ plus two kills a minute (60).
 
 ### Test checklist (in game)
 1. The scores: fly a normal round 8+ and read the 10 s lines against what happened: damage % after a hit, `N missiles on
-   you` while the missile alert sounds (this checks the TargetToHome read; 0 throughout means it can't be read: then only
-   missiles within 1 km count), enemies within 5 km, comfort rising while you sit on a tail with kills.
+   you` while the missile alert sounds (this checks the TargetToHome read), enemies within 5 km, comfort rising while
+   you sit on a tail with kills. A missile counts when its TargetToHome is your pawn; only one whose TargetToHome can't
+   be read (or isn't a valid object) falls back to counting within 1 km. So 0 throughout with alerts means the read
+   works but never names your pawn (a component or controller, say: then missiles add nothing to intensity and holds
+   come later), or it fails and no missile came within 1 km; 1-2 only in the last kilometre points at the fallback.
+   (Code review of 2026-10-29, config-4: this said 0 throughout meant the read failed.)
 2. The hold (waves on, round 8+): let a wave press you (two missiles, health dropping) and stay pressed while you kill
    the rest down to 4: the `held N s ... wave 2 wait` line comes at that kill (not before, however long you were hot),
    with `waits for the intensity hold`; wave 2 only after the hold (its `wave 2 of N` line 15-20 s after the `held`
@@ -1316,7 +1348,9 @@ pass unchanged but one source check in late_rounds_test.lua (startRound's `TIER.
 ### Untested / known limits
 - Everything in game [V at most]. In particular:
 - HIT.msl's TargetToHome read [V static: sv_tactical's ECM and the stats use it, both untested in game]: if it can't be
-  read, only missiles within 1 km count as "on you".
+  read, only missiles within 1 km count as "on you"; if it reads as a valid object that isn't your pawn (its type is
+  unrecorded), none count and there's no fallback. No line logs the first read (nameOf, pawn or not): checklist item 1
+  tells the cases apart only by the counts.
 - Damage is HealthInternal's drops only: the player's native armour pool (+0x1400, KILLS_HEALTH_DEATH.md) drains first,
   so some hits may not show (runtime-ai's measurement gap) [I].
 - The weights and marks are a first guess (80 = two missiles, four close, 30-40 % health gone in 30 s); the round lines
@@ -1622,8 +1656,9 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
   plane and a gun kill on another within 6 s count as a gun kill. In co-op a partner's kills are never yours.
 - The aspect and the samples are up to 2 s old (the sweep); a kill read after its plane's last visit uses that visit.
 - The high habit's height counter only moves Lancers: every other pool flight's world-data band tops out at 4-5 km (the
-  critic), so spawning them higher would pull them back down (ReturnToUnit). With roles off there are no Lancers: the
-  high habit then gives the squad director more top cover (its budget, any flight held) but can't put it above you.
+  critic), so spawning them higher would pull them back down (ReturnToUnit). With roles off no flight is a Lancer (the
+  six Lancer units are drawn as ordinary fighters and spawn within altitude_m, though their 9 km band stays: unit 5):
+  the high habit then gives the squad director more top cover (its budget, any flight held) but can't put it above you.
 - The tail habit doesn't give non-ace tiers the aces' reversals (the metrics brief's optional lever): the squad
   director's cover-the-tailed (unit 6) is that lever now, and it's what the counter scales.
 - The role weights only move shares the round band has: Skirmishers start in round 4's band, so the airfield habit
@@ -1676,7 +1711,8 @@ The other units' tests pass unchanged (their startRound now also logs a `learnin
 - **Scope: top cover above you with roles off too.** The high habit now also scales the squad director's top cover:
   D.counter.top = top_cover_x 1.0 x strength, DIR.roundStart's top_cover budget x (1 + top) and its cooldown divided by
   it ("; top cover x1.60 (you stay high)" in the budget line). With roles on the top cover is the Lancers, which come
-  in above your usual height; with roles off it holds any flight (not above you, their bands top out at 4-5 km).
+  in above your usual height; with roles off it holds any flight (not above you: every flight spawns within
+  altitude_m, and all but the six Lancer units, whose 9 km band is build data, top out at 4-5 km).
 - Not changed: the tail habit's non-ace reversals (unit spec: the squad director's cover is the lever), sending
   joiners' habits to the host (contract: the host's profile picks the room's mix), weighing the profile by its own
   evidence in current() (prior_kills / prior_samples stay fixed weights; min_kills / min_samples are the guards).
@@ -2244,3 +2280,215 @@ the details.
 - Every game on the same tag, linked; a joiner's `ev` lines never carry a kept event (RE_SV_Radio, RE_SV_Salvo_,
   RE_SV_WolfTurn, RE_SV_AnomalyPack, RE_SV_WraithBlink); its "tl" / "dv" lines arrive with the host's tells and salvos;
   the host's `intensity:` lines list each joiner's "in"; "rnd" carries the level and AB.L..IN's phase.
+
+## Code review of 2026-10-29
+
+A multi-agent review of the branch at 2d54a70 (eight dimensions: roles, director, stats, bosses, co-op, build, runtime,
+config; each finding checked again by a second reviewer, with probes on copies of the parts) kept 23 findings (three
+major: roles-1, bosses-1, coop-1; three only plausible: bosses-3, coop-3, runtime-4), refuted 4 and re-checked the 87
+leftovers of the units' own reviews. Seven fix units fixed what it confirmed (a round-2 commit where a reviewer of
+the first found more), plus the user's question of 2026-10-29 about the host's landing (F5) and the HUD info key he
+asked for (F6). No VERSION / COOP_TAG bump: 0.72.0-coop.18 has never been sent to anyone, so the first build that
+goes out carries it (any later change to messages, events or rows needs its own bump). No new native names, remote
+events, rows or co-op message kinds. Nothing has run in game: every fix below is [V] at most, by an offline case
+that fails on the code before it (each unit ran its new cases against a scratch copy of the parts before the fix).
+The units' own sections above were corrected in place where behaviour changed ("code review of 2026-10-29").
+
+### What each fix unit changed
+**F1 roles and ace squadrons** (e72354d, d60900d)
+- roles-1 / director-1 / bosses-2 / runtime-3 (major): ROLE.ownSet(unit, tier) exempted every ace squadron's flight,
+  so the squad director's cover and P4's push fired RE_SV_AceTurn_NN (LastTGT) on Bounty's Lancers and Valkyrie's
+  freed Wolf pairs. A squadron's role flight is now its role's own unless its tier has the levers as the code reads
+  them (`moves`, or `hunt` with `no_provoke`: only the reaper tier, Harvest); the tier from the plane (p.tier), else
+  D.flightTier (sv_ai.lua roleOwn and sv_director.lua coverer pass it). Harvest keeps its reversals and no_provoke.
+- U5's leftover, the ace-round fill: filling an ace round from other groups is P9's design (a group of 24 can't make a
+  30-60 aircraft round); what wasn't meant was a duelists'-set squadron (Inferno, Wraith, Harvest, ace_mix's) filled
+  into Lancer or Skirmisher flights, whose pursuits have no Super branch. ROLE.pickRound fills such a round from the
+  Wolf flights first (WolfLead's LA_SV_TailChase and WolfWing's LA_SV_WolfStrike keep one), then any group.
+- roles-2 / build-1 / config-2: roles off leaves the six Lancer units' 9 km band (build data). Not taken out of the
+  draw (62 aircraft, under co-op's 80 from round 32); the level-load line, CFG.roles and the ini say so (unit 5).
+- U10's leftover: a hit on a blinking lead while it couldn't blink (inside every_s, an opener, blink or spring on its
+  way, your decoy, a director hold, no player position) made a blink when the gate opened; sv_ai.lua hitsSeen keeps
+  sq.dmgSeen up to date meanwhile.
+- Round 2: CFG.director's cover comment and the ini's [director.cover] named the cover as ROLE.ownSet now reads.
+- Log: `roles: round N (...): ...; filled from wolf N (the Wolf pairs first: they keep the Super pursuit)`; `roles:
+  off; every fighter flight flies the fighters' set, drawn as before (the Lancer units keep their 9 km band)`.
+- Tests: director_test (Bounty's Lancers never the cover nor the push, Harvest's may be), aces_test (Inferno's fill
+  from the Wolf pairs, a Harvest round of 56, Bounty's as before, a hit inside every_s), roles_test (roles off).
+
+**F2 the directors** (44dd982)
+- director-2: past [director] players (4) the joiners are looked at in turn, and a plane's tail episode was cleared on
+  every tick its player wasn't picked, so cover and the trap never came for a joiner with 5+ players up. An episode is
+  judged only on a tick its player is looked at; one not looked at stands while they fly within near_km of its plane,
+  and ends after two looks off its tail TAIL_GRACE_S 1 s after the last on it. Solo and up to 4 players as before.
+- U6's leftovers: a wave's first top-cover flight up, more of its wave queued, is asked again each second (TOP_WAIT_S
+  30) instead of refused as the only one up; the pincer's tell waits for SV_Spawn's word (DIR.spawned, both sides up).
+- U7's leftovers: heldTick checks P4's intensity hold before the round's-last-flight release, at most LAST_HOLD_S 30 s
+  from when it became the last (never a stall); P4's local levelTick, which shadowed the global, is easeTick.
+- U3's leftover: an Anomaly / VALKA round whose boss can't come put back the throttle in force before it (D.pressureWas)
+  and fires the band's preset (pressureNoBoss); before, D.pressure stayed B and hostSync sent B to late joiners.
+- Log: `director: top cover: <unit> waits for another flight up (the only one; N more of wave W to come)`, `director:
+  <unit> (top cover), the round's last flight up, waits for the intensity hold too (N s at most)`, `pressure: round N:
+  preset X (was Y, no anomaly this round)`.
+- Tests: director_test (5 and 24 players, the episode's ends, solo's grace, the first flight's wait, a refused pincer
+  side), intensity_test (the last flight inside a hold, a hold that never ends), late_rounds_test (a refused Anomaly).
+
+**F3 the measurements and the learning profile** (fdc7194, aa96bc1)
+- stats-1: STATS.track keeps p.youAt before its [stats] gate (KILL.geom, PROF.sample and P4's tail read need it).
+- stats-2 / runtime-4 / U8's leftover: the profile file was lost on a failed write (unchecked write / close, the old
+  file removed before the rename, a .tmp never read) and written over with a neutral one after a failed read or load.
+  write() renders first, writes and closes a .tmp (both checked), moves the old file to .bak, the .tmp in (the .bak put
+  back on failure), then removes the .bak; a file that isn't a profile goes to .old (one kept). PROF.load, with no main
+  file, reads a whole .tmp (its end line) or a .bak beside a .tmp and moves it in; a .bak alone (a finished write's
+  leftover whose remove was refused) is passed over. A file there but unreadable (errno not 2) gives no profile that
+  session. PROF.saved is set only once a read went through, so checkpoint / fold never write without one.
+- stats-3: the tail watch and the run line's Veteran+ figures leave out the specials and their guards (their top tier is
+  given, not a skill band); the watch checks a candidate alive before reading it (runtime-5's cheap part).
+- stats-4: a joiner's head-start check uses the first round its run's counts saw (PROF.roundStart, h.began: the host's).
+- U8's leftover: each kill share is weighed by its own count (missile Kw, behind Kgeo, the gun's taken half).
+- runtime-2's cheap part: sv_core.lua hookErr / logOnce; the hooks one part calls in another (STATS.track / down /
+  sample, PROF.*, ROLE.spawned, DIR.spawned, ACE.squadUp) log their first error once a session.
+- U2's leftover: a joiner's round and run lines say the tail watch isn't measured there.
+- Log: unit 8's "file" lines (`learning: profile at ... from config\survival_profile.ini.bak|.tmp (...; moved back
+  in)`, `... couldn't be read (...): no profile this session ...`, `... kept as survival_profile.ini.old ...`, `... not
+  written (...): the old one kept ...`, `... not written: no profile was loaded (left as it is)`, `...ini.bak (the
+  profile before this one) couldn't be removed ...`, `, NOT saved (<why>)`), `<area>: <Hook> error <message> (its
+  first: not logged again)`, `; tail watch: not measured on a co-op joiner (its enemies are the host's)`.
+- Tests: profile_test (119: full disk at write and close, a refused move in, .bak / .tmp restores, a lone .bak passed
+  over, .old, an unreadable file, a level load error, own counts, a joiner's head start), stats_test, tailed_test.
+
+**F4 bosses and tells** (9fc9874, c223a60)
+- bosses-1 (major): the ALICORN's railgun tell (radio, WARNING: RAILGUN, RE_SV_AlcnAlertOn) and VLS tell went on after
+  those parts were destroyed. sv_alicorn.lua keeps the railguns and VLS once found (ARMS, armsUp, armsLook: no
+  FindAllOf every pass) and marks a kind down once one was seen up and none is, after one more look for parts that came
+  late (a new one gets a pass of its own: its first read may be a 0). Down: the RAILGUN WARNING off once, no more
+  warnings, calls, RE_SV_AlcnRailgun or RE_SV_AlcnVolley (nor a volley already called). A part never seen up is never
+  counted down.
+- bosses-4: with tells off, a sure tell's callout skipped the state check; it's now kept off the airfield, the break
+  and the summary as with tells on.
+- U9's leftover: AB.L..IN's pods-off line when none of the pods up is its own.
+- U4's leftovers: after a surfacing, alcn_up said, the railgun's warning comes radio_gap_s later (its order lead_s after
+  it), and the deck's call is held a second by a tell's gap (twice at most; a co-op host with tells off holds it for its
+  joiners' gap too: TELL.say returns the send's kind); the hunt tell reads this sweep's p.dist (sv_main.lua planeSweep).
+- config-1: tells.cooldown_s.kulbit 20 -> 12 (ACE.movesTick's kulbit gap is lead_s + 12: every repeat kulbit told).
+- Log: `special: the Alicorn's railguns found: 2 (kept; looked for again before they count as down)` (VLS found: 4),
+  `... 1 more found (2 in all, 1 up)`, `special: the Alicorn's railguns are down (N found, none up): its RAILGUN WARNING
+  off, no more railgun warnings or orders`, `special: the Alicorn's VLS are down (...): no more VLS calls or volleys`,
+  `special: AB.L..IN's ECM pods off: none of its own found (N BP_wp_ecm_a0 up, ...)`, `tell: <id> not said (<why>)` for
+  a sure tell refused by the state.
+- Tests: bosses_test (railguns / VLS down, found late, unreadable, never up; the calls after a surfacing; sure tells
+  with tells off), tells_test (a repeat kulbit), stats_test (the hunt on this sweep's distance).
+
+**F5 co-op and the host's landing** (58ce1a7, 1927119)
+- The user's question ("when the HOST is landed at the airfield that the game isn't paused for the other players"):
+  the online-style pause already kept the world running, but sv_rounds.lua held every spawn while the host was down at
+  the airfield (Shazzy's host log of 2026-10-25: 10-43 s holds). With another player flying (othersFlying: alive,
+  fresh, not on the airfield) the spawns go on, a flight's orders fire (RE_SV_FlightOrders_NN at orders_check_s, then
+  every 5 s while the host is down, not counted as tries), the wave clock runs, the ALICORN's deck launches and a Wolf
+  trap is held hold_after_s after its orders (round 2). Solo, or with nobody else flying, all as before. The Wolf
+  trap's 30 s wait for its orders leaves out the host's time down (U5's leftover, solo too).
+- coop-1 (major): a joiner's own x0.75 cut of a Skirmisher copy was reported to the host as that joiner's hit (~25 %
+  of the plane per joiner). COOP.copyScaled moves the copy's expected health with the cut.
+- coop-2: a Wolf flight's co-op split hunt waits for its trap (queued every 2 s, at most an ace trap's 300 s +
+  hold_max_s + 120 s) instead of being dropped (no Wolf flight ever split before).
+- coop-3: a joiner drops a "dv" event more than DV_LATE_S 1 s past its time (its level wasn't ready).
+- U6's leftover: a forwarded RE_SV_DirHold_NN / WolfHold waits on a joiner until that flight's copy has been up 3 s
+  (its own appearance orders first; M.holdQ, dropped by its release or after 30 s without a copy).
+- bosses-3: AB.L..IN's phase-3 gun event outside a frenzy fires on the host alone (COOP.eventHere); frenzies as before.
+- Log: `round N: spawns go on while you're down at the airfield (1 other player flying)`, `roles: <unit> (wolf) trap 3
+  s after its orders, you down at the airfield (1 other player flying): held B, D`, `coop: <unit> holds its Wolf trap;
+  it goes after the joiners once that's let go`, `coop: the host's RE_SV_DirHold_05 waits for its copy here to have its
+  own orders` (then `fired here N s after it came ...` or `dropped here (...)`), `coop: the host's director event X
+  dropped (N s past its time: this level wasn't ready)`, `special: AB.L..IN's phase-3 gun events on the host alone (its
+  joiners' copies fire their own)`.
+- Tests: the new coop_landing_test.sh (49 checks: solo held; a joiner flying, spawns, orders, the wave clock, the deck
+  and the Wolf trap go on; everyone down, held; a joiner holds nothing), roles_test (the "bd" copy cut, no "ht"),
+  director_test (the Wolf hunt's wait, "dv" late, held-back holds), bosses_test (the phase-3 gun on the host).
+- Left as it was: the shuttle's countdown and invulnerability still pause while the host is down.
+
+**F6 the HUD info key** (a4c99b7, 30eb9a4; the user's request of 2026-10-29, a cluttered 3-player co-op HUD)
+- CFG.hud.info ([hud.info]; enabled, key I, ctrl, start_open, peek_s 5; PERSONAL in co-op): the CO-OP, ALLIES and ITEMS
+  rows stay hidden until I is pressed (again: hidden), each shown peek_s when its news changes (a player joins, drops
+  or is shot down; an ally flight, ship or defence comes or goes, or the order changes; an item bought or used; never a
+  ticking count); ROUND / WAVE, ZOLLARS, AIRFIELD and NEXT always shown, NEXT first in the stack. Open, the CO-OP row
+  has a line a player (FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION, health; 4 lines, then +N MORE). A release
+  key (sv_hud.lua binds it outside any TEST ONLY block), keyboard only; a key UE4SS doesn't know or no key binds: the
+  rows always shown. Round 2: a downed player's DOWN comes from the last state their game sent, so a lagging link no
+  longer re-peeks the closed row. tools/re/HUD_LAYOUT.md has the design, log lines and checklist.
+- Log: `hud: info key I: the CO-OP, ALLIES and ITEMS rows hidden until it's pressed, each shown 5.0 s when it changes`,
+  `hud: info rows shown (I)` / `hidden (I)`, `hud: info key <K> not bound (<why>): the info rows always shown`.
+- Tests: the new hud_info_test.sh (64 checks, on the parts after strip_test_only.py).
+
+**F7 docs and wrap-up** (this section's commit)
+- config-3: this file's head, unit 2's CFG keys and AGENTS.md say P5's reworked trees have no survival.ini switch back
+  to stable-1's (packaged scripts; `reactions = false` is the stock ones) and name the live provoke's switches.
+- config-4: unit 7's checklist item 1 and its untested note: the 1 km fallback counts only a missile whose TargetToHome
+  can't be read; 0 throughout means the read never names your pawn.
+- U2's leftover: unit 2's checklist item 5 and limits note: every spike level has post_stall_all (from round 8).
+- coop-4: COOP.md's list of each player's own sections and sv_coop.lua's PERSONAL comment (menu, profile, flares, the
+  test logs' sections).
+- config-6 (the first review run's nit): where shapecheck is (build/research/ai/survey, not in the repo).
+- U6's leftover: the trap sprung for a joiner (RE_SV_WolfFree under PlayerOnlyNoLimit, then a TargetActor write) on
+  unit 6's untested list with its log lines.
+- roles off: units 5 and 8 say the Lancer units keep their 9 km band (F1's outcome).
+- AGENTS.md: the behaviour section and the co-op section.
+
+### Refuted (not acted on as bugs)
+- runtime-1, ACE.movesTick's two fresh reads a plane a tick: not new (stable-1 made them; the branch only added
+  filters); the round's 60 is spread over waves (at most max_up, ~30, up at once) and the reads run inside timed().
+  An optimisation (a distance prefilter), not a defect.
+- runtime-2, the new hooks' bare pcalls: no failing path found; F3 still logs each hook's first error (hookErr).
+- runtime-5, STATS.tailTick's fresh() before alive(): the read is inside fresh()'s pcall, a pending-kill actor still
+  answers, and a plane is destroyed only after the sweep has marked it down; F3 still checks alive() first.
+- config-5, the 'high' opener's "up to 4.5 km: the pool's band": the doc already states the clip, which matches
+  ACE.highAlt (altitude_m's top).
+Leftovers judged not a bug: the ace-round fill (P9's design; F1 fixed the unintended part) and U7's heldTick order
+(one reviewer read it as documented; F2 reordered it all the same, as the plan asked). Left as it is: U1's leadCheck
+staying silent when k 0 never reaches logPlane (diagnostics only, on an unconfirmed CDO path).
+
+### What stays open
+- Everything in game: the fixes are offline-tested only (the in-game list below).
+- Build data survival.ini can't switch: P5's trees (no stable-1 copy packed) and the Lancer band with roles off (an
+  exact revert needs a build switch: not built).
+- missilesOn logs nothing of the first TargetToHome read (config-4's suggested diagnostic, not built): the checklist
+  tells a non-pawn target from a failed read by the counts only.
+- The Wolf trap's held planes have no hostSync replay for a joiner who links during a hold (the director's holds do).
+- The trap sprung for a joiner, a hold on a joiner 3 s after its copy appears, "dv" end to end: unit 6's [I] list.
+- A co-op host down at the airfield: whether RE_SV_FlightOrders_NN fires with the landing menu up isn't known (hence
+  the retries every 5 s that don't count as tries); the shuttle still pauses for the host's landing; AB.L..IN's
+  phase-3 LastTGT (and VALKA's) still fires every 10 s while the host is down, its effect on a landed plane unknown
+  (the bosses reviewer's note, not a finding).
+- The learning profile: the .tmp / .bak are read back only when the main file is missing (a file there but unreadable
+  gives no profile that session, never a fallback).
+- The ALICORN: a railgun or VLS never read up is never counted down (a 0 read as it appears mustn't silence a working
+  one), so parts that read 0 from the start keep their tells.
+- The HUD info key: in co-op the STORE doesn't pause the game, so a peek can run while it's up [I]; no controller
+  button (it would need the runtime's input hook).
+- From the build review, older than this branch: `package_release.sh offline` stops at the network-word check on
+  sv_coop.lua's SV_SteamName (since stable-1), and package_test.sh never removes flights_*.csv.
+- From the build review, by design: a Wolf flight on the F/A-18E (f18e_common: its missiles in fire-control slot 5)
+  never fires the director's salvo (salvoOk refuses it, so no sure-kill weapon: hard rule 36).
+
+### In game, on top of the checklist above
+- Bounty round (16): its Lancers never turn onto you after "Someone cover me!" (`director: cover` names a duelist or a
+  Harvest flight only); an Inferno round past 24 aircraft: `filled from wolf N (the Wolf pairs first ...)`.
+- ALICORN: shoot both railguns: `railguns are down`, the RAILGUN WARNING gone, no more WARNING: RAILGUN; every VLS:
+  `VLS are down`, no VLS LAUNCH. After a surfacing: "submarine has surfaced", the railgun's warning ~2 s later.
+- Co-op, the host lands while a joiner flies: `spawns go on while you're down at the airfield`, the joiner keeps
+  meeting flights, `orders: <unit> appeared without its orders while you're down at the airfield (...);
+  RE_SV_FlightOrders_NN fired (again every 5 s ...)` then `... has its orders now (N fired while you were down at the
+  airfield)`: do the flights that came then attack the joiner, or circle until the host takes off? Solo landing: held
+  as before. A joiner shooting a fresh Skirmisher: no "wingmate" damage on the host's log before the first hit.
+- Five or more players: a joiner tailing a fighter far from the others still gets "Someone cover me!" and a hunt.
+- The profile: config\survival_profile.ini whole after a run, no .tmp / .bak left beside it.
+- The HUD: I shows / hides the CO-OP, ALLIES and ITEMS rows (`hud: info rows shown (I)`), a peek when a player goes
+  down or an item is bought; tools/re/HUD_LAYOUT.md's checklist.
+
+### The checks at the end (F7)
+lua_check on Scripts/*.lua (24 parts; the largest main chunk sv_coop's 106 of 200 locals) and Scripts/ai/*.lua (12),
+ini_check (777 settings, 0 problems), menu_pages_test, and every tools/checks/*_test.sh: lua_load_test, menu_test,
+coop_settings_test, coop_ground_test, coop_test (4 and 12 players), coop_landing_test, hud_info_test, stats_test,
+tailed_test, late_rounds_test, tells_test, roles_test, director_test, intensity_test, profile_test, bosses_test,
+aces_test: all passed. `sh tools/build_all.sh` exits 0 with the build lines unchanged by the review: `events: 819
+triggers, 1588 execs`, `radio: 721 rows (... 61 tell lines)`, `wolf trap: 12 held objects in 6 Wolf flights`,
+`director: 86 salvo objects in 22 flights`, `6 Lancer flights up to 9000 m`.

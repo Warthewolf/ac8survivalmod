@@ -285,6 +285,13 @@ Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12
 `sh tools/checks/lua_load_test.sh [mod folder]` (every part of main.lua loads). The last two run on a real Lua 5.4.6
 that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).
 Player guide: Claude Docs "Survival COOP: Player Guide".
+Since the behaviour branch's code review (2026-10-29, TestBranch_Behavioural; untested in game, not a hard rule): the
+host down at the airfield no longer holds the room while another player flies (sv_rounds.lua othersFlying: alive,
+fresh, not on the airfield). The spawns go on, a flight's orders fire (RE_SV_FlightOrders_NN every 5 s while the host
+is down, not counted as tries), the wave clock runs, the ALICORN's deck launches and a Wolf trap is held after its
+orders; solo, or with nobody else flying, all held until the takeoff as before (user's question of 2026-10-29: Shazzy's
+host log had 10-43 s holds). The shuttle's countdown still pauses while the host is down. The CO-OP row is behind the
+HUD's info key (I), with a line a player when open (tools/re/COOP.md section 7, tools/re/HUD_LAYOUT.md).
 
 ## Enemy behaviour build (Lua 0.72.0, TestBranch_Behavioural; untested in game)
 The Claude Docs thesis "AC8 Survival Mode: Enemy Behaviour Reference & Challenge Thesis"'s nine proposals, all built on
@@ -300,14 +307,29 @@ rage, the ALICORN's deck launches), late rounds (P8: +3 aircraft a round from 26
 capped at x1.5, the attack throttle's presets) and ace personalities (P9: each squadron's own roles, an opener at first
 contact after its tell, Wraith's and Harvest's lead blinking off your six), plus the roadmap's seven measurements
 (Scripts/sv_stats.lua: `stats:`, `kill-time:`, `death:`, `tailed:` lines). Every mechanism has its own `enabled` in
-survival.ini. tools/re/BEHAVIOUR_DIRECTOR.md has each unit's build, CFG keys, log lines and untested pieces, and one
+survival.ini but two that are build data: P5's reworked reaction trees (LA_SV_ProvokeNear / LA_SV_Escape are packaged
+and built at level load, hard rule 20; `[ai] reactions = false` gives the stock 0012_CP ones, not stable-1's; P5's live
+provoke has its own, `[ai] tier_provoke`, `provoke_stricter`, `provoke_cone_deg` / `provoke_time_s`) and P1's Lancer
+band (the six Lancer units' 9 km in the world data, kept with `[roles] enabled = false`).
+tools/re/BEHAVIOUR_DIRECTOR.md has each unit's build, CFG keys, log lines and untested pieces, and one
 test checklist for the whole branch (per proposal: what to look at in game, which log lines prove it);
 `python -X utf8 -I tools/checks/stats_report.py <log>` tabulates a test log. None of it is a hard rule until a test
 confirms it. Checks without the game: the contract's (lua_check on Scripts/*.lua and Scripts/ai/*.lua, shapecheck on
 changed behaviour scripts, lua_load_test, menu_test, coop_settings_test, coop_ground_test, ini_check, menu_pages_test),
 each unit's own (stats_test, tailed_test, late_rounds_test, tells_test, roles_test, director_test, intensity_test,
-profile_test, bosses_test, aces_test: tools/README.md's checks row) and a full `sh tools/build_all.sh` (819 triggers,
-1588 execs, 721 radio rows).
+profile_test, bosses_test, aces_test, and the code review's coop_landing_test, hud_info_test: tools/README.md's checks
+row), coop_test, and a full `sh tools/build_all.sh` (819 triggers, 1588 execs, 721 radio rows). shapecheck isn't in
+the repo: `python shapecheck.py <file>` from build/research/ai/survey/ (research output on the build machine with the
+stock LA_ scripts it reads, gitignored with build/); build_all.sh doesn't run it.
+Code review of 2026-10-29 (fix units F1-F7 on the same branch, no VERSION / COOP_TAG bump; untested in game;
+BEHAVIOUR_DIRECTOR.md's last section has each fix, its log lines and what stays open): Bounty's Lancers and Valkyrie's
+Wolf pairs are never turned by the director's cover or P4's push (ROLE.ownSet: only Harvest's tier keeps its levers on
+a role flight); the ALICORN's railgun and VLS tells, warning, orders and volleys stop once those parts are destroyed;
+a joiner's Skirmisher cut is no longer sent to the host as a hit; the learning profile's file is written whole and never
+lost (.tmp / .bak / .old); cover and the trap work for joiners past [director] players 4; a host down at the airfield no
+longer holds the room while another player flies (below); and, at the user's request, the HUD info key: I ([hud.info])
+keeps the CO-OP, ALLIES and ITEMS rows hidden until pressed, each shown peek_s 5 when its news changes, open the CO-OP
+row has a line a player (tools/re/HUD_LAYOUT.md; a release key, not a test key; keyboard only).
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
