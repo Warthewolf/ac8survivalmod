@@ -22,6 +22,7 @@
 --     with you down is logged, once a clock (whether they take with the landing menu up isn't known: F5's review of the
 --     change); a joiner runs none of its own;
 --   a joiner's rounds hold nothing on the host's landing;
+--   another player's stand-in waits up to 5 s for their airframe ("players are flying F-16's on my side"), then the default;
 --   the hooks by their place in the source (the ALICORN's deck: bosses_test.sh).
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -511,6 +512,34 @@ local k = D.shuttleClock
 roundsTick(100); roundsTick(110)
 check(k.cd == 0 and nT() == 0 and invs() == "", "a joiner, down at the airfield: no countdown or invulnerability of its own")
 room(false)
+
+---------------------------------------------------------------------------------------------------- a stand-in's airframe
+-- (the user's co-op run of 2026-10-29: "players are flying F-16's on my side but different aircraft on their side": the
+-- stand-in spawned on the empty row of their main-menu "hi" and flew the default all run)
+print("another player's stand-in waits for their airframe")
+do
+    fresh(5)
+    room(true); p2(FLYING)
+    local function peerSpawns() local n = 0; for _, s in ipairs(spawns) do if s.unit:find("CoopPeer") then n = n + 1 end end; return n end
+    local function tick(dt) clock = clock + dt; COOP.tick(0) end
+    M.peers, M.readyAt = {}, 0
+    M.roster[1] = { row = "", ver = VERSION, name = "p2" }
+    local from = #logs + 1
+    tick(0.25); tick(2)
+    check(peerSpawns() == 0, "in the level with no airframe heard of yet: no stand-in for 2 s")
+    M.roster[1].row = "su57_common"
+    tick(0.25)
+    check(peerSpawns() == 1 and since(from, "player 2's plane as su57_common: spawned") == 1,
+          "their airframe comes: the stand-in flies it (" .. tostring(line("coop: player 2's plane as", from)) .. ")")
+    M.peers, M.roster[1].row, spawns = {}, "", {}
+    from = #logs + 1
+    tick(0.25); tick(4)
+    check(peerSpawns() == 0, "still no airframe after 4 s: still waiting")
+    tick(1.5)
+    check(peerSpawns() == 1 and since(from, "player 2's plane as f16c_common %(no airframe from them in 5 s%): spawned") == 1,
+          "none in 5 s: the default, said so (" .. tostring(line("coop: player 2's plane as", from)) .. ")")
+    room(false)
+end
 
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")

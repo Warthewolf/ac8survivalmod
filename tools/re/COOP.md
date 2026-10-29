@@ -92,6 +92,17 @@ Special rounds' scripted parts (Ladon volleys, the Alicorn's dives and railgun, 
 blinks) run on the host only; the joiner sees their aircraft. Ground and sea units (LCACs, BTRs, ships) are spawned on
 the joiner too but not streamed or synced. Missiles fired at the other player aren't shown. The other player's
 plane flies the enemy NPC row of its airframe (an enemy paint). Allies a joiner buys exist only on their side.
+- Another player's airframe [V: the bug; the fix I]: it comes in their "hi" (host) or the host's "pi" (joiners), sent
+  again once their plane is up (the main menu's has none). Until 0.72.1 the stand-in spawned the moment their state
+  said "in Survival's level", on whatever row was known then, so a "hi" a moment late left it the default F-16C for the
+  whole run (the user's co-op run of 2026-10-29, three players: "players are flying F-16's on my side but different
+  aircraft on their side"; the log's "flies " empty). Now peerTick waits up to 5 s (AIRFRAME_WAIT_S) for a row, then
+  flies the default, said so: `coop: player N's plane as <row> (no airframe from them in 5 s): spawned`. A later change
+  is logged (`coop: player N flies <row> (their plane here stays <row> until their next sortie)`): an AI plane that's up
+  can't change airframe, and there's no despawn for a stand-in. tools/checks/coop_landing_test.sh has the cases.
+- Each player's runtime: the host compares a joiner's "hi" runtime with its own (`coop: WARNING: player N runs runtime
+  ...`, a CO-OP RUNTIME MISMATCH callout). The same run: both friends' dlls/main.dll was 0.27.0 under 0.72.0's Lua
+  (built for 0.28.3), a zip unpacked with the game open.
 
 ## 6. A second player plane (research of 2026-10-25, runtimes 0.21.0-0.22.2; probe partly run)
 Goal (user, 2026-10-25): the other player as a real player plane, their own aircraft and paint, targeted by the
