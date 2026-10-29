@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.28.4"
-#define RT_VERSION_A         "0.28.4"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.28.5"
+#define RT_VERSION_A         "0.28.5"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -1852,7 +1852,9 @@ static void OnMusicNext(void* manager)
  * the single-button option: left as built), +0x18 flags (disassembly of 2026-10-24). The detour runs it, then, on the
  * plane Lua named, applies the field's effects, each fading over the fade time by a factor from 1 (off) to -1 (on):
  * pitch / roll / yaw inverted (times the factor), pitch and roll swapped, throttle and brake swapped (blended
- * (1 - factor) / 2 of the way to the other). The struct is rebuilt every call, so nothing can apply twice. */
+ * (1 - factor) / 2 of the way to the other). The struct is rebuilt every call, so nothing can apply twice. Then (runtime
+ * 0.28.5) flight.c's FlightInputHook: while DOWN its autopilot replaces the local plane's pitch, yaw, roll, throttle and
+ * brake, and SV_InputNow's record of what each plane's flight engine got. */
 enum { INV_PITCH, INV_ROLL, INV_YAW, INV_SWAP_AXES, INV_SWAP_THROTTLE, INV_N };
 typedef void (*BuildInputFn)(uint8_t* plane, float* out);
 static uint8_t*      g_fBuildInput;
@@ -1863,11 +1865,19 @@ static volatile int32_t  g_invFadeMs = 1500;
 static float         g_invScale[INV_N] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static uint64_t      g_invLastMs;
 
+static void FlightInputHook(uint8_t* plane, float* out);   /* flight.c: DOWN's autopilot, SV_InputNow's record */
+static void InvertInput(float* out);
+
 static void OnBuildInput(uint8_t* plane, float* out)
 {
     g_nextBuildInput(plane, out);
     CoopFrame(0);                                    /* (only when the music player's tick doesn't run) */
-    if (!plane || plane != g_invPlane || !out) return;
+    if (plane && out && plane == g_invPlane) InvertInput(out);
+    FlightInputHook(plane, out);                     /* (DOWN last: its autopilot is never inverted) */
+}
+
+static void InvertInput(float* out)
+{
     uint64_t now = GetTickCount64();
     float step = g_invLastMs && now > g_invLastMs ? (float)(now - g_invLastMs) * 2.0f / (float)(g_invFadeMs > 0 ? g_invFadeMs : 1) : 0.0f;
     if (now - g_invLastMs > 1000) step = 0.0f;           /* first frame after a pause: no jump */
@@ -2063,6 +2073,7 @@ static int ArgNumber(void* lua, double* v)
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
 #include "coop.c"                                   /* Survival COOP (runtime 0.20.0) */
+#include "flight.c"                                 /* flight sync and DOWN (runtime 0.28.5) */
 
 /* ---- sound: Survival's own sound effects (XAudio2) ---------------------------------------------------------------
  * AC8 plays only its own Wwise banks, so Survival's own sounds (AC7's railgun sounds for VALKA: AGENTS.md's exception,
@@ -2985,6 +2996,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },
         { "SV_CoopSpawnPP", L_CoopSpawnPP }, { "SV_CoopKillPP", L_CoopKillPP }, { "SV_CoopFollow", L_CoopFollow },
         { "SV_CoopPPRole", L_CoopPPRole },
+        { "SV_CoopFire", L_CoopFire }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
@@ -3104,6 +3116,10 @@ static void FindFunctions(void)
         { kSigRemoteLoadout,    kSigRemoteLoadoutMask, sizeof(kSigRemoteLoadout), NULL, 0 },
         { kSigRemoteFlags,      NULL, sizeof(kSigRemoteFlags),  NULL, 0 },
         { kSigRemoteFinish,     NULL, sizeof(kSigRemoteFinish), NULL, 0 },
+        { kSigFireOne,          kSigFireOneMask,   sizeof(kSigFireOne),   NULL, 0 },
+        { kSigFireExec,         NULL,              sizeof(kSigFireExec),  NULL, 0 },
+        { kSigTakeoffAB,        kSigTakeoffABMask, sizeof(kSigTakeoffAB), NULL, 0 },
+        { kSigPPRespawn,        NULL,              sizeof(kSigPPRespawn), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3144,6 +3160,10 @@ static void FindFunctions(void)
     g_siteRemoteLoadout = p[39].hit;
     g_siteRemoteFlags   = p[40].hit;
     g_siteRemoteFinish  = p[41].hit;
+    g_fFireOne          = p[42].hit;
+    g_fFireExec         = p[43].hit;
+    g_fTakeoffAB        = p[44].hit;
+    g_fPPRespawn        = p[45].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3159,6 +3179,8 @@ static void FindFunctions(void)
     Log(L"coop: player plane: spawn %p, world spawn %p, teleport %p, inner %p; remote spawn sites: possess %p, network object %p, role %p, dummy class %p, loadout %p, loadout bytes %p, finish %p",
         g_fSpawnPlayerPlane, g_fWorldSpawnActor, g_fPPTeleportTo, g_fPPTeleportInner, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole,
         g_siteRemoteDummyCls, g_siteRemoteLoadout, g_siteRemoteFlags, g_siteRemoteFinish);
+    Log(L"flight: one-shot fire %p (LiveFireOneShotWeapon's Execute %p), AI takeoff afterburner %p, player plane respawn %p",
+        g_fFireOne, g_fFireExec, g_fTakeoffAB, g_fPPRespawn);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 

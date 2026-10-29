@@ -27,8 +27,13 @@ LiveActorTeleportExecution works. Its Execute (vtable slot 87) = 0x1473eb200; pe
   - slot 186 = 0x147d1e390 `ALiveAIPlane::TeleportTo`: if a replay is recording, records a teleport (event 0x1b),
     then calls slot 315.
   - slot 315 (+0x9d8) = 0x147d1e560: `AActor::TeleportTo` (0x143fc1e10: moves RootComponent +0x1a0, encroachment test
-    unless bNoCheck) then `this->vtable[0x268](GetComponentByClass(flight component), false)` (slot 77 = 0x143fc2c60):
-    the reset that makes the flight model fly on from the new spot.
+    unless bNoCheck) then `ProcessEvent(this, FindFunctionChecked(OnReposition), NULL)` (vtable +0x268 = slot 77 =
+    0x143fc2c60 is AActor::ProcessEvent, not a component reset; FName OnReposition at 0x14e357ef8). The event's native
+    thunk (+0x888 = 0x147d1e5c0) jumps to the class's OnReposition_Implementation (+0x9e0): ALiveAIPlane's 0x147bb5900
+    resets the plane's flight engine (+0x910), its speed to normal (vfunc +0x948 with +0x2bd4) and two movement caches,
+    and ends in `EnableTakeoffAfterburner(false)` (0x147ccf3f0): **every teleport puts an AI plane's afterburner out**.
+    That reset is what makes the flight model fly on from the new spot. (Corrected 2026-10-30, runtime 0.28.5: until
+    then this note read slot 77 as a flight-component reset; the stand-ins' missing afterburners were this.)
 - Survival COOP calls slot 315 every frame on a puppet with bNoCheck = 1 (no replay record each frame). Before binding,
   the runtime checks the object's vtable holds exactly these two functions (sigs.h kSigAITeleportTo /
   kSigAITeleportInner, found by FindFunctions); anything else is never teleported.
@@ -61,6 +66,59 @@ Channel 1480. Also ISteamNetworkingMessages_v002 is there (not used).
 AC8's own online objects (LiveGameObject.NetworkObject, TargetingPlayerPlanes, LiveAIPlane.NearestPlayerPlane): AC8's
 AI already knows several player planes (Online Mode). A real second ALivePlayerPlane for the other player would make
 enemies split between players natively; for the first build the other player is an allied AI plane.
+### Flight sync natives (runtime 0.28.5, runtime/flight.c and coop.c, 2026-10-30; untested in game)
+Section 8 is the Lua side. Addresses are this exe's; the runtime finds each by its signature (sigs.h) and checks the
+code's shape before use. [V] verified by reading the code, [I] inferred, [?] a guess for the test to settle.
+- **SV_CoopFire(shooter, slot, target) -> 1 or an SV_ERR code.** The game's one-shot fire `bool FireOne(AActor* shooter,
+  u8 weaponNumber, AActor* target, const FVector* offset, u64 arg5)` 0x147c8fe20 (kSigFireOne, 55 bytes, unique), the
+  call ULiveFireOneShotWeapon::Execute (0x1473ed1e0, vtable 0x14c683190; kSigFireExec) makes at +0x363 with the node's
+  weapon number (+0x58), the resolved target, a zero offset and the node's +0x70 (8 bytes: its string argument as an
+  FName, "" in the stock records HELIOS_VFX.md lists [I]: 0 here). The runtime checks that call goes to the function it found [V]. weaponNumber is ELiveWeaponNumber,
+  WN_WEAPON_1..6 = 0..5 = the fire-control slot (usmap enum; hard rule 40) [V]. FireOne returns false (fires nothing)
+  unless the shooter's active byte +0x3f4 is set, its dead flag +0xdb8 clear, HealthInternal +0xda8 > 0 and its
+  FireControlSystemComponent +0xfa8 live [V]; then it records a replay shot, gives every weapon module the target
+  (0x147c09c70) and triggers module `slot` (0x147c0aa20: `0 <= slot < module count`, else nothing) [V], and returns
+  true: queued, not proof a missile left (the module's own checks, a fire permission among them, aren't traced) [?].
+  The target is read as a game object (weak pointer, root component, vfuncs +0xae8 / +0xaf0 / +0x8e8, its alive
+  fields), so the runtime takes only 0 or a live LiveGameObject (its class has the reflected HealthInternal at +0xda8,
+  where FireOne reads it). The shooter must be live, an AI plane (coop.c CoKind 1: the AI plane's teleport in slots
+  186 / 315, so never a player plane), its class with FireControlSystemComponent at +0xfa8. At most 25 calls a second a
+  shooter. Codes: -4 bad args (no shooter, slot not a whole 0-5), -5 the function or its offsets not found, -10 over 25
+  this second, -11 FireOne returned false, -13 not a live AI plane with a fire-control system, -14 the target isn't a
+  live game object. Every offset is read from FireOne's own code (+0x2a, +0x43, +0x51, +0x71); HealthInternal's and the
+  FCS's must equal the reflected ones on the shooter's (and the target's) class.
+- **The flag bits** (SV_CoopMe's second argument; agreed with sv_coop.lua): 1 in Survival's level, 2 alive, 4 on the
+  airfield, 8 DOWN (revive), 16 gear down, 32 afterburner, 64 gun firing, 128 flares (coop.c CO_FLAG_*). Checked end to
+  end [V, tools/checks/flight_test.sh]: SV_CoopMe keeps all 32 bits (a negative or huge number gives 0), a joiner's P
+  carries them (+56 of its body) into the host's CoOnPlayer, the host's Q record (+45) out to the joiners; CoSaneState
+  looks at the position and rotation only. SV_CoopPeerAt shows them.
+- **The stand-ins' afterburner**: the AI plane's afterburner byte is +0x29b8, read from EnableTakeoffAfterburner's
+  `mov byte [rbx + disp32], dil` at +0x82 (kSigTakeoffAB, 46 bytes, unique; the UFUNCTION's exec 0x146d43350 calls it)
+  [V]. Its surface component's update (0x147d333a0, `[component + 0x190]` = the plane) ramps the afterburner effect in
+  while the byte is set, out while not (or on its own acceleration / speed tests) [V: the code; I: that it is the
+  glow]. Each slot 315 move clears it (above), so CoDrive writes it again right after every successful move of an AI
+  stand-in: 1 while that player's latest flags have bit 32, else 0 [V: flight_test.sh with a fake plane; ?: in game].
+- **SV_InputNow() -> "pitch,yaw,roll,throttle,brake,highg"** (each x1000, whole numbers; "" before any) from the last
+  BuildFlightInput of the local player's plane (PlayerOwner(world) of Survival's level, else SV_CoopMe's plane, else
+  the plane input was last built for): its out after SV_Invert and DOWN, what the flight engine got. [V] out+0xC
+  throttle = clamp(InputThrottle, 0, 1), +0x10 brake 0..1, +0x14 high-G = (throttle + brake) x k (brake alone on the
+  single-button option); FlightEngine::SetInput (0x144d32580) clamps throttle to 0..1 again (and forces 1 in one of
+  its modes). 0 is neutral (cruise speed in AC8), so the afterburner is a held throttle: AceFlightEnginePlayerParameter
+  has AfterburnerWait / PowerAfterBurnerR / MaxSpeedAfterBurnerR; no threshold is in the input path itself [I]. The
+  ab_throttle 0.9 of section 8 is a guess to calibrate from the log.
+- **Log lines** (AC8SurvivalMode.log): at start `flight: one-shot fire <p> (LiveFireOneShotWeapon's Execute <p>), AI
+  takeoff afterburner <p>, player plane respawn <p>` (none NULL); on the first SV_CoopFire `coop fire: one-shot fire
+  <p> ...: active byte +3F4, dead flag +DB8, HealthInternal +DA8, fire-control system +FA8; at most 25 shots a second
+  per shooter`; per shooter its first result `coop fire: AI plane <p>, slot N, at <p>: queued (the game's fire returned
+  true)` (or `returned false ...`); each kind of refusal once `coop fire: refused (<code>): <why> ...`; once a minute
+  with shots `coop fire: N shots queued, N refused by the game ..., N over 25 a second, N bad calls`; the first stand-in
+  move `coop: the AI plane's afterburner byte is +29B8 (EnableTakeoffAfterburner <p>) ...`; per player once a binding
+  `coop: player N's afterburner on: their stand-in <p>, byte +29B8 (flags <hex>)`.
+- **What the test must confirm**: the missiles leave the stand-in and fly at the target (FireOne queues them with its
+  fire permission off?); slot 1 shows the gun and slot 0 flares; `returned false` never for a live stand-in; the
+  stand-in's afterburner glows on the other screens at full throttle (the byte written after each move is enough, and
+  nothing else turns it out between the move and the component's tick); which SV_InputNow throttle value matches the
+  afterburner.
 
 ## 3. The build
 - runtime/coop.c (included in survival_rt.c; runtime 0.20.0): transport (Steam P2P or UDP), hello / reliable / ack /

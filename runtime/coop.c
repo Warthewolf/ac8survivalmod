@@ -51,6 +51,16 @@
 #define CO_MODE_UDP     2
 #define VT_TELEPORT_TO  186                 /* AActor::TeleportTo: ALiveAIPlane's records a replay teleport          */
 #define VT_TELEPORT_IN  315                 /* ALiveAIPlane's teleport + flight reset (sigs.h kSigAITeleportInner)   */
+/* Lua's state flags (SV_CoopMe's second argument; each P and Q carries them whole, 32 bits, CoSaneState never looks at
+ * them). Agreed with Scripts/sv_coop.lua for runtime 0.28.5; the runtime itself acts on CO_FLAG_AB only (CoDrive). */
+#define CO_FLAG_LEVEL     1                 /* in Survival's level                                                  */
+#define CO_FLAG_ALIVE     2
+#define CO_FLAG_AIRFIELD  4                 /* on the airfield                                                      */
+#define CO_FLAG_DOWN      8                 /* DOWN, waiting for a revive (SV_Down's autopilot flies the plane)     */
+#define CO_FLAG_GEAR      16                /* gear down                                                            */
+#define CO_FLAG_AB        32                /* afterburner: the stand-in's afterburner byte follows it every frame   */
+#define CO_FLAG_GUN       64                /* gun firing                                                           */
+#define CO_FLAG_FLARES    128               /* flares                                                               */
 
 static uint8_t* g_fAITeleportTo;            /* found by FindFunctions (sigs.h)                                       */
 static uint8_t* g_fAITeleportInner;
@@ -58,6 +68,7 @@ static uint8_t* g_fPPTeleportTo, *g_fPPTeleportInner;              /* the same p
 static uint8_t* g_fSpawnPlayerPlane, *g_fWorldSpawnActor;          /* a second player plane (COOP.md 6)              */
 static uint8_t* g_siteRemotePossess, *g_siteRemoteNetObj, *g_siteRemoteRole, *g_siteRemoteDummyCls;
 static uint8_t* g_siteRemoteLoadout, *g_siteRemoteFlags, *g_siteRemoteFinish;
+static uint8_t* g_fTakeoffAB;               /* ALiveAIPlane::EnableTakeoffAfterburner (sigs.h kSigTakeoffAB), read only */
 
 /* ---- clock and math ------------------------------------------------------------------------------------------- */
 static int64_t g_qpcFreq;
@@ -353,6 +364,7 @@ typedef struct {
     double   offset; int haveOffset;        /* local time - that player's time: the smallest seen, let go of slowly */
     int32_t  hp; float maxHp; uint32_t flags; double stateAt;
     uint8_t  rec[CO_Q_REC]; int fresh;
+    int      abSaid;                        /* its stand-in's afterburner was logged on (once per binding)          */
 } CoPlayer;
 
 static struct {
@@ -507,6 +519,28 @@ static uint8_t CoTeleport(uint8_t* o, const double* pos, const double* rot)
         return 1;
     }
     return ((CoTeleportFn)(*(void***)o)[VT_TELEPORT_IN])(o, pos, rot, 0, 1);
+}
+
+/* The AI plane's afterburner byte (+0x29b8), from EnableTakeoffAfterburner's `mov byte [rbx + disp32], dil` at +0x82
+ * (runtime 0.28.5). Slot 315's teleport runs the AI plane's OnReposition (0x147bb5900), which ends in
+ * EnableTakeoffAfterburner(false): every frame's move put a stand-in's afterburner out (the user's co-op run of
+ * 2026-10-29: "nor do I see their afterburners"), so CoDrive writes it again right after each move. 0 if not found. */
+static int32_t g_coAbOff = -1;
+static int32_t CoAbOffset(void)
+{
+    if (g_coAbOff >= 0) return g_coAbOff;
+    g_coAbOff = 0;
+    uint8_t* f = g_fTakeoffAB;
+    if (!f || !Readable(f + 0x82, 7) || f[0x82] != 0x40 || f[0x83] != 0x88 || f[0x84] != 0xBB) {
+        Log(L"coop: the AI plane's afterburner byte wasn't found (EnableTakeoffAfterburner %p); stand-ins show no afterburner", f);
+        return 0;
+    }
+    int32_t off = *(int32_t*)(f + 0x85);
+    if (off < 0x1000 || off >= 0x8000) { Log(L"coop: the AI plane's afterburner byte +%x is implausible; not used", (uint32_t)off); return 0; }
+    g_coAbOff = off;
+    Log(L"coop: the AI plane's afterburner byte is +%x (EnableTakeoffAfterburner %p): stand-ins follow their player's afterburner flag (%d)",
+        (uint32_t)off, f, (int32_t)CO_FLAG_AB);
+    return off;
 }
 
 /* ---- packets ---------------------------------------------------------------------------------------------------- */
@@ -1106,22 +1140,33 @@ static int CoSample(const CoEnt* e, double rt, double* pos, float* q)
     return 0;
 }
 
-static void CoDriveOne(CoEnt* e, double rt)
+/* Moves one puppet to where its stream was at rt; the actor if it was moved, else NULL. */
+static uint8_t* CoDriveOne(CoEnt* e, double rt)
 {
     uint8_t* o = CoRefGet(&e->ref);
-    if (!o) { if (e->ref.obj) { e->ref.obj = NULL; Log(L"coop: a puppet's actor is gone (stream %d); unbound", (int32_t)e->id); } return; }
-    if (CoHealth(o) <= 0) return;                             /* going down: let it fall */
+    if (!o) { if (e->ref.obj) { e->ref.obj = NULL; Log(L"coop: a puppet's actor is gone (stream %d); unbound", (int32_t)e->id); } return NULL; }
+    if (CoHealth(o) <= 0) return NULL;                        /* going down: let it fall */
     double pos[3], rot[3]; float q[4];
-    if (!CoSample(e, rt, pos, q)) return;
+    if (!CoSample(e, rt, pos, q)) return NULL;
     CoQuatToRot(q, rot);
-    if (CoTeleport(o, pos, rot)) ++e->drives; else ++e->fails;
+    if (CoTeleport(o, pos, rot)) { ++e->drives; return o; }
+    ++e->fails;
+    return NULL;
 }
 
 static void CoDrive(double now)
 {
     for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
         CoPlayer* P = &CO.players[s];
-        if (s != CO.mySlot && P->plane.ref.obj && P->haveOffset) CoDriveOne(&P->plane, now - P->offset - CO.delay);
+        if (s == CO.mySlot || !P->plane.ref.obj || !P->haveOffset) continue;
+        uint8_t* o = CoDriveOne(&P->plane, now - P->offset - CO.delay);
+        /* the move turned an AI stand-in's afterburner off (CoAbOffset): set from that player's latest flags */
+        if (!o || CoKind(o) != 1) continue;
+        int32_t ab = CoAbOffset();
+        if (ab <= 0 || !Readable(o + ab, 1)) continue;
+        uint8_t on = (P->flags & CO_FLAG_AB) ? 1 : 0;
+        o[ab] = on;
+        if (on && !P->abSaid) { P->abSaid = 1; Log(L"coop: player %d's afterburner on: their stand-in %p, byte +%x (flags %x)", s + 1, o, (uint32_t)ab, P->flags); }
     }
     if (CO.role != CO_ROLE_JOIN || !CO.players[0].haveOffset) return;
     double rt = now - CO.players[0].offset - CO.delay;        /* the host's enemies, on the host's clock */
@@ -1357,12 +1402,13 @@ static int L_CoopRecv(void* lua)
     return 1;
 }
 
-/* SV_CoopMe(plane [, flags]) -> 1: the local player's plane (streamed to the others), 0 = none; flags go with it */
+/* SV_CoopMe(plane [, flags]) -> 1: the local player's plane (streamed to the others), 0 = none; flags go with it, all 32
+ * bits (CO_FLAG_* above: the other games' stand-ins for this player follow CO_FLAG_AB with their afterburner) */
 static int L_CoopMe(void* lua)
 {
     uint8_t* o = ArgObject(lua);
     double flags = 0; ArgNumber(lua, &flags);
-    CO.meFlags = (uint32_t)flags;
+    CO.meFlags = flags >= 0 && flags < 4294967296.0 ? (uint32_t)flags : 0;
     if (!o) { memset(&CO.me, 0, sizeof(CO.me)); return Ret(lua, 0); }
     if (CO.me.obj != o || !CoRefGet(&CO.me)) CoRefSet(&CO.me, o);
     return Ret(lua, CO.me.obj ? 1 : 0);
@@ -1383,6 +1429,7 @@ static int L_CoopPeer(void* lua)
     }
     CoRefSet(&P->plane.ref, o);
     P->plane.drives = P->plane.fails = 0;
+    P->abSaid = 0;
     Log(L"coop: player %d's plane is %p", (int32_t)slot + 1, o);
     return Ret(lua, 1);
 }
