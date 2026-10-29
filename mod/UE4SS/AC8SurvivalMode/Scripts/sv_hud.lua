@@ -51,6 +51,12 @@ local function fontFace(t)         -- typeface name a text actually has (for the
     return ok and s or "?"
 end
 
+-- The info key (CFG.hud.info): its rows open or not, kept across levels (the key flips it, hudTick applies it); open,
+-- CO-OP has up to INFO_PLAYERS lines under it: 4, so the stack (NEXT, ALLIES, ITEMS, CO-OP and these, from y 516)
+-- ends above the game's minimap (top 1108: tools/re/HUD_LAYOUT.md)
+local info = { open = CFG.hud.info.start_open == true }
+local INFO_PLAYERS = 4
+
 local function hudBuild(pc)
     local wbl = cdo("/Script/UMG.Default__WidgetBlueprintLibrary")
     if not wbl then error("WidgetBlueprintLibrary not found") end
@@ -107,11 +113,19 @@ local function hudBuild(pc)
         slotIn(canvas, H.airNum, { 0, 0 }, { 0, 0 }, { hc.x + ab.x + ab.w + 20, airY, 0, 0 }, { 0, 0 }, true)
     end
     -- NEXT ROUND / the special's row, then ALLIES and ITEMS (the review build's): each shown only with something in it,
-    -- stacked from here down in that order (stackRows)
+    -- stacked from here down in that order (stackRows). With the info key (CFG.hud.info) NEXT comes first, so it stays
+    -- put while the info rows open or peek, and CO-OP (with a line a player under it, open) last, so its length moves
+    -- nothing; without it CO-OP is first, as before.
     H.allies = newText("Allies"); H.items = newText("Items")
-    H.coop = newText("Coop")                               -- CO-OP: who is playing (sv_coop.lua COOP.hudLine), first
+    H.coop = newText("Coop")                               -- CO-OP: who is playing (sv_coop.lua COOP.hudLine)
+    H.coopRows, H.peek = {}, {}
+    local rows = { H.coop, H.next, H.allies, H.items }
+    if hc.info.enabled then
+        rows = { H.next, H.allies, H.items, H.coop }
+        for i = 1, INFO_PLAYERS do H.coopRows[i] = newText("CoopPlayer" .. i); rows[#rows + 1] = H.coopRows[i] end
+    end
     H.stackY, H.stack = rowY, {}
-    for _, w in ipairs({ H.coop, H.next, H.allies, H.items }) do
+    for _, w in ipairs(rows) do
         H.stack[#H.stack + 1] = { w = w, slot = slotIn(canvas, w, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true) }
         w:SetVisibility(VIS.Collapsed)
     end
@@ -233,6 +247,30 @@ local function stackText(w, key, s)
     end
 end
 
+-- One info row (CFG.hud.info): text s shown while the info key has them open, or for peek_s once its news (what it
+-- says that's worth a look, not a count that keeps ticking; the text itself without one) differs from the last, or it
+-- comes back; else collapsed. A peek waits for the HUD to be up (not paused, not at the landing menu); news seen with
+-- the rows open is no peek once they're shut. True if shown.
+local function infoRow(w, key, s, news, now)
+    local ic = CFG.hud.info
+    if not ic.enabled then stackText(w, key, s); return s ~= nil end
+    local pk = H.peek[key] or {}
+    H.peek[key] = pk
+    news = news or s
+    if s == nil then pk.news, pk.due, pk.till = nil, nil, nil
+    elseif news ~= pk.news then pk.news, pk.due = news, true end
+    if pk.due and H.shown then pk.due, pk.till = nil, (not info.open) and now + ic.peek_s or nil end
+    local shown = s ~= nil and (info.open or (pk.till ~= nil and now < pk.till))
+    stackText(w, key, shown and s or nil)
+    return shown
+end
+
+-- COOP.hudLine's row, its news and (n > 0) its player lines; nil solo (sv_coop.lua loads after this part)
+local function coopLine(n)
+    if COOP and COOP.hudLine then return COOP.hudLine(n) end
+    return nil
+end
+
 -- A raid's bombers still up (the round's D.raidUnits), or 0
 local function raidLeft()
     if not (D.raidUnits and next(D.raidUnits)) then return 0 end
@@ -299,6 +337,7 @@ function hudTick(now, paused, pc)
     if show ~= H.shown then
         H.widget:SetVisibility(show and VIS.HitTestInvisible or VIS.Collapsed)
         H.shown = show
+        if show then H.rowsAt = 0 end                  -- (the rows read at once: a peek waiting for it starts now)
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
     end
     pcall(hideGameInfo, now)
@@ -357,16 +396,23 @@ function hudTick(now, paused, pc)
         if n > 0 then nextS = string.format(t.raid_row, n, compassName(D.raidBearing)) end
     end
     stackText(H.next, "nextStr", nextS)
-    -- the allies' and the tactical items' rows (once a second is plenty)
+    -- the info rows: the allies', the tactical items' and co-op's (once a second is plenty; at once when the info key
+    -- flips them)
+    if info.open ~= H.infoOpen then H.infoOpen, H.rowsAt = info.open, 0 end
     if now >= (H.rowsAt or 0) then
         H.rowsAt = now + 1
-        local okA, al = pcall(ALLY.hudLine)
-        stackText(H.allies, "alliesStr", okA and al and string.format(t.allies_row, al) or nil)
-        local okI, it = pcall(TAC.line, now)
-        stackText(H.items, "itemsStr", okI and it and string.format(t.items_row, it) or nil)
+        local okA, al, alNews = pcall(ALLY.hudLine)
+        infoRow(H.allies, "alliesStr", okA and al and string.format(t.allies_row, al) or nil, okA and alNews, now)
+        local okI, it, itNews = pcall(TAC.line, now)
+        infoRow(H.items, "itemsStr", okI and it and string.format(t.items_row, it) or nil, okI and itNews, now)
         if not (okA and okI) then hudLog("rowserr", "allies / items row error " .. tostring(okA and it or al)) end
-        local okC, co = pcall(function() return COOP and COOP.hudLine and COOP.hudLine() end)
-        stackText(H.coop, "coopStr", okC and co or nil)
+        local open = info.open and #H.coopRows or 0
+        local okC, co, coNews, coRows = pcall(coopLine, open)
+        if not okC then hudLog("coopserr", "co-op row error " .. tostring(co)) end
+        local shownC = infoRow(H.coop, "coopStr", okC and co or nil, okC and coNews, now)
+        for i, w in ipairs(H.coopRows) do
+            stackText(w, "coopRow" .. i, (okC and shownC and open > 0 and coRows and coRows[i]) or nil)
+        end
     end
     stackRows()
 
@@ -402,4 +448,38 @@ function hudTick(now, paused, pc)
             H.banner:SetRenderOpacity(a / CFG.hud.opacity); H.sub:SetRenderOpacity(a)
         end
     end
+end
+
+-- The info key (CFG.hud.info): a release feature, not a test key. Its press only flips info.open (in a run: elsewhere it
+-- does nothing, so the menus can't change the next run's HUD); hudTick shows or hides the rows on its next pass.
+-- UE4SS's key binds are keyboard only and don't take the key from the game. A key that can't be bound leaves the rows
+-- always shown (enabled off), never hidden for good.
+do
+local ic = CFG.hud.info
+if ic.enabled then
+    local name = string.upper(tostring(ic.key or ""))
+    local mods = (ic.ctrl and ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
+    local label = (#mods > 0 and "Ctrl+" or "") .. name
+    local ok, err = false, "UE4SS has no key binds here"
+    if type(RegisterKeyBind) == "function" and Key then
+        local k = Key[name]
+        if k == nil then err = "'" .. tostring(ic.key) .. "' isn't a key name UE4SS knows: [hud.info] key"
+        else
+            ok, err = pcall(RegisterKeyBind, k, mods, function()
+                ExecuteInGameThread(function()
+                    if not D then return end
+                    info.open = not info.open
+                    log("hud: info rows " .. (info.open and "shown" or "hidden") .. " (" .. label .. ")")
+                end)
+            end)
+        end
+    end
+    if ok then
+        log(string.format("hud: info key %s: the CO-OP, ALLIES and ITEMS rows %s, each shown %s s when it changes",
+            label, info.open and "open at the start" or "hidden until it's pressed", tostring(ic.peek_s)))
+    else
+        log("hud: info key " .. label .. " not bound (" .. tostring(err) .. "): the info rows always shown")
+        ic.enabled = false
+    end
+end
 end

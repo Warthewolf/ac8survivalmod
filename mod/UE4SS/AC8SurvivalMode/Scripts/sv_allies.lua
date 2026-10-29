@@ -391,30 +391,34 @@ function ALLY.nextOrder(how)
     return R.order
 end
 
--- The HUD's allies row: what's up and what it has shot down ("MOONCHILD 2  SHIPS 1  AA 3/5  KILLS 7  HUNT"), or nil
+-- The HUD's allies row: what's up and what it has shot down ("MOONCHILD 2  SHIPS 1  AA 3/5  KILLS 7  HUNT"), or nil;
+-- and its news for the HUD's info key (sv_hud.lua): which flights, ships and defences are there and the order, not how
+-- many, their health or the kills
 function ALLY.hudLine()
     local R = ALLY.run
     if not R then return nil end
-    local parts, air = {}, {}
+    local parts, air, news = {}, {}, {}
     for u, s in pairs(R.up) do                        -- (aircraft up; a flight waiting to take off shows 0)
         if s.kind == "air" then
             local n = airName(s)
             air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, SV_UnitAlive(u)))
         end
     end
-    for n, k in pairs(air) do parts[#parts + 1] = string.format("%s %d", n, k) end
+    for n, k in pairs(air) do parts[#parts + 1] = string.format("%s %d", n, k); news[#news + 1] = n end
+    table.sort(news)                                  -- (pairs' order isn't news)
     local ships = #ALLY.shipsAtSea()
-    if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships end
+    if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships; news[#news + 1] = "SHIPS" end
     local dc = R.defCount
     if dc and (dc.aa > 0 or dc.sam > 0) then
         parts[#parts + 1] = string.format("AA %d  SAM %d", dc.aa, dc.sam) .. (R.defHp and string.format(" (%d%%)", R.defHp) or "")
+        news[#news + 1] = "DEFENCES"
     end
     local k = RUN.kills or {}
     local kills = (k.allies or 0) + (k.ships or 0) + (k.defences or 0)
     if #parts == 0 and kills == 0 then return nil end
     if kills > 0 then parts[#parts + 1] = "KILLS " .. kills end
-    if next(air) then parts[#parts + 1] = ALLY.order():upper() end
-    return table.concat(parts, "   ")
+    if next(air) then parts[#parts + 1] = ALLY.order():upper(); news[#news + 1] = ALLY.order() end
+    return table.concat(parts, "   "), table.concat(news, " ")
 end
 
 -- Strike flight `bomber` (a normal round's, sent at allied ship unit `ship`): RE_SV_Strike<ship>_NN once its own

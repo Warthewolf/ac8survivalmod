@@ -85,6 +85,9 @@ pays ...). Then: pick a difficulty -> hangar -> sortie. You start over Comona Ai
   and how many zollars you have. (If the STORE can't be added on your setup, the landing menu shows the four shop
   rows instead.)
 - The ITEMS row on the HUD shows the tactical items you carry and the SECOND CHANCE.
+- The ALLIES, ITEMS and CO-OP rows stay hidden until you press I (press it again to hide them); each still shows for
+  a few seconds when something in it changes (an item bought or used, the allies' order, a player joining). The game
+  gets the I key too: survival.ini [hud.info] picks another key, or turns this off to show the rows all the time.
 - Pause menu -> Music Player picks your music.
 
 Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite, Ace, then Mercenary, Legend, Demon,

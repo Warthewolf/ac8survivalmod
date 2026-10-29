@@ -19,10 +19,13 @@ SETTINGS, on the COOP HOST page (press a row to change it; it's saved for next t
   zollar income, enemy skill)
 Everyone plays with the HOST's settings, survival.ini edits included; yours come back when you play alone or host.
 
-On screen, under AIRFIELD:
+On screen, under AIRFIELD (press I to show it; it also shows for a few seconds when someone joins, drops or is shot
+down):
   CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS       you host; friends who pick JOIN come to you
   CO-OP: LOOKING FOR A FRIEND WHO PICKED HOST...     you joined; your game is finding the host
   CO-OP 3/4: WAR (HOST)  CRESSENDO  REAPER           who is playing, the host first
+With I pressed each player has a line of their own: FLYING, AT THE AIRFIELD, DOWN or NOT IN THE MISSION, and their
+health.
 Each friend's plane carries their name on its target box. "<NAME> JOINED" shows as players come in.
 
 The host's game runs the rounds and every enemy; the others fight the same enemies, see the same rounds, callouts and

@@ -1514,27 +1514,55 @@ local function nameTick()
     end
 end
 
--- The HUD's co-op row (sv_hud.lua hudTick): who is playing, the host first and marked, in plain words; nil when solo
+-- The HUD's co-op row (sv_hud.lua hudTick): who is playing, the host first and marked, in plain words; nil when solo.
+-- With lines > 0 (the HUD's info key open, CFG.hud.info) the row is "CO-OP 3/4" and up to that many lines follow it,
+-- one a player (name, HOST, FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION, health), the last "+N MORE" when
+-- they don't all fit. Its second value is the row's news for the info key: who's in, links lost and who's shot down
+-- (not health or where they are).
 local HUD_NAMES = 6
-function COOP.hudLine()
+local function hudState(s)              -- a player's state and health % for their line, from COOP.players()'s sources
+    local e
+    if s == COOP.slot then e = COOP.me() else
+        local P = M.peers[s]
+        e = P and P.fresh and P
+        if not e then return "NOT IN THE MISSION" end
+    end
+    if not e then return "" end                                 -- (your plane not up: the HUD's hidden then)
+    if e.alive == false then return "DOWN" end
+    return e.onAirfield and "AT THE AIRFIELD" or "FLYING", e.hpPct and math.floor(e.hpPct + 0.5)
+end
+function COOP.hudLine(lines)
     if not COOP.open then return nil end
     if COOP.client() and M.state ~= "linked" then
-        return M.auto and "CO-OP: LOOKING FOR A HOST..." or "CO-OP: LOOKING FOR A FRIEND WHO PICKED HOST..."
+        local s = M.auto and "CO-OP: LOOKING FOR A HOST..." or "CO-OP: LOOKING FOR A FRIEND WHO PICKED HOST..."
+        return s, s
     end
-    local names, n = {}, 0
+    lines = lines or 0
+    local names, news, list, n = {}, {}, {}, 0
     for s = 0, MAX_SLOT do
         if M.roster[s] or s == COOP.slot then
             n = n + 1
-            if n <= HUD_NAMES then                      -- (a big room: the first few, then "+N")
-                local nm = upperName(playerName(s), 14) .. (s == 0 and " (HOST)" or "")
-                if M.wasLost and M.wasLost[s] then nm = nm .. " (LOST)" end
-                names[#names + 1] = nm
+            local nm = upperName(playerName(s), 14) .. (s == 0 and " (HOST)" or "")
+            if M.wasLost and M.wasLost[s] then nm = nm .. " (LOST)" end
+            if n <= HUD_NAMES then names[#names + 1] = nm end       -- (a big room: the first few, then "+N")
+            local st, hp = hudState(s)
+            news[#news + 1] = s .. nm .. (st == "DOWN" and " DOWN" or "")
+            if #list < lines then
+                list[#list + 1] = "  " .. nm .. (st ~= "" and "   " .. st or "") .. (hp and string.format("  %d%%", hp) or "")
             end
         end
     end
-    if COOP.host() and n <= 1 then return "CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS" end
+    if COOP.host() and n <= 1 then
+        local s = "CO-OP: YOU ARE THE HOST, WAITING FOR FRIENDS"
+        return s, s
+    end
+    news = table.concat(news, "|")
+    if lines > 0 then
+        if n > lines then list[lines] = string.format("  +%d MORE", n - lines + 1) end
+        return string.format("CO-OP %d/%d", n, maxPlayers()), news, list
+    end
     if n > #names then names[#names + 1] = "+" .. (n - #names) end
-    return string.format("CO-OP %d/%d: %s", n, maxPlayers(), table.concat(names, "  "))
+    return string.format("CO-OP %d/%d: %s", n, maxPlayers(), table.concat(names, "  ")), news
 end
 
 -- The menu's view of co-op (sv_menu.lua): the lobby on the COOP HOST page, settings changed there
