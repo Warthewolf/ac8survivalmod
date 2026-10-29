@@ -18,7 +18,9 @@
 --   the shuttle's countdown: solo, held and the shuttle invulnerable while you're down (as ever); a co-op host with
 --     another player flying runs it on, never invulnerable (logged once, not as the count of others changes: the user,
 --     2026-10-29: "Keep it running while others are flying"), held and invulnerable again when nobody else flies, can
---     be hit again at their takeoff or yours; it lifts off and is lost with you down; a joiner runs none of its own;
+--     be hit again at their takeoff or yours; it lifts off and is lost with you down; the first of its events not fired
+--     with you down is logged, once a clock (whether they take with the landing menu up isn't known: F5's review of the
+--     change); a joiner runs none of its own;
 --   a joiner's rounds hold nothing on the host's landing;
 --   the hooks by their place in the source (the ALICORN's deck: bosses_test.sh).
 local MOD, WORK = arg[1], arg[2]
@@ -483,6 +485,22 @@ ticks(100, 105)
 FLAGS.SV_ShuttleLost = 1
 ticks(105.25, 106)
 check(D.special.lost and D.shuttleClock == nil and invs() == "", "co-op, lost while running with you down: the clock ends, never invulnerable")
+-- its events not fired while it runs with you down (your landing menu may be up): the first logged, once a clock;
+-- flying, not logged (as ever)
+local NOTF = "special: shuttle countdown event RE_SV_ShuttleT_"
+shuttleScene(true)
+grounded = true
+from = #logs + 1
+eventR = -6
+ticks(100, 110)
+check(cd() == 10 and nT() == 10 and since(from, "^" .. NOTF) == 1
+      and line(NOTF .. "1 not fired (the level is still loading) while you're down at the airfield", from) ~= nil,
+      "co-op, running with you down, its events not fired: the first logged once (" .. tostring(line(NOTF, from)) .. ")")
+shuttleScene(true)
+from = #logs + 1
+ticks(100, 110)
+eventR = 1
+check(cd() == 10 and since(from, "^" .. NOTF) == 0, "... flying, its events not fired: not logged")
 -- a joiner runs no countdown of its own (the host's RE_SV_ShuttleT_* come forwarded) and never makes it invulnerable
 shuttleScene(false)
 COOP.open, COOP.role, COOP.slot, CFG.coop.enabled = true, "join", 1, true
