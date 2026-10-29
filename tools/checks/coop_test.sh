@@ -8,7 +8,10 @@ OUT=../../build/checks
 mkdir -p "$OUT"
 CLANG=../llvm/LLVM/bin/clang.exe
 [ -x "$CLANG" ] || CLANG=clang
-"$CLANG" -O1 -w -Wno-incompatible-pointer-types -Wno-incompatible-function-pointer-types -o "$OUT/coop_test.exe" coop_test.c -lws2_32
+# (a windowless program: up to 13 of them run at once for ~40 s, and as console programs they popped up over the
+# game and took its focus while the user played, 2026-10-29: "coop.exe continually opens ... and alt tabs the game";
+# their output still goes to the redirected files)
+"$CLANG" -O1 -w -Wno-incompatible-pointer-types -Wno-incompatible-function-pointer-types -o "$OUT/coop_test.exe" coop_test.c -lws2_32 \n    -Wl,/subsystem:windows -Wl,/entry:mainCRTStartup
 cd "$OUT"
 ./coop_test.exe join 1 > /dev/null 2>&1 || true      # (a fresh exe's first start can be slow: warm it up)
 result=0

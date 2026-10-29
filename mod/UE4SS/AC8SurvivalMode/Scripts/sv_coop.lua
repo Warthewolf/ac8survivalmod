@@ -1177,8 +1177,8 @@ local function onHostMessage(from, f)
                 log("coop: WARNING: player " .. (from + 1) .. " runs Survival " .. tostring(ver) .. ", you " .. VERSION)
                 callout("CO-OP VERSION MISMATCH", string.upper(tostring(name)) .. " HAS " .. tostring(ver))
             end
-            -- (the user's run of 2026-10-29: both friends' dlls/main.dll was 0.27.0 under 0.72.0's Lua, which wants
-            -- 0.28.3: a zip unpacked with the game open leaves the old one in place)
+            -- (a zip unpacked with the game open leaves the old main.dll in place; SV_Version() answers the build's own
+            -- version from runtime 0.28.4: before it, a fixed "0.27.0" for every build)
             local mine = type(SV_Version) == "function" and SV_Version() or nil
             if mine and rt and rt ~= "" and rt ~= "?" and rt ~= mine then
                 log("coop: WARNING: player " .. (from + 1) .. " runs runtime " .. tostring(rt) .. ", you " .. tostring(mine)
