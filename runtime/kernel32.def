@@ -13,6 +13,9 @@ ReadFile
 GetFileSizeEx
 CloseHandle
 GetFileAttributesW
+FindFirstFileW
+FindNextFileW
+FindClose
 WideCharToMultiByte
 VirtualAlloc
 VirtualProtect

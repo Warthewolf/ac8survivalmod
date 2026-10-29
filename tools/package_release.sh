@@ -6,6 +6,9 @@
 #     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
 #     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
 # Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
+# Online: the release's build hash (tools/build_hash.py over the staged files, as the game's runtime works it out) is
+#   printed and written next to the zip, <zip>.buildhash.txt: register it on the leaderboard Worker's /admin page
+#   (leaderboard/README.md) before players send runs from this zip, or their runs are refused as an unknown build.
 # COOP=1 package_release.sh ...: the Survival COOP build (user, 2026-10-25): co-op on, VERSION tagged
 #   (tools/coop_edition.py), release/README_COOP.txt in the readme; the zip is named ..._COOP.
 # NOVALKA=1 package_release.sh ...: a build without VALKA (user, 2026-10-25, a build for a friend): no X-02S container,
@@ -51,7 +54,7 @@ if [ "$ed" = offline ]; then
 import os, sys
 st = sys.argv[1]
 words = ['winhttp', 'bcrypt', 'workers.dev', 'https://', 'SV_Post', 'SV_SteamName', 'steam_api', 'SteamAPI', 'pending_runs',
-         'pilot_id', 'ONLINE ONLY', 'OFFLINE:']
+         'pilot_id', 'ONLINE ONLY', 'OFFLINE:', 'SV_BuildHash', 'X-SV-Build']
 bad = []
 for d, _, fs in os.walk(st):
     for f in fs:
@@ -78,3 +81,16 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(p, os.path.relpath(p, st).replace(os.sep, '/'))
 " "$st" "$out"
 echo "packaged $out ($Ed edition, Lua $lua, runtime $rt)"
+if [ "$ed" = online ]; then
+    # the build hash the game will send with each run from this zip (leaderboard/README.md: register it on /admin)
+    bh=$(python -X utf8 -I tools/build_hash.py "$st/ue4ss/Mods")
+    mv=$(grep -m1 -E '^(local )?VERSION = ' "$mod/Scripts/main.lua" | sed 's/.*"\(.*\)".*/\1/')
+    {
+        echo "AC8 Survival Mode build: register it on the leaderboard before players send runs from this zip (open the"
+        echo "Worker's /admin page and paste this file under 'Builds runs are taken from'). leaderboard/README.md has the rest."
+        echo "mod $mv"
+        echo "build $bh"
+        echo "zip $(basename "$out")"
+    } > "$out.buildhash.txt"
+    echo "build hash: $bh (mod $mv; $out.buildhash.txt)"
+fi
