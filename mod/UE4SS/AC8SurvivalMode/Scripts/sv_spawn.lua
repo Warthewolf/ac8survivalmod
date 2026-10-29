@@ -737,15 +737,19 @@ function WOLF.tick(now)
                 if (flags[string.format("SV_Up_%02d", poolIndex(unit))] or 0) >= 1 then w.upAt = now end
             end
             -- (its 30 s for its orders count while you fly: down at the airfield they wait for your takeoff, ordersTick;
-            -- U5's review: a rearm of over 30 s lost a flight its trap)
+            -- U5's review: a rearm of over 30 s lost a flight its trap. The hold itself waits for your takeoff only when
+            -- no other co-op player flies, as the spawns do (othersFlying): F5's review, a flight up during a host's
+            -- landing was held at its takeoff, mid-fight with a joiner, and its co-op hunt waited out the landing)
             local down = playerOnAirfield()
+            local flying = down and othersFlying() or 0
             if not w.upAt then
                 if not down then w.waited = (w.waited or 0) + (now - (w.waitAt or w.at)) end
                 w.waitAt = now
             end
-            if w.upAt and now >= w.upAt + (tonumber(c.hold_after_s) or 3) and not down then
+            if w.upAt and now >= w.upAt + (tonumber(c.hold_after_s) or 3) and not (down and flying == 0) then
                 w.state, w.heldAt = "held", now
-                hold(unit, w, w.keys, string.format("%.0f s after its orders", now - w.upAt))
+                hold(unit, w, w.keys, string.format("%.0f s after its orders%s", now - w.upAt, down and
+                    string.format(", you down at the airfield (%d other player%s flying)", flying, flying == 1 and "" or "s") or ""))
                 if not next(w.held) then W[unit] = nil end   -- (no event fired: an older container)
             elseif not w.upAt and (w.waited or 0) > 30 then
                 log(string.format("roles: %s (wolf) never got its orders (%.0f s since it came up, your time down at the "

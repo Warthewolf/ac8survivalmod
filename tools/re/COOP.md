@@ -282,9 +282,11 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   flying)`, once a round), ordersTick fires RE_SV_FlightOrders_NN orders_check_s after a spawn and every 5 s while the
   host is down, none counted as a try (whether it fires with the landing menu up is unknown; the 3 tries come after the
   takeoff as ever), the wave clock (waves.timeout_s) runs, and the ALICORN's deck launches. The Wolf trap's 30 s for
-  its orders don't count the host's time on the airfield (solo too). Not changed: the shuttle's countdown and its
-  invulnerability still hold while the host is down. A joiner's game holds nothing on the host's landing (its copies
-  come as the host's "sp" do). Untested in game (tools/checks/coop_landing_test.sh).
+  its orders don't count the host's time on the airfield (solo too), and its hold comes hold_after_s after its orders
+  while another player flies (solo, or with nobody else flying, at the host's takeoff: F5's review, round 2). Not
+  changed: the shuttle's countdown and its invulnerability still hold while the host is down. A joiner's game holds
+  nothing on the host's landing (its copies come as the host's "sp" do). Untested in game
+  (tools/checks/coop_landing_test.sh).
 - Protocol 3, up to 24 players: a joiner sends its own plane to the host (P, 30 Hz); the host sends each joiner one Q
   packet of every other player's latest state (49-byte records: 23 fit in 1132 bytes), at 30 Hz up to 6 players and
   20 Hz past that (relaying every P to every joiner was n x n packets: ~16,000 a second at 24). Message slots are
