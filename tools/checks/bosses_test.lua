@@ -22,9 +22,11 @@
 --     round's own flights (D.taken) and a spare it takes no spare any more;
 --   the ALICORN's railguns and VLS (code review of 2026-10-29): once every one seen up is down (or gone), the RAILGUN
 --     WARNING off, no more railgun warnings, calls or orders, no VLS call or volley (nor a volley already called); one
---     of two down, never read up, or unreadable: as before; after a surfacing its call, the railgun's warning
---     radio_gap_s later (the order its lead after that) and the deck's call held a second by that gap (twice at most);
---     tells off: the order 5 s on as before;
+--     of two down, never read up, or unreadable: as before; a part found a pass after its siblings looked for again
+--     before its kind counts as down (its orders and volleys go on), one found at 0 then given a pass of its own;
+--     after a surfacing its call, the railgun's warning radio_gap_s later (the order its lead after that) and the
+--     deck's call held a second by that gap (twice at most; a co-op host with tells off by its joiners' gap); tells
+--     off: the order 5 s on as before;
 --   the main menu's rows (searchSetup on fake tables): the guards' set on every level, AB.L..IN's ECM row (anomEcm's by
 --     default, its own with ecm_row);
 --   sure tells (the pack's, AB.L..IN's): their callout with tells off or a tell refused, a joiner's from the host too,
@@ -655,9 +657,12 @@ local function at(what, from, to)                         -- the seconds `what` 
 end
 local function cleanArms() FA[RAIL] = nil; for _, c in ipairs(VLS) do FA[c] = nil end end
 s = armsRound()
+f0 = #logs + 1
 tickT(0, 29)
 check(at("^RE_SV_RadioAlcnRail") == "5" and at("^RE_SV_AlcnAlertOn$") == "5" and at("^RE_SV_AlcnRailgun$") == "10"
       and at("^RE_SV_RadioAlcnVls$") == "12" and at("^RE_SV_AlcnVolley$") == "13", "all up: the railgun warned at 5, its order at 10, the VLS' call at 12 and volley at 13")
+check(has(line("special: the Alicorn's railguns found:", f0), "found: 2 (kept;") and has(line("special: the Alicorn's VLS found:", f0), "found: 4 (kept;"),
+      "... the parts found logged once kept (2 railguns, 4 VLS: the in-game test's counts)")
 rails[1].HealthInternal = 0                               -- (one railgun down: the other still fires)
 tickT(30, 65)
 check(at("^RE_SV_RadioAlcnRail", 30) == "65" and at("^RE_SV_AlcnAlertOn$", 30) == "65" and not (s.armsDown or {}).rail,
@@ -686,7 +691,8 @@ tickT(0, 11)
 for _, o in ipairs(vlss) do o.HealthInternal = 0 end
 tickT(12, 20)
 check(at("^RE_SV_RadioAlcnVls$") == "12" and at("^RE_SV_AlcnVolley$") == "", "its VLS down in the call's lead: the call at 12, no volley at 13")
--- gone (no longer valid) counts as down, as a tank; the parts are looked for once, then kept
+-- gone (no longer valid) counts as down, as a tank; the parts are kept once found, looked for again only before they
+-- count as down
 s = armsRound()
 tickT(0, 20)
 local finds = 0
@@ -697,7 +703,45 @@ tickT(21, 100)
 FindAllOf = rawFind
 check((s.armsDown or {}).rail and at("^RE_SV_AlcnRailgun$", 21) == "" and has(line("special: the Alicorn's railguns are down"), "(0 found, none up)"),
       "railguns seen up, then gone: down")
-check(finds == 0, "... the railguns kept once found (no FindAllOf of them after: " .. finds .. ")")
+check(finds == 1, "... the railguns kept once found: one FindAllOf of them before they counted as down, none after (" .. finds .. ")")
+-- a part found a pass after its siblings (the railguns are their hatches' grandchildren): looked for again before its
+-- kind counts as down, so the first ones shot down don't silence it (F4's review: tracked from the first pass only,
+-- the second railgun's orders and two VLS' volleys stopped)
+s = armsRound()
+FA[RAIL], FA[VLS[3]], FA[VLS[4]] = { rails[1] }, {}, {}
+tickT(0, 1)                                               -- (the first parts pass: one railgun, two VLS)
+FA[RAIL], FA[VLS[3]], FA[VLS[4]] = rails, { vlss[3] }, { vlss[4] }
+tickT(2, 20)
+f0 = #logs + 1
+rails[1].HealthInternal, vlss[1].HealthInternal, vlss[2].HealthInternal = 0, 0, 0
+tickT(21, 80)
+check(not (s.armsDown or {}).rail and at("^RE_SV_AlcnAlertOn$", 21) == "65" and at("^RE_SV_AlcnRailgun$", 21) == "70"
+      and has(line("special: the Alicorn's railguns: 1 more found", f0), "(2 in all, 1 up)"),
+      "the second railgun found a pass late, the first shot down: looked for again, warned at 65, its order at 70 ("
+      .. tostring(line("special: the Alicorn's railguns:", f0)) .. ")")
+check(not (s.armsDown or {}).vls and at("^RE_SV_RadioAlcnVls$", 21) == "57" and at("^RE_SV_AlcnVolley$", 21) == "58"
+      and has(line("special: the Alicorn's VLS: 2 more found", f0), "(4 in all, 2 up)"),
+      "two VLS found a pass late, the first two shot down: their call at 57, the volley at 58")
+finds = 0
+FindAllOf = function(c) if c == RAIL then finds = finds + 1 end return rawFind(c) end
+rails[2].HealthInternal = 0
+tickT(81, 140)
+FindAllOf = rawFind
+check((s.armsDown or {}).rail and at("^RE_SV_AlcnRailgun$", 81) == "" and finds == 1
+      and has(line("special: the Alicorn's railguns are down", f0), "(2 found, none up)"),
+      "... then the second shot down: down (one more look, " .. finds .. "), no order at 130")
+-- one found as the others go down, still at 0 (its first read as it appears): a pass of its own before the kind counts
+s = armsRound()
+FA[RAIL] = { rails[1] }
+tickT(0, 20)
+rails[1].HealthInternal, rails[2].HealthInternal = 0, 0
+FA[RAIL] = rails
+tickT(21, 22)
+local late = (s.armsDown or {}).rail
+rails[2].HealthInternal = 1600
+tickT(23, 80)
+check(not late and not (s.armsDown or {}).rail and at("^RE_SV_AlcnRailgun$", 21) == "70",
+      "a railgun found at 0 as the first goes down: not counted down that pass; up the next, its order at 70")
 -- a railgun never read up (0 at its first read) isn't counted down; one whose health can't be read counts as up
 s = armsRound(0)
 tickT(0, 80)
@@ -749,6 +793,24 @@ tickT(0, 45)
 CFG.tells.enabled = true
 check(at("^RE_SV_RadioAlcn") == "" and at("^RE_SV_AlcnAlertOn$") == "36" and at("^RE_SV_AlcnRailgun$") == "36",
       "tells off: the RAILGUN WARNING with the order, 5 s after the surfacing (36) as before")
+-- a co-op host with its own tells off: the deck's call to its joiners held by their gap too, then sent (F4's review:
+-- TELL.say read "off", this game's own, so the call refused for the joiners' gap was dropped)
+do
+    local host0, tell0 = COOP.host, COOP.tell
+    local sent = {}
+    COOP.host = function() return true end
+    COOP.tell = function(slot, id) sent[#sent + 1] = id .. "@" .. tostring(D.now); return true end
+    CFG.tells.enabled = false
+    s = surfaceRound()
+    f0 = #logs + 1
+    tickT(0, 45)
+    CFG.tells.enabled = true
+    COOP.host, COOP.tell = host0, tell0
+    local out = table.concat(sent, ",")
+    check(has(out, "alcn_up@31,alcn_rail_first@33,alcn_deck@35") and at("PLANES LAUNCHING") == "35" and #spawns == 1
+          and has(line("tell: alcn_deck not said", f0), "every joiner: 1.0 s after alcn_rail_first"),
+          "a host with tells off: its joiners' deck call held a second by their gap, sent at 35, the launch after (" .. out .. ")")
+end
 ROLE.live = nil
 
 ---------------------------------------------------------------------------------------------------- startRound
