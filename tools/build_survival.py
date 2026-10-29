@@ -594,6 +594,24 @@ def ladon_units(units, used_ids, z, top_number, v):
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit + rage circuit')
 
 
+def heavy_paths(used_ids, z, v):
+    """The heavy bombers' routes in and their figure-8s over the runway (survival_events.heavy_routes): smooth aircraft
+    paths on Mission 16's Ladon path, as the Ladons'; the route runs on into its loop, the loop (it ends over the runway
+    and starts 2 km past the route's end) into itself."""
+    m16z = ZenPkg(stock(M16 + 'WD_Mission016_global'))
+    m16, _ = props_of(m16z, m16z.export_index('WD_Mission016_global'), 'LiveWorldData')
+    src_path = desc_named(m16, 'AIPathDescList', survival_events.LADON_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    hs = survival_events.heavy_routes()
+    for H in hs:
+        loop = H['circuit']
+        paths.append(make_path(z, used_ids, src_path, H['path'], H['route'], smooth=True, after=loop[0]))
+        paths.append(make_path(z, used_ids, src_path, H['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
+    near = sorted({(H['sector'], H['route_km']) for H in hs if H['route_km'] < survival_events.HEAVY_ROUTE_KM})
+    print(f'  heavies: {2 * len(hs)} paths ({len(hs)} routes + loops); routes begun nearer: '
+          + (', '.join(f'{s} {d:.1f} km' for s, d in near) or 'none'))
+
+
 M26 = '/Game/Maps/Ingame/Mission026/'
 
 
@@ -941,6 +959,7 @@ def build_wd_global():
     ally_units(units, used_ids, z, top_number, v)
     lcac_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
+    heavy_paths(used_ids, z, v)
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)
     valka_eml_unit(units, used_ids, z, top_number)

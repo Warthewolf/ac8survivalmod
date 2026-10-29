@@ -649,9 +649,13 @@ CFG = {
             -- Heavies never bomb on their own (no stock mission lets them): when one is within drop_km of the runway
             -- its flight's bomb run is fired (RE_SV_BombRun_NN: both aircraft drop 6 bombs), at most once every
             -- run_cooldown_s, and bomb_damage is taken off the airfield damage_delay_s later (as the bombs land).
-            -- drop_km 3 (was 1.5: the Tu-160s of the test of 2026-10-22 never came that close; their orbit is now 1.5 km,
-            -- tools/survival_events.py HEAVY_AREA_RADIUS_M); every heavy's distance is logged every 10 s ("bombers:")
-            drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 10, damage_delay_s = 5,
+            -- drop_km 3 (was 1.5: the Tu-160s of the test of 2026-10-22 never came that close); every heavy's distance
+            -- is logged every 30 s ("bombers:"; 10 s with [log] verbose).
+            -- heavy_route: a heavy flight's lead flies a route in from its side, over the runway, then a figure-8 that
+            -- crosses it twice a lap (sv_flights.lua HEAVY; tools/survival_events.py HEAVY_*), route_delay_s after it
+            -- appears (user, 2026-10-29: "tu-95's aren't attacking the base, they fly around nearby and do nothing":
+            -- with their area over the runway they circled 6-8 km out). false: no path (they circle again).
+            drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 10, damage_delay_s = 5, heavy_route = true, route_delay_s = 3,
         },
     },
     -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
@@ -946,8 +950,11 @@ CFG = {
     -- The jammer (economy review: "a jammer or AWACS that buffs nearby enemies until it's shot down"): from from_round, in
     -- a normal round with `chance`, one fighter flight is led by an EA-18G (its ECM pod spoils your missiles near it)
     -- and every enemy within radius_km of it flies rank_add better (PilotRank, at most 5) until it's down. Shot down: its
-    -- kill pays pay_x.
-    jammer = { enabled = true, from_round = 8, chance = 0.5, aircraft = "e18g_common", radius_km = 6, rank_add = 1, pay_x = 3 },
+    -- kill pays pay_x. ecm: the AI never switches the pod on by itself (user, 2026-10-29: "the EA-18G never activated
+    -- it's ECM"; AB.L..IN's needed RE_SV_GlitchEcm too, hard rule 40), so JAM.tick fires RE_SV_JamEcm_NN (its slot 4,
+    -- tools/survival_events.py build_jammer) every ecm_every_s while it's up and leads its flight.
+    jammer = { enabled = true, from_round = 8, chance = 0.5, aircraft = "e18g_common", radius_km = 6, rank_add = 1, pay_x = 3,
+               ecm = true, ecm_every_s = 14 },
     -- Escorts (economy review: "escorts that stay with the bombers"): in a bomber raid escort_share of the fighter
     -- flights hold over the airfield the bombers are making for (RE_SV_Escort_NN: their area on the airfield, any target
     -- that comes) instead of hunting you across the map.

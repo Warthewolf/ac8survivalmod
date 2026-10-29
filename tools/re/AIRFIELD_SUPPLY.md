@@ -179,6 +179,19 @@ These three are the only node classes below that are missing from M22's imports.
 ---------------------------------------------------------------------------------------------------------------------
 ## 2. Bombers
 
+**The heavies' routes (0.72.1) [I].** With their unit area over the runway (Mission 22's 6 km, then 1.5 km from 0.20)
+the Tu-95s / Tu-160s never came within drop_km: they circled 8-12 km out (test of 2026-10-22) and then 6-8 km out (the
+user's run of 2026-10-29, Lua 0.72.0: "tu-95's aren't attacking the base, they fly around nearby and do nothing"; the
+log's closest 6.3 km in 4 minutes). They fly paths now, as the Ladons do (hard rules 1, 2, 35): tools/survival_events.py
+HEAVY_* / heavy_routes (8 compass sectors x the 2 heavy flights: a route in over the runway and a figure-8 crossing it
+twice a lap, 54 km, ~4 min at 850 km/h), build_survival.py heavy_paths, build_heavy (RE_SV_HeavyRoute_<NN><S> on the
+lead, PathFinish -> the loop, each loop's end -> the loop again; RE_SV_HeavyLoop_<NN><L><S> for the next lead), and
+Scripts/sv_flights.lua HEAVY (the sector from the spawn point, the handover from bombTick). Their area is 40 km now
+(HEAVY_AREA_RADIUS_M), so no point of a route is outside it. Lines to look for: `events: RE_SV_HeavyRoute_NNS (... route
+in from bearing B) fired`, `bombers: ... over the airfield`, `bombers: ... bomb run (RE_SV_BombRun_NN): fired`, `bombers:
+UNIT's lead down: object N takes the loop`. Not known yet: whether the wingmen keep formation on a pathed lead, and
+whether the airfield order (Normal on AB_Unit_01_Ground0) pulls a pathed heavy off its path. tools/checks/heavy_test.sh.
+
 ### 2a. Mission 004 base attackers
 Units (`WD_Mission004_global`, all r 6000 m): `EB_Unit_02_Air3` (1x `a06e_common`), `EB_Unit_01_Air3` (1x `mr2k_common`),
 `EB_Unit_03_Air0/Air2` (4x `a06e_common`), `EB_Unit_03_Air1/Air3` (4x `mr2k_common`), plus `m21b`/`mr2k` escorts.
