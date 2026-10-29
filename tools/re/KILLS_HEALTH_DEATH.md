@@ -133,6 +133,73 @@ BossCategory_None, NoneSelect, "", NoneSelect`, life `-` (repeating).
 - Lua can read the displayed value: CampaignInfo widget (`LiveCampaignInfoWidget.ScoreText` / `PrivateScoreText`, already
   found by Survival's HUD code) -> `:GetText():ToString()`. Border "/32000" comes from LiveSetBorderScoreExecution (M022).
 
+## 7. DOWN, its autopilot and the respawn (runtime 0.28.5, runtime/flight.c + down_ctl.c, 2026-10-30; untested in game)
+The user (2026-10-29): "is there a revive option ... if you die ... you get put into a spectator camera". The runtime
+gives Lua two pieces; keeping a DOWN player alive (MinHealth, section 4), the camera, the HUD and the revive are Lua's.
+[V] verified by reading the code, [I] inferred, [?] for the test to settle.
+### SV_Down(plane, cx_cm, cy_cm, alt_m, radius_m) -> 1 or an SV_ERR code; SV_Down(0) -> 1 (off)
+- While on, OnBuildInput (the BuildFlightInput detour, after SV_Invert) gives that plane's pitch, yaw, roll, throttle and
+  brake (high-G 0) from down_ctl.c's autopilot: a circle of radius_m round (cx, cy) at alt_m; the player's stick,
+  throttle and brake do nothing. Its pose is read natively each frame (coop.c CoReadPose: the root component's world
+  location and FRotator); velocity, Euler and body rates come from their changes. BuildFlightInput runs 2-3 times a
+  frame: calls within 8 ms give the last inputs again.
+- Guidance: the heading wanted is the circle's tangent turned in (outside) or out (inside) by 90 deg x (r - R) / R
+  (clamped -45..80) plus a slow integral of the radius error (whatever bank the flight model needs for that radius);
+  bank wanted 0.9 x the heading error, at most 40 deg (25 when lower than alt - 600 m or 400 m), kept on one side through
+  a ~180 deg error; climb angle wanted 0.04 deg a metre of altitude error plus its slow integral, -12..15 deg. Roll input
+  from the bank error (and a small integral of it: a flight model whose roll input asks for a bank angle, not a rate,
+  stops short without it) less the roll rate, -0.5..0.5; pitch input from the climb-angle error less the pitch rate,
+  over cos(bank), -0.35..0.5, none while upside down (it rolls back first); throttle and brake 0 = AC8's neutral, cruise
+  speed (BuildFlightInput: throttle and brake are separate 0..1 inputs [V]); every input slewed at most 3 a second.
+- Input signs [?]: which way a positive pitch or roll input moves the plane isn't settled by the code: BuildFlightInput
+  passes InputPitch / InputRoll through, FlightEngine::SetInput (0x144d32580) negates pitch, yaw and roll into its own
+  frame [V], and that frame's sense wasn't traced. So the first DOWN of a session learns them: hands off until the plane
+  is calm (at most 1.5 s), roll +0.3, -0.3, -0.3, +0.3 for 0.25 s each, wings levelled (at most 2 s), the same with
+  pitch; each sign is that of (the mean body rate under +) - (under -) when they differ by 2 deg/s or more, else +1 is
+  kept and said. About 3-5 s of small inputs, in which a plane that went DOWN diving loses some height; later DOWNs
+  circle at once. Once a test log shows `down: input signs learned (roll N, pitch N)`, the next runtime can start with
+  them known (flight.c g_dnKnown / g_dnSRoll / g_dnSPitch) and never probe.
+- Guards: a live player plane (coop.c CoKind 2), the local one (PlayerOwner(world) of Survival's level, AMMO.md);
+  |cx|, |cy| under 10,000 km; alt 50-15000 m; radius 200-30000 m; BuildFlightInput hooked. Called again for the same
+  plane while on: only the circle changes, the autopilot keeps its state. Codes: -4 bad args (or not a player plane),
+  -5 BuildFlightInput not hooked, -1 / -6 not in Survival's level (yet), -12 not the local player's plane.
+- Offline: tools/checks/flight_test.sh flies it against model planes (each pair of input signs; a rate-command roll, a
+  bank-angle roll and a quicker plane; from far away, an inverted dive near the centre, a climb beside it; a pause in a
+  probe; the signs known): the signs learned every time, and over the last 50 s of 200 within 30 % of the radius (most
+  within 5 %) and 120 m of the altitude. The model planes aren't AC8's flight model.
+- Log lines: `down: autopilot on plane <p>: circling (x, y) m at A m, radius R m; the plane at ...; learning the input
+  signs first (...)` (or `input signs known`); `down: roll probe: body roll rate N deg/s at input +0.3, N at -0.3: roll
+  input sign N` (or `inconclusive, roll input sign kept N`), the same for pitch; `down: input signs learned (roll N,
+  pitch N): the next DOWN circles at once`; every 10 s `down: autopilot (<phase>, N s): N m from the centre (radius R),
+  N m high (want A), heading error N deg, bank N (want N), climb N deg; inputs pitch N, roll N (x1000); input signs
+  roll N, pitch N`; at the end the same line as `down: autopilot off (Lua)` / `(respawn)` / `: the plane is gone`;
+  `down: refused: ...`.
+- The test must confirm: the plane circles steadily at the altitude with no one flying it (the 10 s lines); the signs
+  learned (to fix them in the next build); the probe isn't violent; nothing fights the autopilot (BuildFlightInput's
+  flags byte bit 0 makes SetInput zero every axis; plane +0x58DC set gives zeros and flags 4: neither cleared here).
+### SV_Respawn(plane, x, y, z, pitch, yaw, roll) -> 1 or an SV_ERR code
+- The player plane's own respawn, vtable +0xbf8 (slot 383) = 0x147d6d440 (sigs.h kSigPPRespawn, 40 bytes, unique):
+  `void (plane, const FVector* location, const FRotator* rotation, bool skipMove)` [V], from its callers: Online Mode's
+  respawn at a respawn point 0x147d29220 (0x147d28e80 fills the location from the point's component translation, (0, 0,
+  7000) by default, and the rotation from its quaternion; then vfunc +0xbf8; 0x147d6d3b0 calls that one and fires
+  OnRespawnFinish). With skipMove false [V]: a camera / HUD flag when the game mode and the plane qualify; byte +0xdfd =
+  0; slot 186 TeleportTo(location, rotation, false, false) (the player plane's: replay record, AActor::TeleportTo with
+  the encroachment test, ProcessEvent(OnReposition) = its look reset, the flight-model reset 0x147d40830); vfunc +0x8e0
+  = 0x147d1c440 SetActive(true) through 0x147d1c390 (replay event 0x12; the active byte +0x3f4); ProcessEvent(OnRestored);
+  byte +0xdbd = 1; the movement-input block bits +0x13b8..+0x13be bit 0 cleared and re-applied (0x147d60ca0:
+  bEnableMovementInput and kin); 0x1478c6f40(+0x1b90); HUD calls for the local plane; 0x147d28d90; and EP trigger 0x62
+  RespawnedPlayer. It doesn't touch health, MinHealth or the dead flag +0xdb8 [V for the function; I: OnRestored's
+  blueprint may restore the look]. Health stays Lua's (section 3: RestorePlayerPlane's SetHealth, or the pool).
+- Guards: a live player plane, the local one, its vtable +0xbf8 the function found, the code's shape checked (+0x133
+  `mov byte [rdi+0xdfd], 0`, +0x13a the skipMove test, +0x157 `call [rax+0x5d0]`); the position finite, |x| and |y|
+  under 1,000 km, z -500 m to 30 km (all cm), pitch -90..90, yaw and roll -360..360. DOWN goes off for that plane first.
+  Codes: -4, -5, -1 / -6, -12 as SV_Down.
+- Log: `respawn: the player plane's respawn <p> (vtable +bf8)` (first use); `respawn: plane <p> respawned at (x, y) m,
+  z m high, pitch P yaw Y roll R (it was at ...); now N m off that spot, heading H; health N of N (x10), dead flag N,
+  active N`; `respawn: refused: ...`.
+- The test must confirm: the plane appears at the pose and flies on (speed, controls back), nothing of the campaign
+  mode's death flow starts (call it on a living plane: DOWN keeps it alive), and whether OnRestored restores its look.
+
 ## How Survival should do it
 **Kills / credits (pick by need, in this order):**
 1. Lua, no new code: keep the LiveAIPlane poll; on the first tick a plane is dead (`HealthInternal <= 0` or
