@@ -72,7 +72,8 @@ BOMB_GAP_S = 0.4
 # anything still alive can't be spawned again) and gives it Survival's NPC row, for its name SV_Shuttle_Name.
 # Scripts/main.lua spawns both in place (SV_Spawn without a position) and runs the countdown on a clock of its own
 # that stops while the player is down at the airfield (user, 2026-10-23: "Shuttle timer continues to countdown while in
-# the airfield landing store"; exec delays from the shuttle's appearance couldn't stop): at each whole second s of it,
+# the airfield landing store"; exec delays from the shuttle's appearance couldn't stop; a co-op host's runs on while
+# another player flies, user, 2026-10-29: sv_rounds.lua othersFlying): at each whole second s of it,
 # main.lua fires RE_SV_ShuttleT_<s>, which carries that second's records (radio, ignition, liftoff at
 # SHUTTLE_COUNTDOWN_S = main.lua CFG.specials.shuttle.countdown_s, the climb after it). SHUTTLE_REMOVE_S after liftoff
 # it is taken off (LiveDestroyUnitExecution) so the next special can spawn it again. Flags for Lua: SV_ShuttleRound 1 while it's on the pad (strike flights go for it instead of the

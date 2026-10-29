@@ -2,11 +2,17 @@
 -- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
+-- The other players flying, for the log (othersFlying's count).
+local function flyingText(n) return n == 1 and "1 other player flying" or (n .. " other players flying") end
+
 -- The shuttle's countdown clock (D.shuttleClock: cd seconds run, fired the last second's event): it runs on the game
--- clock except while you're down at the airfield (D.grounded, from roundsTick), and fires RE_SV_ShuttleT_<s> for each
--- whole second s (tools/survival_events.py build_shuttle: radio, ignition, liftoff at countdown_s, the climb after it)
--- up to countdown_s + 30; it stops when the shuttle is lost. While the countdown is held the shuttle can't be hurt
--- (user, 2026-10-23: "Make the shuttle invulnerable while the countdown is held"; LiveGameObject.SetIsInvincible).
+-- clock except while you're down at the airfield (D.grounded, from roundsTick) with no other co-op player flying (a
+-- co-op host's runs on while another player flies, as the spawns do: D.othersFlying, from roundsTick's othersFlying;
+-- user, 2026-10-29: "Keep it running while others are flying"), and fires RE_SV_ShuttleT_<s> for each whole second s
+-- (tools/survival_events.py build_shuttle: radio, ignition, liftoff at countdown_s, the climb after it) up to
+-- countdown_s + 30; it stops when the shuttle is lost. While the countdown is held the shuttle can't be hurt (user,
+-- 2026-10-23: "Make the shuttle invulnerable while the countdown is held"; LiveGameObject.SetIsInvincible): running
+-- again (your takeoff, or another player flying while you're still down), it can be hit again.
 function SPC.shuttleInvincible(on)
     if not valid(SHUTTLE.obj) then shuttleHealth() end           -- (finds the shuttle's actor)
     if not valid(SHUTTLE.obj) then return false end
@@ -21,12 +27,18 @@ function SPC.shuttleClockTick(now)
     if not k then return end
     local dt = math.max(0, now - k.at)
     k.at = now
-    if not D.grounded then k.cd = k.cd + dt end
-    if D.grounded ~= k.grounded then
-        k.grounded = D.grounded
-        log(string.format("special: shuttle countdown %s at %.0f s", D.grounded and "held (you're down at the airfield)" or "running", k.cd))
+    local others = D.grounded and (D.othersFlying or 0) or 0
+    local held = D.grounded and others == 0 or false
+    if not held then k.cd = k.cd + dt end
+    -- (logged when it's held, runs, or runs with you down: not as the number of others flying changes)
+    local mode = held and "held" or D.grounded and "down" or "running"
+    if mode ~= k.mode then
+        k.mode = mode
+        log(string.format("special: shuttle countdown %s at %.0f s", held and "held (you're down at the airfield)"
+            or D.grounded and string.format("running while you're down at the airfield (%s)", flyingText(others))
+            or "running", k.cd))
     end
-    local want = (D.grounded and not k.s.lost and k.s.state == "countdown") or false   -- (not after liftoff)
+    local want = (held and not k.s.lost and k.s.state == "countdown") or false   -- (not after liftoff)
     if want ~= (k.inv or false) and SPC.shuttleInvincible(want) then k.inv = want end
     local last = CFG.specials.shuttle.countdown_s + 30
     while k.fired < math.min(math.floor(k.cd), last) do
@@ -592,7 +604,8 @@ end
 -- The other players flying (a co-op host's: alive, in the mission, not down at the airfield themselves; COOP.players()),
 -- 0 solo or on a joiner. While you're down at the airfield, the spawns, a flight's orders, the wave clock, the Wolf trap's
 -- clock and the ALICORN's deck wait for your takeoff only when it's 0 (user, 2026-10-29: "when the HOST is landed at the
--- airfield that the game isn't paused for the other players"; Shazzy's host log of 2026-10-25: holds of 10-43 s).
+-- airfield that the game isn't paused for the other players"; Shazzy's host log of 2026-10-25: holds of 10-43 s), and so
+-- do the shuttle's countdown and its invulnerability (user, the same day: "Keep it running while others are flying").
 function othersFlying()
     if not (COOP and COOP.host and COOP.host()) then return 0 end
     local n = 0
@@ -601,7 +614,6 @@ function othersFlying()
     end
     return n
 end
-local function flyingText(n) return n == 1 and "1 other player flying" or (n .. " other players flying") end
 
 local ordersTick
 do
@@ -664,7 +676,10 @@ function roundsTick(now)
     -- every tick, whatever the round's state (code review of 2026-10-23: in the break it never ran, so the shuttle's
     -- removal and the Anomaly's lightning clean-up waited for the next round, and while fighting it ran once a second,
     -- which rounded the portal's timing)
-    if D.shuttleClock then D.grounded = playerOnAirfield() end   -- (the shuttle's countdown stops while you're down)
+    if D.shuttleClock then                          -- (the shuttle's countdown stops while you're down, but not in co-op
+        D.grounded = playerOnAirfield()             -- while another player flies)
+        D.othersFlying = D.grounded and othersFlying() or 0
+    end
     specialTick(now)
     pressureAfterBoss(now)                          -- (the band's attack throttle again once an Anomaly / VALKA is down)
     local okW, errW = pcall(WOLF.tick, now)          -- (the Wolf trap's holds and releases: CFG.roles.wolf, sv_spawn.lua)

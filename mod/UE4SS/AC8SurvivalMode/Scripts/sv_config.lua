@@ -1084,7 +1084,9 @@ CFG = {
     -- are strike flights (no heavies) sent at the shuttle. Launched: `reward` zollars. Lost: the shop is closed for the
     -- next shop_closed_rounds rounds. countdown_s is built into the event package (SHUTTLE_COUNTDOWN_S): keep it equal.
     -- The countdown runs on Survival's own clock (D.shuttleClock), which stops while you're down at the airfield (user,
-    -- 2026-10-23: it ran on in the landing store): each whole second fires that second's RE_SV_ShuttleT_<s>.
+    -- 2026-10-23: it ran on in the landing store), the shuttle invulnerable then, but not on a co-op host while another
+    -- player flies (user, 2026-10-29: "Keep it running while others are flying"; sv_rounds.lua othersFlying): each
+    -- whole second fires that second's RE_SV_ShuttleT_<s>.
     -- random (user, 2026-10-23: "after round 3, special rounds get randomised into the normal play, they can appear on
     -- any round above 3, their difficulty increases along with the corresponding round"): from round `first` each
     -- round is a special with `chance`, never two in a row (and not the same one twice running); the pick is made

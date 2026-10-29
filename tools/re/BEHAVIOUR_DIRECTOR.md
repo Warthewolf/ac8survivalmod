@@ -2404,7 +2404,16 @@ The units' own sections above were corrected in place where behaviour changed ("
 - Tests: the new coop_landing_test.sh (49 checks: solo held; a joiner flying, spawns, orders, the wave clock, the deck
   and the Wolf trap go on; everyone down, held; a joiner holds nothing), roles_test (the "bd" copy cut, no "ht"),
   director_test (the Wolf hunt's wait, "dv" late, held-back holds), bosses_test (the phase-3 gun on the host).
-- Left as it was: the shuttle's countdown and invulnerability still pause while the host is down.
+- The shuttle (after F7, the user's answer of 2026-10-29: "Keep it running while others are flying"): with another
+  player flying, the host's countdown runs on while the host is down and the shuttle isn't made invulnerable (it can be
+  hit again if it was); with nobody else flying it's held and invulnerable as solo. sv_rounds.lua roundsTick reads
+  othersFlying into D.othersFlying beside D.grounded, SPC.shuttleClockTick holds on both. Log: `special: shuttle
+  countdown running while you're down at the airfield (1 other player flying) at N s`, logged as the countdown is held,
+  runs, or runs with the host down (not as the count of others changes), then the `invulnerable while the countdown is
+  held` / `can be hit again` lines as before. A joiner runs no countdown of its own (the host's RE_SV_ShuttleT_* come
+  forwarded). coop_landing_test.sh, 64 checks now: 16 on the shuttle (solo held and invulnerable; a joiner flying, it
+  runs, never invulnerable, logged once; held again when they land, hit again at their takeoff or the host's; lifted
+  off and lost with the host down; a joiner none of its own), 9 of them failing on 26d0eac.
 
 **F6 the HUD info key** (a4c99b7, 30eb9a4; the user's request of 2026-10-29, a cluttered 3-player co-op HUD)
 - CFG.hud.info ([hud.info]; enabled, key I, ctrl, start_open, peek_s 5; PERSONAL in co-op): the CO-OP, ALLIES and ITEMS
@@ -2459,9 +2468,11 @@ staying silent when k 0 never reaches logPlane (diagnostics only, on an unconfir
 - The Wolf trap's held planes have no hostSync replay for a joiner who links during a hold (the director's holds do).
 - The trap sprung for a joiner, a hold on a joiner 3 s after its copy appears, "dv" end to end: unit 6's [I] list.
 - A co-op host down at the airfield: whether RE_SV_FlightOrders_NN fires with the landing menu up isn't known (hence
-  the retries every 5 s that don't count as tries); the shuttle still pauses for the host's landing; AB.L..IN's
-  phase-3 LastTGT (and VALKA's) still fires every 10 s while the host is down, its effect on a landed plane unknown
-  (the bosses reviewer's note, not a finding).
+  the retries every 5 s that don't count as tries); the shuttle's countdown follows othersFlying's freshness (a
+  player not heard from for 1 s isn't flying), so the only other player flying on a lagging link holds it, and makes
+  the shuttle invulnerable, for those moments (each change logged); AB.L..IN's phase-3 LastTGT (and VALKA's) still
+  fires every 10 s while the host is down, its effect on a landed plane unknown (the bosses reviewer's note, not a
+  finding).
 - The learning profile: the .tmp / .bak are read back only when the main file is missing (a file there but unreadable
   gives no profile that session, never a fallback).
 - The ALICORN: a railgun or VLS never read up is never counted down (a 0 read as it appears mustn't silence a working
@@ -2481,8 +2492,11 @@ staying silent when k 0 never reaches logPlane (diagnostics only, on an unconfir
 - Co-op, the host lands while a joiner flies: `spawns go on while you're down at the airfield`, the joiner keeps
   meeting flights, `orders: <unit> appeared without its orders while you're down at the airfield (...);
   RE_SV_FlightOrders_NN fired (again every 5 s ...)` then `... has its orders now (N fired while you were down at the
-  airfield)`: do the flights that came then attack the joiner, or circle until the host takes off? Solo landing: held
-  as before. A joiner shooting a fresh Skirmisher: no "wingmate" damage on the host's log before the first hit.
+  airfield)`: do the flights that came then attack the joiner, or circle until the host takes off? In a shuttle round:
+  `special: shuttle countdown running while you're down at the airfield (1 other player flying)`, the NEXT row's
+  LAUNCH IN still counting down and the shuttle taking hits; the joiner lands too: `held`, `invulnerable while the
+  countdown is held`. Solo landing: held as before. A joiner shooting a fresh Skirmisher: no "wingmate" damage on the
+  host's log before the first hit.
 - Five or more players: a joiner tailing a fighter far from the others still gets "Someone cover me!" and a hunt.
 - The profile: config\survival_profile.ini whole after a run, no .tmp / .bak left beside it.
 - The HUD: I shows / hides the CO-OP, ALLIES and ITEMS rows (`hud: info rows shown (I)`), a peek when a player goes

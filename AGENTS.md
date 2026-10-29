@@ -288,10 +288,11 @@ Player guide: Claude Docs "Survival COOP: Player Guide".
 Since the behaviour branch's code review (2026-10-29, TestBranch_Behavioural; untested in game, not a hard rule): the
 host down at the airfield no longer holds the room while another player flies (sv_rounds.lua othersFlying: alive,
 fresh, not on the airfield). The spawns go on, a flight's orders fire (RE_SV_FlightOrders_NN every 5 s while the host
-is down, not counted as tries), the wave clock runs, the ALICORN's deck launches and a Wolf trap is held after its
-orders; solo, or with nobody else flying, all held until the takeoff as before (user's question of 2026-10-29: Shazzy's
-host log had 10-43 s holds). The shuttle's countdown still pauses while the host is down. The CO-OP row is behind the
-HUD's info key (I), with a line a player when open (tools/re/COOP.md section 7, tools/re/HUD_LAYOUT.md).
+is down, not counted as tries), the wave clock runs, the ALICORN's deck launches, a Wolf trap is held after its orders
+and the shuttle's countdown runs, the shuttle not invulnerable then (user, 2026-10-29: "Keep it running while others
+are flying"); solo, or with nobody else flying, all held until the takeoff as before (user's question of 2026-10-29:
+Shazzy's host log had 10-43 s holds). The CO-OP row is behind the HUD's info key (I), with a line a player when open
+(tools/re/COOP.md section 7, tools/re/HUD_LAYOUT.md).
 
 ## Enemy behaviour build (Lua 0.72.0, TestBranch_Behavioural; untested in game)
 The Claude Docs thesis "AC8 Survival Mode: Enemy Behaviour Reference & Challenge Thesis"'s nine proposals, all built on
