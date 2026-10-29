@@ -2423,7 +2423,8 @@ The units' own sections above were corrected in place where behaviour changed ("
 - config-3: this file's head, unit 2's CFG keys and AGENTS.md say P5's reworked trees have no survival.ini switch back
   to stable-1's (packaged scripts; `reactions = false` is the stock ones) and name the live provoke's switches.
 - config-4: unit 7's checklist item 1 and its untested note: the 1 km fallback counts only a missile whose TargetToHome
-  can't be read; 0 throughout means the read never names your pawn.
+  can't be read; 0 throughout means the read never names your pawn, or it fails and no missile came within 1 km
+  (checklist item 1).
 - U2's leftover: unit 2's checklist item 5 and limits note: every spike level has post_stall_all (from round 8).
 - coop-4: COOP.md's list of each player's own sections and sv_coop.lua's PERSONAL comment (menu, profile, flares, the
   test logs' sections).
@@ -2432,6 +2433,9 @@ The units' own sections above were corrected in place where behaviour changed ("
   unit 6's untested list with its log lines.
 - roles off: units 5 and 8 say the Lancer units keep their 9 km band (F1's outcome).
 - AGENTS.md: the behaviour section and the co-op section.
+- Round 2 (the F7 review's three nits): AGENTS.md's pointer to the host's landing is the co-op section above, COOP.md
+  section 7 says the CO-OP row is behind the info key (its peeks and player lines), and config-4's line above names
+  both cases a 0 can mean.
 
 ### Refuted (not acted on as bugs)
 - runtime-1, ACE.movesTick's two fresh reads a plane a tick: not new (stable-1 made them; the branch only added

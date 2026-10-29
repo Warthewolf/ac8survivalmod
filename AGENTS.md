@@ -327,9 +327,9 @@ Wolf pairs are never turned by the director's cover or P4's push (ROLE.ownSet: o
 a role flight); the ALICORN's railgun and VLS tells, warning, orders and volleys stop once those parts are destroyed;
 a joiner's Skirmisher cut is no longer sent to the host as a hit; the learning profile's file is written whole and never
 lost (.tmp / .bak / .old); cover and the trap work for joiners past [director] players 4; a host down at the airfield no
-longer holds the room while another player flies (below); and, at the user's request, the HUD info key: I ([hud.info])
-keeps the CO-OP, ALLIES and ITEMS rows hidden until pressed, each shown peek_s 5 when its news changes, open the CO-OP
-row has a line a player (tools/re/HUD_LAYOUT.md; a release key, not a test key; keyboard only).
+longer holds the room while another player flies (the co-op section above); and, at the user's request, the HUD info
+key: I ([hud.info]) keeps the CO-OP, ALLIES and ITEMS rows hidden until pressed, each shown peek_s 5 when its news
+changes, open the CO-OP row has a line a player (tools/re/HUD_LAYOUT.md; a release key, not a test key; keyboard only).
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
