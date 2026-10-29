@@ -53,6 +53,20 @@ do
     end
 end
 
+-- A line logged once a session for its key (a hook that fails every tick logs one line, not one a tick).
+-- hookErr(what, pcall(f, ...)): a hook's pcall with its first error logged ("<what> error ..."), its results passed
+-- on. The behaviour branch's hooks between parts (code review of 2026-10-29: a bare pcall made a hook that failed read
+-- as one that never ran).
+do
+    local said = {}
+    function logOnce(key, msg) if not said[key] then said[key] = true; log(msg) end end
+    function hookErr(what, ok, ...)
+        if not ok then logOnce("hook " .. tostring(what), string.format("%s error %s (its first: not logged again)",
+            tostring(what), tostring((...)))) end
+        return ok, ...
+    end
+end
+
 function valid(o)
     local ok, v = pcall(function() return o ~= nil and o:IsValid() end)
     return ok and v

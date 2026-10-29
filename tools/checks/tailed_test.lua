@@ -14,10 +14,10 @@
 --      tier_provoke off; the test values; a special's own), enemyProvoke's writes (only what changed), enemySpike's
 --      once-per-plane write and its "provoke:" line;
 --   3. the tail watch: STATS.tailTick on planes you get behind (its reaction, its states, died / escaped, a flicker
---      dropped, at most watch_max read, no bombers, the sweep's death first, never an episode on a wreck the sweep hasn't
---      seen down yet, one already defending kept out of the reaction figures, the planes you're likely behind read before
---      nearer ones, an episode still open at the run's end), the round line's and the run line's parts; nothing on a
---      co-op joiner or with tail_watch off.
+--      dropped, at most watch_max read, no bombers, no special's guard, the sweep's death first, never an episode on or
+--      a read of a wreck the sweep hasn't seen down yet, one already defending kept out of the reaction figures, the
+--      planes you're likely behind read before nearer ones, an episode still open at the run's end), the round line's
+--      and the run line's parts; nothing on a co-op joiner or with tail_watch off.
 -- Its log lines also go to <work dir>/test_lua.log, for tailed_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -483,10 +483,15 @@ check(FL.tw == nil and not line("tailed: " .. FL.name) and not B.tw, "a 0.25 s f
 check(S[1].obj.reads > 0 and S[3].obj.reads > 0 and S[4].obj.reads == 0 and S[5].obj.reads == 0, "at most watch_max (4) read a tick: the nearest")
 -- the sweep sees one down first
 local T4 = fighter("f16c", 0.8, AHEAD, "ERA_Unit_08_Dep_Air0")
-planes = { T4 }
+-- (beside it, a special's guard on your guns: never watched, its top tier is given, not a skill band; code review of
+-- 2026-10-29)
+local SG = fighter("f16c", 0.9, AHEAD, "SV_Unit_AnomalyGuards")
+SG.tier, SG.tierI = CFG.tiers.list[#CFG.tiers.list], #CFG.tiers.list
+planes = { T4, SG }
 run_(114)
 STATS.down(T4, nil, "you", 115.35)
 check(has(line("tailed: " .. T4.name), "died 2.1 s after") and T4.tw == nil, "the sweep's death first: the episode ends there")
+check(SG.tw == nil and SG.obj.reads == 0 and not line("tailed: " .. SG.name), "a special's guard on your guns: never watched")
 -- not on a co-op joiner; not with tail_watch off
 local T5 = fighter("f16c", 0.7, AHEAD, "ERA_Unit_09_Dep_Air0")
 planes = { T5 }
@@ -505,7 +510,8 @@ W.obj.HealthInternal = 0
 planes = { W }
 run_(122)
 STATS.down(W, nil, "you", 122.1)
-check(W.tw == nil and not line("tailed: " .. W.name), "no episode on a wreck the sweep hasn't seen down yet")
+check(W.tw == nil and not line("tailed: " .. W.name) and W.obj.reads == 0,
+      "no episode on a wreck the sweep hasn't seen down yet, and no read of it (alive checked first: code review of 2026-10-29)")
 -- already in Provoke when you get behind it (another pursuer): no reaction of its own, nothing "after its Provoke"
 local PD = fighter("su33", 1.2, AHEAD, "ERA_Unit_11_Dep_Air0")
 PD.obj.state = 8

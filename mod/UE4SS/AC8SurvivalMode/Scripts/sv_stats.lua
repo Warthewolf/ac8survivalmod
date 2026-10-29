@@ -7,7 +7,7 @@
 -- a tailed enemy survives (8 s+ at Veteran), a special round's length (5-8 min), missiles left at death (under 40), what
 -- did the damage at death (varied: guns, brackets, specials), the director's tactics per round (3-6, each with a
 -- callout) and the share of kills from behind (under 70 %). None of them had a log line. This part keeps them, from
--- hooks the other parts call (each through pcall):
+-- hooks the other parts call (each through pcall; the new ones through sv_core.lua's hookErr, which logs a first error):
 --   STATS.track(p, you, now)        sv_main.lua's plane sweep, each live enemy every 2 s: engaged, first hit, your tail
 --   STATS.aiState(p, st, now)       sv_ai.lua aiWatch, the same sweep: its AI state (Provoke / EscapeFromPursuer)
 --   STATS.down(p, g, by, now)       the sweep's death branch (g: KILL.geom, by: creditKill's side): "kill-time:"
@@ -85,12 +85,13 @@ end
 -- within engage_km of you (p.engagedAt), first hurt by you (p.hitAt), and your geometric tail: within tail_km and
 -- tail_deg of its six (the aces' reversal test, ACE.movesTick). An episode on its tail runs from the first sample that
 -- has you there (p.tailAt) to the first that hasn't (an escape) or to its death. p.youAt: where you were at this sample,
--- so the kill's aspect (KILL.geom) comes from one moment, not two reads 2 s apart.
+-- so the kill's aspect (KILL.geom) comes from one moment, not two reads 2 s apart; kept with the measurements off too
+-- (P6's kills and samples and P4's tail read it: code review of 2026-10-29).
 function STATS.track(p, you, now)
+    if you then p.youAt = { X = you.X, Y = you.Y, Z = you.Z } end
     if not (on() and now and you and p.at) then return end
     local c = cfg()
     p.born = p.born or now                                 -- (logged before the round clock ran)
-    p.youAt = { X = you.X, Y = you.Y, Z = you.Z }
     if p.tierI == nil and p.tier then p.tierI = tierIndex(p.tier) or false end
     if p.ace == nil then p.ace = (D and D.aceSquad and p.unit and D.aceSquad[p.unit]) and true or false end
     local d = p.dist or km(p.at, you)
@@ -130,8 +131,9 @@ end
 ---------------------------------------------------------------------------------------------------- the tail watch (P5)
 -- P5's gate (a harder tailed plane; the thesis: "a tailed enemy lasts 8 s+ at Veteran"; runtime-ai step 10): the 2 s
 -- sweep above can't tell a 0.8 s reaction from 2.5 s. STATS.tailTick runs every 250 ms tick (sv_main.lua probeTick,
--- timed "tail watch"; the host or solo: a joiner's enemies are the host's): the enemies with a skill tier (no bombers)
--- within watch_km of you by the sweep's last sample, at most watch_max a tick, get a fresh position and heading: those
+-- timed "tail watch"; the host or solo: a joiner's enemies are the host's): pool flights' planes with a skill tier (no
+-- bombers; no special or its guards: their top tier is given, not a skill band, code review of 2026-10-29) within
+-- watch_km of you by the sweep's last sample, at most watch_max a tick, alive, get a fresh position and heading: those
 -- you're likely on the tail of first (the sweep's p.tailing, or its last pose against where you are now: no read), then
 -- the nearest, so a plane you chase at 2.5 km isn't crowded out by four nearer ones in a furball. You on a live one's
 -- tail (tail_km, tail_deg: the sweep's own test) opens an episode (p.tw, t0), and its provoke values in force are read
@@ -257,7 +259,8 @@ function STATS.tailTick(now)
     local tkm, tdeg, grace = (c.tail_km or 3) * 1000, c.tail_deg or 70, c.watch_grace_s or 2.0
     for _, p in ipairs(planes) do
         if p.tw then cand[#cand + 1] = p
-        elseif not p.down and p.tier and p.dist and p.dist <= wkm and not (p.unit and BOMBER_UNIT[p.unit]) then
+        elseif not p.down and p.tier and p.dist and p.dist <= wkm and p.unit and poolIndex(p.unit)
+               and not BOMBER_UNIT[p.unit] then
             -- (likely on its tail: the sweep said so, or its last pose against you now; no read)
             local likely = p.tailing and true or false
             if not likely and p.at and p.fwd then
@@ -277,7 +280,7 @@ function STATS.tailTick(now)
         local e = p.tw
         if e and not alive(p) then
             tailEnd(p, now, "died")
-        else
+        elseif e or alive(p) then              -- (one without an episode checked alive first: a wreck isn't read)
             -- (one fresh read a plane a tick, shared with the squad director: p.pose, sv_director.lua, which runs first)
             local at, fwd
             local q = p.pose
@@ -289,7 +292,7 @@ function STATS.tailTick(now)
             if at then
                 local m, off = geom(at, fwd, me)
                 local tailing = m <= tkm and off <= tdeg
-                if tailing and not e and alive(p) then open(p, now, m, off); e = p.tw end   -- (never on a wreck)
+                if tailing and not e then open(p, now, m, off); e = p.tw end
                 if e then
                     local dt = math.max(0, math.min(1, now - (e.seen or now)))
                     e.seen = now
@@ -333,7 +336,7 @@ local function isOrdinary(p, u)
     return true
 end
 function STATS.down(p, g, by, now)
-    if PROF.kill then pcall(PROF.kill, p, g, by) end      -- (P6's habits: your kills; with the measurements off too)
+    if PROF.kill then hookErr("learning: PROF.kill", pcall(PROF.kill, p, g, by)) end   -- (P6: your kills; [stats] off too)
     if not (on() and D and now) then return end
     if p.tw then tailEnd(p, now, "died") end              -- (the sweep saw it down before the tail watch did)
     local c, rs = cfg(), D.rs
@@ -348,7 +351,8 @@ function STATS.down(p, g, by, now)
     local wpn = g and g.wpn or nil
     local r = { round = D.round or 0, tierI = p.tierI or nil, ordinary = ordinary, mine = mine, behind = behind, wpn = wpn,
                 up = p.born and now - p.born, engaged = p.engagedAt and now - p.engagedAt, hit = p.hitAt and now - p.hitAt,
-                tailedAI = p.provokeAt and now - p.provokeAt, tailedGeo = p.tailAt and now - p.tailAt }
+                tailedAI = p.provokeAt and now - p.provokeAt, tailedGeo = p.tailAt and now - p.tailAt,
+                special = (u and not poolIndex(u)) and true or nil }   -- (a special or its guards: not the Veteran+ figures)
     if rs then
         rs.down = rs.down + 1
         if mine then rs.mineAll = rs.mineAll + 1 end
@@ -549,9 +553,13 @@ local function newRound(now)
              tw = { n = 0, vet = 0, died = {}, diedProv = {}, esc = {}, up = 0, react = {}, noReact = 0, pre = 0, blackout = 0 } }
 end
 -- The tail watch's part of the round line (P5): its episodes, Veteran+ among them. "Provoke after" is the fresh
--- reactions only; "already defending": episodes whose plane was in Provoke / EscapeFromPursuer / Blackout at once.
-local function watchPart(w)
+-- reactions only; "already defending": episodes whose plane was in Provoke / EscapeFromPursuer / Blackout at once. A
+-- co-op joiner's round: not measured there (the watch is the host's or solo's; it used to log 0 episodes as if it had).
+local WATCH_JOINER = "; tail watch: not measured on a co-op joiner (its enemies are the host's)"
+local function watchPart(rs)
+    local w = rs.tw
     if not w or cfg().tail_watch == false then return "" end
+    if rs.client then return WATCH_JOINER end
     return string.format("; tail watch: %d episode%s (Veteran+ %d): died after median %s (n %d), %s after its Provoke " ..
         "(n %d), escaped %d (held median %s), still up at the end %d, Provoke after median %s (none in %d, already " ..
         "defending %d), blackouts %d", w.n, w.n == 1 and "" or "s",
@@ -595,16 +603,17 @@ local function flushRound()
         #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0)
         .. (((rs.moves.opener or 0) + (rs.moves.blink or 0) > 0)       -- (the squadrons', P9: only when there were any)
             and string.format(", squadron openers %d, blinks %d", rs.moves.opener or 0, rs.moves.blink or 0) or "")
-        .. watchPart(rs.tw))
+        .. watchPart(rs))
     if #m.rounds < 500 then
         m.rounds[#m.rounds + 1] = { round = rs.round, kind = kind, len = len, ground = rs.ground, special = spS,
-                                    tactics = rs.nTactics, callouts = rs.callouts }
+                                    tactics = rs.nTactics, callouts = rs.callouts, client = rs.client }
     end
 end
 
 -- A round starts (startRound's end on the host and solo; on a joiner, the host's round number changing): the last one's
 -- line goes out first if it hasn't yet.
 function STATS.roundStart(now)
+    if PROF.roundStart then hookErr("learning: PROF.roundStart", pcall(PROF.roundStart)) end   -- (P6: the run's first round)
     if not (on() and D and D.round and D.round >= 1) then return end
     flushRound()
     D.rs = newRound(now or D.now or 0)
@@ -613,7 +622,7 @@ end
 -- A round ends (the clear; a joiner: the host's state back to "wait"; cut: the run ended in it): its length, kind and
 -- missiles left are taken now, its line a few seconds later (flushRound, from STATS.sample).
 function STATS.roundEnd(now, cut)
-    if PROF.checkpoint then pcall(PROF.checkpoint) end    -- (P6: the run so far into its file)
+    if PROF.checkpoint then hookErr("learning: PROF.checkpoint", pcall(PROF.checkpoint)) end   -- (P6: the file's [run])
     local rs = D and D.rs
     if not (on() and rs) or rs.ended then return end
     now = now or D.now or rs.at
@@ -630,7 +639,7 @@ end
 -- then, once for both (P6's habits sampled every 2 s, not only while an 8th plane is up: the U8 review).
 function STATS.sample(now, you)
     if not you then you = playerLocation() end
-    if PROF.sample then pcall(PROF.sample, now, you) end  -- (P6's habits: where you fly)
+    if PROF.sample then hookErr("learning: PROF.sample", pcall(PROF.sample, now, you)) end   -- (P6's habits: where you fly)
     local rs = D and D.rs
     if not (on() and rs and now) then return end
     if rs.ended then
@@ -649,7 +658,9 @@ end
 -- round number starts a fresh one. Otherwise the host started a new run while this game's level, RUN and leaderboard run
 -- go on: the round ends, the run so far gets its line, and the host's next run starts on empty records (RUN.metrics).
 function STATS.hostReset(now, resync)
-    if not resync and PROF.newRun then pcall(PROF.newRun, "the host started over") end   -- (P6: the run so far learnt)
+    if not resync and PROF.newRun then                    -- (P6: the run so far learnt)
+        hookErr("learning: PROF.newRun", pcall(PROF.newRun, "the host started over"))
+    end
     if not (on() and D) then return end
     if D.rs and not D.rs.ended then STATS.roundEnd(now, resync and "co-op resync" or "the host started over") end
     flushRound()
@@ -663,7 +674,7 @@ end
 -- The run's over (LB.finish: died, restart, left): the round it ended in, then one line with the seven metrics against
 -- the thesis' targets. RUN.metrics.kills keeps every kill's round, so "rounds 7-12" is worked out here.
 function STATS.runEnd(how)
-    if PROF.fold then pcall(PROF.fold, how) end           -- (P6: the run learnt into your profile, written)
+    if PROF.fold then hookErr("learning: PROF.fold", pcall(PROF.fold, how)) end   -- (P6: the run learnt, the file written)
     if not (on() and D) then return end
     local c, m = cfg(), metrics()
     if m.over then return end
@@ -676,7 +687,7 @@ function STATS.runEnd(how)
     for _, r in ipairs(m.kills) do
         if r.ordinary and r.mine and r.engaged and r.round >= a and r.round <= b then ttk[#ttk + 1] = r.engaged end
         if r.ordinary == nil and r.mine and r.round >= a and r.round <= b then unsorted = unsorted + 1 end
-        if r.tierI and r.tierI >= vet then
+        if r.tierI and r.tierI >= vet and not r.special then
             if r.tailedAI then tAI[#tAI + 1] = r.tailedAI end
             if r.tailedGeo then tGeo[#tGeo + 1] = r.tailedGeo end
         end
@@ -697,7 +708,11 @@ function STATS.runEnd(how)
     if how ~= "died" or msl == nil then msl = held(1) end
     local d, f = m.dmg, m.fired
     local wpart = ""                                       -- the tail watch's Veteran+ episodes (P5's gate)
-    if c.tail_watch ~= false then
+    local joined = #m.rounds > 0 or client()               -- (every round a co-op joiner's: the watch never ran)
+    for _, r in ipairs(m.rounds) do if not r.client then joined = false end end
+    if c.tail_watch ~= false and joined then
+        wpart = "; tail watch Veteran+: not measured on a co-op joiner"
+    elseif c.tail_watch ~= false then
         local wd, wp, we, wr, wn, wb, wu, wa = {}, {}, {}, {}, 0, 0, 0, 0
         for _, e in ipairs(m.tw or {}) do
             if e.vet then
@@ -744,6 +759,7 @@ STATS.median, STATS.classify = median, classify
 --   PROF.menu()              the main menu, once a session, before the NPC rows (sv_main.lua): the profile and the AI's
 --                            flare row (PROF.flareWant, sv_rows.lua searchSetup)
 --   PROF.levelLoad()         each level load: the profile read again (a run that ended this session, a hand edit)
+--   PROF.roundStart()        STATS.roundStart (startRound; a co-op joiner's host round): the round the run began in
 --   PROF.checkpoint()        STATS.roundEnd: the run so far into the file ([run]; a game that closes loses a round)
 --   PROF.fold(how)           STATS.runEnd (LB.finish: died, restart, left): the run learnt into the profile and written
 --   PROF.newRun(why)         STATS.hostReset: a co-op host's new run while this game's level goes on
@@ -760,7 +776,10 @@ local RUN_KEYS = { "round", "from", "K", "Kf", "Kw", "Km", "Kg", "Kgeo", "Kc", "
 local ROLE_GAIN = { gun = { "duelist", "wolf" }, tail = { "wolf" }, high = { "lancer" }, airfield = { "skirm" } }
 local ALT_BIN, ALT_BINS = 250, 80                  -- (your height's histogram: 250 m bins up to 20 km)
 local seen = {}                                    -- (run ids learnt from this session: a checkpoint is never learnt twice)
-local wrote = { said = false, failed = false }     -- (failed: the last write didn't land, the file's older than PROF.saved)
+local wrote = { failed = false }                   -- (failed: the last write didn't land, the file's older than PROF.saved)
+local kept, oldWhy = nil, nil                      -- (the file as the last load found it: write, PROF.load)
+local said = {}                                    -- (the file's failures logged since the last load read it: once each)
+local function once(key, msg) if not said[key] then said[key] = true; log(msg) end end
 
 local function pcfg() return CFG.profile or {} end
 local function pon() local c = CFG.profile; return c ~= nil and c.enabled ~= false end
@@ -789,6 +808,14 @@ local function habit()                             -- this run's counts (made at
     if RUN then RUN.habit = h end
     return h
 end
+-- the round run h began in: the first round its counts saw start (h.began, PROF.roundStart: a co-op joiner's is the
+-- host's, round 20 for one that links then; its D.startRound is its own level load's), on the host or solo never
+-- under the run's own start (START AT ROUND); code review of 2026-10-29
+local function fromRound(h)
+    local r = h.began or (D and D.startRound) or 1
+    if not client() then r = math.max(r, D and D.startRound or 1) end
+    return r
+end
 local function altMedian(h)                        -- your usual height (m): the median of the run's samples, else h.altM
     if (h.S or 0) <= 0 or not h.alt then return h.altM end
     local half, c = h.S / 2, 0
@@ -798,37 +825,41 @@ local function altMedian(h)                        -- your usual height (m): the
     end
     return h.altM
 end
--- a run's shares (nil: nothing seen for one): missile Km / Kw (kills with a weapon seen), gun the bigger of Kg / Kw and
--- Kc / Kgeo (kills with an aspect), behind Kb / Kgeo (all of your kills of fighters), tail_time (St / S) /
--- tail.time_full at most 1, high Sh / S, airfield Sa / SaN (the samples the airfield didn't need you: PROF.sample)
-local function runShares(h)
-    local s, tf = {}, math.max(0.01, num(hcfg("tail").time_full, 0.3))
-    if h.Kw > 0 then s.missile = h.Km / h.Kw end
-    if h.Kw > 0 or h.Kgeo > 0 then s.gun = math.max(h.Kw > 0 and h.Kg / h.Kw or 0, h.Kgeo > 0 and h.Kc / h.Kgeo or 0) end
-    if h.Kgeo > 0 then s.behind = h.Kb / h.Kgeo end
-    if h.S > 0 then s.tail_time, s.high = math.min(1, h.St / h.S / tf), h.Sh / h.S end
-    if (h.SaN or 0) > 0 then s.airfield = h.Sa / h.SaN end
-    return s
-end
--- what run h's share k rests on: its kills of fighters (the kill shares), its samples (the airfield's: SaN)
-local function evidence(h, k)
-    if BY_KILL[k] then return h.Kf or 0 end
-    if k == "airfield" then return h.SaN or 0 end
-    return h.S or 0
+-- a run's shares (nil: nothing seen for one) and what each rests on (ev: its own count, which weighs it in current()
+-- and foldInto; code review of 2026-10-29: every kill share was weighed by all your kills of fighters, Kf): missile
+-- Km / Kw (kills with a weapon seen), gun the bigger of Kg / Kw and Kc / Kgeo (kills with an aspect; its count the
+-- half's taken, a half on fewer than minK kills left out), behind Kb / Kgeo, tail_time (St / S) / tail.time_full at
+-- most 1, high Sh / S (S samples), airfield Sa / SaN (the samples the airfield didn't need you: PROF.sample)
+local function runShares(h, minK)
+    local s, ev, tf = {}, {}, math.max(0.01, num(hcfg("tail").time_full, 0.3))
+    minK = math.max(1, minK or 1)
+    if h.Kw > 0 then s.missile, ev.missile = h.Km / h.Kw, h.Kw end
+    local gw = h.Kw >= minK and h.Kg / h.Kw or nil             -- (the gun's two halves: by weapon, by range)
+    local gc = h.Kgeo >= minK and h.Kc / h.Kgeo or nil
+    if gw and gc == gw and h.Kgeo > h.Kw then gw = nil end      -- (a tie: the half with more kills behind it)
+    if gw and not (gc and gc > gw) then s.gun, ev.gun = gw, h.Kw elseif gc then s.gun, ev.gun = gc, h.Kgeo end
+    if h.Kgeo > 0 then s.behind, ev.behind = h.Kb / h.Kgeo, h.Kgeo end
+    if h.S > 0 then
+        s.tail_time, s.high = math.min(1, h.St / h.S / tf), h.Sh / h.S
+        ev.tail_time, ev.high = h.S, h.S
+    end
+    if (h.SaN or 0) > 0 then s.airfield, ev.airfield = h.Sa / h.SaN, h.SaN end
+    return s, ev
 end
 local function habitsOf(x)                         -- the five habits from the shares (tail: 0.6 behind + 0.4 its time)
     local t = { missile = x.missile, gun = x.gun, high = x.high, airfield = x.airfield }
     if x.behind and x.tail_time then t.tail = 0.6 * x.behind + 0.4 * x.tail_time else t.tail = x.behind or x.tail_time end
     return t
 end
--- the shares in force: this run's (once it has live_kills of your kills / live_samples samples) weighed against the
+-- the shares in force: this run's (once its own count has live_kills kills / live_samples samples) weighed against the
 -- saved profile's as if those were prior_kills / prior_samples of this run's; without one, the other
 local function current(h, sv)
-    local c, s, cur = pcfg(), runShares(h), {}
+    local c, cur = pcfg(), {}
+    local s, ev = runShares(h, num(c.live_kills, 5))
     local learnt = sv ~= nil and (sv.learnt or 0) > 0
     for _, k in ipairs(PARTS) do
         local kill = BY_KILL[k]
-        local have = evidence(h, k)
+        local have = ev[k] or 0
         local x = s[k]
         if x ~= nil and have < num(kill and c.live_kills or c.live_samples, kill and 5 or 30) then x = nil end
         local prior = learnt and sv[k] or nil
@@ -1044,6 +1075,8 @@ function PROF.lancerAlt() local c = counter(); return c and c.lancerAlt or nil e
 -- usual height) and, while a run is on, [run] (its id and counts at its last round's end). Read with io (never
 -- loaded as code): known keys only, every value a number clamped to its range; anything else is skipped.
 local INT_MAX = { version = 1000, runs = 1e9, learnt = 1e9, kills = 1e9 }
+local END_LINE = "; end of the profile"           -- (render's last line: a .tmp that has it was written whole)
+local NO_FILE = 2                                  -- (io.open's errno for no such file: anything else, the file's there)
 local function parse(text)
     local sv, run, sec, ver, skipped = neutral(), nil, "profile", nil, 0
     sv.version = nil
@@ -1102,39 +1135,80 @@ local function render(sv, h)
         local alt = altMedian(h)
         if alt then L[#L + 1] = string.format("alt_m = %d", math.floor(alt + 0.5)) end
     end
+    L[#L + 1] = END_LINE
     return table.concat(L, "\n") .. "\n"
 end
--- written whole: <file>.tmp, then the old one removed and the new one moved in (as survival.ini's update). One that
--- doesn't land leaves wrote.failed: PROF.load then keeps this session's profile (the file's older) until one does.
+local function present(path)                       -- false: no such file (else it's there, readable now or not)
+    local f, _, code = io.open(path, "r")
+    if f then f:close(); return true end
+    return code ~= NO_FILE
+end
+-- Written whole and never in place (code review of 2026-10-29: a full disk put a cut-off file in place of the profile,
+-- and a remove-then-rename could leave it only in the .tmp, which nothing read): <file>.tmp written and closed (both
+-- checked: a failure leaves the old file as it is), the old one moved aside to <file>.bak (Windows' rename never
+-- replaces a file), the new one moved in (the old one back if that fails), then the .bak removed. PROF.load reads the
+-- .tmp or .bak a write the game didn't finish leaves. A file that wasn't a profile at its load (oldWhy) goes aside as
+-- <file>.old and stays. kept: why this session leaves the file alone. One that doesn't land leaves wrote.failed:
+-- PROF.load then keeps this session's profile (the file's older) until one does. Each failure logged once a load.
 local function write(sv, h)
-    local p = filePath()
-    local f = io.open(p .. ".tmp", "w")
-    if not f then
-        wrote.failed = true
-        if not wrote.said then wrote.said = true; log("learning: can't write config\\" .. FILE .. ": the profile stays this session's") end
-        return false
+    if kept then
+        once("kept", "learning: config\\" .. FILE .. " not written: " .. kept .. " (left as it is)")
+        return false, kept
     end
-    f:write(render(sv, h))
-    f:close()
-    os.remove(p)
-    local ok, err = os.rename(p .. ".tmp", p)
-    if not ok and not wrote.said then wrote.said = true; log("learning: " .. FILE .. " not moved in: " .. tostring(err)) end
-    wrote.failed = not ok
-    return ok and true or false
+    local function fail(key, msg)
+        wrote.failed = true
+        once(key, "learning: " .. msg .. "; the profile stays this session's")
+        return false, msg
+    end
+    local p, text = filePath(), render(sv, h)
+    local tmp, bak = p .. ".tmp", p .. ".bak"
+    local f, eo = io.open(tmp, "w")
+    if not f then return fail("open", string.format("can't write config\\%s (%s)", FILE, tostring(eo))) end
+    local okW, eW = f:write(text)
+    local okC, eC = f:close()
+    if not (okW and okC) then
+        os.remove(tmp)
+        return fail("write", string.format("config\\%s not written (%s): the old one kept", FILE, tostring(eW or eC)))
+    end
+    local aside = oldWhy and (p .. ".old") or bak
+    local had = present(p)
+    if had then
+        os.remove(aside)                           -- (a .bak left over is older than the file; one .old is kept)
+        local okA, eA = os.rename(p, aside)
+        if not okA then
+            os.remove(tmp)
+            return fail("aside", string.format("config\\%s not replaced: it couldn't be moved aside (%s), it's kept", FILE,
+                tostring(eA)))
+        end
+    end
+    local okR, eR = os.rename(tmp, p)
+    if not okR then
+        local back = had and os.rename(aside, p)
+        if back then os.remove(tmp) end            -- (the old one's back in place)
+        return fail("move", string.format("config\\%s not moved in (%s): %s", FILE, tostring(eR),
+            back and "the old one put back" or ("the new one left as " .. FILE .. ".tmp, read at the next start")))
+    end
+    os.remove(bak)                                 -- (the old one goes only now the new one's in)
+    if had and oldWhy then
+        log(string.format("learning: config\\%s (%s at its load) kept as %s.old; a new profile written", FILE, oldWhy, FILE))
+    end
+    oldWhy, wrote.failed = nil, false
+    return true
 end
 
 -- run h (this run's counts, or an unfinished one's from the file) into profile sv: its runs and kills always; its
--- shares (each weighed by its evidence: Kf / (Kf + fold_kills), S / (S + fold_samples), at most run_weight_max; a share
--- the profile has none of yet: the run's own) when it has min_kills of your kills of fighters and started at round 1;
--- its time shares and height only with min_samples samples (SaN for the airfield's: a first run's few samples would
--- otherwise stand as the profile for runs to come, the U8 review). nil and a note (what wasn't learnt), or why not.
+-- shares (each weighed by its own count n, runShares' ev: n / (n + fold_kills) for a kill share, n / (n + fold_samples)
+-- for a time share, at most run_weight_max; a share the profile has none of yet: the run's own) when it has min_kills
+-- of your kills of fighters and started at round 1 (from: fromRound's); its time shares and height only with
+-- min_samples samples (SaN for the airfield's: a first run's few samples would otherwise stand as the profile for runs
+-- to come, the U8 review). nil and a note (what wasn't learnt), or why not.
 local function foldInto(sv, h, from)
     local c = pcfg()
     sv.runs, sv.kills = (sv.runs or 0) + 1, (sv.kills or 0) + h.K
     local minK, kf = num(c.min_kills, 8), h.Kf or 0
     if kf < minK then return string.format("only %d of your kills of fighters, min_kills %d", kf, minK) end
     if (from or 1) > 1 then return string.format("a head start at round %d", from) end
-    local s = runShares(h)
+    local s, n = runShares(h)
     if (sv.learnt or 0) == 0 then                  -- (the first run learnt from: its own, nothing older left in)
         for _, k in ipairs(PARTS) do sv[k] = nil end
         sv.alt_m = nil
@@ -1143,7 +1217,7 @@ local function foldInto(sv, h, from)
     local function w(ev, fold) return math.min(maxW, ev / (ev + math.max(1, fold))) end
     local short = {}
     for _, k in ipairs(PARTS) do
-        local x, ev = s[k], evidence(h, k)
+        local x, ev = s[k], n[k] or 0
         if x ~= nil and not BY_KILL[k] and ev < minS then short[#short + 1] = k; x = nil end
         if x ~= nil then
             local a = BY_KILL[k] and w(ev, num(c.fold_kills, 30)) or w(ev, num(c.fold_samples, 300))
@@ -1178,35 +1252,74 @@ local function runText(h)
         h.landings or 0, table.concat(t, ", "))
 end
 
+-- a file's text, or nil and why not: false (no such file), else the error (it's there: in use, a read error)
+local function readText(path)
+    local f, err, code = io.open(path, "r")
+    if not f then return nil, code ~= NO_FILE and tostring(err) end
+    local text, er = f:read("a")
+    f:close()
+    if not text then return nil, "not read: " .. tostring(er) end
+    return text
+end
+-- a file's text as a profile of this version: sv, run, lines skipped; or nil and why it isn't one
+local function profileOf(text)
+    local okP, sv, run, ver, skipped = pcall(parse, text)
+    if not okP then return nil, "not readable" end
+    if not (sv and ver == FORMAT) then
+        return nil, ver and ("is format " .. ver .. ", not " .. FORMAT) or "has no version line"
+    end
+    return sv, run, skipped
+end
+
 -- The profile from its file (where: "the main menu", "level load"). A [run] left in it (the game closed mid-run) is
--- learnt from first, once a session. A missing, broken or other-format file: a neutral profile and a line, never an
--- error (hard rule 50). save off: no profile (each run on its own). A write that didn't land this session (wrote.failed:
--- the folder can't be written): this session's profile is kept, not the older file (the U8 review).
+-- learnt from first, once a session. Never an error (hard rule 50), and never a neutral profile written over a real
+-- one (code review of 2026-10-29): no file, and a write the game didn't finish left its .tmp whole or its .bak: that
+-- one, moved back in; no file at all: a neutral profile ("none yet"); a file that's there but can't be read now (in
+-- use by another program): no profile this session (PROF.saved nil: each run learns on its own, nothing written) until
+-- a load reads it; one that isn't a profile of this version (broken, another format): a neutral profile, the file kept
+-- as .old when the first write replaces it. save off: no profile. A write that didn't land this session (wrote.failed:
+-- the folder can't be written): this session's profile is kept, not the older file (the U8 review). PROF.saved is set
+-- only once the read went through, so a load that fails part way leaves nothing to write (checkpoint, fold).
 function PROF.load(where)
     if wrote.failed and PROF.saved and pon() and pcfg().save ~= false then
         log(string.format("learning: profile at %s: this session's kept (config\\%s couldn't be written: the file's older): %s",
             where, FILE, profileText(PROF.saved)))
         return
     end
-    PROF.saved = nil
+    PROF.saved, kept, oldWhy, said = nil, nil, nil, {}
     if not pon() then return end
     if pcfg().save == false then log("learning: [profile] save off: each run learns on its own"); return end
-    local f = io.open(filePath(), "r")
-    if not f then
-        PROF.saved = neutral()
-        log(string.format("learning: profile at %s: none yet (config\\%s is made at your first run's end)", where, FILE))
+    local p = filePath()
+    local text, err = readText(p)
+    if err then
+        log(string.format("learning: profile at %s: config\\%s couldn't be read (%s): no profile this session (each run " ..
+            "learns on its own), the file not written until a load reads it", where, FILE, err))
         return
     end
-    local text = f:read("a") or ""
-    f:close()
-    local okP, sv, run, ver, skipped = pcall(parse, text)
-    if not okP then sv, run, ver, skipped = nil, nil, nil, 0 end
-    if not (sv and ver == FORMAT) then
-        PROF.saved = neutral()
-        log(string.format("learning: profile at %s: config\\%s %s: starting from a neutral profile (it's written anew at " ..
-            "this run's end)", where, FILE, not okP and "not readable" or (ver and ("is format " .. ver .. ", not " .. FORMAT))
-            or "has no version line"))
-        return
+    local sv, run, skipped, from = nil, nil, 0, nil
+    if text then
+        sv, run, skipped = profileOf(text)
+        if not sv then
+            PROF.saved, oldWhy = neutral(), run
+            log(string.format("learning: profile at %s: config\\%s %s: starting from a neutral profile (the file's kept as " ..
+                "%s.old once a new one is written)", where, FILE, run, FILE))
+            return
+        end
+    else                                           -- (none: a write the game didn't finish may have left one)
+        for _, x in ipairs({ ".tmp", ".bak" }) do
+            local t = readText(p .. x)
+            if not sv and t and (x == ".bak" or t:find(END_LINE, 1, true)) then   -- (a .tmp only when written whole)
+                sv, run, skipped = profileOf(t)
+                if sv then from = x end
+            end
+        end
+        if not sv then
+            PROF.saved = neutral()
+            log(string.format("learning: profile at %s: none yet (config\\%s is made at your first run's end)", where, FILE))
+            return
+        end
+        local okM, eM = os.rename(p .. from, p)
+        if not okM then kept = string.format("%s%s couldn't be moved back in (%s)", FILE, from, tostring(eM)) end
     end
     local extra = ""
     local cur = RUN and RUN.habit
@@ -1221,8 +1334,10 @@ function PROF.load(where)
             why and ("counted, not learnt from (" .. why .. ")") or ("learnt from" .. (note and (", " .. note) or "")))
     end
     PROF.saved = sv
-    log(string.format("learning: profile at %s from config\\%s: %s%s%s", where, FILE, profileText(sv), extra,
-        skipped > 0 and string.format("; %d lines skipped", skipped) or ""))
+    log(string.format("learning: profile at %s from config\\%s%s: %s%s%s", where, FILE,
+        from and string.format("%s (a write the game didn't finish left it; %s)", from,
+            kept and (kept .. ": the file not written this session") or "moved back in") or "",
+        profileText(sv), extra, skipped > 0 and string.format("; %d lines skipped", skipped) or ""))
 end
 function PROF.levelLoad() PROF.load("level load") end
 
@@ -1249,18 +1364,33 @@ function PROF.menu()
     end
 end
 
--- A round's end (STATS.roundEnd): the run so far into the file's [run], once for each round (checkpoint)
+-- A round starts (STATS.roundStart: startRound on the host or solo, the host's round number on a co-op joiner): the
+-- first one this run's counts see is the round it began in (fromRound)
+function PROF.roundStart()
+    if not (pon() and D and (D.round or 0) >= 1) then return end
+    local h = habit()
+    if h.began == nil then h.began = D.round end
+end
+
+-- A round's end (STATS.roundEnd): the run so far into the file's [run], once for each round (checkpoint). Not without
+-- a profile from a load that went through (PROF.saved nil: its load failed, or the file couldn't be read): the file is
+-- left as it is, never a neutral profile written over it (code review of 2026-10-29)
 function PROF.checkpoint()
     local c, h = pcfg(), RUN and RUN.habit
     if not (pon() and h and D) or h.folded or c.save == false or c.checkpoint == false then return end
     local key = string.format("%d|%d|%d", D.round or 0, h.K, h.S)
     if h.cpKey == key or (h.K == 0 and h.S == 0) then return end
-    h.cpKey, h.round, h.from = key, D.round or 0, D.startRound or 1
-    write(PROF.saved or neutral(), h)
+    h.cpKey, h.round, h.from = key, D.round or 0, fromRound(h)
+    if not PROF.saved then
+        once("unloaded", "learning: config\\" .. FILE .. " not written: no profile was loaded (left as it is)")
+        return
+    end
+    write(PROF.saved, h)
 end
 
 -- The run's over (STATS.runEnd; how: died, restart, left, the host started over): learnt into the profile, written
--- ([run] gone). Not a run with nothing flown (no kill, no sample). save off: its habits logged only.
+-- ([run] gone). Not a run with nothing flown (no kill, no sample). save off: its habits logged only; no profile loaded
+-- (its load failed, or the file couldn't be read): logged only, the file left as it is (code review of 2026-10-29).
 function PROF.fold(how)
     local h = RUN and RUN.habit
     if not (pon() and h) or h.folded then return end
@@ -1271,13 +1401,18 @@ function PROF.fold(how)
         log(string.format("learning: run over (%s): %s; not saved ([profile] save off)", tostring(how), runText(h)))
         return
     end
-    local sv = PROF.saved or neutral()
-    local why, note = foldInto(sv, h, D and D.startRound or 1)
+    local sv = PROF.saved
+    if not sv then                                 -- (no profile was loaded: the file's left as it is)
+        log(string.format("learning: run over (%s): %s; not learnt from or saved (no profile was loaded: config\\%s left as " ..
+            "it is)", tostring(how), runText(h), FILE))
+        return
+    end
+    local why, note = foldInto(sv, h, fromRound(h))
     PROF.saved = sv
-    local ok = write(sv, nil)
+    local ok, wErr = write(sv, nil)
     log(string.format("learning: run over (%s): %s; %s; the profile now %s%s", tostring(how), runText(h),
         why and ("counted, not learnt from (" .. why .. ")") or ("learnt from" .. (note and ("; " .. note) or "")),
-        profileText(sv), ok and (", saved to config\\" .. FILE) or ", NOT saved"))
+        profileText(sv), ok and (", saved to config\\" .. FILE) or (", NOT saved (" .. tostring(wErr) .. ")")))
 end
 
 -- A co-op host's new run while this game's level goes on (STATS.hostReset): this one's over, the next starts empty

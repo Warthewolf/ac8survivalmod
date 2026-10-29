@@ -9,7 +9,10 @@
 --   the hooks on the other parts' real code: sv_main.lua's plane sweep and kill credit, sv_ladon.lua's HIT.tick,
 --     sv_flights.lua's ammoTick, sv_leaderboard.lua's LB.deathCheck / LB.finish (the damage record at death too);
 --   COOP.players() / COOP.slotOfAddr() solo and as a host, the ACE.movesTick guard on a joiner, a joiner's rounds, its
---     kills (not sorted into ordinary), the host's restart and a resync ("rs").
+--     kills (not sorted into ordinary), the host's restart and a resync ("rs");
+--   the code review of 2026-10-29: a special's guard kept out of the run line's Veteran+ figures, p.youAt kept by the
+--     sweep with [stats] off (a kill's aspect for P6), a hook's first error logged once (hookErr), a joiner's round and
+--     run lines saying the tail watch isn't measured there.
 -- Its log lines also go to <work dir>/test_lua.log, for stats_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -273,6 +276,11 @@ STATS.hit(134, 10, pawn)
 P3.down = true
 STATS.hit(136, 50, pawn)
 check(STATS.classify(136, pawn) == "unknown", "no missile and no enemy near: unknown")
+-- a special's guard (its top tier given, not a skill band), tailed 17 s before it went down: not in the run line's
+-- Veteran+ figures (code review of 2026-10-29)
+local top = #CFG.tiers.list
+STATS.down({ obj = plane("f16c"), name = "BP_OP1022_f16c_CP_C_guard", unit = "SV_Unit_AnomalyGuards", tier = CFG.tiers.list[top],
+             tierI = top, provokeAt = 120, tailAt = 120 }, nil, "allies", 137)
 D.now = 138
 STATS.death("died")
 local dl = line("death: ")
@@ -284,7 +292,8 @@ check(has(line("stats: round 9"), "(cut short: died)"), "the round you died in g
 local runL = line("stats: run over")
 check(has(runL, "rounds 1-9"), "run line: the rounds")
 check(has(runL, "time to kill rounds 7-12 median 12 s (n 3)"), "run line: time to kill, rounds 7-12")
-check(has(runL, "tailed survival Veteran+ AI Provoke median 4 s (n 1), geometric median 4 s (n 1)"), "run line: tailed survival Veteran+")
+check(has(runL, "tailed survival Veteran+ AI Provoke median 4 s (n 1), geometric median 4 s (n 1)"),
+      "run line: tailed survival Veteran+ (the special's guard left out)")
 check(has(runL, "missiles left at the end 31"), "run line: missiles left")
 check(has(runL, "damage taken 100 HP: missiles 40%, gun/close 10%, unknown 50%, brackets 1"), "run line: damage by source")
 check(has(runL, "director tactics per round avg 0.5 (1 in 2 rounds)"), "run line: tactics per round")
@@ -339,6 +348,38 @@ planes = { QA }; planeSweep(1)
 planes = { QJ }; planeSweep(1)
 check(line("kill-time: " .. QA.name) and not has(line("kill-time: " .. QA.name), "ordinary")
       and not has(line("kill-time: " .. QJ.name), "ordinary") and D.rs.fighters == 1, "an untracked ace's and the jammer's kills aren't ordinary fighters")
+-- [stats] off: the sweep still keeps where you were at each visit (p.youAt: KILL.geom's aspect, P6's samples and P4's
+-- tail read it; code review of 2026-10-29): a kill from 500 m behind reads 180 deg at 0.5 km, not the aspect against
+-- where you are at the death visit (1 km on, ahead of it)
+CFG.stats.enabled = false
+local QY = sweepPlane("f16c", "ERA_Unit_08_Dep_Air0", 0)
+QY.obj.loc, QY.obj.fwd = x(0.5), AHEAD
+planes = { QY }
+planeSweep(1)
+check(QY.youAt and QY.youAt.X == 0 and not QY.engagedAt, "[stats] off: the sweep keeps p.youAt (and no measurements)")
+local kb = RUN.habit and RUN.habit.Kb or 0
+you.X = 100000
+QY.obj.HealthInternal = 0
+D.now = 508
+planeSweep(1)
+you.X = 0
+check(has(line("kill: " .. QY.name), "0.5 km away, 180 deg off its nose") and RUN.habit and RUN.habit.Kb == kb + 1,
+      "[stats] off: the kill's aspect from p.youAt (P6 counts it from behind)")
+CFG.stats.enabled = true
+-- a hook that fails: its first error logged, once (code review of 2026-10-29: a bare pcall dropped it)
+local function count(prefix) local n = 0; for _, l in ipairs(logs) do if l:sub(1, #prefix) == prefix then n = n + 1 end end return n end
+local rawKill, rawTrack = PROF.kill, STATS.track
+PROF.kill = function() error("test: PROF.kill broke") end
+local HK = sweepPlane("f16c", "ERA_Unit_08_Dep_Air1", 1)
+STATS.down(HK, nil, "you", 509); STATS.down(HK, nil, "you", 509.5)
+PROF.kill = rawKill
+STATS.track = function() error("test: STATS.track broke") end
+planes = { sweepPlane("f16c", "ERA_Unit_08_Dep_Air2", 0) }
+planeSweep(1); planeSweep(1)
+STATS.track = rawTrack
+check(count("learning: PROF.kill error") == 1 and has(line("learning: PROF.kill error"), "test: PROF.kill broke")
+      and count("stats: STATS.track error") == 1 and has(line("stats: STATS.track error"), "(its first: not logged again)"),
+      "a hook's first error logged once (STATS.down's PROF.kill, the sweep's STATS.track)")
 planes = { Q, QA, QJ }
 -- your health dropping (HIT.tick): STATS.hit
 local pc = { Pawn = pawn }
@@ -388,6 +429,14 @@ check(has(body("sv_tactical.lua", "\nfunction INS.tick%(now%)"), 'pcall(STATS.de
 local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
 check(has(pt, 'timed("planes", planeSweep, slot)') and has(pt, 'timed("moves", ACE.movesTick, now, D)') and has(pt, "pcall(STATS.sample, D.now"),
       "probeTick: the sweep and ACE.movesTick timed, STATS.sample every 2 s")
+local spawnSrc, statsSrc = readAll(MOD .. "/Scripts/sv_spawn.lua"), readAll(MOD .. "/Scripts/sv_stats.lua")
+check(has(spawnSrc, 'hookErr("roles: ROLE.spawned", pcall(ROLE.spawned') and has(spawnSrc, 'hookErr("director: DIR.spawned", pcall(DIR.spawned')
+      and has(spawnSrc, 'hookErr("aces: ACE.squadUp", pcall(ACE.squadUp') and has(mainSrc, 'hookErr("stats: STATS.track", pcall(STATS.track')
+      and has(mainSrc, 'hookErr("stats: STATS.down", pcall(STATS.down') and has(pt, 'hookErr("stats: STATS.sample", pcall(STATS.sample')
+      and has(statsSrc, 'hookErr("learning: PROF.checkpoint", pcall(PROF.checkpoint))') and has(statsSrc, 'hookErr("learning: PROF.fold", pcall(PROF.fold, how))')
+      and has(statsSrc, 'hookErr("learning: PROF.sample", pcall(PROF.sample, now, you))')
+      and has(statsSrc, 'hookErr("learning: PROF.newRun", pcall(PROF.newRun, "the host started over"))'),
+      "the hooks between parts log their first error (hookErr): spawnFlight's, the sweep's, probeTick's, STATS' calls to PROF")
 pawn.HealthInternal, HIT.h = 800, 800
 
 ---------------------------------------------------------------------------------------------------- co-op
@@ -448,6 +497,8 @@ roundsTick(400)
 check(D.rs.ended == 400 and D.rs.kind == "?", "joiner: the host's clear ends it")
 STATS.sample(404, you)
 check(has(line("stats: round 4"), "length 80 s"), "joiner: its round line")
+check(has(line("stats: round 4"), "; tail watch: not measured on a co-op joiner (its enemies are the host's)"),
+      "joiner: its round line's tail watch not measured (it used to log 0 episodes as if it had)")
 -- a joiner's kills: only the host knows its aces and jammer, so no time to kill here
 M.rnd = { round = 8, state = "spawning", secs = 0, wave = 1, waves = 1, alive = 6, got = os.clock() }
 roundsTick(420)
@@ -468,6 +519,8 @@ check(has(r8, "(cut short: the host started over)") and has(r8, "ordinary fighte
       "joiner: the host's restart ends its round; the round line has no time to kill")
 check(has(run8, "rounds 1-8") and has(run8, "(n 0; 1 of your kills left out: a co-op joiner can't tell aces)") and runLines() == runs0 + 1,
       "joiner: the host's restart gives the run so far its line")
+check(has(run8, "; tail watch Veteran+: not measured on a co-op joiner") and not has(run8, "died after median"),
+      "joiner: the run line's tail watch not measured")
 check(RUN.metrics == nil and D.round == 0 and D.state == "wait", "joiner: the host's next run starts on empty records")
 -- a resync (the "rs" answering its own "jn"): the round cut short, the run goes on
 M.rnd = { round = 9, state = "fighting", secs = 0, wave = 1, waves = 1, alive = 6, got = os.clock() }

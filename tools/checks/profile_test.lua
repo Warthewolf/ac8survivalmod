@@ -23,6 +23,12 @@
 --     neutral profile, never an error; this session's kept at the next load), save off; LB.finish -> STATS.runEnd ->
 --     PROF.fold (with [stats] off too), a co-op host's new run (STATS.hostReset), a joiner's own kills; min_samples (a
 --     run's few samples never stand as the profile's time habits or height);
+--   the code review of 2026-10-29: each kill share in force and folded on its own count (Kw, Kgeo, the gun's half), not
+--     Kf; a co-op joiner linked at the host's round 20 counted, not learnt from (from round 1: learnt); the file never
+--     lost: written whole (its end line), a full disk at the .tmp's write or close and a failed move in leave the old
+--     file as it was (logged), a .bak (or a whole .tmp, never a cut-off one) a write the game didn't finish left read
+--     and moved back in, a file that isn't a profile kept as .old by the first write (logged), a file that can't be
+--     read now and a failed level load never written over;
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -698,6 +704,202 @@ sv = PROF.saved
 check(sv.learnt == 2 and near(sv.missile, 0.875) and near(sv.high, 0.5) and near(sv.airfield, 0) and sv.alt_m == 5125,
       string.format("the next run's 100 samples: its time shares and height the profile's own (high %s), its kill shares blended (missile %s)",
       tostring(sv.high), tostring(sv.missile)))
+D.counter = nil
+
+-- each kill share on its own count (code review of 2026-10-29: all three were weighed by Kf, your kills of fighters):
+-- 20 kills of fighters, 3 with a weapon seen (missiles), 2 with an aspect (both close, neither from behind)
+local hk = { K = 20, Kf = 20, Kw = 3, Km = 3, Kg = 0, Kgeo = 2, Kc = 2, Kb = 0, S = 0, Sh = 0, Sa = 0, SaN = 0, St = 0, alt = {} }
+local ck = PROF.current(hk, nil)
+check(ck.missile == nil and ck.gun == nil and ck.behind == nil,
+      "3 kills with a weapon seen, 2 with an aspect (under live_kills 5): no kill share in force (on Kf 20: missile 1.0, gun 1.0)")
+hk.Kw, hk.Km, hk.Kg = 10, 8, 2
+ck = PROF.current(hk, nil)
+check(near(ck.missile, 0.8) and near(ck.gun, 0.2) and ck.behind == nil,
+      "10 with a weapon seen: missile 0.80, the gun's weapon half 0.20 in force (its range half, 1.0 on 2 kills, left out)")
+local s5, n5 = PROF.runShares(hk)
+check(near(s5.gun, 1.0) and n5.gun == 2 and n5.missile == 10 and n5.behind == 2,
+      "runShares: the gun's bigger half (1.0 on its 2 kills), each share's own count")
+os.remove(PFILE)
+PROF.load("level load")
+PROF.saved.learnt, PROF.saved.missile, PROF.saved.gun, PROF.saved.behind = 1, 0.5, 0.5, 0.5
+D.startRound = 1
+RUN = { habit = { id = "k5", K = 20, Kf = 20, Kw = 3, Km = 3, Kg = 0, Kgeo = 20, Kc = 0, Kb = 20, S = 0, Sh = 0, Sa = 0,
+                  SaN = 0, St = 0, landings = 0, alt = {} } }
+PROF.fold("died")
+sv = PROF.saved
+check(near(sv.missile, 0.5 + 0.5 * 3 / 33) and near(sv.behind, 0.5 + 0.5 * 20 / 50) and near(sv.gun, 0.5 * 30 / 50),
+      string.format("folded, each share by its own count: missile a = 3 / 33 (%.4f; by Kf 0.7), behind and the gun's tie 20 / 50 (%.4f, %.4f)",
+      sv.missile, sv.behind, sv.gun))
+
+-- a co-op joiner's head start (code review of 2026-10-29): its D.startRound is its own level load's (1), but one that
+-- links at the host's round 20 began its run there (PROF.roundStart, from STATS.roundStart: clientRounds' call when the
+-- host's round number changes), so it's counted, not learnt from; one in the room from round 1 is learnt from
+COOP.open, COOP.role = true, "join"
+os.remove(PFILE)
+PROF.load("level load")
+D = { round = 0, startRound = 1, state = "wait", now = 900, up = {}, flown = {}, queue = {}, spare = {} }
+RUN = { habit = strong() }
+RUN.habit.id = "j20"
+D.round = 20; STATS.roundStart(900)
+D.round = 21; STATS.roundStart(960)
+STATS.roundEnd(1000)                                 -- (its checkpoint)
+check(RUN.habit.began == 20 and has(readAll(PFILE), "from = 20"), "a joiner linked at the host's round 20: its run began there ([run] from = 20)")
+from = #logs + 1
+PROF.fold("died")
+check(has(line("learning: run over (died)", from), "counted, not learnt from (a head start at round 20)") and PROF.saved.learnt == 0,
+      "the joiner's run from round 20: counted, not learnt from (its D.startRound 1)")
+RUN = { habit = strong() }
+RUN.habit.id = "j1"
+D.round = 1; STATS.roundStart(1100)
+from = #logs + 1
+PROF.fold("died")
+check(has(line("learning: run over (died)", from), "; learnt from;") and PROF.saved.learnt == 1, "a joiner from the host's round 1: learnt from")
+COOP.open, COOP.role = false, nil
+
+-- the file never lost (code review of 2026-10-29): written whole to a .tmp (write and close checked), the old one
+-- aside as .bak until the new one's in; a .tmp or .bak a write the game didn't finish left read and moved back in; a
+-- file that isn't a profile kept as .old; one that can't be read, or a failed load, never written over
+local function exists(p) local f = io.open(p, "r"); if f then f:close(); return true end return false end
+for _, x in ipairs({ "", ".tmp", ".bak", ".old" }) do os.remove(PFILE .. x) end
+D = { round = 3, startRound = 1, state = "fighting", now = 1200, up = {}, flown = {}, queue = {}, spare = {} }
+PROF.load("level load")
+RUN = { habit = strong() }
+RUN.habit.id = "a1"
+PROF.fold("died")
+RUN = { habit = strong() }
+RUN.habit.id = "a2"
+STATS.roundEnd(1210)
+local good = readAll(PFILE)
+check(has(good, "id = a2") and has(good, "; end of the profile") and not exists(PFILE .. ".bak") and not exists(PFILE .. ".tmp"),
+      "a write over the file: whole (its end line), no .tmp or .bak left")
+-- a full disk: the .tmp's write (or its close) fails
+local rawOpen, rawRename = io.open, os.rename
+local function fullDisk(at)
+    io.open = function(p, m)
+        local f, e, c = rawOpen(p, m)
+        if f and m == "w" and tostring(p):find("%.tmp$") then
+            local w = {}
+            function w.write(_, s)
+                f:write(s:sub(1, 40))
+                if at == "write" then return nil, "No space left on device", 28 end
+                return w
+            end
+            function w.close() f:close(); if at == "close" then return nil, "No space left on device", 28 end return true end
+            return w
+        end
+        return f, e, c
+    end
+end
+fullDisk("write")
+RUN = { habit = strong() }
+RUN.habit.id = "a3"
+D.round = 4
+from = #logs + 1
+STATS.roundEnd(1220)
+PROF.fold("died")
+io.open = rawOpen
+check(readAll(PFILE) == good and not exists(PFILE .. ".tmp") and not exists(PFILE .. ".bak")
+      and has(line("learning: config\\survival_profile.ini not written (No space left on device)", from), "the old one kept; the profile stays this session's")
+      and has(line("learning: run over (died)", from), ", NOT saved (config\\survival_profile.ini not written (No space left on device)"),
+      "a full disk at the .tmp's write: the old file as it was (it used to be replaced by a 40-byte fragment), logged")
+fullDisk("close")
+RUN = { habit = strong() }
+RUN.habit.id = "a4"
+D.round = 5
+STATS.roundEnd(1230)
+io.open = rawOpen
+check(readAll(PFILE) == good and not exists(PFILE .. ".tmp"), "the .tmp's close failing: the old file as it was")
+-- the new one can't be moved in: the old one put back
+os.rename = function(a, b) if tostring(a):find("%.tmp$") then return nil, "Permission denied", 13 end return rawRename(a, b) end
+RUN = { habit = strong() }
+RUN.habit.id = "a5"
+D.round = 6
+from = #logs + 1
+STATS.roundEnd(1240)
+os.rename = rawRename
+check(readAll(PFILE) == good and not exists(PFILE .. ".bak") and not exists(PFILE .. ".tmp")
+      and has(line("learning: config\\survival_profile.ini not moved in (Permission denied)", from), "the old one put back"),
+      "the new one not moved in: the old one put back, nothing left over")
+RUN = { habit = strong() }                           -- (a write that lands: wrote.failed off again)
+RUN.habit.id = "a6"
+D.round = 7
+STATS.roundEnd(1250)
+local A = readAll(PFILE)
+local runsA = tonumber(A:match("\nruns = (%d+)"))                -- (the game writes text mode: \r\n here)
+check(has(A, "id = a6") and runsA, "a write lands again")
+-- the game closed between the old one's move aside and the new one's move in: no file, its .bak, a .tmp cut short
+rawRename(PFILE, PFILE .. ".bak")
+writeAll(PFILE .. ".tmp", A:sub(1, 120))
+from = #logs + 1
+PROF.load("level load")
+local bl = line("learning: profile at level load", from)
+check(PROF.saved and PROF.saved.runs == runsA and readAll(PFILE) == A and not exists(PFILE .. ".bak")
+      and has(bl, "from config\\survival_profile.ini.bak (a write the game didn't finish left it; moved back in)"),
+      "no file, its .bak: the .bak read and moved back in (a .tmp without its end line passed over) (" .. tostring(bl) .. ")")
+-- no file, a .tmp written whole and the older .bak: the .tmp
+rawRename(PFILE, PFILE .. ".bak")
+local B = A:gsub("\nruns = %d+", "\nruns = 77", 1)
+writeAll(PFILE .. ".tmp", B)
+from = #logs + 1
+PROF.load("level load")
+check(PROF.saved and PROF.saved.runs == 77 and readAll(PFILE) == B and not exists(PFILE .. ".tmp")
+      and has(line("learning: profile at level load", from), "from config\\survival_profile.ini.tmp ("),
+      "no file, a whole .tmp and the .bak: the .tmp (the newer) moved back in")
+RUN = { habit = strong() }
+RUN.habit.id = "a7"
+D.round = 8
+STATS.roundEnd(1260)
+check(has(readAll(PFILE), "id = a7") and not exists(PFILE .. ".bak"), "the next write: the .bak left over removed")
+-- a file that isn't a profile: neutral, kept as .old by the first write, said so
+writeAll(PFILE, "\0\0garbage")
+from = #logs + 1
+PROF.load("level load")
+check(PROF.saved and PROF.saved.runs == 0 and has(line("learning: profile at level load", from),
+      "has no version line: starting from a neutral profile (the file's kept as survival_profile.ini.old once a new one is written)"),
+      "a file that isn't a profile: neutral, the .old said at the load")
+RUN = { habit = strong() }
+RUN.habit.id = "a8"
+D.round = 9
+STATS.roundEnd(1270)
+check(readAll(PFILE .. ".old") == "\0\0garbage" and has(readAll(PFILE), "id = a8")
+      and has(line("learning: config\\survival_profile.ini (has no version line at its load) kept as survival_profile.ini.old", from),
+      "a new profile written"), "the first round's end: the old file kept as .old, a new profile written, logged")
+RUN = { habit = strong() }
+RUN.habit.id = "a9"
+D.round = 10
+STATS.roundEnd(1280)
+check(readAll(PFILE .. ".old") == "\0\0garbage" and has(readAll(PFILE), "id = a9") and not exists(PFILE .. ".bak"),
+      "the next write: the .old stays")
+PROF.fold("died")                                    -- (a9 learnt from: no [run] left in the file for the loads below)
+-- a file that's there but can't be read now (another program holds it): no profile, nothing written over it
+local held = readAll(PFILE)
+io.open = function(p, m)
+    if m == "r" and tostring(p):find("survival_profile%.ini$") then return nil, "survival_profile.ini: Permission denied", 13 end
+    return rawOpen(p, m)
+end
+from = #logs + 1
+PROF.load("level load")
+RUN = { habit = strong() }
+RUN.habit.id = "b1"
+D.round = 11
+STATS.roundEnd(1290)
+PROF.fold("died")
+io.open = rawOpen
+check(PROF.saved == nil and readAll(PFILE) == held and has(line("learning: profile at level load", from), "couldn't be read (survival_profile.ini: Permission denied)")
+      and line("learning: config\\survival_profile.ini not written: no profile was loaded", from) ~= nil
+      and has(line("learning: run over (died)", from), "not learnt from or saved (no profile was loaded"),
+      "a file that can't be read now: no profile, the run not written over it (it used to be replaced by a neutral one)")
+-- a level load error (sv_main.lua's handler leaves PROF.saved nil): nothing written over the file
+PROF.load("level load")
+PROF.saved = nil
+RUN = { habit = strong() }
+RUN.habit.id = "b2"
+D.round = 12
+STATS.roundEnd(1300)
+check(readAll(PFILE) == held, "after a level load error: nothing written over the file")
+PROF.load("level load")
+check(PROF.saved and PROF.saved.runs == tonumber(held:match("\nruns = (%d+)")), "read again at the next load")
+for _, x in ipairs({ ".tmp", ".bak", ".old" }) do os.remove(PFILE .. x) end
 D.counter = nil
 
 ---------------------------------------------------------------------------------------------------- hooks
