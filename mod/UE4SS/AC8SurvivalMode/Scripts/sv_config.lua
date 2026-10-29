@@ -161,6 +161,9 @@ CFG = {
     -- summary. A radio line is never asked for again within line_gap_s, by whichever tell (reversal and kulbit share
     -- theirs; the cloned rows keep the template's RequeueingWaitTime of 20 s, which may skip a group asked for again
     -- inside it; 0: no such limit): a tell whose lines are all that recent shows its callout only, or isn't said.
+    -- sure = true (the bosses' phase changes, P7: the warning before a change that must come, code review of unit 9):
+    -- not said for its switches, a gap, its cooldown or its lines, its callout shows anyway (no radio); between rounds,
+    -- down at the airfield or over the summary nothing, as any tell; a host sends it to its joiners whatever its gaps.
     -- lead_s: an action that follows its tell (TELL.after) comes this long after it, at once when the tell wasn't said
     -- or tells are off.
     -- enabled = false: no tells for this game's player (and its own tells' actions at once, as before tells; a co-op
@@ -222,10 +225,10 @@ CFG = {
             -- the bosses' phases (behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): MINDRIPPER's pack springing
             -- (the host's own: CFG.specials.anomaly.pack), AB.L..IN's phase 2 (behind you: the host's own) and 3 (ECM down,
             -- guns: every player), a Ladon enraged (every player; its callout, with its name, is the round's own)
-            pack            = { radio = { "RE_SV_RadioTrap", "RE_SV_RadioEnTrap" }, hud = "pack", urgent = true },
+            pack            = { radio = { "RE_SV_RadioTrap", "RE_SV_RadioEnTrap" }, hud = "pack", urgent = true, sure = true },
             glitch_six      = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" },
-                                hud = "glitch_six", urgent = true },
-            glitch_allout   = { radio = { "RE_SV_RadioGlitchEcm" }, hud = "glitch_allout", urgent = true },
+                                hud = "glitch_six", urgent = true, sure = true },
+            glitch_allout   = { radio = { "RE_SV_RadioGlitchEcm" }, hud = "glitch_allout", urgent = true, sure = true },
             ladon_rage      = { radio = { "RE_SV_RadioLadonRage" } },
         },
         text = {
@@ -1077,18 +1080,21 @@ CFG = {
         -- deck (behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck"; tools/re/BEHAVIOUR_DIRECTOR.md
         -- unit 9): while it's up it launches fighters: a free pool flight of `size` (the Skirmishers' own with the fighter
         -- roles on, CFG.roles; else any) spawned alt_m above it, ahead_m off its bow, along its heading (Survival's spawner
-        -- with a pose, not Online Mode's launches, whose pooled fighters stay put away). The first first_s after it
-        -- appears, then every every_s, and after_surface_s after each surfacing; warn_s before each its radio call
-        -- (CFG.tells alcn_deck) and a callout; never more than max_up of its flights up at once, never while you're down at
-        -- the airfield (a flight that appears in the landing menu gets no orders). A round's launches: `flights` +
-        -- flights_per_round x the round, at most max_flights; from specials.escort_from its escorts come off the deck too
-        -- (escorts: their aircraft in flights of `size`, none from a spawn point). false: no launches (its escorts as before)
+        -- with a pose, not Online Mode's launches, whose pooled fighters stay put away; never one of the round's own
+        -- flights still to come). The first first_s after it appears, then every every_s, and after_surface_s after each
+        -- surfacing; warn_s before each its radio call (CFG.tells alcn_deck) and a callout, only once the launch can go
+        -- (a launch held is told again warn_s before it goes); never more than max_up of its flights up at once, never
+        -- while you're down at the airfield (a flight that appears in the landing menu gets no orders). alt_m: at least
+        -- 1100 (the pool's 2-ship units fly 1000 m and up: survival WD's MinAltitudeInMeter, code review of unit 9). A
+        -- round's launches: `flights` + flights_per_round x the round, at most max_flights; from specials.escort_from its
+        -- escorts come off the deck too (escorts: their aircraft in flights of `size`, none from a spawn point). false: no
+        -- launches (its escorts as before)
         alicorn = { name = "ALICORN", dive_every_s = 120, dive_for_s = 20, first_shot_s = 40, railgun_every_s = 60,
                     surfaced_m = 3, resurface_s = 8, resurface_tries = 4, up_wait_s = 60,
                     rail_alert = { enabled = true, alert_s = 12 },
                     deck = { enabled = true, first_s = 25, every_s = 35, after_surface_s = 6, warn_s = 3, size = 2,
                              max_up = 2, flights = 2, flights_per_round = 0.15, max_flights = 6, escorts = true,
-                             alt_m = 600, ahead_m = 800 },
+                             alt_m = 1200, ahead_m = 800 },
                     volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                     tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
                     weapon_missiles = 3, railgun_missiles = 4,
@@ -1162,16 +1168,19 @@ CFG = {
                      -- around you; a third phase drops ECM and goes all-out guns"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9).
                      -- Phase 2 once behind_after frenzies are over: behind_share of its blinks at the spot nearest your
                      -- six (your heading, at your height; the tell "glitch_six" first). Phase 3 at allout_hp of its health
-                     -- (as it appeared): no more frenzies or blinks, its ECM pod down (no RE_SV_GlitchEcm; ecm_row: its own
-                     -- pod's row refires it by itself at most once a minute, made at the main menu, a game restart to change;
-                     -- ecm_pods_off: the pods up switched off, checked every ecm_check_s), its gun at you whenever you're
+                     -- (as it appeared): no more frenzies or blinks, its ECM pod down (no RE_SV_GlitchEcm; ecm_pods_off:
+                     -- the pods up switched off, checked every ecm_check_s, on a co-op joiner's copy too; ecm_row: its own
+                     -- pod's row refires it by itself at most once a minute, made at the main menu, a game restart to
+                     -- change; off by default, code review of unit 9: hard rule 40's "up all fight" was confirmed with the
+                     -- 14 s row and the event together, so phases 1-2 keep that until a test shows the 60 s row holds the
+                     -- ECM up under the event alone), its gun at you whenever you're
                      -- within allout_range_km and allout_cone_deg of its nose (every allout_gun_s, led as a frenzy's), and
                      -- LastTGT onto you every allout_turn_s and at once (allout_behind_s apart) when you're behind it
                      -- within allout_behind_km (the tell "glitch_allout" first). false: one phase, as before
                      phases = { enabled = true, behind_after = 2, behind_share = 0.5, allout_hp = 0.35,
                                 allout_range_km = 1.5, allout_cone_deg = 20, allout_gun_s = 0.5, allout_turn_s = 10,
-                                allout_behind_s = 3, allout_behind_km = 3, ecm_row = true, ecm_pods_off = true,
-                                ecm_check_s = 3 },
+                                allout_behind_s = 3, allout_behind_km = 3, ecm_row = false, ecm_pods_off = true,
+                                ecm_check_s = 2 },
                      -- the dead flying (user: "look spooky like its the dead flying"): its airframe in the wreck's
                      -- burnt material, no pilot or stores, the damaged-plane smoke and fire on it
                      dead_look = true, dead_fx_scale = 1.0,
@@ -1312,7 +1321,7 @@ CFG = {
         -- (health_per_round 0.05, health_max_x 2.5: were 0.03 / 2.0, economy review of 2026-10-25)
         -- rage (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster"; their round
         -- stays theirs alone, user 2026-10-25, so no escorts; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): one shot down, the
-        -- other is enraged: its volleys every rage.volley_every_s (the first within first_s, rage.volley_warn_s in range),
+        -- other is enraged: its volleys every rage.volley_every_s (the first first_s on, rage.volley_warn_s in range),
         -- and from its next pass over the airfield it flies a tighter circuit at the build's faster speed
         -- (tools/survival_events.py LADON_RAGE: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
         -- path). false: as before

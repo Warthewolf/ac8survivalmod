@@ -760,7 +760,7 @@ D.int = nil; itick(99); D.int.ease = 1
 sent = {}
 clock = clock + 2
 COOP.tick(44)
-check(sentOf(">rnd|") ~= "" and sentOf(">rnd|"):match("|1$") ~= nil, "the host's \"rnd\" carries its level (1): " .. sentOf(">rnd|"))
+check(sentOf(">rnd|") ~= "" and sentOf(">rnd|"):match("|1|[123]?$") ~= nil, "the host's \"rnd\" carries its level (1; AB.L..IN's phase after it, P7): " .. sentOf(">rnd|"))
 -- a joiner's push: the six tell by "tl", a hunt with its target on their stand-in
 fresh(6)
 COOP.open, COOP.role, COOP.slot = true, "host", 0
@@ -846,7 +846,7 @@ do
     check(has(sp, "searchAircraft(ac, levelFor(D.round))") and has(sp, "topSpike or levelFor(D.round), tier.fcs or 0)"),
           "sv_spawn: the bombers' and fighters' fire-control level on levelFor (the tier's fcs the floor)")
     local co = readAll(MOD .. "/Scripts/sv_coop.lua")
-    check(has(co, 'elseif k == "in" then') and has(co, "D.intLevel = r.level and") and has(co, "D.waves and #D.waves or 0, alive, lv)"),
+    check(has(co, 'elseif k == "in" then') and has(co, "D.intLevel = r.level and") and has(co, "D.waves and #D.waves or 0, alive, lv, gp)"),
           "sv_coop: the host's \"in\", the level in \"rnd\" and the joiner's D.intLevel")
     local d = readAll(MOD .. "/Scripts/sv_director.lua")
     local it, on = d:find("pcall(DIR.intensityTick, now, paused)", 1, true), d:find("if not (on() and now and D and D.round and not paused) then return end", 1, true)

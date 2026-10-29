@@ -208,14 +208,19 @@ end
 -- Mode's ALCN_LaunchAir would launch the hull's pooled fighters, which stay put away), the Skirmishers' own flights
 -- with the fighter roles on (CFG.roles; any role's when none is free, any flight with roles off): the round's D.deckLeft
 -- launches (sv_rounds.lua startRound), first_s after it appears, every every_s after a launch and after_surface_s after
--- each surfacing; warn_s before each the tell alcn_deck (its radio call) and a callout, every player. Never more than
+-- each surfacing; warn_s before each the tell alcn_deck (its radio call) and a callout, every player, once nothing holds
+-- the launch (code review of unit 9: told first, it could then wait minutes behind max_up untold). Never more than
 -- max_up of its flights up at once, never while you're down at the airfield (retried each second: a flight that
--- appears in the landing menu gets no orders). The host's (or solo): roundsTick's; spawnFlight mirrors the spawn.
+-- appears in the landing menu gets no orders), never one of the round's own flights (D.taken: one queued for a later
+-- wave, its tier and orders rewritten for the live flight when its turn came); a spare it takes is no spare any more.
+-- At least DECK_FLOOR_M up: the pool's 2-ship units fly 1000 m and up (survival WD's MinAltitudeInMeter, Mission 22's).
+-- The host's (or solo): roundsTick's; spawnFlight mirrors the spawn.
+local DECK_FLOOR_M = 1100
 local function deckFlight(dk)
     local size = math.floor(tonumber(dk.size) or 2)
     local function free(u)
-        return flightSize(u) == size and not (D.up and D.up[u]) and SV_UnitAlive(u) <= 0 and not PROBE_OF[u]
-            and poolIndex(u) ~= nil and not ROLE.sitsOut(u)
+        return flightSize(u) == size and not (D.up and D.up[u]) and not (D.taken and D.taken[u]) and SV_UnitAlive(u) <= 0
+            and not PROBE_OF[u] and poolIndex(u) ~= nil and not ROLE.sitsOut(u)
     end
     local own = ROLE.live and ROLE.groups().skirm or {}
     local opts = {}
@@ -231,52 +236,58 @@ function SPC.alicornDeck(now, s, c)
     local t = CFG.hud.text
     s.deck = s.deck or {}
     s.deckNext = s.deckNext or (s.at + (tonumber(dk.first_s) or 0))
-    if not s.deckWarned and now >= s.deckNext - (tonumber(dk.warn_s) or 0) then     -- (its tell, then the launch)
+    local warn = math.max(0, tonumber(dk.warn_s) or 0)
+    if now < s.deckNext - warn then return end
+    -- what holds the launch, checked from warn_s before it (its tell only once nothing does) to the launch: held, it's
+    -- tried again `retry` s on, and told again warn_s before the launch that comes
+    local function hold(retry) s.deckNext, s.deckWarned = now + retry + warn, nil end
+    local up = 0
+    for u in pairs(s.deck) do if SV_UnitAlive(u) > 0 then up = up + 1 end end
+    if up >= (tonumber(dk.max_up) or 2) then
+        if not s.deckFullSaid then s.deckFullSaid = true; log(string.format("special: the Alicorn's deck waits: %d of its flights up", up)) end
+        return hold(1)
+    end
+    if playerOnAirfield() then return hold(1) end
+    local part = (s.depthPart and valid(s.depthPart) and s.depthPart) or parts(c.core_class)[1]
+    local at, fwd = partAt(part)
+    if not at then
+        if not s.deckNoPartSaid then s.deckNoPartSaid = true; log("special: the Alicorn's deck: none of its parts read yet; waiting") end
+        return hold(2)
+    end
+    local u, how = deckFlight(dk)
+    if not u then
+        if not s.deckNoneSaid then s.deckNoneSaid = true; log(string.format("special: the Alicorn's deck: no free %d-ship to launch", dk.size)) end
+        return hold(5)
+    end
+    if not s.deckWarned then                              -- (its tell, then the launch warn_s on)
         s.deckWarned = true
         hudCallout(t.alicorn_deck, t.alicorn_deck_sub)
         if TELL then pcall(TELL.say, "alcn_deck", TELL.ALL) end
     end
     if now < s.deckNext then return end
-    local up = 0
-    for u in pairs(s.deck) do if SV_UnitAlive(u) > 0 then up = up + 1 end end
-    if up >= (tonumber(dk.max_up) or 2) then
-        if not s.deckFullSaid then s.deckFullSaid = true; log(string.format("special: the Alicorn's deck waits: %d of its flights up", up)) end
-        s.deckNext = now + 1
-        return
-    end
-    if playerOnAirfield() then s.deckNext = now + 1; return end
-    local part = (s.depthPart and valid(s.depthPart) and s.depthPart) or parts(c.core_class)[1]
-    local at, fwd = partAt(part)
-    if not at then
-        if not s.deckNoPartSaid then s.deckNoPartSaid = true; log("special: the Alicorn's deck: none of its parts read yet; waiting") end
-        s.deckNext = now + 2
-        return
-    end
     if not fwd then                                       -- (no bow to read: the launch towards you)
         local you = playerLocation()
         local dx, dy = you and you.X - at.X or 1, you and you.Y - at.Y or 0
         local n = math.sqrt(dx * dx + dy * dy)
         fwd = n > 0 and { X = dx / n, Y = dy / n } or { X = 1, Y = 0 }
     end
-    local u, how = deckFlight(dk)
-    if not u then
-        if not s.deckNoneSaid then s.deckNoneSaid = true; log(string.format("special: the Alicorn's deck: no free %d-ship to launch", dk.size)) end
-        s.deckNext = now + 5
-        return
-    end
     local ahead = (tonumber(dk.ahead_m) or 0) * 100
-    local pose = { x = at.X + fwd.X * ahead, y = at.Y + fwd.Y * ahead, z = math.max(at.Z, 0) + (tonumber(dk.alt_m) or 600) * 100,
+    local alt = math.max(DECK_FLOOR_M, tonumber(dk.alt_m) or DECK_FLOOR_M)
+    local pose = { x = at.X + fwd.X * ahead, y = at.Y + fwd.Y * ahead, z = math.max(at.Z, 0) + alt * 100,
                    yaw = math.deg(math.atan(fwd.Y, fwd.X)) % 360, why = "the Alicorn's deck" }
     local r = spawnFlight(u, nil, pose)
     if r > 0 then
         s.deck[u], s.deckN = true, (s.deckN or 0) + 1
         D.deckLeft = D.deckLeft - 1
+        for i = #(D.spare or {}), 1, -1 do if D.spare[i] == u then table.remove(D.spare, i) end end   -- (no spare now)
         s.deckNext, s.deckWarned, s.deckFullSaid = now + (tonumber(dk.every_s) or 35), nil, nil
-        log(string.format("special: the Alicorn's deck launch %d: %s (%s), %d aircraft at %.0f m, %d launches left this round",
-            s.deckN, u, how, r, pose.z / 100, D.deckLeft))
+        log(string.format("special: the Alicorn's deck launch %d: %s (%s), %d aircraft at %.0f m%s, %d launches left this round",
+            s.deckN, u, how, r, pose.z / 100, alt > (tonumber(dk.alt_m) or alt) and " (alt_m under the pool's floor)" or "",
+            D.deckLeft))
     else
-        s.deckNext = now + 5
-        log(string.format("special: the Alicorn's deck: %s didn't launch (%s); again in 5 s", u, SV_ERR and SV_ERR[r] or tostring(r)))
+        hold(5)
+        log(string.format("special: the Alicorn's deck: %s didn't launch (%s); again in %.0f s, told first", u,
+            SV_ERR and SV_ERR[r] or tostring(r), 5 + warn))
     end
 end
 

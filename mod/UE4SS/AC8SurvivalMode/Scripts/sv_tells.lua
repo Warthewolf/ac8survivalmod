@@ -10,7 +10,8 @@
 --                              player's slot (only the host sends another player's: "tl", sv_coop.lua COOP.tell). a, b:
 --                              numbers its text shows (bearings, an o'clock) or its line is picked by. Returns true when
 --                              said (here, or sent), else false, why, and a kind ("off", "state", "gap", "cooldown",
---                              "line", "empty")
+--                              "line", "empty"), and for this game's own, true when a sure tell (its catalog entry's
+--                              sure: a boss's phase change) wasn't said but its callout showed anyway
 --   TELL.after(id, slot, fn, a, b, need)   say it, then run fn its lead_s later (CFG.tells.lead_s; TELL.tick, every
 --                              250 ms, on the round clock: a pause holds it); not said: fn at once (never with need).
 --                              Returns whether it was said
@@ -173,7 +174,7 @@ local function fireLine(s, ev, now)
     return "not fired: " .. tostring(SV_ERR and SV_ERR[r] or r)
 end
 
-function TELL.play(id, a, b, from, force, line)
+local function play(id, a, b, from, force, line)
     local c = cfg()
     if not (c and c.enabled) then return false, "tells off", "off" end
     if not TELL.known(id) then return false, "not a tell here", "off" end
@@ -222,18 +223,48 @@ function TELL.play(id, a, b, from, force, line)
     return true
 end
 
--- the host's tell to another player (key: a slot, or "all" for every joiner), kept apart as this game's own are
+-- a sure tell (CFG.tells.list[id].sure: the bosses' phase changes, the warning before a change that comes anyway; code
+-- review of unit 9: with tells off, or refused by a gap or its cooldown, the pack sprang with no warning at all): its
+-- callout shown when the tell isn't said, whatever the switches (raw: never mirrored as "co"), no radio; this game's
+-- receiver marked as if said. False when it has no callout
+local function isSure(id) local e = cfg().list[id]; return type(e) == "table" and e.sure == true end
+local function sureHud(id, a, b, why)
+    local c = cfg()
+    local e = c.list[id]
+    if not (isSure(id) and e.hud and type(rawHud) == "function") then return false end
+    local t = c.text or {}
+    local text = fill(t[e.hud], e.args, a, b)
+    if type(text) ~= "string" or text == "" then return false end
+    local okH = pcall(rawHud, text, fill(t[e.hud .. "_sub"], e.args, a, b), nil, e.urgent == true)
+    local s = st()
+    if s then mark(to(s, "me"), id, clockNow()) end
+    log(string.format("tell: %s not said (%s): a sure tell, its callout '%s' shown anyway%s", id, tostring(why), text,
+        okH and "" or " (failed)"))
+    return okH
+end
+-- (said: true; not: false, why, kind, and true when a sure tell's callout showed instead. Nothing between rounds, down
+-- at the airfield or over the summary: kind "state", a sure one too)
+function TELL.play(id, a, b, from, force, line)
+    local said, why, kind = play(id, a, b, from, force, line)
+    if said or kind == "state" or not TELL.known(id) then return said, why, kind end
+    if sureHud(id, a, b, why) then return false, why, kind, true end
+    return said, why, kind
+end
+
+-- the host's tell to another player (key: a slot, or "all" for every joiner), kept apart as this game's own are (a sure
+-- one goes through its gaps and cooldown: the joiner's own decide whether it's said or only its callout shows)
 local function send(s, key, slot, id, a, b)
     local now, x = clockNow(), to(s, key)
     local why, kind = wait(x, id, now)
-    if why then
+    if why and not isSure(id) then
         refused(s, id, (key == "all" and "every joiner: " or ("player " .. (slot + 1) .. ": ")) .. why, kind)
         return false, why, kind
     end
     local okC, sent = pcall(COOP.tell, slot, id, a, b)
     if not (okC and sent) then return false, "not sent" .. (okC and "" or (": " .. tostring(sent))), "off" end
     mark(x, id, now)
-    log(string.format("tell: %s to %s (\"tl\")", id, key == "all" and "every joiner" or ("player " .. (slot + 1))))
+    log(string.format("tell: %s to %s (\"tl\"%s)", id, key == "all" and "every joiner" or ("player " .. (slot + 1)),
+        why and ", a sure tell through " .. why or ""))
     return true
 end
 

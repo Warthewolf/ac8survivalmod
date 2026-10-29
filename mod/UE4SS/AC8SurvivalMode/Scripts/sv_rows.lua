@@ -328,7 +328,9 @@ function searchSetup()
     -- AB.L..IN's own with its phases (CFG.specials.glitch.phases ecm_row; P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): its
     -- pod is held up by RE_SV_GlitchEcm every ecm_every_s (hard rule 40) until its phase 3 drops it, so its own row fires
     -- a pod by itself at most once a minute (anomEcm's values, 60 s between and 60 s rest), else the 14 s refire of
-    -- anomEcm would keep the ECM up whatever the phase (rows _SVE; MINDRIPPER keeps anomEcm)
+    -- anomEcm would keep the ECM up whatever the phase (rows _SVE; MINDRIPPER keeps anomEcm). Off by default (code review
+    -- of unit 9): "up all fight" was confirmed with anomEcm's row and the event together, so phase 3 drops the ECM by
+    -- ecm_pods_off alone until a test shows the event holds it up under this row
     local function glitchEcm(src)
         return copy(fcs, src, function(r)
             r.CaptureDistance, r.ActivationTime = 20000, 0.5

@@ -437,12 +437,15 @@ local function glitchPhase(c, s, n, now, why)
         s.ecmFireAt, s.podsAt = nil, now                    -- (no more ECM events; the pods up off: glitchPodsOff)
         s.turnAt = now + 1
     end
-    if TELL then pcall(TELL.say, n == 3 and "glitch_allout" or "glitch_six", n == 3 and TELL.ALL or nil) end
+    if TELL then pcall(TELL.say, n == 3 and "glitch_allout" or "glitch_six", n == 3 and TELL.ALL or nil) end   -- (sure tells)
+    local ecm = {}                                       -- (how its ECM goes down: its pods switched off, its row)
+    if ph.ecm_pods_off then ecm[#ecm + 1] = string.format("its pods switched off every %.0f s", math.max(1, tonumber(ph.ecm_check_s) or 3)) end
+    if ph.ecm_row then ecm[#ecm + 1] = "its pod's own row once a minute at most" end
+    if #ecm == 0 then ecm[1] = "neither ecm_pods_off nor ecm_row: its pod's row keeps it up" end
     log(string.format("special: %s phase %d (from %d): %s; %s", c.name, n, was, why, n == 2
         and string.format("%.0f %% of its blinks behind you", (tonumber(ph.behind_share) or 0) * 100)
-        or string.format("no more frenzies, its ECM down%s, its gun at you within %.1f km and %.0f deg of its nose every %.1f s, LastTGT every %.0f s",
-            ph.ecm_row and " (its pod's own row: once a minute at most)" or "", ph.allout_range_km, ph.allout_cone_deg,
-            ph.allout_gun_s, ph.allout_turn_s)))
+        or string.format("no more frenzies, its ECM down (%s), its gun at you within %.1f km and %.0f deg of its nose every %.1f s, LastTGT every %.0f s",
+            table.concat(ecm, ", "), ph.allout_range_km, ph.allout_cone_deg, ph.allout_gun_s, ph.allout_turn_s)))
 end
 
 -- Its ECM pods switched off (phase 3, ecm_pods_off; untested in game: a live write to the pod weapon's fields,
@@ -2008,25 +2011,31 @@ function ANOM.packTick(now, s, c)
     if s.pack == nil then
         if ANOM.on == true and now >= (s.packCool or 0) then
             s.pack, s.packAt = "armed", now + (tonumber(pk.spring_delay_s) or 0)
-            local said = false
+            -- (this game's player: the host's, as the spring; a sure tell, its callout shows when it isn't said)
+            local how = "not told (no tells)"
             if TELL then
-                local okT, r = pcall(TELL.say, "pack")             -- (this game's player: the host's, as the spring)
-                said = okT and r == true
+                local okT, r, why, _, shown = pcall(TELL.say, "pack")
+                if okT and r == true then how = "told"
+                elseif okT and shown then how = "its callout only: " .. tostring(why)
+                else how = "not told: " .. tostring(okT and why or r) end
             end
             log(string.format("special: %s's pack: your controls scrambled %.1f km from it; %s springs in %.1f s (%s)",
-                c.name, s.dist or -1, c.guards_name, s.packAt - now, said and "told" or "not told"))
+                c.name, s.dist or -1, c.guards_name, s.packAt - now, how))
         end
     elseif s.pack == "armed" then
         if ANOM.on ~= true then                                  -- (out of the field before it sprang: held)
             s.pack = nil
             log(string.format("special: %s's pack: you left the field first; not sprung", c.name))
         elseif now >= s.packAt then
-            local ok = fire("RE_SV_AnomalyPackSpring")
-            s.packSprings = (s.packSprings or 0) + (ok and 1 or 0)
-            if ok then s.pack, s.packSince = "sprung", now
-            else s.pack, s.packCool = nil, now + (tonumber(pk.cooldown_s) or 0) end
-            log(string.format("special: %s's pack sprung (%d): %s loose on you (LastTGT), %d of %d guards up, %.1f km from %s",
-                c.name, s.packSprings, c.guards_name, SV_UnitAlive(c.guard_unit), c.guards or 4, s.dist or -1, c.name))
+            if fire("RE_SV_AnomalyPackSpring") then
+                s.pack, s.packSince, s.packSprings = "sprung", now, (s.packSprings or 0) + 1
+                log(string.format("special: %s's pack sprung (%d): %s loose on you (LastTGT), %d of %d guards up, %.1f km from %s",
+                    c.name, s.packSprings, c.guards_name, SV_UnitAlive(c.guard_unit), c.guards or 4, s.dist or -1, c.name))
+            else                                                 -- (its event didn't fire: held, cooldown_s to the next)
+                s.pack, s.packCool = nil, now + (tonumber(pk.cooldown_s) or 0)
+                log(string.format("special: %s's pack not sprung (its event not fired); armed again in %.0f s", c.name,
+                    s.packCool - now))
+            end
         end
     elseif s.pack == "sprung" and ANOM.on ~= true and now - (s.packSince or now) >= (tonumber(pk.min_s) or 0)
         and s.fieldOffAt and now - s.fieldOffAt >= (tonumber(pk.hold_after_s) or 0) then
@@ -2117,5 +2126,30 @@ function ANOM.clientTick()
     if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end
     if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
     elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end
+end
+
+-- A Survival COOP joiner's copy of AB.L..IN in its phase 3 (code review of unit 9: the host switched its own plane's
+-- pods off while the joiner's copy, its own pod row firing, jammed on under "ITS ECM IS DOWN"): the host's phase comes
+-- in "rnd" (sv_coop.lua: D.glitchPhase), and the copy's pods are switched off here every ecm_check_s, as glitchPodsOff
+-- does on the host. Nothing before phase 3, with the phases or ecm_pods_off off, or with no copy up.
+function ANOM.clientGlitch(now)
+    local c = CFG.specials.glitch
+    local ph = c and c.phases
+    if not (type(ph) == "table" and ph.enabled and ph.ecm_pods_off and D and D.glitchPhase == 3) then
+        ANOM.glitchCopy = nil
+        return
+    end
+    local cs = ANOM.glitchCopy
+    if not cs then
+        cs = {}
+        ANOM.glitchCopy = cs
+        log(string.format("coop: %s in its phase 3 on the host: its copy's ECM pods switched off here every %.0f s", c.name,
+            math.max(1, tonumber(ph.ecm_check_s) or 3)))
+    end
+    if now < (cs.podsAt or 0) then return end
+    cs.podsAt = now + math.max(1, tonumber(ph.ecm_check_s) or 3)
+    local o
+    for _, q in ipairs(planes) do if q.unit == c.unit and not q.down and valid(q.obj) then o = q.obj end end
+    if o then pcall(glitchPodsOff, c, cs, o) end
 end
 end

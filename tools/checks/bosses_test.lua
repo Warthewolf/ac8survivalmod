@@ -16,10 +16,17 @@
 --     25 s; both down in one second: none; rage off: none;
 --   the ALICORN's deck (SPC.alicornTick): its tell and callout warn_s before, a Skirmisher 2-ship spawned alt_m over the
 --     sea ahead_m off its bow along its heading, every every_s, no more than max_up up, none while dived or while you're
---     at the airfield, after_surface_s after it surfaces, D.deckLeft counted down, any free 2-ship with roles off;
---     startRound's D.deckLeft (and its escorts folded in from escort_from, none from a spawn point);
---   the main menu's rows (searchSetup on fake tables): the guards' set on every level, AB.L..IN's own ECM row;
---   co-op: KEEP_EVENTS (the pack and AB.L..IN's LastTGT kept, a Ladon's rage forwarded);
+--     at the airfield, after_surface_s after it surfaces, D.deckLeft counted down, any free 2-ship with roles off; its
+--     tell only once nothing holds the launch (max_up, the airfield), alt_m never under the pool's 1100 m floor;
+--     startRound's D.deckLeft (and its escorts folded in from escort_from, none from a spawn point), never one of the
+--     round's own flights (D.taken) and a spare it takes no spare any more;
+--   the main menu's rows (searchSetup on fake tables): the guards' set on every level, AB.L..IN's ECM row (anomEcm's by
+--     default, its own with ecm_row);
+--   sure tells (the pack's, AB.L..IN's): their callout with tells off or a tell refused, a joiner's from the host too,
+--     a host's to its joiners through the gaps; nothing between rounds; other tells as before;
+--   the pack's spring when its event doesn't fire (not logged as sprung); an enraged Ladon's volleys under the gap;
+--   co-op: KEEP_EVENTS (the pack and AB.L..IN's LastTGT kept, a Ladon's rage forwarded), AB.L..IN's phase in "rnd" and
+--     a joiner's copy's pods switched off in phase 3 (ANOM.clientGlitch);
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -111,7 +118,8 @@ hudCallout = function(text, sub, big, urgent) callouts[#callouts + 1] = { text =
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
 part("sv_ladon.lua"); part("sv_alicorn.lua"); part("sv_stats.lua"); part("sv_tells.lua")
-part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" },
+                           { "\nlocal function onJoinerMessage%(f%)", "\nfunction onJoinerMessage(f)" } })
 function searchAircraft(a) return a end
 function playerOnAirfield() return grounded end          -- (sv_rounds.lua's own reads where you are)
 function addCredits() end
@@ -233,6 +241,32 @@ s = anomalyRound(); AN.pack.enabled = false
 atk(2.5); tickA(0, 3)
 check(ANOM.on == true and s.pack == nil and evs("Pack") == "", "pack off: the field as before, no pack")
 AN.pack.enabled = true
+-- its tell is a sure one (code review of unit 9): tells off, or the tell refused by its cooldown, its callout still shows
+CFG.tells.enabled = false
+s = anomalyRound()
+f0 = #logs + 1
+atk(2.5); tickA(0, 0)
+check(s.pack == "armed" and said("THE PACK SPRINGS") and said("THE PACK SPRINGS").urgent and evs("^RE_SV_Radio") == ""
+      and has(line("special: MINDRIPPER's pack: your controls", f0), "(its callout only: tells off)"),
+      "tells off: THE PACK SPRINGS shown anyway, no radio (" .. tostring(line("special: MINDRIPPER's pack: your controls", f0)) .. ")")
+CFG.tells.enabled = true
+s = anomalyRound()
+TELL.say("pack")                                          -- (said just now: its cooldown refuses the next)
+callouts, events = {}, {}
+f0 = #logs + 1
+atk(2.5); tickA(3, 3)                                     -- (past urgent_gap_s 2.5, inside its cooldown 20 s)
+check(said("THE PACK SPRINGS") and evs("^RE_SV_Radio") == "" and has(line("special: MINDRIPPER's pack: your controls", f0), "its callout only: its cooldown"),
+      "its tell refused by its cooldown: its callout anyway (" .. tostring(line("special: MINDRIPPER's pack: your controls", f0)) .. ")")
+-- its spring's event not fired: not sprung (and not logged as sprung), armed again after cooldown_s
+s = anomalyRound()
+atk(2.5); tickA(0, 1.25)
+eventR = 0
+f0 = #logs + 1
+tickA(1.5, 1.75)
+eventR = 1
+check(s.pack == nil and (s.packSprings or 0) == 0 and s.packCool == 21.5 and line("special: MINDRIPPER's pack not sprung", f0) ~= nil
+      and line("special: MINDRIPPER's pack sprung", f0) == nil,
+      "its spring not fired: held, logged as not sprung (" .. tostring(line("special: MINDRIPPER's pack not sprung", f0)) .. ")")
 -- hunt_only_sprung: ACE.hunt's TargetActor waits for the spring
 do
     s = anomalyRound()
@@ -417,7 +451,9 @@ local v0 = count("^RE_SV_LadonVolley")
 alive.SV_Unit_LadonKot = 0
 planes[1].down = true
 f1 = #logs + 1
+local mv0 = count("^RE_SV_LadonVolleyMishka")
 tickL(41, 41)
+local mv1 = count("^RE_SV_LadonVolleyMishka")
 local M_ = s.units.Mishka
 check(M_.rage and s.raged == "Mishka" and evs("^RE_SV_LadonRage") == "RE_SV_LadonRageMishka",
       "KOT down: MISHKA enraged (RE_SV_LadonRageMishka)")
@@ -430,9 +466,20 @@ for t = 42, 120 do
     tickL(t, t)
     if count("^RE_SV_LadonVolleyMishka") > n then va[#va + 1] = t end
 end
-check(#va >= 3 and va[1] <= 46 and va[2] - va[1] == 25 and va[3] - va[2] == 25,
-      "its volleys: the next within first_s 5, then every 25 s (" .. table.concat(va, ", ") .. ")")
+check(#va >= 3 and va[1] == 46 and va[2] - va[1] == 25 and va[3] - va[2] == 25 and mv1 == mv0,
+      "its volleys: the next first_s 5 after its rage (not with it), then every 25 s (" .. table.concat(va, ", ") .. ")")
 check(has(line("special: Ladon MISHKA fires"), ", enraged"), "the volley lines say enraged")
+do                                                        -- (enraged, the other's volley_gap_s doesn't hold it)
+    local gap0 = LA.volley_gap_s
+    LA.volley_gap_s = 1000
+    local nv = count("^RE_SV_LadonVolleyMishka")
+    s.volleyAny = D.now
+    M_.volleyAt = D.now + 1
+    tickL(D.now + 1, D.now + 1)
+    check(count("^RE_SV_LadonVolleyMishka") == nv + 1, "enraged: its volley through the gap the other's last set (volley_gap_s 1000)")
+    LA.volley_gap_s = gap0
+    s.nextAt = nil                                        -- (the pass below in the same second)
+end
 FLAGS.SV_LadonRunMishka = 1
 tickL(121, 121)
 check(has(line("special: Ladon MISHKA's pass over the airfield"), "(enraged"), "its next pass logged as enraged")
@@ -487,10 +534,10 @@ tickC(23, 25)
 local sp1 = spawns[1]
 check(#spawns == 1 and ROLE.of[sp1.unit] == "skirm" and flightSize(sp1.unit) == 2, "first_s 25: a Skirmisher 2-ship (" .. tostring(sp1 and sp1.unit) .. ")")
 check(sp1 and math.abs(sp1.x - (core.at.X + 0.8 * 80000)) < 1 and math.abs(sp1.y - (core.at.Y - 0.6 * 80000)) < 1
-      and math.abs(sp1.z - 60000) < 1 and math.abs(sp1.yaw - (math.deg(math.atan(-0.6, 0.8)) % 360)) < 0.01,
-      string.format("ahead_m 800 off its bow, alt_m 600 over the sea, along its heading (x %.0f, y %.0f, z %.0f, yaw %.1f)",
+      and math.abs(sp1.z - 120000) < 1 and math.abs(sp1.yaw - (math.deg(math.atan(-0.6, 0.8)) % 360)) < 0.01,
+      string.format("ahead_m 800 off its bow, alt_m 1200 over the sea, along its heading (x %.0f, y %.0f, z %.0f, yaw %.1f)",
           sp1 and sp1.x or -1, sp1 and sp1.y or -1, sp1 and sp1.z or -1, sp1 and sp1.yaw or -1))
-check(D.up[sp1.unit] and D.deckLeft == 2 and has(line("special: the Alicorn's deck launch 1"), "(skirm), 2 aircraft at 600 m, 2 launches left"),
+check(D.up[sp1.unit] and D.deckLeft == 2 and has(line("special: the Alicorn's deck launch 1"), "(skirm), 2 aircraft at 1200 m, 2 launches left"),
       "up, counted (D.deckLeft 2): " .. tostring(line("special: the Alicorn's deck launch 1")))
 check(has(line("round 14: " .. sp1.unit), "at the Alicorn's deck"), "spawnFlight's line: at the Alicorn's deck")
 alive[sp1.unit] = 2
@@ -500,15 +547,21 @@ tickC(60, 60)
 local sp2 = spawns[2]
 check(#spawns == 2 and sp2.unit ~= sp1.unit and ROLE.of[sp2.unit] == "skirm", "every_s on: the other Skirmisher 2-ship (" .. tostring(sp2 and sp2.unit) .. ")")
 alive[sp2.unit] = 2
+local cw, ew = #callouts + 1, #events + 1
 tickC(61, 100)
 check(#spawns == 2 and has(line("special: the Alicorn's deck waits"), "2 of its flights up"), "max_up 2 up: the deck waits")
+check(not said("PLANES LAUNCHING", cw) and evs("^RE_SV_RadioAlcnDeck", ew) == "", "... untold while it waits (its tell only once the launch can go)")
 alive[sp1.unit] = 0; D.up[sp1.unit] = nil
 grounded = true
 tickC(101, 104)
-check(#spawns == 2, "one down, but you're at the airfield: waits")
+check(#spawns == 2 and not said("PLANES LAUNCHING", cw), "one down, but you're at the airfield: waits, untold")
 grounded = false
 tickC(105, 105)
-check(#spawns == 3 and D.deckLeft == 0, "you took off: launched (the round's last, D.deckLeft 0)")
+check(#spawns == 2 and said("PLANES LAUNCHING", cw) and evs("^RE_SV_RadioAlcnDeck", ew) ~= "", "you took off: its tell first")
+tickC(106, 107)
+check(#spawns == 2, "... and the launch not before warn_s")
+tickC(108, 108)
+check(#spawns == 3 and D.deckLeft == 0, "warn_s after its tell: launched (the round's last, D.deckLeft 0)")
 alive[spawns[3].unit] = 0; D.up[spawns[3].unit] = nil; alive[sp2.unit] = 0; D.up[sp2.unit] = nil
 tickC(106, 200)
 check(#spawns == 3, "D.deckLeft 0: no more")
@@ -530,6 +583,13 @@ ROLE.live = nil
 tickC(0, 25)
 check(#spawns == 1 and flightSize(spawns[1].unit) == 2 and has(line("special: the Alicorn's deck launch 1"), "(roles off)"),
       "roles off: any free pool 2-ship (" .. tostring(spawns[1] and spawns[1].unit) .. ")")
+-- alt_m under the pool's floor: 1100 m
+AL.deck.alt_m = 600
+s = alicornRound()
+tickC(0, 25)
+check(#spawns == 1 and math.abs(spawns[1].z - 110000) < 1 and has(line("special: the Alicorn's deck launch 1"), "at 1100 m (alt_m under the pool's floor)"),
+      "alt_m 600: launched at the 1100 m floor (" .. tostring(spawns[1] and spawns[1].z) .. ")")
+AL.deck.alt_m = CFG_DEFAULTS.specials.alicorn.deck.alt_m
 -- off
 AL.deck.enabled = false
 s = alicornRound()
@@ -563,6 +623,37 @@ check(D.deckLeft == 6 + 4 and nf == 0, "round 40: max_flights 6 + its escorts' 4
 AL.deck.escorts = false
 nf = round(14, "alicorn")
 check(D.deckLeft == 4 and nf > 0, "escorts false: 4 launches, its escorts as fighter flights (" .. nf .. ")")
+do                                                        -- (the deck never launches a flight the round queued)
+    local queued, keep = {}, nil
+    for _, w in ipairs(D.waves or {}) do for _, u in ipairs(w) do queued[u] = true end end
+    local nq = 0
+    for u in pairs(D.taken or {}) do nq = nq + 1 end
+    for _, u in ipairs(CFG.pool) do                       -- (every free 2-ship up but one, the queued ones left free)
+        if not D.taken[u] and flightSize(u) == 2 and not PROBE_OF[u] then
+            if not keep then keep = u else alive[u] = 2 end
+        end
+    end
+    local spare0 = #D.spare
+    D.special = { kind = "alicorn", state = "sail", at = D.now, tanks = 4, coreOpen = false, dived = false,
+                  nextDive = 1e9, nextRail = 1e9, nextVolley = 1e9 }
+    FA[AL.core_class] = { core }
+    spawns = {}
+    for t = D.now, D.now + 25 do SPC.alicornTick(t, D.special) end
+    check(nq > 0 and #spawns == 1 and spawns[1].unit == keep and not queued[keep],
+          string.format("the deck: the one free flight not the round's own (%s; %d taken)", tostring(spawns[1] and spawns[1].unit), nq))
+    local inSpare = false
+    for _, u in ipairs(D.spare) do if u == keep then inSpare = true end end
+    check(not inSpare and #D.spare == spare0 - 1, "... and no spare any more (" .. spare0 .. " -> " .. #D.spare .. ")")
+    alive[keep] = 0; D.up[keep] = nil
+    for t = D.now + 26, D.now + 70 do SPC.alicornTick(t, D.special) end
+    check(#spawns == 2 and not queued[spawns[2].unit], "... nor the next (" .. tostring(spawns[2] and spawns[2].unit) .. ")")
+    alive[keep] = 2
+    for _, u in ipairs(CFG.pool) do if D.taken[u] then alive[u] = 0 end end
+    local n0 = #spawns
+    for t = D.now + 71, D.now + 140 do SPC.alicornTick(t, D.special) end
+    check(#spawns == n0, "only the round's own flights free: none launched (" .. (#spawns - n0) .. ")")
+    for _, u in ipairs(CFG.pool) do alive[u] = 0 end
+end
 AL.deck.escorts = true
 AL.deck.enabled = false
 nf = round(14, "alicorn")
@@ -650,19 +741,96 @@ check(npc.rows["SV_Ace_anomaly_f04e_L_SV"].LuaSetId:ToString() == "NLID_SV_Fight
 check(has(line("special: the Anomaly's guards (", from), "fly NLID_SV_WolfWing (its pack)"), "logged once")
 local gr = npc.rows.SV_Ace_glitch_e18g_L_SV
 local ge = gr and gr.NpcFCSId3:ToString()
-check(ge == "NPC_FCS_ECM000_SVE" and fcs.rows.NPC_FCS_ECM000_SVE.ShotIntervalTime == 60 and fcs.rows.NPC_FCS_ECM000_SVE.RestingTime == 60,
-      "AB.L..IN's ECM slot: its own row (" .. tostring(ge) .. ": 60 s between, 60 s rest)")
+check(ge == "NPC_FCS_ECM000_SVX" and fcs.rows.NPC_FCS_ECM000_SVX.ShotIntervalTime == 14,
+      "AB.L..IN's ECM slot by default: anomEcm's row, as confirmed (" .. tostring(ge) .. ": every 14 s)")
 local ml = npc.rows.SV_Ace_anomaly_f04e_L_SV
 local mEcm = {}
 for i = 3, 5 do local id = ml["NpcFCSId" .. i]:ToString(); if id:find("ECM") then mEcm[#mEcm + 1] = id end end
 check(table.concat(mEcm, ",") == "NPC_FCS_ECM000_SVX", "MINDRIPPER's pod keeps anomEcm's row (" .. table.concat(mEcm, ",") .. ")")
 AN.pack.guard_luaset = ""
-GL.phases.ecm_row = false
-npc = menuRows()
-check(npc.rows.SV_Ace_anomaly_f04e_W_SV.LuaSetId:ToString() == "NLID_SV_Fighter" and npc.rows.SV_Ace_glitch_e18g_L_SV.NpcFCSId3:ToString() == "NPC_FCS_ECM000_SVX",
-      "guard_luaset \"\" / ecm_row false: the fighters' set and anomEcm's row, as before")
-AN.pack.guard_luaset = "NLID_SV_WolfWing"
 GL.phases.ecm_row = true
+npc, fcs = menuRows()
+ge = npc.rows.SV_Ace_glitch_e18g_L_SV.NpcFCSId3:ToString()
+check(npc.rows.SV_Ace_anomaly_f04e_W_SV.LuaSetId:ToString() == "NLID_SV_Fighter" and ge == "NPC_FCS_ECM000_SVE"
+      and fcs.rows.NPC_FCS_ECM000_SVE.ShotIntervalTime == 60 and fcs.rows.NPC_FCS_ECM000_SVE.RestingTime == 60,
+      "guard_luaset \"\": the fighters' set; ecm_row true: AB.L..IN's own row (" .. tostring(ge) .. ": 60 s between, 60 s rest)")
+AN.pack.guard_luaset = "NLID_SV_WolfWing"
+GL.phases.ecm_row = false
+
+---------------------------------------------------------------------------------------------------- sure tells
+print("sure tells (TELL.say / TELL.play)")
+run(20)
+callouts, events = {}, {}
+CFG.tells.enabled = false
+local _, _, _, shownA = TELL.play("glitch_allout")
+check(shownA == true and said("ITS ECM IS DOWN") and said("ITS ECM IS DOWN").urgent and evs("^RE_SV_Radio") == "",
+      "tells off: glitch_allout's callout shown anyway (urgent), no radio")
+callouts = {}
+TELL.say("glitch_six", TELL.ALL)
+check(said("IT'S ON YOUR SIX"), "... said to every player too")
+callouts = {}
+TELL.play("glitch_allout", nil, nil, 0)
+check(said("ITS ECM IS DOWN"), "... and a joiner's from the host (\"tl\")")
+callouts = {}
+TELL.say("reversal")
+check(not said("ACE REVERSAL"), "not a sure tell: nothing with tells off, as before")
+CFG.tells.enabled = true
+D.state = "wait"
+callouts = {}
+TELL.say("glitch_six")
+check(not said("IT'S ON YOUR SIX"), "between rounds: not even a sure tell's callout")
+D.state = "fighting"
+do                                                        -- (a host's to its joiners: a sure one through the gaps)
+    local host0, tell0 = COOP.host, COOP.tell
+    local sent = {}
+    COOP.host = function() return true end
+    COOP.tell = function(slot, id) sent[#sent + 1] = id; return true end
+    run(20)
+    TELL.say("glitch_allout", TELL.ALL); TELL.say("glitch_allout", TELL.ALL)
+    D.now = 3                                             -- (past urgent_gap_s: the next urgent tell may go)
+    TELL.say("reversal", TELL.ALL); TELL.say("reversal", TELL.ALL)
+    COOP.host, COOP.tell = host0, tell0
+    local n = { glitch_allout = 0, reversal = 0 }
+    for _, id in ipairs(sent) do n[id] = (n[id] or 0) + 1 end
+    check(n.glitch_allout == 2 and n.reversal == 1, string.format("a host's sure tell to its joiners through its gap (%d sent), another tell not (%d)",
+        n.glitch_allout, n.reversal))
+end
+
+---------------------------------------------------------------------------------------------------- co-op: AB.L..IN on a joiner
+print("co-op: a joiner's copy of AB.L..IN in its phase 3")
+onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "", "3" })
+check(M.rnd and M.rnd.glitchPhase == 3, "\"rnd\": the host's AB.L..IN phase 3 read")
+onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "", "7" })
+local gp7 = M.rnd.glitchPhase
+onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "" })
+check(gp7 == nil and M.rnd.glitchPhase == nil, "... a phase out of 1-3 or none: nil")
+M.rnd = nil
+run(20)
+local copy = mkObj("BP_OP0001_e18g_Glitch_C_7", KM(0, 0))
+local cpod = { full = "BP_wp_ecm_a0_C_7", addr = 701, bJammingEnable = true, bSupportEnable = true }
+function cpod:GetOwner() return copy end
+function cpod:GetInstigator() return nil end
+FA.BP_wp_ecm_a0_C = { cpod }
+planes = { { unit = GL.unit, obj = copy } }
+D.glitchPhase = 2
+ANOM.clientGlitch(1)
+check(cpod.bJammingEnable == true, "phase 2: the copy's pods left alone")
+D.glitchPhase = 3
+ANOM.clientGlitch(2)
+check(cpod.bJammingEnable == false and cpod.bSupportEnable == false, "phase 3: the copy's pods switched off")
+cpod.bJammingEnable = true
+ANOM.clientGlitch(3)
+check(cpod.bJammingEnable == true, "... not again before ecm_check_s (2 s)")
+ANOM.clientGlitch(4)
+check(cpod.bJammingEnable == false, "... and again after it (a new pod off)")
+cpod.bJammingEnable = true
+GL.phases.ecm_pods_off = false
+ANOM.clientGlitch(10)
+check(cpod.bJammingEnable == true, "ecm_pods_off false: left alone")
+GL.phases.ecm_pods_off = true
+D.glitchPhase = nil
+ANOM.clientGlitch(20)
+check(cpod.bJammingEnable == true and ANOM.glitchCopy == nil, "the host's phase gone: nothing")
 
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
@@ -678,6 +846,10 @@ check(has(body("sv_alicorn.lua", "\nfunction SPC%.alicornTick%("), "pcall(SPC.al
 check(has(body("sv_ladon.lua", "\nfunction SPC%.ladonTick%("), "pcall(SPC.ladonRage, now, s, k)"), "ladonTick: the rage at a kill")
 check(has(readAll(MOD .. "/Scripts/sv_hud.lua"), "t.glitch_row_allout"), "the HUD row: AB.L..IN's phase 3")
 check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), '"^RE_SV_AnomalyPack",'), "KEEP_EVENTS: ^RE_SV_AnomalyPack")
+check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), 'alive, lv, gp)'), "the host's \"rnd\": AB.L..IN's phase")
+check(has(body("sv_coop.lua", "\nlocal function clientRounds%("), "D.glitchPhase = r.glitchPhase")
+      and has(body("sv_coop.lua", "\nlocal function clientRounds%("), "pcall(ANOM.clientGlitch, now)"), "clientRounds: the phase kept, the copy's pods")
+check(has(body("sv_rounds.lua", "\nlocal function startRound%("), "D.taken = taken"), "startRound: the round's own flights for the deck")
 
 logFile:close()
 if fails > 0 then print("bosses test: " .. fails .. " FAILED"); os.exit(1) end
