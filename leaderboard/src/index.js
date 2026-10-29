@@ -354,7 +354,9 @@ const SCHEMA = [
 let haveSchema = false;
 async function ensureSchema(env) {
   if (haveSchema) return;
-  for (const sql of SCHEMA) await env.DB.prepare(sql).run();
+  // (one round trip for them all: one at a time, 15 of them on each fresh Worker instance, they and the boards' queries
+  // took a slash command past Discord's 3 s: "The application did not respond", 2026-10-30)
+  await env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql)));
   for (const table of ["runs", "runs_archive"]) {
     const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
     const have = new Set(results.map((r) => r.name));
@@ -465,19 +467,45 @@ async function pilotEmbed(env, name) {
   };
 }
 
-async function interactions(req, env) {
+// A slash command's answer (a message's data: embeds, or content).
+async function commandReply(env, it) {
+  const opt = Object.fromEntries((it.data.options || []).map((o) => [o.name, o.value]));
+  if (it.data.name === "leaderboard")
+    return { embeds: EXTRA_BOARDS.includes(opt.board)
+      ? await extraEmbeds(env, opt.board, opt.difficulty || null)
+      : await boardEmbeds(env, opt.board || null, opt.difficulty || null) };
+  if (it.data.name === "pilot") return { embeds: [await pilotEmbed(env, String(opt.name || "").slice(0, 24))] };
+  return { content: "Unknown command." };
+}
+
+// ... edited into the "thinking..." answer once it's made (the interaction's own webhook: its token, no bot auth); a
+// failure says so there rather than leaving "thinking..." up
+async function commandFollowUp(env, it) {
+  let data;
+  try { data = await commandReply(env, it); } catch (e) {
+    console.log(String(e && e.stack || e));
+    data = { content: "The leaderboard couldn't be read just now. Try again in a minute." };
+  }
+  const r = await fetch(`${API}/webhooks/${env.DISCORD_APP_ID}/${it.token}/messages/@original`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  if (!r.ok) console.log(`interaction follow-up: ${r.status} ${await r.text()}`);
+}
+
+// Discord gives an interaction 3 s for its first answer, and a fresh Worker instance's ensureSchema plus the boards'
+// queries took longer (2026-10-30, after the admin page's deploy: "The application did not respond"): a command is
+// answered "thinking..." at once (type 5) and its board edited in by commandFollowUp (Discord allows 15 minutes).
+// Without ctx (the local test) it's answered in one go, as before.
+async function interactions(req, env, ctx) {
   const body = await req.text();
   if (!(await discordSigned(req, body, env.DISCORD_PUBLIC_KEY))) return new Response("bad signature", { status: 401 });
   const it = JSON.parse(body);
   if (it.type === 1) return json({ type: 1 });                       // Discord's ping
   if (it.type === 2) {
-    const opt = Object.fromEntries((it.data.options || []).map((o) => [o.name, o.value]));
-    if (it.data.name === "leaderboard")
-      return json({ type: 4, data: { embeds: EXTRA_BOARDS.includes(opt.board)
-        ? await extraEmbeds(env, opt.board, opt.difficulty || null)
-        : await boardEmbeds(env, opt.board || null, opt.difficulty || null) } });
-    if (it.data.name === "pilot")
-      return json({ type: 4, data: { embeds: [await pilotEmbed(env, String(opt.name || "").slice(0, 24))] } });
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(commandFollowUp(env, it));
+      return json({ type: 5 });
+    }
+    return json({ type: 4, data: await commandReply(env, it) });
   }
   return json({ type: 4, data: { content: "Unknown command." } });
 }
@@ -860,7 +888,7 @@ export default {
     const path = new URL(req.url).pathname;
     try {
       if (req.method === "POST" && path === "/submit") return await submit(req, env, ctx);
-      if (req.method === "POST" && path === "/interactions") return await interactions(req, env);
+      if (req.method === "POST" && path === "/interactions") return await interactions(req, env, ctx);
       if (req.method === "GET" && path === "/setup") return await setup(req, env);
       if (req.method === "GET" && (path === "/admin" || path === "/admin/")) return adminPage();
       if (req.method === "POST" && path.startsWith("/admin/")) return await admin(req, env, path.slice("/admin/".length));
@@ -873,4 +901,4 @@ export default {
   },
 };
 
-export { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed };      // (for tests)
+export { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed, commandReply, commandFollowUp };      // (for tests)
