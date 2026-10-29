@@ -12,7 +12,8 @@
 --     kills (not sorted into ordinary), the host's restart and a resync ("rs");
 --   the code review of 2026-10-29: a special's guard kept out of the run line's Veteran+ figures, p.youAt kept by the
 --     sweep with [stats] off (a kill's aspect for P6), a hook's first error logged once (hookErr), a joiner's round and
---     run lines saying the tail watch isn't measured there, ACE.hunt (the hunt tell) reading this visit's p.dist.
+--     run lines saying the tail watch isn't measured there, ACE.hunt (the hunt tell) reading this visit's p.dist;
+--   STATS.tactic's "told" (a tell said with a tactic: a radio line, no callout since the clean up of 2026-10-29).
 -- Its log lines also go to <work dir>/test_lua.log, for stats_test.sh to run tools/checks/stats_report.py on.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -225,9 +226,9 @@ visit(P2, 106, x(1.2), { X = 0, Y = 1, Z = 0 }, 10)
 check(D.rs.tailEscaped == 1 and D.rs.provokeEscaped == 1 and P2.tailAt == nil and P2.provokeAt == nil, "P2's tail and Provoke escapes counted")
 -- a tactic on P3's flight while it flies, an ace reversal: counted apart
 visit(P3, 102, x(4), BEHIND, 10)
-STATS.tactic("cover", JAM_UNIT, 0, "test", "HIGH SIX")
+STATS.tactic("cover", JAM_UNIT, 0, "test", "six")
 check(type(P3.dirTag) == "table" and P3.dirTag.tactic == "cover" and P3.dirTag.at == 102, "STATS.tactic tags the unit's planes { tactic, at }")
-check(has(line("director: round 8"), "cover on " .. JAM_UNIT) and has(line("director:"), 'callout "HIGH SIX"'), "director: line")
+check(has(line("director: round 8"), "cover on " .. JAM_UNIT) and has(line("director:"), 'told "six"'), "director: line")
 STATS.tactic("reversal", "ERA_Unit_05_Dep_Air0", nil, "1500 m")
 check(D.rs.nTactics == 1 and D.rs.moves.reversal == 1, "a reversal is counted apart from the director's tactics")
 -- the kills (PR.ammo: what dropped last decides the weapon)
@@ -260,7 +261,7 @@ check(has(rl, "AI Provoke median 4 s (1 died, 1 escaped), geometric median 4 s (
 check(has(rl, "kills from behind 1/4 (25%)"), "round line: kills from behind")
 check(has(rl, "your kills with missiles 2, gun 1, special 1, nothing seen 0"), "round line: weapons")
 check(has(rl, "missiles left 31, fired 2 this round"), "round line: missiles left and fired")
-check(has(rl, "director tactics 1 (cover x1; 1 callouts); ace reversals 1"), "round line: tactics and reversals")
+check(has(rl, "director tactics 1 (cover x1; 1 told); ace reversals 1"), "round line: tactics and reversals")
 -- round 9: hits by source, then shot down
 D.round = 9
 STATS.roundStart(130)

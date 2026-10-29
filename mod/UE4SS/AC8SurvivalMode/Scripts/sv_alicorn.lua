@@ -207,8 +207,8 @@ local function partAt(o)
 end
 
 -- Its railguns (LiveAIRailgun, not their hatches: railgun_R's can't be destroyed, ALICORN.md 1.2) and its VLS: once a
--- kind is down its tells and orders stop (code review of 2026-10-29: WARNING: RAILGUN, Mission 18's RAILGUN WARNING and
--- VLS LAUNCH came every minute after the player had shot them all). A kind's parts are looked for (FindAllOf) until
+-- kind is down its tells and orders stop (code review of 2026-10-29: the railgun's call, Mission 18's RAILGUN WARNING and
+-- the VLS call came every minute after the player had shot them all). A kind's parts are looked for (FindAllOf) until
 -- some are found, then kept (s.arms, as s.depthPart), and looked for again before the kind counts as down (armsLook:
 -- one found a pass after its siblings, the railguns being their hatches' grandchildren, would otherwise be silenced
 -- with them; F4's review); how many of them are still there, and how many are up (a health that can't be read counts
@@ -256,7 +256,7 @@ local function armsDown(s, key) return s.armsDown ~= nil and s.armsDown[key] == 
 -- Mode's ALCN_LaunchAir would launch the hull's pooled fighters, which stay put away), the Skirmishers' own flights
 -- with the fighter roles on (CFG.roles; any role's when none is free, any flight with roles off): the round's D.deckLeft
 -- launches (sv_rounds.lua startRound), first_s after it appears, every every_s after a launch and after_surface_s after
--- each surfacing; warn_s before each the tell alcn_deck (its radio call) and a callout, every player, once nothing holds
+-- each surfacing; warn_s before each the tell alcn_deck (its radio call), every player, once nothing holds
 -- the launch (code review of unit 9: told first, it could then wait minutes behind max_up untold). Never more than
 -- max_up of its flights up at once, never while you're down at the airfield (retried each second: a flight that
 -- appears in the landing menu gets no orders) but in co-op while another player flies (othersFlying: ordersTick gives it
@@ -282,7 +282,6 @@ end
 function SPC.alicornDeck(now, s, c)
     local dk = c.deck
     if not (dk and dk.enabled) or (D.deckLeft or 0) <= 0 or s.state ~= "sail" or s.dived then return end
-    local t = CFG.hud.text
     s.deck = s.deck or {}
     s.deckNext = s.deckNext or (s.at + (tonumber(dk.first_s) or 0))
     local warn = math.max(0, tonumber(dk.warn_s) or 0)
@@ -323,7 +322,6 @@ function SPC.alicornDeck(now, s, c)
             return hold(1)
         end
         s.deckWarned, s.deckGaps = true, nil
-        hudCallout(t.alicorn_deck, t.alicorn_deck_sub)
     end
     if now < s.deckNext then return end
     if not fwd then                                       -- (no bow to read: the launch towards you)
@@ -400,8 +398,8 @@ function SPC.alicornTick(now, s)
         end
     end
     -- the railgun's tell (behaviour roadmap P3; it fired without a warning before): its lead_s (CFG.tells alcn_rail)
-    -- before each order the radio call and WARNING: RAILGUN on every game (the first time "the railgun has been
-    -- activated"), and the RAILGUN WARNING (rail_alert) from then until alert_s after the order. The order's time is
+    -- before each order the radio call on every game (the first time "the railgun has been activated"), and the
+    -- RAILGUN WARNING (rail_alert) from then until alert_s after the order. The order's time is
     -- as it was (but after a surfacing: above); the railgun then aims ~7 s and preps ~2 s (tools/re/ALICORN.md). Its
     -- railguns down (ARMS): none of it
     local ra = c.rail_alert or {}

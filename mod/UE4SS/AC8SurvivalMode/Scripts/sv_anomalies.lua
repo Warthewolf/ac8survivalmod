@@ -2036,12 +2036,11 @@ function ANOM.packTick(now, s, c)
     if s.pack == nil then
         if ANOM.on == true and now >= (s.packCool or 0) then
             s.pack, s.packAt = "armed", now + (tonumber(pk.spring_delay_s) or 0)
-            -- (this game's player: the host's, as the spring; a sure tell, its callout shows when it isn't said)
+            -- (this game's player: the host's, as the spring; a sure tell: through its gap and cooldown)
             local how = "not told (no tells)"
             if TELL then
-                local okT, r, why, _, shown = pcall(TELL.say, "pack")
+                local okT, r, why = pcall(TELL.say, "pack")
                 if okT and r == true then how = "told"
-                elseif okT and shown then how = "its callout only: " .. tostring(why)
                 else how = "not told: " .. tostring(okT and why or r) end
             end
             log(string.format("special: %s's pack: your controls scrambled %.1f km from it; %s springs in %.1f s (%s)",
@@ -2154,7 +2153,7 @@ function ANOM.clientTick()
 end
 
 -- A Survival COOP joiner's copy of AB.L..IN in its phase 3 (code review of unit 9: the host switched its own plane's
--- pods off while the joiner's copy, its own pod row firing, jammed on under "ITS ECM IS DOWN"): the host's phase comes
+-- pods off while the joiner's copy, its own pod row firing, jammed on after "it's not jamming anymore"): the host's phase comes
 -- in "rnd" (sv_coop.lua: D.glitchPhase), and the copy's pods are switched off here every ecm_check_s, as glitchPodsOff
 -- does on the host. Nothing before phase 3, with the phases or ecm_pods_off off, or with no copy up.
 function ANOM.clientGlitch(now)

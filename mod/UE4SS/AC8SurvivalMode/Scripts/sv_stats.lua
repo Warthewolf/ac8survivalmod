@@ -18,8 +18,9 @@
 --   STATS.sample(now, you)          sv_main.lua every 2 s: time down at the airfield; a cleared round's line
 --   STATS.runEnd(how)               LB.finish: "stats: run over"
 --   STATS.hostReset(now, resync)    sv_coop.lua, a joiner told "rs": its round cut short; the host's new run: a run line
---   STATS.tactic(name, unit, slot, why, callout)   the squad / intensity director's tactics (P2, P4): a "director:"
---                                   line, counted per round, and the unit's live planes tagged p.dirTag = { tactic, at }
+--   STATS.tactic(name, unit, slot, why, told)   the squad / intensity director's tactics (P2, P4): a "director:" line,
+--                                   counted per round (told: the tell said with it, its radio call), and the unit's live
+--                                   planes tagged p.dirTag = { tactic, at }
 -- and, at the end of the part, P6's learning layer (PROF: your habits from the same hooks, CFG.profile).
 -- Logged only (AC8SurvivalMode_lua.log), never sent: friends' release logs are the test data, so none of this is in a
 -- test-only or online-only block, and the leaderboard's JSON keeps its fixed fields. The time base is D.now, the game
@@ -519,7 +520,7 @@ end
 -- p.dirTag = { tactic, at } (one contract: P8's director-kill bonus and the kill-time line read it). slot: the player
 -- it's aimed at (COOP.players()), nil for the room. ACE.movesTick's reversals come here as "reversal": counted apart
 -- (the round line's "ace reversals"), not tagged, not logged again (aces: lines). Runs with CFG.stats off too (the tag).
-function STATS.tactic(name, unit, slot, why, callout)
+function STATS.tactic(name, unit, slot, why, told)
     if not D then return end
     name = tostring(name or "?")
     local rs = D.rs
@@ -530,7 +531,7 @@ function STATS.tactic(name, unit, slot, why, callout)
     if rs then
         rs.tactics[name] = (rs.tactics[name] or 0) + 1
         rs.nTactics = rs.nTactics + 1
-        if callout then rs.callouts = rs.callouts + 1 end
+        if told then rs.told = rs.told + 1 end
     end
     local n = 0
     if unit then
@@ -540,7 +541,7 @@ function STATS.tactic(name, unit, slot, why, callout)
     log(string.format("director: round %d +%.0f s: %s on %s%s%s%s", D.round or 0, (rs and D.now) and (D.now - rs.at) or 0,
         name, unit and string.format("%s (%d planes)", unit, n) or "the round",
         (slot and COOP and COOP.open) and string.format(", player %d", slot + 1) or "", why and (" (" .. tostring(why) .. ")") or "",
-        callout and string.format('; callout "%s"', tostring(callout)) or ""))
+        told and string.format('; told "%s"', tostring(told)) or ""))
 end
 
 ---------------------------------------------------------------------------------------------------- rounds
@@ -549,7 +550,7 @@ local function newRound(now)
     return { round = D.round, at = now, ground = 0, tier = ti and ti.name or "no tier", client = client(),
              down = 0, mineAll = 0, fighters = 0, fightersMine = 0, unsorted = 0, ttk = {}, ttkSpawn = {}, ttkHit = {},
              tailedAI = {}, tailedGeo = {}, provokeEscaped = 0, tailEscaped = 0, mineGeo = 0, behind = 0, close = 0,
-             wpn = {}, fired = {}, dmg = {}, hp = 0, tactics = {}, nTactics = 0, callouts = 0, moves = {}, stateS = {},
+             wpn = {}, fired = {}, dmg = {}, hp = 0, tactics = {}, nTactics = 0, told = 0, moves = {}, stateS = {},
              tw = { n = 0, vet = 0, died = {}, diedProv = {}, esc = {}, up = 0, react = {}, noReact = 0, pre = 0, blackout = 0 } }
 end
 -- The tail watch's part of the round line (P5): its episodes, Veteran+ among them. "Provoke after" is the fresh
@@ -593,20 +594,20 @@ local function flushRound()
         "aircraft down %d (yours %d), %s; tailed survival: AI Provoke median %s (%d died, %d escaped), " ..
         "geometric median %s (%d died, %d escaped); kills from behind %d/%d (%s); your kills with missiles %d, gun %d, " ..
         "special %d, nothing seen %d (%d close); missiles left %s, fired %d this round; you took %.0f HP (missiles %s, " ..
-        "gun/close %s, unknown %s); director tactics %d (%s; %d callouts); ace reversals %d",
+        "gun/close %s, unknown %s); director tactics %d (%s; %d told); ace reversals %d",
         rs.round, rs.tier, kind, spS and string.format(" %d s", spS) or "", players, players == 1 and "" or "s",
         rs.cut and (" (cut short: " .. tostring(rs.cut) .. ")") or "", len, rs.ground, rs.waves or 1,
         (rs.waves or 1) == 1 and "" or "s", rs.down, rs.mineAll, ft, sec(median(rs.tailedAI)), #rs.tailedAI, rs.provokeEscaped,
         sec(median(rs.tailedGeo)), #rs.tailedGeo, rs.tailEscaped, rs.behind, rs.mineGeo, share(rs.behind, rs.mineGeo),
         w.msl or 0, w.gun or 0, w.special or 0, w.none or 0, rs.close, tostring(rs.mslLeft or "?"), f[1] or 0, rs.hp,
         share(rs.dmg.missile, rs.hp), share(rs.dmg["gun/close"], rs.hp), share(rs.dmg.unknown, rs.hp), rs.nTactics,
-        #tl > 0 and table.concat(tl, ", ") or "none", rs.callouts, rs.moves.reversal or 0)
+        #tl > 0 and table.concat(tl, ", ") or "none", rs.told, rs.moves.reversal or 0)
         .. (((rs.moves.opener or 0) + (rs.moves.blink or 0) > 0)       -- (the squadrons', P9: only when there were any)
             and string.format(", squadron openers %d, blinks %d", rs.moves.opener or 0, rs.moves.blink or 0) or "")
         .. watchPart(rs))
     if #m.rounds < 500 then
         m.rounds[#m.rounds + 1] = { round = rs.round, kind = kind, len = len, ground = rs.ground, special = spS,
-                                    tactics = rs.nTactics, callouts = rs.callouts, client = rs.client }
+                                    tactics = rs.nTactics, client = rs.client }
     end
 end
 

@@ -10,8 +10,8 @@
 --     personality off: ace_mix);
 --   spawnFlight's opener (each tier's openers in turn, a blink only on a duelist flight, else a kulbit), "high"'s
 --     altitude (off a Lancer flight, top_m), a Valkyrie Wolf flight's trap held (ROLE.spawned), ACE.squadUp's line;
---   ACE.squadTick: first contact within the opener's km, the squadron's tell first (its name in the callout, the round's
---     first flight of it; later ones the opener's own tell), the opener its lead_s on: high (a salvo from the nearest
+--   ACE.squadTick: first contact within the opener's km, the squadron's tell first (its radio line, no callout: the
+--     round's first flight of it; later ones the opener's own tell), the opener its lead_s on: high (a salvo from the nearest
 --     planes able to, gap_s apart), trap (sprung spring_s later after the "trap" tell: free and LastTGT; waits while the
 --     trap's pending, gives up after wait_s; not a Wolf flight: the pack's reversal), kulbit (the flight's
 --     RE_SV_AceKulbit_NN), blink (the lead to a spot behind and beside you, ground clearance, smoke); the blink tick (you
@@ -80,7 +80,7 @@ function SV_CoopPeerAt() return "" end
 SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end, breakS = function() return 20 end,
           skillAdd = function() return 0 end }
 local callouts = {}
-function hudCallout(text, sub, big, urgent) callouts[#callouts + 1] = { text = text, sub = sub, urgent = urgent } end
+function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
 local function part(name, chunk, edits)
@@ -105,7 +105,7 @@ part("sv_config.lua")
 local cfgLine = nil
 for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l end end
 part("sv_rows.lua"); part("sv_ai.lua")
-hudCallout = function(text, sub, big, urgent) callouts[#callouts + 1] = { text = text, sub = sub, urgent = urgent } end
+hudCallout = function(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
 part("sv_tactical.lua"); part("sv_stats.lua"); part("sv_tells.lua"); part("sv_director.lua")
@@ -135,6 +135,16 @@ end
 local function since(from, pat) local n = 0; for i = from, #logs do if logs[i]:find(pat) then n = n + 1 end end; return n end
 local function evs(pat, from) local t = {}; for i = from or 1, #events do if events[i]:find(pat) then t[#t + 1] = events[i] end end; return table.concat(t, ";") end
 local function said(text) for _, c in ipairs(callouts) do if c.text == text then return c end end return nil end
+-- (no tell callout: none of their old texts, gone since the clean up of 2026-10-29; ACE INBOUND and the round's own
+-- callouts come as ever)
+local OLD_TELLS = { "POST-STALL ACES", "FROM ABOVE", "THE PACK", "THEY BLINK", "THE HARVEST", "IT BLINKED", "IT'S A TRAP",
+                    "ACE POST-STALL", "BANDIT DIVING", "HE'S DRAGGING YOU", "ACE REVERSAL" }
+local function noTell()
+    for _, c in ipairs(callouts) do
+        for _, t in ipairs(OLD_TELLS) do if tostring(c.text):find(t, 1, true) then return false end end
+    end
+    return true
+end
 local function deep(t) if type(t) ~= "table" then return t end; local c = {}; for k, v in pairs(t) do c[k] = deep(v) end; return c end
 local function sentOf(pat) local t = {}; for _, s in ipairs(sent) do if s:find(pat) then t[#t + 1] = s end end; return table.concat(t, ";") end
 
@@ -380,7 +390,7 @@ spawnFlight("ERA_Unit_01_Dep_Air1")
 plane("ERA_Unit_01_Dep_Air1", 0, KM(3, 0), DIRV(-1, 0), tierOf("Demon"))
 from_ = #logs + 1
 tickTo(100, 101)
-check(D.squad["ERA_Unit_01_Dep_Air1"].op == nil and said("INFERNO: POST-STALL ACES") and evs("^RE_SV_Ace") == ""
+check(D.squad["ERA_Unit_01_Dep_Air1"].op == nil and evs("^RE_SV_RadioTurn") ~= "" and noTell() and evs("^RE_SV_Ace") == ""
       and has(line("aces: ERA_Unit_01_Dep_Air1 (Inferno squadron) meets", from_), "no opener"),
       "openers none: its squadron's tell at first contact (within 4 km), no opener")
 AC.flight.demon.openers = { "kulbit" }
@@ -398,9 +408,9 @@ tickTo(100, 102)
 check(D.squad[U].contact == nil and evs("^RE_SV_") == "", "3 km off: no contact (kulbit's km 2.5)")
 move(p1, KM(2.2, 0))
 tickTo(102.25, 102.5)                              -- (first contacts looked for every 0.5 s)
-check(D.squad[U].contact and said("INFERNO: POST-STALL ACES") and said("INFERNO: POST-STALL ACES").urgent
+check(D.squad[U].contact and noTell()
       and evs("^RE_SV_RadioTurn") ~= "" and has(line("aces: " .. U .. " (Inferno squadron) meets you 2.2 km off", from_), "told (demon_in)"),
-      "2.2 km: its tell, INFERNO: POST-STALL ACES, a reversal line (" .. tostring(line("aces: " .. U, from_)) .. ")")
+      "2.2 km: its tell, a reversal line, no callout (" .. tostring(line("aces: " .. U, from_)) .. ")")
 check(evs("^RE_SV_AceKulbit") == "", "... the kulbit not yet (its lead_s 0.5)")
 tickTo(102.75, 103.25)
 check(evs("^RE_SV_AceKulbit") == "RE_SV_AceKulbit_02" and has(line("aces: " .. U .. " (Inferno squadron) kulbits as one"), "fired")
@@ -414,7 +424,7 @@ spawnFlight(U2)
 plane(U2, 0, KM(0, 2), DIRV(0, -1), tierOf("Demon"))
 callouts = {}
 tickTo(110.25, 111)
-check(said("ACE POST-STALL") and not said("INFERNO: POST-STALL ACES") and has(line("aces: " .. U2 .. " (Inferno squadron) meets"), "told (kulbit)"),
+check(noTell() and has(line("aces: " .. U2 .. " (Inferno squadron) meets"), "told (kulbit)"),
       "the round's second Inferno flight: the kulbit tell, not the squadron's again")
 
 -- Bounty: the high salvo
@@ -425,8 +435,8 @@ local q = {}
 for k = 0, 3 do q[k] = plane(U, k, KM(4 + k * 0.4, 0, 5), DIRV(-1, 0), tierOf("Mercenary")) end
 from_ = #logs + 1
 tickTo(100, 100)
-check(said("BOUNTY: FROM ABOVE") and evs("^RE_SV_RadioDive") ~= "" and evs("^RE_SV_Salvo") == "",
-      "4.1 km: BOUNTY: FROM ABOVE and a dive line, no salvo yet (lead_s 1.0)")
+check(noTell() and evs("^RE_SV_RadioDive") ~= "" and evs("^RE_SV_Salvo") == "",
+      "4.1 km: a dive line (no callout), no salvo yet (lead_s 1.0)")
 tickTo(100.25, 101.75)
 local sv = evs("^RE_SV_Salvo")
 check(sv == "RE_SV_Salvo_08A;RE_SV_Salvo_08B", "lead_s on: the two nearest planes fire (A at once, B gap_s 0.6 later): " .. sv)
@@ -451,13 +461,13 @@ D.wolf[U].state, D.wolf[U].heldAt, D.wolf[U].held = "held", 100, { [1] = true, [
 for _, x in ipairs(planes) do move(x, KM(3.8 + x.k * 0.05, 0)) end
 from_ = #logs + 1
 tickTo(100, 100)
-check(said("VALKYRIE: THE PACK") and evs("^RE_SV_RadioEnLure") ~= "" and has(line("aces: " .. U .. " (Valkyrie squadron): its trap springs in 8 s", from_), "springs"),
-      "3.8 km: VALKYRIE: THE PACK (a lure line), its trap springs in 8 s")
+check(noTell() and evs("^RE_SV_RadioEnLure") ~= "" and has(line("aces: " .. U .. " (Valkyrie squadron): its trap springs in 8 s", from_), "springs"),
+      "3.8 km: a lure line (no callout), its trap springs in 8 s")
 tickTo(100.25, 107.75)
 check(evs("^RE_SV_Wolf") == "", "nothing before spring_s")
 tickTo(108, 108)
-check(said("IT'S A TRAP") and has(line("aces: " .. U .. " (Valkyrie squadron): its trap springs on you in 1.0 s"), "told (trap)"),
-      "spring_s on: IT'S A TRAP")
+check(noTell() and evs("^RE_SV_Radio(E?n?Trap)") ~= "" and has(line("aces: " .. U .. " (Valkyrie squadron): its trap springs on you in 1.0 s"), "told (trap)"),
+      "spring_s on: an \"it's a trap\" line (no callout)")
 tickTo(108.25, 109.25)
 check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_15B;RE_SV_WolfTurn_15B;RE_SV_WolfFree_15D;RE_SV_WolfTurn_15D;RE_SV_WolfFree_15F;RE_SV_WolfTurn_15F"
       and not WOLF.holding(U) and has(line("roles: " .. U .. " (wolf) trap freed (Valkyrie's trap springs)"), "turned onto the player"),
@@ -492,10 +502,10 @@ check(WOLF.holding(U) and D.wolf[U].state == "held" and evs("^RE_SV_WolfHold") =
       "held 87 s without meeting anyone (past roles.wolf's 60 s): still held")
 for _, x in ipairs(planes) do move(x, KM(3.8 + x.k * 0.05, 0)) end
 wolfTo(190.25, 200)
-check(said("VALKYRIE: THE PACK") and D.wolf[U].untilContact == nil and D.wolf[U].maxFrom == 190.5
+check(noTell() and evs("^RE_SV_RadioEnLure") ~= "" and D.wolf[U].untilContact == nil and D.wolf[U].maxFrom == 190.5
       and evs("^RE_SV_Wolf[FT]") == "RE_SV_WolfFree_15B;RE_SV_WolfTurn_15B;RE_SV_WolfFree_15D;RE_SV_WolfTurn_15D;RE_SV_WolfFree_15F;RE_SV_WolfTurn_15F"
       and has(line("roles: " .. U .. " (wolf) trap freed (Valkyrie's trap springs)", from_), "turned onto the player"),
-      "met at last (190 s): VALKYRIE: THE PACK, its trap springs on you then (" .. evs("^RE_SV_Wolf[FT]") .. ")")
+      "met at last (190 s): its lure line, its trap springs on you then (" .. evs("^RE_SV_Wolf[FT]") .. ")")
 -- the contact's own hold_max_s: a spring that never comes (your decoy) is let go roles.wolf's 60 s after the contact
 fresh(19, "Legend")
 spawnFlight(U)
@@ -550,7 +560,7 @@ plane(U, 1, KM(4.3, 0.2), DIRV(-1, 0), tierOf("Phantom"))
 move(lead, KM(3.9, 0))
 smokes = 0
 tickTo(100, 100.25)
-check(said("WRAITH: THEY BLINK") and evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_WraithBlink") == "", "3.9 km: WRAITH: THEY BLINK, no blink yet")
+check(noTell() and evs("^RE_SV_RadioSix") ~= "" and evs("^RE_SV_WraithBlink") == "", "3.9 km: a check-your-six line (no callout), no blink yet")
 tickTo(100.5, 100.5)
 local bl = evs("^RE_SV_WraithBlink")
 check(bl == "RE_SV_WraithBlinkBD" or bl == "RE_SV_WraithBlinkBF", "lead_s on: its lead to a spot behind and beside you (heading 0: 135 or 225 deg): " .. bl)
@@ -581,15 +591,15 @@ lead = plane(U, 0, KM(6, 0), DIRV(-1, 0), tierOf("Phantom"))
 lead.dmg = { you = 30 }
 callouts = {}
 tickTo(100, 102)
-check(evs("^RE_SV_WraithBlink") == "" and not said("IT BLINKED") and D.squad[U].contact == nil,
-      "Wraith's lead hit from 6 km, before it's met: no blink, no IT BLINKED (its blinks wait for first contact)")
+check(evs("^RE_SV_WraithBlink") == "" and evs("^RE_SV_RadioSix") == "" and D.squad[U].contact == nil,
+      "Wraith's lead hit from 6 km, before it's met: no blink, no blink tell (its blinks wait for first contact)")
 move(lead, KM(3.9, 0))
 from_ = #logs + 1
 tickTo(102.25, 103)
-check(said("WRAITH: THEY BLINK") and evs("^RE_SV_WraithBlink") ~= "" and not evs("^RE_SV_WraithBlink"):find(";", 1, true)
+check(evs("^RE_SV_RadioSix") ~= "" and noTell() and evs("^RE_SV_WraithBlink") ~= "" and not evs("^RE_SV_WraithBlink"):find(";", 1, true)
       and since(from_, "blinks %(its opener%)") == 1, "met at 3.9 km: its tell, then one blink, the opener's")
 tickTo(103.25, 126)
-check(not evs("^RE_SV_WraithBlink"):find(";", 1, true) and not said("IT BLINKED"),
+check(not evs("^RE_SV_WraithBlink"):find(";", 1, true) and since(from_, "tell: blink:") == 0,
       "every_s on: no blink for the hit from before it was met (" .. evs("^RE_SV_WraithBlink") .. ")")
 -- Harvest met with you behind one of its planes (U10's review): its kulbit, no reversal in the same tick or until it's over
 U = "ERA_Unit_01_Dep_Air0"
@@ -600,7 +610,7 @@ plane(U, 0, KM(2.45, 0.3), DIRV(-1, 0), tierOf("Reaper"))       -- (its lead hea
 plane(U, 1, KM(2.4, 0), DIRV(1, 0), tierOf("Reaper"))           -- (you 2.4 km on this one's six: a reversal's range)
 from_ = #logs + 1
 tickTo(100, 100.25, true)
-check(said("HARVEST: THE HARVEST") and evs("^RE_SV_AceTurn") == "" and D.aceMoveAt[U] >= 101.5,
+check(evs("^RE_SV_RadioHunt") ~= "" and noTell() and evs("^RE_SV_AceTurn") == "" and D.aceMoveAt[U] >= 101.5,
       "met at 2.4 km: its tell; the reversal held until the opener's gone (" .. tostring(D.aceMoveAt[U]) .. ")")
 tickTo(100.5, 112.25, true)
 check(evs("^RE_SV_AceKulbit") == "RE_SV_AceKulbit_01" and evs("^RE_SV_AceTurn") == "", "its kulbit, and no reversal inside its 12 s")
@@ -629,11 +639,12 @@ tickTo(100, 101)
 check(evs("^RE_SV_WraithBlink") == "", "10 km off: nothing")
 move(lead, KM(1.5, 0), DIRV(0, 1))                -- (1.5 km off, flying across your nose: you're 90 deg off its tail)
 tickTo(101, 101)
-check(evs("^RE_SV_WraithBlink") == "" and not said("IT BLINKED"), "1.5 km off but 90 deg off its tail: nothing (tail_deg 70)")
+check(evs("^RE_SV_WraithBlink") == "" and evs("^RE_SV_RadioSix") == "", "1.5 km off but 90 deg off its tail: nothing (tail_deg 70)")
 move(lead, KM(1.5, 0), DIRV(1, 0))                -- (you 1.5 km behind it, on its six)
 from_ = #logs + 1
 tickTo(101.25, 101.25)
-check(said("IT BLINKED") and evs("^RE_SV_WraithBlink") == "", "you on its six: its tell (IT BLINKED), the blink lead_s later")
+check(evs("^RE_SV_RadioSix") ~= "" and noTell() and evs("^RE_SV_WraithBlink") == "",
+      "you on its six: its tell (a check-your-six line, no callout), the blink lead_s later")
 tickTo(101.5, 101.75)
 check(evs("^RE_SV_WraithBlink") ~= "" and has(line("aces: " .. U .. "'s lead", from_), "you 1500 m on its six"), "... then the blink: " .. tostring(line("aces: " .. U .. "'s lead", from_)))
 local n1 = #evs("^RE_SV_WraithBlink"):gsub("[^;]", "")
@@ -733,8 +744,8 @@ for k = 0, 3 do plane(U, k, KM(60 + k * 0.3, 0, 5), DIRV(-1, 0), tierOf("Mercena
 joiner(KM(57, 0, 5))
 sent, callouts = {}, {}
 tickTo(100, 102)
-check(sentOf("tl|mercenary_in") == "1>tl|mercenary_in|" .. tierOf("Mercenary") .. "|" and not said("BOUNTY: FROM ABOVE"),
-      "player 2 meets Bounty first: mercenary_in to them only (the tier's index for its name), not shown here")
+check(sentOf("tl|mercenary_in") == "1>tl|mercenary_in|" and noTell() and evs("^RE_SV_Radio") == "",
+      "player 2 meets Bounty first: mercenary_in to them only (\"tl\", no number now), not said here")
 check(evs("^RE_SV_Salvo") == "" and sentOf(">dv|RE_SV_Salvo_08A|") ~= "" and sentOf(">dv|RE_SV_Salvo_08B|") ~= "",
       "lead_s on: the salvo on player 2's own copies (\"dv\"), none fired here: " .. sentOf(">dv|"))
 -- a joiner meets Wraith first: its tell, no blink (round the host only)
@@ -748,8 +759,9 @@ from_ = #logs + 1
 tickTo(100, 101)
 check(sentOf("tl|phantom_in") ~= "" and evs("^RE_SV_WraithBlink") == "" and has(line("aces: " .. U .. "'s blink is round the host's plane only", from_), "player 2"),
       "player 2 meets Wraith first: its tell, no blink round them (logged)")
--- the squadron's tell names the joiner's own squadron text from "tl": the host's tier index -> the joiner's CFG.aces
-check(TELL.known("phantom_in") and CFG.tells.list.phantom_in.args == "squadron", "phantom_in names the squadron from the joiner's own CFG")
+-- the squadron's tell on the joiner: its own catalog's lines (no text to name the squadron in now)
+check(TELL.known("phantom_in") and CFG.tells.list.phantom_in.args == nil and CFG.tells.list.phantom_in.sure == true,
+      "phantom_in: a sure radio tell in the joiner's own catalog (no text, no args)")
 -- on a joiner's game: nothing (the host's planes are puppets there)
 COOP.open, COOP.role, COOP.slot = true, "join", 1
 fresh(22, "Demon"); COOP.open, COOP.role, COOP.slot = true, "join", 1
@@ -759,22 +771,15 @@ tickTo(100, 102)
 check(evs("^RE_SV_") == "" and D.squad[U].contact == nil, "a joiner's game: no contact, no opener")
 COOP.open, COOP.role, COOP.slot = false, nil, nil
 
----------------------------------------------------------------------------------------------------- the tell's text
-print("the squadron tells' text")
+---------------------------------------------------------------------------------------------------- the tells
+print("the squadron tells: radio lines only (the clean up of 2026-10-29)")
 fresh(28, "Reaper")
-callouts = {}
-TELL.play("reaper_in", tierOf("Reaper"))
-check(said("HARVEST: THE HARVEST"), "reaper_in: its squadron's name from CFG.aces (HARVEST)")
-CFG.aces.reaper.squadron = "Gravediggers"
-callouts = {}
-D.tells = nil
-TELL.play("reaper_in", tierOf("Reaper"))
-check(said("GRAVEDIGGERS: THE HARVEST"), "a renamed squadron ([aces.reaper] squadron): its own name")
-CFG.aces.reaper.squadron = "Harvest"
-callouts = {}
-D.tells = nil
-TELL.play("demon_in", 99)
-check(said("ACE SQUADRON: POST-STALL ACES"), "a tier index off the list: ACE SQUADRON")
+callouts, events = {}, {}
+check(TELL.play("reaper_in") == true and evs("^RE_SV_RadioHunt") ~= "" and noTell(), "reaper_in: a hunt line, no callout")
+for _, id in ipairs({ "mercenary_in", "legend_in", "demon_in", "phantom_in", "reaper_in" }) do
+    local e = CFG.tells.list[id]
+    check(e and e.sure == true and e.hud == nil and e.urgent == nil and e.args == nil and #e.radio > 0, id .. ": sure, its lines, nothing for the HUD")
+end
 
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")

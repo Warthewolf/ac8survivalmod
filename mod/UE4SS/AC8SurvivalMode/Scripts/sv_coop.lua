@@ -106,12 +106,12 @@ function COOP.more(n, capKey, cap)
     local m = math.floor(n * (1 + (tonumber(c.aircraft_per_player) or 0) * (p - 1)) + 0.5)
     return math.max(n, math.min(m, tonumber(cap) or tonumber(c[capKey]) or m))
 end
--- A tell (sv_tells.lua TELL.say) to joiner `slot`, or to every joiner (nil): "tl", its id and up to two numbers only;
--- the joiner plays it from its own CFG.tells (text, lines and switches: PERSONAL), nothing free-form crosses
-function COOP.tell(slot, id, a, b)
+-- A tell (sv_tells.lua TELL.say) to joiner `slot`, or to every joiner (nil): "tl", its id and the number its line is
+-- picked by only; the joiner plays it from its own CFG.tells (lines and switches: PERSONAL), nothing free-form crosses
+function COOP.tell(slot, id, a)
     if not COOP.host() or (slot ~= nil and not slotOk(slot)) or type(id) ~= "string" then return false end
     local function num(v) return (type(v) == "number" and finite(v, 1e6)) and string.format("%.6g", v) or "" end
-    return sendTo(slot, true, "tl", short(id, 32), num(a), num(b))
+    return sendTo(slot, true, "tl", short(id, 32), num(a))
 end
 -- The squad director's events on one joiner's copies (sv_director.lua: a bracket salvo aimed at that player, fired by
 -- that game so its own copies shoot at it, never by "ev" to every joiner): "dv", the event, its flight and a delay (the
@@ -1225,14 +1225,14 @@ local function onJoinerMessage(f)
         end
     elseif k == "co" then
         if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, f[4] == "1"); M.noMirror = false end
-    elseif k == "tl" then                                -- a tell (sv_tells.lua): an id this game knows, two numbers
-        local id, a, b = short(f[2], 32), tonumber(f[3]), tonumber(f[4])
+    elseif k == "tl" then                                -- a tell (sv_tells.lua): an id this game knows, a number
+        local id, a = short(f[2], 32), tonumber(f[3])
         local now = os.clock()
         if now - (M.tlAt or -1) >= 1 then M.tlAt, M.tlN = now, 0 end
         M.tlN = M.tlN + 1                                -- (at most TL_PER_S a second; tells are dropped, never queued:
-        if M.tlN <= TL_PER_S and cfg().callouts and TELL and TELL.known(id) and levelReady()   -- a late one misleads)
-            and (a == nil or finite(a, 1e6)) and (b == nil or finite(b, 1e6)) then
-            local okT, errT = pcall(TELL.play, id, a, b, "the host")
+        if M.tlN <= TL_PER_S and TELL and TELL.known(id) and levelReady()   -- a late one misleads; [coop] callouts is the
+            and (a == nil or finite(a, 1e6)) then                           -- host's banners, tells are radio lines)
+            local okT, errT = pcall(TELL.play, id, a, "the host")
             if not okT then once("tl", "coop: tell error " .. tostring(errT)) end
         end
     elseif k == "dv" then                                -- the director's event on this game's copies (COOP.dispatch)
@@ -1403,8 +1403,8 @@ bombTick = function(tick)
     return mirrored(rawBombTick, tick)
 end
 local rawCallout = hudCallout
-hudCallout = function(text, sub, big, urgent)
-    rawCallout(text, sub, big, urgent)
+hudCallout = function(text, sub, big)
+    rawCallout(text, sub, big)
     if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
 end
 local rawAddCredits = addCredits

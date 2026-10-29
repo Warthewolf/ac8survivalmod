@@ -582,15 +582,13 @@ function ROLE.ownSet(unit, tier)
     return not (type(fl) == "table" and (fl.moves or (fl.hunt and fl.no_provoke)))
 end
 
--- A role flight is up (spawnFlight, inside roundsTick: n planes): the round's first Lancer and first Skirmisher flight
--- call themselves out to every player (CFG.roles.tells; P3's tells "lancer" / "skirm", HUD only), a Wolf flight's trap
--- is held once its orders are in (WOLF). An ace squadron in a role flight neither calls out nor holds, but one whose
--- opener is the trap (P9's ace personalities: Valkyrie's pack, ace.opener from sv_ai.lua ACE.pickOpener) holds it as
--- any Wolf flight does, and ACE.squadTick springs it after first contact: its hold_max_s runs from that contact (WOLF.contact),
--- held till then for up to CFG.aces.personality.openers.trap hold_max_s (U10's review: flights meet you minutes after
--- they're up, and the trap freed at 60 s left Valkyrie's opener nothing to spring)
+-- A role flight is up (spawnFlight, inside roundsTick: n planes): a Wolf flight's trap is held once its orders are in
+-- (WOLF). An ace squadron in a role flight doesn't hold, but one whose opener is the trap (P9's ace personalities:
+-- Valkyrie's pack, ace.opener from sv_ai.lua ACE.pickOpener) holds it as any Wolf flight does, and ACE.squadTick springs
+-- it after first contact: its hold_max_s runs from that contact (WOLF.contact), held till then for up to
+-- CFG.aces.personality.openers.trap hold_max_s (U10's review: flights meet you minutes after they're up, and the trap
+-- freed at 60 s left Valkyrie's opener nothing to spring)
 function ROLE.spawned(unit, role, n, ace)
-    local c = CFG.roles
     if ace then
         if role == "wolf" and ace.opener == "trap" then
             local pc = CFG.aces.personality
@@ -598,13 +596,6 @@ function ROLE.spawned(unit, role, n, ace)
             WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)
         end
         return
-    end
-    if (role == "lancer" or role == "skirm") and c.tells and TELL then
-        D.roleSaid = D.roleSaid or {}
-        if D.roleSaid[role] ~= D.round then
-            D.roleSaid[role] = D.round
-            pcall(TELL.say, role, TELL.ALL)
-        end
     end
     if role == "wolf" then WOLF.spawned(unit, n, D.now) end
 end

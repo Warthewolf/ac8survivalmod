@@ -186,19 +186,19 @@ local function tellReady(id, e)
     local ok, r = pcall(TELL.ready, id, tellSlot(e))
     return ok and r == true
 end
-local function tellSay(id, e, a, b)
+local function tellSay(id, e, a)
     if not (TELL and TELL.say) or not id or id == "" then return false end
-    local ok, r = pcall(TELL.say, id, tellSlot(e), a, b)
+    local ok, r = pcall(TELL.say, id, tellSlot(e), a)
     return ok and r == true
 end
 -- its tell, then fn its lead_s later (TELL.after; no TELL: at once). Whether the tell was said
-local function tellAfter(id, e, fn, a, b)
+local function tellAfter(id, e, fn, a)
     if not (TELL and TELL.after) then
         local ok, err = pcall(fn)
         if not ok then log("director: " .. id .. "'s action failed: " .. tostring(err)) end
         return false
     end
-    local ok, r = pcall(TELL.after, id, tellSlot(e), fn, a, b)
+    local ok, r = pcall(TELL.after, id, tellSlot(e), fn, a)
     return ok and r == true
 end
 
@@ -846,7 +846,7 @@ function DIR.spawned(unit, role, n, ace)
         -- (its tell, to every player, once each side has a flight up: SV_Spawn's word, not the point's; review of unit 6)
         if not pc.told and pc.count[1] > 0 and pc.count[2] > 0 then
             pc.told = true
-            pc.said = tellSay("pincer", nil, pc.b1, pc.b2)
+            pc.said = tellSay("pincer", nil)
         end
     end
 end

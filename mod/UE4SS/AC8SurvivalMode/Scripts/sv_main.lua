@@ -717,8 +717,8 @@ if type(RegisterKeyBind) == "function" and Key then
         end)
     end
     -- Ctrl+0 in a run: the next line of the tells' catalog (CFG.tells, sv_tells.lua: every radio line of every tell in
-    -- turn, then the HUD-only ones), said here whatever the gaps, with its callout, to hear and see each one (the
-    -- behaviour roadmap P3's test list, tools/re/BEHAVIOUR_DIRECTOR.md unit 4)
+    -- turn), said here whatever the gaps, to hear each one (the behaviour roadmap P3's test list,
+    -- tools/re/BEHAVIOUR_DIRECTOR.md unit 4)
     if Key.ZERO then
         pcall(RegisterKeyBind, Key.ZERO, mods, function()
             ExecuteInGameThread(function()
@@ -728,14 +728,12 @@ if type(RegisterKeyBind) == "function" and Key then
                     for id in pairs(CFG.tells.list) do ids[#ids + 1] = id end
                     table.sort(ids)
                     for _, id in ipairs(ids) do
-                        local radio = CFG.tells.list[id].radio or {}
-                        for i, line in ipairs(radio) do all[#all + 1] = { id, line, i } end
-                        if #radio == 0 then all[#all + 1] = { id } end
+                        for i, line in ipairs(CFG.tells.list[id].radio or {}) do all[#all + 1] = { id, line, i } end
                     end
                     D.tellTest = (D.tellTest or 0) % #all + 1
                     local e = all[D.tellTest]
-                    local said, why = TELL.play(e[1], e[3] or 3, 270, nil, true, e[2])
-                    log(string.format("test: Ctrl+0, tell line %d of %d: %s %s (%s)", D.tellTest, #all, e[1], tostring(e[2] or "(HUD only)"),
+                    local said, why = TELL.play(e[1], e[3], nil, true, e[2])
+                    log(string.format("test: Ctrl+0, tell line %d of %d: %s %s (%s)", D.tellTest, #all, e[1], e[2],
                         said and "said" or tostring(why)))
                 end)
                 if not ok then log("test: Ctrl+0 error " .. tostring(err)) end

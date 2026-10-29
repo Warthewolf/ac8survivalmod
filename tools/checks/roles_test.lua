@@ -724,18 +724,14 @@ local okS9 = true
 for _ = 1, 30 do local _, row = spawnOf("ERA_Unit_07_Dep_Air2", 9); if not inList(base(row), CFG.roles.aircraft.skirm) then okS9 = false end end
 check(okS9, "round 9: the Skirmishers fly the F-2A, Gripen and F-35C only")
 check(has(line("round 9: ERA_Unit_07_Dep_Air2 [skirm]"), "as "), "the spawn line names the role")
--- tells: the first Lancer and Skirmisher flight of a round, once each
+-- no call-out for a role's first flight (the clean up of 2026-10-29: "lancer" / "skirm" were HUD only, BANDITS HIGH and
+-- LONG-RANGE SHOOTERS; gone with the HUD warnings, and [roles] tells with them)
 fresh(8); tells = {}
 spawnOf("ERA_Unit_03_Dep_Air0", 8); spawnOf("ERA_Unit_04_Dep_Air1", 8); spawnOf("ERA_Unit_07_Dep_Air0", 8)
 spawnOf("ERA_Unit_01_Dep_Air0", 8); spawnOf("ERA_Unit_05_Dep_Air0", 8)
-check(table.concat(tells, ",") == "lancer@all,skirm@all", "round 8: one 'lancer' and one 'skirm' tell to every player (" .. table.concat(tells, ",") .. ")")
-spawnOf("ERA_Unit_03_Dep_Air1", 9)
-check(tells[3] == "lancer@all", "the next round's first Lancer flight calls again")
-check(CFG.tells.list.lancer and CFG.tells.list.skirm and CFG.tells.text.lancer and CFG.tells.text.skirm_sub, "the tells' catalog has lancer and skirm")
-CFG.roles.tells = false; tells = {}
-fresh(11); spawnOf("ERA_Unit_03_Dep_Air0", 11)
-check(#tells == 0, "[roles] tells = false: no callout")
-CFG.roles.tells = true
+check(#tells == 0, "round 8's Lancer and Skirmisher flights: no tell (" .. table.concat(tells, ",") .. ")")
+check(CFG.tells.list.lancer == nil and CFG.tells.list.skirm == nil and CFG.tells.text == nil and CFG.roles.tells == nil,
+      "no lancer / skirm tells in the catalog, no [roles] tells")
 -- a Wolf flight's trap
 fresh(10)
 spawnOf("ERA_Unit_05_Dep_Air2", 10)

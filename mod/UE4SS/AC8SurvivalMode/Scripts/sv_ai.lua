@@ -224,7 +224,7 @@ function ACE.movesTick(now, D)
                                 range, offTail, ev, tostring(r), n))
                         end
                     end
-                    -- its tell first (behaviour roadmap P3, CFG.tells reversal / kulbit: the call and callout), the move its
+                    -- its tell first (behaviour roadmap P3, CFG.tells reversal / kulbit: the radio call), the move its
                     -- lead_s after (TELL.after); no tell said (or tells off): the move at once, as before
                     local said = false
                     if TELL and TELL.after then said = TELL.after(tell, nil, go) else go() end
@@ -337,10 +337,9 @@ end
 -- a tell to player e (nil: this game's own); said, and what the log says about it
 local function tell(id, e, a)
     if not (id and TELL and TELL.say and TELL.known and TELL.known(id)) then return false, "no tell" end
-    local ok, said, why, _, shown = pcall(TELL.say, id, (e and not e.isMe) and e.slot or nil, a)
+    local ok, said, why = pcall(TELL.say, id, (e and not e.isMe) and e.slot or nil, a)
     if not ok then return false, "tell error " .. tostring(said) end
     if said == true then return true, "told (" .. id .. ")" end
-    if shown == true then return true, string.format("%s's callout only: %s", id, tostring(why)) end
     return false, string.format("%s not told: %s", id, tostring(why))
 end
 
@@ -400,7 +399,7 @@ function ACE.squadUp(unit, ace, role, n)
 end
 
 -- a flight's first contact: player e d km from its plane p. Its squadron's tell to them (the round's first flight of
--- it they meet: <tier>_in, its name; a later one its opener's own), the opener the tell's lead_s on (sq.actAt). The
+-- it they meet: <tier>_in; a later one its opener's own), the opener the tell's lead_s on (sq.actAt). The
 -- flight's reversals (ACE.movesTick, after this tick's squads) and the director's cover turn wait until the opener's
 -- gone (sq.holdTo through D.aceMoveAt; U10's review: one fired in between and the opener cut each other); a move already
 -- in flight is the opener's to wait out (act). A held trap's hold_max_s runs from here (WOLF.contact); a hit on its
@@ -416,9 +415,8 @@ local function open(unit, sq, e, d, p, now)
     local first = D.squadSaid[key] ~= D.round
     D.squadSaid[key] = D.round
     local id = (first and pc().tells ~= false) and (tk .. "_in") or (op and OPEN_TELL[op]) or nil
-    local a = nil
-    if id == tk .. "_in" then a = sq.ti
-    elseif id == "dive" and DIR and DIR.oclock and p.at then
+    local a = nil                                    -- (the dive's o'clock: its chained line)
+    if id == "dive" and DIR and DIR.oclock and p.at then
         local okC, h = pcall(DIR.oclock, e, p.at)
         a = okC and h or 12
     end
