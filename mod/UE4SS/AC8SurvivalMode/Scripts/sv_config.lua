@@ -390,8 +390,10 @@ CFG = {
         --           fighters' missile slot, P2's bracket's)
         --   trap    a Wolf flight's trap (its odd aircraft held at engagement None from its appearance, as CFG.roles.wolf;
         --           held, freed when hit or its bait is down) springs spring_s after contact: the "trap" tell, then free
-        --           and LastTGT onto you (RE_SV_WolfFree / WolfTurn); not held yet, it waits up to wait_s more. A
-        --           squadron flight off the Wolf pairs: the pack turns on you instead (RE_SV_AceTurn_NN, LastTGT)
+        --           and LastTGT onto you (RE_SV_WolfFree / WolfTurn); not held yet, it waits up to wait_s more. Held
+        --           until that contact (roles.wolf's hold_max_s runs from it), at most hold_max_s from the hold (0: as
+        --           any Wolf flight's). A squadron flight off the Wolf pairs: the pack turns on you instead
+        --           (RE_SV_AceTurn_NN, LastTGT)
         --   kulbit  every aircraft of the flight kulbits as one, firing its special (RE_SV_AceKulbit_NN: the Shadows')
         --   blink   its lead (object 0) blinks to a spot behind and beside you (RE_SV_WraithBlink<K><J>, ACE.BLINK's ring,
         --           a duelist flight's lead only; ground_clear_m over the ground), smoke where it left and came out (smoke)
@@ -400,7 +402,7 @@ CFG = {
         -- enabled = false: ace rounds draw CFG.roles.ace_mix, no openers or blinks (the Reaper's own levers stay).
         personality = { enabled = true, tells = true, ground_clear_m = 150, smoke = true,
                         openers = { high = { km = 5.0, alt_add_m = 2000, top_m = 4500, salvo = 2, gap_s = 0.6, range_km = 5.0 },
-                                    trap = { km = 4.0, spring_s = 8, wait_s = 15 },
+                                    trap = { km = 4.0, spring_s = 8, wait_s = 15, hold_max_s = 300 },
                                     kulbit = { km = 2.5 },
                                     blink = { km = 4.0 } } },
     },
