@@ -548,9 +548,11 @@ CFG = {
     -- (CFG.tells: the action its lead_s later), each with a cooldown and a budget a round; the host's (co-op joiners get
     -- their own tells and shots, and see the planes move):
     --   cover      you on an enemy's tail (cover.tail_km, tail_deg) for cover.tail_s: the nearest plane of another flight
-    --              within range_km of you that may turn (a duelist's or an ace squadron's, not an escort's or the
-    --              jammer's) turns its flight onto you, the aces' reversal (RE_SV_AceTurn_NN; its next no sooner than
-    --              move_s); the tailed one calls for help first (cover_ask, at ask_s), then "check your six" (six)
+    --              within range_km of you that may turn (a duelist's, or a squadron's whose tier has the reversals,
+    --              Harvest's; never another Lancer, Wolf or Skirmisher flight, Bounty's and Valkyrie's included:
+    --              ROLE.ownSet; not an escort's or the jammer's) turns its flight onto you, the aces' reversal
+    --              (RE_SV_AceTurn_NN; its next no sooner than move_s); the tailed one calls for help first (cover_ask, at
+    --              ask_s), then "check your six" (six)
     --   trap       you on a Wolf bait's tail (fighter roles: CFG.roles) for trap.spring_s: its held wingman is sprung onto
     --              you; trap.warn's tell ("he's dragging you") at drag_s, "it's a trap" (trap) at the spring
     --   bracket    two enemies within bracket.range_km of you, their noses within nose_deg of you, sep_deg apart around
