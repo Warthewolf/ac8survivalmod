@@ -149,6 +149,7 @@ function SPC.ladonTick(now, s)
                     local ev, first = "RE_SV_LadonVolley" .. k .. L.side, not L.volleySaid
                     local function volley()
                         local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+                        HIT.sweepUntil = ((D and D.now) or now) + 6      -- (its missiles leave 1.5 s on: HIT.tick's sweep)
                         log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s%s", c.names[k] or k, near, ev,
                             tostring(r), first and string.format(", one every %d s in range%s", every,
                             rg and "" or string.format(", %d s after the other's", gap)) or "", rg and ", enraged" or ""))
@@ -317,6 +318,24 @@ function HIT.reset() HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, n
 function HIT.tick(pc, now)
     local new = HIT.new
     HIT.new = {}
+    -- Weapons are pooled (LiveWeaponBase is a LiveObjectPoolItem: the co-op fire research of 2026-10-29), so a volley's
+    -- reused missiles never come in as new objects: for sweep_s after each volley (HIT.sweepUntil, sv_ladon's volley)
+    -- every Ladon missile up is toned down again (from the class default, so twice is the same as once)
+    if HIT.sweepUntil and now and now < HIT.sweepUntil then
+        local n = 0
+        for cls, fn in pairs({ [LADON_MSL .. "_C"] = nerf, [LADON_CERTAIN .. "_C"] = certain }) do
+            for _, o in ipairs(FindAllOf(cls) or {}) do
+                if valid(o) and not short(o):find("^Default__") then fn(o); n = n + 1 end
+            end
+        end
+        if n > (HIT.sweepN or 0) then HIT.sweepN = n end
+    elseif HIT.sweepUntil then
+        if not HIT.sweepSaid then
+            HIT.sweepSaid = true
+            log(string.format("hits: a Ladon volley's missiles toned down as they flew (up to %d at once, pooled ones too)", HIT.sweepN or 0))
+        end
+        HIT.sweepUntil, HIT.sweepN = nil, nil
+    end
     for _, o in ipairs(new) do                             -- the new missiles: enemies' tracked, the Ladons' toned down
         if valid(o) then
             local n = short(o)
