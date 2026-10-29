@@ -736,12 +736,20 @@ function WOLF.tick(now)
                 flags = flags or svFlags() or {}
                 if (flags[string.format("SV_Up_%02d", poolIndex(unit))] or 0) >= 1 then w.upAt = now end
             end
-            if w.upAt and now >= w.upAt + (tonumber(c.hold_after_s) or 3) and not playerOnAirfield() then
+            -- (its 30 s for its orders count while you fly: down at the airfield they wait for your takeoff, ordersTick;
+            -- U5's review: a rearm of over 30 s lost a flight its trap)
+            local down = playerOnAirfield()
+            if not w.upAt then
+                if not down then w.waited = (w.waited or 0) + (now - (w.waitAt or w.at)) end
+                w.waitAt = now
+            end
+            if w.upAt and now >= w.upAt + (tonumber(c.hold_after_s) or 3) and not down then
                 w.state, w.heldAt = "held", now
                 hold(unit, w, w.keys, string.format("%.0f s after its orders", now - w.upAt))
                 if not next(w.held) then W[unit] = nil end   -- (no event fired: an older container)
-            elseif not w.upAt and now - w.at > 30 then
-                log("roles: " .. unit .. " (wolf) never got its orders; its trap isn't held")
+            elseif not w.upAt and (w.waited or 0) > 30 then
+                log(string.format("roles: %s (wolf) never got its orders (%.0f s since it came up, your time down at the "
+                    .. "airfield not counted); its trap isn't held", unit, w.waited))
                 W[unit] = nil
             end
         elseif w.state == "held" and next(w.held) and now >= (w.checkAt or 0) then

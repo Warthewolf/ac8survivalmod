@@ -858,6 +858,9 @@ function enemyLate(p, round)
     if x == 1 then return end
     local h0, h1 = scaleHealth(p.obj, x)
     p.late = h1 ~= nil
+    -- (a co-op joiner's copy, scaled as the host scales its own: what it's expected to have moves with it, or the cut
+    -- went to the host as this player's hit and took a Skirmisher there to x0.5; code review of 2026-10-29)
+    if h1 and COOP and COOP.copyScaled then COOP.copyScaled(p.obj, h0, h1) end
     local key = round .. "|" .. (rx ~= 1 and role or "")
     if h1 and not lateSaid[key] then
         lateSaid[key] = true

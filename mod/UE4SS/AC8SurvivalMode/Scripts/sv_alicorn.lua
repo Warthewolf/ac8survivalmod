@@ -259,7 +259,8 @@ local function armsDown(s, key) return s.armsDown ~= nil and s.armsDown[key] == 
 -- each surfacing; warn_s before each the tell alcn_deck (its radio call) and a callout, every player, once nothing holds
 -- the launch (code review of unit 9: told first, it could then wait minutes behind max_up untold). Never more than
 -- max_up of its flights up at once, never while you're down at the airfield (retried each second: a flight that
--- appears in the landing menu gets no orders), never one of the round's own flights (D.taken: one queued for a later
+-- appears in the landing menu gets no orders) but in co-op while another player flies (othersFlying: ordersTick gives it
+-- its orders then; user, 2026-10-29), never one of the round's own flights (D.taken: one queued for a later
 -- wave, its tier and orders rewritten for the live flight when its turn came); a spare it takes is no spare any more.
 -- At least DECK_FLOOR_M up: the pool's 2-ship units fly 1000 m and up (survival WD's MinAltitudeInMeter, Mission 22's).
 -- The host's (or solo): roundsTick's; spawnFlight mirrors the spawn.
@@ -295,7 +296,8 @@ function SPC.alicornDeck(now, s, c)
         if not s.deckFullSaid then s.deckFullSaid = true; log(string.format("special: the Alicorn's deck waits: %d of its flights up", up)) end
         return hold(1)
     end
-    if playerOnAirfield() then return hold(1) end
+    local flying = playerOnAirfield() and othersFlying()
+    if flying == 0 then return hold(1) end
     local part = (s.depthPart and valid(s.depthPart) and s.depthPart) or parts(c.core_class)[1]
     local at, fwd = partAt(part)
     if not at then
@@ -340,9 +342,9 @@ function SPC.alicornDeck(now, s, c)
         D.deckLeft = D.deckLeft - 1
         for i = #(D.spare or {}), 1, -1 do if D.spare[i] == u then table.remove(D.spare, i) end end   -- (no spare now)
         s.deckNext, s.deckWarned, s.deckFullSaid = now + (tonumber(dk.every_s) or 35), nil, nil
-        log(string.format("special: the Alicorn's deck launch %d: %s (%s), %d aircraft at %.0f m%s, %d launches left this round",
+        log(string.format("special: the Alicorn's deck launch %d: %s (%s), %d aircraft at %.0f m%s, %d launches left this round%s",
             s.deckN, u, how, r, pose.z / 100, alt > (tonumber(dk.alt_m) or alt) and " (alt_m under the pool's floor)" or "",
-            D.deckLeft))
+            D.deckLeft, flying and string.format("; you're down at the airfield, %d other player(s) flying", flying) or ""))
     else
         hold(5)
         log(string.format("special: the Alicorn's deck: %s didn't launch (%s); again in %.0f s, told first", u,

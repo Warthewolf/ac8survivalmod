@@ -21,7 +21,8 @@
 --      the timer, a hit, its own bait (or the lead) going down or the director's spring (with the turn), a held plane
 --      shot down dropped, a recycled flight's earlier planes ignored, nothing freed or sprung inside your decoy (after
 --      it, then), held again after it, dropped with its flight; the events co-op forwards (hold, free) and keeps (turn);
---   6. enemyLate: a Skirmisher's health x0.75 (MaxHealth lowered too), with the late rounds', not an ace squadron's;
+--   6. enemyLate: a Skirmisher's health x0.75 (MaxHealth lowered too), with the late rounds', not an ace squadron's; a
+--      co-op joiner's copy cut the same and the cut never sent to the host as its hit ("ht"), a hit after it still;
 --   7. a tier's no_provoke and moves (the Reaper's, every ordinary flight's from round 28) on duelists and ace squadrons
 --      only, not on Lancer, Wolf or Skirmisher flights.
 local MOD, WORK = arg[1], arg[2]
@@ -912,6 +913,43 @@ local off = plane("ERA_Unit_07_Dep_Air1", 60)
 enemyLate(off, 5)
 check(off.obj.HealthInternal == 600, "roles off: untouched")
 ROLE.live = saveLive
+-- a co-op joiner's copy of a Skirmisher (code review of 2026-10-29, coop-1): cut here as the host cuts its own, and
+-- the cut not sent to the host as this player's hit ("ht": it took the host's plane to x0.5); a hit after it still is
+do
+    local M = _G.M
+    local sentJ, inboxJ = {}, {}
+    local rawSend, rawRecv, rawInfo = SV_CoopSend, SV_CoopRecv, SV_CoopInfo
+    SV_CoopSend = function(msg) sentJ[#sentJ + 1] = msg; return 1 end
+    SV_CoopRecv = function() return table.remove(inboxJ, 1) or "" end
+    SV_CoopInfo = function() return "open=1;state=linked;peers=0/linked/40/10/host" end
+    local function hts() local t = {}; for _, m in ipairs(sentJ) do if m:match("^ht|") then t[#t + 1] = m end end; return table.concat(t, ";") end
+    CFG.coop.enabled = true
+    COOP.open, COOP.role, COOP.slot = true, "join", 1
+    fresh(5)
+    COOP.tick(0)                                       -- (this level's reset)
+    local U = "ERA_Unit_07_Dep_Air1"
+    M.cunits[U] = { gen = 1, n = 0, planes = {}, binds = {} }   -- (its spawn here, doSpawn's)
+    inboxJ[#inboxJ + 1] = "0|bd|" .. U .. "|1|1|7"     -- (the host's id for its plane 1)
+    COOP.tick(0)
+    local o = { addr = 0x700, HealthInternal = 600, MaxHealth = 60,
+                full = "BP_OP_test_C_1 /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.x" }
+    function o:SetMinHealth() end
+    logPlane(o, U, 0)                                  -- (the copy up here: clientPlane binds it)
+    check(M.copies[7] and M.copies[7].exp == 600, "(a joiner's copy of a Skirmisher bound, 600 expected)")
+    enemyLate(planes[#planes], 5)                      -- (the joiner's own sweep)
+    sentJ = {}
+    COOP.tick(0)
+    check(o.HealthInternal == 450 and o.MaxHealth == 45 and hts() == "" and M.copies[7].exp == 450,
+          "a co-op joiner's Skirmisher copy: x0.75 here as on the host, no \"ht\" sent for the cut (" .. hts() .. ")")
+    o.HealthInternal = 350                             -- (this player's hit)
+    sentJ = {}
+    COOP.tick(0)
+    check(hts() == "ht|7|10.0", "... a hit after it: sent as ever (" .. hts() .. ")")
+    COOP.role = "host"
+    check(COOP.copyScaled(o, 450, 300) == false, "COOP.copyScaled on the host: nothing (its planes' hits are its own)")
+    SV_CoopSend, SV_CoopRecv, SV_CoopInfo = rawSend, rawRecv, rawInfo
+    COOP.open, COOP.role, COOP.slot, CFG.coop.enabled = false, nil, nil, false
+end
 
 ---------------------------------------------------------------------------------------------------- 7. a tier's levers
 print("a tier's no_provoke and moves leave role flights alone (ACE.hunt, ACE.movesTick; U5's review)")

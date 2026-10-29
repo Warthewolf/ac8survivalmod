@@ -209,16 +209,22 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   joiners' copies fly the same world-data units (their behaviour doesn't matter on a joiner: puppets). The Wolf trap's
   per-object holds and frees (RE_SV_WolfHold_<NN><L> / RE_SV_WolfFree_<NN><L>) are forwarded, so a joiner's copy of a
   held plane holds its fire too; its LastTGT turn (RE_SV_WolfTurn_<NN><L>) is in KEEP_EVENTS (onto LocalPlayer: the
-  host's game). The host's split hunts (RE_SV_Hunt_NN, unit-wide) skip a Wolf flight while its trap is held. A joiner
-  who links after a hold has been fired doesn't get it again (its copies attack it until the trap is freed). Untested.
+  host's game). The host's split hunts (RE_SV_Hunt_NN, unit-wide) wait while a Wolf flight's trap is pending or held
+  and go once it's let go (code review of 2026-10-29: they were dropped, so no Wolf flight ever split). A joiner
+  who links after a hold has been fired doesn't get it again (its copies attack it until the trap is freed). A joiner's
+  copies' health cut by its own late-rounds / role scaling (a Skirmisher's x0.75) moves what clientTick expects
+  (COOP.copyScaled), so it never goes to the host as that player's hit ("ht"; the same review: it took the host's
+  Skirmishers to x0.5). Untested.
 - The squad director (behaviour roadmap P2, BEHAVIOUR_DIRECTOR.md unit 6) runs on the host only and aims each tactic at
   a player slot (COOP.players(); a joiner's entry now carries `rot`). "dv" (host -> one joiner, COOP.dispatch): one of
   the director's events (RE_SV_Salvo_<NN><L>, RE_SV_Dir*_<NN>, RE_SV_Wolf*_<NN><L>, the flight's own NN), the flight and
   a delay; the joiner fires it on its own copies after the delay (clamped 0-3 s, so the tell's lead is timed there),
-  only once its level is ready, only with a live copy of that plane (or flight), at most 8 a second, never queued past
-  its delay; "rs" clears the queue. So a bracket salvo aimed at a joiner is fired by that joiner's game (its copies'
+  only once its level is ready, only with a live copy of that plane (or flight), at most 8 a second, dropped once 1 s
+  past its time (a level that stopped being ready meanwhile; code review of 2026-10-29); "rs" clears the queue. So a bracket salvo aimed at a joiner is fired by that joiner's game (its copies'
   "Player" is the joiner); RE_SV_Salvo_* is in KEEP_EVENTS (never "ev"). A flight's hold and release
-  (RE_SV_DirHold_NN / RE_SV_DirFree_NN: top cover, regroup) are forwarded, so a joiner's copies hold their fire too.
+  (RE_SV_DirHold_NN / RE_SV_DirFree_NN: top cover, regroup) are forwarded, so a joiner's copies hold their fire too;
+  a joiner fires a hold (a Wolf trap's too) only once that flight's copy there has been up 3 s (its own appearance
+  orders, 2 s after it appears, would undo it), its release dropping one still waiting (code review of 2026-10-29).
   LastTGT steers to the host, so a cover or a dive aimed at a joiner sends the flight hunting (RE_SV_Hunt_NN) with its
   TargetActor kept on that joiner's stand-in for aim_s. The host's split hunt waits while the director holds a flight
   (the hunt's order would free it; as long as the hold lasts, at most top_cover.max_s + 120 s) and goes after; a
@@ -242,8 +248,9 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   KEEP_EVENTS (its LastTGT steers to LocalPlayer; the guards are puppets on a joiner), and the "pack" tell is the
   host's own; a joiner's own field (ANOM.clientTick) never springs it. AB.L..IN's phase 2 blinks are around the host
   (RE_SV_GlitchBlink_*, kept), its "glitch_six" tell the host's; its phase 3 LastTGT (RE_SV_GlitchTurn) is kept by
-  mirroredEvent's RE_SV_Glitch rule, its "glitch_allout" tell goes to every player ("tl"), and its gun events
-  (RE_SV_GlitchGun, forwarded) fire on each joiner's copy at that joiner while the host is close in front of it; the
+  mirroredEvent's RE_SV_Glitch rule, its "glitch_allout" tell goes to every player ("tl"), and its phase-3 gun events
+  (RE_SV_GlitchGun outside a frenzy) fire on the host's game alone (COOP.eventHere; code review of 2026-10-29: forwarded,
+  each joiner's copy fired at that joiner on the host's geometry), a frenzy's still forwarded; the
   host stops RE_SV_GlitchEcm (forwarded) and switches its own pods off, and its "rnd" carries AB.L..IN's phase (the
   9th field: 1-3, else empty; a joiner takes only 1-3 as D.glitchPhase), so a joiner's ANOM.clientGlitch switches its
   copy's pods off too every ecm_check_s while the host's is in phase 3 (its own row would refire them every 14 s; code
@@ -267,6 +274,17 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
 - Names: each stand-in's AI desc shows a callsign (bShowCallSignForAlly, GameObjectDisplayNameID02 =
   SV_CoopName_<slot letter>), set to the player's name with SV_SetText. A co-op row on the HUD lists the players.
 - Pause: while another player is linked, the pause menu opens but the game is unpaused from Lua's 250 ms tick.
+- The host's landing (user, 2026-10-29: "when the HOST is landed at the airfield that the game isn't paused for the
+  other players"; Shazzy's host log of 2026-10-25: spawns held 10-43 s in rounds 3, 4, 6 and 7). Solo, spawns wait while
+  you're down at the airfield (a flight that appears with the landing menu up gets no orders: test of 2026-10-22). A
+  co-op host now holds only while no other player flies (sv_rounds.lua othersFlying: COOP.players() alive, fresh, not
+  on the airfield): the spawns go on (`round N: spawns go on while you're down at the airfield (1 other player
+  flying)`, once a round), ordersTick fires RE_SV_FlightOrders_NN orders_check_s after a spawn and every 5 s while the
+  host is down, none counted as a try (whether it fires with the landing menu up is unknown; the 3 tries come after the
+  takeoff as ever), the wave clock (waves.timeout_s) runs, and the ALICORN's deck launches. The Wolf trap's 30 s for
+  its orders don't count the host's time on the airfield (solo too). Not changed: the shuttle's countdown and its
+  invulnerability still hold while the host is down. A joiner's game holds nothing on the host's landing (its copies
+  come as the host's "sp" do). Untested in game (tools/checks/coop_landing_test.sh).
 - Protocol 3, up to 24 players: a joiner sends its own plane to the host (P, 30 Hz); the host sends each joiner one Q
   packet of every other player's latest state (49-byte records: 23 fit in 1132 bytes), at 30 Hz up to 6 players and
   20 Hz past that (relaying every P to every joiner was n x n packets: ~16,000 a second at 24). Message slots are

@@ -11,13 +11,15 @@
 --   AB.L..IN's phases (ANOM.glitchTick): phase 2 once two frenzies are over (its tell; blinks at the spot nearest your
 --     six), phase 3 at 35 % health (its tell to every player; no frenzy on a hit, no RE_SV_GlitchEcm, its pods switched
 --     off, its gun only with you close in front of it, LastTGT every allout_turn_s and when you're behind it; none of the
---     pods up its own logged once), phase 3 mid-blink (it comes back first), phases off (as before);
+--     pods up its own logged once; a co-op host's phase-3 gun events its own, never forwarded, a frenzy's forwarded),
+--     phase 3 mid-blink (it comes back first), phases off (as before);
 --   a Ladon's rage (SPC.ladonTick): the other one shot down: RE_SV_LadonRage<Key>, its callout and tell, volleys every
 --     25 s; both down in one second: none; rage off: none;
 --   the ALICORN's deck (SPC.alicornTick): its tell and callout warn_s before, a Skirmisher 2-ship spawned alt_m over the
 --     sea ahead_m off its bow along its heading, every every_s, no more than max_up up, none while dived or while you're
---     at the airfield, after_surface_s after it surfaces, D.deckLeft counted down, any free 2-ship with roles off; its
---     tell only once nothing holds the launch (max_up, the airfield), alt_m never under the pool's 1100 m floor;
+--     at the airfield (a co-op host's while another player flies: launched), after_surface_s after it surfaces,
+--     D.deckLeft counted down, any free 2-ship with roles off; its tell only once nothing holds the launch (max_up, the
+--     airfield), alt_m never under the pool's 1100 m floor;
 --     startRound's D.deckLeft (and its escorts folded in from escort_from, none from a spawn point), never one of the
 --     round's own flights (D.taken) and a spare it takes no spare any more;
 --   the ALICORN's railguns and VLS (code review of 2026-10-29): once every one seen up is down (or gone), the RAILGUN
@@ -402,6 +404,29 @@ you = KM(-1, 0)                                           -- (2 km ahead: out of
 gun0 = count("^RE_SV_GlitchGun")
 tickG(107.5, 109)
 check(count("^RE_SV_GlitchGun") == gun0, "2 km in front of it: out of allout_range_km, quiet")
+-- a co-op host: phase 3's gun events on its own game alone (hot3 is the host's geometry; forwarded, each joiner's copy
+-- fired at that joiner: code review of 2026-10-29, bosses-3); a frenzy's still forwarded
+do
+    local sentB, rawSend = {}, SV_CoopSend
+    SV_CoopSend = function(msg) sentB[#sentB + 1] = msg; return 1 end
+    local function fwd() local n = 0; for _, m in ipairs(sentB) do if m == "ev|RE_SV_GlitchGun" then n = n + 1 end end; return n end
+    COOP.open, COOP.role, COOP.slot = true, "host", 0
+    you = KM(0, 0.1)
+    gun0 = count("^RE_SV_GlitchGun")
+    local fH = #logs + 1
+    tickG(109.25, 111.25)
+    check(count("^RE_SV_GlitchGun") - gun0 == 5 and fwd() == 0 and has(line("special: AB.L..IN's phase-3 gun events on the host alone", fH), "fire their own"),
+          string.format("a co-op host close in front of it in phase 3: RE_SV_GlitchGun here (%d in 2 s), none forwarded (%d; logged)",
+              count("^RE_SV_GlitchGun") - gun0, fwd()))
+    local sF = glitchRound()
+    tickG(1.5, 1.5)
+    sentB = {}
+    hit(); tickG(1.75, 3)
+    check(sF.frenzyUntil and fwd() > 0, "... a frenzy's gun events forwarded as before (" .. fwd() .. ")")
+    SV_CoopSend = rawSend
+    COOP.open, COOP.role, COOP.slot = false, nil, nil
+    s = sF
+end
 -- none of the pods up its own: that's logged too, once (a tester greps "ECM pods off"; code review of 2026-10-29)
 do
     local sZ = glitchRound()
@@ -614,6 +639,27 @@ tickC(0, 25)
 check(#spawns == 1 and math.abs(spawns[1].z - 110000) < 1 and has(line("special: the Alicorn's deck launch 1"), "at 1100 m (alt_m under the pool's floor)"),
       "alt_m 600: launched at the 1100 m floor (" .. tostring(spawns[1] and spawns[1].z) .. ")")
 AL.deck.alt_m = CFG_DEFAULTS.specials.alicorn.deck.alt_m
+-- a co-op host down at the airfield: it launches while another player flies (othersFlying; user, 2026-10-29: "the game
+-- isn't paused for the other players"), and waits as solo while they're down too
+do
+    local M = _G.M
+    local peersWas = M.peers
+    COOP.open, COOP.role, COOP.slot = true, "host", 0
+    M.peers = { [1] = { at = KM(10, 0), alive = true, fresh = true, onAirfield = false, hpPct = 100 } }
+    s = alicornRound()
+    grounded = true
+    local f0 = #logs + 1
+    tickC(0, 25)
+    check(#spawns == 1 and said("PLANES LAUNCHING") and has(line("special: the Alicorn's deck launch 1", f0), "you're down at the airfield, 1 other player(s) flying"),
+          "a co-op host down at the airfield, player 2 flying: launched at first_s (logged)")
+    M.peers[1].onAirfield = true
+    s = alicornRound()
+    grounded = true
+    tickC(0, 40)
+    check(#spawns == 0 and not said("PLANES LAUNCHING"), "... player 2 down at the airfield too: waits, untold")
+    M.peers, COOP.open, COOP.role, COOP.slot = peersWas, false, nil, nil
+    grounded = false
+end
 -- off
 AL.deck.enabled = false
 s = alicornRound()

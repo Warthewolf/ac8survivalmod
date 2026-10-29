@@ -29,8 +29,12 @@
 --     stand-in, ACE.hunt leaving it, the orders back after aim_s; inside your decoy: at its end), the split hunt waiting
 --     out a hold however long it lasts and given back after it (COOP.hunted), the holds in force sent to a joiner who
 --     links later (and not one let go meanwhile), KEEP_EVENTS, and the joiner's "dv" guards (names, its flight, a live
---     copy, the delay, the rate, a level still loading, "rs"); past `players` (5 and 24 up) a joiner's tail episode
---     kept on the ticks they aren't looked at (cover for them), over when they land or fly off its plane; solo's 1 s;
+--     copy, the delay, the rate, a level still loading, one 1 s past its time dropped, "rs"); past `players` (5 and 24
+--     up) a joiner's tail episode kept on the ticks they aren't looked at (cover for them), over when they land or fly
+--     off its plane; solo's 1 s; a Wolf flight's split hunt waiting out its trap (pending or held) and going after it,
+--     dropped past the longest a trap holds; a forwarded hold (RE_SV_DirHold, RE_SV_WolfHold) held back on a joiner
+--     until its copy's own orders have come, dropped by its release or with no copy 30 s on, at once for a copy up
+--     long since;
 --   the hooks in sv_main, sv_rounds, sv_spawn, sv_allies, sv_ai and main.lua by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -843,6 +847,34 @@ D.dir.held[L] = nil
 clock = clock + 13
 COOP.tick(18)
 check(sentOf("ev|RE_SV_DirHold") == "", "... none for a flight let go meanwhile")
+-- a Wolf flight's split hunt waits while its trap is pending or held and goes once it's let go (code review of
+-- 2026-10-29, coop-2: it was dropped, and a trap is still pending or held at +5 s, so no Wolf flight ever split)
+local WF = "ERA_Unit_05_Dep_Air1"                     -- (pool index 14)
+D.wolf = { [WF] = { at = 0, keys = { 1, 3 }, held = {}, state = "pending" } }
+D.up[WF], alive[WF] = true, 4
+M.units[WF] = { gen = 5, n = 1, planes = { { id = 41 } }, ground = {}, at = clock }
+M.hunts = { { at = clock - 1, name = "RE_SV_Hunt_14", unit = WF } }
+events = {}
+from = #logs + 1
+COOP.tick(19)
+check(evs("^RE_SV_Hunt") == "" and #M.hunts == 1 and has(line("coop: " .. WF .. " holds its Wolf trap", from), "once that's let go"),
+      "the split hunt for a Wolf flight whose trap is pending: waits (logged)")
+D.wolf[WF].state, D.wolf[WF].held = "held", { [1] = true, [3] = true }
+for _ = 1, 30 do clock = clock + 2; COOP.tick(19) end
+check(evs("^RE_SV_Hunt") == "" and #M.hunts == 1 and since(from, "holds its Wolf trap") == 1, "... while it's held (60 s on), logged once")
+D.wolf[WF].held, D.wolf[WF].state = {}, "free"
+clock = clock + 2
+COOP.tick(19)
+check(evs("^RE_SV_Hunt") == "RE_SV_Hunt_14" and COOP.hunted(WF)
+      and has(line("coop: " .. WF .. " goes after the joiners", from), "its Wolf trap let go after"),
+      "... freed: the hunt goes (COOP.hunted), logged")
+D.wolf[WF] = { at = 0, keys = { 1 }, held = { [1] = true }, state = "held" }
+M.hunts = { { at = clock - 1, name = "RE_SV_Hunt_14", unit = WF } }
+events = {}
+for _ = 1, 260 do clock = clock + 2; COOP.tick(19) end
+check(evs("^RE_SV_Hunt") == "" and #M.hunts == 0 and has(line("coop: " .. WF .. " held its Wolf trap"), "it doesn't go after the joiners"),
+      "a trap held past the longest one can (an ace trap's 300 s + hold_max_s 60 + 120): the hunt dropped (logged)")
+D.wolf = nil
 CFG.coop.enabled = false
 -- past CFG.director.players (4) flying, the others looked at in turn: a joiner's tail episode stands on the ticks they
 -- aren't (the review's director-2: with 5 up it ended each tick player 2 wasn't picked, so no cover ever came)
@@ -919,6 +951,26 @@ do
     roundsTick(501)
     check(evs("^RE_SV_Salvo") == "RE_SV_Salvo_02A" and has(line("coop: director RE_SV_Salvo_02A fired here"), "fired"),
           "1 s on: fired on this game's copy (its own fire control aims at this game's player)")
+    -- one due while this level stopped being ready (its pawn gone a moment: READY_S again): dropped once it's 1 s past
+    -- its time, not fired seconds late (code review of 2026-10-29, coop-3)
+    events = {}
+    from = #logs + 1
+    clock = clock + 1
+    inbox[#inbox + 1] = "0|dv|RE_SV_Salvo_02A|" .. U .. "|1.00"
+    COOP.tick(21)
+    check(M.dvQ and #M.dvQ == 1, "(another queued)")
+    local pawnWas = survivalPC.Pawn
+    survivalPC.Pawn = nil
+    clock = clock + 1.1
+    roundsTick(502)
+    survivalPC.Pawn = pawnWas
+    clock = clock + 1
+    roundsTick(503)
+    check(#M.dvQ == 1 and evs("^RE_SV_Salvo") == "", "(the level not ready yet: still queued)")
+    clock = clock + 3
+    roundsTick(504)
+    check(evs("^RE_SV_Salvo") == "" and #M.dvQ == 0 and has(line("coop: the host's director event RE_SV_Salvo_02A dropped", from), "past its time"),
+          "one due while this level wasn't ready: dropped once it's 1 s past its time, not fired late (logged)")
     events = {}
     local bad = { "0|dv|RE_SV_AceTurn_02|" .. U .. "|0", "0|dv|RE_SV_Salvo_04A|" .. U .. "|0", "0|dv|RE_SV_Salvo_02C|" .. U .. "|0",
                   "0|dv|RE_SV_Salvo_02A|" .. U .. "|nan", "0|dv|RE_SV_Salvo_02a|" .. U .. "|0", "0|dv|" .. ("RE_SV_Salvo_02A"):rep(5) .. "|" .. U .. "|0" }
@@ -940,6 +992,65 @@ do
     inbox[#inbox + 1] = "0|rs"
     COOP.tick(27)
     check(M.dvQ == nil, "the host's restart (\"rs\"): the queue gone")
+    -- the host's hold on a flight whose copy comes up here after it: held back until that copy's own appearance orders
+    -- have come (they'd undo it; review of unit 6), dropped by its release if that comes first, or with no copy 30 s on;
+    -- a copy up long since: at once
+    print("co-op: a forwarded hold on the joiner")
+    local QU = "ERA_Unit_02_Dep_Air1"                -- (pool index 5)
+    events, spawns, alive[QU] = {}, {}, 0             -- (none of its last flight up here: spawned at once)
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|sp|" .. QU .. "|-|-|-1|9"
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirHold_05"
+    COOP.tick(28)
+    check(evs("^RE_SV_DirHold") == "" and M.holdQ and #M.holdQ == 1
+          and has(line("coop: the host's RE_SV_DirHold_05 waits", from), "its own orders"), "its copy's spawn still queued here: the hold waits (logged)")
+    roundsTick(510)
+    check(#spawns == 1 and spawns[1].unit == QU and evs("^RE_SV_DirHold") == "", "(its copy spawned here)")
+    clock = clock + 2.9
+    roundsTick(511)
+    check(evs("^RE_SV_DirHold") == "", "... not within 3 s of its copy coming up (its appearance orders 2 s on)")
+    clock = clock + 0.2
+    roundsTick(512)
+    check(evs("^RE_SV_DirHold") == "RE_SV_DirHold_05" and has(line("coop: the host's RE_SV_DirHold_05 fired here", from), "its copy's orders first"),
+          "... then fired here (logged)")
+    events = {}
+    clock = clock + 10
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirHold_05"
+    COOP.tick(29)
+    check(evs("^RE_SV_DirHold") == "RE_SV_DirHold_05", "its copy up long since: a hold fired at once")
+    events = {}
+    inbox[#inbox + 1] = "0|sp|" .. QU .. "|-|-|-1|10"
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirHold_05"
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirFree_05"
+    COOP.tick(30)
+    roundsTick(513)
+    clock = clock + 5
+    roundsTick(514)
+    check(evs("^RE_SV_Dir") == "RE_SV_DirFree_05" and #M.holdQ == 0
+          and has(line("coop: the host's RE_SV_DirHold_05 dropped here", from), "RE_SV_DirFree_05 came before it could go"),
+          "its release before it could go: the release fired, the hold dropped (logged)")
+    events = {}
+    inbox[#inbox + 1] = "0|ev|RE_SV_WolfHold_05B"
+    M.cunits[QU].upAt = clock                        -- (a copy just up: a Wolf trap's hold waits the same)
+    COOP.tick(31)
+    inbox[#inbox + 1] = "0|ev|RE_SV_WolfFree_05D"
+    COOP.tick(31)
+    clock = clock + 3.1
+    roundsTick(515)
+    check(evs("^RE_SV_Wolf") == "RE_SV_WolfFree_05D,RE_SV_WolfHold_05B", "a Wolf trap's hold waits too; another plane's release leaves it")
+    events = {}
+    M.cunits[QU] = { gen = 11, n = 0, planes = {}, binds = {} }   -- (a copy that never comes up here)
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirHold_05"
+    COOP.tick(32)
+    clock = clock + 31
+    roundsTick(516)
+    check(evs("^RE_SV_Dir") == "" and #M.holdQ == 0 and has(line("coop: the host's RE_SV_DirHold_05 dropped here", from), "wasn't up 30 s on"),
+          "its copy never up here: dropped 30 s on (logged)")
+    inbox[#inbox + 1] = "0|ev|RE_SV_DirHold_05"
+    COOP.tick(33)
+    inbox[#inbox + 1] = "0|rs"
+    COOP.tick(33)
+    check(M.holdQ == nil, "the host's restart (\"rs\"): the holds waiting gone")
     events = {}
     D = { round = 6, state = "fighting", now = 500, up = {}, flown = {} }
     p = plane(A, 0, KM(1, 0), DIRV(1, 0)); plane(Q, 0, KM(0, 3), DIRV(0, -1))
