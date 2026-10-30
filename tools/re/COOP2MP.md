@@ -541,3 +541,9 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   here couldn't be finished` if not); a real plane's hits on the host kept (M.joinHits) and added to the kill's
   "wingmate" share (KILL.read). The resend (jn) after strays at most every 120 s, never within 30 s of the last.
   coop_ground_test's ModifyHealth stub now refuses a role-2 cause as the game does (the old code fails it).
+- The aircraft beside each name (0.73.21-coop2mp.22, runtime 0.32.4; the user: "they should also have what aircraft they
+  are flying attached above their name too"): the box's builder (0x147293760) reads the object's ObjName +0x6D8 (at
+  0x147294fc5 and 0x147295963) beside the callsign +0x6E8; the remote spawn fills ObjName from the plane's data row, ours
+  had none. Each game sends its own plane's GetObjName() in "hi" / "pi" (a 9th field, cleaned: 32 characters, no "|" or
+  control characters); SV_PPName's third argument writes it to +0x6D8 (the airframe code if none came; set again when
+  it arrives late). `coop: player N's name on their real plane's box: <name> (<aircraft>)`.

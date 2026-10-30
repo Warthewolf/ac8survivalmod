@@ -382,7 +382,7 @@ end
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
         local r = M.roster[s]
-        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "") end
+        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "", r.ac or "") end
     end
 end
 
@@ -1126,9 +1126,11 @@ local function peerTick(slot)
             -- (their name under ALLY in its target box: the callsign line, runtime 0.32.2; the AI stand-ins' own way,
             -- SV_CoopName_<A-X>, doesn't reach a player plane)
             if type(SV_PPName) == "function" and P.addr then
-                local okN, rn = pcall(SV_PPName, P.addr, playerName(slot))
+                local acn = (r0 and r0.ac and r0.ac ~= "") and r0.ac or string.upper(code or "")
+                local okN, rn = pcall(SV_PPName, P.addr, playerName(slot), acn)
+                P.acShown = (okN and rn == 1) and acn or nil
                 log(string.format("coop: player %d's name on their real plane's box: %s", slot + 1,
-                    (okN and rn == 1) and playerName(slot) or ("NOT set (" .. tostring(rn) .. ")")))
+                    (okN and rn == 1) and (playerName(slot) .. " (" .. acn .. ")") or ("NOT set (" .. tostring(rn) .. ")")))
             end
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
             log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
@@ -1165,6 +1167,14 @@ local function peerTick(slot)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
             log(string.format("coop: player %d's plane %s", slot + 1, show and "shown"
                 or (fresh and "hidden (down)" or "hidden (not in the mission)")))
+        end
+        if P.real and valid(P.obj) and P.addr and type(SV_PPName) == "function" then
+            local r1 = M.roster[slot]
+            local acn = r1 and r1.ac
+            if acn and acn ~= "" and acn ~= P.acShown then
+                local okN, rn = pcall(SV_PPName, P.addr, playerName(slot), acn)
+                if okN and rn == 1 then P.acShown = acn end
+            end
         end
         -- (COOP2MP T5: their damage shown on their real plane here, its health as their game says, never under 1 HP: a
         -- real plane is never destroyed mid-level (0.73.12's crash), and hits on it here are refused anyway (hard rule 53);
@@ -1917,21 +1927,36 @@ function M.myPaint()
     return (ok and paintOk(p)) and p or ""
 end
 M.paintOk = paintOk
+-- your aircraft's name as the game shows it (your plane's GetObjName: "ADFX-02" ...), for the line beside your name on
+-- the others' boxes (SV_PPName's third argument, runtime 0.32.4); 32 characters at most, no "|"
+local function acClean(v)
+    if type(v) ~= "string" then return "" end
+    v = v:gsub("[|%c]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return #v <= 32 and v or v:sub(1, 32)
+end
+function M.myAircraft()
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return "" end
+    local ok, v = pcall(function() local x = pawn:GetObjName(); return type(x) == "string" and x or x:ToString() end)
+    return ok and acClean(v) or ""
+end
+M.acClean = acClean
 local function sendHi()
     local row, code = myAirframe()
     -- (what the host last heard: a hello sent with no plane yet is followed by the airframe once there is one; the
     -- co-op run of 2026-10-30: a player who'd been in the level before linking never sent theirs, shown as the default)
     -- The airframe's code (COOP2MP T3: the player plane the others spawn for you; the ADFX-02 has no AI row) goes last.
-    M.myRow, M.myCode, M.myLo, M.myPt = row, code, M.myLoadout(), M.myPaint()
+    M.myRow, M.myCode, M.myLo, M.myPt, M.myAc = row, code, M.myLoadout(), M.myPaint(), M.myAircraft()
     send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "", code or "", M.myLo,
-        M.myPt)
+        M.myPt, M.myAc)
 end
 
 -- the host's own roster entry, and everyone told
 local function hostRosterSelf()
     local row, code = myAirframe()
-    M.myRow, M.myCode, M.myLo, M.myPt = row, code, M.myLoadout(), M.myPaint()
-    M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "", lo = M.myLo, paint = M.myPt }
+    M.myRow, M.myCode, M.myLo, M.myPt, M.myAc = row, code, M.myLoadout(), M.myPaint(), M.myAircraft()
+    M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "", lo = M.myLo, paint = M.myPt,
+                    ac = M.myAc }
     sendRoster(nil)
 end
 
@@ -2185,9 +2210,10 @@ local function onHostMessage(from, f)
         local code = short(f[6], 16):match("^%w+$") or ""          -- (their airframe's code: COOP2MP T3)
         local lo = loadoutOk(f[7]) and f[7] or ""                  -- (their loadout: COOP2MP T4b)
         local pt = paintOk(f[8]) and f[8] or ""                    -- (their paint: T5)
+        local ac = acClean(f[9])                                    -- (their aircraft's name)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
-        M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo, paint = pt }
+        M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo, paint = pt, ac = ac }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
@@ -2245,7 +2271,7 @@ local function onJoinerMessage(f)
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
         M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "",
-                        lo = loadoutOk(f[7]) and f[7] or "", paint = paintOk(f[8]) and f[8] or "" }
+                        lo = loadoutOk(f[7]) and f[7] or "", paint = paintOk(f[8]) and f[8] or "", ac = acClean(f[9]) }
         if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
             local P = M.peers[s]
             log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
@@ -2801,7 +2827,9 @@ function COOP.tick(tick)
         local row, code = myAirframe()
         local lo = M.myLoadout()                              -- (new weapons picked at the airfield: COOP2MP T4b)
         local pt = M.myPaint()                                -- (and paint: T5)
-        if (row and row ~= M.myRow) or (code and code ~= M.myCode) or (lo ~= "" and lo ~= M.myLo) or (pt ~= "" and pt ~= M.myPt) then
+        local acn = M.myAircraft()                            -- (and the aircraft's name)
+        if (row and row ~= M.myRow) or (code and code ~= M.myCode) or (lo ~= "" and lo ~= M.myLo) or (pt ~= "" and pt ~= M.myPt)
+            or (acn ~= "" and acn ~= M.myAc) then
             M.myRow, M.myCode = row, code
             if COOP.host() then hostRosterSelf() else sendHi() end
         end

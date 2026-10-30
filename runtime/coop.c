@@ -1955,21 +1955,39 @@ static int L_SpawnCam(void* lua)
  * (its write of the plane's +0x2200, `lea rcx, [rsi + 0x2200]; ...; call`), checked first. Not reflected: Lua can't. The
  * user, 2026-10-30: "the Player Names aren't showing underneath ALLY anymore" (AI stand-ins showed theirs) */
 typedef void* (*CoFStrAssignFn)(void* dst, const void* src);
+static int CoUtf8To16(const char* txt, size_t len, wchar_t* w, int cap);
 static int L_PPName(void* lua)
 {
     uint8_t* plane = ArgObject(lua);
-    char txt[160];
-    size_t len = 0;
+    char txt[160], ac[160];
+    size_t len = 0, acLen = 0;
     if (!plane || !ArgBytes(lua, txt, sizeof(txt), &len) || !len) return Ret(lua, -1);
-    if (!LiveObject(plane) || CoKind(plane) != 2 || plane == CO.me.obj || !Readable(plane + 0x6E8, 0x10)) return Ret(lua, -1);
+    int haveAc = ArgBytes(lua, ac, sizeof(ac), &acLen) && acLen > 0;          /* (optional: their aircraft's name) */
+    if (!LiveObject(plane) || CoKind(plane) != 2 || plane == CO.me.obj || !Readable(plane + 0x6D8, 0x20)) return Ret(lua, -1);
     uint8_t* s = g_siteRemoteFinish;
     uint8_t* c = s ? s - 0x34 : NULL, *l = s ? s - 0x46 : NULL;
     if (!c || c[0] != 0xE8 || l[0] != 0x48 || l[1] != 0x8D || l[2] != 0x8E || *(int32_t*)(l + 3) != 0x2200) return Ret(lua, -2);
     CoFStrAssignFn assign = (CoFStrAssignFn)(c + 5 + *(int32_t*)(c + 1));
     if (!InGame(assign)) return Ret(lua, -2);
-    wchar_t w[40];                                                  /* UTF-8 in, UTF-16 out, 39 characters at most */
+    wchar_t w[40];
+    int n = CoUtf8To16(txt, len, w, 40);
+    if (!n) return Ret(lua, -1);
+    struct { wchar_t* data; int32_t num, max; } src = { w, n + 1, n + 1 };
+    assign(plane + 0x6E8, &src);
+    /* the aircraft's name: ObjName +0x6D8 (GetObjName's field), which the remote spawn fills from the plane's data row
+     * and the box's builder (0x147293760) reads beside the callsign; our spawn has no session data for it */
+    wchar_t wa[40];
+    int na = haveAc ? CoUtf8To16(ac, acLen, wa, 40) : 0;
+    if (na) { struct { wchar_t* data; int32_t num, max; } sa = { wa, na + 1, na + 1 }; assign(plane + 0x6D8, &sa); }
+    Log(L"coop: player plane %p's callsign (under ALLY) set: %s%s%s", plane, w, na ? L"; its aircraft: " : L"", na ? wa : L"");
+    return Ret(lua, 1);
+}
+
+/* UTF-8 (len bytes) to UTF-16 in w (cap - 1 characters at most, 0-terminated): the characters written */
+static int CoUtf8To16(const char* txt, size_t len, wchar_t* w, int cap)
+{
     int n = 0;
-    for (size_t i = 0; i < len && n < 39;) {
+    for (size_t i = 0; i < len && n < cap - 1;) {
         uint32_t u = (uint8_t)txt[i];
         int k = u < 0x80 ? 0 : (u & 0xE0) == 0xC0 ? 1 : (u & 0xF0) == 0xE0 ? 2 : (u & 0xF8) == 0xF0 ? 3 : -1;
         if (k < 0 || i + (size_t)k >= len + (k ? 0 : 1)) break;
@@ -1981,15 +1999,11 @@ static int L_PPName(void* lua)
         }
         i += 1 + (size_t)k;
         if (u < 0x20) continue;
-        if (u >= 0x10000) { if (n >= 38) break; u -= 0x10000; w[n++] = (wchar_t)(0xD800 | (u >> 10)); w[n++] = (wchar_t)(0xDC00 | (u & 0x3FF)); }
+        if (u >= 0x10000) { if (n >= cap - 2) break; u -= 0x10000; w[n++] = (wchar_t)(0xD800 | (u >> 10)); w[n++] = (wchar_t)(0xDC00 | (u & 0x3FF)); }
         else w[n++] = (wchar_t)u;
     }
-    if (!n) return Ret(lua, -1);
     w[n] = 0;
-    struct { wchar_t* data; int32_t num, max; } src = { w, n + 1, n + 1 };
-    assign(plane + 0x6E8, &src);
-    Log(L"coop: player plane %p's callsign (under ALLY) set: %s", plane, w);
-    return Ret(lua, 1);
+    return n;
 }
 
 /* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up); SV_CoopKillPP(slot): that
