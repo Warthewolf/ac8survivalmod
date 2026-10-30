@@ -1117,6 +1117,63 @@ ANOM.clientGlitch(20)
 check(cpod.bJammingEnable == true and ANOM.glitchCopy == nil, "the host's phase gone: nothing")
 
 ---------------------------------------------------------------------------------------------------- the hooks
+print("a Ladon's body down with its parts still up (co-op, 2026-10-30: the round never ended)")
+do
+    local s = ladonRound()
+    tickL(0, 5)
+    alive.SV_Unit_LadonKot, alive.SV_Unit_LadonMishka = 25, 25        -- (its unit: body and parts; the parts never die)
+    local function part(name, hp)
+        local o = mkObj(name, KM(5, 2), nil, hp)
+        function o:SetMinHealth(v) self.minH = v end
+        function o:ModifyHealth(d) self.HealthInternal = math.max(0, self.HealthInternal + d * 10) end
+        return o
+    end
+    local vls, ciws = part("BP_OP0045_ladn_VLS_L_Base_C_1", 3000), part("BP_wp_pulse_pod_C_2", 800)
+    LADON_PARTS.SV_Unit_LadonMishka = { at = os.clock(), mishka, vls, ciws }
+    planes[2].down = true
+    local f = #logs + 1
+    check(ladonPartsDown(planes[2]) == 2 and vls.HealthInternal == 0 and ciws.HealthInternal == 0,
+          "ladonPartsDown: its two parts still up finished off, the body left alone")
+    check(line("special: SV_Unit_LadonMishka's body down: 2 of its 3 parts still up finished off", f) ~= nil, "... logged")
+    tickL(6, 6)
+    check(not s.units.Mishka.alive and s.units.Kot.alive, "SV_UnitAlive still 25, its body down: MISHKA counted down, KOT not")
+    check(line("special: Ladon MISHKA's body is down, 25 of its unit still up", f) ~= nil
+          and line("special: round 14, Ladon MISHKA down", f) ~= nil, "... logged, paid as a kill")
+    planes[1].down = true
+    tickL(7, 7)
+    check(s.state == "done", "both bodies down: the Ladon round is over")
+    LADON_PARTS = {}
+    alive.SV_Unit_LadonKot, alive.SV_Unit_LadonMishka = 0, 0
+end
+print("a Ladon's own sure kill, pooled, outside a volley (HIT.tick's Ladon sweep)")
+do
+    local CDO = "/Game/Blueprints/Weapons/MSL/NPC/Vls/Ladon/BP_wp_vls_ladon.Default__BP_wp_vls_ladon_C"
+    local keepCdo = OBJ[CDO]
+    OBJ[CDO] = { full = "Default__BP_wp_vls_ladon_C", damage = 15.0, MaxHomingAngle = 60.0, MaxRotationAngle = 30.0 }
+    HIT.reset()
+    HIT.sweepUntil = nil
+    local sure = { full = "PersistentLevel.BP_wp_vls_certain_ladon_C_2147400001", damage = 1000.0, MaxHomingAngle = 180.0,
+                   MaxRotationAngle = 30.0 }
+    FA["BP_wp_vls_certain_ladon_C"] = { sure }
+    planes = { { unit = "SV_Unit_LadonMishka", obj = mkObj("Ladon_Mishka", KM(5, 2)), dist = 5 } }
+    local from = #logs + 1
+    HIT.tick(nil, 100)
+    check(sure.damage <= 10.5 and sure.MaxHomingAngle <= 60, "a Ladon up: its pooled sure kill made ordinary (" .. sure.damage .. ")")
+    check(line("hits: a Ladon's sure-kill missile caught at damage 1000", from) ~= nil, "... logged")
+    sure.damage = 1000.0
+    planes[1].down = true                                  -- (the Ladon down: its missiles still flying)
+    HIT.tick(nil, 100.2)
+    check(sure.damage == 1000.0, "... at most every 0.5 s")
+    HIT.tick(nil, 120)
+    check(sure.damage <= 10.5, "the Ladon down 20 s: still swept (its missiles in flight)")
+    sure.damage = 1000.0
+    HIT.tick(nil, 141)
+    check(sure.damage == 1000.0, "40 s after the last Ladon: no more sweeps")
+    HIT.reset()
+    check(HIT.ladonUntil == nil, "HIT.reset clears it")
+    FA["BP_wp_vls_certain_ladon_C"], OBJ[CDO], planes = nil, keepCdo, {}
+end
+
 print("the hooks, by their place in the source")
 local function body(file, from_)
     local src = readAll(MOD .. "/Scripts/" .. file)

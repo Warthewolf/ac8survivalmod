@@ -248,6 +248,9 @@ local function planeSweep(slot)
                 local okC, by = pcall(creditKill, p)
                 if not okC then log("credits: error " .. tostring(by)); by = nil end
                 hookErr("stats: STATS.down", pcall(STATS.down, p, g, by, D and D.now))
+                if p.unit and p.unit:find("^SV_Unit_Ladon") then           -- (its parts with it: sv_ladon.lua)
+                    hookErr("special: ladonPartsDown", pcall(ladonPartsDown, p))
+                end
             end
         end
     end

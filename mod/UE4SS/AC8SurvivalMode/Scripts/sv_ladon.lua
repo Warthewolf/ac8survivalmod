@@ -9,6 +9,61 @@
 do
 local KEYS = { "Kot", "Mishka" }
 
+-- A Ladon's parts (its 25 objects: the body, the VLS launchers, the pulse cannon pods...), as SV_Spawn makes them
+-- (spawningUnit is its unit then: SPC.ladonSpawn here, a co-op joiner's copies in sv_coop.lua): LADON_PARTS[unit].
+-- The co-op run of 2026-10-30 (0.73.20), round 8: both Ladons shot down (their bodies "down" in the round probe) but
+-- their parts lived on, so SV_UnitAlive (the unit's AliveChildAIGameObjects) never reached 0 and the round never ended
+-- ("it still says both LADONs are alive"), and MISHKA's VLS fired on after its body was gone: four players down 0-4 s
+-- after it, the host from 100 HP in one hit, all of it from BP_OP0045_ladn_VLS_L_Base
+LADON_PARTS = {}
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if not (u and u:find("^SV_Unit_Ladon")) then return end
+    local l = LADON_PARTS[u]
+    if not l or os.clock() - (l.at or 0) > 2 then l = { at = os.clock() }; LADON_PARTS[u] = l end   -- (a new spawn of it)
+    if #l < 60 then l[#l + 1] = o end
+end)
+
+-- Ladon `p` (a body in planes) is down: its parts still up are finished off (no attacker: as a joiner's hit, which the
+-- game takes). Every game, for its own copy. The number finished, or nil
+function ladonPartsDown(p)
+    local l = p and p.unit and LADON_PARTS[p.unit]
+    if not l then return nil end
+    local n, left = 0, 0
+    for _, o in ipairs(l) do
+        if valid(o) and o ~= p.obj then
+            local okH, h = pcall(function() return o.HealthInternal end)
+            if okH and type(h) == "number" and h > 0 then
+                pcall(function() o:SetMinHealth(0.0) end)
+                local ok = pcall(function() o:ModifyHealth(-(h / 10 + 1000), nil, true) end)
+                local okA, h1 = pcall(function() return o.HealthInternal end)
+                if not ok or (okA and type(h1) == "number" and h1 > 0) then
+                    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+                    if valid(gs) then pcall(function() gs:ApplyDamage(o, 100000000.0, nil, nil, nil) end) end
+                    okA, h1 = pcall(function() return o.HealthInternal end)
+                end
+                if okA and type(h1) == "number" and h1 > 0 then left = left + 1 else n = n + 1 end
+            end
+        end
+    end
+    log(string.format("special: %s's body down: %d of its %d parts still up finished off%s", p.unit, n, #l,
+        left > 0 and string.format(", %d NOT (still up)", left) or ""))
+    return n
+end
+
+-- Ladon `unit`'s body (its planes from `from`) seen and every one of them down: the round's own count of it
+local function bodyDown(unit, from)
+    local seen = false
+    for i = from or 1, #planes do
+        local p = planes[i]
+        if p.unit == unit then
+            seen = true
+            if not p.down and valid(p.obj) then return false end
+        end
+    end
+    return seen
+end
+
 -- At the main menu, before the level loads (the spawner caches the rows then): each Ladon's DT_NPC row, from
 -- DT_SV_NpcRows, with its name, health and speed.
 function SPC.ladonSetup()
@@ -187,6 +242,10 @@ function SPC.ladonTick(now, s)
                     log(string.format("special: Ladon %s gone without being shot down (SV_UnitAlive %d); no pay", c.names[k] or k, n))
                 end
             end
+            if n > 0 and not gone and bodyDown(L.unit, s.planeFrom) then   -- (its body down, parts still up: down)
+                log(string.format("special: Ladon %s's body is down, %d of its unit still up (its parts): counted down", c.names[k] or k, n))
+                n = 0
+            end
             if n == 0 and not gone then
                 L.alive = false
                 local pay = c.reward + (c.reward_per_round or 0) * D.round
@@ -312,7 +371,10 @@ local function around(me, now)
         "; nearest enemies: " .. (#et > 0 and table.concat(et, ", ") or "none within 8 km")
 end
 
-function HIT.reset() HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil end
+function HIT.reset()
+    HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil
+    HIT.ladonUntil, HIT.ladonSweepAt = nil, nil
+end
 
 -- every tick in a run (now: the round clock)
 function HIT.tick(pc, now)
@@ -321,15 +383,42 @@ function HIT.tick(pc, now)
     -- Weapons are pooled (LiveWeaponBase is a LiveObjectPoolItem: the co-op fire research of 2026-10-29), so a volley's
     -- reused missiles never come in as new objects: for sweep_s after each volley (HIT.sweepUntil, sv_ladon's volley)
     -- every Ladon missile up is toned down again (from the class default, so twice is the same as once)
-    if HIT.sweepUntil and now and now < HIT.sweepUntil then
+    -- Also every 0.5 s while a Ladon is up and 40 s after the last: its own fire control fires the sure kill too, pooled,
+    -- outside Survival's volleys (the co-op run of 2026-10-30, round 8: four players down within 4 s of Ladon MISHKA's
+    -- end, the host from 100 HP in one hit, all of it from BP_OP0045_ladn_VLS_L_Base, its volley 39 s before)
+    if now then
+        for _, p in ipairs(planes or {}) do
+            if not p.down and ((p.unit or ""):find("Ladon", 1, true) or (p.name or ""):find("_ladn_", 1, true)) then
+                HIT.ladonUntil = now + 40
+                break
+            end
+        end
+    end
+    local volleyOn = HIT.sweepUntil and now and now < HIT.sweepUntil
+    local ladonOn = HIT.ladonUntil and now and now < HIT.ladonUntil and now >= (HIT.ladonSweepAt or 0)
+    if volleyOn or ladonOn then
+        if ladonOn then HIT.ladonSweepAt = now + 0.5 end
         local n = 0
         for cls, fn in pairs({ [LADON_MSL .. "_C"] = nerf, [LADON_CERTAIN .. "_C"] = certain }) do
             for _, o in ipairs(FindAllOf(cls) or {}) do
-                if valid(o) and not short(o):find("^Default__") then fn(o); n = n + 1 end
+                if valid(o) and not short(o):find("^Default__") then
+                    if fn == certain then
+                        local okD, d = pcall(function() return o.damage end)
+                        if okD and type(d) == "number" and d > (tonumber(CFG.specials.ladon.missile_damage) or 10) + 0.5 then
+                            HIT.certainCaught = (HIT.certainCaught or 0) + 1
+                            if now - (HIT.certainCaughtSaid or -1e9) >= 60 then
+                                HIT.certainCaughtSaid = now
+                                log(string.format("hits: a Ladon's sure-kill missile caught at damage %.0f, made ordinary (%d so far; %s)",
+                                    d, HIT.certainCaught, volleyOn and "a volley's" or "its own fire control's"))
+                            end
+                        end
+                    end
+                    fn(o); n = n + 1
+                end
             end
         end
-        if n > (HIT.sweepN or 0) then HIT.sweepN = n end
-    elseif HIT.sweepUntil then
+        if volleyOn and n > (HIT.sweepN or 0) then HIT.sweepN = n end
+    elseif HIT.sweepUntil and not volleyOn then
         if not HIT.sweepSaid then
             HIT.sweepSaid = true
             log(string.format("hits: a Ladon volley's missiles toned down as they flew (up to %d at once, pooled ones too)", HIT.sweepN or 0))
