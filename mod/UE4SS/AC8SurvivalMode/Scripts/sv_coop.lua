@@ -312,6 +312,22 @@ end
 -- see them", and a joiner who restarted mid-Alicorn got a fresh one, all its tanks up, its core shut. The host's
 -- health and deaths go to every game, the joiners' hits to the host, as for the planes.
 local groundNew = {}
+-- the allies' units (MOONCHILD's / the WINGMEN's flights, the ships) and the airfield's defences (AA guns, SAM sites,
+-- CIWS): the host's, mirrored like its enemies; on a joiner's game their copies fight the enemies' copies there, so
+-- neither what they deal nor what they take is sent to the host (it's the host's own allies' fight, dealt there)
+local allySet
+local function allyUnit(u)
+    if not allySet then
+        allySet = {}
+        for x in pairs(ALLY and ALLY.unit or {}) do allySet[x] = true end
+        local d = CFG.shop and CFG.shop.items and CFG.shop.items.Airfield and CFG.shop.items.Airfield.defences
+        for _, def in pairs(d or {}) do
+            if type(def) == "table" and type(def.units) == "table" then for _, x in ipairs(def.units) do allySet[x] = true end end
+        end
+    end
+    return u ~= nil and allySet[u] == true
+end
+COOP.allyUnit = allyUnit
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     local u = spawningUnit
     if COOP.open and u and not SLOT_OF[u] and #groundNew < 600 then groundNew[#groundNew + 1] = { obj = o, unit = u, at = os.clock() } end
@@ -649,13 +665,13 @@ local function killCopy(id, o)
     end
 end
 
-local function bindCopy(id, o)
+local function bindCopy(id, o, unit)
     if M.dead[id] then killCopy(id, o); return end
     local a = addrOf(o)
     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
     pcall(function() o:SetMinHealth(0.1) end)               -- (it goes down when the host's does)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a }
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a, ally = allyUnit(unit) }   -- (ally: the host's allies' copy)
 end
 
 -- (a joiner) copy o's health scaled here (sv_ai.lua enemyLate: CFG.late, a Skirmisher's x0.75, as the host scales its
@@ -677,14 +693,14 @@ local function clientPlane(o, unit)
     cu.n = cu.n + 1
     cu.planes[cu.n] = o
     local id = cu.binds[cu.n]
-    if id then bindCopy(id, o) end
+    if id then bindCopy(id, o, unit) end
 end
 
 -- a ship's, vehicle's or part's copy (groundTick): not moved, held up until the host's goes down, its hits sent
-local function bindGround(id, o)
+local function bindGround(id, o, unit)
     if M.dead[id] then killCopy(id, o); M.copies[id] = nil; return end
     pcall(function() o:SetMinHealth(0.1) end)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o) }  -- (addr: a shot's target, "fx")
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o), ally = allyUnit(unit) }  -- (addr: a shot's target, "fx")
 end
 clientGround = function(o, unit)
     local cu = M.cunits[unit]
@@ -693,7 +709,7 @@ clientGround = function(o, unit)
     local key = groundKey(o, cu.gcount)
     cu.gobjs[key] = o
     local id = cu.gbinds and cu.gbinds[key]
-    if id then bindGround(id, o) end
+    if id then bindGround(id, o, unit) end
 end
 
 local function killAllCopies(why)
@@ -972,13 +988,16 @@ end
 
 local function clientTick()
     pcall(strayTick, os.clock())
+    pcall(M.buildTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
     -- here (their own hits come from their game: the stand-ins fly damage-0 rows, COOP.syncSetup; this is the backstop)
     local ins = nil
     for id, c in pairs(M.copies) do
         if valid(c.obj) then
             local h = health(c.obj)
-            if h and h < c.exp then
+            if h and h < c.exp and c.ally then
+                c.exp = h                                  -- (an ally's copy: its fight is the host's, nothing sent)
+            elseif h and h < c.exp then
                 local loss = c.exp - h
                 ins = ins or (M.standInSet and M.standInSet()) or {}
                 if next(ins) and M.standInDamage then
@@ -1420,6 +1439,8 @@ end
 function M.standInSet()
     local set = {}
     for s, P in pairs(M.peers) do if s ~= COOP.slot and P.addr then set[P.addr] = s end end
+    for _, c in pairs(M.copies) do if c.ally and c.addr then set[c.addr] = -1 end end   -- (the host's allies' copies here:
+                                                                                     -- their hits are the host's)
     return set
 end
 -- what the stand-ins in `set` have done to o so far (its DamageHistoryMap, in health: KILLS_HEALTH_DEATH.md 1)
@@ -2203,6 +2224,112 @@ presetName = function()
 end
 end
 
+---------------------------------------------------------------------------------------------------- allies and defences
+-- (sv_shop.lua shopBuy / shopBuildFor, sv_allies.lua) A joiner's STORE purchase of an allied flight or ship or an
+-- airfield defence: "ab|<id>|<item>|<price>|<kind>" to the host, paid here at once; the host builds it in its game (its
+-- spawn goes to every game as its enemies' do) and answers "ak|<id>|<message>" or "ax|<id>|<why>" (refunded), or
+-- "ar|<price>|<why>" later (a flight that never took off: refunded). No answer in BUILD_WAIT_S: refunded.
+local BUILD_WAIT_S, BUILD_PER_S = 30, 4
+function COOP.askBuild(name, price, kind)
+    if not COOP.client() then return false, "NOT IN CO-OP." end
+    M.builds = M.builds or {}
+    M.buildSeq = (M.buildSeq or 0) % 9999 + 1
+    local id = M.buildSeq
+    if not send(true, "ab", id, short(name, 32), string.format("%d", price), kind and short(kind, 16) or "") then
+        return false, "NO LINK TO THE HOST."
+    end
+    M.builds[id] = { name = name, price = price, kind = kind, at = os.clock() }
+    log(string.format("shop: asked the host to build %s (%d paid, kept until it answers)", name, price))
+    return true, "ASKED THE HOST: IT BUILDS IT FOR EVERYONE."
+end
+local function buildDone(b, msg)
+    if not (b and RUN) then return end
+    RUN.msg[b.name], RUN.dirty = msg, true
+    RUN.bought[b.name] = (RUN.bought[b.name] or 0) + 1
+    if b.kind then
+        RUN.defences = RUN.defences or { built = 0, bought = {} }
+        RUN.defences.built = RUN.defences.built + 1
+        RUN.defences.bought[b.kind] = (RUN.defences.bought[b.kind] or 0) + 1
+    elseif LB and LB.stat then pcall(LB.stat, "allies", 1) end
+end
+local function refundHere(price, name, why)
+    if not RUN or type(price) ~= "number" or price <= 0 then return end
+    RUN.credits, RUN.spent, RUN.dirty = RUN.credits + price, math.max(0, RUN.spent - price), true
+    if name then RUN.msg[name] = string.format("%s. %d REFUNDED.", why, price) end
+    log(string.format("shop: %s: %s; %d refunded", tostring(name or "a purchase"), why, price))
+end
+function M.buildTick(now)
+    for id, b in pairs(M.builds or {}) do
+        if now - b.at >= BUILD_WAIT_S then
+            M.builds[id] = nil
+            refundHere(b.price, b.name, "NO ANSWER FROM THE HOST")
+        end
+    end
+end
+-- (the host) a joiner's purchase that can't come after all (an allied flight that never took off): their zollars back
+function COOP.refund(slot, price, why)
+    if not (COOP.host() and slotOk(slot) and slot ~= COOP.slot) then return false end
+    return sendTo(slot, true, "ar", string.format("%d", math.floor(tonumber(price) or 0)), short(why, 60))
+end
+-- (the host) joiner `slot` airborne here: their plane in the mission, flying, not at their airfield, not down
+function COOP.airborne(slot)
+    local P = M.peers[slot]
+    return P ~= nil and P.fresh == true and not P.onAirfield and not P.down
+end
+-- the allies' orders changed here (sv_allies.lua ALLY.nextOrder): a joiner's go to the host, the host's to everyone
+function COOP.orderChanged(order, how)
+    if not COOP.open or how == "coop" then return end
+    if COOP.client() then send(true, "ao", short(order, 16)) elseif COOP.host() then send(true, "ag", short(order, 16)) end
+end
+local function onBuildAsk(from, f)
+    M.buildRate = M.buildRate or {}
+    local now, r = os.clock(), M.buildRate[from]
+    if not r or now - r.at >= 1 then r = { at = now, n = 0 }; M.buildRate[from] = r end
+    r.n = r.n + 1
+    if r.n > BUILD_PER_S then once("abrate" .. from, "shop: player " .. (from + 1) .. " asks for too many builds; dropped"); return end
+    local id, name, price = tonumber(f[2]), short(f[3], 32), tonumber(f[4])
+    local kind = (f[5] and f[5] ~= "") and short(f[5], 16) or nil
+    if not (id and id == math.floor(id) and id >= 1 and id <= 9999) then return end
+    local it = CFG.shop and CFG.shop.items and CFG.shop.items[name]
+    if not (it and price and finite(price, CREDITS_MAX + 1) and price >= 0) then
+        sendTo(from, true, "ax", id, "A BAD REQUEST"); return
+    end
+    local ok, msg = false, "NOT AVAILABLE RIGHT NOW."
+    if type(shopBuildFor) == "function" then
+        local okC, a, b = pcall(shopBuildFor, from, name, math.floor(price), kind)
+        if okC then ok, msg = a, b else msg = "THE HOST COULDN'T BUILD IT"; log("shop: build for player " .. (from + 1) .. ": " .. tostring(a)) end
+    end
+    log(string.format("shop: player %d's %s (%d): %s", from + 1, name, math.floor(price), ok and ("built: " .. tostring(msg)) or ("refused: " .. tostring(msg))))
+    if ok then sendTo(from, true, "ak", id, short(msg, 80)) else sendTo(from, true, "ax", id, short(msg, 80)) end
+end
+local function upperText(v, n) return (tostring(v or ""):gsub("[%c|]", ""):upper():sub(1, n)) end
+local function onBuildAnswer(f)
+    local k, id = f[1], tonumber(f[2])
+    if k == "ar" then
+        local price = tonumber(f[2])
+        if price and finite(price, CREDITS_MAX + 1) and price > 0 then refundHere(math.floor(price), nil, upperText(f[3], 60)) end
+        return
+    end
+    local b = id and M.builds and M.builds[id]
+    if not b then return end
+    M.builds[id] = nil
+    if k == "ak" then
+        local msg = tostring(f[3] or ""):gsub("[%c|]", ""):sub(1, 80)
+        buildDone(b, msg)
+        log(string.format("shop: the host built your %s: %s", b.name, msg))
+    else
+        refundHere(b.price, b.name, "REFUSED: " .. upperText(f[3], 60))
+    end
+end
+local function onOrder(f, fromHost)
+    local o = short(f[2], 16)
+    local okL = false
+    for _, x in ipairs(CFG.allies and CFG.allies.orders and CFG.allies.orders.list or {}) do if x == o then okL = true end end
+    if not (okL and ALLY and ALLY.nextOrder) then return end
+    if ALLY.order and ALLY.order() == o then return end
+    pcall(ALLY.nextOrder, fromHost and "coop" or "a joiner", o)
+end
+
 local function onHostMessage(from, f)
     local k = f[1]
     if k == "hi" then
@@ -2240,6 +2367,8 @@ local function onHostMessage(from, f)
         hostRosterSelf()
     elseif k == "jn" then hostSync(from)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
+    elseif k == "ab" then onBuildAsk(from, f)            -- a joiner's ally / defence bought: built here, for everyone
+    elseif k == "ao" then onOrder(f, false)              -- a joiner changed the allies' orders
     elseif k == "fx" then M.fxFromJoiner(from, f)       -- a joiner's shots: its plane here fires them, the others told
     elseif (k == "dw" or k == "rv") and DOWN and DOWN.onHost then DOWN.onHost(from, f)   -- (down, a revive: sv_down.lua)
     elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
@@ -2257,6 +2386,8 @@ local function onJoinerMessage(f)
     local k = f[1]
     if k == "cf" then M.onSettings(f)
     elseif k == "fx" then M.fxFromHost(f)               -- a player's shots (the host's, or a joiner's relayed)
+    elseif k == "ak" or k == "ax" or k == "ar" then onBuildAnswer(f)   -- the host's say on your ally / defence
+    elseif k == "ag" then onOrder(f, true)               -- the allies' orders (the room's: the host's)
     elseif (k == "dw" or k == "rb" or k == "rx" or k == "ro" or k == "rc") and DOWN and DOWN.onJoiner then DOWN.onJoiner(f)   -- (sv_down.lua)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
@@ -2367,7 +2498,7 @@ local function onJoinerMessage(f)
             M.cunits[unit] = cu
         end
         cu.binds[ord] = id
-        if cu.planes[ord] then bindCopy(id, cu.planes[ord]) end
+        if cu.planes[ord] then bindCopy(id, cu.planes[ord], unit) end
     elseif k == "gd" then                                -- a ship's, vehicle's or part's id (hostGround)
         local unit, gen, key, id = short(f[2], 96), tonumber(f[3]), short(f[4], 96), tonumber(f[5])
         if not (gen and id and id >= 1 and id <= 65535 and id == math.floor(id)) then return end
@@ -2388,7 +2519,7 @@ local function onJoinerMessage(f)
         cu.gbinds = cu.gbinds or {}
         cu.gbinds[key] = id
         local o = cu.gobjs and cu.gobjs[key]
-        if o and valid(o) then bindGround(id, o) end
+        if o and valid(o) then bindGround(id, o, unit) end
     elseif k == "hp" then
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]

@@ -552,3 +552,8 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   kill on after its body was gone (four players down). Each Ladon's parts are now recorded at spawn and finished off
   with its body, on every game (sv_ladon.lua ladonPartsDown), the round counts the body, and every Ladon missile is
   toned while a Ladon is up. Open: why the parts didn't die with the body (no attacker named on the killing hit?).
+- The joiners' allies and defences (0.73.23-coop2mp.24): only the host's SV_Spawn is mirrored, so a joiner's STORE
+  wingmen, MOONCHILD, AEGIS, AA guns, SAM sites and CIWS were only ever in their own game. A joiner's purchase now asks
+  the host ("ab"), which builds it (sv_shop.lua shopBuildFor) and so mirrors it to everyone; "ak" / "ax" / "ar" answer,
+  refunds on a refusal or no answer. The host's allies' copies on a joiner's game send no hits either way (c.ally), so
+  their fight is the host's alone. The orders go through the host ("ao" / "ag").

@@ -451,6 +451,31 @@ function shopTexts()
     end
 end
 
+-- (co-op host) joiner `slot`'s purchase of item `name` (an allied flight or ship, or a defence of `kind`) for `price`,
+-- which they pay on their own game: built here (its spawn goes to every game, sv_coop.lua's SV_Spawn); true and the
+-- row's message, or false and why not. Nothing is charged here.
+function shopBuildFor(slot, name, price, kind)
+    local it = CFG.shop.items[name]
+    if not (it and D and nativeReady()) then return false, "NOT AVAILABLE RIGHT NOW." end
+    local role = it.kind and "ammo" or it.role
+    if role == "ally_air" or role == "ally_ship" then
+        local o = offer(name)
+        if not o.unit then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
+        return ALLY.buy(o.role, o.unit, it.ship or it.ally, price, slot)
+    end
+    local d = CFG.shop.items.Airfield.defences
+    if not (kind and type(d[kind]) == "table" and d[kind].units) then
+        kind = (type(d[role]) == "table" and d[role].units) and role or nil
+    end
+    if not kind then return false, "NOT AVAILABLE IN CO-OP." end
+    local f = defenceFor(kind)
+    if not f then return false, "ALL BUILT." end
+    local r = SV_Spawn(f.unit)
+    if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
+    log(string.format("shop: %s built for player %d (%s, %d paid on their game)", f.def.label, slot + 1, f.unit, price))
+    return true, string.format("%s BUILT for %d (%s).", f.def.label, price, f.unit)
+end
+
 -- One purchase; the result goes into the item's help line and the log.
 function shopBuy(name)
     local it = CFG.shop.items[name]
@@ -523,6 +548,15 @@ function shopBuy(name)
         if not (after and after >= 99) then return done("COULD NOT REPAIR IT (NOTHING CHARGED).") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         return done(string.format("AIRCRAFT REPAIRED (%s%% -> %d%%) for %d.", tostring(before), after, price))
+    elseif COOP and COOP.client and COOP.client() and (o.role == "ally_air" or o.role == "ally_ship" or (o.unit and o.kind)) then
+        -- co-op: the allies and the airfield's defences are the host's (one airfield, one sky for everyone): the host
+        -- builds it in its game, which sends it to every game, and you pay now (refunded on a refusal or no answer;
+        -- sv_coop.lua "ab" / "ak" / "ax"). The co-op run of 2026-10-30: wingmen, MOONCHILD, AEGIS, AA guns, SAM sites
+        -- and CIWS bought by joiners were only ever in their own game ("none of it was syncing")
+        local ok, msg = COOP.askBuild(name, price, o.kind)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        return done(msg)
     elseif o.role == "ally_air" or o.role == "ally_ship" then
         local ok, msg = ALLY.buy(o.role, o.unit, it.ship or it.ally, price)
         if not ok then return done(msg) end

@@ -341,6 +341,91 @@ check(KILL.side({ full = "BP_GR033_ciws_CP_Ally_C_3", addr = addr() }, 9) == "de
       and KILL.side({ full = "BP_GR002_gepa_CP_C_2", addr = addr() }, 9) == "defences",
       "kill credit: the CIWS's is the defences', the ALICORN's CIWS isn't")
 
+---------------------------------------------------------------------------------------------------- co-op: the host builds a joiner's
+print("co-op: a joiner's allies and defences are built by the host (the co-op run of 2026-10-30: none of it synced)")
+do
+    local asked, refunds, orders = {}, {}, {}
+    local airborne = {}
+    COOP = { client = function() return true end, host = function() return false end,
+             askBuild = function(name, price, kind) asked[#asked + 1] = { name = name, price = price, kind = kind }
+                 return true, "ASKED THE HOST: IT BUILDS IT FOR EVERYONE." end,
+             refund = function(slot, price, why) refunds[#refunds + 1] = { slot = slot, price = price, why = why }; return true end,
+             airborne = function(slot) return airborne[slot] == true end,
+             orderChanged = function(o, how) orders[#orders + 1] = o .. "/" .. tostring(how) end }
+    -- the joiner: nothing spawned, the host asked, paid now
+    D = { round = 3, state = "wait", now = 100, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+    RUN.credits, RUN.spent, RUN.bought, RUN.msg, RUN.defences, RUN.offerShown = 100000, 0, {}, {}, nil, nil
+    spawned, alive = {}, {}
+    ALLY.run = nil
+    setup()
+    shop("Ciws")
+    check(#spawned == 0 and #asked == 1 and asked[1].name == "Ciws" and asked[1].price == 6000 and asked[1].kind == "ciws"
+          and RUN.credits == 94000 and RUN.msg.Ciws == "ASKED THE HOST: IT BUILDS IT FOR EVERYONE.",
+          "joiner: BUILD CIWS asks the host (Ciws, 6000, ciws), nothing built here, 6000 paid")
+    shop("Wingmen")
+    check(#spawned == 0 and asked[2] and asked[2].name == "Wingmen" and asked[2].kind == nil and RUN.credits == 89000
+          and next(ALLY.state().up) == nil, "joiner: WINGMEN asks the host too, no flight of its own queued here")
+    shop("ShipAegis")
+    check(#spawned == 0 and asked[3] and asked[3].name == "ShipAegis", "joiner: the AEGIS asks the host too")
+    -- the host: builds it with nothing charged
+    COOP.client = function() return false end
+    COOP.host = function() return true end
+    RUN.credits, RUN.spent = 50000, 0
+    spawned, alive = {}, {}
+    local ok, msg = shopBuildFor(2, "Ciws", 6000, "ciws")
+    check(ok and spawned[1] == "SV_Unit_Ciws_A" and RUN.credits == 50000 and msg == "CIWS BUILT for 6000 (SV_Unit_Ciws_A).",
+          "host: player 3's CIWS built here (SV_Unit_Ciws_A), nothing charged: " .. tostring(msg))
+    for _, u in ipairs(DEF.ciws.units) do alive[u] = 1 end
+    ok, msg = shopBuildFor(2, "Ciws", 6000, "ciws")
+    check(not ok and msg == "ALL BUILT.", "host: every CIWS up: refused (" .. tostring(msg) .. ")")
+    ok, msg = shopBuildFor(2, "AAGun", 4000, nil)
+    check(ok and spawned[#spawned] == DEF.aa.units[1], "host: an AA gun by its row's own kind")
+    ok, msg = shopBuildFor(2, "Rearm", 100, nil)
+    check(not ok, "host: anything but an ally or a defence refused (" .. tostring(msg) .. ")")
+    ok, msg = shopBuildFor(2, "ShipAegis", 20000, nil)
+    local R = ALLY.state()
+    local ship = SHIPCFG.units[1]
+    check(ok and spawned[#spawned] == ship and R.up[ship] and R.up[ship].buyer == 2, "host: player 3's AEGIS at sea, theirs (buyer 3)")
+    -- their flight: takes off once they're airborne, whatever the host is doing
+    ok, msg = shopBuildFor(2, "Wingmen", 5000, nil)
+    local wu
+    for u, s in pairs(R.up) do if s.kind == "air" then wu = u end end
+    check(ok and wu and R.up[wu].buyer == 2 and R.up[wu].queued, "host: player 3's WINGMEN queued for them")
+    onAirfield = false                                    -- (the host flying: not what it waits for)
+    R.nextTakeoff, R.up[wu].at = 0, 300
+    local n0 = #spawned
+    ALLY.tick(300)
+    check(#spawned == n0 and R.up[wu].queued, "host: not off while player 3 isn't airborne")
+    airborne[2] = true
+    ALLY.tick(301)
+    check(spawned[#spawned] == wu and not R.up[wu].queued, "host: off once player 3 is airborne")
+    R.up[wu] = { kind = "air", ally = "wingmen", queued = true, at = 310, price = 5000, buyer = 2 }
+    airborne[2] = false
+    R.nextTakeoff = 0
+    ALLY.tick(399)
+    check(R.up[wu].queued, "host: ... 89 s on, still waiting")
+    R.nextTakeoff = 0
+    ALLY.tick(400)
+    check(not R.up[wu].queued, "host: ... 90 s on, off anyway (they may never take off: a link lost)")
+    -- one that never comes: refunded to the joiner, not the host
+    R.up[wu] = { kind = "air", ally = "wingmen", queued = true, at = 400, price = 5000, buyer = 2 }
+    airborne[2] = true
+    local realSpawn = SV_Spawn
+    SV_Spawn = function() return -7 end
+    local cr = RUN.credits
+    for t = 0, 3 do R.nextTakeoff = 0; ALLY.tick(402 + t * 6) end
+    SV_Spawn = realSpawn
+    check(R.up[wu] == nil and refunds[1] and refunds[1].slot == 2 and refunds[1].price == 5000 and RUN.credits == cr,
+          "host: their flight that never took off: 5000 back to player 3, not here")
+    -- the orders: told to co-op
+    ALLY.nextOrder("store")
+    check(orders[1] and orders[1]:find("/store$"), "the orders changed: told to co-op (" .. tostring(orders[1]) .. ")")
+    ALLY.nextOrder("coop", "defend")
+    check(ALLY.order() == "defend", "an order set from co-op: defend")
+    COOP = nil
+    onAirfield = true
+end
+
 ---------------------------------------------------------------------------------------------------- the build in step
 print("the build in step")
 do
