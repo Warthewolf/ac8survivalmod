@@ -494,6 +494,39 @@ inbox[#inbox + 1] = "0|ro|5"
 tick()
 check(finished[1] == "died" and events[#events] == "RE_SV_RunOver", "the host's ro: the run's over here (LB.finish, RE_SV_RunOver)")
 
+---------------------------------------------------------------------------------------------------- the host revived
+-- (the user's co-op run of 2026-10-30: the host was DOWN for 2.5 minutes and nobody bought it back before the mission
+-- failed, so a joiner reviving the host had never run in game)
+print("the host down, revived by a joiner")
+scene("host", 0, { [1] = AIRFIELD_F, [2] = FLY })
+pawn.HealthInternal = 1
+tick()
+check(DOWN.me() and pawn.hidden and survivalPC.view ~= pawn and msgs("dw") == "-1>dw|0|0", "the host down: hidden, watching, dw|0|0 to everyone")
+sent = {}
+from = #logs + 1
+pawn.HealthInternal = 1                           -- (still at the floor when the joiner buys it back)
+inbox[#inbox + 1] = "1|rv|0|5000"
+tick()
+check(not DOWN.me() and pawn.hidden == false and pawn.collision == true and pawn.bEnableWeaponInput == true and survivalPC.view == pawn,
+      "player 2 at their airfield revives the host: back, shown, armed, the view its own")
+check(msgs("rb") == "-1>rb|0|1|1" and St.count == 1 and line("^revive: player 2 revived player 1 for 5000", from) ~= nil
+      and callout("BACK IN THE FIGHT"), "rb|0|1|1 to everyone, the room's count 1, logged, called out (" .. msgs("rb") .. ")")
+check(pawn.HealthInternal == 1000 and events[#events] == "RE_SV_RepairAircraft", "repaired")
+peer(1, FLY)
+pawn.HealthInternal = 1
+tick()
+sent = {}
+inbox[#inbox + 1] = "1|rv|0|7500"
+tick()
+check(DOWN.me() and msgs("rx") == "1>rx|0|NOT AT THE AIRFIELD|1", "down again, the joiner flying: refused, told why (" .. msgs("rx") .. ")")
+peer(1, AIRFIELD_F)
+tick()                                            -- (their landed state in first)
+sent = {}
+inbox[#inbox + 1] = "1|rv|0|7500"
+tick()
+check(not DOWN.me() and msgs("rb") == "-1>rb|0|2|1", "down again within 15 s of the last revive, the joiner landed: revived again ("
+      .. msgs("rb") .. msgs("rx") .. ")")
+
 ---------------------------------------------------------------------------------------------------- everyone down
 print("everyone down: the run's over")
 scene("host", 0, { [1] = FLY, [2] = FLY })

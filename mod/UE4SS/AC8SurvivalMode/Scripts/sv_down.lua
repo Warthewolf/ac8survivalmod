@@ -277,6 +277,7 @@ local function goDown(pawn, h)
     local now = os.clock()
     St.down, St.downAt, St.ended, St.reverts, St.views, St.watch, St.lookAt = true, now, false, 0, 0, nil, nil
     St.since[mySlot()] = now
+    St.reviving[mySlot()] = nil                    -- (a new DOWN: the last revive's guard doesn't hold this one)
     St.home, St.restore, St.edgeAt = homeView(), nil, nil
     log("spectate: your own view as you went down: " .. (St.home and (St.home.name .. (St.home.pawn and " (your plane)" or " (not your plane)")) or "none"))
     local saved, did = outOfFight(pawn)
@@ -521,6 +522,7 @@ function DOWN.onHost(from, f)
         local slot = whole(f[2], 0, 23)
         if slot ~= from then logOnce("dwslot" .. from, "revive: player " .. (from + 1) .. " said another player is down; ignored"); return end
         local first = St.since[slot] == nil
+        if first then St.reviving[slot] = nil end   -- (a new DOWN: the last revive's guard doesn't hold this one)
         St.since[slot] = St.since[slot] or os.clock()
         COOP.msg(nil, "dw", slot, St.count)
         if first then
