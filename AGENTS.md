@@ -452,7 +452,10 @@ bits; zip 0.73.6 replaces 0.73.5. T4a.2 in game: the laser armed but didn't fire
 (State bit 9 is gear down, and the feed cleared it). T4a.3 (0.73.7-coop2mp.8, runtime 0.31.2; not yet run): bit 9 sent,
 the laser launched from the copy's own weapons; zip 0.73.7. T4a.3 in game: the laser fires from the copy; the ECM / ESM and the gear
 not. T4a.4 (0.73.8-coop2mp.9, runtime 0.31.4; not yet run): the ECM / ESM launched as the laser; the gear moved as
-RemoteUpdate's own check does (FlGear: the copy's own State never keeps the gear bit sent); zip 0.73.8.
+RemoteUpdate's own check does (FlGear: the copy's own State never keeps the gear bit sent); zip 0.73.8. T4a.4 in game: the
+ECM launched (not seen), the gear raised again every frame: a remote plane's second flight engine (+0x3c60, loaded from
+the message and simulated) makes the State's gear bits from its own gear. T4a.5 (0.73.9-coop2mp.10, runtime 0.31.5):
+both engines' gear moved; zip 0.73.9.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
