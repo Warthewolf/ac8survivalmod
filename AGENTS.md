@@ -479,6 +479,17 @@ on a real plane showed its cockpit: a player plane carries cameras of its own an
 0.73.12-coop2mp.13 (runtime 0.32.0; not yet run in game): a changed loadout is kept for the next level's plane (logged,
 no respawn); the watched plane's own cameras are switched off while you watch it and back on after (sv_down.lua hush,
 logged once a plane; tools/checks/coop_revive_test.sh); zip 0.73.12.
+0.73.22-coop2mp.23 (runtime 0.32.4; built and installed 2026-10-31, not yet run in game; zip 0.73.22, hash b7d19c51...0590e0):
+the co-op run of 2026-10-30 on 0.73.20, round 8: both Ladons shot down (their bodies "down") but the round never ended
+("it still says both LADONs are alive"): SV_UnitAlive counts the unit's AliveChildAIGameObjects (body + 24 parts) and
+the parts lived on; MISHKA's VLS fired on after its body was gone (four players down 0-4 s after it, the host from 100 HP
+in one hit, all of it from BP_OP0045_ladn_VLS_L_Base: a sure kill, never toned since its own fire control fires it
+pooled, outside Survival's volleys). Now (sv_ladon.lua) each Ladon's parts are recorded as SV_Spawn makes them
+(LADON_PARTS, spawningUnit: host and joiners' copies), finished off when its body goes down (ladonPartsDown, from the
+round probe: `special: <unit>'s body down: N of its M parts still up finished off`), the round counts a Ladon down when
+its body is (`special: Ladon X's body is down, N of its unit still up (its parts): counted down`), and while a Ladon is
+up (+40 s) every Ladon missile is toned every 0.5 s (`hits: a Ladon's sure-kill missile caught at damage N`).
+tools/checks/bosses_test.sh covers it. Not yet known why the parts lived (a kill with no attacker since 0.73.20?).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

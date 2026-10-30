@@ -547,3 +547,8 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   had none. Each game sends its own plane's GetObjName() in "hi" / "pi" (a 9th field, cleaned: 32 characters, no "|" or
   control characters); SV_PPName's third argument writes it to +0x6D8 (the airframe code if none came; set again when
   it arrives late). `coop: player N's name on their real plane's box: <name> (<aircraft>)`.
+- The Ladons in co-op (0.73.22-coop2mp.23): in the run of 2026-10-30 both Ladons' bodies went down but their parts
+  (VLS, pulse cannon pods: the unit's 25 objects) lived on, so the round waited for good and MISHKA's VLS fired a sure
+  kill on after its body was gone (four players down). Each Ladon's parts are now recorded at spawn and finished off
+  with its body, on every game (sv_ladon.lua ladonPartsDown), the round counts the body, and every Ladon missile is
+  toned while a Ladon is up. Open: why the parts didn't die with the body (no attacker named on the killing hit?).
