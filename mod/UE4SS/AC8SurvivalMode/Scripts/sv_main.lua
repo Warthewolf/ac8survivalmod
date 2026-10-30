@@ -880,6 +880,23 @@ if type(RegisterKeyBind) == "function" and Key then
         return loadObject(path)
     end
     PPTEST = { tick = function(now)
+        -- (T4a: your gear on the copy, through the game's own gear calls: SV_CoopPPFx kind 2)
+        if ppTest.obj and type(SV_CoopPPFx) == "function" then
+            local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+            local down = nil
+            pcall(function()
+                local comp = pawn.LandingGearOnMesh
+                if valid(comp) then local v = comp:IsVisible(); if type(v) == "boolean" then down = v end end
+            end)
+            if down ~= nil and down ~= ppTest.gear then
+                local first = ppTest.gear == nil
+                ppTest.gear = down
+                if not first then
+                    log(string.format("test: your gear %s: the copy's %s", down and "down" or "up", tostring(SV_CoopPPFx(ppTest.addr, 2,
+                        down and 1 or 0))))
+                end
+            end
+        end
         if not (ppTest.obj and now >= (ppTest.logAt or 0)) then return end
         ppTest.logAt = now + 5
         local o, pawn = ppTest.obj, survivalPC and valid(survivalPC) and survivalPC.Pawn
@@ -945,7 +962,7 @@ if type(RegisterKeyBind) == "function" and Key then
                     log(string.format("test: Ctrl+F11 second player plane (%s): %s", e.name, tostring(a)))
                     ppRelease("Ctrl+F11 the last copy gone")
                     if type(a) ~= "number" or a <= 0 then hudCallout("TEST: " .. e.name .. " FAILED", tostring(a)); ppTest.obj = nil; return end
-                    ppTest.addr, ppTest.name, ppTest.logAt = a, e.name, 0
+                    ppTest.addr, ppTest.name, ppTest.logAt, ppTest.gear = a, e.name, 0, nil
                     local c = ppCopy()
                     ppTest.obj = c
                     local f = type(SV_CoopFeed) == "function" and SV_CoopFeed(a, addrOf(pawn), 0, 150, 0) or "no SV_CoopFeed"

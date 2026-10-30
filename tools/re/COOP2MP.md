@@ -295,3 +295,32 @@ replays nothing (its weapon numbers aren't yours: T4b gives each player's real p
   (+311), the copy's trigger set N times`. Problems: `no network manager here`, `NOT LAUNCHED`, `another airframe`.
 - The friends' zip of this build (T3 + T4a's hooks, which do nothing outside the solo test):
   build/release/AC8SurvivalMode_COOP2MP_0.73.5_Online_COOP_NoValka.zip (hash 2f62ee32...0d4fff), in place of 0.73.4's.
+
+### T4a results (the user's solo test, 2026-10-30 19:58-19:59)
+- Missiles replayed and launched from the copy (3 of 3; no lock: target 0); flares (1 of 1); your gun's trigger (+0x30e
+  and +0x311 both set while you fire) put on the copy's +0x311.
+- The laser didn't fire on the copy (user: "laser not working on other craft, working on mine"): it isn't a
+  LiveExplosiveWeapon (`your launches 1 (0 missiles)`), so T4a skipped it.
+- With the input fed through its pointer (T1e), the copy's own engine now makes its afterburner amount and State
+  (`left on it up to 1000`, `State bits yours 8, its 8`): the OnSurfacePP write is now only a backstop.
+
+## Special weapons and the gear, Online Mode's way (research, 2026-10-30, checked)
+PlaneWeaponsFired tells four kinds apart by class (its calls to each StaticClass): LiveExplosiveWeapon (+0x34:
+ExplosiveWeaponFire), LiveAttachedInstantWeapon (+0x70: the laser, InstantWeaponFire via 0x1474d9c50),
+LiveBullet (+0x146: BulletWeaponFire via 0x1474d9de0) and LiveElectronicWeaponBase (+0x1b0: ESM / ECM,
+ElectronicMeasureFire via 0x1474d9f60). Their handlers (0x1474db3f0, 0x1474db6c0, 0x1474db9b0) do, on the role-2
+plane: select the special (0x147d71e20(plane, weapon number): weapons +0x308 = number - 1; only these handlers call it)
+and arm it (0x147d62ab0(plane, true)); a bullet special is armed and disarmed. The LandingGear handler (0x1474dca90,
+message +0x20 bGearDown, +0x21 bForceCancel, +0x22 bLanding, +0x23 bCarrier) calls gear down 0x147d594c0(plane, force
+cancel, landing, 0) or gear up 0x147d59730(plane, carrier) (a jmp stub into the protected section).
+
+## T4a.2 build (0.73.6-coop2mp.7, runtime 0.31.1; installed 2026-10-30, not yet run)
+- The Ctrl+F11 copy: your laser, bullet specials and ESM / ECM replayed the handlers' way (select, arm; a bullet special
+  armed and disarmed): `coop2mp: T4: your laser (weapon N) replayed on the copy: selected and armed (its selected special
+  now N)`; your gear mirrored (`test: your gear down: the copy's 1`).
+- SV_CoopPPFx(plane, kind, value) (kind 0 flares, 1 the gun's remote trigger, 2 the gear) on another player's real
+  plane; co-op's sync (sv_coop.lua peersTick) uses it for real planes from the flag bits every game already sends (16
+  gear, 64 gun, 128 flares): in co-op the other players' gear, gun and flares now show on their real planes. Their
+  missiles and specials in co-op: T4b (a new message with each launch).
+- The friends' zip of this build: build/release/AC8SurvivalMode_COOP2MP_0.73.6_Online_COOP_NoValka.zip (hash
+  fa821c65...895796), in place of 0.73.5's.

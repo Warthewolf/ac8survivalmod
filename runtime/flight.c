@@ -674,6 +674,20 @@ typedef uint8_t* (*NetMgrFn)(void* world);
 typedef double*  (*GetVelFn)(void* self, double* out);
 typedef uint8_t* (*StaticClassFn)(void);
 static uint8_t*     g_fPlaneFired, *g_fRemoteFire, *g_fLaunchWeapon, *g_fFireFlares, *g_fNetManager;
+static uint8_t*     g_fSelectSpecial, *g_fArmSpecial, *g_fGearSite;  /* (a special weapon's select / arm; the gear's site) */
+typedef void (*SelectSpecialFn)(uint8_t* plane, uint64_t weapon);
+typedef void (*ArmSpecialFn)(uint8_t* plane, uint64_t arm);
+typedef void (*GearDownFn)(uint8_t* plane, uint64_t forceCancel, uint64_t landing, uint64_t a4);
+typedef void (*GearUpFn)(uint8_t* plane, uint64_t carrier);
+/* the kinds PlaneWeaponsFired tells apart (each its own message online): the call to each class's StaticClass in it */
+#define FW_EXPLOSIVE   0x34    /* LiveExplosiveWeapon: ExplosiveWeaponFire */
+#define FW_INSTANT     0x70    /* LiveAttachedInstantWeapon (the laser): InstantWeaponFire */
+#define FW_BULLET      0x146   /* LiveBullet: BulletWeaponFire */
+#define FW_ELECTRONIC  0x1b0   /* LiveElectronicWeaponBase (ESM / ECM): ElectronicMeasureFire */
+static const wchar_t* const kFwKind[] = { L"?", L"laser", L"bullet special", L"electronic (ESM / ECM)" };
+#define FS_Q        8
+static struct { uint8_t kind, weapon; } g_fsQ[FS_Q];
+static int g_fsN;
 static PlaneFiredFn g_nextPlaneFired;
 static LaunchFn     g_nextLaunchWeapon;
 static FireFlaresFn g_nextFireFlares;
@@ -683,13 +697,14 @@ static struct { FwData d; CoRef target; } g_fwQ[FW_Q];
 static int g_fwN, g_fwFlares;
 static struct {
     uint32_t seen, explosive, queued, dropped, launched, failed, flares, flaresOk, gunYours30e, gunYours311, gunSet;
+    uint32_t special, unknown, specialDone; int saidSpecial;
     uint64_t nextId; int said, saidNoNm, saidOther, saidW;
     uint8_t* inTarget; int in; uint64_t ret; uint8_t* proj;      /* (one replay: LaunchWeapon's target, what it gave) */
 } FW;
 
-static int FwIsExplosive(uint8_t* proj)                  /* IsA the explosive weapon class, as PlaneWeaponsFired asks */
+static int FwIsA(uint8_t* proj, int32_t at)              /* IsA the class PlaneWeaponsFired asks for at that call */
 {
-    uint8_t* site = g_fPlaneFired + 0x34;                 /* call <its StaticClass> */
+    uint8_t* site = g_fPlaneFired + at;                   /* call <its StaticClass> */
     if (site[0] != 0xE8) return 0;
     uint8_t* sc = site + 5 + *(int32_t*)(site + 1);
     if (!InGame(sc)) return 0;
@@ -711,7 +726,13 @@ static void FwCapture(uint8_t* src, CoArr* projs)
     for (int32_t i = 0; i < n; ++i) {
         uint8_t* pj = ((uint8_t**)projs->data)[i];
         ++FW.seen;
-        if (!pj || !LiveObject(pj) || !Readable(pj, 0x6f0) || !FwIsExplosive(pj)) continue;
+        if (!pj || !LiveObject(pj) || !Readable(pj, 0x6f0)) continue;
+        if (!FwIsA(pj, FW_EXPLOSIVE)) {                   /* a special of another kind: select and arm it there */
+            int kind = FwIsA(pj, FW_INSTANT) ? 1 : FwIsA(pj, FW_BULLET) ? 2 : FwIsA(pj, FW_ELECTRONIC) ? 3 : 0;
+            if (kind && g_fsN < FS_Q) { g_fsQ[g_fsN].kind = (uint8_t)kind; g_fsQ[g_fsN].weapon = pj[0x3a8]; ++g_fsN; ++FW.special; }
+            else if (!kind) ++FW.unknown;
+            continue;
+        }
         ++FW.explosive;
         if (g_fwN >= FW_Q) { ++FW.dropped; continue; }
         uint8_t* root = *(uint8_t**)(pj + 0x1a0);
@@ -777,15 +798,28 @@ static void FwFlush(uint8_t* copy)
         FW.gunYours30e += sw[0x30e] != 0; FW.gunYours311 += sw[0x311] != 0;
         if (w[0x311] != on) { w[0x311] = on; ++FW.gunSet; }
     }
-    if (!g_fwN && !g_fwFlares) return;
-    int n = g_fwN, fl = g_fwFlares;
-    g_fwN = g_fwFlares = 0;
+    if (!g_fwN && !g_fwFlares && !g_fsN) return;
+    int n = g_fwN, fl = g_fwFlares, ns = g_fsN;
+    g_fwN = g_fwFlares = g_fsN = 0;
     if (!w || !src) { if (!FW.saidW++) Log(L"coop2mp: T4: the copy (or you) has no weapon system; %d shots not replayed", n); FW.dropped += n; return; }
     if (*(void**)(copy + 0x10) != *(void**)(src + 0x10)) {
         if (!FW.saidOther++) Log(L"coop2mp: T4: the copy is another airframe (its weapon numbers aren't yours): your shots aren't replayed on it");
         FW.dropped += n; return;
     }
     for (int k = 0; k < fl; ++k) if ((uint8_t)g_nextFireFlares(w)) ++FW.flaresOk;
+    for (int k = 0; k < ns && g_fSelectSpecial && g_fArmSpecial; ++k) {
+        /* (as the InstantWeaponFire / ElectronicMeasureFire handlers: select, arm; BulletWeaponFire's: armed and disarmed) */
+        ((SelectSpecialFn)g_fSelectSpecial)(copy, g_fsQ[k].weapon);
+        ((ArmSpecialFn)g_fArmSpecial)(copy, 1);
+        if (g_fsQ[k].kind == 2) ((ArmSpecialFn)g_fArmSpecial)(copy, 0);
+        ++FW.specialDone;
+        if (FW.saidSpecial < 6) {
+            ++FW.saidSpecial;
+            Log(L"coop2mp: T4: your %s (weapon %d) replayed on the copy: selected and armed%s (its selected special now %d)",
+                kFwKind[g_fsQ[k].kind], (int32_t)g_fsQ[k].weapon, g_fsQ[k].kind == 2 ? L", then disarmed" : L"",
+                Readable(w + 0x308, 4) ? *(int32_t*)(w + 0x308) + 1 : -1);
+        }
+    }
     if (!n) return;
     void* world = VCall(copy, VF_WORLD);
     uint8_t* nm = (world && g_fNetManager) ? ((NetMgrFn)g_fNetManager)(world) : NULL;
@@ -922,10 +956,12 @@ static void FdLog(void)
         Log(L"coop2mp: fed plane %p: %u hits this second, %d damage asked, %d taken off its health (health now %d)", plane, FD.hits,
             (int32_t)FD.hitDmg, (int32_t)FD.hitApplied, CoHealth(plane));
     if (FW.seen || FW.flares || FW.gunYours30e || FW.gunYours311 || FW.dropped)
-        Log(L"coop2mp: T4 this second: your launches %u (%u missiles), queued %u, replayed %u launched / %u not, %u dropped; your flares "
-            L"%u, the copy's %u; your gun trigger frames %u (+30e) %u (+311), the copy's trigger set %u times", FW.seen, FW.explosive,
-            FW.queued, FW.launched, FW.failed, FW.dropped, FW.flares, FW.flaresOk, FW.gunYours30e, FW.gunYours311, FW.gunSet);
+        Log(L"coop2mp: T4 this second: your launches %u (%u missiles, %u specials, %u unknown), queued %u, replayed %u launched / %u not, "
+            L"%u specials, %u dropped; your flares %u, the copy's %u; your gun trigger frames %u (+30e) %u (+311), the copy's trigger "
+            L"set %u times", FW.seen, FW.explosive, FW.special, FW.unknown, FW.queued, FW.launched, FW.failed, FW.specialDone, FW.dropped,
+            FW.flares, FW.flaresOk, FW.gunYours30e, FW.gunYours311, FW.gunSet);
     FW.seen = FW.explosive = FW.queued = FW.launched = FW.failed = FW.dropped = FW.flares = FW.flaresOk = 0;
+    FW.special = FW.unknown = FW.specialDone = 0;
     FW.gunYours30e = FW.gunYours311 = FW.gunSet = 0;
     FD.abSrc = FD.abFound = 0; FD.abWrites = 0; FD.stateOr = 0; FD.hits = 0; FD.hitDmg = FD.hitApplied = 0;
 }
@@ -963,6 +999,37 @@ static int L_CoopFeed(void* lua)
         (int32_t)up, r, (uint32_t)FD.noOff, g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)", in,
         g_nextPPDamage ? L"yes" : L"NO (not hooked)", (g_nextPlaneFired && g_nextLaunchWeapon && g_fRemoteFire && g_fNetManager)
         ? (*(void**)(plane + 0x10) == *(void**)(src + 0x10) ? L"yes" : L"no (another airframe)") : L"NO (game code not found)");
-    g_fwN = g_fwFlares = 0;
+    g_fwN = g_fwFlares = g_fsN = 0;
     return Ret(lua, 1);
+}
+
+/* SV_CoopPPFx(plane, kind, value) -> 1: on another player's real plane here (a player plane of role 2, never yours): kind
+ * 0 its flares (FireFlares on its weapon system, as Online Mode's PushFlare), 1 its gun's remote trigger (weapons +0x311 =
+ * value, as HoldingMachineGunButton), 2 its landing gear (value 1 down, 0 up: the LandingGear handler's own calls).
+ * < 0: -1 bad args / not such a plane, -2 that game code not found, -3 the flares didn't fire (none ready). COOP2MP T4:
+ * sv_coop.lua's sync for real planes (the flag bits every game sends), and the Ctrl+F11 test's gear. */
+static int L_CoopPPFx(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    double kind = -1, value = 0;
+    ArgNumber(lua, &kind); ArgNumber(lua, &value);
+    if (!plane || !LiveObject(plane) || CoKind(plane) != 2 || plane == CO.me.obj || (FD.src.obj && plane == FD.src.obj) ||
+        !Readable(plane + FW_W, 8)) return Ret(lua, -1);
+    uint8_t* w = *(uint8_t**)(plane + FW_W);
+    if (!w || !Readable(w + 0x311, 1)) return Ret(lua, -1);
+    if (kind == 0) {
+        FireFlaresFn ff = g_nextFireFlares ? g_nextFireFlares : (FireFlaresFn)g_fFireFlares;
+        if (!ff) return Ret(lua, -2);
+        return Ret(lua, (uint8_t)ff(w) ? 1 : -3);
+    }
+    if (kind == 1) { w[0x311] = value != 0 ? 1 : 0; return Ret(lua, 1); }
+    if (kind == 2) {
+        uint8_t* s = g_fGearSite;
+        if (!s || s[0x13] != 0xE8 || s[0x1e] != 0xE8) return Ret(lua, -2);
+        uint8_t* down = s + 0x18 + *(int32_t*)(s + 0x14), *up = s + 0x23 + *(int32_t*)(s + 0x1f);
+        if (!InGame(down) || !InGame(up)) return Ret(lua, -2);
+        if (value != 0) ((GearDownFn)down)(plane, 0, 0, 0); else ((GearUpFn)up)(plane, 0);
+        return Ret(lua, 1);
+    }
+    return Ret(lua, -1);
 }
