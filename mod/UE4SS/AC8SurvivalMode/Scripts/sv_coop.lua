@@ -515,18 +515,20 @@ local function hostTick()
             end
         end
     end
-    -- the flights on a real plane whose player went (down, gone): onto another real plane, else back on you
+    -- the flights on a real plane whose player went (down, landed at their airfield, gone): onto another real plane, else
+    -- back on you
     if M.huntOn and now >= (M.huntCheckAt or 0) then
         M.huntCheckAt = now + 5
         for unit, h in pairs(M.huntOn) do
             local u, P = M.units[unit], M.peers[h.slot]
             if not (u and u.gen == h.gen and D and D.up and D.up[unit]) then
                 M.huntOn[unit] = nil
-            elseif not (P and P.real and P.shown and P.obj and valid(P.obj)) then
+            elseif not COOP.realTarget(h.slot) then
                 M.huntOn[unit] = nil
+                local why = (P and P.onAirfield) and "landed at their airfield" or (P and P.down) and "down" or "gone"
                 local ok, s, n = COOP.huntReal(unit)
                 if not ok then n = COOP.huntHost(unit) end
-                log(string.format("coop: %s's target (player %d) is gone: %s", unit, h.slot + 1, ok and string.format(
+                log(string.format("coop: %s's target (player %d) is %s: %s", unit, h.slot + 1, why, ok and string.format(
                     "onto player %d's real plane (%d planes)", s + 1, n) or string.format("back on you (%d planes)", n)))
             end
         end
@@ -1105,10 +1107,14 @@ function COOP.peerInfo(slot) return M.peers[slot] end
 -- bits, on each of its planes up. slot's plane if it's shown here, else the shown real plane the fewest flights are on.
 -- -> true, slot, planes ordered; false if none. COOP.huntHost: the flight back on you (PlayerOnlyNoLimit, as it came).
 local ORDER_NORMAL, PRIO_PLAYER_ONLY_NO_LIMIT, PRIO_TARGET_FIRST, FIRE_BITS = 0, 8, 9, 7
+-- (not a player down at their airfield, nor one DOWN: the user's co-op run of 2026-10-30, a flight sent onto Alessia's
+-- real plane as she sat in the STORE, shooting it on the runway here 5 times while she bought a revive)
 local function realTarget(s)
     local P = M.peers[s]
-    return (s ~= COOP.slot and P and P.real and P.shown and P.obj and valid(P.obj)) and P.obj or nil
+    return (s ~= COOP.slot and P and P.real and P.shown and P.obj and valid(P.obj) and not P.onAirfield and not P.down)
+        and P.obj or nil
 end
+COOP.realTarget = realTarget
 function COOP.anyReal()
     for s = 0, MAX_SLOT do if realTarget(s) then return true end end
     return false

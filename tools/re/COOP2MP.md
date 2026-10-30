@@ -455,3 +455,9 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   reads your stick from the plane's input fields (+0xff8 pitch, +0xff0 - +0xfec yaw, +0xff4 roll, +0xfe4 throttle,
   +0xfe8 brake: before DOWN's autopilot) and swings the arm (110 deg/s), throttle / brake zoom 10-150 m. A restart while
   down puts the view back from the camera actor too. coop_revive_test covers it.
+- The user's co-op run of 2026-10-30 (0.73.13, 22:02-22:08, 3 players): Alessia landed her EA-36 (22:03:50) and sat in
+  the STORE; at 22:05:05 Cressendo went DOWN and the flight on him was sent onto her real plane (COOP.huntReal picked
+  any shown real plane), and hit it 5 times on the runway on the host's screen (refused there) while she bought his
+  revive. 0.73.15-coop2mp.16: realTarget skips a player at their airfield (state bit 4) or DOWN; the 5 s check moves a
+  flight off a player who lands (`coop: <unit>'s target (player N) is landed at their airfield: onto ...`).
+  coop_fire_test covers it.
