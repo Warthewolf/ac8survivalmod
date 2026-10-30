@@ -1065,7 +1065,13 @@ CFG = {
              name = "",
              -- the other player's airframe -> the NPC mission row their plane is shown as here (the player's plane
              -- blueprint BP_PlayerPlane_PPnnnn_<code>_C; a code not listed flies `default`). Rows of Survival's table.
-             airframes = { f16c = "f16c_common", f16v = "f16c_common", f18e = "f18e_common", f18f = "f18e_common",
+             -- (the user, 2026-10-30: "someone who was flying the FA-36 was registering as flying the F-16": 12 of
+             -- AC8's 34 player planes weren't listed. Now all but the ADFX-02, which has no AI plane; the F-14A has
+             -- only a special row, so it's shown as the F-14D)
+             airframes = { fa36 = "fa36_common", ea36 = "ea36_common", f04e = "f04e_common", f18c = "f18c_common",
+                           f15j = "f15j_common", a06e = "a06e_common", su25 = "su25_common", x40a = "x40a_common",
+                           mr2k = "mr2k_common", e06b = "e06b_common", f14a = "f14d_common",
+                           f16c = "f16c_common", f16v = "f16c_common", f18e = "f18e_common", f18f = "f18e_common",
                            f15e = "f15e_common", f15c = "f15c_common", f15x = "f15e_common", f14d = "f14d_common",
                            f22a = "f22a_common", f35c = "f35c_common", f02a = "f02a_common", su57 = "su57_common",
                            su35 = "su35_common", su37 = "su35_common", su30 = "su35_common", su33 = "su33_common",

@@ -321,6 +321,7 @@ COOP.peerPlane(P1, 1); COOP.peerPlane(P2, 2)
 peer(1, 3); peer(2, 3)
 tick()
 M.peers[1].row = "e18g_common"
+M.ecmSlot.e18g_common = 3                         -- (as COOP.syncSetup records the pod it adds: the rows' test below)
 local fromE = #logs + 1
 inbox[#inbox + 1] = "1|fx|e:0:0"
 tick()
@@ -465,17 +466,35 @@ local function DT(name, rows)
 end
 local function npcRow(fcs) local r = {}; for i = 0, 5 do r["NpcFCSId" .. i] = FName(fcs[i] or "None") end; return r end
 local mission = DT("DT_SV_NpcMission", { f16c_common = { NpcId = FName("OP_f16c") }, f16c_common_svcp = { NpcId = FName("OP_f16c_SVCP") },
-                                         su57_common = { NpcId = FName("OP_su57") } })
-local npc = DT("DT_NPC", { OP_f16c = npcRow({ [0] = "FCS_Flr", "FCS_Gun", "FCS_Msl", nil, "FCS_Bad" }) })
+                                         su57_common = { NpcId = FName("OP_su57") },
+                                         e18g_common = { NpcId = FName("OP_e18g") }, e18g_common_svcp = { NpcId = FName("OP_e18g_SVCP") } })
+local npc = DT("DT_NPC", { OP_f16c = npcRow({ [0] = "FCS_Flr", "FCS_Gun", "FCS_Msl", nil, "FCS_Bad" }),
+                           OP_e18g = npcRow({ [0] = "FCS_Flr", "FCS_Gun", "FCS_Msl" }) })
 local fcs = DT("DT_NPC_FCS", { FCS_Flr = { NpcWeaponId = FName("W_Flr") }, FCS_Gun = { NpcWeaponId = FName("W_Gun") },
                                FCS_Msl = { NpcWeaponId = FName("W_Msl") }, FCS_Bad = { NpcWeaponId = FName("W_Missing") } })
 local wpn = DT("DT_NPC_Weapon", { W_Flr = { damage = 0, AreaOfEffectDamage = 0 }, W_Gun = { damage = 7, AreaOfEffectDamage = 0 },
                                   W_Msl = { damage = 60, AreaOfEffectDamage = 20 } })
 objects[PROBE_TABLES[2].path], objects[FCS_TABLE], objects[WEAPON_TABLE] = npc, fcs, wpn
 objects["/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"] = mission
-M.svcpDone, M.svcpReady = nil, nil
+M.svcpDone, M.svcpReady, M.ecmSlot = nil, nil, {}
 from = #logs + 1
 COOP.syncSetup()
+-- (the EA-18G's plain campaign row has no ECM pod: its copy gets the stock one in its first free slot, for the ESM)
+local ce = npc.rows.OP_e18g_SVCP
+check(ce ~= nil and ce.NpcFCSId3:ToString() == "NPC_FCS_ECM000" and ce.NpcFCSId2:ToString() == "FCS_Msl_SVCP" and M.ecmSlot.e18g_common == 3
+      and npc.rows.OP_e18g.NpcFCSId3:ToString() == "None" and has(line("^coopfire: the stand%-ins' damage%-0 rows", from), "e18g_common slot 3 (added)"),
+      "the EA-18G's copy: the ECM pod added in slot 3 (recorded, logged), the game's own row untouched")
+-- every player plane of AC8 (BP_PlayerPlane_PPnnnn_<code>, build/research) on a stand-in row of its own, but the ADFX-02
+-- (no AI plane of it): the user, 2026-10-30, "someone who was flying the FA-36 was registering as flying the F-16"
+do
+    local codes = { "a10c", "f02a", "f04e", "f15c", "f22a", "f35c", "f18c", "j39e", "su34", "e18g", "typn", "f15j", "a06e",
+                    "rflm", "su25", "x40a", "mr2k", "fa36", "ea36", "m29a", "su57", "f16c", "f14d", "f18f", "f15e", "su47",
+                    "m21b", "su35", "m31b", "su33", "e06b", "f18e", "f14a" }
+    local missing = {}
+    for _, c in ipairs(codes) do if not CFG.coop.airframes[c] then missing[#missing + 1] = c end end
+    check(#missing == 0 and CFG.coop.airframes.fa36 == "fa36_common" and CFG.coop.airframes.adfx02 == nil,
+          "every player plane but the ADFX-02 has its own stand-in row; the FA-36 fa36_common (missing: " .. table.concat(missing, " ") .. ")")
+end
 local cp = npc.rows.OP_f16c_SVCP
 check(cp ~= nil and cp.NpcFCSId2:ToString() == "FCS_Msl_SVCP" and cp.NpcFCSId1:ToString() == "FCS_Gun_SVCP"
       and cp.NpcFCSId4:ToString() == "None" and cp.NpcFCSId3:ToString() == "None",

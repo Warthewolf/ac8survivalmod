@@ -867,6 +867,10 @@ local function myAirframe()
     if not valid(pawn) then return nil end
     local code = nameOf(pawn):match(AF_CODE)
     local c = cfg()
+    if not (code and c.airframes[code]) then                   -- (the others see it as the default: say so, once a code)
+        once("afcode" .. tostring(code), string.format("coop: your plane (%s) isn't in [coop] airframes: the others see it "
+            .. "as %s", tostring(code or nameOf(pawn):match("^(%S+)")), tostring(c.default)))
+    end
     return code and (c.airframes[code] or c.default) or c.default, code
 end
 
@@ -1053,9 +1057,9 @@ do
 local FX_PER_S, FX_MAX, FX_STALE_MS, FLAG_HOLD_S, GUN_EVERY_S, FLARE_EVERY_S = 12, 32, 1500, 0.5, 0.2, 1.0
 -- (a special weapon's count down with nothing new in flight this long after: an electronic one, ESM / jamming)
 local ELEC_WAIT_S = 0.45
--- the ECM pod's fire-control slot on a stand-in's airframe row (COOP.syncSetup records each row's from its DT_NPC row:
--- an FCS id with ECM in it); the EA-18G's (flares, gun, missiles, ECM: tools/survival_events.py JAM_ECM_SLOT) if not
-M.ecmSlot = M.ecmSlot or { e18g_common = 3 }
+-- the ECM pod's fire-control slot on a stand-in's airframe row (COOP.syncSetup records each row's: an FCS id with ECM in
+-- it, or the pod it adds to the electronic-warfare airframes' copies, whose plain campaign rows carry none)
+M.ecmSlot = M.ecmSlot or {}
 local BIT_GEAR, BIT_AB, BIT_GUN, BIT_FLARE = 16, 32, 64, 128
 local MISSION_TABLE = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
 local S = { seen = {}, kinds = {}, rate = {}, n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 } }
@@ -1421,6 +1425,9 @@ function COOP.syncSetup()
     M.svcpDone, M.svcpReady = true, {}
     for _, t in ipairs({ npc, mission, fcs, wpn }) do pin(t, nameOf(t)) end
     local made, emptied, lost, ecms = {}, {}, {}, {}
+    -- (the electronic-warfare airframes: their plain campaign rows, OP1010_e18g_01 and kin, have no ECM pod, only the
+    -- named aces' do; their copies get the stock one in their first free slot, so the others' ESM shows on them)
+    local ELEC = { e18g_common = true, ea36_common = true, e06b_common = true }
     local function harmless(id)                           -- id .. "_SVCP": its weapon's damage 0, or nil
         local new = id .. "_SVCP"
         if made[new] == nil then
@@ -1460,6 +1467,17 @@ function COOP.syncSetup()
                         else r["NpcFCSId" .. i] = FName("None"); emptied[#emptied + 1] = dst .. " slot " .. i .. " (" .. id .. ")" end
                     end
                 end
+                if ELEC[row] and M.ecmSlot[row] == nil then
+                    for i = 3, 5 do
+                        local id = r["NpcFCSId" .. i]:ToString()
+                        if id == "None" or id == "" then
+                            r["NpcFCSId" .. i] = FName("NPC_FCS_ECM000")
+                            M.ecmSlot[row] = i
+                            ecms[#ecms + 1] = row .. " slot " .. i .. " (added)"
+                            break
+                        end
+                    end
+                end
             end)
             if not okR then error(dst .. ": " .. tostring(whyR), 0) end
             M.svcpReady[row] = row .. "_svcp"
@@ -1471,7 +1489,7 @@ function COOP.syncSetup()
     log(string.format("coopfire: the stand-ins' damage-0 rows: %d of %d airframes%s%s; ECM pods (the others' ESM shown): %s", n,
         #rows, #emptied > 0 and ("; weapons left off: " .. table.concat(emptied, ", ")) or "",
         #lost > 0 and ("; not made (their own rows): " .. table.concat(lost, "; ")) or "",
-        #ecms > 0 and table.concat(ecms, ", ") or "none found (e18g_common slot 3 assumed)"))
+        #ecms > 0 and table.concat(ecms, ", ") or "none"))
 end
 
 -- TEST ONLY BEGIN (Ctrl+F5, sv_main.lua: the co-op fire path on an allied plane, solo; tools/re/COOP.md 8)
@@ -1509,6 +1527,9 @@ end
 ---------------------------------------------------------------------------------------------------- messages
 local function sendHi()
     local row = myAirframe()
+    -- (what the host last heard: a hello sent with no plane yet is followed by the airframe once there is one; the
+    -- co-op run of 2026-10-30: a player who'd been in the level before linking never sent theirs, shown as the default)
+    M.myRow = row
     send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "")
 end
 

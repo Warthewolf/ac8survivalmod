@@ -394,6 +394,14 @@ dropping with nothing new in flight is sent as `e` and fires the stand-in's ECM 
 0.72.6-coop.24: a new DOWN clears the last revive's 15 s guard (a player down again within 15 s of a revive was refused
 "ALREADY BEING REVIVED"); the revive test now has a joiner reviving the host (never run in game: in the run of
 2026-10-30 nobody bought the host back).
+Since 0.72.6 (not yet a build or run): the user, "someone who was flying the FA-36 was registering as flying the F-16"
+(it was gloom, and xX_spagooterpoop_Xx): 12 of AC8's 34 player planes (BP_PlayerPlane_PPnnnn_<code>, build/research)
+weren't in CFG.coop.airframes, so their stand-ins flew the default F-16C. Now all but the ADFX-02 (no AI plane): 10 new
+stand-in rows from the plain campaign enemy rows (build_survival.py POOL_EXTRA: OP1018_fa36_01 ...), the F-14A on the
+F-14D; an unlisted plane is logged; a hello sent with no plane is followed by the airframe (sendHi keeps M.myRow).
+The plain EA-18G row (OP1010_e18g_01) has NO ECM pod (only the named aces' rows carry NPC_FCS_ECM000): the stand-ins'
+copies of the EA-18G / EA-36 / E-6B get it in their first free slot (the ESM display), and the enemy jammer's rows get
+the held-up pod in slot 3, which RE_SV_JamEcm fires (it fired the random special weapon there before).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
