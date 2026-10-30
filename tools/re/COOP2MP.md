@@ -524,3 +524,20 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   spawns; [coop] join_wait_s 90 each, 0 never; `round N: enemy spawns paused while <names> join the mission`, callout
   WAITING FOR PLAYERS): the user, "is there a way that we can effectively pause enemy spawns while people are joining
   the lobby?". coop_fire_test covers each.
+
+### The ghosts (0.73.19 run, 2026-10-30) and 0.73.20-coop2mp.21: hits and kills between real planes
+- The joiners' logs (both 0.73.19): the same copy "taken down" every 5-20 s and never dying ("BP_OP1030_su33..._2147443813"
+  at 05:44:59, 05:45:19, 05:45:39 ...), then "the host's ERA_Unit_02_Dep_Air0 not spawned here (its last flight is still
+  up)", and the resend loop (the host "sent player N the run" every 20-40 s). The user: "people are attacking ghosts on
+  my side", "I saw Alyssa and Cress firing missiles at aircraft that did not exist on my screen".
+- Cause (hard rule 53's own finding): the game refuses damage whose attacker is another player's plane (role 2).
+  sv_coop.lua dealt (a) a joiner's hit on the host's enemy with the joiner's plane as the cause, and (b) the host's
+  kill on a joiner's copy with the host's plane as the cause. With AI stand-ins (0.72) both worked; from COOP2MP T3
+  those planes are real (role 2), so EVERY joiner hit and EVERY copy kill was refused: enemies joiners shot never died
+  on the host, the host's kills stayed up on the joiners, flying on by their own AI, and their flights never spawned
+  again there.
+- 0.73.20: the cause none when that plane is a real one, and either way a hit / kill that wasn't taken (health
+  unchanged) is dealt again with none; a copy still up after that gets GameplayStatics' ApplyDamage (`coop: a copy
+  here couldn't be finished` if not); a real plane's hits on the host kept (M.joinHits) and added to the kill's
+  "wingmate" share (KILL.read). The resend (jn) after strays at most every 120 s, never within 30 s of the last.
+  coop_ground_test's ModifyHealth stub now refuses a role-2 cause as the game does (the old code fails it).
