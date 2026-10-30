@@ -402,6 +402,15 @@ F-14D; an unlisted plane is logged; a hello sent with no plane is followed by th
 The plain EA-18G row (OP1010_e18g_01) has NO ECM pod (only the named aces' rows carry NPC_FCS_ECM000): the stand-ins'
 copies of the EA-18G / EA-36 / E-6B get it in their first free slot (the ESM display), and the enemy jammer's rows get
 the held-up pod in slot 3, which RE_SV_JamEcm fires (it fired the random special weapon there before).
+0.72.7-coop.25 (runtime 0.28.7) = all of the above: built, packaged (build hash 73655d02...4c760f) and INSTALLED
+2026-10-30 (0.72.4 backed up in build/backup/install_before_coop25_0727). Not yet run in game.
+AC8's Online Mode syncs player weapons with Strix messages (exe strings, jp.co.soft_gear.strix...game.FLiveMessage*):
+ExplosiveWeaponFire (WeaponData: WeaponNumber, WeaponNetworkId, SpawnSlotIndex, InitialLocation / Rotation / Velocity,
+TargetNetworkId, LockonNum, RandSeed), BulletWeaponFire, HoldingMachineGunButton, InstantWeaponFire,
+ElectronicMeasureFire / Effect (ESM / ECM), SpecialWeaponArmed, LockedTarget, PushFlare, EscapeByFlare, LandingGear,
+FlightEngineInput, Damage, RespawnRescueTry / Result; the remote player is a real ALivePlayerPlane firing its own
+weapons (COOP.md 6). Every message name is referenced from one function, 0x1452a5010 (likely their registration). Research
+only, nothing built on it.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
