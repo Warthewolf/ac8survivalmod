@@ -362,6 +362,10 @@ After 0.72.3 (the user's co-op run of 2026-10-30, not yet a build): the revives'
 SetMinHealth keeps whole health points only (0.1 -> 0; tools/re/KILLS_HEALTH_DEATH.md 1): the host was shot down from
 40 HP in round 8 and the run restarted at round 1. INS.tick now writes the MinHealth field. The shuttle's whole pad
 is taken off after liftoff (its objects recorded as spawned; the 1.5 km sweep missed the control centre).
+0.72.4 in game (the user's co-op run of 2026-10-30, 13 players): the floor held and revives worked (VERDA DOWN at
+13:38:56, revived by the host from the STORE at 13:41:22), but VERDA had crashed into the ground, so the loiter never
+lifted the plane and respawn loiter brought them back where it lay. Since then (not yet a build): a DOWN plane slower
+than 40 m/s (or under the sea) for 3 s comes back the native way (SV_Respawn 4 km out from the runway, 500 m up).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

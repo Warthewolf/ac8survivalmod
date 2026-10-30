@@ -510,7 +510,11 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
 - **Back**: SV_Down(0), shown, collision on, inputs and attacker limits back (a limit only if still 0), the view on
   your plane, RE_SV_RepairAircraft and HealthInternal written full, safe_s invincible; respawn "loiter" stays where it
   was flown, "native" calls SV_Respawn 4 km out from the runway (1609574, -435747) along its heading (yaw -23), 500 m
-  up, yaw -23; `revive: respawn d=<m> m` half a second on (where you are against where it was asked). A downed player
+  up, yaw -23; `revive: respawn d=<m> m` half a second on (where you are against where it was asked). A plane that
+  isn't flying when revived (slower than 40 m/s, or under the sea, for 3 s while DOWN: it crashed into the ground with
+  its floor held, and the loiter can't lift it) comes back "native" whatever respawn says: the user's co-op run of
+  2026-10-30 (0.72.4), VERDA crashed, went DOWN, and was revived where the plane lay, on the ground (fixed for the
+  next build, not yet run in game). A downed player
   keeps zollars, items, upgrades and allies, and gets round bonuses unless down_round_bonus = false (then the host's
   own and a joiner's "cr" are skipped while down).
 - **Run over**: the host, every pass: every player present (you; others in the level and heard from in 5 s) not alive
@@ -531,11 +535,12 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   coop.revive the host's for everyone except OWN_IN (key, ctrl, camera).
 - **Log lines**: `insurance: your aircraft's floor 0.1 HP (co-op's revives)`; `down: you're down at 0.1 HP in round N:
   hidden, no collision, ...; loiter round the airfield at 2500 m, 4000 m round: on`; `down: loiter <km> / <m> (from
-  the airfield / up; watching <name>)` every 5 s (every 30 s after a minute); `spectate: view <NAME> (<why>), reverted N
+  the airfield / up), <N> m/s; watching <name>` every 5 s (every 30 s after a minute); `down: your plane isn't flying (N
+  m/s, N m up, N km from the airfield): a revive brings you back 4 km out from the runway, 500 m up` (once a DOWN); `spectate: view <NAME> (<why>), reverted N
   times`, `spectate: view put back on <NAME> (the game took it back N times)`; `down: player N (<NAME>) is down`;
   `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K)`
   or `... refused: <WHY>`; `revive: back (revived by <NAME>) after N s down: repaired (event fired, health written), 5 s
-  invincible, <where>`; `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
+  invincible, <where>` (`... (your plane wasn't flying: N m/s): done` for a crashed one); `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
   over in round N`; `down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): fired`.
 - **Test keys** (TEST ONLY, stripped): T1 Ctrl+F6, the floor solo on / off (`down-test: health N (floor 0.1),
   MinHealth M` once a second: let an enemy shoot you down to 0.1 HP and stay there); T2 Ctrl+END (each press: 1 DOWN

@@ -16,7 +16,8 @@
 --   revive      any other player at their airfield buys you back from the STORE's AIRFIELD page (REVIVE <NAME>, the one
 --               down longest: price x raise for each revive in the run, the host's count); the host checks it and tells
 --               everyone ("rb"): you're back, repaired, safe_s invincible, where the loiter left you (respawn "loiter")
---               or 4 km out from the runway at 500 m ("native": SV_Respawn); the others call it out
+--               or 4 km out from the runway at 500 m ("native": SV_Respawn; also a plane that isn't flying, crashed into
+--               the ground: GROUND_MS); the others call it out
 --   run over    every player in the mission down (RO_CONFIRM_S): the host's "ro" ends the run on every game (LB.finish,
 --               Mission 15's MissionFailed: RE_SV_RunOver; sv_leaderboard.lua's own death check waits for it in co-op)
 -- The spectator camera: a CameraComponent added to the watched player's plane here (back_m behind, up_m up, looking at
@@ -29,6 +30,10 @@
 DOWN = {}
 do
 local RO_CONFIRM_S, PENDING_S, REVIVING_S, MSG_PER_S, PRESENT_MS = 3, 10, 15, 4, 5000
+-- a DOWN plane slower than GROUND_MS (m/s: no plane flies that slowly) or under the sea for GROUND_S isn't flying: it
+-- crashed into the ground with its floor held, and the loiter can't lift it (the user's co-op run of 2026-10-30: VERDA
+-- crashed, was revived where the plane lay, on the ground). A revive then brings it back the "native" way.
+local GROUND_MS, GROUND_S = 40, 3
 local INPUTS = { { "bEnableWeaponInput", false }, { "bEnableFlareInput", false }, { "bIsWeaponSystemDisabled", true } }
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
 -- "native" respawn: 4 km out from the runway along its heading (Comona's runway, yaw -23: the takeoff's way), 500 m up
@@ -228,12 +233,33 @@ local function loiter(pawn)
     return r == 1 and "on" or (tostring(r) .. " " .. tostring(SV_ERR[r] or ""))
 end
 
+-- (each pass while DOWN) how fast your plane moves, from where it is against half a second or more before: the loiter
+-- keeps a flying plane at cruise speed; a crashed one lies still
+local function motionTick(now)
+    local at = playerLocation()
+    if not at then return end
+    local m = St.motion
+    if m and now - m.t < 0.5 then return end
+    St.motion = { X = at.X, Y = at.Y, Z = at.Z, t = now }
+    if not m then return end
+    St.speed = km(at, m) * 1000 / (now - m.t)
+    if St.speed < GROUND_MS or at.Z < 0 then St.groundedAt = St.groundedAt or now else St.groundedAt = nil end
+    if St.groundedAt and now - St.groundedAt >= GROUND_S and not St.groundSaid then
+        St.groundSaid = true
+        local dx, dy = at.X - AIRFIELD.X, at.Y - AIRFIELD.Y
+        log(string.format("down: your plane isn't flying (%.0f m/s, %.0f m up, %.1f km from the airfield): a revive brings you back "
+            .. "4 km out from the runway, 500 m up", St.speed, at.Z / 100, math.sqrt(dx * dx + dy * dy) / 100000))
+    end
+end
+local function grounded() return St.groundedAt ~= nil and os.clock() - St.groundedAt >= GROUND_S end
+
 local function goDown(pawn, h)
     local now = os.clock()
     St.down, St.downAt, St.ended, St.reverts, St.views, St.watch, St.lookAt = true, now, false, 0, 0, nil, nil
     St.since[mySlot()] = now
     local saved, did = outOfFight(pawn)
     St.saved, St.loiterAddr, St.loiterAt, St.loiterSaid = saved, addrOf(pawn), now + 5, nil
+    St.motion, St.speed, St.groundedAt, St.groundSaid = nil, nil, nil, nil
     local r = loiter(pawn)
     local lo = rc().loiter or {}
     log(string.format("down: you're down at %.1f HP in round %s: %s; loiter round the airfield at %s m, %s m round: %s",
@@ -251,6 +277,7 @@ function DOWN.back(how, respawn)
     if not St.down then return end
     local pawn = pawnOf()
     local downFor = os.clock() - (St.downAt or os.clock())
+    local onGround = grounded()
     St.down, St.since[mySlot()] = false, nil
     if type(SV_Down) == "function" then pcall(SV_Down, 0) end
     backInFight(pawn, St.saved)
@@ -261,7 +288,10 @@ function DOWN.back(how, respawn)
     St.safeUntil = os.clock() + num(rc().safe_s, 5)
     if valid(pawn) then pcall(function() pawn:SetIsInvincible(true) end) end
     local where = respawn or tostring(rc().respawn or "loiter")
-    local placed = "where the loiter left you"
+    local placed, why = "where the loiter left you", ""
+    if where ~= "native" and onGround then          -- (crashed: where it lies is the ground)
+        where, why = "native", string.format(" (your plane wasn't flying: %.0f m/s)", St.speed or 0)
+    end
     if where == "native" and valid(pawn) then
         local y = math.rad(RUNWAY.yaw)
         local x, yy = RUNWAY.X + math.cos(y) * RUNWAY.out_cm, RUNWAY.Y + math.sin(y) * RUNWAY.out_cm
@@ -270,7 +300,7 @@ function DOWN.back(how, respawn)
             local okR, v = pcall(SV_Respawn, addrOf(pawn) or 0, x, yy, RUNWAY.z_cm, 0, RUNWAY.yaw, 0)
             rr = (not okR and ("error " .. tostring(v))) or (v == 1 and "done") or (tostring(v) .. " " .. tostring(SV_ERR[v] or ""))
         end
-        placed = string.format("SV_Respawn 4 km out from the runway, 500 m up: %s", tostring(rr))
+        placed = string.format("SV_Respawn 4 km out from the runway, 500 m up%s: %s", why, tostring(rr))
         St.respawnAt = { at = os.clock() + 0.5, X = x, Y = yy, Z = RUNWAY.z_cm }
     else
         local at = playerLocation()
@@ -521,11 +551,13 @@ function DOWN.tick()
                 local at = playerLocation()
                 if at then
                     local dx, dy = at.X - AIRFIELD.X, at.Y - AIRFIELD.Y
-                    log(string.format("down: loiter %.1f km / %.0f m (from the airfield / up; watching %s)", math.sqrt(dx * dx + dy * dy) / 100000,
-                        at.Z / 100, St.watch and St.watch.name or "nobody"))
+                    log(string.format("down: loiter %.1f km / %.0f m (from the airfield / up), %s m/s; watching %s", math.sqrt(dx * dx + dy * dy) / 100000,
+                        at.Z / 100, St.speed and string.format("%.0f", St.speed) or "?", St.watch and St.watch.name or "nobody"))
                 end
             end
         end
+        local okM, errM = pcall(motionTick, now)
+        if not okM then logOnce("motionTick", "down: motion error " .. tostring(errM)) end
         local okS, errS = pcall(spectateTick, now)
         if not okS then logOnce("spectateTick", "spectate: error " .. tostring(errS)) end
     elseif valid(pawn) and not St.ended and (St.testDown or (rc().enabled == true and linked() and D.round and D.round >= 1)) then
