@@ -417,7 +417,10 @@ The user: "everyone is using their player aircraft and not an AI stand in", "Sta
 other players as real player planes (ALivePlayerPlane, as AC8's Online Mode shows them) with their own weapons, instead
 of AI stand-ins. VERSION 0.73.x, COOP_TAG -coop2mp.N, zips `BUILD_NAME=COOP2MP COOP=1 NOVALKA=1 sh
 tools/package_release.sh online <version>`. tools/re/COOP2MP.md has Online Mode's research (its Strix weapon messages)
-and the tests T1-T5.
+and the tests T1-T5. T1 / T2 (0.73.0, test of 2026-10-30): a role-2 player plane with its tick off and moved every
+frame holds formation but has no animations, afterburner, HUD box or enemy attacks. T1c (0.73.1-coop2mp.2, runtime
+0.29.1; not yet run in game): its tick left on and its own RemoteUpdate (0x147d6f0c0, kSigRemoteUpdate) fed each frame:
+SV_CoopFeed writes a pose, speed, State and stick into its network object's physics message and input (COOP2MP.md).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

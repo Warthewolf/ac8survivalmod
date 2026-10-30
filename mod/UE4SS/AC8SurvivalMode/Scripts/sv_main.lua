@@ -800,13 +800,16 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- Ctrl+F11 in a run: COOP2MP's T1 / T2 (tools/re/COOP2MP.md): a real player plane beside you, spawned as Online Mode
-    -- spawns another player's (network dummy controller, network object, role 2), its own tick off (with role 2 and no
-    -- network data its tick pulls it to the map's centre: COOP.md 6) and moved 150 m off your right wing on every input
-    -- build (smooth in 0.22.7). Each press the next airframe: your own plane's class (T1), the ADFX-02, the FA-36 (T2:
-    -- another class, its own default weapons). Ctrl+F12 takes it away. Watch: does it look and fly right, your camera,
-    -- HUD and lock-on stay yours, do the enemies go for it; every 5 s `test: second plane ...` says where it is, its
-    -- health and how many enemies have it (and you) as their nearest player plane.
+    -- Ctrl+F11 in a run: COOP2MP's T1c (tools/re/COOP2MP.md): a real player plane beside you, spawned as Online Mode
+    -- spawns another player's (network dummy controller, network object, role 2), its own tick ON and fed (SV_CoopFeed,
+    -- runtime 0.29.1): every frame, just before its own remote update, its network data gets your pose 150 m off your
+    -- right wing and your stick, so it flies itself as Online Mode's remote players do (T1 / T2 kept its tick off and
+    -- moved it: no animations, afterburner, HUD box or enemy attacks). Without SV_CoopFeed (an older main.dll) or if it
+    -- refuses, T1's way. Each press the next airframe: your own plane's class, the ADFX-02, the FA-36 (another class,
+    -- its own default weapons). Ctrl+F12 takes it away. Watch: does it fly beside you, its control surfaces, gear and
+    -- afterburner, an ALLY tag / HUD box, do the enemies go for it; every 5 s `test: second plane ...` says where it is,
+    -- its health and how many enemies have it (and you) as their nearest player plane, every second `coop2mp: fed
+    -- plane ...` how far it is from where it was sent.
     local ppTest = { addr = nil, step = 0 }
     local PP_PLANES = { { name = "YOUR OWN" }, { name = "ADFX-02", code = "adfx02" }, { name = "FA-36", code = "fa36" } }
     local function ppClass(e)                          -- (sv_coop.lua's table of every player plane's blueprint)
@@ -870,9 +873,14 @@ if type(RegisterKeyBind) == "function" and Key then
                     ppTest.addr, ppTest.name, ppTest.logAt = a, e.name, 0
                     local c = ppCopy()
                     ppTest.obj = c
-                    local okT, et = pcall(function() c:SetActorTickEnabled(false) end)
-                    log("test: Ctrl+F11 the copy's own tick off: " .. (okT and "done" or tostring(et)))
-                    local f = SV_CoopFollow(a, addrOf(pawn), 0, 150, 0, 0)
+                    local f = type(SV_CoopFeed) == "function" and SV_CoopFeed(a, addrOf(pawn), 0, 150, 0) or "no SV_CoopFeed"
+                    if f == 1 then
+                        log("test: Ctrl+F11 the copy's own tick stays on, fed (SV_CoopFeed 1)")
+                    else
+                        local okT, et = pcall(function() c:SetActorTickEnabled(false) end)
+                        log("test: Ctrl+F11 not fed (" .. tostring(f) .. "): T1's way, its own tick off: " .. (okT and "done" or tostring(et)))
+                        f = SV_CoopFollow(a, addrOf(pawn), 0, 150, 0, 0)
+                    end
                     local after = survivalPC.Pawn
                     log("test: Ctrl+F11 after the spawn: your pawn is " .. (addrOf(after) == addrOf(pawn) and "still yours" or
                         ("NOW " .. nameOf(after))) .. "; formation " .. tostring(f))
@@ -888,6 +896,7 @@ if type(RegisterKeyBind) == "function" and Key then
                 local ok, err = pcall(function()
                     if type(SV_CoopKillPP) ~= "function" then return end
                     ppTest.addr, ppTest.step, ppTest.obj = nil, 0, nil
+                    if type(SV_CoopFeed) == "function" then SV_CoopFeed(0) end
                     log("test: Ctrl+F12 second player plane removed: " .. tostring(SV_CoopKillPP()))
                 end)
                 if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
