@@ -201,6 +201,17 @@ local function scene(role, slot, peers)         -- a new level: co-op as `role` 
 end
 
 ---------------------------------------------------------------------------------------------------- the floor
+print("the prices")
+-- (the user, 2026-10-30: "lower the cost for reviving": 2500, x1.25 a revive, was 5000 x1.5)
+do
+    local cr = CFG.coop.revive
+    check(cr.price == 2500 and cr.raise == 1.25, "shipped: 2500 a revive, x1.25 for each one in the run (" .. tostring(cr.price) .. " x" .. tostring(cr.raise) .. ")")
+    local p = {}
+    for n = 0, 2 do p[#p + 1] = math.floor(cr.price * cr.raise ^ n / 10 + 0.5) * 10 end
+    check(table.concat(p, " ") == "2500 3130 3910", "the run's first three: " .. table.concat(p, " "))
+    cr.price, cr.raise = 5000, 1.5         -- (the checks below were written for 5000 x1.5: the logic is the same)
+end
+
 print("the floor")
 scene("host", 0, { [1] = FLY, [2] = FLY })
 check(pawn.MinHealth == 0.1 and DOWN.floor() == 0.1, "co-op, another game linked: MinHealth 0.1 (floor_hp)")

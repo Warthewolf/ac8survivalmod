@@ -1091,7 +1091,7 @@ CFG = {
              -- down_round_bonus: a downed player still gets the round bonuses. key / ctrl: the next player to watch;
              -- camera: back_m behind and up_m above the plane you watch, blend_s to swing over. key, ctrl and camera
              -- are each player's own, the rest the host's.
-             revive = { enabled = true, floor_hp = 0.1, price = 5000, raise = 1.5, safe_s = 5,
+             revive = { enabled = true, floor_hp = 0.1, price = 2500, raise = 1.25, safe_s = 5,
                         loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", key = "O", ctrl = false,
                         camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a

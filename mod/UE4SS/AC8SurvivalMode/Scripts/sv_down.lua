@@ -68,7 +68,7 @@ local function name(slot) return upper((COOP and COOP.name and COOP.name(slot)) 
 local function callout(text, sub) if type(hudCallout) == "function" then pcall(hudCallout, text, sub) end end
 local function priceFor(n)
     local c = rc()
-    return math.floor(num(c.price, 5000) * num(c.raise, 1) ^ (n or 0) / 10 + 0.5) * 10
+    return math.floor(num(c.price, 2500) * num(c.raise, 1) ^ (n or 0) / 10 + 0.5) * 10
 end
 
 -- Revives on: co-op open with another game linked, in a run (or T1's floor, a test key's)

@@ -541,7 +541,7 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host -> everyone
   `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>`, `ro|<round>`; host -> one joiner
   `rx|<slot>|<why>|<count>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>` with a `dw ... q` for each one down.
-- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 5000, raise 1.5, safe_s 5, respawn loiter |
+- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 2500, raise 1.25 (5000 x 1.5 until 2026-10-30: the user, "lower the cost for reviving"), safe_s 5, respawn loiter |
   native, key O, ctrl false, down_round_bonus true; [coop.revive.loiter] alt_m 2500, radius_m 4000;
   [coop.revive.camera] back_m 30, up_m 8, blend_s 0.5. [coop] is PERSONAL, but sv_coop.lua's SHARED_IN makes
   coop.revive the host's for everyone except OWN_IN (key, ctrl, camera).
