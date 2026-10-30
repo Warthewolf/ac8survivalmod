@@ -459,7 +459,9 @@ both engines' gear moved; zip 0.73.9. T4a.5 in game: the gear still lowered and 
 check's flag (engine +0x34 bit 0x10) is the input's flags byte (input message +0x20 = BuildFlightInput's out+0x18:
 0x10 = State bit 9), and the feed wrote it as a fixed 4; State bit 9 is the engine's gear state +0x710 != 0. T4a.6
 (0.73.10-coop2mp.11, runtime 0.31.6): your input's flags byte fed (co-op's real planes: 4 | gear from State bit 9),
-a log line a second with both engines' flags and gear state; zip 0.73.10. Installed; not yet run in game.
+a log line a second with both engines' flags and gear state; zip 0.73.10. T4a.6 in game (2026-10-30): the copy's gear
+came down and went up again, each moved once (flags 0x10 on both engines while down; own engine's gear state 1-3, then
+0); the solo copy (T4a) now replays missiles, flares, gun, laser and gear. ECM / ESM still not seen on it.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
