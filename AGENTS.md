@@ -241,6 +241,14 @@ Copy a working stock pattern before inventing a new one.
     InitialSetting_Accessibility), and a BACK row naming the page under it is a working way back. Copies of the main
     menu's top page have no cancel. Confirmed by the tests of 2026-10-29 (runtimes 0.27.0-0.28.3).
 
+53. A remote player plane (role 2) flies itself when its network object's messages are fed each frame before its
+    RemoteUpdate (0x147d6f0c0): the physics message *(N+0x98) and the input message *(N+0x170), both pointers (N+0x170
+    is a TSharedPtr: writing at N+0x178 hit its reference controller and Quit Mission crashed, test of 2026-10-30). Its
+    afterburner glow is plane+0x39d0, reset every frame on a remote plane, so it's written just before the surface
+    update (0x147d32b00) reads it. Enemies attack one only when an order names it (Survival's name "Player": your plane),
+    and hits on it reach the player plane's damage (0x147d5a430) but are never applied. Confirmed by T1c-T1e
+    (tools/re/COOP2MP.md, 2026-10-30).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
@@ -428,7 +436,8 @@ attacks. T1d (0.73.2-coop2mp.3, runtime 0.29.2; not yet run): the glow from your
 glow and the ordered attacks worked (a missile exploded on the copy) but its health never moved, and Quit Mission
 crashed: N+0x170 is a TSharedPtr to the input message, and the feed wrote the stick over its controller. T1e
 (0.73.3-coop2mp.4, runtime 0.29.3; not yet run): the input through the pointer, and the hits on the copy logged at the
-player plane's damage (0x147d5a430).
+player plane's damage (0x147d5a430). T1e in game: the copy took your stick, the hits reached the
+damage and were refused (40 asked, 0 taken), Restart and Quit Mission ran clean (hard rule 53).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
