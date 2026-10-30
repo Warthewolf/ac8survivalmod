@@ -442,7 +442,7 @@ static int L_Respawn(void* lua)
  * zero, so its tick pulled it to the map's centre (COOP.md 6), and T1 kept its tick off: no animations, afterburner,
  * HUD box or enemy attacks. Here, just before RemoteUpdate runs for the fed plane, its message gets a pose and its
  * input: Direction (+0x20, 3 floats, a unit vector), Location (+0x2c, 3 int32, cm), Rotation (+0x38, 3 floats, deg:
- * pitch, yaw, roll), State (+0x44, int32: the source's plane+0x2b18 less bits 20 and 9), SpeedLocal (+0x48, float m/s);
+ * pitch, yaw, roll), State (+0x44, int32: the source's plane+0x2b18 less bit 20), SpeedLocal (+0x48, float m/s);
  * the input message's +0x08..+0x1c: pitch, yaw, roll, throttle, brake, high-G (the source's last BuildFlightInput),
  * +0x20 the attribute byte (4; bit 0 zeroes the input). TriggerTimeMs (+0x08) and the queues (+0x58, +0x68, +0x78
  * counts) are left alone. T1c's source: your own plane, with a formation offset (forward, right, up).
@@ -457,6 +457,10 @@ static RemoteUpdateFn g_nextRemoteUpdate;
 #define FD_IN       0x170      /* N's FLiveMessageFlightEngineInput (a TSharedPtr: the message's address) */
 #define FD_SPEED    0x2318     /* the plane's flight state (+0x2268) speed, m/s (float) */
 #define FD_STATE    0x2b18     /* its State (int32) */
+/* State bits not sent to a remote plane: bit 20 (the research's, its meaning unknown). Bit 9 is gear down: RemoteUpdate
+ * (0x147d6f989) puts the plane's gear down or up from it every frame; until runtime 0.31.2 it was cleared too, so the
+ * copy's gear never came down (T4a.2's test, 2026-10-30: your State 0x40A00 / 0x40200 with the gear down). */
+#define FD_STATE_LOCAL (1u << 20)
 static struct {
     int on, said;
     int32_t noOff;
@@ -520,7 +524,7 @@ static void FdFeed(uint8_t* plane)
     float frot[3] = { (float)rot[0], (float)rot[1], (float)rot[2] };
     int32_t state = Readable(src + FD_STATE, 4) ? *(int32_t*)(src + FD_STATE) : 0;
     FD.stateOr |= (uint32_t)state;
-    state &= ~((1 << 20) | (1 << 9));
+    state &= ~FD_STATE_LOCAL;
     memcpy(r + 0x20, dir, 12); memcpy(r + 0x2c, loc, 12); memcpy(r + 0x38, frot, 12);
     memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
     const FlInput* rec = NULL;                          /* the source's last BuildFlightInput (FlRecordInput) */
@@ -604,7 +608,7 @@ static void FlNetFeed(int s, uint8_t* plane)
     float frot[3] = { (float)rot[0], (float)rot[1], (float)rot[2] };
     int32_t state = 0;
     if (P->hasFl) memcpy(&state, P->fl + 9, 4);
-    state &= ~((1 << 20) | (1 << 9));
+    state &= ~FD_STATE_LOCAL;
     memcpy(r + 0x20, dir, 12); memcpy(r + 0x2c, loc, 12); memcpy(r + 0x38, frot, 12);
     memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
     if (P->hasFl) {
@@ -701,6 +705,41 @@ static struct {
     uint64_t nextId; int said, saidNoNm, saidOther, saidW;
     uint8_t* inTarget; int in; uint64_t ret; uint8_t* proj;      /* (one replay: LaunchWeapon's target, what it gave) */
 } FW;
+
+/* T4a.3: a laser on the copy. Online Mode's InstantWeaponFire handler only selects and arms it (0x147d62ab0 arms: the
+ * armed cue and the HUD, no shot), and T4a.2's test showed no beam; your own laser is spawned by LaunchWeapon as your
+ * missiles are. The remote fire can't take it (after LaunchWeapon it writes an explosive weapon's +0x6b4 / +0x6e8 and
+ * calls its vf+0x8a0 on whatever was launched), so its own steps are done here without those: 0x147f63c00(weapons,
+ * 0.0, 1), the slot 0x147f7c300(launcher, weapon, spawn slot), the seed, LaunchWeapon, and the two lists it fills
+ * freed (GMalloc, as the remote fire frees them). The calls' addresses are read from the remote fire's own code. */
+typedef void    (*WsPrepFn)(uint8_t* w, float a, uint64_t b);
+typedef int32_t (*WsSlotFn)(void* ws, uint64_t weapon, uint64_t spawnSlot);
+typedef struct { void* p; int32_t n, m; } FwArr;
+static int FwLaunchDirect(uint8_t* copy, uint8_t weapon, uint8_t* target, uint8_t** outProj)
+{
+    uint8_t* f = g_fRemoteFire, *c1 = f ? f + 0x4f4 : NULL, *c2 = f ? f + 0x50b : NULL, *gm = f ? f + 0x77d : NULL;
+    if (!f || !g_nextLaunchWeapon || c1[0] != 0xE8 || c2[0] != 0xE8 || gm[0] != 0x48 || gm[1] != 0x8B || gm[2] != 0x0D) return -2;
+    WsPrepFn prep = (WsPrepFn)(c1 + 5 + *(int32_t*)(c1 + 1));
+    WsSlotFn slotFn = (WsSlotFn)(c2 + 5 + *(int32_t*)(c2 + 1));
+    void** gmalloc = (void**)(gm + 7 + *(int32_t*)(gm + 3));
+    if (!InGame(prep) || !InGame(slotFn) || !Readable(gmalloc, 8)) return -2;
+    uint8_t* w = *(uint8_t**)(copy + FW_W);
+    void* ws = (w && Readable(w + 0x2e0, 8)) ? *(void**)(w + 0x2e0) : NULL;
+    if (!ws || !Readable(w + 0x534, 0x10)) return -1;
+    prep(w, 0.0f, 1);
+    int32_t slot = slotFn(ws, weapon, 0);
+    *(uint32_t*)(w + 0x53c) = *(uint32_t*)(w + 0x540);
+    *(uint32_t*)(w + 0x540) = *(uint32_t*)(w + 0x534) = *(uint32_t*)(w + 0x538) = 0;
+    FwArr a = { 0 }, b = { 0 };
+    void* proj = NULL;
+    uint64_t r = g_nextLaunchWeapon(ws, weapon, target, &proj, &slot, 0, 0, 0, &a, &b);
+    void* m = *gmalloc;
+    typedef void (*FreeFn)(void* self, void* p);
+    if (m && a.p) ((FreeFn)(*(void***)m)[0x48 / 8])(m, a.p);
+    if (m && b.p) ((FreeFn)(*(void***)m)[0x48 / 8])(m, b.p);
+    *outProj = (uint8_t*)proj;
+    return (uint8_t)r == 1 ? 1 : 0;
+}
 
 static int FwIsA(uint8_t* proj, int32_t at)              /* IsA the class PlaneWeaponsFired asks for at that call */
 {
@@ -812,12 +851,16 @@ static void FwFlush(uint8_t* copy)
         ((SelectSpecialFn)g_fSelectSpecial)(copy, g_fsQ[k].weapon);
         ((ArmSpecialFn)g_fArmSpecial)(copy, 1);
         if (g_fsQ[k].kind == 2) ((ArmSpecialFn)g_fArmSpecial)(copy, 0);
+        int lr = 0;
+        uint8_t* lp = NULL;
+        if (g_fsQ[k].kind == 1) lr = FwLaunchDirect(copy, g_fsQ[k].weapon, NULL, &lp);      /* (the laser: T4a.3) */
         ++FW.specialDone;
         if (FW.saidSpecial < 6) {
             ++FW.saidSpecial;
-            Log(L"coop2mp: T4: your %s (weapon %d) replayed on the copy: selected and armed%s (its selected special now %d)",
-                kFwKind[g_fsQ[k].kind], (int32_t)g_fsQ[k].weapon, g_fsQ[k].kind == 2 ? L", then disarmed" : L"",
-                Readable(w + 0x308, 4) ? *(int32_t*)(w + 0x308) + 1 : -1);
+            Log(L"coop2mp: T4: your %s (weapon %d) replayed on the copy: selected and armed%s (its selected special now %d)%s, "
+                L"launched %d (%p)", kFwKind[g_fsQ[k].kind], (int32_t)g_fsQ[k].weapon, g_fsQ[k].kind == 2 ? L", then disarmed" : L"",
+                Readable(w + 0x308, 4) ? *(int32_t*)(w + 0x308) + 1 : -1, g_fsQ[k].kind == 1 ? L"; launched from its weapons" : L"",
+                lr, lp);
         }
     }
     if (!n) return;

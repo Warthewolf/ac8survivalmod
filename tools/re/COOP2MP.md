@@ -96,8 +96,10 @@ own plane's class, the ADFX-02 (BP_PlayerPlane_PP0038_adfx02), the FA-36 (PP0018
   zeroes the input). (Read as inline at N+0x170 until runtime 0.29.3: see T1e.)
 - The plane's own flight state (MS, plane+0x2268: its speed plane+0x2318, its State plane+0x2b18) is blended toward the
   second one, and snaps to it when over 1 km off; then the plane's own engine, controls and effects run as for yours.
-- With nothing received all of R is zero: that's the pull to the map's centre (COOP.md 6). A local plane's State has bits
-  20 and 9 that a remote one mustn't get (cleared when copied).
+- With nothing received all of R is zero: that's the pull to the map's centre (COOP.md 6). State bit 9 is gear down:
+  RemoteUpdate (0x147d6f989) lowers or raises the plane's gear from it every frame (T4a.2's test; until runtime 0.31.2
+  it was cleared on the research's word, so a remote plane's gear never came down). Bit 20: still cleared, meaning
+  unknown.
 
 ## T1c build (0.73.1-coop2mp.2, runtime 0.29.1; the user's test install, 2026-10-30)
 The runtime hooks RemoteUpdate (sigs.h kSigRemoteUpdate, 18 bytes) and, for the one plane SV_CoopFeed names, writes the
@@ -324,3 +326,19 @@ cancel, landing, 0) or gear up 0x147d59730(plane, carrier) (a jmp stub into the 
   missiles and specials in co-op: T4b (a new message with each launch).
 - The friends' zip of this build: build/release/AC8SurvivalMode_COOP2MP_0.73.6_Online_COOP_NoValka.zip (hash
   fa821c65...895796), in place of 0.73.5's.
+
+### T4a.2 results (the user's solo test, 2026-10-30 20:07-20:08)
+- The laser (weapon 2) and the ESM (weapon 3) were selected and armed on the copy, Online Mode's handlers' way, but the
+  laser didn't fire (user: "laser didn't fire"): the arm call (0x147d62ab0) only arms (the armed cue, the HUD), no shot.
+- The gear didn't come down (user: "gear didn't go down") though the gear-down call ran: your State had bit 9 (0x200)
+  with the gear down (0x40A00, then 0x40200), RemoteUpdate puts the gear up or down from bit 9 every frame, and the feed
+  cleared it.
+
+## T4a.3 build (0.73.7-coop2mp.8, runtime 0.31.2; installed 2026-10-30, not yet run)
+- Bit 9 sent (FD_STATE_LOCAL: bit 20 only): the copy's gear from your State, as a remote plane's is online; co-op's
+  real planes the same from the flight block.
+- The laser launched from the copy's weapons after select and arm: the remote fire's own steps (0x147f63c00(weapons,
+  0.0, 1), the slot 0x147f7c300, the seed, LaunchWeapon, its two lists freed through GMalloc), their addresses read from
+  the remote fire's code, without its explosive-only writes (FwLaunchDirect). Log: `coop2mp: T4: your laser (weapon N)
+  replayed on the copy: selected and armed (its selected special now N); launched from its weapons, launched 1 (<p>)`.
+- The friends' zip: build/release/AC8SurvivalMode_COOP2MP_0.73.7_Online_COOP_NoValka.zip (hash a39fddb8...8a9465).

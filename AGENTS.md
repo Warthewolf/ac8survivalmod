@@ -448,7 +448,9 @@ T4a (0.73.5-coop2mp.6, runtime 0.31.0; not yet run): solo, the Ctrl+F11 copy rep
 way; the friends' zip 0.73.5 replaces 0.73.4. T4a in game: missiles, flares and gun replayed, the laser not (not
 an explosive weapon). T4a.2 (0.73.6-coop2mp.7, runtime 0.31.1; not yet run): specials (laser, bullet, ESM / ECM) the
 handlers' way (select, arm), the gear; SV_CoopPPFx gives co-op's real planes their gear, gun and flares from the flag
-bits; zip 0.73.6 replaces 0.73.5.
+bits; zip 0.73.6 replaces 0.73.5. T4a.2 in game: the laser armed but didn't fire, the gear didn't come down
+(State bit 9 is gear down, and the feed cleared it). T4a.3 (0.73.7-coop2mp.8, runtime 0.31.2; not yet run): bit 9 sent,
+the laser launched from the copy's own weapons; zip 0.73.7.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
