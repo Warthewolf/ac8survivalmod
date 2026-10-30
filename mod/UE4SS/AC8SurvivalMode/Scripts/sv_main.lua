@@ -450,6 +450,7 @@ local function probeTick(tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if PPTEST and PPTEST.tick then pcall(PPTEST.tick, os.clock()) end   -- (COOP2MP's test key: nil in releases, stripped)
         if now and valid(survivalPC) then                               -- Survival's own sounds follow (sv_sound.lua)
             local okSn, errSn = timed("sound", SND.tick)
             if not okSn and not D.sndErr then D.sndErr = true; log("sound: error " .. tostring(errSn)) end
@@ -799,15 +800,45 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- Ctrl+F11 in a run: a second player plane (tools/re/COOP.md 6, the research probe for co-op's real wingmate): a copy
-    -- of your own plane spawned as Online Mode spawns another player's (network dummy controller, network object, role
-    -- 2), kept 150 m off your right wing every frame. Ctrl+F12 takes it away. Watch: does your camera, HUD and control
-    -- stay yours, does it look like your plane, do the enemies go for it; the log says what the game did.
-    -- It flickered in and out (0.22.2, 0.22.3): with role 2 its own tick keeps it at the map's centre (test of
-    -- 2026-10-25: tick off, it held its spot but stuttered; role 0 with its tick on, it flew straight on its own and our
-    -- moves didn't hold it). So the copy starts with its tick off (A); a second press gives it role 0 and its tick back
-    -- and leaves it alone while the runtime scans it for its flight model's position (B, 0.22.6); a third spawns anew.
+    -- Ctrl+F11 in a run: COOP2MP's T1 / T2 (tools/re/COOP2MP.md): a real player plane beside you, spawned as Online Mode
+    -- spawns another player's (network dummy controller, network object, role 2), its own tick off (with role 2 and no
+    -- network data its tick pulls it to the map's centre: COOP.md 6) and moved 150 m off your right wing on every input
+    -- build (smooth in 0.22.7). Each press the next airframe: your own plane's class (T1), the ADFX-02, the FA-36 (T2:
+    -- another class, its own default weapons). Ctrl+F12 takes it away. Watch: does it look and fly right, your camera,
+    -- HUD and lock-on stay yours, do the enemies go for it; every 5 s `test: second plane ...` says where it is, its
+    -- health and how many enemies have it (and you) as their nearest player plane.
     local ppTest = { addr = nil, step = 0 }
+    local PP_PLANES = { { name = "YOUR OWN" }, { name = "ADFX-02", n = 38, code = "adfx02" }, { name = "FA-36", n = 18, code = "fa36" } }
+    local function ppClass(e)
+        if not e.n then return nil end
+        local b = string.format("BP_PlayerPlane_PP%04d_%s", e.n, e.code)
+        return loadObject(string.format("/Game/Blueprints/Vehicle/PLAYER/Plane/PP%04d_%s/%s.%s_C", e.n, e.code, b, b))
+    end
+    PPTEST = { tick = function(now)
+        if not (ppTest.obj and now >= (ppTest.logAt or 0)) then return end
+        ppTest.logAt = now + 5
+        local o, pawn = ppTest.obj, survivalPC and valid(survivalPC) and survivalPC.Pawn
+        if not valid(o) then log("test: second plane " .. tostring(ppTest.name) .. ": gone"); ppTest.obj = nil; return end
+        local d = "?"
+        pcall(function()
+            local a, b = o:K2_GetActorLocation(), pawn:K2_GetActorLocation()
+            d = string.format("%.0f m", math.sqrt((a.X - b.X) ^ 2 + (a.Y - b.Y) ^ 2 + (a.Z - b.Z) ^ 2) / 100)
+        end)
+        local okH, h = pcall(function() return o.HealthInternal end)
+        local onIt, onYou, up = 0, 0, 0
+        for _, p in ipairs(planes or {}) do
+            if not p.down and valid(p.obj) then
+                up = up + 1
+                local okN, np = pcall(function() return p.obj.NearestPlayerPlane end)
+                local na = okN and valid(np) and addrOf(np)
+                if na and na == ppTest.addr then onIt = onIt + 1 elseif na and na == addrOf(pawn) then onYou = onYou + 1 end
+            end
+        end
+        local okT, tk = pcall(function() return o:IsActorTickEnabled() end)
+        log(string.format("test: second plane %s: %s from you, health %s, its tick %s; of %d enemies up, %d have it as their nearest "
+            .. "player plane, %d you; your pawn %s", ppTest.name, d, okH and tostring(h) or "?", okT and tostring(tk) or "?", up, onIt,
+            onYou, valid(pawn) and "yours" or "GONE"))
+    end }
     local function ppCopy()
         for _, o in ipairs(FindAllOf("LivePlayerPlane") or {}) do
             if valid(o) and addrOf(o) == ppTest.addr then return o end
@@ -820,41 +851,31 @@ if type(RegisterKeyBind) == "function" and Key then
                     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
                     if not D or not valid(pawn) then log("test: Ctrl+F11 outside a flight"); return end
                     if type(SV_CoopSpawnPP) ~= "function" then log("test: Ctrl+F11 needs dlls/main.dll 0.21.0"); return end
-                    local copy = ppTest.addr and ppTest.step < 2 and ppCopy()
-                    if copy then
-                        ppTest.step = ppTest.step + 1
-                        local old = type(SV_CoopPPRole) == "function" and SV_CoopPPRole(0)
-                        local okT, e = pcall(function() copy:SetActorTickEnabled(true) end)
-                        local f = SV_CoopFollow(ppTest.addr, addrOf(pawn), 0, 150, 0, 1)
-                        log(string.format("test: Ctrl+F11 test B, role byte %s -> 0, tick on (%s), left alone and scanned: %s", tostring(old),
-                            okT and "done" or tostring(e), tostring(f)))
-                        hudCallout("TEST B: FLYING ON ITS OWN", "SCANNING IT; WAIT 3 SECONDS")
+                    ppTest.step = ppTest.step % #PP_PLANES + 1
+                    local e = PP_PLANES[ppTest.step]
+                    local cls, why = ppClass(e)
+                    if e.n and not valid(cls) then
+                        log(string.format("test: Ctrl+F11 %s: its class didn't load (%s)", e.name, tostring(why)))
+                        hudCallout("TEST: " .. e.name .. " DIDN'T LOAD", "CTRL+F11 FOR THE NEXT")
                         return
                     end
-                    ppTest.addr, ppTest.step = nil, 0
                     local l, r = pawn:K2_GetActorLocation(), pawn:K2_GetActorRotation()
                     local yaw = math.rad(r.Yaw)
                     local x, y = l.X - math.sin(yaw) * 15000, l.Y + math.cos(yaw) * 15000
-                    local a = SV_CoopSpawnPP(addrOf(pawn), x, y, l.Z, r.Yaw)
-                    log(string.format("test: Ctrl+F11 second player plane: %s", tostring(a)))
-                    if type(a) ~= "number" or a <= 0 then hudCallout("TEST: SECOND PLANE FAILED", tostring(a)); return end
-                    ppTest.addr, ppTest.step = a, 1
+                    log(string.format("test: Ctrl+F11 spawning %s (%s)", e.name, cls and nameOf(cls) or "your plane's class"))
+                    local a = SV_CoopSpawnPP(addrOf(pawn), x, y, l.Z, r.Yaw, cls and addrOf(cls) or 0)
+                    log(string.format("test: Ctrl+F11 second player plane (%s): %s", e.name, tostring(a)))
+                    if type(a) ~= "number" or a <= 0 then hudCallout("TEST: " .. e.name .. " FAILED", tostring(a)); ppTest.obj = nil; return end
+                    ppTest.addr, ppTest.name, ppTest.logAt = a, e.name, 0
                     local c = ppCopy()
-                    local okT, e = pcall(function() c:SetActorTickEnabled(false) end)
-                    log("test: Ctrl+F11 the copy's own tick off: " .. (okT and "done" or tostring(e)))
+                    ppTest.obj = c
+                    local okT, et = pcall(function() c:SetActorTickEnabled(false) end)
+                    log("test: Ctrl+F11 the copy's own tick off: " .. (okT and "done" or tostring(et)))
                     local f = SV_CoopFollow(a, addrOf(pawn), 0, 150, 0, 0)
                     local after = survivalPC.Pawn
                     log("test: Ctrl+F11 after the spawn: your pawn is " .. (addrOf(after) == addrOf(pawn) and "still yours" or
                         ("NOW " .. nameOf(after))) .. "; formation " .. tostring(f))
-                    for _, o in ipairs(FindAllOf("LivePlayerPlane") or {}) do
-                        if valid(o) then
-                            local okH, h = pcall(function() return o.HealthInternal end)
-                            local okC, ctl = pcall(function() return o.Controller end)
-                            log(string.format("test:   player plane %s, health %s, controller %s", nameOf(o):match("([^%.:]+)$") or "?",
-                                tostring(okH and h), okC and valid(ctl) and nameOf(ctl):match("([^%.:]+)$") or "none"))
-                        end
-                    end
-                    hudCallout("TEST A: TICK OFF, MOVED", "CTRL+F11 AGAIN FOR B")
+                    hudCallout("TEST: " .. e.name .. " BESIDE YOU", "CTRL+F11 NEXT AIRFRAME, CTRL+F12 REMOVE")
                 end)
                 if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
             end)
@@ -865,7 +886,7 @@ if type(RegisterKeyBind) == "function" and Key then
             ExecuteInGameThread(function()
                 local ok, err = pcall(function()
                     if type(SV_CoopKillPP) ~= "function" then return end
-                    ppTest.addr, ppTest.step = nil, 0
+                    ppTest.addr, ppTest.step, ppTest.obj = nil, 0, nil
                     log("test: Ctrl+F12 second player plane removed: " .. tostring(SV_CoopKillPP()))
                 end)
                 if not ok then log("test: Ctrl+F12 error " .. tostring(err)) end
