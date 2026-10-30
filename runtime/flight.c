@@ -853,13 +853,15 @@ static void FwFlush(uint8_t* copy)
         if (g_fsQ[k].kind == 2) ((ArmSpecialFn)g_fArmSpecial)(copy, 0);
         int lr = 0;
         uint8_t* lp = NULL;
-        if (g_fsQ[k].kind == 1) lr = FwLaunchDirect(copy, g_fsQ[k].weapon, NULL, &lp);      /* (the laser: T4a.3) */
+        /* (the laser, T4a.3; the ECM / ESM too, T4a.4: armed alone it showed nothing; the effect on the planes it jams or
+         * marks is the ElectronicMeasureEffect message's, 0x1474dbdf0, applied to those planes, not to the user's) */
+        if (g_fsQ[k].kind == 1 || g_fsQ[k].kind == 3) lr = FwLaunchDirect(copy, g_fsQ[k].weapon, NULL, &lp);
         ++FW.specialDone;
         if (FW.saidSpecial < 6) {
             ++FW.saidSpecial;
             Log(L"coop2mp: T4: your %s (weapon %d) replayed on the copy: selected and armed%s (its selected special now %d)%s, "
                 L"launched %d (%p)", kFwKind[g_fsQ[k].kind], (int32_t)g_fsQ[k].weapon, g_fsQ[k].kind == 2 ? L", then disarmed" : L"",
-                Readable(w + 0x308, 4) ? *(int32_t*)(w + 0x308) + 1 : -1, g_fsQ[k].kind == 1 ? L"; launched from its weapons" : L"",
+                Readable(w + 0x308, 4) ? *(int32_t*)(w + 0x308) + 1 : -1, g_fsQ[k].kind != 2 ? L"; launched from its weapons" : L"",
                 lr, lp);
         }
     }
@@ -893,21 +895,57 @@ static void FwFlush(uint8_t* copy)
     }
 }
 
+/* T4a.4: the gear. RemoteUpdate's own check (0x147d6f982) lowers its flight state's gear (0x144d33fb0(state, 1)) when
+ * the plane's State has bit 9 and the gear flag (+0x229c bit 0x10) isn't set, and raises it (0x144d33ea0(state, 0, 0,
+ * 0)) the other way; but it reads the State the plane's own update made from its real gear (bits 9 and 11 cleared while
+ * the gear is up: T4a.3's test, `yours 40A00, its 40000`), so the gear sent never came down. Done here after
+ * RemoteUpdate from the gear sent (after: before it, its own check would put the gear back from the stale State); once
+ * down, the plane's State has bit 9 itself and its check agrees. The calls, the flag and the state's offset are read
+ * from RemoteUpdate's code. */
+typedef void (*MsGearUpFn)(uint8_t* ms, uint64_t a, uint64_t b, uint64_t c);
+typedef void (*MsGearDownFn)(uint8_t* ms, uint64_t down);
+static int FlGear(uint8_t* plane, int down)              /* 1 moved, 0 already so, < 0 not found */
+{
+    uint8_t* f = g_fRemoteUpdate;
+    if (!f) return -2;
+    uint8_t* chk = f + 0x8c2, *lu = f + 0x8fb, *cu = f + 0x907, *ld = f + 0x912, *cd = f + 0x91b;
+    if (chk[0] != 0x0F || chk[1] != 0xB6 || chk[2] != 0x93 || lu[0] != 0x48 || lu[1] != 0x8D || lu[2] != 0x8B ||
+        ld[0] != 0x48 || ld[1] != 0x8D || ld[2] != 0x8B || cu[0] != 0xE8 || cd[0] != 0xE8) return -2;
+    int32_t flag = *(int32_t*)(chk + 3), ms = *(int32_t*)(lu + 3);
+    if (flag <= 0 || flag >= 0x8000 || ms <= 0 || ms >= 0x8000 || ms != *(int32_t*)(ld + 3) || !Readable(plane + flag, 1)) return -2;
+    int have = (plane[flag] & 0x10) != 0;
+    if (!!down == have) return 0;
+    if (down) ((MsGearDownFn)(cd + 5 + *(int32_t*)(cd + 1)))(plane + ms, 1);
+    else ((MsGearUpFn)(cu + 5 + *(int32_t*)(cu + 1)))(plane + ms, 0, 0, 0);
+    return 1;
+}
+static int32_t g_fgSaid;
+
 static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
 {
-    int test = 0;
+    int test = 0, ns = -1;
     if (plane) {
         if (FD.on && plane == FD.plane.obj && CoRefGet(&FD.plane)) {
             ++FD.calls; FD.lastCallAt = CoNow();
             FdFeed(plane);
             test = 1;
         } else {
-            int s = FlNetSlot(plane);
-            if (s >= 0) FlNetFeed(s, plane);
+            ns = FlNetSlot(plane);
+            if (ns >= 0) FlNetFeed(ns, plane);
         }
     }
     uint64_t r = g_nextRemoteUpdate(plane, dt);
-    if (test) FwFlush(plane);
+    if (test) {
+        FwFlush(plane);
+        uint8_t* src = CoRefGet(&FD.src);
+        uint32_t st = (src && Readable(src + FD_STATE, 4)) ? *(uint32_t*)(src + FD_STATE) : 0;
+        int g = src ? FlGear(plane, (st >> 9) & 1) : 0;
+        if (g && g_fgSaid < 8) { ++g_fgSaid; Log(L"coop2mp: T4: the copy's gear %s (your State %x): %d", (st >> 9) & 1 ? L"down" : L"up", st, g); }
+    } else if (ns >= 0 && CO.players[ns].hasFl) {
+        uint32_t st;
+        memcpy(&st, CO.players[ns].fl + 9, 4);
+        FlGear(plane, (st >> 9) & 1);
+    }
     return r;
 }
 
@@ -1066,13 +1104,9 @@ static int L_CoopPPFx(void* lua)
         return Ret(lua, (uint8_t)ff(w) ? 1 : -3);
     }
     if (kind == 1) { w[0x311] = value != 0 ? 1 : 0; return Ret(lua, 1); }
-    if (kind == 2) {
-        uint8_t* s = g_fGearSite;
-        if (!s || s[0x13] != 0xE8 || s[0x1e] != 0xE8) return Ret(lua, -2);
-        uint8_t* down = s + 0x18 + *(int32_t*)(s + 0x14), *up = s + 0x23 + *(int32_t*)(s + 0x1f);
-        if (!InGame(down) || !InGame(up)) return Ret(lua, -2);
-        if (value != 0) ((GearDownFn)down)(plane, 0, 0, 0); else ((GearUpFn)up)(plane, 0);
-        return Ret(lua, 1);
+    if (kind == 2) {                                      /* (as RemoteUpdate's check: FlGear; T4a.4) */
+        int g = FlGear(plane, value != 0);
+        return Ret(lua, g < 0 ? g : 1);
     }
     return Ret(lua, -1);
 }
