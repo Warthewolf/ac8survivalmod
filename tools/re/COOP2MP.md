@@ -473,3 +473,6 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
 - The user, 2026-10-30, after a co-op test on 0.73.16: "ECM ESM worked" (a player's ECM / ESM shown from their real
   plane on the others' games, T4b kind 3). Cress's earlier target box with no plane (0.73.11, round 1) wasn't
   reproduced by firing it: its cause stays open.
+- The same test: the other players saw the host's own loadout on the host's real plane (the user: "people reported
+  seeing my loadout"); the empty host loadout in Cress's 0.73.11 log ("//34,40") doesn't show as a problem now. Resolved
+  unless a mismatched special turns up.
