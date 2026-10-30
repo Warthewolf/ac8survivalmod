@@ -638,18 +638,200 @@ static void FlNetLog(void)
     }
 }
 
+/* ---- COOP2MP T4: your weapons on your real plane elsewhere, Online Mode's way (runtime 0.31.0; COOP2MP.md T4) -------
+ * Online Mode shows another player's shot by launching the same weapon from their plane's own weapon system: the remote
+ * plane fire 0x147d71ea0(plane, &{ExplosiveWeaponFire*, ctrl}) takes each WeaponData (0x50 bytes, at message+0x20) and
+ * LaunchWeapon(weapons+0x2e0, weapon number, target, ...) with its random seed, then sets the missile off from the
+ * shooter's start (its vf+0x8a0: location, rotation, velocity, target location, latency). A role-2 plane's weapons do no
+ * damage anywhere (CanBeDamagedBy, hard rule 53's research): what shows is all it does; each shooter's own game counts
+ * their hits. The message's time is the send time; one in the future gives no latency (a 0 would be 3 s late). Its
+ * target comes from the online network-id map (empty offline), so for our replays LaunchWeapon gets the target itself
+ * (OnLaunchWeapon). The network manager it reads unchecked is checked here first.
+ * T4a (solo, the Ctrl+F11 copy of your own plane's class): each of your launches (PlaneWeaponsFired, called by the
+ * weapon system after each one) is read as the online sender reads it (missile +0x3a8 weapon number, +0x6d0 spawn slot,
+ * +0x6d4, +0x6b4 seed, +0x3c8 lock-ons, +0x3f0 target; root +0x220 location, GetVelocity vf+0x358) and replayed from
+ * the copy the next frame (its offset from you added); your flares (FireFlares) too, and your gun's trigger (weapons
+ * +0x30e, yours; +0x311 the remote trigger the gun message sets) mirrored. Another airframe's weapon numbers aren't
+ * yours: nothing replayed on it (T4b: each player's own loadout on their real plane). */
+typedef struct {
+    void* vt; uint64_t netId;
+    uint8_t tgtType, pad0[3]; uint32_t tgtId; int32_t tgtLoc[3];
+    uint8_t weapon, slot, unk26, seed, lockon, pad1[3];
+    int32_t initLoc[3]; float initRot[3], initVel[3];
+} FwData;
+_Static_assert(sizeof(FwData) == 0x50, "WeaponData is 0x50 bytes");
+typedef struct {
+    void* vt; uint64_t triggerTime; uint8_t typeId, pad0[3]; uint32_t netId; uint64_t pad1;
+    FwData* wd; int32_t wdNum, wdMax; void* em; int32_t emNum, emMax;
+} FwMsg;
+_Static_assert(__builtin_offsetof(FwMsg, wd) == 0x20 && __builtin_offsetof(FwMsg, em) == 0x30, "ExplosiveWeaponFire's arrays");
+typedef void     (*PlaneFiredFn)(uint8_t* plane, CoArr* projs);
+typedef uint64_t (*RemoteFireFn)(uint8_t* plane, void** msgPair);
+typedef uint64_t (*LaunchFn)(void* ws, uint64_t weapon, void* target, void** outProj, void* slot, uint64_t a6, uint64_t a7,
+                             uint64_t lockon, void* arrA, void* arrB);
+typedef uint64_t (*FireFlaresFn)(uint8_t* w);
+typedef uint8_t* (*NetMgrFn)(void* world);
+typedef double*  (*GetVelFn)(void* self, double* out);
+typedef uint8_t* (*StaticClassFn)(void);
+static uint8_t*     g_fPlaneFired, *g_fRemoteFire, *g_fLaunchWeapon, *g_fFireFlares, *g_fNetManager;
+static PlaneFiredFn g_nextPlaneFired;
+static LaunchFn     g_nextLaunchWeapon;
+static FireFlaresFn g_nextFireFlares;
+#define FW_W        0x16a8     /* a player plane's weapon system */
+#define FW_Q        16
+static struct { FwData d; CoRef target; } g_fwQ[FW_Q];
+static int g_fwN, g_fwFlares;
+static struct {
+    uint32_t seen, explosive, queued, dropped, launched, failed, flares, flaresOk, gunYours30e, gunYours311, gunSet;
+    uint64_t nextId; int said, saidNoNm, saidOther, saidW;
+    uint8_t* inTarget; int in; uint64_t ret; uint8_t* proj;      /* (one replay: LaunchWeapon's target, what it gave) */
+} FW;
+
+static int FwIsExplosive(uint8_t* proj)                  /* IsA the explosive weapon class, as PlaneWeaponsFired asks */
+{
+    uint8_t* site = g_fPlaneFired + 0x34;                 /* call <its StaticClass> */
+    if (site[0] != 0xE8) return 0;
+    uint8_t* sc = site + 5 + *(int32_t*)(site + 1);
+    if (!InGame(sc)) return 0;
+    uint8_t* cls = ((StaticClassFn)sc)(), *pc = *(uint8_t**)(proj + 0x10);
+    if (!cls || !pc || !Readable(cls + 0x30, 0x10) || !Readable(pc + 0x30, 0x10)) return 0;
+    int32_t d = *(int32_t*)(cls + 0x38);
+    if (d < 0 || d > *(int32_t*)(pc + 0x38)) return 0;
+    uint8_t** chain = *(uint8_t***)(pc + 0x30);
+    return Readable(chain + d, 8) && chain[d] == cls + 0x30;
+}
+
+static void FwCapture(uint8_t* src, CoArr* projs)
+{
+    uint8_t* copy = CoRefGet(&FD.plane);
+    double sp[3], sr[3], cp[3], cr[3];
+    if (!copy || !CoReadPose(src, sp, sr) || !CoReadPose(copy, cp, cr)) return;
+    int32_t n = projs->num < 0 ? 0 : projs->num > 8 ? 8 : projs->num;
+    if (!n || !Readable(projs->data, 8 * (size_t)n)) return;
+    for (int32_t i = 0; i < n; ++i) {
+        uint8_t* pj = ((uint8_t**)projs->data)[i];
+        ++FW.seen;
+        if (!pj || !LiveObject(pj) || !Readable(pj, 0x6f0) || !FwIsExplosive(pj)) continue;
+        ++FW.explosive;
+        if (g_fwN >= FW_Q) { ++FW.dropped; continue; }
+        uint8_t* root = *(uint8_t**)(pj + 0x1a0);
+        if (!root || !Readable(root + 0x220, 24)) continue;
+        double loc[3], rot[3], vel[3] = { 0, 0, 0 }, pl[3];
+        memcpy(loc, root + 0x220, 24);
+        if (!CoReadPose(pj, pl, rot)) { rot[0] = rot[1] = rot[2] = 0; }
+        double* v = ((GetVelFn)(*(void***)pj)[0x358 / 8])(pj, vel);
+        if (v && v != vel && Readable(v, 24)) memcpy(vel, v, 24);
+        FwData* d = &g_fwQ[g_fwN].d;
+        memset(d, 0, sizeof(*d));
+        d->netId = 0xC000000000000000ull | ++FW.nextId;
+        d->weapon = pj[0x3a8]; d->slot = pj[0x6d0]; d->unk26 = pj[0x6d4]; d->seed = pj[0x6b4]; d->lockon = pj[0x3c8];
+        uint8_t* tg = *(uint8_t**)(pj + 0x3f0);
+        if (tg && !LiveObject(tg)) tg = NULL;
+        uint8_t* troot = tg ? *(uint8_t**)(tg + 0x1a0) : NULL;
+        double tl[3];
+        if (troot && Readable(troot + 0x220, 24)) memcpy(tl, troot + 0x220, 24);
+        else for (int k = 0; k < 3; ++k) tl[k] = loc[k] + vel[k] * 5.0;
+        for (int k = 0; k < 3; ++k) {
+            double at = loc[k] + (cp[k] - sp[k]);              /* from the copy: your offset from it */
+            d->initLoc[k] = (int32_t)(at + (at < 0 ? -0.5 : 0.5));
+            d->tgtLoc[k] = (int32_t)(tl[k] + (tl[k] < 0 ? -0.5 : 0.5));
+            d->initRot[k] = (float)rot[k]; d->initVel[k] = (float)vel[k];
+        }
+        memset(&g_fwQ[g_fwN].target, 0, sizeof(CoRef));
+        if (tg) CoRefSet(&g_fwQ[g_fwN].target, tg);
+        ++g_fwN; ++FW.queued;
+    }
+}
+
+static void OnPlaneFired(uint8_t* plane, CoArr* projs)
+{
+    g_nextPlaneFired(plane, projs);
+    if (FD.on && plane && plane == FD.src.obj && CoRefGet(&FD.src) && projs && Readable(projs, sizeof(CoArr))) FwCapture(plane, projs);
+}
+
+static uint64_t OnLaunchWeapon(void* ws, uint64_t weapon, void* target, void** outProj, void* slot, uint64_t a6, uint64_t a7,
+                               uint64_t lockon, void* arrA, void* arrB)
+{
+    if (FW.in && !target && FW.inTarget) target = FW.inTarget;      /* (our replay: the shooter's target, here) */
+    uint64_t r = g_nextLaunchWeapon(ws, weapon, target, outProj, slot, a6, a7, lockon, arrA, arrB);
+    if (FW.in) { FW.ret = r; FW.proj = (outProj && Readable(outProj, 8)) ? (uint8_t*)*outProj : NULL; }
+    return r;
+}
+
+static uint64_t OnFireFlares(uint8_t* w)
+{
+    uint64_t r = g_nextFireFlares(w);
+    uint8_t* src = FD.on ? CoRefGet(&FD.src) : NULL;
+    if (src && (uint8_t)r && Readable(src + FW_W, 8) && w == *(uint8_t**)(src + FW_W)) { ++g_fwFlares; ++FW.flares; }
+    return r;
+}
+
+/* the queued shots and flares from the copy, after its update (OnRemoteUpdate); the gun's trigger mirrored */
+static void FwFlush(uint8_t* copy)
+{
+    uint8_t* src = CoRefGet(&FD.src);
+    uint8_t* w = Readable(copy + FW_W, 8) ? *(uint8_t**)(copy + FW_W) : NULL;
+    uint8_t* sw = (src && Readable(src + FW_W, 8)) ? *(uint8_t**)(src + FW_W) : NULL;
+    if (w && sw && Readable(w + 0x30e, 8) && Readable(sw + 0x30e, 8)) {
+        uint8_t on = sw[0x30e] ? 1 : 0;
+        FW.gunYours30e += sw[0x30e] != 0; FW.gunYours311 += sw[0x311] != 0;
+        if (w[0x311] != on) { w[0x311] = on; ++FW.gunSet; }
+    }
+    if (!g_fwN && !g_fwFlares) return;
+    int n = g_fwN, fl = g_fwFlares;
+    g_fwN = g_fwFlares = 0;
+    if (!w || !src) { if (!FW.saidW++) Log(L"coop2mp: T4: the copy (or you) has no weapon system; %d shots not replayed", n); FW.dropped += n; return; }
+    if (*(void**)(copy + 0x10) != *(void**)(src + 0x10)) {
+        if (!FW.saidOther++) Log(L"coop2mp: T4: the copy is another airframe (its weapon numbers aren't yours): your shots aren't replayed on it");
+        FW.dropped += n; return;
+    }
+    for (int k = 0; k < fl; ++k) if ((uint8_t)g_nextFireFlares(w)) ++FW.flaresOk;
+    if (!n) return;
+    void* world = VCall(copy, VF_WORLD);
+    uint8_t* nm = (world && g_fNetManager) ? ((NetMgrFn)g_fNetManager)(world) : NULL;
+    if (!nm || !Readable(nm + 0x2e0, 0x58) || !g_fRemoteFire || !g_nextLaunchWeapon) {
+        if (!FW.saidNoNm++) Log(L"coop2mp: T4: no network manager here (%p, world %p) or no remote fire (%p): %d shots not replayed", nm,
+            world, g_fRemoteFire, n);
+        FW.dropped += n; return;
+    }
+    for (int i = 0; i < n; ++i) {
+        FwMsg m;
+        memset(&m, 0, sizeof(m));
+        m.triggerTime = ~0ull;                              /* (in the future: no latency) */
+        m.wd = &g_fwQ[i].d; m.wdNum = m.wdMax = 1;
+        void* pair[2] = { &m, NULL };
+        FW.inTarget = CoRefGet(&g_fwQ[i].target); FW.in = 1; FW.ret = 0; FW.proj = NULL;
+        ((RemoteFireFn)g_fRemoteFire)(copy, pair);
+        FW.in = 0;
+        int ok = (uint8_t)FW.ret == 1 && FW.proj;
+        if (ok) ++FW.launched; else ++FW.failed;
+        if (FW.said < 6) {
+            ++FW.said;
+            uint8_t* pt = (FW.proj && Readable(FW.proj + 0x3f0, 8)) ? *(uint8_t**)(FW.proj + 0x3f0) : NULL;
+            Log(L"coop2mp: T4: your shot (weapon %d, slot %d, lock-ons %d, seed %d, target %p) replayed on the copy: %s, its missile %p "
+                L"(target %p, network id %x), the network manager %p", (int32_t)g_fwQ[i].d.weapon, (int32_t)g_fwQ[i].d.slot,
+                (int32_t)g_fwQ[i].d.lockon, (int32_t)g_fwQ[i].d.seed, FW.inTarget, ok ? L"launched" : L"NOT LAUNCHED", FW.proj, pt,
+                (uint32_t)g_fwQ[i].d.netId, nm);
+        }
+    }
+}
+
 static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
 {
+    int test = 0;
     if (plane) {
         if (FD.on && plane == FD.plane.obj && CoRefGet(&FD.plane)) {
             ++FD.calls; FD.lastCallAt = CoNow();
             FdFeed(plane);
+            test = 1;
         } else {
             int s = FlNetSlot(plane);
             if (s >= 0) FlNetFeed(s, plane);
         }
     }
-    return g_nextRemoteUpdate(plane, dt);
+    uint64_t r = g_nextRemoteUpdate(plane, dt);
+    if (test) FwFlush(plane);
+    return r;
 }
 
 /* The afterburner's glow (T1c's test, 2026-10-30: the fed plane flew and its control surfaces moved, but no glow). A
@@ -739,6 +921,12 @@ static void FdLog(void)
     if (FD.hits)
         Log(L"coop2mp: fed plane %p: %u hits this second, %d damage asked, %d taken off its health (health now %d)", plane, FD.hits,
             (int32_t)FD.hitDmg, (int32_t)FD.hitApplied, CoHealth(plane));
+    if (FW.seen || FW.flares || FW.gunYours30e || FW.gunYours311 || FW.dropped)
+        Log(L"coop2mp: T4 this second: your launches %u (%u missiles), queued %u, replayed %u launched / %u not, %u dropped; your flares "
+            L"%u, the copy's %u; your gun trigger frames %u (+30e) %u (+311), the copy's trigger set %u times", FW.seen, FW.explosive,
+            FW.queued, FW.launched, FW.failed, FW.dropped, FW.flares, FW.flaresOk, FW.gunYours30e, FW.gunYours311, FW.gunSet);
+    FW.seen = FW.explosive = FW.queued = FW.launched = FW.failed = FW.dropped = FW.flares = FW.flaresOk = 0;
+    FW.gunYours30e = FW.gunYours311 = FW.gunSet = 0;
     FD.abSrc = FD.abFound = 0; FD.abWrites = 0; FD.stateOr = 0; FD.hits = 0; FD.hitDmg = FD.hitApplied = 0;
 }
 
@@ -771,7 +959,10 @@ static int L_CoopFeed(void* lua)
     FD.lastLog = FD.lastCallAt = CoNow();
     FD.on = 1;
     Log(L"coop2mp: plane %p fed from %p (%d m ahead, %d m right, %d m up): its own update flies it (message %p, NetworkObject +%x); "
-        L"its afterburner from yours: %s; input message %p; hits logged: %s", plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r,
-        (uint32_t)FD.noOff, g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)", in, g_nextPPDamage ? L"yes" : L"NO (not hooked)");
+        L"its afterburner from yours: %s; input message %p; hits logged: %s; your shots replayed: %s", plane, src, (int32_t)f, (int32_t)rt,
+        (int32_t)up, r, (uint32_t)FD.noOff, g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)", in,
+        g_nextPPDamage ? L"yes" : L"NO (not hooked)", (g_nextPlaneFired && g_nextLaunchWeapon && g_fRemoteFire && g_fNetManager)
+        ? (*(void**)(plane + 0x10) == *(void**)(src + 0x10) ? L"yes" : L"no (another airframe)") : L"NO (game code not found)");
+    g_fwN = g_fwFlares = 0;
     return Ret(lua, 1);
 }

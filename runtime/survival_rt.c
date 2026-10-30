@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.30.0"
-#define RT_VERSION_A         "0.30.0"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.31.0"
+#define RT_VERSION_A         "0.31.0"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3190,6 +3190,11 @@ static void FindFunctions(void)
         { kSigRemoteUpdate,     kSigRemoteUpdateMask, sizeof(kSigRemoteUpdate), NULL, 0 },
         { kSigSurfacePP,        kSigSurfacePPMask, sizeof(kSigSurfacePP), NULL, 0 },
         { kSigPPDamage,         NULL,              sizeof(kSigPPDamage),  NULL, 0 },
+        { kSigPlaneFired,       kSigPlaneFiredMask, sizeof(kSigPlaneFired), NULL, 0 },
+        { kSigRemoteFire,       NULL,              sizeof(kSigRemoteFire), NULL, 0 },
+        { kSigLaunchWeapon,     NULL,              sizeof(kSigLaunchWeapon), NULL, 0 },
+        { kSigFireFlares,       NULL,              sizeof(kSigFireFlares), NULL, 0 },
+        { kSigNetManager,       kSigNetManagerMask, sizeof(kSigNetManager), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3237,6 +3242,11 @@ static void FindFunctions(void)
     g_fRemoteUpdate     = p[46].hit;
     g_fSurfacePP        = p[47].hit;
     g_fPPDamage         = p[48].hit;
+    g_fPlaneFired       = p[49].hit;
+    g_fRemoteFire       = p[50].hit;
+    g_fLaunchWeapon     = p[51].hit;
+    g_fFireFlares       = p[52].hit;
+    g_fNetManager       = p[53].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3254,6 +3264,8 @@ static void FindFunctions(void)
         g_siteRemoteDummyCls, g_siteRemoteLoadout, g_siteRemoteFlags, g_siteRemoteFinish);
     Log(L"flight: one-shot fire %p (LiveFireOneShotWeapon's Execute %p), AI takeoff afterburner %p, player plane respawn %p, remote update %p, surface update %p, player plane damage %p",
         g_fFireOne, g_fFireExec, g_fTakeoffAB, g_fPPRespawn, g_fRemoteUpdate, g_fSurfacePP, g_fPPDamage);
+    Log(L"coop2mp: weapons fired %p, remote plane fire %p, launch weapon %p, flares %p, network manager %p", g_fPlaneFired, g_fRemoteFire,
+        g_fLaunchWeapon, g_fFireFlares, g_fNetManager);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
@@ -3283,6 +3295,11 @@ static int Install(void)
     else Log(L"player plane surface update not found; a fed plane shows no afterburner (COOP2MP)");
     if (g_fPPDamage && HookInline(g_fPPDamage, 15, (void*)OnPPDamage, (void**)&g_nextPPDamage, L"player plane damage")) {}
     else Log(L"player plane damage not found; hits on a fed plane aren't logged (COOP2MP)");
+    if (g_fPlaneFired && g_fRemoteFire && g_fNetManager && g_fLaunchWeapon && g_fFireFlares &&
+        HookInline(g_fPlaneFired, 15, (void*)OnPlaneFired, (void**)&g_nextPlaneFired, L"player plane weapons fired") &&
+        HookInline(g_fLaunchWeapon, 21, (void*)OnLaunchWeapon, (void**)&g_nextLaunchWeapon, L"launch weapon") &&
+        HookInline(g_fFireFlares, 18, (void*)OnFireFlares, (void**)&g_nextFireFlares, L"fire flares")) {}
+    else Log(L"COOP2MP T4's game code not all found (or not hooked); your shots aren't replayed");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");
