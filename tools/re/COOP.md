@@ -52,7 +52,8 @@ bPermissionToFire, bPermissionToEngage, bPermissionToUseFlares, bPermissionToPro
 bIsNotLockonTarget true (you can't lock your wingmate); SetIsInvincible(true); bCanBeDamagedByAlly false.
 ### Damage and deaths
 KILLS_HEALTH_DEATH.md: `ModifyHealth(-damage, causer, true)` deals real damage to AI objects (TakeDamage, death, and
-DamageHistoryMap[causer]); SetMinHealth(x) keeps an AI object above x. The joiner's copies have MinHealth 0.1: their
+DamageHistoryMap[causer]); SetMinHealth(x) keeps an AI object above x (whole points only: the copies' SetMinHealth(0.1) below is 0 in fact, so a
+joiner's copy can go down on its own game before the host's does; left so, 2026-10-30). The joiner's copies have MinHealth 0.1: their
 health loss is measured and sent to the host, which deals it with the joiner's plane (the host's puppet) as the
 cause; the host's deaths come back and the copy is finished with ModifyHealth (the cause the host's puppet), so it
 dies as an AI plane does (wreck, explosion) and each game's kill credit follows its own DamageHistoryMap.
@@ -476,6 +477,9 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
 - **The floor**: sv_tactical.lua INS.tick sets MinHealth to the higher of SECOND CHANCE's (when held) and floor_hp (0.1
   HP: HealthInternal 1) and, while revives are on, reads it back every pass and sets it again (`insurance: your
   aircraft's floor was put back by the game`). A SECOND CHANCE held fires first (its 4 % floor), then the revives'.
+  It writes the field, not SetMinHealth: the game's SetMinHealth keeps whole points only (KILLS_HEALTH_DEATH.md 1), so
+  up to 0.72.3 the floor was 0 and never held (the user's run of 2026-10-30: "put back" every pass, shot down from
+  40 HP in round 8, the run restarted at round 1). Fixed for the next build, not yet run in game.
 - **DOWN** (HealthInternal <= floor_hp x 10, in round 1 or later, no SECOND CHANCE held): invincible, hidden, collision
   off, bEnableWeaponInput / bEnableFlareInput false, bIsWeaponSystemDisabled true, the plane's attacker limits
   (MaxPlaneAttackerMissiles, MaxPursuitAttackers, MaxNonPlaneAttackerMissiles) 0 [a guess: the enemies' throttle on

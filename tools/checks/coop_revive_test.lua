@@ -132,7 +132,9 @@ local function newPawn(addr)
     function pawn:SetIsInvincible(v) self.invincible = v end
     function pawn:SetActorHiddenInGame(v) self.hidden = v end
     function pawn:SetActorEnableCollision(v) self.collision = v end
-    function pawn:SetMinHealth(v) self.MinHealth = v end
+    -- (the game's SetMinHealth keeps whole health points, up to MaxHealth: its native 0x147d193b0 truncates, so 0.1 is 0;
+    -- user's run of 2026-10-30, shot down with the floor "put back" every pass. The floor is the field itself)
+    function pawn:SetMinHealth(v) self.minCalls = (self.minCalls or 0) + 1; self.MinHealth = math.min(math.max(0, math.floor(v)), math.floor(self.MaxHealth)) end
     survivalPC.Pawn = pawn
 end
 survivalPC = { view = nil, views = {} }
@@ -197,6 +199,10 @@ end
 print("the floor")
 scene("host", 0, { [1] = FLY, [2] = FLY })
 check(pawn.MinHealth == 0.1 and DOWN.floor() == 0.1, "co-op, another game linked: MinHealth 0.1 (floor_hp)")
+local setsBefore = pawn.minCalls or 0
+ticks(4)
+check(pawn.MinHealth == 0.1 and (pawn.minCalls or 0) == setsBefore and line("put back by the game") == nil,
+      "it stays 0.1: not set again, nothing \"put back\" (the field written, not SetMinHealth: whole points only)")
 pawn.MinHealth = 0
 local from = #logs + 1
 tick()

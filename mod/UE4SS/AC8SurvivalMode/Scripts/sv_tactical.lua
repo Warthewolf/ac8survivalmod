@@ -387,8 +387,12 @@ function INS.tick(now)
         reset = okR and type(cur) == "number" and math.abs(cur - want) > 0.001
     end
     if INS.min ~= want or INS.pawn ~= addrOf(pawn) or reset then
-        local ok = pcall(function() pawn:SetMinHealth(want) end)
-        if not ok then ok = pcall(function() pawn.MinHealth = want end) end
+        -- the field itself: the game's SetMinHealth keeps whole health points only (its native 0x147d193b0 truncates, so
+        -- 0.1 was 0 and co-op's floor never held: the user's run of 2026-10-30, shot down from 40 HP with the floor "put
+        -- back" every pass); every hit is clamped at the field (KILLS_HEALTH_DEATH.md 2). SetMinHealth only if it can't
+        -- be written, rounded up (never under the floor)
+        local ok = pcall(function() pawn.MinHealth = want end)
+        if not ok then ok = pcall(function() pawn:SetMinHealth(math.ceil(want)) end) end
         if reset then                                             -- (the game's: set again, counted)
             INS.resets = (INS.resets or 0) + 1
             if INS.resets <= 3 or INS.resets % 20 == 0 then

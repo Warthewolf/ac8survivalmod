@@ -29,7 +29,11 @@ Scratch tools and dumps: `build/research/kills/` (run from `tools/re`):
 
 UFUNCTIONs of LiveGameObject (outer 0x147d19710; exec thunks in brackets): GetHealth [0x147d17ea0], GetMaxHealth,
 GetMinHealth, GetDamagePercentage [0x147d17db0: (1 - min(1, Health/Max)) x 100, the HUD "DMG n%"], IsAlive,
-ModifyHealth(float InValue, UObject* DamageCauser, bool bCauseDamageEvent) -> float [impl 0x147d1ccb0], SetMinHealth(float),
+ModifyHealth(float InValue, UObject* DamageCauser, bool bCauseDamageEvent) -> float [impl 0x147d1ccb0], SetMinHealth(float)
+[exec 0x147d193b0: MinHealth = min(max(0, int(value)), int(MaxHealth)): **whole health points only**, 0.1 -> 0; the
+user's co-op run of 2026-10-30 died from 40 HP with SetMinHealth(0.1) set every pass. Write the reflected field
+`MinHealth` for a fraction: the damage clamp reads it as is, GetMinHealth vfunc +0x928 = `movss xmm0,[rcx+0x3b8]` for
+the player (0x146dc5730), and 0.1 HP stores as HealthInternal 1 (SetHealth truncates h x 10.0f)],
 SetIsInvincible(bool), SetIsInvincibleFromAI, IsAttackedByMainWeapon / BySpecialWeapon / ByOpponent, OnHitByGun(Attacker),
 OnDeath(DeadGameObject) [-> vfunc +0x898], IsPlayerTarget, GetFaction, GetUnitName, GetObjName, GetSpeedKmph, GetAltitudeMeters.
 `K2_GetLastDamagedByAttacker() -> Object` exists only on `ALiveAIUniqueObjectBase` (bosses/unique objects), not on AI planes.
