@@ -246,6 +246,21 @@ local function armOn(obj)
                         CameraRotationLagSpeed = 7.0 }) do
         pcall(function() arm[k] = v end)
     end
+    -- (the arm's pivot on the middle of the plane, not its root: the user, 2026-10-30, watching the ADFX-02 and the
+    -- X-40A: "centre it more on the aircraft, it's sitting behind slightly"; a player plane's root sits aft of its middle)
+    local o, e = {}, {}
+    local okB = pcall(function() obj:GetActorBounds(false, o, e, false) end)
+    local okR, q = pcall(function() local v = obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if okB and type(o.X) == "number" and type(o.Y) == "number" and type(o.Z) == "number" and okR and q and type(q.X) == "number" then
+        local d = math.sqrt((o.X - q.X) ^ 2 + (o.Y - q.Y) ^ 2 + (o.Z - q.Z) ^ 2)
+        if d > 1 and d < 5000 then                     -- (50 m at most: bounds that take in something else aren't the plane's)
+            local okW = pcall(function() arm:K2_SetWorldLocation({ X = o.X, Y = o.Y, Z = o.Z }, false, {}, true) end)
+            log(string.format("spectate: %s's middle is %.1f m from its root: the camera's pivot moved there%s",
+                nameOf(obj):match("([%w_]+)$") or "?", d / 100, okW and "" or " (FAILED)"))
+        end
+    else
+        log("spectate: " .. (nameOf(obj):match("([%w_]+)$") or "?") .. "'s bounds can't be read: the camera pivots on its root")
+    end
     if a then St.arms[a] = arm end
     return arm
 end
@@ -298,9 +313,27 @@ local function orbitTick(now)
     local function dz(x) return math.abs(x) < DEAD and 0 or x end
     local o = orbit()
     local turn, lift, zoom = dz(v[3]) + dz(v[2]), dz(v[1]), dz(v[5]) - dz(v[4])
+    -- (each axis's first move logged, and the most each read a minute: whether your stick reaches the camera)
+    St.stickMax = St.stickMax or { 0, 0, 0, 0, 0 }
+    St.stickSaid = St.stickSaid or {}
+    local AX = { "pitch (camera up / down)", "yaw (camera round)", "roll (camera round)", "throttle (zoom in)", "brake (zoom out)" }
+    for i = 1, 5 do
+        St.stickMax[i] = math.max(St.stickMax[i], math.abs(v[i]))
+        if math.abs(v[i]) >= DEAD and not St.stickSaid[i] then
+            St.stickSaid[i] = true
+            log(string.format("spectate: your stick's %s moves the camera (%.2f)", AX[i], v[i]))
+        end
+    end
+    if now >= (St.stickLogAt or now + 60) then
+        log(string.format("spectate: the minute's stick, most each axis: pitch %.2f, yaw %.2f, roll %.2f, throttle %.2f, brake %.2f",
+            table.unpack(St.stickMax)))
+        St.stickMax = { 0, 0, 0, 0, 0 }
+        St.stickLogAt = now + 60
+    end
+    St.stickLogAt = St.stickLogAt or now + 60
     if turn == 0 and lift == 0 and zoom == 0 then return end
     o.yaw = (o.yaw + turn * ORBIT_DEG_S * dt + 180) % 360 - 180
-    o.pitch = math.max(-80, math.min(60, o.pitch + lift * ORBIT_DEG_S * 0.6 * dt))
+    o.pitch = math.max(-85, math.min(85, o.pitch + lift * ORBIT_DEG_S * 0.8 * dt))
     o.len = math.max(1000, math.min(15000, o.len + zoom * ZOOM_M_S * 100 * dt))
     applyOrbit(arm)
 end
@@ -483,6 +516,14 @@ function DOWN.back(how, respawn)
     if where ~= "native" and onGround then          -- (crashed: where it lies is the ground)
         where, why = "native", string.format(" (your plane wasn't flying: %.0f m/s)", St.speed or 0)
     end
+    -- (the loiter that drifted off: back by the airfield, not out there. The user's co-op run of 2026-10-30: the autopilot
+    -- held its bank but never turned, drifting 15 -> 38 km out, and the revive put them "half way across the map near the
+    -- border". near_km in [coop.revive], 8 by default)
+    local at = where ~= "native" and playerLocation() or nil
+    local farKm = at and math.sqrt((at.X - AIRFIELD.X) ^ 2 + (at.Y - AIRFIELD.Y) ^ 2) / 100000 or 0
+    if at and farKm > num(rc().near_km, 8) then
+        where, why = "native", string.format(" (the loiter had left you %.1f km from the airfield)", farKm)
+    end
     if where == "native" and valid(pawn) then
         local y = math.rad(RUNWAY.yaw)
         local x, yy = RUNWAY.X + math.cos(y) * RUNWAY.out_cm, RUNWAY.Y + math.sin(y) * RUNWAY.out_cm
@@ -589,11 +630,15 @@ end
 -- out along the runway as the revive's "native"), out of the fight again (the respawn may give the plane its look back)
 -- and flown again this pass (the respawn turned the loiter off)
 local function edgeGuard(pawn, now)
-    if not ZONE or now < (St.edgeAt or 0) then return end
+    if now < (St.edgeAt or 0) then return end
     local at = playerLocation()
     if not at then return end
-    local edge = ZONE.HALF - math.max(math.abs(at.X - ZONE.X), math.abs(at.Y - ZONE.Y))
-    if edge >= EDGE_CM then return end
+    -- (also a plane drifted far from the airfield: the loiter's autopilot holds its bank but AC8's planes don't turn from
+    -- bank alone, and in the user's co-op run of 2026-10-30 it drifted 15 -> 38 km out; drift_km in [coop.revive])
+    local farKm = math.sqrt((at.X - AIRFIELD.X) ^ 2 + (at.Y - AIRFIELD.Y) ^ 2) / 100000
+    local edge = ZONE and (ZONE.HALF - math.max(math.abs(at.X - ZONE.X), math.abs(at.Y - ZONE.Y))) or math.huge
+    local drifted = farKm > num(rc().drift_km, 10)
+    if edge >= EDGE_CM and not drifted then return end
     St.edgeAt = now + EDGE_EVERY_S
     local y = math.rad(RUNWAY.yaw)
     local x, yy = RUNWAY.X + math.cos(y) * RUNWAY.out_cm, RUNWAY.Y + math.sin(y) * RUNWAY.out_cm
@@ -605,8 +650,9 @@ local function edgeGuard(pawn, now)
     end
     local _, did = outOfFight(pawn)
     St.loiterAt, St.motion, St.groundedAt, St.groundSaid = 0, nil, nil, nil
-    log(string.format("down: your plane was %.1f km from the combat zone's edge, %.0f m up: put back over the airfield, %.0f m up "
-        .. "(SV_Respawn: %s); %s", (edge + 300000) / 100000, at.Z / 100, z / 100, rr, did))
+    log(string.format("down: your plane was %s, %.0f m up: put back over the airfield, %.0f m up (SV_Respawn: %s); %s",
+        edge < EDGE_CM and string.format("%.1f km from the combat zone's edge", (edge + 300000) / 100000)
+        or string.format("%.1f km from the airfield", farKm), at.Z / 100, z / 100, rr, did))
 end
 
 ---------------------------------------------------------------------------------------------------- the STORE's row

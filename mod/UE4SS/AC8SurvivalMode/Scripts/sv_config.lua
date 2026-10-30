@@ -1096,12 +1096,13 @@ CFG = {
              -- flown round the airfield (loiter: alt_m up, radius_m round) and watch another player; any other player at
              -- their airfield buys you back from the STORE's AIRFIELD page for price, x raise for each revive in the run
              -- (the host's count), and you're back repaired, safe_s seconds invincible, where the loiter left you
-             -- (respawn "loiter") or 4 km out from the runway at 500 m ("native"). Everyone down: the run's over.
+             -- (respawn "loiter"; farther than near_km from the airfield: "native" instead) or 4 km out from the runway at 500 m
+             -- ("native"). Everyone down: the run's over.
              -- down_round_bonus: a downed player still gets the round bonuses. key / ctrl: the next player to watch;
              -- camera: back_m behind and up_m above the plane you watch, blend_s to swing over. key, ctrl and camera
              -- are each player's own, the rest the host's.
              revive = { enabled = true, floor_hp = 0.1, price = 2500, raise = 1.25, safe_s = 5,
-                        loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", key = "O", ctrl = false,
+                        loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", near_km = 8, drift_km = 10, key = "O", ctrl = false,
                         camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense

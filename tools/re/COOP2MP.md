@@ -461,3 +461,12 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   revive. 0.73.15-coop2mp.16: realTarget skips a player at their airfield (state bit 4) or DOWN; the 5 s check moves a
   flight off a player who lands (`coop: <unit>'s target (player N) is landed at their airfield: onto ...`).
   coop_fire_test covers it.
+- 0.73.15 in game (22:13-22:21): the replay-style camera came up on the ADFX-02 and the X-40A (zoomed to 150 m). The
+  user: up / down too, "centre it more on the aircraft, it's sitting behind slightly"; revived "half way across the map
+  near the border". The DOWN autopilot held bank 40 for 90 s at pitch input 0.04 with the heading error 113-123 deg:
+  AC8's planes don't turn from bank alone, and it drifted 15 -> 38 km; the revive (respawn loiter) put them there.
+  A turn pull and a point-and-pull law were tried against tools/checks/flight_test.c with an AC8-like model (no turn from
+  bank): they fixed it but broke the other model planes (bank-angle roll, the late plane), so the law is unchanged for
+  now. 0.73.16-coop2mp.17: the camera's arm pivots on the plane's bounds' middle (GetActorBounds), its up / down to
+  +-85 deg, each stick axis logged as it first moves and its most a minute; a DOWN plane past drift_km (10) from the
+  airfield is put back over it (edgeGuard's SV_Respawn), a revive past near_km (8) brings you back by the runway.

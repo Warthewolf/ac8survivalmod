@@ -306,11 +306,13 @@ local stick = "0,0,0,0,0"
 function SV_StickNow() return stick end
 for _, p in ipairs({ P1, P2 }) do
     function p:K2_GetActorLocation() return { X = 0, Y = 0, Z = 250000 } end
+    function p:GetActorBounds(_, o, e) o.X, o.Y, o.Z = 450, 0, 250030; e.X, e.Y, e.Z = 900, 700, 250 end   -- (its middle 4.5 m ahead)
     local add = p.AddComponentByClass
     function p:AddComponentByClass(cls, ...)
         local c = add(self, cls, ...)
         c.isArm = cls == ARMCLS
         function c:K2_SetRelativeRotation(r) self.rot = r end
+        function c:K2_SetWorldLocation(l) self.world = l end
         return c
     end
 end
@@ -325,6 +327,8 @@ check(arm and arm.isArm and camActor.parent == arm and camActor.sock == "SpringE
 check(arm and arm.bDoCollisionTest == false and arm.bEnableCameraLag == true and arm.bEnableCameraRotationLag == true
       and arm.bInheritRoll == false and math.abs(arm.TargetArmLength - 3105) < 2, "the arm: lag on, no collision test, level horizon, 31 m")
 check(camActor.CameraComponent.bConstrainAspectRatio == false and spawned == 1, "one camera actor, no letterbox")
+check(arm and arm.world and arm.world.X == 450 and arm.world.Z == 250030 and line("^spectate: SV_Peer2's middle is 4.5 m from its root", from) ~= nil,
+      "the arm's pivot on the plane's middle (its bounds), not its root, logged")
 check(line("^spectate: replay%-style camera on", from) ~= nil, "logged")
 check(has(DOWN.hudLine(), "STICK: CAMERA  THROTTLE/BRAKE: ZOOM"), "the NEXT row tells the controls: " .. tostring(DOWN.hudLine()))
 local y0, p0, l0 = St.orbit.yaw, St.orbit.pitch, St.orbit.len
@@ -420,6 +424,19 @@ ticks(5)
 check(#respawns == 1, "not again within 20 s")
 ticks(15.25)
 check(#respawns == 2, "again after 20 s while it's still there")
+-- drifted far from the airfield, well inside the zone (the user's co-op run of 2026-10-30: 15 -> 38 km out)
+pawn.at = nil                                                        -- (back by the airfield while the 20 s run out)
+ticks(20.25)
+respawns, from = {}, #logs + 1
+pawn.at = { X = 1609639 - 1200000, Y = -436414, Z = 250000 }         -- (12 km west of the airfield, nowhere near an edge)
+tick()
+check(#respawns == 1 and respawns[1][4] == 250000 and has(line("^down: your plane was", from), "12.0 km from the airfield"),
+      "12 km from the airfield (drift_km 10): put back over it at the loiter's height, logged: " .. tostring(line("^down: your plane was", from)))
+ticks(20.25)
+respawns = {}
+pawn.at = { X = 1609639 - 600000, Y = -436414, Z = 250000 }          -- (6 km out: within drift_km)
+tick()
+check(#respawns == 0, "6 km out: left alone")
 pawn.at = nil
 
 ---------------------------------------------------------------------------------------------------- revives on the host
@@ -536,7 +553,18 @@ tick()
 r = respawns[1] or {}
 check(not DOWN.me() and r[4] == 50000 and r[6] == -23 and has(line("^revive: back", from), "your plane wasn't flying: 0 m/s"),
       "revived: SV_Respawn 4 km out from the runway, 500 m up, not where it lay (" .. tostring(line("^revive: back", from)) .. ")")
-pawn.at = nil
+-- revived far out (the loiter drifted: near_km 8): back by the runway, not out there
+pawn.at = { X = 1609639 + 2000000, Y = -436414, Z = 250000 }
+pawn.flySpeed, pawn.flyFrom = 15000, clock
+pawn.HealthInternal = 1
+tick()
+respawns, from = {}, #logs + 1
+inbox[#inbox + 1] = "0|rb|1|2|0"
+tick()
+r = respawns[#respawns] or {}                    -- (the revive's: the drift guard may have put it back first)
+check(not DOWN.me() and r[4] == 50000 and has(line("^revive: back", from), "the loiter had left you 20.0 km from the airfield"),
+      "revived 20 km out: SV_Respawn by the runway (" .. tostring(line("^revive: back", from)) .. ")")
+pawn.at, pawn.flySpeed = nil, nil
 -- its revives of another player
 sent = {}
 peer(2, DOWNED); tick()
