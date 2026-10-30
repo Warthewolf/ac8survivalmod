@@ -63,7 +63,8 @@ end
 -- nothing off (a run of 2026-10-24: fired, result 1, and the shuttle, the pad's 9 dummies and its guns were still up
 -- every round after), so Lua does it: the shuttle is killed (no longer invincible, MinHealth 0, GameplayStatics.
 -- ApplyDamage) so its unit is down and SV_Spawn brings a fresh one next time, and it and everything at the pad
--- (SHUTTLE.padAt, 1.5 km round; not aircraft) is hidden, without collision, target box, lock or targeting, invincible
+-- (the pad units' objects as spawned, SHUTTLE.pad, and anything else within 1.5 km of SHUTTLE.padAt; not aircraft:
+-- the pad reaches 2 km out) is hidden, without collision, target box, lock or targeting, invincible
 -- and not ticking. The pad's objects come back as they were at the next shuttle round (spawnShuttle: their units are
 -- still up, so they aren't spawned again).
 do
@@ -100,10 +101,20 @@ function SPC.shuttleTakeOff()
         killed = ok and "damage applied" or "ApplyDamage failed"
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
     end
+    -- the pad's own objects, as SV_Spawn made them (spawnShuttle), then anything else near the pad
+    local seen, rec = {}, 0
+    for _, l in pairs(SHUTTLE.pad or {}) do
+        for _, o in ipairs(l) do
+            local a = valid(o) and addrOf(o)
+            if a and not seen[a] then
+                seen[a], rec = true, rec + 1
+                if hide(o, true) then hidden = hidden + 1 else failed = failed + 1 end
+            end
+        end
+    end
     local at = SHUTTLE.padAt
     if at then
         local planeCls = StaticFindObject("/Script/Live.LiveAIPlane")
-        local seen = {}
         for _, cls in ipairs(GROUND) do
             for _, o in ipairs(FindAllOf(cls) or {}) do
                 local a = valid(o) and addrOf(o)
@@ -118,8 +129,9 @@ function SPC.shuttleTakeOff()
             end
         end
     end
-    log(string.format("special: shuttle and pad off: the shuttle %s; %d objects hidden%s%s", killed, hidden,
-        failed > 0 and string.format(", %d only partly", failed) or "", at and "" or " (the pad's spot unknown: the shuttle only)"))
+    log(string.format("special: shuttle and pad off: the shuttle %s; %d objects hidden (%d of them the pad's own, as spawned)%s%s",
+        killed, hidden, rec, failed > 0 and string.format(", %d only partly", failed) or "",
+        (at or rec > 0) and "" or " (the pad's spot unknown: the shuttle only)"))
 end
 -- the pad's objects back as they were (the next shuttle round)
 function SPC.shuttlePadBack()

@@ -891,12 +891,22 @@ end
 
 -- Comona Defense: the pad (once a run: its guns and SAMs stay up between specials) and the shuttle, both where the
 -- world data puts them (SV_Spawn without a position). The shuttle's appearance starts the event package's countdown.
+-- The pad's objects as SV_Spawn makes them (SHUTTLE.pad[unit], LiveAIGroundDummy included: a LiveAIGameObject):
+-- SPC.shuttleTakeOff hides exactly these. Its sweep 1.5 km round the shuttle missed the control centre, its 3 dummies and
+-- a SAM site, 1.6-2.0 km out (user, 2026-10-30: "spaceport did not despawn after shuttle round"; every log: 16 hidden)
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local l = SHUTTLE.padSpawning and SHUTTLE.pad and SHUTTLE.pad[SHUTTLE.padSpawning]
+    if l and #l < 100 then l[#l + 1] = o end
+end)
 function spawnShuttle()
     local c = CFG.specials.shuttle
     pcall(SPC.shuttlePadBack)                             -- (the pad hidden after the last one: its units are still up)
     for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
         if u and SV_UnitAlive(u) <= 0 then
+            SHUTTLE.pad = SHUTTLE.pad or {}
+            SHUTTLE.pad[u], SHUTTLE.padSpawning = {}, u
             local p = SV_Spawn(u)
+            SHUTTLE.padSpawning = nil
             log("special: pad " .. u .. ": " .. (p > 0 and (p .. " objects up") or ("not spawned (" .. (SV_ERR[p] or tostring(p)) .. ")")))
         end
     end
