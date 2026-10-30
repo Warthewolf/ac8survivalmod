@@ -200,3 +200,12 @@ InputMoment 88, Accele 112, EngineBrake 116); nothing carries the afterburner am
   taken off its health (health now N)`. No line at all while missiles explode on it: the hit doesn't reach the player
   plane's damage (look for Online Mode's hit message path next).
 - Test: as T1d (Ctrl+F11, enemies ordered onto it), let missiles hit the copy, then Quit Mission (and a Restart).
+
+### T1e results (the user's solo test, 2026-10-30 18:15-18:18)
+- The copy flew beside you with your stick on its controls (user: "copy is following me").
+- The hits reach the player plane's damage and are refused there: two missile hits (kind 2, 40 damage each, from the
+  ordered enemy), health 1200 -> 1200, the game returned 0 both times (user: "missiles have hit it a few times now").
+  So on the host a hit on another player's plane can be caught at 0x147d5a430 (damage, kind, attacker) and sent to that
+  player's game, where it hits their own plane, as Online Mode does.
+- Restart Mission kept the copy (its tick on, fed) and Quit Mission went back to the main menu without a crash (user:
+  "quit mission worked"; no new crash report): the shared-pointer fix holds.
