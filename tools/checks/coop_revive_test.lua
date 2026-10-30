@@ -291,6 +291,67 @@ check(othersFlying() == 1, "othersFlying: player 3 only")
 DOWN.nextView("key")
 check(survivalPC.view == P2, "the only one left: the key keeps it")
 
+---------------------------------------------------------------------------------------------------- the replay-style camera
+print("the replay-style camera: a camera actor on a spring arm, your stick swings it, throttle / brake zoom")
+local ARMCLS = { full = "Class /Script/Engine.SpringArmComponent" }
+local rawSFO = StaticFindObject
+function StaticFindObject(p) if p == "/Script/Engine.SpringArmComponent" then return ARMCLS end return rawSFO(p) end
+local camActor = { full = "CameraActor" .. LEVEL .. "CameraActor_1", addr = 777, CameraComponent = { bConstrainAspectRatio = true } }
+function camActor:K2_AttachToComponent(comp, sock, a, b, c, weld) self.parent, self.sock, self.rules = comp, tostring(sock), a .. b .. c end
+local spawned = 0
+function SV_SpawnCam() spawned = spawned + 1; return 777 end
+local rawFAO = FindAllOf
+function FindAllOf(c) if c == "CameraActor" then return { camActor } end return rawFAO(c) end
+local stick = "0,0,0,0,0"
+function SV_StickNow() return stick end
+for _, p in ipairs({ P1, P2 }) do
+    function p:K2_GetActorLocation() return { X = 0, Y = 0, Z = 250000 } end
+    local add = p.AddComponentByClass
+    function p:AddComponentByClass(cls, ...)
+        local c = add(self, cls, ...)
+        c.isArm = cls == ARMCLS
+        function c:K2_SetRelativeRotation(r) self.rot = r end
+        return c
+    end
+end
+St.watch = nil
+from = #logs + 1
+DOWN.nextView("test")
+local w = St.watch
+local arm = w and St.arms and St.arms[w.addr]
+check(w and survivalPC.view == camActor and w.viewAddr == 777, "the view on our camera actor, not on the plane")
+check(arm and arm.isArm and camActor.parent == arm and camActor.sock == "SpringEndpoint" and camActor.rules == "221",
+      "at the end of a spring arm on the plane (snapped to it, turned with it)")
+check(arm and arm.bDoCollisionTest == false and arm.bEnableCameraLag == true and arm.bEnableCameraRotationLag == true
+      and arm.bInheritRoll == false and math.abs(arm.TargetArmLength - 3105) < 2, "the arm: lag on, no collision test, level horizon, 31 m")
+check(camActor.CameraComponent.bConstrainAspectRatio == false and spawned == 1, "one camera actor, no letterbox")
+check(line("^spectate: replay%-style camera on", from) ~= nil, "logged")
+check(has(DOWN.hudLine(), "STICK: CAMERA  THROTTLE/BRAKE: ZOOM"), "the NEXT row tells the controls: " .. tostring(DOWN.hudLine()))
+local y0, p0, l0 = St.orbit.yaw, St.orbit.pitch, St.orbit.len
+stick = "0,0,1000,0,0"
+tick(); tick(); tick(); tick()
+check(St.orbit.yaw > y0 + 80 and arm.rot and math.abs(arm.rot.Yaw - St.orbit.yaw) < 0.01, "full roll for a second: swung ~110 deg round the plane (" .. string.format("%.0f", St.orbit.yaw - y0) .. ")")
+stick = "1000,0,0,0,0"
+tick(); tick()
+check(St.orbit.pitch > p0, "pitch: the camera tilts")
+stick = "0,0,0,1000,0"
+ticks(10)
+check(St.orbit.len == 1000, "throttle held: zoomed in to 10 m at most (" .. St.orbit.len .. ")")
+stick = "0,0,0,0,1000"
+ticks(10)
+check(St.orbit.len == 15000 and arm.TargetArmLength == 15000, "brake held: out to 150 m at most")
+stick = "100,-100,100,0,0"
+local y1 = St.orbit.yaw
+tick()
+check(St.orbit.yaw == y1, "inside the dead zone: still")
+stick = "0,0,0,0,0"
+survivalPC.view = pawn
+tick()
+check(survivalPC.view == camActor, "the game takes the view back: put back on the camera actor")
+StaticFindObject, FindAllOf, SV_SpawnCam, SV_StickNow = rawSFO, rawFAO, nil, nil
+St.camActor, St.watch = nil, nil                 -- (the old camera from here on: the sections below)
+DOWN.nextView("test")
+
 ---------------------------------------------------------------------------------------------------- the host down: its own-plane events
 print("the host down: events at its own plane not fired here")
 events = {}

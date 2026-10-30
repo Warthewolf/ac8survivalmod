@@ -1842,6 +1842,33 @@ static int L_CoopPPRole(void* lua)
     return Ret(lua, old);
 }
 
+/* SV_SpawnCam(x, y, z) -> a new CameraActor's address at that spot (cm), or < 0: -1 no plane of yours / no world, -2 game
+ * code not found, -3 no CameraActor class, -4 it didn't spawn. Co-op's spectator camera on a player plane (COOP2MP's real
+ * planes): the view on a player plane takes the game's own player-plane camera whatever cameras are added to it (the
+ * user's co-op run of 2026-10-30: our camera measured 31 m behind CRESSENDO's real ADFX-02, the view inside it), so
+ * sv_down.lua views a camera actor of its own, attached to the plane (K2_AttachToActor, keeping its place). */
+static int L_SpawnCam(void* lua)
+{
+    double pos[3] = { 0, 0, 0 };
+    if (!ArgNumber(lua, &pos[0]) || !ArgNumber(lua, &pos[1]) || !ArgNumber(lua, &pos[2])) return Ret(lua, -1);
+    if (!g_fWorldSpawnActor || !ResolveUE4SS()) return Ret(lua, -2);
+    uint8_t* me = CoRefGet(&CO.me);
+    void* world = me ? VCall(me, VF_WORLD) : NULL;
+    if (!LiveObject(world)) return Ret(lua, -1);
+    void* cls = U.findObject(L"Class", L"CameraActor", 0, 0);
+    if (!LiveObject(cls)) return Ret(lua, -3);
+    double xf[12] __attribute__((aligned(16)));
+    CoXform(xf, pos, 0);
+    uint8_t params[0x80] __attribute__((aligned(16)));                              /* FActorSpawnParameters, as the game fills it */
+    memset(params, 0, sizeof(params));
+    *(uint16_t*)(params + 0x30) = 0x101;                                            /* AlwaysSpawn, MultiplyWithRoot */
+    *(uint32_t*)(params + 0x34) = 0x48;                                             /* RF_Transactional | RF_Transient */
+    uint8_t* cam = (uint8_t*)((CoWorldSpawnFn)g_fWorldSpawnActor)(world, cls, xf, params);
+    if (!LiveObject(cam)) return Ret(lua, -4);
+    Log(L"coop: spectator camera actor %p spawned", cam);
+    return Ret(lua, (int64_t)(uintptr_t)cam);
+}
+
 /* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up); SV_CoopKillPP(slot): that
  * player slot's real plane (COOP2MP T3) */
 static int L_CoopKillPP(void* lua)

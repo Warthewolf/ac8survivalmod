@@ -214,10 +214,109 @@ local function hush(obj, cam)
     end
     return #list, off
 end
+-- The spectator camera, the replay viewer's way (the user, 2026-10-30: "can you make it like the Replay Actor? except
+-- without the ability to time skip"): AC8's replay third-person camera is a camera on a spring arm, trailing the plane
+-- with lag; here a camera actor of ours (SV_SpawnCam, runtime 0.32.1) at the end of a SpringArmComponent added to the
+-- watched plane (one arm a plane, kept; one camera actor, moved from arm to arm). Your stick (SV_StickNow: your own
+-- input, under DOWN's autopilot) swings it round the plane, throttle / brake zoom in and out; the arm's lag smooths the
+-- 4-a-second steps. The view is on the camera actor, never on the plane: on a player plane (COOP2MP's real planes) the
+-- view takes the game's own player-plane camera whatever is added to it (the co-op run of 2026-10-30: our camera
+-- measured 31 m behind CRESSENDO's real ADFX-02, the view inside it). Without SV_SpawnCam, the added camera as before.
+local ORBIT_DEG_S, ZOOM_M_S, DEAD = 110, 40, 0.15
+local function orbit()
+    if not St.orbit then
+        local cam = rc().camera or {}
+        local back, up = num(cam.back_m, 30), num(cam.up_m, 8)
+        St.orbit = { yaw = 0, pitch = -math.deg(math.atan(up, back)), len = math.sqrt(back * back + up * up) * 100 }
+    end
+    return St.orbit
+end
+local function armOn(obj)
+    local a = addrOf(obj)
+    St.arms = St.arms or {}
+    local have = a and St.arms[a]
+    if have and valid(have) then return have end
+    local cls = StaticFindObject("/Script/Engine.SpringArmComponent")
+    if not valid(cls) then return nil, "no SpringArmComponent class" end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local ok, arm = pcall(function() return obj:AddComponentByClass(cls, false, t, false) end)
+    if not ok or not valid(arm) then return nil, "AddComponentByClass " .. (ok and "gave nothing" or tostring(arm)) end
+    for k, v in pairs({ bDoCollisionTest = false, bUsePawnControlRotation = false, bInheritPitch = true, bInheritYaw = true,
+                        bInheritRoll = false, bEnableCameraLag = true, CameraLagSpeed = 12.0, bEnableCameraRotationLag = true,
+                        CameraRotationLagSpeed = 7.0 }) do
+        pcall(function() arm[k] = v end)
+    end
+    if a then St.arms[a] = arm end
+    return arm
+end
+local function applyOrbit(arm)
+    local o = orbit()
+    pcall(function() arm.TargetArmLength = o.len end)
+    pcall(function() arm:K2_SetRelativeRotation({ Pitch = o.pitch, Yaw = o.yaw, Roll = 0 }, false, {}, true) end)
+end
+local function rigOn(obj)
+    if type(SV_SpawnCam) ~= "function" then return nil, "dlls/main.dll has no SV_SpawnCam (runtime 0.32.1)" end
+    local arm, err = armOn(obj)
+    if not arm then return nil, err end
+    local actor = St.camActor
+    if not valid(actor) then
+        actor = nil
+        local okL, q = pcall(function() local v = obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+        if not (okL and q and type(q.X) == "number") then return nil, "its place can't be read" end
+        local ca = SV_SpawnCam(q.X, q.Y, q.Z + 3000)
+        if type(ca) ~= "number" or ca <= 0 then return nil, "SV_SpawnCam " .. tostring(ca) end
+        for _, x in ipairs(FindAllOf("CameraActor") or {}) do if valid(x) and addrOf(x) == ca then actor = x end end
+        if not actor then return nil, "its camera actor wasn't found" end
+        pcall(function() actor.CameraComponent.bConstrainAspectRatio = false end)
+        St.camActor = actor
+    end
+    applyOrbit(arm)
+    -- (at the arm's end and turned with it: EAttachmentRule SnapToTarget for location and rotation, KeepWorld scale)
+    local okA = pcall(function() actor:K2_AttachToComponent(arm, FName("SpringEndpoint"), 2, 2, 1, false) end)
+    if not okA then return nil, "it wouldn't attach to the arm" end
+    St.rigSaid = St.rigSaid or {}
+    local a = addrOf(obj)
+    if a and not St.rigSaid[a] then
+        St.rigSaid[a] = true
+        log(string.format("spectate: replay-style camera on %s (arm %.0f m, your stick swings it, throttle / brake zoom)",
+            nameOf(obj):match("([%w_]+)$") or "?", orbit().len / 100))
+    end
+    return actor
+end
+-- each pass while watching: your stick turns the camera round the plane, throttle / brake zoom
+local function orbitTick(now)
+    local w = St.watch
+    local arm = w and St.arms and St.arms[w.addr]
+    local dt = math.min(0.5, math.max(0, now - (St.orbitAt or now)))
+    St.orbitAt = now
+    if not (arm and valid(arm) and w.viewAddr and w.viewAddr ~= w.addr) or type(SV_StickNow) ~= "function" then return end
+    local okS, s = pcall(SV_StickNow)
+    if not (okS and type(s) == "string") then return end
+    local v = {}
+    for x in s:gmatch("[^,]+") do v[#v + 1] = (tonumber(x) or 0) / 1000 end
+    if #v < 5 then return end
+    local function dz(x) return math.abs(x) < DEAD and 0 or x end
+    local o = orbit()
+    local turn, lift, zoom = dz(v[3]) + dz(v[2]), dz(v[1]), dz(v[5]) - dz(v[4])
+    if turn == 0 and lift == 0 and zoom == 0 then return end
+    o.yaw = (o.yaw + turn * ORBIT_DEG_S * dt + 180) % 360 - 180
+    o.pitch = math.max(-80, math.min(60, o.pitch + lift * ORBIT_DEG_S * 0.6 * dt))
+    o.len = math.max(1000, math.min(15000, o.len + zoom * ZOOM_M_S * 100 * dt))
+    applyOrbit(arm)
+end
 local function view(e, why)
-    local cam, err = camOn(e.obj)
-    hush(e.obj, cam)
-    local ok = setView(e.obj, num((rc().camera or {}).blend_s, 0.5))
+    local cam, err, target = rigOn(e.obj)
+    if cam then
+        target = cam
+    else
+        St.rigErr = St.rigErr or {}
+        if not St.rigErr[tostring(err)] then St.rigErr[tostring(err)] = true; log("spectate: no replay-style camera (" .. tostring(err) .. "): the added one") end
+        target = e.obj
+        cam, err = camOn(e.obj)
+        hush(e.obj, cam)
+    end
+    e.viewAddr = addrOf(target)
+    local ok = setView(target, num((rc().camera or {}).blend_s, 0.5))
     St.watch, St.views = e, (St.views or 0) + 1
     log(string.format("spectate: view %s (%s)%s%s, reverted %d times", e.name, why, cam and "" or (", no camera: " .. tostring(err)),
         ok and "" or ", SetViewTargetWithBlend FAILED", St.reverts))
@@ -260,9 +359,10 @@ local function spectateTick(now)
         for _, e in ipairs(l) do if e.addr == w.addr then still = true end end
         if not still then DOWN.nextView("their plane isn't up here now"); return end
         local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
-        if okV and addrOf(vt) ~= w.addr then
+        if okV and addrOf(vt) ~= (w.viewAddr or w.addr) then
             St.reverts = St.reverts + 1
-            setView(w.obj, 0)
+            local t = w.viewAddr ~= w.addr and St.camActor
+            setView((t and valid(t)) and t or w.obj, 0)
             if St.reverts <= 3 or St.reverts % 20 == 0 then
                 log(string.format("spectate: view put back on %s (the game took it back %d times)", w.name, St.reverts))
             end
@@ -275,7 +375,10 @@ end
 -- The NEXT row while you're down (sv_hud.lua hudTick)
 function DOWN.hudLine()
     if not St.down then return nil end
-    if St.watch then return string.format("DOWN: WATCHING %s  [%s] NEXT", St.watch.name, keyLabel()) end
+    if St.watch then
+        return string.format("DOWN: WATCHING %s  [%s] NEXT%s", St.watch.name, keyLabel(),
+            (St.watch.viewAddr and St.watch.viewAddr ~= St.watch.addr) and "  STICK: CAMERA  THROTTLE/BRAKE: ZOOM" or "")
+    end
     return "DOWN: WAITING FOR A REVIVE"
 end
 
@@ -432,7 +535,8 @@ end
 function DOWN.reset(why, newLevel)
     if St.down and newLevel then
         if why == "a new level" then
-            St.restore = { addr = St.loiterAddr, saved = St.saved, home = St.home, watch = St.watch and St.watch.addr, at = os.clock() }
+            St.restore = { addr = St.loiterAddr, saved = St.saved, home = St.home, watch = St.watch and St.watch.addr,
+                          watchView = St.watch and St.watch.viewAddr, at = os.clock() }
         end
         St.down, St.saved, St.watch, St.home = false, nil, nil, nil
         if type(SV_Down) == "function" then pcall(SV_Down, 0) end
@@ -468,11 +572,12 @@ local function restoreAfter(pawn)
     end
     local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
     local va = okV and valid(vt) and addrOf(vt) or nil
-    if va == nil or va == r.watch or va == addrOf(survivalPC) then
+    local onWatch = va ~= nil and (va == r.watch or va == r.watchView or va == addrOf(St.camActor))   -- (or our camera)
+    if va == nil or onWatch or va == addrOf(survivalPC) then
         St.home = r.home
         viewSelf(0)
         St.home = nil
-        parts[#parts + 1] = "the view was " .. (va == nil and "nowhere" or va == r.watch and "still on the plane you watched" or "on the controller")
+        parts[#parts + 1] = "the view was " .. (va == nil and "nowhere" or onWatch and "still on the plane you watched" or "on the controller")
             .. ": back on " .. ((r.home and not r.home.pawn and valid(r.home.obj)) and r.home.name or "your plane")
     else
         parts[#parts + 1] = "the view on " .. nameOf(vt) .. " (left as it is)"
@@ -714,6 +819,8 @@ function DOWN.tick()
         local okM, errM = pcall(motionTick, now)
         if not okM then logOnce("motionTick", "down: motion error " .. tostring(errM)) end
         local okS, errS = pcall(spectateTick, now)
+        local okO, errO = pcall(orbitTick, now)
+        if not okO then logOnce("orbitTick", "spectate: camera controls error " .. tostring(errO)) end
         if not okS then logOnce("spectateTick", "spectate: error " .. tostring(errS)) end
     elseif valid(pawn) and not St.ended and (St.testDown or (rc().enabled == true and linked() and D.round and D.round >= 1)) then
         local okH, h = pcall(function() return pawn.HealthInternal end)
