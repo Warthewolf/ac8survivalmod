@@ -58,8 +58,6 @@ Each test is a COOP2MP build; solo tests use the test keys (TEST ONLY, never in 
    ("fx" grows the fields WeaponData has). Then the player's real missiles, specials, ESM, gun and flares show.
 5. **T5: the rest.** Enemies targeting the other players (Online Mode's OtherPlayer faction), damage shown, the DOWN and
    revive on a player plane, up to 24 of them (frame cost).
-</content>
-</invoke>
 
 ## T1 / T2 build (0.73.0-coop2mp.1, runtime 0.29.0; installed 2026-10-30 as the user's test install)
 `sh tools/package_dev.sh COOP2MP_T1` (the test keys kept; never for friends), installed over 0.72.7 (backed up in
@@ -85,3 +83,31 @@ own plane's class, the ADFX-02 (BP_PlayerPlane_PP0038_adfx02), the FA-36 (PP0018
   COOP.planeClassPath with every player plane's path).
 - So a frozen plane teleported every frame can't be a real MP-style plane: its tick has to run, fed the network data
   Online Mode feeds a remote plane (its movement sync and flight inputs). Research on that path: next section.
+
+## How a remote player plane flies itself (research, 2026-10-30; verified in the exe)
+- ALivePlayerPlane's FrameUpdate calls RemoteUpdate 0x147d6f0c0 (plane, float dt) at 0x147d646dc for a plane of network
+  role 2. It checks plane+0xed0 (the network object N, a ULiveNetworkPlayerPlane), then 0x1474d8c00 reads N's
+  FLiveMessageFlightEnginePhysics R = *(N+0x98) into the plane's second flight state: Direction R+0x20 (3 floats),
+  Location R+0x2c (3 int32, cm), Rotation R+0x38 (3 floats, deg: pitch, yaw, roll), State R+0x44 (int32), SpeedLocal
+  R+0x48 (float, m/s). R+0x08 is TriggerTimeMs (left alone); R+0x58 / +0x68 / +0x78 count queued messages (keep 0).
+- Its input comes from N+0x170 (FLiveMessageFlightEngineInput): +0x08 pitch, +0x0c yaw, +0x10 roll, +0x14 throttle,
+  +0x18 brake, +0x1c high-G (floats), +0x20 an attribute byte (4 by default; bit 0 zeroes the input).
+- The plane's own flight state (MS, plane+0x2268: its speed plane+0x2318, its State plane+0x2b18) is blended toward the
+  second one, and snaps to it when over 1 km off; then the plane's own engine, controls and effects run as for yours.
+- With nothing received all of R is zero: that's the pull to the map's centre (COOP.md 6). A local plane's State has bits
+  20 and 9 that a remote one mustn't get (cleared when copied).
+
+## T1c build (0.73.1-coop2mp.2, runtime 0.29.1; the user's test install, 2026-10-30)
+The runtime hooks RemoteUpdate (sigs.h kSigRemoteUpdate, 18 bytes) and, for the one plane SV_CoopFeed names, writes the
+source's pose (plus a formation offset), speed, State and last BuildFlightInput into R and N+0x170 just before the
+game's update reads them (runtime/flight.c, FD). Ctrl+F11 now leaves the copy's tick ON and feeds it from your plane,
+150 m off your right wing (T1's tick-off way if SV_CoopFeed is missing or refuses). Same three airframes; Ctrl+F12 ends it.
+- Look: does it stay beside you (not at the map's centre, not stuttering); its control surfaces, gear and afterburner
+  following yours; an ALLY tag / HUD box; the ADFX-02 loading (93d9d08's path); enemies going for it, it taking hits.
+- Log: `remote player plane update` hooked at load; `test: Ctrl+F11 the copy's own tick stays on, fed (SV_CoopFeed 1)`;
+  `coop2mp: plane <p> fed from <p> (0 m ahead, 150 m right, 0 m up) ...`; once, `coop2mp: fed plane <p> first: message
+  <p>, input <p> (the source's | NO INPUT RECORD); speed N m/s ..., state <x>, queues 0 0 0`; then every second
+  `coop2mp: fed plane <p>: N updates, N fed, N skipped; N m off where it was sent, its speed N m/s` (`ITS REMOTE UPDATE
+  ISN'T RUNNING` if the game stops calling it); the 5 s `test: second plane ...` line as before ("its tick true").
+- If it sits at the map's centre anyway, or N m off keeps growing: something else writes R after us (a received
+  message's queue) or the update reads another field; the log's queue counts and "skipped" tell which.

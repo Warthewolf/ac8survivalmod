@@ -366,4 +366,19 @@ static const uint8_t kSigPPRespawn[40] = {
     0xF9, 0xE8,
 };
 
+/* ALivePlayerPlane's remote update 0x147d6f0c0: (plane, float dt), called from its FrameUpdate (0x147d646dc) for a
+ * plane of network role 2 (another player's). It reads the network object's (plane + NetworkObject) physics message
+ * (N+0x98) and input (N+0x170) into the plane's second flight state and blends its own toward it (tools/re/COOP2MP.md
+ * T1c). Its first 18 bytes (push rbp; push rbx; lea rbp,[rsp-0x128]; sub rsp,0x228) are hooked. Unique 49 bytes; the
+ * stack cookie's address wildcarded. */
+static const uint8_t kSigRemoteUpdate[49] = {
+    0x40, 0x55, 0x53, 0x48, 0x8D, 0xAC, 0x24, 0xD8, 0xFE, 0xFF, 0xFF, 0x48, 0x81, 0xEC, 0x28, 0x02, 0x00, 0x00, 0x44,
+    0x0F, 0x29, 0xA4, 0x24, 0xB0, 0x01, 0x00, 0x00, 0x48, 0x8B, 0x05, 0x00, 0x00, 0x00, 0x00, 0x48, 0x33, 0xC4, 0x48,
+    0x89, 0x45, 0x70, 0x48, 0x83, 0xB9, 0xD0, 0x0E, 0x00, 0x00, 0x00,
+};
+static const uint8_t kSigRemoteUpdateMask[49] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
 #endif

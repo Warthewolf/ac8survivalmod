@@ -316,6 +316,8 @@ static void DownStop(const wchar_t* why)
     memset(&DN.ref, 0, sizeof(DN.ref));
 }
 
+static void FdLog(void);                                /* COOP2MP's fed plane (below) */
+
 /* From OnBuildInput (survival_rt.c), after the game's BuildFlightInput and SV_Invert: DOWN, then the input record. */
 static void FlightInputHook(uint8_t* plane, float* out)
 {
@@ -326,6 +328,7 @@ static void FlightInputHook(uint8_t* plane, float* out)
         else if (o == plane) DownApply(o, out);
     }
     FlRecordInput(plane, out);
+    FdLog();
 }
 
 /* SV_Down(plane, cx_cm, cy_cm, alt_m, radius_m) -> 1 (on, or its circle changed when it's on for that plane already: the
@@ -426,5 +429,156 @@ static int L_Respawn(void* lua)
         (int32_t)(v[1] / 100), (int32_t)(v[2] / 100), (int32_t)v[3], (int32_t)v[4], (int32_t)v[5], (int32_t)(was[0] / 100),
         (int32_t)(was[1] / 100), (int32_t)(was[2] / 100), (int32_t)(CoSqrt(dx * dx + dy * dy + dz * dz) / 100), (int32_t)nr[1],
         CoHealth(plane), maxHp, fi ? (int32_t)plane[FI.dead] : -1, fi ? (int32_t)plane[FI.active] : -1);
+    return Ret(lua, 1);
+}
+
+/* ---- COOP2MP: a remote player plane fed (runtime 0.29.1; tools/re/COOP2MP.md T1c) ------------------------------------
+ * A role-2 (another player's) player plane flies itself: its FrameUpdate calls RemoteUpdate(plane, dt) (hooked here,
+ * sigs.h kSigRemoteUpdate), which sets the plane's second flight state from its network object's (plane +
+ * NetworkObject) FLiveMessageFlightEnginePhysics (N+0x98) and its input from N+0x170, blends the plane's own flight
+ * state toward it (a snap when over 1 km off) and runs its own engine and controls. With nothing received all of it is
+ * zero, so its tick pulled it to the map's centre (COOP.md 6), and T1 kept its tick off: no animations, afterburner,
+ * HUD box or enemy attacks. Here, just before RemoteUpdate runs for the fed plane, its message gets a pose and its
+ * input: Direction (+0x20, 3 floats, a unit vector), Location (+0x2c, 3 int32, cm), Rotation (+0x38, 3 floats, deg:
+ * pitch, yaw, roll), State (+0x44, int32: the source's plane+0x2b18 less bits 20 and 9), SpeedLocal (+0x48, float m/s);
+ * the input +0x08..+0x1c: pitch, yaw, roll, throttle, brake, high-G (the source's last BuildFlightInput), +0x20 the
+ * attribute byte (4; bit 0 zeroes the input). TriggerTimeMs (+0x08) and the queues (+0x58, +0x68, +0x78 counts) are
+ * left alone. T1c's source: your own plane, with a formation offset (forward, right, up). */
+typedef uint64_t (*RemoteUpdateFn)(uint8_t* plane, float dt);
+static uint8_t*       g_fRemoteUpdate;                  /* found by FindFunctions (sigs.h kSigRemoteUpdate) */
+static RemoteUpdateFn g_nextRemoteUpdate;
+#define FD_R        0x98       /* N's FLiveMessageFlightEnginePhysics pointer */
+#define FD_IN       0x170      /* N's FLiveMessageFlightEngineInput */
+#define FD_SPEED    0x2318     /* the plane's flight state (+0x2268) speed, m/s (float) */
+#define FD_STATE    0x2b18     /* its State (int32) */
+static struct {
+    int on, said;
+    int32_t noOff;
+    CoRef plane, src;
+    double off[3];                                      /* cm: forward, right, up */
+    uint32_t calls, fed, skipped;
+    double lastLog, lastCallAt, srcPos[3], srcAt, spd, tgt[3];
+} FD;
+static void* g_fdNetCls;
+
+static uint8_t* FdMessage(uint8_t* plane, uint8_t** in)  /* the plane's physics message, its input in *in; NULL: none */
+{
+    if (FD.noOff <= 0 || !Readable(plane + FD.noOff, 8)) return NULL;
+    uint8_t* n = *(uint8_t**)(plane + FD.noOff);
+    if (!n || !LiveObject(n) || (g_fdNetCls && *(void**)(n + 0x10) != g_fdNetCls) || !Readable(n + FD_IN, 0x28) ||
+        !Readable(n + FD_R, 8)) return NULL;
+    uint8_t* r = *(uint8_t**)(n + FD_R);
+    if (!r || !Readable(r, 0x80)) return NULL;
+    *in = n + FD_IN;
+    return r;
+}
+
+static void FdFeed(uint8_t* plane)
+{
+    uint8_t* src = CoRefGet(&FD.src), *in = NULL;
+    uint8_t* r = FdMessage(plane, &in);
+    double p[3], rot[3], now = CoNow();
+    if (!src || !r || !CoReadPose(src, p, rot)) { ++FD.skipped; return; }
+    /* speed: the source's own (m/s), else from its moves; direction: along its moves, else its nose */
+    double dt = now - FD.srcAt, d[3] = { 0, 0, 0 }, dl = 0;
+    if (FD.srcAt > 0 && dt > 0.004 && dt < 0.5) {
+        for (int k = 0; k < 3; ++k) d[k] = p[k] - FD.srcPos[k];
+        dl = CoSqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        double v = dl / dt / 100.0;
+        FD.spd = FD.spd > 0 ? FD.spd + (v - FD.spd) * 0.2 : v;
+    }
+    if (FD.srcAt <= 0 || dt > 0.004) { memcpy(FD.srcPos, p, sizeof(p)); FD.srcAt = now; }
+    float own = Readable(src + FD_SPEED, 4) ? *(float*)(src + FD_SPEED) : -1.0f;
+    float speed = (own > 1.0f && own < 2000.0f) ? own : (float)FD.spd;
+    double cp = Cos(rot[0] * CO_PI / 180.0), sp = Sin(rot[0] * CO_PI / 180.0);
+    double cy = Cos(rot[1] * CO_PI / 180.0), sy = Sin(rot[1] * CO_PI / 180.0);
+    float dir[3];
+    if (dl > 1.0) { dir[0] = (float)(d[0] / dl); dir[1] = (float)(d[1] / dl); dir[2] = (float)(d[2] / dl); }
+    else { dir[0] = (float)(cp * cy); dir[1] = (float)(cp * sy); dir[2] = (float)sp; }
+    p[0] += FD.off[0] * cy - FD.off[1] * sy;
+    p[1] += FD.off[0] * sy + FD.off[1] * cy;
+    p[2] += FD.off[2];
+    memcpy(FD.tgt, p, sizeof(p));
+    int32_t loc[3];
+    for (int k = 0; k < 3; ++k) loc[k] = (int32_t)(p[k] + (p[k] < 0 ? -0.5 : 0.5));
+    float frot[3] = { (float)rot[0], (float)rot[1], (float)rot[2] };
+    int32_t state = Readable(src + FD_STATE, 4) ? *(int32_t*)(src + FD_STATE) : 0;
+    state &= ~((1 << 20) | (1 << 9));
+    memcpy(r + 0x20, dir, 12); memcpy(r + 0x2c, loc, 12); memcpy(r + 0x38, frot, 12);
+    memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
+    const FlInput* rec = NULL;                          /* the source's last BuildFlightInput (FlRecordInput) */
+    for (int i = 0; i < 4; ++i) if (g_flIn[i].plane == src) rec = &g_flIn[i];
+    if (rec) { memcpy(in + 0x08, rec->v, sizeof(rec->v)); in[0x20] = 4; }
+    ++FD.fed;
+    if (!FD.said) {
+        FD.said = 1;
+        Log(L"coop2mp: fed plane %p first: message %p, input %p (%s); speed %d m/s (the source's field %d), state %x, queues %d %d %d",
+            plane, r, in, rec ? L"the source's" : L"NO INPUT RECORD", (int32_t)speed, (int32_t)own, (uint32_t)state,
+            *(int32_t*)(r + 0x58), *(int32_t*)(r + 0x68), *(int32_t*)(r + 0x78));
+    }
+}
+
+static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
+{
+    if (FD.on && plane && plane == FD.plane.obj && CoRefGet(&FD.plane)) {
+        ++FD.calls; FD.lastCallAt = CoNow();
+        FdFeed(plane);
+    }
+    return g_nextRemoteUpdate(plane, dt);
+}
+
+/* once a second while feeding (from FlightInputHook): how far the plane is from where it was sent */
+static void FdLog(void)
+{
+    if (!FD.on) return;
+    double now = CoNow();
+    if (now - FD.lastLog < 1.0) return;
+    FD.lastLog = now;
+    uint8_t* plane = CoRefGet(&FD.plane);
+    if (!plane) { FD.on = 0; Log(L"coop2mp: the fed plane is gone; feeding off"); return; }
+    double p[3], rot[3];
+    int32_t off = -1;
+    if (CoReadPose(plane, p, rot)) {
+        double dx = p[0] - FD.tgt[0], dy = p[1] - FD.tgt[1], dz = p[2] - FD.tgt[2];
+        off = (int32_t)(CoSqrt(dx * dx + dy * dy + dz * dz) / 100.0);
+    }
+    float spd = Readable(plane + FD_SPEED, 4) ? *(float*)(plane + FD_SPEED) : -1.0f;
+    Log(L"coop2mp: fed plane %p: %u updates, %u fed, %u skipped; %d m off where it was sent, its speed %d m/s%s", plane, FD.calls,
+        FD.fed, FD.skipped, off, (int32_t)spd, (now - FD.lastCallAt > 2.0) ? L"; ITS REMOTE UPDATE ISN'T RUNNING (tick off? not alive?)" : L"");
+}
+
+/* SV_CoopFeed(plane, source, forward_m, right_m, up_m) -> 1: a remote player plane (role 2, its tick on) flown by its own
+ * update toward source's pose + that offset, with source's inputs (COOP2MP T1c); SV_CoopFeed(0) -> 1: off. < 0: -1 bad
+ * args, -2 RemoteUpdate not hooked, -3 no network message on it. A plane fed isn't moved by SV_CoopFollow. */
+static int L_CoopFeed(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    if (!plane) { if (FD.on) Log(L"coop2mp: feeding off (Lua)"); FD.on = 0; return Ret(lua, 1); }
+    uint8_t* src = ArgObject(lua);
+    double f = 0, rt = 0, up = 0;
+    ArgNumber(lua, &f); ArgNumber(lua, &rt); ArgNumber(lua, &up);
+    if (!src || !LiveObject(plane) || !LiveObject(src) || CoKind(plane) != 2 || CoKind(src) != 2) return Ret(lua, -1);
+    if (!(f > -5000 && f < 5000 && rt > -5000 && rt < 5000 && up > -5000 && up < 5000)) return Ret(lua, -1);
+    if (!g_nextRemoteUpdate) return Ret(lua, -2);
+    uint8_t* no = (uint8_t*)U.valuePtr(plane, L"NetworkObject");
+    FD.on = 0;
+    FD.noOff = no ? (int32_t)(no - plane) : -1;
+    if (!g_fdNetCls) g_fdNetCls = U.findObject(L"Class", L"LiveNetworkPlayerPlane", 0, 0);
+    uint8_t* in = NULL;
+    uint8_t* r = FdMessage(plane, &in);
+    if (!r) {
+        Log(L"coop2mp: plane %p has no network message to feed (NetworkObject +%x, class %p)", plane, (uint32_t)FD.noOff, g_fdNetCls);
+        return Ret(lua, -3);
+    }
+    if (g_follow.obj == plane) memset(&g_follow, 0, sizeof(g_follow));
+    memset(&FD.plane, 0, sizeof(FD.plane)); memset(&FD.src, 0, sizeof(FD.src));
+    CoRefSet(&FD.plane, plane); CoRefSet(&FD.src, src);
+    FD.off[0] = f * 100; FD.off[1] = rt * 100; FD.off[2] = up * 100;
+    FD.calls = FD.fed = FD.skipped = 0;
+    FD.said = 0; FD.srcAt = 0; FD.spd = 0;
+    FD.lastLog = FD.lastCallAt = CoNow();
+    FD.on = 1;
+    Log(L"coop2mp: plane %p fed from %p (%d m ahead, %d m right, %d m up): its own update flies it (message %p, NetworkObject +%x)",
+        plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r, (uint32_t)FD.noOff);
     return Ret(lua, 1);
 }
