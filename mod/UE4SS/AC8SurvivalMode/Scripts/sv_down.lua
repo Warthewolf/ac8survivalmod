@@ -141,10 +141,33 @@ local function camOn(obj)
     if not ok or not valid(comp) then return nil, "AddComponentByClass " .. (ok and "gave nothing" or tostring(comp)) end
     local cam = rc().camera or {}
     local back, up = num(cam.back_m, 30) * 100, num(cam.up_m, 8) * 100
-    pcall(function()
-        comp:K2_SetRelativeLocationAndRotation({ X = -back, Y = 0, Z = up }, { Pitch = -math.deg(math.atan(up, back)), Yaw = 0, Roll = 0 },
-            false, {}, true)
-    end)
+    local function place(k)
+        pcall(function()
+            comp:K2_SetRelativeLocationAndRotation({ X = -back * k, Y = 0, Z = up * k },
+                { Pitch = -math.deg(math.atan(up, back)), Yaw = 0, Roll = 0 }, false, {}, true)
+        end)
+    end
+    place(1)
+    -- (how far it really is: the offset is in the plane's root component's space, and a player plane's is scaled down:
+    -- the user's co-op run of 2026-10-30, watching CRESSENDO's real ADFX-02, the view sat just behind its seat. So the
+    -- distance is measured and the offset scaled by what it came out as)
+    local want = math.sqrt(back * back + up * up)
+    local function dist()
+        local okC, c = pcall(function() local v = comp:K2_GetComponentLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+        local okP, q = pcall(function() local v = obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+        if not (okC and okP and c and q and type(c.X) == "number" and type(q.X) == "number") then return nil end
+        return math.sqrt((c.X - q.X) ^ 2 + (c.Y - q.Y) ^ 2 + (c.Z - q.Z) ^ 2)
+    end
+    local d0 = dist()
+    local k, d1 = 1, d0
+    if d0 and d0 > 1 and math.abs(d0 / want - 1) > 0.2 then
+        k = math.max(0.01, math.min(1000, want / d0))
+        place(k)
+        d1 = dist()
+    end
+    log(string.format("spectate: camera on %s: %s from it (wanted %.0f m)%s", nameOf(obj):match("([%w_]+)$") or "?",
+        d0 and string.format("%.1f m", d0 / 100) or "? m", want / 100,
+        k ~= 1 and string.format("; its offset x%.2f (the plane's scale), now %s", k, d1 and string.format("%.1f m", d1 / 100) or "? m") or ""))
     if a then St.cams[a] = comp end
     return comp
 end

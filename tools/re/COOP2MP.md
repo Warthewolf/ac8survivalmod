@@ -442,3 +442,8 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
 - 0.73.12: a loadout change mid-level is logged and kept for the next level's plane; while you watch a plane its other
   CameraComponents (K2_GetComponentsByClass) are deactivated, ours activated, theirs back on as the view leaves it
   (`spectate: <plane>'s own cameras: <names>; N switched off while you watch it`).
+- 0.73.12 in game (21:49-21:52): no crash through 4 loadout changes; the camera still inside the plane, on the ADFX-02
+  and the X-40A alike (the user's screenshot: just behind the seat, pitched down: our camera, its 30 m / 8 m offset come
+  out ~100x short), and no "own cameras" line (a player plane has no other CameraComponent). A player plane's root is
+  scaled down. 0.73.13-coop2mp.14: the camera's distance from the plane is measured after placing it and its offset
+  scaled by what it came out as (`spectate: camera on <plane>: D m from it (wanted 31 m); its offset xK ..., now D m`).
