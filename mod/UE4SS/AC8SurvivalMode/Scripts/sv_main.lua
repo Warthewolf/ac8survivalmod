@@ -808,11 +808,12 @@ if type(RegisterKeyBind) == "function" and Key then
     -- HUD and lock-on stay yours, do the enemies go for it; every 5 s `test: second plane ...` says where it is, its
     -- health and how many enemies have it (and you) as their nearest player plane.
     local ppTest = { addr = nil, step = 0 }
-    local PP_PLANES = { { name = "YOUR OWN" }, { name = "ADFX-02", n = 38, code = "adfx02" }, { name = "FA-36", n = 18, code = "fa36" } }
-    local function ppClass(e)
-        if not e.n then return nil end
-        local b = string.format("BP_PlayerPlane_PP%04d_%s", e.n, e.code)
-        return loadObject(string.format("/Game/Blueprints/Vehicle/PLAYER/Plane/PP%04d_%s/%s.%s_C", e.n, e.code, b, b))
+    local PP_PLANES = { { name = "YOUR OWN" }, { name = "ADFX-02", code = "adfx02" }, { name = "FA-36", code = "fa36" } }
+    local function ppClass(e)                          -- (sv_coop.lua's table of every player plane's blueprint)
+        if not e.code then return nil end
+        local path = COOP and COOP.planeClassPath and COOP.planeClassPath(e.code)
+        if not path then return nil, "no blueprint path for " .. e.code end
+        return loadObject(path)
     end
     PPTEST = { tick = function(now)
         if not (ppTest.obj and now >= (ppTest.logAt or 0)) then return end
@@ -854,7 +855,7 @@ if type(RegisterKeyBind) == "function" and Key then
                     ppTest.step = ppTest.step % #PP_PLANES + 1
                     local e = PP_PLANES[ppTest.step]
                     local cls, why = ppClass(e)
-                    if e.n and not valid(cls) then
+                    if e.code and not valid(cls) then
                         log(string.format("test: Ctrl+F11 %s: its class didn't load (%s)", e.name, tostring(why)))
                         hudCallout("TEST: " .. e.name .. " DIDN'T LOAD", "CTRL+F11 FOR THE NEXT")
                         return
