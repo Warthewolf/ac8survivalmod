@@ -366,6 +366,13 @@ is taken off after liftoff (its objects recorded as spawned; the 1.5 km sweep mi
 13:38:56, revived by the host from the STORE at 13:41:22), but VERDA had crashed into the ground, so the loiter never
 lifted the plane and respawn loiter brought them back where it lay. Since then (not yet a build): a DOWN plane slower
 than 40 m/s (or under the sea) for 3 s comes back the native way (SV_Respawn 4 km out from the runway, 500 m up).
+The same run, the host DOWN in round 6 (runtime 0.28.6): the loiter flew the plane upside down at 15 m over the sea out
+of the combat zone (its roll probe read -3 / +2 deg/s as a sign: wrong), the mission failed and restarted in round 7 in
+the same level with the SAME plane, which stayed hidden (no third-person view) with its weapons off. Runtime 0.28.7 (not
+yet run in game): longer probes, DN_MIN_DIFF 10, an in-flight sign check (rates against the inputs flip a sign) and a
+dive backstop (tools/checks/flight_test.c's late plane and wrong-signs runs); sv_down.lua puts the plane and view back
+after a restart while down (restoreAfter), remembers your own view as you go down, and puts a DOWN plane 8 km from the
+combat zone's edge back over the airfield (edgeGuard, SV_Respawn).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

@@ -15,14 +15,27 @@
  *  rates under + and under - (the order cancels a steady drift). The signs are kept for the next DOWN (DownInit's
  *  signsKnown). Round the circle, a slow integral of the radius error turns the heading wanted in or out until the
  *  plane holds the radius, whatever bank its flight model needs for it.
+ *
+ *  The probe can still read a sign wrong (a plane that answers late), so round the circle the body rates are checked
+ *  against the inputs given (DnCheck): a plane that turns against them for DN_CHECK_W flips that sign. The user's co-op
+ *  run of 2026-10-30 (runtime 0.28.6): the probe read -3 / +2 deg/s as a sign (DN_MIN_DIFF was 2, its quarters 0.25 s),
+ *  the wrong roll sign held the host's DOWN plane upside down for 2.5 minutes, at 15 m over the sea, out of the combat
+ *  zone, and the mission failed.
  * ============================================================================= */
 
 #define DN_PROBE_IN    0.3     /* the sign probe's input                                                          */
-#define DN_PROBE_S     0.25    /* each quarter of a probe (+, -, -, +), s                                          */
-#define DN_PROBE_SKIP  0.08    /* the start of each quarter isn't measured (the response turning round), s        */
+#define DN_PROBE_S     0.5     /* each quarter of a probe (+, -, -, +), s                                          */
+#define DN_PROBE_SKIP  0.25    /* the start of each quarter isn't measured (the response turning round, late), s  */
 #define DN_SETTLE_S    1.5     /* longest hands-off wait for a calm plane before the probes, s                    */
 #define DN_LEVEL_S     2.0     /* longest wings-level wait between the probes, s                                  */
-#define DN_MIN_DIFF    2.0     /* deg/s: a probe's two halves closer than this tell nothing (the prior is kept)    */
+#define DN_MIN_DIFF    10.0    /* deg/s: a probe's two halves closer than this tell nothing (the prior is kept)    */
+#define DN_CHECK_MIN   0.1     /* the in-flight check: smaller inputs aren't counted                               */
+#define DN_CHECK_W     1.0     /* the in-flight check: input x seconds counted before a sign is judged             */
+#define DN_CHECK_RATE  4.0     /* deg/s: the mean body rate along the inputs that confirms a sign (against: flips) */
+#define DN_FLIPS_MAX   6       /* sign flips at most in one DOWN                                                   */
+#define DN_CHECK_BANK  90.0    /* deg: the pitch check counts only under this bank                                 */
+#define DN_DIVE_DEG    -40.0   /* the dive backstop: a descent steeper than this ...                                */
+#define DN_DIVE_S      10.0    /* ... this long, with the climb wanted 20 deg above it, flips the pitch sign       */
 #define DN_BANK_MAX    40.0    /* deg                                                                              */
 #define DN_SLEW        3.0     /* input units a second (outside the probes)                                        */
 #define DN_GAP_S       0.5     /* longer between two samples (a pause, a load): start the rates over               */
@@ -33,6 +46,11 @@ enum { DN_START, DN_SETTLE, DN_ROLL, DN_LEVEL, DN_PITCH, DN_CIRCLE };
 #define DN_LEARNED_PITCH  2
 #define DN_VAGUE_ROLL     4    /* a probe that told nothing (the prior +1 kept)                                    */
 #define DN_VAGUE_PITCH    8
+#define DN_FLIPPED_ROLL  16    /* the in-flight check: the plane turned against the inputs, the sign flipped       */
+#define DN_FLIPPED_PITCH 32
+#define DN_CONFIRMED_ROLL  64  /* the in-flight check: the plane turned along the inputs                           */
+#define DN_CONFIRMED_PITCH 128
+#define DN_FLIPPED_DIVE  256   /* the dive backstop flipped the pitch sign                                         */
 
 typedef struct {
     double cx, cy, alt, radius;              /* the circle: centre in cm, altitude and radius in m                  */
@@ -51,6 +69,10 @@ typedef struct {
     double bankI;                            /* the bank error integral, roll input                                   */
     double oP, oR;                           /* the inputs last given (raw: what BuildFlightInput's out gets)         */
     double lastBank;                         /* the bank last asked for (its side kept through ~180 deg errors)      */
+    double chk[4];                           /* the in-flight check: roll rate x input and |input| x dt summed; pitch */
+    double resp[2];                          /* the last check's mean body rate along the inputs (deg/s): roll, pitch */
+    int    flips;                            /* signs flipped by the check (and the dive backstop)                   */
+    double diveAt;                           /* since when the plane dives steeper than DN_DIVE_DEG wanting to climb */
     float  out[5];
     double dist, headErr, bankWant, gamma;   /* for the log                                                           */
 } DownCtl;
@@ -86,6 +108,25 @@ static void DnPickDir(DownCtl* c, const double* pos, double track)
 
 /* Wings level (UE sense: a positive result rolls right). */
 static double DnLevel(const DownCtl* c, double bank) { return DnClamp(0.025 * (0.0 - bank) - 0.005 * c->rp, -0.5, 0.5); }
+
+/* The in-flight sign check on one axis (0 roll, 1 pitch): u the input given over the last dt in UE's sense (through the
+ * sign believed), rate the body rate measured. Once DN_CHECK_W of input is counted: a mean rate along the inputs
+ * confirms the sign, against them flips it (a wrong roll sign holds the plane upside down, a wrong pitch sign dives it). */
+static void DnCheck(DownCtl* c, int axis, double u, double rate, double dt)
+{
+    if (CoAbs(u) < DN_CHECK_MIN) return;
+    double* k = &c->chk[axis * 2];
+    k[0] += u * rate * dt; k[1] += CoAbs(u) * dt;
+    if (k[1] < DN_CHECK_W) return;
+    double m = k[0] / k[1];
+    c->resp[axis] = m;
+    k[0] = k[1] = 0;
+    if (m <= -DN_CHECK_RATE && c->flips < DN_FLIPS_MAX) {
+        ++c->flips;
+        if (axis) { c->sPitch = -c->sPitch; c->altI = 0; c->learned |= DN_FLIPPED_PITCH; }
+        else { c->sRoll = -c->sRoll; c->bankI = 0; c->learned |= DN_FLIPPED_ROLL; }
+    } else if (m >= DN_CHECK_RATE) c->learned |= axis ? DN_CONFIRMED_PITCH : DN_CONFIRMED_ROLL;
+}
 
 /* One step at time t (s). Writes out[0] pitch, [1] yaw, [2] roll, [3] throttle, [4] brake. Returns 1 when it computed
  * new inputs, 0 when it gave the last ones again (called again within the same frame). */
@@ -160,6 +201,8 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if ((CoAbs(bank) < 12.0 && CoAbs(c->rp) < 25.0) || age > DN_LEVEL_S) { c->phase = DN_PITCH; c->phaseAt = t; c->sub = 0; }
         break;
     default: {                                                 /* DN_CIRCLE */
+        DnCheck(c, 0, c->sRoll * c->oR, c->rp, dt);             /* (the inputs given over the last dt, the rates now) */
+        if (CoAbs(bank) < DN_CHECK_BANK) DnCheck(c, 1, c->sPitch * c->oP, c->rq, dt);
         double x = (pos[0] - c->cx) / 100.0, y = (pos[1] - c->cy) / 100.0, h = pos[2] / 100.0;
         double rr = CoSqrt(x * x + y * y), R = c->radius;
         double vh = CoSqrt(c->v[0] * c->v[0] + c->v[1] * c->v[1]) / 100.0, vz = c->v[2] / 100.0;
@@ -181,6 +224,15 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         double gammaWant = DnClamp(0.04 * eh + 0.0015 * c->altI, -12.0, 15.0);
         double vt = CoSqrt(vh * vh + vz * vz);
         double gamma = vt > 20.0 ? CoAtan2(vz, vh) / D2R : rot[0];
+        /* the dive backstop: a steep dive the climb wanted doesn't pull it out of (a wrong pitch sign the check can't see
+         * once the plane is near vertical) */
+        if (gamma < DN_DIVE_DEG && gammaWant > gamma + 20.0) {
+            if (c->diveAt <= 0) c->diveAt = t;
+            else if (t - c->diveAt >= DN_DIVE_S && c->flips < DN_FLIPS_MAX) {
+                ++c->flips; c->sPitch = -c->sPitch; c->altI = 0; c->diveAt = 0;
+                c->learned |= DN_FLIPPED_PITCH | DN_FLIPPED_DIVE;
+            }
+        } else c->diveAt = 0;
         /* (the bank error's integral: a flight model whose roll input asks for a bank angle, not a roll rate, stops
          * short of the bank wanted without it) */
         double eb = DnWrap(bankWant - bank);

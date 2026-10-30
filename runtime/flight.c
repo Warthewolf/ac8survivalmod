@@ -240,7 +240,7 @@ static int L_InputNow(void* lua)
  * plane circles (cx, cy) at alt on its own while its pilot waits for a revive. Its pose is read natively every frame
  * (coop.c CoReadPose: the root component's world location and rotation; velocity and rates from their changes). */
 static struct {
-    int on, okBits;
+    int on, okBits, said;                                /* said: the in-flight check's confirmations logged (bits) */
     CoRef ref;
     DownCtl c;
     double lastLog, startAt;
@@ -253,10 +253,11 @@ static void DownLog(const wchar_t* why)
     const DownCtl* c = &DN.c;
     int32_t ph = c->phase >= 0 && c->phase <= DN_CIRCLE ? c->phase : 0;
     Log(L"down: %s (%s, %d s): %d m from the centre (radius %d), %d m high (want %d), heading error %d deg, bank %d "
-        L"(want %d), climb %d deg; inputs pitch %d, roll %d (x1000); input signs roll %d, pitch %d", why, kDnPhase[ph],
+        L"(want %d), climb %d deg; inputs pitch %d, roll %d (x1000); input signs roll %d, pitch %d (rates along the "
+        L"inputs roll %d, pitch %d deg/s; %d flips)", why, kDnPhase[ph],
         (int32_t)(CoNow() - DN.startAt), (int32_t)c->dist, (int32_t)c->radius, (int32_t)(c->p[2] / 100.0), (int32_t)c->alt,
         (int32_t)c->headErr, (int32_t)c->r[2], (int32_t)c->bankWant, (int32_t)c->gamma, (int32_t)(c->oP * 1000.0),
-        (int32_t)(c->oR * 1000.0), c->sRoll, c->sPitch);
+        (int32_t)(c->oR * 1000.0), c->sRoll, c->sPitch, (int32_t)c->resp[0], (int32_t)c->resp[1], c->flips);
 }
 
 static void DownApply(uint8_t* plane, float* out)
@@ -278,10 +279,30 @@ static void DownApply(uint8_t* plane, float* out)
             Log(L"down: pitch probe: body pitch rate %d deg/s at input +0.3, %d at -0.3: %s %d", (int32_t)DN.c.probeRate[2],
                 (int32_t)DN.c.probeRate[3], (l & DN_LEARNED_PITCH) ? L"pitch input sign" : L"inconclusive, pitch input sign kept",
                 DN.c.sPitch);
-        DN.okBits |= l & (DN_LEARNED_ROLL | DN_LEARNED_PITCH);
-        if (DN.okBits == (DN_LEARNED_ROLL | DN_LEARNED_PITCH) && !g_dnKnown) {
+        /* the in-flight check (DnCheck): a sign flipped, each time; a sign confirmed, once a DOWN */
+        if (l & DN_FLIPPED_ROLL)
+            Log(L"down: roll input sign flipped to %d: the plane rolled against the inputs (%d deg/s along them); %d flips",
+                DN.c.sRoll, (int32_t)DN.c.resp[0], DN.c.flips);
+        if (l & DN_FLIPPED_DIVE)
+            Log(L"down: pitch input sign flipped to %d: a dive steeper than 40 deg for 10 s didn't pull out; %d flips",
+                DN.c.sPitch, DN.c.flips);
+        else if (l & DN_FLIPPED_PITCH)
+            Log(L"down: pitch input sign flipped to %d: the plane pitched against the inputs (%d deg/s along them); %d flips",
+                DN.c.sPitch, (int32_t)DN.c.resp[1], DN.c.flips);
+        if ((l & DN_CONFIRMED_ROLL) && !(DN.said & 1)) {
+            DN.said |= 1;
+            Log(L"down: roll input sign %d confirmed in flight (%d deg/s along the inputs)", DN.c.sRoll, (int32_t)DN.c.resp[0]);
+        }
+        if ((l & DN_CONFIRMED_PITCH) && !(DN.said & 2)) {
+            DN.said |= 2;
+            Log(L"down: pitch input sign %d confirmed in flight (%d deg/s along the inputs)", DN.c.sPitch, (int32_t)DN.c.resp[1]);
+        }
+        DN.okBits |= ((l & (DN_LEARNED_ROLL | DN_FLIPPED_ROLL | DN_CONFIRMED_ROLL)) ? DN_LEARNED_ROLL : 0) |
+                     ((l & (DN_LEARNED_PITCH | DN_FLIPPED_PITCH | DN_CONFIRMED_PITCH)) ? DN_LEARNED_PITCH : 0);
+        if (DN.okBits == (DN_LEARNED_ROLL | DN_LEARNED_PITCH) &&
+            (!g_dnKnown || g_dnSRoll != DN.c.sRoll || g_dnSPitch != DN.c.sPitch)) {
             g_dnKnown = 1; g_dnSRoll = DN.c.sRoll; g_dnSPitch = DN.c.sPitch;
-            Log(L"down: input signs learned (roll %d, pitch %d): the next DOWN circles at once", g_dnSRoll, g_dnSPitch);
+            Log(L"down: input signs kept for the next DOWN (roll %d, pitch %d): it circles at once", g_dnSRoll, g_dnSPitch);
         }
     }
     if (now - DN.lastLog >= 10.0) { DN.lastLog = now; DownLog(L"autopilot"); }
@@ -333,14 +354,14 @@ static int L_Down(void* lua)
     if (me != plane) { Log(L"down: refused: %p isn't the local player's plane (%p)", plane, me); return Ret(lua, SV_ERR_NOT_LOCAL); }
     DownInit(&DN.c, cx, cy, alt, rad, g_dnKnown, g_dnSRoll, g_dnSPitch);
     CoRefSet(&DN.ref, plane);
-    DN.on = 1; DN.okBits = g_dnKnown ? (DN_LEARNED_ROLL | DN_LEARNED_PITCH) : 0;
+    DN.on = 1; DN.okBits = g_dnKnown ? (DN_LEARNED_ROLL | DN_LEARNED_PITCH) : 0; DN.said = 0;
     DN.startAt = DN.lastLog = CoNow();
     double p[3] = { 0, 0, 0 }, r[3] = { 0, 0, 0 };
     CoReadPose(plane, p, r);
     Log(L"down: autopilot on plane %p: circling (%d, %d) m at %d m, radius %d m; the plane at (%d, %d) m, %d m high, heading %d, "
         L"bank %d; %s", plane, (int32_t)(cx / 100), (int32_t)(cy / 100), (int32_t)alt, (int32_t)rad, (int32_t)(p[0] / 100),
         (int32_t)(p[1] / 100), (int32_t)(p[2] / 100), (int32_t)r[1], (int32_t)r[2],
-        g_dnKnown ? L"input signs known" : L"learning the input signs first (about 2 s of small roll and pitch inputs)");
+        g_dnKnown ? L"input signs known (checked again in flight)" : L"learning the input signs first (about 5 s of small roll and pitch inputs)");
     return Ret(lua, 1);
 }
 

@@ -23,7 +23,14 @@
 -- The spectator camera: a CameraComponent added to the watched player's plane here (back_m behind, up_m up, looking at
 -- it; hard rule 46: components added to AI planes work), your view on it (SetViewTargetWithBlend), put back (and
 -- counted) whenever the game takes it back to your own plane; the key (O; ctrl) the next player; the next one by itself
--- when the one you watch goes down, leaves or isn't shown; the NEXT row "DOWN: WATCHING <NAME>  [O] NEXT".
+-- when the one you watch goes down, leaves or isn't shown; the NEXT row "DOWN: WATCHING <NAME>  [O] NEXT". Your own
+-- view (the game's view target as you went down) is put back on the way back.
+--   a restart  while you're down (the pause menu's, or the retry after a failed mission) keeps the level AND your plane:
+--              the game refills and restores it, but what DOWN changed stays (the user's co-op run of 2026-10-30: the
+--              host's DOWN plane left the combat zone, the mission failed and restarted in round 7; the host could fly
+--              but had no third-person view: the plane still hidden). Put back at the first pass with the level's
+--              player (restoreAfter): shown, collision, weapons, attackers, mortal; the view off the plane you watched.
+--   the edge   a DOWN plane EDGE_CM from the combat zone's edge is put back over the airfield (SV_Respawn), flown again.
 -- Messages (reliable; sv_coop.lua hands them over, its guards first): joiner -> host dw|<slot>, rv|<slot>|<price>;
 -- host -> everyone dw|<slot>|<count>[|q], rb|<slot>|<count>|<by>, ro|<round>; host -> one joiner rx|<slot>|<why>|<count>
 -- (a refused revive: refunded), rc|<count> (the room's revives, as it links).
@@ -34,6 +41,11 @@ local RO_CONFIRM_S, PENDING_S, REVIVING_S, MSG_PER_S, PRESENT_MS = 3, 10, 15, 4,
 -- crashed into the ground with its floor held, and the loiter can't lift it (the user's co-op run of 2026-10-30: VERDA
 -- crashed, was revived where the plane lay, on the ground). A revive then brings it back the "native" way.
 local GROUND_MS, GROUND_S = 40, 3
+-- a DOWN plane this near the combat zone's edge (ZONE, sv_ai.lua: 3 km inside it already, so 8 km from it) is put back
+-- over the airfield, at most every EDGE_EVERY_S: out of the zone the game fails the mission for everyone
+local EDGE_CM, EDGE_EVERY_S = 500000, 20
+-- a restart's put-back waits this long for the level's player plane at most
+local RESTORE_S = 60
 local INPUTS = { { "bEnableWeaponInput", false }, { "bEnableFlareInput", false }, { "bIsWeaponSystemDisabled", true } }
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
 -- "native" respawn: 4 km out from the runway along its heading (Comona's runway, yaw -23: the takeoff's way), 500 m up
@@ -147,11 +159,19 @@ local function view(e, why)
     log(string.format("spectate: view %s (%s)%s%s, reverted %d times", e.name, why, cam and "" or (", no camera: " .. tostring(err)),
         ok and "" or ", SetViewTargetWithBlend FAILED", St.reverts))
 end
--- the view back on your own plane
-local function viewSelf()
+-- your own view as you go down: the game's view target then (your plane, as a rule)
+local function homeView()
+    local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
+    if not (okV and valid(vt)) then return nil end
+    return { obj = vt, addr = addrOf(vt), name = nameOf(vt), pawn = addrOf(vt) == addrOf(pawnOf()) }
+end
+-- the view back on your own: what it was as you went down, or your plane now (a restart or a respawn may give another)
+local function viewSelf(blend)
     St.watch = nil
-    local pawn = pawnOf()
-    if valid(pawn) then setView(pawn, num((rc().camera or {}).blend_s, 0.5)) end
+    local h, pawn = St.home, pawnOf()
+    blend = blend or num((rc().camera or {}).blend_s, 0.5)
+    if h and not h.pawn and valid(h.obj) then setView(h.obj, blend)
+    elseif valid(pawn) then setView(pawn, blend) end
 end
 -- the next player to watch (the key, or the one watched is gone): the one after the current in slot order, else the first
 function DOWN.nextView(why)
@@ -257,6 +277,8 @@ local function goDown(pawn, h)
     local now = os.clock()
     St.down, St.downAt, St.ended, St.reverts, St.views, St.watch, St.lookAt = true, now, false, 0, 0, nil, nil
     St.since[mySlot()] = now
+    St.home, St.restore, St.edgeAt = homeView(), nil, nil
+    log("spectate: your own view as you went down: " .. (St.home and (St.home.name .. (St.home.pawn and " (your plane)" or " (not your plane)")) or "none"))
     local saved, did = outOfFight(pawn)
     St.saved, St.loiterAddr, St.loiterAt, St.loiterSaid = saved, addrOf(pawn), now + 5, nil
     St.motion, St.speed, St.groundedAt, St.groundSaid = nil, nil, nil, nil
@@ -283,6 +305,7 @@ function DOWN.back(how, respawn)
     backInFight(pawn, St.saved)
     St.saved = nil
     viewSelf()
+    St.home = nil
     local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
     local okW = valid(pawn) and pcall(function() pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5) end)
     St.safeUntil = os.clock() + num(rc().safe_s, 5)
@@ -339,12 +362,16 @@ function DOWN.runOver(round, by)
 end
 
 -- The host's new run (a plane still down comes back, a revive asked is refunded), a new level or a run left (newLevel:
--- the loiter off, nothing else touched): nothing down, no revives
+-- the loiter off; on a new level, which a restart is too, the plane and view put back at the first pass with the level's
+-- player, restoreAfter): nothing down, no revives
 function DOWN.reset(why, newLevel)
     if St.down and newLevel then
-        St.down, St.saved, St.watch = false, nil, nil
+        if why == "a new level" then
+            St.restore = { addr = St.loiterAddr, saved = St.saved, home = St.home, watch = St.watch and St.watch.addr, at = os.clock() }
+        end
+        St.down, St.saved, St.watch, St.home = false, nil, nil, nil
         if type(SV_Down) == "function" then pcall(SV_Down, 0) end
-        log("down: " .. tostring(why) .. ": no longer down")
+        log("down: " .. tostring(why) .. ": no longer down" .. (St.restore and "; your plane and view put back once the level's player is in" or ""))
     elseif St.down then
         DOWN.back(tostring(why), "loiter")
     end
@@ -354,6 +381,62 @@ function DOWN.reset(why, newLevel)
     end
     St.since, St.count, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
+end
+
+-- After a restart while you were down (DOWN.reset's St.restore), at the first pass with the level's player: the plane DOWN
+-- changed, if the restart kept it (it does: the game refills and restores it in place), shown, collision, weapons and
+-- attackers back, mortal; the view, if it's still on the plane you watched (or nowhere), back on your own
+local function restoreAfter(pawn)
+    local r = St.restore
+    St.restore = nil
+    if os.clock() - (r.at or 0) > RESTORE_S then
+        log(string.format("down: after the restart: no player plane in %d s; nothing put back", RESTORE_S))
+        return
+    end
+    local parts = {}
+    if r.addr ~= nil and addrOf(pawn) == r.addr then
+        backInFight(pawn, r.saved)
+        pcall(function() pawn:SetIsInvincible(false) end)
+        parts[#parts + 1] = "the same plane: shown, collision, weapons and its attackers back, not invincible"
+    else
+        parts[#parts + 1] = string.format("another plane (%s; down was %s): nothing on it to put back", tostring(addrOf(pawn)), tostring(r.addr))
+    end
+    local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
+    local va = okV and valid(vt) and addrOf(vt) or nil
+    if va == nil or va == r.watch or va == addrOf(survivalPC) then
+        St.home = r.home
+        viewSelf(0)
+        St.home = nil
+        parts[#parts + 1] = "the view was " .. (va == nil and "nowhere" or va == r.watch and "still on the plane you watched" or "on the controller")
+            .. ": back on " .. ((r.home and not r.home.pawn and valid(r.home.obj)) and r.home.name or "your plane")
+    else
+        parts[#parts + 1] = "the view on " .. nameOf(vt) .. " (left as it is)"
+    end
+    log("down: after the restart: " .. table.concat(parts, "; "))
+end
+
+-- (each pass while DOWN) near the combat zone's edge: put back over the airfield at the loiter's height (SV_Respawn, 4 km
+-- out along the runway as the revive's "native"), out of the fight again (the respawn may give the plane its look back)
+-- and flown again this pass (the respawn turned the loiter off)
+local function edgeGuard(pawn, now)
+    if not ZONE or now < (St.edgeAt or 0) then return end
+    local at = playerLocation()
+    if not at then return end
+    local edge = ZONE.HALF - math.max(math.abs(at.X - ZONE.X), math.abs(at.Y - ZONE.Y))
+    if edge >= EDGE_CM then return end
+    St.edgeAt = now + EDGE_EVERY_S
+    local y = math.rad(RUNWAY.yaw)
+    local x, yy = RUNWAY.X + math.cos(y) * RUNWAY.out_cm, RUNWAY.Y + math.sin(y) * RUNWAY.out_cm
+    local z = num((rc().loiter or {}).alt_m, 2500) * 100
+    local rr = "no SV_Respawn (runtime 0.28.5 or later)"
+    if type(SV_Respawn) == "function" then
+        local okR, v = pcall(SV_Respawn, addrOf(pawn) or 0, x, yy, z, 0, RUNWAY.yaw, 0)
+        rr = (not okR and ("error " .. tostring(v))) or (v == 1 and "done") or (tostring(v) .. " " .. tostring(SV_ERR[v] or ""))
+    end
+    local _, did = outOfFight(pawn)
+    St.loiterAt, St.motion, St.groundedAt, St.groundSaid = 0, nil, nil, nil
+    log(string.format("down: your plane was %.1f km from the combat zone's edge, %.0f m up: put back over the airfield, %.0f m up "
+        .. "(SV_Respawn: %s); %s", (edge + 300000) / 100000, at.Z / 100, z / 100, rr, did))
 end
 
 ---------------------------------------------------------------------------------------------------- the STORE's row
@@ -534,9 +617,15 @@ function DOWN.tick()
         St.respawnAt = nil
         if at then log(string.format("revive: respawn d=%.0f m", km(at, want) * 1000)) end
     end
+    if St.restore and valid(pawn) then                      -- (a restart while you were down)
+        local okR, errR = pcall(restoreAfter, pawn)
+        if not okR then St.restore = nil; log("down: after the restart: error " .. tostring(errR)) end
+    end
     if St.down then
         if valid(pawn) then
             pcall(function() pawn:SetIsInvincible(true) end)
+            local okE, errE = pcall(edgeGuard, pawn, now)
+            if not okE then logOnce("edgeGuard", "down: the zone's edge: error " .. tostring(errE)) end
             if addrOf(pawn) ~= St.loiterAddr then              -- (another plane: out of the fight and flown again)
                 St.saved = select(1, outOfFight(pawn))
                 St.loiterAddr = addrOf(pawn)
