@@ -487,7 +487,9 @@ local function hostTick()
         local gp = ""                                      -- (AB.L..IN's phase, P7: a joiner switches its copy's pods off in 3)
         local sp = D.special
         if sp and sp.kind == "glitch" and sp.state == "hunt" and type(sp.phase) == "number" then gp = sp.phase end
-        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp)
+        local okA, al = pcall(function() return ALLY and ALLY.roomCode and ALLY.roomCode() or "" end)   -- (the room's
+        if not okA then once("roomcode", "coop: the allies' summary not sent: " .. tostring(al)); al = "" end   -- allies)
+        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al)
     end
     if AF and now >= M.nextAf then
         local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down)
@@ -644,9 +646,18 @@ end
 -- their own AI, and their flights never spawned again ("its last flight is still up"): the co-op run of 2026-10-30,
 -- "people are attacking ghosts", the same copy "taken down" every 5 s. Checked after: still up, GameplayStatics'
 -- ApplyDamage)
-local function killCopy(id, o)
+-- torn: a copy this game takes down itself (the host's run started over, a stray, its flight's last copies before a
+-- new spawn), not the host's kill: its address kept TORN_S so the plane watch pays nothing for it (COOP.tornDown). The
+-- co-op run of 2026-10-31: three joiners' teardowns (the host's answer to their own "jn") paid 5-14 kills "by you"
+-- each, 750-2,230 zollars, in the seconds after.
+local TORN_S = 30
+local function killCopy(id, o, torn)
     if type(SV_CoopBind) == "function" then SV_CoopBind(id, 0) end
     if not valid(o) then return end
+    if torn then
+        local a = addrOf(o)
+        if a then M.torn = M.torn or {}; M.torn[a] = os.clock() end
+    end
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
     local P0 = M.peers[0]
@@ -712,10 +723,22 @@ clientGround = function(o, unit)
     if id then bindGround(id, o, unit) end
 end
 
+-- (sv_main.lua planeSweep) plane p, just down here, is a copy this game took down itself (killCopy's torn): not a kill
+function COOP.tornDown(p)
+    local a = p and (p.addr or (valid(p.obj) and addrOf(p.obj)))
+    local t = a and M.torn and M.torn[a]
+    if M.torn and os.clock() >= (M.tornPruneAt or 0) then
+        M.tornPruneAt = os.clock() + TORN_S
+        for k, at in pairs(M.torn) do if os.clock() - at > TORN_S then M.torn[k] = nil end end
+    end
+    return t ~= nil and os.clock() - t <= TORN_S
+end
+
 local function killAllCopies(why)
     local n, loose, seen = 0, 0, {}
+    if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end   -- (the defences' cached actors: freed soon)
     for id, c in pairs(M.copies) do
-        killCopy(id, c.obj); n = n + 1
+        killCopy(id, c.obj, true); n = n + 1
         local a = c.addr or (valid(c.obj) and addrOf(c.obj))
         if a then seen[a] = true end
     end
@@ -726,11 +749,11 @@ local function killAllCopies(why)
     for _, cu in pairs(M.cunits or {}) do
         for _, o in pairs(cu.planes or {}) do
             local a = valid(o) and addrOf(o)
-            if a and not seen[a] then seen[a] = true; killCopy(0, o); loose = loose + 1 end
+            if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
         end
         for _, o in pairs(cu.gobjs or {}) do
             local a = valid(o) and addrOf(o)
-            if a and not seen[a] then seen[a] = true; killCopy(0, o); loose = loose + 1 end
+            if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
         end
     end
     M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
@@ -747,10 +770,11 @@ local function doSpawn(q)
     if rawUnitAlive and rawUnitAlive(unit) > 0 then      -- the copy of its last flight still up: down first
         local cu = M.cunits[unit]
         if cu and cu.gen ~= q.gen then
-            for ord, o in pairs(cu.planes) do local id = cu.binds[ord]; killCopy(id or 0, o); if id then M.copies[id] = nil end end
+            for ord, o in pairs(cu.planes) do local id = cu.binds[ord]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end end
             for key, o in pairs(cu.gobjs or {}) do
-                local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o); if id then M.copies[id] = nil end
+                local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end
             end
+            if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
         end
         q.tries = (q.tries or 0) + 1
         if q.tries < 6 then q.at = os.clock() + 1.5; return false end
@@ -940,7 +964,7 @@ local function strayTick(now)
         if cu.at and now - cu.at >= STRAY_S then
             for ord, o in pairs(cu.planes or {}) do
                 local a = valid(o) and addrOf(o)
-                if a and not bound[a] then killCopy(0, o); cu.planes[ord] = nil; n = n + 1 end
+                if a and not bound[a] then killCopy(0, o, true); cu.planes[ord] = nil; n = n + 1 end
             end
         end
     end
@@ -957,7 +981,7 @@ local function strayTick(now)
             local first = M.strayFirst[a]
             if not first then M.strayFirst[a] = now
             elseif now - first >= STRAY_S and (health(o) or 1) > 0 then
-                killCopy(0, o); n = n + 1; M.strayFirst[a] = nil
+                killCopy(0, o, true); n = n + 1; M.strayFirst[a] = nil
                 names[#names + 1] = (p.unit or "?") .. " " .. tostring(p.name)
             end
         end
@@ -970,7 +994,12 @@ local function strayTick(now)
             local nb = 0
             for ord in pairs(cu.planes or {}) do if cu.binds and cu.binds[ord] then nb = nb + 1 end end
             if nb < (cu.n or 0) then
-                log(string.format("coop: the host's %s here: %d of %d planes bound to the host's", unit, nb, cu.n or 0))
+                -- (which generation it was spawned as, and the host's last ids for that unit: whether they came at all.
+                -- The co-op run of 2026-10-31: flights re-spawned after a resync went unbound, 57 on one joiner's game)
+                local bl = M.bdLast and M.bdLast[unit]
+                log(string.format("coop: the host's %s here: %d of %d planes bound to the host's (spawned as gen %s; the host's "
+                    .. "last ids for it: %s)", unit, nb, cu.n or 0, tostring(cu.gen),
+                    bl and string.format("%d for gen %s", bl.n, tostring(bl.gen)) or "none"))
             end
         end
     end
@@ -2321,6 +2350,59 @@ local function onBuildAnswer(f)
         refundHere(b.price, b.name, "REFUSED: " .. upperText(f[3], 60))
     end
 end
+-- (a joiner) the host's allies summary in "rnd" (ALLY.roomCode: "m2w0s1") -> { m =, w =, s = } of what's in it, or nil
+local function roomAlliesOf(v)
+    if type(v) ~= "string" or v == "" or #v > 9 or v:gsub("[mws]%d%d?", "") ~= "" then return nil end
+    local t = {}
+    for k, n in v:gmatch("([mws])(%d+)") do t[k] = tonumber(n) end
+    return t
+end
+-- (a joiner, sv_allies.lua ALLY.hudLine) the room's allied flights and ships, from the host's last "rnd" (5 s at most
+-- old), or nil: not a joiner, nothing bought, or no word
+function COOP.roomAllies()
+    if not COOP.client() then return nil end
+    local r = M.rnd
+    return (r and r.allies and os.clock() - (r.got or 0) <= 5) and r.allies or nil
+end
+-- (the host, sv_allies.lua's COVER) allied planes `objs` cover player `slot`, a joiner who bought them (the user's co-op
+-- run of 2026-10-30: COVER kept a joiner's flight near the host, the stock order's NearPlayer being your plane): each
+-- onto one of the enemy planes nearest that player's real plane (Normal / TargetFirst, as COOP.huntReal's), within 2x
+-- CFG.allies.orders cover_radius_m of it, or 4x for the flights sent onto that plane (huntReal's), those counted at half
+-- their distance. -> planes ordered (0: none of their attackers in reach, or no real plane), the nearest one's km
+function COOP.coverFor(slot, objs)
+    local me = realTarget(slot)
+    if not (me and D and D.up) then return 0 end
+    local okL, at = pcall(function() return me:K2_GetActorLocation() end)
+    if not (okL and at) then return 0 end
+    local reach = ((CFG.allies.orders.cover_radius_m or 5000) * 100) * 2
+    local c = {}
+    for unit in pairs(D.up) do
+        local u = M.units[unit]
+        local on = M.huntOn and M.huntOn[unit] and M.huntOn[unit].slot == slot
+        for i = 1, (u and u.n or 0) do
+            local pl = u.planes[i]
+            local b = pl and not pl.dead and M.byId[pl.id]
+            if b and valid(b.obj) then
+                local ok, l = pcall(function() return b.obj:K2_GetActorLocation() end)
+                if ok and l then
+                    local d = math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2 + (l.Z - at.Z) ^ 2)
+                    if d <= (on and reach * 2 or reach) then c[#c + 1] = { obj = b.obj, k = on and d * 0.5 or d, d = d } end
+                end
+            end
+        end
+    end
+    if #c == 0 then return 0 end
+    table.sort(c, function(a, b) return a.k < b.k end)
+    local n, nearest = 0, math.huge
+    for _, e in ipairs(c) do nearest = math.min(nearest, e.d) end
+    for i, o in ipairs(objs or {}) do
+        local e = c[(i - 1) % #c + 1]
+        if valid(o) and pcall(function() o:EngagementOrderOverride(ORDER_NORMAL, e.obj, PRIO_TARGET_FIRST, 0, false, FIRE_BITS, false) end) then
+            n = n + 1
+        end
+    end
+    return n, nearest / 100000
+end
 local function onOrder(f, fromHost)
     local o = short(f[2], 16)
     local okL = false
@@ -2395,7 +2477,8 @@ local function onJoinerMessage(f)
         local gp = tonumber(f[9])                         -- (AB.L..IN's phase, P7: 1-3, else none)
         if not (gp == 1 or gp == 2 or gp == 3) then gp = nil end
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
-                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock() }
+                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock(),
+                  allies = roomAlliesOf(f[10]) }
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end
@@ -2479,6 +2562,13 @@ local function onJoinerMessage(f)
         M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = tonumber(f[6]) or 0 }
     elseif k == "bd" then
         local unit, gen, ord, id = f[2], tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
+        if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
+        local bl = type(unit) == "string" and M.bdLast[unit]                                 -- ids per unit: strayTick's
+        if type(unit) == "string" and (not bl or bl.gen ~= gen) then                         -- bound line; capped)
+            if not bl then M.bdLastN = M.bdLastN + 1 end
+            bl = { gen = gen, n = 0 }; M.bdLast[unit] = bl
+        end
+        if bl then bl.n = bl.n + 1 end
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then                   -- (its spawn is still queued: keep the id for it)
             cu = { gen = gen, n = 0, planes = {}, binds = {} }

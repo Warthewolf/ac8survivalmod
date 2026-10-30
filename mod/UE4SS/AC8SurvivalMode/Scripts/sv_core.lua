@@ -548,7 +548,8 @@ function logPlane(o, unit, k)
     if n:find("Wingman", 1, true) then log("planes: wingman " .. short .. " (not an enemy)"); return end
     if unit and SPC.alicornPooled and SPC.alicornPooled(o, short, unit) then return end   -- (the Alicorn's parked pools)
     -- (k: its index in the flight; born: the round clock when it's first logged, for the measurements' kill times)
-    local rec = { obj = o, name = short, unit = unit, k = k, born = D and D.now or nil }
+    -- (addr: KILL.fired's key, and COOP.tornDown's for a copy taken down before the sweep first saw it)
+    local rec = { obj = o, name = short, unit = unit, k = k, born = D and D.now or nil, addr = addrOf(o) }
     planes[#planes + 1] = rec
     local where = ""
     pcall(function()

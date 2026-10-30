@@ -506,6 +506,25 @@ backstop), so the host's allies' fight is dealt once, on the host. Log lines: `s
 ...` / `refused: ...` (host), `shop: asked the host to build ...`, `shop: the host built your ...`, `... refunded`
 (joiner). Not yet: a joiner's HUD ALLIES row shows the defences but not the room's flights and ships; COVER still
 covers the host. tools/checks/defences_test.sh and coop_ground_test.sh cover it.
+0.73.23 in game (2026-10-31, gloom hosting dukka, Kalash and Saint Alessia, to round 15; report: Claude Docs "AC8
+Survival Mode: Co-op Session Report, 31 Oct 2026"): the joiners' purchases built by the host (12 of 12) and the aircraft
+names on the boxes worked; no Ladon round. Three joiners crashed, the same stack each time (access violation in UE4SS's
+UObject property lookup, UStruct::FindProperty -> FField::GetClass, from a Lua read), each 4-9 s after a resync ("rs")
+took every copy down and the host's defences were spawned again at the same count: sv_allies.lua defenceHealth kept its
+cached defence actors (rebuilt every 30 s or on a count change) and read HealthInternal / MaxHealth every 2 s with no
+valid(), so freed actors were read. Also: the host answered 71 "jn" in 63 minutes (strays -> jn -> rs tears everything
+down -> re-spawned flights often unbound -> the next strays; 57 partly bound flights on one joiner), and each teardown
+paid the joiner for the copies it took down itself (5-14 kills, 750-2,230 zollars). 0.73.24-coop2mp.25 (runtime 0.32.4;
+built and installed 2026-10-31, not yet run in game; zip 0.73.24, hash 6a5ca5dd...63eb54; replaces 0.73.23): the defence
+list checked and pruned (valid, health > 0; ALLY.forgetActors on a joiner's teardown); copies a joiner takes down itself
+(killCopy's torn: rs, strays, a flight's last copies) not paid (COOP.tornDown, `round probe: ... taken down here (co-op,
+not a kill ...)`); the "planes bound" line names the generation spawned and the host's last ids for it (why the binds go
+missing after a resync is still open); a joiner's ALLIES row shows the room's flights and ships (ALLY.roomCode, "rnd"
+field 10: "m<n>w<n>s<n>"); COVER on a joiner's flight guards that joiner while their real plane flies (its area the
+hunt's, each plane onto the enemies nearest them, COOP.coverFor; else the host as before). Untested in game: whether
+EngagementOrderOverride works on an allied plane onto an enemy. Lesson (not yet a hard rule, unconfirmed): any Lua list
+of game objects kept between ticks must check valid() before each read and drop what's gone at once; a pcall doesn't
+catch a freed object's access violation.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

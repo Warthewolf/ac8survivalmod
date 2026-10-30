@@ -210,6 +210,7 @@ end
 -- of them each tick (all of them on one tick every 2 s was a hitch with 60 aircraft up: user, 2026-10-23, "the custom
 -- HUD ... seems a bit laggy"). Timed as "planes" in the perf line (coop-perf step 10). Returns where you are (or nil
 -- / false) when a plane was visited this tick.
+local tornSeen = 0                                 -- (co-op copies this game took down itself: COOP.tornDown)
 local function planeSweep(slot)
     local you = nil
     for i, p in ipairs(planes) do
@@ -237,6 +238,12 @@ local function planeSweep(slot)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
                 hookErr("stats: STATS.track", pcall(STATS.track, p, you or nil, D and D.now))   -- (sv_stats.lua)
+            elseif COOP and COOP.tornDown and COOP.tornDown(p) then           -- (a co-op copy this game took down
+                p.down = true                                                      -- itself: no kill, no pay, no stats)
+                tornSeen = tornSeen + 1
+                if tornSeen <= 3 or tornSeen % 25 == 0 then
+                    log(string.format("round probe: %s taken down here (co-op, not a kill; %d so far)", p.name, tornSeen))
+                end
             else
                 p.down = true
                 pcall(KILL.read, p)                                                -- (the last hits, if it's still there)

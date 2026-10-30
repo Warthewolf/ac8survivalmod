@@ -336,6 +336,44 @@ local c1 = { full = "BP_GR033_ciws_CP_Ally_C " .. lvl .. "BP_GR033_ciws_CP_Ally_
 local g1 = { full = "BP_GR002_gepa_CP_C " .. lvl .. "BP_GR002_gepa_CP_C_1", addr = addr(), HealthInternal = 600, MaxHealth = 60 }
 objects = { BP_GR033_ciws_CP_Ally_C = { c1 }, BP_GR002_gepa_CP_C = { g1 } }
 check(ALLY.repairDefences() == 1 and c1.HealthInternal == 600 and g1.HealthInternal == 600, "repairs: a damaged CIWS back to full (200 -> 600), a whole AA gun left")
+-- the defences' health on the row: a defence that's gone or down comes off the cached list at once and is never read
+-- again (the co-op runs of 2026-10-30: two joiners crashed reading the host's old defences, taken down and spawned again
+-- at the same count, so the list was kept)
+do
+    local reads = {}
+    local function defence(cls, hp)
+        local o = { full = cls .. " " .. lvl .. cls .. "_" .. addr(), addr = addr(), hp = hp, MaxHealth = 60 }
+        o.K2_GetActorLocation = function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 } end
+        return setmetatable(o, { __index = function(t, k)
+            if k == "HealthInternal" then reads[t] = (reads[t] or 0) + 1; return rawget(t, "hp") end
+        end })
+    end
+    local d1, d2 = defence("BP_GR033_ciws_CP_Ally_C", 600), defence("BP_GR033_ciws_CP_Ally_C", 300)
+    objects = { BP_GR033_ciws_CP_Ally_C = { d1, d2 } }
+    alive = { SV_Unit_Ciws_A = 1, SV_Unit_Ciws_B = 1 }
+    ALLY.run = nil
+    local R = ALLY.state()
+    ALLY.tick(700)
+    check(R.defHp == 75 and #R.defActors == 2, "the row's defences' health: 75% (600 and 300 of 600): " .. tostring(R.defHp))
+    d2.gone = true                                   -- (taken down and spawned again: its old actor gone, the count the same)
+    local d3 = defence("BP_GR033_ciws_CP_Ally_C", 600)
+    objects = { BP_GR033_ciws_CP_Ally_C = { d1, d3 } }
+    reads = {}
+    R.checkAt = 0
+    ALLY.tick(702)
+    check(not reads[d2] and #R.defActors == 1 and R.defActorsAt == 0, "an old actor gone: never read, off the list, the list found again next time")
+    R.checkAt = 0
+    ALLY.tick(704)
+    check(#R.defActors == 2 and R.defActors[1] ~= d2 and R.defActors[2] ~= d2 and R.defHp == 100, "... found again: the new one in, 100%")
+    d1.hp = 0
+    R.checkAt = 0
+    ALLY.tick(706)
+    check(#R.defActors == 1 and R.defActors[1] == d3, "one down (health 0): off the list too")
+    ALLY.forgetActors()
+    check(R.defActors == nil, "ALLY.forgetActors: the cached list dropped (a joiner's teardown)")
+    objects, alive = {}, {}
+    ALLY.run = nil
+end
 check(KILL.side({ full = "BP_GR033_ciws_CP_Ally_C_3", addr = addr() }, 9) == "defences"
       and KILL.side({ full = "BP_BA002_alcn_ciws_Base_C_1", addr = addr() }, 9) ~= "defences"
       and KILL.side({ full = "BP_GR002_gepa_CP_C_2", addr = addr() }, 9) == "defences",
@@ -422,6 +460,63 @@ do
     check(orders[1] and orders[1]:find("/store$"), "the orders changed: told to co-op (" .. tostring(orders[1]) .. ")")
     ALLY.nextOrder("coop", "defend")
     check(ALLY.order() == "defend", "an order set from co-op: defend")
+    -- the room's allies for the joiners' ALLIES rows (ALLY.roomCode in "rnd"; a joiner's own R.up stays empty)
+    R.up = { [wu] = { kind = "air", ally = "wingmen", at = 500, buyer = 2 }, [ship] = { kind = "ship", key = "Aegis", at = 500 } }
+    alive[wu], alive[ship] = 2, 1
+    check(ALLY.roomCode() == "w2s1", "host: the room's allies summed up: " .. ALLY.roomCode())
+    R.up[wu].queued = true
+    check(ALLY.roomCode() == "w0s1", "host: a flight waiting to take off counts 0: " .. ALLY.roomCode())
+    R.up[wu].queued = nil
+    local room
+    COOP.roomAllies = function() return room end
+    local mine = ALLY.run
+    ALLY.run = nil
+    room = { w = 2, s = 1 }
+    local row = ALLY.hudLine()
+    check(has(row, CFG.allies.wingmen.name .. " 2") and has(row, "SHIPS 1") and not has(row, CFG.allies.aircraft.name .. " "),
+          "joiner: the ALLIES row shows the host's flights and ships: " .. tostring(row))
+    room = nil
+    check(ALLY.hudLine() == nil, "joiner: no word from the host, nothing of its own: no row")
+    ALLY.run = mine
+    COOP.roomAllies = nil
+    -- COVER on a joiner's flight: that joiner covered while their real plane flies here, else you
+    local covered, real = {}, { [2] = true }
+    COOP.realTarget = function(s) return real[s] and { addr = 9 } or nil end
+    COOP.coverFor = function(slot, objs) covered[#covered + 1] = { slot = slot, n = #objs }; return #objs, 1.5 end
+    local rawFlags = svFlags
+    svFlags = function() return { ["SV_AllyAir" .. wu:sub(-1)] = 2 } end
+    R.planes = { { obj = { addr = 71 }, unit = wu, name = "w1" }, { obj = { addr = 72 }, unit = wu, name = "w2" },
+                 { obj = { addr = 73, gone = true }, unit = wu, name = "w3" } }
+    ALLY.nextOrder("coop", "cover")
+    events, covered, from = {}, {}, #logs + 1
+    R.checkAt = 0
+    ALLY.tick(600)
+    local x = wu:sub(-1)
+    check(events[#events] == "RE_SV_AllyHunt" .. x and covered[1] and covered[1].slot == 2 and covered[1].n == 2
+          and line("ordered to cover player 3 (who bought it)", from) and line("covering player 3: 2 of 2 planes", from),
+          "cover, player 3 flying: the hunt's area (" .. tostring(events[#events]) .. ") and its 2 planes onto the enemies near them")
+    events, covered = {}, {}
+    R.checkAt, R.coverAt = 0, 0
+    ALLY.tick(610)
+    check(#events == 0 and #covered == 1, "... 10 s on: retargeted, no event again (" .. table.concat(events, ",") .. ")")
+    real[2] = nil
+    events, covered, from = {}, {}, #logs + 1
+    R.checkAt, R.coverAt = 0, 0
+    ALLY.tick(620)
+    check(events[#events] == "RE_SV_AllyCover" .. x and #covered == 0 and line("ordered to cover you (player 3's plane isn't flying here)", from),
+          "cover, player 3 down / landed: it covers you (" .. tostring(events[#events]) .. ")")
+    events = {}
+    R.checkAt, R.coverAt = 0, 0
+    ALLY.tick(630)
+    check(events[#events] == "RE_SV_AllyCover" .. x, "... and again every cover_every_s, as before")
+    R.up[wu].buyer = nil
+    real[2] = true
+    events, covered = {}, {}
+    R.checkAt, R.coverAt = 0, 0
+    ALLY.tick(640)
+    check(events[#events] == "RE_SV_AllyCover" .. x and #covered == 0, "the host's own flight: covers the host as before")
+    svFlags = rawFlags
+    R.planes, R.up = {}, {}
     COOP = nil
     onAirfield = true
 end

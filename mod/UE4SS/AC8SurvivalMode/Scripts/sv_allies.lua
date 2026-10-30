@@ -404,7 +404,12 @@ local function repairActors(classes)
 end
 
 -- The airfield defences' health in % (their actors within 4 km of the runway, found again every 30 s or when one is
--- built or lost; read every 2 s), or nil when none is up
+-- built, lost or gone from the list; read every 2 s), or nil when none is up. One that's down or no longer valid comes
+-- off the list at once: a destroyed actor is freed at the game's next garbage collection, and a read of it after that
+-- crashes the game inside UE4SS, pcall or not. The co-op run of 2026-10-31, three joiners' games: a resync ("rs")
+-- took every copy here down and the host's defences spawned again at once, the count unchanged, so the old list was
+-- kept and read every 2 s; all three crashed 4-9 s on (access violation in UE4SS's FindProperty, from a Lua read).
+-- (ALLY.forgetActors: a co-op joiner's teardown drops the list too.)
 local function defenceHealth(R, now)
     local n = 0
     for _, kind in ipairs(DEF_KINDS) do n = n + (R.defCount and R.defCount[kind] or 0) end
@@ -414,8 +419,9 @@ local function defenceHealth(R, now)
         for _, cls in ipairs(DEF_CLASSES) do
             for _, o in ipairs(FindAllOf(cls) or {}) do
                 if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
-                    local ok, l = pcall(function() return o:K2_GetActorLocation() end)
-                    if ok and l and math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) < 400000 then
+                    local ok, l, h = pcall(function() return o:K2_GetActorLocation(), o.HealthInternal end)
+                    if ok and l and type(h) == "number" and h > 0
+                        and math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) < 400000 then
                         R.defActors[#R.defActors + 1] = o
                     end
                 end
@@ -423,13 +429,26 @@ local function defenceHealth(R, now)
         end
     end
     local sum, k = 0, 0
-    for _, o in ipairs(R.defActors) do
-        pcall(function()
-            local h, mh = o.HealthInternal, o.MaxHealth
-            if h > 0 and mh > 0 then sum, k = sum + math.min(1, h / (mh * 10)), k + 1 end
-        end)
+    for i = #R.defActors, 1, -1 do
+        local o, h, mh = R.defActors[i], nil, nil
+        if valid(o) then
+            local ok, a, b = pcall(function() return o.HealthInternal, o.MaxHealth end)
+            if ok then h, mh = a, b end
+        end
+        if type(h) == "number" and type(mh) == "number" and h > 0 and mh > 0 then
+            sum, k = sum + math.min(1, h / (mh * 10)), k + 1
+        else
+            table.remove(R.defActors, i)                  -- (down or gone: never read again; found again next time)
+            R.defActorsAt = 0
+        end
     end
     return k > 0 and math.floor(sum / k * 100 + 0.5) or nil
+end
+
+-- (sv_coop.lua killAllCopies: a co-op joiner took every copy down) the cached actors dropped before they're freed
+function ALLY.forgetActors()
+    local R = ALLY.run
+    if R then R.defActors = nil end
 end
 
 function ALLY.repairDefences()
@@ -482,19 +501,44 @@ end
 -- The HUD's allies row: what's up and what it has shot down ("MOONCHILD 2  SHIPS 1  AA 3/5  KILLS 7  HUNT"), or nil;
 -- and its news for the HUD's info key (sv_hud.lua): which flights, ships and defences are there and the order, not how
 -- many, their health or the kills
-function ALLY.hudLine()
-    local R = ALLY.run
-    if not R then return nil end
-    local parts, air, news = {}, {}, {}
+local function airUp(R)
+    local air = {}
     for u, s in pairs(R.up) do                        -- (aircraft up; a flight waiting to take off shows 0)
         if s.kind == "air" then
             local n = airName(s)
             air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, SV_UnitAlive(u)))
         end
     end
+    return air
+end
+
+-- (co-op, the host) the room's allied flights and ships for the joiners' ALLIES rows, in "rnd": "m<n>w<n>s<n>", a
+-- letter only for what's bought (m MOONCHILD's aircraft up, w the WINGMEN's, 0 while waiting to take off; s the ships
+-- at sea). The allies are all the host's (a joiner's purchases are built here), so a joiner's own R.up stays empty and
+-- its row showed only the defences, whose copies it counts itself (the user's co-op run of 2026-10-30).
+function ALLY.roomCode()
+    local R = ALLY.run
+    if not R then return "" end
+    local air, c = airUp(R), CFG.allies
+    local m, w, ships = air[c.aircraft.name], air[c.wingmen.name], #ALLY.shipsAtSea()
+    return (m and ("m" .. math.min(m, 99)) or "") .. (w and ("w" .. math.min(w, 99)) or "")
+        .. (ships > 0 and ("s" .. math.min(ships, 99)) or "")
+end
+
+function ALLY.hudLine()
+    local R = ALLY.run
+    local room = COOP and COOP.roomAllies and COOP.roomAllies()   -- (a joiner: the host's, ALLY.roomCode)
+    if not (R or room) then return nil end
+    R = R or { up = {} }
+    local parts, air, news = {}, {}, {}
+    if room then
+        air[CFG.allies.aircraft.name], air[CFG.allies.wingmen.name] = room.m, room.w
+    else
+        air = airUp(R)
+    end
     for n, k in pairs(air) do parts[#parts + 1] = string.format("%s %d", n, k); news[#news + 1] = n end
     table.sort(news)                                  -- (pairs' order isn't news)
-    local ships = #ALLY.shipsAtSea()
+    local ships = room and (room.s or 0) or #ALLY.shipsAtSea()
     if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships; news[#news + 1] = "SHIPS" end
     local dc = R.defCount
     local ciws = dc and dc.ciws or 0
@@ -584,17 +628,40 @@ function ALLY.tick(now)
                 elseif s.kind == "air" and n > 0 then
                     local up = math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
                     airborne = airborne + up
-                    -- its orders (CFG.allies.orders), once it's airborne and whenever they change; cover again and again
+                    -- its orders (CFG.allies.orders), once it's airborne and whenever they change; cover again and again.
+                    -- (co-op: a joiner's flight on cover covers that joiner while their real plane flies here: its area
+                    -- the hunt's, over the whole map, and its planes onto the enemies nearest them, COOP.coverFor; the
+                    -- stock cover's NearPlayer is your plane. Down, at their airfield or gone: it covers you.)
                     local order = ALLY.order()
                     local again = order == "cover" and now >= (R.coverAt or 0)
-                    if up > 0 and (R.orderGiven[u] ~= order or again) and type(SV_Event) == "function" then
-                        local ev = "RE_SV_Ally" .. order:sub(1, 1):upper() .. order:sub(2) .. u:sub(-1)
-                        local r = SV_Event(ev)
-                        if R.orderGiven[u] ~= order then
-                            log(string.format("allies: %s (%s) ordered to %s: %s %s", airName(s), u, order, ev,
-                                r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+                    local theirs = order == "cover" and s.buyer and COOP and COOP.coverFor and COOP.realTarget
+                        and COOP.realTarget(s.buyer) ~= nil
+                    local given = theirs and ("cover:" .. s.buyer) or order
+                    if up > 0 and (R.orderGiven[u] ~= given or again) and type(SV_Event) == "function" then
+                        if R.orderGiven[u] ~= given then
+                            local ev = "RE_SV_Ally" .. (theirs and "Hunt" or (order:sub(1, 1):upper() .. order:sub(2))) .. u:sub(-1)
+                            local r = SV_Event(ev)
+                            log(string.format("allies: %s (%s) ordered to %s%s: %s %s", airName(s), u, order,
+                                theirs and string.format(" player %d (who bought it)", s.buyer + 1)
+                                    or (order == "cover" and s.buyer and string.format(" you (player %d's plane isn't flying here)", s.buyer + 1)) or "",
+                                ev, r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+                        elseif not theirs then
+                            SV_Event("RE_SV_Ally" .. order:sub(1, 1):upper() .. order:sub(2) .. u:sub(-1))
                         end
-                        R.orderGiven[u] = order
+                        if theirs then
+                            local objs = {}
+                            for _, p in ipairs(R.planes) do if p.unit == u and valid(p.obj) then objs[#objs + 1] = p.obj end end
+                            local okC, n, km = pcall(COOP.coverFor, s.buyer, objs)
+                            local key = okC and (n > 0 and "on" or "none") or "err"
+                            if s.coverSaid ~= key then
+                                s.coverSaid = key
+                                log(string.format("allies: %s (%s) covering player %d: %s", airName(s), u, s.buyer + 1,
+                                    not okC and ("error " .. tostring(n)) or n > 0 and string.format(
+                                    "%d of %d planes onto the enemies nearest them (the nearest %.1f km off)", n, #objs, km)
+                                    or "no enemy near them"))
+                            end
+                        end
+                        R.orderGiven[u] = given
                     end
                 end
             end
