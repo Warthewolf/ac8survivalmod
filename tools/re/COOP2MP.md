@@ -378,3 +378,17 @@ FlGear moves BOTH engines' gear (the second first) after RemoteUpdate, from the 
 simulation keeps bit 9 and RemoteUpdate's own check agrees. Log: `coop2mp: T4: the copy's gear down (your State
 40a00): 1` once per change (not every frame). Zip: build/release/AC8SurvivalMode_COOP2MP_0.73.9_Online_COOP_NoValka.zip
 (hash a053fcad...335881).
+
+### T4a.6 (0.73.10-coop2mp.11, runtime 0.31.6): the gear's real cause
+T4a.5 in game (2026-10-30): the copy's gear lowered and raised again every frame, its State 0. From the code:
+- RemoteUpdate's gear check (0x147d6f982) compares the plane's State bit 9 (+0x2b18, copied from the second engine)
+  with the own engine's +0x34 bit 0x10, and calls gear down (0x144d33fb0) / up (0x144d33ea0) while they differ.
+- Engine +0x34 is the input's flags byte (the input message +0x20; RemoteUpdate's SetInput copies it to both engines).
+  BuildFlightInput (0x147d689b0) builds it at out+0x18: 0x10 = State bit 9 (gear down), 8 = plane+0x13d1 == 1,
+  4 = +0x1314, 2 = +0x1313, 1 = 0x147d660f0's answer; 4 alone when the plane has no control (+0x58dc).
+- The engine simulation (0x144d326e0) sets State bit 9 = gear state +0x710 != 0, bit 10 = +0x710 == 1 and gear
+  position +0x754 under a limit, bit 11 = +0x710 == 2. Gear down sets +0x710 = 1; gear up sets State bit 18.
+- The feed wrote the flags byte as a fixed 4, so the input always said gear up while the State said down.
+T4a.6 feeds the source's recorded flags byte (FlRecordInput keeps out+0x18); a co-op real plane gets 4 | (State bit 9
+<< 4). FlGear stays (a no-op once the flags agree). Log: `coop2mp: fed plane ... gear: your input flags N; its engine
+flags A / B, gear state C / D (own / second)`: with your gear down expect flags with 0x10 on both and gear state > 0.
