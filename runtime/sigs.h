@@ -381,4 +381,19 @@ static const uint8_t kSigRemoteUpdateMask[49] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
+/* A player plane's surface component update 0x147d32b00: (component, float dt), from the component's tick 0x147d320e0
+ * when component+0x188 (its player plane) is set. It sets the afterburner's alpha (component+0x2a4; the
+ * "Afterburner_Alpha" / "AfterBurnerSize" / "AfterBurnerLightSize" parameters, 0x147d33dcc) from the plane's afterburner
+ * amount plane+0x39d0 (0 when dead). Its first 18 bytes (mov rax,rsp; movss [rax+0x10],xmm1; push rbx; push rsi; push
+ * rdi; sub rsp,0x90) are hooked (COOP2MP's fed plane: tools/re/COOP2MP.md). Unique 57 bytes. */
+static const uint8_t kSigSurfacePP[57] = {
+    0x48, 0x8B, 0xC4, 0xF3, 0x0F, 0x11, 0x48, 0x10, 0x53, 0x56, 0x57, 0x48, 0x81, 0xEC, 0x90, 0x00, 0x00, 0x00, 0x0F,
+    0x29, 0x70, 0xD8, 0x48, 0x8B, 0xD9, 0x0F, 0x29, 0x78, 0xC8, 0x33, 0xFF, 0xF3, 0x0F, 0x10, 0x3D, 0xD5, 0x5E, 0x57,
+    0x05, 0x0F, 0x57, 0xF6, 0x44, 0x0F, 0x29, 0x40, 0xB8, 0x44, 0x0F, 0x29, 0x50, 0x98, 0x48, 0x89, 0x4C, 0x24, 0x20,
+};
+static const uint8_t kSigSurfacePPMask[57] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
 #endif

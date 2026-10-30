@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.29.1"
-#define RT_VERSION_A         "0.29.1"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.29.2"
+#define RT_VERSION_A         "0.29.2"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3187,6 +3187,7 @@ static void FindFunctions(void)
         { kSigTakeoffAB,        kSigTakeoffABMask, sizeof(kSigTakeoffAB), NULL, 0 },
         { kSigPPRespawn,        NULL,              sizeof(kSigPPRespawn), NULL, 0 },
         { kSigRemoteUpdate,     kSigRemoteUpdateMask, sizeof(kSigRemoteUpdate), NULL, 0 },
+        { kSigSurfacePP,        kSigSurfacePPMask, sizeof(kSigSurfacePP), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3232,6 +3233,7 @@ static void FindFunctions(void)
     g_fTakeoffAB        = p[44].hit;
     g_fPPRespawn        = p[45].hit;
     g_fRemoteUpdate     = p[46].hit;
+    g_fSurfacePP        = p[47].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3247,8 +3249,8 @@ static void FindFunctions(void)
     Log(L"coop: player plane: spawn %p, world spawn %p, teleport %p, inner %p; remote spawn sites: possess %p, network object %p, role %p, dummy class %p, loadout %p, loadout bytes %p, finish %p",
         g_fSpawnPlayerPlane, g_fWorldSpawnActor, g_fPPTeleportTo, g_fPPTeleportInner, g_siteRemotePossess, g_siteRemoteNetObj, g_siteRemoteRole,
         g_siteRemoteDummyCls, g_siteRemoteLoadout, g_siteRemoteFlags, g_siteRemoteFinish);
-    Log(L"flight: one-shot fire %p (LiveFireOneShotWeapon's Execute %p), AI takeoff afterburner %p, player plane respawn %p, remote update %p",
-        g_fFireOne, g_fFireExec, g_fTakeoffAB, g_fPPRespawn, g_fRemoteUpdate);
+    Log(L"flight: one-shot fire %p (LiveFireOneShotWeapon's Execute %p), AI takeoff afterburner %p, player plane respawn %p, remote update %p, surface update %p",
+        g_fFireOne, g_fFireExec, g_fTakeoffAB, g_fPPRespawn, g_fRemoteUpdate, g_fSurfacePP);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
@@ -3274,6 +3276,8 @@ static int Install(void)
     else Log(L"flight input not found; the Anomaly's field can't invert the controls");
     if (g_fRemoteUpdate && HookInline(g_fRemoteUpdate, 18, (void*)OnRemoteUpdate, (void**)&g_nextRemoteUpdate, L"remote player plane update")) {}
     else Log(L"remote player plane update not found; SV_CoopFeed does nothing (COOP2MP)");
+    if (g_fSurfacePP && HookInline(g_fSurfacePP, 18, (void*)OnSurfacePP, (void**)&g_nextSurfacePP, L"player plane surface update")) {}
+    else Log(L"player plane surface update not found; a fed plane shows no afterburner (COOP2MP)");
 
     if (!g_fBase || !g_fMainDecide || !g_fDiffDecide || !g_fDiffNext || !g_gotoMenu || !g_setDifficulty || !g_fTransition) {
         Log(L"menu: game functions not found (different game version?); the Survival entry opens the free-mission difficulty page only");
