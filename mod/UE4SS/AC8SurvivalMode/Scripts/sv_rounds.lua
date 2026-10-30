@@ -626,6 +626,26 @@ end
 -- clock and the ALICORN's deck wait for your takeoff only when it's 0 (user, 2026-10-29: "when the HOST is landed at the
 -- airfield that the game isn't paused for the other players"; Shazzy's host log of 2026-10-25: holds of 10-43 s), and so
 -- do the shuttle's countdown and its invulnerability (user, the same day: "Keep it running while others are flying").
+-- (co-op host) a round held while a linked player isn't in the mission yet (sv_coop.lua COOP.joinWaiting): no round
+-- start, no spawns; callout and log once a hold, and when it ends
+function joinHold(now)
+    local names = COOP and COOP.joinWaiting and COOP.joinWaiting(now)
+    if names and #names > 0 then
+        local who = table.concat(names, ", ")
+        if D.joinHeld ~= who then
+            D.joinHeld = who
+            hudCallout("WAITING FOR PLAYERS", string.upper(who))
+            log(string.format("round %d: enemy spawns paused while %s join%s the mission", D.round or 0, who, #names == 1 and "s" or ""))
+        end
+        return true
+    end
+    if D.joinHeld then
+        log(string.format("round %d: everyone's in the mission: spawns go on", D.round or 0))
+        D.joinHeld = nil
+    end
+    return false
+end
+
 function othersFlying()
     if not (COOP and COOP.host and COOP.host()) then return 0 end
     local n = 0
@@ -730,9 +750,10 @@ function roundsTick(now)
                     ceil ~= level and string.format(" (the spikes' %d, eased by the intensity director)", ceil) or ""))
             end
         end
-        if now >= D.at then startRound() end
+        if now >= D.at and not joinHold(now) then startRound() end
     elseif D.state == "spawning" then
         if now < D.at then return end
+        if joinHold(now) then D.at = now + 1; return end
         local flying = playerOnAirfield() and othersFlying()
         if flying == 0 then                        -- the landing menu may be up, and a flight that appears then gets no orders
             if D.held ~= D.round then D.held = D.round; log(string.format("round %d: spawns held while you are down at the airfield", D.round)) end

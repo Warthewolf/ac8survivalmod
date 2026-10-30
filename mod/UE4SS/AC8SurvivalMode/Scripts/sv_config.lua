@@ -1058,6 +1058,9 @@ CFG = {
              real_planes = true,
              -- real_damage: their damage shown on their real plane (its health as their game says, never under 1 HP)
              real_damage = true,
+             -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
+             -- yet, each at most this long; 0: never
+             join_wait_s = 90,
              -- real_paint: their paint (skin and emblems) on their real plane; false: the airframe's default
              real_paint = true,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
