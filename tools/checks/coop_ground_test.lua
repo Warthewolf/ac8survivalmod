@@ -210,7 +210,46 @@ if ROLE == "host" then
     inbox[#inbox + 1] = "1|ao|bogus"
     tick(1)
     check(#ord == 1 and ord[1] == "a joiner/defend", "host: a joiner's order taken (defend), a made-up one not")
+    -- the room's allies in "rnd" (ALLY.roomCode), for the joiners' ALLIES rows
+    ALLY.roomCode = function() return "m2s1" end
+    local b4 = #sent
+    M.nextRnd = 0
+    tick(1)
+    check(table.concat(sent, "\n", b4 + 1):find("rnd|[^\n]*|m2s1"), "host: the room's allies in rnd (m2s1)")
     ALLY = nil
+    -- COVER for a joiner (COOP.coverFor): the allied planes onto the enemies nearest that joiner's real plane, the
+    -- flights sent onto that plane reaching twice as far and counted at half their distance
+    local function at(x) return function() return { X = x, Y = 0, Z = 0 } end end
+    local hit = {}
+    local function ally(n)
+        return { name = n, EngagementOrderOverride = function(self, o, tgt, prio) hit[#hit + 1] = { self.name, tgt.name, prio } end }
+    end
+    local was = { peer = M.peers[1], up = D.up, huntOn = M.huntOn }
+    M.peers[1] = { real = true, shown = true, obj = { name = "theirs", K2_GetActorLocation = at(0) } }
+    D.up = { SV_Up_01 = true, SV_Up_02 = true, SV_Up_03 = true }
+    M.units.SV_Up_01 = { n = 2, planes = { { id = 901 }, { id = 902, dead = true } } }
+    M.units.SV_Up_02 = { n = 1, planes = { { id = 903 } } }
+    M.units.SV_Up_03 = { n = 1, planes = { { id = 904 } } }
+    M.byId[901] = { obj = { name = "e3km", K2_GetActorLocation = at(300000) } }
+    M.byId[902] = { obj = { name = "dead", K2_GetActorLocation = at(100) } }
+    M.byId[903] = { obj = { name = "e9km", K2_GetActorLocation = at(900000) } }
+    M.byId[904] = { obj = { name = "on16km", K2_GetActorLocation = at(1600000) } }
+    M.huntOn = { SV_Up_03 = { slot = 1 } }
+    local n, km = COOP.coverFor(1, { ally("a1"), ally("a2") })
+    check(n == 2 and math.abs((km or 0) - 3) < 1e-6 and hit[1] and hit[1][1] == "a1" and hit[1][2] == "e3km"
+          and hit[2] and hit[2][2] == "on16km" and hit[1][3] == 9,
+          "host: cover for player 2: onto the nearest (3 km) and the flight sent onto them (16 km), TargetFirst: "
+          .. tostring(n) .. ", " .. (hit[1] and hit[1][2] or "-") .. ", " .. (hit[2] and hit[2][2] or "-"))
+    M.huntOn = nil
+    hit = {}
+    n = COOP.coverFor(1, { ally("a1"), ally("a2"), ally("a3") })
+    check(n == 3 and hit[1][2] == "e3km" and hit[2][2] == "e9km" and hit[3][2] == "e3km",
+          "host: ... not sent onto them: past 10 km out of reach, the planes shared round the rest")
+    M.peers[1].onAirfield = true
+    check(COOP.coverFor(1, { ally("a1") }) == 0, "host: ... at their airfield: none (the ally covers you)")
+    for _, u in ipairs({ "SV_Up_01", "SV_Up_02", "SV_Up_03" }) do M.units[u] = nil end
+    for id = 901, 904 do M.byId[id] = nil end
+    M.peers[1], D.up, M.huntOn = was.peer, was.up, was.huntOn
 else
     menu = 16 + 4; tick()
     check(COOP.client(), "join: joined")
@@ -272,6 +311,34 @@ else
     inbox[#inbox + 1] = "0|ak|9999|CIWS BUILT"
     tick()
     check(RUN.credits == 28000 and RUN.bought.Ciws == 1, "join: an answer to nothing asked: ignored")
+    -- the room's allies from the host's "rnd", for the ALLIES row here
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2s1"
+    tick()
+    local ra = COOP.roomAllies()
+    check(ra and ra.m == 2 and ra.s == 1 and ra.w == nil, "join: the host's allies taken from rnd (m2s1)")
+    tick(6)
+    check(COOP.roomAllies() == nil, "join: ... 6 s with no word: none")
+    for _, bad in ipairs({ "m999", "x2", "m2;s1", "m2w2s2m2w2", "" }) do
+        inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||" .. bad
+        tick()
+        check(COOP.roomAllies() == nil, "join: a bad allies field (" .. bad .. "): none")
+    end
+    -- copies this game takes down itself are no kills (COOP.tornDown: the co-op runs of 2026-10-30, a joiner's teardown
+    -- on the host's restart paid 41 kills), the host's kills are; the teardown drops the defences' cached actors
+    local killed, torn = obj("BP_OP1004_f15c", 5000, true), obj("BP_OP1004_f15c", 5000, true)
+    M.copies[998], M.copies[999] = { obj = killed, exp = 50000, addr = killed.addr }, { obj = torn, exp = 50000, addr = torn.addr }
+    inbox[#inbox + 1] = "0|dn|998"
+    tick()
+    check(killed.HealthInternal <= 0 and not COOP.tornDown({ addr = killed.addr }), "join: the host's kill (dn): a kill here")
+    local forgot = 0
+    ALLY = { unit = {}, forgetActors = function() forgot = forgot + 1 end }
+    inbox[#inbox + 1] = "0|rs"
+    tick()
+    check(torn.HealthInternal <= 0 and COOP.tornDown({ addr = torn.addr }) and forgot == 1,
+          "join: taken down on the host's new run (rs): not a kill, the defences' actors forgotten")
+    tick(31)
+    check(not COOP.tornDown({ addr = torn.addr }), "join: ... 30 s on, forgotten (its address may be another plane's)")
+    ALLY = nil
 end
 print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 15), #logs do print("    log: " .. logs[i]) end end
