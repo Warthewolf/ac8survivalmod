@@ -392,3 +392,6 @@ T4a.5 in game (2026-10-30): the copy's gear lowered and raised again every frame
 T4a.6 feeds the source's recorded flags byte (FlRecordInput keeps out+0x18); a co-op real plane gets 4 | (State bit 9
 << 4). FlGear stays (a no-op once the flags agree). Log: `coop2mp: fed plane ... gear: your input flags N; its engine
 flags A / B, gear state C / D (own / second)`: with your gear down expect flags with 0x10 on both and gear state > 0.
+T4a.6 in game (2026-10-30, user: "gear successfully lowered"): down at 21:07:05 and up at 21:07:13, one move each;
+while down both engines' flags 10, the own engine's gear state 1 -> 2 -> 3 -> 1. After raising, the second engine's
+gear state stays 1 (FlGear moves it only on a flag change); harmless in this test (the plane's gear stayed up).
