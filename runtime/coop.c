@@ -1661,6 +1661,30 @@ static CoArr CoLoadoutList(uint8_t* lo, int32_t off)
     return *src;                                                                  /* the loadout call copies it */
 }
 
+/* A loadout as SV_CoopLoadout gives it, "a,b,c/d,e/x,y": the loadout object's two lists (64 at most each), then its two
+ * loadout bytes (COOP2MP T4b: another player's real plane carries their weapons, so their weapon numbers mean here what
+ * they mean on their game). 1 when whole */
+static int CoParseLoadout(const char* s, int32_t* l1, int32_t* n1, int32_t* l2, int32_t* n2, uint8_t* bytes)
+{
+    int part = 0, have = 0, nb = 0;
+    int64_t v = 0;
+    *n1 = *n2 = 0;
+    for (const char* p = s;; ++p) {
+        char c = *p;
+        if (c >= '0' && c <= '9') { v = v * 10 + (c - '0'); have = 1; if (v > 0x7fffffff) return 0; continue; }
+        if (c != ',' && c != '/' && c != 0) return 0;
+        if (have) {
+            if (part == 0) { if (*n1 >= 64) return 0; l1[(*n1)++] = (int32_t)v; }
+            else if (part == 1) { if (*n2 >= 64) return 0; l2[(*n2)++] = (int32_t)v; }
+            else { if (nb >= 2 || v > 255) return 0; bytes[nb++] = (uint8_t)v; }
+        }
+        v = 0; have = 0;
+        if (c == '/') { if (++part > 2) return 0; }
+        if (!c) break;
+    }
+    return part == 2 && nb == 2;
+}
+
 static int CoRemoteSites(int32_t* possessSlot, uint8_t** possessFn, int32_t* netSlot, int32_t* roleOff)
 {
     uint8_t* s = g_siteRemotePossess;
@@ -1695,7 +1719,8 @@ static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTr
  * didn't spawn, -5 the plane didn't spawn (a class that isn't a player plane's too), -6 its spawn didn't finish. One at
  * a time: a second call removes the first. Another class gets no loadout of yours (your weapon ids are your plane's):
  * its own default weapons. A seventh argument, a player slot 0-23 (COOP2MP T3: another player's real plane), keeps one
- * per slot instead (a second call for the slot removes that slot's). */
+ * per slot instead (a second call for the slot removes that slot's). An eighth, their loadout ("a,b/c,d/x,y": SV_CoopLoadout
+ * on their game, COOP2MP T4b), gives the plane their weapons, another airframe's too. */
 static int L_CoopSpawnPP(void* lua)
 {
     uint8_t* pawn = ArgObject(lua);
@@ -1706,6 +1731,11 @@ static int L_CoopSpawnPP(void* lua)
     double slotArg = -1;
     ArgNumber(lua, &slotArg);
     int slot = (slotArg >= 0 && slotArg < CO_MAX_PLAYERS) ? (int)slotArg : -1;
+    char loTxt[512];                                                               /* (optional: their loadout, T4b) */
+    size_t loLen = 0;
+    int32_t lo1[64], lo2[64], loN1 = 0, loN2 = 0;
+    uint8_t loB[2] = { 0, 0 };
+    int theirs = ArgBytes(lua, loTxt, sizeof(loTxt), &loLen) && loLen > 0 && CoParseLoadout(loTxt, lo1, &loN1, lo2, &loN2, loB);
     CoRef* keepPlane = slot >= 0 ? &g_peerPP[slot] : &g_ppPlane, *keepCtrl = slot >= 0 ? &g_peerCtrl[slot] : &g_ppCtrl;
     if (!LiveObject(pawn) || (clsArg && !LiveObject(clsArg))) return Ret(lua, -1);
     int32_t possessSlot = 0, netSlot = 0, roleOff = 0, loObj = 0, loByte[2] = { 0, 0 };
@@ -1769,11 +1799,14 @@ static int L_CoopSpawnPP(void* lua)
      * object's two lists) and the two loadout bytes, then FinishSpawning (construction and BeginPlay: the plane's own
      * setup, its weapons' owner among it). 0.22.1 left that out and the first formation teleport crashed the game
      * (its weapons had no owner, test of 2026-10-25). */
-    uint8_t* lo = foreign ? NULL : *(uint8_t**)(pawn + loObj);
+    uint8_t* lo = (foreign || theirs) ? NULL : *(uint8_t**)(pawn + loObj);
     if (!LiveObject(lo)) lo = NULL;
     CoArr l1 = CoLoadoutList(lo, 0x30), l2 = CoLoadoutList(lo, 0x40);
+    if (theirs) { l1.data = lo1; l1.num = l1.max = loN1; l2.data = lo2; l2.num = l2.max = loN2; }   /* (another player's, T4b) */
     ((CoLoadoutFn)loadoutFn)(plane, &l1, &l2);
-    plane[loByte[0]] = foreign ? 0 : pawn[loByte[0]]; plane[loByte[1]] = foreign ? 0 : pawn[loByte[1]];
+    plane[loByte[0]] = theirs ? loB[0] : foreign ? 0 : pawn[loByte[0]];
+    plane[loByte[1]] = theirs ? loB[1] : foreign ? 0 : pawn[loByte[1]];
+    if (theirs) Log(L"coop: second player plane: their loadout given (%d and %d entries, bytes %d %d)", loN1, loN2, loB[0], loB[1]);
     ((CoFinishFn)g_fFinishSpawning)(plane, xf, 0, NULL, 1);
     int finished = (plane[g_finishedOff] & 1) != 0;
     int32_t wOff = *(int32_t*)(g_siteRemoteLoadout + 20);                          /* mov r14, [plane + disp32] */

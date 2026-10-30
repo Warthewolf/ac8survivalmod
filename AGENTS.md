@@ -462,6 +462,14 @@ check's flag (engine +0x34 bit 0x10) is the input's flags byte (input message +0
 a log line a second with both engines' flags and gear state; zip 0.73.10. T4a.6 in game (2026-10-30): the copy's gear
 came down and went up again, each moved once (flags 0x10 on both engines while down; own engine's gear state 1-3, then
 0); the solo copy (T4a) now replays missiles, flares, gun, laser and gear. ECM / ESM still not seen on it.
+T4b (0.73.11-coop2mp.12, runtime 0.32.0; not yet run in game): the other players' launches on their real planes in
+co-op. Each game's own launches (PlaneWeaponsFired on its plane while co-op is open: kind, weapon number, spawn slot,
+seed, lock-ons, start against the plane, rotation, velocity, target) come out of SV_CoopShots and go in "fx" as
+`p:<target id>:<age>:<shot>`, relayed by the host; a game replays them from that player's real plane (SV_CoopPPShot:
+the remote fire for missiles, FwLaunchDirect for the laser and ESM / ECM, a bullet special armed), the AI stand-ins
+keep m / s / e. Each player's loadout (SV_CoopLoadout, "a,b/c/x,y") rides in hi / pi (a 7th field) and their real
+plane is spawned with it (SV_CoopSpawnPP's 8th argument), again when it changes; so their weapon numbers mean the
+same weapons here. tools/checks/coop_fire_test.sh covers the Lua side; zip 0.73.11.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
