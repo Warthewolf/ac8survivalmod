@@ -281,7 +281,7 @@ SURVIVAL CO-OP: HOST / JOIN on the main menu (OnMainDecide, SV_MenuChoice); name
 online-style pause; the host's Q batches for up to 24 players; more enemies per player (COOP.more); the host's settings
 for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); the main menu's settings rows (SV_Set_*,
 SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
-tools/coop_edition.py COOP_TAG for every build friends get: games with different tags refuse to link).
+tools/coop_edition.py COOP_TAG for every build friends get: games with different tags still link, with a CO-OP VERSION MISMATCH callout: only a different co-op protocol, coop.c CO_PROTO, refuses. The co-op run of 2026-10-31: two players on 0.73.26 joined a 0.73.27 host).
 Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
 state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
 sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
