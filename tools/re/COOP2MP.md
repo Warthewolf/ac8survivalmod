@@ -557,3 +557,14 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   the host ("ab"), which builds it (sv_shop.lua shopBuildFor) and so mirrors it to everyone; "ak" / "ax" / "ar" answer,
   refunds on a refusal or no answer. The host's allies' copies on a joiner's game send no hits either way (c.ally), so
   their fight is the host's alone. The orders go through the host ("ao" / "ag").
+
+## A replayed launch past the plane's weapons (2026-10-31, runtime 0.32.5)
+The co-op run of 2026-10-31 on 0.73.26: the host crashed replaying a joiner's first launch on their real plane (an
+FA-36, joined 35 s before): RemoteUpdate (from FrameUpdate 0x147d646dc) -> main.dll's detour (FnFlush) -> the remote fire
+0x147d71ea0 -> +0x50b `call 0x147f7c300` with rcx = [weapons +0x2e0] (the launcher), dl = WeaponData's weapon number,
+r8d = its spawn slot. 0x147f7c300: r10 = [[launcher +0xb0] +0x28] + weapon x 0xa0, no bounds check; its spawn slot
+clamped by entry +0x60; the entry's slot list +0x78 (count +0x80) searched: [+0x78] was -1 and the read at 0x147f7c340
+faulted. The table's count is [launcher +0xb0] +0x30 (0x147f7bbc4 loops `cmp [rax+0x30], edi`). flight.c FwWeaponOk
+checks the number against it (and the entry's list readable) before any replay: the remote fire, FwLaunchDirect, and
+the special's select / arm.
+

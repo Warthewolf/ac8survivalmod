@@ -745,6 +745,36 @@ static struct {
 typedef void    (*WsPrepFn)(uint8_t* w, float a, uint64_t b);
 typedef int32_t (*WsSlotFn)(void* ws, uint64_t weapon, uint64_t spawnSlot);
 typedef struct { void* p; int32_t n, m; } FwArr;
+
+/* Weapon system w has weapon number `weapon` (its count of weapons in *count). The spawn slot's lookup 0x147f7c300
+ * (launcher, weapon, spawn slot), which the remote fire and FwLaunchDirect call, indexes the launcher's weapon table
+ * ([launcher +0xb0] +0x28, a TArray of 0xa0-byte entries, its count at +0x30: the game's own loop at 0x147f7bbc4) by
+ * the weapon number with no bounds check, then reads that entry's slot list (+0x78, its count +0x80). A number past the
+ * table's end read garbage and crashed the game (the user's co-op run of 2026-10-31, 09:22:24: another player's
+ * replayed launch, an access violation reading -1 at 0x147f7c340). So every replayed weapon is checked here first. */
+static int FwWeaponOk(uint8_t* w, uint8_t weapon, int32_t* count)
+{
+    if (count) *count = -1;
+    if (!w || !Readable(w + 0x2e0, 8)) return 0;
+    uint8_t* ws = *(uint8_t**)(w + 0x2e0);
+    if (!ws || !Readable(ws + 0xb0, 8)) return 0;
+    uint8_t* ld = *(uint8_t**)(ws + 0xb0);
+    if (!ld || !Readable(ld + 0x28, 0x10)) return 0;
+    uint8_t* tab = *(uint8_t**)(ld + 0x28);
+    int32_t num = *(int32_t*)(ld + 0x30), max = *(int32_t*)(ld + 0x34);
+    if (count) *count = num;
+    if (!tab || num <= 0 || num > 64 || max < num || (int32_t)weapon >= num) return 0;
+    uint8_t* e = tab + (size_t)weapon * 0xa0;
+    if (!Readable(e, 0xa0)) return 0;
+    int32_t slots = *(int32_t*)(e + 0x80);
+    if (slots < 0 || slots > 256) return 0;
+    if (slots > 0) {
+        uint8_t* list = *(uint8_t**)(e + 0x78);
+        if (!list || !Readable(list, (size_t)slots * 4)) return 0;
+    }
+    return 1;
+}
+
 static int FwLaunchDirect(uint8_t* copy, uint8_t weapon, uint8_t* target, uint8_t** outProj)
 {
     uint8_t* f = g_fRemoteFire, *c1 = f ? f + 0x4f4 : NULL, *c2 = f ? f + 0x50b : NULL, *gm = f ? f + 0x77d : NULL;
@@ -756,6 +786,7 @@ static int FwLaunchDirect(uint8_t* copy, uint8_t weapon, uint8_t* target, uint8_
     uint8_t* w = *(uint8_t**)(copy + FW_W);
     void* ws = (w && Readable(w + 0x2e0, 8)) ? *(void**)(w + 0x2e0) : NULL;
     if (!ws || !Readable(w + 0x534, 0x10)) return -1;
+    if (!FwWeaponOk(w, weapon, NULL)) return -3;          /* (not a weapon of that plane's: FwWeaponOk) */
     prep(w, 0.0f, 1);
     int32_t slot = slotFn(ws, weapon, 0);
     *(uint32_t*)(w + 0x53c) = *(uint32_t*)(w + 0x540);
@@ -964,6 +995,7 @@ static void FwFlush(uint8_t* copy)
     }
     for (int k = 0; k < fl; ++k) if ((uint8_t)g_nextFireFlares(w)) ++FW.flaresOk;
     for (int k = 0; k < ns && g_fSelectSpecial && g_fArmSpecial; ++k) {
+        if (!FwWeaponOk(w, g_fsQ[k].weapon, NULL)) { ++FW.dropped; continue; }   /* (not a weapon of the copy's) */
         /* (as the InstantWeaponFire / ElectronicMeasureFire handlers: select, arm; BulletWeaponFire's: armed and disarmed) */
         ((SelectSpecialFn)g_fSelectSpecial)(copy, g_fsQ[k].weapon);
         ((ArmSpecialFn)g_fArmSpecial)(copy, 1);
@@ -991,6 +1023,7 @@ static void FwFlush(uint8_t* copy)
         FW.dropped += n; return;
     }
     for (int i = 0; i < n; ++i) {
+        if (!FwWeaponOk(w, g_fwQ[i].d.weapon, NULL)) { ++FW.dropped; continue; }   /* (not a weapon of the copy's) */
         FwMsg m;
         memset(&m, 0, sizeof(m));
         m.triggerTime = ~0ull;                              /* (in the future: no latency) */
@@ -1022,7 +1055,7 @@ typedef struct { CoRef plane, target; FnShot s; } FnIn;
 #define FN_IN 32
 static FnIn g_fnIn[FN_IN];
 static int g_fnInN;
-static struct { uint32_t got, refused, launched, failed, specials, stale, gone, noNm; int said; double logAt; } FN;
+static struct { uint32_t got, refused, launched, failed, specials, stale, gone, noNm, badWeapon; int said, saidBad; double logAt; } FN;
 
 /* SV_CoopPPShot(plane, target, "k,w,s,u,seed,lock,rx,ry,rz,pitch,yaw,roll,vx,vy,vz") -> 1 queued; < 0: -1 bad args or
  * not another player's real plane (role 2, not yours, not the test copy's source), -4 the queue full (32) */
@@ -1080,6 +1113,17 @@ static void FnFlush(uint8_t* plane, int slot)
         uint8_t* tg = CoRefGet(&q->target);
         uint8_t* w = Readable(plane + FW_W, 8) ? *(uint8_t**)(plane + FW_W) : NULL;
         if (!w) { ++FN.failed; continue; }
+        int32_t nWeapons = -1;
+        if (!FwWeaponOk(w, s->weapon, &nWeapons)) {          /* (its launcher would read past its table: FwWeaponOk) */
+            ++FN.badWeapon;
+            if (FN.saidBad < 6) {
+                ++FN.saidBad;
+                Log(L"coop2mp: T4b: player %d's %s (weapon %d) NOT replayed on their real plane %p here: it has %d weapons "
+                    L"(that number isn't one of them)", slot + 1, s->kind ? kFwKind[s->kind] : L"shot", (int32_t)s->weapon, plane,
+                    nWeapons);
+            }
+            continue;
+        }
         if (s->kind != 0) {
             if (!g_fSelectSpecial || !g_fArmSpecial) { ++FN.failed; continue; }
             ((SelectSpecialFn)g_fSelectSpecial)(plane, s->weapon);
@@ -1142,10 +1186,11 @@ static void FnLog(void)
     FN.logAt = now;
     if (!(FN.got || FN.refused || g_fnOutTaken || g_fnOutDropped)) return;
     Log(L"coop2mp: T4b this minute: your launches sent %u (%u dropped); theirs %u queued here, %u refused, %u launched, %u "
-        L"not, %u specials, %u stale, %u with their plane gone, %u with no network manager", g_fnOutTaken, g_fnOutDropped, FN.got,
-        FN.refused, FN.launched, FN.failed, FN.specials, FN.stale, FN.gone, FN.noNm);
+        L"not, %u specials, %u stale, %u with their plane gone, %u with no network manager, %u not a weapon of their plane here",
+        g_fnOutTaken, g_fnOutDropped, FN.got, FN.refused, FN.launched, FN.failed, FN.specials, FN.stale, FN.gone, FN.noNm,
+        FN.badWeapon);
     g_fnOutTaken = g_fnOutDropped = 0;
-    FN.got = FN.refused = FN.launched = FN.failed = FN.specials = FN.stale = FN.gone = FN.noNm = 0;
+    FN.got = FN.refused = FN.launched = FN.failed = FN.specials = FN.stale = FN.gone = FN.noNm = FN.badWeapon = 0;
 }
 
 /* SV_CoopLoadout() -> your plane's loadout, "a,b,c/d,e/x,y" (the loadout object's two lists and the two loadout bytes,
