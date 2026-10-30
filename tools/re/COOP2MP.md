@@ -342,3 +342,21 @@ cancel, landing, 0) or gear up 0x147d59730(plane, carrier) (a jmp stub into the 
   the remote fire's code, without its explosive-only writes (FwLaunchDirect). Log: `coop2mp: T4: your laser (weapon N)
   replayed on the copy: selected and armed (its selected special now N); launched from its weapons, launched 1 (<p>)`.
 - The friends' zip: build/release/AC8SurvivalMode_COOP2MP_0.73.7_Online_COOP_NoValka.zip (hash a39fddb8...8a9465).
+
+### T4a.3 results (the user's solo test, 2026-10-30 20:16-20:18)
+- The laser fires from the copy (user: "laser is now firing"; `launched 1` each time). Missiles and the gun as before.
+- The ECM / ESM still showed nothing (user: "ECM didnt show", "can't tell if ECM is working"): only selected and armed
+  (`launched 0`). ElectronicMeasureEffect (0x1474dbdf0) applies the effect to the planes jammed / marked (through the
+  network-id map, 0x147d27c00), not to the user's plane: what shows on it is the weapon itself, launched as the laser.
+- The gear still didn't come down (user: "gear did not go down on the other aircraft"): your State 0x40A00 / 0x40210
+  was sent, the copy's own State read 0x40000 / 0x40010. The plane's own update makes bits 9 and 11 from its real gear,
+  and RemoteUpdate's gear check (0x147d6f982) reads that State, so the gear sent never reached it.
+
+## T4a.4 build (0.73.8-coop2mp.9, runtime 0.31.4; installed 2026-10-30, not yet run)
+- The ECM / ESM launched from the copy's weapons as the laser is (FwLaunchDirect after select and arm).
+- The gear, as RemoteUpdate's check does it, after RemoteUpdate (FlGear): the flight state's gear down
+  0x144d33fb0(plane+0x2268, 1) when the gear sent (State bit 9) is down and the gear flag (+0x229c bit 0x10) isn't, up
+  0x144d33ea0(state, 0, 0, 0) the other way; calls, flag and offset read from RemoteUpdate's code. The Ctrl+F11 copy
+  from your State, co-op's real planes from their flight block's, SV_CoopPPFx kind 2 the same. Log: `coop2mp: T4: the
+  copy's gear down (your State 40a00): 1`.
+- The friends' zip: build/release/AC8SurvivalMode_COOP2MP_0.73.8_Online_COOP_NoValka.zip (hash c81ef480...1477cb).
