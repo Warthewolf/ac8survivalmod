@@ -1655,17 +1655,20 @@ static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTr
     xf[8] = xf[9] = xf[10] = 1.0;
 }
 
-/* SV_CoopSpawnPP(pawn, x, y, z, yaw) -> the new player plane's address (a copy of pawn's plane class, possessed by a
- * network dummy controller, marked as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy
- * controller class, -4 the controller didn't spawn, -5 the plane didn't spawn, -6 its spawn didn't finish. One at a
- * time: a second call removes the first. */
+/* SV_CoopSpawnPP(pawn, x, y, z, yaw[, class]) -> the new player plane's address (a plane of pawn's class, or of `class`
+ * (a player plane blueprint's class, COOP2MP T2: tools/re/COOP2MP.md), possessed by a network dummy controller, marked
+ * as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy controller class, -4 the controller
+ * didn't spawn, -5 the plane didn't spawn (a class that isn't a player plane's too), -6 its spawn didn't finish. One at
+ * a time: a second call removes the first. Another class gets no loadout of yours (your weapon ids are your plane's):
+ * its own default weapons. */
 static int L_CoopSpawnPP(void* lua)
 {
     uint8_t* pawn = ArgObject(lua);
     double pos[3] = { 0 }, yaw = 0;
     if (!pawn || !ArgNumber(lua, &pos[0]) || !ArgNumber(lua, &pos[1]) || !ArgNumber(lua, &pos[2])) return Ret(lua, -1);
     ArgNumber(lua, &yaw);
-    if (!LiveObject(pawn)) return Ret(lua, -1);
+    uint8_t* clsArg = ArgObject(lua);                                              /* (optional) */
+    if (!LiveObject(pawn) || (clsArg && !LiveObject(clsArg))) return Ret(lua, -1);
     int32_t possessSlot = 0, netSlot = 0, roleOff = 0, loObj = 0, loByte[2] = { 0, 0 };
     uint8_t* possessFn = NULL, *loadoutFn = NULL;
     if (!g_fSpawnPlayerPlane || !g_fWorldSpawnActor || !ResolveUE4SS() ||
@@ -1680,6 +1683,8 @@ static int L_CoopSpawnPP(void* lua)
     if (CoRefGet(&g_ppCtrl) && g_destroyActor) g_destroyActor(g_ppCtrl.obj, 0);
     memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
     void* cls = *(void**)(pawn + 0x10);                                             /* UObjectBase::ClassPrivate */
+    int foreign = clsArg && (void*)clsArg != cls;
+    if (foreign) cls = clsArg;
     void* world = VCall(pawn, VF_WORLD);
     /* the dummy controller's class: by its short name as UE4SS finds classes (the full path found nothing: test of
      * 2026-10-25), else from the remote spawn's own call to its StaticClass */
@@ -1725,18 +1730,18 @@ static int L_CoopSpawnPP(void* lua)
      * object's two lists) and the two loadout bytes, then FinishSpawning (construction and BeginPlay: the plane's own
      * setup, its weapons' owner among it). 0.22.1 left that out and the first formation teleport crashed the game
      * (its weapons had no owner, test of 2026-10-25). */
-    uint8_t* lo = *(uint8_t**)(pawn + loObj);
+    uint8_t* lo = foreign ? NULL : *(uint8_t**)(pawn + loObj);
     if (!LiveObject(lo)) lo = NULL;
     CoArr l1 = CoLoadoutList(lo, 0x30), l2 = CoLoadoutList(lo, 0x40);
     ((CoLoadoutFn)loadoutFn)(plane, &l1, &l2);
-    plane[loByte[0]] = pawn[loByte[0]]; plane[loByte[1]] = pawn[loByte[1]];
+    plane[loByte[0]] = foreign ? 0 : pawn[loByte[0]]; plane[loByte[1]] = foreign ? 0 : pawn[loByte[1]];
     ((CoFinishFn)g_fFinishSpawning)(plane, xf, 0, NULL, 1);
     int finished = (plane[g_finishedOff] & 1) != 0;
     int32_t wOff = *(int32_t*)(g_siteRemoteLoadout + 20);                          /* mov r14, [plane + disp32] */
     uint8_t* w = (wOff > 0 && wOff < 0x8000) ? *(uint8_t**)(plane + wOff) : NULL;
     void* owner = (w && Readable(w + 0x2d0, 8)) ? *(void**)(w + 0x2d0) : NULL;   /* what crashed 0.22.1 (COOP.md 6) */
-    Log(L"coop: second player plane %p (class %p) spawned, controller %p, possessed (slot +%x, Possess %p), network object %p (+%x), role byte +%x = 2 (yours %d)",
-        plane, cls, ctrl, (uint32_t)possessSlot, possessFn, (netOk && noOff > 0) ? *(void**)(plane + noOff) : NULL, (uint32_t)noOff, (uint32_t)roleOff,
+    Log(L"coop: second player plane %p (class %p, %s) spawned, controller %p, possessed (slot +%x, Possess %p), network object %p (+%x), role byte +%x = 2 (yours %d)",
+        plane, cls, foreign ? L"another airframe: no loadout of yours" : L"yours", ctrl, (uint32_t)possessSlot, possessFn, (netOk && noOff > 0) ? *(void**)(plane + noOff) : NULL, (uint32_t)noOff, (uint32_t)roleOff,
         (int32_t)pawn[roleOff]);
     Log(L"coop: second player plane: loadout %p (+%x; yours %p: %d and %d entries), bytes +%x +%x = %d %d, spawn finished: %s, weapons %p (+%x), their owner %p",
         *(void**)(plane + loObj), (uint32_t)loObj, lo, l1.num, l2.num, (uint32_t)loByte[0], (uint32_t)loByte[1], plane[loByte[0]],

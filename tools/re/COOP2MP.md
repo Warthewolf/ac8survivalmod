@@ -60,3 +60,17 @@ Each test is a COOP2MP build; solo tests use the test keys (TEST ONLY, never in 
    revive on a player plane, up to 24 of them (frame cost).
 </content>
 </invoke>
+
+## T1 / T2 build (0.73.0-coop2mp.1, runtime 0.29.0; installed 2026-10-30 as the user's test install)
+`sh tools/package_dev.sh COOP2MP_T1` (the test keys kept; never for friends), installed over 0.72.7 (backed up in
+build/backup/install_before_coop2mp_t1). SV_CoopSpawnPP takes an optional plane class (another airframe: no loadout of
+yours, its own default weapons). In a solo run, Ctrl+F11 each press the next airframe 150 m off your right wing: your
+own plane's class, the ADFX-02 (BP_PlayerPlane_PP0038_adfx02), the FA-36 (PP0018_fa36); Ctrl+F12 removes it.
+- Look: does it show, solid and smooth, in what paint; its gear, afterburner glow and control surfaces (its own tick is
+  off: what of its look still runs?); the ALLY tag / W box; your camera, HUD, target cycling and lock-on stay yours.
+- Fight near it: do enemies go for it (their missiles at it, it taking hits).
+- Log: `test: Ctrl+F11 spawning <name> (<class>)`, `coop: second player plane <p> (class <p>, yours | another
+  airframe: no loadout of yours) spawned ...`, `... spawn finished: yes, weapons <p> ..., their owner <p>`,
+  `test: Ctrl+F11 after the spawn: your pawn is still yours; formation 1`, and every 5 s `test: second plane <name>:
+  <d> m from you, health <h>, its tick false; of N enemies up, A have it as their nearest player plane, B you`;
+  `test: Ctrl+F11 <name>: its class didn't load (...)` if a class path is wrong.
