@@ -373,6 +373,21 @@ yet run in game): longer probes, DN_MIN_DIFF 10, an in-flight sign check (rates 
 dive backstop (tools/checks/flight_test.c's late plane and wrong-signs runs); sv_down.lua puts the plane and view back
 after a restart while down (restoreAfter), remembers your own view as you go down, and puts a DOWN plane 8 km from the
 combat zone's edge back over the airfield (edgeGuard, SV_Respawn).
+The same run's logs (the host and 7 joiners, 0.72.4-coop.22 / runtime 0.28.6; report: Claude Docs "AC8 Survival Mode:
+Co-op Play Session Report, 30 Oct 2026"): enemy copies never failed a move; Shazzy's DOWN probe read -2 / +1 deg/s as a
+roll sign too (inverted); reliable resends tracked the round trip (fixed 250 ms timer: 4-7 % resent past 290 ms); a lost
+link was flooded (20,892 resends a minute); the host streamed planes and enemies to players in menus or loading (one on
+Stable 1 for 14 minutes); joiners kept their money and upgrades through the host's restart; 1,093 of 1,094 refused
+remote shots came while that player was in the STORE; the Lua tick averaged 9-30 ms (worst 86-493 ms), "shop" / "icons"
+/ "ammo panel" walking every object down at the airfield. Changed since (not yet a build, not yet run in game): runtime
+0.28.7's coop.c (CoRto: resend after the round trip x 1.5 + 100 ms, backing off; a lost link gets its oldest reliable
+message only; CoWantsState: Q and E only to a joiner whose plane is in the level; CoTrackOffset / CoRenderDelay: each
+sender's interpolation delay follows its lateness, CO.delay to 300 ms; new log lines `enemies drawn N ms behind the host
+(lateness N ms)` and `coop: planes here ...`), sv_coop.lua (a joiner's run starts over on the host's new run:
+newRunHere; others' shots not asked of the game while your STORE is open; the afterburner flip logged once),
+sv_core / sv_shop / sv_main (landingWindows once a tick; the relabel reads the STORE rows' TextBlocks only, at once after
+a press, else every 2 s; shop texts every 0.5 s at the airfield; an ammo panel looked for 3 times at most; the perf line
+names every part by its share and the untimed rest).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

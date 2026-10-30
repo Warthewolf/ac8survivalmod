@@ -258,6 +258,19 @@ inbox[#inbox + 1] = "1|fx|m:5:0"
 tick()
 check(fired() == "", "player 2's state over a second old: their shots dropped as stale")
 peer(1, 3)
+-- your landing STORE open (D.musicHold): the game refuses the other planes' fire there, so it isn't asked (the co-op run
+-- of 2026-10-30: 1,093 of its 1,094 refused shots came while that game's player was in the STORE)
+fires, sent = {}, {}
+tick(1.1)
+D.musicHold = 1
+inbox[#inbox + 1] = "1|fx|m:5:0;m:5:0"
+tick()
+D.musicHold = 0
+local tallyAt = #logs + 1
+for _ = 1, 62 do tick(1) end
+local tally = line("^coopfire: 60 s:", tallyAt)
+check(fired() == "" and has(tally, "2 not shown: you were in the STORE"),
+      "your STORE open: their 2 shots not asked of the game, counted in the minute's line (" .. tostring(tally) .. ")")
 fires, sent = {}, {}
 P1.gone = true
 tick()
@@ -485,7 +498,7 @@ CFG.coop.sync.enabled = true
 print("the hooks, by their place in the source")
 do
     local sm = readAll(MOD .. "/Scripts/sv_main.lua")
-    local a, b = sm:find("pcall(COOP.ammoRead)", 1, true), sm:find("pcall(ammoTick, tick, survivalPC)", 1, true)
+    local a, b = sm:find("timed(\"coop ammo\", COOP.ammoRead)", 1, true), sm:find("timed(\"ammo\", ammoTick, tick, survivalPC)", 1, true)
     check(a and b and a < b, "sv_main: COOP.ammoRead before ammoTick (its refill)")
     check(has(sm, "pcall(COOP.syncSetup)"), "sv_main: COOP.syncSetup at the main menu, with the other rows")
     local bs = readAll(MOD .. "/../../../tools/build_survival.py")

@@ -194,14 +194,14 @@ int main(int argc, char** argv)
                 CoPlayer* P = &CO.players[s];
                 if (s == CO.mySlot || !P->haveOffset || P->plane.ns < 4 || CoNow() - P->plane.lastRecv > 0.2) continue;
                 double want[3], wr[3], got[3], gr[3];
-                PlayerPath(s, CoNow() - P->offset - CO.delay, want, wr); GetPose(pup[s], got, gr);
+                PlayerPath(s, CoNow() - P->offset - CoRenderDelay(P), want, wr); GetPose(pup[s], got, gr);
                 double e = Dist(want, got);
                 eSum[s] += e; if (e > eMax[s]) eMax[s] = e; ++eN[s];
             }
             CoEnt* en = CoEntById(7, 0);
             if (!en || en->ns < 4) { ++frames; Sleep(16); continue; }   /* (its stream hasn't started yet) */
             double want[3], wr[3], got[3], gr[3];
-            EnemyPath(CoNow() - CO.players[0].offset - CO.delay, want, wr); GetPose(copy, got, gr);
+            EnemyPath(CoNow() - CO.players[0].offset - CoRenderDelay(&CO.players[0]), want, wr); GetPose(copy, got, gr);
             want[2] = got[2];
             double e = Dist(want, got); enSum += e; if (e > enMax) enMax = e; ++enN;
         }

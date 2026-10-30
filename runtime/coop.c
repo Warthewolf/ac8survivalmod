@@ -13,7 +13,8 @@
  *  'S', CO_PROTO, a type and a flags byte:
  *    H hello (1 s): role, session nonce, time + echo of the link's last hello (the round trip), the slot the host
  *      gives that joiner (or none yet / full), max players, mod version, name
- *    L reliable Lua message: sender nonce, seq, length, bytes (per link: resent every 250 ms until acked, in order)
+ *    L reliable Lua message: sender nonce, seq, length, bytes (per link, in order: resent once its ack is a round trip
+ *      overdue, backing off; a lost link gets only its oldest, CoFlushReliable)
  *    K ack: sender nonce, every seq below this one arrived
  *    U unreliable Lua message
  *    P a joiner's own plane, to the host (30 Hz): slot, time, position (cm, doubles), rotation (quaternion), health,
@@ -23,8 +24,11 @@
  *      latest but the receiver's own (protocol 3: up to 24 players. Relaying each joiner's P to every other joiner
  *      was n x n packets 30 times a second, about 16,000 a second from the host at 24)
  *    E the host's tracked enemies (15 Hz): time, n x {id, position (floats), rotation (int16 quaternion)}
+ *  The host streams Q and E only to a joiner whose own plane is in Survival's level (CoWantsState), and nothing but
+ *  hellos and its oldest reliable message to a lost link.
  *  Puppets: a local plane bound to a stream (another player's, or a host enemy on a joiner's game) is moved every
- *  frame to where the stream says it was CO_DELAY ago on its sender's clock (snapshot interpolation, nlerp), through
+ *  frame to where the stream says it was a delay ago on its sender's clock (snapshot interpolation, nlerp; the delay
+ *  follows how late that sender's states come, CoTrackOffset / CoRenderDelay: CO.delay to CO_DELAY_MAX), through
  *  the plane's own teleport (vtable slot 315: the flight model flies on from there, hard rule 39), late in the frame
  *  (the music player's tickable, after every actor's tick), so it draws where the stream puts it.
  *  All of it runs on the game thread: the Lua calls come from Survival's ExecuteInGameThread tick, the frame work from
@@ -325,7 +329,7 @@ static int CoParseIp(const char* s, CoSockAddr* out, uint16_t defPort)  /* "a.b.
 }
 
 /* ---- session state ---------------------------------------------------------------------------------------------- */
-typedef struct { uint32_t seq; uint16_t len; double sentAt; char* data; } CoOut;
+typedef struct { uint32_t seq; uint16_t len; double sentAt; char* data; uint8_t tries; } CoOut;
 typedef struct { uint8_t* obj; void* vt; uint32_t idx; uint64_t name; } CoRef;   /* a local actor, checked before use */
 typedef struct { double t; double p[3]; float q[4]; } CoSnap;
 typedef struct {
@@ -333,6 +337,8 @@ typedef struct {
     CoRef    ref;                           /* the local actor this stream drives (joiner), or the one it reads (host) */
     CoSnap   s[CO_SNAPS]; int32_t ns;
     int32_t  drives, fails;
+    int32_t  ahead, held, mark;             /* since the last minute's report: moves past its newest snapshot (on along
+                                               its velocity), past 0.5 s (held); mark = drives at that report          */
     double   lastRecv;
 } CoEnt;
 
@@ -362,6 +368,8 @@ typedef struct {
 typedef struct {
     CoEnt    plane;
     double   offset; int haveOffset;        /* local time - that player's time: the smallest seen, let go of slowly */
+    double   jit, dly;                      /* how late its states come past that (up fast, down slowly); the delay its
+                                               puppets are drawn behind it (CoRenderDelay), s                          */
     int32_t  hp; float maxHp; uint32_t flags; double stateAt;
     uint8_t  rec[CO_Q_REC]; int fresh;
     int      abSaid;                        /* its stand-in's afterburner was logged on (once per binding)          */
@@ -374,6 +382,7 @@ static struct {
     double   delay;                         /* interpolation delay, seconds */
     uint16_t port;
     double   lastDiscover, lastFrame, lastPlayerSend, lastEntSend, lastStats;
+    double   prevStep, frameGap;            /* the last CoStep and the gap before this one (a hitch: > 0.1 s)       */
     uint64_t cand[CO_MAX_CAND]; int32_t ncand;
     char     myVer[32], myName[64];
     uint64_t myId;
@@ -622,6 +631,7 @@ static void CoPlayerReset(int s)
 {
     CO.players[s].plane.ns = 0;
     CO.players[s].haveOffset = 0;
+    CO.players[s].jit = CO.players[s].dly = 0;
     CO.players[s].stateAt = 0;
     CO.players[s].fresh = 0;
 }
@@ -648,17 +658,33 @@ static void CoSendLua(int k, const char* s, uint32_t n, int reliable)
     char* d = (char*)malloc(n ? n : 1);
     if (!d) return;
     memcpy(d, s, n);
-    L->out[L->nout++] = (CoOut){ L->sendSeq++, (uint16_t)n, -1.0, d };
+    L->out[L->nout++] = (CoOut){ L->sendSeq++, (uint16_t)n, -1.0, d, 0 };
 }
 
+/* How long a reliable message waits for its ack before it goes again: the link's round trip x 1.5 + 100 ms (at least
+ * 250 ms; 500 ms before the first round trip is known), doubled for each try after the first, up to 4 s. A fixed 250 ms
+ * sent every message twice on links slower than that: the co-op run of 2026-10-30 resent 4-7 % on the 290-470 ms links,
+ * 0-1 % on the 220-260 ms ones. */
+static double CoRto(const CoLink* L, int tries)
+{
+    double r = L->rtt > 0 ? L->rtt * 1.5 + 0.1 : 0.5;
+    if (r < 0.25) r = 0.25;
+    for (int i = 1; i < tries && r < 4.0; ++i) r *= 2.0;
+    return r > 4.0 ? 4.0 : r;
+}
+
+/* The reliable messages due (new, or their ack overdue: CoRto), up to 16 a call. A lost link gets its oldest one only,
+ * as a probe, so a dead link isn't flooded: the same run sent Shazzy's lost link 20,892 resends in a minute (every
+ * message every 250 ms, 16 a frame). */
 static void CoFlushReliable(int k, double now)
 {
     CoLink* L = &CO.links[k];
-    int sent = 0;
-    for (int32_t i = 0; i < L->nout && sent < 16; ++i) {
+    int sent = 0, most = L->connected ? 16 : 1;
+    for (int32_t i = 0; i < L->nout && sent < most; ++i) {
         CoOut* o = &L->out[i];
-        if (o->sentAt >= 0 && now - o->sentAt < 0.25) continue;
+        if (o->sentAt >= 0 && now - o->sentAt < CoRto(L, o->tries)) { if (!L->connected) break; continue; }
         if (o->sentAt >= 0) ++L->resent;
+        if (o->tries < 255) ++o->tries;
         uint8_t b[CO_MAX_PACKET], *p = CoHeader(b, 'L');
         CoPut32(&p, CO.nonce); CoPut32(&p, o->seq); CoPut16(&p, o->len);
         memcpy(p, o->data, o->len); p += o->len;
@@ -680,7 +706,10 @@ static void CoOnAck(CoLink* L, uint32_t below)
         if (L->out[i].seq < below) free(L->out[i].data); else L->out[j++] = L->out[i];
     }
     L->nout = j;
-    if (below > L->ackedBelow) L->ackedBelow = below;
+    if (below > L->ackedBelow) {                              /* the link answers: what's left waits one round trip again */
+        L->ackedBelow = below;
+        for (int32_t i = 0; i < L->nout; ++i) if (L->out[i].tries > 1) L->out[i].tries = 1;
+    }
 }
 
 static void CoOnReliable(int k, uint32_t seq, const char* d, uint16_t n)
@@ -727,11 +756,30 @@ static void CoPushSnap(CoEnt* e, double t, const double* p, const float* q, doub
     e->lastRecv = now;
 }
 
+/* The interpolation delay adapts to each sender's lateness (how much later than its fastest a state comes): the co-op
+ * run of 2026-10-30 ran on Steam relays with 220-800 ms round trips, and a fixed CO.delay (120 ms) drew a plane past its
+ * newest state whenever one came later than that. The delay follows the lateness + 30 ms, from CO.delay up to
+ * CO_DELAY_MAX, moving at most 0.1 s a second so nothing jumps. A hitch on this game (a frame over 0.1 s) isn't counted:
+ * what came during it is read late but drawn in time. */
+#define CO_DELAY_MAX 0.30
 static void CoTrackOffset(CoPlayer* P, double senderT, double now)
 {
     double est = now - senderT;
     if (!P->haveOffset || est < P->offset) { P->offset = est; P->haveOffset = 1; }
     else P->offset += (est - P->offset) * 0.001;              /* let go slowly (clock drift, a slower route) */
+    double late = est - P->offset;
+    if (CO.frameGap > 0.1 || !(late >= 0 && late < 2.0)) return;
+    P->jit += (late - P->jit) * (late > P->jit ? 0.3 : 0.005);
+}
+static double CoRenderDelay(const CoPlayer* P) { return P->dly > 0 ? P->dly : CO.delay; }
+static void CoAdaptDelay(CoPlayer* P, double dt)
+{
+    double want = P->jit + 0.03, step = (dt > 0.1 ? 0.1 : dt) * 0.1;
+    if (want < CO.delay) want = CO.delay;
+    if (want > CO_DELAY_MAX) want = CO_DELAY_MAX > CO.delay ? CO_DELAY_MAX : CO.delay;
+    double d = CoRenderDelay(P);
+    d += want > d + step ? step : want < d - step ? -step : want - d;
+    P->dly = d;
 }
 
 static double CoPeerTime(uint32_t ms) { return (double)ms / 1000.0; }
@@ -1063,14 +1111,24 @@ static void CoSendPlayer(double now)
     memcpy(p, &hp, 4); p += 4;
     memcpy(p, &maxHp, 4); p += 4;
     CoPut32(&p, CO.meFlags);
-    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, CO_P_SIZE);
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used && CO.links[k].connected) CoSendTo(k, b, CO_P_SIZE);
+}
+
+/* (the host) whether joiner j gets the planes and the enemies: its link answers and its own plane came in the last 3 s,
+ * in Survival's level. A joiner in the menus, loading or on another build sends no plane and drew nothing of them: the
+ * co-op run of 2026-10-30 sent 500-880 KB a minute for 14 minutes to a player on the old build at the main menu, and
+ * ~590 KB a minute to cressendo through a 2.3-minute load. The reliable messages and hellos go on as ever. */
+static int CoWantsState(int j, double now)
+{
+    const CoPlayer* P = &CO.players[j];
+    return CO.links[j].used && CO.links[j].connected && P->stateAt > 0 && now - P->stateAt < 3.0 && (P->flags & CO_FLAG_LEVEL);
 }
 
 /* the host: one Q to each joiner with every player's state since the last batch, the joiner's own left out */
-static void CoSendPlanes(void)
+static void CoSendPlanes(double now)
 {
     for (int j = 1; j < CO_MAX_PLAYERS; ++j) {
-        if (!CO.links[j].used) continue;
+        if (!CoWantsState(j, now)) continue;
         uint8_t b[CO_MAX_PACKET], *p = CoHeader(b, 'Q'), *cnt = p++;
         *cnt = 0;
         for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
@@ -1102,17 +1160,18 @@ static void CoSendEnts(double now)
         ++cnt;
         if ((size_t)(p - b) + 22 > CO_MAX_PACKET) {
             memcpy(countAt, &cnt, 2);
-            for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, (uint32_t)(p - b));
+            for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CoWantsState(k, now)) CoSendTo(k, b, (uint32_t)(p - b));
             p = NULL;
         }
     }
     if (p && cnt) {
         memcpy(countAt, &cnt, 2);
-        for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used) CoSendTo(k, b, (uint32_t)(p - b));
+        for (int k = 1; k < CO_MAX_PLAYERS; ++k) if (CoWantsState(k, now)) CoSendTo(k, b, (uint32_t)(p - b));
     }
 }
 
 /* where the stream was at render time rt (its sender's clock); 0 if it has nothing yet */
+/* (1 between two snapshots or before the first, 2 past the newest: on along its velocity, 3 over 0.5 s past it: held) */
 static int CoSample(const CoEnt* e, double rt, double* pos, float* q)
 {
     if (!e->ns) return 0;
@@ -1125,7 +1184,7 @@ static int CoSample(const CoEnt* e, double rt, double* pos, float* q)
             double dt = last->t - prev->t;
             if (dt > 0.001) for (int c = 0; c < 3; ++c) pos[c] += (last->p[c] - prev->p[c]) / dt * ahead;
         }
-        return 1;
+        return ahead >= 0.5 ? 3 : ahead > 0.001 ? 2 : 1;
     }
     if (rt <= e->s[0].t) { memcpy(pos, e->s[0].p, 24); memcpy(q, e->s[0].q, 16); return 1; }
     for (int32_t i = e->ns - 2; i >= 0; --i) {
@@ -1147,9 +1206,10 @@ static uint8_t* CoDriveOne(CoEnt* e, double rt)
     if (!o) { if (e->ref.obj) { e->ref.obj = NULL; Log(L"coop: a puppet's actor is gone (stream %d); unbound", (int32_t)e->id); } return NULL; }
     if (CoHealth(o) <= 0) return NULL;                        /* going down: let it fall */
     double pos[3], rot[3]; float q[4];
-    if (!CoSample(e, rt, pos, q)) return NULL;
+    int how = CoSample(e, rt, pos, q);
+    if (!how) return NULL;
     CoQuatToRot(q, rot);
-    if (CoTeleport(o, pos, rot)) { ++e->drives; return o; }
+    if (CoTeleport(o, pos, rot)) { ++e->drives; e->ahead += how >= 2; e->held += how == 3; return o; }
     ++e->fails;
     return NULL;
 }
@@ -1159,7 +1219,8 @@ static void CoDrive(double now)
     for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
         CoPlayer* P = &CO.players[s];
         if (s == CO.mySlot || !P->plane.ref.obj || !P->haveOffset) continue;
-        uint8_t* o = CoDriveOne(&P->plane, now - P->offset - CO.delay);
+        CoAdaptDelay(P, CO.frameGap);
+        uint8_t* o = CoDriveOne(&P->plane, now - P->offset - CoRenderDelay(P));
         /* the move turned an AI stand-in's afterburner off (CoAbOffset): set from that player's latest flags */
         if (!o || CoKind(o) != 1) continue;
         int32_t ab = CoAbOffset();
@@ -1169,7 +1230,8 @@ static void CoDrive(double now)
         if (on && !P->abSaid) { P->abSaid = 1; Log(L"coop: player %d's afterburner on: their stand-in %p, byte +%x (flags %x)", s + 1, o, (uint32_t)ab, P->flags); }
     }
     if (CO.role != CO_ROLE_JOIN || !CO.players[0].haveOffset) return;
-    double rt = now - CO.players[0].offset - CO.delay;        /* the host's enemies, on the host's clock */
+    if (!CO.players[0].plane.ref.obj) CoAdaptDelay(&CO.players[0], CO.frameGap);   /* (else done above, once a frame) */
+    double rt = now - CO.players[0].offset - CoRenderDelay(&CO.players[0]);   /* the host's enemies, on the host's clock */
     for (int i = 0; i < CO_MAX_ENTS; ++i) if (CO.ents[i].used && CO.ents[i].ref.obj) CoDriveOne(&CO.ents[i], rt);
 }
 
@@ -1177,6 +1239,8 @@ static void CoDrive(double now)
 
 static void CoStep(double now, int drive)
 {
+    CO.frameGap = CO.prevStep > 0 ? now - CO.prevStep : 0;    /* (before the pump: CoTrackOffset skips a hitch's states) */
+    CO.prevStep = now;
     CoPump(now);
     int anyFree = 0;
     for (int s = 1; s < CO.maxPlayers; ++s) if (!CO.links[s].used) anyFree = 1;
@@ -1213,16 +1277,25 @@ static void CoStep(double now, int drive)
         if (now - CO.lastPlayerSend >= 1.0 / hz) {
             CO.lastPlayerSend = now;
             CoSendPlayer(now);
-            if (CO.role == CO_ROLE_HOST) CoSendPlanes();
+            if (CO.role == CO_ROLE_HOST) CoSendPlanes(now);
         }
         if (CO.role == CO_ROLE_HOST && now - CO.lastEntSend >= 1.0 / 15.0) { CO.lastEntSend = now; CoSendEnts(now); }
     }
     if (drive) CoDrive(now);
     if (now - CO.lastStats >= 60.0) {
         CO.lastStats = now;
-        int32_t bound = 0, drives = 0, fails = 0;
-        for (int i = 0; i < CO_MAX_ENTS; ++i) if (CO.ents[i].used && CO.ents[i].ref.obj) { ++bound; drives += CO.ents[i].drives; fails += CO.ents[i].fails; }
-        Log(L"coop: you are player %d; %d enemy streams bound (%d moves, %d failed); %u bad packets", CO.mySlot + 1, bound, drives, fails, CO.badPk);
+        int32_t bound = 0, drives = 0, fails = 0, minute = 0, ahead = 0, held = 0;
+        for (int i = 0; i < CO_MAX_ENTS; ++i) {
+            CoEnt* e = &CO.ents[i];
+            if (!e->used || !e->ref.obj) continue;
+            ++bound; drives += e->drives; fails += e->fails;
+            minute += e->drives - e->mark; ahead += e->ahead; held += e->held;
+            e->mark = e->drives; e->ahead = e->held = 0;
+        }
+        const CoPlayer* H = &CO.players[0];
+        Log(L"coop: you are player %d; %d enemy streams bound (%d moves, %d failed); %u bad packets; enemies drawn %d ms behind "
+            L"the host (lateness %d ms); the last minute's %d enemy moves: %d past their newest state, %d held", CO.mySlot + 1,
+            bound, drives, fails, CO.badPk, (int32_t)(CoRenderDelay(H) * 1000), (int32_t)(H->jit * 1000), minute, ahead, held);
         for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
             CoLink* L = &CO.links[k];
             if (!L->used) continue;
@@ -1230,6 +1303,25 @@ static void CoStep(double now, int drive)
             Log(L"coop:   player %d %s: %s, rtt %d ms; sent %u packets (%u KB), got %u (%u KB), %u resent; their plane %d moves",
                 k + 1, wn, L->connected ? L"linked" : L"link lost", (int32_t)(L->rtt * 1000), L->txPk, L->txB / 1024, L->rxPk,
                 L->rxB / 1024, L->resent, CO.players[k].plane.drives);
+        }
+        /* each other player's plane here: drawn how far behind, how late their states came, the last minute's moves past
+         * their newest state of all its moves */
+        char line[480]; CoBuf b = { line, line + sizeof(line) - 1 };
+        int any = 0;
+        for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+            CoPlayer* P = &CO.players[s];
+            if (s == CO.mySlot || !P->plane.ref.obj || !P->haveOffset) continue;
+            CoEnt* e = &P->plane;
+            if (any) CoPutS(&b, "; ");
+            CoPutI(&b, s + 1); CoPutS(&b, " "); CoPutI(&b, (int64_t)(CoRenderDelay(P) * 1000)); CoPutS(&b, "/");
+            CoPutI(&b, (int64_t)(P->jit * 1000)); CoPutS(&b, " ms "); CoPutI(&b, e->ahead); CoPutS(&b, "/"); CoPutI(&b, e->drives - e->mark);
+            e->mark = e->drives; e->ahead = e->held = 0;
+            any = 1;
+        }
+        *b.p = 0;
+        if (any) {
+            wchar_t wl[480]; CoWide(line, wl, 480);
+            Log(L"coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): %s", wl);
         }
     }
 }

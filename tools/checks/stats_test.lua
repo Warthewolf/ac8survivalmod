@@ -543,8 +543,15 @@ function SV_CoopRecv() return table.remove(inbox, 1) or "" end
 local function runLines() local n = 0; for _, l in ipairs(logs) do if l:find("^stats: run over") then n = n + 1 end end; return n end
 local runs0 = runLines()
 M.jnAt = os.clock() - 100
+SETUP = SETUP or { zollars = function() return 300 end }   -- (sv_menu.lua's run setup: the menu's STARTING ZOLLARS)
+TAC = TAC or { reset = function() end }
+RUN.credits, RUN.ups, RUN.items, RUN.insured = 9999, { gun = 2 }, { ecm = 1 }, true
 inbox[1] = "0|rs"
 COOP.tick(5)
+-- (the co-op run of 2026-10-30: after the host's restart the joiners kept 4,400-15,260 zollars and their upgrades)
+check(RUN.credits == SETUP.zollars() and next(RUN.ups) == nil and next(RUN.items) == nil and not RUN.insured and A == nil
+      and has(line("run: the host's run started over"), "had 9999"),
+      "joiner: the host's restart starts this game's run over too: " .. tostring(RUN.credits) .. " zollars, no upgrades or items, the loadout again")
 local r8, run8 = line("stats: round 8"), line("stats: run over (the host started over)")
 check(has(r8, "(cut short: the host started over)") and has(r8, "ordinary fighters ? (a joiner can't tell aces; 1 pool fighters down)"),
       "joiner: the host's restart ends its round; the round line has no time to kill")
@@ -558,8 +565,10 @@ M.rnd = { round = 9, state = "fighting", secs = 0, wave = 1, waves = 1, alive = 
 roundsTick(500)
 check(D.rs and D.rs.round == 9 and not D.rs.ended, "joiner: round 9 under way")
 M.jnAt = os.clock()
+RUN.credits = 4321
 inbox[1] = "0|rs"
 COOP.tick(6)
+check(RUN.credits == 4321, "joiner: a resync (its own rejoin) keeps its money (" .. tostring(RUN.credits) .. ")")
 check(has(line("stats: round 9"), "(cut short: co-op resync)") and runLines() == runs0 + 1 and RUN.metrics ~= nil,
       "joiner: a resync cuts the round short and keeps the run")
 
