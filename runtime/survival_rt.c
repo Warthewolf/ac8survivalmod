@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.29.3"
-#define RT_VERSION_A         "0.29.3"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.30.0"
+#define RT_VERSION_A         "0.30.0"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -2072,6 +2072,7 @@ static int ArgNumber(void* lua, double* v)
 
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
+#define SV_FLIGHT_FEED 1                            /* (coop.c: flight.c's flight block and real planes) */
 #include "coop.c"                                   /* Survival COOP (runtime 0.20.0) */
 #include "flight.c"                                 /* flight sync and DOWN (runtime 0.28.5) */
 

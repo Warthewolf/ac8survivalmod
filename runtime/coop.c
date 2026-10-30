@@ -18,9 +18,10 @@
  *    K ack: sender nonce, every seq below this one arrived
  *    U unreliable Lua message
  *    P a joiner's own plane, to the host (30 Hz): slot, time, position (cm, doubles), rotation (quaternion), health,
- *      Lua's flags
+ *      Lua's flags, the flight block (protocol 4, COOP2MP: CO_FL)
  *    Q the host's batch of planes, to each joiner (30 Hz; 20 Hz past CO_FAST_UPTO players): n x {slot, time on that
- *      player's clock, position (doubles), rotation (int16 quaternion), health, max health, flags}, every player's
+ *      player's clock, position (doubles), rotation (int16 quaternion), health, max health, flags, flight block}, as
+ *      many packets as it takes (protocol 4: 19 records fit one), every player's
  *      latest but the receiver's own (protocol 3: up to 24 players. Relaying each joiner's P to every other joiner
  *      was n x n packets 30 times a second, about 16,000 a second from the host at 24)
  *    E the host's tracked enemies (15 Hz): time, n x {id, position (floats), rotation (int16 quaternion)}
@@ -35,7 +36,8 @@
  *  the music player's tick (OnMusicTick).
  * ============================================================================= */
 
-#define CO_PROTO        3                   /* 3: up to 24, the host's Q batches (runtime 0.24.0); 2: up to 4; 1: two */
+#define CO_PROTO        4                   /* 4: the flight block (COOP2MP, runtime 0.30.0); 3: up to 24, the host's Q
+                                               batches (runtime 0.24.0); 2: up to 4; 1: two */
 #define CO_MAX_PLAYERS  24
 #define CO_FAST_UPTO    6                   /* players (you included) up to which the host sends Q at 30 Hz, else 20  */
 #define CO_MAX_CAND     64                  /* Steam friends tried at once                                          */
@@ -65,6 +67,11 @@
 #define CO_FLAG_AB        32                /* afterburner: the stand-in's afterburner byte follows it every frame   */
 #define CO_FLAG_GUN       64                /* gun firing                                                           */
 #define CO_FLAG_FLARES    128               /* flares                                                               */
+/* The flight block (protocol 4, COOP2MP's real player planes: tools/re/COOP2MP.md T3): what another game feeds a player's
+ * real plane with (hard rule 53) beyond its pose: [0..5] the stick, int8 x127 (pitch, yaw, roll, throttle, brake,
+ * high-G: the last BuildFlightInput), [6] the afterburner amount x255 (plane+0x39d0), [7..8] the speed, m/s x10
+ * (plane+0x2318), [9..12] the flight State (plane+0x2b18). flight.c fills it (FlFlightBlock) and feeds it (FlFeeds). */
+#define CO_FL             13
 
 static uint8_t* g_fAITeleportTo;            /* found by FindFunctions (sigs.h)                                       */
 static uint8_t* g_fAITeleportInner;
@@ -360,7 +367,8 @@ typedef struct {
     uint32_t txPk, rxPk, txB, rxB, resent;
 } CoLink;
 
-#define CO_Q_REC 49                         /* a Q record: slot, time, position, int16 quaternion, health, max, flags */
+#define CO_Q_REC (49 + CO_FL)               /* a Q record: slot, time, position, int16 quaternion, health, max, flags,
+                                               the flight block */
 
 /* A player's plane as streamed (slot 0 the host, 1..23 the joiners): its snapshots on that player's clock and the
  * local puppet they move. A joiner gets the other joiners' planes from the host's Q batches; the host keeps each
@@ -373,6 +381,8 @@ typedef struct {
     int32_t  hp; float maxHp; uint32_t flags; double stateAt;
     uint8_t  rec[CO_Q_REC]; int fresh;
     int      abSaid;                        /* its stand-in's afterburner was logged on (once per binding)          */
+    uint8_t  fl[CO_FL]; int hasFl;          /* its latest flight block (protocol 4)                                 */
+    uint32_t fed, fedSkip; double fedOffCm; /* its real plane here: frames fed, frames not, the last miss (flight.c) */
 } CoPlayer;
 
 static struct {
@@ -551,6 +561,15 @@ static int32_t CoAbOffset(void)
         (uint32_t)off, f, (int32_t)CO_FLAG_AB);
     return off;
 }
+
+/* ---- the flight block (flight.c: COOP2MP's real player planes) ------------------------------------------------- */
+#ifdef SV_FLIGHT_FEED
+static void FlFlightBlock(uint8_t* plane, uint8_t* out);   /* your plane's flight block, into out[CO_FL]            */
+static int  FlFeeds(uint8_t* plane);                       /* a bound puppet the remote update feeds (not moved here) */
+#else
+static void FlFlightBlock(uint8_t* plane, uint8_t* out) { (void)plane; memset(out, 0, CO_FL); }
+static int  FlFeeds(uint8_t* plane) { (void)plane; return 0; }
+#endif
 
 /* ---- packets ---------------------------------------------------------------------------------------------------- */
 static void CoRawTo(uint64_t steamId, const CoSockAddr* udp, const uint8_t* data, uint32_t n, CoLink* L)
@@ -906,7 +925,8 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
     }
 }
 
-static void CoQRec(uint8_t* r, int slot, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags)
+static void CoQRec(uint8_t* r, int slot, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags,
+                   const uint8_t* fl)
 {
     r[0] = (uint8_t)slot;
     memcpy(r + 1, &ms, 4); memcpy(r + 5, pos, 24);
@@ -915,9 +935,11 @@ static void CoQRec(uint8_t* r, int slot, uint32_t ms, const double* pos, const f
         int16_t i = (int16_t)(v * 32767.0f); memcpy(r + 29 + c * 2, &i, 2);
     }
     memcpy(r + 37, &hp, 4); memcpy(r + 41, &maxHp, 4); memcpy(r + 45, &flags, 4);
+    if (fl) memcpy(r + 49, fl, CO_FL); else memset(r + 49, 0, CO_FL);
 }
 
-static void CoOnPlayer(int src, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags, double now)
+static void CoOnPlayer(int src, uint32_t ms, const double* pos, const float* q, int32_t hp, float maxHp, uint32_t flags,
+                       const uint8_t* fl, double now)
 {
     if (src < 0 || src >= CO_MAX_PLAYERS || src == CO.mySlot) return;
     if (!CoSaneState(pos, q)) { ++CO.badPk; return; }          /* (not kept, not relayed) */
@@ -927,10 +949,12 @@ static void CoOnPlayer(int src, uint32_t ms, const double* pos, const float* q, 
     CoTrackOffset(P, t, now);
     CoPushSnap(&P->plane, t, pos, q, now);
     P->hp = hp; P->maxHp = maxHp; P->flags = flags; P->stateAt = now;
-    if (CO.role == CO_ROLE_HOST) { CoQRec(P->rec, src, ms, pos, q, hp, maxHp, flags); P->fresh = 1; }
+    if (fl) { memcpy(P->fl, fl, CO_FL); P->hasFl = 1; }
+    if (CO.role == CO_ROLE_HOST) { CoQRec(P->rec, src, ms, pos, q, hp, maxHp, flags, fl); P->fresh = 1; }
 }
 
-#define CO_P_SIZE (4 + 60)                  /* 'P': slot, 3 spare, time, position, rotation, health, max health, flags */
+#define CO_P_SIZE (4 + 60 + CO_FL)          /* 'P': slot, 3 spare, time, position, rotation, health, max health, flags,
+                                               the flight block */
 
 static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSockAddr* udp, double now)
 {
@@ -966,7 +990,7 @@ static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoS
         if (n < CO_P_SIZE) { ++CO.badPk; return; }
         double pos[3]; float q[4]; int32_t hp; float maxHp;
         memcpy(pos, p + 8, 24); memcpy(q, p + 32, 16); memcpy(&hp, p + 48, 4); memcpy(&maxHp, p + 52, 4);
-        CoOnPlayer(k, CoGet32(p + 4), pos, q, hp, maxHp, CoGet32(p + 56), now);
+        CoOnPlayer(k, CoGet32(p + 4), pos, q, hp, maxHp, CoGet32(p + 56), p + 60, now);
         return;
     }
     case 'Q': {                                                /* the host's batch: everyone else's planes */
@@ -978,7 +1002,7 @@ static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoS
             memcpy(pos, r + 5, 24);
             for (int c = 0; c < 4; ++c) { int16_t v; memcpy(&v, r + 29 + c * 2, 2); q[c] = v / 32767.0f; }
             memcpy(&hp, r + 37, 4); memcpy(&maxHp, r + 41, 4);
-            CoOnPlayer(r[0], CoGet32(r + 1), pos, q, hp, maxHp, CoGet32(r + 45), now);
+            CoOnPlayer(r[0], CoGet32(r + 1), pos, q, hp, maxHp, CoGet32(r + 45), r + 49, now);
         }
         return;
     }
@@ -1102,7 +1126,9 @@ static void CoSendPlayer(double now)
     float q[4]; CoRotToQuat(rot, q);
     int32_t hp = CoHealth(me);
     float maxHp = g_offMaxHealth >= 0 && Readable(me + g_offMaxHealth, 4) ? *(float*)(me + g_offMaxHealth) : 0.0f;
-    if (CO.role == CO_ROLE_HOST) { CoQRec(CO.players[0].rec, 0, CoMs(now), pos, q, hp, maxHp, CO.meFlags); CO.players[0].fresh = 1; return; }
+    uint8_t fl[CO_FL];
+    FlFlightBlock(me, fl);
+    if (CO.role == CO_ROLE_HOST) { CoQRec(CO.players[0].rec, 0, CoMs(now), pos, q, hp, maxHp, CO.meFlags, fl); CO.players[0].fresh = 1; return; }
     uint8_t b[CO_P_SIZE], *p = CoHeader(b, 'P');
     *p++ = (uint8_t)(CO.mySlot >= 0 ? CO.mySlot : CO_SLOT_NONE); *p++ = 0; *p++ = 0; *p++ = 0;
     CoPut32(&p, CoMs(now));
@@ -1111,6 +1137,7 @@ static void CoSendPlayer(double now)
     memcpy(p, &hp, 4); p += 4;
     memcpy(p, &maxHp, 4); p += 4;
     CoPut32(&p, CO.meFlags);
+    memcpy(p, fl, CO_FL); p += CO_FL;
     for (int k = 0; k < CO_MAX_PLAYERS; ++k) if (CO.links[k].used && CO.links[k].connected) CoSendTo(k, b, CO_P_SIZE);
 }
 
@@ -1124,7 +1151,8 @@ static int CoWantsState(int j, double now)
     return CO.links[j].used && CO.links[j].connected && P->stateAt > 0 && now - P->stateAt < 3.0 && (P->flags & CO_FLAG_LEVEL);
 }
 
-/* the host: one Q to each joiner with every player's state since the last batch, the joiner's own left out */
+/* the host: Q to each joiner with every player's state since the last batch, the joiner's own left out (as many
+ * packets as it takes: 19 records of 62 bytes fit one, protocol 4) */
 static void CoSendPlanes(double now)
 {
     for (int j = 1; j < CO_MAX_PLAYERS; ++j) {
@@ -1133,7 +1161,10 @@ static void CoSendPlanes(double now)
         *cnt = 0;
         for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
             if (s == j || !CO.players[s].fresh || (s && !CO.links[s].used)) continue;
-            if ((size_t)(p - b) + CO_Q_REC > CO_MAX_PACKET) break;      /* (23 records fit: 1132 bytes) */
+            if ((size_t)(p - b) + CO_Q_REC > CO_MAX_PACKET) {
+                CoSendTo(j, b, (uint32_t)(p - b));
+                p = CoHeader(b, 'Q'); cnt = p++; *cnt = 0;
+            }
             memcpy(p, CO.players[s].rec, CO_Q_REC); p += CO_Q_REC; ++*cnt;
         }
         if (*cnt) CoSendTo(j, b, (uint32_t)(p - b));
@@ -1220,6 +1251,7 @@ static void CoDrive(double now)
         CoPlayer* P = &CO.players[s];
         if (s == CO.mySlot || !P->plane.ref.obj || !P->haveOffset) continue;
         CoAdaptDelay(P, CO.frameGap);
+        if (FlFeeds(CoRefGet(&P->plane.ref))) continue;       /* a real player plane: its own update flies it (flight.c) */
         uint8_t* o = CoDriveOne(&P->plane, now - P->offset - CoRenderDelay(P));
         /* the move turned an AI stand-in's afterburner off (CoAbOffset): set from that player's latest flags */
         if (!o || CoKind(o) != 1) continue;
@@ -1521,8 +1553,9 @@ static int L_CoopPeer(void* lua)
     }
     CoRefSet(&P->plane.ref, o);
     P->plane.drives = P->plane.fails = 0;
-    P->abSaid = 0;
-    Log(L"coop: player %d's plane is %p", (int32_t)slot + 1, o);
+    P->abSaid = 0; P->fed = P->fedSkip = 0; P->fedOffCm = -1;
+    Log(L"coop: player %d's plane is %p (%s)", (int32_t)slot + 1, o,
+        FlFeeds(o) ? L"a real player plane: its own update flies it, fed from their stream" : L"moved every frame");
     return Ret(lua, 1);
 }
 
@@ -1590,6 +1623,7 @@ static int L_CoopReset(void* lua)
  * network-object function is checked before it's called. Research probe first: Ctrl+F11 (sv_main.lua, test only)
  * spawns a copy of your own plane and SV_CoopFollow keeps it in formation. */
 static CoRef  g_ppPlane, g_ppCtrl, g_follow, g_followPawn;
+static CoRef  g_peerPP[CO_MAX_PLAYERS], g_peerCtrl[CO_MAX_PLAYERS];    /* each player slot's real plane (COOP2MP T3) */
 static double g_followOff[3], g_followAt;
 static int32_t g_followMoves, g_followFails;
 
@@ -1660,7 +1694,8 @@ static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTr
  * as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy controller class, -4 the controller
  * didn't spawn, -5 the plane didn't spawn (a class that isn't a player plane's too), -6 its spawn didn't finish. One at
  * a time: a second call removes the first. Another class gets no loadout of yours (your weapon ids are your plane's):
- * its own default weapons. */
+ * its own default weapons. A seventh argument, a player slot 0-23 (COOP2MP T3: another player's real plane), keeps one
+ * per slot instead (a second call for the slot removes that slot's). */
 static int L_CoopSpawnPP(void* lua)
 {
     uint8_t* pawn = ArgObject(lua);
@@ -1668,6 +1703,10 @@ static int L_CoopSpawnPP(void* lua)
     if (!pawn || !ArgNumber(lua, &pos[0]) || !ArgNumber(lua, &pos[1]) || !ArgNumber(lua, &pos[2])) return Ret(lua, -1);
     ArgNumber(lua, &yaw);
     uint8_t* clsArg = ArgObject(lua);                                              /* (optional) */
+    double slotArg = -1;
+    ArgNumber(lua, &slotArg);
+    int slot = (slotArg >= 0 && slotArg < CO_MAX_PLAYERS) ? (int)slotArg : -1;
+    CoRef* keepPlane = slot >= 0 ? &g_peerPP[slot] : &g_ppPlane, *keepCtrl = slot >= 0 ? &g_peerCtrl[slot] : &g_ppCtrl;
     if (!LiveObject(pawn) || (clsArg && !LiveObject(clsArg))) return Ret(lua, -1);
     int32_t possessSlot = 0, netSlot = 0, roleOff = 0, loObj = 0, loByte[2] = { 0, 0 };
     uint8_t* possessFn = NULL, *loadoutFn = NULL;
@@ -1679,9 +1718,9 @@ static int L_CoopSpawnPP(void* lua)
             g_siteRemoteFinish);
         return Ret(lua, -2);
     }
-    if (CoRefGet(&g_ppPlane) && g_destroyActor) g_destroyActor(g_ppPlane.obj, 0);
-    if (CoRefGet(&g_ppCtrl) && g_destroyActor) g_destroyActor(g_ppCtrl.obj, 0);
-    memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
+    if (CoRefGet(keepPlane) && g_destroyActor) g_destroyActor(keepPlane->obj, 0);
+    if (CoRefGet(keepCtrl) && g_destroyActor) g_destroyActor(keepCtrl->obj, 0);
+    memset(keepPlane, 0, sizeof(*keepPlane)); memset(keepCtrl, 0, sizeof(*keepCtrl));
     void* cls = *(void**)(pawn + 0x10);                                             /* UObjectBase::ClassPrivate */
     int foreign = clsArg && (void*)clsArg != cls;
     if (foreign) cls = clsArg;
@@ -1751,7 +1790,8 @@ static int L_CoopSpawnPP(void* lua)
         Log(L"coop: second player plane: its spawn didn't finish; removed");
         return Ret(lua, -6);
     }
-    CoRefSet(&g_ppPlane, plane); CoRefSet(&g_ppCtrl, ctrl);
+    CoRefSet(keepPlane, plane); CoRefSet(keepCtrl, ctrl);
+    if (slot >= 0) Log(L"coop: player %d's real plane is %p", slot + 1, plane);
     return Ret(lua, (int64_t)(uintptr_t)plane);
 }
 
@@ -1769,10 +1809,21 @@ static int L_CoopPPRole(void* lua)
     return Ret(lua, old);
 }
 
-/* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up) */
+/* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up); SV_CoopKillPP(slot): that
+ * player slot's real plane (COOP2MP T3) */
 static int L_CoopKillPP(void* lua)
 {
     int n = 0;
+    double slotArg = -1;
+    if (ArgNumber(lua, &slotArg) && slotArg >= 0 && slotArg < CO_MAX_PLAYERS) {
+        int s = (int)slotArg;
+        if (CO.players[s].plane.ref.obj && CO.players[s].plane.ref.obj == g_peerPP[s].obj) memset(&CO.players[s].plane.ref, 0, sizeof(CoRef));
+        if (CoRefGet(&g_peerPP[s]) && g_destroyActor) { g_destroyActor(g_peerPP[s].obj, 0); ++n; }
+        if (CoRefGet(&g_peerCtrl[s]) && g_destroyActor) { g_destroyActor(g_peerCtrl[s].obj, 0); ++n; }
+        memset(&g_peerPP[s], 0, sizeof(CoRef)); memset(&g_peerCtrl[s], 0, sizeof(CoRef));
+        if (n) Log(L"coop: player %d's real plane removed", s + 1);
+        return Ret(lua, n ? 1 : 0);
+    }
     if (g_follow.obj == g_ppPlane.obj) memset(&g_follow, 0, sizeof(g_follow));
     if (CoRefGet(&g_ppPlane) && g_destroyActor) { g_destroyActor(g_ppPlane.obj, 0); ++n; }
     if (CoRefGet(&g_ppCtrl) && g_destroyActor) { g_destroyActor(g_ppCtrl.obj, 0); ++n; }

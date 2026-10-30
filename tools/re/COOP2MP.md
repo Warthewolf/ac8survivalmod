@@ -209,3 +209,42 @@ InputMoment 88, Accele 112, EngineBrake 116); nothing carries the afterburner am
   player's game, where it hits their own plane, as Online Mode does.
 - Restart Mission kept the copy (its tick on, fed) and Quit Mission went back to the main menu without a crash (user:
   "quit mission worked"; no new crash report): the shared-pointer fix holds.
+
+## T3 build: the other players as real planes (0.73.4-coop2mp.5, runtime 0.30.0, protocol 4; 2026-10-30, not yet run)
+Built while step 1 of Online Mode's weapons and damage (who decides a hit) is being researched. Damage stays as 0.72's:
+each game's copies of the host's enemies attack that game's own player; hits on another player's plane here are
+refused (T1e) and only counted.
+- **Protocol 4** (runtime/coop.c): each P packet and Q record carries a flight block (CO_FL, 13 bytes: the stick int8
+  x127 (pitch, yaw, roll, throttle, brake, high-G), the afterburner amount x255 (plane+0x39d0), the speed m/s x10
+  (+0x2318), the State (+0x2b18)), filled from your plane (flight.c FlFlightBlock). A Q record is 62 bytes: the host
+  sends as many Q packets as it takes (19 records each). Games on protocol 3 (0.72.x) don't link.
+- **Real planes** (Scripts/sv_coop.lua peerTick, `[coop] real_planes = true`): each other player is spawned as their
+  airframe's player plane (SV_CoopSpawnPP's seventh argument, their slot: one per slot) where their stream says they
+  are, from the airframe code in their "hi" / the host's "pi" (a new last field). Bound with SV_CoopPeer, it isn't
+  teleported (coop.c CoDrive asks FlFeeds): its own update flies it, fed before each RemoteUpdate (flight.c FlNetFeed:
+  the pose where CoDrive would have put it, its last 0.1 s's direction, their block's speed, State and stick); its
+  afterburner glow is their block's amount (OnSurfacePP). No code in their hello (an older build) or a spawn that fails:
+  the AI stand-in as before (`coop: player N's real plane (<code>) not spawned: <why>; their AI stand-in instead`).
+- **The host's split hunt** (and the squad director's cover, push and a held flight's release on a joiner): with real
+  planes up, a flight is ordered onto one player's real plane (COOP.huntReal: EngagementOrderOverride Normal, that
+  plane, TargetFirst, fire bits 7 on each of its planes; the given player's, else the real plane the fewest flights are
+  on) instead of the stock hunt (RE_SV_Hunt_NN, AIFirst: it finds no player plane). Every 5 s a flight whose target went
+  (down, hidden, gone) is ordered onto another real plane, else back on the host (COOP.huntHost: PlayerOnlyNoLimit).
+- **Not on real planes yet (T4)**: their missiles, gun, flares and gear (0.72.2's sync fires an AI stand-in's weapons
+  and EnableLandingGear: skipped on a real plane, `coopfire: player N's plane here is their real plane: their shots
+  aren't shown on it yet`). Their paint: the plane's default.
+- **Test (two or more players, the same build: friends the zip, the user's own install the dev stage)**: pick
+  different aircraft (one the ADFX-02). Look: each other player as their own aircraft, smooth, their control surfaces
+  and afterburner moving with theirs; host flights going after the joiners; a player shot down (DOWN) hidden and back
+  after a revive; the revive camera on a real plane.
+- **Log** (AC8SurvivalMode_lua.log): `coop: player N's plane is their real <code> (a player plane, <addr>): flown by its
+  own update from their stream`; `coop: <unit> goes after player N's real plane (K planes ordered onto it)`;
+  `director: cover for player N: RE_SV_Hunt_NN: onto player N's real plane (K planes)`; `coop: <unit>'s target (player
+  N) is gone: ...`. AC8SurvivalMode.log: `coop: player N's real plane is <p>`, `coop: player N's plane is <p> (a real
+  player plane: its own update flies it, fed from their stream)`, `coop2mp: player N's real plane <p> fed from their
+  stream: speed S m/s, flight block yes, State <x>` (`NOT YET` from a game that sends none), then once a minute
+  `coop2mp: player N's real plane: F frames fed, K not ...; at most M m off where it was sent; H hits on it here
+  (refused: their own game takes its hits)`.
+- Checks: flight_test.sh (the flight block from P kept and put in the Q record), coop_test.sh (4 and 12 players on
+  protocol 4), the Lua suites. Packaged: build/release/AC8SurvivalMode_COOP2MP_0.73.4_Online_COOP_NoValka.zip (build
+  hash 9d04afb2...b66523); the dev stage (test keys) installed as the user's own.

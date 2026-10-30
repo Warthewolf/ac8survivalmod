@@ -317,6 +317,7 @@ static void DownStop(const wchar_t* why)
 }
 
 static void FdLog(void);                                /* COOP2MP's fed plane (below) */
+static void FlNetLog(void);                             /* and the other players' real planes (T3) */
 
 /* From OnBuildInput (survival_rt.c), after the game's BuildFlightInput and SV_Invert: DOWN, then the input record. */
 static void FlightInputHook(uint8_t* plane, float* out)
@@ -329,6 +330,7 @@ static void FlightInputHook(uint8_t* plane, float* out)
     }
     FlRecordInput(plane, out);
     FdLog();
+    FlNetLog();
 }
 
 /* SV_Down(plane, cx_cm, cy_cm, alt_m, radius_m) -> 1 (on, or its circle changed when it's on for that plane already: the
@@ -468,9 +470,15 @@ static struct {
     double hitDmg, hitApplied;                          /* this second's damage asked, and taken off its health */
 } FD;
 static void* g_fdNetCls;
+#define FD_AB       0x39d0     /* a player plane's afterburner amount (float, 0..1): OnSurfacePP below */
 
 static uint8_t* FdMessage(uint8_t* plane, uint8_t** in)  /* the plane's physics message, its input in *in; NULL: none */
 {
+    if (!FD.noOff) {                                     /* (every player plane's: LiveGameObject.NetworkObject) */
+        uint8_t* no = (uint8_t*)U.valuePtr(plane, L"NetworkObject");
+        FD.noOff = no ? (int32_t)(no - plane) : -1;
+        if (!g_fdNetCls) g_fdNetCls = U.findObject(L"Class", L"LiveNetworkPlayerPlane", 0, 0);
+    }
     if (FD.noOff <= 0 || !Readable(plane + FD.noOff, 8)) return NULL;
     uint8_t* n = *(uint8_t**)(plane + FD.noOff);
     if (!n || !LiveObject(n) || (g_fdNetCls && *(void**)(n + 0x10) != g_fdNetCls) || !Readable(n + FD_IN, 8) ||
@@ -527,11 +535,119 @@ static void FdFeed(uint8_t* plane)
     }
 }
 
+/* ---- COOP2MP T3: the other players' real planes (runtime 0.30.0; tools/re/COOP2MP.md T3) ---------------------------
+ * A player slot's bound puppet (SV_CoopPeer) that is a player plane (sv_coop.lua spawns one of their airframe with
+ * SV_CoopSpawnPP's slot) isn't teleported (coop.c CoDrive asks FlFeeds): its own update flies it, as T1e's copy, fed
+ * just before its RemoteUpdate from their stream: the pose where CoDrive would have put it (their snapshots a delay ago,
+ * CoSample), the direction and speed of its last 0.1 s, and their flight block (coop.c CO_FL: stick, afterburner amount,
+ * speed, State) as their game sent it. Each game sends its own plane's block with its state (FlFlightBlock). */
+static int FlFeeds(uint8_t* plane) { return plane && g_nextRemoteUpdate && CoKind(plane) == 2; }
+
+static void FlFlightBlock(uint8_t* plane, uint8_t* out)
+{
+    memset(out, 0, CO_FL);
+    if (!plane) return;
+    const FlInput* rec = NULL;                           /* its last BuildFlightInput (FlRecordInput) */
+    for (int i = 0; i < 4; ++i) if (g_flIn[i].plane == plane) rec = &g_flIn[i];
+    if (rec) for (int i = 0; i < 6; ++i) {
+        float v = rec->v[i];
+        v = (v == v) ? (v < -1.0f ? -1.0f : v > 1.0f ? 1.0f : v) : 0.0f;
+        out[i] = (uint8_t)(int8_t)(v * 127.0f + (v < 0 ? -0.5f : 0.5f));
+    }
+    float ab = Readable(plane + FD_AB, 4) ? *(float*)(plane + FD_AB) : 0.0f;
+    ab = (ab == ab) ? (ab < 0.0f ? 0.0f : ab > 1.0f ? 1.0f : ab) : 0.0f;
+    out[6] = (uint8_t)(ab * 255.0f + 0.5f);
+    float sp = Readable(plane + FD_SPEED, 4) ? *(float*)(plane + FD_SPEED) : 0.0f;
+    sp = (sp == sp) ? (sp < 0.0f ? 0.0f : sp > 6500.0f ? 6500.0f : sp) : 0.0f;
+    uint16_t spd = (uint16_t)(sp * 10.0f + 0.5f);
+    memcpy(out + 7, &spd, 2);
+    uint32_t st = Readable(plane + FD_STATE, 4) ? *(uint32_t*)(plane + FD_STATE) : 0;
+    memcpy(out + 9, &st, 4);
+}
+
+static int FlNetSlot(uint8_t* plane)                     /* the player slot whose bound puppet this is, else -1 */
+{
+    if (!CO.open || !plane) return -1;
+    for (int s = 0; s < CO_MAX_PLAYERS; ++s) if (s != CO.mySlot && CO.players[s].plane.ref.obj == plane) return s;
+    return -1;
+}
+
+static uint32_t g_netHits[CO_MAX_PLAYERS];               /* hits on a real plane here (refused: their game takes its own) */
+static void FlNetFeed(int s, uint8_t* plane)
+{
+    CoPlayer* P = &CO.players[s];
+    uint8_t* in = NULL;
+    uint8_t* r = CoRefGet(&P->plane.ref) ? FdMessage(plane, &in) : NULL;
+    double pos[3], p0[3], rot[3], at[3], atRot[3];
+    float q[4], q0[4];
+    if (!r || !P->haveOffset) { ++P->fedSkip; return; }
+    double rt = CoNow() - P->offset - CoRenderDelay(P);
+    if (!CoSample(&P->plane, rt, pos, q)) { ++P->fedSkip; return; }
+    CoQuatToRot(q, rot);
+    double d[3] = { 0, 0, 0 }, dl = 0;
+    if (CoSample(&P->plane, rt - 0.1, p0, q0)) {
+        for (int k = 0; k < 3; ++k) d[k] = pos[k] - p0[k];
+        dl = CoSqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    }
+    uint16_t spd = 0;
+    if (P->hasFl) memcpy(&spd, P->fl + 7, 2);
+    float speed = spd >= 10 ? spd / 10.0f : (float)(dl / 0.1 / 100.0);
+    float dir[3];
+    if (dl > 1.0) { dir[0] = (float)(d[0] / dl); dir[1] = (float)(d[1] / dl); dir[2] = (float)(d[2] / dl); }
+    else {
+        double cp = Cos(rot[0] * CO_PI / 180.0), sp = Sin(rot[0] * CO_PI / 180.0);
+        double cy = Cos(rot[1] * CO_PI / 180.0), sy = Sin(rot[1] * CO_PI / 180.0);
+        dir[0] = (float)(cp * cy); dir[1] = (float)(cp * sy); dir[2] = (float)sp;
+    }
+    int32_t loc[3];
+    for (int k = 0; k < 3; ++k) loc[k] = (int32_t)(pos[k] + (pos[k] < 0 ? -0.5 : 0.5));
+    float frot[3] = { (float)rot[0], (float)rot[1], (float)rot[2] };
+    int32_t state = 0;
+    if (P->hasFl) memcpy(&state, P->fl + 9, 4);
+    state &= ~((1 << 20) | (1 << 9));
+    memcpy(r + 0x20, dir, 12); memcpy(r + 0x2c, loc, 12); memcpy(r + 0x38, frot, 12);
+    memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
+    if (P->hasFl) {
+        float v[6];
+        for (int i = 0; i < 6; ++i) v[i] = (int8_t)P->fl[i] / 127.0f;
+        memcpy(in + 0x08, v, sizeof(v)); in[0x20] = 4;
+    }
+    if (CoReadPose(plane, at, atRot)) {                  /* (where it is against where it was sent: the minute's most) */
+        double ex = at[0] - pos[0], ey = at[1] - pos[1], ez = at[2] - pos[2], off = CoSqrt(ex * ex + ey * ey + ez * ez);
+        if (off > P->fedOffCm) P->fedOffCm = off;
+    }
+    if (!P->fed) Log(L"coop2mp: player %d's real plane %p fed from their stream: speed %d m/s, flight block %s, State %x", s + 1,
+        plane, (int32_t)speed, P->hasFl ? L"yes" : L"NOT YET (their game sends none: an older build?)", (uint32_t)state);
+    ++P->fed;
+}
+
+/* once a minute (from FlightInputHook): each real plane fed here */
+static double g_netLogAt;
+static void FlNetLog(void)
+{
+    double now = CoNow();
+    if (!CO.open || now - g_netLogAt < 60.0) return;
+    g_netLogAt = now;
+    for (int s = 0; s < CO_MAX_PLAYERS; ++s) {
+        CoPlayer* P = &CO.players[s];
+        if (s == CO.mySlot || !(P->fed || P->fedSkip)) continue;
+        Log(L"coop2mp: player %d's real plane: %u frames fed, %u not (no stream yet / no message) this minute; at most %d m off "
+            L"where it was sent; %u hits on it here (refused: their own game takes its hits)", s + 1, P->fed, P->fedSkip,
+            P->fedOffCm >= 0 ? (int32_t)(P->fedOffCm / 100.0) : -1, g_netHits[s]);
+        P->fed = P->fedSkip = 0; P->fedOffCm = -1; g_netHits[s] = 0;
+    }
+}
+
 static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
 {
-    if (FD.on && plane && plane == FD.plane.obj && CoRefGet(&FD.plane)) {
-        ++FD.calls; FD.lastCallAt = CoNow();
-        FdFeed(plane);
+    if (plane) {
+        if (FD.on && plane == FD.plane.obj && CoRefGet(&FD.plane)) {
+            ++FD.calls; FD.lastCallAt = CoNow();
+            FdFeed(plane);
+        } else {
+            int s = FlNetSlot(plane);
+            if (s >= 0) FlNetFeed(s, plane);
+        }
     }
     return g_nextRemoteUpdate(plane, dt);
 }
@@ -540,14 +656,17 @@ static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
  * player plane's surface component update (0x147d32b00, sigs.h kSigSurfacePP) takes its afterburner alpha from the
  * plane's afterburner amount plane+0x39d0. Your own plane's comes from its movement update (0x14731e7e0 writes the
  * block plane+0x39c0.. from its flight engine at +0x3088); nothing writes a remote plane's. So the fed plane gets the
- * source's, written just before the component reads it. */
-#define FD_AB       0x39d0     /* a player plane's afterburner amount (float, 0..1) */
+ * source's, written just before the component reads it; a real plane of another player's (T3) their game's own. */
 typedef uint64_t (*SurfacePPFn)(uint8_t* comp, float dt);
 static uint8_t*    g_fSurfacePP;                        /* found by FindFunctions (sigs.h kSigSurfacePP) */
 static SurfacePPFn g_nextSurfacePP;
 
 static uint64_t OnSurfacePP(uint8_t* comp, float dt)
 {
+    uint8_t* pl = (comp && Readable(comp + 0x188, 8)) ? *(uint8_t**)(comp + 0x188) : NULL;
+    int ns = (pl && !(FD.on && pl == FD.plane.obj)) ? FlNetSlot(pl) : -1;
+    if (ns >= 0 && CO.players[ns].hasFl && CoRefGet(&CO.players[ns].plane.ref))
+        *(float*)(pl + FD_AB) = CO.players[ns].fl[6] / 255.0f;
     if (FD.on && comp && Readable(comp + 0x188, 8)) {
         uint8_t* plane = *(uint8_t**)(comp + 0x188);
         uint8_t* src = (plane && plane == FD.plane.obj && CoRefGet(&FD.plane)) ? CoRefGet(&FD.src) : NULL;
@@ -574,7 +693,13 @@ static PPDamageFn g_nextPPDamage;
 
 static float OnPPDamage(uint8_t* plane, float dmg, uint8_t* evt, uint8_t* inst, void* a5)
 {
-    if (!(FD.on && plane && plane == FD.plane.obj && CoRefGet(&FD.plane))) return g_nextPPDamage(plane, dmg, evt, inst, a5);
+    if (!(FD.on && plane && plane == FD.plane.obj && CoRefGet(&FD.plane))) {
+        int s = FlNetSlot(plane);                         /* (T3: another player's real plane; counted, FlNetLog) */
+        if (s >= 0 && !g_netHits[s]++)
+            Log(L"coop2mp: a hit on player %d's real plane here: %d damage (x10), from %p (refused here: their own game takes their "
+                L"hits; counted once a minute)", s + 1, (int32_t)(dmg * 10), inst);
+        return g_nextPPDamage(plane, dmg, evt, inst, a5);
+    }
     int32_t before = CoHealth(plane);
     float took = g_nextPPDamage(plane, dmg, evt, inst, a5);
     int32_t after = CoHealth(plane);
@@ -630,10 +755,7 @@ static int L_CoopFeed(void* lua)
     if (!src || !LiveObject(plane) || !LiveObject(src) || CoKind(plane) != 2 || CoKind(src) != 2) return Ret(lua, -1);
     if (!(f > -5000 && f < 5000 && rt > -5000 && rt < 5000 && up > -5000 && up < 5000)) return Ret(lua, -1);
     if (!g_nextRemoteUpdate) return Ret(lua, -2);
-    uint8_t* no = (uint8_t*)U.valuePtr(plane, L"NetworkObject");
     FD.on = 0;
-    FD.noOff = no ? (int32_t)(no - plane) : -1;
-    if (!g_fdNetCls) g_fdNetCls = U.findObject(L"Class", L"LiveNetworkPlayerPlane", 0, 0);
     uint8_t* in = NULL;
     uint8_t* r = FdMessage(plane, &in);
     if (!r) {
