@@ -525,6 +525,15 @@ hunt's, each plane onto the enemies nearest them, COOP.coverFor; else the host a
 EngagementOrderOverride works on an allied plane onto an enemy. Lesson (not yet a hard rule, unconfirmed): any Lua list
 of game objects kept between ticks must check valid() before each read and drop what's gone at once; a pcall doesn't
 catch a freed object's access violation.
+0.73.25-coop2mp.26 (runtime 0.32.4; built and installed 2026-10-31, not yet run in game; zip 0.73.25, hash
+98a359a9...ecd30d4; replaces 0.73.24): the info wall (user, 2026-10-31: "an information wall that appears in the center of
+the screen on a button press and hides on a button press. Similar to how the end of round information screen works";
+with more than 3 players the corner's CO-OP lines had no room). The I key opens and shuts a centred panel styled as the
+run's summary: every co-op player (name, HOST / YOU / LOST, aircraft, FLYING / AT THE AIRFIELD / DOWN / NOT IN THE
+MISSION, health; two columns from 9, all 24 fit), then ALLIES, ITEMS and the run's kills (sv_hud.lua wallBuild /
+wallRows / wallTick, sv_coop.lua COOP.wallInfo, CFG.hud.wall, CFG.hud.text.wall_*). The corner keeps NEXT always and
+ALLIES / ITEMS / CO-OP as peeks (no player lines any more), hidden while the wall is open; each level starts with it shut
+(start_open: open). tools/re/HUD_LAYOUT.md has the layout, log lines and checklist; hud_info_test.sh 79 checks.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

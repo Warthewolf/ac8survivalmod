@@ -3,17 +3,21 @@
 -- the real sv_core, sv_config, sv_ai, sv_hud, sv_allies, sv_tactical and sv_coop (M exposed), the widgets stubbed:
 --   the key: one UE4SS key bind, I without Ctrl (Ctrl+I with ctrl), left in by strip_test_only; a key name UE4SS
 --     doesn't know, or no key binds at all, leaves the rows always shown (logged); enabled = false binds nothing;
---   the stack: NEXT first, then ALLIES, ITEMS, CO-OP and its four player lines, the last above the game's minimap;
---     without the key, today's order (CO-OP first) and every row shown whenever it has something in it;
+--   the stack: NEXT first, then ALLIES, ITEMS and CO-OP, the last above the game's minimap; without the key, today's
+--     order (CO-OP first) and every row shown whenever it has something in it;
 --   closed: a row shows peek_s (and up to the next second's pass) when it first has something, when its news changes
 --     (an item bought or used; an ally flight there or gone, the allies' order) or when it comes back, never for a
 --     count that ticks (the ECM's seconds, an ally flight's aircraft, the kills); a change while the HUD is hidden
 --     (paused) peeks once it's back up;
---   the key's press: the rows shown on the next pass (not the next second's), logged "hud: info rows shown (I)", hidden
---     again on the next press; outside a run nothing; the rows read once a second, not every pass;
+--   the key's press (2026-10-31: the info wall, "an information wall that appears in the center of the screen on a
+--     button press and hides on a button press"): the wall on the next pass (not the next second's), centred, as tall as
+--     its rows, logged "hud: info wall shown (I)", its title, the allies, items and kills, the footer naming the key; the
+--     corner's rows hidden while it's open; shut on the next press; outside a run nothing; read once a second; the
+--     run's summary over it hides it; each level starts shut (start_open: open);
 --   co-op: the compact row peeks when a player joins, drops or is shot down or a link is lost, not for health, the
---     airfield or a state gone stale (a downed player's too); open, "CO-OP n/max" and a line a player (FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION,
---     health), the fourth "+N MORE" in a bigger room; a joiner still looking for its host has the one row.
+--     airfield or a state gone stale (a downed player's too); on the wall, "CO-OP n/max PLAYERS" and a line a player
+--     (HOST, YOU, LOST; their aircraft; FLYING / AT THE AIRFIELD / DOWN / NOT IN THE MISSION; health), every one of 24
+--     in two columns from 9; a joiner still looking for its host has the header alone.
 local WORK = arg[1]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -36,7 +40,7 @@ function ExecuteInGameThread(fn) fn() end
 -- the widgets: each records its text, visibility and its canvas slot's offsets
 local Slot = {}
 Slot.__index = Slot
-function Slot:SetOffsets(o) self.top, self.left = o.Top, o.Left end
+function Slot:SetOffsets(o) self.top, self.left, self.width, self.height = o.Top, o.Left, o.Right, o.Bottom end
 function Slot:SetAnchors() end
 function Slot:SetAlignment() end
 function Slot:SetAutoSize() end
@@ -125,8 +129,8 @@ do
     check(#binds == 1 and binds[1].key == 79 and has(line("hud: info key", n), "info key O:"), "a key name in any case (o -> O)")
     n = reload()
     check(#binds == 1 and binds[1].key == 73 and #binds[1].mods == 0 and has(line("hud: info key", n), "info key I: ")
-          and has(line("hud: info key", n), "hidden until it's pressed") and has(line("hud: info key", n), "5.0 s"),
-          "the default: I without Ctrl, the rows hidden until it's pressed (logged)")
+          and has(line("hud: info key", n), "the info wall") and has(line("hud: info key", n), "shown when it's pressed")
+          and has(line("hud: info key", n), "5.0 s"), "the default: I without Ctrl, the wall shown when it's pressed (logged)")
 end
 local press = binds[1].fn
 part("sv_allies.lua"); part("sv_tactical.lua")
@@ -180,11 +184,12 @@ tick(0)
 do
     local names = {}
     for _, r in ipairs(H.stack) do names[#names + 1] = r.w.name:match("^SV_(%a+%d?)_") end
-    check(table.concat(names, ",") == "Next,Allies,Items,Coop,CoopPlayer1,CoopPlayer2,CoopPlayer3,CoopPlayer4",
-          "NEXT first, then ALLIES, ITEMS, CO-OP and its four player lines (" .. table.concat(names, ",") .. ")")
+    check(table.concat(names, ",") == "Next,Allies,Items,Coop",
+          "NEXT first, then ALLIES, ITEMS and CO-OP, no player lines (" .. table.concat(names, ",") .. ")")
     check(H.stackY == 516, "the stack starts at 516 (under ROUND, ZOLLARS, AIRFIELD)")
     local last = H.stackY + (#H.stack - 1) * CFG.hud.line
-    check(last + CFG.hud.line <= 1108, "all eight rows shown end above the game's minimap (top 1108; the last at " .. last .. ")")
+    check(last + CFG.hud.line <= 1108, "all four rows shown end above the game's minimap (top 1108; the last at " .. last .. ")")
+    check(H.wallPanel and H.wallPanel.vis == VIS.Collapsed and #H.wallRows >= 17, "the info wall built, shut, with room for 24 players in two columns")
     check(not shown("Allies") and not shown("Items") and not shown("Coop"), "solo, nothing bought: no info row")
 end
 
@@ -256,36 +261,60 @@ ALLY.run.up.SV_Unit_Ally1 = { kind = "air" }
 tick(1)
 check(shown("Allies") and has(text("Allies"), CFG.allies.aircraft.name), "another ally flight bought: a peek")
 
----------------------------------------------------------------------------------------------------- the key
-print("the key's press")
+---------------------------------------------------------------------------------------------------- the key: the wall
+print("the key's press: the info wall")
+local function wallOn() return H.wallOn == true and H.wallPanel.vis == VIS.HitTestInvisible end
+local function wallRow(i) local r = H.wallRows[i]; return r and r.aOn and r.a.text or nil end
+local function wallRowB(i) local r = H.wallRows[i]; return r and r.bOn and r.b.text or nil end
 tick(6)
 check(not shown("Allies") and not shown("Items") and not row("Items").shown, "closed, no news: both rows hidden")
 RUN.items = { airstrike = 2 }
 tick(7)
+check(not wallOn(), "the wall shut until the key's pressed")
 n0 = #logs
 local before = calls.ally
 D.now = now
 press()
-check(logs[#logs] == "hud: info rows shown (I)", "a press logs 'hud: info rows shown (I)'")
+check(logs[#logs] == "hud: info wall shown (I)", "a press logs 'hud: info wall shown (I)'")
 hudTick(now, false, pc)
-check(shown("Allies") and shown("Items") and text("Items") == "ITEMS: AIRSTRIKE 2" and calls.ally == before + 1,
-      "the next pass shows them (not the next second's)")
+check(wallOn() and calls.ally == before + 2, "the next pass opens the wall (not the next second's), the corner row and the wall read at once")
+check(H.wallTitle.text == "INFORMATION" and H.wallFoot.text == "PRESS I TO CLOSE", "its title, and the footer naming the key")
+check(has(wallRow(1), "ALLIES:  ") and has(wallRow(1), "COVER") and wallRow(2) == "ITEMS:  AIRSTRIKE 2"
+      and wallRow(3) == "THIS RUN'S KILLS:  YOU 0   ALLIES 3   SHIPS 0   DEFENCES 0" and wallRow(4) == nil,
+      "solo: the allies, the items and the run's kills (" .. tostring(wallRow(1)) .. " / " .. tostring(wallRow(2)) .. " / "
+      .. tostring(wallRow(3)) .. ")")
+do
+    local wc, h = CFG.hud.wall, CFG.hud.wall.top + 3 * CFG.hud.line + CFG.hud.wall.bottom
+    local sl = H.wallSlot
+    check(sl.left == DESIGN_W / 2 and sl.width == wc.w and sl.height == h and sl.top == math.floor(wc.y_mid - h / 2),
+          "centred, as tall as its 3 rows (top " .. tostring(sl.top) .. ", " .. tostring(sl.width) .. " x " .. tostring(sl.height) .. ")")
+    check(H.wallRows[1].sa.left == DESIGN_W / 2 and H.wallRows[2].sa.top == H.wallRows[1].sa.top + CFG.hud.line
+          and H.wallRows[1].sa.top == sl.top + wc.top, "its rows centred, a line apart, under the title")
+end
+check(not shown("Allies") and not shown("Items"), "the corner's ALLIES and ITEMS hidden while it's open")
 tick(10)
-check(shown("Allies") and shown("Items"), "open: they stay")
+check(wallOn(), "open: it stays")
 unitAlive = 2
 tick(1)
-check(has(text("Allies"), CFG.allies.wingmen.name .. " 2"), "open: a count shown as it changes")
+check(has(wallRow(1), CFG.allies.wingmen.name .. " 2"), "open: a count shown as it changes")
+LB.show = { state = "sending" }
+tick(1)
+check(not wallOn(), "the run's summary up: the wall hidden under it")
+LB.show = nil
+tick(1)
+check(wallOn(), "... and back once it's gone")
 press()
-check(logs[#logs] == "hud: info rows hidden (I)", "the next press logs 'hud: info rows hidden (I)'")
+check(logs[#logs] == "hud: info wall hidden (I)", "the next press logs 'hud: info wall hidden (I)'")
 hudTick(now, false, pc)
-check(not shown("Allies") and not shown("Items"), "... and the next pass hides them")
+check(not wallOn() and H.wallRows[1].a.vis == VIS.Collapsed and not shown("Allies") and not shown("Items"),
+      "... and the next pass shuts it (what changed while it was open is no peek)")
 local savedD = D
 D = nil
 n0 = #logs
 press()
 D = savedD
 hudTick(now, false, pc)
-check(#logs == n0 and not shown("Items"), "a press outside a run does nothing")
+check(#logs == n0 and not wallOn(), "a press outside a run does nothing")
 do
     local a = calls.ally
     tick(10)
@@ -294,12 +323,16 @@ end
 D.state, D.at = "wait", now + 20
 press()
 hudTick(now, false, pc)
-check(row("Next").slot.top == 516 and row("Allies").slot.top == 584 and row("Items").slot.top == 652,
-      "open: NEXT stays first at 516, ALLIES and ITEMS under it")
+check(wallOn() and row("Next").slot.top == 516 and shown("Next"), "open: NEXT stays in the corner, first at 516")
 press()
 hudTick(now, false, pc)
-check(row("Next").slot.top == 516 and shown("Next"), "closed: NEXT where it was")
+check(not wallOn() and row("Next").slot.top == 516 and shown("Next"), "closed: NEXT where it was")
 D.state = "fighting"
+press()
+hudTick(now, false, pc)
+fresh()
+tick(0)
+check(not wallOn(), "open as a level ends: the next level starts with it shut")
 
 ---------------------------------------------------------------------------------------------------- co-op
 print("co-op")
@@ -312,7 +345,7 @@ M.wasLost = nil
 tick(0)
 local maxP = math.max(2, math.min(24, math.floor(tonumber(CFG.coop.max_players) or 24)))
 check(shown("Coop") and text("Coop") == string.format("CO-OP 2/%d: WAR (HOST)  CRESSENDO", maxP), "a co-op room: its row peeks (" .. tostring(text("Coop")) .. ")")
-check(not shown("CoopPlayer1"), "... closed: no player lines")
+check(not wallOn(), "... the wall shut")
 tick(6)
 check(not shown("Coop"), "... over")
 M.peers[1].hpPct = 40
@@ -346,31 +379,55 @@ M.wasLost = { [2] = true }
 tick(1)
 check(shown("Coop") and has(text("Coop"), "REAPER (LOST)"), "a link lost: a peek")
 tick(6)
+M.myAc, M.roster[1].ac = "F-16C", "SU35"
 press()
 hudTick(now, false, pc)
-check(shown("Coop") and text("Coop") == string.format("CO-OP 3/%d", maxP), "open: 'CO-OP 3/" .. maxP .. "' (" .. tostring(text("Coop")) .. ")")
-check(text("CoopPlayer1") == "  WAR (HOST)   FLYING  100%" and text("CoopPlayer2") == "  CRESSENDO   DOWN"
-      and text("CoopPlayer3") == "  REAPER (LOST)   NOT IN THE MISSION" and not shown("CoopPlayer4"),
-      "... a line a player: " .. tostring(text("CoopPlayer1")) .. " / " .. tostring(text("CoopPlayer2")) .. " / " .. tostring(text("CoopPlayer3")))
+check(wallOn() and wallRow(1) == string.format("CO-OP  3/%d PLAYERS", maxP), "the wall: 'CO-OP  3/" .. maxP .. " PLAYERS' (" .. tostring(wallRow(1)) .. ")")
+check(wallRow(2) == "WAR (HOST, YOU)   F-16C   FLYING   100%" and wallRow(3) == "CRESSENDO   SU35   DOWN"
+      and wallRow(4) == "REAPER (LOST)   NOT IN THE MISSION" and wallRow(5) == "" and wallRow(6) == "ALLIES:  NONE"
+      and wallRow(7) == "ITEMS:  NONE",
+      "... a line a player with their aircraft, a gap, the allies and items: " .. tostring(wallRow(2)) .. " / " .. tostring(wallRow(3))
+      .. " / " .. tostring(wallRow(4)) .. " / " .. tostring(wallRow(6)))
+check(not shown("Coop"), "... the corner's CO-OP row hidden while it's open")
 M.peers[1].alive, M.peers[1].flags = true, 3
 onAirfield = true
 tick(1)
-check(text("CoopPlayer1") == "  WAR (HOST)   AT THE AIRFIELD  100%" and text("CoopPlayer2") == "  CRESSENDO   AT THE AIRFIELD  40%",
-      "... updated: " .. tostring(text("CoopPlayer1")) .. " / " .. tostring(text("CoopPlayer2")))
+check(wallRow(2) == "WAR (HOST, YOU)   F-16C   AT THE AIRFIELD   100%" and wallRow(3) == "CRESSENDO   SU35   AT THE AIRFIELD   40%",
+      "... updated: " .. tostring(wallRow(2)) .. " / " .. tostring(wallRow(3)))
 onAirfield = false
 for s = 3, 5 do M.roster[s] = { name = "P" .. s } end
 tick(1)
-check(text("Coop") == string.format("CO-OP 6/%d", maxP) and shown("CoopPlayer4") and text("CoopPlayer4") == "  +3 MORE",
-      "6 players: three lines and '+3 MORE' (" .. tostring(text("CoopPlayer4")) .. ")")
+check(wallRow(1) == string.format("CO-OP  6/%d PLAYERS", maxP) and wallRow(7) == "P5   NOT IN THE MISSION" and wallRowB(2) == nil
+      and H.wallRows[2].sa.left == DESIGN_W / 2, "6 players: every one, in one column (" .. tostring(wallRow(7)) .. ")")
+for s = 6, 23 do M.roster[s] = { name = "P" .. s } end
+tick(1)
+do
+    local wc, sl = CFG.hud.wall, H.wallSlot
+    check(wallRow(1) == string.format("CO-OP  24/%d PLAYERS", maxP) and wallRow(2) == "WAR (HOST, YOU)   F-16C   FLYING   100%"
+          and wallRowB(2) == "P12   NOT IN THE MISSION" and wallRow(13) == "P11   NOT IN THE MISSION"
+          and wallRowB(13) == "P23   NOT IN THE MISSION" and wallRow(14) == "" and has(wallRow(15), "ALLIES:")
+          and wallRow(17) ~= nil and wallRow(18) == nil,
+          "24 players: all of them, 12 a column, then the gap, allies, items, kills (" .. tostring(wallRowB(13)) .. ")")
+    check(H.wallRows[1].sa.left == DESIGN_W / 2 and H.wallRows[2].sa.left == DESIGN_W / 2 - wc.col_dx
+          and H.wallRows[2].sb.left == DESIGN_W / 2 + wc.col_dx and H.wallRows[15].sa.left == DESIGN_W / 2,
+          "... the header and the rows under them across the middle, the players in two columns")
+    check(sl.width == wc.w2 and sl.top >= 0 and sl.top + sl.height <= DESIGN_H,
+          "... the wide panel, on screen (top " .. tostring(sl.top) .. ", " .. tostring(sl.height) .. " tall)")
+end
+for s = 6, 23 do M.roster[s] = nil end
+tick(1)
+check(wallRowB(2) == nil and H.wallRows[2].sa.left == DESIGN_W / 2 and H.wallSlot.width == CFG.hud.wall.w,
+      "back to 6: one column, the narrow panel")
 press()
 hudTick(now, false, pc)
-check(not shown("Coop") and not shown("CoopPlayer1") and not shown("CoopPlayer4"), "closed again: the row and its lines hidden (the joins seen while open are no peek)")
+check(not wallOn() and not shown("Coop"), "closed again: the wall shut (the joins seen while open are no peek)")
 COOP.role, M.state, M.auto = "join", "looking", true
 tick(1)
 check(shown("Coop") and text("Coop") == "CO-OP: LOOKING FOR A HOST...", "a joiner looking for its host: one row, its peek")
 press()
 hudTick(now, false, pc)
-check(shown("Coop") and not shown("CoopPlayer1"), "... open: still the one row")
+check(wallOn() and wallRow(1) == "CO-OP: LOOKING FOR A HOST..." and wallRow(2) == "" and has(wallRow(3), "ALLIES:"),
+      "... the wall: the header alone")
 press()
 hudTick(now, false, pc)
 COOP.open = false
@@ -394,7 +451,7 @@ tick(30)
 check(shown("Items") and shown("Coop") and has(text("Coop"), "CO-OP 6/"), "every row shown whenever it has something, the compact co-op row")
 press()
 hudTick(now, false, pc)
-check(shown("Items") and shown("Coop"), "a press changes nothing")
+check(shown("Items") and shown("Coop") and H.wallPanel == nil, "a press changes nothing (no wall built)")
 
 ---------------------------------------------------------------------------------------------------- start_open
 print("start_open = true")
@@ -406,10 +463,10 @@ check(#binds == 1 and has(line("hud: info key", n0), "open at the start"), "logg
 fresh(); now = 500
 RUN.items = { airstrike = 1 }
 tick(20)
-check(shown("Items"), "the rows open without a press, 20 s on")
+check(H.wallOn == true and not shown("Items"), "the wall open without a press, 20 s on")
 binds[1].fn()
 hudTick(now, false, pc)
-check(not shown("Items") and logs[#logs] == "hud: info rows hidden (I)", "the first press hides them")
+check(not H.wallOn and logs[#logs] == "hud: info wall hidden (I)", "the first press shuts it")
 
 logFile:close()
 print(fails == 0 and "hud info test: all passed" or ("hud info test: " .. fails .. " FAILED"))

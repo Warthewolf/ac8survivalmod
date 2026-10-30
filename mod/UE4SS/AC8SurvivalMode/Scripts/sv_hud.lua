@@ -51,11 +51,44 @@ local function fontFace(t)         -- typeface name a text actually has (for the
     return ok and s or "?"
 end
 
--- The info key (CFG.hud.info): its rows open or not, kept across levels (the key flips it, hudTick applies it); open,
--- CO-OP has up to INFO_PLAYERS lines under it: 4, so the stack (NEXT, ALLIES, ITEMS, CO-OP and these, from y 516)
--- ends above the game's minimap (top 1108: tools/re/HUD_LAYOUT.md)
+-- The info key (CFG.hud.info): the info wall open or not (the key flips it, hudTick applies it; each level starts with
+-- start_open). The corner's stack (NEXT, ALLIES, ITEMS, CO-OP, from y 516) ends above the game's minimap (top 1108:
+-- tools/re/HUD_LAYOUT.md); the wall has a row for every player: up to 24, in two columns (header, 12 rows, a gap, the
+-- allies, the items and the kills: 17 of WALL_ROWS).
 local info = { open = CFG.hud.info.start_open == true }
-local INFO_PLAYERS = 4
+local WALL_ROWS = 20
+
+-- The info wall's widgets (hudBuild): a panel as the run's summary's (CFG.hud.summary's fill and edge), a centred title,
+-- WALL_ROWS rows of two texts (a and b, the second column's), a footer; all collapsed, placed by wallTick
+local function wallBuild(canvas)
+    local hc, sm = CFG.hud, CFG.hud.summary
+    local panel = newWidget("CanvasPanel", "WallPanel")
+    H.wallSlot = slotIn(canvas, panel, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, 0, hc.wall.w, 400 }, { 0.5, 0 }, false)
+    local fill = newWidget("Image", "WallFill")
+    fill:SetColorAndOpacity({ R = sm.fill[1], G = sm.fill[2], B = sm.fill[3], A = sm.fill[4] })
+    slotIn(panel, fill, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+    local e = sm.edge_px
+    newBar(panel, { 0, 0 }, { 1, 0 }, { 0, 0, 0, e }, sm.edge)          -- top
+    newBar(panel, { 0, 1 }, { 1, 1 }, { 0, -e, 0, e }, sm.edge)         -- bottom
+    newBar(panel, { 0, 0 }, { 0, 1 }, { 0, 0, e, 0 }, sm.edge)          -- left
+    newBar(panel, { 1, 0 }, { 1, 1 }, { -e, 0, e, 0 }, sm.edge)         -- right
+    H.wallPanel = panel
+    local function centred(name, spacing)
+        local t = newText(name, 1, spacing)
+        return t, slotIn(canvas, t, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, 0, 0, 0 }, { 0.5, 0 }, true)
+    end
+    H.wallTitle, H.wallTitleSlot = centred("WallTitle", hc.banner_letter_spacing)
+    H.wallRows = {}
+    for i = 1, WALL_ROWS do
+        local r = {}
+        r.a, r.sa = centred("WallA" .. i)
+        r.b, r.sb = centred("WallB" .. i)
+        H.wallRows[i] = r
+    end
+    H.wallFoot, H.wallFootSlot = centred("WallFoot")
+    panel:SetVisibility(VIS.Collapsed); H.wallTitle:SetVisibility(VIS.Collapsed); H.wallFoot:SetVisibility(VIS.Collapsed)
+    for _, r in ipairs(H.wallRows) do r.a:SetVisibility(VIS.Collapsed); r.b:SetVisibility(VIS.Collapsed) end
+end
 
 local function hudBuild(pc)
     local wbl = cdo("/Script/UMG.Default__WidgetBlueprintLibrary")
@@ -114,20 +147,20 @@ local function hudBuild(pc)
     end
     -- NEXT ROUND / the special's row, then ALLIES and ITEMS (the review build's): each shown only with something in it,
     -- stacked from here down in that order (stackRows). With the info key (CFG.hud.info) NEXT comes first, so it stays
-    -- put while the info rows open or peek, and CO-OP (with a line a player under it, open) last, so its length moves
-    -- nothing; without it CO-OP is first, as before.
+    -- put while the info rows peek, and CO-OP last; without it CO-OP is first, as before.
     H.allies = newText("Allies"); H.items = newText("Items")
     H.coop = newText("Coop")                               -- CO-OP: who is playing (sv_coop.lua COOP.hudLine)
-    H.coopRows, H.peek = {}, {}
-    local rows = { H.coop, H.next, H.allies, H.items }
-    if hc.info.enabled then
-        rows = { H.next, H.allies, H.items, H.coop }
-        for i = 1, INFO_PLAYERS do H.coopRows[i] = newText("CoopPlayer" .. i); rows[#rows + 1] = H.coopRows[i] end
-    end
+    H.peek = {}
+    local rows = hc.info.enabled and { H.next, H.allies, H.items, H.coop } or { H.coop, H.next, H.allies, H.items }
     H.stackY, H.stack = rowY, {}
     for _, w in ipairs(rows) do
         H.stack[#H.stack + 1] = { w = w, slot = slotIn(canvas, w, { 0, 0 }, { 0, 0 }, { hc.x, rowY, 0, 0 }, { 0, 0 }, true) }
         w:SetVisibility(VIS.Collapsed)
+    end
+    -- the info wall (before the banner, which draws over it); each level starts with it as start_open says
+    if hc.info.enabled then
+        wallBuild(canvas)
+        info.open = hc.info.start_open == true
     end
 
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
@@ -216,11 +249,11 @@ local function stackText(w, key, s)
     end
 end
 
--- One info row (CFG.hud.info): text s shown while the info key has them open, or for peek_s once its news (what it
--- says that's worth a look, not a count that keeps ticking; the text itself without one) differs from the last, or it
--- comes back; else collapsed. A peek waits for the HUD to be up (H.shown: not paused, a plane, the game HUD on; solo
--- that covers the STORE, which pauses, but in co-op it doesn't pause: untested there); news seen with the rows open is
--- no peek once they're shut. True if shown.
+-- One info row (CFG.hud.info): text s shown for peek_s once its news (what it says that's worth a look, not a count
+-- that keeps ticking; the text itself without one) differs from the last, or it comes back; else collapsed, and always
+-- while the info wall is open (it holds all of it). A peek waits for the HUD to be up (H.shown: not paused, a plane, the
+-- game HUD on; solo that covers the STORE, which pauses, but in co-op it doesn't pause: untested there); news seen with
+-- the wall open is no peek once it's shut. True if shown.
 local function infoRow(w, key, s, news, now)
     local ic = CFG.hud.info
     if not ic.enabled then stackText(w, key, s); return s ~= nil end
@@ -230,15 +263,92 @@ local function infoRow(w, key, s, news, now)
     if s == nil then pk.news, pk.due, pk.till = nil, nil, nil
     elseif news ~= pk.news then pk.news, pk.due = news, true end
     if pk.due and H.shown then pk.due, pk.till = nil, (not info.open) and now + ic.peek_s or nil end
-    local shown = s ~= nil and (info.open or (pk.till ~= nil and now < pk.till))
+    local shown = s ~= nil and not info.open and pk.till ~= nil and now < pk.till
     stackText(w, key, shown and s or nil)
     return shown
 end
 
--- COOP.hudLine's row, its news and (n > 0) its player lines; nil solo (sv_coop.lua loads after this part)
-local function coopLine(n)
-    if COOP and COOP.hudLine then return COOP.hudLine(n) end
+-- COOP.hudLine's row and its news; nil solo (sv_coop.lua loads after this part)
+local function coopLine()
+    if COOP and COOP.hudLine then return COOP.hudLine() end
     return nil
+end
+
+-- The info wall's rows: { a = text } across the middle, or { a, b } a player in each column; co-op's players first
+-- (COOP.wallInfo: a line each, in two columns from CFG.hud.wall.cols_from), then the allies, the items and the run's
+-- kills. -> the rows, and whether the players take two columns
+local function wallRows(now)
+    local t, wc, rows, two = CFG.hud.text, CFG.hud.wall, {}, false
+    local okC, co = pcall(function() return COOP and COOP.wallInfo and COOP.wallInfo() end)
+    if not okC then hudLog("wallcoop", "info wall: co-op error " .. tostring(co)); co = nil end
+    if co then
+        rows[#rows + 1] = { a = co.header }
+        local p = co.players or {}
+        two = #p >= wc.cols_from
+        local half = two and math.ceil(#p / 2) or #p
+        for i = 1, half do rows[#rows + 1] = { a = p[i], b = two and (p[half + i] or "") or nil } end
+        rows[#rows + 1] = { a = "" }
+    end
+    local okA, al = pcall(ALLY.hudLine)
+    rows[#rows + 1] = { a = string.format(t.wall_allies, (okA and al) or t.wall_none) }
+    local okI, it = pcall(TAC.line, now)
+    rows[#rows + 1] = { a = string.format(t.wall_items, (okI and it) or t.wall_none) }
+    if not (okA and okI) then hudLog("wallerr", "info wall: allies / items error " .. tostring(okA and it or al)) end
+    local k = RUN and RUN.kills or {}
+    rows[#rows + 1] = { a = string.format(t.wall_kills, k.you or 0, k.allies or 0, k.ships or 0, k.defences or 0) }
+    return rows, two
+end
+
+-- The info wall on screen while it's open (and the run's summary isn't up): its rows read, the panel as tall as they
+-- need and as wide as the columns, centred on CFG.hud.wall.y_mid; widgets moved only when the shape changes
+local function wallTick(now, open)
+    if not H.wallPanel then return end
+    if not open then
+        if H.wallOn then
+            H.wallOn = false
+            H.wallPanel:SetVisibility(VIS.Collapsed); H.wallTitle:SetVisibility(VIS.Collapsed); H.wallFoot:SetVisibility(VIS.Collapsed)
+            for _, r in ipairs(H.wallRows) do
+                if r.aOn then r.aOn = false; r.a:SetVisibility(VIS.Collapsed) end
+                if r.bOn then r.bOn = false; r.b:SetVisibility(VIS.Collapsed) end
+            end
+        end
+        return
+    end
+    local rows, two = wallRows(now)
+    local hc, wc, t = CFG.hud, CFG.hud.wall, CFG.hud.text
+    local n = math.min(#rows, WALL_ROWS)
+    local w, h = two and wc.w2 or wc.w, wc.top + n * hc.line + wc.bottom
+    local y0 = math.floor(wc.y_mid - h / 2)
+    local mid = DESIGN_W / 2
+    local shape = n .. (two and "/2" or "/1")
+    if shape ~= H.wallShape then
+        H.wallShape = shape
+        pcall(function() H.wallSlot:SetOffsets({ Left = mid, Top = y0, Right = w, Bottom = h }) end)
+        pcall(function() H.wallTitleSlot:SetOffsets({ Left = mid, Top = y0 + wc.title_dy, Right = 0, Bottom = 0 }) end)
+        pcall(function() H.wallFootSlot:SetOffsets({ Left = mid, Top = y0 + h - wc.bottom + 24, Right = 0, Bottom = 0 }) end)
+    end
+    setText(H.wallTitle, "wallTitleStr", t.wall_title)
+    setText(H.wallFoot, "wallFootStr", string.format(t.wall_close, info.label or "I"))
+    for i, r in ipairs(H.wallRows) do
+        local row = i <= n and rows[i] or nil
+        local y = y0 + wc.top + (i - 1) * hc.line
+        local ax = (row and row.b) and mid - wc.col_dx or mid
+        if row and (r.ax ~= ax or r.y ~= y) then
+            r.ax, r.y = ax, y
+            pcall(function() r.sa:SetOffsets({ Left = ax, Top = y, Right = 0, Bottom = 0 }) end)
+            pcall(function() r.sb:SetOffsets({ Left = mid + wc.col_dx, Top = y, Right = 0, Bottom = 0 }) end)
+        end
+        if row then setText(r.a, "wallA" .. i, row.a) end
+        if row and row.b then setText(r.b, "wallB" .. i, row.b) end
+        local aOn, bOn = row ~= nil, row ~= nil and row.b ~= nil
+        if r.aOn ~= aOn then r.aOn = aOn; r.a:SetVisibility(aOn and VIS.HitTestInvisible or VIS.Collapsed) end
+        if r.bOn ~= bOn then r.bOn = bOn; r.b:SetVisibility(bOn and VIS.HitTestInvisible or VIS.Collapsed) end
+    end
+    if not H.wallOn then
+        H.wallOn = true
+        H.wallPanel:SetVisibility(VIS.HitTestInvisible); H.wallTitle:SetVisibility(VIS.HitTestInvisible)
+        H.wallFoot:SetVisibility(VIS.HitTestInvisible)
+    end
 end
 
 -- A raid's bombers still up (the round's D.raidUnits), or 0
@@ -368,8 +478,8 @@ function hudTick(now, paused, pc)
     local okDn, downS = pcall(function() return DOWN and DOWN.hudLine and DOWN.hudLine() end)   -- (co-op: you're down,
     if okDn and downS then nextS = downS end                                                    -- watching: sv_down.lua)
     stackText(H.next, "nextStr", nextS)
-    -- the info rows: the allies', the tactical items' and co-op's (once a second is plenty; at once when the info key
-    -- flips them)
+    -- the info rows: the allies', the tactical items' and co-op's, and the info wall while it's open (once a second is
+    -- plenty; at once when the info key flips it)
     if info.open ~= H.infoOpen then H.infoOpen, H.rowsAt = info.open, 0 end
     if now >= (H.rowsAt or 0) then
         H.rowsAt = now + 1
@@ -378,13 +488,11 @@ function hudTick(now, paused, pc)
         local okI, it, itNews = pcall(TAC.line, now)
         infoRow(H.items, "itemsStr", okI and it and string.format(t.items_row, it) or nil, okI and itNews, now)
         if not (okA and okI) then hudLog("rowserr", "allies / items row error " .. tostring(okA and it or al)) end
-        local open = info.open and #H.coopRows or 0
-        local okC, co, coNews, coRows = pcall(coopLine, open)
+        local okC, co, coNews = pcall(coopLine)
         if not okC then hudLog("coopserr", "co-op row error " .. tostring(co)) end
-        local shownC = infoRow(H.coop, "coopStr", okC and co or nil, okC and coNews, now)
-        for i, w in ipairs(H.coopRows) do
-            stackText(w, "coopRow" .. i, (okC and shownC and open > 0 and coRows and coRows[i]) or nil)
-        end
+        infoRow(H.coop, "coopStr", okC and co or nil, okC and coNews, now)
+        local okW, errW = pcall(wallTick, now, CFG.hud.info.enabled and info.open and LB.show == nil)
+        if not okW then hudLog("wallerr2", "info wall error " .. tostring(errW)) end
     end
     stackRows()
 
@@ -421,15 +529,16 @@ function hudTick(now, paused, pc)
 end
 
 -- The info key (CFG.hud.info): a release feature, not a test key. Its press only flips info.open (in a run: elsewhere it
--- does nothing, so the menus can't change the next run's HUD); hudTick shows or hides the rows on its next pass.
+-- does nothing, so the menus can't change the next run's HUD); hudTick opens or shuts the info wall on its next pass.
 -- UE4SS's key binds are keyboard only and don't take the key from the game. A key that can't be bound leaves the rows
--- always shown (enabled off), never hidden for good.
+-- always shown and no wall (enabled off), never hidden for good.
 do
 local ic = CFG.hud.info
 if ic.enabled then
     local name = string.upper(tostring(ic.key or ""))
     local mods = (ic.ctrl and ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
     local label = (#mods > 0 and "Ctrl+" or "") .. name
+    info.label = label                                 -- (the wall's footer names it)
     local ok, err = false, "UE4SS has no key binds here"
     if type(RegisterKeyBind) == "function" and Key then
         local k = Key[name]
@@ -439,16 +548,17 @@ if ic.enabled then
                 ExecuteInGameThread(function()
                     if not D then return end
                     info.open = not info.open
-                    log("hud: info rows " .. (info.open and "shown" or "hidden") .. " (" .. label .. ")")
+                    log("hud: info wall " .. (info.open and "shown" or "hidden") .. " (" .. label .. ")")
                 end)
             end)
         end
     end
     if ok then
-        log(string.format("hud: info key %s: the CO-OP, ALLIES and ITEMS rows %s, each shown %s s when it changes",
-            label, info.open and "open at the start" or "hidden until it's pressed", tostring(ic.peek_s)))
+        log(string.format("hud: info key %s: the info wall (players, allies, items) %s; the CO-OP, ALLIES and ITEMS rows "
+            .. "each shown %s s when it changes", label, info.open and "open at the start" or "shown when it's pressed",
+            tostring(ic.peek_s)))
     else
-        log("hud: info key " .. label .. " not bound (" .. tostring(err) .. "): the info rows always shown")
+        log("hud: info key " .. label .. " not bound (" .. tostring(err) .. "): the info rows always shown, no info wall")
         ic.enabled = false
     end
 end

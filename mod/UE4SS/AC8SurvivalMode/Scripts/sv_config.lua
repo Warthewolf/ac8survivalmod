@@ -1649,14 +1649,22 @@ CFG = {
         start_callout_lead_s = 3,               -- "ROUND n" this long before the round's first flight
         zorder           = 0,
         -- The info key (user, 2026-10-29: "assign a hotkey like 'i' for information ... details that don't need to be
-        -- seen constantly are hidden unless the player wants to see them"): the CO-OP, ALLIES and ITEMS rows stay hidden
-        -- until `key` (a UE4SS Key name: a letter, F5, ...; with Ctrl when ctrl) opens them, under NEXT ROUND, and each
-        -- shows peek_s when its news changes (a player joins, drops or is shot down; an ally flight, ship or defence
-        -- comes or goes, or the allies' order changes; an item bought or used), the CO-OP row with a line a player while
-        -- they're open. Only in a run (a press elsewhere does nothing). Keyboard only: a UE4SS key bind (a pad button
-        -- would need the runtime's input hook), and the game gets the key too. enabled = false: those rows always
-        -- shown, as before. Each player's own (co-op never syncs hud).
+        -- seen constantly are hidden unless the player wants to see them"; 2026-10-31: "an information wall that appears
+        -- in the center of the screen on a button press and hides on a button press ... similar to how the end of round
+        -- information screen works", the corner had room for 4 players): the CO-OP, ALLIES and ITEMS rows under NEXT
+        -- ROUND stay hidden, each shown peek_s when its news changes (a player joins, drops or is shot down; an ally
+        -- flight, ship or defence comes or goes, or the allies' order changes; an item bought or used); `key` (a UE4SS
+        -- Key name: a letter, F5, ...; with Ctrl when ctrl) opens the info wall (`wall`) in the screen's middle and
+        -- shuts it, the corner's rows hidden while it's open. Only in a run (a press elsewhere does nothing); start_open:
+        -- open as each level starts. Keyboard only: a UE4SS key bind (a pad button would need the runtime's input hook),
+        -- and the game gets the key too. enabled = false: those rows always shown, no wall. Each player's own (co-op never
+        -- syncs hud).
         info             = { enabled = true, key = "I", ctrl = false, start_open = false, peek_s = 5.0 },
+        -- the info wall: a panel like the run's summary (its fill and edge), centred on y_mid, as tall as it needs; w
+        -- wide, or w2 with the players in two columns (cols_from players or more, each column col_dx off the middle);
+        -- the title title_dy under its top, the first row `top` under it, the footer `bottom` above its foot
+        wall             = { y_mid = 1000, w = 2200, w2 = 3000, col_dx = 740, cols_from = 9, top = 130, bottom = 100,
+                             title_dy = 40 },
         text = {
             round        = "ROUND: %d",
             next_round   = "NEXT ROUND: %s",
@@ -1728,6 +1736,13 @@ CFG = {
             jammer_down_sub = "+%d ZOLLARS",
             allies_row   = "ALLIES: %s",
             items_row    = "ITEMS: %s",
+            -- the info wall (CFG.hud.wall): its title, rows and footer (the key's name in it)
+            wall_title   = "INFORMATION",
+            wall_allies  = "ALLIES:  %s",
+            wall_items   = "ITEMS:  %s",
+            wall_none    = "NONE",
+            wall_kills   = "THIS RUN'S KILLS:  YOU %d   ALLIES %d   SHIPS %d   DEFENCES %d",
+            wall_close   = "PRESS %s TO CLOSE",
             kills        = "ROUND %d KILLS",
             kills_sub    = "YOU %d   ALLIES %d   SHIPS %d   DEFENCES %d",
             airstrike    = "AIRSTRIKE INBOUND",
