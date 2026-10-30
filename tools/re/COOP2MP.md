@@ -395,3 +395,35 @@ flags A / B, gear state C / D (own / second)`: with your gear down expect flags 
 T4a.6 in game (2026-10-30, user: "gear successfully lowered"): down at 21:07:05 and up at 21:07:13, one move each;
 while down both engines' flags 10, the own engine's gear state 1 -> 2 -> 3 -> 1. After raising, the second engine's
 gear state stays 1 (FlGear moves it only on a flag change); harmless in this test (the plane's gear stayed up).
+
+## T4b build: the other players' launches on their real planes (0.73.11-coop2mp.12, runtime 0.32.0; not yet run in game)
+- **Out** (flight.c FnCapture, OnPlaneFired): in co-op (CO.open) each launch from your own plane (CO.me) is read as T4a
+  reads the copy's source: kind (0 explosive, 1 laser, 2 bullet special, 3 ESM / ECM, by PlaneWeaponsFired's class
+  checks), weapon number (+0x3a8), and for an explosive one spawn slot (+0x6d0), +0x6d4, seed (+0x6b4), lock-ons (+0x3c8),
+  where it started against your plane (cm, 500 m at most), rotation, velocity and target (+0x3f0). Up to 24 queued.
+  SV_CoopShots() hands them over once ("k,w,s,u,seed,lock,rx,ry,rz,pitch,yaw,roll,vx,vy,vz,target;...", rotation x10,
+  velocity cm/s, target an address); sv_coop.lua syncTick names the target by its stream id and adds
+  `p:<id>:0:<shot>` to the tick's "fx" (beside m / s / e for the AI stand-ins).
+- **Relay and guards** (sv_coop.lua fireShots): as every fx entry (FX_MAX a message, FX_STALE_MS, a lagging shooter), plus
+  P_PER_S 16 launches a second a shooter, a shot of digits, commas and minus signs only, 200 characters at most.
+- **In**: on a game where the shooter's plane is their real plane, SV_CoopPPShot(their plane, the target here, shot)
+  queues it (32 at most; it checks the plane is role 2 and not yours, and every field's range); after that plane's
+  next RemoteUpdate (OnRemoteUpdate -> FnFlush) an explosive one goes through the remote fire (start: their plane here
+  + where it left theirs; target location from the target here, else 5 s along its velocity), the laser and ESM / ECM
+  are selected, armed and launched from its weapons (FwLaunchDirect), a bullet special armed and disarmed. Over 1.5 s
+  queued: dropped. Nothing while your STORE is open (the game holds the planes there).
+- **Loadouts**: SV_CoopLoadout() reads your plane's loadout object (its two int lists, +0x30 / +0x40, and the two
+  loadout bytes, as Online Mode's remote spawn copies them; CoLoadoutSites) as "a,b/c,d/x,y"; it goes in "hi" (and the
+  host's "pi") as a 7th field, resent when it changes (new weapons at the airfield). SV_CoopSpawnPP takes it as an 8th
+  argument (CoParseLoadout: 64 entries a list at most, bytes 0-255) and gives the plane those lists and bytes, another
+  airframe's too; a real plane up whose player's loadout changed is spawned again with it.
+- **Log**: AC8SurvivalMode.log `coop: second player plane: their loadout given (N and M entries, bytes A B)`,
+  `coop2mp: T4b: player N's shot (weapon W, slot S, lock-ons L) on their real plane P here: launched (proj), target T`
+  (8 at most), `coop2mp: T4b: player N's laser / electronic (ESM / ECM) ... launched 1`, then once a minute `coop2mp: T4b
+  this minute: your launches sent N (D dropped); theirs N queued here, R refused, L launched, F not, S specials, ...`.
+  AC8SurvivalMode_lua.log `coop: player N's plane is their real <code> ...; their loadout a,b/c/x,y`, `coopfire: player
+  N's first launch on their real plane here: queued`, the minute's `real planes' launches (T4b) Q queued, R refused`.
+- **Test (two or more players on 0.73.11)**: each fires missiles (locked and not), a special (laser, ESM / ECM, a bullet
+  special) and flares; on the other screens each shows from their real plane at the right target, the special being
+  theirs (not your plane's or the airframe's default). Then one changes weapons at the airfield: their plane is spawned
+  again with the new loadout.

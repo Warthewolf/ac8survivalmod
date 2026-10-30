@@ -550,6 +550,93 @@ ht = {}
 for _, s in ipairs(sent) do if s:find(">ht|") then ht[#ht + 1] = s end end
 check(table.concat(ht, " ") == "-1>ht|7|10.0", "the next hit, no stand-in's: all of it sent (" .. table.concat(ht, " ") .. ")")
 
+---------------------------------------------------------------------------------------------------- COOP2MP T4b
+print("COOP2MP T4b: launches on the other players' real planes (\"p\"), loadouts in hi / pi")
+local shotsOut, ppShots, ppR, loadout = "", {}, 1, ""
+function SV_CoopShots() local s = shotsOut; shotsOut = ""; return s end
+function SV_CoopPPShot(a, t, pay) ppShots[#ppShots + 1] = string.format("%d/%d/%s", a, t, pay); return ppR end
+function SV_CoopLoadout() return loadout end
+local PAY = "0,1,0,0,96,2,10,-5,0,-15,1800,0,100,-20,0"
+-- your launches: each as "p:<target's stream id>:0:<shot>" in the tick's fx, beside the stand-ins' m / s
+fresh("host", 0)
+M.byId[5] = { obj = E5, unit = "ERA_Unit_01_Dep_Air0", ord = 1, addr = 505 }
+M.linkedPeers = 2
+pawn.addr = 11
+tick()
+inFlight = { msl(7101, "BP_plwp_msl_f16c_C", E5) }
+shotsOut = PAY .. ",505;3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+tick()
+check(fx() == "-1>fx|0|m:5:0;p:5:0:" .. PAY .. ";p:0:0:3,3,0,0,0,0,0,0,0,0,0,0,0,0,0",
+      "your launches out as p entries (target 505 = enemy 5, none = 0) beside the stand-ins' m (" .. fx() .. ")")
+-- the host: a joiner's p replayed on their real plane here, m not fired from it, both relayed
+fresh("host", 0)
+M.byId[5] = { obj = E5, unit = "ERA_Unit_01_Dep_Air0", ord = 1, addr = 505 }
+COOP.peerPlane(P1, 1); COOP.peerPlane(P2, 2)
+peer(1, 3); peer(2, 3)
+tick()
+M.peers[1].real = true
+ppShots = {}
+local from = #logs + 1
+inbox[#inbox + 1] = "1|fx|m:5:0;p:5:0:" .. PAY
+tick()
+check(table.concat(ppShots, " ") == "1001/505/" .. PAY, "their launch replayed on their real plane here at enemy 5 (" .. table.concat(ppShots, " ") .. ")")
+check(fired() == "", "their m isn't fired from a real plane (" .. fired() .. ")")
+check(fx() == "2>fx|1|m:5:20;p:5:20:" .. PAY, "both relayed to player 3, ages grown (" .. fx() .. ")")
+check(line("coopfire: player 2's first launch on their real plane here: queued", from) ~= nil, "the first launch logged")
+-- a stand-in: p ignored, m fired as before
+fresh("host", 0)
+M.byId[5] = { obj = E5, unit = "ERA_Unit_01_Dep_Air0", ord = 1, addr = 505 }
+COOP.peerPlane(P1, 1)
+peer(1, 3)
+tick()
+M.peers[1].real = nil
+ppShots, fires = {}, {}
+inbox[#inbox + 1] = "1|fx|m:5:0;p:5:0:" .. PAY
+tick()
+check(#ppShots == 0 and fired() == "1001/2/505", "a stand-in: p not replayed, m fired from it (" .. fired() .. ")")
+-- the guards: unreadable, stale, over 16 a second, the runtime's refusal counted
+fresh("host", 0)
+COOP.peerPlane(P1, 1)
+peer(1, 3)
+tick()
+M.peers[1].real = true
+ppShots, ppR = {}, -1
+local n0 = M.fxS.n
+local drop0, bad0 = n0.dropped, n0.pBad or 0
+inbox[#inbox + 1] = "1|fx|p:0:0:1,x,2;p:0:2000:" .. PAY .. ";p:0:0:" .. PAY
+tick()
+check(#ppShots == 1 and M.fxS.n.dropped - drop0 == 2, "an unreadable one and a stale one dropped, the third asked (" .. #ppShots .. ")")
+check((M.fxS.n.pBad or 0) - bad0 == 1, "the runtime's refusal counted for the minute's line")
+ppR = 1
+local many = {}
+for i = 1, 20 do many[#many + 1] = "p:0:0:" .. PAY end
+ppShots = {}
+clock = clock + 1.1
+inbox[#inbox + 1] = "1|fx|" .. table.concat(many, ";")
+tick()
+check(#ppShots == 16, "at most 16 launches a second from a shooter (" .. #ppShots .. ")")
+-- the loadout: yours in your hello / the roster, theirs from hi / pi, a bad one left out
+fresh("host", 0)
+loadout = "1001,2002/3/0,1"
+tick()
+check(M.roster[0] and M.roster[0].lo == "1001,2002/3/0,1", "the host's own roster entry carries its loadout")
+local pi = ""
+for _, s in ipairs(sent) do if s:find(">pi|0|") then pi = s end end
+check(pi:find("|1001,2002/3/0,1$") ~= nil, "and the roster tells every joiner (" .. pi .. ")")
+sent = {}
+loadout = "1001,2002/4/0,1"
+tick()
+local again = false
+for _, s in ipairs(sent) do if s:find(">pi|0|.*|1001,2002/4/0,1$") then again = true end end
+check(again, "new weapons (the loadout changed): told again")
+inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.0|f16c_common|B|f16c|5,6/7/1,0"
+tick()
+check(M.roster[1] and M.roster[1].lo == "5,6/7/1,0", "a joiner's loadout from its hi")
+inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.0|f16c_common|B|f16c|5,x/7"
+tick()
+check(M.roster[1] and M.roster[1].lo == "", "a bad loadout left out")
+loadout = ""
+
 ---------------------------------------------------------------------------------------------------- sync off
 print("sync off")
 fresh("host", 0)

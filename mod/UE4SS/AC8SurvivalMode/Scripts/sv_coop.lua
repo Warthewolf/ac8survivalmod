@@ -382,7 +382,7 @@ end
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
         local r = M.roster[s]
-        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "") end
+        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "") end
     end
 end
 
@@ -935,7 +935,7 @@ end
 -- ("pi"); without one (an older build), or if the spawn fails, the AI stand-in as before.
 local function realOn() return cfg().real_planes == true and type(SV_CoopSpawnPP) == "function" end
 function COOP.realOn() return COOP.open and realOn() end
-local function spawnReal(slot, P, code)
+local function spawnReal(slot, P, code, lo)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil, "you have no plane here yet" end
     local path = COOP.planeClassPath(code)
@@ -943,7 +943,7 @@ local function spawnReal(slot, P, code)
     local cls = loadObject(path)
     if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
     local at, yaw = P.at, (P.rot and P.rot[2]) or 0
-    local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot)
+    local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot, lo or "")
     if type(a) ~= "number" or a <= 0 then return nil, "SV_CoopSpawnPP " .. tostring(a) end
     for _, x in ipairs(FindAllOf("LivePlayerPlane") or {}) do
         if valid(x) and addrOf(x) == a then return x end
@@ -983,13 +983,18 @@ local function peerTick(slot)
     local known = r0 and type(r0.row) == "string" and r0.row ~= ""
     local code = r0 and r0.code ~= "" and r0.code or nil
     if P.realFailed and P.realFailed ~= code then P.realFailed = nil end        -- (another airframe: try again)
+    local lo = r0 and r0.lo or ""
+    if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and not P.spawning then    -- (new weapons: T4b)
+        log(string.format("coop: player %d's loadout changed: their real plane here spawned again with it", slot + 1))
+        P.obj, P.addr, P.real = nil, nil, nil                                     -- (SV_CoopSpawnPP replaces the slot's)
+    end
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
-        local o, why = spawnReal(slot, P, code)
+        local o, why = spawnReal(slot, P, code, lo)
         if o then
-            P.obj, P.addr, P.real, P.code, P.shown = o, addrOf(o), true, code, nil
+            P.obj, P.addr, P.real, P.code, P.shown, P.lo = o, addrOf(o), true, code, nil, lo
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
             log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
-                .. "stream", slot + 1, code, P.addr or 0))
+                .. "stream; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)"))
         else
             P.realFailed = code
             log(string.format("coop: player %d's real plane (%s) not spawned: %s; their AI stand-in instead", slot + 1, code,
@@ -1171,13 +1176,16 @@ end
 -- shows; a joiner takes any stand-in's damage out of what it sends the host anyway (clientTick: the backstop).
 -- "fx" (reliable, a tick's shots in one): shooter -> host "fx|<k>:<id>:<age>;..." (k: m a missile, s a special weapon,
 -- e an electronic special (ESM / jamming), g the gun's target; id: the target's stream id, 0 none; age: ms since it was
--- seen); host -> the others
+-- seen); host -> the others. COOP2MP T4b (runtime 0.32.0): each launch also as "p:<id>:<age>:<shot>" (the runtime's
+-- SV_CoopShots: kind, weapon number, spawn slot, seed, lock-ons, where it left your plane, rotation, velocity), replayed
+-- from your real plane in the other games (SV_CoopPPShot); a stand-in there fires m / s / e as before, a real plane p.
 -- "fx|<shooter's slot>|..." (never back to the shooter; the host's own as slot 0). Guards: a known slot, not your own;
 -- at most FX_PER_S shots a second a shooter and FX_MAX entries a message; a shot older than FX_STALE_MS (its age and
 -- half the round trip of each leg) or from a shooter whose state is over a second old dropped; an id not known here
 -- fired with no target.
 do
 local FX_PER_S, FX_MAX, FX_STALE_MS, FLAG_HOLD_S, GUN_EVERY_S, FLARE_EVERY_S = 12, 32, 1500, 0.5, 0.2, 1.0
+local P_PER_S = 16                                         -- (a shooter's "p" launches a second, T4b)
 -- (a special weapon's count down with nothing new in flight this long after: an electronic one, ESM / jamming)
 local ELEC_WAIT_S = 0.45
 -- the ECM pod's fire-control slot on a stand-in's airframe row (COOP.syncSetup records each row's: an FCS id with ECM in
@@ -1359,10 +1367,8 @@ local function coopFire(slot, fcs, target)
     if D and D.musicHold == 1 then S.n.inStore = (S.n.inStore or 0) + 1; return nil end
     local a = standInAddr(slot)
     if not a then S.n.noPlane = (S.n.noPlane or 0) + 1; return nil end
-    if M.peers[slot] and M.peers[slot].real then                 -- (a real plane: its own weapons' sync is COOP2MP T4)
+    if M.peers[slot] and M.peers[slot].real then                 -- (a real plane: its launches come as "p", T4b)
         S.n.real = (S.n.real or 0) + 1
-        once("realfire" .. slot, string.format("coopfire: player %d's plane here is their real plane: their shots aren't shown "
-            .. "on it yet (COOP2MP T4)", slot + 1))
         return nil
     end
     if type(SV_CoopFire) ~= "function" then
@@ -1393,11 +1399,32 @@ local function fireShots(slot, body, extraMs)
     local P, now = M.peers[slot], os.clock()
     local R = S.rate[slot] or { at = now, n = 0 }
     S.rate[slot] = R
-    if now - R.at >= 1 then R.at, R.n = now, 0 end
+    if now - R.at >= 1 then R.at, R.n, R.np = now, 0, 0 end
     local lagging = P and type(P.age) == "number" and P.age > 1000      -- (their state over a second old)
     local why, n = {}, 0
     for e in body:gmatch("[^;]+") do
         n = n + 1
+        local pid, page, pay = e:match("^p:(%d+):(%d+):([%-%d,]+)$")
+        if pid then                                          -- (a launch for their real plane here: T4b)
+            pid, page = tonumber(pid), tonumber(page) + extraMs
+            local bad = (n > FX_MAX and "more than " .. FX_MAX .. " in a message") or ((pid > 65535 or #pay > 200) and "unreadable")
+                or ((page > FX_STALE_MS or lagging) and "stale") or ((R.np or 0) >= P_PER_S and "over " .. P_PER_S .. " launches a second")
+            if bad then
+                why[bad] = (why[bad] or 0) + 1
+                S.n.dropped = S.n.dropped + 1
+            else
+                R.np = (R.np or 0) + 1
+                passed[#passed + 1] = string.format("p:%d:%d:%s", pid, page, pay)
+                if P and P.real and P.addr and valid(P.obj) and on("missiles") and type(SV_CoopPPShot) == "function"
+                    and not (D and D.musicHold == 1) then
+                    local okS, r = pcall(SV_CoopPPShot, P.addr, addrOfId(pid) or 0, pay)
+                    if not okS then r = tostring(r) end
+                    if r == 1 then S.n.pOk = (S.n.pOk or 0) + 1 else S.n.pBad = (S.n.pBad or 0) + 1 end
+                    once("pfirst" .. slot, string.format("coopfire: player %d's first launch on their real plane here: %s", slot + 1,
+                        r == 1 and "queued" or ("refused (" .. tostring(r) .. ")")))
+                end
+            end
+        else
         local k, id, age = e:match("^([msge]):(%d+):(%d+)$")
         id, age = tonumber(id), tonumber(age)
         local bad = (n > FX_MAX and "more than " .. FX_MAX .. " in a message") or ((not k or id > 65535 or age > 600000) and "unreadable")
@@ -1427,6 +1454,7 @@ local function fireShots(slot, body, extraMs)
         if bad then
             why[bad] = (why[bad] or 0) + 1
             S.n.dropped = S.n.dropped + 1
+        end
         end
     end
     for w, c in pairs(why) do once("fxdrop" .. slot .. w, string.format("coopfire: player %d's shots dropped: %d %s", slot + 1, c, w)) end
@@ -1529,9 +1557,19 @@ function M.syncTick(now, pawn)
             end
             S.spDropAt = nil
         end
+        -- your launches as the runtime read them, for your real plane in the other games (T4b): "p:<target id>:0:<shot>"
+        if on("missiles") and type(SV_CoopShots) == "function" then
+            local okL, list = pcall(SV_CoopShots)
+            if okL and type(list) == "string" and list ~= "" then
+                for e in list:gmatch("[^;]+") do
+                    local pay, t = e:match("^([%-%d,]+),(%d+)$")
+                    if pay then out[#out + 1] = string.format("p:%d:0:%s", idOfAddr(tonumber(t) ~= 0 and tonumber(t) or nil), pay) end
+                end
+            end
+        end
         if #out > FX_MAX then for i = #out, FX_MAX + 1, -1 do out[i] = nil end end
         local shots = 0
-        for _, e in ipairs(out) do if e:sub(1, 1) ~= "g" then shots = shots + 1 end end
+        for _, e in ipairs(out) do local c = e:sub(1, 1); if c ~= "g" and c ~= "p" then shots = shots + 1 end end
         if #out > 0 and (M.linkedPeers or 0) > 0 then
             local body = table.concat(out, ";")
             if COOP.host() then send(true, "fx", COOP.slot or 0, body) else send(true, "fx", body) end
@@ -1543,12 +1581,13 @@ function M.syncTick(now, pawn)
     ammoAfter()
     if now >= (S.statAt or now + 60) then                   -- (a minute's tally, when anything happened)
         local n = S.n
-        if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) > 0 then
+        if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) + (n.pOk or 0) + (n.pBad or 0) > 0 then
             log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
                 .. "their target not here, %d with no plane here, %d not shown: you were in the STORE), your gun %d bursts, "
-                .. "your flares %d, your gear flips %d, afterburner flips %d, throttle up to %.3f (ab_throttle %s)", n.sent,
+                .. "your flares %d, your gear flips %d, afterburner flips %d, throttle up to %.3f (ab_throttle %s); real planes' "
+                .. "launches (T4b) %d queued, %d refused", n.sent,
                 n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0, n.inStore or 0, n.bursts or 0,
-                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle)))
+                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle), n.pOk or 0, n.pBad or 0))
         end
         S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
         S.statAt = now + 60
@@ -1677,20 +1716,29 @@ end
 end
 
 ---------------------------------------------------------------------------------------------------- messages
+-- your plane's loadout (SV_CoopLoadout, runtime 0.32.0: "a,b/c,d/x,y"), "" when it can't be read: the others' real
+-- plane of yours carries it, so your weapon numbers mean there what they mean here (COOP2MP T4b)
+local function loadoutOk(lo) return type(lo) == "string" and #lo <= 600 and lo:match("^[%d,]*/[%d,]*/%d+,%d+$") ~= nil end
+function M.myLoadout()
+    if type(SV_CoopLoadout) ~= "function" then return "" end
+    local ok, lo = pcall(SV_CoopLoadout)
+    return (ok and loadoutOk(lo)) and lo or ""
+end
+M.loadoutOk = loadoutOk
 local function sendHi()
     local row, code = myAirframe()
     -- (what the host last heard: a hello sent with no plane yet is followed by the airframe once there is one; the
     -- co-op run of 2026-10-30: a player who'd been in the level before linking never sent theirs, shown as the default)
     -- The airframe's code (COOP2MP T3: the player plane the others spawn for you; the ADFX-02 has no AI row) goes last.
-    M.myRow, M.myCode = row, code
-    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "", code or "")
+    M.myRow, M.myCode, M.myLo = row, code, M.myLoadout()
+    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "", code or "", M.myLo)
 end
 
 -- the host's own roster entry, and everyone told
 local function hostRosterSelf()
     local row, code = myAirframe()
-    M.myRow, M.myCode = row, code
-    M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "" }
+    M.myRow, M.myCode, M.myLo = row, code, M.myLoadout()
+    M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "", lo = M.myLo }
     sendRoster(nil)
 end
 
@@ -1942,9 +1990,10 @@ local function onHostMessage(from, f)
     if k == "hi" then
         local ver, rt, row, name = short(f[2], 32), short(f[3], 16), short(f[4], 64), short(f[5], 32)
         local code = short(f[6], 16):match("^%w+$") or ""          -- (their airframe's code: COOP2MP T3)
+        local lo = loadoutOk(f[7]) and f[7] or ""                  -- (their loadout: COOP2MP T4b)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
-        M.roster[from] = { row = row or "", ver = ver, name = name, code = code }
+        M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
@@ -2001,7 +2050,8 @@ local function onJoinerMessage(f)
         if not slotOk(s) then return end
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
-        M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "" }
+        M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "",
+                        lo = loadoutOk(f[7]) and f[7] or "" }
         if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
             local P = M.peers[s]
             log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
@@ -2528,7 +2578,8 @@ function COOP.tick(tick)
         if okB then flags = flags + bits else once("syncBits", "coopfire: state bits error " .. tostring(bits)) end
         SV_CoopMe(addrOf(pawn) or 0, flags)
         local row, code = myAirframe()
-        if (row and row ~= M.myRow) or (code and code ~= M.myCode) then
+        local lo = M.myLoadout()                              -- (new weapons picked at the airfield: COOP2MP T4b)
+        if (row and row ~= M.myRow) or (code and code ~= M.myCode) or (lo ~= "" and lo ~= M.myLo) then
             M.myRow, M.myCode = row, code
             if COOP.host() then hostRosterSelf() else sendHi() end
         end
