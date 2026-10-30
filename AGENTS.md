@@ -391,6 +391,9 @@ names every part by its share and the untimed rest).
 0.72.5-coop.23 (runtime 0.28.7; the user, 2026-10-30, after that run: "EA-18G player used his ESM and it didn't show up
 for any of us"): an ESM / jamming pod fires no projectile, so the weapon sync never saw it; now a special weapon's count
 dropping with nothing new in flight is sent as `e` and fires the stand-in's ECM pod (tools/re/COOP.md 8). Not yet run.
+0.72.6-coop.24: a new DOWN clears the last revive's 15 s guard (a player down again within 15 s of a revive was refused
+"ALREADY BEING REVIVED"); the revive test now has a joiner reviving the host (never run in game: in the run of
+2026-10-30 nobody bought the host back).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
