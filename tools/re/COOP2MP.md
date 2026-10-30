@@ -74,3 +74,14 @@ own plane's class, the ADFX-02 (BP_PlayerPlane_PP0038_adfx02), the FA-36 (PP0018
   `test: Ctrl+F11 after the spawn: your pawn is still yours; formation 1`, and every 5 s `test: second plane <name>:
   <d> m from you, health <h>, its tick false; of N enemies up, A have it as their nearest player plane, B you`;
   `test: Ctrl+F11 <name>: its class didn't load (...)` if a class path is wrong.
+
+### T1 / T2 results (the user's solo test, 2026-10-30 15:38-15:40)
+- Your own plane's class and the FA-36 spawned (spawn finished, weapons' owner set, your pawn stayed yours) and held
+  150 m off your wing for over a minute: 1,200 moves, none refused, none over 50 m off (moved at the music tick).
+- With its tick off: no animations (control surfaces), no afterburner, NO HUD box or ALLY tag (0.22.5's screenshots had
+  them: its tick may have run then), and the enemies never attacked it (health 1200 throughout; the user: "I didn't see
+  the enemies targetting it"), though 2-4 of 4 had it as their NearestPlayerPlane at times.
+- The ADFX-02 didn't load: its blueprint is PP0038_adfx02_L001/BP_PlayerPlane_PP0038_adfx02_L001 (fixed: 93d9d08,
+  COOP.planeClassPath with every player plane's path).
+- So a frozen plane teleported every frame can't be a real MP-style plane: its tick has to run, fed the network data
+  Online Mode feeds a remote plane (its movement sync and flight inputs). Research on that path: next section.
