@@ -427,3 +427,18 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   special) and flares; on the other screens each shows from their real plane at the right target, the special being
   theirs (not your plane's or the airframe's default). Then one changes weapons at the airfield: their plane is spawned
   again with the new loadout.
+
+### T4b results (the user and a friend, 2026-10-30 21:34-21:37) and 0.73.12
+- Worked: `their loadout given (15 and 0 entries, bytes 33 28)`; the friend's laser (weapon 3) "selected and armed,
+  launched 1", missiles (weapon 1 / 2, lock-ons 0 and 1, at the stream's targets) "launched", flares.
+- Crash (the user's game, 21:37:39): the friend browsed the airfield's weapon pages (their log 19:07:35-46, Kuala Lumpur
+  time), their loadout changed, their "hi" went out again and the user's game replaced their live real plane
+  (SV_CoopSpawnPP destroys the slot's plane first). A frame on: EXCEPTION_ACCESS_VIOLATION reading the old plane's
+  address + 8 at 0x147443726 (`mov eax, [rax+8]`: an object's flags, read from a holder's +0x28), in a vfunc +0x60 run
+  in a parallel loop (0x147434e50, from 0x1474703c0). Some game system keeps a raw pointer to a player plane; never
+  destroy a live real plane mid-level (the level's teardown, Restart and Quit, are fine: T1e).
+- The spectator camera on the friend's real ADFX-02 showed its cockpit: SetViewTargetWithBlend on an actor takes its
+  first active CameraComponent, and a player plane carries its own.
+- 0.73.12: a loadout change mid-level is logged and kept for the next level's plane; while you watch a plane its other
+  CameraComponents (K2_GetComponentsByClass) are deactivated, ours activated, theirs back on as the view leaves it
+  (`spectate: <plane>'s own cameras: <names>; N switched off while you watch it`).

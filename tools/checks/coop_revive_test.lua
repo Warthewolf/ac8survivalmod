@@ -148,11 +148,25 @@ function survivalPC:GetViewTarget() return self.view end
 newPawn()
 local function plane(addr, name)
     local p = { full = "BP_NPC_f16c_C" .. LEVEL .. name, addr = addr, comps = {} }
+    local function cam(c)                         -- (a camera: on / off, as UActorComponent's)
+        c.active = c.active ~= false
+        function c:IsActive() return self.active end
+        function c:Deactivate() self.active = false end
+        function c:Activate() self.active = true end
+        return c
+    end
+    -- its own camera (a player plane's: COOP2MP's real planes carry cockpit / chase cameras)
+    p.ownCam = cam({ addr = addr * 10 + 9, full = "CameraComponent " .. name .. ".CockpitCamera" })
     function p:AddComponentByClass(cls)
-        local c = { addr = addr * 10 + #self.comps, cls = cls }
+        local c = cam({ addr = addr * 10 + #self.comps, cls = cls })
         function c:K2_SetRelativeLocationAndRotation(l, r) self.loc, self.rot = l, r end
         self.comps[#self.comps + 1] = c
         return c
+    end
+    function p:K2_GetComponentsByClass()
+        local l = { self.ownCam }
+        for _, c in ipairs(self.comps) do l[#l + 1] = c end
+        return { ForEach = function(_, fn) for i, c in ipairs(l) do fn(i, { get = function() return c end }) end end }
     end
     function p:SetActorHiddenInGame(v) self.hidden = v end
     function p:SetActorEnableCollision(v) self.collision = v end
@@ -257,8 +271,11 @@ check(me.down == true and me.alive == false, "COOP.players(): you down, not aliv
 check(survivalPC.view == P1 and #P1.comps == 1 and P1.comps[1].loc.X == -3000 and P1.comps[1].loc.Z == 800,
       "watching player 2: a camera 30 m behind and 8 m above their plane, the view on it")
 check(DOWN.hudLine() == "DOWN: WATCHING B  [O] NEXT", "the NEXT row: " .. tostring(DOWN.hudLine()))
+check(P1.ownCam.active == false and P1.comps[1].active == true and line("^spectate: SV_Peer1's own cameras: CockpitCamera %(on%); 1 switched off", from) ~= nil,
+      "their plane's own camera switched off while you watch it, ours on (the ADFX-02's view was its cockpit), logged")
 DOWN.nextView("key")
 check(survivalPC.view == P2 and DOWN.hudLine() == "DOWN: WATCHING C  [O] NEXT", "the key: player 3")
+check(P1.ownCam.active == true and P2.ownCam.active == false, "player 2's camera back on as the view leaves, player 3's off")
 DOWN.nextView("key")
 check(survivalPC.view == P1 and #P1.comps == 1, "again: player 2, their camera kept")
 survivalPC.view = pawn

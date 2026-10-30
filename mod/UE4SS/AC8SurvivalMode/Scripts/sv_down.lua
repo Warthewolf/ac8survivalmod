@@ -152,8 +152,48 @@ local function setView(target, blend)
     if not (survivalPC and valid(survivalPC) and valid(target)) then return false end
     return pcall(function() survivalPC:SetViewTargetWithBlend(target, blend or 0, 0, 0, false) end)
 end
+-- A player plane (COOP2MP's real planes: the ADFX-02 has no AI stand-in) carries cameras of its own, and the view on an
+-- actor takes the first active camera on it: the user's co-op run of 2026-10-30, watching CRESSENDO's real ADFX-02,
+-- "spawned the camera inside the aircraft". So while you watch a plane, its other cameras are switched off (St.hushed),
+-- and back on as the view leaves it.
+local function unhush()
+    for _, c in ipairs(St.hushed or {}) do
+        if valid(c) then pcall(function() c:Activate(false) end) end
+    end
+    St.hushed = {}
+end
+local function hush(obj, cam)
+    unhush()
+    local cls = StaticFindObject("/Script/Engine.CameraComponent")
+    if not (valid(cls) and valid(obj)) then return 0, 0 end
+    local okL, arr = pcall(function() return obj:K2_GetComponentsByClass(cls) end)
+    if not (okL and arr) then return 0, 0 end
+    local list = {}
+    pcall(function() arr:ForEach(function(_, e) list[#list + 1] = e:get() end) end)
+    local mine, off, names = cam and addrOf(cam), 0, {}
+    for _, c in ipairs(list) do
+        if valid(c) and addrOf(c) ~= mine then
+            local okA, act = pcall(function() return c:IsActive() end)
+            names[#names + 1] = (nameOf(c):match("([%w_]+)$") or "?") .. (okA and act and " (on)" or "")
+            if okA and act and pcall(function() c:Deactivate() end) then
+                off = off + 1
+                St.hushed[#St.hushed + 1] = c
+            end
+        end
+    end
+    if cam then pcall(function() cam:Activate(true) end) end
+    local a = addrOf(obj)
+    St.hushSaid = St.hushSaid or {}
+    if a and not St.hushSaid[a] and #names > 0 then
+        St.hushSaid[a] = true
+        log(string.format("spectate: %s's own cameras: %s; %d switched off while you watch it", nameOf(obj):match("([%w_]+)$") or "?",
+            table.concat(names, ", "), off))
+    end
+    return #list, off
+end
 local function view(e, why)
     local cam, err = camOn(e.obj)
+    hush(e.obj, cam)
     local ok = setView(e.obj, num((rc().camera or {}).blend_s, 0.5))
     St.watch, St.views = e, (St.views or 0) + 1
     log(string.format("spectate: view %s (%s)%s%s, reverted %d times", e.name, why, cam and "" or (", no camera: " .. tostring(err)),
@@ -168,6 +208,7 @@ end
 -- the view back on your own: what it was as you went down, or your plane now (a restart or a respawn may give another)
 local function viewSelf(blend)
     St.watch = nil
+    unhush()
     local h, pawn = St.home, pawnOf()
     blend = blend or num((rc().camera or {}).blend_s, 0.5)
     if h and not h.pawn and valid(h.obj) then setView(h.obj, blend)
