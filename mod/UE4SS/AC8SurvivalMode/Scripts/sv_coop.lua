@@ -64,6 +64,7 @@ local function finite(v, lim) return type(v) == "number" and v == v and v > -lim
 local HIT_MAX, CREDITS_MAX = 100000, 1000000                -- (one hit's damage; one round bonus's zollars)
 local TL_PER_S = 4                                          -- (the host's tells a joiner plays in a second, at most)
 local AIRFRAME_WAIT_S = 5                                   -- (s a stand-in waits for its player's airframe: peerTick)
+local HELLO_WAIT_S = 30                                     -- (... and for any hello at all from them: peerTick)
 local function slotOk(s) return type(s) == "number" and s == math.floor(s) and s >= 0 and s <= MAX_SLOT end
 local knownRows = {}
 local function knownRow(row)                                -- a row of Survival's NPC table here (DT_SV_NpcMission)
@@ -1190,8 +1191,22 @@ local function peerTick(slot)
                 tostring(why)))
         end
     end
+    -- (no hello from them at all while their plane streams here: the user's co-op run of 2026-10-31, Shazzy's link came
+    -- back after the host had dropped them, their game still had itself on the host's roster so never said hello again,
+    -- and their plane here flew the default F-16C all level (an AI plane up can't change airframe, and one is never
+    -- replaced mid-level). The host asks for it every 3 s, "hq", and the default waits HELLO_WAIT_S then.)
+    if r0 then P.helloAsked = nil
+    elseif fresh and COOP.host() and os.clock() >= (P.helloAskAt or 0) then
+        P.helloAskAt = os.clock() + 3
+        sendTo(slot, true, "hq")
+        if not P.helloAsked then
+            P.helloAsked = true
+            log(string.format("coop: player %d's plane streams here but no hello from them: asked for it (hq)", slot + 1))
+        end
+    end
+    local waitS = r0 and AIRFRAME_WAIT_S or HELLO_WAIT_S
     if fresh and not P.obj and not P.spawning and levelReady()                 -- (not while this level loads)
-        and (known or os.clock() - P.freshAt >= AIRFRAME_WAIT_S) then
+        and (known or os.clock() - P.freshAt >= waitS) then
         local row = standInRow(r0 and r0.row)
         local fly = M.flyRow and M.flyRow(row) or row        -- (its damage-0 copy, <row>_svcp: the sync's)
         rawSetAircraft(unit, fly)
@@ -1200,7 +1215,7 @@ local function peerTick(slot)
         spawningUnit = nil
         P.spawning, P.row = os.clock(), row
         log(string.format("coop: player %d's plane as %s%s: %s", slot + 1, fly,
-            known and "" or string.format(" (no airframe from them in %d s)", AIRFRAME_WAIT_S),
+            known and "" or string.format(" (no %s from them in %d s)", r0 and "airframe" or "hello", waitS),
             (type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     elseif P.spawning and os.clock() - P.spawning > 10 then
         P.spawning = nil                                  -- (it never came: again)
@@ -2470,6 +2485,12 @@ local function onJoinerMessage(f)
     elseif k == "fx" then M.fxFromHost(f)               -- a player's shots (the host's, or a joiner's relayed)
     elseif k == "ak" or k == "ax" or k == "ar" then onBuildAnswer(f)   -- the host's say on your ally / defence
     elseif k == "ag" then onOrder(f, true)               -- the allies' orders (the room's: the host's)
+    elseif k == "hq" then                                -- the host has no hello from you (peerTick): again, once a second
+        if os.clock() >= (M.hqAt or 0) then
+            M.hqAt = os.clock() + 1
+            sendHi()
+            once("hq", "coop: the host asked for your hello (it had none from you): sent")
+        end
     elseif (k == "dw" or k == "rb" or k == "rx" or k == "ro" or k == "rc") and DOWN and DOWN.onJoiner then DOWN.onJoiner(f)   -- (sv_down.lua)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
@@ -2669,6 +2690,9 @@ local function onSys(from, what, f)
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
             M.wasLost[from] = nil
             callout("CO-OP LINK BACK", string.upper(playerName(from)))
+            -- (a joiner says hello again: the host may have dropped it meanwhile, its roster entry gone, and this game
+            -- can't tell; the co-op run of 2026-10-31)
+            if COOP.client() then sendHi() end
             if COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
         end
     elseif what == "left" then
