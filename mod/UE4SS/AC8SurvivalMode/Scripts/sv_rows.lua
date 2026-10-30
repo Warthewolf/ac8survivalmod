@@ -555,6 +555,20 @@ function searchSetup()
                             end)
                         end
                         local fcsList = CFG.special.fcs
+                        -- the jammer's ECM pod (CFG.jammer): its row, the campaign's plain EA-18G (OP1010_e18g_01), has
+                        -- none (only the named aces' do), so RE_SV_JamEcm_NN's WN_WEAPON_4 (slot 3, tools/
+                        -- survival_events.py JAM_ECM_SLOT) fired the random special weapon put there (the user,
+                        -- 2026-10-29: "the EA-18G never activated it's ECM"). The pod first, held up as MINDRIPPER's
+                        local jam = CFG.jammer and CFG.jammer.enabled ~= false and a == CFG.jammer.aircraft
+                        if jam and free then
+                            local pod = anomEcm("NPC_FCS_ECM000") or "NPC_FCS_ECM000"
+                            r["NpcFCSId" .. free] = FName(pod)
+                            if level == 0 then
+                                log(string.format("weapons: %s (the jammer) carries its ECM pod %s (slot %d%s)", svNpc, pod, free,
+                                    free == 3 and "" or ": NOT slot 3, the one RE_SV_JamEcm fires"))
+                            end
+                            free = frees[2]
+                        end
                         if mind then                    -- its own (CFG.specials.anomaly.weapons: specials and the ECM pod)
                             local got = {}
                             for k, slot in ipairs(frees) do

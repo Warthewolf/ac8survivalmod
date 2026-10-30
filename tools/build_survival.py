@@ -1854,7 +1854,20 @@ POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01'),
               ('typn_common', 'f18e_common', 'OP1011_typn_01'),
               ('su57_common', 'su33_common', 'OP1021_su57_01'),
               ('f22a_common', 'f15e_common', 'OP1005_f22a_01'),
-              ('e18g_common', 'f18e_common', 'OP1010_e18g_01')]
+              ('e18g_common', 'f18e_common', 'OP1010_e18g_01'),
+              # the co-op stand-ins of the player planes the list above hadn't got (Scripts/sv_config.lua
+              # CFG.coop.airframes; the user, 2026-10-30: "someone who was flying the FA-36 was registering as flying the
+              # F-16"): each one's plain campaign enemy row (build/research/ai/dt_npc.tsv), not in the enemy pool
+              ('fa36_common', 'f18e_common', 'OP1018_fa36_01'),
+              ('ea36_common', 'f18e_common', 'OP1019_ea36_01'),
+              ('f04e_common', 'f16c_common', 'OP1003_f04e_01'),
+              ('f18c_common', 'f18e_common', 'OP1007_f18c_01'),
+              ('f15j_common', 'f15e_common', 'OP1012_f15j_01'),
+              ('a06e_common', 'f18e_common', 'OP1013_a06e_01'),
+              ('su25_common', 'su34_common', 'OP1015_su25_01'),
+              ('x40a_common', 'f15e_common', 'OP1016_x40a_01'),
+              ('mr2k_common', 'f16c_common', 'OP1017_mr2k_01'),
+              ('e06b_common', 'f18e_common', 'OP1031_e06b_01')]
 # Survival COOP's stand-ins (Scripts/sv_coop.lua, the weapon sync; tools/re/COOP.md 8): each other player's plane flies
 # <row>_svcp for its airframe's row (Scripts/sv_config.lua CFG.coop.airframes and default, read from the Lua), whose
 # NpcId <its NpcId>_SVCP is the DT_NPC copy sv_coop.lua COOP.syncSetup makes at the main menu with every weapon on

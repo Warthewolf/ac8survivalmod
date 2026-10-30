@@ -541,6 +541,45 @@ do
     room(false)
 end
 
+---------------------------------------------------------------------------------------------------- your airframe
+-- (the user's co-op run of 2026-10-30: two FA-36 players were F-16s on everyone's screen: the FA-36 wasn't in
+-- CFG.coop.airframes, and a player who'd been in the level before linking never sent an airframe at all, its game
+-- having taken the default already: its hello in the hangar went with no plane)
+print("a joiner's airframe: an FA-36, sent once its plane is up")
+do
+    fresh(5)
+    COOP.open, COOP.role, COOP.slot, CFG.coop.enabled = true, "join", 1, true
+    local function tick(dt) clock = clock + dt; COOP.tick(0) end
+    local function his() local t = {}; for _, m in ipairs(sent) do if m:find(">hi|", 1, true) then t[#t + 1] = m end end; return t end
+    local from = #logs + 1
+    M.myRow = "f16c_common"                       -- (the default taken in the level before linking)
+    survivalPC.Pawn = nil                         -- (in the hangar: no plane)
+    inbox[#inbox + 1] = "0|sys|paired"
+    sent = {}
+    tick(0.25)
+    local h = his()
+    local f = {}
+    for x in ((h[1] or "") .. "|"):gmatch("([^|]*)|") do f[#f + 1] = x end
+    check(#h == 1 and f[1] == "-1>hi" and f[4] == "", "linked in the hangar: hi with no airframe (" .. tostring(h[1]) .. ")")
+    pawn.full = "BP_PlayerPlane_PP0018_fa36_C_1"
+    survivalPC.Pawn = pawn
+    sent = {}
+    tick(0.25)
+    h = his()
+    check(#h == 1 and h[1]:find("|fa36_common|", 1, true) ~= nil, "its FA-36 up: hi with fa36_common (" .. tostring(h[1]) .. ")")
+    sent = {}
+    tick(0.25)
+    check(#his() == 0, "not again while it's the same")
+    pawn.full = "BP_PlayerPlane_PP0038_adfx02_C_1"
+    sent = {}
+    tick(0.25)
+    h = his()
+    check(#h == 1 and h[1]:find("|f16c_common|", 1, true) ~= nil and line("coop: your plane (adfx02) isn't in [coop] airframes: the others see it as f16c_common", from) ~= nil,
+          "an ADFX-02 (no AI plane): the default, said so (" .. tostring(h[1]) .. ")")
+    pawn.full = "BP_PlayerPlane_PP1000_f16c_C_1"
+    room(false)
+end
+
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
 do
