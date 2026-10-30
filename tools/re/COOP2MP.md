@@ -447,3 +447,11 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   out ~100x short), and no "own cameras" line (a player plane has no other CameraComponent). A player plane's root is
   scaled down. 0.73.13-coop2mp.14: the camera's distance from the plane is measured after placing it and its offset
   scaled by what it came out as (`spectate: camera on <plane>: D m from it (wanted 31 m); its offset xK ..., now D m`).
+- 0.73.13 in game (22:01): our camera measured 31.0 m behind the ADFX-02 and the view was still inside it: the view on a
+  player plane takes the game's own player-plane camera, whatever is added. 0.73.14-coop2mp.15 (runtime 0.32.1): the
+  replay viewer's way (the user: "make it like the Replay Actor, without the time skip"): SV_SpawnCam spawns a CameraActor
+  (the world spawn, as the dummy controller), attached at the end of a SpringArmComponent added to the watched plane
+  (camera and rotation lag, no collision test, level horizon); the view on the camera actor, never the plane; SV_StickNow
+  reads your stick from the plane's input fields (+0xff8 pitch, +0xff0 - +0xfec yaw, +0xff4 roll, +0xfe4 throttle,
+  +0xfe8 brake: before DOWN's autopilot) and swings the arm (110 deg/s), throttle / brake zoom 10-150 m. A restart while
+  down puts the view back from the camera actor too. coop_revive_test covers it.

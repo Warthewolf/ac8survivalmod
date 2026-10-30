@@ -215,6 +215,30 @@ static void FlRecordInput(uint8_t* plane, const float* out)
 
 /* SV_InputNow() -> "pitch,yaw,roll,throttle,brake,highg" (each x1000, whole numbers) from the last BuildFlightInput of
  * the local player's plane (or, outside Survival's level, of the plane input was last built for), "" if none yet */
+/* SV_StickNow() -> "pitch,yaw,roll,throttle,brake" (each x1000): your plane's stick as the game read it this frame, from
+ * the plane's own input fields that BuildFlightInput (0x147d689b0) reads (pitch +0xff8, yaw +0xff0 - +0xfec, roll +0xff4,
+ * throttle +0xfe4, brake +0xfe8), so before DOWN's autopilot replaces what goes to the flight engine; "" none. The
+ * co-op spectator camera's controls while you're DOWN (sv_down.lua) */
+static int L_StickNow(void* lua)
+{
+    uint8_t* me = FlLocalCached();
+    if (!me) me = CoRefGet(&CO.me);
+    if (!me || !Readable(me + 0xfe4, 0x18)) { U.luaSetString(lua, "", 0); return 1; }
+    float v[5] = { *(float*)(me + 0xff8), *(float*)(me + 0xff0) - *(float*)(me + 0xfec), *(float*)(me + 0xff4),
+                   *(float*)(me + 0xfe4), *(float*)(me + 0xfe8) };
+    char s[96];
+    CoBuf b = { s, s + sizeof(s) - 1 };
+    for (int k = 0; k < 5; ++k) {
+        float x = v[k];
+        if (!(x > -10.0f && x < 10.0f)) x = 0.0f;                         /* (NaN, junk) */
+        if (k) CoPutS(&b, ",");
+        CoPutI(&b, (int64_t)(x * 1000.0f + (x < 0 ? -0.5f : 0.5f)));
+    }
+    *b.p = 0;
+    U.luaSetString(lua, s, (size_t)(b.p - s));
+    return 1;
+}
+
 static int L_InputNow(void* lua)
 {
     uint8_t* me = FlLocalCached();
