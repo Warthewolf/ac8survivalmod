@@ -470,3 +470,6 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   now. 0.73.16-coop2mp.17: the camera's arm pivots on the plane's bounds' middle (GetActorBounds), its up / down to
   +-85 deg, each stick axis logged as it first moves and its most a minute; a DOWN plane past drift_km (10) from the
   airfield is put back over it (edgeGuard's SV_Respawn), a revive past near_km (8) brings you back by the runway.
+- The user, 2026-10-30, after a co-op test on 0.73.16: "ECM ESM worked" (a player's ECM / ESM shown from their real
+  plane on the others' games, T4b kind 3). Cress's earlier target box with no plane (0.73.11, round 1) wasn't
+  reproduced by firing it: its cause stays open.
