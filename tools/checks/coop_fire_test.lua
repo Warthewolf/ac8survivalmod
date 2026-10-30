@@ -665,6 +665,32 @@ M.peers[1].onAirfield, M.peers[2].down = nil, nil
 check(COOP.realTarget(1) == R1, "back in the air: a target again")
 M.peers[1], M.peers[2], M.huntOn = nil, nil, nil
 
+---------------------------------------------------------------------------------------------------- T5: damage shown
+print("their damage on their real plane here: health as their game says, never under 1 HP")
+fresh("host", 0)
+COOP.peerPlane(P1, 1)
+P1.HealthInternal, P1.MinHealth = 1000, 0
+peerState[1] = "100000,0,300000,0,0,0,640,100,3,100"       -- (64 of 100 HP, in the level and alive)
+tick()
+M.peers[1].real = true
+tick()
+check(P1.HealthInternal == 640 and P1.MinHealth == 1.0, "their 64 % on their real plane here, its floor 1 HP (" .. tostring(P1.HealthInternal) .. ")")
+peerState[1] = "100000,0,300000,0,0,0,0,100,3,100"         -- (their game: 0, as it went down)
+tick()
+check(P1.HealthInternal == 10, "never under 1 HP here (a real plane is never destroyed mid-level)")
+peerState[1] = "100000,0,300000,0,0,0,9999,100,3,100"
+tick()
+check(P1.HealthInternal == 1000, "never over its full health")
+CFG.coop.real_damage = false
+peerState[1] = "100000,0,300000,0,0,0,500,100,3,100"
+tick()
+check(P1.HealthInternal == 1000, "real_damage off: left alone")
+CFG.coop.real_damage = true
+M.peers[1].real = nil
+tick()
+check(P1.HealthInternal == 1000, "an AI stand-in: left alone (its own damage sync)")
+peerState[1] = nil
+
 ---------------------------------------------------------------------------------------------------- sync off
 print("sync off")
 fresh("host", 0)
