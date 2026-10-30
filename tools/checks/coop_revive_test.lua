@@ -13,7 +13,8 @@
 --     next by itself when the one watched goes down, the view put back (counted) when the game takes it, the HUD line;
 --   a revive by a joiner (the host's checks, "rb" to everyone, the room's count and the next price) and by the host
 --     (the STORE row's label, "(+1)", the price); the downed game's way back (loiter off, the plane as it was, repaired,
---     safe_s invincible, respawn loiter / native with SV_Respawn's pose);
+--     safe_s invincible, respawn loiter / native with SV_Respawn's pose; a plane that isn't flying, crashed into the
+--     ground with its floor held, native whatever respawn says: the user's co-op run of 2026-10-30);
 --   the refusals: not on the airfield, not down, a second revive, a wrong price, a bad request, another player's "dw";
 --     a joiner's refund on "rx" and with no answer in 10 s; the row's CO-OP ONLY / NOBODY IS DOWN;
 --   everyone down: the host's "ro" after 3 s (a player gone from the mission doesn't count), each game's run over
@@ -128,7 +129,11 @@ local function newPawn(addr)
              MinHealth = 0, invincible = false, hidden = false, collision = true, bEnableWeaponInput = true,
              bEnableFlareInput = true, bIsWeaponSystemDisabled = false, MaxPlaneAttackerMissiles = 4, MaxPursuitAttackers = 6,
              MaxNonPlaneAttackerMissiles = 2 }
-    function pawn:K2_GetActorLocation() return { X = 1609639, Y = -436414 + 400000, Z = 250000 } end
+    -- (still unless flySpeed (cm/s) flies it along X; at: where a crashed plane lies)
+    function pawn:K2_GetActorLocation()
+        if self.at then return self.at end
+        return { X = 1609639 + (self.flySpeed or 0) * clock, Y = -436414 + 400000, Z = 250000 }
+    end
     function pawn:SetIsInvincible(v) self.invincible = v end
     function pawn:SetActorHiddenInGame(v) self.hidden = v end
     function pawn:SetActorEnableCollision(v) self.collision = v end
@@ -353,6 +358,32 @@ local y = math.rad(-23)
 check(math.abs((r[2] or 0) - (1609574 + math.cos(y) * 400000)) < 1 and math.abs((r[3] or 0) - (-435747 + math.sin(y) * 400000)) < 1
       and r[4] == 50000 and r[6] == -23, "respawn native: SV_Respawn 4 km out along the runway's heading, 500 m up, yaw -23")
 CFG.coop.revive.respawn = "loiter"
+-- a crashed plane (the floor held, the plane lying on the ground: the user's co-op run of 2026-10-30, VERDA revived where
+-- it lay) comes back the native way; a flying one where the loiter left it
+respawns = {}
+pawn.flySpeed = 15000
+pawn.HealthInternal = 1
+tick()
+ticks(10)
+from = #logs + 1
+inbox[#inbox + 1] = "0|rb|1|2|0"
+tick()
+check(not DOWN.me() and #respawns == 0 and has(line("^revive: back", from), "where the loiter left you")
+      and line("^down: your plane isn't flying") == nil, "flying at 150 m/s when revived: where the loiter left it, no SV_Respawn")
+pawn.flySpeed, pawn.at = nil, { X = 1609639 + 150000, Y = -436414, Z = 500 }
+pawn.HealthInternal = 1
+from = #logs + 1
+tick()
+ticks(5)
+check(DOWN.me() and since(from, "^down: your plane isn't flying %(0 m/s, 5 m up, 1%.5 km from the airfield%)") == 1,
+      "crashed, lying still: not flying, said once (" .. tostring(line("^down: your plane isn't", from)) .. ")")
+check(has(line("^down: loiter", from), "0 m/s"), "the loiter line has its speed: " .. tostring(line("^down: loiter", from)))
+inbox[#inbox + 1] = "0|rb|1|2|0"
+tick()
+r = respawns[1] or {}
+check(not DOWN.me() and r[4] == 50000 and r[6] == -23 and has(line("^revive: back", from), "your plane wasn't flying: 0 m/s"),
+      "revived: SV_Respawn 4 km out from the runway, 500 m up, not where it lay (" .. tostring(line("^revive: back", from)) .. ")")
+pawn.at = nil
 -- its revives of another player
 sent = {}
 peer(2, DOWNED); tick()
