@@ -553,8 +553,9 @@ reads the entry's slot list +0x78: a weapon number that plane hasn't read garbag
 built and installed 2026-10-31, not yet run in game; zip 0.73.27, hash f0c27640...69feba0; replaces 0.73.26): every
 replayed weapon (T4b's FnFlush, T4a's copy, FwLaunchDirect) is checked first (flight.c FwWeaponOk); one not on the plane
 is dropped and logged (`coop2mp: T4b: player N's shot (weapon W) NOT replayed on their real plane ... here: it has M
-weapons`, and the minute line's `not a weapon of their plane here`). Open: why that player's weapon number wasn't on
-their real plane here (their loadout given at spawn: 15 entries; the next log shows M).
+weapons`, and the minute line's `not a weapon of their plane here`). The cause (user, 2026-10-31): that player (Twelve)
+ran another mod that changed their weapons, so their weapon numbers weren't the stock plane's. Players on other mods can
+make the games disagree elsewhere too: a session should run the same mod set.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
