@@ -412,6 +412,13 @@ FlightEngineInput, Damage, RespawnRescueTry / Result; the remote player is a rea
 weapons (COOP.md 6). Every message name is referenced from one function, 0x1452a5010 (likely their registration). Research
 only, nothing built on it.
 
+## COOP2MP (branch COOP2MP, from 0.72.7-coop.25, 2026-10-30; nothing new run in game)
+The user: "everyone is using their player aircraft and not an AI stand in", "Start a new build called COOP2MP". The
+other players as real player planes (ALivePlayerPlane, as AC8's Online Mode shows them) with their own weapons, instead
+of AI stand-ins. VERSION 0.73.x, COOP_TAG -coop2mp.N, zips `BUILD_NAME=COOP2MP COOP=1 NOVALKA=1 sh
+tools/package_release.sh online <version>`. tools/re/COOP2MP.md has Online Mode's research (its Strix weapon messages)
+and the tests T1-T5.
+
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
 co-op versions (0.72.2-coop.20), has an admin page for the user only (GET /admin; ADMIN_KEY in the POST body, 5 wrong
