@@ -90,8 +90,10 @@ own plane's class, the ADFX-02 (BP_PlayerPlane_PP0038_adfx02), the FA-36 (PP0018
   FLiveMessageFlightEnginePhysics R = *(N+0x98) into the plane's second flight state: Direction R+0x20 (3 floats),
   Location R+0x2c (3 int32, cm), Rotation R+0x38 (3 floats, deg: pitch, yaw, roll), State R+0x44 (int32), SpeedLocal
   R+0x48 (float, m/s). R+0x08 is TriggerTimeMs (left alone); R+0x58 / +0x68 / +0x78 count queued messages (keep 0).
-- Its input comes from N+0x170 (FLiveMessageFlightEngineInput): +0x08 pitch, +0x0c yaw, +0x10 roll, +0x14 throttle,
-  +0x18 brake, +0x1c high-G (floats), +0x20 an attribute byte (4 by default; bit 0 zeroes the input).
+- Its input comes from the FLiveMessageFlightEngineInput that N+0x170 points to (a TSharedPtr: the message's address at
+  +0x170, its reference controller at +0x178; RemoteUpdate 0x147d6f1d1 `mov rdx, [rdi+0x170]`): +0x08 pitch, +0x0c
+  yaw, +0x10 roll, +0x14 throttle, +0x18 brake, +0x1c high-G (floats), +0x20 an attribute byte (4 by default; bit 0
+  zeroes the input). (Read as inline at N+0x170 until runtime 0.29.3: see T1e.)
 - The plane's own flight state (MS, plane+0x2268: its speed plane+0x2318, its State plane+0x2b18) is blended toward the
   second one, and snaps to it when over 1 km off; then the plane's own engine, controls and effects run as for yours.
 - With nothing received all of R is zero: that's the pull to the map's centre (COOP.md 6). A local plane's State has bits
@@ -181,3 +183,20 @@ InputMoment 88, Accele 112, EngineBrake 116); nothing carries the afterburner am
   for a role-2 plane).
 - So for co-op: the host has to spread its flights' orders over the players itself (the game's own search never picks a
   remote player while an order names the local one).
+- The user saw a missile explode on the copy: the hits land, their damage isn't applied (a role-2 plane's).
+- Quit Mission crashed the game (18:06, after a restart of the mission in the same level kept the copy, its tick then
+  off): EXCEPTION_ACCESS_VIOLATION writing 0xbf800008 in the network object's destructor (0x146f0d3b0, from garbage
+  collection), which releases the TSharedPtr controller at N+0x178. T1c / T1d wrote the input inline at N+0x178..+0x190
+  (N+0x170 is that shared pointer, not the message): a pitch of -1.0 (0xbf800000) over the controller. So the copy's
+  input was never fed either (its control surfaces moved with its flight); and every T1c / T1d copy corrupted its
+  network object. Test builds only (COOP2MP's feed; 0.72.x has none of it).
+
+## T1e build (0.73.3-coop2mp.4, runtime 0.29.3; installed 2026-10-30, not yet run in game)
+- The input through the pointer (FdMessage: *(N+0x170), +0x08.. in that message): Quit Mission shouldn't crash, and the
+  copy's controls get your stick.
+- The hits: the runtime hooks the player plane's damage 0x147d5a430 (sigs.h kSigPPDamage, 15 bytes) and logs it for the
+  fed plane only: its first 10 hits `coop2mp: hit on the fed plane <p>: damage N (x10), kind K, from <p>, health A -> B,
+  the game returned N (x10)`, then each second with hits `coop2mp: fed plane <p>: N hits this second, N damage asked, N
+  taken off its health (health now N)`. No line at all while missiles explode on it: the hit doesn't reach the player
+  plane's damage (look for Online Mode's hit message path next).
+- Test: as T1d (Ctrl+F11, enemies ordered onto it), let missiles hit the copy, then Quit Mission (and a Restart).
