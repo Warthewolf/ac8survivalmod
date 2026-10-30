@@ -420,7 +420,11 @@ tools/package_release.sh online <version>`. tools/re/COOP2MP.md has Online Mode'
 and the tests T1-T5. T1 / T2 (0.73.0, test of 2026-10-30): a role-2 player plane with its tick off and moved every
 frame holds formation but has no animations, afterburner, HUD box or enemy attacks. T1c (0.73.1-coop2mp.2, runtime
 0.29.1; not yet run in game): its tick left on and its own RemoteUpdate (0x147d6f0c0, kSigRemoteUpdate) fed each frame:
-SV_CoopFeed writes a pose, speed, State and stick into its network object's physics message and input (COOP2MP.md).
+SV_CoopFeed writes a pose, speed, State and stick into its network object's physics message and input (COOP2MP.md). T1c in game
+(2026-10-30): it flew beside you on all three airframes, control surfaces working, but no afterburner glow and no enemy
+attacks. T1d (0.73.2-coop2mp.3, runtime 0.29.2; not yet run): the glow from your plane's afterburner amount
+(plane+0x39d0, written before the surface update reads it) and half the enemies ordered onto the copy
+(EngagementOrderOverride TargetFirst; Survival's orders name "Player", which is your plane only).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

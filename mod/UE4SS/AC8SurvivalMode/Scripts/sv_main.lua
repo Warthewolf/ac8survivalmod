@@ -810,7 +810,65 @@ if type(RegisterKeyBind) == "function" and Key then
     -- afterburner, an ALLY tag / HUD box, do the enemies go for it; every 5 s `test: second plane ...` says where it is,
     -- its health and how many enemies have it (and you) as their nearest player plane, every second `coop2mp: fed
     -- plane ...` how far it is from where it was sent.
-    local ppTest = { addr = nil, step = 0 }
+    -- T1d (0.73.2; T1c's test: the enemies had it as their NearestPlayerPlane but never attacked it): an enemy attacks
+    -- its fire control's tracking target (GetTrackingTarget), and Survival's orders name "Player" (your plane only). So
+    -- every other enemy up is ordered onto the copy (EngagementOrderOverride: Normal, the copy, TargetFirst: it alone),
+    -- again every 5 s while it isn't tracking it; the rest pick for themselves. The copy is held at PP_FLOOR health
+    -- (never shot down in the test), given your attack limits, and the 5 s line counts the enemies' tracking targets.
+    -- Ctrl+F12 (and the next Ctrl+F11) gives the ordered ones back their own order (you, PlayerOnlyNoLimit).
+    local ppTest = { addr = nil, step = 0, ordered = {} }
+    local PP_FLOOR = 300
+    local ORDER_NORMAL, PRIO_PLAYER_ONLY_NO_LIMIT, PRIO_TARGET_FIRST, FIRE_BITS = 0, 8, 9, 7
+    local function ppOrder(e, target, prio)
+        return pcall(function() e:EngagementOrderOverride(ORDER_NORMAL, target, prio, 0, false, FIRE_BITS, false) end)
+    end
+    local function ppRelease(why)                      -- the ordered enemies back on you
+        local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+        local n = 0
+        for _, e in pairs(ppTest.ordered) do
+            if valid(e) and valid(pawn) and ppOrder(e, pawn, PRIO_PLAYER_ONLY_NO_LIMIT) then n = n + 1 end
+        end
+        ppTest.ordered = {}
+        if n > 0 then log(string.format("test: %s: %d enemies back on you", why, n)) end
+    end
+    local function ppTracking(e)                       -- an enemy's fire control's target: "it", "you", "other", "none"
+        local ok, t = pcall(function() return e:GetTrackingTarget() end)
+        if not ok then return "?" end
+        if not valid(t) then return "none" end
+        local a = addrOf(t)
+        local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+        if a == ppTest.addr then return "it" elseif valid(pawn) and a == addrOf(pawn) then return "you" end
+        return "other"
+    end
+    local function ppSplit(now)                         -- every other enemy up onto the copy (T1d)
+        local o = ppTest.obj
+        if not valid(o) then return end
+        local i, sent = 0, 0
+        for _, p in ipairs(planes or {}) do
+            if not p.down and valid(p.obj) then
+                i = i + 1
+                local key = addrOf(p.obj)
+                if i % 2 == 1 then
+                    if ppTracking(p.obj) ~= "it" and ppOrder(p.obj, o, PRIO_TARGET_FIRST) then sent = sent + 1 end
+                    ppTest.ordered[key] = p.obj
+                end
+            end
+        end
+        if sent > 0 then log(string.format("test: %d enemies ordered onto the second plane (TargetFirst)", sent)) end
+    end
+    local function ppPrepare(o, pawn)                   -- the copy's floor and your attack limits
+        local okF = pcall(function() o.MinHealth = PP_FLOOR end)
+        if not okF then okF = pcall(function() o:SetMinHealth(PP_FLOOR) end) end
+        local lim = {}
+        for _, k in ipairs({ "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }) do
+            local okY, y = pcall(function() return pawn[k] end)
+            local okW = okY and type(y) == "number" and pcall(function() o[k] = y end)
+            local okI, it = pcall(function() return o[k] end)
+            lim[#lim + 1] = string.format("%s %s (yours %s%s)", k, okI and tostring(it) or "?", okY and tostring(y) or "?",
+                okW and "" or ", not copied")
+        end
+        log(string.format("test: Ctrl+F11 the copy's floor %d HP: %s; %s", PP_FLOOR, okF and "set" or "NOT SET", table.concat(lim, ", ")))
+    end
     local PP_PLANES = { { name = "YOUR OWN" }, { name = "ADFX-02", code = "adfx02" }, { name = "FA-36", code = "fa36" } }
     local function ppClass(e)                          -- (sv_coop.lua's table of every player plane's blueprint)
         if not e.code then return nil end
@@ -839,9 +897,22 @@ if type(RegisterKeyBind) == "function" and Key then
             end
         end
         local okT, tk = pcall(function() return o:IsActorTickEnabled() end)
-        log(string.format("test: second plane %s: %s from you, health %s, its tick %s; of %d enemies up, %d have it as their nearest "
-            .. "player plane, %d you; your pawn %s", ppTest.name, d, okH and tostring(h) or "?", okT and tostring(tk) or "?", up, onIt,
-            onYou, valid(pawn) and "yours" or "GONE"))
+        local okG, gr = pcall(function() return o:IsOnGround() end)
+        local okA, act = pcall(function() return o.bIsActivated end)
+        local tr, ord, ordIt = { it = 0, you = 0, other = 0, none = 0, ["?"] = 0 }, 0, 0
+        for _, p in ipairs(planes or {}) do
+            if not p.down and valid(p.obj) then
+                local t = ppTracking(p.obj)
+                tr[t] = (tr[t] or 0) + 1
+                if ppTest.ordered[addrOf(p.obj)] then ord = ord + 1; if t == "it" then ordIt = ordIt + 1 end end
+            end
+        end
+        log(string.format("test: second plane %s: %s from you, health %s, its tick %s, on the ground %s, activated %s; of %d enemies "
+            .. "up, %d have it as their nearest player plane, %d you; tracking: %d it, %d you, %d other, %d none, %d unread; ordered "
+            .. "onto it %d (%d tracking it); your pawn %s", ppTest.name, d, okH and tostring(h) or "?", okT and tostring(tk) or "?",
+            okG and tostring(gr) or "?", okA and tostring(act) or "?", up, onIt, onYou, tr.it, tr.you, tr.other, tr.none, tr["?"],
+            ord, ordIt, valid(pawn) and "yours" or "GONE"))
+        ppSplit(now)
     end }
     local function ppCopy()
         for _, o in ipairs(FindAllOf("LivePlayerPlane") or {}) do
@@ -869,6 +940,7 @@ if type(RegisterKeyBind) == "function" and Key then
                     log(string.format("test: Ctrl+F11 spawning %s (%s)", e.name, cls and nameOf(cls) or "your plane's class"))
                     local a = SV_CoopSpawnPP(addrOf(pawn), x, y, l.Z, r.Yaw, cls and addrOf(cls) or 0)
                     log(string.format("test: Ctrl+F11 second player plane (%s): %s", e.name, tostring(a)))
+                    ppRelease("Ctrl+F11 the last copy gone")
                     if type(a) ~= "number" or a <= 0 then hudCallout("TEST: " .. e.name .. " FAILED", tostring(a)); ppTest.obj = nil; return end
                     ppTest.addr, ppTest.name, ppTest.logAt = a, e.name, 0
                     local c = ppCopy()
@@ -881,6 +953,7 @@ if type(RegisterKeyBind) == "function" and Key then
                         log("test: Ctrl+F11 not fed (" .. tostring(f) .. "): T1's way, its own tick off: " .. (okT and "done" or tostring(et)))
                         f = SV_CoopFollow(a, addrOf(pawn), 0, 150, 0, 0)
                     end
+                    if valid(c) then ppPrepare(c, pawn) end
                     local after = survivalPC.Pawn
                     log("test: Ctrl+F11 after the spawn: your pawn is " .. (addrOf(after) == addrOf(pawn) and "still yours" or
                         ("NOW " .. nameOf(after))) .. "; formation " .. tostring(f))
@@ -895,6 +968,7 @@ if type(RegisterKeyBind) == "function" and Key then
             ExecuteInGameThread(function()
                 local ok, err = pcall(function()
                     if type(SV_CoopKillPP) ~= "function" then return end
+                    ppRelease("Ctrl+F12")
                     ppTest.addr, ppTest.step, ppTest.obj = nil, 0, nil
                     if type(SV_CoopFeed) == "function" then SV_CoopFeed(0) end
                     log("test: Ctrl+F12 second player plane removed: " .. tostring(SV_CoopKillPP()))

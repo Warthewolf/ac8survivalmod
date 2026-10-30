@@ -111,3 +111,57 @@ game's update reads them (runtime/flight.c, FD). Ctrl+F11 now leaves the copy's 
   ISN'T RUNNING` if the game stops calling it); the 5 s `test: second plane ...` line as before ("its tick true").
 - If it sits at the map's centre anyway, or N m off keeps growing: something else writes R after us (a received
   message's queue) or the update reads another field; the log's queue counts and "skipped" tell which.
+
+### T1c results (the user's solo test, 2026-10-30 16:57-17:00)
+- All three airframes (your own, the ADFX-02 now loading, the FA-36) flew fed with their tick on: 0 skipped, 1-20 m
+  off where they were sent (89 m once) from 60 to 638 m/s; control surfaces and the rest worked (user: "didn't see an
+  afterburner but everything else worked").
+- No afterburner glow. No enemy attacked it (user: "enemies don't target the other aircraft"): health 1200 / 1260
+  throughout, though 0-4 of 4 enemies had it as their NearestPlayerPlane.
+
+## The afterburner's glow (research, 2026-10-30; verified in the exe)
+A plane's surface component tick 0x147d320e0 calls, for a player plane (component+0x188 set), 0x147d32b00, which sets
+the afterburner alpha component+0x2a4 = plane+0x39d0 (0 when dead); 0x147d33dcc puts it in the "Afterburner_Alpha" /
+"AfterBurnerSize" / "AfterBurnerLightSize" parameters. (An AI plane's, 0x147d333a0 via component+0x190, ramps on its
+byte +0x29b8, its acceleration or its speed.) plane+0x39d0 is the player plane's afterburner amount (getter
+0x147d65ed0), written with the block plane+0x39c0.. by its movement update 0x14731e7e0 (from 0x14731e590) out of its
+flight engine at +0x3088. A fed remote plane never gets one. In the network messages the input's Accele is the
+throttle (FLiveMessage... flight state: Direction 0, Location 24, Rotation 48, MomentSpeed 64, State 72, SpeedLocal 76,
+InputMoment 88, Accele 112, EngineBrake 116); nothing carries the afterburner amount itself.
+
+## Why enemies didn't attack it (research, 2026-10-30; [V] in the exe unless marked)
+- NearestPlayerPlane (AI plane+0x2668, the nearest of LiveActorManager.CachedPlayerPlanes) only feeds the provoke and
+  blackout reactions. An AI attacks its fire control's current target (vfunc +0xcb0; Lua GetTrackingTarget()).
+- The search (LiveFCSModule_AIControlLegacy slot +0x300, 0x147bf34a0) takes hostile, alive, activated (+0x3f4) planes
+  near its unit area out of LiveActorManager.ObjectMapper, sorts them into flags (0x147bf74a0: 2 player plane, 0x10 not
+  locally controlled, 8 the order's target, 0x20 pursuit quota full) and keeps those its filter (0x147c0bb30: target
+  type, search priority, order target) allows. The copy is 0x12, exactly an Online Mode remote player, and passes
+  Survival's PlayerOnlyNoLimit; air only needs its State bit 17 (on the ground [I]) clear.
+- Survival's orders name "Player": FirstPlayerPlane (LiveActorManager+0x1e0), set by RegisterGameObject (0x1473a1a80)
+  for a locally controlled plane only, so your plane is every order's target (flag 8) and the copy never is.
+- The mission's attack limits (LiveSetPlayerMaxAttackerMissiles 0x1473f9ba0) are written to the planes then in
+  CachedPlayerPlanes: a copy spawned later keeps the defaults. Fire gate 0x147c047b0: the target's attackers / missiles
+  against its limits and cooldowns (counted down in its TickGame).
+- EngagementOrderOverride(Order, TargetEnemy, SearchPriority, SearchPriorityExtension, IgnoreAttackQuota,
+  bCanFireWeaponBit, PropogateToChild) is a UFUNCTION on every AI object (exec 0x146d24730 -> SetEngagement 0x147c8f9e0,
+  the event node's path). ELiveEngagement Normal 0; ELiveEnemySearchPriority Default 0, AIFirst 1, AIOnly 2, AINonTGT 3,
+  AINonTGTFirst 4, PlayerFirst 5, PlayerOnly 6, PlayerFirstNoLimit 7, PlayerOnlyNoLimit 8, TargetFirst 9 (the order's
+  target alone), TargetOrNearbyPlayer 10, None 11; fire bits 7 (the stock order's three true, three false).
+- Not traced: whether a hit on a role-2 plane applies on this game (player TakeDamage 0x147d5a430 has no role check at
+  its head).
+
+## T1d build (0.73.2-coop2mp.3, runtime 0.29.2; staged 2026-10-30, not yet run in game)
+- The afterburner: the runtime hooks 0x147d32b00 (sigs.h kSigSurfacePP, 18 bytes) and, for the fed plane, writes the
+  source's plane+0x39d0 there just before the component reads it.
+- The enemies: Ctrl+F11's copy gets a floor of 300 HP (MinHealth: never shot down in the test) and your attack limits;
+  every 5 s every other enemy up that isn't tracking it is ordered onto it (EngagementOrderOverride Normal, the copy,
+  TargetFirst, fire bits 7), the rest left to pick; Ctrl+F12 and the next Ctrl+F11 put the ordered ones back on you
+  (PlayerOnlyNoLimit).
+- Look: the copy's afterburner glow when you boost; enemies going for it (missiles at it, its health dropping to 300 and
+  holding); whether the unordered half ever pick it.
+- Log: at load `player plane surface update: hooked at <p>`; `coop2mp: plane <p> fed ... its afterburner from yours: yes`;
+  every second `coop2mp: fed plane ...; afterburner x1000 yours up to N, left on it up to N, N written; State bits yours
+  <x>, its <x>` (left on it = what the game had there before the write: 0 means nothing else keeps it); `test: Ctrl+F11
+  the copy's floor 300 HP: set; MaxPlaneAttackerMissiles ...`; `test: N enemies ordered onto the second plane
+  (TargetFirst)`; every 5 s `test: second plane ...: health H, ..., on the ground false, activated true; ... tracking: A
+  it, B you, C other, D none, E unread; ordered onto it N (M tracking it)`.

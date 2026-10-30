@@ -456,8 +456,10 @@ static struct {
     int32_t noOff;
     CoRef plane, src;
     double off[3];                                      /* cm: forward, right, up */
-    uint32_t calls, fed, skipped;
+    uint32_t calls, fed, skipped, abWrites;
     double lastLog, lastCallAt, srcPos[3], srcAt, spd, tgt[3];
+    float abSrc, abFound;                               /* this second's most: the source's afterburner, what was left on it */
+    uint32_t stateOr;                                   /* this second's source State bits (before the mask) */
 } FD;
 static void* g_fdNetCls;
 
@@ -503,6 +505,7 @@ static void FdFeed(uint8_t* plane)
     for (int k = 0; k < 3; ++k) loc[k] = (int32_t)(p[k] + (p[k] < 0 ? -0.5 : 0.5));
     float frot[3] = { (float)rot[0], (float)rot[1], (float)rot[2] };
     int32_t state = Readable(src + FD_STATE, 4) ? *(int32_t*)(src + FD_STATE) : 0;
+    FD.stateOr |= (uint32_t)state;
     state &= ~((1 << 20) | (1 << 9));
     memcpy(r + 0x20, dir, 12); memcpy(r + 0x2c, loc, 12); memcpy(r + 0x38, frot, 12);
     memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
@@ -527,6 +530,33 @@ static uint64_t OnRemoteUpdate(uint8_t* plane, float dt)
     return g_nextRemoteUpdate(plane, dt);
 }
 
+/* The afterburner's glow (T1c's test, 2026-10-30: the fed plane flew and its control surfaces moved, but no glow). A
+ * player plane's surface component update (0x147d32b00, sigs.h kSigSurfacePP) takes its afterburner alpha from the
+ * plane's afterburner amount plane+0x39d0. Your own plane's comes from its movement update (0x14731e7e0 writes the
+ * block plane+0x39c0.. from its flight engine at +0x3088); nothing writes a remote plane's. So the fed plane gets the
+ * source's, written just before the component reads it. */
+#define FD_AB       0x39d0     /* a player plane's afterburner amount (float, 0..1) */
+typedef uint64_t (*SurfacePPFn)(uint8_t* comp, float dt);
+static uint8_t*    g_fSurfacePP;                        /* found by FindFunctions (sigs.h kSigSurfacePP) */
+static SurfacePPFn g_nextSurfacePP;
+
+static uint64_t OnSurfacePP(uint8_t* comp, float dt)
+{
+    if (FD.on && comp && Readable(comp + 0x188, 8)) {
+        uint8_t* plane = *(uint8_t**)(comp + 0x188);
+        uint8_t* src = (plane && plane == FD.plane.obj && CoRefGet(&FD.plane)) ? CoRefGet(&FD.src) : NULL;
+        if (src) {
+            float found = *(float*)(plane + FD_AB), ab = *(float*)(src + FD_AB);
+            if (!(ab >= 0.0f && ab <= 4.0f)) ab = 0.0f;
+            if (found > FD.abFound) FD.abFound = found;
+            if (ab > FD.abSrc) FD.abSrc = ab;
+            *(float*)(plane + FD_AB) = ab;
+            ++FD.abWrites;
+        }
+    }
+    return g_nextSurfacePP(comp, dt);
+}
+
 /* once a second while feeding (from FlightInputHook): how far the plane is from where it was sent */
 static void FdLog(void)
 {
@@ -543,8 +573,12 @@ static void FdLog(void)
         off = (int32_t)(CoSqrt(dx * dx + dy * dy + dz * dz) / 100.0);
     }
     float spd = Readable(plane + FD_SPEED, 4) ? *(float*)(plane + FD_SPEED) : -1.0f;
-    Log(L"coop2mp: fed plane %p: %u updates, %u fed, %u skipped; %d m off where it was sent, its speed %d m/s%s", plane, FD.calls,
-        FD.fed, FD.skipped, off, (int32_t)spd, (now - FD.lastCallAt > 2.0) ? L"; ITS REMOTE UPDATE ISN'T RUNNING (tick off? not alive?)" : L"");
+    uint32_t its = Readable(plane + FD_STATE, 4) ? *(uint32_t*)(plane + FD_STATE) : 0;
+    Log(L"coop2mp: fed plane %p: %u updates, %u fed, %u skipped; %d m off where it was sent, its speed %d m/s; afterburner x1000 "
+        L"yours up to %d, left on it up to %d, %u written; State bits yours %x, its %x%s", plane, FD.calls, FD.fed, FD.skipped, off,
+        (int32_t)spd, (int32_t)(FD.abSrc * 1000), (int32_t)(FD.abFound * 1000), FD.abWrites, FD.stateOr, its,
+        (now - FD.lastCallAt > 2.0) ? L"; ITS REMOTE UPDATE ISN'T RUNNING (tick off? not alive?)" : L"");
+    FD.abSrc = FD.abFound = 0; FD.abWrites = 0; FD.stateOr = 0;
 }
 
 /* SV_CoopFeed(plane, source, forward_m, right_m, up_m) -> 1: a remote player plane (role 2, its tick on) flown by its own
@@ -574,11 +608,12 @@ static int L_CoopFeed(void* lua)
     memset(&FD.plane, 0, sizeof(FD.plane)); memset(&FD.src, 0, sizeof(FD.src));
     CoRefSet(&FD.plane, plane); CoRefSet(&FD.src, src);
     FD.off[0] = f * 100; FD.off[1] = rt * 100; FD.off[2] = up * 100;
-    FD.calls = FD.fed = FD.skipped = 0;
-    FD.said = 0; FD.srcAt = 0; FD.spd = 0;
+    FD.calls = FD.fed = FD.skipped = FD.abWrites = 0;
+    FD.said = 0; FD.srcAt = 0; FD.spd = 0; FD.abSrc = FD.abFound = 0; FD.stateOr = 0;
     FD.lastLog = FD.lastCallAt = CoNow();
     FD.on = 1;
-    Log(L"coop2mp: plane %p fed from %p (%d m ahead, %d m right, %d m up): its own update flies it (message %p, NetworkObject +%x)",
-        plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r, (uint32_t)FD.noOff);
+    Log(L"coop2mp: plane %p fed from %p (%d m ahead, %d m right, %d m up): its own update flies it (message %p, NetworkObject +%x); "
+        L"its afterburner from yours: %s", plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r, (uint32_t)FD.noOff,
+        g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)");
     return Ret(lua, 1);
 }
