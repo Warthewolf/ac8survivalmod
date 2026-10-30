@@ -542,7 +542,8 @@ stays for the level (an AI plane up can't change airframe; nothing is replaced m
 the host asks a player whose plane streams with no hello for one every 3 s ("hq"; `coop: player N's plane streams here
 but no hello from them: asked for it (hq)`), the default waits HELLO_WAIT_S (30) with no hello at all (5 with an empty
 one, as before), and a joiner says hello on "hq" (once a second at most) and whenever its link comes back.
-coop_landing_test.sh covers it.
+coop_landing_test.sh covers it. Built as 0.73.26-coop2mp.27 (runtime 0.32.4; installed 2026-10-31, not yet run in game;
+zip 0.73.26, hash 294ad410...d428122; replaces 0.73.25).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
