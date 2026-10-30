@@ -544,6 +544,17 @@ but no hello from them: asked for it (hq)`), the default waits HELLO_WAIT_S (30)
 one, as before), and a joiner says hello on "hq" (once a second at most) and whenever its link comes back.
 coop_landing_test.sh covers it. Built as 0.73.26-coop2mp.27 (runtime 0.32.4; installed 2026-10-31, not yet run in game;
 zip 0.73.26, hash 294ad410...d428122; replaces 0.73.25).
+0.73.26 in game (2026-10-31, five players): the host crashed 400 s in (09:22:24), access violation reading -1 at
+0x147f7c340, the stack RemoteUpdate's call (0x147d646dc) -> main.dll's detour -> the remote fire 0x147d71ea0 (+0x50b) ->
+the spawn slot's lookup 0x147f7c300, replaying a joiner's launch on their real plane (player 5's first, an FA-36 that had
+joined 35 s before). 0x147f7c300(launcher, weapon, spawn slot) indexes the launcher's weapon table ([launcher +0xb0]
++0x28, 0xa0-byte entries, count +0x30: the game's loop at 0x147f7bbc4) by the weapon number with no bounds check and
+reads the entry's slot list +0x78: a weapon number that plane hasn't read garbage. Runtime 0.32.5 (0.73.27-coop2mp.28;
+built and installed 2026-10-31, not yet run in game; zip 0.73.27, hash f0c27640...69feba0; replaces 0.73.26): every
+replayed weapon (T4b's FnFlush, T4a's copy, FwLaunchDirect) is checked first (flight.c FwWeaponOk); one not on the plane
+is dropped and logged (`coop2mp: T4b: player N's shot (weapon W) NOT replayed on their real plane ... here: it has M
+weapons`, and the minute line's `not a weapon of their plane here`). Open: why that player's weapon number wasn't on
+their real plane here (their loadout given at spawn: 15 entries; the next log shows M).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
