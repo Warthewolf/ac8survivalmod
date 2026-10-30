@@ -997,7 +997,14 @@ local function peerTick(slot)
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
         local o, why = spawnReal(slot, P, code, lo)
         if o then
-            P.obj, P.addr, P.real, P.code, P.shown, P.lo = o, addrOf(o), true, code, nil, lo
+            P.obj, P.addr, P.real, P.code, P.shown, P.lo, P.hpShown = o, addrOf(o), true, code, nil, lo, nil
+            -- (their name under ALLY in its target box: the callsign line, runtime 0.32.2; the AI stand-ins' own way,
+            -- SV_CoopName_<A-X>, doesn't reach a player plane)
+            if type(SV_PPName) == "function" and P.addr then
+                local okN, rn = pcall(SV_PPName, P.addr, playerName(slot))
+                log(string.format("coop: player %d's name on their real plane's box: %s", slot + 1,
+                    (okN and rn == 1) and playerName(slot) or ("NOT set (" .. tostring(rn) .. ")")))
+            end
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
             log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
                 .. "stream; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)"))
@@ -1032,6 +1039,22 @@ local function peerTick(slot)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
             log(string.format("coop: player %d's plane %s", slot + 1, show and "shown"
                 or (fresh and "hidden (down)" or "hidden (not in the mission)")))
+        end
+        -- (COOP2MP T5: their damage shown on their real plane here, its health as their game says, never under 1 HP: a
+        -- real plane is never destroyed mid-level (0.73.12's crash), and hits on it here are refused anyway (hard rule 53);
+        -- the field written, not SetMinHealth, which keeps whole points only)
+        if P.real and show and valid(P.obj) and type(P.hp) == "number" and type(P.maxHp) == "number" and P.maxHp > 0
+            and cfg().real_damage ~= false then
+            local want = math.max(10, math.min(math.floor(P.maxHp * 10 + 0.5), math.floor(P.hp + 0.5)))
+            if want ~= P.hpShown then
+                pcall(function() P.obj.MinHealth = 1.0 end)
+                local okH = pcall(function() P.obj.HealthInternal = want end)
+                if okH and P.hpShown == nil then
+                    log(string.format("coop: player %d's damage shown on their real plane here (health %d%%)", slot + 1,
+                        math.floor(want / 10 / P.maxHp * 100 + 0.5)))
+                end
+                P.hpShown = okH and want or P.hpShown
+            end
         end
     end
 end

@@ -1056,6 +1056,8 @@ CFG = {
              -- each other player as their own airframe's player plane, as AC8's Online Mode shows them (COOP2MP T3,
              -- tools/re/COOP2MP.md); false: an AI stand-in of their airframe, as 0.72 (also the fallback)
              real_planes = true,
+             -- real_damage: their damage shown on their real plane (its health as their game says, never under 1 HP)
+             real_damage = true,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
              -- and of a wave's (0.15: 4 players 1.45 times), up to max_aircraft in a round and max_up up at once
              -- (never fewer than one player gets). 0 = a single player's rounds. From CFG.late.aircraft_from_round

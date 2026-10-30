@@ -476,3 +476,21 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
 - The same test: the other players saw the host's own loadout on the host's real plane (the user: "people reported
   seeing my loadout"); the empty host loadout in Cress's 0.73.11 log ("//34,40") doesn't show as a problem now. Resolved
   unless a mismatched special turns up.
+
+## T5 (from 0.73.17-coop2mp.18, runtime 0.32.2; not yet run in game)
+- Names under ALLY (the user: "the Player Names aren't showing underneath ALLY anymore"): research (a subagent, checked
+  in code): the target box's lines come from each object's block at obj+0xA70, rebuilt each frame by 0x147293760; the
+  gamer-tag line (+0x2210, the remote spawn's player name) shows only in an online game mode (0x147EDAF50: the
+  AuthorityGameMode's vfunc), the callsign line is, offline, the game object's callsign FString obj+0x6E8 (GetCallsign's
+  field; not reflected). SV_PPName(plane, name) writes it with the game's FString assign (the call 0x34 bytes before the
+  remote spawn's finish site, after its `lea rcx, [rsi+0x2200]`, checked); sv_coop.lua calls it as each real plane
+  spawns (`coop: player N's name on their real plane's box: <name>`). Not verified: a branch in the builder that clears
+  the callsign line for some planes ([rsp+0x42] and [rsp+0x44] both set).
+- Damage shown ([coop] real_damage): their health as their stream says written to their real plane's HealthInternal
+  (10 x HP), MinHealth field 1.0, never under 1 HP (a real plane is never destroyed mid-level: 0.73.12's crash); its
+  hits here stay refused (hard rule 53). coop_fire_test covers it.
+- Already in: the host's hunt onto real planes (T3, 0.73.15 skips landed / DOWN players); DOWN / revive hide and show a
+  real plane (0.72.2's, seen working 2026-10-30).
+- Open: paint (research running), many players' frame cost, the DOWN autopilot's turn.
+- coop_test.sh (12 players over lossy UDP) failed once of four runs on 0.73.17 (one joiner got 0 of 120 reliable
+  messages; the transport didn't change): flaky.

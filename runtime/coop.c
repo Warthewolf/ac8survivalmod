@@ -1869,6 +1869,50 @@ static int L_SpawnCam(void* lua)
     return Ret(lua, (int64_t)(uintptr_t)cam);
 }
 
+/* SV_PPName(plane, name) -> 1: another player's real plane here shows name under ALLY in its target box; < 0: -1 bad
+ * args / not such a plane, -2 game code not found. The box's callsign line, offline, is the game object's callsign FString
+ * at +0x6E8 (GetCallsign's field; the HUD's builder 0x147293760 copies it in every frame; the online line, +0x2210, shows
+ * only in an online game mode). The game's FString assign is the call 0x34 bytes before the remote spawn's finish site
+ * (its write of the plane's +0x2200, `lea rcx, [rsi + 0x2200]; ...; call`), checked first. Not reflected: Lua can't. The
+ * user, 2026-10-30: "the Player Names aren't showing underneath ALLY anymore" (AI stand-ins showed theirs) */
+typedef void* (*CoFStrAssignFn)(void* dst, const void* src);
+static int L_PPName(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    char txt[160];
+    size_t len = 0;
+    if (!plane || !ArgBytes(lua, txt, sizeof(txt), &len) || !len) return Ret(lua, -1);
+    if (!LiveObject(plane) || CoKind(plane) != 2 || plane == CO.me.obj || !Readable(plane + 0x6E8, 0x10)) return Ret(lua, -1);
+    uint8_t* s = g_siteRemoteFinish;
+    uint8_t* c = s ? s - 0x34 : NULL, *l = s ? s - 0x46 : NULL;
+    if (!c || c[0] != 0xE8 || l[0] != 0x48 || l[1] != 0x8D || l[2] != 0x8E || *(int32_t*)(l + 3) != 0x2200) return Ret(lua, -2);
+    CoFStrAssignFn assign = (CoFStrAssignFn)(c + 5 + *(int32_t*)(c + 1));
+    if (!InGame(assign)) return Ret(lua, -2);
+    wchar_t w[40];                                                  /* UTF-8 in, UTF-16 out, 39 characters at most */
+    int n = 0;
+    for (size_t i = 0; i < len && n < 39;) {
+        uint32_t u = (uint8_t)txt[i];
+        int k = u < 0x80 ? 0 : (u & 0xE0) == 0xC0 ? 1 : (u & 0xF0) == 0xE0 ? 2 : (u & 0xF8) == 0xF0 ? 3 : -1;
+        if (k < 0 || i + (size_t)k >= len + (k ? 0 : 1)) break;
+        u = k == 0 ? u : k == 1 ? (u & 0x1F) : k == 2 ? (u & 0x0F) : (u & 0x07);
+        for (int j = 1; j <= k; ++j) {
+            uint8_t b = (uint8_t)txt[i + j];
+            if ((b & 0xC0) != 0x80) { u = '?'; k = j - 1; break; }
+            u = (u << 6) | (b & 0x3F);
+        }
+        i += 1 + (size_t)k;
+        if (u < 0x20) continue;
+        if (u >= 0x10000) { if (n >= 38) break; u -= 0x10000; w[n++] = (wchar_t)(0xD800 | (u >> 10)); w[n++] = (wchar_t)(0xDC00 | (u & 0x3FF)); }
+        else w[n++] = (wchar_t)u;
+    }
+    if (!n) return Ret(lua, -1);
+    w[n] = 0;
+    struct { wchar_t* data; int32_t num, max; } src = { w, n + 1, n + 1 };
+    assign(plane + 0x6E8, &src);
+    Log(L"coop: player plane %p's callsign (under ALLY) set: %s", plane, w);
+    return Ret(lua, 1);
+}
+
 /* SV_CoopKillPP() -> 1: the second player plane and its controller removed (0: none was up); SV_CoopKillPP(slot): that
  * player slot's real plane (COOP2MP T3) */
 static int L_CoopKillPP(void* lua)
