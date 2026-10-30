@@ -1035,18 +1035,27 @@ end
 --   gun          SV_Ammo(0) dropping (read before Survival's own refill: COOP.ammoRead) -> state bit 64 while it does;
 --                the others fire the stand-in's gun (slot 1) every GUN_EVERY_S at its target ("fx" g: your target)
 --   flares       SV_Ammo(4) dropping -> bit 128; the others fire the stand-in's flares (slot 0) as it comes on
+--   electronic   a special weapon's count (SV_Ammo(2) / (3)) dropping with nothing new in flight within ELEC_WAIT_S: an
+--                ESM / jamming pod, which fires no projectile (the user's co-op run of 2026-10-30: the EA-18G's ESM
+--                "didn't show up for any of us"): "fx" e; the others fire the stand-in's ECM pod (its row's ECM slot)
 --   gear         LandingGearOnMesh shown -> bit 16; the others call the stand-in's EnableLandingGear as it flips
 --   afterburner  SV_InputNow's throttle at ab_throttle or over -> bit 32; the runtime lights the stand-in's itself
 -- Never twice: a stand-in flies its airframe's damage-0 copy (<row>_svcp, COOP.syncSetup), so what it fires here only
 -- shows; a joiner takes any stand-in's damage out of what it sends the host anyway (clientTick: the backstop).
 -- "fx" (reliable, a tick's shots in one): shooter -> host "fx|<k>:<id>:<age>;..." (k: m a missile, s a special weapon,
--- g the gun's target; id: the target's stream id, 0 none; age: ms since it was seen); host -> the others
+-- e an electronic special (ESM / jamming), g the gun's target; id: the target's stream id, 0 none; age: ms since it was
+-- seen); host -> the others
 -- "fx|<shooter's slot>|..." (never back to the shooter; the host's own as slot 0). Guards: a known slot, not your own;
 -- at most FX_PER_S shots a second a shooter and FX_MAX entries a message; a shot older than FX_STALE_MS (its age and
 -- half the round trip of each leg) or from a shooter whose state is over a second old dropped; an id not known here
 -- fired with no target.
 do
 local FX_PER_S, FX_MAX, FX_STALE_MS, FLAG_HOLD_S, GUN_EVERY_S, FLARE_EVERY_S = 12, 32, 1500, 0.5, 0.2, 1.0
+-- (a special weapon's count down with nothing new in flight this long after: an electronic one, ESM / jamming)
+local ELEC_WAIT_S = 0.45
+-- the ECM pod's fire-control slot on a stand-in's airframe row (COOP.syncSetup records each row's from its DT_NPC row:
+-- an FCS id with ECM in it); the EA-18G's (flares, gun, missiles, ECM: tools/survival_events.py JAM_ECM_SLOT) if not
+M.ecmSlot = M.ecmSlot or { e18g_common = 3 }
 local BIT_GEAR, BIT_AB, BIT_GUN, BIT_FLARE = 16, 32, 64, 128
 local MISSION_TABLE = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission"
 local S = { seen = {}, kinds = {}, rate = {}, n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 } }
@@ -1131,6 +1140,7 @@ local function watchShots(pawn, out)
                 if k then
                     local okT, t = pcall(function() return w.TargetToHome end)
                     out[#out + 1] = string.format("%s:%d:0", k, (okT and valid(t)) and idOfAddr(addrOf(t)) or 0)
+                    if k == "s" then S.spShotAt = os.clock() end     -- (a special weapon in flight: not electronic)
                 end
             end
         end
@@ -1153,6 +1163,11 @@ function COOP.ammoRead()
         S.n.flares = (S.n.flares or 0) + 1
         S.flrAt = now
     end
+    for k = 2, 3 do                                        -- (the special weapons: an ESM's use shows only here)
+        local v = SV_Ammo(k)
+        local was = S.spLast and S.spLast[k]
+        if on("missiles") and type(v) == "number" and v >= 0 and was and v < was and not S.spDropAt then S.spDropAt = now end
+    end
 end
 -- (COOP.tick, after ammoTick) the counts the next read goes by
 local function ammoAfter()
@@ -1160,6 +1175,8 @@ local function ammoAfter()
     local g, f = SV_Ammo(0), SV_Ammo(4)
     S.gunLast = (type(g) == "number" and g >= 0) and g or nil
     S.flrLast = (type(f) == "number" and f >= 0) and f or nil
+    S.spLast = {}
+    for k = 2, 3 do local v = SV_Ammo(k); S.spLast[k] = (type(v) == "number" and v >= 0) and v or nil end
 end
 
 -- this game's state bits for its own plane (SV_CoopMe): 16 gear down, 32 afterburner, 64 gun firing, 128 flares
@@ -1208,7 +1225,7 @@ local function standInAddr(slot)
     local P = M.peers[slot]
     return P and P.obj and P.shown and valid(P.obj) and P.addr or nil
 end
-local FCS_NAME = { [0] = "flares", "gun", "missiles" }
+local FCS_NAME = { [0] = "flares", "gun", "missiles", "ECM pod" }
 local function coopFire(slot, fcs, target)
     -- (your landing STORE open: the game holds the other planes inactive there and refuses their fire; the co-op run of
     -- 2026-10-30: 1,093 of its 1,094 refused shots came while that game's player was in the STORE)
@@ -1248,7 +1265,7 @@ local function fireShots(slot, body, extraMs)
     local why, n = {}, 0
     for e in body:gmatch("[^;]+") do
         n = n + 1
-        local k, id, age = e:match("^([msg]):(%d+):(%d+)$")
+        local k, id, age = e:match("^([msge]):(%d+):(%d+)$")
         id, age = tonumber(id), tonumber(age)
         local bad = (n > FX_MAX and "more than " .. FX_MAX .. " in a message") or ((not k or id > 65535 or age > 600000) and "unreadable")
         if not bad and k == "g" then                         -- (the gun's target: no shot)
@@ -1262,7 +1279,16 @@ local function fireShots(slot, body, extraMs)
                 passed[#passed + 1] = string.format("%s:%d:%d", k, id, age)
                 local t = addrOfId(id)
                 if id > 0 and not t then S.n.untargeted = (S.n.untargeted or 0) + 1 end
-                if on("missiles") then coopFire(slot, 2, t) end
+                if k == "e" then                                   -- (their ESM / jamming pod: the stand-in's ECM pod)
+                    local row = P and P.row
+                    local ecm = row and M.ecmSlot[row]
+                    if not on("missiles") then
+                    elseif ecm then coopFire(slot, ecm, nil)
+                    else
+                        once("noecm" .. slot .. tostring(row), string.format("coopfire: player %d's electronic special: their "
+                            .. "plane here (%s) has no ECM pod to show it", slot + 1, tostring(row)))
+                    end
+                elseif on("missiles") then coopFire(slot, 2, t) end
             end
         end
         if bad then
@@ -1339,6 +1365,14 @@ function M.syncTick(now, pawn)
             if id ~= S.gunTarget or not S.gunOn then out[#out + 1] = string.format("g:%d:0", id); S.gunTarget = id end
         end
         S.gunOn = gun
+        -- a special weapon used with nothing new in flight since (an ESM / jamming pod): "e", its age since the drop
+        if S.spDropAt and now - S.spDropAt >= ELEC_WAIT_S then
+            if not (S.spShotAt and S.spShotAt >= S.spDropAt - 0.3) then
+                out[#out + 1] = string.format("e:0:%d", math.floor((now - S.spDropAt) * 1000 + 0.5))
+                once("fxelec", "coopfire: your special weapon went off with nothing in flight (an ESM or jamming pod): sent as e")
+            end
+            S.spDropAt = nil
+        end
         if #out > FX_MAX then for i = #out, FX_MAX + 1, -1 do out[i] = nil end end
         local shots = 0
         for _, e in ipairs(out) do if e:sub(1, 1) ~= "g" then shots = shots + 1 end end
@@ -1386,7 +1420,7 @@ function COOP.syncSetup()
     end
     M.svcpDone, M.svcpReady = true, {}
     for _, t in ipairs({ npc, mission, fcs, wpn }) do pin(t, nameOf(t)) end
-    local made, emptied, lost = {}, {}, {}
+    local made, emptied, lost, ecms = {}, {}, {}, {}
     local function harmless(id)                           -- id .. "_SVCP": its weapon's damage 0, or nil
         local new = id .. "_SVCP"
         if made[new] == nil then
@@ -1419,6 +1453,7 @@ function COOP.syncSetup()
             local okR, whyR = cloneRow(npc, src, dst, function(r)
                 for i = 0, 5 do
                     local id = r["NpcFCSId" .. i]:ToString()
+                    if id:upper():find("ECM", 1, true) then M.ecmSlot[row] = i; ecms[#ecms + 1] = row .. " slot " .. i end
                     if id ~= "None" and id ~= "" and not id:find("_SVCP$") then
                         local new = harmless(id)
                         if new then r["NpcFCSId" .. i] = FName(new)
@@ -1433,9 +1468,10 @@ function COOP.syncSetup()
     end
     local n = 0
     for _ in pairs(M.svcpReady) do n = n + 1 end
-    log(string.format("coopfire: the stand-ins' damage-0 rows: %d of %d airframes%s%s", n, #rows,
-        #emptied > 0 and ("; weapons left off: " .. table.concat(emptied, ", ")) or "",
-        #lost > 0 and ("; not made (their own rows): " .. table.concat(lost, "; ")) or ""))
+    log(string.format("coopfire: the stand-ins' damage-0 rows: %d of %d airframes%s%s; ECM pods (the others' ESM shown): %s", n,
+        #rows, #emptied > 0 and ("; weapons left off: " .. table.concat(emptied, ", ")) or "",
+        #lost > 0 and ("; not made (their own rows): " .. table.concat(lost, "; ")) or "",
+        #ecms > 0 and table.concat(ecms, ", ") or "none found (e18g_common slot 3 assumed)"))
 end
 
 -- TEST ONLY BEGIN (Ctrl+F5, sv_main.lua: the co-op fire path on an allied plane, solo; tools/re/COOP.md 8)

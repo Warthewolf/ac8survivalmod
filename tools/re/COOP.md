@@ -426,14 +426,20 @@ stand-ins' afterburner) is the runtime's (its notes in section 2).
     own enemy, M.byId by address; a joiner: its copy, M.copies[id].addr; 0 for none or one not linked).
   - gun and flares: SV_Ammo(0) / SV_Ammo(4) dropping, read before Survival's own refill (sv_main.lua calls
     COOP.ammoRead just before ammoTick; COOP.tick keeps the counts after it), never on the airfield (a rearm).
+  - electronic specials (ESM / jamming pods fire no projectile, so FiredExplosiveWeapons never has them; the user's co-op
+    run of 2026-10-30: the EA-18G's ESM "didn't show up for any of us"): SV_Ammo(2) / (3) dropping away from the
+    airfield with no new special weapon in flight within 0.45 s (ELEC_WAIT_S) -> `e`. Lua 0.72.5, not yet run in game.
   - gear: `pawn.LandingGearOnMesh:IsVisible()` (the gear-down mesh shown).
   - afterburner: SV_InputNow()'s throttle (x1000) at `ab_throttle` or over.
 - **Sent**: state flag bits on SV_CoopMe (16 gear down, 32 afterburner, 64 gun firing: held 0.5 s after the last drop,
   128 flares: the same), and the shots as `fx` (reliable, one message a tick): shooter -> host `fx|k:id:age;...`
-  (k: m missile, s special weapon, g the gun's target, sent as the gun starts or the target changes; id the target's
+  (k: m missile, s special weapon, e electronic special, g the gun's target, sent as the gun starts or the target changes; id the target's
   stream id, 0 none; age ms), the host -> every other joiner `fx|<shooter's slot>|...` (never back to the shooter; its
   own as slot 0), each age grown by half that link's round trip (SV_CoopInfo's rtt).
-- **Shown**: each shot fired from the shooter's stand-in, `SV_CoopFire(stand-in, 2, the target's actor here or 0)`; a
+- **Shown**: an `e` fires the stand-in's ECM pod (BP_wp_ecm_a0, class LiveElectronicSupportMeasures: its ring and field),
+  the fire-control slot COOP.syncSetup found with ECM in its FCS id on that airframe's DT_NPC row (M.ecmSlot; the
+  EA-18G's slot 3 assumed); an airframe without one shows nothing (`coopfire: player N's electronic special: their
+  plane here (<row>) has no ECM pod to show it`). Each other shot fired from the shooter's stand-in, `SV_CoopFire(stand-in, 2, the target's actor here or 0)`; a
   peer's bit 64 fires its stand-in's gun (slot 1) every 0.2 s (each Lua tick) at its `g` target; bit 128's rising
   edge its flares (slot 0), again every second held; a flip of bit 16 the stand-in's `EnableLandingGear(down, 1.0)`
   (LiveAIPlane UFUNCTION; a new stand-in seen gear up calls nothing); bit 32 the runtime lights by itself each frame.

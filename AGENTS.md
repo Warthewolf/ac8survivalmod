@@ -388,6 +388,9 @@ newRunHere; others' shots not asked of the game while your STORE is open; the af
 sv_core / sv_shop / sv_main (landingWindows once a tick; the relabel reads the STORE rows' TextBlocks only, at once after
 a press, else every 2 s; shop texts every 0.5 s at the airfield; an ammo panel looked for 3 times at most; the perf line
 names every part by its share and the untimed rest).
+0.72.5-coop.23 (runtime 0.28.7; the user, 2026-10-30, after that run: "EA-18G player used his ESM and it didn't show up
+for any of us"): an ESM / jamming pod fires no projectile, so the weapon sync never saw it; now a special weapon's count
+dropping with nothing new in flight is sent as `e` and fires the stand-in's ECM pod (tools/re/COOP.md 8). Not yet run.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

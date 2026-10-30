@@ -288,6 +288,54 @@ check(line("coopfire: SV_CoopFire%(player 2's plane, slot 2%) refused: %-11 the 
       "SV_CoopFire's refusal logged with its code and SV_ERR's words")
 fireR = 1
 
+---------------------------------------------------------------------------------------------------- electronic specials
+-- (the user's co-op run of 2026-10-30: "EA-18G player used his ESM and it didn't show up for any of us": an ESM fires no
+-- projectile, so FiredExplosiveWeapons never had it)
+print("an electronic special (ESM): sent as e, the stand-in's ECM pod fired")
+fresh("host", 0)
+M.linkedPeers = 2
+pawn.addr = 11
+inFlight = {}
+tick()                                            -- (the first read: primed)
+sent = {}
+ammo[2] = 3                                       -- special 1 used, nothing in flight
+tick(); tick()
+check(fx() == "", "not yet: 0.25 s after the drop it could still be a projectile's (" .. fx() .. ")")
+tick()
+check(fx() == "-1>fx|0|e:0:500", "nothing in flight 0.5 s after special 1 went down: e, 500 ms old, to every joiner (" .. fx() .. ")")
+check(line("coopfire: your special weapon went off with nothing in flight") ~= nil, "logged once")
+sent = {}
+ammo[2] = 2
+inFlight = { msl(7101, "BP_plwp_lasm_f16c_C", nil) }
+tick(); tick(); tick()
+check(fx() == "-1>fx|0|s:0:0", "a special weapon in flight as its count went down: s only, no e (" .. fx() .. ")")
+sent = {}
+grounded = true
+ammo[3] = 0
+tick(); tick(); tick()
+grounded = false
+check(fx() == "", "special 2 down on the airfield (a rearm or a change): nothing")
+-- shown: the host gets player 2's e, fires their EA-18G stand-in's ECM pod (slot 3), relays it to player 3
+fresh("host", 0)
+COOP.peerPlane(P1, 1); COOP.peerPlane(P2, 2)
+peer(1, 3); peer(2, 3)
+tick()
+M.peers[1].row = "e18g_common"
+local fromE = #logs + 1
+inbox[#inbox + 1] = "1|fx|e:0:0"
+tick()
+check(fired() == "1001/3/0" and fx() == "2>fx|1|e:0:20", "player 2's ESM: their EA-18G here fires its ECM pod (slot 3, no target), relayed to player 3 ("
+      .. fired() .. ", " .. fx() .. ")")
+check(line("coopfire: player 2's first ECM pod here", fromE) ~= nil, "its first ECM pod logged")
+fires, sent = {}, {}
+tick(1.1)
+M.peers[1].row = "f16c_common"
+inbox[#inbox + 1] = "1|fx|e:0:0"
+tick()
+check(fired() == "" and line("coopfire: player 2's electronic special: their plane here %(f16c_common%) has no ECM pod", fromE) ~= nil,
+      "an airframe with no ECM pod: nothing fired, logged once")
+fires, sent = {}, {}
+
 ---------------------------------------------------------------------------------------------------- a joiner
 print("a joiner: the host's and the others' shots, its own")
 fresh("join", 1)
