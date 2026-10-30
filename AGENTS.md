@@ -534,6 +534,15 @@ MISSION, health; two columns from 9, all 24 fit), then ALLIES, ITEMS and the run
 wallRows / wallTick, sv_coop.lua COOP.wallInfo, CFG.hud.wall, CFG.hud.text.wall_*). The corner keeps NEXT always and
 ALLIES / ITEMS / CO-OP as peeks (no player lines any more), hidden while the wall is open; each level starts with it shut
 (start_open: open). tools/re/HUD_LAYOUT.md has the layout, log lines and checklist; hud_info_test.sh 79 checks.
+0.73.25 in game (2026-10-31, the user hosting dukka, Shazzy, Saint Alessia): Shazzy's link was lost, the host dropped
+them at 90 s ("po" to everyone, which Shazzy's game, cut off, never got) and their link came back 29 s later as a "link
+back" on their side, not a new pairing; their game still listed itself on the host's roster so never said hello again,
+the host had their plane's stream and no hello, and after AIRFRAME_WAIT_S spawned the default F-16C AI stand-in, which
+stays for the level (an AI plane up can't change airframe; nothing is replaced mid-level). Since (not yet a build or run):
+the host asks a player whose plane streams with no hello for one every 3 s ("hq"; `coop: player N's plane streams here
+but no hello from them: asked for it (hq)`), the default waits HELLO_WAIT_S (30) with no hello at all (5 with an empty
+one, as before), and a joiner says hello on "hq" (once a second at most) and whenever its link comes back.
+coop_landing_test.sh covers it.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

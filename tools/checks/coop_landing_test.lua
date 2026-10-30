@@ -538,6 +538,25 @@ do
     tick(1.5)
     check(peerSpawns() == 1 and since(from, "player 2's plane as f16c_common %(no airframe from them in 5 s%): spawned") == 1,
           "none in 5 s: the default, said so (" .. tostring(line("coop: player 2's plane as", from)) .. ")")
+    -- no hello at all from them while their plane streams (the user's co-op run of 2026-10-31: Shazzy's link came back
+    -- after the host had dropped them, their game still listing itself, and their plane here flew the default F-16C):
+    -- asked for it every 3 s ("hq"), the default only after 30 s
+    local function hqs() local n = 0; for _, m in ipairs(sent) do if m:find("^1>hq") then n = n + 1 end end; return n end
+    M.peers, M.roster[1], spawns, sent = {}, nil, {}, {}
+    from = #logs + 1
+    tick(0.25); tick(6)
+    check(peerSpawns() == 0 and hqs() == 2 and since(from, "player 2's plane streams here but no hello from them: asked for it %(hq%)") == 1,
+          "no hello from them: asked for it (" .. hqs() .. " asks, logged once), no default 6 s on")
+    M.roster[1] = { row = "su57_common", ver = VERSION, name = "p2" }
+    tick(0.25)
+    check(peerSpawns() == 1 and since(from, "player 2's plane as su57_common: spawned") == 1, "their hello comes: their airframe")
+    M.peers, M.roster[1], spawns, sent = {}, nil, {}, {}
+    from = #logs + 1
+    tick(0.25); tick(29)
+    check(peerSpawns() == 0, "still no hello 29 s on: still waiting")
+    tick(1.5)
+    check(peerSpawns() == 1 and since(from, "player 2's plane as f16c_common %(no hello from them in 30 s%): spawned") == 1,
+          "none in 30 s: the default, said so (" .. tostring(line("coop: player 2's plane as", from)) .. ")")
     room(false)
 end
 
@@ -576,6 +595,22 @@ do
     h = his()
     check(#h == 1 and h[1]:find("|f16c_common|", 1, true) ~= nil and line("coop: your plane (adfx02) isn't in [coop] airframes: the others see it as f16c_common", from) ~= nil,
           "an ADFX-02 (no AI plane): the default, said so (" .. tostring(h[1]) .. ")")
+    -- the host asks for it ("hq": it has no hello from this game), and the link coming back says it again
+    sent = {}
+    inbox[#inbox + 1] = "0|hq"
+    tick(0.25)
+    check(#his() == 1 and line("coop: the host asked for your hello (it had none from you): sent", from) ~= nil,
+          "the host asks (hq): hello sent")
+    sent = {}
+    inbox[#inbox + 1] = "0|hq"
+    tick(0.25)
+    check(#his() == 0, "... at most once a second")
+    sent = {}
+    inbox[#inbox + 1] = "0|sys|lost"
+    tick(0.25)
+    inbox[#inbox + 1] = "0|sys|up"
+    tick(0.25)
+    check(#his() == 1, "the link back: hello again (the host may have dropped this game meanwhile)")
     pawn.full = "BP_PlayerPlane_PP1000_f16c_C_1"
     room(false)
 end
