@@ -1685,6 +1685,49 @@ static int CoParseLoadout(const char* s, int32_t* l1, int32_t* n1, int32_t* l2, 
     return part == 2 && nb == 2;
 }
 
+/* A player plane's paint (COOP2MP T5; research of 2026-10-30, checked in code): its BeginPlay (vtable 0xA70, 0x147d4af60,
+ * inside FinishSpawning) loads the skin (ULiveSkinMaterialComplition, 0x147d82100(comp, plane, plane id, skin id); -1
+ * the plane's default) and the emblems (ULivePlaneEmblemSetter, 0x147de2c60(..., flags, &emblem ids)) from the plane's
+ * own fields, which Online Mode's remote spawn fills before it: skin id int, emblem ids TArray<int32>, emblem flags int.
+ * Their offsets and the TArray<int32> copy-assign are read from the remote spawn's own writes, at fixed distances before
+ * its finish site: `mov [rsi + skin], eax` (-0x11e), `lea rcx, [rsi + emblems]` (-0x113), `call <assign>` (-0x108),
+ * `mov [rsi + flags], eax` (-0xd2) */
+typedef void* (*CoArrAssignFn)(void* dst, const void* src);
+static int CoPaintSites(int32_t* skin, int32_t* emb, int32_t* flags, CoArrAssignFn* assign)
+{
+    uint8_t* s = g_siteRemoteFinish;
+    if (!s) return 0;
+    uint8_t* a = s - 0x11e, *b = s - 0x113, *c = s - 0x108, *d = s - 0xd2;
+    if (a[0] != 0x89 || a[1] != 0x86 || b[0] != 0x48 || b[1] != 0x8D || b[2] != 0x8E || c[0] != 0xE8 || d[0] != 0x89 || d[1] != 0x86)
+        return 0;
+    *skin = *(int32_t*)(a + 2); *emb = *(int32_t*)(b + 3); *flags = *(int32_t*)(d + 2);
+    *assign = (CoArrAssignFn)(c + 5 + *(int32_t*)(c + 1));
+    return *skin > 0 && *skin < 0x8000 && *emb > 0 && *emb < 0x8000 && *flags > 0 && *flags < 0x8000 && InGame(*assign);
+}
+/* "skin/flags/e1,e2,..." (16 emblems at most), as SV_CoopPaint gives it; 1 when whole */
+static int CoParsePaint(const char* s, int32_t* skin, int32_t* flags, int32_t* emb, int32_t* nEmb)
+{
+    int part = 0, neg = 0, have = 0;
+    int64_t v = 0;
+    *nEmb = 0;
+    for (const char* p = s;; ++p) {
+        char ch = *p;
+        if (ch == '-' && !have && !neg && part < 2) { neg = 1; continue; }
+        if (ch >= '0' && ch <= '9') { v = v * 10 + (ch - '0'); have = 1; if (v > 0x7fffffff) return 0; continue; }
+        if (ch != ',' && ch != '/' && ch != 0) return 0;
+        if (have) {
+            int32_t x = (int32_t)(neg ? -v : v);
+            if (part == 0) *skin = x;
+            else if (part == 1) *flags = x;
+            else { if (*nEmb >= 16) return 0; emb[(*nEmb)++] = x; }
+        } else if (part < 2 && (ch == '/' || ch == 0)) return 0;
+        v = 0; have = 0; neg = 0;
+        if (ch == '/') { if (++part > 2) return 0; }
+        if (!ch) break;
+    }
+    return part == 2;
+}
+
 static int CoRemoteSites(int32_t* possessSlot, uint8_t** possessFn, int32_t* netSlot, int32_t* roleOff)
 {
     uint8_t* s = g_siteRemotePossess;
@@ -1736,6 +1779,10 @@ static int L_CoopSpawnPP(void* lua)
     int32_t lo1[64], lo2[64], loN1 = 0, loN2 = 0;
     uint8_t loB[2] = { 0, 0 };
     int theirs = ArgBytes(lua, loTxt, sizeof(loTxt), &loLen) && loLen > 0 && CoParseLoadout(loTxt, lo1, &loN1, lo2, &loN2, loB);
+    char ptTxt[256];                                                               /* (optional: their paint, T5) */
+    size_t ptLen = 0;
+    int32_t ptSkin = -1, ptFlags = 0, ptEmb[16], ptN = 0;
+    int paint = ArgBytes(lua, ptTxt, sizeof(ptTxt), &ptLen) && ptLen > 0 && CoParsePaint(ptTxt, &ptSkin, &ptFlags, ptEmb, &ptN);
     CoRef* keepPlane = slot >= 0 ? &g_peerPP[slot] : &g_ppPlane, *keepCtrl = slot >= 0 ? &g_peerCtrl[slot] : &g_ppCtrl;
     if (!LiveObject(pawn) || (clsArg && !LiveObject(clsArg))) return Ret(lua, -1);
     int32_t possessSlot = 0, netSlot = 0, roleOff = 0, loObj = 0, loByte[2] = { 0, 0 };
@@ -1807,6 +1854,17 @@ static int L_CoopSpawnPP(void* lua)
     plane[loByte[0]] = theirs ? loB[0] : foreign ? 0 : pawn[loByte[0]];
     plane[loByte[1]] = theirs ? loB[1] : foreign ? 0 : pawn[loByte[1]];
     if (theirs) Log(L"coop: second player plane: their loadout given (%d and %d entries, bytes %d %d)", loN1, loN2, loB[0], loB[1]);
+    if (paint) {                                         /* (their paint: read by its BeginPlay, inside FinishSpawning) */
+        int32_t oSkin = 0, oEmb = 0, oFlags = 0;
+        CoArrAssignFn assign = NULL;
+        if (CoPaintSites(&oSkin, &oEmb, &oFlags, &assign)) {
+            *(int32_t*)(plane + oSkin) = ptSkin;
+            *(int32_t*)(plane + oFlags) = ptFlags;
+            struct { int32_t* data; int32_t num, max; } src = { ptEmb, ptN, ptN };
+            assign(plane + oEmb, &src);
+            Log(L"coop: second player plane: their paint given (skin %d, emblem flags %d, %d emblems)", ptSkin, ptFlags, ptN);
+        } else Log(L"coop: second player plane: their paint not given (the remote spawn's paint writes weren't found)");
+    }
     ((CoFinishFn)g_fFinishSpawning)(plane, xf, 0, NULL, 1);
     int finished = (plane[g_finishedOff] & 1) != 0;
     int32_t wOff = *(int32_t*)(g_siteRemoteLoadout + 20);                          /* mov r14, [plane + disp32] */
@@ -1840,6 +1898,27 @@ static int L_CoopPPRole(void* lua)
     plane[roleOff] = (uint8_t)role;
     Log(L"coop: second player plane %p: role byte +%x %d -> %d", plane, (uint32_t)roleOff, old, (int32_t)plane[roleOff]);
     return Ret(lua, old);
+}
+
+/* SV_CoopPaint() -> your plane's paint, "skin/flags/e1,e2,..." (its skin id, emblem flags and emblem ids, 16 at most:
+ * what SV_CoopSpawnPP's ninth argument gives another game's real plane of yours), "" when it can't be read */
+static int L_CoopPaint(void* lua)
+{
+    uint8_t* me = CoRefGet(&CO.me);
+    int32_t oSkin = 0, oEmb = 0, oFlags = 0;
+    CoArrAssignFn assign = NULL;
+    if (!me || !LiveObject(me) || !CoPaintSites(&oSkin, &oEmb, &oFlags, &assign) || !Readable(me + oSkin, 4) ||
+        !Readable(me + oFlags, 4) || !Readable(me + oEmb, 0x10)) { U.luaSetString(lua, "", 0); return 1; }
+    int32_t* data = *(int32_t**)(me + oEmb);
+    int32_t num = *(int32_t*)(me + oEmb + 8);
+    if (num < 0 || num > 16 || (num && !Readable(data, 4 * (size_t)num))) num = 0;
+    char s[300];
+    CoBuf b = { s, s + sizeof(s) - 1 };
+    CoPutI(&b, *(int32_t*)(me + oSkin)); CoPutS(&b, "/"); CoPutI(&b, *(int32_t*)(me + oFlags)); CoPutS(&b, "/");
+    for (int32_t i = 0; i < num; ++i) { if (i) CoPutS(&b, ","); CoPutI(&b, data[i]); }
+    *b.p = 0;
+    U.luaSetString(lua, s, (size_t)(b.p - s));
+    return 1;
 }
 
 /* SV_SpawnCam(x, y, z) -> a new CameraActor's address at that spot (cm), or < 0: -1 no plane of yours / no world, -2 game

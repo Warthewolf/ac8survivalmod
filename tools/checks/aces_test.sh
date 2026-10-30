@@ -43,7 +43,7 @@ check(sorted({d for _, _, d in b}) == list(range(0, 360, 45)), 'J: 0, 45 ... 315
 check('"RE_SV_WraithBlink%s%s"' in lua and '"^RE_SV_WraithBlink"' in lua, 'the Lua fires them and co-op keeps them (KEEP_EVENTS)')
 check(not any(u in s.PROBE_UNITS.values() for u in units), "none on the probe flights")
 coop = open(sys.argv[1] + '/coop_edition.py', encoding='utf-8').read()
-check("COOP_TAG = '-coop2mp.18'" in coop, 'tools/coop_edition.py COOP_TAG -coop2mp.18 (0.73.17: names under ALLY, damage shown on real planes: tools/re/COOP2MP.md)')
+check("COOP_TAG = '-coop2mp.19'" in coop, 'tools/coop_edition.py COOP_TAG -coop2mp.19 (0.73.18: each player in their own paint: tools/re/COOP2MP.md)')
 print('aces build: all passed' if not fails else f'aces build: {fails} FAILED')
 sys.exit(1 if fails else 0)
 PY

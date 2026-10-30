@@ -494,3 +494,15 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
 - Open: paint (research running), many players' frame cost, the DOWN autopilot's turn.
 - coop_test.sh (12 players over lossy UDP) failed once of four runs on 0.73.17 (one joiner got 0 of 120 reliable
   messages; the transport didn't change): flaky.
+- Paint (0.73.18-coop2mp.19, runtime 0.32.3; research of 2026-10-30 by a subagent, checked in code; dumps in
+  build/re/paint): ALivePlayerPlane's BeginPlay (vtable 0xA70, 0x147d4af60, inside FinishSpawning) loads its skin
+  (ULiveSkinMaterialComplition at +0x3A98: 0x147d82100(comp, plane, plane id +0xF98, skin id); -1 the plane's default)
+  and emblems (ULivePlaneEmblemSetter at +0x3AA0: 0x147de2c60(..., flags, &emblem ids)) from fields the remote spawn
+  fills before it: skin id int +0xFA4, emblem ids TArray<int32> +0xFB8, emblem flags int +0xFC8 (+0xFAC/+0xFB0/+0xFB4
+  likely weathering; +0xFA2 = 1 skips the skin: kept 0). The two "loadout bytes" +0xFA0 / +0xFA1 are special weapons 1
+  and 2 (not paint). The offsets and the TArray<int32> copy-assign (0x1416d9250) are read from the remote spawn's writes
+  at -0x11e / -0x113 / -0x108 / -0xd2 from its finish site (CoPaintSites, checked). SV_CoopPaint() reads your plane's
+  "skin/flags/emblems"; "hi" / "pi" carry it as an 8th field (resent when it changes); SV_CoopSpawnPP's 9th argument
+  writes it before FinishSpawning ([coop] real_paint). Logs: `coop: second player plane: their paint given (skin N,
+  emblem flags F, K emblems)`, `coop: player N's plane is their real <code> ...; their paint <s>`. Open: a skin id the
+  receiving game doesn't own (DLC?) may not load (0x147d82190 not traced); weathering not sent.
