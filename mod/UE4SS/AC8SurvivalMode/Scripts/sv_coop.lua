@@ -862,6 +862,22 @@ end
 
 ---------------------------------------------------------------------------------------------------- the other players' planes
 local AF_CODE = "BP_PlayerPlane_PP%d+_(%w+)"
+-- Every player plane's blueprint folder and name by its code (AC8's 35, build/research/ui/paths.txt: the ADFX-02's has a
+-- variant suffix, so a path built from the code alone missed it in COOP2MP's T2, 2026-10-30): COOP.planeClassPath(code)
+-- -> the blueprint class's path, for real player planes in place of the AI stand-ins (tools/re/COOP2MP.md)
+local PP_BP = { a10c = "PP0001_a10c", f02a = "PP0002_f02a", f04e = "PP0003_f04e", f15c = "PP0004_f15c", f22a = "PP0005_f22a",
+                f35c = "PP0006_f35c", f18c = "PP0007_f18c", j39e = "PP0008_j39e", su34 = "PP0009_su34", e18g = "PP0010_e18g",
+                typn = "PP0011_typn", f15j = "PP0012_f15j", a06e = "PP0013_a06e", rflm = "PP0014_rflm", su25 = "PP0015_su25",
+                x40a = "PP0016_x40a", mr2k = "PP0017_mr2k", fa36 = "PP0018_fa36", ea36 = "PP0019_ea36", m29a = "PP0020_m29a",
+                su57 = "PP0021_su57", f16c = "PP0022_f16c", f14d = "PP0023_f14d", f18f = "PP0024_f18f", f15e = "PP0025_f15e",
+                su47 = "PP0026_su47", m21b = "PP0027_m21b", su35 = "PP0028_su35", m31b = "PP0029_m31b", su33 = "PP0030_su33",
+                e06b = "PP0031_e06b", f18e = "PP0032_f18e", f14a = "PP0034_f14a", adfx02 = "PP0038_adfx02_L001" }
+function COOP.planeClassPath(code)
+    local d = type(code) == "string" and PP_BP[code]
+    if not d then return nil end
+    local b = "BP_PlayerPlane_" .. d
+    return string.format("/Game/Blueprints/Vehicle/PLAYER/Plane/%s/%s.%s_C", d, b, b)
+end
 local function myAirframe()
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil end

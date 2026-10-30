@@ -494,6 +494,12 @@ do
     for _, c in ipairs(codes) do if not CFG.coop.airframes[c] then missing[#missing + 1] = c end end
     check(#missing == 0 and CFG.coop.airframes.fa36 == "fa36_common" and CFG.coop.airframes.adfx02 == nil,
           "every player plane but the ADFX-02 has its own stand-in row; the FA-36 fa36_common (missing: " .. table.concat(missing, " ") .. ")")
+    -- (COOP2MP: every player plane's own blueprint, the ADFX-02's with its variant suffix)
+    local noPath = {}
+    for _, c in ipairs(codes) do if not COOP.planeClassPath(c) then noPath[#noPath + 1] = c end end
+    check(#noPath == 0 and COOP.planeClassPath("adfx02") ==
+          "/Game/Blueprints/Vehicle/PLAYER/Plane/PP0038_adfx02_L001/BP_PlayerPlane_PP0038_adfx02_L001.BP_PlayerPlane_PP0038_adfx02_L001_C"
+          and COOP.planeClassPath("nope") == nil, "every player plane's blueprint path, the ADFX-02's L001 (none for: " .. table.concat(noPath, " ") .. ")")
 end
 local cp = npc.rows.OP_f16c_SVCP
 check(cp ~= nil and cp.NpcFCSId2:ToString() == "FCS_Msl_SVCP" and cp.NpcFCSId1:ToString() == "FCS_Gun_SVCP"
