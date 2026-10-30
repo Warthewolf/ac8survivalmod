@@ -33,11 +33,19 @@ local function slotTexts(panel, slot)
     SH.slotCache = SH.slotCache or {}
     local key = addrOf(panel) or nameOf(panel)   -- (the address read back nil on the live panel: test of 2026-10-23)
     local c = SH.slotCache[key]
-    if not c or (not c.found and os.clock() - c.at > 2) then   -- (none yet: looked for again every 2 s, not every call)
-        c = { slots = {}, at = os.clock() }
+    -- (none yet: looked for again every 2 s, not every call, three times at most: a panel with no ammo slots, such as the
+    -- confirmation's, walked every TextBlock in memory every 2 s while you were down at the airfield; the co-op run of
+    -- 2026-10-30's "ammo panel" up to 95 ms a tick. The TextBlocks' names are read once a second for every panel)
+    if not c or (not c.found and (c.tries or 0) < 3 and os.clock() - c.at > 2) then
+        c = { slots = {}, at = os.clock(), tries = (c and c.tries or 0) + 1 }
         local base = nameOf(panel):match("^%S+%s+(.+)$") or nameOf(panel)
-        for _, t in ipairs(FindAllOf("TextBlock") or {}) do
-            local n = nameOf(t)
+        if not (SH.tbNames and os.clock() - SH.tbNames.at < 1) then
+            local list = {}
+            for _, t in ipairs(FindAllOf("TextBlock") or {}) do list[#list + 1] = { t = t, n = nameOf(t) } end
+            SH.tbNames = { at = os.clock(), list = list }
+        end
+        for _, e in ipairs(SH.tbNames.list) do
+            local t, n = e.t, e.n
             local at = n:find(base, 1, true)
             local sl, leaf = nil, nil         -- (not `at and s:match(...)`: `and` keeps only the first capture)
             if at then sl, leaf = n:sub(at + #base):match("^%.WidgetTree[_%d]*%.(AmmoText%a+)%.WidgetTree[_%d]*%.([%w_]+)$") end
@@ -59,7 +67,7 @@ end
 
 local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
-    if not playerOnAirfield() then SH.panels, SH.slotCache = nil, nil; return end   -- the landing menu only exists down there
+    if not playerOnAirfield() then SH.panels, SH.slotCache, SH.tbNames = nil, nil, nil; return end   -- the landing menu only exists down there
     -- every 2 s, all of them: the STORE pages show their own panel, made when the page opens, while the landing
     -- page's stays valid (report of 2026-10-23: the STORE still showed the stock counts)
     if tick % 8 == 1 or not SH.panels then
@@ -156,6 +164,32 @@ local function creditKill(p)
     if by == "allies" or by == "ships" then LB.stat("by_allies", 1) elseif by == "defences" then LB.stat("by_defences", 1) end
     if p.unit and D and D.aceSquad and D.aceSquad[p.unit] then LB.stat("aces", 1) end
     return by
+end
+
+-- A new run's money and gear (RUN): a level loaded, or a joiner's when the host's run starts over (newRunHere)
+function newRun()
+    return { credits = SETUP.zollars(), earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
+             -- kills by who made them (KILL.by), the airframes flown so far (pickAircraft), the tactical items, upgrade
+             -- tiers and SECOND CHANCE held (sv_tactical.lua)
+             kills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }, seenAc = {},
+             items = {}, ups = {}, insured = false,
+             -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
+             stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
+                       by_allies = 0, by_defences = 0, specials = {} } }
+end
+
+-- (a joiner, sv_coop.lua "rs") The host's run started over and this game's level didn't: its run starts over too, its
+-- money, items, upgrades (UP.apply puts them back to stock within 2 s), SECOND CHANCE and loadout (the ammo preset
+-- again: A) as a new run's. The co-op run of 2026-10-30: after the host's restart in round 7 the joiners went into its
+-- round 1 with 4,400-15,260 zollars and their upgrades, the host with 720. Allies bought stay up (each game's own).
+function newRunHere(why)
+    if not D then return end
+    local had = RUN and RUN.credits
+    RUN = newRun()
+    A = nil
+    pcall(TAC.reset)
+    log(string.format("run: %s: this game's run starts over too: %d zollars (had %s), no items, upgrades or SECOND CHANCE, "
+        .. "the loadout as a new run's", tostring(why), RUN.credits, tostring(had)))
 end
 
 local function timed(name, fn, ...)                -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
@@ -276,14 +310,7 @@ local function probeTick(tick)
         M = { bags = {}, dropped = {}, round = 1, track = CFG.music.start_track }
         local afMax = SETUP.airfieldHP()                -- (the menu's AIRFIELD HEALTH)
         AF = { max = afMax, full = afMax, hp = afMax, down = false, bomb = 0, bombBase = 0, pending = {} }
-        RUN = { credits = SETUP.zollars(), earned = 0, spent = 0, bought = {}, msg = {}, dirty = true,
-                -- kills by who made them (KILL.by), the airframes flown so far (pickAircraft), the tactical items, upgrade
-                -- tiers and SECOND CHANCE held (sv_tactical.lua)
-                kills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }, seenAc = {},
-                items = {}, ups = {}, insured = false,
-                -- (the leaderboard's run clock from the level's start: made later, a run shot down at once read 0:00:00)
-                stats = { started = os.time(), air = 0, ground = 0, aces = 0, allies = 0, af_down = 0, captured = 0,
-                          by_allies = 0, by_defences = 0, specials = {} } }
+        RUN = newRun()
         pcall(TAC.reset)                                -- (the gun's class default back to stock, the ECM / decoy off)
         if DOWN and DOWN.reset then pcall(DOWN.reset, "a new level", true) end   -- (co-op: nobody down, no revives yet)
         local okPf, errPf = pcall(PROF.levelLoad)       -- (the learning layer's saved profile read again: P6, sv_stats.lua)
@@ -395,9 +422,9 @@ local function probeTick(tick)
                     if paused then
                         hold = 1
                     elseif COOP and COOP.open and (tick % 2 == 0 or D.musicHold == 1) then
-                        for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
+                        for _, w in ipairs(landingWindows(tick)) do                       -- (sv_core.lua: once a tick)
                             local okV, vis = pcall(function() return w:IsVisible() end)   -- (a closed one may linger
-                            if liveWidget(w) and okV and vis == true then hold = 1; break end -- until it's collected)
+                            if valid(w) and okV and vis == true then hold = 1; break end  -- until it's collected)
                         end
                     elseif COOP and COOP.open then
                         hold = D.musicHold or 0                     -- (looked at every other tick)
@@ -411,7 +438,7 @@ local function probeTick(tick)
             end
             local okF, errF = timed("airfield", airfieldTick, tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
-            local okB, errB = pcall(bombTick, tick)
+            local okB, errB = timed("bombers", bombTick, tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
             local okS, errS = timed("shop", shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
@@ -424,20 +451,20 @@ local function probeTick(tick)
         end
         if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
         if now and valid(survivalPC) then                               -- Survival's own sounds follow (sv_sound.lua)
-            local okSn, errSn = pcall(SND.tick)
+            local okSn, errSn = timed("sound", SND.tick)
             if not okSn and not D.sndErr then D.sndErr = true; log("sound: error " .. tostring(errSn)) end
         end
         if now and valid(survivalPC) then                               -- what hits the player (section "hits")
-            local okHt, errHt = pcall(HIT.tick, survivalPC, now)
+            local okHt, errHt = timed("hits", HIT.tick, survivalPC, now)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
             if CFG.allies.kills then pcall(KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
             -- the STORE's tactical items and SECOND CHANCE (sv_tactical.lua)
-            local okT, errT = pcall(TAC.tick, now)
+            local okT, errT = timed("tactical", TAC.tick, now)
             if not okT and not D.tacErr then D.tacErr = true; log("tactical: error " .. tostring(errT)) end
-            local okIn, errIn = pcall(INS.tick, now)
+            local okIn, errIn = timed("floor", INS.tick, now)
             if not okIn and not D.insErr then D.insErr = true; log("insurance: error " .. tostring(errIn)) end
             if DOWN and DOWN.tick then                  -- co-op's revives and the spectator camera (sv_down.lua)
-                local okDn, errDn = pcall(DOWN.tick)
+                local okDn, errDn = timed("down", DOWN.tick)
                 if not okDn and D and not D.downErr then D.downErr = true; log("down: error " .. tostring(errDn)) end
             end
         end
@@ -461,10 +488,10 @@ local function probeTick(tick)
             if not okTw and not D.twErr then D.twErr = true; log("stats: tail watch error " .. tostring(errTw)) end
         end
         if COOP and COOP.ammoRead then                   -- (co-op: your gun and flares firing, before the refill below)
-            local okAr, errAr = pcall(COOP.ammoRead)
+            local okAr, errAr = timed("coop ammo", COOP.ammoRead)
             if not okAr and not D.ammoReadErr then D.ammoReadErr = true; log("coopfire: ammo read error " .. tostring(errAr)) end
         end
-        local okA, errA = pcall(ammoTick, tick, survivalPC)
+        local okA, errA = timed("ammo", ammoTick, tick, survivalPC)
         if not okA then log("ammo: error " .. tostring(errA)) end
     end
     if levelTick then
@@ -537,7 +564,7 @@ LoopAsync(250, function()
         local t0 = os.clock()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
-        local okM, errM = pcall(MENU.tick, tick)    -- Survival's menu pages and the run setups (sv_menu.lua)
+        local okM, errM = timed("menu", MENU.tick, tick)   -- Survival's menu pages and the run setups (sv_menu.lua)
         if not okM then log("menu: error " .. tostring(errM)) end
         if COOP and COOP.tick then                  -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
             local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
@@ -549,15 +576,20 @@ LoopAsync(250, function()
             local dt = (os.clock() - t0) * 1000
             pf.n, pf.sum, pf.max = pf.n + 1, pf.sum + dt, math.max(pf.max, dt)
             if tick - pf.at >= (logVerbose() and 240 or 1200) then   -- (a minute's ticks; five without [log] verbose)
-                local parts = {}
-                for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v } end
-                table.sort(parts, function(a, b) return a[2].max > b[2].max end)
+                -- (every part by its share of the time, the untimed rest last: the co-op run of 2026-10-30's lines named
+                -- the four worst single ticks only, which left most of an average 9-30 ms tick unexplained)
+                local parts, timedSum = {}, 0
+                for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v }; timedSum = timedSum + v.sum end
+                table.sort(parts, function(a, b) return a[2].sum > b[2].sum end)
                 local top = {}
-                for i = 1, math.min(4, #parts) do
-                    top[#top + 1] = string.format("%s %.1f/%.1f", parts[i][1], parts[i][2].sum / math.max(1, parts[i][2].n), parts[i][2].max)
+                for i = 1, math.min(12, #parts) do
+                    local v = parts[i][2]
+                    top[#top + 1] = string.format("%s %.1f/%.0f %d%%", parts[i][1], v.sum / math.max(1, pf.n), v.max,
+                        math.floor(100 * v.sum / math.max(pf.sum, 0.001) + 0.5))
                 end
-                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts avg/worst ms: %s; %s", pf.sum / pf.n,
-                    pf.max, pf.n, table.concat(top, ", "), memText()))
+                local rest = math.max(0, pf.sum - timedSum)
+                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts (ms a tick / worst, share): %s; untimed %.1f %d%%; %s",
+                    pf.sum / pf.n, pf.max, pf.n, table.concat(top, ", "), rest / pf.n, math.floor(100 * rest / math.max(pf.sum, 0.001) + 0.5), memText()))
                 D.perf = nil
             end
         end

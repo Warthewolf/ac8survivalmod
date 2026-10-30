@@ -374,7 +374,19 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   20 Hz past that (relaying every P to every joiner was n x n packets: ~16,000 a second at 24). Message slots are
   decimal ("12|..."). The offline test runs 4 and 12 players: 0.6 m worst off the true path at 20 % loss.
   Bandwidth, the host's upload: ~25 KB/s of planes per joiner at 24 players, plus the enemy stream (22 bytes an enemy,
-  15 Hz).
+  15 Hz). Measured in the co-op run of 2026-10-30 (13 players): 450-850 KB a minute per joiner from the host (8-14
+  KB/s), 85-105 KB a minute back; Steam relay round trips 220-470 ms (up to 830).
+- Since that run (runtime 0.28.7, not yet run in game): a reliable message goes again once its ack is a round trip
+  overdue (CoRto: rtt x 1.5 + 100 ms, at least 250 ms, doubled each try up to 4 s; an ack puts the rest back to one
+  round trip) instead of every 250 ms; a lost link gets only its oldest message as a probe; Q and E go only to a joiner
+  whose own plane came in the last 3 s in Survival's level (CoWantsState: nothing to players in menus, loading or on
+  another build); each sender's interpolation delay follows how late its states come past its fastest (CoTrackOffset's
+  envelope, up fast, down over ~10 s; + 30 ms, CO.delay to CO_DELAY_MAX 300 ms, moving 0.1 s a second at most; a frame
+  over 0.1 s here isn't counted). Log lines: `coop: you are player N; ...; enemies drawn D ms behind the host (lateness
+  J ms); the last minute's M enemy moves: A past their newest state, H held` and `coop: planes here (player
+  drawn-behind/lateness ms past/moves, the last minute): 2 120/15 ms 3/3400; ...`. The test should show how often the
+  planes ran past their newest state with the delay adapting (tools/checks/coop_test.sh: 0.08-0.09 m mean, 0.43 m
+  worst off the true path at 20 % loss).
 - More players, more enemies: CFG.coop.aircraft_per_player (0.15) more of a round's and a wave's aircraft for each
   player past the first, up to coop.max_aircraft (60) / coop.max_up (30) (COOP.more, sv_rounds.lua startRound). From
   CFG.late.aircraft_from_round (26) the round's 60 grows as one player's cap does, up to late.coop_max_aircraft (80 by

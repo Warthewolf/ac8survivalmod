@@ -87,6 +87,20 @@ function liveWidget(w)
     return valid(w) and nameOf(w):find("/Engine/Transient", 1, true) ~= nil
 end
 
+-- The landing menu's live windows (WBP_Menu_IngameHangar_Common_000_C), found once a tick for everyone who asks: the
+-- STORE's row icons and co-op's music hold each walked every object for them every other tick down at the airfield
+-- (the perf lines of the co-op run of 2026-10-30: "icons" up to 6.2 ms a tick on average, "shop" up to 195 ms)
+local LW = {}
+function landingWindows(tick)
+    if LW.tick == tick and LW.list then return LW.list end
+    local out = {}
+    for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
+        if liveWidget(w) then out[#out + 1] = w end
+    end
+    LW.tick, LW.list = tick, out
+    return out
+end
+
 -- calls a data table method; false when this UE4SS build cannot do it
 function dtCall(dt, method, ...)
     local args = { ... }

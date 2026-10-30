@@ -541,7 +541,7 @@ end
 print("the hooks, by their place in the source")
 do
     local sm = readAll(MOD .. "/Scripts/sv_main.lua")
-    local a, b = sm:find("pcall(INS.tick, now)", 1, true), sm:find("pcall(DOWN.tick)", 1, true)
+    local a, b = sm:find("timed(\"floor\", INS.tick, now)", 1, true), sm:find("timed(\"down\", DOWN.tick)", 1, true)
     check(a and b and a < b, "sv_main: DOWN.tick after INS.tick (its floor)")
     check(has(sm, 'pcall(DOWN.reset, "a new level", true)') and has(sm, 'pcall(DOWN.reset, "the level was left", true)'), "sv_main: reset on a new level and a run left")
     check(has(readAll(MOD .. "/Scripts/sv_hud.lua"), "DOWN.hudLine()"), "sv_hud: the NEXT row while down")

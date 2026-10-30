@@ -70,8 +70,8 @@ function SHOP.decorTick(tick)
     if not CFG.shop.enabled or tick % 2 ~= 0 or not playerOnAirfield() then return end
     local imgClass = StaticFindObject("/Script/UMG.Image")
     if not valid(imgClass) then return end
-    for _, win in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
-        if liveWidget(win) then
+    for _, win in ipairs(landingWindows(tick)) do
+        if valid(win) then
             local list = child(win, "WBP_Menu_Pause_List_000")
             for k = 1, 6 do
                 local row = list and child(list, string.format("WBP_Menu_Text_Focus_000_%02d", k))
@@ -358,17 +358,48 @@ end
 -- AIRFIELD_SHOP_UI.md), so after a purchase it kept the old one (a run of 2026-10-25: "AIRFRAME 1/10 5000 Z" after
 -- tier 1 was bought; the player pressed again and again, WEAPON BAYS tier 1 -> 4 in a second). The help line is read on
 -- every move, so it was right. Each changed label's TextBlock (a live one showing the old text) gets the new one.
+-- Only the STORE rows' own TextBlocks are read (under a WBP_Menu_Text_Focus row, by their full names): every live
+-- TextBlock's text was read each time a label changed, and in co-op another player's kill changes them (the perf lines
+-- of the co-op run of 2026-10-30, "shop" up to 195 ms a tick). None found that way: every TextBlock, as before, logged.
 local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
 local function relabel(changed)
-    local n = 0
+    local n, rows, all = 0, 0, SH.relabelAll
     for _, t in ipairs(FindAllOf("TextBlock") or {}) do
-        if liveWidget(t) then
+        local nm = valid(t) and nameOf(t) or ""
+        if nm:find("/Engine/Transient", 1, true) and (all or nm:find("WBP_Menu_Text_Focus", 1, true)) then
+            rows = rows + 1
             local ok, v = pcall(function() return t:GetText():ToString() end)
             local new = ok and type(v) == "string" and changed[rowKey(v)]
             if new and pcall(function() t:SetText(toText(new)) end) then n = n + 1 end
         end
     end
+    if rows == 0 and not all then
+        SH.relabelAll = true
+        log("shop: no STORE row TextBlock under a WBP_Menu_Text_Focus row; row labels are looked for in every TextBlock")
+        return relabel(changed)
+    end
     return n
+end
+
+-- The changed labels wait (merged: a label changed twice goes straight to its newest) and go on screen at once after a
+-- press of yours, else at most every 2 s; left behind when you leave the airfield (the pages read their labels anew)
+function SHOP.relabelFlush(force)
+    if not (SH.relabelQ and next(SH.relabelQ)) then return end
+    if not playerOnAirfield() then SH.relabelQ = nil; return end
+    local now = os.clock()
+    if not force and now < (SH.relabelAt or 0) then return end
+    local q = SH.relabelQ
+    SH.relabelQ, SH.relabelAt = nil, now + 2
+    local okR, n = pcall(relabel, q)
+    if okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
+end
+local function relabelQueue(changed)
+    local q = SH.relabelQ or {}
+    for oldK, new in pairs(changed) do
+        for k, v in pairs(q) do if rowKey(v) == oldK then q[k] = new end end
+        if q[oldK] == nil then q[oldK] = new end
+    end
+    SH.relabelQ = q
 end
 
 function shopTexts()
@@ -389,8 +420,8 @@ function shopTexts()
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
     end
     if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
-        local okR, n = pcall(relabel, changed)
-        if okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
+        relabelQueue(changed)
+        SHOP.relabelFlush(SH.pressAt ~= nil and os.clock() - SH.pressAt < 1)
     end
     -- the STORE's own texts: its rows on the landing page (one per page it opens on), its page titles and the rows
     -- between its pages (tools/build_survival.py STORE_PAGES / STORE_ROWS)
@@ -576,7 +607,7 @@ function shopTick(tick)
                 log("shop: " .. item .. " pressed again within 1 s of a tier bought; not bought twice")
             else
                 if it and it.role == "upgrade" then SH.upAt = SH.upAt or {}; SH.upAt[item] = os.clock() end
-                seen[item] = true
+                seen[item], SH.pressAt = true, os.clock()
                 local spent = RUN.spent
                 local ok, err = pcall(shopBuy, item)
                 if not ok then log("shop: error " .. tostring(err)) end
@@ -587,12 +618,15 @@ function shopTick(tick)
         end
     end
     if tick % 4 == 3 then pcall(SHOP.healthCheck) end
-    -- the texts when something changed: at once down at the airfield (where they're read), at most every 5 s in flight
-    -- (every kill changed them, and all 21 rows' offers were worked out each time: economy review of 2026-10-25,
-    -- "frame-time cost grows with round size")
-    if RUN.dirty and (playerOnAirfield() or tick >= (SH.textTick or 0)) then
-        RUN.dirty, SH.textTick = false, tick + 20
+    -- the texts when something changed: down at the airfield (where they're read) at once after a press of yours, else
+    -- every 0.5 s at most (in co-op every player's kill changes them: the co-op run of 2026-10-30 worked out all the rows'
+    -- offers nearly every tick down there), at most every 5 s in flight (every kill changed them, and all 21 rows' offers
+    -- were worked out each time: economy review of 2026-10-25, "frame-time cost grows with round size")
+    local pressed = SH.pressAt ~= nil and os.clock() - SH.pressAt < 0.3
+    if RUN.dirty and ((playerOnAirfield() and (pressed or tick >= (SH.groundTick or 0))) or tick >= (SH.textTick or 0)) then
+        RUN.dirty, SH.textTick, SH.groundTick = false, tick + 20, tick + 2
         local ok, err = pcall(shopTexts)
         if not ok then log("shop: text error " .. tostring(err)) end
     end
+    SHOP.relabelFlush(false)
 end

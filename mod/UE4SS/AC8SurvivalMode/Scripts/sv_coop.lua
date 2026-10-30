@@ -1187,8 +1187,11 @@ function M.syncBits(pawn, now)
             local ab = th / 1000 >= (tonumber(sc().ab_throttle) or 0.9)
             if ab ~= S.ab then
                 S.ab, S.n.ab = ab, S.n.ab + 1
-                if S.n.ab <= 4 then log(string.format("coopfire: your throttle %.3f: afterburner %s (ab_throttle %s)", th / 1000,
-                    ab and "on" or "off", tostring(sc().ab_throttle))) end
+                if (S.n.ab <= 4 and logVerbose()) or not S.abSaid then   -- (the first one; up to 4 a minute with [log] verbose)
+                    S.abSaid = true
+                    log(string.format("coopfire: your throttle %.3f: afterburner %s (ab_throttle %s)", th / 1000,
+                        ab and "on" or "off", tostring(sc().ab_throttle)))
+                end
             end
             if ab then b = b + BIT_AB end
         else
@@ -1207,6 +1210,9 @@ local function standInAddr(slot)
 end
 local FCS_NAME = { [0] = "flares", "gun", "missiles" }
 local function coopFire(slot, fcs, target)
+    -- (your landing STORE open: the game holds the other planes inactive there and refuses their fire; the co-op run of
+    -- 2026-10-30: 1,093 of its 1,094 refused shots came while that game's player was in the STORE)
+    if D and D.musicHold == 1 then S.n.inStore = (S.n.inStore or 0) + 1; return nil end
     local a = standInAddr(slot)
     if not a then S.n.noPlane = (S.n.noPlane or 0) + 1; return nil end
     if type(SV_CoopFire) ~= "function" then
@@ -1349,10 +1355,10 @@ function M.syncTick(now, pawn)
         local n = S.n
         if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) > 0 then
             log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
-                .. "their target not here, %d with no plane here), your gun %d bursts, your flares %d, your gear flips %d, "
-                .. "afterburner flips %d, throttle up to %.3f (ab_throttle %s)", n.sent, n.got, n.fired, n.failed, n.dropped,
-                n.untargeted or 0, n.noPlane or 0, n.bursts or 0, n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000,
-                tostring(sc().ab_throttle)))
+                .. "their target not here, %d with no plane here, %d not shown: you were in the STORE), your gun %d bursts, "
+                .. "your flares %d, your gear flips %d, afterburner flips %d, throttle up to %.3f (ab_throttle %s)", n.sent,
+                n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0, n.inStore or 0, n.bursts or 0,
+                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle)))
         end
         S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
         S.statAt = now + 60
@@ -1914,7 +1920,13 @@ local function onJoinerMessage(f)
         if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)
         -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
         -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
-        if STATS and D then pcall(STATS.hostReset, D.now, M.jnAt ~= nil and os.clock() - M.jnAt < 15) end
+        local resync = M.jnAt ~= nil and os.clock() - M.jnAt < 15
+        if STATS and D then pcall(STATS.hostReset, D.now, resync) end
+        -- (the host's new run, not the answer to this game's own "jn": the money and gear start over here too)
+        if D and not resync and type(newRunHere) == "function" then
+            local okN, errN = pcall(newRunHere, "the host's run started over")
+            if not okN then log("run: error " .. tostring(errN)) end
+        end
         if D then D.round, D.state, M.rnd = 0, "wait", nil end
     end
 end
