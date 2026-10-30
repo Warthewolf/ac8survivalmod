@@ -195,7 +195,10 @@ static int L_CoopFire(void* lua)
  * accelerate input: 0 is neutral (cruise speed), 1 a held accelerate (the flight engine clamps it to 0..1 and
  * AceFlightEnginePlayerParameter has AfterburnerWait / PowerAfterBurnerR / MaxSpeedAfterBurnerR: the afterburner comes
  * from holding it; no threshold in the input path itself). */
-typedef struct { uint8_t* plane; double at; float v[6]; } FlInput;
+/* flags: the input's flags byte (out +0x18), as BuildFlightInput (0x147d689b0) builds it: 0x10 State bit 9 (gear down),
+ * 8 plane+0x13d1 == 1, 4 +0x1314, 2 +0x1313, the low bit 0x147d660f0's. A remote plane's engines take it as their
+ * +0x34 (the input message +0x20), and RemoteUpdate's gear check reads its 0x10 against the State's bit 9 (T4a.5) */
+typedef struct { uint8_t* plane; double at; float v[6]; uint8_t flags; } FlInput;
 static FlInput g_flIn[4];
 
 static void FlRecordInput(uint8_t* plane, const float* out)
@@ -207,6 +210,7 @@ static void FlRecordInput(uint8_t* plane, const float* out)
     }
     slot->plane = plane; slot->at = CoNow();
     for (int k = 0; k < 6; ++k) slot->v[k] = out[k];
+    slot->flags = ((const uint8_t*)out)[0x18];
 }
 
 /* SV_InputNow() -> "pitch,yaw,roll,throttle,brake,highg" (each x1000, whole numbers) from the last BuildFlightInput of
@@ -529,7 +533,7 @@ static void FdFeed(uint8_t* plane)
     memcpy(r + 0x44, &state, 4); memcpy(r + 0x48, &speed, 4);
     const FlInput* rec = NULL;                          /* the source's last BuildFlightInput (FlRecordInput) */
     for (int i = 0; i < 4; ++i) if (g_flIn[i].plane == src) rec = &g_flIn[i];
-    if (rec) { memcpy(in + 0x08, rec->v, sizeof(rec->v)); in[0x20] = 4; }
+    if (rec) { memcpy(in + 0x08, rec->v, sizeof(rec->v)); in[0x20] = rec->flags; }
     ++FD.fed;
     if (!FD.said) {
         FD.said = 1;
@@ -614,7 +618,7 @@ static void FlNetFeed(int s, uint8_t* plane)
     if (P->hasFl) {
         float v[6];
         for (int i = 0; i < 6; ++i) v[i] = (int8_t)P->fl[i] / 127.0f;
-        memcpy(in + 0x08, v, sizeof(v)); in[0x20] = 4;
+        memcpy(in + 0x08, v, sizeof(v)); in[0x20] = (uint8_t)(4 | (((uint32_t)state >> 9) & 1) << 4);   /* (gear: FlInput) */
     }
     if (CoReadPose(plane, at, atRot)) {                  /* (where it is against where it was sent: the minute's most) */
         double ex = at[0] - pos[0], ey = at[1] - pos[1], ez = at[2] - pos[2], off = CoSqrt(ex * ex + ey * ey + ez * ez);
@@ -1048,6 +1052,15 @@ static void FdLog(void)
     if (FD.hits)
         Log(L"coop2mp: fed plane %p: %u hits this second, %d damage asked, %d taken off its health (health now %d)", plane, FD.hits,
             (int32_t)FD.hitDmg, (int32_t)FD.hitApplied, CoHealth(plane));
+    {                                                    /* (its gear: both engines' input flags +0x34 and gear state +0x710) */
+        const uint8_t* e1 = plane + 0x2268, *e2 = plane + 0x3c60;
+        int r1 = Readable(e1 + 0x34, 1) && Readable(e1 + 0x710, 1), r2 = Readable(e2 + 0x34, 1) && Readable(e2 + 0x710, 1);
+        uint8_t* src = CoRefGet(&FD.src);
+        int sf = -1;
+        for (int i = 0; i < 4; ++i) if (src && g_flIn[i].plane == src) sf = g_flIn[i].flags;
+        Log(L"coop2mp: fed plane %p gear: your input flags %x; its engine flags %x / %x, gear state %d / %d (own / second)", plane, sf,
+            r1 ? e1[0x34] : 0xff, r2 ? e2[0x34] : 0xff, r1 ? e1[0x710] : -1, r2 ? e2[0x710] : -1);
+    }
     if (FW.seen || FW.flares || FW.gunYours30e || FW.gunYours311 || FW.dropped)
         Log(L"coop2mp: T4 this second: your launches %u (%u missiles, %u specials, %u unknown), queued %u, replayed %u launched / %u not, "
             L"%u specials, %u dropped; your flares %u, the copy's %u; your gun trigger frames %u (+30e) %u (+311), the copy's trigger "

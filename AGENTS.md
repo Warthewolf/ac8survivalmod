@@ -455,7 +455,11 @@ not. T4a.4 (0.73.8-coop2mp.9, runtime 0.31.4; not yet run): the ECM / ESM launch
 RemoteUpdate's own check does (FlGear: the copy's own State never keeps the gear bit sent); zip 0.73.8. T4a.4 in game: the
 ECM launched (not seen), the gear raised again every frame: a remote plane's second flight engine (+0x3c60, loaded from
 the message and simulated) makes the State's gear bits from its own gear. T4a.5 (0.73.9-coop2mp.10, runtime 0.31.5):
-both engines' gear moved; zip 0.73.9.
+both engines' gear moved; zip 0.73.9. T4a.5 in game: the gear still lowered and raised again every frame. The
+check's flag (engine +0x34 bit 0x10) is the input's flags byte (input message +0x20 = BuildFlightInput's out+0x18:
+0x10 = State bit 9), and the feed wrote it as a fixed 4; State bit 9 is the engine's gear state +0x710 != 0. T4a.6
+(0.73.10-coop2mp.11, runtime 0.31.6): your input's flags byte fed (co-op's real planes: 4 | gear from State bit 9),
+a log line a second with both engines' flags and gear state; zip 0.73.10. Installed; not yet run in game.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
