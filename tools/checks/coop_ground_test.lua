@@ -69,7 +69,8 @@ local function obj(cls, hp, plane)
                 addr = nextAddr, HealthInternal = hp, min = 0, plane = plane }
     function o:IsA() return self.plane == true end
     function o:SetMinHealth(v) self.min = v * 10 end
-    function o:ModifyHealth(d) self.HealthInternal = math.max(self.min, self.HealthInternal + d * 10) end
+    -- (as the game's: damage from another player's real plane, role 2, is refused outright: hard rule 53)
+    function o:ModifyHealth(d, causer) if causer and causer.role2 then return 0 end; self.HealthInternal = math.max(self.min, self.HealthInternal + d * 10) end
     return o
 end
 local UNITS = {
@@ -135,6 +136,17 @@ if ROLE == "host" then
     inbox[#inbox + 1] = "1|ht|" .. lc2 .. "|120.0"
     tick()
     check(world.SV_Unit_LcacA[2].HealthInternal == 5000 - 1200, "host: the joiner's hit dealt (" .. world.SV_Unit_LcacA[2].HealthInternal .. ")")
+    -- the joiner's plane here their real one (COOP2MP: role 2, its damage refused): the hit dealt with none named, their
+    -- share kept for the kill's credit (the co-op run of 2026-10-30: every joiner hit refused, "attacking ghosts")
+    local P1 = M.peers[1] or {}
+    M.peers[1] = P1
+    local keepObj, keepReal = P1.obj, P1.real
+    P1.obj, P1.real = { addr = 0x7770, role2 = true }, true
+    inbox[#inbox + 1] = "1|ht|" .. lc2 .. "|50.0"
+    tick()
+    check(world.SV_Unit_LcacA[2].HealthInternal == 5000 - 1200 - 500, "host: a real plane's hit dealt too (" .. world.SV_Unit_LcacA[2].HealthInternal .. ")")
+    check(M.joinHits and M.joinHits[world.SV_Unit_LcacA[2].addr] == 50, "host: ... its share kept for the kill's credit")
+    P1.obj, P1.real = keepObj, keepReal
     -- the tanks gone, the core open, the Alicorn under water; then a joiner starts over
     for i = 2, 5 do world.SV_Unit_Alicorn[i].HealthInternal = 0 end
     D.special = { kind = "alicorn", state = "sail", coreOpen = true, dived = true }
@@ -170,6 +182,9 @@ else
     check(COOP.client(), "join: joined")
     D = { round = 0, state = "wait" }
     survivalPC = { Pawn = { addr = 0x9, HealthInternal = 1000 } }
+    -- the host's plane here its real one (COOP2MP: role 2): a copy finished with no cause named (the game refused it
+    -- named: from T3 no copy here could be finished, the co-op run of 2026-10-30)
+    M.peers[0] = { obj = { addr = 0x8880, role2 = true }, real = true, addr = 0x8880 }
     tick()
     local lines = {}
     for l in readAll(WORK .. "/ground_messages.txt"):gmatch("[^\n]+") do lines[#lines + 1] = l end

@@ -591,10 +591,30 @@ local function hostHit(from, id, dmg)
     if not (e and not e.dead and valid(e.obj) and finite(dmg, math.huge) and dmg > 0) then return end
     dmg = math.min(dmg, HIT_MAX)
     local P = M.peers[from]
-    local causer = P and P.obj and valid(P.obj) and P.obj or nil
+    -- (a real plane of theirs here is another player's, role 2, and the game refuses its damage outright: hard rule 53.
+    -- From COOP2MP T3 every joiner hit was refused that way, so enemies they shot never died here (the co-op run of
+    -- 2026-10-30: "people are attacking ghosts on my side"). Then the hit has no attacker, and their share is kept here
+    -- for the kill's credit, M.joinHits)
+    local real = P and P.real
+    local causer = (not real and P and P.obj and valid(P.obj)) and P.obj or nil
+    local h0 = health(e.obj)
     local ok = pcall(function() e.obj:ModifyHealth(-dmg, causer, true) end)
     if not ok then ok = pcall(function() e.obj:ModifyHealth(-dmg, e.obj, true) end) end
     if not ok then once("hitfail", "coop: the joiners' hits can't be dealt (ModifyHealth failed)") end
+    local h1 = health(e.obj)
+    if causer and h0 and h1 and h1 >= h0 then               -- (refused with their plane named: with none)
+        pcall(function() e.obj:ModifyHealth(-dmg, nil, true) end)
+        real = true
+    end
+    if real and e.addr then
+        M.joinHits = M.joinHits or {}
+        M.joinHits[e.addr] = (M.joinHits[e.addr] or 0) + dmg
+        h1 = health(e.obj)
+        if h0 and h1 and h1 >= h0 then
+            once("hitrefused", string.format("coop: a hit from player %d's real plane wasn't taken (health %d before and after)",
+                from + 1, h0))
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------------------------- joiner
@@ -603,14 +623,30 @@ local function hostPuppet()
     return P and P.obj and valid(P.obj) and P.obj or nil
 end
 
+-- (with the host's plane as the cause when it's an AI stand-in; with none when it's their real plane, role 2, whose damage
+-- the game refuses: from COOP2MP T3 no copy here could be finished, so the host's kills stayed up here, flying on by
+-- their own AI, and their flights never spawned again ("its last flight is still up"): the co-op run of 2026-10-30,
+-- "people are attacking ghosts", the same copy "taken down" every 5 s. Checked after: still up, GameplayStatics'
+-- ApplyDamage)
 local function killCopy(id, o)
     if type(SV_CoopBind) == "function" then SV_CoopBind(id, 0) end
     if not valid(o) then return end
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
-    local causer = hostPuppet()
+    local P0 = M.peers[0]
+    local causer = not (P0 and P0.real) and hostPuppet() or nil
     local ok = pcall(function() o:ModifyHealth(-(h / 10 + 100), causer, true) end)
     if not ok then pcall(function() o.HealthInternal = 0 end) end
+    if (health(o) or 0) > 0 and causer then                  -- (refused with the host's plane named: with none)
+        pcall(function() o:ModifyHealth(-(h / 10 + 100), nil, true) end)
+    end
+    if (health(o) or 0) > 0 then
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if valid(gs) then pcall(function() gs:ApplyDamage(o, 100000000.0, nil, nil, nil) end) end
+        if (health(o) or 0) > 0 then
+            once("killfail", "coop: a copy here couldn't be finished (health " .. tostring(health(o)) .. " after)")
+        end
+    end
 end
 
 local function bindCopy(id, o)
@@ -922,8 +958,8 @@ local function strayTick(now)
             end
         end
     end
-    if n > 0 and now >= (M.resyncAt or 0) and COOP.client() then
-        M.resyncAt = now + 30
+    if n > 0 and now >= (M.resyncAt or 0) and now - (M.jnAt or -1e9) >= 30 and COOP.client() then
+        M.resyncAt = now + 120
         M.jnAt = os.clock()
         send(true, "jn")
         log("coop: strays here: the host asked for the whole picture again (jn)")
@@ -2477,6 +2513,16 @@ logPlane = function(o, unit, k)
         if not ok then log("coop: plane error " .. tostring(err)) end
     end
 end
+local rawRead = KILL.read
+KILL.read = function(p)
+    rawRead(p)
+    local a = p and valid(p.obj) and addrOf(p.obj)
+    local j = a and M.joinHits and M.joinHits[a]
+    if j and j > 0 then
+        p.dmg = p.dmg or {}
+        p.dmg.wingmate = math.max(p.dmg.wingmate or 0, j)
+    end
+end
 local rawSide = KILL.side
 KILL.side = function(o, pawnAddr)
     local a = addrOf(o)
@@ -2710,6 +2756,7 @@ function COOP.tick(tick)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj) } or {}
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
+        M.joinHits, M.pendBind, M.strayFirst = nil, nil, nil
         M.replays, groundNew, M.holdQ = {}, {}, nil
         M.svcpUsable = {}                                              -- (the stand-ins' damage-0 rows in before it loaded)
         for row, sv in pairs(M.svcpReady or {}) do M.svcpUsable[row] = sv end
