@@ -2703,6 +2703,15 @@ local function onSys(from, what, f)
         if COOP.host() then send(true, "po", from) end
     elseif what == "full" then
         callout("CO-OP: THE HOST'S GAME IS FULL", nil)
+    elseif what == "badver" then                          -- (joiner, runtime 0.32.6) the host runs another build
+        local hv = upperText(f[3], 32)
+        log(string.format("coop: the host runs Survival %s, this game %s: another build doesn't link (update to the host's)",
+            tostring(f[3] or "?"), VERSION))
+        callout("CO-OP: THE HOST HAS " .. (hv ~= "" and hv or "ANOTHER BUILD"), "UPDATE SURVIVAL TO JOIN (YOU HAVE " .. upperText(VERSION, 32) .. ")")
+    elseif what == "refused" then                         -- (host) a joiner of another build turned away (coop.c)
+        local nm, jv = upperText(f[3], 20), upperText(f[4], 32)
+        log(string.format("coop: %s tried to join with Survival %s (yours %s): refused", tostring(f[3] or "?"), tostring(f[4] or "?"), VERSION))
+        callout("REFUSED " .. (nm ~= "" and nm or "A PLAYER"), "THEY HAVE " .. (jv ~= "" and jv or "ANOTHER BUILD") .. ": UPDATE TO " .. upperText(VERSION, 32))
     elseif what == "samerole" then
         if M.auto and COOP.host() and playerCount() <= 1 and not D then   -- (an automatic host, alone, not in a run)
             log("coop: another host found; this game was hosting only because it found none (role auto): joining")

@@ -121,6 +121,10 @@ int main(int argc, char** argv)
     double runFor = argc > 2 ? atof(argv[2]) : 14.0;
     const char* nj = getenv("COOP_TEST_JOINERS");
     int joiners = nj && atoi(nj) > 0 && atoi(nj) < CO_MAX_PLAYERS ? atoi(nj) : 3, players = joiners + 1;
+    /* (COOP_TEST_VER: this game's build; a joiner of another build than the host's "test" must be refused, told the
+     * host's, and never given a slot: runtime 0.32.6, the user's "refuse mismatched builds" of 2026-10-31) */
+    const char* ver = getenv("COOP_TEST_VER") ? getenv("COOP_TEST_VER") : "test";
+    int odd = strcmp(ver, "test") != 0, gotBad = 0;
     srand(host ? 11 : (unsigned)GetCurrentProcessId());
     if (host) {                                           /* the guard on states from other games (security review of
                                                            * 2026-10-26): never a NaN, a far-off point or a zero rotation */
@@ -140,7 +144,7 @@ int main(int argc, char** argv)
     g_fAITeleportTo = (uint8_t*)FakeTeleTo; g_fAITeleportInner = (uint8_t*)FakeTeleIn;
     FakeLua f;
     Args(&f); ArgS(&f, "udp"); ArgS(&f, host ? "host" : "join"); ArgS(&f, host ? "auto" : "127.0.0.1:27791");
-    ArgN(&f, 27791); ArgN(&f, 100); ArgS(&f, "test"); ArgN(&f, players);
+    ArgN(&f, 27791); ArgN(&f, 100); ArgS(&f, ver); ArgN(&f, players);
     int64_t r = CallI(L_CoopOpen, &f);
     const char* who = host ? "host" : "join";
     printf("%s: open %lld, nonce %08x\n", who, (long long)r, CO.nonce);
@@ -187,7 +191,7 @@ int main(int argc, char** argv)
             m = m ? m + 1 : f.retS;
             if (!strncmp(m, "m|", 2)) { int k = atoi(m + 2); ++gotRel; if (k != order) printf("join: OUT OF ORDER: got %d, wanted %d\n", k, order); order = k + 1; }
             else if (!strncmp(m, "j|", 2)) { if (from >= 0 && from < CO_MAX_PLAYERS) ++fromJoin[from]; }
-            else printf("%s: %s\n", who, f.retS);
+            else { if (!strncmp(m, "sys|badver|", 11)) gotBad = 1; printf("%s: %s\n", who, f.retS); }
         }
         if (!host && bound && t - t0 > 3.0 && CoNow() - CO.players[0].plane.lastRecv < 0.2) {
             for (int s = 0; s < players; ++s) {
@@ -210,6 +214,10 @@ int main(int argc, char** argv)
     }
     Args(&f); f.at = 0; L_CoopInfo(&f);
     printf("%s: info %s\n", who, f.retS);
+    if (odd) {
+        printf("join: another build (%s): %s, slot %d\n", ver, gotBad ? "refused, told the host's" : "NOT REFUSED", CO.mySlot + 1);
+        return (gotBad && CO.mySlot < 0) ? 0 : 4;
+    }
     if (host) {
         int ok = 1;
         for (int k = 1; k < players; ++k) { printf("host: from player %d: %d of 40 messages\n", k + 1, fromJoin[k]); if (fromJoin[k] != 40) ok = 0; }

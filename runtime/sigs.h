@@ -485,4 +485,21 @@ static const uint8_t kSigGearApplyMask[24] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
 };
 
+/* An AI unit's per-frame update 0x147cb2850 (self, float dt): vtable slot 279 of its class (vtable 0x14c51df10; its
+ * constructor 0x147cb2430 makes a MainMesh beside the fire control and the damage state, over a parent shared by 36
+ * classes). While +0x2680 is set it moves the effect component it holds at +0x2690 to the unit (0x147cb33bb),
+ * checking only that component's garbage flag (ObjectFlags bit 30), which a freed one no longer keeps: the co-op run
+ * of 2026-10-31, three games crashed there in the same minute, calling through a freed component's vtable
+ * (0x1442c3e9b, `call [r10+0x538]`). flight.c OnUnitFxFrame lets go of a destroyed one first. Unique 53 bytes; its two
+ * calls' targets wildcarded. */
+static const uint8_t kSigUnitFxFrame[53] = {
+    0x40, 0x53, 0x48, 0x83, 0xEC, 0x30, 0x0F, 0x29, 0x74, 0x24, 0x20, 0x48, 0x8B, 0xD9, 0x0F, 0x28, 0xF1, 0xE8, 0x00,
+    0x00, 0x00, 0x00, 0x83, 0xBB, 0x80, 0x26, 0x00, 0x00, 0x00, 0x74, 0x0B, 0x0F, 0x28, 0xCE, 0x48, 0x8B, 0xCB, 0xE8,
+    0x00, 0x00, 0x00, 0x00, 0x0F, 0x28, 0x74, 0x24, 0x20, 0x48, 0x83, 0xC4, 0x30, 0x5B, 0xC3,
+};
+static const uint8_t kSigUnitFxFrameMask[53] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
 #endif
