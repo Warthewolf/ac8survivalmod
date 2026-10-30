@@ -98,10 +98,15 @@ static void FlagsTest(void)
     memcpy(p, pos, 24); p += 24; memcpy(p, q, 16); p += 16;
     int32_t hp = 900; float maxHp = 100; memcpy(p, &hp, 4); p += 4; memcpy(p, &maxHp, 4); p += 4;
     CoPut32(&p, 0xFFFFFFF0u);
+    for (int i = 0; i < CO_FL; ++i) *p++ = (uint8_t)(0x10 + i);      /* the flight block (protocol 4) */
     CoOnPacket(b, (uint32_t)(p - b), 0, &a1, now);
     CHECK(CO.players[1].flags == 0xFFFFFFF0u, "host: player 2's flags %x from P, want FFFFFFF0", CO.players[1].flags);
     uint32_t rel; memcpy(&rel, CO.players[1].rec + 45, 4);
     CHECK(CO.players[1].fresh && rel == 0xFFFFFFF0u, "host: player 2's Q record flags %x, want FFFFFFF0", rel);
+    CHECK(CO.players[1].hasFl && CO.players[1].fl[0] == 0x10 && CO.players[1].fl[CO_FL - 1] == 0x10 + CO_FL - 1 &&
+          CO.players[1].rec[49] == 0x10 && CO.players[1].rec[49 + CO_FL - 1] == 0x10 + CO_FL - 1,
+          "host: player 2's flight block from P (kept %d, %x..%x; its Q record %x..%x)", CO.players[1].hasFl, CO.players[1].fl[0],
+          CO.players[1].fl[CO_FL - 1], CO.players[1].rec[49], CO.players[1].rec[49 + CO_FL - 1]);
 
     /* the host's Q into a joiner: two records, flags 0xE9 (1, 8, 32, 64, 128) and 0x3F */
     memset(&CO, 0, sizeof(CO));
@@ -110,8 +115,8 @@ static void FlagsTest(void)
     CO.links[0].used = 1; CO.links[0].addr = a0;
     p = CoHeader(b, 'Q');
     *p++ = 2;
-    CoQRec(p, 0, 7000, pos, q, 1000, 100.0f, 0xE9); p += CO_Q_REC;
-    CoQRec(p, 2, 7000, pos, q, 1000, 100.0f, 0x3F); p += CO_Q_REC;
+    CoQRec(p, 0, 7000, pos, q, 1000, 100.0f, 0xE9, NULL); p += CO_Q_REC;
+    CoQRec(p, 2, 7000, pos, q, 1000, 100.0f, 0x3F, NULL); p += CO_Q_REC;
     CoOnPacket(b, (uint32_t)(p - b), 0, &a0, now);
     CHECK(CO.players[0].flags == 0xE9 && CO.players[2].flags == 0x3F, "joiner: flags %x / %x from Q, want E9 / 3F",
           CO.players[0].flags, CO.players[2].flags);
@@ -135,7 +140,7 @@ static void FlagsTest(void)
     /* (another snapshot or two, so CoSample has something at the render time) */
     for (int k = 1; k <= 3; ++k) {
         p = CoHeader(b, 'Q'); *p++ = 1;
-        CoQRec(p, 0, 7000 + 33 * k, pos, q, 1000, 100.0f, 0xE9); p += CO_Q_REC;
+        CoQRec(p, 0, 7000 + 33 * k, pos, q, 1000, 100.0f, 0xE9, NULL); p += CO_Q_REC;
         CoOnPacket(b, (uint32_t)(p - b), 0, &a0, now);
     }
     CoDrive(CoNow());

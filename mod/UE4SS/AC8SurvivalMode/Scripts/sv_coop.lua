@@ -382,7 +382,7 @@ end
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
         local r = M.roster[s]
-        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "") end
+        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "") end
     end
 end
 
@@ -502,11 +502,32 @@ local function hostTick()
                 -- the hunt's unit-wide order would free it while it's still held, here and not on the joiners' copies)
                 h.at, h.since = now + 2, h.since or now
                 M.hunts[#M.hunts + 1] = h
+            elseif D and D.up and D.up[h.unit] and COOP.realOn() and COOP.anyReal() then
+                local ok, s, n = COOP.huntReal(h.unit)
+                log("coop: " .. h.unit .. (ok and string.format(" goes after player %d's real plane (%d planes ordered onto it)", s + 1, n)
+                    or " found no real plane to go after") .. (h.wolfAt and string.format(", its Wolf trap let go after %.0f s",
+                    now - h.wolfAt) or ""))
             elseif D and D.up and D.up[h.unit] and type(SV_Event) == "function" then
                 local r = SV_Event(h.name)
                 if r == 1 and M.units[h.unit] then M.hunted = M.hunted or {}; M.hunted[h.unit] = M.units[h.unit].gen end
                 log("coop: " .. h.unit .. " goes after the joiners (" .. h.name .. " " .. tostring(r) .. ")" ..
                     (h.wolfAt and string.format(", its Wolf trap let go after %.0f s", now - h.wolfAt) or ""))
+            end
+        end
+    end
+    -- the flights on a real plane whose player went (down, gone): onto another real plane, else back on you
+    if M.huntOn and now >= (M.huntCheckAt or 0) then
+        M.huntCheckAt = now + 5
+        for unit, h in pairs(M.huntOn) do
+            local u, P = M.units[unit], M.peers[h.slot]
+            if not (u and u.gen == h.gen and D and D.up and D.up[unit]) then
+                M.huntOn[unit] = nil
+            elseif not (P and P.real and P.shown and P.obj and valid(P.obj)) then
+                M.huntOn[unit] = nil
+                local ok, s, n = COOP.huntReal(unit)
+                if not ok then n = COOP.huntHost(unit) end
+                log(string.format("coop: %s's target (player %d) is gone: %s", unit, h.slot + 1, ok and string.format(
+                    "onto player %d's real plane (%d planes)", s + 1, n) or string.format("back on you (%d planes)", n)))
             end
         end
     end
@@ -907,6 +928,29 @@ function COOP.peerPlane(o, slot)
         r == 1 and "moved every frame" or ("NOT moved: " .. tostring(r))))
 end
 
+-- COOP2MP T3 (tools/re/COOP2MP.md, hard rule 53): each other player as their own airframe's player plane, as AC8's
+-- Online Mode shows them (CFG.coop.real_planes), not an AI stand-in: SV_CoopSpawnPP with their slot (a network dummy
+-- controller, role 2) where their stream says they are, bound with SV_CoopPeer; the runtime feeds its own update from
+-- their stream (flight.c FlNetFeed: pose, stick, afterburner, flight State). Their airframe's code comes in their "hi"
+-- ("pi"); without one (an older build), or if the spawn fails, the AI stand-in as before.
+local function realOn() return cfg().real_planes == true and type(SV_CoopSpawnPP) == "function" end
+function COOP.realOn() return COOP.open and realOn() end
+local function spawnReal(slot, P, code)
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not valid(pawn) then return nil, "you have no plane here yet" end
+    local path = COOP.planeClassPath(code)
+    if not path then return nil, "no player plane blueprint for " .. tostring(code) end
+    local cls = loadObject(path)
+    if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
+    local at, yaw = P.at, (P.rot and P.rot[2]) or 0
+    local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot)
+    if type(a) ~= "number" or a <= 0 then return nil, "SV_CoopSpawnPP " .. tostring(a) end
+    for _, x in ipairs(FindAllOf("LivePlayerPlane") or {}) do
+        if valid(x) and addrOf(x) == a then return x end
+    end
+    return nil, "spawned (" .. tostring(a) .. ") but not found"
+end
+
 local function peerTick(slot)
     local s = type(SV_CoopPeerAt) == "function" and SV_CoopPeerAt(slot) or ""
     local f = {}
@@ -928,7 +972,7 @@ local function peerTick(slot)
         P.at, P.fresh, P.down = nil, false, nil
     end
     if not D then return end
-    if P.obj and not valid(P.obj) then P.obj, P.addr = nil, nil end
+    if P.obj and not valid(P.obj) then P.obj, P.addr, P.real = nil, nil, nil end
     local unit = PEER_UNITS[slot]
     -- Their airframe comes in their "hi" (or the host's "pi") once their plane is up, and their state can come first:
     -- the stand-in spawned on the empty row of their main-menu "hi" flew the default, F-16C, for the whole run (the
@@ -937,6 +981,21 @@ local function peerTick(slot)
     P.freshAt = fresh and (P.freshAt or os.clock()) or nil
     local r0 = M.roster[slot]
     local known = r0 and type(r0.row) == "string" and r0.row ~= ""
+    local code = r0 and r0.code ~= "" and r0.code or nil
+    if P.realFailed and P.realFailed ~= code then P.realFailed = nil end        -- (another airframe: try again)
+    if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
+        local o, why = spawnReal(slot, P, code)
+        if o then
+            P.obj, P.addr, P.real, P.code, P.shown = o, addrOf(o), true, code, nil
+            P.gear, P.flare, P.gunNext, P.flareNext = nil, nil, nil, nil
+            log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
+                .. "stream", slot + 1, code, P.addr or 0))
+        else
+            P.realFailed = code
+            log(string.format("coop: player %d's real plane (%s) not spawned: %s; their AI stand-in instead", slot + 1, code,
+                tostring(why)))
+        end
+    end
     if fresh and not P.obj and not P.spawning and levelReady()                 -- (not while this level loads)
         and (known or os.clock() - P.freshAt >= AIRFRAME_WAIT_S) then
         local row = standInRow(r0 and r0.row)
@@ -1032,6 +1091,54 @@ function COOP.name(slot) return playerName(slot) end
 COOP.slotOk = slotOk
 function COOP.linked() return COOP.open and (M.linkedPeers or 0) or 0 end
 function COOP.peerInfo(slot) return M.peers[slot] end
+-- (the host, COOP2MP T3) a flight onto one player's real plane: Normal, that plane, TargetFirst (theirs alone; hard rule
+-- 53: Survival's orders name "Player", your plane, and the stock hunt only finds AI planes), the stock order's fire
+-- bits, on each of its planes up. slot's plane if it's shown here, else the shown real plane the fewest flights are on.
+-- -> true, slot, planes ordered; false if none. COOP.huntHost: the flight back on you (PlayerOnlyNoLimit, as it came).
+local ORDER_NORMAL, PRIO_PLAYER_ONLY_NO_LIMIT, PRIO_TARGET_FIRST, FIRE_BITS = 0, 8, 9, 7
+local function realTarget(s)
+    local P = M.peers[s]
+    return (s ~= COOP.slot and P and P.real and P.shown and P.obj and valid(P.obj)) and P.obj or nil
+end
+function COOP.anyReal()
+    for s = 0, MAX_SLOT do if realTarget(s) then return true end end
+    return false
+end
+local function orderFlight(unit, target, prio)
+    local u, n = M.units[unit], 0
+    if not (u and valid(target)) then return 0 end
+    for i = 1, u.n or 0 do
+        local b = u.planes[i] and M.byId[u.planes[i].id]
+        if b and valid(b.obj) and pcall(function() b.obj:EngagementOrderOverride(ORDER_NORMAL, target, prio, 0, false, FIRE_BITS, false) end) then
+            n = n + 1
+        end
+    end
+    return n
+end
+function COOP.huntReal(unit, slot)
+    local u = M.units[unit]
+    if not u then return false end
+    M.huntOn = M.huntOn or {}
+    if slot == nil or not realTarget(slot) then
+        local count, best, bestN = {}, nil, nil
+        for un, h in pairs(M.huntOn) do if un ~= unit then count[h.slot] = (count[h.slot] or 0) + 1 end end
+        for s = 0, MAX_SLOT do
+            if realTarget(s) and (best == nil or (count[s] or 0) < bestN) then best, bestN = s, count[s] or 0 end
+        end
+        slot = best
+    end
+    local o = slot and realTarget(slot)
+    local n = o and orderFlight(unit, o, PRIO_TARGET_FIRST) or 0
+    if n == 0 then return false end
+    M.huntOn[unit] = { slot = slot, gen = u.gen }
+    M.hunted = M.hunted or {}; M.hunted[unit] = u.gen
+    return true, slot, n
+end
+function COOP.huntHost(unit)
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if M.huntOn then M.huntOn[unit] = nil end
+    return valid(pawn) and orderFlight(unit, pawn, PRIO_PLAYER_ONLY_NO_LIMIT) or 0
+end
 function COOP.watchable()
     local out = {}
     for s = 0, MAX_SLOT do
@@ -1252,6 +1359,12 @@ local function coopFire(slot, fcs, target)
     if D and D.musicHold == 1 then S.n.inStore = (S.n.inStore or 0) + 1; return nil end
     local a = standInAddr(slot)
     if not a then S.n.noPlane = (S.n.noPlane or 0) + 1; return nil end
+    if M.peers[slot] and M.peers[slot].real then                 -- (a real plane: its own weapons' sync is COOP2MP T4)
+        S.n.real = (S.n.real or 0) + 1
+        once("realfire" .. slot, string.format("coopfire: player %d's plane here is their real plane: their shots aren't shown "
+            .. "on it yet (COOP2MP T4)", slot + 1))
+        return nil
+    end
     if type(SV_CoopFire) ~= "function" then
         once("nofire", "coopfire: dlls/main.dll has no SV_CoopFire (runtime 0.28.5 or later): the other players' fire isn't shown")
         return nil
@@ -1338,7 +1451,7 @@ local function peersTick(now)
     for s, P in pairs(M.peers) do
         if s ~= COOP.slot and P.obj and P.shown and P.fresh and valid(P.obj) and type(P.flags) == "number" then
             local fl = P.flags
-            if on("gear") then
+            if on("gear") and not P.real then                   -- (EnableLandingGear is the AI plane's: COOP2MP T4)
                 local g = bit(fl, BIT_GEAR)
                 if g ~= P.gear then
                     local first = P.gear == nil
@@ -1542,16 +1655,19 @@ end
 
 ---------------------------------------------------------------------------------------------------- messages
 local function sendHi()
-    local row = myAirframe()
+    local row, code = myAirframe()
     -- (what the host last heard: a hello sent with no plane yet is followed by the airframe once there is one; the
     -- co-op run of 2026-10-30: a player who'd been in the level before linking never sent theirs, shown as the default)
-    M.myRow = row
-    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "")
+    -- The airframe's code (COOP2MP T3: the player plane the others spawn for you; the ADFX-02 has no AI row) goes last.
+    M.myRow, M.myCode = row, code
+    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "", code or "")
 end
 
 -- the host's own roster entry, and everyone told
 local function hostRosterSelf()
-    M.roster[0] = { row = myAirframe() or "", ver = VERSION, name = M.myName or "" }
+    local row, code = myAirframe()
+    M.myRow, M.myCode = row, code
+    M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "" }
     sendRoster(nil)
 end
 
@@ -1802,9 +1918,10 @@ local function onHostMessage(from, f)
     local k = f[1]
     if k == "hi" then
         local ver, rt, row, name = short(f[2], 32), short(f[3], 16), short(f[4], 64), short(f[5], 32)
+        local code = short(f[6], 16):match("^%w+$") or ""          -- (their airframe's code: COOP2MP T3)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
-        M.roster[from] = { row = row or "", ver = ver, name = name }
+        M.roster[from] = { row = row or "", ver = ver, name = name, code = code }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
@@ -1861,7 +1978,7 @@ local function onJoinerMessage(f)
         if not slotOk(s) then return end
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
-        M.roster[s] = { row = f[3], ver = f[4], name = f[5] }
+        M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "" }
         if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
             local P = M.peers[s]
             log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
@@ -2387,9 +2504,9 @@ function COOP.tick(tick)
         local okB, bits = pcall(M.syncBits, pawn, now)
         if okB then flags = flags + bits else once("syncBits", "coopfire: state bits error " .. tostring(bits)) end
         SV_CoopMe(addrOf(pawn) or 0, flags)
-        local row = myAirframe()
-        if row and row ~= M.myRow then
-            M.myRow = row
+        local row, code = myAirframe()
+        if (row and row ~= M.myRow) or (code and code ~= M.myCode) then
+            M.myRow, M.myCode = row, code
             if COOP.host() then hostRosterSelf() else sendHi() end
         end
     else

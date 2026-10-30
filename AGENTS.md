@@ -437,7 +437,11 @@ glow and the ordered attacks worked (a missile exploded on the copy) but its hea
 crashed: N+0x170 is a TSharedPtr to the input message, and the feed wrote the stick over its controller. T1e
 (0.73.3-coop2mp.4, runtime 0.29.3; not yet run): the input through the pointer, and the hits on the copy logged at the
 player plane's damage (0x147d5a430). T1e in game: the copy took your stick, the hits reached the
-damage and were refused (40 asked, 0 taken), Restart and Quit Mission ran clean (hard rule 53).
+damage and were refused (40 asked, 0 taken), Restart and Quit Mission ran clean (hard rule 53). T3 (0.73.4-coop2mp.5,
+runtime 0.30.0, co-op protocol 4; not yet run in game): the other players as their real planes in co-op ([coop]
+real_planes, the AI stand-in as the fallback), fed from their stream with a flight block (stick, afterburner, speed,
+State); the host's split hunt and the director's joiner tactics order flights onto a real plane (COOP.huntReal); their
+weapons and gear on real planes wait for T4; damage as 0.72 (each game's own). COOP2MP.md "T3 build".
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

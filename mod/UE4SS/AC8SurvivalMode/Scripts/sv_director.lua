@@ -65,6 +65,16 @@ local function fire(ev)
     if r == 1 then return "fired", true end
     return "not fired: " .. tostring(SV_ERR and SV_ERR[r] or r), false
 end
+-- a flight sent after a joiner: the stock hunt (RE_SV_Hunt_NN: AIFirst, their AI stand-in), or with the other players'
+-- real planes (COOP2MP T3) an order onto that player's plane (COOP.huntReal: the stock hunt finds no player plane)
+local function huntFire(ev, unit, slot)
+    if COOP and COOP.realOn and COOP.realOn() and COOP.anyReal() then
+        local ok, s, n = COOP.huntReal(unit, slot)
+        if ok then return string.format("%s: onto player %d's real plane (%d planes)", ev, s + 1, n) end
+        return ev .. ": no real plane to order it onto"
+    end
+    return ev .. " " .. (fire(ev))
+end
 
 -- this run's state (D.dir: a new level or run clears it with D)
 local function st()
@@ -292,7 +302,7 @@ local function orders(s, unit, e, why)
     local hunted = COOP and COOP.hunted and COOP.hunted(unit)
     if (e and not e.isMe) or hunted then
         local h = string.format("RE_SV_Hunt_%02d", i)
-        parts[#parts + 1] = h .. " " .. (fire(h))
+        parts[#parts + 1] = huntFire(h, unit, (e and not e.isMe) and e.slot or nil)
     end
     log(string.format("director: %s back in the fight (%s): %s", unit, tostring(why), table.concat(parts, ", ")))
     return true
@@ -393,7 +403,7 @@ local function doCover(s, p, e, q, d, held, now)
         fn = function()
             if alive(unit) <= 0 then return end
             local h = string.format("RE_SV_Hunt_%02d", i)
-            log(string.format("director: cover for player %d: %s %s", slot + 1, h, (fire(h))))
+            log(string.format("director: cover for player %d: %s", slot + 1, huntFire(h, unit, slot)))
             aim(s, unit, nil, e, c.aim_s, "cover", true)
         end
     end
@@ -989,7 +999,7 @@ function DIR.push(slot, why, rangeKm)
         fn = function()
             if alive(unit) <= 0 then return end
             local h = string.format("RE_SV_Hunt_%02d", i)
-            log(string.format("director: push on player %d: %s %s", e.slot + 1, h, (fire(h))))
+            log(string.format("director: push on player %d: %s", e.slot + 1, huntFire(h, unit, e.slot)))
             aim(s, unit, nil, e, c.aim_s, "push", true)
         end
     end
