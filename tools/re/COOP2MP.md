@@ -165,3 +165,19 @@ InputMoment 88, Accele 112, EngineBrake 116); nothing carries the afterburner am
   the copy's floor 300 HP: set; MaxPlaneAttackerMissiles ...`; `test: N enemies ordered onto the second plane
   (TargetFirst)`; every 5 s `test: second plane ...: health H, ..., on the ground false, activated true; ... tracking: A
   it, B you, C other, D none, E unread; ordered onto it N (M tracking it)`.
+
+### T1d results (the user's solo test, 2026-10-30 17:58-18:02)
+- The afterburner glow works (user: "afterburner was working"). Your afterburner amount read 0.3-1.0 while boosting;
+  what the game had left on the copy before each write was always 0 (a remote plane's +0x39d0 is reset every frame),
+  so the write just before the surface update is what shows it. Your State bits while boosting: 8 (also 0x10, 0x40,
+  0x80 at times); the copy's own State stayed 0 although R+0x44 carried them.
+- The ordered enemies attacked it (user: "enemies were attacking"): every ordered one tracked it within 5 s and kept it
+  (2 of 2 for three minutes on the ADFX-02); the unordered ones never picked it (tracking it = exactly the ordered
+  count), as the research said (Survival's orders name your plane). It stayed in the air (on the ground false,
+  activated true) with your attack limits (4 / 6 / 4).
+- Its health never changed (1200, then 1260 for three minutes under attack) though its floor was 300: either the
+  enemies' shots never hit it or a hit on a role-2 plane isn't applied on this game (Online Mode applies a remote
+  player's damage on their own game: FLiveMessageDamage). Next: find which (the player plane's TakeDamage 0x147d5a430
+  for a role-2 plane).
+- So for co-op: the host has to spread its flights' orders over the players itself (the game's own search never picks a
+  remote player while an order names the local one).
