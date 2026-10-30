@@ -713,6 +713,83 @@ tick()
 check(P1.HealthInternal == 1000, "an AI stand-in: left alone (its own damage sync)")
 peerState[1] = nil
 
+---------------------------------------------------------------------------------------------------- stray copies (joiner)
+print("a joiner's copies never bound to the host's: taken down on a link back, and after 15 s")
+local function copyPlane(addr)
+    local o = { full = "BP_OP1022_f16c_CP_C" .. LEVEL .. "C" .. addr, addr = addr, HealthInternal = 1000, killed = false }
+    function o:GetAddress() return self.addr end
+    function o:SetMinHealth() end
+    function o:ModifyHealth(d) self.killed = true; self.HealthInternal = 0 end
+    return o
+end
+fresh("join", 1)
+local A1, A2 = copyPlane(8001), copyPlane(8002)
+M.cunits = { ERA_Unit_01_Dep_Air0 = { gen = 1, n = 2, planes = { A1, A2 }, binds = {}, gbinds = {}, at = clock } }
+local from = #logs + 1
+inbox[#inbox + 1] = "0|sys|lost"
+tick()
+inbox[#inbox + 1] = "0|sys|up"
+tick()
+check(A1.killed and A2.killed and has(line("^coop: 2 copies taken down", from), "2 of them never bound"),
+      "the link back: both unbound copies taken down too (" .. tostring(line("^coop: %d+ copies taken down", from)) .. ")")
+fresh("join", 1)
+local B1, B2 = copyPlane(8101), copyPlane(8102)
+M.cunits = { ERA_Unit_02_Dep_Air0 = { gen = 1, n = 2, planes = { B1, B2 }, binds = {}, gbinds = {}, at = clock } }
+M.copies[77] = { obj = B1, exp = 1000, addr = 8101 }   -- (B1 bound, B2 never)
+M.strayAt = 0
+tick(5.0)
+check(not B2.killed, "5 s on: not yet")
+tick(11.0)
+check(B2.killed and not B1.killed and line("^coop: 1 stray enemy copies taken down") ~= nil, "15 s on, still unbound: taken down; the bound one left")
+-- any enemy AI plane here that isn't one of the host's (not spawned through the co-op stream): the same after 15 s
+local S1, S2, SP = copyPlane(8201), copyPlane(8202), copyPlane(8203)
+planes = { { obj = S1, name = "S1", unit = "ERA_Unit_03_Dep_Air0" }, { obj = B1, name = "B1", unit = "ERA_Unit_02_Dep_Air0" },
+           { obj = SP, name = "SP", unit = "SV_Unit_CoopPeerB" }, { obj = S2, name = "S2", unit = "ERA_Unit_04_Dep_Air0", down = true } }
+M.strayAt = 0
+tick(5.0)
+check(not S1.killed, "a stray enemy plane: seen, not yet")
+tick(16.0)
+check(S1.killed and not B1.killed and not SP.killed and not S2.killed and has(line("^coop: %d+ stray enemy copies taken down"), "ERA_Unit_03_Dep_Air0 S1"),
+      "15 s on: the stray taken down (named); a bound copy, another player's stand-in and one already down left")
+planes = {}
+M.copies[77] = nil
+
+---------------------------------------------------------------------------------------------------- binds, the join hold
+print("a bind before its flight's spawn is kept; the host's round waits for players joining")
+fresh("join", 1)
+inbox[#inbox + 1] = "0|bd|ERA_Unit_03_Dep_Air0|5|1|901"          -- (its spawn not queued yet: kept, not dropped)
+tick()
+check(M.pendBind and M.pendBind.ERA_Unit_03_Dep_Air0 and M.pendBind.ERA_Unit_03_Dep_Air0.binds[1] == 901, "the early bind kept")
+inbox[#inbox + 1] = "0|sp|ERA_Unit_03_Dep_Air0|-|-|-1|5"
+for _ = 1, 4 do tick(1); roundsTick(clock) end              -- (a joiner's spawns run in the rounds tick)
+local cu = M.cunits.ERA_Unit_03_Dep_Air0
+check(cu and cu.gen == 5 and cu.binds[1] == 901 and not M.pendBind.ERA_Unit_03_Dep_Air0, "its spawn takes it: plane 1 will be bound to 901")
+-- the host: the round waits while a linked player isn't in the mission (each at most join_wait_s)
+fresh("host", 0)
+M.roster[3] = { row = "f16c_common", ver = VERSION, name = "LATE" }
+peer(1, 3); peer(2, 3)
+peerState[3] = nil                                           -- (player 4 linked, not in the mission: loading)
+tick()
+local w = COOP.joinWaiting(clock)
+check(w and #w == 1 and w[1]:upper():find("LATE") ~= nil, "a linked player still loading is waited for (" .. tostring(w and w[1]) .. ")")
+D.state, D.at, D.round = "spawning", clock, 3
+D.queue = { "ERA_Unit_01_Dep_Air0" }
+local from = #logs + 1
+check(joinHold(clock) == true and D.joinHeld ~= nil and line("^round 3: enemy spawns paused while", from) ~= nil, "the round held, logged")
+clock = clock + 91
+check(COOP.joinWaiting(clock) == nil and joinHold(clock) == false and line("^round 3: everyone's in the mission", from) ~= nil,
+      "after join_wait_s (90): not waited for any more, spawns go on")
+peerState[3] = "100000,0,300000,0,0,0,800,100,3,100"
+tick()
+check(COOP.joinWaiting(clock) == nil, "in the mission: nothing to wait for")
+peerState[3] = nil
+tick()
+check(COOP.joinWaiting(clock) ~= nil, "out again (a restart, a lost link): waited for again")
+CFG.coop.join_wait_s = 0
+check(COOP.joinWaiting(clock) == nil, "join_wait_s 0: never")
+CFG.coop.join_wait_s = 90
+M.roster[3], peerState[3] = nil, nil
+
 ---------------------------------------------------------------------------------------------------- sync off
 print("sync off")
 fresh("host", 0)

@@ -506,3 +506,21 @@ gear state stays 1 (FlGear moves it only on a flag change); harmless in this tes
   writes it before FinishSpawning ([coop] real_paint). Logs: `coop: second player plane: their paint given (skin N,
   emblem flags F, K emblems)`, `coop: player N's plane is their real <code> ...; their paint <s>`. Open: a skin id the
   receiving game doesn't own (DLC?) may not load (0x147d82190 not traced); weathering not sent.
+
+### The desync of 2026-10-30 (0.73.18, 3 players) and 0.73.19-coop2mp.20
+- The user: "desync is huge, friends are reporting enemies even though i'm into the next round", "I'm seeing players go
+  after enemies that I'm not seeing, no target boxes or anything, however on their side they see aircraft there".
+- Cressendo's log (Kuala Lumpur 20:23, the host's 22:53): his level was still loading as the host's round 1 came in
+  ("no world yet; spawns wait"), and the host's links to both joiners dropped 22:53:27-42 right after it sent them the
+  run. His game spawned all 4 copies at 20:23:49, but a minute on "1 enemy streams bound": 3 copies never got the host's
+  id ("bd") and flew on by their own AI; he fought and killed them a minute after the host's round 1 had ended.
+- Causes in sv_coop.lua: a "bd" for a flight with no copy and no queued spawn here was DROPPED (silently); and the
+  link-back resync's killAllCopies took down the bound copies only and forgot the rest (M.cunits wiped).
+- 0.73.19: an early "bd" / "gd" kept (M.pendBind) and taken by its flight's spawn; killAllCopies takes down every copy
+  spawned here, bound or not; a joiner's sweep every 5 s (strayTick) takes down any enemy AI plane here (sv_core's
+  `planes`, the other players' stand-ins skipped) unbound 15 s on, and then asks the host for the whole picture ("jn",
+  at most every 30 s); each flight's binds logged 20 s after its spawn when short (`coop: the host's <unit> here: N of
+  M planes bound`). And the host's round waits while a linked player isn't in the mission yet (no round start, no
+  spawns; [coop] join_wait_s 90 each, 0 never; `round N: enemy spawns paused while <names> join the mission`, callout
+  WAITING FOR PLAYERS): the user, "is there a way that we can effectively pause enemy spawns while people are joining
+  the lobby?". coop_fire_test covers each.

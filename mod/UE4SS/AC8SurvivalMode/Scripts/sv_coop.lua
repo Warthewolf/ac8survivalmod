@@ -661,10 +661,31 @@ clientGround = function(o, unit)
 end
 
 local function killAllCopies(why)
-    local n = 0
-    for id, c in pairs(M.copies) do killCopy(id, c.obj); n = n + 1 end
+    local n, loose, seen = 0, 0, {}
+    for id, c in pairs(M.copies) do
+        killCopy(id, c.obj); n = n + 1
+        local a = c.addr or (valid(c.obj) and addrOf(c.obj))
+        if a then seen[a] = true end
+    end
+    -- (and every copy spawned here that never got its id from the host: the user's co-op run of 2026-10-30, both links
+    -- lost seconds after the round's flights were sent; their binds never came, the link-back resync took down the bound
+    -- copies only and forgot the rest, which flew on by their own AI into the next rounds: "friends are reporting enemies
+    -- even though i'm into the next round")
+    for _, cu in pairs(M.cunits or {}) do
+        for _, o in pairs(cu.planes or {}) do
+            local a = valid(o) and addrOf(o)
+            if a and not seen[a] then seen[a] = true; killCopy(0, o); loose = loose + 1 end
+        end
+        for _, o in pairs(cu.gobjs or {}) do
+            local a = valid(o) and addrOf(o)
+            if a and not seen[a] then seen[a] = true; killCopy(0, o); loose = loose + 1 end
+        end
+    end
     M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
-    if n > 0 then log("coop: " .. n .. " copies taken down (" .. why .. ")") end
+    if n + loose > 0 then
+        log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
+            loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
+    end
 end
 
 local function doSpawn(q)
@@ -691,7 +712,14 @@ local function doSpawn(q)
     if q.level and q.level >= 0 and rawSetLevel then rawSetLevel(unit, q.level) end
     local old = M.cunits[unit]
     local same = old and old.gen == q.gen
-    M.cunits[unit] = { gen = q.gen, n = 0, planes = {}, binds = same and old.binds or {}, gbinds = same and old.gbinds or {} }
+    M.cunits[unit] = { gen = q.gen, n = 0, planes = {}, binds = same and old.binds or {}, gbinds = same and old.gbinds or {},
+                       at = os.clock() }
+    local pb = M.pendBind and M.pendBind[unit]               -- (binds that came before its spawn was queued)
+    if pb and pb.gen == q.gen then
+        for ord, id in pairs(pb.binds) do M.cunits[unit].binds[ord] = id end
+        for key, id in pairs(pb.gbinds) do M.cunits[unit].gbinds[key] = id end
+        M.pendBind[unit] = nil
+    end
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
@@ -847,7 +875,67 @@ local function clientRounds(now)
     end
 end
 
+-- (a joiner, every 5 s) a copy spawned here that's still not bound to the host's plane STRAY_S on: never driven by the
+-- host, it would fly on by its own AI (the co-op run of 2026-10-30: enemies seen a round after the host had cleared them)
+local STRAY_S = 15
+local function strayTick(now)
+    if now < (M.strayAt or 0) then return end
+    M.strayAt = now + 5
+    local bound = {}
+    for _, c in pairs(M.copies) do local a = c.addr or (valid(c.obj) and addrOf(c.obj)); if a then bound[a] = true end end
+    local n = 0
+    for unit, cu in pairs(M.cunits) do
+        if cu.at and now - cu.at >= STRAY_S then
+            for ord, o in pairs(cu.planes or {}) do
+                local a = valid(o) and addrOf(o)
+                if a and not bound[a] then killCopy(0, o); cu.planes[ord] = nil; n = n + 1 end
+            end
+        end
+    end
+    -- and any enemy AI plane here (sv_core's `planes`: allies, wingmen and the Alicorn's parked ones aren't in it; the other
+    -- players' AI stand-ins skipped) that isn't one of the host's: the user, 2026-10-30, "I'm seeing players go after enemies
+    -- that I'm not seeing, no target boxes or anything, however on their side they see aircraft there"
+    M.strayFirst = M.strayFirst or {}
+    local stillHere, names = {}, {}
+    for _, p in ipairs(planes or {}) do
+        local o = p.obj
+        local a = valid(o) and addrOf(o)
+        if a and not p.down and not (p.unit and SLOT_OF[p.unit]) and not bound[a] then
+            stillHere[a] = true
+            local first = M.strayFirst[a]
+            if not first then M.strayFirst[a] = now
+            elseif now - first >= STRAY_S and (health(o) or 1) > 0 then
+                killCopy(0, o); n = n + 1; M.strayFirst[a] = nil
+                names[#names + 1] = (p.unit or "?") .. " " .. tostring(p.name)
+            end
+        end
+    end
+    for a in pairs(M.strayFirst) do if not stillHere[a] then M.strayFirst[a] = nil end end
+    -- (each flight's copies 20 s after they spawned: how many got the host's id, once)
+    for unit, cu in pairs(M.cunits) do
+        if cu.at and not cu.bindSaid and now - cu.at >= 20 and (cu.n or 0) > 0 then
+            cu.bindSaid = true
+            local nb = 0
+            for ord in pairs(cu.planes or {}) do if cu.binds and cu.binds[ord] then nb = nb + 1 end end
+            if nb < (cu.n or 0) then
+                log(string.format("coop: the host's %s here: %d of %d planes bound to the host's", unit, nb, cu.n or 0))
+            end
+        end
+    end
+    if n > 0 and now >= (M.resyncAt or 0) and COOP.client() then
+        M.resyncAt = now + 30
+        M.jnAt = os.clock()
+        send(true, "jn")
+        log("coop: strays here: the host asked for the whole picture again (jn)")
+    end
+    if n > 0 then
+        log(string.format("coop: %d stray enemy copies taken down (here %d s, never bound to the host's)%s", n, STRAY_S,
+            #names > 0 and (": " .. table.concat(names, ", ", 1, math.min(#names, 6))) or ""))
+    end
+end
+
 local function clientTick()
+    pcall(strayTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
     -- here (their own hits come from their game: the stand-ins fly damage-0 rows, COOP.syncSetup; this is the backstop)
     local ins = nil
@@ -1140,6 +1228,30 @@ local function realTarget(s)
         and P.obj or nil
 end
 COOP.realTarget = realTarget
+-- (the host) the players linked but not in the mission yet (loading, the hangar, a link lost), each held for at most
+-- [coop] join_wait_s from when it was first seen out: their names, or nil. The user, 2026-10-30: "is there a way that
+-- we can effectively pause enemy spawns while people are joining the lobby?" (a joiner still loading when the round's
+-- flights came got only 1 of 4 binds: the desync)
+function COOP.joinWaiting(now)
+    if not (COOP.open and COOP.host and COOP.host()) then return nil end
+    local cap = tonumber(cfg().join_wait_s) or 90
+    if cap <= 0 then return nil end
+    M.outSince = M.outSince or {}
+    local names = nil
+    for s in pairs(M.roster or {}) do
+        if s ~= COOP.slot then
+            local P = M.peers[s]
+            if P and P.fresh then
+                M.outSince[s] = nil
+            else
+                M.outSince[s] = M.outSince[s] or now
+                if now - M.outSince[s] < cap then names = names or {}; names[#names + 1] = playerName(s) end
+            end
+        end
+    end
+    for s in pairs(M.outSince) do if not (M.roster or {})[s] then M.outSince[s] = nil end end
+    return names
+end
 function COOP.anyReal()
     for s = 0, MAX_SLOT do if realTarget(s) then return true end end
     return false
@@ -2179,7 +2291,17 @@ local function onJoinerMessage(f)
             cu = { gen = gen, n = 0, planes = {}, binds = {} }
             local queued = false
             for _, q in ipairs(M.spawnQ) do if q.unit == unit and q.gen == gen then queued = true end end
-            if not queued then return end
+            if not queued then
+                -- (nor queued yet: kept for when it is, not dropped. The co-op run of 2026-10-30: a joiner still loading
+                -- as the host's round came in got 1 bind of 4, and its other copies flew on by their own AI)
+                if gen and ord and id then
+                    M.pendBind = M.pendBind or {}
+                    local pb = M.pendBind[unit]
+                    if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
+                    pb.binds[ord] = id
+                end
+                return
+            end
             M.cunits[unit] = cu
         end
         cu.binds[ord] = id
@@ -2191,7 +2313,13 @@ local function onJoinerMessage(f)
         if not cu or cu.gen ~= gen then                   -- (its spawn is still queued: keep the id for it)
             local queued = false
             for _, q in ipairs(M.spawnQ) do if q.unit == unit and q.gen == gen then queued = true end end
-            if not queued then return end
+            if not queued then                            -- (nor queued yet: kept, as a plane's "bd")
+                M.pendBind = M.pendBind or {}
+                local pb = M.pendBind[unit]
+                if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
+                pb.gbinds[key] = id
+                return
+            end
             cu = { gen = gen, n = 0, planes = {}, binds = {}, gbinds = {} }
             M.cunits[unit] = cu
         end
