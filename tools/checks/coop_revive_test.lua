@@ -129,10 +129,10 @@ local function newPawn(addr)
              MinHealth = 0, invincible = false, hidden = false, collision = true, bEnableWeaponInput = true,
              bEnableFlareInput = true, bIsWeaponSystemDisabled = false, MaxPlaneAttackerMissiles = 4, MaxPursuitAttackers = 6,
              MaxNonPlaneAttackerMissiles = 2 }
-    -- (still unless flySpeed (cm/s) flies it along X; at: where a crashed plane lies)
+    -- (still unless flySpeed (cm/s) flies it along X from flyFrom; at: where a crashed plane lies)
     function pawn:K2_GetActorLocation()
         if self.at then return self.at end
-        return { X = 1609639 + (self.flySpeed or 0) * clock, Y = -436414 + 400000, Z = 250000 }
+        return { X = 1609639 + (self.flySpeed or 0) * (clock - (self.flyFrom or clock)), Y = -436414 + 400000, Z = 250000 }
     end
     function pawn:SetIsInvincible(v) self.invincible = v end
     function pawn:SetActorHiddenInGame(v) self.hidden = v end
@@ -270,6 +270,69 @@ check(SV_Event("RE_SV_WolfTurn_01A") == -20 and SV_Event("RE_SV_Salvo_02B") == -
       "a Wolf turn, a salvo, AB.L..IN's gun: not fired (-20)")
 check(SV_Event("RE_SV_FlightOrders_01") == 1 and table.concat(events, ",") == "RE_SV_FlightOrders_01", "a flight's orders: fired as ever")
 
+---------------------------------------------------------------------------------------------------- a restart while down
+print("a restart while you're down, and the combat zone's edge")
+-- (the user's co-op run of 2026-10-30: the host's DOWN plane left the combat zone, the mission failed and restarted in
+-- round 7 in the same level with the same plane, refilled by the game: the host could fly it, but it stayed hidden, no
+-- third-person view)
+local function restartLevel()                    -- sv_main.lua's level-load reset on a restart: the same level and plane
+    D = { round = 1, state = "spawning", now = 99, at = 0, up = {}, flown = {}, queue = {}, spare = {}, events = {},
+          orders = {}, pressure = "B", wave = 1 }
+    DOWN.reset("a new level", true)
+    TAC.reset()
+end
+check(DOWN.me() and pawn.hidden and survivalPC.view == P2, "(down, watching player 3)")
+check(line("^spectate: your own view as you went down: BP_PlayerPlane_PP1000_f16c_C .*%(your plane%)") ~= nil,
+      "your own view noted as you went down: your plane")
+from = #logs + 1
+restartLevel()
+check(not DOWN.me() and pawn.hidden == true and has(line("^down: a new level", from), "put back once the level's player is in"),
+      "the restart's reset: not down, the put-back waits for the level's player")
+pawn.HealthInternal = 1000                       -- (the game restores the plane)
+tick()
+check(pawn.hidden == false and pawn.collision == true and pawn.invincible == false, "the next pass: the same plane shown, collision, mortal")
+check(pawn.bEnableWeaponInput == true and pawn.bIsWeaponSystemDisabled == false and pawn.MaxPursuitAttackers == 6,
+      "its weapons and its attackers' limits back")
+check(survivalPC.view == pawn and has(line("^down: after the restart", from), "the same plane")
+      and has(line("^down: after the restart", from), "still on the plane you watched"),
+      "the view off the plane you watched, back on yours: " .. tostring(line("^down: after the restart", from)))
+ticks(1)
+check(since(from, "^down: after the restart") == 1 and not DOWN.me(), "put back once; not down again")
+-- down again, and the restart gives another plane with the view on it already: nothing touched
+pawn.HealthInternal = 1
+tick()
+check(DOWN.me() and survivalPC.view ~= pawn, "(down again, watching)")
+from = #logs + 1
+restartLevel()
+newPawn(77)
+survivalPC.view = pawn
+local nViews = #survivalPC.views
+tick()
+check(pawn.hidden == false and pawn.invincible == false and #survivalPC.views == nViews
+      and has(line("^down: after the restart", from), "another plane (77; down was 9)") and has(line("^down: after the restart", from), "left as it is"),
+      "another plane after the restart: nothing on it touched, the game's view left: " .. tostring(line("^down: after the restart", from)))
+-- the combat zone's edge
+newPawn()
+survivalPC.view = pawn
+pawn.HealthInternal = 1
+tick()
+check(DOWN.me(), "(down)")
+respawns, from = {}, #logs + 1
+local nDown = #downCalls
+pawn.at = { X = ZONE.X + ZONE.HALF - 200000, Y = ZONE.Y, Z = 30000 }      -- (5 km from the real edge, 300 m up)
+tick()
+local er = respawns[1] or {}
+check(#respawns == 1 and er[4] == 250000 and er[6] == -23 and math.abs((er[2] or 0) - (1609574 + math.cos(math.rad(-23)) * 400000)) < 1,
+      "5 km from the zone's edge: SV_Respawn 4 km out along the runway, at the loiter's 2500 m")
+check(pawn.hidden == true and pawn.collision == false and pawn.bEnableWeaponInput == false and #downCalls > nDown
+      and (downCalls[#downCalls] or ""):find("^9,") ~= nil, "still out of the fight, the loiter on again the same pass")
+check(has(line("^down: your plane was", from), "5.0 km from the combat zone's edge"), "logged: " .. tostring(line("^down: your plane was", from)))
+ticks(5)
+check(#respawns == 1, "not again within 20 s")
+ticks(15.25)
+check(#respawns == 2, "again after 20 s while it's still there")
+pawn.at = nil
+
 ---------------------------------------------------------------------------------------------------- revives on the host
 print("revives: the host's checks")
 scene("host", 0, { [1] = FLY, [2] = AIRFIELD_F })
@@ -361,7 +424,8 @@ CFG.coop.revive.respawn = "loiter"
 -- a crashed plane (the floor held, the plane lying on the ground: the user's co-op run of 2026-10-30, VERDA revived where
 -- it lay) comes back the native way; a flying one where the loiter left it
 respawns = {}
-pawn.flySpeed = 15000
+local fromFly = #logs + 1
+pawn.flySpeed, pawn.flyFrom = 15000, clock
 pawn.HealthInternal = 1
 tick()
 ticks(10)
@@ -369,7 +433,7 @@ from = #logs + 1
 inbox[#inbox + 1] = "0|rb|1|2|0"
 tick()
 check(not DOWN.me() and #respawns == 0 and has(line("^revive: back", from), "where the loiter left you")
-      and line("^down: your plane isn't flying") == nil, "flying at 150 m/s when revived: where the loiter left it, no SV_Respawn")
+      and line("^down: your plane isn't flying", fromFly) == nil, "flying at 150 m/s when revived: where the loiter left it, no SV_Respawn")
 pawn.flySpeed, pawn.at = nil, { X = 1609639 + 150000, Y = -436414, Z = 500 }
 pawn.HealthInternal = 1
 from = #logs + 1

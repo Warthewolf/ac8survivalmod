@@ -153,12 +153,15 @@ static void FlagsTest(void)
 typedef struct { double x, y, z, th, ps, ph, p, q; } Model;          /* m; deg; body rates deg/s */
 static double Wrap(double a) { while (a > 180) a -= 360; while (a < -180) a += 360; return a; }
 /* kind 0: rate-command roll; 1: bank-angle roll (an assisted mode); 2: a quicker, tighter-turning plane (260 m/s, 250 deg/s
- * roll, 60 deg/s pitch, more sag and turn from bank) */
+ * roll, 60 deg/s pitch, more sag and turn from bank); 3: a late plane (Fly hands it its inputs 0.4 s late; 200 m/s, 70 deg/s
+ * roll, 25 deg/s pitch): the user's co-op run of 2026-10-30, where AC8's plane answered the roll probe with -3 / +2 deg/s
+ * and the sign read from that was wrong; the probe may read it wrong here too, the in-flight check has to put it right */
 static void ModelStep(Model* m, const float* in, int sr, int sp, int kind, double dt)
 {
-    const double V = kind == 2 ? 260.0 : 160.0, D = CO_PI / 180.0, sag = kind == 2 ? 10.0 : 6.0, turn = kind == 2 ? 12.0 : 6.0;
-    double pc = kind == 1 ? (sr * in[2] * 75.0 - m->ph) / 0.35 : sr * in[2] * (kind == 2 ? 250.0 : 180.0);
-    double qc = sp * in[0] * (kind == 2 ? 60.0 : 35.0);
+    const double V = kind == 2 ? 260.0 : kind == 3 ? 200.0 : 160.0, D = CO_PI / 180.0, sag = kind == 2 ? 10.0 : 6.0,
+                 turn = kind == 2 ? 12.0 : 6.0;
+    double pc = kind == 1 ? (sr * in[2] * 75.0 - m->ph) / 0.35 : sr * in[2] * (kind == 2 ? 250.0 : kind == 3 ? 70.0 : 180.0);
+    double qc = sp * in[0] * (kind == 2 ? 60.0 : kind == 3 ? 25.0 : 35.0);
     m->p += (pc - m->p) * fmin(1.0, dt / 0.1);
     m->q += (qc - m->q) * fmin(1.0, dt / 0.15);
     double ph = m->ph * D, th = m->th * D;
@@ -174,14 +177,17 @@ static void ModelStep(Model* m, const float* in, int sr, int sp, int kind, doubl
 
 typedef struct { const char* name; double x, y, z, ps, th, ph, alt, R; } Start;
 
+/* known: 1 the signs given (the true ones), -1 the WRONG ones given as known (a bad probe kept from an earlier DOWN) */
 static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInProbe, int quiet)
 {
     DownCtl c;
-    DownInit(&c, 0, 0, s->alt, s->R, known, known ? sr : 1, known ? sp : 1);
+    DownInit(&c, 0, 0, s->alt, s->R, known != 0, known ? known * sr : 1, known ? known * sp : 1);
     Model m = { s->x, s->y, s->z, s->th, s->ps, s->ph, 0, 0 };
     const double dt = 1.0 / 60.0;
     double t = 100.0, sumR = 0, sumH = 0, maxBank = 0, minZ = 1e9;
-    int n = 0;
+    int n = 0, flipsAt = -1;
+    static float late[64][5];                             /* kind 3's inputs, handed over 24 frames (0.4 s) late */
+    static const float none[5] = { 0, 0, 0, 0, 0 };
     for (int k = 0; k < (int)(200.0 / dt); ++k) {
         if (pauseInProbe && k == 100) t += 1.5;           /* a pause in the roll probe: the probe starts over */
         double pos[3] = { m.x * 100, m.y * 100, m.z * 100 }, rot[3] = { m.th, m.ps, m.ph };
@@ -189,7 +195,10 @@ static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInP
         DownStep(&c, t, pos, rot, out);
         DownStep(&c, t + 0.0004, pos, rot, again);        /* BuildFlightInput's second call in the frame */
         if (memcmp(out, again, sizeof(out))) { printf("FAILED: a second call in the frame changed the inputs\n"); g_fail = 1; return 0; }
-        ModelStep(&m, out, sr, sp, kind, dt);
+        const float* in = out;
+        if (kind == 3) { memcpy(late[k % 64], out, sizeof(out)); in = k >= 24 ? late[(k - 24) % 64] : none; }
+        ModelStep(&m, in, sr, sp, kind, dt);
+        if (c.flips && flipsAt < 0) flipsAt = k;
         t += dt;
         if (m.z < minZ) minZ = m.z;
         if (k * dt >= 150.0) {
@@ -198,13 +207,18 @@ static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInP
         }
     }
     double eR = sumR / n, eH = sumH / n;
-    int ok = c.phase == DN_CIRCLE && c.sRoll == sr && c.sPitch == sp && eR < 0.3 * s->R && eH < 120.0 && maxBank < 70.0;
+    /* (a plane that answers on time, its signs learned by the probe or given right: the in-flight check never flips one;
+     * wrong signs given: flipped back within 30 s) */
+    int flipsOk = kind == 3 || pauseInProbe ? 1 : known < 0 ? (c.flips >= 1 && flipsAt >= 0 && flipsAt * dt < 30.0) : c.flips == 0;
+    int ok = c.phase == DN_CIRCLE && c.sRoll == sr && c.sPitch == sp && eR < 0.3 * s->R && eH < 120.0 && maxBank < 70.0 && flipsOk;
     if (!quiet || !ok)
-        printf("%s %s, signs roll %+d pitch %+d%s%s: learned %+d %+d (probes %.0f/%.0f, %.0f/%.0f deg/s); last 50 s: %.0f m off the "
-               "%.0f m circle, %.0f m off %.0f m, bank up to %.0f deg; lowest %.0f m: %s\n", s->name,
-               kind == 1 ? "bank-angle roll" : kind == 2 ? "quick plane" : "rate roll", sr, sp, known ? ", signs known" : "", pauseInProbe ? ", paused in a probe" : "",
-               c.sRoll, c.sPitch, c.probeRate[0], c.probeRate[1], c.probeRate[2], c.probeRate[3], eR, s->R, eH, s->alt, maxBank,
-               minZ, ok ? "ok" : "FAILED");
+        printf("%s %s, signs roll %+d pitch %+d%s%s: now %+d %+d (probes %.0f/%.0f, %.0f/%.0f deg/s; %d flips); last 50 s: %.0f m "
+               "off the %.0f m circle, %.0f m off %.0f m, bank up to %.0f deg; lowest %.0f m: %s\n", s->name,
+               kind == 1 ? "bank-angle roll" : kind == 2 ? "quick plane" : kind == 3 ? "late plane" : "rate roll", sr, sp,
+               known > 0 ? ", signs known" : known < 0 ? ", WRONG signs known" : "", pauseInProbe ? ", paused in a probe" : "",
+               c.sRoll, c.sPitch, c.probeRate[0], c.probeRate[1], c.probeRate[2], c.probeRate[3], c.flips,
+               eR, s->R, eH, s->alt, maxBank, minZ, ok ? "ok" : "FAILED");
+    if (c.flips && (!quiet || !ok)) printf("    (first flip %.1f s in)\n", flipsAt * dt);
     if (!ok) g_fail = 1;
     return ok;
 }
@@ -228,6 +242,13 @@ int main(void)
             for (int sp = -1; sp <= 1; sp += 2) { ++runs; good += Fly(&starts[st], sr, sp, 2, 0, 0, 0); }
     ++runs; good += Fly(&starts[0], -1, 1, 0, 0, 1, 0);     /* a pause in a probe */
     ++runs; good += Fly(&starts[1], 1, -1, 0, 1, 0, 0);     /* the signs known: circling at once */
+    /* the late plane, every pair of signs from each start; and wrong signs kept as known (rate roll and the late plane) */
+    for (int st = 0; st < 3; ++st)
+        for (int sr = -1; sr <= 1; sr += 2)
+            for (int sp = -1; sp <= 1; sp += 2) { ++runs; good += Fly(&starts[st], sr, sp, 3, 0, 0, 0); }
+    for (int kind = 0; kind <= 3; kind += 3)
+        for (int st = 0; st < 3; ++st)
+            for (int sr = -1; sr <= 1; sr += 2) { ++runs; good += Fly(&starts[st], sr, 1, kind, -1, 0, 0); }
     printf("down: %d of %d flights ok\n", good, runs);
     printf(g_fail ? "flight test: FAILED\n" : "flight test: passed\n");
     return g_fail ? 1 : 0;
