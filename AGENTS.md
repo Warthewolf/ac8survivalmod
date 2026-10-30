@@ -445,7 +445,10 @@ weapons and gear on real planes wait for T4; damage as 0.72 (each game's own). C
 weapons research (COOP2MP.md): AI shots are decided on the target's game, a player's on the shooter's (CanBeDamagedBy);
 a player's shot is shown elsewhere by the remote plane fire 0x147d71ea0 launching it from their plane's own weapons.
 T4a (0.73.5-coop2mp.6, runtime 0.31.0; not yet run): solo, the Ctrl+F11 copy replays your launches, flares and gun that
-way; the friends' zip 0.73.5 replaces 0.73.4.
+way; the friends' zip 0.73.5 replaces 0.73.4. T4a in game: missiles, flares and gun replayed, the laser not (not
+an explosive weapon). T4a.2 (0.73.6-coop2mp.7, runtime 0.31.1; not yet run): specials (laser, bullet, ESM / ECM) the
+handlers' way (select, arm), the gear; SV_CoopPPFx gives co-op's real planes their gear, gun and flares from the flag
+bits; zip 0.73.6 replaces 0.73.5.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

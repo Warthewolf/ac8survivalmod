@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.31.0"
-#define RT_VERSION_A         "0.31.0"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.31.1"
+#define RT_VERSION_A         "0.31.1"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3061,7 +3061,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopRecv", L_CoopRecv }, { "SV_CoopMe", L_CoopMe }, { "SV_CoopPeer", L_CoopPeer }, { "SV_CoopTrack", L_CoopTrack },
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },
         { "SV_CoopSpawnPP", L_CoopSpawnPP }, { "SV_CoopKillPP", L_CoopKillPP }, { "SV_CoopFollow", L_CoopFollow },
-        { "SV_CoopPPRole", L_CoopPPRole }, { "SV_CoopFeed", L_CoopFeed },
+        { "SV_CoopPPRole", L_CoopPPRole }, { "SV_CoopFeed", L_CoopFeed }, { "SV_CoopPPFx", L_CoopPPFx },
         { "SV_CoopFire", L_CoopFire }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
@@ -3195,6 +3195,9 @@ static void FindFunctions(void)
         { kSigLaunchWeapon,     NULL,              sizeof(kSigLaunchWeapon), NULL, 0 },
         { kSigFireFlares,       NULL,              sizeof(kSigFireFlares), NULL, 0 },
         { kSigNetManager,       kSigNetManagerMask, sizeof(kSigNetManager), NULL, 0 },
+        { kSigSelectSpecial,    NULL,              sizeof(kSigSelectSpecial), NULL, 0 },
+        { kSigArmSpecial,       kSigArmSpecialMask, sizeof(kSigArmSpecial), NULL, 0 },
+        { kSigGearApply,        kSigGearApplyMask, sizeof(kSigGearApply), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3247,6 +3250,9 @@ static void FindFunctions(void)
     g_fLaunchWeapon     = p[51].hit;
     g_fFireFlares       = p[52].hit;
     g_fNetManager       = p[53].hit;
+    g_fSelectSpecial    = p[54].hit;
+    g_fArmSpecial       = p[55].hit;
+    g_fGearSite         = p[56].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3264,8 +3270,9 @@ static void FindFunctions(void)
         g_siteRemoteDummyCls, g_siteRemoteLoadout, g_siteRemoteFlags, g_siteRemoteFinish);
     Log(L"flight: one-shot fire %p (LiveFireOneShotWeapon's Execute %p), AI takeoff afterburner %p, player plane respawn %p, remote update %p, surface update %p, player plane damage %p",
         g_fFireOne, g_fFireExec, g_fTakeoffAB, g_fPPRespawn, g_fRemoteUpdate, g_fSurfacePP, g_fPPDamage);
-    Log(L"coop2mp: weapons fired %p, remote plane fire %p, launch weapon %p, flares %p, network manager %p", g_fPlaneFired, g_fRemoteFire,
-        g_fLaunchWeapon, g_fFireFlares, g_fNetManager);
+    Log(L"coop2mp: weapons fired %p, remote plane fire %p, launch weapon %p, flares %p, network manager %p, select special %p, arm "
+        L"special %p, gear site %p", g_fPlaneFired, g_fRemoteFire, g_fLaunchWeapon, g_fFireFlares, g_fNetManager, g_fSelectSpecial,
+        g_fArmSpecial, g_fGearSite);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 

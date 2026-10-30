@@ -987,7 +987,7 @@ local function peerTick(slot)
         local o, why = spawnReal(slot, P, code)
         if o then
             P.obj, P.addr, P.real, P.code, P.shown = o, addrOf(o), true, code, nil
-            P.gear, P.flare, P.gunNext, P.flareNext = nil, nil, nil, nil
+            P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
             log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
                 .. "stream", slot + 1, code, P.addr or 0))
         else
@@ -1451,13 +1451,19 @@ local function peersTick(now)
     for s, P in pairs(M.peers) do
         if s ~= COOP.slot and P.obj and P.shown and P.fresh and valid(P.obj) and type(P.flags) == "number" then
             local fl = P.flags
-            if on("gear") and not P.real then                   -- (EnableLandingGear is the AI plane's: COOP2MP T4)
+            if on("gear") then
                 local g = bit(fl, BIT_GEAR)
                 if g ~= P.gear then
                     local first = P.gear == nil
                     P.gear = g
                     if not (first and not g) then                     -- (a new plane comes gear up: only "down" to say)
-                        local okG, err = pcall(function() P.obj:EnableLandingGear(g, 1.0) end)
+                        -- (a real plane: the game's own gear calls, as Online Mode's LandingGear; a stand-in: the AI's)
+                        local okG, err = pcall(function()
+                            if P.real then
+                                local r = type(SV_CoopPPFx) == "function" and SV_CoopPPFx(P.addr, 2, g and 1 or 0) or -9
+                                if r ~= 1 then error("SV_CoopPPFx " .. tostring(r)) end
+                            else P.obj:EnableLandingGear(g, 1.0) end
+                        end)
                         P.gearFlips = (P.gearFlips or 0) + 1
                         if P.gearFlips <= 4 or not okG then
                             log(string.format("coopfire: player %d's gear %s here: %s", s + 1, g and "down" or "up",
@@ -1466,6 +1472,22 @@ local function peersTick(now)
                     end
                 end
             end
+            if P.real then                                    -- (a real plane: its own gun's trigger and flares, COOP2MP T4)
+                local gun = on("guns") and bit(fl, BIT_GUN) or false
+                if gun ~= (P.gunOn or false) and type(SV_CoopPPFx) == "function" then
+                    P.gunOn = gun
+                    SV_CoopPPFx(P.addr, 1, gun and 1 or 0)
+                end
+                if on("flares") then
+                    local f = bit(fl, BIT_FLARE)
+                    if f and (not P.flare or now >= (P.flareNext or 0)) and type(SV_CoopPPFx) == "function" then
+                        P.flareNext = now + FLARE_EVERY_S
+                        local r = SV_CoopPPFx(P.addr, 0, 1)
+                        once("realflare" .. s, string.format("coopfire: player %d's flares on their real plane here: %s", s + 1, tostring(r)))
+                    end
+                    P.flare = f
+                end
+            else
             if on("guns") and bit(fl, BIT_GUN) and now >= (P.gunNext or 0) then
                 P.gunNext = now + GUN_EVERY_S
                 coopFire(s, 1, addrOfId(P.gunTarget))
@@ -1477,6 +1499,7 @@ local function peersTick(now)
                     coopFire(s, 0, nil)
                 end
                 P.flare = f
+            end
             end
         end
     end
