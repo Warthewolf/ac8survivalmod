@@ -70,7 +70,8 @@ if bad:
 print('offline check: no network code in', st)
 " "$st"
 fi
-out="build/release/AC8SurvivalMode_${ver}_$Ed$suffix.zip"
+# BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: tools/re/COOP2MP.md)
+out="build/release/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${ver}_$Ed$suffix.zip"
 python -I -c "
 import os, sys, zipfile
 st, out = sys.argv[1], sys.argv[2]
