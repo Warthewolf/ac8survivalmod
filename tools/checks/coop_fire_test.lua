@@ -552,7 +552,7 @@ check(table.concat(ht, " ") == "-1>ht|7|10.0", "the next hit, no stand-in's: all
 
 ---------------------------------------------------------------------------------------------------- COOP2MP T4b
 print("COOP2MP T4b: launches on the other players' real planes (\"p\"), loadouts in hi / pi")
-local shotsOut, ppShots, ppR, loadout = "", {}, 1, ""
+local shotsOut, ppShots, ppR, loadout, paint = "", {}, 1, "", ""
 function SV_CoopShots() local s = shotsOut; shotsOut = ""; return s end
 function SV_CoopPPShot(a, t, pay) ppShots[#ppShots + 1] = string.format("%d/%d/%s", a, t, pay); return ppR end
 function SV_CoopLoadout() return loadout end
@@ -622,12 +622,12 @@ tick()
 check(M.roster[0] and M.roster[0].lo == "1001,2002/3/0,1", "the host's own roster entry carries its loadout")
 local pi = ""
 for _, s in ipairs(sent) do if s:find(">pi|0|") then pi = s end end
-check(pi:find("|1001,2002/3/0,1$") ~= nil, "and the roster tells every joiner (" .. pi .. ")")
+check(pi:find("|1001,2002/3/0,1|$") ~= nil, "and the roster tells every joiner (" .. pi .. ")")
 sent = {}
 loadout = "1001,2002/4/0,1"
 tick()
 local again = false
-for _, s in ipairs(sent) do if s:find(">pi|0|.*|1001,2002/4/0,1$") then again = true end end
+for _, s in ipairs(sent) do if s:find(">pi|0|.*|1001,2002/4/0,1|$") then again = true end end
 check(again, "new weapons (the loadout changed): told again")
 inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.0|f16c_common|B|f16c|5,6/7/1,0"
 tick()
@@ -636,6 +636,28 @@ inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.0|f16c_common|B|f16c|5,x/7"
 tick()
 check(M.roster[1] and M.roster[1].lo == "", "a bad loadout left out")
 loadout = ""
+-- the paint (T5): yours in the roster and pi, theirs from hi, a bad one left out, a new one told again
+function SV_CoopPaint() return paint end
+paint = "12/3/7,8"
+sent = {}
+tick()
+check(M.roster[0].paint == "12/3/7,8", "your paint in the host's roster entry")
+local piP = ""
+for _, s in ipairs(sent) do if s:find(">pi|0|") then piP = s end end
+check(piP:find("|12/3/7,8$") ~= nil, "and in pi, after the loadout (" .. piP .. ")")
+sent = {}
+paint = "-1/0/"
+tick()
+local againP = false
+for _, s in ipairs(sent) do if s:find(">pi|0|.*|%-1/0/$") then againP = true end end
+check(againP, "a new paint (its default, no emblems): told again")
+inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.3|f16c_common|B|f16c|5,6/7/1,0|44/1/9"
+tick()
+check(M.roster[1] and M.roster[1].paint == "44/1/9", "a joiner's paint from its hi")
+inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.3|f16c_common|B|f16c|5,6/7/1,0|x/1/9"
+tick()
+check(M.roster[1] and M.roster[1].paint == "", "a bad paint left out")
+paint = ""
 
 ---------------------------------------------------------------------------------------------------- the host's hunt on real planes
 print("the hunt onto real planes: never a player at their airfield or down")
