@@ -622,12 +622,12 @@ tick()
 check(M.roster[0] and M.roster[0].lo == "1001,2002/3/0,1", "the host's own roster entry carries its loadout")
 local pi = ""
 for _, s in ipairs(sent) do if s:find(">pi|0|") then pi = s end end
-check(pi:find("|1001,2002/3/0,1|$") ~= nil, "and the roster tells every joiner (" .. pi .. ")")
+check(pi:find("|1001,2002/3/0,1||$") ~= nil, "and the roster tells every joiner (" .. pi .. ")")
 sent = {}
 loadout = "1001,2002/4/0,1"
 tick()
 local again = false
-for _, s in ipairs(sent) do if s:find(">pi|0|.*|1001,2002/4/0,1|$") then again = true end end
+for _, s in ipairs(sent) do if s:find(">pi|0|.*|1001,2002/4/0,1||$") then again = true end end
 check(again, "new weapons (the loadout changed): told again")
 inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.0|f16c_common|B|f16c|5,6/7/1,0"
 tick()
@@ -644,12 +644,12 @@ tick()
 check(M.roster[0].paint == "12/3/7,8", "your paint in the host's roster entry")
 local piP = ""
 for _, s in ipairs(sent) do if s:find(">pi|0|") then piP = s end end
-check(piP:find("|12/3/7,8$") ~= nil, "and in pi, after the loadout (" .. piP .. ")")
+check(piP:find("|12/3/7,8|$") ~= nil, "and in pi, after the loadout (" .. piP .. ")")
 sent = {}
 paint = "-1/0/"
 tick()
 local againP = false
-for _, s in ipairs(sent) do if s:find(">pi|0|.*|%-1/0/$") then againP = true end end
+for _, s in ipairs(sent) do if s:find(">pi|0|.*|%-1/0/|$") then againP = true end end
 check(againP, "a new paint (its default, no emblems): told again")
 inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.3|f16c_common|B|f16c|5,6/7/1,0|44/1/9"
 tick()
@@ -658,6 +658,20 @@ inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.3|f16c_common|B|f16c|5,6/7/1,0|
 tick()
 check(M.roster[1] and M.roster[1].paint == "", "a bad paint left out")
 paint = ""
+-- the aircraft's name (your plane's GetObjName): in the roster and pi, a joiner's from hi, cleaned
+function pawn:GetObjName() return "ADFX-02 Morgan" end
+sent = {}
+tick()
+check(M.roster[0].ac == "ADFX-02 Morgan", "your aircraft's name in the roster (" .. tostring(M.roster[0].ac) .. ")")
+local piA = ""
+for _, s in ipairs(sent) do if s:find(">pi|0|") then piA = s end end
+check(piA:find("|ADFX%-02 Morgan$") ~= nil, "and last in pi (" .. piA .. ")")
+inbox[#inbox + 1] = "1|hi|" .. VERSION .. "|0.32.4|f16c_common|B|f16c|5,6/7/1,0|44/1/9|F-16C Fighting Falcon"
+tick()
+check(M.roster[1] and M.roster[1].ac == "F-16C Fighting Falcon", "a joiner's aircraft name from hi (" .. tostring(M.roster[1] and M.roster[1].ac) .. ")")
+check(M.acClean("X|Y" .. string.char(1) .. "Z" .. string.char(10)) == "XYZ", "a | and control characters stripped")
+check(#M.acClean(string.rep("A", 50)) == 32, "32 characters at most")
+pawn.GetObjName = nil
 
 ---------------------------------------------------------------------------------------------------- the host's hunt on real planes
 print("the hunt onto real planes: never a player at their airfield or down")
