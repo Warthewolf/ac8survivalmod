@@ -490,6 +490,22 @@ round probe: `special: <unit>'s body down: N of its M parts still up finished of
 its body is (`special: Ladon X's body is down, N of its unit still up (its parts): counted down`), and while a Ladon is
 up (+40 s) every Ladon missile is toned every 0.5 s (`hits: a Ladon's sure-kill missile caught at damage N`).
 tools/checks/bosses_test.sh covers it. Not yet known why the parts lived (a kill with no attacker since 0.73.20?).
+0.73.23-coop2mp.24 (runtime 0.32.4; built and installed 2026-10-31, not yet run in game; zip 0.73.23, hash 6bc1a200...6d28bc;
+replaces 0.73.22): the joiners' STORE allies and defences (user, 2026-10-31: "some people spawned AI aircraft in from
+the shop, as well as Anti Air etc at the airfield and none of it was syncing with the other players"; the logs: a
+joiner's WINGMEN, MOONCHILD, AEGIS, AA guns, SAM sites and CIWS only ever in their own game, since only the host's
+SV_Spawn is mirrored, and a joiner could take a unit name the host built later). Now (sv_shop.lua, sv_coop.lua,
+sv_allies.lua) a joiner's purchase of an allied flight or ship or a defence goes to the host ("ab|id|item|price|kind"),
+paid on their game at once; the host builds it (shopBuildFor: the unit picked there, nothing charged there; its spawn
+goes to every game as its enemies' do) and answers "ak" or "ax" (refunded), "ar" later for a flight that never took off
+(refunded to that player); no answer in 30 s: refunded. A joiner's flight takes off once that player is airborne
+(COOP.airborne), else 90 s on. The allies' orders are the room's: a joiner's change goes to the host ("ao"), the host's
+to everyone ("ag"). On a joiner's game the host's allies' copies (ALLY.unit and the defences' units, c.ally at bind time)
+send no hits: what they take isn't sent, and their hits on enemy copies are taken off what is (the stand-ins'
+backstop), so the host's allies' fight is dealt once, on the host. Log lines: `shop: player N's <item> (<price>): built:
+...` / `refused: ...` (host), `shop: asked the host to build ...`, `shop: the host built your ...`, `... refunded`
+(joiner). Not yet: a joiner's HUD ALLIES row shows the defences but not the room's flights and ships; COVER still
+covers the host. tools/checks/defences_test.sh and coop_ground_test.sh cover it.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

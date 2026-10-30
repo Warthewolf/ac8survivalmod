@@ -75,6 +75,7 @@ local function obj(cls, hp, plane)
 end
 local UNITS = {
     SV_Unit_LcacA = { { "BP_SH010_lcac", 5000 }, { "BP_SH010_lcac", 5000 } },
+    SV_Unit_AAGun_A = { { "BP_GR002_gepa_CP", 6000 } },                 -- (an airfield defence: the host's ally)
     SV_Unit_Alicorn = { { "BP_BA002_alcn", 90000 }, { "BP_BA002_alcn_btankfl_Base", 18750 }, { "BP_BA002_alcn_btankfr_Base", 18750 },
                         { "BP_BA002_alcn_btankrl_Base", 18750 }, { "BP_BA002_alcn_btankrr_Base", 18750 },
                         { "BP_MP028_dummy_emlmcore_Base", 31250 }, { "BP_FG037_uavm_ON_pool", 100, true } },
@@ -114,7 +115,7 @@ if ROLE == "host" then
     check(COOP.host(), "host: hosting")
     D = { round = 8, state = "fight" }
     tick()
-    spawn("SV_Unit_LcacA"); spawn("SV_Unit_Alicorn")
+    spawn("SV_Unit_LcacA"); spawn("SV_Unit_Alicorn"); spawn("SV_Unit_AAGun_A")
     tick(0.1); check(#msgs("gd") == 0, "host: no ids before the objects are half a second old")
     tick(1)
     local k = byKey()
@@ -177,6 +178,39 @@ if ROLE == "host" then
         if to == "-1" or to == "1" then out[#out + 1] = "0|" .. body end
     end
     writeAll(WORK .. "/ground_messages.txt", table.concat(out, "\n"))
+    -- a joiner's ally / defence bought: built here (sv_shop.lua shopBuildFor), answered "ak" / "ax"
+    local built = {}
+    shopBuildFor = function(slot, name, price, kind)
+        built[#built + 1] = { slot, name, price, kind }
+        if name == "Ciws" then return true, "CIWS BUILT for 6000 (SV_Unit_Ciws_A)." end
+        return false, "ALL BUILT."
+    end
+    local b0 = #sent
+    inbox[#inbox + 1] = "1|ab|7|Ciws|6000|ciws"
+    tick()
+    check(built[1] and built[1][1] == 1 and built[1][2] == "Ciws" and built[1][3] == 6000 and built[1][4] == "ciws"
+          and table.concat(sent, "\n", b0 + 1):find("1>ak|7|CIWS BUILT for 6000", 1, true), "host: a joiner's CIWS built here, answered (ak)")
+    inbox[#inbox + 1] = "1|ab|8|AAGun|4000|"
+    tick()
+    check(built[2] and built[2][4] == nil and table.concat(sent, "\n", b0 + 1):find("1>ax|8|ALL BUILT.", 1, true), "host: one it can't build refused (ax)")
+    inbox[#inbox + 1] = "1|ab|9|Nope|100|"
+    inbox[#inbox + 1] = "1|ab|10|Ciws|-5|ciws"
+    tick()
+    local s3 = table.concat(sent, "\n", b0 + 1)
+    check(#built == 2 and s3:find("1>ax|9|A BAD REQUEST", 1, true) and s3:find("1>ax|10|A BAD REQUEST", 1, true),
+          "host: an unknown item or a bad price: refused, nothing built")
+    for i = 11, 16 do inbox[#inbox + 1] = "1|ab|" .. i .. "|Ciws|6000|ciws" end
+    tick(0)
+    check(#built <= 2 + 4, "host: at most 4 asks a second from one game (" .. (#built - 2) .. " of 6 taken)")
+    -- the allies' orders: a joiner's taken (the allies are the host's: one order for the room)
+    local ord = {}
+    ALLY = { unit = {}, order = function() return "cover" end,
+             nextOrder = function(how, o) ord[#ord + 1] = tostring(how) .. "/" .. tostring(o) end }
+    inbox[#inbox + 1] = "1|ao|defend"
+    inbox[#inbox + 1] = "1|ao|bogus"
+    tick(1)
+    check(#ord == 1 and ord[1] == "a joiner/defend", "host: a joiner's order taken (defend), a made-up one not")
+    ALLY = nil
 else
     menu = 16 + 4; tick()
     check(COOP.client(), "join: joined")
@@ -206,6 +240,38 @@ else
     tick()
     local s = table.concat(sent, "\n", before + 1)
     check(s:find("ht|%d+|50%.0"), "join: a hit on a craft here sent to the host (ht)")
+    -- the host's AA gun here: its copy's losses never sent, its hits on enemies taken off what is (its fight is the host's)
+    local aa = world.SV_Unit_AAGun_A
+    check(aa and #aa == 1, "join: the host's AA gun spawned here")
+    local b1 = #sent
+    aa[1].HealthInternal = aa[1].HealthInternal - 700
+    tick()
+    check(not table.concat(sent, "\n", b1 + 1):find("ht|", 1, true), "join: a hit on the host's AA gun here not sent (an ally)")
+    check(M.standInSet()[aa[1].addr] == -1, "join: ... its own hits here taken off what's sent (the stand-ins' backstop)")
+    -- your ally / defence bought: the host asked, its answer kept or refunded
+    RUN = { credits = 10000, spent = 6000, msg = {}, bought = {}, dirty = false }
+    local ok = COOP.askBuild("Ciws", 6000, "ciws")
+    local id = tonumber(table.concat(sent, "\n", b1 + 1):match("ab|(%d+)|Ciws|6000|ciws"))
+    check(ok and id, "join: BUILD CIWS asked of the host (ab)")
+    inbox[#inbox + 1] = "0|ak|" .. tostring(id) .. "|CIWS BUILT for 6000 (SV_Unit_Ciws_A)."
+    tick()
+    check(RUN.msg.Ciws == "CIWS BUILT for 6000 (SV_Unit_Ciws_A)." and RUN.defences and RUN.defences.bought.ciws == 1
+          and RUN.bought.Ciws == 1 and RUN.credits == 10000, "join: built: counted as yours, nothing refunded")
+    local b2 = #sent
+    COOP.askBuild("Wingmen", 5000, nil)
+    id = tonumber(table.concat(sent, "\n", b2 + 1):match("ab|(%d+)|Wingmen|"))
+    inbox[#inbox + 1] = "0|ax|" .. tostring(id) .. "|BOTH ALLIED FLIGHTS ARE UP."
+    tick()
+    check(RUN.credits == 15000 and (RUN.msg.Wingmen or ""):find("REFUSED: BOTH ALLIED FLIGHTS ARE UP", 1, true), "join: refused: 5000 refunded")
+    COOP.askBuild("SAM", 8000, "sam")
+    tick(31)
+    check(RUN.credits == 23000 and (RUN.msg.SAM or ""):find("NO ANSWER FROM THE HOST", 1, true), "join: no answer in 30 s: 8000 refunded")
+    inbox[#inbox + 1] = "0|ar|5000|WINGMEN COULD NOT TAKE OFF"
+    tick()
+    check(RUN.credits == 28000, "join: a flight of yours that never took off: 5000 back (ar)")
+    inbox[#inbox + 1] = "0|ak|9999|CIWS BUILT"
+    tick()
+    check(RUN.credits == 28000 and RUN.bought.Ciws == 1, "join: an answer to nothing asked: ignored")
 end
 print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 15), #logs do print("    log: " .. logs[i]) end end

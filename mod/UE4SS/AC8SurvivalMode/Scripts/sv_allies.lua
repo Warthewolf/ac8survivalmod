@@ -314,8 +314,9 @@ function ALLY.shipsAtSea()
     return out
 end
 
--- A purchase (the shop takes the zollars when it succeeds): true and its message, or false and why not.
-function ALLY.buy(role, unit, key, price)
+-- A purchase (the shop takes the zollars when it succeeds): true and its message, or false and why not. `buyer`: a
+-- co-op joiner's slot when the host buys it for them (sv_shop.lua shopBuildFor: they paid on their game), else nil
+function ALLY.buy(role, unit, key, price, buyer)
     local R, t, now = ALLY.state(), CFG.allies.text, D and D.now or 0
     if role == "ally_ship" then
         local sh = CFG.allies.ships[key]
@@ -324,15 +325,16 @@ function ALLY.buy(role, unit, key, price)
         spawningUnit = nil
         log(string.format("allies: %s (%s): %s", sh.name, unit, r > 0 and "at sea" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
         if r <= 0 then return false, "COULD NOT SEND IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
-        R.up[unit] = { kind = "ship", key = key, at = now, price = price }
-        hudCallout(string.format(t.ship, sh.name), t.ship_sub)
+        R.up[unit] = { kind = "ship", key = key, at = now, price = price, buyer = buyer }
+        if not buyer then hudCallout(string.format(t.ship, sh.name), t.ship_sub) end
         return true, sh.name .. " AT SEA"
     end
     -- an allied flight on MOONCHILD's units: MOONCHILD's F-22s, or the cheaper WINGMEN (key "wingmen")
     local wing = key == "wingmen"
     local name = wing and CFG.allies.wingmen.name or CFG.allies.aircraft.name
-    R.up[unit] = { kind = "air", ally = wing and "wingmen" or "moonchild", queued = true, at = now, price = price }
-    log(string.format("allies: %s (%s) bought; it takes off once you're airborne", name, unit))
+    R.up[unit] = { kind = "air", ally = wing and "wingmen" or "moonchild", queued = true, at = now, price = price, buyer = buyer }
+    log(string.format("allies: %s (%s) bought%s; it takes off once %s airborne", name, unit,
+        buyer and string.format(" for player %d", buyer + 1) or "", buyer and "they're" or "you're"))
     return true, name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
 end
 
@@ -460,11 +462,15 @@ end
 -- The allied aircraft's orders (CFG.allies.orders): R.order now, ALLY.nextOrder the next one (the STORE's row, Ctrl+F4)
 function ALLY.order() return ALLY.state().order or CFG.allies.orders.default end
 
-function ALLY.nextOrder(how)
+function ALLY.nextOrder(how, to)
     local R, list = ALLY.state(), CFG.allies.orders.list
     local cur, k = ALLY.order(), 1
     for i, o in ipairs(list) do if o == cur then k = i end end
     R.order = list[k % #list + 1]
+    for _, o in ipairs(list) do if o == to then R.order = to end end      -- (a set order: the host's, in co-op)
+    -- (co-op: the allies are the host's, one order for the room: a joiner's change goes to the host, which sends it
+    -- to everyone; sv_coop.lua "ao" / "ag")
+    if COOP and COOP.orderChanged then pcall(COOP.orderChanged, R.order, how) end
     R.orderGiven, R.coverAt, RUN.dirty = {}, 0, true             -- (every airborne flight gets it on the next check)
     R.checkAt = 0
     local t = CFG.allies.text
@@ -524,7 +530,13 @@ function ALLY.tick(now)
     local R, c, t = ALLY.state(), CFG.allies, CFG.allies.text
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
-        if s and s.queued and now >= R.nextTakeoff and not playerOnAirfield() then
+        local ready
+        if s and s.buyer then                        -- (a co-op joiner's: once they're airborne, or 90 s on)
+            ready = (COOP and COOP.airborne and COOP.airborne(s.buyer)) or now - (s.at or now) >= 90
+        else
+            ready = not playerOnAirfield()
+        end
+        if s and s.queued and now >= R.nextTakeoff and ready then
             -- its airframe (the unit's AI objects take the row's aircraft: hard rule 15), WINGMEN's F-16C or MOONCHILD's F-22
             local w = c.wingmen
             local set = SV_SetAircraft(u, s.ally == "wingmen" and w.row or w.moonchild_row)
@@ -542,10 +554,15 @@ function ALLY.tick(now)
             else
                 s.tries, R.nextTakeoff = (s.tries or 0) + 1, now + 5
                 log(string.format("allies: %s (%s) not spawned (%s)", name, u, SV_ERR[r] or tostring(r)))
-                if s.tries >= 3 then                 -- never came: the zollars back
+                if s.tries >= 3 then                 -- never came: the zollars back (to the joiner who paid, if it was one)
                     R.up[u] = nil
-                    RUN.credits, RUN.spent, RUN.dirty = RUN.credits + (s.price or 0), RUN.spent - (s.price or 0), true
-                    log(string.format("allies: %s (%s) couldn't take off; %d zollars back", name, u, s.price or 0))
+                    if s.buyer then
+                        if COOP and COOP.refund then COOP.refund(s.buyer, s.price or 0, name .. " COULD NOT TAKE OFF") end
+                    else
+                        RUN.credits, RUN.spent, RUN.dirty = RUN.credits + (s.price or 0), RUN.spent - (s.price or 0), true
+                    end
+                    log(string.format("allies: %s (%s) couldn't take off; %d zollars back%s", name, u, s.price or 0,
+                        s.buyer and string.format(" to player %d", s.buyer + 1) or ""))
                 end
             end
         end
