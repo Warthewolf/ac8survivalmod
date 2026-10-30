@@ -248,3 +248,50 @@ refused (T1e) and only counted.
 - Checks: flight_test.sh (the flight block from P kept and put in the Q record), coop_test.sh (4 and 12 players on
   protocol 4), the Lua suites. Packaged: build/release/AC8SurvivalMode_COOP2MP_0.73.4_Online_COOP_NoValka.zip (build
   hash 9d04afb2...b66523); the dev stage (test keys) installed as the user's own.
+
+## Online Mode's weapons and damage (research of 2026-10-30; [C] checked in the code by the main session, else the agent's)
+- Hit authority: one check, CanBeDamagedBy (0x147d2afb0, a jmp into the protected section's body 0x15c915570), on
+  every hit through the game object's TakeDamage 0x147d203e0 [C]. Its virtuals: +0xaa0 is a player plane, +0xab0 is AI,
+  +0xc40 / +0xc48 / +0xc50 the role byte +0xed8 == 3 / 2 / 1 [C]. Refused: a role-2 player attacker; a role-2 target hit
+  by AI (T1e's 40 damage); a role-1 target hit by a role-2 attacker; a role-2 target is hit only by a role-3 attacker [C].
+  Roles [C]: 1 by default and every local plane offline; online your plane 3, a remote player 2, AI 3 on the AI's host
+  and 2 elsewhere. So AI shots are decided on the target's own game and a player's on the shooter's.
+- After the check [C, 0x147d20971]: offline the damage is applied there (0x147d20aa0); online (gm+0x1fa) a game that
+  isn't the host with gm+0x739 only reports it (0x147d2b530 -> SendDamage 0x1474bcbb0).
+- A player's shot elsewhere [C]: the remote plane fire 0x147d71ea0(plane, &{ExplosiveWeaponFire*, ctrl}) needs the
+  plane's ULiveNetworkPlayerPlane (+0xed0) and weapon system (+0x16a8); latency = min((now - message +0x08) x 1e-7, 3)
+  s, 0 when the message's time is in the future; reads the game mode's network manager 0x147ee02e0(world) unchecked
+  (its +0x2e0 network-id map); skips an empty electronic-measure array (+0x30, 0x18 each); per WeaponData (+0x20, 0x50
+  each: +0x08 network id, +0x10 / +0x14 target type / id, +0x18 int3 target location, +0x24 weapon number, +0x25 spawn
+  slot, +0x26 ?, +0x27 seed, +0x28 lock-ons, +0x2c int3 start, +0x38 float3 rotation, +0x44 float3 velocity):
+  0x147f63c00, the slot (0x147f7c300), the seed into weapons +0x534 / +0x538 / +0x540, LaunchWeapon 0x147f7a880(weapons
+  +0x2e0, number, target (from the map: none offline), &projectile, &slot, 0, 0, lock-ons, ...), the projectile's +0x6b4
+  seed and +0x6e8 network id, then its vf+0x8a0(&start, &rotation, &velocity, &target location, latency); a NULL ctrl
+  is never touched. The shooter's side [C]: PlaneWeaponsFired 0x147d71060(plane, TArray<AActor*>*), called by the
+  weapon system after each launch (0x147f58d86, 0x147f59177), offline too; only its sender 0x147d71320 needs a network
+  object. The sender reads the projectile's +0x3a8 / +0x6d0 / +0x6d4 / +0x6b4 / +0x3c8 bytes, +0x6e8, +0x3f0 target,
+  root (+0x1a0) +0x220 location, GetVelocity (vf+0x358) [C].
+- Flares [C]: FireFlares 0x147f61d90(weapons), called by the PushFlare handler and by your own flare press
+  (0x147f58009). The gun [C]: the HoldingMachineGunButton handler sets weapons +0x311 (the remote trigger) from its
+  bTrigger; the weapon system's update fires on +0x30e (yours) or +0x311.
+- The agent's (not re-checked): an AI's shot elsewhere goes to the AI's copy's FCS module vf+0x358 (0x147c975c0);
+  Damage / DamageClient / Health / ExplosiveWeaponHit layouts and handlers (ApplyDamageResult 0x147d2b690, SetHealth
+  vf+0x918 0x147d1cb80); the dispatcher 0x1475034c0 and that network objects are registered only online; the clock.
+
+## T4a build (0.73.5-coop2mp.6, runtime 0.31.0; installed 2026-10-30 as the user's test install, not yet run)
+Solo, the Ctrl+F11 copy of your own plane's class (fed as T1c-T1e): each launch of yours is read at PlaneWeaponsFired
+(hooked) as the online sender reads it and replayed from the copy the next frame through the remote plane fire, its
+start moved by the copy's offset from you, LaunchWeapon (hooked) given your missile's target for it (the network-id map
+is empty offline); your flares (FireFlares, hooked) fired from the copy's weapons; your gun's trigger (+0x30e) put on
+the copy's remote trigger (+0x311) every frame. The network manager is checked before each replay. Another airframe
+replays nothing (its weapon numbers aren't yours: T4b gives each player's real plane their own loadout).
+- Look: the copy launching the same missile / special as you, from itself, flying at your target (homing?); its flares
+  with yours; its gun with yours. Their hits should do nothing (role 2).
+- Log (AC8SurvivalMode.log): `launch weapon: hooked`, `fire flares: hooked`, `player plane weapons fired: hooked`;
+  `coop: second player plane ...`, `coop2mp: plane <p> fed from <p> ...; your shots replayed: yes`; the first 6 shots
+  `coop2mp: T4: your shot (weapon N, slot S, lock-ons L, seed X, target <p>) replayed on the copy: launched, its missile
+  <p> (target <p>, ...), the network manager <p>`; each second with any `coop2mp: T4 this second: your launches N (M
+  missiles), queued, replayed A launched / B not, C dropped; your flares, the copy's; your gun trigger frames (+30e)
+  (+311), the copy's trigger set N times`. Problems: `no network manager here`, `NOT LAUNCHED`, `another airframe`.
+- The friends' zip of this build (T3 + T4a's hooks, which do nothing outside the solo test):
+  build/release/AC8SurvivalMode_COOP2MP_0.73.5_Online_COOP_NoValka.zip (hash 2f62ee32...0d4fff), in place of 0.73.4's.

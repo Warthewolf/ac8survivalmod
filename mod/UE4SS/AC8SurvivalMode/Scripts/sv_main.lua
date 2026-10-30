@@ -816,6 +816,9 @@ if type(RegisterKeyBind) == "function" and Key then
     -- again every 5 s while it isn't tracking it; the rest pick for themselves. The copy is held at PP_FLOOR health
     -- (never shot down in the test), given your attack limits, and the 5 s line counts the enemies' tracking targets.
     -- Ctrl+F12 (and the next Ctrl+F11) gives the ordered ones back their own order (you, PlayerOnlyNoLimit).
+    -- T4a (0.73.5, runtime 0.31.0): the copy of your own plane's class fires what you fire, Online Mode's way (the
+    -- runtime replays each launch of yours from the copy's own weapons, your flares too, your gun's trigger mirrored;
+    -- `coop2mp: T4 ...` lines); another airframe replays nothing (its weapons aren't yours).
     local ppTest = { addr = nil, step = 0, ordered = {} }
     local PP_FLOOR = 300
     local ORDER_NORMAL, PRIO_PLAYER_ONLY_NO_LIMIT, PRIO_TARGET_FIRST, FIRE_BITS = 0, 8, 9, 7
