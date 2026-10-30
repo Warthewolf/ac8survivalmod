@@ -424,7 +424,11 @@ SV_CoopFeed writes a pose, speed, State and stick into its network object's phys
 (2026-10-30): it flew beside you on all three airframes, control surfaces working, but no afterburner glow and no enemy
 attacks. T1d (0.73.2-coop2mp.3, runtime 0.29.2; not yet run): the glow from your plane's afterburner amount
 (plane+0x39d0, written before the surface update reads it) and half the enemies ordered onto the copy
-(EngagementOrderOverride TargetFirst; Survival's orders name "Player", which is your plane only).
+(EngagementOrderOverride TargetFirst; Survival's orders name "Player", which is your plane only). T1d in game: the
+glow and the ordered attacks worked (a missile exploded on the copy) but its health never moved, and Quit Mission
+crashed: N+0x170 is a TSharedPtr to the input message, and the feed wrote the stick over its controller. T1e
+(0.73.3-coop2mp.4, runtime 0.29.3; not yet run): the input through the pointer, and the hits on the copy logged at the
+player plane's damage (0x147d5a430).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

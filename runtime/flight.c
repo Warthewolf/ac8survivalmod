@@ -435,20 +435,24 @@ static int L_Respawn(void* lua)
 /* ---- COOP2MP: a remote player plane fed (runtime 0.29.1; tools/re/COOP2MP.md T1c) ------------------------------------
  * A role-2 (another player's) player plane flies itself: its FrameUpdate calls RemoteUpdate(plane, dt) (hooked here,
  * sigs.h kSigRemoteUpdate), which sets the plane's second flight state from its network object's (plane +
- * NetworkObject) FLiveMessageFlightEnginePhysics (N+0x98) and its input from N+0x170, blends the plane's own flight
+ * NetworkObject) FLiveMessageFlightEnginePhysics (*(N+0x98)) and its input from *(N+0x170), blends the plane's own flight
  * state toward it (a snap when over 1 km off) and runs its own engine and controls. With nothing received all of it is
  * zero, so its tick pulled it to the map's centre (COOP.md 6), and T1 kept its tick off: no animations, afterburner,
  * HUD box or enemy attacks. Here, just before RemoteUpdate runs for the fed plane, its message gets a pose and its
  * input: Direction (+0x20, 3 floats, a unit vector), Location (+0x2c, 3 int32, cm), Rotation (+0x38, 3 floats, deg:
  * pitch, yaw, roll), State (+0x44, int32: the source's plane+0x2b18 less bits 20 and 9), SpeedLocal (+0x48, float m/s);
- * the input +0x08..+0x1c: pitch, yaw, roll, throttle, brake, high-G (the source's last BuildFlightInput), +0x20 the
- * attribute byte (4; bit 0 zeroes the input). TriggerTimeMs (+0x08) and the queues (+0x58, +0x68, +0x78 counts) are
- * left alone. T1c's source: your own plane, with a formation offset (forward, right, up). */
+ * the input message's +0x08..+0x1c: pitch, yaw, roll, throttle, brake, high-G (the source's last BuildFlightInput),
+ * +0x20 the attribute byte (4; bit 0 zeroes the input). TriggerTimeMs (+0x08) and the queues (+0x58, +0x68, +0x78
+ * counts) are left alone. T1c's source: your own plane, with a formation offset (forward, right, up).
+ * N+0x170 is a TSharedPtr (the message's address, then its reference controller at +0x178), as RemoteUpdate reads it
+ * (0x147d6f1d1 `mov rdx, [rdi+0x170]`, then [rdx+0x8]..). Until runtime 0.29.3 the input went to N+0x178.. itself: over
+ * that controller, which the network object's destructor (0x146f0d3b0) releases, so Quit Mission crashed the game
+ * (EXCEPTION_ACCESS_VIOLATION writing 0xbf800008: a pitch of -1.0 as a pointer; the user's test of 2026-10-30). */
 typedef uint64_t (*RemoteUpdateFn)(uint8_t* plane, float dt);
 static uint8_t*       g_fRemoteUpdate;                  /* found by FindFunctions (sigs.h kSigRemoteUpdate) */
 static RemoteUpdateFn g_nextRemoteUpdate;
 #define FD_R        0x98       /* N's FLiveMessageFlightEnginePhysics pointer */
-#define FD_IN       0x170      /* N's FLiveMessageFlightEngineInput */
+#define FD_IN       0x170      /* N's FLiveMessageFlightEngineInput (a TSharedPtr: the message's address) */
 #define FD_SPEED    0x2318     /* the plane's flight state (+0x2268) speed, m/s (float) */
 #define FD_STATE    0x2b18     /* its State (int32) */
 static struct {
@@ -460,6 +464,8 @@ static struct {
     double lastLog, lastCallAt, srcPos[3], srcAt, spd, tgt[3];
     float abSrc, abFound;                               /* this second's most: the source's afterburner, what was left on it */
     uint32_t stateOr;                                   /* this second's source State bits (before the mask) */
+    uint32_t hits, hitsSaid;                            /* calls of the player plane's damage on it (T1e) */
+    double hitDmg, hitApplied;                          /* this second's damage asked, and taken off its health */
 } FD;
 static void* g_fdNetCls;
 
@@ -467,11 +473,11 @@ static uint8_t* FdMessage(uint8_t* plane, uint8_t** in)  /* the plane's physics 
 {
     if (FD.noOff <= 0 || !Readable(plane + FD.noOff, 8)) return NULL;
     uint8_t* n = *(uint8_t**)(plane + FD.noOff);
-    if (!n || !LiveObject(n) || (g_fdNetCls && *(void**)(n + 0x10) != g_fdNetCls) || !Readable(n + FD_IN, 0x28) ||
+    if (!n || !LiveObject(n) || (g_fdNetCls && *(void**)(n + 0x10) != g_fdNetCls) || !Readable(n + FD_IN, 8) ||
         !Readable(n + FD_R, 8)) return NULL;
-    uint8_t* r = *(uint8_t**)(n + FD_R);
-    if (!r || !Readable(r, 0x80)) return NULL;
-    *in = n + FD_IN;
+    uint8_t* r = *(uint8_t**)(n + FD_R), *i = *(uint8_t**)(n + FD_IN);
+    if (!r || !Readable(r, 0x80) || !i || !Readable(i, 0x28)) return NULL;
+    *in = i;
     return r;
 }
 
@@ -557,6 +563,33 @@ static uint64_t OnSurfacePP(uint8_t* comp, float dt)
     return g_nextSurfacePP(comp, dt);
 }
 
+/* T1e: the hits on the fed plane (T1d's test: enemies ordered onto it fired, a missile exploded on it, its health never
+ * moved). A player plane's damage 0x147d5a430 (sigs.h kSigPPDamage): float (plane, float damage, event (+0x18 its kind),
+ * instigator, a fifth), returning what it took; it ends in the game object's 0x147d203e0. Logged for the fed plane only
+ * (its first 10 one by one, then a second's sum): is it called, and does its health move. In co-op this is where a hit
+ * on another player's plane would be sent to their game (Online Mode applies a remote player's damage there). */
+typedef float (*PPDamageFn)(uint8_t* plane, float dmg, uint8_t* evt, uint8_t* inst, void* a5);
+static uint8_t*   g_fPPDamage;                          /* found by FindFunctions (sigs.h kSigPPDamage) */
+static PPDamageFn g_nextPPDamage;
+
+static float OnPPDamage(uint8_t* plane, float dmg, uint8_t* evt, uint8_t* inst, void* a5)
+{
+    if (!(FD.on && plane && plane == FD.plane.obj && CoRefGet(&FD.plane))) return g_nextPPDamage(plane, dmg, evt, inst, a5);
+    int32_t before = CoHealth(plane);
+    float took = g_nextPPDamage(plane, dmg, evt, inst, a5);
+    int32_t after = CoHealth(plane);
+    ++FD.hits;
+    if (dmg > 0 && dmg < 1e7f) FD.hitDmg += dmg;
+    FD.hitApplied += before - after;
+    if (FD.hitsSaid < 10) {
+        ++FD.hitsSaid;
+        int32_t kind = (evt && Readable(evt + 0x18, 1)) ? (int32_t)evt[0x18] : -1;
+        Log(L"coop2mp: hit on the fed plane %p: damage %d (x10), kind %d, from %p, health %d -> %d, the game returned %d (x10)",
+            plane, (int32_t)(dmg * 10), kind, inst, before, after, (int32_t)(took * 10));
+    }
+    return took;
+}
+
 /* once a second while feeding (from FlightInputHook): how far the plane is from where it was sent */
 static void FdLog(void)
 {
@@ -578,7 +611,10 @@ static void FdLog(void)
         L"yours up to %d, left on it up to %d, %u written; State bits yours %x, its %x%s", plane, FD.calls, FD.fed, FD.skipped, off,
         (int32_t)spd, (int32_t)(FD.abSrc * 1000), (int32_t)(FD.abFound * 1000), FD.abWrites, FD.stateOr, its,
         (now - FD.lastCallAt > 2.0) ? L"; ITS REMOTE UPDATE ISN'T RUNNING (tick off? not alive?)" : L"");
-    FD.abSrc = FD.abFound = 0; FD.abWrites = 0; FD.stateOr = 0;
+    if (FD.hits)
+        Log(L"coop2mp: fed plane %p: %u hits this second, %d damage asked, %d taken off its health (health now %d)", plane, FD.hits,
+            (int32_t)FD.hitDmg, (int32_t)FD.hitApplied, CoHealth(plane));
+    FD.abSrc = FD.abFound = 0; FD.abWrites = 0; FD.stateOr = 0; FD.hits = 0; FD.hitDmg = FD.hitApplied = 0;
 }
 
 /* SV_CoopFeed(plane, source, forward_m, right_m, up_m) -> 1: a remote player plane (role 2, its tick on) flown by its own
@@ -608,12 +644,12 @@ static int L_CoopFeed(void* lua)
     memset(&FD.plane, 0, sizeof(FD.plane)); memset(&FD.src, 0, sizeof(FD.src));
     CoRefSet(&FD.plane, plane); CoRefSet(&FD.src, src);
     FD.off[0] = f * 100; FD.off[1] = rt * 100; FD.off[2] = up * 100;
-    FD.calls = FD.fed = FD.skipped = FD.abWrites = 0;
+    FD.calls = FD.fed = FD.skipped = FD.abWrites = 0; FD.hits = FD.hitsSaid = 0; FD.hitDmg = FD.hitApplied = 0;
     FD.said = 0; FD.srcAt = 0; FD.spd = 0; FD.abSrc = FD.abFound = 0; FD.stateOr = 0;
     FD.lastLog = FD.lastCallAt = CoNow();
     FD.on = 1;
     Log(L"coop2mp: plane %p fed from %p (%d m ahead, %d m right, %d m up): its own update flies it (message %p, NetworkObject +%x); "
-        L"its afterburner from yours: %s", plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r, (uint32_t)FD.noOff,
-        g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)");
+        L"its afterburner from yours: %s; input message %p; hits logged: %s", plane, src, (int32_t)f, (int32_t)rt, (int32_t)up, r,
+        (uint32_t)FD.noOff, g_nextSurfacePP ? L"yes" : L"NO (surface update not hooked)", in, g_nextPPDamage ? L"yes" : L"NO (not hooked)");
     return Ret(lua, 1);
 }
