@@ -984,9 +984,13 @@ local function peerTick(slot)
     local code = r0 and r0.code ~= "" and r0.code or nil
     if P.realFailed and P.realFailed ~= code then P.realFailed = nil end        -- (another airframe: try again)
     local lo = r0 and r0.lo or ""
-    if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and not P.spawning then    -- (new weapons: T4b)
-        log(string.format("coop: player %d's loadout changed: their real plane here spawned again with it", slot + 1))
-        P.obj, P.addr, P.real = nil, nil, nil                                     -- (SV_CoopSpawnPP replaces the slot's)
+    -- (new weapons mid-level: their real plane here keeps the loadout it was spawned with. Replacing a live real plane
+    -- crashed the game: the user's co-op run of 2026-10-30, 21:37:39, an access violation reading the destroyed plane a
+    -- frame on, some game system still holding it; so it's never destroyed mid-level, and the next level's has them)
+    if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and P.loSaid ~= lo then
+        P.loSaid = lo
+        log(string.format("coop: player %d's loadout changed: their real plane here keeps the one it was spawned with "
+            .. "(the next level's has the new one)", slot + 1))
     end
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
         local o, why = spawnReal(slot, P, code, lo)

@@ -470,6 +470,15 @@ the remote fire for missiles, FwLaunchDirect for the laser and ESM / ECM, a bull
 keep m / s / e. Each player's loadout (SV_CoopLoadout, "a,b/c/x,y") rides in hi / pi (a 7th field) and their real
 plane is spawned with it (SV_CoopSpawnPP's 8th argument), again when it changes; so their weapon numbers mean the
 same weapons here. tools/checks/coop_fire_test.sh covers the Lua side; zip 0.73.11.
+T4b in game (2026-10-30, the user and a friend, 2 players): it worked (the ADFX-02's loadout given, its laser, missiles
+locked and not, and flares from its real plane). Two problems: (1) the friend changed specials at the airfield, their
+loadout changed, and the user's game replaced their live real plane: it crashed a frame on (access violation reading
+the destroyed plane +8, in game code 0x147443726 that checks a held object's flags; the crash report's call stack runs
+through 0x1474703c0 / 0x147434e50 / vfunc +0x60). Never destroy a live real plane mid-level. (2) The spectator camera
+on a real plane showed its cockpit: a player plane carries cameras of its own and the view takes the first active one.
+0.73.12-coop2mp.13 (runtime 0.32.0; not yet run in game): a changed loadout is kept for the next level's plane (logged,
+no respawn); the watched plane's own cameras are switched off while you watch it and back on after (sv_down.lua hush,
+logged once a plane; tools/checks/coop_revive_test.sh); zip 0.73.12.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
