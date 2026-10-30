@@ -557,6 +557,12 @@ do
     tick(1.5)
     check(peerSpawns() == 1 and since(from, "player 2's plane as f16c_common %(no hello from them in 30 s%): spawned") == 1,
           "none in 30 s: the default, said so (" .. tostring(line("coop: player 2's plane as", from)) .. ")")
+    -- a joiner of another build turned away by the runtime (0.32.6, "sys|refused"): said so here
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|sys|refused|Rapt0r|0.73.26-coop2mp.27"
+    tick(0.25)
+    check(line("coop: Rapt0r tried to join with Survival 0.73.26-coop2mp.27 (yours " .. VERSION .. "): refused", from) ~= nil,
+          "the host: a joiner of another build refused, logged (" .. tostring(line("coop: Rapt0r", from)) .. ")")
     room(false)
 end
 
@@ -611,6 +617,12 @@ do
     inbox[#inbox + 1] = "0|sys|up"
     tick(0.25)
     check(#his() == 1, "the link back: hello again (the host may have dropped this game meanwhile)")
+    -- the host on another build (runtime 0.32.6, "sys|badver|<the host's>"): said so, nothing linked
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|sys|badver|0.73.27-coop2mp.28"
+    tick(0.25)
+    check(line("coop: the host runs Survival 0.73.27-coop2mp.28, this game " .. VERSION .. ": another build doesn't link", from) ~= nil,
+          "a joiner: the host on another build, said so (" .. tostring(line("coop: the host runs", from)) .. ")")
     pawn.full = "BP_PlayerPlane_PP1000_f16c_C_1"
     room(false)
 end

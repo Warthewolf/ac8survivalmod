@@ -281,7 +281,7 @@ SURVIVAL CO-OP: HOST / JOIN on the main menu (OnMainDecide, SV_MenuChoice); name
 online-style pause; the host's Q batches for up to 24 players; more enemies per player (COOP.more); the host's settings
 for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); the main menu's settings rows (SV_Set_*,
 SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
-tools/coop_edition.py COOP_TAG for every build friends get: games with different tags still link, with a CO-OP VERSION MISMATCH callout: only a different co-op protocol, coop.c CO_PROTO, refuses. The co-op run of 2026-10-31: two players on 0.73.26 joined a 0.73.27 host).
+tools/coop_edition.py COOP_TAG for every build friends get: from runtime 0.32.6 games with different builds refuse to link (coop.c CoSameVer, both ways); before it they linked with a CO-OP VERSION MISMATCH callout, only a different CO_PROTO refusing: two players on 0.73.26 joined a 0.73.27 host, 2026-10-31).
 Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
 state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
 sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
@@ -557,7 +557,24 @@ weapons`, and the minute line's `not a weapon of their plane here`). The cause (
 (Twelve) ran SPWeaponCustomizer 2.3 (UseHighestCapacity=1, the FA-36 given special slots 19, 21 and 27) and AC8WeaponSwap
 1.1.0 (a native library, ac8weaponlib_011.dll); their first shot, a SAAM (BP_plwp_saam_a0_C), went as weapon 2, which
 the stock FA-36 spawned from their loadout (specials 23, 21) hasn't. Their other mods (AC8UnitHealth, AC8WeaponValues,
-HangarModelFix, SkipIntro) only display or skip menus. Players on other mods can
+HangarModelFix, SkipIntro) only display or skip menus.
+0.73.27 in game (2026-10-31, 8 players): at 10:01 the host and at least five joiners went down within 30 s. The host's,
+dukka's and player 5's crash reports are one stack, all game code: an AI unit's per-frame update (0x147cb2850, slot 279
+of its class's vtable 0x14c51df10; the class's constructor 0x147cb2430 makes a MainMesh beside the fire control and the
+damage state, over a parent shared by 36 classes, so not an AI plane) moving an effect component it holds at +0x2690
+(spawned on a sea-plane test, 0x147cb3a23) and checking only its garbage flag; the component had been freed, and the
+call through its vtable (0x1442c3e9b) faulted. Which unit isn't known (two AEGIS ships had just been bought; MISHKA had
+left one part alive, `1 NOT (still up)`). Shazzy's report (09:43) was the replay again: 0x147f7c300 writes the spawn slot
+through the entry's list pointer (+0x78) even when its count is 0, and 0.32.5's FwWeaponOk only checked the list when it
+had entries. Runtime 0.32.6 (0.73.28-coop2mp.29; built and installed 2026-10-31, not yet run in game; zip 0.73.28, hash
+9b2b218f...abe00e73; replaces 0.73.27): FwWeaponOk checks the list writable and the slot array (+0x58, count +0x60)
+whatever the counts; flight.c OnUnitFxFrame hooks that vtable slot (sigs.h kSigUnitFxFrame) and lets go of a +0x2690
+component the moment it's marked destroyed (`guard: an AI unit's effect ... let go before it's freed`); and another
+build is refused (the user: "add the refuse mismatched builds"): the host's hello answers a joiner of another version
+with yourSlot 0xFD and no link (`coop: refused <name>: their Survival is <v>`, Lua "sys|refused" -> REFUSED <NAME>
+callout), a joiner on another build than the host's links to nothing and says so ("sys|badver" -> CO-OP: THE HOST HAS
+<v>), both ways (an older host doesn't refuse, the newer joiner does). coop_test.sh's 4-player run has a joiner of
+another build (refused, never a slot); coop_landing_test covers the Lua side. Players on other mods can
 make the games disagree elsewhere too: a session should run the same mod set.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)

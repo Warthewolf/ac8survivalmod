@@ -25,12 +25,16 @@ for joiners in 3 11; do
         (./coop_test.exe join > join$j.txt 2>&1; echo $? > join$j.rc) &
         j=$((j + 1))
     done
+    # (and in the 4-player run, one of another build: refused, told the host's, never a slot; the others unaffected)
+    if [ $joiners = 3 ]; then rm -f badver.rc badver.txt; (COOP_TEST_VER=other ./coop_test.exe join > badver.txt 2>&1; echo $? > badver.rc) & fi
     sleep 19
     grep -vh "\[log\]" host.txt join*.txt | grep -E "player|reliable|enemy|OUT OF|full|samerole|guard" | grep -vE "mean 0\.|of 40 messages" || true
+    if [ $joiners = 3 ]; then grep -h "another build\|refused" badver.txt host.txt | head -3 || true; fi
     fail=0
     [ -f host.rc ] && [ "$(cat host.rc)" = 0 ] || fail=1
     j=1
     while [ $j -le $joiners ]; do [ -f join$j.rc ] && [ "$(cat join$j.rc)" = 0 ] || fail=1; j=$((j + 1)); done
+    if [ $joiners = 3 ]; then [ -f badver.rc ] && [ "$(cat badver.rc)" = 0 ] || fail=1; fi
     if [ "$fail" = 0 ]; then echo "coop test ($((joiners + 1)) players): passed"
     else echo "coop test ($((joiners + 1)) players): FAILED (see build/checks/*.txt)"; result=1; fi
 done

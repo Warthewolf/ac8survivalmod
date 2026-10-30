@@ -402,7 +402,8 @@ static struct {
     CoRef    me; uint32_t meFlags;
     CoEnt    ents[CO_MAX_ENTS];
     uint32_t badPk;
-    int      warnedTele, fullSaid;
+    int      warnedTele, fullSaid, badVerSaid;
+    struct { uint64_t id; double at; } refused[8];   /* (the host: joiners turned away for another build, logged once a minute) */
 } CO;
 
 /* reflected offsets, resolved once from the first object that has them */
@@ -598,6 +599,7 @@ static uint32_t CoMs(double t) { return (uint32_t)(uint64_t)(t * 1000.0); }
 
 #define CO_SLOT_NONE 0xFF                   /* hello's yourSlot: not given yet */
 #define CO_SLOT_FULL 0xFE                   /* hello's yourSlot: the host has no room */
+#define CO_SLOT_BADVER 0xFD                 /* ... the host runs another build of Survival (runtime 0.32.6) */
 
 /* hello: role, nonce, time, echo of the link's last hello + its age, yourSlot, max players, version, name */
 static void CoHelloTo(uint64_t steamId, const CoSockAddr* udp, CoLink* L, uint8_t yourSlot, double now)
@@ -849,6 +851,42 @@ static void CoLinkOpen(int k, uint64_t steamId, const CoSockAddr* udp, int role,
     CoSys(k, CO.role == CO_ROLE_HOST ? "sys|joined" : "sys|paired");
 }
 
+/* The joiner's build is this game's (their mod version, as each game's SV_CoopOpen gave it: Survival's VERSION with the
+ * co-op tag). Another build is turned away (the user, 2026-10-31: "add the refuse mismatched builds"; two players on
+ * 0.73.26 had joined a 0.73.27 host, whose crash fix their games lacked). A host with no version given takes anyone. */
+static int CoSameVer(const char* ver)
+{
+    if (!CO.myVer[0]) return 1;
+    for (int i = 0; i < 32; ++i) {
+        if (ver[i] != CO.myVer[i]) return 0;
+        if (!ver[i]) return 1;
+    }
+    return 1;
+}
+/* (the host) a joiner of another build turned away: logged, and told to Lua ("sys|refused|<name>|<their build>"), once a
+ * minute per player (their hellos come every second) */
+static void CoRefusedSay(uint64_t steamId, const CoSockAddr* udp, const char* name, const char* ver, double now)
+{
+    uint64_t id = steamId ? steamId : (udp ? ((uint64_t)udp->addr << 16 | udp->port) : 0);
+    int slot = -1, old = 0;
+    for (int i = 0; i < 8; ++i) {
+        if (CO.refused[i].id == id) { slot = i; break; }
+        if (CO.refused[i].at < CO.refused[old].at) old = i;
+    }
+    if (slot >= 0 && now - CO.refused[slot].at < 60.0) return;
+    if (slot < 0) slot = old;
+    CO.refused[slot].id = id; CO.refused[slot].at = now;
+    wchar_t wn[64], wv[33], wm[33];
+    CoWide(name, wn, 64); CoWide(ver, wv, 33); CoWide(CO.myVer, wm, 33);
+    Log(L"coop: refused %s: their Survival is %s, this game's %s (another build doesn't link)", wn, wv, wm);
+    char m[128] = "sys|refused|", *d = m + 12;
+    for (const char* c = name; *c && d < m + 12 + 40; ++c) *d++ = (*c == '|' || (unsigned char)*c < 0x20) ? '?' : *c;
+    *d++ = '|';
+    for (const char* c = ver; *c && d < m + sizeof(m) - 1; ++c) *d++ = (*c == '|' || (unsigned char)*c < 0x20) ? '?' : *c;
+    *d = 0;
+    CoSys(0, m);
+}
+
 static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSockAddr* udp, double now)
 {
     if (n < 4 + 1 + 16 + 2 + 32 + 64) { ++CO.badPk; return; }
@@ -876,6 +914,11 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
         return;
     }
     if (CO.role == CO_ROLE_HOST) {                            /* a joiner */
+        if (k < 0 && !CoSameVer(ver)) {                       /* another build: turned away, told the host's */
+            CoHelloTo(steamId, udp, NULL, CO_SLOT_BADVER, now);
+            CoRefusedSay(steamId, udp, name, ver, now);
+            return;
+        }
         if (k < 0) {
             for (int s = 1; s < CO.maxPlayers && k < 0; ++s) if (!CO.links[s].used) k = s;
             if (k < 0) {                                       /* no room: told so */
@@ -893,6 +936,19 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
     } else {                                                  /* the host */
         if (yourSlot == CO_SLOT_FULL) {
             if (!CO.fullSaid) { CO.fullSaid = 1; Log(L"coop: the host's game is full (%d players)", (int32_t)p[18]); CoSys(0, "sys|full"); }
+            return;
+        }
+        if (yourSlot == CO_SLOT_BADVER || (k < 0 && !CoSameVer(ver))) {   /* (an older host doesn't refuse: this game does) */
+            if (!CO.badVerSaid) {
+                CO.badVerSaid = 1;
+                char m[64] = "sys|badver|";
+                CoCopy(m + 11, sizeof(m) - 11, ver, CoLen(ver));
+                for (char* c = m + 11; *c; ++c) if (*c == '|' || (unsigned char)*c < 0x20) *c = '?';
+                wchar_t wv[33], wm[33];
+                CoWide(ver, wv, 33); CoWide(CO.myVer, wm, 33);
+                Log(L"coop: the host runs Survival %s and this game %s: it won't link with another build (update to the host's)", wv, wm);
+                CoSys(0, m);
+            }
             return;
         }
         if (k < 0) {

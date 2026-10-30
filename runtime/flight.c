@@ -766,12 +766,16 @@ static int FwWeaponOk(uint8_t* w, uint8_t weapon, int32_t* count)
     if (!tab || num <= 0 || num > 64 || max < num || (int32_t)weapon >= num) return 0;
     uint8_t* e = tab + (size_t)weapon * 0xa0;
     if (!Readable(e, 0xa0)) return 0;
-    int32_t slots = *(int32_t*)(e + 0x80);
-    if (slots < 0 || slots > 256) return 0;
-    if (slots > 0) {
-        uint8_t* list = *(uint8_t**)(e + 0x78);
-        if (!list || !Readable(list, (size_t)slots * 4)) return 0;
-    }
+    /* (what 0x147f7c300 does with the entry, whatever the counts: its spawn slot clamped to the slot array's count
+     * (+0x60; 0 past it), the slot list (+0x78, its count +0x80) searched, and when none matches, or the list is
+     * empty, the slot WRITTEN to the list's first int and the slot array (+0x58, 0x80 bytes a slot) read at it. The
+     * co-op run of 2026-10-31: an entry with an empty list and a garbage list pointer, 0x0000003700000034, crashed a
+     * joiner's game at 0x147f7c35e on that write; runtime 0.32.5 checked the list only when it had entries) */
+    int32_t slots = *(int32_t*)(e + 0x80), nSlotArr = *(int32_t*)(e + 0x60);
+    if (slots < 0 || slots > 256 || nSlotArr <= 0 || nSlotArr > 256) return 0;
+    uint8_t* list = *(uint8_t**)(e + 0x78), *slotArr = *(uint8_t**)(e + 0x58);
+    if (!list || !Writable(list, (size_t)(slots > 0 ? slots : 1) * 4)) return 0;
+    if (!slotArr || !Readable(slotArr, (size_t)nSlotArr * 0x80)) return 0;
     return 1;
 }
 
@@ -1454,4 +1458,58 @@ static int L_CoopPPFx(void* lua)
         return Ret(lua, g < 0 ? g : 1);
     }
     return Ret(lua, -1);
+}
+
+/* ---- a game bug guarded: an AI unit's effect freed under it (runtime 0.32.6) -------------------------------------
+ * Some AI units' per-frame update (0x147cb2850, slot 279 of their class's vtable: sigs.h kSigUnitFxFrame) moves an
+ * effect component they spawned (+0x2690) to the unit every frame, checking only its garbage flag. Once that component
+ * is destroyed (an effect that ends destroys itself) its memory is freed at the next garbage collection, the flag goes
+ * with it, and the next move calls through a freed vtable: the co-op run of 2026-10-31, the host and two joiners
+ * crashed there (0x1442c3e9b) within the same minute. The guard lets go of the component the moment it's marked
+ * destroyed, before it can be freed; the game skips the move with nothing held. A live component is never touched. */
+#define UFX_OFF             0x2690
+#define RF_MIRRORED_GARBAGE 0x40000000u
+typedef void (*UnitFxFrameFn)(uint8_t* self, float dt);
+static uint8_t*      g_fUnitFxFrame;                       /* found by FindFunctions */
+static UnitFxFrameFn g_nextUnitFxFrame;
+static uint32_t      g_ufxLetGo;
+
+static void OnUnitFxFrame(uint8_t* self, float dt)
+{
+    uint8_t** held = self ? (uint8_t**)(self + UFX_OFF) : NULL;
+    if (held && Readable(held, 8) && *held) {
+        uint8_t* c = *held;
+        if (!Readable(c, 0x10) || (*(uint32_t*)(c + 8) & RF_MIRRORED_GARBAGE)) {
+            *held = NULL;
+            if (g_ufxLetGo++ < 8)
+                Log(L"guard: an AI unit's effect %p (unit %p, +0x2690) was destroyed: let go before it's freed (%u so far)", c, self,
+                    g_ufxLetGo);
+        }
+    }
+    g_nextUnitFxFrame(self, dt);
+}
+
+typedef struct { uint64_t want; void** slots[4]; int n; } UfxScan;
+static void UfxScanRegion(uint8_t* p, size_t n, void* vctx)
+{
+    UfxScan* c = (UfxScan*)vctx;
+    uint8_t* a = (uint8_t*)(((uintptr_t)p + 7) & ~(uintptr_t)7);
+    for (; a + 8 <= p + n && c->n < 4; a += 8)
+        if (*(uint64_t*)a == c->want) c->slots[c->n++] = (void**)a;
+}
+
+/* every vtable slot holding the update (data sections only), each pointed at the guard */
+static void UfxInstall(void)
+{
+    if (!g_fUnitFxFrame) { Log(L"guard: the AI unit effect update wasn't found (another game build?): not guarded"); return; }
+    UfxScan c = { (uint64_t)(uintptr_t)g_fUnitFxFrame, { 0 }, 0 };
+    for (int s = 0; s < g_nsec && c.n < 4; ++s)
+        if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, UfxScanRegion, &c);
+    if (!c.n) { Log(L"guard: the AI unit effect update %p is in no vtable: not guarded", g_fUnitFxFrame); return; }
+    /* (the next is the update itself, set before any slot points at the guard: the slots were found holding it) */
+    g_nextUnitFxFrame = (UnitFxFrameFn)g_fUnitFxFrame;
+    for (int i = 0; i < c.n; ++i) {
+        void* prev = NULL;
+        HookSlot(c.slots[i], (void*)OnUnitFxFrame, &prev, L"guard: AI unit effect update");
+    }
 }
