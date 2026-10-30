@@ -358,6 +358,10 @@ held at a 0.1 HP floor, a shot-down player is DOWN (hidden, flown round the airf
 player's plane through a camera added to it, O the next), any other player at their airfield buys them back from the
 STORE's AIRFIELD page (REVIVE <NAME>, 5000 x 1.5 a revive, checked by the host: dw / rv / rb / rx / ro / rc), everyone
 down ends the run (RE_SV_RunOver, Mission 15's MissionFailed); [coop.revive]; tools/checks/coop_revive_test.sh.
+After 0.72.3 (the user's co-op run of 2026-10-30, not yet a build): the revives' floor never held, because the game's
+SetMinHealth keeps whole health points only (0.1 -> 0; tools/re/KILLS_HEALTH_DEATH.md 1): the host was shot down from
+40 HP in round 8 and the run restarted at round 1. INS.tick now writes the MinHealth field. The shuttle's whole pad
+is taken off after liftoff (its objects recorded as spawned; the 1.5 km sweep missed the control centre).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
