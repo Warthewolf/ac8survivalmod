@@ -637,6 +637,34 @@ tick()
 check(M.roster[1] and M.roster[1].lo == "", "a bad loadout left out")
 loadout = ""
 
+---------------------------------------------------------------------------------------------------- the host's hunt on real planes
+print("the hunt onto real planes: never a player at their airfield or down")
+fresh("host", 0)
+local orders = {}
+local function enemy(id, addr)
+    local e = { full = "BP_OP1022_f16c_CP_C" .. LEVEL .. "E" .. id, addr = addr }
+    function e:EngagementOrderOverride(o, target, prio) orders[#orders + 1] = string.format("%d>%d", self.addr, target.addr) end
+    function e:GetAddress() return self.addr end
+    M.byId[id] = { obj = e, unit = "ERA_Unit_01_Dep_Air0", ord = id, addr = addr }
+end
+enemy(41, 4101); enemy(42, 4102)
+M.units["ERA_Unit_01_Dep_Air0"] = { n = 2, gen = 1, planes = { { id = 41 }, { id = 42 } } }
+local R1, R2 = plane(2001, "Real1"), plane(2002, "Real2")
+M.peers[1] = { real = true, shown = true, obj = R1, addr = 2001, onAirfield = true }
+M.peers[2] = { real = true, shown = true, obj = R2, addr = 2002 }
+M.huntOn = {}
+check(not COOP.realTarget(1) and COOP.realTarget(2) == R2, "a player at their airfield isn't a target; one flying is")
+local ok, s, n = COOP.huntReal("ERA_Unit_01_Dep_Air0", 1)
+check(ok and s == 2 and n == 2 and table.concat(orders, " ") == "4101>2002 4102>2002",
+      "a flight sent onto the landed player goes after the one flying instead (" .. table.concat(orders, " ") .. ")")
+M.peers[2].down = true
+orders = {}
+ok = COOP.huntReal("ERA_Unit_01_Dep_Air0")
+check(not ok and #orders == 0, "nobody flying (one landed, one down): no real plane to go after")
+M.peers[1].onAirfield, M.peers[2].down = nil, nil
+check(COOP.realTarget(1) == R1, "back in the air: a target again")
+M.peers[1], M.peers[2], M.huntOn = nil, nil, nil
+
 ---------------------------------------------------------------------------------------------------- sync off
 print("sync off")
 fresh("host", 0)
