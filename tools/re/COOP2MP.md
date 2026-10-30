@@ -360,3 +360,21 @@ cancel, landing, 0) or gear up 0x147d59730(plane, carrier) (a jmp stub into the 
   from your State, co-op's real planes from their flight block's, SV_CoopPPFx kind 2 the same. Log: `coop2mp: T4: the
   copy's gear down (your State 40a00): 1`.
 - The friends' zip: build/release/AC8SurvivalMode_COOP2MP_0.73.8_Online_COOP_NoValka.zip (hash c81ef480...1477cb).
+
+### T4a.4 results (the user's solo test, 2026-10-30 20:23-20:24)
+- The ECM / ESM launched from the copy's weapons (`launched 1`); the user couldn't tell whether it showed.
+- The gear still didn't come down: FlGear lowered the copy's engine gear every frame (logged 8 times in one second), so
+  something raised it again each frame.
+
+## The remote plane's second flight engine (research, 2026-10-30, checked)
+RemoteUpdate loads the physics message into a SECOND flight engine at plane+0x3c60 (0x1474d8c00(network object,
+plane+0x3c60): `lea rdx, [rbx+0x3c60]` at RemoteUpdate+0xa2), gives it the input (SetInput 0x144d32580) and simulates it
+(0x144d326e0) every frame, then blends the plane's own engine (+0x2268) toward it and copies its State over the plane's
+(+0x2b18 = +0x4510). The second engine's simulation makes State bits 9 / 11 from its own gear (up), so the gear sent
+never reached RemoteUpdate's check, which then raised the plane's own engine's gear lowered by hand.
+
+## T4a.5 build (0.73.9-coop2mp.10, runtime 0.31.5; built 2026-10-30, installed when the game is closed)
+FlGear moves BOTH engines' gear (the second first) after RemoteUpdate, from the gear sent: then the second engine's
+simulation keeps bit 9 and RemoteUpdate's own check agrees. Log: `coop2mp: T4: the copy's gear down (your State
+40a00): 1` once per change (not every frame). Zip: build/release/AC8SurvivalMode_COOP2MP_0.73.9_Online_COOP_NoValka.zip
+(hash a053fcad...335881).

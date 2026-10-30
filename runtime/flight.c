@@ -895,29 +895,41 @@ static void FwFlush(uint8_t* copy)
     }
 }
 
-/* T4a.4: the gear. RemoteUpdate's own check (0x147d6f982) lowers its flight state's gear (0x144d33fb0(state, 1)) when
- * the plane's State has bit 9 and the gear flag (+0x229c bit 0x10) isn't set, and raises it (0x144d33ea0(state, 0, 0,
- * 0)) the other way; but it reads the State the plane's own update made from its real gear (bits 9 and 11 cleared while
- * the gear is up: T4a.3's test, `yours 40A00, its 40000`), so the gear sent never came down. Done here after
- * RemoteUpdate from the gear sent (after: before it, its own check would put the gear back from the stale State); once
- * down, the plane's State has bit 9 itself and its check agrees. The calls, the flag and the state's offset are read
- * from RemoteUpdate's code. */
+/* T4a.4 / T4a.5: the gear. A remote plane runs two flight engines: its own (+0x2268) and a second one (+0x3c60) that
+ * RemoteUpdate loads from the physics message (0x1474d8c00(network object, second)), gives the input (SetInput
+ * 0x144d32580) and simulates (0x144d326e0) every frame, then copies its State over the plane's (+0x2b18 = +0x4510).
+ * RemoteUpdate's gear check (0x147d6f982) lowers the plane's own engine's gear (0x144d33fb0(engine, 1)) when that State
+ * has bit 9 and the gear flag (engine +0x34 bit 0x10, +0x229c) isn't set, and raises it (0x144d33ea0(engine, 0, 0, 0))
+ * the other way. But the second engine's simulation makes bits 9 and 11 from its own gear, still up: the gear sent never
+ * survived it (T4a.3: `yours 40A00, its 40000`), and the plane's gear lowered by hand was raised again the next frame
+ * (T4a.4: lowered every frame, never down). So both engines' gear is moved here, after RemoteUpdate, the second's first:
+ * then its simulation keeps bit 9 and RemoteUpdate's own check agrees. The calls, the flag and both engines' offsets
+ * are read from RemoteUpdate's code. */
 typedef void (*MsGearUpFn)(uint8_t* ms, uint64_t a, uint64_t b, uint64_t c);
 typedef void (*MsGearDownFn)(uint8_t* ms, uint64_t down);
-static int FlGear(uint8_t* plane, int down)              /* 1 moved, 0 already so, < 0 not found */
+static int FlGear(uint8_t* plane, int down)              /* 1 moved (either engine), 0 already so, < 0 not found */
 {
     uint8_t* f = g_fRemoteUpdate;
     if (!f) return -2;
-    uint8_t* chk = f + 0x8c2, *lu = f + 0x8fb, *cu = f + 0x907, *ld = f + 0x912, *cd = f + 0x91b;
-    if (chk[0] != 0x0F || chk[1] != 0xB6 || chk[2] != 0x93 || lu[0] != 0x48 || lu[1] != 0x8D || lu[2] != 0x8B ||
-        ld[0] != 0x48 || ld[1] != 0x8D || ld[2] != 0x8B || cu[0] != 0xE8 || cd[0] != 0xE8) return -2;
-    int32_t flag = *(int32_t*)(chk + 3), ms = *(int32_t*)(lu + 3);
-    if (flag <= 0 || flag >= 0x8000 || ms <= 0 || ms >= 0x8000 || ms != *(int32_t*)(ld + 3) || !Readable(plane + flag, 1)) return -2;
-    int have = (plane[flag] & 0x10) != 0;
-    if (!!down == have) return 0;
-    if (down) ((MsGearDownFn)(cd + 5 + *(int32_t*)(cd + 1)))(plane + ms, 1);
-    else ((MsGearUpFn)(cu + 5 + *(int32_t*)(cu + 1)))(plane + ms, 0, 0, 0);
-    return 1;
+    uint8_t* l2 = f + 0xa2, *chk = f + 0x8c2, *lu = f + 0x8fb, *cu = f + 0x907, *ld = f + 0x912, *cd = f + 0x91b;
+    if (l2[0] != 0x48 || l2[1] != 0x8D || l2[2] != 0x93 || chk[0] != 0x0F || chk[1] != 0xB6 || chk[2] != 0x93 ||
+        lu[0] != 0x48 || lu[1] != 0x8D || lu[2] != 0x8B || ld[0] != 0x48 || ld[1] != 0x8D || ld[2] != 0x8B ||
+        cu[0] != 0xE8 || cd[0] != 0xE8) return -2;
+    int32_t flag = *(int32_t*)(chk + 3), ms = *(int32_t*)(lu + 3), ms2 = *(int32_t*)(l2 + 3), rel = flag - ms;
+    if (ms <= 0 || ms >= 0x8000 || ms2 <= 0 || ms2 >= 0x8000 || rel <= 0 || rel >= 0x1000 || ms != *(int32_t*)(ld + 3)) return -2;
+    MsGearDownFn gd = (MsGearDownFn)(cd + 5 + *(int32_t*)(cd + 1));
+    MsGearUpFn gu = (MsGearUpFn)(cu + 5 + *(int32_t*)(cu + 1));
+    int32_t eng[2] = { ms2, ms };
+    int moved = 0;
+    for (int k = 0; k < 2; ++k) {
+        uint8_t* e = plane + eng[k];
+        if (!Readable(e + rel, 1)) continue;
+        int have = (e[rel] & 0x10) != 0;
+        if (!!down == have) continue;
+        if (down) gd(e, 1); else gu(e, 0, 0, 0);
+        moved = 1;
+    }
+    return moved;
 }
 static int32_t g_fgSaid;
 
