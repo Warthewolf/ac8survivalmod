@@ -475,6 +475,13 @@ end
 -- piece, all taken off debris_timeout_s after the last change (debris on the ground counts as destroyed). The round
 -- can't end while a rocket or its debris is up.
 local ROCKETS, DEBRIS = "SV_Unit_SpRockets", { "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }
+-- The island's enemies (tools/survival_events.py sp_island: their spots past tools/spaceport_spots.py's building check;
+-- user, 2026-10-31: "add more enemies around the island"): air defences (Mission 6's EXSAM site, flak guns, Gecko SAMs,
+-- Shilka AA guns) and armour (T-90s, BTR-90s), with the garrison; island.ad_pay / armour_pay each, the round held until
+-- they're down (each fights as it appears: its engagement order, SV_SpIslUp<key>).
+local ISLAND = { { "SV_Unit_SpIslExsam", "ad" }, { "SV_Unit_SpIslFlak", "ad" }, { "SV_Unit_SpIslSam", "ad" },
+                 { "SV_Unit_SpIslAA", "ad" }, { "SV_Unit_SpIslTankA", "armour" }, { "SV_Unit_SpIslTankB", "armour" },
+                 { "SV_Unit_SpIslApc", "armour" } }
 local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 
 -- The rockets and their debris on the pads (from retakeSpawn); s.rk the round's rockets, or nothing when they're off
@@ -621,10 +628,21 @@ function SPORT.retakeSpawn(now)
         log(string.format("special: the spaceport's garrison %s: %s", u, r == -100 and "still up from before" or said(r)))
     end
     local nr = rocketsSpawn(now, s)
-    if n == 0 and SPORT.shipsUp(s) == 0 and nr == 0 then log("special: no garrison, ships or rockets for the retake; a normal round"); return false end
+    local ni, isl = 0, {}
+    local ic = c.retake and c.retake.island or {}
+    s.island = {}
+    if ic.enabled ~= false then
+        for _, it in ipairs(ISLAND) do
+            local r = (aliveOf(it[1]) or 1) <= 0 and spawn(it[1]) or -100
+            if r > 0 then s.island[it[1]] = { alive = r, kind = it[2] }; ni = ni + r end
+            isl[#isl + 1] = it[1]:sub(#"SV_Unit_SpIsl" + 1) .. " " .. (r == -100 and "still up from before" or said(r))
+        end
+        log("special: the island's defences and armour: " .. table.concat(isl, ", "))
+    end
+    if n == 0 and ni == 0 and SPORT.shipsUp(s) == 0 and nr == 0 then log("special: no garrison, island enemies, ships or rockets for the retake; a normal round"); return false end
     hudCallout(t.sp_retake_go, t.sp_retake_go_sub)
-    log(string.format("special: round %d, the Spaceport Retake: %d garrison vehicles, %d ships from the assault%s", D.round, n,
-        SPORT.shipsUp(s), rs.forced and " (forced)" or ""))
+    log(string.format("special: round %d, the Spaceport Retake: %d garrison vehicles, %d island enemies, %d ships from the assault%s",
+        D.round, n, ni, SPORT.shipsUp(s), rs.forced and " (forced)" or ""))
     return true
 end
 
@@ -646,6 +664,19 @@ function SPORT.retakeTick(now, s)
     end
     local okD, errD = pcall(deck, now, s)
     if not okD and tostring(errD) ~= s.deckErr then s.deckErr = tostring(errD); log("special: the Ford's deck error " .. s.deckErr) end
+    local ic = c.retake and c.retake.island or {}
+    for unit, x in pairs(s.island or {}) do
+        if x.alive > 0 then
+            local a = aliveOf(unit) or x.alive
+            if a < x.alive then
+                addCredits(tierPay((x.kind == "ad" and ic.ad_pay or ic.armour_pay) or 0) * (x.alive - a),
+                    x.kind == "ad" and "the island's air defences: one down" or "the island's armour: one down")
+                LB.stat("ground", x.alive - a)
+                log(string.format("special: the island's %s %s: %d left", x.kind == "ad" and "air defence" or "armour", unit, a))
+            end
+            x.alive = a
+        end
+    end
     local okR, errR = pcall(rocketsTick, now, s)
     if not okR and tostring(errR) ~= s.rkErr then s.rkErr = tostring(errR); log("special: the retake's rockets error " .. s.rkErr) end
 end
@@ -654,6 +685,7 @@ function SPORT.retakeBusy(s)
     if s.state ~= "retake" then return false end
     for _, x in pairs(s.garrison or {}) do if x.alive > 0 then return true end end
     if s.rk and not s.rk.done then return true end                -- (a rocket or its debris still up)
+    for _, x in pairs(s.island or {}) do if x.alive > 0 then return true end end
     return SPORT.shipsUp(s) > 0
 end
 
@@ -662,6 +694,7 @@ function SPORT.retakeOver(now, s)
     s.state = "done"
     fire("RE_SV_SpGarrisonRemove")                        -- (none should be left: tidy)
     if s.rk then fire("RE_SV_SpRocketRemove") end
+    if s.island and next(s.island) then fire("RE_SV_SpIslandRemove") end
     local pay = (c.retake and c.retake.reward or 0) + (c.retake and c.retake.reward_per_round or 0) * D.round
     local esc = s.rk and rocketsEscaped(s.rk) or 0
     if esc > 0 then                                         -- (a rocket reached orbit: no reward)
