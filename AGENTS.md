@@ -725,6 +725,14 @@ module's WeaponClass(es), `weapons: <unit> (<row>, <airframe>) carries: ...`, on
 `weapons: first launch of <weapon> by <airframe> (<unit>, <row>) at <target>` once each, and every 60 s `weapons: last
 N s: <weapon> xN (<shooters>) ...; carried by enemies but never fired this run: ...`. Guns and flares are listed, not
 watched. tools/checks/weaponlog_test.sh. Unverified: that idle pool items are hidden (logged if bHidden can't be read).
+0.73.39 in game (the user's solo Spaceport test, 2026-10-31 17:51): the fleet, waves and landings worked, but "only some
+of the ships are firing, none of their Anti Air": no ship launched anything in 5 minutes (the weapons log). A hull's
+engagement order doesn't reach its turrets (stock missions order each by name; the Ladon's CIWS needed theirs).
+0.73.40-coop2mp.41 (built and installed 2026-10-31, zip 0.73.40, hash a3f8e7c2...477dec; not yet run in game): each of the
+fleet's 68 turrets its own order (Mission 16's Default_RemoteEvent_20: Normal, PlayerFirst; survival_events.sp_parts,
+asserted against the world data). The STORE's allied Aegis (ally_units / build_allies) still have the hull's order only:
+likely why they "didn't seem to fire all that much" (2026-10-23). The same log: the fighters carried their specials
+(2AAM, HCAA) and never fired one in 5 minutes, their standard missiles 21 times.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
