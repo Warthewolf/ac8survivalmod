@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.7"
-#define RT_VERSION_A         "0.32.7"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.8"
+#define RT_VERSION_A         "0.32.8"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3210,6 +3210,7 @@ static void FindFunctions(void)
         { kSigArmSpecial,       kSigArmSpecialMask, sizeof(kSigArmSpecial), NULL, 0 },
         { kSigGearApply,        kSigGearApplyMask, sizeof(kSigGearApply), NULL, 0 },
         { kSigUnitFxFrame,      kSigUnitFxFrameMask, sizeof(kSigUnitFxFrame), NULL, 0 },
+        { kSigTargetCheck,      kSigTargetCheckMask, sizeof(kSigTargetCheck), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3266,6 +3267,7 @@ static void FindFunctions(void)
     g_fArmSpecial       = p[55].hit;
     g_fGearSite         = p[56].hit;
     g_fUnitFxFrame      = p[57].hit;
+    g_fTargetCheck      = p[58].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3286,7 +3288,7 @@ static void FindFunctions(void)
     Log(L"coop2mp: weapons fired %p, remote plane fire %p, launch weapon %p, flares %p, network manager %p, select special %p, arm "
         L"special %p, gear site %p", g_fPlaneFired, g_fRemoteFire, g_fLaunchWeapon, g_fFireFlares, g_fNetManager, g_fSelectSpecial,
         g_fArmSpecial, g_fGearSite);
-    Log(L"guard: AI unit effect update %p", g_fUnitFxFrame);
+    Log(L"guard: AI unit effect update %p, target entry check %p", g_fUnitFxFrame, g_fTargetCheck);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
@@ -3312,7 +3314,9 @@ static int Install(void)
     else Log(L"flight input not found; the Anomaly's field can't invert the controls");
     if (g_fRemoteUpdate && HookInline(g_fRemoteUpdate, 18, (void*)OnRemoteUpdate, (void**)&g_nextRemoteUpdate, L"remote player plane update")) {}
     else Log(L"remote player plane update not found; SV_CoopFeed does nothing (COOP2MP)");
+    UoFind();                                              /* (GUObjectArray, for the guards' liveness check: flight.c) */
     UfxInstall();                                          /* (the AI unit effect guard: flight.c) */
+    TgtInstall();                                          /* (the target search guard: flight.c) */
     if (g_fSurfacePP && HookInline(g_fSurfacePP, 18, (void*)OnSurfacePP, (void**)&g_nextSurfacePP, L"player plane surface update")) {}
     else Log(L"player plane surface update not found; a fed plane shows no afterburner (COOP2MP)");
     if (g_fPPDamage && HookInline(g_fPPDamage, 15, (void*)OnPPDamage, (void**)&g_nextPPDamage, L"player plane damage")) {}

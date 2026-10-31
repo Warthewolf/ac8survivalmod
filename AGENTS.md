@@ -604,6 +604,27 @@ SV_CoopSwapPP swaps the native plane refs), one in a slot that's another player'
 own slot is hidden at once and set aside 10 s on (AI stand-ins stay their slot's unit). Log lines `coop: migration: ...`.
 tools/checks/coop_migration_test.sh covers it (the host's line, the takeover, the others, slots, hl, off). Open: whether
 Steam P2P links a new host fast enough, the new host's run state beyond D (RUN, AF, specials mid-fight), stand-ins.
+0.73.30 in game (2026-10-31, 6-7 players, the user hosting): the user's game crashed at 12:07 and host migration took
+over (user: "host migrate worked", "reset the round they were on, allies stayed"): the first in line hosted, round 10
+started again, the allies were back. The same session's crashes (none of Survival's own code on the stacks):
+- 11:24 (the host, 0.73.29, the Alicorn round) and 12:07 (the host, 0.73.30, round 10's start while Survival recycled
+  the flights flown before, destroying their planes): worker threads in a weapon's target search (ParallelFor
+  0x1474703c0 -> 0x147434e50 -> 0x147435060, slot +0x60 (obj, query, a, b) -> bool on a family of 151 classes over one
+  base): 11:24 in class 0x14cb78378's 0x147443690 (IsA on its +0x18 game object, freed: class NULL), 12:07 in class
+  0x14cb77dc8's 0x1474515a0 (its +0x20 weak actor NULL, used unchecked at 0x147450468); the T4b replaced-plane crash was
+  the first class too (+0x28).
+- 11:57 (gloom, after the Ladon round) and 12:03 (another joiner, round 9's Tu-95 raid): the AI unit effect move
+  (+0x2690) past 0.32.6's guard: the effect freed (and its memory reused) while the unit's update wasn't running, so its
+  garbage flag was never seen.
+0.73.31-coop2mp.32 (runtime 0.32.8; built and installed 2026-10-31, zip 0.73.31, hash 2d0260bd...727735;
+replaces 0.73.30): runtime/uobj.h UObjLive / UWeakLive answer from GUObjectArray as the game's own
+weak-pointer lookup does (found in 0x147443cb0, which kSigTargetCheck's function calls; tools/checks/uobj_test.sh); the
+effect guard lets go of a component no longer in GUObjectArray; flight.c TgtInstall hooks slot +0x60 of the first class
+(kSigTargetCheck: +0x18 / +0x28 live) and of every class of the family whose check reads +0x20 through the game's
+FWeakObjectPtr::Get (11 of them), answering "not a target" when that weak actor was set and is gone. Log lines:
+`guard: GUObjectArray chunks at ...`, `guard: N target entry classes guarded (...)`, `guard: a weapon's target search
+skipped a gone unit's entry ...`, `guard: an AI unit's effect ... was freed already (not in GUObjectArray): let go`.
+Not yet run in game; watch that targets stay selectable (a wrong "gone" would hide them).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
