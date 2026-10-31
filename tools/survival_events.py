@@ -1466,6 +1466,23 @@ def sp_craft():
     return out
 
 
+# Each ship's turrets, as the world data names them (build_survival.py retag_turrets / retag_parts / the Ford's own, and
+# asserts it): a ship's parts need their own engagement orders, the hull's never reaches them (the user's first test
+# of 2026-10-31: "only some of the ships are firing, none of their Anti Air is firing"; no SAM fired at all), as the
+# Ladon's CIWS needed theirs (Mission 16's Default_RemoteEvent_20: Normal, PlayerFirst) and Mission 22 / 26 order each
+# turret by name. The Wasps have none.
+SP_AEGIS_PARTS = ['BP_VE002_aegs_mk15_Base', 'BP_VE002_aegs_mk41_Base', 'BP_VE002_aegs_mk45_Base',
+                  'BP_VE002_aegs_mk45_Base_Artillery']
+SP_FORD_PARTS = ['Mk15LB', 'Mk15RF', 'Mk15LF', 'Mk15RB']
+SP_BOAT_PARTS = ['BP_VE011_mslb_sam']
+
+
+def sp_parts(s):
+    """Ship `s`'s (an sp_fleet entry) turret objects, as event args write them."""
+    parts = {'aegis': SP_AEGIS_PARTS, 'ford': SP_FORD_PARTS, 'boat': SP_BOAT_PARTS}.get(s['kind'], [])
+    return [f"{s['obj']}_{p}" for p in parts]
+
+
 def sp_garrison():
     """The retake's garrison: (unit, object base, [points]) one a troops' spot."""
     import math
@@ -1767,12 +1784,20 @@ def build_spaceport(g, flag, stock_ep):
     t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
     t_seng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
     assert arg_values(t_seng)[3] == 'Normal' and arg_values(t_tengage)[3] == 'EvadeOnly', (arg_values(t_seng), arg_values(t_tengage))
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_part = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_RemoteEvent_20',
+                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_LCIWS')
+    assert arg_values(t_part)[3] == 'Normal' and arg_values(t_part)[6] == 'PlayerFirst', arg_values(t_part)
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
     fleet = sp_fleet()
+    parts = 0
     for s in fleet:                                        # (fights whatever comes: Normal, as the STORE's ships)
         up = f"SV_SpShipUp{s['kind'].title()}{s['key']}"
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: s['unit']})
         g.execute(t_seng, up, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
+        for p in sp_parts(s):                              # (and each turret its own: the Ladon's CIWS order)
+            g.execute(t_part, up, {0: p}, delay=2.5)
+            parts += 1
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_SpFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
@@ -1808,8 +1833,8 @@ def build_spaceport(g, flag, stock_ep):
             trm = f"RE_SV_SpTroopsRemove{grp}{w}{c['craft']}"
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
-    print(f'  spaceport assault: {len(fleet)} ships, {len(waves)} landing waves of {len(SP_CRAFT)} craft, '
-          f'{len(sp_garrison())} garrison units')
+    print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
+          f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units')
 
 
 def build_ladon(g, flag, stock_ep):
