@@ -1395,10 +1395,19 @@ SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 k
 SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
 SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
 SP_GARRISON_N = 4
-SP_NPC_ROWS = [  # the hulls: (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
-    ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),
-    ('sv_sp_boat', 'aegs_common', 'VE011_mslb_01'),
-    ('sv_sp_ford', 'aegs_common', 'VE004_grfd_01'),
+SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
+    ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),               # (no parts: the stock row as it is)
+]
+# The armed hulls on rows of their own (0.73.45; the user's test of 0.73.44: "im not being locked on by any of the aegis
+# ships and the range updates etc we applied don't seem to be working": the Aegis VLS fired from 2.1 km, the boats' SAMs
+# from 1.5 km, their stock 3 km lock-on): a ship's parts are spawned on the rows its hull's DT_NPC row names
+# (ChildNPCId; hard rule 38's Ladon pods the same), not on their world data descs' rows, so the turrets flew their stock
+# rows. Each hull's DT_SV_NpcRows copy names the turrets' (SP_TURRETS) in its ChildNPCId, as do the turrets' own copies
+# (the Aegis's gun mount's artillery). (DT_SV_NpcMission row, DT_SV_NpcRows row, the stock DT_NPC row it copies)
+SP_HULLS = [
+    ('sv_fleet_aegishull', 'SV_Fleet_AegisHull', 'VE002_aegs_01'),
+    ('sv_sp_boat', 'SV_Fleet_BoatHull', 'VE011_mslb_01'),
+    ('sv_sp_ford', 'SV_Fleet_FordHull', 'VE004_grfd_01'),
 ]
 # The turrets, on Survival's own rows (the user, 2026-10-31: "up the Activation Range and Targetting Range and Lifetime of
 # ALL Ships currently at the Spaceport"): each turret's own DT_SV_NpcMission row (shaped as aegs_mk15) naming a
@@ -1416,7 +1425,7 @@ SP_TURRETS = [  # (the part's row in its source world data, Survival's mission r
      for p in ('LB', 'RF', 'LF', 'RB')] + [
     ('VE011_mslb_sam_01', 'sv_fleet_samboat', 'SV_Fleet_SamBoat', 'VE011_mslb_sam_01')]
 SP_TURRET_SHAPE = 'aegs_mk15'
-SP_AEGIS_ROW = 'aegs_common'                     # Mission 22's (VE002_aegs_01) and its turrets' own rows, as they are
+SP_AEGIS_ROW = 'sv_fleet_aegishull'              # (SP_HULLS: VE002_aegs_01's copy, its turrets on SP_TURRETS' rows)
 SP_WASP_SOURCE = ('/Game/Maps/Ingame/Mission028/WD_Mission028_global', 'AUnit01_Sea_0')
 SP_BOAT_SOURCE = ('/Game/Maps/Ingame/Training006/WD_Training006_phase02', 'EA_UNIT_2_1')
 SP_FORD_SOURCE = ('/Game/Maps/Ingame/Mission016/WD_Mission016_global', 'A_Unit_01_Ship0')
@@ -1894,7 +1903,7 @@ def build_spaceport(g, flag, stock_ep):
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
     lua = runtime_lua()
-    for _, _, npc, _ in SP_TURRETS:
+    for npc in [t[2] for t in SP_TURRETS] + [h[1] for h in SP_HULLS]:
         assert f'"{npc}"' in lua, f'Scripts/sv_spaceport.lua SPORT.FLEET_ROWS has no {npc}'
     print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
           f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units')

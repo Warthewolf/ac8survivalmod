@@ -1896,7 +1896,7 @@ def build_npc_rows():
               (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY),
               (survival_events.AWACS_SOURCE_NPC, survival_events.AWACS_NPC, survival_events.AWACS_NAME_KEY)]
     allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
-    allies += [(stock_npc or m22[src], npc, None) for src, _, npc, stock_npc in survival_events.SP_TURRETS]   # the fleet's
+
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
         allies.append((m22[hull], npc, text))
@@ -1917,6 +1917,25 @@ def build_npc_rows():
             assert swapped == 1, f'{npc}: {was} in {swapped} fire-control slots, 1 expected'
             z.nb.add(now)
         out.append(((npc, 0), row))
+    # the Spaceport fleet's turrets and armed hulls (survival_events.SP_TURRETS / SP_HULLS): copies of their stock rows,
+    # every ChildNPCId naming the fleet's own copy (a ship's parts spawn on the rows its hull's row names: hard rule 38)
+    shown = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    fleet_of = {(stock_npc or m22[src]): npc for src, _, npc, stock_npc in survival_events.SP_TURRETS}
+    remapped = 0
+    for src, npc in ([(stock_npc or m22[src], npc) for src, _, npc, stock_npc in survival_events.SP_TURRETS]
+                     + [(stock, npc) for _, npc, stock in survival_events.SP_HULLS]):
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        for i, q in enumerate(row[2]):
+            if q[1] == 'ChildNPCId' and q[3]:
+                kids = []
+                for k in q[3][1]:
+                    assert shown(k) in fleet_of, f'{npc}: its child {shown(k)} has no fleet row (SP_TURRETS)'
+                    kids.append(('name', fleet_of[shown(k)], 0))
+                    remapped += 1
+                row[2][i] = (q[0], q[1], q[2], ('arr', kids))
+        out.append(((npc, 0), row))
+    assert remapped == 3 + 1 + 1 + 4, remapped              # (the Aegis's 3 and its mount's artillery, the boat's, the Ford's 4)
     # the STORE's CIWS (survival_events.DEFENCE_CIWS*): the game's land Phalanx on its allied model row (no NpcFCSId: its
     # blueprint's own arms fire, until main.lua gives it one: CFG.shop.items.Airfield.defences.ciws.fcs_row)
     f = survival_events.fname(survival_events.DEFENCE_CIWS_NPC)
@@ -2139,6 +2158,8 @@ def build_npc_table():
                   survival_events.DEFENCE_CIWS_ROW[1]))
     for _, mrow, npc, _ in survival_events.SP_TURRETS:        # the Spaceport fleet's turrets (their own fire control)
         extra.append((mrow, survival_events.SP_TURRET_SHAPE, npc))
+    for mrow, npc, _ in survival_events.SP_HULLS:              # and its armed hulls (their ChildNPCId: the turrets')
+        extra.append((mrow, 'aegs_common', npc))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         row, npc, _ = survival_events.ally_ship_rows(key)
         extra.append((row, hull, npc))

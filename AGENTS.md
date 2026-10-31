@@ -797,6 +797,16 @@ could we add?" ... "All of them"), in the log only:
 - the Spaceport waves (sv_spaceport.lua): `special: wave <unit>: n craft, x shot down, y landed, z troop vehicles ashore`
   as each is done, and the round's `the Spaceport Assault's waves (...): ... the capture: 5% at +4:10, ...`.
 CFG.log.weapons (hit_m, turret_s) and CFG.log.audit ([log.audit]). Tests: audit_test, weaponlog_test, spaceport_test.
+0.73.44 in game (the user's solo Spaceport test, 2026-10-31 19:36): "im not being locked on by any of the aegis ships and
+the range updates etc we applied don't seem to be working". The new logs: the fleet's 9 rows in DT_NPC on their boosted
+fire control (VLS 3 -> 20 km), yet the Aegis VLS fired from 2.1 km on average and the boats' SAMs from 1.5 km (their stock
+3 km), none in the first minute: the turrets flew their stock rows. A ship's parts spawn on the rows its HULL's DT_NPC
+row names (ChildNPCId), not their world data descs' MissionNpcID (hard rule 38's Ladon pods the same); the hulls were
+the stock rows. 0.73.45-coop2mp.46 (built and installed 2026-10-31, zip 0.73.45, hash 2a76d6ef...06b34b; not yet run in game): the armed hulls on Survival's own copies (survival_events.SP_HULLS:
+SV_Fleet_AegisHull / BoatHull / FordHull, mission rows sv_fleet_aegishull / sv_sp_boat / sv_sp_ford) whose ChildNPCId
+names the fleet's turret rows, as do the turrets' (the gun mount's artillery); build_npc_rows asserts all 9 children
+remapped. The STORE's allied Aegis has the same flaw (SV_Ally_Aegis keeps the stock ChildNPCId: its turrets' _SVA
+boosts never applied; the user's "aegis ships still don't engage far enough", 2026-10-23): not changed yet.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
