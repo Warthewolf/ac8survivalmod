@@ -13,9 +13,12 @@ one. Their choices (the questions of the same day, all the recommended answers):
   LCACs once the spaceport is taken.
 
 ## Round 1: Spaceport Defence
-- An enemy fleet WEST of the spaceport (the pad at x -13.25 km, y +0.60 km: tools/re/SPECIAL_ROUNDS.md 1). Proposed
-  counts, each a setting: a carrier group (1 Ford, 2 Aegis), four amphibious groups (each 1 Wasp, 1 Aegis, 2 missile
-  boats).
+- An enemy fleet WEST of the spaceport (the pad at x -13.25 km, y +0.60 km: tools/re/SPECIAL_ROUNDS.md 1), sizeable
+  (user, 2026-10-31: "I want more Aegis Ships, I want the fleet to be sizeable, put into the budget for 14 aegis
+  ships"). Counts, each a setting: a carrier group (1 Ford, 6 Aegis) and four amphibious groups (each 1 Wasp, 2 Aegis,
+  2 missile boats): 27 ships, 14 of them Aegis, about 100 AI objects with their turret parts, and LCACs at 8 a minute.
+  The most of any special so far: the build checks the frame rate and the Lua tick with the whole fleet up, and co-op's
+  load (ships and parts are linked by key, never moved every frame).
 - Each Wasp puts 2 LCACs on the water beside it every minute until it's sunk (no stock mission launches LCACs from a
   ship: they spawn on the water, tools/re/SPECIAL_ROUNDS.md 3); the missile boats escort them in. Each LCAC that reaches
   the spaceport's shore puts its troops ashore (the beach assault's BTR-90s, Mission 13's), who drive to the spaceport.
