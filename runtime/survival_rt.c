@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.12"
-#define RT_VERSION_A         "0.32.12"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.13"
+#define RT_VERSION_A         "0.32.13"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -166,6 +166,73 @@ static void OpenLog(void)
     memcpy(path + k, L"\\AC8SurvivalMode.log", 21 * 2);
     g_log = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+}
+
+/* ---- crash breadcrumbs: <mod folder>\AC8SurvivalMode_crumbs.log (runtime 0.32.13) -----------------------------------
+ * The user, 2026-10-31 (Alyssa's crash could only be traced from its minidump): a short line for each risky thing the
+ * runtime and Survival's Lua do (a spawn, a flight recycled and its unit actor destroyed, a player plane destroyed,
+ * copies taken down, a removal event, a guard's catch), written to a file of its own at once (WriteFile: the system
+ * keeps what was written when the game crashes a moment later), with milliseconds and the thread. The session before is
+ * kept as AC8SurvivalMode_crumbs.prev.log (the crashed one, after the restart); CRUMB_MAX lines a session at most. */
+#define CRUMB_MAX 20000
+static HANDLE           g_crumb = INVALID_HANDLE_VALUE;
+static volatile int32_t g_crumbLock;
+static int32_t          g_crumbN;
+
+static void OpenCrumbs(void)
+{
+    static wchar_t path[PATH_CAP], prev[PATH_CAP];           /* (once, at load: off the stack, no stack probe) */
+    size_t k = WLen(g_modRoot);
+    if (!k || k + 32 >= PATH_CAP) return;
+    memcpy(path, g_modRoot, k * 2);
+    memcpy(path + k, L"\\AC8SurvivalMode_crumbs.log", 28 * 2);
+    memcpy(prev, g_modRoot, k * 2);
+    memcpy(prev + k, L"\\AC8SurvivalMode_crumbs.prev.log", 33 * 2);
+    BOOL (*moveEx)(const wchar_t*, const wchar_t*, DWORD) =
+        (BOOL (*)(const wchar_t*, const wchar_t*, DWORD))GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "MoveFileExW");
+    if (moveEx) moveEx(path, prev, 1);                    /* (MOVEFILE_REPLACE_EXISTING; none there: nothing) */
+    g_crumb = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+}
+
+static void Crumb(const wchar_t* fmt, ...)
+{
+    static wchar_t wide[512];
+    static char    utf8[512 * 3 + 64];
+    if (g_crumb == INVALID_HANDLE_VALUE || g_crumbN >= CRUMB_MAX) return;
+    while (__sync_lock_test_and_set(&g_crumbLock, 1)) Sleep(0);
+    uint16_t st[8];
+    GetLocalTime(st);
+    wchar_t stamp[48];
+    {
+        wchar_t* s = stamp;
+        int v[3] = { st[4], st[5], st[6] };
+        for (int i = 0; i < 3; ++i) { *s++ = (wchar_t)(L'0' + v[i] / 10); *s++ = (wchar_t)(L'0' + v[i] % 10); *s++ = i < 2 ? L':' : L'.'; }
+        *s++ = (wchar_t)(L'0' + st[7] / 100); *s++ = (wchar_t)(L'0' + st[7] / 10 % 10); *s++ = (wchar_t)(L'0' + st[7] % 10);
+        *s++ = L' '; *s++ = L't';
+        DWORD tid = GetCurrentThreadId();
+        wchar_t digits[12]; int nd = 0;
+        do { digits[nd++] = (wchar_t)(L'0' + tid % 10); tid /= 10; } while (tid && nd < 11);
+        while (nd) *s++ = digits[--nd];
+        *s++ = L' ';
+        *s = 0;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    VFmt(wide, 512, fmt, ap);
+    va_end(ap);
+    int n = WideCharToMultiByte(CP_UTF8, 0, stamp, (int)WLen(stamp), utf8, 64, NULL, NULL);
+    int m = WideCharToMultiByte(CP_UTF8, 0, wide, (int)WLen(wide), utf8 + n, (int)sizeof(utf8) - n - 2, NULL, NULL);
+    if (m > 0) {
+        n += m;
+        utf8[n++] = '\r'; utf8[n++] = '\n';
+        DWORD put = 0;
+        WriteFile(g_crumb, utf8, (DWORD)n, &put, NULL);
+        if (++g_crumbN == CRUMB_MAX) {
+            static const char full[] = "(20000 lines: no more this session)\r\n";
+            WriteFile(g_crumb, full, (DWORD)(sizeof(full) - 1), &put, NULL);
+        }
+    }
+    __sync_lock_release(&g_crumbLock);
 }
 
 static int FileExists(const wchar_t* dir, const wchar_t* rel)
@@ -1216,8 +1283,10 @@ static int Recycle(uint8_t* desc, const wchar_t* name)
         Log(L"spawn %s: its last flight is still up (%d alive); not spawned again", name, alive);
         return -1;
     }
+    Crumb(L"recycle %s: unregistering and destroying its unit actor %p", name, unit);
     g_unregisterUnit(g_phase, unit);
     g_destroyActor(unit, 0);
+    Crumb(L"recycle %s: done", name);
     Log(L"spawn %s: its last flight was shot down; took it off the phase's list and removed its unit actor", name);
     return 1;
 }
@@ -2450,6 +2519,15 @@ static int L_UnitAlive(void* lua)
     return Ret(lua, UnitAlive(name));
 }
 
+/* SV_Crumb(text) -> 1: a line in the crash breadcrumbs (AC8SurvivalMode_crumbs.log), at once */
+static int L_Crumb(void* lua)
+{
+    wchar_t text[240];
+    if (!ArgName(lua, text, 240)) return Ret(lua, SV_ERR_BAD_ARGS);
+    Crumb(L"lua: %s", text);
+    return Ret(lua, 1);
+}
+
 /* SV_LogUnits([why]) -> length of the phase's unit list (written to AC8SurvivalMode.log) */
 static int L_LogUnits(void* lua)
 {
@@ -3061,7 +3139,7 @@ static void RegisterLua(void* lua)
 {
     static const struct { const char* name; LuaFn fn; } kFns[] = {
         { "SV_Version", L_Version }, { "SV_MenuChoice", L_MenuChoice }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
-        { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
+        { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset }, { "SV_Crumb", L_Crumb },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
@@ -3427,6 +3505,7 @@ EXPORT void* start_mod(void)
     SetWString((MsvcWString*)(mod + 0x80), L"voidcallsreaper");
     if (g_instances++ == 0) {
         OpenLog();
+        OpenCrumbs();
         Log(L"AC8 Survival Mode runtime %s", RT_VERSION);
         HANDLE th = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
         if (th) CloseHandle(th); else Log(L"could not start the install thread");

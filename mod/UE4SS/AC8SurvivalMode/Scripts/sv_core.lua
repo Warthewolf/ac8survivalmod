@@ -53,6 +53,11 @@ do
     end
 end
 
+-- A line in the crash breadcrumbs (the native runtime's AC8SurvivalMode_crumbs.log, from 0.32.13: SV_Crumb, written at
+-- once, the session before kept as .prev): the risky things Survival's Lua does (spawns, removals, copies taken down,
+-- teardowns), so a crash shows what came just before it. Nothing with an older runtime.
+function crumb(s) if type(SV_Crumb) == "function" then pcall(SV_Crumb, tostring(s):sub(1, 230)) end end
+
 -- A line logged once a session for its key (a hook that fails every tick logs one line, not one a tick).
 -- hookErr(what, pcall(f, ...)): a hook's pcall with its first error logged ("<what> error ..."), its results passed
 -- on. The behaviour branch's hooks between parts (code review of 2026-10-29: a bare pcall made a hook that failed read

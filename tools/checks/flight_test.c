@@ -61,6 +61,7 @@ static int InGame(const void* p) { (void)p; return 0; }
 static int ArgNumber(void* lua, double* v) { if (U.luaStackSize(lua) < 1 || !U.luaIsNumber(lua, 1)) return 0; *v = U.luaGetNumber(lua, 1); return 1; }
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
+static void Crumb(const wchar_t* fmt, ...) { (void)fmt; }      /* (the crash breadcrumbs: survival_rt.c's, not here) */
 #include "../../runtime/coop.c"
 #include "../../runtime/down_ctl.c"
 

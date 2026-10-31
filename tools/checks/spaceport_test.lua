@@ -306,5 +306,17 @@ D.at = 0
 okT, errT = pcall(roundsTick, 8)
 check(okT and D.state == "wait" and s.state == "done" and called(T.sp_held) ~= nil, "all sunk: the round ends, its over (" .. tostring(errT) .. ")")
 
+print("the wave report")
+local wl, sl = {}, {}
+for _, l in ipairs(logs) do
+    if l:find("^special: wave SV_Unit_SpLcac") then wl[#wl + 1] = l end
+    if l:find("^special: the Spaceport Assault's waves") then sl[#sl + 1] = l end
+end
+local avl = nil
+for _, l in ipairs(wl) do if l:find("^special: wave SV_Unit_SpLcacAV: 2 craft, 0 shot down, 1 landed, 1 troop vehicles ashore") then avl = l end end
+check(avl ~= nil, "each wave's line as it's done (AV: 2 craft, 1 landed, its troops ashore): " .. tostring(avl or wl[1]))
+check(#sl >= 2 and sl[1]:find("troop vehicles: 2 ashore, 2 got in", 1, true) and sl[1]:find("the capture: ", 1, true),
+    "the round's line at its end, the capture's timeline: " .. tostring(sl[1]))
+
 print(fails == 0 and "spaceport test: all passed" or ("spaceport test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
