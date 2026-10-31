@@ -470,6 +470,8 @@ local function probeTick(tick)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
             local okWl, errWl = timed("weapons log", WLOG.tick, now)          -- (sv_weaponlog.lua)
             if not okWl and not D.wlogErr then D.wlogErr = true; log("weapons: log error " .. tostring(errWl)) end
+            local okAt, errAt = timed("attackers", ATK.tick, now)             -- (sv_spweapons.lua: missiles at once)
+            if not okAt and not D.atkErr then D.atkErr = true; log("attackers: error " .. tostring(errAt)) end
             local okSw, errSw = timed("specials", SPW.tick, now)              -- (sv_spweapons.lua)
             if not okSw and not D.spwErr then D.spwErr = true; log("specials: error " .. tostring(errSw)) end
             local okAu, errAu = timed("audit", AUDIT.tick, now)               -- (sv_audit.lua)

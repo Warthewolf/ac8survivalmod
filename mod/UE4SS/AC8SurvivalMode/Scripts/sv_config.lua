@@ -405,6 +405,11 @@ CFG = {
     -- Special weapons (user, 2026-10-22): each fighter type gets one of these stock ace fire-control rows (QAAM, 2AAM,
     -- LAAM, HCAA, as the Shadow aces carry theirs) in its first free weapon slot, picked at random once a session; its
     -- fire control fires it by itself when the player is in its range and cone.
+    -- how many missiles may be in the air at you at once (Scripts/sv_spweapons.lua ATK; the user, 2026-10-31: "is there a
+    -- hard cap ... I've only ever seen 4 missiles launch at me at one time ... is there a way to increase that?"): the game
+    -- allows 2 from aircraft and 2 from ships / SAM sites / turrets on every difficulty; your plane's own limits set to
+    -- plane_missiles and nonplane_missiles, pursuers the aircraft that may chase you at once (0: the game's), every check_s
+    attackers = { enabled = true, plane_missiles = 4, nonplane_missiles = 6, pursuers = 0, check_s = 2 },
     special = { enabled = true,
                 fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" },
                 -- fired (Scripts/sv_spweapons.lua; the user, 2026-10-31: "I want the Enemies to fire their Special
