@@ -1986,6 +1986,24 @@ SPC.kinds = {
                    tick = function(now, s) return ANOM.tick(now, s) end },
     amphibious = { sub = "amphib_sub", spawn = function(now) return AMPH.spawn(now) end,
                    tick = function(now, s) return AMPH.tick(now, s) end },
+    -- (ready() whether it can come now, else a normal round; busy(s) holds the round's end, over(now, s) at its end,
+    -- row(s, t) its NEXT row: sv_spaceport.lua)
+    spaceport  = { sub = "spaceport_sub", ready = function() return SPORT.ready() end,
+                   budget = function(budget)
+                       return math.floor(budget * (CFG.specials.spaceport.fighter_share or 0.5) / 2 + 0.5) * 2
+                   end,
+                   spawn = function(now) return SPORT.spawn(now) end, tick = function(now, s) return SPORT.tick(now, s) end,
+                   busy = function(s) return SPORT.busy(s) end, over = function(now, s) return SPORT.roundOver(now, s) end,
+                   row = function(s, t) return SPORT.row(s, t) end },
+    retake     = { sub = "retake_sub",
+                   budget = function(budget)
+                       local r = CFG.specials.spaceport.retake or {}
+                       return math.floor(budget * (r.fighter_share or 0.6) / 2 + 0.5) * 2
+                   end,
+                   spawn = function(now) return SPORT.retakeSpawn(now) end,
+                   tick = function(now, s) return SPORT.retakeTick(now, s) end,
+                   busy = function(s) return SPORT.retakeBusy(s) end, over = function(now, s) return SPORT.retakeOver(now, s) end,
+                   row = function(s, t) return SPORT.row(s, t) end },
     ladon      = { sub = "ladon_sub", alone = true, aircraft = 2, spawn = function(now) return SPC.ladonSpawn(now) end,
                    tick = function(now, s) return SPC.ladonTick(now, s) end },
     alicorn    = { sub = "alicorn_sub", alone = true, aircraft = 1, spawn = function(now) return SPC.alicornSpawn(now) end,

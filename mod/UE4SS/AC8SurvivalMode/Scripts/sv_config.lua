@@ -1202,6 +1202,8 @@ CFG = {
         chance   = 0.3,
         first    = 4,
         every    = 5,
+        -- (not "spaceport" yet, the Spaceport Assault: untested in game, forced with Ctrl+END in a dev install until a
+        -- test has run it; add it here or in survival.ini's rotation to get it)
         rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
@@ -1525,6 +1527,35 @@ CFG = {
                        -- stuck_s is taken off (no pay, no capture); without its actor to watch, after troop_timeout_s.
                        -- runway_cm: where they drive to (survival_events.LCAC_RUNWAY), for the log's distances.
                        stuck_m = 50, stuck_s = 60, troop_timeout_s = 540, runway_cm = { 1609574, -435747 } },
+        -- "spaceport" = the Spaceport Assault (tools/re/SPACEPORT_ASSAULT.md, tools/survival_events.py SP_*; the user's
+        -- special of 2026-10-31; Scripts/sv_spaceport.lua): an enemy fleet west of the spaceport, `ships` of each kind
+        -- (the build has 1 Ford, 4 Wasps, 14 Aegis and 8 missile boats; fewer leaves the last of a kind out),
+        -- spawn_per_tick of them every 0.5 s. Each Wasp afloat sends 2 landing craft every wave_every_s (the first
+        -- first_wave_s after the fleet appears); each craft that lands puts a troop vehicle ashore (invincible this
+        -- round), which drives to the spaceport: capture_per_troop % of its capture each, taken off troop_stay_s after it
+        -- gets there (gone in), or troop_timeout_s after it landed if it never does; a wave's craft are taken off
+        -- remove_after_s after the first one landed. At 100 % the spaceport is captured: no more landings, and the next
+        -- round is the retake. Every ship sunk with nothing still coming in: held, reward + reward_per_round x the
+        -- round. pay: zollars a ship (by kind) or landing craft destroyed. fighter_share: the round's fighters, of its
+        -- aircraft. from_round: never before this round. ford_cm: the Ford's spot and heading (x, y cm, yaw deg:
+        -- survival_events.sp_fleet), for its deck when its hull can't be read.
+        spaceport = { from_round = 8, ships = { ford = 1, wasp = 4, aegis = 14, boat = 8 }, spawn_per_tick = 3,
+                      wave_every_s = 60, first_wave_s = 20, capture_per_troop = 5, troop_stay_s = 30,
+                      troop_timeout_s = 420, remove_after_s = 60, fighter_share = 0.5, reward = 10000,
+                      reward_per_round = 300, pay = { ford = 3000, wasp = 1200, aegis = 800, boat = 300, craft = 150 },
+                      ford_cm = { -2964629, -26491, 3.0 },
+                      -- the Ford's deck, as the Alicorn's (CFG.specials.alicorn.deck): from first_s, a free size-ship
+                      -- pool flight every every_s, flights + flights_per_round x the round (at most max_flights), max_up
+                      -- of them up at once, ahead_m off its bow and alt_m up
+                      deck = { enabled = true, first_s = 45, every_s = 50, size = 2, max_up = 2, flights = 3,
+                               flights_per_round = 0.15, max_flights = 8, ahead_m = 600, alt_m = 1100 },
+                      -- the retake, the round after a captured spaceport: the garrison (a unit of 4 targetable vehicles
+                      -- for every per_unit troop vehicles that got in, 3 at most) and the ships still afloat; reward +
+                      -- reward_per_round x the round when they're all down, garrison_pay a vehicle; fighter_share of the
+                      -- round's aircraft. enabled = false: no retake (the fleet left afloat stays until the next Spaceport
+                      -- Assault takes it off). test_troops: the troops Ctrl+INS's forced retake counts (test only).
+                      retake = { enabled = true, per_unit = 4, reward = 12000, reward_per_round = 300, garrison_pay = 300,
+                                 fighter_share = 0.6, test_troops = 8 } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -1839,6 +1870,32 @@ CFG = {
             freed        = "AIRFIELD BACK IN OUR HANDS",
             repelled     = "LANDING REPELLED",
             repelled_sub = "+%d ZOLLARS",
+            spaceport_sub = "ENEMY FLEET WEST OF THE SPACEPORT",
+            retake_sub   = "RETAKE THE SPACEPORT",
+            sp_go        = "SPACEPORT ASSAULT",
+            sp_go_sub    = "SINK THE FLEET BEFORE ITS TROOPS TAKE THE SPACEPORT",
+            sp_row       = "FLEET: %d SHIPS  LANDING CRAFT: %d  SPACEPORT CAPTURE: %d%%",
+            sp_landing   = "LANDING CRAFT LAUNCHED",
+            sp_landing_sub = "THE WASPS ARE SENDING THEM IN",
+            sp_ashore    = "TROOPS ASHORE",
+            sp_ashore_sub = "THEY CAN'T BE STOPPED ASHORE: SINK THE WASPS",
+            sp_troops_in = "TROOPS AT THE SPACEPORT",
+            sp_troops_in_sub = "SPACEPORT %d%% CAPTURED",
+            sp_wasp_down = "WASP SUNK",
+            sp_wasp_down_sub = "NO MORE LANDINGS FROM IT",
+            sp_ford_down = "CARRIER SUNK",
+            sp_ford_down_sub = "NO MORE FIGHTERS OFF ITS DECK",
+            sp_captured  = "SPACEPORT CAPTURED",
+            sp_captured_sub = "RETAKE IT NEXT ROUND",
+            sp_lost      = "SPACEPORT LOST",
+            sp_lost_sub  = "%d SHIPS STAY OFFSHORE FOR THE RETAKE",
+            sp_held      = "SPACEPORT HELD",
+            sp_held_sub  = "+%d ZOLLARS",
+            sp_retake_go = "SPACEPORT RETAKE",
+            sp_retake_go_sub = "DESTROY THE GARRISON AND THE FLEET",
+            sp_retake_row = "GARRISON: %d  FLEET: %d SHIPS",
+            sp_retaken   = "SPACEPORT RETAKEN",
+            sp_retaken_sub = "+%d ZOLLARS",
             shop_captured = "SHOP CLOSED: THE AIRFIELD IS CAPTURED.",
             ace_sub      = "%s SQUADRON (%s)",
         },

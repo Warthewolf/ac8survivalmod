@@ -729,7 +729,9 @@ if type(RegisterKeyBind) == "function" and Key then
     local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
                             { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
                             { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },
-                            { "EIGHT", "valka", "VALKA" } }
+                            { "EIGHT", "valka", "VALKA" },
+                            -- (the Spaceport Assault and its retake, sv_spaceport.lua: Ctrl+END / Ctrl+INS)
+                            { "END", "spaceport", "SPACEPORT ASSAULT" }, { "INS", "retake", "SPACEPORT RETAKE" } }
     for i, ts in ipairs(TEST_SPECIALS) do
         local key, kind, label = Key[ts[1]], ts[2], ts[3]
         if key then

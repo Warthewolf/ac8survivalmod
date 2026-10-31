@@ -1113,6 +1113,7 @@ def build_events(stock_ep):
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
     build_alicorn(g, flag, stock_ep)
+    build_spaceport(g, flag, stock_ep)
     build_tells(g)
     build_ace_moves(g, flag, stock_ep)
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
@@ -1346,6 +1347,137 @@ SPACEPORT_BEACHES = [(-1512225, -20610, 500), (-1530847, 28330, 500), (-1557771,
 SPACEPORT_SEA = [(-2810707, 432930), (-2785643, 238488), (-2769543, 113592), (-2748663, -48395), (-2964629, -26491)]
 SPACEPORT_TROOP_SPOTS = [(-1490317, 157461, 500), (-1484219, 75102, 500), (-1419829, -21557, 500)]
 SPACEPORT_PAD = (-1325196, 59778)                # Mission 19's rocket 1 / Mission 22's shuttle pad
+
+# Special round "Spaceport Assault" (tools/re/SPACEPORT_ASSAULT.md; user, 2026-10-31): an enemy fleet off the spaceport's
+# west shore. Four amphibious groups on the first four sea marks (north to south), each a Wasp (Mission 28's
+# AUnit01_Sea_0), two Aegis (Survival's copy of Mission 22's AC_Unit_01_Ship1) ahead of it either side of its lane and
+# two missile boats (Training006's EA_UNIT_2_1) further in; and the carrier group on the fifth mark, the Gerald R. Ford
+# (Mission 16's A_Unit_01_Ship0) in a ring of six Aegis: 14 Aegis in all (user: "put into the budget for 14 aegis
+# ships"). Every ship is an enemy (Faction 2: no stock world data has an enemy Ford, Aegis or Wasp) on the enemy DT_NPC
+# rows (SP_NPC_ROWS), boxed and TGT-marked, and holds its spot (no path). Each Wasp's lane runs from just ahead of it to
+# the beach it faces (SP_WASP_BEACH: the northern-most Wasp to the northern-most beach); its landing craft (Mission 13's,
+# as the airfield's assault) come in waves of two, SP_WAVES units a lane, so a wave can come every minute while the
+# last ones are still on their way. Each craft that lands puts a BTR-90 ashore (invincible this round, no box) that
+# drives to the troops' spot nearest its beach: Scripts/sv_spaceport.lua's capture meter counts the arrivals. After a
+# captured spaceport, the retake round's garrison (SP_GARRISON: one unit of SP_GARRISON_N targetable BTR-90s a troops'
+# spot) stands in for the troops.
+SP_GROUPS = 'ABCD'                               # the Wasps' groups, on SPACEPORT_SEA[0..3]
+SP_WASP_BEACH = {'A': 3, 'B': 2, 'C': 1, 'D': 0}  # each group's beach (SPACEPORT_BEACHES index)
+SP_FORD_SEA = 4                                  # the carrier group's mark
+SP_SHIP_Z = {'aegis': 300.0, 'wasp': 0.0, 'boat': 0.0, 'ford': 50.0}    # their sources' heights
+SP_AEGIS_AHEAD_CM, SP_AEGIS_SIDE_CM = 150000.0, 45000.0    # a group's Aegis: ahead of the Wasp, either side of its lane
+SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM = 400000.0, 35000.0      # its missile boats
+SP_RING_CM, SP_RING_DEG = 180000.0, [30, 90, 150, 210, 270, 330]   # the carrier's Aegis (none dead ahead: a Wasp's there)
+SP_SHIP_AREA_M, SP_SHIP_ALT_M = 25000.0, (0.0, 15000.0)    # as the STORE's ships (ALLY_SHIP_AREA_M): their turrets reach
+SP_WAVES = 'VWXYZ'                               # a lane's craft units (letters: hard rule 17)
+SP_CRAFT = 'LR'                                  # a wave's two craft, side by side
+SP_CRAFT_GAP_CM = 18000.0
+SP_LCAC_START_CM = 50000.0                       # the craft start this far ahead of their Wasp
+SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 km to the beach in about 3.3 minutes)
+SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
+SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
+SP_GARRISON_N = 4
+SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
+    ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),
+    ('sv_sp_boat', 'aegs_common', 'VE011_mslb_01'),
+    ('sv_sp_boat_sam', 'aegs_mk15', 'VE011_mslb_sam_01'),
+    ('sv_sp_ford', 'aegs_common', 'VE004_grfd_01'),
+] + [(f'sv_sp_ford_{p.lower()}', 'aegs_mk15', f'VE004_grfd_mk15_{p}_01') for p in ('LB', 'RF', 'LF', 'RB')]
+SP_AEGIS_ROW = 'aegs_common'                     # Mission 22's (VE002_aegs_01) and its turrets' own rows, as they are
+SP_WASP_SOURCE = ('/Game/Maps/Ingame/Mission028/WD_Mission028_global', 'AUnit01_Sea_0')
+SP_BOAT_SOURCE = ('/Game/Maps/Ingame/Training006/WD_Training006_phase02', 'EA_UNIT_2_1')
+SP_FORD_SOURCE = ('/Game/Maps/Ingame/Mission016/WD_Mission016_global', 'A_Unit_01_Ship0')
+SP_AEGIS_SOURCE = 'AC_Unit_01_Ship1'             # Survival's own copy (Mission 22's)
+
+
+def sp_lanes():
+    """Each Wasp's lane: dict(group, sea (x, y), start (x, y), beach (x, y, z), spot (x, y, z), ux, uy, yaw, length)."""
+    import math
+    out = []
+    for k, grp in enumerate(SP_GROUPS):
+        sx, sy = SPACEPORT_SEA[k]
+        bx, by, bz = SPACEPORT_BEACHES[SP_WASP_BEACH[grp]]
+        dx, dy = bx - sx, by - sy
+        d = math.hypot(dx, dy)
+        ux, uy = dx / d, dy / d
+        spot = min(SPACEPORT_TROOP_SPOTS, key=lambda p: math.hypot(p[0] - bx, p[1] - by))
+        start = (sx + ux * SP_LCAC_START_CM, sy + uy * SP_LCAC_START_CM)
+        out.append(dict(group=grp, sea=(sx, sy), start=start, beach=(bx, by, bz), spot=spot, ux=ux, uy=uy,
+                        yaw=math.degrees(math.atan2(dy, dx)), length=math.hypot(bx - start[0], by - start[1])))
+    return out
+
+
+def sp_fleet():
+    """Every ship of the fleet: dict(kind, key, unit, obj, point (x, y, z) cm, yaw, group), the Ford first."""
+    import math
+    out = []
+    fx, fy = SPACEPORT_SEA[SP_FORD_SEA]
+    fyaw = math.degrees(math.atan2(SPACEPORT_PAD[1] - fy, SPACEPORT_PAD[0] - fx))
+    out.append(dict(kind='ford', key='', unit='SV_Unit_SpFord', obj='SV_Obj_SpFord', point=(fx, fy, SP_SHIP_Z['ford']),
+                    yaw=fyaw, group='Ford'))
+    aegis, boats = iter('ABCDEFGHIJKLMN'), iter('ABCDEFGH')
+    for L in sp_lanes():
+        (sx, sy), ux, uy = L['sea'], L['ux'], L['uy']
+        out.append(dict(kind='wasp', key=L['group'], unit=f"SV_Unit_SpWasp{L['group']}", obj=f"SV_Obj_SpWasp{L['group']}",
+                        point=(sx, sy, SP_SHIP_Z['wasp']), yaw=L['yaw'], group=L['group']))
+        for kind, ahead, side, keys in (('aegis', SP_AEGIS_AHEAD_CM, SP_AEGIS_SIDE_CM, aegis),
+                                        ('boat', SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM, boats)):
+            for sgn in (1, -1):
+                key = next(keys)
+                x, y = sx + ux * ahead - uy * side * sgn, sy + uy * ahead + ux * side * sgn
+                name = 'Aegis' if kind == 'aegis' else 'Boat'
+                out.append(dict(kind=kind, key=key, unit=f'SV_Unit_Sp{name}{key}', obj=f'SV_Obj_Sp{name}{key}',
+                                point=(x, y, SP_SHIP_Z[kind]), yaw=L['yaw'], group=L['group']))
+    for deg in SP_RING_DEG:
+        key = next(aegis)
+        a = math.radians(fyaw + deg)
+        out.append(dict(kind='aegis', key=key, unit=f'SV_Unit_SpAegis{key}', obj=f'SV_Obj_SpAegis{key}',
+                        point=(fx + math.cos(a) * SP_RING_CM, fy + math.sin(a) * SP_RING_CM, SP_SHIP_Z['aegis']),
+                        yaw=fyaw, group='Ford'))
+    assert sum(1 for s in out if s['kind'] == 'aegis') == 14, 'the fleet has 14 Aegis'
+    return out
+
+
+def sp_craft():
+    """One dict per landing craft (lane group g, wave w, craft c): its unit SV_Unit_SpLcac<g><w> (the wave's two
+    craft), object, paths in and out, its troops' unit, drive path and flags."""
+    import math
+    out = []
+    for L in sp_lanes():
+        g, (sx, sy), (bx, by, bz), ux, uy = L['group'], L['start'], L['beach'], L['ux'], L['uy']
+        tx, ty, tz = L['spot']
+        for wi, w in enumerate(SP_WAVES):
+            for k, c in enumerate(SP_CRAFT):
+                side = (k - (len(SP_CRAFT) - 1) / 2.0) * SP_CRAFT_GAP_CM
+                ox, oy = -uy * side, ux * side
+                n = wi * len(SP_CRAFT) + k                    # its troops' place round the spot (a spiral: no two on one)
+                a = math.radians(n * 137.5 + (ord(g) - 65) * 31.0)
+                r = SP_TROOP_SPREAD_CM * math.sqrt(n + 0.5)
+                out.append(dict(
+                    group=g, wave=w, craft=c, k=k, unit=f'SV_Unit_SpLcac{g}{w}', obj_base=f'SV_Obj_SpLcac{g}{w}',
+                    obj=f'SV_Obj_SpLcac{g}{w}_{k}', path=f'SV_Path_SpLcac{g}{w}{c}', back=f'SV_Path_SpLcac{g}{w}{c}Back',
+                    troops=f'SV_Unit_SpTroops{g}{w}{c}', troop_obj=f'SV_Obj_SpTroops{g}{w}{c}',
+                    flag=f'SV_SpLand{g}{w}{c}', land=f'SV_SpLanded{g}{w}{c}', up=f'SV_SpLcacUp{g}{w}',
+                    drive=f'SV_Path_SpDrive{g}{w}{c}', troops_up=f'SV_SpTroopsUp{g}{w}{c}',
+                    aflag=f'SV_SpAt{g}{w}{c}', at=f'SV_SpAtSpot{g}{w}{c}',
+                    spot=(tx + math.cos(a) * r, ty + math.sin(a) * r, tz),
+                    start=(sx + ox, sy + oy, LCAC_SEA_Z), beach=(bx + ox, by + oy, float(bz)),
+                    yaw=L['yaw'], length=L['length']))
+    return out
+
+
+def sp_garrison():
+    """The retake's garrison: (unit, object base, [points]) one a troops' spot."""
+    import math
+    out = []
+    for key, (x, y, zz) in zip(SP_GARRISON, SPACEPORT_TROOP_SPOTS):
+        pts = [(x + math.cos(math.radians(90 * k + 45)) * 6000.0, y + math.sin(math.radians(90 * k + 45)) * 6000.0, zz)
+               for k in range(SP_GARRISON_N)]
+        out.append((f'SV_Unit_SpGarrison{key}', f'SV_Obj_SpGarrison{key}', pts))
+    return out
+
+
+INT_FLAGS += [c['flag'] for c in sp_craft()] + [c['aflag'] for c in sp_craft()]
 
 
 AWACS_EVENTS = {}                              # build_allies' events build_awacs goes on from ('airborne')
@@ -1614,6 +1746,70 @@ def build_amphib(g, flag, stock_ep):
             trm = f'RE_SV_LcacTroopsRemove{lane}{c["craft"]}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
+
+
+def build_spaceport(g, flag, stock_ep):
+    """The Spaceport Assault (SP_*): each fleet unit's Mission 22 ship engagement order as it appears; each wave of
+    landing craft as the airfield's assault (build_amphib, Mission 13's records): appearance -> each craft on its path
+    in (SP_LCAC_SPEED) -> PathFinish (hard rule 1) -> SV_SpLand<g><w><c> = 1 (Scripts/sv_spaceport.lua puts its troops
+    ashore) -> back out; the troops drive to their spot, its PathFinish sets SV_SpAt<g><w><c>. Remote events for Lua:
+    RE_SV_SpLcacRemove<g><w>, RE_SV_SpTroopsRemove<g><w><c>, RE_SV_SpFleetRemove (every ship), RE_SV_SpGarrisonRemove."""
+    m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
+    t_cpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
+                                 lambda a, e: a[0] == 'E_Obj02_02_Ship0_lcac_0')
+    t_upath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
+                                 lambda a, e: a[1] == 'E_Unit02_02_Ship0')
+    t_exit = g.foreign_template(m13, 'LiveAIPathExitExecution', '02_LCAC_PathFinish_0')
+    t_tpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_Reinforce_tank_0',
+                                 lambda a, e: a[0] == 'E_Obj02_02_Ground0_tank_0')
+    t_tengage = g.foreign_template(m13, 'LiveAIEngagementOrder', '02_Reinforce_tank_0',
+                                   lambda a, e: a[1] == 'E_Unit02_02_Ground0')
+    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    t_seng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
+    assert arg_values(t_seng)[3] == 'Normal' and arg_values(t_tengage)[3] == 'EvadeOnly', (arg_values(t_seng), arg_values(t_tengage))
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    fleet = sp_fleet()
+    for s in fleet:                                        # (fights whatever comes: Normal, as the STORE's ships)
+        up = f"SV_SpShipUp{s['kind'].title()}{s['key']}"
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: s['unit']})
+        g.execute(t_seng, up, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpFleetRemove')
+    for s in fleet:
+        g.execute(t_remove, 'RE_SV_SpFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpGarrisonRemove')
+    for unit, _, _ in sp_garrison():
+        g.execute(t_remove, 'RE_SV_SpGarrisonRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect'})
+    craft = sp_craft()
+    waves = []
+    for c in craft:
+        if (c['group'], c['wave']) not in waves: waves.append((c['group'], c['wave']))
+    for grp, w in waves:
+        cs = [c for c in craft if c['group'] == grp and c['wave'] == w]
+        up = cs[0]['up']
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: cs[0]['unit']})
+        for c in cs:
+            flag(up, c['flag'], 'Set', 0)
+            g.execute(t_cpath, up, {0: c['obj'], 2: c['path'], 4: SP_LCAC_SPEED}, delay=0.5 + c['k'] * 1.5)
+        g.execute(t_upath, up, {1: cs[0]['unit'], 2: cs[0]['path']}, delay=0.5)
+        rm = f'RE_SV_SpLcacRemove{grp}{w}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', rm)
+        g.execute(t_remove, rm, {0: 'NoneSelect', 1: cs[0]['unit'], 2: 'NoneSelect'})
+        for c in cs:
+            g.trigger(finish, c['land'], arg_changes={0: c['obj'], 2: c['path']})
+            g.execute(t_exit, c['land'], {0: c['obj']})
+            flag(c['land'], c['flag'], 'Set', 1)
+            g.execute(t_cpath, c['land'], {0: c['obj'], 2: c['back'], 4: SP_LCAC_SPEED}, delay=LCAC_RETURN_S)
+            g.trigger('01_E_AreaA_ReinforcementAppearance_0', c['troops_up'], arg_changes={0: c['troops']})
+            flag(c['troops_up'], c['aflag'], 'Set', 0)
+            g.execute(t_tengage, c['troops_up'], {1: c['troops']})
+            g.execute(t_tpath, c['troops_up'], {0: c['troop_obj'], 2: c['drive'], 4: LCAC_TROOP_SPEED}, delay=0.5)
+            g.trigger(finish, c['at'], arg_changes={0: c['troop_obj'], 2: c['drive']})
+            flag(c['at'], c['aflag'], 'Set', 1)
+            trm = f"RE_SV_SpTroopsRemove{grp}{w}{c['craft']}"
+            g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
+            g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
+    print(f'  spaceport assault: {len(fleet)} ships, {len(waves)} landing waves of {len(SP_CRAFT)} craft, '
+          f'{len(sp_garrison())} garrison units')
 
 
 def build_ladon(g, flag, stock_ep):

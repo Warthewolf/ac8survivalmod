@@ -704,6 +704,15 @@ game): the other players' ESM / ECM fields count on every game. Each plane pulls
 (role byte +0xED8 == 2, at 0x147d27f34), which co-op's real planes are; flight.c OnPlaneEw sets every OTHER live real plane
 to role 1 around that call and back to 2 after, so the stock range / team / time rules apply (`coop2mp: the other
 players' ESM / ECM fields count on this game ...`, once). tools/re/COOP2MP.md "ESM / ECM effects across games".
+0.73.38-coop2mp.39 (runtime 0.32.11; built 2026-10-31, NOT installed (friends were on 0.73.37), not yet run in game; zip
+0.73.38, hash e52b0e3a...e9d3ec): the Spaceport Assault, round 1 (user's special of 2026-10-31; tools/re/SPACEPORT_ASSAULT.md
+"Build 0.73.38"): an enemy fleet of 27 one-ship units west of the spaceport (the Ford, 4 Wasps, 14 Aegis, 8 missile boats:
+allied descs flipped to Faction 2 on the enemy DT_NPC rows, tools/build_survival.py spaceport_units / enemy_unit), each
+Wasp's waves of two LCACs to its beach, their invincible troops driving to the spaceport's capture meter, the Ford's deck
+launches, SPACEPORT HELD / CAPTURED, and a first retake (the garrison and the ships left; Mission 19's rockets not yet).
+Scripts/sv_spaceport.lua (SPORT), CFG.specials.spaceport, [specials.spaceport*]; SPC.kinds gained ready / busy / over /
+row (sv_rounds.lua, sv_hud.lua) and specialFor a special's from_round. Not in the rotation until tested: Ctrl+END /
+Ctrl+INS force it (test only). 1211 triggers, 2262 execs. tools/checks/spaceport_test.sh.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
