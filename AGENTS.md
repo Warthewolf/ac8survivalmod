@@ -768,6 +768,12 @@ minute, the boats' SAMs 4), so a turret's own order is what they needed.
   "by you"): not yet fixed.
 - Lesson (the load test): a new global table is `X = {}`, never `X = X or {}` (the load test's stub answers every
   global, and sv_allies.lua iterated SPORT.FLEET_ROWS at load: lua_load_test hung).
+0.73.43-coop2mp.44 (runtime 0.32.12; built 2026-10-31, not yet run in game): the enemies' specials at every player (user:
+"it's paramount that Special Weapons target all, HOST and JOINERS"; 0.73.42 fired only on the host, at the host): every
+game runs sv_spweapons.lua on its own planes at its own player (the host its enemies, each joiner its copies of them,
+as their standard missiles already go: an AI's shots are decided on its target's game), each with its own cap; a joiner
+learns each flight's rows from the host's spawn (sv_coop.lua doSpawn -> SPW.noteRows: the flight's row, idx -1, and its
+lead's own, idx 0); none while that player is DOWN; RE_SV_SpecFire_ still never forwarded. spweapons_test covers it.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
