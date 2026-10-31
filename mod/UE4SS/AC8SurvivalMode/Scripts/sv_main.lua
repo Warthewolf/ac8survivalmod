@@ -1065,8 +1065,8 @@ if type(RegisterKeyBind) == "function" and Key then
                 pcall(function()
                     local o = (hit.OutHit or hit)[field]
                     if o and o.Get then o = o:Get() end
-                    local n = o and o:GetFullName()
-                    if n and n ~= "" then what = n:match("([^%.:/]+)$") or n end
+                    local n = o and nameOf(o)                       -- (its outers checked: sv_core.lua nameOf)
+                    if n and n ~= "" and n ~= "?" then what = n:match("([^%.:/]+)$") or n end
                 end)
             end
         end
