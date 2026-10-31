@@ -1877,10 +1877,16 @@ static uint64_t      g_invLastMs;
 
 static void FlightInputHook(uint8_t* plane, float* out);   /* flight.c: DOWN's autopilot, SV_InputNow's record */
 static void InvertInput(float* out);
+#ifdef SV_DEV
+static void RecSample(uint8_t* plane, const float* out);  /* recorder.c: the flight recorder (dev builds only) */
+#endif
 
 static void OnBuildInput(uint8_t* plane, float* out)
 {
     g_nextBuildInput(plane, out);
+#ifdef SV_DEV
+    RecSample(plane, out);                           /* (the stick as the game built it: before any change) */
+#endif
     CoopFrame(0);                                    /* (only when the music player's tick doesn't run) */
     if (plane && out && plane == g_invPlane) InvertInput(out);
     FlightInputHook(plane, out);                     /* (DOWN last: its autopilot is never inverted) */
@@ -2416,7 +2422,7 @@ static int L_PlaneLevel(void* lua)
 /* SV_PlayerTarget(plane) -> the address of the player plane's current target (the enemy it has selected, the one its
  * missiles go for), 0 for none, SV_ERR_BAD_ARGS for a bad plane. tools/re/UNIQUE_ACTIONS.md: the player tick posts
  * EnemyBehind for player+0x1ae8 -> +0x750. Confirmed in game 2026-10-23 (it named the Reaper ace the player had
- * targeted). Not used by Lua at the moment (the flight recorder that used it is gone). */
+ * targeted). The dev builds' flight recorder (recorder.c) reads the same pointer every frame. */
 #define PLAYER_TARGET_HOLDER 0x1ae8
 #define PLAYER_TARGET        0x750
 static int L_PlayerTarget(void* lua)
@@ -2431,6 +2437,8 @@ static int L_PlayerTarget(void* lua)
     if (!target || !LiveObject(target)) return Ret(lua, 0);
     return Ret(lua, (int64_t)(uintptr_t)target);
 }
+
+#include "recorder.c"                               /* the flight recorder: SV_DEV builds only (empty otherwise) */
 
 /* SV_SetAircraft(unit, npc [, index]) -> AI objects changed or an SV_ERR code */
 static int L_SetAircraft(void* lua)
@@ -3065,6 +3073,9 @@ static void RegisterLua(void* lua)
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
+#ifdef SV_DEV
+        { "SV_FlightRec", L_FlightRec },                  /* (dev builds only: recorder.c) */
+#endif
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting },
         { "SV_MenuPages", L_MenuPages }, { "SV_MenuClass", L_MenuClass }, { "SV_MenuSlot", L_MenuSlot }, { "SV_MenuQuick", L_MenuQuick }, { "SV_BGMNames", L_BGMNames },
         { "SV_CoopOpen", L_CoopOpen }, { "SV_CoopClose", L_CoopClose }, { "SV_CoopInfo", L_CoopInfo }, { "SV_CoopSend", L_CoopSend },

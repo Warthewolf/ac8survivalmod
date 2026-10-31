@@ -1,7 +1,8 @@
 #!/bin/sh
 # package_dev.sh [name] : the user's own test install of the staged build (run tools/build_all.sh first): the Online
 # COOP build without VALKA, as package_release.sh makes it, but with the test keys KEPT (no tools/strip_test_only.py):
-# build/release/stage_dev_<name>/ue4ss/Mods/{AC8SurvivalMode,IoStoreLoaderMod/SurvivalMode}. Never for friends: their
+# build/release/stage_dev_<name>/ue4ss/Mods/{AC8SurvivalMode,IoStoreLoaderMod/SurvivalMode}, with the dev main.dll (the
+# flight recorder: runtime/build.sh DEV=1; tools/checks/no_dev_check.py keeps it out of zips). Never for friends: their
 # zips come from package_release.sh, which strips every TEST ONLY block (user, 2026-10-23: test keys out of releases).
 # (stage_dev was made by hand this way for 0.72.2; COOP2MP's T1 / T2 need it: tools/re/COOP2MP.md)
 set -e
@@ -21,6 +22,10 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
 rm -rf "$mod/Sounds/valka"
 rmdir "$mod/Sounds" 2>/dev/null || true
 python -X utf8 -I tools/novalka.py "$mod" > /dev/null
+# the dev main.dll (runtime/build.sh DEV=1: the flight recorder, recorder.c), for this install only
+(cd runtime && DEV=1 sh build.sh > /dev/null)
+cp build/runtime/dev/main.dll "$mod/dlls/main.dll"
+rm -rf "$mod/recordings"
 cp release/README.txt "$st/README.txt"
 python -X utf8 -I tools/coop_edition.py "$st" "$mod" > /dev/null
 python -I tools/edition.py online "$mod"/Scripts/*.lua "$mod/config/survival.default.ini" "$st/README.txt" > /dev/null

@@ -725,6 +725,9 @@ function roundsTick(now)
     local okW, errW = pcall(WOLF.tick, now)          -- (the Wolf trap's holds and releases: CFG.roles.wolf, sv_spawn.lua)
     if not okW and tostring(errW) ~= D.wolfErr then D.wolfErr = tostring(errW); log("roles: wolf error " .. D.wolfErr) end
     if D.state == "wait" then
+        -- TEST ONLY BEGIN
+        if D.testRange and not (COOP and COOP.open) then D.at, D.announced = now + 3600, true end   -- (Ctrl+F2: the dev test range, solo)
+        -- TEST ONLY END
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
             local t = CFG.hud.text

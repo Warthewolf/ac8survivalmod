@@ -22,6 +22,8 @@ rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/pending_runs.txt "$st"/ue4ss/Mods/
 python -I tools/strip_test_only.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua
 python -X utf8 -I tools/checks/lua_check.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua
 sed "s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
+rm -rf "$st"/ue4ss/Mods/AC8SurvivalMode/recordings             # (the dev install's flight recordings)
+python -X utf8 -I tools/checks/no_dev_check.py "$st"/ue4ss/Mods/AC8SurvivalMode
 out="build/release/AC8SurvivalMode_$name.zip"
 python -I -c "
 import os, sys, zipfile
