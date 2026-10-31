@@ -860,6 +860,10 @@ the flak's waits (triggering, between, rest) x flak.fire_x 0.5; the SAM sites', 
 salvos of missile.salvo_n 3, salvo_gap_s 0.5 apart (a salvo in the game's fire control: TriggerCount shots
 ShotIntervalTime apart over TriggeringTime = count x interval, then RestingTime: the stock 2AAM 2 x 0.25 s, rest 7; the
 4AAM 4 x 1 s, rest 16; every ship and SAM missile row 1).
+0.73.54-coop2mp.55: the revive test keys gone (user: "the same key to test the revive system is being used by the test
+spaceport", "we no longer need the revive test"): T1 Ctrl+F6 and T2 Ctrl+END (sv_down.lua DOWN.testFloor / testDown, the
+watch list's test planes, the floor's down-test lines); Ctrl+END is the Spaceport Assault's alone, Ctrl+F6 free. A test
+key bound twice with Ctrl is logged at load (`test: Ctrl+<key> is bound twice`).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

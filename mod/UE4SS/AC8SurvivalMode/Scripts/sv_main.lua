@@ -660,7 +660,14 @@ if type(RegisterKeyBind) == "function" and Key then
     -- TEST ONLY BEGIN
     do
     -- (every test key below, pressed, makes its run unranked: LB.testKey, sv_leaderboard.lua)
+    local boundKeys = {}                -- (a key bound twice here: logged, both would run on a press)
     local RegisterKeyBind = function(key, m, fn)
+        if key ~= nil and boundKeys[key] then
+            local kn = tostring(key)
+            pcall(function() for n, v in pairs(Key) do if v == key then kn = n end end end)
+            log("test: Ctrl+" .. kn .. " is bound twice: both run on a press")
+        end
+        if key ~= nil then boundKeys[key] = true end
         return RegisterKeyBind(key, m, function(...)
             if LB and LB.testKey then pcall(LB.testKey, key) end
             return fn(...)
@@ -1031,24 +1038,8 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- co-op's revives solo (sv_down.lua; tools/re/COOP.md 9): T1 Ctrl+F6 the floor on / off (down-test: lines once a
-    -- second), T2 Ctrl+END each press the next step: down (watching MOONCHILD / VIPER or an enemy; the revive key the
-    -- next), back by the loiter, down, back by SV_Respawn
-    for key, t in pairs({ F6 = { "T1", "testFloor" }, END = { "T2", "testDown" } }) do
-        if Key[key] then
-            pcall(RegisterKeyBind, Key[key], mods, function()
-                ExecuteInGameThread(function()
-                    local ok, err = pcall(function()
-                        if not D or not DOWN or not DOWN[t[2]] then log("test: " .. t[1] .. " (Ctrl+" .. key .. ") outside a Survival run"); return end
-                        DOWN[t[2]]()
-                    end)
-                    if not ok then log("test: " .. t[1] .. " (Ctrl+" .. key .. ") error " .. tostring(err)) end
-                end)
-            end)
-        else
-            log("test: " .. t[1] .. " not bound: UE4SS has no key " .. key)
-        end
-    end
+    -- (co-op's revive tests T1 Ctrl+F6 / T2 Ctrl+END are gone, 0.73.54: the user, 2026-10-31: "the same key to test the
+    -- revive system is being used by the test spaceport", "we no longer need the revive test"; Ctrl+END is the Spaceport's)
     -- The Spaceport Assault's map marks (tools/re/SPACEPORT_ASSAULT.md; hard rule 27: the terrain's collision is only
     -- there near the player, so the shore can't be traced from afar). In flight, low over the spot: Ctrl+HOME a beach the
     -- landing craft land on, Ctrl+PAGE_UP a spot at sea for the fleet, Ctrl+PAGE_DOWN a spot at the spaceport the troops

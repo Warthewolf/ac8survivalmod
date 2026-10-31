@@ -71,8 +71,8 @@ local function priceFor(n)
     return math.floor(num(c.price, 2500) * num(c.raise, 1) ^ (n or 0) / 10 + 0.5) * 10
 end
 
--- Revives on: co-op open with another game linked, in a run (or T1's floor, a test key's)
-function DOWN.active() return St.testFloor == true or (rc().enabled == true and D ~= nil and linked()) end
+-- Revives on: co-op open with another game linked, in a run
+function DOWN.active() return rc().enabled == true and D ~= nil and linked() end
 -- the MinHealth your plane is held at (sv_tactical.lua INS.tick): floor_hp while revives are on, else 0 (solo: as ever)
 function DOWN.floor() return (DOWN.active() and not St.noFloor) and num(rc().floor_hp, 0.1) or 0 end
 -- you're DOWN (shot down, waiting for a revive)
@@ -117,16 +117,6 @@ end
 local function watchable()
     local l = COOP and COOP.watchable and COOP.watchable() or {}
     for _, e in ipairs(l) do e.name = upper(e.name, 14) end
-    -- TEST ONLY BEGIN (T2, Ctrl+END solo: MOONCHILD / VIPER, else the nearest enemies)
-    if St.testDown and #l == 0 then
-        for _, p in ipairs(ALLY and ALLY.run and ALLY.run.planes or {}) do
-            if valid(p.obj) then l[#l + 1] = { slot = -1, obj = p.obj, addr = addrOf(p.obj), name = upper(p.name, 14) } end
-        end
-        for _, p in ipairs(planes or {}) do
-            if #l < 6 and not p.down and valid(p.obj) then l[#l + 1] = { slot = -1, obj = p.obj, addr = addrOf(p.obj), name = upper(p.name, 14) } end
-        end
-    end
-    -- TEST ONLY END
     return l
 end
 -- a camera on plane e.obj: a CameraComponent added once (kept by its address), back_m behind and up_m above, looking at it
@@ -870,20 +860,11 @@ function DOWN.tick()
         local okO, errO = pcall(orbitTick, now)
         if not okO then logOnce("orbitTick", "spectate: camera controls error " .. tostring(errO)) end
         if not okS then logOnce("spectateTick", "spectate: error " .. tostring(errS)) end
-    elseif valid(pawn) and not St.ended and (St.testDown or (rc().enabled == true and linked() and D.round and D.round >= 1)) then
+    elseif valid(pawn) and not St.ended and rc().enabled == true and linked() and D.round and D.round >= 1 then
         local okH, h = pcall(function() return pawn.HealthInternal end)
         local fl = num(rc().floor_hp, 0.1) * 10
         if okH and type(h) == "number" and h > 0 and h <= fl + 0.01 and not RUN.insured then goDown(pawn, h) end
     end
-    -- TEST ONLY BEGIN (T1, Ctrl+F6: the floor solo, once a second)
-    if St.testFloor and valid(pawn) and now >= (St.testLogAt or 0) then
-        St.testLogAt = now + 1
-        local okH, h = pcall(function() return pawn.HealthInternal end)
-        local okM, m = pcall(function() return pawn.MinHealth end)
-        log(string.format("down-test: health %s (floor %s), MinHealth %s", okH and string.format("%.1f", h / 10) or "?",
-            tostring(rc().floor_hp), okM and tostring(m) or "?"))
-    end
-    -- TEST ONLY END
     if not (COOP and COOP.open) then return end
     if now >= (St.listAt or 0) then                         -- (the STORE's REVIVE row follows who's down: once a second)
         St.listAt = now + 1
@@ -924,33 +905,6 @@ function DOWN.tick()
         end
     end
 end
-
--- TEST ONLY BEGIN (T1 Ctrl+F6, T2 Ctrl+END: sv_main.lua; tools/re/COOP.md 9)
--- T1: the floor solo, on and off (down-test: lines once a second)
-function DOWN.testFloor()
-    St.testFloor = not St.testFloor
-    log("down-test: T1 the floor solo " .. (St.testFloor and ("on (floor_hp " .. tostring(rc().floor_hp) .. ")") or "off"))
-    callout("TEST T1: FLOOR " .. (St.testFloor and "ON" or "OFF"), St.testFloor and ("HELD AT " .. tostring(rc().floor_hp) .. " HP") or nil)
-end
--- T2: each press the next step, solo: 1 DOWN (watching MOONCHILD / VIPER or an enemy; the key the next), 2 back by the
--- loiter, 3 DOWN again, 4 back by SV_Respawn
-function DOWN.testDown()
-    local pawn = pawnOf()
-    if not valid(pawn) then log("down-test: T2 without a plane"); return end
-    St.testStep = (St.testStep or 0) % 4 + 1
-    local s = St.testStep
-    if s == 1 or s == 3 then
-        St.testDown = true
-        local okH, h = pcall(function() return pawn.HealthInternal end)
-        goDown(pawn, okH and h or 0)
-        log("down-test: T2 step " .. s .. ": down")
-    else
-        DOWN.back("test T2 step " .. s, s == 2 and "loiter" or "native")
-        St.testDown = nil
-        log("down-test: T2 step " .. s .. ": back by " .. (s == 2 and "the loiter" or "SV_Respawn"))
-    end
-end
--- TEST ONLY END
 
 -- The next-player key (CFG.coop.revive key / ctrl): each player's own; only while you're down. A key UE4SS doesn't know
 -- leaves the camera on the next player by itself.
