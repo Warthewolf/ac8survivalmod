@@ -625,6 +625,21 @@ FWeakObjectPtr::Get (11 of them), answering "not a target" when that weak actor 
 `guard: GUObjectArray chunks at ...`, `guard: N target entry classes guarded (...)`, `guard: a weapon's target search
 skipped a gone unit's entry ...`, `guard: an AI unit's effect ... was freed already (not in GUObjectArray): let go`.
 Not yet run in game; watch that targets stay selectable (a wrong "gone" would hide them).
+0.73.31 in game (2026-10-31, the user hosting 5 players to an Alicorn round): no crash; the guards loaded on every game
+(GUObjectArray found, 10 classes); every skip (14 lines on the host, 4096+ entries in 5 minutes) was one class,
+0x147447050, which tests its weak actor itself, so 0.32.8 changed its answers for nothing. Two joiners couldn't target
+the Alicorn at all (user: "players go reported the alicorn as untargettable"): on a joiner the Alicorn's 131 parked
+pools (put away invincible) were counted as its copies though the host gives them no ids (hostPlane skips
+SPC.alcnPool; clientPlane didn't), so 15 s on they were "strays", couldn't be finished ("health 1000 after"), the "jn"
+resync's teardown took the Alicorn's tanks and core down there, and the host's fresh one was refused (the old unit
+still up: "its last flight is still up (212 alive)"), leaving a hull with no live parts.
+0.73.32-coop2mp.33 (runtime 0.32.9; built and installed 2026-10-31, zip 0.73.32, hash dc54b9e5...3fdc5; replaces
+0.73.31): clientPlane skips the parked pools (as hostPlane, so the ordinals agree); a
+joiner's doSpawn takes a stuck Alicorn copy off whole (RE_SV_AlcnRemove, once) before the host's fresh one
+(`coop: the Alicorn's last copy here is still up (N alive): taken off whole for the host's`; coop_ground_test); the
+target guard tests the weak actor only in classes that use it unchecked (TcWeakUnchecked: no `test rax, rax` after
+the Get, no inline `bts r32, 21` before it: 0x1474515a0, 0x147439690, 0x14743a4c0) and, in the first class, only its
+raw +0x18 / +0x28 (it tests the weak itself): 4 classes. Not yet run in game.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

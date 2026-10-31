@@ -703,6 +703,12 @@ end
 local function clientPlane(o, unit)
     local cu = M.cunits[unit]
     if not cu then return end
+    -- (the Alicorn's 131 parked pools: the host gives them no ids, hostPlane, so neither does this game's count. Counted
+    -- here, they were "strays" 15 s on, their copies couldn't be taken down (put away invincible), the "jn" resync took
+    -- the Alicorn's tanks and core down here and its fresh copy was refused, "its last flight is still up": the co-op
+    -- run of 2026-10-31, two joiners couldn't target the Alicorn at all)
+    local a = addrOf(o)
+    if SPC and SPC.alcnPool and a and SPC.alcnPool.set[a] then return end
     cu.n = cu.n + 1
     cu.planes[cu.n] = o
     local id = cu.binds[cu.n]
@@ -777,6 +783,14 @@ local function doSpawn(q)
                 local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end
             end
             if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
+        end
+        -- (the Alicorn's last copy can't be shot down here: its parked pools are invincible, so it's taken off whole,
+        -- as the host does when one is left from last time, and the host's fresh one comes in its place)
+        if SPC and unit == SPC.alicornUnit and not q.alcnRemoved and rawEvent then
+            q.alcnRemoved = true
+            local r = rawEvent("RE_SV_AlcnRemove")
+            log("coop: the Alicorn's last copy here is still up (" .. tostring(rawUnitAlive(unit)) .. " alive): taken off whole "
+                .. "for the host's (RE_SV_AlcnRemove " .. tostring(r) .. ")")
         end
         q.tries = (q.tries or 0) + 1
         if q.tries < 6 then q.at = os.clock() + 1.5; return false end

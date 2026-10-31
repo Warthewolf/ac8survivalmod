@@ -57,7 +57,7 @@ function SV_CoopBind() return 1 end
 function SV_MenuSetting() return "" end
 local menu = 0
 function SV_MenuChoice() return menu end
-function SV_Event(name) events[#events + 1] = name; return 1 end
+function SV_Event(name) events[#events + 1] = name; if EV_HOOK then EV_HOOK(name) end; return 1 end
 
 -- the spawner: each unit's objects, made in the same order on every game (NotifyOnNewObject, then SV_Spawn's return)
 local notify = {}
@@ -339,6 +339,32 @@ else
     tick(31)
     check(not COOP.tornDown({ addr = torn.addr }), "join: ... 30 s on, forgotten (its address may be another plane's)")
     ALLY = nil
+    -- the Alicorn's parked pools aren't copies here (the host gives them no ids): the co-op run of 2026-10-31, 131 of them
+    -- counted as strays, a resync, the tanks and core taken down here and the fresh copy refused (still up)
+    SPC = { alcnPool = { set = {}, n = 0 }, alicornUnit = "SV_Unit_Alicorn" }
+    local gen = 777
+    inbox[#inbox + 1] = "0|sp|SV_Unit_Alicorn|-|-|-1|" .. gen
+    local removed = 0
+    EV_HOOK = function(name) if name == "RE_SV_AlcnRemove" then removed = removed + 1; alive.SV_Unit_Alicorn = 0 end end
+    local before3 = #logs
+    for _ = 1, 12 do tick(0.5) end
+    local l3 = table.concat(logs, " | ", before3 + 1)
+    check(removed == 1 and l3:find("the Alicorn's last copy here is still up", 1, true) and not l3:find("spawning anyway", 1, true),
+          "join: the host's fresh Alicorn while its last copy's still up here: that one taken off whole (RE_SV_AlcnRemove), once")
+    check(alive.SV_Unit_Alicorn == 7 and M.cunits.SV_Unit_Alicorn and M.cunits.SV_Unit_Alicorn.gen == gen,
+          "join: ... and the host's spawned in its place (" .. tostring(alive.SV_Unit_Alicorn) .. ")")
+    local pool = obj("BP_FG037_uavm_ON_pool", 100, true)
+    SPC.alcnPool.set[pool.addr] = true
+    local plane = obj("BP_OP1022_f16c", 500, true)
+    logPlane(pool, "SV_Unit_Alicorn", 0)
+    check(M.cunits.SV_Unit_Alicorn.n == 0, "join: a parked pool of its isn't a copy here (no ordinal, never a stray)")
+    logPlane(plane, "SV_Unit_Alicorn", 1)
+    check(M.cunits.SV_Unit_Alicorn.n == 1 and M.cunits.SV_Unit_Alicorn.planes[1] == plane, "join: ... any other plane of it is (ordinal 1, as the host's)")
+    local b4 = #logs
+    tick(16); tick(5)
+    local l4 = table.concat(logs, " | ", b4 + 1)
+    check(pool.HealthInternal == 100 and not l4:find("131 stray", 1, true), "join: 20 s on, the pool's not taken down as a stray")
+    EV_HOOK, SPC = nil, nil
 end
 print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 15), #logs do print("    log: " .. logs[i]) end end
