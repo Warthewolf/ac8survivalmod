@@ -535,4 +535,13 @@ static const uint8_t kSigPlaneEw[40] = {
     0x00, 0x00,
 };
 
+/* The world an object is in (0x143fc1ca0(obj): NULL for a class default, an object whose outer is gone, being destroyed
+ * (RF_BeginDestroyed, outer flag bit 15) or unreachable, or one in no world): some 20 weapon target entry checks pass
+ * its answer on unchecked (flight.c TcWorldUnchecked; Alyssa's crash of 2026-10-31). Unique 32 bytes (mksig.py). */
+static const uint8_t kSigWorldOf[32] = {
+    0x48, 0x83, 0xEC, 0x28, 0x8B, 0x41, 0x08, 0x4C, 0x8B, 0xC1, 0xC1, 0xE8,
+    0x04, 0xA8, 0x01, 0x75, 0x64, 0x48, 0x8B, 0x41, 0x20, 0x48, 0x85, 0xC0,
+    0x74, 0x5B, 0x8B, 0x40, 0x08, 0xC1, 0xE8, 0x0F,
+};
+
 #endif

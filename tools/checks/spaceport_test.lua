@@ -112,6 +112,7 @@ LB.stat, LB.special = function() end, function() end
 local flights = {}
 function spawnFlight(u, maxLevel, pose) flights[#flights + 1] = { unit = u, pose = pose }; alive[u] = 2; D.up[u] = true; return 2 end
 local SP, T = CFG.specials.spaceport, CFG.hud.text
+ALLY.fleetReady = true                           -- (the turrets' rows: sv_allies.lua ALLY.setup at the main menu)
 local function since(from, pat) local n = 0; for i = from, #logs do if logs[i]:find(pat) then n = n + 1 end end; return n end
 local function evs(pat) local t = {}; for _, e in ipairs(events) do if e:find(pat) then t[#t + 1] = e end end; return table.concat(t, ",") end
 local function spawned(pat) local t = {}; for _, s in ipairs(spawns) do if s.unit:find(pat) then t[#t + 1] = s.unit end end; return t end
