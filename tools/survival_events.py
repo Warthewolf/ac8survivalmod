@@ -1395,6 +1395,28 @@ SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 k
 SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
 SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
 SP_GARRISON_N = 4
+# The retake's rockets (tools/re/SPACEPORT_ASSAULT.md "Mission 19's rockets"; user, 2026-10-31: "can you please build the
+# rockets this time?"): Mission 19's two rockets (E_Unit_05_Rocket_0: one on each pad, the second the shuttle's) as
+# Survival's unit SV_Unit_SpRockets (objects SV_Obj_SpRocket_0 / _1, on the pads, invincible until launched), each on a
+# whole copy of its Mission 19 climb (900 m up to 20.2 km: SV_Path_SpRocketA / B). Mission 19's split: the rocket's
+# blueprint brings in its debris world-data objects BY THEIR EXACT NAMES (E_Obj_Rocket_Debri_Phase<N>_0 / _1) at its
+# sockets when the last rocket of the unit is killed with its destroy spawner on; each stage's pieces the stage before's
+# death brings in. Survival's three debris units hold them under those names (built as port_unit names a pair: base _0,
+# base _1), at Mission 19's spot 500 m down, on copies of Mission 19's rows (no numeric tail: hard rule 17).
+SP_ROCKET_SOURCE = ('/Game/Maps/Ingame/Mission019/WD_Mission019_global', 'E_Unit_05_Rocket_0')
+SP_ROCKET_UNIT, SP_ROCKET_OBJ, SP_ROCKET_ROW = 'SV_Unit_SpRockets', 'SV_Obj_SpRocket', 'sv_sp_rocket'
+SP_ROCKET_PATHS = [('E_Obj_03_Rocket_0_Path0', 'SV_Path_SpRocketA'), ('E_Obj_03_Rocket_1_Path0', 'SV_Path_SpRocketB')]
+SP_ROCKET_SPEED = ('280.0', '280.0')             # its launch (Mission 19's 05_PhaseStart_2: speed, acceleration)
+SP_ROCKET_AREA_M, SP_ROCKET_ALT_M = 30000.0, (0.0, 25000.0)
+SP_DEBRIS = [  # (Mission 19's unit, Survival's unit, its objects' base name (exact), [(Survival's row, Mission 19's)])
+    ('Rocket_Debri_Phase1_0', 'SV_Unit_SpDebriA', 'E_Obj_Rocket_Debri_Phase1',
+     [('sv_sp_debri_a', 'Rocket_Debri_1_1'), ('sv_sp_debri_b', 'Rocket_Debri_1_2')]),
+    ('Rocket_Debri_Phase2_0', 'SV_Unit_SpDebriB', 'E_Obj_Rocket_Debri_Phase2',
+     [('sv_sp_debri_c', 'Rocket_Debri_2_1'), ('sv_sp_debri_d', 'Rocket_Debri_2_2')]),
+    ('Rocket_Debri_Phase3_0', 'SV_Unit_SpDebriC', 'E_Obj_Rocket_Debri_Phase3',
+     [('sv_sp_debri_e', 'Rocket_Debri_3_1'), ('sv_sp_debri_f', 'Rocket_Debri_3_2')]),
+]
+SP_ROCKET_ROWS = [(SP_ROCKET_ROW, 'Rocket')] + [r for d in SP_DEBRIS for r in d[3]]   # (Survival's, DT_NPC_Mission019's)
 SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
     ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),               # (no parts: the stock row as it is)
 ]
@@ -1543,6 +1565,7 @@ def sp_garrison():
 
 
 INT_FLAGS += [c['flag'] for c in sp_craft()] + [c['aflag'] for c in sp_craft()]
+INT_FLAGS += ['SV_SpRocketEscA', 'SV_SpRocketEscB']        # a rocket's climb finished: escaped (Scripts/sv_spaceport.lua)
 
 
 AWACS_EVENTS = {}                              # build_allies' events build_awacs goes on from ('airborne')
@@ -1902,11 +1925,58 @@ def build_spaceport(g, flag, stock_ep):
             trm = f"RE_SV_SpTroopsRemove{grp}{w}{c['craft']}"
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
+    # the retake's rockets (SP_ROCKET_*, SP_DEBRIS; Scripts/sv_spaceport.lua's rockets), on Mission 19's own records,
+    # each fired from Lua by its remote event (Mission 19 drives them with PathPointReceive and object-destroy triggers:
+    # hard rule 1, and Survival's objects carry no tags)
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_rpath = g.foreign_template(m19, 'LiveAIPathExecution', '05_PhaseStart_2', lambda a, e: a[0] == 'E_Obj_05_Rocket_0')
+    t_rboost = g.foreign_template(m19, 'LiveAIPathExecution', '05_PathPoint_Rocket_0_0')
+    t_attr = g.foreign_template(m19, 'LiveSetCommonAttribute', 'Debri_HUD', lambda a, e: a[1] == 'E_Obj_Rocket_Debri_Phase1_0')
+    t_minh = g.foreign_template(m19, 'LiveSetMinHealthExecution', 'Debri_HUD')
+    t_split = g.foreign_template(m19, 'LiveSetActiveOnDestroySpawnerEvent', '05_PhaseStart_1')
+    assert arg_values(t_attr)[3:6] == ['true', 'false', 'TGT'], arg_values(t_attr)       # (shown, not invincible, TGT)
+    assert arg_values(t_split)[1:3] == ['E_Unit_05_Rocket_0', 'false'], arg_values(t_split)
+    assert arg_values(t_rpath)[2] == 'E_Obj_03_Rocket_0_Path0' and arg_values(t_rpath)[9] == 'true', arg_values(t_rpath)
+    assert arg_values(t_rboost)[4] == '1000' and arg_values(t_rboost)[9] == 'false', arg_values(t_rboost)   # (on along it)
+    rockets = [f'{SP_ROCKET_OBJ}_{k}' for k in range(2)]
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketSplitOff')      # the retake's start: no split yet, the debris held
+    g.execute(t_split, 'RE_SV_SpRocketSplitOff', {0: 'NoneSelect', 1: SP_ROCKET_UNIT, 2: 'false'})
+    for _, _, obj, _ in SP_DEBRIS:
+        for k in range(2):
+            g.execute(t_minh, 'RE_SV_SpRocketSplitOff', {0: f'{obj}_{k}', 3: '1.0'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketSplitOn')       # one rocket left: the last one breaks up
+    g.execute(t_split, 'RE_SV_SpRocketSplitOn', {0: 'NoneSelect', 1: SP_ROCKET_UNIT, 2: 'true'})
+    for (_, path), obj, L in zip(SP_ROCKET_PATHS, rockets, 'AB'):
+        go = f'RE_SV_SpRocketLaunch{L}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', go)
+        flag(go, f'SV_SpRocketEsc{L}', 'Set', 0)
+        g.execute(t_attr, go, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'true', 4: 'false', 5: 'TGT'})
+        g.execute(t_rpath, go, {0: obj, 2: path, 4: SP_ROCKET_SPEED[0], 5: SP_ROCKET_SPEED[1]}, delay=0.5)
+        boost = f'RE_SV_SpRocketBoost{L}'                                 # (Mission 19's at its first path point)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', boost)
+        g.execute(t_rboost, boost, {0: obj, 2: path})
+        esc = f'SV_SpRocketOut{L}'                                        # its climb's end: escaped
+        g.trigger(finish, esc, arg_changes={0: obj, 2: path})
+        flag(esc, f'SV_SpRocketEsc{L}', 'Set', 1)
+        g.execute(t_attr, esc, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'false', 4: 'true', 5: 'None'})
+        g.execute(t_off, esc, {0: obj, 1: 'NoneSelect', 2: 'NoneSelect', 3: 'false'}, delay=1.0)
+    for st, (_, unit, obj, _) in enumerate(SP_DEBRIS, 1):                # each stage targetable in turn
+        ev = f'RE_SV_SpDebriTgt{st}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        for k in range(2):
+            g.execute(t_attr, ev, {0: 'NoneSelect', 1: f'{obj}_{k}', 2: 'NoneSelect', 3: 'true', 4: 'false', 5: 'TGT'})
+            g.execute(t_minh, ev, {0: f'{obj}_{k}', 3: '0.0'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketRemove')
+    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS]:
+        g.execute(t_remove, 'RE_SV_SpRocketRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect'})
     lua = runtime_lua()
     for npc in [t[2] for t in SP_TURRETS] + [h[1] for h in SP_HULLS]:
         assert f'"{npc}"' in lua, f'Scripts/sv_spaceport.lua SPORT.FLEET_ROWS has no {npc}'
+    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS]:
+        assert f'"{unit}"' in lua, f'Scripts/sv_spaceport.lua has no {unit}'
     print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
-          f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units')
+          f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units; the retake: 2 rockets, {len(SP_DEBRIS)} debris '
+          f'stages')
 
 
 def build_ladon(g, flag, stock_ep):
