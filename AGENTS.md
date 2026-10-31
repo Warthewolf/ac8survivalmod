@@ -875,6 +875,22 @@ airfield, bombers; probeTickB: the STORE, allies, sounds, hits, loggers, AI part
 still once a tick; the perf line a minute in, then every five, with each half's average and worst (`perf: tick avg N ms
 (halves A + B), worst half W ms (first a, second b)`). Friends' zips get the weapons log and the audit off
 (tools/quiet_logs.py from package_release.sh); the user's dev install keeps them. Not yet run in game.
+0.73.57-coop2mp.58 (user, 2026-10-31: "can you please build the rockets this time?"; dev only: friends stay on 0.73.56
+without the Spaceport): the Spaceport Retake's rockets, Mission 19's (tools/re/SPACEPORT_ASSAULT.md). Build: its rocket
+unit (two objects on the pads, invincible until launched) as SV_Unit_SpRockets / SV_Obj_SpRocket_0/_1 (port_unit
+keep_rotation), its climbs copied whole (build_survival.py copy_path: SV_Path_SpRocketA / B, 900 m to 20.2 km), its three
+debris units as SV_Unit_SpDebriA-C holding E_Obj_Rocket_Debri_Phase<N>_0/_1 under Mission 19's exact names (port_unit
+digit_ok, rows per object), rows copied under Survival names (NPC_IMPORT renames: sv_sp_rocket, sv_sp_debri_a-f). Events
+(Mission 19's records, fired from Lua): RE_SV_SpRocketSplitOff / On (LiveSetActiveOnDestroySpawnerEvent; the debris held
+at 1 HP), RE_SV_SpRocketLaunch<A|B> (shown, not invincible, TGT; its path at 280 km/h), RE_SV_SpRocketBoost<A|B> (1000
+km/h on along it: Mission 19's PathPointReceive record), the climb's PathFinish -> SV_SpRocketEsc<A|B> (escaped: hidden,
+invincible, despawned), RE_SV_SpDebriTgt1-3, RE_SV_SpRocketRemove. Lua (sv_spaceport.lua rockets, CFG.specials.spaceport
+.retake.rockets): launches at +45 / +110 s, boost 12 s on, 3000 Z a rocket, an escape -5000 Z and no retake reward, the
+last one shot down breaks up, each debris stage targetable in turn (400 Z a piece), taken off 120 s after the last change;
+the round holds until they're done. Not yet known in game: the split itself (whether the blueprint brings in Survival's
+debris objects by those names, from units Lua spawned at the retake's start, 500 m down; Mission 19 spawns them at level
+start), where debris falls with no fall-target marks (Survival's world data has no marks yet), the climb's speed and
+whether its PathFinish fires. spaceport_test covers the Lua (launches, boost, kill, split, stages, escape, timeout, off).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

@@ -463,6 +463,141 @@ function SPORT.row(s, t)
 end
 
 ---------------------------------------------------------------------------------------------------- the retake
+---------------------------------------------------------------------------------------------------- the retake's rockets
+-- Mission 19's two rockets on the pads (SV_Unit_SpRockets, tools/survival_events.py SP_ROCKET_*; user, 2026-10-31: "can
+-- you please build the rockets this time?"). Each launches rockets.launch_a_s / launch_b_s into the retake
+-- (RE_SV_SpRocketLaunch<A|B>: shown, not invincible, TGT, its climb to 20.2 km at Mission 19's 280 km/h), boost_s on
+-- Mission 19's 1000 km/h (RE_SV_SpRocketBoost<A|B>: Mission 19 boosts at a path point, which never fires for Survival,
+-- hard rule 1). Its climb's end sets SV_SpRocketEsc<A|B>: escaped, escape_penalty zollars and no retake reward. Mission
+-- 19's split: the destroy spawner off at the start (RE_SV_SpRocketSplitOff; every debris piece held at 1 HP), on once one
+-- rocket is left (RE_SV_SpRocketSplitOn): the last one killed breaks up, its debris stages (SV_Unit_SpDebriA-C)
+-- targetable in turn (RE_SV_SpDebriTgt1-3, debris_tgt_s after the kill, debris_next_s after each stage), debris_pay a
+-- piece, all taken off debris_timeout_s after the last change (debris on the ground counts as destroyed). The round
+-- can't end while a rocket or its debris is up.
+local ROCKETS, DEBRIS = "SV_Unit_SpRockets", { "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }
+local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
+
+-- The rockets and their debris on the pads (from retakeSpawn); s.rk the round's rockets, or nothing when they're off
+local function rocketsSpawn(now, s)
+    local rc = rcfg()
+    if rc.enabled == false then log("special: the retake's rockets are off ([specials.spaceport.retake.rockets] enabled)"); return 0 end
+    if (aliveOf(ROCKETS) or 0) > 0 then fire("RE_SV_SpRocketRemove") end   -- (left up from before: taken off)
+    local r = spawn(ROCKETS)
+    if r <= 0 then log("special: the retake's rockets didn't spawn (" .. said(r) .. ")"); return 0 end
+    local deb = {}
+    for _, u in ipairs(DEBRIS) do deb[#deb + 1] = u .. " " .. said(spawn(u)) end
+    s.rk = { n = r, alive = r, at = now, setupAt = now + 2, launch = { A = now + (tonumber(rc.launch_a_s) or 45),
+             B = now + (tonumber(rc.launch_b_s) or 110) }, launched = {}, boosted = {}, escaped = {}, kills = 0,
+             escPending = 0, debris = {} }
+    log(string.format("special: the retake's rockets on the pads: %s; launches at +%.0f s and +%.0f s; their debris: %s", said(r),
+        s.rk.launch.A - now, s.rk.launch.B - now, table.concat(deb, ", ")))
+    return r
+end
+
+local function rocketsEscaped(rk) local n = 0; for _ in pairs(rk.escaped) do n = n + 1 end; return n end
+
+local function debrisTick(now, rk, rc)
+    local t = CFG.hud.text
+    if rk.stageAt and now >= rk.stageAt then
+        rk.stageAt = nil
+        fire("RE_SV_SpDebriTgt" .. rk.stage)
+        local a = aliveOf(DEBRIS[rk.stage]) or 0
+        log(string.format("special: the rocket's debris, stage %d (%s): targets now (%d up)", rk.stage, DEBRIS[rk.stage], a))
+    end
+    local u = DEBRIS[rk.stage]
+    local a = aliveOf(u) or 0
+    local was = rk.debris[u] or 2
+    if a < was then
+        local pay = tierPay(rc.debris_pay or 0) * (was - a)
+        addCredits(pay, "the rocket's debris")
+        rk.changeAt = now
+        log(string.format("special: the rocket's debris %s: %d left (+%d)", u, a, pay))
+    end
+    rk.debris[u] = a
+    if a <= 0 and not rk.stageAt then                    -- the stage gone: the next is brought in by its death
+        rk.stage, rk.changeAt = rk.stage + 1, now
+        if rk.stage <= #DEBRIS then
+            rk.stageAt = now + (tonumber(rc.debris_next_s) or 2.8)
+        else
+            rk.done = true
+            fire("RE_SV_SpRocketRemove")
+            hudCallout(t.sp_debris_down, t.sp_debris_down_sub)
+            log("special: the rocket's debris: every stage down")
+        end
+    elseif now - (rk.changeAt or now) >= (tonumber(rc.debris_timeout_s) or 120) then
+        rk.done = true
+        fire("RE_SV_SpRocketRemove")
+        log(string.format("special: the rocket's debris: nothing changed for %.0f s (stage %d, %s %d up): taken off, counted down",
+            now - rk.changeAt, rk.stage, u, a))
+    end
+end
+
+local function rocketsTick(now, s)
+    local rk, rc, t = s.rk, rcfg(), CFG.hud.text
+    if not rk or rk.done then return end
+    if rk.setupAt and now >= rk.setupAt then
+        rk.setupAt = nil
+        log("special: the rockets' split off until one is left, their debris held (RE_SV_SpRocketSplitOff " .. fire("RE_SV_SpRocketSplitOff") .. ")")
+    end
+    for _, L in ipairs({ "A", "B" }) do
+        if not rk.launched[L] and now >= rk.launch[L] and rk.kills + rocketsEscaped(rk) < rk.n then
+            rk.launched[L] = now
+            hudCallout(t.sp_rocket_launch, t.sp_rocket_launch_sub)
+            log(string.format("special: rocket %s launched (RE_SV_SpRocketLaunch%s %s)", L, L, fire("RE_SV_SpRocketLaunch" .. L)))
+        end
+        if rk.launched[L] and not rk.boosted[L] and now >= rk.launched[L] + (tonumber(rc.boost_s) or 12) then
+            rk.boosted[L] = true
+            log(string.format("special: rocket %s boosted to Mission 19's 1000 km/h (%s)", L, fire("RE_SV_SpRocketBoost" .. L)))
+        end
+    end
+    local f = svFlags() or {}                           -- escapes first: an escaped rocket's despawn isn't a kill
+    for _, L in ipairs({ "A", "B" }) do
+        if rk.launched[L] and now - rk.launched[L] >= 3 and not rk.escaped[L] and (f["SV_SpRocketEsc" .. L] or 0) >= 1 then
+            rk.escaped[L] = now
+            rk.escPending, rk.escUntil = rk.escPending + 1, now + 5
+            local took = math.min(math.floor(tonumber(rc.escape_penalty) or 0), math.max(0, RUN.credits or 0))
+            if took > 0 then RUN.credits, RUN.dirty = RUN.credits - took, true end   -- (as the STORE takes them)
+            hudCallout(t.sp_rocket_escaped, string.format(t.sp_rocket_escaped_sub, took))
+            log(string.format("special: rocket %s escaped (its climb's end): -%d zollars, no retake reward", L, took))
+        end
+    end
+    if rk.escPending > 0 and now > (rk.escUntil or 0) then rk.escPending = 0 end
+    local alive = aliveOf(ROCKETS) or rk.alive
+    if alive < rk.alive then
+        local down = rk.alive - alive
+        local esc = math.min(down, rk.escPending)
+        rk.escPending, down = rk.escPending - esc, down - esc
+        if down > 0 then
+            rk.kills, rk.lastKill = rk.kills + down, now
+            local pay = tierPay(rc.rocket_pay or 0) * down
+            addCredits(pay, "a rocket shot down")
+            LB.stat("ground", down)
+            hudCallout(t.sp_rocket_down, string.format(t.sp_rocket_down_sub, pay))
+            log(string.format("special: a rocket shot down (+%d); %d of %d down, %d escaped", pay, rk.kills, rk.n, rocketsEscaped(rk)))
+        end
+    end
+    rk.alive = alive
+    local over = rk.kills + rocketsEscaped(rk)
+    if over >= 1 and over < rk.n and not rk.splitOn then
+        rk.splitOn = true
+        log("special: one rocket left: it breaks up when it's shot down (RE_SV_SpRocketSplitOn " .. fire("RE_SV_SpRocketSplitOn") .. ")")
+    end
+    if over >= rk.n and not rk.stage then
+        local lastEsc = 0
+        for _, at in pairs(rk.escaped) do lastEsc = math.max(lastEsc, at) end
+        if rc.debris ~= false and rk.lastKill and rk.lastKill >= lastEsc then
+            rk.stage, rk.stageAt, rk.changeAt = 1, now + (tonumber(rc.debris_tgt_s) or 3), now
+            hudCallout(t.sp_debris, t.sp_debris_sub)
+            log("special: the last rocket broke up: its debris falls (stage 1 targets in " .. tostring(rc.debris_tgt_s or 3) .. " s)")
+        else
+            rk.done = true
+            fire("RE_SV_SpRocketRemove")
+            log("special: the rockets are done: " .. rk.kills .. " shot down, " .. rocketsEscaped(rk) .. " escaped")
+        end
+    end
+    if rk.stage and not rk.done then debrisTick(now, rk, rc) end
+end
+
 -- The round after a captured spaceport (specialFor: RUN.sport.retakeRound). Ctrl+INS (test only) forces it without a
 -- lost assault: the garrison for retake.test_troops troops, and no ships.
 function SPORT.retakeSpawn(now)
@@ -485,7 +620,8 @@ function SPORT.retakeSpawn(now)
         if r > 0 then s.garrison[u] = { alive = r }; n = n + r end
         log(string.format("special: the spaceport's garrison %s: %s", u, r == -100 and "still up from before" or said(r)))
     end
-    if n == 0 and SPORT.shipsUp(s) == 0 then log("special: no garrison and no ships for the retake; a normal round"); return false end
+    local nr = rocketsSpawn(now, s)
+    if n == 0 and SPORT.shipsUp(s) == 0 and nr == 0 then log("special: no garrison, ships or rockets for the retake; a normal round"); return false end
     hudCallout(t.sp_retake_go, t.sp_retake_go_sub)
     log(string.format("special: round %d, the Spaceport Retake: %d garrison vehicles, %d ships from the assault%s", D.round, n,
         SPORT.shipsUp(s), rs.forced and " (forced)" or ""))
@@ -510,11 +646,14 @@ function SPORT.retakeTick(now, s)
     end
     local okD, errD = pcall(deck, now, s)
     if not okD and tostring(errD) ~= s.deckErr then s.deckErr = tostring(errD); log("special: the Ford's deck error " .. s.deckErr) end
+    local okR, errR = pcall(rocketsTick, now, s)
+    if not okR and tostring(errR) ~= s.rkErr then s.rkErr = tostring(errR); log("special: the retake's rockets error " .. s.rkErr) end
 end
 
 function SPORT.retakeBusy(s)
     if s.state ~= "retake" then return false end
     for _, x in pairs(s.garrison or {}) do if x.alive > 0 then return true end end
+    if s.rk and not s.rk.done then return true end                -- (a rocket or its debris still up)
     return SPORT.shipsUp(s) > 0
 end
 
@@ -522,7 +661,13 @@ function SPORT.retakeOver(now, s)
     local c, t = cfg(), CFG.hud.text
     s.state = "done"
     fire("RE_SV_SpGarrisonRemove")                        -- (none should be left: tidy)
+    if s.rk then fire("RE_SV_SpRocketRemove") end
     local pay = (c.retake and c.retake.reward or 0) + (c.retake and c.retake.reward_per_round or 0) * D.round
+    local esc = s.rk and rocketsEscaped(s.rk) or 0
+    if esc > 0 then                                         -- (a rocket reached orbit: no reward)
+        log(string.format("special: the retake's reward withheld: %d rocket%s escaped", esc, esc == 1 and "" or "s"))
+        pay = 0
+    end
     addCredits(pay, "spaceport retaken")
     LB.special("retake", true, now - (s.at or now))
     hudCallout(t.sp_retaken, string.format(t.sp_retaken_sub, pay))

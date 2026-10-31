@@ -392,15 +392,20 @@ def vec(x, y, zz, kind='Vector'):
     return ('native', kind, struct.pack('<3d', x, y, zz))
 
 
-def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False):
+def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False, rows=None,
+              keep_rotation=False, digit_ok=False):
     """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
     (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
     the other mission's), our world data's name, new UniqueIDs; tgt: a target box and a TGT mark on each (user,
-    2026-10-23: "assault ships and troops did not come with target boxes"). Returns the objects' names as event args
-    write them."""
+    2026-10-23: "assault ships and troops did not come with target boxes"). rows: each object's own row (in order);
+    keep_rotation: the source objects' rotation (Mission 19's rockets stand on their tails); digit_ok: an obj_name
+    ending in a digit with no underscore before it (FName splits a tail only after one: Mission 19's debris names, which
+    its rocket's blueprint looks up exactly). Returns the objects' names as event args write them."""
     new = copy.deepcopy(src)
     assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
-    assert not new_unit[-1].isdigit() and not obj_name[-1].isdigit() and obj_name not in top_number, obj_name
+    assert not new_unit[-1].isdigit() and (digit_ok or not obj_name[-1].isdigit()) and obj_name not in top_number, obj_name
+    assert not digit_ok or obj_name.rpartition('_')[2][:1].isalpha(), obj_name    # (its tail is a word, not _<digits>)
+    assert rows is None or len(rows) == len(points), (new_unit, rows)
     wd = ('name', 'WD_SurvivalMode_global', 0)
     objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
     while len(objs) < len(points): objs.append(copy.deepcopy(objs[-1]))   # more than the source has: copies of its last
@@ -409,9 +414,10 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     for k, (ob, pt) in enumerate(zip(objs, points)):
         num = 0 if len(points) == 1 else k + 1
         uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}:{k}')
-        repl = {'Name': ('name', obj_name, num), 'MissionNpcID': ('name', npc_row, 0), 'UniqueID': ('raw', 'UInt32', uid),
-                'SpawnPoint': vec(*pt), 'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd,
-                'Tags': ('arr', [])}
+        repl = {'Name': ('name', obj_name, num), 'MissionNpcID': ('name', rows[k] if rows else npc_row, 0),
+                'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(*pt), 'Rotation': vec(0.0, yaw, 0.0, 'Rotator'),
+                'WorldDataName': wd, 'Tags': ('arr', [])}
+        if keep_rotation: del repl['Rotation']
         assert all(any(q[1] == n for q in ob[2]) for n in ('Name', 'MissionNpcID', 'UniqueID', 'SpawnPoint')), new_unit
         ob[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in ob[2]]
         if tgt:                    # the HUD's target box and the red TGT mark (ELiveTargetMarkType 1), as a mission target
@@ -432,10 +438,39 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
     new[2][:] = sorted([q for q in new[2] if q[1] != 'bIsSpawnFromStart'] + [(sp_idx, 'bIsSpawnFromStart', True, None)],
                        key=lambda q: q[0])
-    assert npc_row in NPC_ROWS, npc_row
-    for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global']: z.nb.add(n)
+    assert npc_row in NPC_ROWS and all(r in NPC_ROWS for r in rows or []), (npc_row, rows)
+    for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global'] + list(rows or []): z.nb.add(n)
     units.append(new)
     return names
+
+
+def copy_path(z, used_ids, src, name):
+    """Another mission's AI path desc `src` whole as Survival's `name`: its points where they are (their tangents, up and
+    rotation: Mission 19's rocket climbs, straight up, need its own; make_path's level tangents can't), renamed as the
+    engine names a path's points (name_0, name_1 ...), new UniqueIDs, our world data's name, no tube data (hard rule 34)
+    and ControlType 1 (hard rule 35)."""
+    new = copy.deepcopy(src)
+    f = {p[1]: p for p in new[2]}
+    assert not name[-1].isdigit(), name
+    els = []
+    for k, el in enumerate(f['PathPointDescList'][3][1]):
+        el = copy.deepcopy(el)
+        uid = ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}:{k + 1}'))
+        el[2][:] = [(q[0], q[1], False, ('name', name, k + 1)) if q[1] == 'Name' else
+                    (q[0], q[1], False, uid) if q[1] == 'UniqueID' else q for q in el[2]]
+        els.append(el)
+    b = copy.deepcopy(f['BeginPointDesc'][3])
+    b[2][:] = [(q[0], q[1], False, ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}:0'))) if q[1] == 'UniqueID'
+               else q for q in b[2]]
+    tube = ('struct', 'LiveAIPathTubeData', [(0, 'TubeData', False, ('arr', [])), (1, 'MoveData', False, ('arr', []))])
+    ctl = ('enum', 'ELiveAIPathControlType', ('raw', 'Byte', b'\x01'))
+    assert f['ControlType'][3] is not None and f['ControlType'][3][2][2] == b'\x01', (name, f['ControlType'][3])
+    repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els), 'PathTubeData': tube, 'ControlType': ctl,
+            'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}')),
+            'Name': ('name', name, 0), 'WorldDataName': ('name', 'WD_SurvivalMode_global', 0)}
+    new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl else q for q in new[2]]
+    for n in names_in(new) + [name, 'DefaultPathPoint']: z.nb.add(n)
+    return new
 
 
 def make_path(z, used_ids, template, name, pts, smooth=False, before=None, after=None):
@@ -980,9 +1015,26 @@ def spaceport_units(units, used_ids, z, top_number, v):
         paths.append(make_path(z, used_ids, lane, s['back_path'], s['back_pts']))
     for unit, obj, pts in survival_events.sp_garrison():          # the retake's: on the spot, targets
         port_unit(units, used_ids, z, src_troop, unit, obj, survival_events.LCAC_TROOP_ROW, pts, 180.0, top_number, tgt=True)
+    # the retake's rockets and their debris (survival_events.SP_ROCKET_* / SP_DEBRIS): Mission 19's, where it has them
+    m19 = stock_wd(survival_events.SP_ROCKET_SOURCE[0])
+    spot = lambda ob: struct.unpack('<3d', [q for q in ob[2] if q[1] == 'SpawnPoint'][0][3][2])
+    src_r = desc_named(m19, 'UnitDescList', survival_events.SP_ROCKET_SOURCE[1])
+    obj_r = survival_events.SP_ROCKET_OBJ
+    names = port_unit(units, used_ids, z, src_r, survival_events.SP_ROCKET_UNIT, obj_r, survival_events.SP_ROCKET_ROW,
+                      [spot(ob) for ob in objects(src_r)], 0.0, top_number, keep_rotation=True)
+    assert names == [f'{obj_r}_0', f'{obj_r}_1'], names
+    unit_area(unit_by(survival_events.SP_ROCKET_UNIT), survival_events.SP_ROCKET_AREA_M, survival_events.SP_ROCKET_ALT_M)
+    for src_p, new_p in survival_events.SP_ROCKET_PATHS:
+        paths.append(copy_path(z, used_ids, desc_named(m19, 'AIPathDescList', src_p), new_p))
+    for src_u, unit, obj, rws in survival_events.SP_DEBRIS:
+        su = desc_named(m19, 'UnitDescList', src_u)
+        names = port_unit(units, used_ids, z, su, unit, obj, rws[0][0], [spot(ob) for ob in objects(su)], 0.0, top_number,
+                          rows=[r[0] for r in rws], keep_rotation=True, digit_ok=True)
+        assert names == [f'{obj}_0', f'{obj}_1'], names   # (as Mission 19 stores them: its rocket's blueprint looks them up)
     print(f'  spaceport assault: ' + ', '.join(f'{n} {k}' for k, n in count.items()) + f'; {len(waves)} landing waves '
           f'({len(craft)} craft, {len(craft) * 3} paths, {len(craft)} troop units), {len(boats)} boat patrols, '
-          f'{len(survival_events.sp_garrison())} garrison units')
+          f'{len(survival_events.sp_garrison())} garrison units; the retake: 2 rockets on 2 climbs, '
+          f'{len(survival_events.SP_DEBRIS)} debris units')
 
 
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
@@ -2062,7 +2114,10 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               # they come with its DT_NPC row's ChildNPCId)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016', []),
               # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
-              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01'])]
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01']),
+              # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
+              # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
@@ -2205,8 +2260,10 @@ def build_npc_table():
                 dt['rows'].append(((L['row'], 0), row))
                 extra.append((L['row'], LADON_TABLE_NOTE, L['npc']))
         for r in wanted:
-            assert (r, 0) not in rows, r
-            row = copy.deepcopy(srows[(r, 0)])
+            r, src = r if isinstance(r, tuple) else (r, r)          # (a row copied under a name of Survival's)
+            assert (r, 0) not in rows and survival_events.fname(r)[2] == 0, r   # (a name the engine keeps whole)
+            f = survival_events.fname(src)
+            row = copy.deepcopy(srows[(f[1], f[2])])
             assert not any(p[3] and p[3][0] == 'obj' for p in row[2]), r              # names and values only
             for n in names_in(row) + [r]: z.nb.add(n)
             dt['rows'].append(((r, 0), row))

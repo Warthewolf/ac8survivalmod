@@ -53,6 +53,7 @@ function SV_Event(name)
     if u then alive["SV_Unit_SpLcac" .. u] = 0 end
     u = name:match("^RE_SV_SpTroopsRemove(%u%u%u)$")
     if u then alive["SV_Unit_SpTroops" .. u] = 0 end
+    if name == "RE_SV_SpRocketRemove" then for _, d in ipairs({ "SV_Unit_SpRockets", "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }) do alive[d] = 0 end end
     return eventR
 end
 function SV_UnitAlive(u) return alive[u] or 0 end
@@ -63,6 +64,7 @@ local spawns = {}
 local SIZE = function(u)
     if u:find("^SV_Unit_SpLcac") then return 2 end
     if u:find("^SV_Unit_SpGarrison") then return 4 end
+    if u == "SV_Unit_SpRockets" or u:find("^SV_Unit_SpDebri") then return 2 end
     if u:find("^SV_Unit_Sp") then return 1 end
     return flightSize(u)
 end
@@ -228,6 +230,7 @@ check(carried == 26 and s.state == "done" and called(T.sp_lost) ~= nil, "its end
 check(specialFor(D.round + 1) == "retake", "specialFor: the next round is the retake")
 
 print("the retake")
+SP.retake.rockets.enabled = false                -- (the rockets: their own section below)
 local rs = RUN.sport
 D.round = D.round + 1
 D.special = { kind = "retake", state = "pending" }
@@ -249,6 +252,83 @@ check(paid("spaceport retaken") > 0 and called(T.sp_retaken) ~= nil, "its end: t
 fresh(12)
 D.special = { kind = "retake", state = "pending" }
 check(SPORT.retakeSpawn(0) == true and #spawned("^SV_Unit_SpGarrison") == 2, "forced (no RUN.sport): test_troops 8: 2 garrison units")
+SP.retake.rockets.enabled = true
+
+print("the retake's rockets")
+local RK = SP.retake.rockets
+local function rtick(s, from, to) for t = from, to, 0.5 do now = t; D.now = t; SPORT.retakeTick(t, s) end end
+local function retakeWithRockets()
+    fresh(12)
+    D.special = { kind = "retake", state = "pending" }
+    RUN.credits = 20000
+    check(SPORT.retakeSpawn(0) == true, "the retake spawned with its rockets")
+    local s = D.special
+    for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
+    return s
+end
+local s3 = retakeWithRockets()
+check(alive.SV_Unit_SpRockets == 2 and alive.SV_Unit_SpDebriA == 2 and alive.SV_Unit_SpDebriC == 2 and s3.rk and s3.rk.n == 2,
+      "both rockets and the 3 debris units spawned")
+rtick(s3, 0, 3)
+check(evs("^RE_SV_SpRocketSplitOff$") ~= "" and evs("^RE_SV_SpRocketLaunch") == "", "the split off at the start; nothing launched yet")
+check(SPORT.retakeBusy(s3), "busy: the rockets on the pads (the garrison down)")
+rtick(s3, 3.5, RK.launch_a_s + 0.5)
+check(evs("^RE_SV_SpRocketLaunch") == "RE_SV_SpRocketLaunchA" and called(T.sp_rocket_launch) ~= nil, "rocket A launched at launch_a_s: ROCKET LAUNCH")
+rtick(s3, RK.launch_a_s + 1, RK.launch_a_s + RK.boost_s + 0.5)
+check(evs("^RE_SV_SpRocketBoost") == "RE_SV_SpRocketBoostA", "boosted boost_s on")
+alive.SV_Unit_SpRockets = 1                     -- A shot down
+rtick(s3, RK.launch_a_s + RK.boost_s + 1, RK.launch_a_s + RK.boost_s + 2)
+check(paid("a rocket shot down") > 0 and called(T.sp_rocket_down) ~= nil and evs("^RE_SV_SpRocketSplitOn$") ~= "",
+      "A down: paid, ROCKET DOWN, the split on for the last one")
+rtick(s3, RK.launch_a_s + RK.boost_s + 2.5, RK.launch_b_s + 0.5)
+check(evs("^RE_SV_SpRocketLaunchB$") ~= "", "rocket B launched at launch_b_s")
+alive.SV_Unit_SpRockets = 0                     -- B shot down: it breaks up
+rtick(s3, RK.launch_b_s + 1, RK.launch_b_s + 1)
+check(called(T.sp_debris) ~= nil and s3.rk.stage == 1 and SPORT.retakeBusy(s3), "B down: THE ROCKET BREAKS UP, stage 1, still busy")
+rtick(s3, RK.launch_b_s + 1.5, RK.launch_b_s + 1 + RK.debris_tgt_s + 0.5)
+check(evs("^RE_SV_SpDebriTgt1$") ~= "", "stage 1 targetable debris_tgt_s on")
+alive.SV_Unit_SpDebriA = 0
+rtick(s3, now + 0.5, now + 0.5 + RK.debris_next_s + 0.5)
+check(evs("^RE_SV_SpDebriTgt2$") ~= "" and paid("the rocket's debris") > 0, "stage 1 down: its pieces paid, stage 2 targetable")
+alive.SV_Unit_SpDebriB = 0
+rtick(s3, now + 0.5, now + 0.5 + RK.debris_next_s + 0.5)
+alive.SV_Unit_SpDebriC = 0
+rtick(s3, now + 0.5, now + 1)
+check(evs("^RE_SV_SpDebriTgt3$") ~= "" and s3.rk.done and called(T.sp_debris_down) ~= nil and not SPORT.retakeBusy(s3),
+      "stages 2 and 3 down: DEBRIS DESTROYED, the rockets done, not busy")
+SPORT.retakeOver(now, s3)
+check(paid("spaceport retaken") > 0, "no escape: the retake reward paid")
+-- an escape: the penalty, no reward, its despawn not a kill; the other shot down breaks up; the debris never splits: taken off
+local s4 = retakeWithRockets()
+rtick(s4, 0, RK.launch_a_s + 0.5)
+FLAGS.SV_SpRocketEscA = 1
+rtick(s4, RK.launch_a_s + 4, RK.launch_a_s + 4)
+alive.SV_Unit_SpRockets = 1                     -- (its despawn a second later)
+rtick(s4, RK.launch_a_s + 5, RK.launch_a_s + 5)
+check(called(T.sp_rocket_escaped) ~= nil and RUN.credits == 20000 - RK.escape_penalty and paid("a rocket shot down") == 0
+      and s4.rk.kills == 0 and evs("^RE_SV_SpRocketSplitOn$") ~= "",
+      "A escaped: ROCKET ESCAPED, -escape_penalty, its despawn not a kill, the split on for B")
+rtick(s4, RK.launch_a_s + 5.5, RK.launch_b_s + 0.5)
+alive.SV_Unit_SpRockets = 0
+rtick(s4, RK.launch_b_s + 1, RK.launch_b_s + 1 + RK.debris_tgt_s + 1)
+check(s4.rk.stage == 1 and evs("^RE_SV_SpDebriTgt1$") ~= "", "B shot down after A escaped: it breaks up (stage 1)")
+rtick(s4, now + 0.5, now + RK.debris_timeout_s + 1)
+check(s4.rk.done and evs("^RE_SV_SpRocketRemove$") ~= "" and since(1, "nothing changed for") >= 1, "debris that never changes: taken off after debris_timeout_s")
+SPORT.retakeOver(now, s4)
+check(paid("spaceport retaken") == 0 and since(1, "reward withheld: 1 rocket escaped") >= 1, "an escape: no retake reward")
+-- both escape: no debris
+local s5 = retakeWithRockets()
+rtick(s5, 0, RK.launch_b_s + 0.5)
+FLAGS.SV_SpRocketEscA, FLAGS.SV_SpRocketEscB = 1, 1
+rtick(s5, RK.launch_b_s + 4, RK.launch_b_s + 5)
+check(s5.rk.done and not s5.rk.stage and evs("^RE_SV_SpDebriTgt") == "" and RUN.credits == 20000 - 2 * RK.escape_penalty,
+      "both escaped: done, no debris, two penalties")
+-- off: no rockets
+RK.enabled = false
+local s6 = retakeWithRockets()
+rtick(s6, 0, 1)
+check(s6.rk == nil and alive.SV_Unit_SpRockets == nil and not SPORT.retakeBusy(s6), "rockets.enabled = false: none")
+RK.enabled = true
 
 print("held")
 fresh(10)
