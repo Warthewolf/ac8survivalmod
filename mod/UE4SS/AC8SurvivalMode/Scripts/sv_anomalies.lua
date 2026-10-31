@@ -1996,6 +1996,10 @@ SPC.kinds = {
                    busy = function(s) return SPORT.busy(s) end, over = function(now, s) return SPORT.roundOver(now, s) end,
                    row = function(s, t) return SPORT.row(s, t) end },
     retake     = { sub = "retake_sub",
+                   ready = function()                    -- (forced too: none with the Spaceport or its retake off)
+                       local c = CFG.specials.spaceport
+                       return not (c.enabled == false or (c.retake and c.retake.enabled == false))
+                   end,
                    budget = function(budget)
                        local r = CFG.specials.spaceport.retake or {}
                        return math.floor(budget * (r.fighter_share or 0.6) / 2 + 0.5) * 2
