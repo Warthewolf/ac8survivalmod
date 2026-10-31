@@ -78,6 +78,54 @@ references another export (hard rule 34: scanned).
 - Not verified: what bIsLanding does; whether EnemySearchType matters; whether a part's WD row or DT_NPC ChildNPCId wins
   at spawn; an _Ally class on an enemy; that the BP_VE004_grfd_mk15_0N_CP packages exist (not extracted).
 
+## Mission 19's rockets (research of 2026-10-31; blueprints pulled to the session scratchpad's bp/)
+- **The split is the blueprints', not the events'**: each rocket / debris blueprint has a destroy system
+  (LiveDefaultDestroySystemSpawnFromWD) that, at its final explosion, brings in world-data objects BY THEIR EXACT NAMES at
+  the dying piece's socket and hides the parent. So Survival's WD keeps those names:
+  rocket -> E_Obj_Rocket_Debri_Phase1_0 (ABR_p1, SOC_B) + _Phase1_1 (L_p1, SOC_L); ABR death -> _Phase2_0 (BR_p2, SOC_B)
+  + _Phase2_1 (A_p2, SOC_A); BR death -> _Phase3_0 (R_p3, SOC_B) + _Phase3_1 (B_p3, SOC_R). L_p1 destroys itself 3 s on
+  (a 1000-damage self timer). Debris (class LiveAIRocketWreck, inferred) fall by themselves, no paths, with per-difficulty
+  fall settings, aimed at marks by name (ABR_p1 -> RocketDebri_FirstMark_0_*, BR_p2 / R_p3 -> LastMark_0_*, A_p2 / B_p3 ->
+  LastMark_1_*, the base -> DefaultMarkActor0 at (-1358362, 6514, 6000), only in WD_Mission019_phase05); 25
+  LiveSetFallTargetExecution records (RocketDebri_PhaseN_M_Volume_K) re-aim each piece mark ring by mark ring as it falls
+  through the RocketDebri_Fall_Target volumes.
+- The rocket blueprint sets bUseHandShakeInUnit: the two rockets share ONE debris set, so (inferred) only the last
+  rocket killed splits. Survival spawns the debris units itself, so both rockets can split if the set is spawned again
+  (old one taken off: hard rule 16) before the second dies, or the rockets launch staggered.
+- Units (WD_Mission019_global): E_Unit_05_Rocket_0 (faction 2, tag Unit_Rocket_All), E_Obj_05_Rocket_0 at
+  (-1384043.4, -41260.8, 7642.7) and _1 at (-1325196.1, 59777.7, 7676.2) (the shuttle's pad); rotation (90, 0, 180), TGT,
+  HUD box, invincible, tags Obj_Rocket / Obj_04_HUD_OFF; row Rocket -> OP0058_crkt_01 -> BP_OP0058_crkt_CP, MaxHealth
+  160. Rocket_Debri_Phase1_0 / 2_0 / 3_0: one unit a stage, two objects, at z -500 m, spawned at level start, tags
+  Unit_Rocket_All / Unit_Rocket_Debri, objects Obj_Rocket_Debri (+ _Phase02 / _Phase03), no mark or box, MaxHealth 20.
+- Launch: paths E_Obj_03_Rocket_0/_1_Path0 (ControlType 1, empty tube data) straight up from 900 / 750 m through 1.8, 6,
+  14 and 20.2 km; Mission 19 starts them after its cutscene and speeds them up at path points (1000 km/h, accel 2.8 then
+  1.7 / 1.8): PathPointReceive (hard rule 1). Survival: its own legs from the pad (the shuttle's proven launch records,
+  or legs chained by PathFinish, ControlType 1, each started a little ahead: hard rule 2, one-shot: hard rule 3); the top
+  leg's PathFinish (~14 km: the radio counts down to ~13 km) is the escape. Climb 1.8 -> 14 km ~70-110 s (to measure).
+- Damage window: health 100 at start, MinHealth 75 and the missiles' homing offset until a player is within 8 km
+  (Default_CheckDistanceEvent_6: MinHealth 0, homing back); the survivor of the first kill held at MinHealth 5 under
+  6 km (05_ObjectDestroy_Rocket_*), 0 inside Rocket_Destructible_Volume0 (r 800 m, 6-16 km). The destroy spawner is off
+  at phase start and on once the unit's last rocket is at 0 (LiveSetActiveOnDestroySpawnerEvent). Debris: Phase1 held at
+  MinHealth 1 until Debri_HUD (33 s after the kill) gives it TGT and MinHealth 0; each stage's death gives the next its TGT
+  and MinHealth 0 2.6-2.8 s on (05_ObjectDestroy_Debri_1 / _2). Counting: type 72 unit-count triggers (Survival's own
+  UnitDamage_Ship_Destroy_0 is one); success = Unit_Rocket_All at 0.
+- Failure in Mission 19: escape (F_PathPointReceive), debris reaching the ground (F_ObjectCrashedDestroy_0, type 71) or a
+  rocket killed on the pad (00_Rocket_Failed_Volume0 -> VFX_BigExplosionN). Survival's: an escape is the penalty; debris
+  on the ground just counts as destroyed (the user's design has no fail there).
+- Copy list: the rocket unit (Survival's names fine), the three debris units under their exact object names (port_unit's
+  digit-tail assert relaxed for these, tags kept or named in records), new pad paths (make_path),
+  Rocket_Destructible_Volume0, the Fall_Target volumes, every RocketDebri_*Mark_* and DefaultMarkActor0 by name (volume
+  classes are script imports: import_from), optionally the Rise / Down volumes and VFX_05_RocketSmoke0/1 /
+  VFX_BigExplosion0/1 (BP_MO102 / BP_MO103 imports + container header: hard rule 7); seven DT_SV_NpcMission rows
+  (Rocket, Rocket_Debri_1_1 .. 3_2). Events: the destroy spawner on / off, the MinHealth gating, Debri_HUD's TGT and
+  MinHealth (from Lua, not a fixed 33 s), 05_ObjectDestroy_Debri_1 / _2, the 25 fall-target records, type 70 / 71
+  triggers. Can't use: cutscene triggers (27, 28), PathPointReceive (2e), phase starts (4c), Mission 19's cameras /
+  mission finish / radio (unless cloned into DT_SV_Radio).
+- To test: one split per handshake; the booster flames without the cutscene; debris safe at -500 m; an escaped rocket
+  destroyed with the spawner on would spawn debris at 14 km (switch it off first, or move it to Rocket_Delete0 as
+  Mission 19's 04_05_Change); Debug_Rocket_PhaseStart_5 jumps a rocket 7500 along its path (for testing); whether volumes
+  and marks need the WD trailer updated (only paths are proven not to).
+
 ## What the game has (research of 2026-10-31)
 - Ships: see "The ships" above (VE014_lcac: the beach assault's, Mission 13's enemy ones).
 - Rockets: Mission 19 (EP_Mission019_global: build/research/special/EP_Mission019_global.txt); its liftoff is a cutscene
