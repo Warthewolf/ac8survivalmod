@@ -490,6 +490,9 @@ function roundsTick(now)
     if D.shuttleClock then D.grounded = playerOnAirfield() end   -- (the shuttle's countdown stops while you're down)
     specialTick(now)
     if D.state == "wait" then
+        -- TEST ONLY BEGIN
+        if D.testRange then D.at, D.announced = now + 3600, true end    -- (Ctrl+0: the test range holds the rounds)
+        -- TEST ONLY END
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
             local t = CFG.hud.text

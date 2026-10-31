@@ -254,8 +254,12 @@ function spawnFlight(unit, maxLevel)
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
+    local yaw = (bearing + 180) % 360                                             -- facing the airfield
+    -- TEST ONLY BEGIN
+    if TEST_SPAWN_AT then x, y, alt, yaw = TEST_SPAWN_AT.x, TEST_SPAWN_AT.y, TEST_SPAWN_AT.alt, TEST_SPAWN_AT.yaw end   -- (Ctrl+F5)
+    -- TEST ONLY END
     spawningUnit = unit
-    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
+    local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit = nil
     log(string.format("round %d: %s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
         D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",

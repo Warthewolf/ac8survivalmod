@@ -226,6 +226,10 @@ RECORDING.md there). It finds the actor's RootComponent offset from the pointer 
 doubles (+0x200 quat, +0x220 translation), the AI target's stick at +0x2a8c and its post-stall flags; nothing is
 written to the game. None of it is a hard rule until a test confirms it (the log's "the engine puts the plane at"
 line against the first P row checks the transform read).
+Test range (Lua 0.70.8, test-only keys, untested): Ctrl+0 holds the rounds (free-flight-like: nothing spawns unless asked),
+Ctrl+F5 spawns a top-level ace flight 1.5 km ahead of the player flying its way (spawnFlight with TEST_SPAWN_AT), to
+record post-stall moves from its tail. Survival's level, not stock free flight: stock free flight has no Survival
+world data / event package, so no spawner, orders or unique actions there.
 
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES

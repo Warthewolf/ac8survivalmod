@@ -580,6 +580,52 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
+    -- Ctrl+0 in a run: the test range on / off (user, 2026-10-31: "the AI appears in a free flight mission instead of
+    -- survival for testing"). On: no round starts (one already up runs on), enemies come only from Ctrl+F5 / Ctrl+6.
+    -- Off: the next round in 5 s. For the GRU pilot project's recordings (Ctrl+F6) and later its net-flown enemies.
+    if Key.ZERO then
+        pcall(RegisterKeyBind, Key.ZERO, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now then log("test: Ctrl+0 outside a Survival run"); return end
+                    D.testRange = not D.testRange
+                    if not D.testRange and D.state == "wait" then D.at, D.announced = D.now + 5, false end
+                    hudCallout(D.testRange and "TEST RANGE" or "TEST RANGE OFF",
+                               D.testRange and "NO ROUNDS - CTRL+F5 SPAWNS AN ACE ON YOUR NOSE" or "NEXT ROUND IN 5 S")
+                    log(string.format("test: Ctrl+0, test range %s (round %d, %s)", D.testRange and "on" or "off", D.round, D.state))
+                end)
+                if not ok then log("test: Ctrl+0 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+F5 in a run: a top-level flight (as Ctrl+6, its ace leading: post-stall allowed) 1.5 km ahead of you, flying
+    -- your way at your height: you start on the ace's tail, where it Cobras / Kulbits to shake you (record it: Ctrl+F6)
+    if Key.F5 then
+        pcall(RegisterKeyBind, Key.F5, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now or not nativeReady() then log("test: Ctrl+F5 outside a Survival run"); return end
+                    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+                    if not valid(pawn) then log("test: Ctrl+F5 without your plane"); return end
+                    local loc, rot = pawn:K2_GetActorLocation(), pawn:K2_GetActorRotation()
+                    local unit
+                    for _, u in ipairs(CFG.pool) do
+                        if not unit and not D.up[u] and not PROBE_OF[u] and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
+                    end
+                    if not unit then hudCallout("TEST: NO FREE FLIGHT", "TRY AGAIN WHEN SOME ARE DOWN"); return end
+                    local yaw, alt = rot.Yaw, math.max(loc.Z / 100, 1500)
+                    TEST_SPAWN_AT = { x = loc.X + 150000 * math.cos(math.rad(yaw)), y = loc.Y + 150000 * math.sin(math.rad(yaw)),
+                                      alt = alt, yaw = yaw % 360 }
+                    local okS, r = pcall(spawnFlight, unit, true)
+                    TEST_SPAWN_AT = nil
+                    if not okS then error(r) end
+                    hudCallout("TEST: ACE ON YOUR NOSE", r > 0 and "1.5 KM AHEAD - STAY ON ITS TAIL" or "COULD NOT SPAWN")
+                    log(string.format("test: Ctrl+F5, %s 1.5 km ahead at yaw %.0f, %.1f km up: %s", unit, yaw, alt / 1000, tostring(r)))
+                end)
+                if not ok then TEST_SPAWN_AT = nil; log("test: Ctrl+F5 error " .. tostring(err)) end
+            end)
+        end)
+    end
     -- Ctrl+9 while VALKA flies the X-02S: her next paint variant (SPC.V.PAINTS), named on the HUD and in the log
     if Key.NINE then
         pcall(RegisterKeyBind, Key.NINE, mods, function()
