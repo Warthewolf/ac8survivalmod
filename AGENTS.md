@@ -828,6 +828,13 @@ every game's rows at its main menu and the enemies' specials fire at every playe
 plane_missiles 6, nonplane_missiles 14 (survival.ini [attackers]).
 0.73.49-coop2mp.50 (built and installed 2026-10-31, zip 0.73.49; user: "set the pursuers to 12"): CFG.attackers.pursuers 12 (MaxPursuitAttackers: the aircraft that may
 chase a player at once; the game's own is logged on the attackers: line).
+0.73.50-coop2mp.51 (built and installed 2026-10-31, zip 0.73.50; user: "increase the number of ships and sam site targetting to 40"): nonplane_missiles 40; the
+attackers: line also logs the plane's attack waits (CooldownPursuit / NonpursuitAttackTimerRange_CP) and the difficulty's
+modifiers. The player difficulty table (DT_Difficulty, LiveDifficultyDataTable; LiveDifficultyManager keeps the current
+row as CurrentDifficultyDataTableRow), Casual / Easy / Normal / Hard / Ace: PlayerHealthModifier 300 / 200 / 100 / 100 /
+100, unlimited gun yes / yes / yes / no / no, unlimited missiles Casual only, ReturnLineRecoveryHealth all but Ace,
+FlightAssistOnForNewGame Casual / Easy, MissionClearMRPModifier 100 / 100 / 100 / 120 / 150, CooldownPursuit and
+NonpursuitAttackTimeModifier 150 / 120 / 100 / 50 / 25 % (the enemies' waits between attacks).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
