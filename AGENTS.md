@@ -868,6 +868,13 @@ key bound twice with Ctrl is logged at load (`test: Ctrl+<key> is bound twice`).
 NOT include the spaceport retake", "or Spaceport Defense"): CFG.specials.spaceport.enabled (SPORT.ready, the retake kind's
 ready and specialFor: none, forced or not); `NOSPACEPORT=1` on package_release.sh / package_dev.sh runs
 tools/nospaceport.py on the staged copies (both off, their ini sections gone; zip ..._NoSpaceport). The sources keep it on.
+0.73.56-coop2mp.57 (a friend's report of 2026-10-31: "choppy" and stuttering in solo play; their log too short for a perf
+line): the Lua tick ran whole on one frame every 250 ms (the user's perf lines: 15-38 ms a tick, worst 160-357 ms; the
+weapons log 19 ms of it in Spaceport rounds). Now in two halves 125 ms apart (sv_main.lua probeTick: rounds, HUD, music,
+airfield, bombers; probeTickB: the STORE, allies, sounds, hits, loggers, AI parts, ammo, the plane sweep), each part
+still once a tick; the perf line a minute in, then every five, with each half's average and worst (`perf: tick avg N ms
+(halves A + B), worst half W ms (first a, second b)`). Friends' zips get the weapons log and the audit off
+(tools/quiet_logs.py from package_release.sh); the user's dev install keeps them. Not yet run in game.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
