@@ -37,6 +37,7 @@ local function spawn(unit)
     return r
 end
 local function said(r) return r > 0 and (r .. " up") or ("not spawned (" .. ((SV_ERR and SV_ERR[r]) or tostring(r)) .. ")") end
+local function mmss(sec) sec = math.max(0, math.floor(sec + 0.5)); return string.format("%d:%02d", sec // 60, sec % 60) end
 
 -- The fleet in the build's order (tools/survival_events.py sp_fleet): the Ford, each group's Wasp, Aegis pair and
 -- boat pair, then the Ford's ring of Aegis.
@@ -70,6 +71,37 @@ SPORT.FLEET_ROWS = { "SV_Fleet_Mk15Aegis", "SV_Fleet_Mk41Aegis", "SV_Fleet_Mk45A
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     if spawningUnit == FORD and not (SPORT.fordActor and valid(SPORT.fordActor)) then SPORT.fordActor = o end
 end)
+-- The fleet's turrets as SV_Spawn makes them (the user's loggers of 2026-10-31: sv_weaponlog.lua's fleet watch): every
+-- object of a ship unit, kept by address once its class reads as a turret's (a mount: mk15 / mk41 / mk45 / the artillery /
+-- a SAM launcher); its object checked valid before each read, dropped once it's gone.
+SPORT.turrets, SPORT.newParts = {}, {}
+local TURRET_CLASS = { "mk15", "mk41", "mk45", "artillery", "_sam", "aagun" }
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if u and (u:find("^SV_Unit_SpAegis") or u:find("^SV_Unit_SpFord") or u:find("^SV_Unit_SpBoat")) and #SPORT.newParts < 400 then
+        SPORT.newParts[#SPORT.newParts + 1] = { obj = o, unit = u, at = os.clock() }
+    end
+end)
+function SPORT.partsTick()
+    if #SPORT.newParts == 0 then return end
+    local keep, now = {}, os.clock()
+    for _, np in ipairs(SPORT.newParts) do
+        if now - np.at < 0.5 then keep[#keep + 1] = np                    -- (a moment to be named)
+        elseif valid(np.obj) then
+            local cls = ((nameOf(np.obj):match("([%w_]+)$") or "?"):gsub("_C_%d+$", ""):gsub("_C$", ""))
+            local low = cls:lower()
+            for _, k in ipairs(TURRET_CLASS) do
+                if low:find(k, 1, true) then
+                    local a = addrOf(np.obj)
+                    if a then SPORT.turrets[a] = { obj = np.obj, unit = np.unit, cls = cls, shots = 0 } end
+                    break
+                end
+            end
+        end
+    end
+    SPORT.newParts = keep
+end
+
 local function fordAt()
     local c = cfg()
     local a = SPORT.fordActor
@@ -201,6 +233,8 @@ function SPORT.spawn(now)
     end
     local s = D.special
     s.state, s.at, s.ships, s.queue, s.lanes, s.troops, s.capture = "assault", now, {}, {}, {}, {}, 0
+    -- (the wave report, the user's loggers of 2026-10-31: each wave's line as it's done, the round's at its end)
+    s.stat, s.capLog = { waves = 0, craft = 0, shot = 0, landed = 0, ashore = 0, inside = 0, stuck = 0 }, {}
     local n, want = {}, c.ships or {}
     for _, sh in ipairs(SPORT.fleet()) do
         n[sh.kind] = (n[sh.kind] or 0) + 1
@@ -275,7 +309,8 @@ function SPORT.tick(now, s)
                 local unit = "SV_Unit_SpLcac" .. g .. w
                 local r = spawn(unit)
                 if r > 0 then
-                    L.waves[w] = { unit = unit, n = r, alive = r, landed = {}, at = now }
+                    L.waves[w] = { unit = unit, n = r, alive = r, landed = {}, at = now, shot = 0, ashore = 0, nLanded = 0 }
+                    s.stat.waves, s.stat.craft = s.stat.waves + 1, s.stat.craft + r
                     L.sent, L.next = (L.sent or 0) + 1, now + (tonumber(c.wave_every_s) or 60)
                     if not s.wavesSaid then s.wavesSaid = true; hudCallout(t.sp_landing, t.sp_landing_sub) end
                 else
@@ -289,6 +324,7 @@ function SPORT.tick(now, s)
         for w, wv in pairs(L.waves) do
             local alive = wv.removed and 0 or (aliveOf(wv.unit) or wv.alive)
             if alive < wv.alive and not wv.removed then
+                wv.shot, s.stat.shot = (wv.shot or 0) + (wv.alive - alive), s.stat.shot + (wv.alive - alive)
                 addCredits(tierPay(c.pay and c.pay.craft or 0) * (wv.alive - alive), "landing craft down (" .. wv.unit .. ")")
                 LB.stat("ground", wv.alive - alive)
                 log(string.format("special: %s: %d landing craft left", wv.unit, alive))
@@ -300,12 +336,14 @@ function SPORT.tick(now, s)
                 if now - wv.at >= 5 and (f["SV_SpLand" .. key] or 0) >= 1 and not wv.landed[k] then
                     wv.landed[k] = now
                     wv.firstLanded = wv.firstLanded or now
+                    wv.nLanded, s.stat.landed = (wv.nLanded or 0) + 1, s.stat.landed + 1
                     local tu = "SV_Unit_SpTroops" .. key
                     local r = -100
                     if not s.captured and (aliveOf(tu) or 1) <= 0 then r = spawn(tu) end
                     log(string.format("special: %s craft %s on the beach; troops %s: %s", wv.unit, k, tu,
                         r == -100 and (s.captured and "none (captured)" or "still up from before") or said(r)))
                     if r > 0 then
+                        wv.ashore, s.stat.ashore = (wv.ashore or 0) + 1, s.stat.ashore + 1
                         s.troops[#s.troops + 1] = { unit = tu, key = key, at = now }
                         if not s.ashoreSaid then s.ashoreSaid = true; hudCallout(t.sp_ashore, t.sp_ashore_sub) end
                     end
@@ -315,7 +353,11 @@ function SPORT.tick(now, s)
                 wv.removed = true                         -- (no pay for these: they got away)
                 log(string.format("special: %s are away; taken off (%s)", wv.unit, fire("RE_SV_SpLcacRemove" .. g .. w)))
             end
-            if wv.removed or alive <= 0 then L.waves[w] = nil end   -- (free again once it's off the list: freeWave)
+            if wv.removed or alive <= 0 then                     -- (free again once it's off the list: freeWave)
+                log(string.format("special: wave %s: %d craft, %d shot down, %d landed, %d troop vehicles ashore (%s after it left)",
+                    wv.unit, wv.n, wv.shot or 0, wv.nLanded or 0, wv.ashore or 0, mmss(now - wv.at)))
+                L.waves[w] = nil
+            end
         end
     end
     for i = #s.troops, 1, -1 do                                -- troop vehicles at their spot, and gone in
@@ -323,8 +365,10 @@ function SPORT.tick(now, s)
         if not tr.reached and now - tr.at >= 2 and (f["SV_SpAt" .. tr.key] or 0) >= 1 then
             tr.reached = now
             s.inside = (s.inside or 0) + 1
+            if s.stat then s.stat.inside = s.stat.inside + 1 end
             if not s.captured then
                 s.capture = math.min(100, s.capture + (tonumber(c.capture_per_troop) or 5))
+                if s.capLog then s.capLog[#s.capLog + 1] = string.format("%d%% at +%s", s.capture, mmss(now - s.at)) end
                 RUN.dirty = true
                 hudCallout(t.sp_troops_in, string.format(t.sp_troops_in_sub, s.capture))
                 log(string.format("special: troops %s reached the spaceport; %d%% captured", tr.unit, s.capture))
@@ -333,6 +377,7 @@ function SPORT.tick(now, s)
         local why = (tr.reached and now - tr.reached >= (tonumber(c.troop_stay_s) or 30) and "gone in")
             or (not tr.reached and now - tr.at >= (tonumber(c.troop_timeout_s) or 420) and "never got there")
         if why then
+            if not tr.reached and s.stat then s.stat.stuck = s.stat.stuck + 1 end
             log(string.format("special: troops %s %s; taken off (%s)", tr.unit, why, fire("RE_SV_SpTroopsRemove" .. tr.key)))
             table.remove(s.troops, i)
         end
@@ -374,6 +419,14 @@ function SPORT.roundOver(now, s)
     end
     for _, tr in ipairs(s.troops or {}) do fire("RE_SV_SpTroopsRemove" .. tr.key) end
     s.troops, s.state = {}, "done"
+    local st = s.stat
+    if st then
+        local cl = s.capLog or {}
+        log(string.format("special: the Spaceport Assault's waves (%s): %d sent, %d craft: %d shot down, %d landed; troop vehicles: "
+            .. "%d ashore, %d got in, %d stuck; the capture: %s", mmss(now - (s.at or now)), st.waves, st.craft, st.shot,
+            st.landed, st.ashore, st.inside, st.stuck,
+            #cl > 0 and table.concat(cl, ", ", math.max(1, #cl - 19)) or "never started"))
+    end
     if s.captured then                                 -- the ships still afloat carry over into the retake
         local left = 0
         for unit, sh in pairs(s.ships) do

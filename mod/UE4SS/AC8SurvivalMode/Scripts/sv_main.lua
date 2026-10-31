@@ -472,6 +472,8 @@ local function probeTick(tick)
             if not okWl and not D.wlogErr then D.wlogErr = true; log("weapons: log error " .. tostring(errWl)) end
             local okSw, errSw = timed("specials", SPW.tick, now)              -- (sv_spweapons.lua)
             if not okSw and not D.spwErr then D.spwErr = true; log("specials: error " .. tostring(errSw)) end
+            local okAu, errAu = timed("audit", AUDIT.tick, now)               -- (sv_audit.lua)
+            if not okAu and not D.auditErr then D.auditErr = true; log("audit: error " .. tostring(errAu)) end
             if CFG.allies.kills then pcall(KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
             -- the STORE's tactical items and SECOND CHANCE (sv_tactical.lua)
             local okT, errT = timed("tactical", TAC.tick, now)

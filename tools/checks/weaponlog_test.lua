@@ -5,7 +5,9 @@
 --   fired: the first look learns what's up (nothing counted); a weapon shown that was hidden is a launch, its owner an
 --     enemy plane (its unit and row), you (not counted) or another (by its class); one shown again with a new owner a
 --     launch too; the first launch of each weapon by each airframe logged once;
---   the summary every summary_s: what was launched, by whom, and what's carried but never fired; off: nothing.
+--   the summary every summary_s: what was launched, by whom, and what's carried but never fired; off: nothing;
+--   missiles at you followed to their end (a hit, decoyed by a flare, missed) and the summary's `missiles at you`;
+--   the Spaceport fleet's turrets: a turret's missile counted with your range, a mount silent in your reach idle.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -94,6 +96,54 @@ local s = lines("^weapons: last %d+ s: ")
 check(#s >= 1 and s[#s]:find("BP_wp_msl_a0 x3 (BP_OP1022_f16c_CP 3)", 1, true), "what was launched and by whom: " .. tostring(s[#s]))
 check(s[#s] and s[#s]:find("carried by enemies but never fired this run: BP_wp_qaam_a0 (1 planes: ERA_Unit_01_Dep_Air0)", 1, true),
     "carried but never fired: the QAAM (not the gun: bullets aren't watched)")
+
+print("missiles at you")
+you.HealthInternal, you.MaxHealth = 1000, 100
+function you:K2_GetActorLocation() return { X = 0, Y = 0, Z = 0 } end
+local function mslAt(n, addr, owner, x)
+    local m = msl(n, addr, owner)
+    m.TargetToHome, m.x = you, x
+    function m:K2_GetActorLocation() return { X = self.x, Y = 0, Z = 0 } end
+    return m
+end
+local h1, h2, h3 = mslAt("BP_wp_qaam_a0", 301, f16, 300000), mslAt("BP_wp_qaam_a0", 302, f16, 400000), mslAt("BP_wp_2aam_a0", 303, f16, 500000)
+local flare = { full = "x.BP_wp_flare_C_9", addr = 399 }
+-- (a fleet turret: an Aegis's VLS, sv_spaceport.lua SPORT.turrets)
+local vls = { full = "BP_VE002_aegs_mk41_CP_C_7", addr = 41 }
+function vls:K2_GetActorLocation() return { X = 800000, Y = 0, Z = 0 } end
+local gun = { full = "BP_VE002_aegs_mk45_CP_C_8", addr = 42 }
+function gun:K2_GetActorLocation() return { X = 900000, Y = 0, Z = 0 } end
+SPORT = { turrets = { [41] = { obj = vls, unit = "SV_Unit_SpAegisA", cls = "BP_VE002_aegs_mk41_CP", shots = 0 },
+                      [42] = { obj = gun, unit = "SV_Unit_SpAegisA", cls = "BP_VE002_aegs_mk45_CP", shots = 0 } } }
+local v1 = msl("BP_wp_vls_a0", 401, vls)
+FA.LiveExplosiveWeapon = { h1, h2, h3, v1 }
+local t = 80
+local function tick() t = t + 0.5; WLOG.tick(t) end
+tick()
+h1.bHidden, h2.bHidden, h3.bHidden, v1.bHidden = false, false, false, false
+tick()
+h1.x, h2.x, h3.x = 5000, 100000, 200000            -- (h1 50 m off you; h2 1 km; h3 2 km)
+h2.TargetToHome = flare                             -- (h2 goes after a flare)
+tick()
+h1.bHidden, you.HealthInternal = true, 600           -- (h1 gone as your health drops: a hit)
+tick()
+h2.bHidden, h3.bHidden = true, true
+for _ = 1, 4 do tick() end
+local o = WLOG.r.outRun
+check(o.BP_wp_qaam_a0 and o.BP_wp_qaam_a0.n == 2 and o.BP_wp_qaam_a0.hit == 1 and o.BP_wp_qaam_a0.decoyed == 1,
+    "two QAAMs at you: one passed 50 m as your health dropped (a hit), one went after a flare (decoyed)")
+check(o.BP_wp_2aam_a0 and o.BP_wp_2aam_a0.missed == 1 and math.abs(o.BP_wp_2aam_a0.km - 5.0) < 0.01,
+    "a 2AAM that never came near: missed, fired from 5 km")
+check(SPORT.turrets[41].shots == 1 and SPORT.turrets[41].atKmN == 1, "the Aegis VLS's missile: its shot counted, your range at fire")
+t = t + 61
+WLOG.tick(t)
+local ml = lines("^missiles at you: last ")
+check(#ml >= 1 and ml[#ml]:find("BP_wp_qaam_a0 2 (1 hit, 1 decoyed, 0 missed; from 3.5 km on average)", 1, true), "the summary: " .. tostring(ml[#ml]))
+local fl = lines("^fleet: last ")
+check(#fl >= 1 and fl[#fl]:find("BP_VE002_aegs_mk41_CP: 1 of 1 fired (1 missiles, you 8.0 km off at fire on average)", 1, true)
+    and fl[#fl]:find("BP_VE002_aegs_mk45_CP: 0 of 1 fired (0 missiles), 0 guns seen firing, 1 idle with you inside 25 km", 1, true),
+    "the fleet: the VLS fired, the gun mount idle with you in its reach: " .. tostring(fl[#fl]))
+SPORT = nil
 
 print("off")
 local n = #logs

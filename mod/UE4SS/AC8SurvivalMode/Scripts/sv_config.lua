@@ -84,7 +84,11 @@ CFG = {
     -- weapons (Scripts/sv_weaponlog.lua; the user, 2026-10-31: "a logger that checks what enemy missiles are being
     -- fired"): each enemy plane's fire control as built (once an airframe and loadout), the first launch of each weapon
     -- by each kind of shooter, looked for every every_s, and a summary every summary_s with what's carried but never fired
-    log = { verbose = false, weapons = { enabled = true, every_s = 0.5, summary_s = 60 } },
+    -- (hit_m, turret_s: the missile outcomes' and the fleet watch's, sv_weaponlog.lua) audit: Scripts/sv_audit.lua's
+    -- targets / pay audit / sync lines every report_s, the enemies' targets looked at every sample_s, a joiner's kill paid
+    -- within suspect_s of a teardown flagged
+    log = { verbose = false, weapons = { enabled = true, every_s = 0.5, summary_s = 60, hit_m = 150, turret_s = 5 },
+            audit = { enabled = true, sample_s = 5, report_s = 60, suspect_s = 5 } },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
