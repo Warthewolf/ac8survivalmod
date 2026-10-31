@@ -393,14 +393,15 @@ def vec(x, y, zz, kind='Vector'):
 
 
 def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False, rows=None,
-              keep_rotation=False, digit_ok=False):
+              keep_rotation=False, digit_ok=False, clone_first=False):
     """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
     (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
     the other mission's), our world data's name, new UniqueIDs; tgt: a target box and a TGT mark on each (user,
     2026-10-23: "assault ships and troops did not come with target boxes"). rows: each object's own row (in order);
     keep_rotation: the source objects' rotation (Mission 19's rockets stand on their tails); digit_ok: an obj_name
     ending in a digit with no underscore before it (FName splits a tail only after one: Mission 19's debris names, which
-    its rocket's blueprint looks up exactly). Returns the objects' names as event args write them."""
+    its rocket's blueprint looks up exactly); clone_first: every object a copy of the source's first (a unit of mixed
+    vehicles: Mission 7's T-90 is one of three kinds). Returns the objects' names as event args write them."""
     new = copy.deepcopy(src)
     assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
     assert not new_unit[-1].isdigit() and (digit_ok or not obj_name[-1].isdigit()) and obj_name not in top_number, obj_name
@@ -408,6 +409,7 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     assert rows is None or len(rows) == len(points), (new_unit, rows)
     wd = ('name', 'WD_SurvivalMode_global', 0)
     objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    if clone_first: objs[:] = [copy.deepcopy(objs[0])]
     while len(objs) < len(points): objs.append(copy.deepcopy(objs[-1]))   # more than the source has: copies of its last
     del objs[len(points):]
     names = []
@@ -1031,10 +1033,21 @@ def spaceport_units(units, used_ids, z, top_number, v):
         names = port_unit(units, used_ids, z, su, unit, obj, rws[0][0], [spot(ob) for ob in objects(su)], 0.0, top_number,
                           rows=[r[0] for r in rws], keep_rotation=True, digit_ok=True)
         assert names == [f'{obj}_0', f'{obj}_1'], names   # (as Mission 19 stores them: its rocket's blueprint looks them up)
+    # the retake's island enemies (survival_events.sp_island: their spots past tools/spaceport_spots.py's building check)
+    for u in survival_events.sp_island():
+        su = desc_named(stock_wd(u['src'][0]), 'UnitDescList', u['src'][1])
+        if not u['clone_first']:                             # (the EXSAM site: its objects as Mission 6 has them)
+            got = [nm for nm in [[q for q in ob[2] if q[1] == 'MissionNpcID'][0][3][1] for ob in objects(su)]]
+            assert got[:1] == ['exsamsr_common'] and got[1:5] == ['exsam_MS06'] * 4, got
+        names = port_unit(units, used_ids, z, su, u['unit'], u['obj'], u['rows'][0], u['points'], u['yaw'], top_number,
+                          tgt=True, rows=u['rows'], clone_first=u['clone_first'])
+        assert len(names) == len(u['points']), (u['unit'], names)
+        unit_area(unit_by(u['unit']), survival_events.SP_ISLAND_AREA_M, survival_events.SP_ISLAND_ALT_M)
     print(f'  spaceport assault: ' + ', '.join(f'{n} {k}' for k, n in count.items()) + f'; {len(waves)} landing waves '
           f'({len(craft)} craft, {len(craft) * 3} paths, {len(craft)} troop units), {len(boats)} boat patrols, '
           f'{len(survival_events.sp_garrison())} garrison units; the retake: 2 rockets on 2 climbs, '
-          f'{len(survival_events.SP_DEBRIS)} debris units')
+          f'{len(survival_events.SP_DEBRIS)} debris units, '
+          + ', '.join(f'{u["unit"][len("SV_Unit_SpIsl"):]} {len(u["points"])}' for u in survival_events.sp_island()))
 
 
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
@@ -2117,7 +2130,8 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01']),
               # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
               # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
-              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)]
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)] + list(
+              survival_events.SP_ISLAND_ROWS.items())   # (the retake's island enemies: Mission 6's and 7's rows)
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script

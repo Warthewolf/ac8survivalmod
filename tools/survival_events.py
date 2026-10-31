@@ -1417,6 +1417,60 @@ SP_DEBRIS = [  # (Mission 19's unit, Survival's unit, its objects' base name (ex
      [('sv_sp_debri_e', 'Rocket_Debri_3_1'), ('sv_sp_debri_f', 'Rocket_Debri_3_2')]),
 ]
 SP_ROCKET_ROWS = [(SP_ROCKET_ROW, 'Rocket')] + [r for d in SP_DEBRIS for r in d[3]]   # (Survival's, DT_NPC_Mission019's)
+# The retake's island enemies (user, 2026-10-31: "on the spaceport retake, add more enemies around the island", their
+# picks: air defences, armour, more aircraft, about 30; "do a building check so that no enemies spawn in buildings"):
+# Mission 6's EXSAM site whole (its radar and four launchers in Mission 6's layout), its flak guns, Gecko SAMs and Shilka
+# AA guns, Mission 7's T-90s and the BTR-90s, each unit another mission's enemy ground unit (port_unit: its first object
+# for every spot, clone_first, but the site) on Survival's copy of its mission row; the spots from tools/spaceport_spots.py
+# (the building check: every building and prop's box round the spaceport). Scripts/sv_spaceport.lua spawns them with the
+# retake's garrison; the round holds until they're down.
+M06_WD, M07_WD = '/Game/Maps/Ingame/MIssion006/WD_Mission006_global', '/Game/Maps/Ingame/Mission007/WD_Mission007_global'
+SP_ISLAND_ROWS = {'/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission006': [('sv_isl_radar', 'exsamsr_common'),
+                  ('sv_isl_exsam', 'exsam_MS06'), ('sv_isl_flak', 'flak_02'), ('sv_isl_sam', 'geck_common'),
+                  ('sv_isl_aa', 'shil_common')],
+                  '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission007': [('sv_isl_tank', 't090_common')]}
+SP_EXSAM_SITE = ((0.0, 0.0), (-9900.0, -5400.0), (5300.0, -9900.0), (-5300.0, 10000.0), (9900.0, 5200.0))   # (Mission 6's)
+SP_ISLAND_AREA_M, SP_ISLAND_ALT_M = 20000.0, (0.0, 15000.0)     # (ground air defences engage only inside their unit's area)
+SP_ISLAND_PADS = [(-1384043.4, -41260.8), (-1325196.1, 59777.7)]
+SP_ISLAND_AD_CENTRE, SP_ISLAND_ARMOUR_CENTRE, SP_ISLAND_SITE_CENTRE = (-1354620.0, 9258.0), (-1465000.0, 70000.0), (-1440000.0, 60000.0)
+SP_ISLAND_AD = ['aa', 'sam', 'flak'] * 4 + ['aa']          # the single air defences, in their spots' spread order
+
+
+def sp_island():
+    """The retake's island units: dict(unit, obj, kind ('ad' or 'armour'), src (world data, unit), rows, points (cm),
+    yaw, clone_first), their spots picked by tools/spaceport_spots.py (the same every build)."""
+    if hasattr(sp_island, 'done'): return sp_island.done
+    import math
+    import spaceport_spots as S
+    avoid = SP_ISLAND_PADS + [p[:2] for p in SPACEPORT_TROOP_SPOTS]
+    site = S.candidates(SP_ISLAND_SITE_CENTRE, 140000.0, avoid, SP_EXSAM_SITE)
+    assert site, 'no clear spot for the EXSAM site'
+    sx, sy = site[0]
+    site_pts = [(sx + ox, sy + oy) for ox, oy in SP_EXSAM_SITE]
+    ad = S.spread(S.candidates(SP_ISLAND_AD_CENTRE, 170000.0, avoid), len(SP_ISLAND_AD), 20000.0, site_pts)
+    armour = S.spread(S.candidates(SP_ISLAND_ARMOUR_CENTRE, 170000.0, avoid), 12, 12000.0, site_pts + ad)
+    tanks, apcs = sorted(armour[:8]), armour[8:]
+    cx, cy = SP_ISLAND_AD_CENTRE
+    face = lambda pts: math.degrees(math.atan2(sum(p[1] for p in pts) / len(pts) - cy, sum(p[0] for p in pts) / len(pts) - cx))
+    by = lambda k: [p for p, kk in zip(ad, SP_ISLAND_AD) if kk == k]
+    out = [dict(unit='SV_Unit_SpIslExsam', obj='SV_Obj_SpIslExsam', kind='ad', src=(M06_WD, 'EA_Unit_01_Ground_8'),
+                rows=['sv_isl_radar'] + ['sv_isl_exsam'] * 4, points=site_pts, clone_first=False)]
+    for unit, obj, kind, src, row, pts in (
+            ('SV_Unit_SpIslFlak', 'SV_Obj_SpIslFlak', 'ad', (M06_WD, 'EA_Unit_01_Ground_4'), 'sv_isl_flak', by('flak')),
+            ('SV_Unit_SpIslSam', 'SV_Obj_SpIslSam', 'ad', (M06_WD, 'EA_Unit_02_Ground_5'), 'sv_isl_sam', by('sam')),
+            ('SV_Unit_SpIslAA', 'SV_Obj_SpIslAA', 'ad', (M06_WD, 'EA_Unit_01_Ground_6'), 'sv_isl_aa', by('aa')),
+            ('SV_Unit_SpIslTankA', 'SV_Obj_SpIslTankA', 'armour', (M07_WD, 'ECUnit02_Ground_5'), 'sv_isl_tank', tanks[:4]),
+            ('SV_Unit_SpIslTankB', 'SV_Obj_SpIslTankB', 'armour', (M07_WD, 'ECUnit02_Ground_5'), 'sv_isl_tank', tanks[4:]),
+            ('SV_Unit_SpIslApc', 'SV_Obj_SpIslApc', 'armour', (M06_WD, 'EA_Unit_01_Ground_1'), LCAC_TROOP_ROW, apcs)):
+        out.append(dict(unit=unit, obj=obj, kind=kind, src=src, rows=[row] * len(pts), points=pts, clone_first=True))
+    for u in out:
+        u['yaw'] = face(u['points'])
+        u['points'] = S.with_z(u['points'])
+        for x, y, _ in u['points']:                 # the building check, again on what's built
+            c, mesh = S.clearance(x, y)
+            assert c >= S.CLEAR_CM and S.on_land(x, y), (u['unit'], x, y, c, mesh)
+    sp_island.done = out
+    return out
 SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
     ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),               # (no parts: the stock row as it is)
 ]
@@ -1969,14 +2023,21 @@ def build_spaceport(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketRemove')
     for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS]:
         g.execute(t_remove, 'RE_SV_SpRocketRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect'})
+    # the island's enemies: each unit fights as it appears (Normal, as the fleet's hulls), all of them taken off at the end
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpIslandRemove')
+    for u in sp_island():
+        up = 'SV_SpIslUp' + u['unit'][len('SV_Unit_SpIsl'):]
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: u['unit']})
+        g.execute(t_seng, up, {0: 'NoneSelect', 1: u['unit']}, delay=2.0)
+        g.execute(t_remove, 'RE_SV_SpIslandRemove', {0: 'NoneSelect', 1: u['unit'], 2: 'NoneSelect'})
     lua = runtime_lua()
     for npc in [t[2] for t in SP_TURRETS] + [h[1] for h in SP_HULLS]:
         assert f'"{npc}"' in lua, f'Scripts/sv_spaceport.lua SPORT.FLEET_ROWS has no {npc}'
-    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS]:
+    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS] + [u['unit'] for u in sp_island()]:
         assert f'"{unit}"' in lua, f'Scripts/sv_spaceport.lua has no {unit}'
     print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
           f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units; the retake: 2 rockets, {len(SP_DEBRIS)} debris '
-          f'stages')
+          f'stages, {sum(len(u["points"]) for u in sp_island())} island enemies in {len(sp_island())} units')
 
 
 def build_ladon(g, flag, stock_ep):
