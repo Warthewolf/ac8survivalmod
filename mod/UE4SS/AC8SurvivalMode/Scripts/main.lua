@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.73.38"
+VERSION = "0.73.39"
 
 local MODULES = {
     "sv_core",
@@ -26,6 +26,7 @@ local MODULES = {
     "sv_allies",
     "sv_tactical",
     "sv_stats",                    -- the behaviour roadmap's measurements and P6's learning layer (BEHAVIOUR_DIRECTOR.md)
+    "sv_weaponlog",                -- what the enemies carry and fire, in the log (CFG.log.weapons)
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
     "sv_menu",

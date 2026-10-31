@@ -81,7 +81,10 @@ CFG = {
     -- "enemies: nearest" every 10 s, no "intensity: round N: you ..." every CFG.intensity.log_s (its round summary
     -- stays); "ammo: now" every 60 s when it changed (else 10 s), "perf:" every 5 minutes (else every minute). true: all
     -- of them as before, for debugging. Each player's own in co-op (sv_coop.lua PERSONAL).
-    log = { verbose = false },
+    -- weapons (Scripts/sv_weaponlog.lua; the user, 2026-10-31: "a logger that checks what enemy missiles are being
+    -- fired"): each enemy plane's fire control as built (once an airframe and loadout), the first launch of each weapon
+    -- by each kind of shooter, looked for every every_s, and a summary every summary_s with what's carried but never fired
+    log = { verbose = false, weapons = { enabled = true, every_s = 0.5, summary_s = 60 } },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
