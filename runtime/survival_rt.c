@@ -23,7 +23,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.19.0"
+#define RT_VERSION           L"0.20.0"
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 /* Hangar level to travel to (ELiveLevelID; 0x0C..0x10 = PL_Hangar001..005). It must be the hangar the mission row's
@@ -1642,9 +1642,179 @@ static volatile int32_t  g_invFadeMs = 1500;
 static float         g_invScale[INV_N] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static uint64_t      g_invLastMs;
 
+/* ---- flight recorder (SV_FlightRec, runtime 0.20.0) ---------------------------------------------------------------
+ * For the GRU pilot (warthewolf/ac8-gru-pilot: its sim is calibrated from these). The BuildFlightInput detour runs once
+ * a frame on the player's plane (game thread); while recording, each call writes one CSV row for the player and one
+ * for the plane it has targeted (player+0x1ae8 -> +0x750, as SV_PlayerTarget) to <mod>\recordings\flight_<date>.csv:
+ *   t (s, QueryPerformanceCounter), who (P player / T target), id (the actor's address, so a new target shows),
+ *   x y z (cm) and qx qy qz qw: the root component's ComponentToWorld (translation +0x220, rotation +0x200; FTransform
+ *   is doubles in UE5: tools/re/BEHAVIOUR_NATIVE_MOVE.md 5), speed (ALiveGameObject.Speed +0x3c0, cm/s), hp
+ *   (HealthInternal +0xda8 / 10), then the inputs:
+ *   P: pitch yaw roll throttle brake highg = the out struct the flight engine gets (+0x0..+0x14), flags = out+0x18;
+ *   T: pitch yaw roll throttle brake = ALiveAIPlane +0x2a8c..+0x2a9c (what its behaviour tree commands), ai_speed
+ *   +0x2a88 (m/s), cobra_ok / kulbit_ok = bCanManeuverPugachevsCobra +0x28d0 / bCanManeuverKulbit +0x28d1
+ *   (tools/re/BEHAVIOUR_NATIVE_MOVE.md 1, BEHAVIOUR_NATIVE_LOGIC.md). ai = 1 when the target's vtable is
+ *   ALiveAIPlane's (exe+0xc551db0, KILLS_HEALTH_DEATH.md); its input columns mean nothing on anything else (ships,
+ *   ground units, subclasses: the first target vtables are logged to learn them).
+ * The actor's RootComponent offset isn't known here: SV_FlightRec gets the plane and its RootComponent from Lua and
+ * finds the pointer in the plane (the same AActor field holds it on every actor). Nothing in the game is written. */
+#define REC_ROOT_SCAN_FROM 0x100
+#define REC_ROOT_SCAN_TO   0x800
+#define COMP_ROTATION      0x200              /* FQuat4d x, y, z, w */
+#define COMP_TRANSLATION   0x220              /* FVector3d x, y, z (cm) */
+#define OBJ_SPEED          0x3c0              /* ALiveGameObject.Speed, float cm/s */
+#define OBJ_HEALTH         0xda8              /* ALiveGameObject HealthInternal, int x10 */
+#define AIP_SPEED          0x2a88
+#define AIP_STICK          0x2a8c             /* pitch, yaw, roll, throttle, brake (5 floats) */
+#define AIP_CAN_COBRA      0x28d0
+#define AIP_CAN_KULBIT     0x28d1
+#define VT_AI_PLANE_RVA    0xc551db0
+#define PLAYER_TARGET_HOLDER 0x1ae8            /* player plane -> its target holder (SV_PlayerTarget) */
+#define PLAYER_TARGET        0x750
+static volatile int32_t g_recLock;
+static HANDLE   g_recFile = INVALID_HANDLE_VALUE;
+static uint8_t* g_recPlane;
+static uint32_t g_recRootOff;
+static int64_t  g_recT0, g_recFreq, g_recFlushAt;
+static int64_t  g_recRows;
+static char     g_recBuf[65536];
+static size_t   g_recLen;
+static uint8_t* g_recTarget;                  /* the last target seen (logged when it changes) */
+static uint32_t g_recVts[8];                  /* target vtables already logged */
+static int      g_recQuatWarned;
+
+static void RecPut(const char* s) { while (*s && g_recLen < sizeof(g_recBuf) - 1) g_recBuf[g_recLen++] = *s++; }
+
+static void RecInt(int64_t v)
+{
+    char t[24]; int n = 0;
+    uint64_t u = v < 0 ? (uint64_t)(-v) : (uint64_t)v;
+    do { t[n++] = (char)('0' + u % 10); u /= 10; } while (u);
+    if (v < 0) t[n++] = '-';
+    while (n && g_recLen < sizeof(g_recBuf) - 1) g_recBuf[g_recLen++] = t[--n];
+}
+
+static void RecF(double v, int dec)           /* fixed point; "nan" for NaN / out of range */
+{
+    if (v != v || v > 9e15 || v < -9e15) { RecPut("nan"); return; }
+    int64_t scale = 1;
+    for (int i = 0; i < dec; ++i) scale *= 10;
+    int64_t q = (int64_t)(v * (double)scale + (v < 0 ? -0.5 : 0.5));
+    if (q < 0) { RecPut("-"); q = -q; }
+    RecInt(q / scale);
+    if (dec) {
+        char t[20]; int64_t r = q % scale;
+        for (int i = dec - 1; i >= 0; --i) { t[i] = (char)('0' + r % 10); r /= 10; }
+        t[dec] = 0;
+        RecPut("."); RecPut(t);
+    }
+}
+
+static void RecFlush(void)
+{
+    if (g_recFile != INVALID_HANDLE_VALUE && g_recLen) {
+        DWORD put = 0;
+        WriteFile(g_recFile, g_recBuf, (DWORD)g_recLen, &put, NULL);
+    }
+    g_recLen = 0;
+}
+
+/* One row: the actor's transform, speed and health, then the input columns (filled by the caller). */
+static int RecActor(double t, char who, uint8_t* actor)
+{
+    if (!actor || !Readable(actor + g_recRootOff, 8)) return 0;
+    uint8_t* comp = *(uint8_t**)(actor + g_recRootOff);
+    if (!comp || !Readable(comp + COMP_ROTATION, 0x40) || !Readable(actor + OBJ_HEALTH, 4)) return 0;
+    const double* q = (const double*)(comp + COMP_ROTATION);
+    const double* p = (const double*)(comp + COMP_TRANSLATION);
+    double n2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+    if ((n2 < 0.9 || n2 > 1.1) && !g_recQuatWarned) {
+        g_recQuatWarned = 1;
+        Log(L"flight recorder: %s's rotation isn't a unit quaternion (|q|^2 x1000 = %d): the component layout differs",
+            who == 'P' ? L"the player" : L"the target", (int32_t)(n2 * 1000.0));
+    }
+    char w[2] = { who, 0 };
+    RecF(t, 4); RecPut(","); RecPut(w); RecPut(",");
+    {
+        char h[20]; int k = 0; uint64_t a = (uint64_t)(uintptr_t)actor;
+        do { h[k++] = "0123456789ABCDEF"[a & 15]; a >>= 4; } while (a);
+        while (k && g_recLen < sizeof(g_recBuf) - 1) g_recBuf[g_recLen++] = h[--k];
+    }
+    for (int i = 0; i < 3; ++i) { RecPut(","); RecF(p[i], 1); }
+    for (int i = 0; i < 4; ++i) { RecPut(","); RecF(q[i], 6); }
+    RecPut(","); RecF(*(float*)(actor + OBJ_SPEED), 1);
+    RecPut(","); RecF(*(int32_t*)(actor + OBJ_HEALTH) * 0.1, 1);
+    return 1;
+}
+
+static void RecSample(uint8_t* plane, const float* out)
+{
+    if (g_recFile == INVALID_HANDLE_VALUE || plane != g_recPlane || !out) return;
+    if (__sync_lock_test_and_set(&g_recLock, 1)) return;         /* SV_FlightRec is opening / closing: skip a frame */
+    if (g_recFile != INVALID_HANDLE_VALUE && plane == g_recPlane) {
+        int64_t now = 0;
+        QueryPerformanceCounter(&now);
+        double t = (double)(now - g_recT0) / (double)g_recFreq;
+        /* player: the out struct as the flight engine gets it */
+        if (RecActor(t, 'P', plane)) {
+            for (int i = 0; i < 6; ++i) { RecPut(","); RecF(out[i], 4); }
+            RecPut(","); RecInt(((const uint8_t*)out)[0x18]);
+            RecPut(",,,,\r\n");                                   /* ai, ai_speed, cobra_ok, kulbit_ok */
+            ++g_recRows;
+        }
+        /* its target, when it has one */
+        uint8_t* target = NULL;
+        if (Readable(plane + PLAYER_TARGET_HOLDER, 8)) {
+            uint8_t* holder = *(uint8_t**)(plane + PLAYER_TARGET_HOLDER);
+            if (holder && Readable(holder + PLAYER_TARGET, 8)) target = *(uint8_t**)(holder + PLAYER_TARGET);
+        }
+        if (target && LiveObject(target)) {
+            uint32_t vt = (uint32_t)((uint8_t*)*(void**)target - g_exe);
+            if (target != g_recTarget) {
+                g_recTarget = target;
+                int known = 0, slot = -1;
+                for (int i = 0; i < 8; ++i) { if (g_recVts[i] == vt) known = 1; if (!g_recVts[i] && slot < 0) slot = i; }
+                if (!known && slot >= 0) {
+                    g_recVts[slot] = vt;
+                    Log(L"flight recorder: target %p, vtable exe+%x%s", target, vt, vt == VT_AI_PLANE_RVA ? L" (ALiveAIPlane)" : L"");
+                }
+            }
+            if (RecActor(t, 'T', target)) {
+                int ai = vt == VT_AI_PLANE_RVA;
+                if (Readable(target + AIP_CAN_COBRA, AIP_STICK + 20 - AIP_CAN_COBRA)) {
+                    const float* st = (const float*)(target + AIP_STICK);
+                    for (int i = 0; i < 5; ++i) { RecPut(","); RecF(st[i], 4); }
+                    RecPut(",,,"); RecInt(ai);                    /* highg, flags: player only */
+                    RecPut(","); RecF(*(float*)(target + AIP_SPEED), 2);
+                    RecPut(","); RecInt(target[AIP_CAN_COBRA]); RecPut(","); RecInt(target[AIP_CAN_KULBIT]);
+                } else {
+                    RecPut(",,,,,,,,"); RecInt(ai); RecPut(",,,");
+                }
+                RecPut("\r\n");
+                ++g_recRows;
+            }
+        }
+        if (g_recLen > sizeof(g_recBuf) - 1024 || now >= g_recFlushAt) {     /* every 2 s: a crash loses little */
+            RecFlush();
+            g_recFlushAt = now + 2 * g_recFreq;
+        }
+    }
+    __sync_lock_release(&g_recLock);
+}
+
+static void RecClose(void)
+{
+    if (g_recFile == INVALID_HANDLE_VALUE) return;
+    RecFlush();
+    CloseHandle(g_recFile);
+    g_recFile = INVALID_HANDLE_VALUE;
+    g_recPlane = NULL;
+}
+
 static void OnBuildInput(uint8_t* plane, float* out)
 {
     g_nextBuildInput(plane, out);
+    RecSample(plane, out);
     if (!plane || plane != g_invPlane || !out) return;
     uint64_t now = GetTickCount64();
     float step = g_invLastMs && now > g_invLastMs ? (float)(now - g_invLastMs) * 2.0f / (float)(g_invFadeMs > 0 ? g_invFadeMs : 1) : 0.0f;
@@ -2121,10 +2291,10 @@ static int L_SndMaster(void* lua)
     return Ret(lua, 1);
 }
 
-/* SV_Version() -> "0.19.0" */
+/* SV_Version() -> "0.20.0" */
 static int L_Version(void* lua)
 {
-    static const char v[] = "0.19.0";
+    static const char v[] = "0.20.0";
     U.luaSetString(lua, v, sizeof(v) - 1);
     return 1;
 }
@@ -2164,9 +2334,7 @@ static int L_PlaneLevel(void* lua)
 /* SV_PlayerTarget(plane) -> the address of the player plane's current target (the enemy it has selected, the one its
  * missiles go for), 0 for none, SV_ERR_BAD_ARGS for a bad plane. tools/re/UNIQUE_ACTIONS.md: the player tick posts
  * EnemyBehind for player+0x1ae8 -> +0x750. Confirmed in game 2026-10-23 (it named the Reaper ace the player had
- * targeted). Not used by Lua at the moment (the flight recorder that used it is gone). */
-#define PLAYER_TARGET_HOLDER 0x1ae8
-#define PLAYER_TARGET        0x750
+ * targeted). The flight recorder (SV_FlightRec) reads the same pointer every frame. */
 static int L_PlayerTarget(void* lua)
 {
     double addr = 0;
@@ -2178,6 +2346,74 @@ static int L_PlayerTarget(void* lua)
     uint8_t* target = *(uint8_t**)(holder + PLAYER_TARGET);
     if (!target || !LiveObject(target)) return Ret(lua, 0);
     return Ret(lua, (int64_t)(uintptr_t)target);
+}
+
+/* SV_FlightRec(on, plane, root) -> on = 1: starts recording plane (the player's ALivePlayerPlane address) to a new
+ * <mod>\recordings\flight_<date>_<time>.csv and returns its RootComponent offset (found by looking for root, the
+ * plane's RootComponent address, in the plane), or SV_ERR_BAD_ARGS (bad plane, root not found in it) /
+ * SV_ERR_NO_GAME (BuildFlightInput not hooked) / SV_ERR_REFUSED (the file can't be made). Already recording: restarts
+ * in a new file. on = 0: stops and returns the rows written (0 when it wasn't recording). */
+static int L_FlightRec(void* lua)
+{
+    double on = 0, addr = 0, root = 0;
+    ArgNumber(lua, &on); ArgNumber(lua, &addr); ArgNumber(lua, &root);
+    while (__sync_lock_test_and_set(&g_recLock, 1)) Sleep(0);
+    int64_t rows = g_recRows;
+    int had = g_recFile != INVALID_HANDLE_VALUE;
+    RecClose();
+    if (had) Log(L"flight recorder: stopped, %d rows", (int32_t)rows);
+    int64_t ret = had ? rows : 0;
+    if (on != 0) {
+        uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)(addr > 0 ? addr : 0);
+        uint8_t* comp = (uint8_t*)(uintptr_t)(uint64_t)(root > 0 ? root : 0);
+        uint32_t off = 0;
+        if (!g_nextBuildInput) ret = SV_ERR_NO_GAME;
+        else if (!plane || !comp || !LiveObject(plane) || !Readable(plane + REC_ROOT_SCAN_TO, 8) ||
+                 !Readable(comp + COMP_ROTATION, 0x40)) ret = SV_ERR_BAD_ARGS;
+        else {
+            for (uint32_t o = REC_ROOT_SCAN_FROM; o < REC_ROOT_SCAN_TO && !off; o += 8)
+                if (*(uint8_t**)(plane + o) == comp) off = o;
+            ret = off ? (int64_t)off : SV_ERR_BAD_ARGS;
+        }
+        if (off) {
+            wchar_t path[PATH_CAP], name[48];
+            uint16_t st[8];
+            GetLocalTime(st);
+            size_t k = WLen(g_modRoot);
+            if (k + 64 < PATH_CAP) {
+                memcpy(path, g_modRoot, k * 2);
+                memcpy(path + k, L"\\recordings", 12 * 2);
+                CreateDirectoryW(path, NULL);                       /* fails harmlessly when it's there */
+                int v[6] = { st[0], st[1], st[3], st[4], st[5], st[6] }, w[6] = { 4, 2, 2, 2, 2, 2 }, n = 0;
+                const wchar_t* pre = L"\\flight_";
+                while (*pre) name[n++] = *pre++;
+                for (int i = 0; i < 6; ++i) {
+                    if (i == 3) name[n++] = L'_';
+                    for (int d = w[i] - 1, x = v[i]; d >= 0; --d, x /= 10) name[n + d] = (wchar_t)(L'0' + x % 10);
+                    n += w[i];
+                }
+                memcpy(name + n, L".csv", 5 * 2);
+                memcpy(path + k + 11, name, (WLen(name) + 1) * 2);
+                g_recFile = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            }
+            if (g_recFile == INVALID_HANDLE_VALUE) { ret = SV_ERR_REFUSED; Log(L"flight recorder: can't make the file"); }
+            else {
+                QueryPerformanceFrequency(&g_recFreq);
+                if (g_recFreq <= 0) g_recFreq = 1;
+                QueryPerformanceCounter(&g_recT0);
+                g_recFlushAt = g_recT0 + 2 * g_recFreq;
+                g_recRows = 0; g_recLen = 0; g_recTarget = NULL; g_recQuatWarned = 0;
+                g_recRootOff = off;
+                g_recPlane = plane;
+                RecPut("t,who,id,x,y,z,qx,qy,qz,qw,speed,hp,pitch,yaw,roll,throttle,brake,highg,flags,ai,ai_speed,cobra_ok,kulbit_ok\r\n");
+                Log(L"flight recorder: plane %p (RootComponent at +%x) -> %s", plane, off, path);
+            }
+        } else {
+            Log(L"flight recorder: not started (%d)", (int32_t)ret);
+        }
+    }
+    __sync_lock_release(&g_recLock);
+    return Ret(lua, ret);
 }
 
 /* SV_SetAircraft(unit, npc [, index]) -> AI objects changed or an SV_ERR code */
@@ -2663,7 +2899,7 @@ static void RegisterLua(void* lua)
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset },
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget }, { "SV_FlightRec", L_FlightRec },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_BGMNames", L_BGMNames },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE

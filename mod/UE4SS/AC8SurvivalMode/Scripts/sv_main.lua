@@ -603,6 +603,43 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
+    -- Ctrl+F6: the flight recorder on / off, in any level (dlls/main.dll SV_FlightRec, runtime 0.20.0): every frame,
+    -- your plane (with the inputs the flight engine got) and the AI plane you have targeted (with the inputs its
+    -- behaviour tree commands) go to recordings\flight_<date>_<time>.csv. For the GRU pilot's sim
+    -- (warthewolf/ac8-gru-pilot), which calibrates its flight model and post-stall moves from them.
+    if Key.F6 then
+        local recOn = false
+        pcall(RegisterKeyBind, Key.F6, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    local say = function(a, b) log("flight recorder: " .. a .. (b and (" (" .. b .. ")") or ""))
+                                               if D then hudCallout(a:upper(), b and b:upper()) end end
+                    if type(SV_FlightRec) ~= "function" then say("needs runtime 0.20.0"); return end
+                    if recOn then
+                        recOn = false
+                        say("off", string.format("%d rows saved", SV_FlightRec(0)))
+                        return
+                    end
+                    local pawn
+                    for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
+                        local p = valid(pc) and pc.Pawn
+                        if valid(p) then pawn = p end
+                    end
+                    if not pawn then say("no player plane here"); return end
+                    local root = pawn.RootComponent
+                    local r = SV_FlightRec(1, addrOf(pawn) or 0, valid(root) and addrOf(root) or 0)
+                    recOn = r > 0
+                    -- the engine's own word on where the plane is, to check the recorder's transform read against
+                    local okL, loc = pcall(function() return pawn:K2_GetActorLocation() end)
+                    log(string.format("flight recorder: SV_FlightRec %s; the engine puts the plane at %s", tostring(r),
+                        okL and loc and string.format("%.1f %.1f %.1f cm", loc.X, loc.Y, loc.Z) or "?"))
+                    if recOn then say("on", "target an enemy to record it too")
+                    else say("could not start", "code " .. tostring(r)) end
+                end)
+                if not ok then log("flight recorder: error " .. tostring(err)) end
+            end)
+        end)
+    end
 end
 
 log("loaded, version " .. VERSION)

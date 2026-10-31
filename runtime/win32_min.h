@@ -114,6 +114,9 @@ IMPORT HANDLE WINAPI CreateThread(void* sec, size_t stack, ThreadProc fn, void* 
 IMPORT void   WINAPI Sleep(DWORD ms);
 IMPORT uint64_t WINAPI GetTickCount64(void);
 IMPORT void   WINAPI GetLocalTime(uint16_t st[8]);
+IMPORT BOOL   WINAPI CreateDirectoryW(const wchar_t* path, void* sec);
+IMPORT BOOL   WINAPI QueryPerformanceCounter(int64_t* count);
+IMPORT BOOL   WINAPI QueryPerformanceFrequency(int64_t* freq);
 typedef struct {                                   /* PROCESS_MEMORY_COUNTERS */
     DWORD  cb, PageFaultCount;
     size_t PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage;

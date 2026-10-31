@@ -32,4 +32,7 @@ CreateThread
 Sleep
 GetTickCount64
 GetLocalTime
+CreateDirectoryW
+QueryPerformanceCounter
+QueryPerformanceFrequency
 K32GetProcessMemoryInfo
