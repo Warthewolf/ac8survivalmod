@@ -1061,6 +1061,13 @@ CFG = {
              -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
              -- yet, each at most this long; 0: never
              join_wait_s = 90,
+             -- migration (the user, 2026-10-31: "if the Host does leave, it automatically tries to find the next best
+             -- host"): when the host's game goes, the player with the best link takes over as host and the others join
+             -- them; the round in play starts again, the allies and the airfield's defences are built again. after_s:
+             -- the host silent this long first (longer while it said it's reloading: a run's end); link_s: each next
+             -- host waited for; wait_s: the new host's round held this long for everyone to be back; break_s: its break.
+             -- Steam only (each player's Steam ID).
+             migration = { enabled = true, after_s = 30, link_s = 20, wait_s = 60, break_s = 15 },
              -- real_paint: their paint (skin and emblems) on their real plane; false: the airframe's default
              real_paint = true,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft

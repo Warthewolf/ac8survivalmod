@@ -388,7 +388,7 @@ typedef struct {
 static struct {
     int      open, mode, role, maxPlayers, mySlot;   /* mySlot: the host 0, a joiner the one the host gave it (-1 before) */
     uint32_t nonce;
-    char     partner[160];
+    char     partner[640];                 /* (24 SteamID64s and "auto": host migration, runtime 0.32.7) */
     double   delay;                         /* interpolation delay, seconds */
     uint16_t port;
     double   lastDiscover, lastFrame, lastPlayerSend, lastEntSend, lastStats;
@@ -1130,8 +1130,8 @@ static void CoDiscover(double now)
     if (ST.state <= 0) return;
     CO.ncand = 0;
     int any = 0;
-    char names[8][64]; uint64_t ids[8]; int nn = 0;
-    for (const char* s = CO.partner; *s && nn < 8; ) {     /* the partner list */
+    char names[24][64]; uint64_t ids[24]; int nn = 0;
+    for (const char* s = CO.partner; *s && nn < 24; ) {    /* the partner list (24: every player of a session, host migration) */
         while (*s == ' ' || *s == ',') ++s;
         const char* e = s;
         while (*e && *e != ',') ++e;
@@ -1467,7 +1467,7 @@ static uint8_t* ArgObject(void* lua)                       /* an address from Lu
  * (the host's; default 24). Opening again starts over. */
 static int L_CoopOpen(void* lua)
 {
-    char mode[16], role[16], partner[160], ver[32];
+    char mode[16], role[16], partner[640], ver[32];
     double port = 27777, delay = 100, maxp = CO_MAX_PLAYERS;
     if (!ArgBytes(lua, mode, sizeof(mode), NULL) || !ArgBytes(lua, role, sizeof(role), NULL) ||
         !ArgBytes(lua, partner, sizeof(partner), NULL)) return Ret(lua, -1);
@@ -1615,6 +1615,27 @@ static int L_CoopPeer(void* lua)
     return Ret(lua, 1);
 }
 
+/* SV_CoopPeerIds() -> each linked game's "slot:steamid:rtt ms:packets sent:resent:linked" (0 / 1), comma-separated: the
+ * host's joiners, a joiner's host (host migration, runtime 0.32.7: the host ranks its joiners by link quality and tells
+ * everyone the order and their Steam IDs) */
+static int L_CoopPeerIds(void* lua)
+{
+    static char out[2048];
+    CoBuf b = { out, out + sizeof(out) - 1 };
+    int first = 1;
+    for (int k = 0; k < CO_MAX_PLAYERS; ++k) {
+        CoLink* L = &CO.links[k];
+        if (!L->used) continue;
+        if (!first) CoPutS(&b, ",");
+        first = 0;
+        CoPutI(&b, k); CoPutS(&b, ":"); CoPutU(&b, L->steamId); CoPutS(&b, ":"); CoPutI(&b, (int64_t)(L->rtt * 1000));
+        CoPutS(&b, ":"); CoPutU(&b, L->txPk); CoPutS(&b, ":"); CoPutU(&b, L->resent); CoPutS(&b, ":"); CoPutI(&b, L->connected ? 1 : 0);
+    }
+    *b.p = 0;
+    U.luaSetString(lua, out, (size_t)(b.p - out));
+    return 1;
+}
+
 /* SV_CoopTrack(id, plane) -> 1 (host: stream that enemy under id), 0 untracked (plane 0), -1 bad */
 static int L_CoopTrack(void* lua)
 {
@@ -1680,6 +1701,21 @@ static int L_CoopReset(void* lua)
  * spawns a copy of your own plane and SV_CoopFollow keeps it in formation. */
 static CoRef  g_ppPlane, g_ppCtrl, g_follow, g_followPawn;
 static CoRef  g_peerPP[CO_MAX_PLAYERS], g_peerCtrl[CO_MAX_PLAYERS];    /* each player slot's real plane (COOP2MP T3) */
+
+/* SV_CoopSwapPP(a, b) -> 1: two player slots' real planes (and their stream bindings) trade places, when a player comes
+ * back in another slot (host migration, runtime 0.32.7: the plane stays theirs, never destroyed mid-level); -1 bad */
+static int L_CoopSwapPP(void* lua)
+{
+    double a = -1, b = -1;
+    if (!ArgNumber(lua, &a) || !ArgNumber(lua, &b) || a < 0 || b < 0 || a >= CO_MAX_PLAYERS || b >= CO_MAX_PLAYERS || a == b)
+        return Ret(lua, -1);
+    int i = (int)a, j = (int)b;
+    CoRef t = g_peerPP[i]; g_peerPP[i] = g_peerPP[j]; g_peerPP[j] = t;
+    t = g_peerCtrl[i]; g_peerCtrl[i] = g_peerCtrl[j]; g_peerCtrl[j] = t;
+    t = CO.players[i].plane.ref; CO.players[i].plane.ref = CO.players[j].plane.ref; CO.players[j].plane.ref = t;
+    Log(L"coop: player slots %d and %d's planes swapped (a player back in another slot)", i + 1, j + 1);
+    return Ret(lua, 1);
+}
 static double g_followOff[3], g_followAt;
 static int32_t g_followMoves, g_followFails;
 

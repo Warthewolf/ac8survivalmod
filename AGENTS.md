@@ -585,6 +585,25 @@ plane, its AIStateComponent, the blackboard), none for a plane at 0 health, neve
 director's aims and the tail watch all go through it (tailed_test covers it). Rule kept since: a game object a Lua part
 keeps between ticks is dropped the first time it's invalid, and a component reached through it is checked too. Players on other mods can
 make the games disagree elsewhere too: a session should run the same mod set.
+0.73.30-coop2mp.31 (runtime 0.32.7; built 2026-10-31, NOT yet installed (AC8 was running), not yet run in game; zip
+0.73.30, hash 88faf384...bd23cd; replaces 0.73.29): host migration (user, 2026-10-31: "if the Host does leave, it
+automatically tries to find the next best host"; their choices: the round in play starts again, the allies and defences
+are built again, the best connection takes over). sv_coop.lua's "host migration" block, [coop.migration] (enabled,
+after_s 30, link_s 20, wait_s 60, break_s 15; Steam only). The host ranks its joiners by link (round trip + 2000 x the
+share resent, +10000 out of the mission; SV_CoopPeerIds: each link's slot, Steam ID, rtt, sent, resent) and sends the
+line with each Steam ID ("sq|<host sid>|slot:sid,..."), the allies and defences up ("al|item:buyer sid,..."), and "hl|120"
+before its level reloads at a run's end (DOWN.runOver); "pi" carries each player's Steam ID last. A joiner whose host is
+silent after_s (or the host's "hl" time) goes down the line: the first in line reopens as host looking for everyone's
+Steam ID (SV_CoopOpen's partner list, now 640 chars / 24 names), takes the copies down (torn, not paid), sets the old
+host's plane aside (hidden, never destroyed), starts the round in play again break_s on (a new D; between rounds the
+next), holds it while the others aren't back (joinWaiting, wait_s), and builds the allies and defences again 5 s on
+(shopBuildFor, free, retried every 3 s up to 10); the others join it, the next after link_s, the old host again when
+nobody answers. A host by migration that nobody joined and hears another host joins it again (samerole, migStepBack).
+Each real plane carries its owner's Steam ID (P.sid): one back in another slot moves with them (M.slotFix,
+SV_CoopSwapPP swaps the native plane refs), one in a slot that's another player's is set aside, one left in this game's
+own slot is hidden at once and set aside 10 s on (AI stand-ins stay their slot's unit). Log lines `coop: migration: ...`.
+tools/checks/coop_migration_test.sh covers it (the host's line, the takeover, the others, slots, hl, off). Open: whether
+Steam P2P links a new host fast enough, the new host's run state beyond D (RUN, AF, specials mid-fight), stand-ins.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

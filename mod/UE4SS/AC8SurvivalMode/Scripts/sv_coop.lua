@@ -399,7 +399,8 @@ end
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
         local r = M.roster[s]
-        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "", r.ac or "") end
+        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "", r.ac or "",
+                         r.sid or "") end   -- (sid: their Steam ID, host migration)
     end
 end
 
@@ -1156,6 +1157,8 @@ local function peerTick(slot)
     -- AI plane up can't change airframe). So it waits up to AIRFRAME_WAIT_S for a row, then flies the default.
     P.freshAt = fresh and (P.freshAt or os.clock()) or nil
     local r0 = M.roster[slot]
+    -- (whose plane it is: their Steam ID, so it moves with them to another slot, host migration: M.slotFix)
+    if P.obj and not P.sid and r0 and r0.sid then P.sid = r0.sid end
     local known = r0 and type(r0.row) == "string" and r0.row ~= ""
     local code = r0 and r0.code ~= "" and r0.code or nil
     if P.realFailed and P.realFailed ~= code then P.realFailed = nil end        -- (another airframe: try again)
@@ -1359,6 +1362,15 @@ function COOP.joinWaiting(now)
         end
     end
     for s in pairs(M.outSince) do if not (M.roster or {})[s] then M.outSince[s] = nil end end
+    -- (a host by migration: the old room's players not back yet, by their Steam IDs, for up to [coop.migration] wait_s)
+    local mg, mc = M.mig, cfg().migration or {}
+    if mg and mg.hosting and mg.expect and os.clock() - (mg.hostAt or 0) < (tonumber(mc.wait_s) or 60) then
+        for sid, nm in pairs(mg.expect) do
+            local back = false
+            for _, r in pairs(M.roster or {}) do if r.sid == sid then back = true end end
+            if not back then names = names or {}; names[#names + 1] = nm end
+        end
+    end
     return names
 end
 function COOP.anyReal()
@@ -2021,7 +2033,7 @@ local function hostRosterSelf()
     local row, code = myAirframe()
     M.myRow, M.myCode, M.myLo, M.myPt, M.myAc = row, code, M.myLoadout(), M.myPaint(), M.myAircraft()
     M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "", lo = M.myLo, paint = M.myPt,
-                    ac = M.myAc }
+                    ac = M.myAc, sid = M.mySid and M.mySid() or nil }
     sendRoster(nil)
 end
 
@@ -2427,6 +2439,287 @@ local function onOrder(f, fromHost)
     pcall(ALLY.nextOrder, fromHost and "coop" or "a joiner", o)
 end
 
+---------------------------------------------------------------------------------------------------- host migration
+-- (the user, 2026-10-31: "can we also set up a Host Migration system? so if the Host does leave, it automatically
+-- tries to find the next best host"; their choices: the round in play starts again, the allies and defences are built
+-- again, the best connection takes over.) While it's up, the host ranks its joiners by their link (round trip and the
+-- share resent; players in the mission first) and tells everyone the order with each one's Steam ID ("sq"), and the
+-- allies and defences up ("al"); before its level reloads at a run's end it says how long it'll be away ("hl"). A
+-- joiner whose host has been silent [coop.migration] after_s goes down that order: if the first is itself it becomes
+-- the host (it opens as host looking for everyone's Steam ID, takes over the run: the round in play again after
+-- break_s, held up to wait_s while the others come back, the allies and defences built again), else it joins that one,
+-- the next after link_s. Planes keep their owner (P.sid): one back in another slot has its plane moved with them
+-- (SV_CoopSwapPP), a slot that's someone else's has the old plane set aside, hidden (never destroyed mid-level).
+do
+local ITEM_OK = { AAGun = true, SAM = true, Ciws = true, Wingmen = true, Moonchild = true, ShipAegis = true }
+local function mig() return cfg().migration or {} end
+local function sidOk(v) return type(v) == "string" and v:match("^%d+$") ~= nil and #v >= 15 and #v <= 20 end
+function M.mySid()
+    if not M.mySidV and type(SV_CoopInfo) == "function" then
+        local v = tostring(SV_CoopInfo() or ""):match("me=(%d+)")
+        if sidOk(v) then M.mySidV = v end
+    end
+    return M.mySidV
+end
+-- (the host) each linked game's Steam ID and link: { [slot] = { sid, rtt (ms), loss (share resent), up } }
+function M.linkQuality()
+    local q = {}
+    local s = type(SV_CoopPeerIds) == "function" and tostring(SV_CoopPeerIds() or "") or ""
+    for slot, sid, rtt, tx, rs, up in s:gmatch("(%d+):(%d+):(%-?%d+):(%d+):(%d+):([01])") do
+        q[tonumber(slot)] = { sid = sid, rtt = tonumber(rtt), loss = tonumber(rs) / math.max(1, tonumber(tx)), up = up == "1" }
+    end
+    return q
+end
+-- (the host) the allies and defences up: "item:buyer's Steam ID" (0: yours, or none known), sorted
+local function allyList()
+    local R, out = ALLY and ALLY.run, {}
+    if not R then return "" end
+    for _, a in pairs(R.up or {}) do
+        local item = a.kind == "ship" and ("Ship" .. tostring(a.key)) or (a.ally == "wingmen" and "Wingmen" or "Moonchild")
+        local b = a.buyer and M.roster[a.buyer] and M.roster[a.buyer].sid or "0"
+        if ITEM_OK[item] then out[#out + 1] = item .. ":" .. b end
+    end
+    local dc = R.defCount or {}
+    for kind, item in pairs({ aa = "AAGun", sam = "SAM", ciws = "Ciws" }) do
+        for _ = 1, math.min(8, tonumber(dc[kind]) or 0) do out[#out + 1] = item .. ":0" end
+    end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+-- (the host, every 5 s) the line of succession and the allies up, sent when they change and every 30 s
+local function hostShare(now)
+    if now < (M.sqAt or 0) then return end
+    M.sqAt = now + 5
+    local me = M.mySid()
+    if not me then return end
+    if M.roster[0] then M.roster[0].sid = me end
+    local q, list = M.linkQuality(), {}
+    for s, r in pairs(M.roster) do
+        local l = s ~= COOP.slot and q[s]
+        if l and sidOk(l.sid) then
+            r.sid = l.sid
+            local P = M.peers[s]
+            if l.up then
+                list[#list + 1] = { s = s, sid = l.sid, score = (l.rtt >= 0 and l.rtt or 999) + 2000 * l.loss + ((P and P.fresh) and 0 or 10000) }
+            end
+        end
+    end
+    table.sort(list, function(a, b) if a.score ~= b.score then return a.score < b.score end return a.s < b.s end)
+    local parts, said = {}, {}
+    for _, e in ipairs(list) do parts[#parts + 1] = e.s .. ":" .. e.sid; said[#said + 1] = string.format("%d (%.0f)", e.s + 1, e.score) end
+    local order = table.concat(parts, ",")
+    if order ~= M.sqSent or now >= (M.sqAgain or 0) then
+        M.sqSent, M.sqAgain = order, now + 30
+        send(true, "sq", me, order)
+        if order ~= M.sqSaid then
+            M.sqSaid = order
+            log("coop: migration: the next hosts, best link first: " .. (#said > 0 and table.concat(said, ", ") or "none"))
+        end
+    end
+    local al = allyList()
+    if al ~= M.alSent or now >= (M.alAgain or 0) then M.alSent, M.alAgain = al, now + 30; send(true, "al", al) end
+end
+-- (the host) before its level reloads (a run's end): away for up to secs, the joiners wait that long
+function COOP.hostAway(secs)
+    if COOP.host() then send(true, "hl", string.format("%d", math.floor(secs))) end
+end
+-- (a joiner) the host's line of succession, allies, time away
+function M.onSuccession(f)
+    if not sidOk(f[2]) then return end
+    local list = {}
+    for s, sid in tostring(f[3] or ""):gmatch("(%d+):(%d+)") do
+        local n = tonumber(s)
+        if slotOk(n) and n ~= 0 and sidOk(sid) and #list < MAX_SLOT then list[#list + 1] = { slot = n, sid = sid } end
+    end
+    M.succ, M.hostSid = list, f[2]
+    if M.roster[0] then M.roster[0].sid = f[2] end
+end
+function M.onAllies(f)
+    local list = {}
+    for item, sid in tostring(f[2] or ""):gmatch("(%a+):(%d+)") do
+        if ITEM_OK[item] and #list < 40 then list[#list + 1] = { item = item, sid = sid ~= "0" and sid or nil } end
+    end
+    M.allyList = list
+end
+function M.onHostAway(f)
+    local secs = tonumber(f[2])
+    if secs and secs > 0 and secs <= 300 then
+        M.hostAwayUntil = os.clock() + secs
+        log(string.format("coop: migration: the host's reloading, waited for up to %d s", secs))
+    end
+end
+-- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level)
+function M.retirePeer(s, why)
+    local P = M.peers[s]
+    M.peers[s] = nil
+    if not (P and P.obj and valid(P.obj)) then return end
+    pcall(function() P.obj:SetActorHiddenInGame(true) end)
+    pcall(function() P.obj:SetActorEnableCollision(false) end)
+    if type(SV_CoopPeer) == "function" then SV_CoopPeer(s, 0) end
+    M.retired = M.retired or {}
+    M.retired[#M.retired + 1] = P.obj
+    log(string.format("coop: player %d's plane here set aside, hidden (%s)", s + 1, why))
+end
+-- (every tick, before the planes) each player's real plane in their slot: one in another moves with them (from this
+-- game's own slot too: it was theirs before this game took it), one that's another player's now is set aside; one left
+-- in this game's own slot is hidden at once (its slot's never ticked) and set aside 10 s on if its player hasn't turned
+-- up. (An AI stand-in is its slot's unit, SV_Unit_CoopPeer<A-X>: it stays, flown from whoever has the slot now.)
+function M.slotFix()
+    local me = COOP.slot
+    for s, r in pairs(M.roster) do
+        local sid, P = r.sid, M.peers[s]
+        if s ~= me and sidOk(sid) and not (P and P.sid == sid) then
+            local moved = false
+            for t, Q in pairs(M.peers) do
+                if t ~= s and Q.real and Q.sid == sid and Q.obj then
+                    M.peers[s], M.peers[t] = Q, P
+                    if type(SV_CoopSwapPP) == "function" then SV_CoopSwapPP(s, t) end
+                    Q.shown, Q.ownSlotAt = nil, nil
+                    if P then P.shown = nil end
+                    log(string.format("coop: player %d is back as player %d: their plane here moved with them", t + 1, s + 1))
+                    moved = true
+                    break
+                end
+            end
+            if not moved and P and P.real and P.obj and P.sid and P.sid ~= sid then M.retirePeer(s, "the slot is another player's now") end
+        end
+    end
+    local P = me and M.peers[me]
+    if P and P.real and P.obj then
+        if not P.ownSlotAt then
+            P.ownSlotAt = os.clock()
+            pcall(function() P.obj:SetActorHiddenInGame(true) end)
+        elseif os.clock() - P.ownSlotAt >= 10 then
+            M.retirePeer(me, "it was in this game's slot, and its player isn't back")
+        end
+    end
+end
+local function sidName(sid)
+    for _, r in pairs(M.roster) do if r.sid == sid and r.name and r.name ~= "" then return r.name end end
+    return nil
+end
+local becomeHost
+local function nextCandidate(now)
+    local mg = M.mig
+    mg.i = mg.i + 1
+    local e = mg.list[mg.i]
+    if not e then
+        log("coop: migration: none of the next hosts answered; looking for a host as before")
+        callout("CO-OP: NO NEW HOST FOUND", "LOOKING FOR A HOST AS BEFORE")
+        M.mig, M.hostLostAt = nil, nil
+        COOP.reopen("join", "host migration: no next host answered", (mg.oldSid and (mg.oldSid .. ",") or "") .. tostring(cfg().partner or "auto"))
+        return
+    end
+    mg.cand, mg.candAt, mg.candName = e, now, mg.names[e.sid] or ("PLAYER " .. (e.slot + 1))
+    if e.sid == M.mySid() then return becomeHost(now) end
+    log(string.format("coop: migration: joining %s, the next host (%d of %d in line)", mg.candName, mg.i, #mg.list))
+    callout("CO-OP: " .. string.upper(mg.candName) .. " TAKES OVER", "JOINING THEIR GAME...")
+    COOP.reopen("join", "host migration", e.sid)
+end
+becomeHost = function(now)
+    local mg, me, c = M.mig, M.mySid(), mig()
+    local partners, expect = {}, {}
+    for _, e in ipairs(mg.list) do
+        if e.sid ~= me then partners[#partners + 1] = e.sid; expect[e.sid] = mg.names[e.sid] or ("PLAYER " .. (e.slot + 1)) end
+    end
+    partners[#partners + 1] = "auto"
+    log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it", mg.i, #mg.list))
+    COOP.reopen("host", "host migration", table.concat(partners, ","))
+    mg.hosting, mg.expect, mg.hostAt = true, expect, now
+    killAllCopies("host migration")
+    M.retirePeer(0, "the old host's: you're the host now")
+    -- the round: the one in play again (between rounds, the next), break_s on and once everyone's back (joinWaiting).
+    -- A new D: the next co-op tick sets everything up as a new level's (the units, the copies, "rs").
+    local old = D
+    local first = (mg.state == "wait") and (mg.round or 0) or math.max(0, (mg.round or 1) - 1)
+    D = { round = first, startRound = old and old.startRound or (first + 1), state = "wait", at = ((old and old.now) or 0) + (c.break_s or 15),
+          now = old and old.now, queue = {}, spare = {}, up = {}, flown = {}, announced = false, perf = old and old.perf }
+    M.rnd = nil
+    mg.rebuild, mg.rebuildAt = {}, now + 5
+    for _, a in ipairs(M.allyList or {}) do mg.rebuild[#mg.rebuild + 1] = { item = a.item, sid = a.sid, tries = 0 } end
+    log(string.format("coop: migration: round %d starts again once everyone's back (up to %d s), %d allies and defences to build again",
+        first + 1, c.wait_s or 60, #mg.rebuild))
+    callout("YOU ARE THE NEW HOST", string.format("ROUND %d STARTS ONCE EVERYONE'S BACK", first + 1))
+end
+-- (a host by migration) the allies and defences again, then done
+local function afterTakeover(now)
+    local mg, c = M.mig, mig()
+    if mg.rebuild and now >= (mg.rebuildAt or 0) then
+        mg.rebuildAt = now + 3
+        for i = #mg.rebuild, 1, -1 do
+            local a = mg.rebuild[i]
+            local buyer = nil
+            for s, r in pairs(M.roster) do if s ~= COOP.slot and a.sid and r.sid == a.sid then buyer = s end end
+            local it = CFG.shop and CFG.shop.items and CFG.shop.items[a.item]
+            local kind = it and (it.role == "aa" or it.role == "sam" or it.role == "ciws") and it.role or nil
+            local okB, ok, msg = false, false, "NOT AVAILABLE"
+            if type(shopBuildFor) == "function" then okB, ok, msg = pcall(shopBuildFor, buyer, a.item, 0, kind) end
+            a.tries = a.tries + 1
+            if okB and ok then
+                table.remove(mg.rebuild, i)
+                log(string.format("coop: migration: %s built again%s: %s", a.item, buyer and (" for player " .. (buyer + 1)) or "", tostring(msg)))
+            elseif a.tries >= 10 then
+                table.remove(mg.rebuild, i)
+                log(string.format("coop: migration: %s NOT built again (%s)", a.item, okB and tostring(msg) or ("error " .. tostring(ok))))
+            end
+        end
+        if #mg.rebuild == 0 then mg.rebuild = nil end
+    end
+    if not mg.rebuild and now - (mg.hostAt or now) >= (c.wait_s or 60) then
+        log(string.format("coop: migration over: %d players with this game as the host", playerCount()))
+        M.migratedFrom, M.mig = mg.oldSid, nil
+    end
+end
+-- (a host by migration that nobody joined, hearing another host: its own link had dropped and the old host is still
+-- there) it joins it again. Whether it did.
+function M.migStepBack()
+    local old = (M.mig and M.mig.hosting and M.mig.oldSid) or M.migratedFrom
+    if not old then return false end
+    log("coop: migration: nobody joined this game and another host is there: joining it again (this game's link had dropped)")
+    callout("CO-OP: THE HOST'S STILL THERE", "JOINING THEM AGAIN")
+    M.mig, M.migratedFrom, M.hostLostAt = nil, nil, nil
+    COOP.reopen("join", "host migration undone", old .. "," .. tostring(cfg().partner or "auto"))
+    return true
+end
+-- every tick: the host shares, a joiner watches its host, a migration goes on
+function M.migTick(now)
+    local c = mig()
+    if not c.enabled or tostring(cfg().transport or "steam") ~= "steam" then return end
+    if COOP.host() then
+        hostShare(now)
+        if M.mig and M.mig.hosting then afterTakeover(now) end
+        return
+    end
+    if not (COOP.client() and D) then return end
+    local mg = M.mig
+    if mg then
+        if M.state == "linked" then
+            log(string.format("coop: migration: linked to %s, the new host", tostring(mg.candName)))
+            callout("CO-OP: NEW HOST", string.upper(tostring(mg.candName)) .. " IS HOSTING")
+            M.mig, M.hostLostAt = nil, nil
+        elseif now - (mg.candAt or now) >= (c.link_s or 20) then
+            log(string.format("coop: migration: %s didn't answer in %d s", tostring(mg.candName), c.link_s or 20))
+            nextCandidate(now)
+        end
+        return
+    end
+    if not (M.hostLostAt and M.succ and #M.succ > 0) then return end
+    local wait = c.after_s or 30
+    if M.hostAwayUntil and M.hostAwayUntil > M.hostLostAt then wait = math.max(wait, M.hostAwayUntil - M.hostLostAt) end
+    if now - M.hostLostAt < wait then return end
+    local list, names = {}, {}
+    for _, e in ipairs(M.succ) do
+        if e.sid ~= M.hostSid then list[#list + 1] = e; names[e.sid] = sidName(e.sid) or ((M.roster[e.slot] or {}).name) end
+    end
+    if M.mySid() then names[M.mySid()] = M.myName end
+    local oldName = playerName(0)
+    M.mig = { list = list, names = names, i = 0, oldSid = M.hostSid, round = D.round, state = D.state, at = now }
+    log(string.format("coop: migration: the host (%s) silent %.0f s: going down the line of %d", oldName, now - M.hostLostAt, #list))
+    callout("CO-OP: " .. string.upper(oldName) .. " (HOST) IS GONE", "FINDING THE NEXT HOST...")
+    nextCandidate(now)
+end
+end
+
 local function onHostMessage(from, f)
     local k = f[1]
     if k == "hi" then
@@ -2437,7 +2730,9 @@ local function onHostMessage(from, f)
         local ac = acClean(f[9])                                    -- (their aircraft's name)
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
-        M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo, paint = pt, ac = ac }
+        local q = M.linkQuality and M.linkQuality()[from]                -- (their Steam ID, from their link: host migration)
+        M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo, paint = pt, ac = ac,
+                           sid = q and q.sid ~= "0" and q.sid or nil }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
@@ -2485,6 +2780,9 @@ local function onJoinerMessage(f)
     elseif k == "fx" then M.fxFromHost(f)               -- a player's shots (the host's, or a joiner's relayed)
     elseif k == "ak" or k == "ax" or k == "ar" then onBuildAnswer(f)   -- the host's say on your ally / defence
     elseif k == "ag" then onOrder(f, true)               -- the allies' orders (the room's: the host's)
+    elseif k == "sq" then M.onSuccession(f)              -- host migration: the next hosts, best link first
+    elseif k == "al" then M.onAllies(f)                  -- host migration: the allies and defences up
+    elseif k == "hl" then M.onHostAway(f)                -- host migration: the host's reloading (a run's end)
     elseif k == "hq" then                                -- the host has no hello from you (peerTick): again, once a second
         if os.clock() >= (M.hqAt or 0) then
             M.hqAt = os.clock() + 1
@@ -2505,8 +2803,10 @@ local function onJoinerMessage(f)
         if not slotOk(s) then return end
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
+        local sid = tostring(f[10] or ""):match("^%d+$")
         M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "",
-                        lo = loadoutOk(f[7]) and f[7] or "", paint = paintOk(f[8]) and f[8] or "", ac = acClean(f[9]) }
+                        lo = loadoutOk(f[7]) and f[7] or "", paint = paintOk(f[8]) and f[8] or "", ac = acClean(f[9]),
+                        sid = (sid and #sid >= 15 and #sid <= 20) and sid or nil }
         if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
             local P = M.peers[s]
             log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
@@ -2676,6 +2976,7 @@ local function onSys(from, what, f)
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
+        if from == 0 then M.hostLostAt = nil end          -- (host migration: the host's back, or a new one)
         sendHi()
         if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
         if COOP.host() and what == "restart" then M.roster[from] = nil end
@@ -2686,7 +2987,9 @@ local function onSys(from, what, f)
         M.wasLost = M.wasLost or {}
         M.wasLost[from] = true
         callout("CO-OP LINK LOST", string.upper(playerName(from)))
+        if from == 0 and COOP.client() then M.hostLostAt = M.hostLostAt or os.clock() end   -- (host migration's clock)
     elseif what == "up" then
+        if from == 0 then M.hostLostAt = nil end
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
             M.wasLost[from] = nil
             callout("CO-OP LINK BACK", string.upper(playerName(from)))
@@ -2713,7 +3016,10 @@ local function onSys(from, what, f)
         log(string.format("coop: %s tried to join with Survival %s (yours %s): refused", tostring(f[3] or "?"), tostring(f[4] or "?"), VERSION))
         callout("REFUSED " .. (nm ~= "" and nm or "A PLAYER"), "THEY HAVE " .. (jv ~= "" and jv or "ANOTHER BUILD") .. ": UPDATE TO " .. upperText(VERSION, 32))
     elseif what == "samerole" then
-        if M.auto and COOP.host() and playerCount() <= 1 and not D then   -- (an automatic host, alone, not in a run)
+        if COOP.host() and playerCount() <= 1 and M.migStepBack and M.migStepBack() then
+            -- (a host by migration that nobody joined hears another host: its own link had dropped, the old host's
+            -- still there; it joins it again)
+        elseif M.auto and COOP.host() and playerCount() <= 1 and not D then   -- (an automatic host, alone, not in a run)
             log("coop: another host found; this game was hosting only because it found none (role auto): joining")
             COOP.reopen("join", "another host found")
             callout("CO-OP: ANOTHER HOST FOUND", "JOINING THEM")
@@ -2825,16 +3131,18 @@ end
 -- again at random, so two such games don't host at once) it reopens as the host, and an automatic host that meets
 -- another host while alone and before a run joins that one (onSys "samerole").
 local AUTO_WAIT = 10                                  -- (s; up to twice that, at random)
-function COOP.reopen(role, why)
+-- partner: who to look for this time (host migration: the next host's Steam ID, or every player's for the new host),
+-- else CFG.coop.partner
+function COOP.reopen(role, why, partner)
     local c = cfg()
-    local r = SV_CoopOpen(c.transport or "steam", role, c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
+    local r = SV_CoopOpen(c.transport or "steam", role, partner or c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
                           maxPlayers())
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
     M.state, M.roster = nil, {}
     if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
-        role == "host" and "host" or "joiner", tostring(c.transport), tostring(c.partner), maxPlayers(), why,
+        role == "host" and "host" or "joiner", tostring(c.transport), tostring(partner or c.partner or "auto"), maxPlayers(), why,
         r == 1 and (role == "host" and "looking for players" or "looking for the host") or
         ({ [-1] = "bad settings", [-2] = "Steam not available", [-3] = "UDP not available", [-4] = "partner isn't an IP address" })[r] or tostring(r)))
     if COOP.open and COOP.host() and M.myName ~= nil then hostRosterSelf() end
@@ -3049,7 +3357,9 @@ function COOP.tick(tick)
         if type(SV_CoopReset) == "function" then SV_CoopReset() end
         if COOP.client() then killAllCopies("a new run here") end      -- (a restart in the same level keeps the actors)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
-            M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj) } or {}
+            -- (whose it is and whether it's their real plane kept too: a host by migration keeps every live plane)
+            M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj), sid = P.sid, real = P.real, code = P.code,
+                                                       lo = P.lo, row = P.row } or {}
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
         M.joinHits, M.pendBind, M.strayFirst = nil, nil, nil
@@ -3106,6 +3416,8 @@ function COOP.tick(tick)
     else
         SV_CoopMe(0, 0)
     end
+    local okSf, errSf = pcall(M.slotFix)                              -- (each plane in its owner's slot: host migration)
+    if not okSf then once("slotFix", "coop: slot fix error " .. tostring(errSf)) end
     for s = 0, MAX_SLOT do
         if s ~= COOP.slot then
             local okP, errP = pcall(peerTick, s)
@@ -3123,5 +3435,7 @@ function COOP.tick(tick)
         local okC, errC = pcall(clientTick)
         if not okC then once("clientTick", "coop: joiner error " .. tostring(errC)) end
     end
+    local okMg, errMg = pcall(M.migTick, now)                         -- (host migration: the line, the watch, a takeover)
+    if not okMg then once("migTick", "coop: migration error " .. tostring(errMg)) end
 end
 end

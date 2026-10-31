@@ -554,6 +554,8 @@ function DOWN.runOver(round, by)
     pcall(STATS.death, "died")
     local okL, errL = pcall(LB.finish, "died")
     if not okL then log("leaderboard: error " .. tostring(errL)) end
+    -- (the host's level reloads now: its joiners wait for it instead of finding a new host, host migration)
+    if COOP and COOP.hostAway then pcall(COOP.hostAway, 120) end
     local fire = COOP and COOP.eventHere or SV_Event
     local r = type(fire) == "function" and fire("RE_SV_RunOver") or -5
     log("down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): " .. (r == 1 and "fired" or (SV_ERR[r] or tostring(r))))
