@@ -155,13 +155,15 @@ local SHOWN = { "Provoke", "EscapeFromPursuer", "AttackAvoidance", "Blackout", "
 local PRE = { Provoke = true, EscapeFromPursuer = true, Blackout = true }   -- (at the first read: already defending)
 local function tw() local c = cfg(); return c.tail_watch ~= false and on() end
 local function readState(p)
+    -- (read fresh each time, never kept: a kept blackboard outlived its dead plane and was called after it was freed;
+    -- aiBlackboard, sv_ai.lua)
+    local bb = aiBlackboard and aiBlackboard(p)
+    if not bb then return nil end
     local ok, v = pcall(function()
         AISTATE = AISTATE or FName("AIState")
-        local bb = p.bb or p.obj.AIStateComponent.BlackboardComponent
-        p.bb = bb
         return bb:GetValueAsEnum(AISTATE)
     end)
-    if not (ok and type(v) == "number") then p.bb = nil; return nil end
+    if not (ok and type(v) == "number") then return nil end
     return (AI_STATE and AI_STATE[v]) or tostring(v)
 end
 local function fresh(p)                           -- position (cm) and heading now, or nil

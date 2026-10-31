@@ -351,10 +351,13 @@ local function aimsTick(s, now)
         else
             local n = 0
             for _, p in ipairs(planes) do
-                if not p.down and p.unit == unit and (a.k == nil or p.k == a.k) and valid(p.obj) and valid(a.obj) then
+                -- (the blackboard read fresh and checked each time: aiBlackboard, sv_ai.lua; a plane dying in the 2 s
+                -- before the plane watch marks it down had its AI torn down under this write)
+                local bb = (not p.down and p.unit == unit and (a.k == nil or p.k == a.k) and valid(a.obj)) and aiBlackboard(p) or nil
+                if bb then
                     local ok = pcall(function()
                         TARGET = TARGET or FName("TargetActor")
-                        p.obj.AIStateComponent.BlackboardComponent:SetValueAsObject(TARGET, a.obj)
+                        bb:SetValueAsObject(TARGET, a.obj)
                     end)
                     if ok then n = n + 1 end
                 end

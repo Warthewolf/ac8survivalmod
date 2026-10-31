@@ -106,10 +106,30 @@ AI_STATE = { [0] = "ReturnToWorld", "AvoidObstacle", "AvoidRangeAttack", "Wingma
 -- Both are read every time, the log on or off (coop-perf step 10), and kept for later parts: p.aiState, and p.aiTarget /
 -- p.aiTargetAddr (the object it's after and its address, for COOP.slotOfAddr; nil for none). The measurements time
 -- Provoke episodes from the state (CFG.stats: STATS.aiState, sv_stats.lua); the target's name (nameOf) only for the log.
+-- Plane p's AI blackboard, read fresh and checked at every step (the plane, its AIStateComponent, the blackboard), or
+-- nil; nil too for a plane at 0 health (its AI is torn down as it dies). Never kept between ticks: a dead plane's
+-- components are freed at the next garbage collection, and a call through a kept one crashes the game inside UE4SS's
+-- ProcessEvent, pcall or not (the user's co-op run of 2026-10-31, 10:44:43: the host crashed so, sv_stats.lua's tail
+-- watch keeping p.bb and the director's aim writing through each plane's every second). Every blackboard read or
+-- write goes through it.
+function aiBlackboard(p)
+    if not (p and valid(p.obj)) then return nil end
+    local ok, bb = pcall(function()
+        local h = p.obj.HealthInternal
+        if type(h) == "number" and h <= 0 then return nil end
+        local st = p.obj.AIStateComponent
+        if not valid(st) then return nil end
+        local b = st.BlackboardComponent
+        return valid(b) and b or nil
+    end)
+    return ok and bb or nil
+end
+
 function aiWatch(p, you)
     local st, read, tobj = "?", false, nil
     pcall(function()
-        local bb = p.obj.AIStateComponent.BlackboardComponent
+        local bb = aiBlackboard(p)
+        if not bb then return end
         local okS, v = pcall(function() return bb:GetValueAsEnum(FName("AIState")) end)
         if okS and type(v) == "number" then st = AI_STATE[v] or tostring(v) end
         local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
@@ -159,7 +179,8 @@ function ACE.hunt(p)
     if ANOM and ANOM.packHeld and ANOM.packHeld(p) then return end   -- (a PHANTASM guard till its pack springs: P7, off by default)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
-    local bb = p.obj.AIStateComponent.BlackboardComponent
+    local bb = aiBlackboard(p)
+    if not bb then return end
     local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
     if okT and valid(t) and nameOf(t) == nameOf(pawn) then return end
     local ok = pcall(function() bb:SetValueAsObject(FName("TargetActor"), pawn) end)
