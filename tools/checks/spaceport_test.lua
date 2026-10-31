@@ -286,6 +286,19 @@ local nf = #flights
 run(s, now + 0.25, now + 3 * SP.deck.every_s)
 check(#flights == nf, "the Ford sunk: no more")
 
+print("switched off (CFG.specials.spaceport.enabled = false, tools/nospaceport.py)")
+fresh(10)
+CFG.specials.spaceport.enabled = false
+check(SPORT.ready() == false and SPC.kinds.retake.ready() == false, "enabled = false: no Spaceport Assault, no retake (ready)")
+RUN.sport = { retakeRound = D.round + 1, troops = 8, lostRound = D.round, ships = {} }
+check(specialFor(D.round + 1) ~= "retake", "enabled = false: a captured spaceport's next round isn't the retake")
+CFG.specials.spaceport.enabled = true
+check(SPORT.ready() == true and SPC.kinds.retake.ready() == true and specialFor(D.round + 1) == "retake", "enabled again: both can come")
+CFG.specials.spaceport.retake.enabled = false
+check(SPC.kinds.retake.ready() == false and specialFor(D.round + 1) ~= "retake", "retake.enabled = false: no retake")
+CFG.specials.spaceport.retake.enabled = true
+RUN.sport = nil
+
 print("startRound: its fleet still up")
 fresh(10)
 alive.SV_Unit_SpAegisC = 1

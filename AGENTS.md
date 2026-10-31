@@ -864,6 +864,10 @@ ShotIntervalTime apart over TriggeringTime = count x interval, then RestingTime:
 spaceport", "we no longer need the revive test"): T1 Ctrl+F6 and T2 Ctrl+END (sv_down.lua DOWN.testFloor / testDown, the
 watch list's test planes, the floor's down-test lines); Ctrl+END is the Spaceport Assault's alone, Ctrl+F6 free. A test
 key bound twice with Ctrl is logged at load (`test: Ctrl+<key> is bound twice`).
+0.73.55-coop2mp.56: a friends' build without the Spaceport (user, 2026-10-31: "build a version for my friends that DOES
+NOT include the spaceport retake", "or Spaceport Defense"): CFG.specials.spaceport.enabled (SPORT.ready, the retake kind's
+ready and specialFor: none, forced or not); `NOSPACEPORT=1` on package_release.sh / package_dev.sh runs
+tools/nospaceport.py on the staged copies (both off, their ini sections gone; zip ..._NoSpaceport). The sources keep it on.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

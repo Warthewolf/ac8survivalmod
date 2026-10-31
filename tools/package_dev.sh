@@ -21,6 +21,8 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
 rm -rf "$mod/Sounds/valka"
 rmdir "$mod/Sounds" 2>/dev/null || true
 python -X utf8 -I tools/novalka.py "$mod" > /dev/null
+# NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
+if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi
 cp release/README.txt "$st/README.txt"
 python -X utf8 -I tools/coop_edition.py "$st" "$mod" > /dev/null
 python -I tools/edition.py online "$mod"/Scripts/*.lua "$mod/config/survival.default.ini" "$st/README.txt" > /dev/null

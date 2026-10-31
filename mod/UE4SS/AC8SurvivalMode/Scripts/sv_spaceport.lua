@@ -214,6 +214,10 @@ end
 
 -- Whether a Spaceport Assault can come: the native spawner, the turrets' rows in, and none of its fleet still up.
 function SPORT.ready()
+    if cfg().enabled == false then
+        if not SPORT.offSaid then SPORT.offSaid = true; log("special: no Spaceport Assault: switched off ([specials.spaceport] enabled)") end
+        return false
+    end
     if not nativeReady() then return false end
     if not (ALLY and ALLY.fleetReady) then
         if not SPORT.rowsSaid then SPORT.rowsSaid = true; log("special: no Spaceport Assault: its turrets' rows aren't in DT_NPC") end

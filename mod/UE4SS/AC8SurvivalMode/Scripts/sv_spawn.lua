@@ -843,7 +843,7 @@ function specialFor(round)
     local sp = CFG.specials
     -- the round after a captured spaceport is its retake (sv_spaceport.lua; CFG.specials.spaceport.retake)
     local spr = sp.spaceport
-    if RUN.sport and RUN.sport.retakeRound == round and not (spr and spr.retake and spr.retake.enabled == false) then
+    if RUN.sport and RUN.sport.retakeRound == round and not (spr and (spr.enabled == false or (spr.retake and spr.retake.enabled == false))) then
         return "retake"
     end
     local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
