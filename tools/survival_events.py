@@ -1338,6 +1338,16 @@ def build_heavy(g, stock_ep):
           f'RE_SV_HeavyRoute_<NN><S> / HeavyLoop_<NN><L><S>, {HEAVY_SPEED} km/h)')
 
 
+# The Spaceport Assault's map (tools/re/SPACEPORT_ASSAULT.md): the user's marks of 2026-10-31 (tools/re/spaceport/
+# spaceport_marks.txt / spaceport_rings.txt: Ctrl+HOME beaches, Ctrl+PAGE_UP sea, Ctrl+PAGE_DOWN the troops' spots; hard
+# rule 27), cm. The beaches' rings read sea (4 m) west and north of each, land (5 m) east and south: the craft come in
+# from the west. Spaceport spots 3 and 4 were one double press (50 m apart): one kept.
+SPACEPORT_BEACHES = [(-1512225, -20610, 500), (-1530847, 28330, 500), (-1557771, 95289, 500), (-1597594, 197576, 500)]
+SPACEPORT_SEA = [(-2810707, 432930), (-2785643, 238488), (-2769543, 113592), (-2748663, -48395), (-2964629, -26491)]
+SPACEPORT_TROOP_SPOTS = [(-1490317, 157461, 500), (-1484219, 75102, 500), (-1419829, -21557, 500)]
+SPACEPORT_PAD = (-1325196, 59778)                # Mission 19's rocket 1 / Mission 22's shuttle pad
+
+
 AWACS_EVENTS = {}                              # build_allies' events build_awacs goes on from ('airborne')
 
 
