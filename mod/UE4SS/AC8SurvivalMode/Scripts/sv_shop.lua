@@ -472,7 +472,9 @@ function shopBuildFor(slot, name, price, kind)
     if not f then return false, "ALL BUILT." end
     local r = SV_Spawn(f.unit)
     if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
-    log(string.format("shop: %s built for player %d (%s, %d paid on their game)", f.def.label, slot + 1, f.unit, price))
+    -- (slot nil: a host by migration building the old room's again, its own or a buyer's who's gone)
+    log(string.format("shop: %s built for %s (%s, %d paid on their game)", f.def.label, slot and ("player " .. (slot + 1)) or "the room",
+        f.unit, price))
     return true, string.format("%s BUILT for %d (%s).", f.def.label, price, f.unit)
 end
 
