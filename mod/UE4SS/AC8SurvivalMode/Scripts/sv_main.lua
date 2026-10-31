@@ -1039,6 +1039,96 @@ if type(RegisterKeyBind) == "function" and Key then
             log("test: " .. t[1] .. " not bound: UE4SS has no key " .. key)
         end
     end
+    -- The Spaceport Assault's map marks (tools/re/SPACEPORT_ASSAULT.md; hard rule 27: the terrain's collision is only
+    -- there near the player, so the shore can't be traced from afar). In flight, low over the spot: Ctrl+HOME a beach the
+    -- landing craft land on, Ctrl+PAGE_UP a spot at sea for the fleet, Ctrl+PAGE_DOWN a spot at the spaceport the troops
+    -- drive to. Each writes `<kind> x y z ground surface` (cm; surface S sea, L land, ? unknown, from what a straight-down
+    -- trace hit) to config\spaceport_marks.txt, and a beach also the ground round it (8 directions at 0.5, 1, 2 and 3 km)
+    -- to config\spaceport_rings.txt, so the build can tell which way the open water is. (The airport's beaches came
+    -- the same way: Lua 0.35.x's Ctrl+F10 marks, removed in 0.44.1.)
+    ;(function()                   -- (its own function: the main chunk's 200-local limit)
+    local function marksDir() return SCRIPT_DIR .. "..\\config\\" end
+    local function groundAt(ks, x, y)
+        local hit = {}
+        local ok, r = pcall(function()
+            return ks:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
+                hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
+        end)
+        local z, what
+        pcall(function()
+            local h = hit.OutHit or hit
+            local l = h.ImpactPoint or h.Location
+            if l and l.Z then z = l.Z end
+        end)
+        for _, field in ipairs({ "Component", "PhysMaterial" }) do
+            if not what then
+                pcall(function()
+                    local o = (hit.OutHit or hit)[field]
+                    if o and o.Get then o = o:Get() end
+                    local n = o and o:GetFullName()
+                    if n and n ~= "" then what = n:match("([^%.:/]+)$") or n end
+                end)
+            end
+        end
+        if ok and r then return z, what end
+        return nil, nil
+    end
+    local function surface(what)
+        if not what then return "?" end
+        local w = what:lower()
+        if w:find("sea") or w:find("water") or w:find("ocean") then return "S" end
+        if w:find("landscape") or w:find("terrain") or w:find("ter_") then return "L" end
+        return "?"
+    end
+    local KINDS = { HOME = { "beach", "BEACH MARKED", "a landing craft lands here" },
+                    PAGE_UP = { "sea", "FLEET SPOT MARKED", "a ship sails here" },
+                    PAGE_DOWN = { "spaceport", "SPACEPORT SPOT MARKED", "troops drive here" } }
+    local counts = {}
+    for key, k in pairs(KINDS) do
+        if Key[key] then
+            pcall(RegisterKeyBind, Key[key], mods, function()
+                ExecuteInGameThread(function()
+                    local ok, err = pcall(function()
+                        local you = playerLocation and playerLocation()
+                        if not (D and you) then log("test: Ctrl+" .. key .. " (spaceport mark) outside a flight"); return end
+                        local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+                        local z, what = nil, nil
+                        if valid(ks) then z, what = groundAt(ks, you.X, you.Y) end
+                        local f = io.open(marksDir() .. "spaceport_marks.txt", "a")
+                        if f then
+                            f:write(string.format("%s %.0f %.0f %.0f %s %s\n", k[1], you.X, you.Y, you.Z,
+                                z and string.format("%.0f", z) or "?", surface(what)))
+                            f:close()
+                        end
+                        local rings = ""
+                        if k[1] == "beach" and valid(ks) then          -- (the ground round it, while you're here)
+                            local parts = {}
+                            for d = 0, 7 do
+                                local a, hs = math.rad(d * 45), {}
+                                for _, km in ipairs({ 0.5, 1, 2, 3 }) do
+                                    local rz, rw = groundAt(ks, you.X + math.cos(a) * km * 100000, you.Y + math.sin(a) * km * 100000)
+                                    hs[#hs + 1] = (rz and string.format("%.0f", rz / 100) or "-") .. surface(rw)
+                                end
+                                parts[#parts + 1] = (d * 45) .. ":" .. table.concat(hs, ",")
+                            end
+                            rings = table.concat(parts, " ")
+                            local r = io.open(marksDir() .. "spaceport_rings.txt", "a")
+                            if r then r:write(string.format("beach %.0f %.0f %s\n", you.X, you.Y, rings)); r:close() end
+                        end
+                        counts[k[1]] = (counts[k[1]] or 0) + 1
+                        hudCallout(string.format("%s (%d)", k[2], counts[k[1]]), string.format("%.1f, %.1f KM: %s", you.X / 100000,
+                            you.Y / 100000, k[3]))
+                        log(string.format("test: spaceport mark %s %d at %.0f, %.0f, %.0f cm (ground %s, %s, %s)%s", k[1], counts[k[1]],
+                            you.X, you.Y, you.Z, tostring(z), surface(what), tostring(what), rings ~= "" and (": ring " .. rings) or ""))
+                    end)
+                    if not ok then log("test: Ctrl+" .. key .. " (spaceport mark) error " .. tostring(err)) end
+                end)
+            end)
+        else
+            log("test: the spaceport mark for " .. k[1] .. " not bound: UE4SS has no key " .. key)
+        end
+    end
+    end)()
     end
     -- TEST ONLY END
     if Key.F7 then                 -- Ctrl+F7: write the live HUD's layout to hud_dump.txt (any screen)
