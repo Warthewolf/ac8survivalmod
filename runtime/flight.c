@@ -1474,16 +1474,44 @@ static uint8_t*      g_fUnitFxFrame;                       /* found by FindFunct
 static UnitFxFrameFn g_nextUnitFxFrame;
 static uint32_t      g_ufxLetGo;
 
+/* ---- whether a UObject is still the engine's (runtime 0.32.8) ----------------------------------------------------
+ * A garbage flag only says so until the object is freed: the co-op run of 2026-10-31 (11:57, a joiner, the round after
+ * the Ladons) crashed in the effect move again past the 0.32.6 guard, its effect freed (and its memory taken by
+ * something else) while the unit's update wasn't running, so the guard never saw the flag. GUObjectArray says it at any
+ * time: the object's slot (its InternalIndex, +0xC) must still hold it, not marked garbage (internal flag 1 << 21) or
+ * unreachable (the GC's flag of the moment). The game's own weak-pointer lookup does the same (inlined 1,429 times, all
+ * on the same globals); UoFind reads them from one of those, in the target entry check (kSigTargetCheck). */
+#include "uobj.h"
+static uint8_t*       g_fTargetCheck;                       /* found by FindFunctions */
+
+static void UoFind(void)
+{
+    if (!g_fTargetCheck || g_fTargetCheck[0xe0] != 0xE8) { Log(L"guard: GUObjectArray not found (another game build?): liveness by flags only"); return; }
+    uint8_t* f = Rel32(g_fTargetCheck + 0xe0);              /* 0x147443cb0 */
+    if (!InGame(f) || f[0x78] != 0x3B || f[0x79] != 0x05 || f[0x8d] != 0x48 || f[0x8e] != 0x8B || f[0x8f] != 0x05 ||
+        f[0xa7] != 0x8B || f[0xa8] != 0x0D) {
+        Log(L"guard: the target check's GUObjectArray lookup %p isn't the expected code: liveness by flags only", f);
+        return;
+    }
+    g_uoNum    = (int32_t*)RipRel(f + 0x78, 6);
+    g_uoChunks = (uint8_t* const* volatile*)RipRel(f + 0x8d, 7);
+    g_uoGcFlag = (uint32_t*)RipRel(f + 0xa7, 6);
+    Log(L"guard: GUObjectArray chunks at %p, count at %p (%d objects), GC flag at %p (now %x)", (void*)g_uoChunks, (void*)g_uoNum,
+        *g_uoNum, (void*)g_uoGcFlag, *g_uoGcFlag);
+}
+
 static void OnUnitFxFrame(uint8_t* self, float dt)
 {
     uint8_t** held = self ? (uint8_t**)(self + UFX_OFF) : NULL;
     if (held && Readable(held, 8) && *held) {
         uint8_t* c = *held;
-        if (!Readable(c, 0x10) || (*(uint32_t*)(c + 8) & RF_MIRRORED_GARBAGE)) {
+        int gone = !Readable(c, 0x10) || (*(uint32_t*)(c + 8) & RF_MIRRORED_GARBAGE);
+        if (!gone && UObjLive(c) == 0) gone = 2;           /* (freed already: its flag went with it) */
+        if (gone) {
             *held = NULL;
             if (g_ufxLetGo++ < 8)
-                Log(L"guard: an AI unit's effect %p (unit %p, +0x2690) was destroyed: let go before it's freed (%u so far)", c, self,
-                    g_ufxLetGo);
+                Log(L"guard: an AI unit's effect %p (unit %p, +0x2690) was %s: let go (%u so far)", c, self,
+                    gone == 2 ? L"freed already (not in GUObjectArray)" : L"destroyed, before it's freed", g_ufxLetGo);
         }
     }
     g_nextUnitFxFrame(self, dt);
@@ -1512,4 +1540,125 @@ static void UfxInstall(void)
         void* prev = NULL;
         HookSlot(c.slots[i], (void*)OnUnitFxFrame, &prev, L"guard: AI unit effect update");
     }
+}
+
+/* ---- a game bug guarded: a weapon's target search reading a freed unit (runtime 0.32.8) -------------------------
+ * Each unit a weapon can aim at has target entries, of a family of classes over one base (vtables sharing its slots
+ * +0x00, +0x18, +0x28, +0x50); a weapon's search asks every entry, on worker threads (the ParallelFor 0x1474703c0 ->
+ * 0x147434e50 -> 0x147435060: slot +0x60 (entry, query, a, b) -> bool, false: not a target). The entries keep a weak
+ * pointer to their unit's actor at +0x20, and some read it without a null check. Entries left behind by a unit that's
+ * gone crashed the co-op host twice on 2026-10-31: at 11:24 (the Alicorn round: class 0x14cb78378's check 0x147443690
+ * reading its game object +0x18, the class gone: IsA at 0x1470d2200) and at 12:07 (round 10's start, as Survival
+ * recycled the flights flown before, destroying their planes: class 0x14cb77dc8's 0x1474515a0 using the weak actor,
+ * NULL, at 0x147450468); and the T4b replaced plane (+0x28, class 0x14cb78378's raw actor). The guard answers "not a
+ * target" for an entry whose actor was set and is gone (UWeakLive), or, in the first class (sigs.h kSigTargetCheck),
+ * whose game object or actor isn't live (UObjLive), and lets the game check the rest. */
+typedef uint8_t (*TargetCheckFn)(uint8_t* entry, void* query, void* a, void* b);
+#define TC_MAX 16                                           /* (classes guarded; the game has 12) */
+#define TC_SCAN_MAX 256                                     /* (vtables of the family looked at; the game has 151) */
+static TargetCheckFn g_tcNext[TC_MAX];
+static uint8_t       g_tcFirst[TC_MAX];                     /* the class with the game object (+0x18) and actor (+0x28) */
+static void**        g_tcSlot[TC_MAX];
+static int           g_tcN;
+static volatile int32_t g_tgtSkipped;
+
+static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
+{
+    const wchar_t* why = NULL;
+    if (entry) {
+        const uint8_t* w = entry + 0x20;
+        if (*(const int32_t*)(w + 4) && UWeakLive(w) == 0) why = L"its actor's weak pointer resolves to nothing";
+        else if (g_tcFirst[i]) {
+            uint8_t* go    = *(uint8_t**)(entry + 0x18);
+            uint8_t* actor = *(uint8_t**)(entry + 0x28);
+            if (go && UObjLive(go) == 0) why = L"its game object isn't live";
+            else if (actor && UObjLive(actor) == 0) why = L"its actor isn't live";
+        }
+    }
+    if (why) {
+        int32_t n = __atomic_add_fetch(&g_tgtSkipped, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0))  /* (worker threads: Log is locked; the first few, then 8, 16, ...) */
+            Log(L"guard: a weapon's target search skipped a gone unit's entry %p (class %d of %d: %s; %d so far)", entry, i + 1,
+                g_tcN, why, n);
+        return 0;
+    }
+    return g_tcNext[i](entry, query, a, b);
+}
+#define TC_THUNK(i) static uint8_t OnTc##i(uint8_t* e, void* q, void* a, void* b) { return TcCheck(i, e, q, a, b); }
+TC_THUNK(0) TC_THUNK(1) TC_THUNK(2) TC_THUNK(3) TC_THUNK(4) TC_THUNK(5) TC_THUNK(6) TC_THUNK(7)
+TC_THUNK(8) TC_THUNK(9) TC_THUNK(10) TC_THUNK(11) TC_THUNK(12) TC_THUNK(13) TC_THUNK(14) TC_THUNK(15)
+static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc2, (void*)OnTc3, (void*)OnTc4, (void*)OnTc5,
+                                         (void*)OnTc6, (void*)OnTc7, (void*)OnTc8, (void*)OnTc9, (void*)OnTc10, (void*)OnTc11,
+                                         (void*)OnTc12, (void*)OnTc13, (void*)OnTc14, (void*)OnTc15 };
+
+/* whether a class's check reads the entry's +0x20 through the game's FWeakObjectPtr::Get (g_tcWeakGet): `lea rcx,
+ * [reg+0x20]; call Get` in its first 0x800 bytes. Only those get the weak pointer test (another class might keep
+ * something else there, and skipping its live entries would hide its targets). */
+static uint8_t* g_tcWeakGet;
+static int TcReadsWeak(const uint8_t* f)
+{
+    for (const uint8_t* p = f; p + 9 <= f + 0x800 && InGame(p + 9); ++p)
+        if ((p[0] == 0x48 || p[0] == 0x49) && p[1] == 0x8D && (p[2] & 0xF8) == 0x48 && p[2] != 0x4C && p[3] == 0x20 && p[4] == 0xE8 &&
+            Rel32((uint8_t*)p + 4) == g_tcWeakGet)
+            return 1;
+    return 0;
+}
+
+/* the family's vtables: the first class's (whose slot +0x60 is kSigTargetCheck), then every other with its base slots */
+typedef struct { uint64_t base[4]; void** vt[TC_SCAN_MAX]; int n; } TcScan;
+static const int kTcBase[4] = { 0x00, 0x18, 0x28, 0x50 };
+static void TcScanRegion(uint8_t* p, size_t n, void* vctx)
+{
+    TcScan* c = (TcScan*)vctx;
+    uint8_t* a = (uint8_t*)(((uintptr_t)p + 7) & ~(uintptr_t)7);
+    for (; a + 0x68 <= p + n && c->n < TC_SCAN_MAX; a += 8) {
+        if (*(uint64_t*)a != c->base[0]) continue;
+        int same = 1;
+        for (int k = 1; k < 4 && same; ++k) same = *(uint64_t*)(a + kTcBase[k]) == c->base[k];
+        uint8_t* f = *(uint8_t**)(a + 0x60);
+        if (same && InGame(f)) c->vt[c->n++] = (void**)a;
+    }
+}
+
+static void TgtInstall(void)
+{
+    if (!g_fTargetCheck) { Log(L"guard: the target entry check wasn't found (another game build?): not guarded"); return; }
+    if (!g_uoChunks) { Log(L"guard: no GUObjectArray: the target search isn't guarded"); return; }
+    UfxScan one = { (uint64_t)(uintptr_t)g_fTargetCheck, { 0 }, 0 };
+    for (int s = 0; s < g_nsec && one.n < 4; ++s)
+        if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, UfxScanRegion, &one);
+    if (one.n != 1) { Log(L"guard: the target entry check %p is in %d vtables (1 expected): not guarded", g_fTargetCheck, one.n); return; }
+    uint8_t* vtA = (uint8_t*)one.slots[0] - 0x60;
+    uint8_t* helper = g_fTargetCheck[0xe0] == 0xE8 ? Rel32(g_fTargetCheck + 0xe0) : NULL;      /* 0x147443cb0 */
+    g_tcWeakGet = (helper && helper[0x38] == 0xE8) ? Rel32(helper + 0x38) : NULL;               /* 0x141ad7cb0 */
+    if (!InGame(g_tcWeakGet)) { Log(L"guard: the game's weak pointer Get wasn't found: the target search isn't guarded"); return; }
+    static TcScan c;                                       /* (2 KB: off the stack) */
+    memset(&c, 0, sizeof(c));
+    for (int k = 0; k < 4; ++k) {
+        c.base[k] = *(uint64_t*)(vtA + kTcBase[k]);
+        if (!InGame((void*)(uintptr_t)c.base[k])) { Log(L"guard: the target entries' vtable %p isn't the expected shape: not guarded", vtA); return; }
+    }
+    for (int s = 0; s < g_nsec && c.n < TC_SCAN_MAX; ++s)
+        if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, TcScanRegion, &c);
+    int alone = 0;
+    for (int i = 0; i < c.n && g_tcN < TC_MAX; ++i) {
+        void** slot = (void**)((uint8_t*)c.vt[i] + 0x60);
+        int dup = 0;
+        for (int j = 0; j < g_tcN; ++j) dup |= g_tcSlot[j] == slot;
+        if (dup) continue;
+        if ((uint8_t*)c.vt[i] != vtA && !TcReadsWeak((const uint8_t*)*slot)) {
+            ++alone;
+            continue;
+        }
+        int k = g_tcN;
+        g_tcNext[k]  = (TargetCheckFn)*slot;                /* (set before the slot points at the guard) */
+        g_tcFirst[k] = (uint8_t*)c.vt[i] == vtA;
+        g_tcSlot[k]  = slot;
+        g_tcN = k + 1;
+        void* prev = NULL;
+        if (!HookSlot(slot, g_tcThunk[k], &prev, g_tcFirst[k] ? L"guard: target entry check (class with game object)" : L"guard: target entry check"))
+            g_tcN = k;
+    }
+    Log(L"guard: %d target entry classes guarded (%d vtables of the family, %d whose check doesn't read +0x20 as a weak pointer "
+        L"left alone%s)", g_tcN, c.n, alone, c.n >= TC_SCAN_MAX ? L"; more not looked at" : L"");
 }
