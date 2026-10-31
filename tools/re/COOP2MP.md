@@ -568,3 +568,22 @@ faulted. The table's count is [launcher +0xb0] +0x30 (0x147f7bbc4 loops `cmp [ra
 checks the number against it (and the entry's list readable) before any replay: the remote fire, FwLaunchDirect, and
 the special's select / arm.
 
+## ESM / ECM effects across games (2026-10-31, runtime 0.32.11; not yet run in game)
+The user, 2026-10-31: "players are reporting that their own ESM and ECM isn't affecting the other players, only them".
+- Each plane pulls its electronic effects every tick: 0x147d27d50(plane rcx, float xmm1, pointer r8), from
+  ALiveGameObject's full update 0x147d1bd10. It walks every electronic weapon in the world (LiveElectronicWeaponBase) and
+  fills the plane's ReceivingCounterList +0xd28 / ReceivingSupportList +0xd38 (jammed flag +0xd0c, supported +0xd0d).
+- The locality gate, 0x147d27f34-f4b: a weapon whose owner (+0x368) answers true at vfunc +0xc48 (role byte +0xED8 == 2,
+  a remote plane) is skipped. Online Mode's firing game sends those effects as ElectronicMeasureEffect messages instead
+  (NetworkCounterMeasureList +0xd88 / NetworkSupportMeasureList +0xd98, filled through 0x147d27c00(_, list, source,
+  weapon number, on)). Co-op's real planes are role 2 and Survival sends none of those messages, so another player's
+  field, launched from their real plane here (T4b), helped or jammed nothing on this game.
+- runtime 0.32.11 (flight.c OnPlaneEw, sigs.h kSigPlaneEw: the function's first 40 bytes, unique, no relative addresses;
+  15 bytes stolen: mov [rsp+18], r8 / movss [rsp+10], xmm1 / push rbp / push rsi / push r13): around each call every
+  OTHER co-op real plane (g_peerPP, checked through GUObjectArray, the same vtable, index and name) is role 1 and back to
+  2 after. The stock rules then apply (the field's range, team and time); the plane updated keeps its own role.
+- Log: `coop2mp: the plane electronic update wasn't found ...` if the signature misses; once a session `coop2mp: the
+  other players' ESM / ECM fields count on this game (N real planes looked at as local ...)`.
+- Test (two or more players on 0.73.37, real planes on): one fires an ESM, the others see enemies marked and their
+  missiles helped inside its field; one fires an ECM, enemy missiles at the others inside it go wide. The firing game
+  is unchanged.

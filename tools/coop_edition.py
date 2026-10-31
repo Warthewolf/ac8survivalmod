@@ -8,7 +8,7 @@ with COOP=1; user, 2026-10-25: "a new 0.70.6 build called Survival COOP"). On th
 import os
 import sys
 
-COOP_TAG = '-coop2mp.37'
+COOP_TAG = '-coop2mp.38'
 
 
 def sub(s, old, new, what):

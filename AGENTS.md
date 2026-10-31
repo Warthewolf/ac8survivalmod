@@ -698,6 +698,12 @@ the orbit path) when the climb-out hasn't ended climb_s 60 after takeoff, and ag
 (`allies: VOID WATCHER 1 put on its orbit (<why>)`; defences_test). Players' own ESM / ECM affecting only their own game
 in co-op (user, the same day): research under way (Online Mode's ElectronicMeasureEffect fills the sender plane's
 +0xd88 enemies / +0xd98 allies lists of {weak ptr, flag} through 0x147d27c00; nothing sends those in Survival).
+0.73.37-coop2mp.38 (runtime 0.32.11; built and installed 2026-10-31, zip 0.73.37, hash 4ef765fd...f30d98; not yet run in
+game): the other players' ESM / ECM fields count on every game. Each plane pulls its electronic effects every tick
+(0x147d27d50, sigs.h kSigPlaneEw) from every electronic weapon in the world but skips one whose owner is a remote plane
+(role byte +0xED8 == 2, at 0x147d27f34), which co-op's real planes are; flight.c OnPlaneEw sets every OTHER live real plane
+to role 1 around that call and back to 2 after, so the stock range / team / time rules apply (`coop2mp: the other
+players' ESM / ECM fields count on this game ...`, once). tools/re/COOP2MP.md "ESM / ECM effects across games".
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

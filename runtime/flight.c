@@ -1460,6 +1460,54 @@ static int L_CoopPPFx(void* lua)
     return Ret(lua, -1);
 }
 
+/* ---- co-op: the other players' ESM / ECM fields count on this game too (runtime 0.32.11) -------------------------
+ * Each plane pulls its electronic effects every tick (0x147d27d50, sigs.h kSigPlaneEw) from every electronic weapon in
+ * the world, but skips one whose owner is a remote plane (role byte +0xED8 == 2, the owner's vfunc +0xc48, checked at
+ * 0x147d27f34): Online Mode's firing game sends those effects as ElectronicMeasureEffect messages instead. Co-op's real
+ * planes are role 2, so another player's ESM / ECM field, launched from their real plane here (T4b), helped no one on
+ * this game: not your plane, not the enemies' copies, not the allies (user, 2026-10-31: "their own ESM and ECM isn't
+ * affecting the other players, only them"). Around each call every OTHER co-op real plane is role 1 and back to 2
+ * after, so the stock rules (range, team, the field's own time) apply; the plane updated keeps its own role (a real
+ * plane's HUD and sounds for a jam or support starting stay a remote plane's). Inside the function the role is read only
+ * by that gate and by the role-3 filter of Online Mode's sender (still false). Game thread only, as plane updates are.
+ * (tools/re/COOP2MP.md "ESM / ECM effects".) */
+#include "uobj.h"                                          /* (UObjLive; included again below, guarded) */
+typedef uint64_t (*PlaneEwFn)(uint8_t* plane, float dt, void* a, void* b);
+static uint8_t*  g_fPlaneEw;                               /* found by FindFunctions */
+static PlaneEwFn g_nextPlaneEw;
+static uint32_t  g_ewFlips;
+#define PP_ROLE 0xED8
+
+/* a co-op real plane, cheaply (every plane's tick): still the engine's object (GUObjectArray), the same vtable and
+ * index as when it was spawned; GUObjectArray unknown: the full check */
+static uint8_t* EwPlane(const CoRef* r)
+{
+    uint8_t* o = r->obj;
+    if (!o) return NULL;
+    int live = UObjLive(o);
+    if (live < 0) return CoRefGet(r);
+    return (live == 1 && *(void**)o == r->vt && *(uint32_t*)(o + 0xC) == r->idx && *(uint64_t*)(o + 0x18) == r->name)
+        ? o : NULL;
+}
+
+static uint64_t OnPlaneEw(uint8_t* plane, float dt, void* a, void* b)
+{
+    uint8_t* flipped[CO_MAX_PLAYERS];
+    int n = 0;
+    if (CO.open) {
+        for (int i = 0; i < CO_MAX_PLAYERS; ++i) {
+            uint8_t* rp = EwPlane(&g_peerPP[i]);
+            if (rp && rp != plane && rp[PP_ROLE] == 2) { rp[PP_ROLE] = 1; flipped[n++] = rp; }
+        }
+    }
+    uint64_t r = g_nextPlaneEw(plane, dt, a, b);
+    for (int i = 0; i < n; ++i) flipped[i][PP_ROLE] = 2;
+    if (n && !g_ewFlips++)
+        Log(L"coop2mp: the other players' ESM / ECM fields count on this game (%d real planes looked at as local for each "
+            L"plane's electronic update)", n);
+    return r;
+}
+
 /* ---- a game bug guarded: an AI unit's effect freed under it (runtime 0.32.6) -------------------------------------
  * Some AI units' per-frame update (0x147cb2850, slot 279 of their class's vtable: sigs.h kSigUnitFxFrame) moves an
  * effect component they spawned (+0x2690) to the unit every frame, checking only its garbage flag. Once that component
