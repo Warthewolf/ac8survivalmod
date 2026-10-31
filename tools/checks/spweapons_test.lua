@@ -3,7 +3,9 @@
 --   an enemy whose row carries its special in slot 3 fires it (RE_SV_SpecFire_<NN><L>) with you in its nose cone at
 --     that weapon's range; not first_s after it appears; not again for every_s; not with you behind it, too near or too
 --     far (each weapon's band: a QAAM's short, a LAAM's long); not a row with its special elsewhere (the jammer's), a
---     held Wolf trap, a plane down; at most max_per_min across the sky; nothing on a co-op joiner, nothing switched off;
+--     held Wolf trap, a plane down; at most max_per_min across the sky; nothing switched off, nothing while you're DOWN;
+--   a co-op joiner: its copies of the host's enemies fire at it, their rows from the host's spawn (SPW.noteRows: the
+--     flight's row, its lead's own), with no host records here;
 --   the build's slot (tools/survival_events.py SPEC_SLOT = WN_WEAPON_4) and Lua's in step.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -45,7 +47,7 @@ local function plane(unit, k, km, facing)
     local o = { full = "BP_OP1030_su33_CP_C_" .. k }
     function o:K2_GetActorLocation() return { X = km * 100000, Y = 0, Z = 300000 } end
     function o:GetActorForwardVector() return { X = facing == "away" and 1 or -1, Y = 0, Z = 0 } end
-    return { obj = o, unit = unit, k = k, born = 0, name = o.full }
+    return { obj = o, unit = unit, k = k, born = 0, name = o.full, spwSeen = 0 }   -- (first looked at at 0)
 end
 local U1, U2 = "ERA_Unit_01_Dep_Air0", "ERA_Unit_02_Dep_Air0"
 SR = { spSlot = { su33_common_sv = 3, e18g_common_sv = 4, f14d_common_sv = 3 },
@@ -110,17 +112,33 @@ SPW.tick(40)
 check(#events == CFG.special.fire.max_per_min, "none more within the minute")
 
 print("co-op and off")
+fresh({})                                          -- (a joiner: none of the host's records)
+D.flightRow = nil
+COOP = { client = function() return true end }
+SPW.noteRows(U1, { { row = "su33_common_sv", idx = -1 } })
+SPW.noteRows(U2, { { row = "e18g_common_sv", idx = -1 }, { row = "f14d_common_sv", idx = 0 } })
+planes = { plane(U1, 0, 4, "you"), plane(U2, 0, 9, "you"), plane(U2, 1, 4, "you") }
+SPW.tick(5)
+SPW.tick(20)
+check(evs() == "RE_SV_SpecFire_01A,RE_SV_SpecFire_04A", "a co-op joiner: the host's flights' copies fire at it, by the host's rows "
+    .. "(the lead's own LAAM at 9 km, not its jammer wingman) (" .. evs() .. ")")
+COOP = nil
 fresh()
 planes = { plane(U1, 0, 4, "you") }
-COOP = { client = function() return true end }
+DOWN = { me = function() return true end }
+SPW.tick(5); SPW.nextAt = nil
 SPW.tick(20)
-check(#events == 0, "a co-op joiner: none (the host's)")
-COOP = nil
+check(#events == 0, "you're DOWN (a co-op revive's wait): none")
+DOWN = nil
 CFG.special.fire.enabled = false
 SPW.nextAt = nil
 SPW.tick(21)
 check(#events == 0, "enabled = false: none")
 CFG.special.fire.enabled = true
+
+check(readAll(MOD .. "/Scripts/sv_coop.lua"):find("pcall(SPW.noteRows, unit, q.ops)", 1, true) ~= nil,
+    "sv_coop.lua's doSpawn (a joiner's copy of the host's spawn) tells SPW its rows")
+check(readAll(MOD .. "/Scripts/sv_coop.lua"):find('"^RE_SV_SpecFire_",', 1, true) ~= nil, "the event never forwarded (KEEP_EVENTS)")
 
 print("the build")
 local se = readAll(MOD .. "/../../../tools/survival_events.py")
