@@ -1551,10 +1551,11 @@ static void UfxInstall(void)
  * reading its game object +0x18, the class gone: IsA at 0x1470d2200) and at 12:07 (round 10's start, as Survival
  * recycled the flights flown before, destroying their planes: class 0x14cb77dc8's 0x1474515a0 using the weak actor,
  * NULL, at 0x147450468); and the T4b replaced plane (+0x28, class 0x14cb78378's raw actor). The guard answers "not a
- * target" for an entry whose actor was set and is gone (UWeakLive), or, in the first class (sigs.h kSigTargetCheck),
- * whose game object or actor isn't live (UObjLive), and lets the game check the rest. */
+ * target" for an entry whose actor was set and is gone (UWeakLive) in a class that uses it unchecked (TcWeakUnchecked:
+ * 3 of them), or, in the first class (sigs.h kSigTargetCheck), whose game object or actor isn't live (UObjLive), and
+ * lets the game check the rest. */
 typedef uint8_t (*TargetCheckFn)(uint8_t* entry, void* query, void* a, void* b);
-#define TC_MAX 16                                           /* (classes guarded; the game has 12) */
+#define TC_MAX 16                                           /* (classes guarded; the game has 4) */
 #define TC_SCAN_MAX 256                                     /* (vtables of the family looked at; the game has 151) */
 static TargetCheckFn g_tcNext[TC_MAX];
 static uint8_t       g_tcFirst[TC_MAX];                     /* the class with the game object (+0x18) and actor (+0x28) */
@@ -1565,15 +1566,14 @@ static volatile int32_t g_tgtSkipped;
 static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
 {
     const wchar_t* why = NULL;
-    if (entry) {
+    if (entry && g_tcFirst[i]) {                           /* (its weak actor it tests itself: 0x147443cb0) */
+        uint8_t* go    = *(uint8_t**)(entry + 0x18);
+        uint8_t* actor = *(uint8_t**)(entry + 0x28);
+        if (go && UObjLive(go) == 0) why = L"its game object isn't live";
+        else if (actor && UObjLive(actor) == 0) why = L"its actor isn't live";
+    } else if (entry) {
         const uint8_t* w = entry + 0x20;
         if (*(const int32_t*)(w + 4) && UWeakLive(w) == 0) why = L"its actor's weak pointer resolves to nothing";
-        else if (g_tcFirst[i]) {
-            uint8_t* go    = *(uint8_t**)(entry + 0x18);
-            uint8_t* actor = *(uint8_t**)(entry + 0x28);
-            if (go && UObjLive(go) == 0) why = L"its game object isn't live";
-            else if (actor && UObjLive(actor) == 0) why = L"its actor isn't live";
-        }
     }
     if (why) {
         int32_t n = __atomic_add_fetch(&g_tgtSkipped, 1, __ATOMIC_RELAXED);
@@ -1591,16 +1591,23 @@ static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc
                                          (void*)OnTc6, (void*)OnTc7, (void*)OnTc8, (void*)OnTc9, (void*)OnTc10, (void*)OnTc11,
                                          (void*)OnTc12, (void*)OnTc13, (void*)OnTc14, (void*)OnTc15 };
 
-/* whether a class's check reads the entry's +0x20 through the game's FWeakObjectPtr::Get (g_tcWeakGet): `lea rcx,
- * [reg+0x20]; call Get` in its first 0x800 bytes. Only those get the weak pointer test (another class might keep
- * something else there, and skipping its live entries would hide its targets). */
+/* whether a class's check uses the entry's +0x20 weak actor unchecked: some `lea rcx, [reg+0x20]; call Get` (the game's
+ * FWeakObjectPtr::Get, g_tcWeakGet) in its first 0x800 bytes with no `test rax, rax` in the 16 bytes after it and no
+ * inline validity test (`bts r32, 21`, the garbage flag) in the 24 before it. Only those get the weak pointer test: a
+ * class that tests the pointer handles a gone actor itself (0.32.8 tested every class reading it, and one of those,
+ * 0x147447050, skipped thousands of entries it would have answered: the co-op run of 2026-10-31). */
 static uint8_t* g_tcWeakGet;
-static int TcReadsWeak(const uint8_t* f)
+static int TcWeakUnchecked(const uint8_t* f)
 {
-    for (const uint8_t* p = f; p + 9 <= f + 0x800 && InGame(p + 9); ++p)
-        if ((p[0] == 0x48 || p[0] == 0x49) && p[1] == 0x8D && (p[2] & 0xF8) == 0x48 && p[2] != 0x4C && p[3] == 0x20 && p[4] == 0xE8 &&
-            Rel32((uint8_t*)p + 4) == g_tcWeakGet)
-            return 1;
+    for (const uint8_t* p = f; p + 9 <= f + 0x800 && InGame(p + 25); ++p) {
+        if (!((p[0] == 0x48 || p[0] == 0x49) && p[1] == 0x8D && (p[2] & 0xF8) == 0x48 && p[2] != 0x4C && p[3] == 0x20 && p[4] == 0xE8 &&
+              Rel32((uint8_t*)p + 4) == g_tcWeakGet))
+            continue;
+        int tested = 0;
+        for (const uint8_t* q = p + 9; q + 3 <= p + 9 + 16 && !tested; ++q) tested = q[0] == 0x48 && q[1] == 0x85 && q[2] == 0xC0;
+        for (const uint8_t* q = p - 24 >= f ? p - 24 : f; q + 4 <= p && !tested; ++q) tested = q[0] == 0x0F && q[1] == 0xBA && (q[2] & 0xF8) == 0xE8 && q[3] == 0x15;
+        if (!tested) return 1;
+    }
     return 0;
 }
 
@@ -1646,7 +1653,7 @@ static void TgtInstall(void)
         int dup = 0;
         for (int j = 0; j < g_tcN; ++j) dup |= g_tcSlot[j] == slot;
         if (dup) continue;
-        if ((uint8_t*)c.vt[i] != vtA && !TcReadsWeak((const uint8_t*)*slot)) {
+        if ((uint8_t*)c.vt[i] != vtA && !TcWeakUnchecked((const uint8_t*)*slot)) {
             ++alone;
             continue;
         }
@@ -1659,6 +1666,6 @@ static void TgtInstall(void)
         if (!HookSlot(slot, g_tcThunk[k], &prev, g_tcFirst[k] ? L"guard: target entry check (class with game object)" : L"guard: target entry check"))
             g_tcN = k;
     }
-    Log(L"guard: %d target entry classes guarded (%d vtables of the family, %d whose check doesn't read +0x20 as a weak pointer "
+    Log(L"guard: %d target entry classes guarded (%d vtables of the family, %d that don't use +0x20 as a weak pointer unchecked "
         L"left alone%s)", g_tcN, c.n, alone, c.n >= TC_SCAN_MAX ? L"; more not looked at" : L"");
 }
