@@ -1750,6 +1750,8 @@ def build_npc_rows():
         f = survival_events.fname(src)
         row = copy.deepcopy(rows[(f[1], f[2])])
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+        if npc == survival_events.AWACS_NPC:              # VOID WATCHER 1 on Survival's model row (no MAGNOLIA name)
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.AWACS_MODEL, 0))
         if npc == survival_events.ALLY_WINGMEN_NPC:      # SNIPER's LAAMs where the F-16C's standard missile is
             was, now = survival_events.ALLY_WINGMEN_MISSILE
             swapped = 0
@@ -1817,6 +1819,16 @@ def build_model_rows():
         set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(text))
         set_prop(row[2], idx['GameObjectId'], 'GameObjectId', ('raw', 'Int', struct.pack('<i', 1)))
         out.append(((new, 0), row))
+    # VOID WATCHER 1's (survival_events.AWACS_MODEL): the campaign's Magnolia row under the game's plain E-767 name
+    zc = ZenPkg(stock(MODEL_CP))
+    dc, _ = dtx.parse(uprop.Ctx(bytes(zc.payloads[0]), zc.names), 0, 'LiveModelDataTable')
+    crow = dict(dc['rows'])
+    f = survival_events.fname(survival_events.AWACS_MODEL_SOURCE)
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    names = dict((q[1], q[3]) for q in row[2])
+    assert names['GameObjectDisplayName01'] == s('ContainerAllyCallsign_Name_Magnolia'), names['GameObjectDisplayName01']
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.AWACS_MODEL_NAME))
+    out.append(((survival_events.AWACS_MODEL, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out

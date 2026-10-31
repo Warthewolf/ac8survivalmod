@@ -59,8 +59,46 @@ end
 
 -- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
 -- damage. If a plane's flight can't be read, every heavy flight that is up drops.
+-- (once a second) the minimap's alert on a raid (CFG.airfield.bombers.ping; user, 2026-10-31: "an alert that pings the
+-- aircraft via the minimap that are attacking the airfield"): each bomber flight up (not one sent at an allied ship)
+-- with an aircraft within within_km of the airfield is pinged on the radar every every_s (RE_SV_RaidPing_NN: Mission
+-- 22's LiveBattleNavigationExecution on its unit). The host's (or solo): forwarded, each joiner's game pings its copies.
+local function raidPings(tick)
+    local pg = CFG.airfield.bombers.ping
+    if not (pg and pg.enabled and D.up) or (COOP and COOP.client and COOP.client()) then return end
+    local near = {}
+    for _, p in ipairs(planes or {}) do
+        local u = not p.down and valid(p.obj) and planeUnit(p)
+        if u and BOMBER_UNIT[u] and D.up[u] and not (D.shipStrike and D.shipStrike[u]) then
+            local ok, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+            if ok and l then
+                local d = math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2)
+                if not near[u] or d < near[u] then near[u] = d end
+            end
+        end
+    end
+    D.pingAt = D.pingAt or {}
+    for u, d in pairs(near) do
+        if d <= pg.within_km * 100000 and tick >= (D.pingAt[u] or 0) then
+            D.pingAt[u] = tick + pg.every_s * 4
+            local ev = string.format("RE_SV_RaidPing_%02d", BOMBER_INDEX[u])
+            local r = SV_Event(ev)
+            D.pinged = D.pinged or {}
+            if not D.pinged[u] or r ~= 1 then
+                D.pinged[u] = true
+                log(string.format("bombers: %s pinged on the minimap, %.1f km from the airfield (%s %s; every %d s while within %d km)",
+                    u, d / 100000, ev, r == 1 and "fired" or ("NOT fired: " .. tostring(r)), pg.every_s, pg.within_km))
+            end
+        end
+    end
+end
+
 function bombTick(tick)
     local b = CFG.airfield.bombers
+    if CFG.airfield.enabled and D and tick % 4 == 2 and type(SV_Event) == "function" then
+        local okP, errP = pcall(raidPings, tick)
+        if not okP and not D.pingErrSaid then D.pingErrSaid = true; log("bombers: minimap ping error " .. tostring(errP)) end
+    end
     if not CFG.airfield.enabled or not D or not D.heavy or tick % 4 ~= 2 or type(SV_Event) ~= "function" then return end
     if D.heavyPath then pcall(heavyNext) end
     local heavy = {}
