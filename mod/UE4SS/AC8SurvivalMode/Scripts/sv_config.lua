@@ -807,9 +807,10 @@ CFG = {
                              -- SAM sites' missiles 8 -> 20 km and 14 -> 30 s, the defences' search 10 -> 25 km)
                              fcs = { lock_x = 0.75, fire_x = 0.5, range_x = 2.0, search_m = 25000, slew_x = 2.0, yaw_full = true,
                                      round_reach = true, round_width_x = 1.5,
-                                     -- (salvo_x: less waiting between the SAM sites' shots and salvos, x0.8; 2026-10-31)
+                                     -- (salvo_x: less waiting between the SAM sites' shots and salvos, x0.8; salvo_n missiles a
+                                     -- salvo, salvo_gap_s apart (the game's: 1); 2026-10-31: "increase missile salvos")
                                      missile = { range_m = 20000, life_s = 30, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5,
-                                                 salvo_x = 0.8 } },
+                                                 salvo_x = 0.8, salvo_n = 3, salvo_gap_s = 0.5 } },
                          } },
         },
     },
@@ -913,10 +914,13 @@ CFG = {
                       -- range_m, its shells' damage x damage_x, bursting from min_alt_m up; enabled = false: an AA gun)
                       fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 3.0, search_m = 40000, gun_spread_x = 0.5,
                               round_reach = true, round_width_x = 1.5,
-                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50 },
+                              -- (flak.fire_x: its waits halved, "increase Flak firing"; salvo_n / salvo_gap_s: 3 missiles a
+                              -- salvo 0.5 s apart, "increase missile salvos", 2026-10-31)
+                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50,
+                                       fire_x = 0.5 },
                                                   missile = { range_m = 35000, life_s = 45, accel_x = 2.0,
                                                               speed_max_kmph = 3600, turn_x = 1.5, salvo_x = 0.8,
-                                                              homing_from = "EXSAM_Ground_000" } },
+                                                              homing_from = "EXSAM_Ground_000", salvo_n = 3, salvo_gap_s = 0.5 } },
                       -- (the STORE sends the first free one: their lanes start 11.5 (A), 11.9 (C), 13.0 (D) and 13.6 km
                       -- (B) from the airfield, all inside its 20 km missiles' reach of the bombers' run-in; nearest first)
                       units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD", "SV_Unit_ShipAegisB" } },
@@ -1596,14 +1600,17 @@ CFG = {
                       -- Ford's four mounts flak guns, the missiles homing as the EXSAM's)
                       fcs = { lock_x = 2.0, fire_x = 2.0, range_x = 3.0, search_m = 40000, slew_x = 1.5, round_reach = true,
                               round_width_x = 1.5, gun_spread_x = 0.5,
-                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50 },
+                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50,
+                                       fire_x = 0.5 },
                               missile = { range_m = 35000, life_s = 45, accel_x = 1.5, speed_max_kmph = 3600, turn_x = 1.0,
-                                          salvo_x = 0.8, homing_from = "EXSAM_Ground_000" } },
+                                          salvo_x = 0.8, homing_from = "EXSAM_Ground_000", salvo_n = 3, salvo_gap_s = 0.5 } },
                       -- the Ford's deck, as the Alicorn's (CFG.specials.alicorn.deck): from first_s, a free size-ship
                       -- pool flight every every_s, flights + flights_per_round x the round (at most max_flights), max_up
                       -- of them up at once, ahead_m off its bow and alt_m up
-                      deck = { enabled = true, first_s = 45, every_s = 50, size = 2, max_up = 2, flights = 3,
-                               flights_per_round = 0.15, max_flights = 8, ahead_m = 600, alt_m = 1100 },
+                      -- (user, 2026-10-31: "increase the Carriers aircraft spawn rate": first_s 45 -> 20, every_s 50 -> 25,
+                      -- max_up 2 -> 4, flights 3 -> 5, flights_per_round 0.15 -> 0.3, max_flights 8 -> 14)
+                      deck = { enabled = true, first_s = 20, every_s = 25, size = 2, max_up = 4, flights = 5,
+                               flights_per_round = 0.3, max_flights = 14, ahead_m = 600, alt_m = 1100 },
                       -- the retake, the round after a captured spaceport: the garrison (a unit of 4 targetable vehicles
                       -- for every per_unit troop vehicles that got in, 3 at most) and the ships still afloat; reward +
                       -- reward_per_round x the round when they're all down, garrison_pay a vehicle; fighter_share of the

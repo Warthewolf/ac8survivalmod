@@ -234,9 +234,13 @@ do                                                -- (its reach: from 500 km/h, 
     check(reach > 1.3 * sam.CaptureDistance, string.format("SAM missiles reach %.1f km straight out, past the %.0f km lock-on (was %.1f km)",
           reach / 1000, sam.CaptureDistance / 1000, (500 / 3.6 * 7.3 + 300 / 3.6 * 7.3 * 7.3 / 2) / 1000))
 end
-check(has(fcsLine, "NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.8")
-      and has(fcsLine, string.format(" s, 5.00 -> %.2f s between, rest 10.00 -> %.2f s", 5.0 * tx * DEF.fcs.fire_x * mc.salvo_x,
-              10.0 * tx * DEF.fcs.fire_x * mc.salvo_x))
+check(sam and sam.TriggerCount == mc.salvo_n and near(sam.ShotIntervalTime, mc.salvo_gap_s) and near(sam.TriggeringTime, mc.salvo_n * mc.salvo_gap_s)
+      and near(sam.RestingTime, 10.0 * tx * DEF.fcs.fire_x * mc.salvo_x) and sam.MagazineCapacity >= mc.salvo_n,
+      string.format("SAM sites: salvos of %s, %s s apart, rest %.2f s (\"increase missile salvos\")", tostring(mc.salvo_n),
+          tostring(mc.salvo_gap_s), sam and sam.RestingTime or -1))
+check(has(fcsLine, string.format("NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> %.2f s, "
+          .. "5.00 -> %.2f s between, rest 10.00 -> %.2f s", mc.salvo_n * mc.salvo_gap_s, mc.salvo_gap_s, 10.0 * tx * DEF.fcs.fire_x * mc.salvo_x))
+      and has(fcsLine, string.format(", salvos of %d, %.2f s apart", mc.salvo_n, mc.salvo_gap_s))
       and has(fcsLine, "missile SAM_Ground_000_SVA_Defence: 7.3 -> 30 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5"),
       "the log line: the SAM sites' before -> after")
 -- the CIWS
@@ -277,11 +281,13 @@ do
     check(fk and fk.enabled ~= false and mk45 and mk45.NpcFCSId0:ToString() == "NPC_FCS_VesselAAGun000_SVA_Aegis" and fl
           and fl.NpcWeaponId:ToString() == "FlakGun_000_SVA_Aegis" and T.wpn:FindRow("AAGUN_Vessel_000_SVA_Aegis") == nil,
           "the Mk 45 on its own fire control, which fires the flak's shells (FlakGun_000_SVA_Aegis), no AA rounds")
-    check(fl and fl.CaptureDistance == fk.range_m and near(fl.ShotIntervalTime, 3.0 * tx * sfc.fire_x) and near(fl.RestingTime, 1.0 * tx * sfc.fire_x)
-          and near(fl.ActivationTime, 0.5 * tx * sfc.lock_x) and near(fl.TriggeringTime, 3.0 * tx * sfc.lock_x)
+    local ffx = fk.fire_x or 1
+    check(fl and fl.CaptureDistance == fk.range_m and near(fl.ShotIntervalTime, 3.0 * tx * sfc.fire_x * ffx)
+          and near(fl.RestingTime, 1.0 * tx * sfc.fire_x * ffx) and ffx < 1
+          and near(fl.ActivationTime, 0.5 * tx * sfc.lock_x) and near(fl.TriggeringTime, 3.0 * tx * sfc.lock_x * ffx)
           and fl.YawAngleMin == -110 and fl.YawAngleMax == 90 and fl.PitchAngleMax == 85 and near(fl.CaptureAngleRange, math.min(180, 30 * CFG.allies.fcs.angle_x))
           and fl.YawSpeed == 360 and fl.PredictionOffsetTime == 5.0 and fl.NpcAIModuleId:ToString() == "NPC_AIModule_SV_Aegis",
-          string.format("flak: %d m reach, the AA gun's timings x the boosts (%.2f s between), the mount's arcs (-110..90), the flak's slew and lead, the search",
+          string.format("flak: %d m reach, the AA gun's timings x the boosts x flak.fire_x (%.2f s between), the mount's arcs (-110..90), the flak's slew and lead, the search",
               fl and fl.CaptureDistance or -1, fl and fl.ShotIntervalTime or -1))
     check(fw and near(fw.damage, 10 * fk.damage_x) and near(fw.RandRangeMeters, 120 * CFG.allies.fcs.spread_x * sfc.gun_spread_x)
           and near(fw.ImpactRadiusMeters, 18 * sfc.round_width_x) and fw.HeightLimitRangeMinMeters == fk.min_alt_m and fw.LifeTime == 15,
@@ -295,10 +301,11 @@ do
     local mc = sfc.missile
     local vl = T.fcs:FindRow("NPC_FCS_VesselVLSmk41_SVA_Aegis")
     local vw = T.wpn:FindRow("VLS_Vessel_000_SVA_Aegis")
-    check(vl and vl.CaptureDistance == mc.range_m and near(vl.ShotIntervalTime, 5.0 * tx * sfc.fire_x * mc.salvo_x)
-          and near(vl.RestingTime, 10.0 * tx * sfc.fire_x * mc.salvo_x) and mc.salvo_x < 1,
-          string.format("Mk 41: lock-on %s m, less waiting (salvo_x %s: %.2f s between, rest %.2f s)", tostring(vl and vl.CaptureDistance),
-              tostring(mc.salvo_x), vl and vl.ShotIntervalTime or -1, vl and vl.RestingTime or -1))
+    check(vl and vl.CaptureDistance == mc.range_m and near(vl.RestingTime, 10.0 * tx * sfc.fire_x * mc.salvo_x) and mc.salvo_x < 1
+          and vl.TriggerCount == mc.salvo_n and mc.salvo_n > 1 and near(vl.ShotIntervalTime, mc.salvo_gap_s)
+          and near(vl.TriggeringTime, mc.salvo_n * mc.salvo_gap_s),
+          string.format("Mk 41: lock-on %s m, salvos of %s, %.2f s apart, rest %.2f s (salvo_x %s)", tostring(vl and vl.CaptureDistance),
+              tostring(vl and vl.TriggerCount), vl and vl.ShotIntervalTime or -1, vl and vl.RestingTime or -1, tostring(mc.salvo_x)))
     check(mc.homing_from == "EXSAM_Ground_000" and vw and vw.MaxHomingAngle == 90 and near(vw.MaxRotationAngle, 45 * mc.turn_x)
           and vw.HomingDelayFromStart == 0.7 and vw.OmnidirectionalDuration == 0.95 and vw.OmnidirectionalAbility == 360
           and vw.DistanceFromTargetMeters == 900 and vw.damage == 40 and vw.LifeTime == mc.life_s,
