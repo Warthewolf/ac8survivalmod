@@ -203,6 +203,34 @@ function SPORT.spawn(now)
     return true
 end
 
+-- The round's fighters fall back with the capture (the user's test of 2026-10-31: "after the spaceport was captured,
+-- the next round didn't start": six fighters were still up, and a round ends only with its aircraft down): each pool
+-- flight up is despawned (RE_SV_FlightOff_NN, Mission 22's own despawn) and off the round's list (D.up: a despawned
+-- unit can still read alive), its planes marked down (no pay), the round's queue and later waves dropped, no more deck
+-- launches. The round then ends as any does, and the retake comes after its break.
+local function withdraw(s)
+    local gone, n = {}, 0
+    D.queue, D.spare = {}, {}
+    if D.waves then D.wave = #D.waves end
+    if D.state == "spawning" or D.state == "wave" then D.state = "fighting" end
+    for u in pairs(D.up or {}) do
+        local k = poolIndex(u)
+        if k then
+            n = n + math.max(0, SV_UnitAlive(u))
+            fire(string.format("RE_SV_FlightOff_%02d", k))
+            gone[u] = true
+            gone[#gone + 1] = u
+        end
+    end
+    for _, u in ipairs(gone) do D.up[u] = nil end
+    for _, p in ipairs(planes or {}) do
+        if p.unit and gone[p.unit] and not p.down then p.down, p.withdrawn = true, true end
+    end
+    s.deckLeft = 0
+    log(string.format("special: the round's fighters fall back with the capture: %d flights (%d aircraft) taken off%s", #gone, n,
+        #gone > 0 and (": " .. table.concat(gone, ", ")) or ""))
+end
+
 -- A lane's next free wave: one not out and not still up from before.
 local function freeWave(g, L)
     for _, w in ipairs(WAVES) do
@@ -310,6 +338,8 @@ function SPORT.tick(now, s)
                 if not wv.removed then wv.removed = true; log(string.format("special: %s recalled (%s)", wv.unit, fire("RE_SV_SpLcacRemove" .. g .. w))) end
             end
         end
+        local okW, errW = pcall(withdraw, s)
+        if not okW then log("special: the fighters' withdrawal error " .. tostring(errW)) end
     end
     local okD, errD = pcall(deck, now, s)
     if not okD and tostring(errD) ~= s.deckErr then s.deckErr = tostring(errD); log("special: the Ford's deck error " .. s.deckErr) end
