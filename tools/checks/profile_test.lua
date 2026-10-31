@@ -286,9 +286,9 @@ do
     check(swept == 0 and hs and hs.S == 5 and hs.Sh == 5 and reads == 5,
           string.format("4 planes up: the sweep's slot 0 read nothing, STATS.sample read you (%d reads): 5 samples, 5 high (%s / %s)",
           reads, tostring(hs and hs.S), tostring(hs and hs.Sh)))
-    local probe = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+    local probe = body("sv_main.lua", "\nlocal function probeTickB%(tick%)")
     check(has(probe, "pcall(STATS.sample, D.now, you or nil)") and has(body("sv_stats.lua", "\nfunction STATS.sample%("),
-          "if not you then you = playerLocation() end"), "probeTick passes the sweep's you; STATS.sample reads it when that's nil")
+          "if not you then you = playerLocation() end"), "probeTickB passes the sweep's you; STATS.sample reads it when that's nil")
 end
 
 ---------------------------------------------------------------------------------------------------- counters

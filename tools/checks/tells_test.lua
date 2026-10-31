@@ -514,8 +514,8 @@ do
     check(not has(body("sv_alicorn.lua", "\nfunction SPC.alicornDeck%("), "hudCallout") and not has(body("sv_ladon.lua", "\nfunction SPC.ladonRage%("), "hudCallout")
           and has(body("sv_ladon.lua", "\nfunction SPC.ladonRage%("), 'pcall(TELL.say, "ladon_rage", TELL.ALL)'),
           "the deck launch and a Ladon's rage: their radio calls, no callout")
-    local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
-    check(has(pt, 'timed("tells", TELL.tick, now)'), "probeTick: TELL.tick every 250 ms, timed")
+    local pt = body("sv_main.lua", "\nlocal function probeTickB%(tick%)")
+    check(has(pt, 'timed("tells", TELL.tick, now)'), "probeTickB: TELL.tick every 250 ms, timed")
     local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
     local k0, inside = mainSrc:find("Key.ZERO", 1, true), false
     if k0 then

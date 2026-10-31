@@ -264,6 +264,8 @@ local function planeSweep(slot)
     return you
 end
 
+-- (probeTick's round clock, for its second half: probeTickB)
+local bNow, bPaused
 local function probeTick(tick)
     if levelTick == -1 then
         levelTick = tick
@@ -450,6 +452,23 @@ local function probeTick(tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
             local okB, errB = timed("bombers", bombTick, tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
+        end
+        if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if PPTEST and PPTEST.tick then pcall(PPTEST.tick, os.clock()) end   -- (COOP2MP's test key: nil in releases, stripped)
+        bNow, bPaused = now, paused
+    else
+        bNow, bPaused = nil, nil
+    end
+end
+
+-- The tick's second half, 125 ms after probeTick (the loop below): the STORE, the allies, Survival's sounds, what hits
+-- you, the loggers, the AI's parts, the ammo and the plane sweep, on probeTick's clock (bNow, bPaused). The tick ran
+-- whole on one frame every 250 ms (15-38 ms on the user's PC, worst 357 ms: a frame that long four times a second; a
+-- friend's report of 2026-10-31, "choppy" and stuttering in solo play): in two halves, each part still once a tick.
+local function probeTickB(tick)
+    if D then
+        local now, paused = bNow, bPaused
+        if now then
             local okS, errS = timed("shop", shopTick, tick)
             if not okS then log("shop: error " .. tostring(errS)) end
             local okAl, errAl = timed("allies", ALLY.tick, now)
@@ -459,8 +478,6 @@ local function probeTick(tick)
             local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
-        if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
-        if PPTEST and PPTEST.tick then pcall(PPTEST.tick, os.clock()) end   -- (COOP2MP's test key: nil in releases, stripped)
         if now and valid(survivalPC) then                               -- Survival's own sounds follow (sv_sound.lua)
             local okSn, errSn = timed("sound", SND.tick)
             if not okSn and not D.sndErr then D.sndErr = true; log("sound: error " .. tostring(errSn)) end
@@ -562,14 +579,57 @@ local function probeTick(tick)
 end
 
 ---------------------------------------------------------------------------------------------------- the one tick
--- Everything runs from this single game-thread pass every 250 ms. UE4SS 3.0.1 crashed with heap corruption inside its
--- Lua (test M2-8) while this script ran many ExecuteWithDelay timers (one per menu widget) next to two loops; one
--- loop that queues one game-thread job at a time keeps all Lua work in one place.
-local tick, rowsStopped, queued = 0, false, false
-LoopAsync(250, function()
+-- The perf line (report of 2026-10-23: "the custom HUD ... seems a bit laggy"): every part by its share of the time,
+-- the untimed rest last (the co-op run of 2026-10-30's lines named the four worst single ticks only, which left most of
+-- an average 9-30 ms tick unexplained); a minute in, then every five (every minute with [log] verbose); the worst half is
+-- the longest the game thread waited on one frame.
+local function perfLine(tA, tB, tick)
+    local pf = D.perf or { n = 0, sum = 0, max = 0, maxA = 0, maxB = 0, parts = {}, at = tick }
+    D.perf = pf
+    pf.n, pf.sum = pf.n + 1, pf.sum + tA + tB
+    pf.max, pf.maxA, pf.maxB = math.max(pf.max, tA, tB), math.max(pf.maxA, tA), math.max(pf.maxB, tB)
+    pf.sumA = (pf.sumA or 0) + tA
+    if tick - pf.at < ((logVerbose() or not D.perfSaid) and 240 or 1200) then return end
+    D.perfSaid = true
+    local parts, timedSum = {}, 0
+    for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v }; timedSum = timedSum + v.sum end
+    table.sort(parts, function(a, b) return a[2].sum > b[2].sum end)
+    local top = {}
+    for i = 1, math.min(12, #parts) do
+        local v = parts[i][2]
+        top[#top + 1] = string.format("%s %.1f/%.0f %d%%", parts[i][1], v.sum / math.max(1, pf.n), v.max,
+            math.floor(100 * v.sum / math.max(pf.sum, 0.001) + 0.5))
+    end
+    local rest = math.max(0, pf.sum - timedSum)
+    log(string.format("perf: tick avg %.1f ms (halves %.1f + %.1f), worst half %.1f ms (first %.0f, second %.0f) over %d ticks; "
+        .. "parts (ms a tick / worst, share): %s; untimed %.1f %d%%; %s", pf.sum / pf.n, pf.sumA / pf.n, (pf.sum - pf.sumA) / pf.n,
+        pf.max, pf.maxA, pf.maxB, pf.n, table.concat(top, ", "), rest / pf.n, math.floor(100 * rest / math.max(pf.sum, 0.001) + 0.5),
+        memText()))
+    D.perf = nil
+end
+
+-- Everything runs from this one loop's game-thread jobs, one at a time. UE4SS 3.0.1 crashed with heap corruption inside
+-- its Lua (test M2-8) while this script ran many ExecuteWithDelay timers (one per menu widget) next to two loops; one
+-- loop that queues one game-thread job at a time keeps all Lua work in one place. A tick is 250 ms in two halves 125
+-- ms apart (probeTick, then probeTickB), so no one frame carries all of it (a friend's "choppy", 2026-10-31).
+local tick, rowsStopped, queued, half, tA = 0, false, false, 1, 0
+LoopAsync(125, function()
     if queued then return false end
     queued = true
     ExecuteInGameThread(function()
+        half = 1 - half
+        if half == 1 then                           -- the second half: probeTickB, the leaderboard's polls, the perf line
+            local t1 = os.clock()
+            local okB, errB = pcall(probeTickB, tick)
+            if not okB then log("round probe: error (second half) " .. tostring(errB)) end
+            if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
+            if tick % 4 == 1 then pcall(LB.poll) end                         -- the leaderboard sends' answers
+            if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
+            local tB = (os.clock() - t1) * 1000
+            if D then pcall(perfLine, tA, tB, tick) end
+            queued = false
+            return
+        end
         tick = tick + 1
         if not rowsStopped and (tick % 4 == 0 or not (ready[1] and ready[2])) then   -- watching for reloads: 1/s
             local ok, r = pcall(watchRows)
@@ -589,32 +649,7 @@ LoopAsync(250, function()
             local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
             if not okC then log("coop: error " .. tostring(errC)) end
         end
-        if D then                                   -- (report of 2026-10-23: "the custom HUD ... seems a bit laggy")
-            local pf = D.perf or { n = 0, sum = 0, max = 0, parts = {}, at = tick }
-            D.perf = pf
-            local dt = (os.clock() - t0) * 1000
-            pf.n, pf.sum, pf.max = pf.n + 1, pf.sum + dt, math.max(pf.max, dt)
-            if tick - pf.at >= (logVerbose() and 240 or 1200) then   -- (a minute's ticks; five without [log] verbose)
-                -- (every part by its share of the time, the untimed rest last: the co-op run of 2026-10-30's lines named
-                -- the four worst single ticks only, which left most of an average 9-30 ms tick unexplained)
-                local parts, timedSum = {}, 0
-                for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v }; timedSum = timedSum + v.sum end
-                table.sort(parts, function(a, b) return a[2].sum > b[2].sum end)
-                local top = {}
-                for i = 1, math.min(12, #parts) do
-                    local v = parts[i][2]
-                    top[#top + 1] = string.format("%s %.1f/%.0f %d%%", parts[i][1], v.sum / math.max(1, pf.n), v.max,
-                        math.floor(100 * v.sum / math.max(pf.sum, 0.001) + 0.5))
-                end
-                local rest = math.max(0, pf.sum - timedSum)
-                log(string.format("perf: tick avg %.1f ms, worst %.1f ms over %d ticks; parts (ms a tick / worst, share): %s; untimed %.1f %d%%; %s",
-                    pf.sum / pf.n, pf.max, pf.n, table.concat(top, ", "), rest / pf.n, math.floor(100 * rest / math.max(pf.sum, 0.001) + 0.5), memText()))
-                D.perf = nil
-            end
-        end
-        if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
-        if tick % 4 == 1 then pcall(LB.poll) end                         -- the leaderboard sends' answers
-        if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
+        tA = (os.clock() - t0) * 1000
         queued = false
     end)
     return false
