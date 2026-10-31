@@ -891,6 +891,19 @@ the round holds until they're done. Not yet known in game: the split itself (whe
 debris objects by those names, from units Lua spawned at the retake's start, 500 m down; Mission 19 spawns them at level
 start), where debris falls with no fall-target marks (Survival's world data has no marks yet), the climb's speed and
 whether its PathFinish fires. spaceport_test covers the Lua (launches, boost, kill, split, stages, escape, timeout, off).
+0.73.58-coop2mp.59 (user, 2026-10-31: "on the spaceport retake, add more enemies around the island", their picks: air
+defences, armour, more aircraft, about 30; "do a building check so that no enemies spawn in buildings"; dev only): 30
+island enemies in 7 units with the retake's garrison (survival_events.sp_island): Mission 6's EXSAM site whole (radar +
+4 launchers in its layout), 4 flak guns, 4 Gecko SAMs, 5 Shilka AA guns (Mission 6's), 8 T-90s (Mission 7's) and 4
+BTR-90s, each on Survival's copy of its mission row (NPC_IMPORT renames: sv_isl_*), TGT and boxed, an engagement order as
+it appears (SV_SpIslUp<key>), 20 km unit areas; Lua pays island.ad_pay 600 / armour_pay 400 and holds the round until
+they're down; the retake's fighters + extra_aircraft 6. The building check: tools/scan_spaceport_buildings.py reads every
+StaticMeshActor and mesh instance round the spaceport from the stock level packages (Map17_Env_CityMap001,
+Map17_Env_CityHda001_Baked) with each mesh's ExtendedBounds into tools/data/spaceport_buildings.json (1344 oriented boxes);
+tools/spaceport_spots.py picks spots on a fixed grid: 20 m or more from every box (the launch complexes' too), buildings
+within 300 m in all four quadrants (land: hard rule 27 rules out tracing it), 250 m from the pads and the garrison's spots,
+spread farthest-point; the build asserts every spot again (all 24 m or more clear). Not yet run in game: whether ground
+units from other missions stand right at z 500, fight on their orders, and how hard 30 more targets make the retake.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

@@ -53,6 +53,7 @@ function SV_Event(name)
     if u then alive["SV_Unit_SpLcac" .. u] = 0 end
     u = name:match("^RE_SV_SpTroopsRemove(%u%u%u)$")
     if u then alive["SV_Unit_SpTroops" .. u] = 0 end
+    if name == "RE_SV_SpIslandRemove" then for u in pairs(alive) do if u:find("^SV_Unit_SpIsl") then alive[u] = 0 end end end
     if name == "RE_SV_SpRocketRemove" then for _, d in ipairs({ "SV_Unit_SpRockets", "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }) do alive[d] = 0 end end
     return eventR
 end
@@ -65,6 +66,8 @@ local SIZE = function(u)
     if u:find("^SV_Unit_SpLcac") then return 2 end
     if u:find("^SV_Unit_SpGarrison") then return 4 end
     if u == "SV_Unit_SpRockets" or u:find("^SV_Unit_SpDebri") then return 2 end
+    if u == "SV_Unit_SpIslExsam" or u == "SV_Unit_SpIslAA" then return 5 end
+    if u:find("^SV_Unit_SpIsl") then return 4 end
     if u:find("^SV_Unit_Sp") then return 1 end
     return flightSize(u)
 end
@@ -230,7 +233,8 @@ check(carried == 26 and s.state == "done" and called(T.sp_lost) ~= nil, "its end
 check(specialFor(D.round + 1) == "retake", "specialFor: the next round is the retake")
 
 print("the retake")
-SP.retake.rockets.enabled = false                -- (the rockets: their own section below)
+SP.retake.rockets.enabled = false                -- (the rockets and the island: their own sections below)
+SP.retake.island.enabled = false
 local rs = RUN.sport
 D.round = D.round + 1
 D.special = { kind = "retake", state = "pending" }
@@ -253,6 +257,28 @@ fresh(12)
 D.special = { kind = "retake", state = "pending" }
 check(SPORT.retakeSpawn(0) == true and #spawned("^SV_Unit_SpGarrison") == 2, "forced (no RUN.sport): test_troops 8: 2 garrison units")
 SP.retake.rockets.enabled = true
+
+print("the retake's island enemies")
+fresh(12)
+D.special = { kind = "retake", state = "pending" }
+SP.retake.island.enabled, SP.retake.rockets.enabled = true, false
+check(SPORT.retakeSpawn(0) == true and #spawned("^SV_Unit_SpIsl") == 7, "7 island units spawned (" .. #spawned("^SV_Unit_SpIsl") .. ")")
+local si = D.special
+for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
+for _ = 1, 4 do now = now + 0.5; SPORT.retakeTick(now, si) end
+check(SPORT.retakeBusy(si) and since(1, "the island's defences and armour: Exsam 5 up") >= 1, "busy while the island's enemies are up; logged")
+alive.SV_Unit_SpIslExsam, alive.SV_Unit_SpIslTankA = 2, 1
+now = now + 1; SPORT.retakeTick(now, si)
+check(paid("air defences: one down") > 0 and paid("armour: one down") > 0, "an EXSAM down and a tank down: each paid by its kind")
+for u in pairs(alive) do if u:find("^SV_Unit_SpIsl") then alive[u] = 0 end end
+now = now + 1; SPORT.retakeTick(now, si)
+check(not SPORT.retakeBusy(si), "all down: not busy")
+SPORT.retakeOver(now, si)
+check(evs("^RE_SV_SpIslandRemove$") ~= "", "its end: the island's units taken off")
+check(SPC.kinds.retake.budget(20) == math.floor((20 * SP.retake.fighter_share + SP.retake.extra_aircraft) / 2 + 0.5) * 2,
+      "the retake's aircraft: fighter_share + extra_aircraft (" .. SPC.kinds.retake.budget(20) .. " of 20)")
+SP.retake.rockets.enabled = true
+SP.retake.island.enabled = false                 -- (the rockets alone below)
 
 print("the retake's rockets")
 local RK = SP.retake.rockets
@@ -329,6 +355,7 @@ local s6 = retakeWithRockets()
 rtick(s6, 0, 1)
 check(s6.rk == nil and alive.SV_Unit_SpRockets == nil and not SPORT.retakeBusy(s6), "rockets.enabled = false: none")
 RK.enabled = true
+SP.retake.island.enabled = true
 
 print("held")
 fresh(10)

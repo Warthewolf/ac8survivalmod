@@ -1626,6 +1626,10 @@ CFG = {
                       -- debris_timeout_s after the last change
                       retake = { enabled = true, per_unit = 4, reward = 12000, reward_per_round = 300, garrison_pay = 300,
                                  fighter_share = 0.6, test_troops = 8,
+                                 -- (island: the island's air defences and armour, ad_pay / armour_pay each; extra_aircraft
+                                 -- fighters on top of fighter_share; user, 2026-10-31: "add more enemies around the island":
+                                 -- air defences, armour, more aircraft)
+                                 extra_aircraft = 6, island = { enabled = true, ad_pay = 600, armour_pay = 400 },
                                  rockets = { enabled = true, launch_a_s = 45, launch_b_s = 110, boost_s = 12, rocket_pay = 3000,
                                              escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
                                              debris_pay = 400, debris_timeout_s = 120 } } },
@@ -1965,7 +1969,7 @@ CFG = {
             sp_held      = "SPACEPORT HELD",
             sp_held_sub  = "+%d ZOLLARS",
             sp_retake_go = "SPACEPORT RETAKE",
-            sp_retake_go_sub = "DESTROY THE GARRISON AND THE FLEET",
+            sp_retake_go_sub = "DESTROY THE GARRISON, THE ISLAND'S DEFENCES AND THE ROCKETS",
             sp_retake_row = "GARRISON: %d  FLEET: %d SHIPS",
             sp_rocket_launch = "ROCKET LAUNCH",
             sp_rocket_launch_sub = "SHOOT IT DOWN BEFORE IT REACHES ORBIT",

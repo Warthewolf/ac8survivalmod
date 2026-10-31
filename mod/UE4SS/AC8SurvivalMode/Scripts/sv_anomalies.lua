@@ -2001,8 +2001,8 @@ SPC.kinds = {
                        return not (c.enabled == false or (c.retake and c.retake.enabled == false))
                    end,
                    budget = function(budget)
-                       local r = CFG.specials.spaceport.retake or {}
-                       return math.floor(budget * (r.fighter_share or 0.6) / 2 + 0.5) * 2
+                       local r = CFG.specials.spaceport.retake or {}   -- (extra_aircraft: more fighters, 2026-10-31)
+                       return math.floor((budget * (r.fighter_share or 0.6) + (r.extra_aircraft or 0)) / 2 + 0.5) * 2
                    end,
                    spawn = function(now) return SPORT.retakeSpawn(now) end,
                    tick = function(now, s) return SPORT.retakeTick(now, s) end,
