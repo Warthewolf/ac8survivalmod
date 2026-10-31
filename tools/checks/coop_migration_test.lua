@@ -95,7 +95,8 @@ tick()
 for s, sid in pairs({ [1] = SID.a, [2] = SID.b, [3] = SID.c }) do M.roster[s] = { name = "P" .. s, row = "f16c_common", ver = VERSION } end
 -- slot 1: 300 ms, 1 % resent; slot 2: 120 ms, 0.5 %; slot 3: 100 ms but 30 % resent
 peerIds = "1:" .. SID.a .. ":300:1000:10:1,2:" .. SID.b .. ":120:1000:5:1,3:" .. SID.c .. ":100:1000:300:1"
-ALLY = { run = { up = { SV_Unit_MoonchildA = { kind = "air", ally = "wingmen", buyer = 2 }, SV_Unit_ShipAegisA = { kind = "ship", key = "Aegis" } },
+ALLY = { run = { up = { SV_Unit_MoonchildA = { kind = "air", ally = "wingmen", buyer = 2 }, SV_Unit_ShipAegisA = { kind = "ship", key = "Aegis" },
+                        SV_Unit_VoidWatcher = { kind = "air", ally = "awacs" } },
                  defCount = { aa = 1, sam = 0, ciws = 2 } }, unit = {} }
 local s0 = #sent
 M.sqAt = 0
@@ -104,7 +105,7 @@ local sq = sentOf("sq", s0 + 1)[1]
 check(sq and sq:find("sq|" .. SID.host .. "|2:" .. SID.b .. ",1:" .. SID.a .. ",3:" .. SID.c, 1, true) ~= nil,
       "the line, best link first: player 3 (120 ms), player 2 (300 ms), player 4 (30 % resent) (" .. tostring(sq) .. ")")
 local al = sentOf("al", s0 + 1)[1]
-check(al and has(al, "al|AAGun:0,Ciws:0,Ciws:0,ShipAegis:0,Wingmen:" .. SID.b), "the allies and defences up, the buyer's Steam ID (" .. tostring(al) .. ")")
+check(al and has(al, "al|AAGun:0,Ciws:0,Ciws:0,ShipAegis:0,VoidWatcher:0,Wingmen:" .. SID.b), "the allies and defences up, VOID WATCHER 1 too, the buyer's Steam ID (" .. tostring(al) .. ")")
 check(M.roster[2].sid == SID.b and M.roster[0] and M.roster[0].sid == SID.host, "each roster entry with its Steam ID, yours too")
 local s1 = #sent
 M.sqAt = 0

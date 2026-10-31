@@ -632,6 +632,25 @@ do
     onAirfield = true                                 -- (the STORE's texts: at the airfield)
     shop()
     check(has(texts.SV_Shop_VoidWatcher, "12000 Z"), "... and sells it again (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+    -- co-op: a joiner's purchase, built here by the host, takes off once that joiner is airborne (else 90 s on)
+    COOP = COOP or {}
+    local rawAir, rawRefund = COOP.airborne, COOP.refund
+    local joinerUp = false
+    COOP.airborne = function(slot) return slot == 2 and joinerUp end
+    COOP.refund = function() end
+    local okJ, msgJ = shopBuildFor(2, "VoidWatcher", 12000, nil)
+    check(okJ and R.up[AW.unit] and R.up[AW.unit].buyer == 2 and R.up[AW.unit].queued and has(line("bought for player 3", from), "they're airborne"),
+          "co-op: player 3's VOID WATCHER 1 built here, for them (" .. tostring(msgJ) .. ")")
+    R.nextTakeoff = 0
+    local n1 = #spawned
+    D.now = D.now + 5; ALLY.tick(D.now)
+    check(#spawned == n1, "... it waits while player 3 is at their airfield")
+    joinerUp = true
+    D.now = D.now + 1; ALLY.tick(D.now)
+    check(spawned[#spawned] == AW.unit and not R.up[AW.unit].queued, "... and takes off once they're airborne")
+    COOP.airborne, COOP.refund = rawAir, rawRefund
+    alive[AW.unit] = 0
+    D.now = D.now + 10; R.checkAt = 0; ALLY.tick(D.now)
     -- off: not sold
     AW.enabled = false
     shop("VoidWatcher")
