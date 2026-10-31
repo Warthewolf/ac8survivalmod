@@ -665,6 +665,15 @@ support range A -> B m, range A -> B m, life A -> B s`, `... lost N s after it s
 E-767 follows the fighter scramble's taxi / roll / climb paths (it's invincible until airborne), whether its ESM fires on
 command (as the jammer's ECM does) and whether the field's range takes from an instance set at construction.
 tools/checks/defences_test.sh's "VOID WATCHER 1 and SNIPER" and coop_ground_test's room code cover the Lua.
+A joiner's crash of 2026-10-31 16:08 (0.73.33, round 11, right after buying WEAPON BAYS' last tier; the machine of
+the 12:03 crash): an access violation reading 0xffffffffffffffff inside UE4SS, a recursion of its own (an outer-chain
+walk, "...ameInstance_C" and "...etText" on the stack) from Survival's Lua tick: a STORE press relabels the rows at once
+(sv_shop.lua relabel: FindAllOf("TextBlock"), nameOf -> GetFullName on each), and a TextBlock whose page was going away
+had a freed outer; valid() (UE4SS's IsValid) checks only the object, and a pcall doesn't catch it. 0.73.34-coop2mp.35
+(runtime 0.32.10; built and installed 2026-10-31, zip 0.73.34, hash 305a5df9...778a85): uobj.h UObjChainLive (the object and every outer, +0x20, live in GUObjectArray, 64 levels at most;
+uobj_test), SV_ObjChain(address) for Lua, and sv_core.lua nameOf answers "?" without asking UE4SS when the chain isn't
+live (every name read goes through it; the shore marker's trace-hit name too). Not yet run in game. Lesson (not a hard
+rule yet): UE4SS's GetFullName on a FindAllOf result isn't safe in a frame where widgets are being torn down.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

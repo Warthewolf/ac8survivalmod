@@ -74,6 +74,18 @@ int main(void)
     check(UWeakLive((const uint8_t*)w) == 0, "its slot freed: gone");
     w[0] = -1; w[1] = 3;           check(UWeakLive((const uint8_t*)w) == 0, "index -1: gone");
     check(UWeakLive(NULL) == 0, "no pointer: gone");
+    /* outer chains (UObjectBase::OuterPrivate +0x20): every level live, or the walk for a full name isn't safe */
+    *(uint8_t**)(objs[0] + 0x20) = objs[1];               /* objs[0] -> objs[1] -> (none) */
+    *(uint8_t**)(objs[1] + 0x20) = NULL;
+    check(UObjChainLive(objs[0]) == 1, "a chain of live objects to the top: live");
+    *(uint8_t**)(objs[1] + 0x20) = objs[3];               /* ... -> objs[3], marked garbage above */
+    check(UObjChainLive(objs[0]) == 0, "an outer marked garbage: not live");
+    *(uint8_t**)(objs[1] + 0x20) = objs[5];               /* ... -> objs[5], its slot another object's */
+    check(UObjChainLive(objs[0]) == 0, "an outer freed (its slot another object's): not live");
+    *(uint8_t**)(objs[1] + 0x20) = objs[0];               /* a loop: never ends at the top */
+    check(UObjChainLive(objs[0]) == 0, "a chain that never ends: not live (64 levels at most)");
+    *(uint8_t**)(objs[1] + 0x20) = NULL;
+    check(UObjChainLive(objs[0]) == 1 && UObjLive(objs[0]) == 1, "the live chain again: live");
     printf(fails ? "uobj test: %d FAILED\n" : "uobj test: all passed\n", fails);
     return fails ? 1 : 0;
 }

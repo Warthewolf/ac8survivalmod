@@ -1484,6 +1484,15 @@ static uint32_t      g_ufxLetGo;
 #include "uobj.h"
 static uint8_t*       g_fTargetCheck;                       /* found by FindFunctions */
 
+/* SV_ObjChain(address) -> 1 the object and every outer above it are live (GUObjectArray), 0 one isn't, -1 can't tell:
+ * Scripts/sv_core.lua nameOf asks before UE4SS walks the chain for a full name (uobj.h UObjChainLive) */
+static int L_ObjChain(void* lua)
+{
+    uint8_t* o = ArgObject(lua);
+    if (!o) return Ret(lua, 0);
+    return Ret(lua, UObjChainLive(o));
+}
+
 static void UoFind(void)
 {
     if (!g_fTargetCheck || g_fTargetCheck[0xe0] != 0xE8) { Log(L"guard: GUObjectArray not found (another game build?): liveness by flags only"); return; }

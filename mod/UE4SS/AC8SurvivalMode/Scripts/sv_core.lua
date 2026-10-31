@@ -75,7 +75,15 @@ function valid(o)
     return ok and v
 end
 
+-- (UE4SS's GetFullName walks the object's outers with no checks: a STORE row's TextBlock whose page was going away
+-- crashed a joiner's game in that walk, a joiner's run of 2026-10-31 after a WEAPON BAYS purchase, the relabel's
+-- FindAllOf("TextBlock"); a pcall doesn't catch it. The native runtime checks every outer is still the engine's first,
+-- SV_ObjChain from runtime 0.32.10: "?" when one isn't.)
 function nameOf(o)
+    if type(SV_ObjChain) == "function" then
+        local okA, a = pcall(function() return o:GetAddress() end)
+        if not (okA and a) or SV_ObjChain(a) == 0 then return "?" end
+    end
     local ok, s = pcall(function() return o:GetFullName() end)
     return ok and s or "?"
 end

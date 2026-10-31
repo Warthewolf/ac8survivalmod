@@ -25,6 +25,20 @@ static int UObjLive(const uint8_t* o)
     return !(*(const uint32_t*)(item + 8) & (*g_uoGcFlag | UO_GARBAGE));
 }
 
+/* o and every outer above it (UObjectBase::OuterPrivate, +0x20) live, up to 64 levels: 1 yes, 0 no, -1 can't tell.
+ * UE4SS's GetFullName walks that chain with no checks: a STORE row's TextBlock (BP_LiveGameInstance_C ... WidgetTree
+ * ... WBP_Menu_Text_Focus ... TextBlock) whose page was going away crashed a joiner's game in UE4SS's name walk, reading
+ * 0xffffffffffffffff (2026-10-31, after a WEAPON BAYS purchase: the relabel's FindAllOf("TextBlock") + GetFullName). */
+static int UObjChainLive(const uint8_t* o)
+{
+    if (!g_uoChunks) return -1;
+    for (int depth = 0; o && depth < 64; ++depth) {
+        if (UObjLive(o) != 1) return 0;
+        o = *(const uint8_t* const*)(o + 0x20);
+    }
+    return o ? 0 : 1;                                     /* (deeper than 64: something's wrong) */
+}
+
 /* An FWeakObjectPtr { int32 ObjectIndex, int32 ObjectSerialNumber } at w: 1 if it resolves to a live object, 0 if it
  * doesn't (null, freed, garbage, unreachable: what the game's FWeakObjectPtr::Get, 0x141ad7cb0, answers NULL for),
  * -1 can't tell. As the game's inlined lookup (0x147443d18): a serial of 0 is a null pointer; the item's serial
