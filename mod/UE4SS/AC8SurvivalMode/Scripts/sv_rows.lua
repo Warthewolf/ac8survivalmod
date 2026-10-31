@@ -612,6 +612,18 @@ function searchSetup()
                     end
                     SR.mslSlot = SR.mslSlot or {}
                     SR.mslSlot[mname] = slot
+                    -- its special weapon's slot and fire control (sv_spweapons.lua fires slot 3's): the first slot from 3
+                    -- that isn't a pod, flares, a gun or a standard missile
+                    local sp, sid = nil, nil
+                    for i = 3, 5 do
+                        local id = tostring(rr["NpcFCSId" .. i]:ToString())
+                        if sp == nil and id ~= "None" and id ~= "" and not id:find("ECM", 1, true) and not id:find("ESM", 1, true)
+                            and not id:find("Flr", 1, true) and not id:find("Gun", 1, true) and not id:find("^NPC_FCS_PlaneMsl") then
+                            sp, sid = i, id
+                        end
+                    end
+                    SR.spSlot, SR.spWeapon = SR.spSlot or {}, SR.spWeapon or {}
+                    SR.spSlot[mname], SR.spWeapon[mname] = sp, sid
                 end)
                 if level == 0 then
                     SR.ready[a], SR.npcRow[a], n = mname, svNpc, n + 1
@@ -637,6 +649,15 @@ function searchSetup()
     local nl = 0
     for _, t in pairs(SR.levels) do nl = nl + #t end
     log(string.format("spikes: %d difficulty-spike rows made (%d levels)", nl, nLevels))
+    do                                  -- the specials fired (sv_spweapons.lua: slot 3, WN_WEAPON_4): the rows that carry one there
+        local want, ok, other = SPW and SPW.FCS_SLOT or 3, 0, {}
+        for row, slot in pairs(SR.spSlot or {}) do
+            if slot == want then ok = ok + 1 elseif not row:find("_sv%a$") then other[#other + 1] = row .. " " .. tostring(slot) end
+        end
+        table.sort(other)
+        log(string.format("specials: %d rows carry a special in fire-control slot %d (WN_WEAPON_%d: fired at you)%s", ok, want,
+            want + 1, #other > 0 and ("; elsewhere: " .. table.concat(other, ", ")) or ""))
+    end
     do                                  -- the squad director's bracket salvo (P2) fires WN_WEAPON_3: the rows that carry it
         local want, ok, other = DIR and DIR.SALVO_FCS_SLOT or 2, 0, {}
         for row, slot in pairs(SR.mslSlot or {}) do
