@@ -806,7 +806,11 @@ the stock rows. 0.73.45-coop2mp.46 (built and installed 2026-10-31, zip 0.73.45,
 SV_Fleet_AegisHull / BoatHull / FordHull, mission rows sv_fleet_aegishull / sv_sp_boat / sv_sp_ford) whose ChildNPCId
 names the fleet's turret rows, as do the turrets' (the gun mount's artillery); build_npc_rows asserts all 9 children
 remapped. The STORE's allied Aegis has the same flaw (SV_Ally_Aegis keeps the stock ChildNPCId: its turrets' _SVA
-boosts never applied; the user's "aegis ships still don't engage far enough", 2026-10-23): not changed yet.
+boosts never applied; the user's "aegis ships still don't engage far enough", 2026-10-23).
+0.73.46-coop2mp.47 (built and installed 2026-10-31, zip 0.73.46, hash 9f1e962b...034520, not yet run in game; user: "I want it fixed also"): the STORE's Aegis the same way: build_npc_rows remaps
+SV_Ally_Aegis's ChildNPCId to SV_Turret_aegs_mk45 / mk15 / mk41_Ally and SV_Turret_aegs_mk45_Ally's to
+SV_Turret_aegs_artillery_Ally (asserted, 4), so its turrets fly their own fire control (CFG.allies.ships.Aegis.fcs: 25 km
+search, x2 lock-on, 20 km / 30 s missiles) for the first time. Watch its kills and the balance.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
