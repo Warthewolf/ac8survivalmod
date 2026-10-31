@@ -574,7 +574,16 @@ build is refused (the user: "add the refuse mismatched builds"): the host's hell
 with yourSlot 0xFD and no link (`coop: refused <name>: their Survival is <v>`, Lua "sys|refused" -> REFUSED <NAME>
 callout), a joiner on another build than the host's links to nothing and says so ("sys|badver" -> CO-OP: THE HOST HAS
 <v>), both ways (an older host doesn't refuse, the newer joiner does). coop_test.sh's 4-player run has a joiner of
-another build (refused, never a slot); coop_landing_test covers the Lua side. Players on other mods can
+another build (refused, never a slot); coop_landing_test covers the Lua side.
+0.73.28 in game (2026-10-31, 7 players): the host crashed at 10:44:43, in UE4SS's UObject::ProcessEvent called from Lua
+(a method on a freed object), right after every joiner asked for the whole picture at once and a plane of a flight the
+director kept aimed died: sv_stats.lua's tail watch KEPT each plane's blackboard (p.bb) between its 4 Hz reads, and the
+director's aimsTick wrote TargetActor through p.obj.AIStateComponent.BlackboardComponent with only the plane checked.
+0.73.29-coop2mp.30 (runtime 0.32.6; built and installed 2026-10-31, not yet run in game; zip 0.73.29, hash
+1dfccdea...0ab2f; replaces 0.73.28): sv_ai.lua aiBlackboard(p) reads the blackboard fresh, valid() at each step (the
+plane, its AIStateComponent, the blackboard), none for a plane at 0 health, never kept; aiWatch, ACE.hunt, the
+director's aims and the tail watch all go through it (tailed_test covers it). Rule kept since: a game object a Lua part
+keeps between ticks is dropped the first time it's invalid, and a component reached through it is checked too. Players on other mods can
 make the games disagree elsewhere too: a session should run the same mod set.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)

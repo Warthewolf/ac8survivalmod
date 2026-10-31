@@ -547,6 +547,28 @@ check(has(rl, "(cut short: died)") and has(rl, "; tail watch: 6 episodes (Vetera
 check(has(line("stats: run over (died)"), "; tail watch Veteran+: died after median 3.0 s on your tail (n 3), 8.0 s after its Provoke (n 1), escaped 2 (held median 2.5 s), still up at the end 1, Provoke after median 1.5 s (none in 4, already defending 1), blackouts 0 [8 s+]"),
       "the run line's tail watch Veteran+ part")
 
+-- aiBlackboard (sv_ai.lua): every blackboard call goes through it, read fresh and checked at each step, never kept
+-- (the user's co-op run of 2026-10-31, 10:44:43: a kept blackboard called after its dead plane's AI was freed)
+print("the AI blackboard, checked")
+do
+    local calls = 0
+    local function plane(hp)
+        local bb = { GetValueAsEnum = function() calls = calls + 1; return 3 end }
+        return { obj = { HealthInternal = hp, AIStateComponent = { BlackboardComponent = bb } }, bb = bb }
+    end
+    local a = plane(500)
+    check(aiBlackboard(a) == a.bb, "a live plane: its blackboard")
+    check(aiBlackboard(plane(0)) == nil, "a plane at 0 health (its AI torn down as it dies): none")
+    local b = plane(500); b.obj.AIStateComponent.gone = true
+    check(aiBlackboard(b) == nil, "its AI state component destroyed: none")
+    local c = plane(500); c.obj.AIStateComponent.BlackboardComponent.gone = true
+    check(aiBlackboard(c) == nil, "its blackboard destroyed: none")
+    local d = plane(500); d.obj.gone = true
+    check(aiBlackboard(d) == nil and aiBlackboard(nil) == nil, "the plane itself gone, or none: none")
+    check(not has(readAll(MOD .. "/Scripts/sv_stats.lua"), "p.bb = bb") and calls == 0,
+          "the tail watch keeps no blackboard between reads (and none was called above)")
+end
+
 logFile:close()
 print(fails == 0 and "tailed: all passed" or ("tailed: " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 12), #logs do print("    log: " .. logs[i]) end end
