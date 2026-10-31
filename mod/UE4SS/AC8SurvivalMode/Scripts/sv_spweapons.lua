@@ -11,12 +11,34 @@
 -- LiveFireOneShotWeapon, WN_WEAPON_4 at "Player", hard rule 40) when you're inside cone_deg of its nose at that weapon's
 -- range (CFG.special.fire.ranges, by its fire control's name), first_s after it appears, then every every_s at most, at
 -- most max_per_min across the sky; not a held Wolf trap (its wait is the trap). Its ammunition is its fire control's: a
--- slot that's empty fires nothing. The host's (or solo), at the host's plane (the event is each game's own: sv_coop.lua
--- KEEP_EVENTS). `specials: <unit> <letter> (<row>) fires its <weapon> at you, N km` once each, and the weapons log
--- (sv_weaponlog.lua) says whether it launched.
+-- slot that's empty fires nothing. Co-op (user, 2026-10-31: "it's paramount that Special Weapons target all, HOST and
+-- JOINERS"): every game fires its own planes at its own player, the host its enemies at the host and each joiner the
+-- host's enemies' copies there at that joiner, as their standard missiles already go (an AI's shots are decided on its
+-- target's game: hard rule 48), each with its own cap; the event is never forwarded (sv_coop.lua KEEP_EVENTS: "Player"
+-- is each game's own). A joiner knows each flight's rows from the host's spawn (sv_coop.lua doSpawn: SPW.noteRows, the
+-- SV_SetAircraft ops it plays); nothing is fired at a player who's DOWN (sv_down.lua). `specials: <unit> <letter>
+-- (<row>) fires its <weapon> at you, N km` once each, and the weapons log (sv_weaponlog.lua) says whether it launched.
 SPW = {}
 do
 SPW.FCS_SLOT = 3                                  -- (WN_WEAPON_4: tools/survival_events.py SPEC_SLOT, asserted there)
+SPW.row, SPW.leadRow = {}, {}                     -- (a joiner's: each flight's rows, from the host's spawns)
+
+-- (a joiner) the rows the host's spawn of `unit` set (its ops: { row, idx }, idx -1 the whole flight, 0 its lead)
+function SPW.noteRows(unit, ops)
+    if type(unit) ~= "string" or type(ops) ~= "table" then return end
+    SPW.leadRow[unit] = nil
+    for _, op in ipairs(ops) do
+        if type(op) == "table" and type(op.row) == "string" then
+            if op.idx == 0 then SPW.leadRow[unit] = op.row elseif (tonumber(op.idx) or -1) < 0 then SPW.row[unit] = op.row end
+        end
+    end
+end
+
+-- plane p's row: its lead's own (an ace's) for object 0, else its flight's (the host's records, else a joiner's)
+local function rowOf(p)
+    local lr = p.k == 0 and ((D.leadRow and D.leadRow[p.unit] and D.leadRow[p.unit].row) or SPW.leadRow[p.unit])
+    return lr or (D.flightRow and D.flightRow[p.unit]) or SPW.row[p.unit]
+end
 
 local function cfg() return CFG.special and CFG.special.fire or {} end
 
@@ -36,8 +58,8 @@ function SPW.tick(now)
     if c.enabled == false or not D or not now or D.state == "wait" or not (CFG.special and CFG.special.enabled) then return end
     if now < (SPW.nextAt or 0) then return end
     SPW.nextAt = now + (tonumber(c.check_s) or 1)
-    if COOP and COOP.client and COOP.client() then return end           -- (the host's rounds: its planes)
     if not (SR and SR.spSlot) then return end
+    if DOWN and DOWN.me and DOWN.me() then return end                    -- (you're DOWN: a co-op revive's wait)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not (pawn and valid(pawn)) then return end
     local you
@@ -54,10 +76,10 @@ function SPW.tick(now)
     for _, p in ipairs(planes or {}) do
         if #SPW.recent >= cap then break end
         local k = p.k
-        if not p.down and p.unit and k and k >= 0 and k <= 5 and poolIndex(p.unit) and now - (p.born or now) >= first
+        if not p.down and p.unit and k and k >= 0 and k <= 5 and not p.spwSeen then p.spwSeen = now end   -- (its first look)
+        if not p.down and p.unit and k and k >= 0 and k <= 5 and poolIndex(p.unit) and now - (p.spwSeen or now) >= first
             and now >= (p.spwAt or 0) and valid(p.obj) and not (D.wolf and D.wolf[p.unit] and D.wolf[p.unit].held[k]) then
-            local lr = k == 0 and D.leadRow and D.leadRow[p.unit]
-            local row = (lr and lr.row) or (D.flightRow and D.flightRow[p.unit])
+            local row = rowOf(p)
             if row and SR.spSlot[row] == SPW.FCS_SLOT then
                 local at, fwd
                 pcall(function()
