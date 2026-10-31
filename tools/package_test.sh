@@ -16,6 +16,7 @@ rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/survival.ini* "$st"/ue4ss/Mods/AC8
 # (what the game writes there: the queue of unsent runs, this install's anonymous pilot name, map notes, dumps)
 rm -f "$st"/ue4ss/Mods/AC8SurvivalMode/config/pending_runs.txt "$st"/ue4ss/Mods/AC8SurvivalMode/config/pilot_id.txt \
       "$st"/ue4ss/Mods/AC8SurvivalMode/config/coast_*.txt "$st"/ue4ss/Mods/AC8SurvivalMode/hud_dump.txt
+rm -rf "$st"/ue4ss/Mods/AC8SurvivalMode/recordings              # (flight recorder files: Ctrl+F6)
 # the test-only cheats (TEST ONLY BEGIN ... END in Scripts/*.lua: the +5000 zollars key) never ship
 python -I tools/strip_test_only.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua
 python -X utf8 -I tools/checks/lua_check.py "$st"/ue4ss/Mods/AC8SurvivalMode/Scripts/*.lua

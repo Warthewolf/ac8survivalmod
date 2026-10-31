@@ -219,6 +219,14 @@ a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lin
 until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
 `python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
 
+## Flight recorder (runtime 0.20.0, Lua 0.70.7, 2026-10-31; untested in game)
+Ctrl+F6 (any level) -> SV_FlightRec: the BuildFlightInput detour writes your plane and its current target every frame
+to <mod>\recordings\flight_<date>_<time>.csv, for the GRU pilot project (warthewolf/ac8-gru-pilot: recording.py,
+RECORDING.md there). It finds the actor's RootComponent offset from the pointer Lua passes, reads ComponentToWorld as
+doubles (+0x200 quat, +0x220 translation), the AI target's stick at +0x2a8c and its post-stall flags; nothing is
+written to the game. None of it is a hard rule until a test confirms it (the log's "the engine puts the plane at"
+line against the first P row checks the transform read).
+
 ## Runtime layout (Lua, from 0.66.0)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
