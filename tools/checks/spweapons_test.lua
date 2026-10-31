@@ -146,7 +146,7 @@ survivalPC = { full = "PC", Pawn = pp }
 logs = {}
 ATK.tick(1)
 check(pp.MaxPlaneAttackerMissiles == CFG.attackers.plane_missiles and pp.MaxNonPlaneAttackerMissiles == CFG.attackers.nonplane_missiles
-    and pp.MaxPursuitAttackers == 3, "your plane's limits set (planes, ships / SAMs), chasers left as the game's (pursuers 0)")
+    and pp.MaxPursuitAttackers == CFG.attackers.pursuers, "your plane's limits set (planes, ships / SAMs, chasers)")
 check(#logs == 1 and logs[1]:find("the game's: planes 2, ships / SAMs 2, chasers 3", 1, true), "logged with the game's: " .. tostring(logs[1]))
 pp.MaxNonPlaneAttackerMissiles = 2
 ATK.tick(2); ATK.tick(4)
