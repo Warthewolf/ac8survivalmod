@@ -835,6 +835,10 @@ row as CurrentDifficultyDataTableRow), Casual / Easy / Normal / Hard / Ace: Play
 100, unlimited gun yes / yes / yes / no / no, unlimited missiles Casual only, ReturnLineRecoveryHealth all but Ace,
 FlightAssistOnForNewGame Casual / Easy, MissionClearMRPModifier 100 / 100 / 100 / 120 / 150, CooldownPursuit and
 NonpursuitAttackTimeModifier 150 / 120 / 100 / 50 / 25 % (the enemies' waits between attacks).
+0.73.51-coop2mp.52 (built and installed 2026-10-31, zip 0.73.51, hash f1199a67...7d77a6; user: "increase the lock on and firing distance of all SAM sites and Ships"): the airfield's SAM sites'
+missiles 8 -> 20 km, 14 -> 30 s, the defences' search 10 -> 25 km, their units' area 25 -> 30 km; the STORE's Aegis and
+the Spaceport fleet: search 25 -> 40 km, guns' lock-on x2 -> x3, missiles 20 -> 35 km and 30 -> 45 s (the fleet's 3600
+km/h), their units' areas 25 -> 45 km (the STORE's) and 40 -> 45 km (the fleet's).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

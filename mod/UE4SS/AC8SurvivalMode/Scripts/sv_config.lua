@@ -803,9 +803,11 @@ CFG = {
                              -- the CIWS's rounds fly 3 s, longer by the range's growth); missile: the SAM's own
                              -- (SAM_Ground_000: 7.3 s from 500 km/h, +300 km/h a second to 3000, turning 15, about 3.2
                              -- km of flight, so the 4.8 km lock-on fell short), as the Aegis's (CFG.allies.ships)
-                             fcs = { lock_x = 0.75, fire_x = 0.5, range_x = 2.0, search_m = 10000, slew_x = 2.0, yaw_full = true,
+                             -- (user, 2026-10-31: "increase the lock on and firing distance of all SAM sites and Ships": the
+                             -- SAM sites' missiles 8 -> 20 km and 14 -> 30 s, the defences' search 10 -> 25 km)
+                             fcs = { lock_x = 0.75, fire_x = 0.5, range_x = 2.0, search_m = 25000, slew_x = 2.0, yaw_full = true,
                                      round_reach = true, round_width_x = 1.5,
-                                     missile = { range_m = 8000, life_s = 14, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5 } },
+                                     missile = { range_m = 20000, life_s = 30, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5 } },
                          } },
         },
     },
@@ -897,9 +899,11 @@ CFG = {
             -- short; user, 2026-10-23: "aegis ships still don't engage far enough"): lock-on at range_m, life_s of
             -- flight, acceleration x accel_x, top speed speed_max_kmph, turn rate x turn_x.
             -- health_add: HP on its hull's own (economy review: "ships placed to protect"; its row's MaxHealthDifference)
+            -- (user, 2026-10-31: "increase the lock on and firing distance of all SAM sites and Ships": search 25 -> 40
+            -- km, the guns' lock-on x2 -> x3, the missiles 20 -> 35 km and 30 -> 45 s)
             Aegis = { name = "DDG AEGIS", turrets = "aegs", health_add = 300,
-                      fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 2.0, search_m = 25000,
-                                                  missile = { range_m = 20000, life_s = 30, accel_x = 2.0,
+                      fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 3.0, search_m = 40000,
+                                                  missile = { range_m = 35000, life_s = 45, accel_x = 2.0,
                                                               speed_max_kmph = 3600, turn_x = 1.5 } },
                       -- (the STORE sends the first free one: their lanes start 11.5 (A), 11.9 (C), 13.0 (D) and 13.6 km
                       -- (B) from the airfield, all inside its 20 km missiles' reach of the bombers' run-in; nearest first)
@@ -1573,9 +1577,11 @@ CFG = {
                       -- lock-on range, round_reach their guns' rounds out to it, missile their homing missiles' lock-on
                       -- range_m, flight life_s, acceleration x accel_x, top speed, turn x turn_x; lock_x / fire_x 2.0
                       -- undo CFG.allies.fcs.time_x 0.5 (their stock rate of fire)
-                      fcs = { lock_x = 2.0, fire_x = 2.0, range_x = 2.0, search_m = 25000, slew_x = 1.5, round_reach = true,
+                      -- (user, 2026-10-31: "increase the lock on and firing distance of all SAM sites and Ships":
+                      -- search 25 -> 40 km, the guns' lock-on x2 -> x3, the missiles 20 -> 35 km, 30 -> 45 s, 3600 km/h)
+                      fcs = { lock_x = 2.0, fire_x = 2.0, range_x = 3.0, search_m = 40000, slew_x = 1.5, round_reach = true,
                               round_width_x = 1.0,
-                              missile = { range_m = 20000, life_s = 30, accel_x = 1.5, speed_max_kmph = 3000, turn_x = 1.0 } },
+                              missile = { range_m = 35000, life_s = 45, accel_x = 1.5, speed_max_kmph = 3600, turn_x = 1.0 } },
                       -- the Ford's deck, as the Alicorn's (CFG.specials.alicorn.deck): from first_s, a free size-ship
                       -- pool flight every every_s, flights + flights_per_round x the round (at most max_flights), max_up
                       -- of them up at once, ahead_m off its bow and alt_m up

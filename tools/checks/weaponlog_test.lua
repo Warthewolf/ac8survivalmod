@@ -141,7 +141,8 @@ local ml = lines("^missiles at you: last ")
 check(#ml >= 1 and ml[#ml]:find("BP_wp_qaam_a0 2 (1 hit, 1 decoyed, 0 missed; from 3.5 km on average)", 1, true), "the summary: " .. tostring(ml[#ml]))
 local fl = lines("^fleet: last ")
 check(#fl >= 1 and fl[#fl]:find("BP_VE002_aegs_mk41_CP: 1 of 1 fired (1 missiles, you 8.0 km off at fire on average)", 1, true)
-    and fl[#fl]:find("BP_VE002_aegs_mk45_CP: 0 of 1 fired (0 missiles), 0 guns seen firing, 1 idle with you inside 25 km", 1, true),
+    and fl[#fl]:find(string.format("BP_VE002_aegs_mk45_CP: 0 of 1 fired (0 missiles), 0 guns seen firing, 1 idle with you inside %d km",
+        math.floor(CFG.specials.spaceport.fcs.search_m / 1000)), 1, true),
     "the fleet: the VLS fired, the gun mount idle with you in its reach: " .. tostring(fl[#fl]))
 SPORT = nil
 

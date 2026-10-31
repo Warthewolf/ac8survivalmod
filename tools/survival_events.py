@@ -454,7 +454,7 @@ DEFENCE_ROWS = {'gepa_common': ('sv_def_gepa', 'SV_Def_Gepa'), 'avng_common': ('
 # Every defence unit's area (0.72.1): Mission 22's airport unit has 6 km and 500-6000 m, and turrets engage only inside
 # their unit's area (the Aegis's 20 km missiles stopped at its 10 km: ALLY_SHIP_AREA_M), which would hold the SAM
 # sites' 8 km lock-on and the defences' 10 km search (CFG.shop.items.Airfield.defences.fcs) in; the ships' then.
-DEFENCE_AREA_M, DEFENCE_ALT_M = 25000.0, (0.0, 15000.0)
+DEFENCE_AREA_M, DEFENCE_ALT_M = 30000.0, (0.0, 15000.0)   # (2026-10-31: 25 -> 30 km, the SAM sites' 20 km missiles)
 DEFENCE_CIWS_ROW = ('sv_def_ciws', 'SV_Def_Ciws')
 DEFENCE_CIWS_MISSION_SOURCE = 'gepa_common'
 DEFENCE_CIWS_NPC = 'GR033_ciws_01'
@@ -563,7 +563,7 @@ ALLY_SHIP_SPEED = '80'                      # Mission 22's allied ships'
 # A ship's unit area: Mission 22's allied hulls have 10 km and 200-6000 m, and its turrets engage only inside it (as
 # the fighters' 6 km area kept them from the player): the Aegis's 25 km search and 20 km missiles stopped at 10 km
 # (user, 2026-10-23: "aegis's didn't seem to fire all that much better"). Survival's ships get this much.
-ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M = 25000.0, (0.0, 15000.0)
+ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M = 45000.0, (0.0, 15000.0)   # (2026-10-31: 25 -> 45 km, the 35 km missiles' reach)
 
 
 def ally_ships():
@@ -1386,7 +1386,7 @@ SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM = 400000.0, 35000.0      # its missile boats
 SP_BOAT_PATROL_CM, SP_BOAT_SPEED, SP_BOAT_PATH_TEMPLATE = 900000.0, '90', '01_Ship1_grig_0_Path0'
 SP_RING_CM, SP_RING_DEG = 180000.0, [30, 90, 150, 210, 270, 330]   # the carrier's Aegis (none dead ahead: a Wasp's there)
 # (their turrets engage only inside it: 40 km round each ship, as far as their boosted search and missiles reach, SP_TURRETS)
-SP_SHIP_AREA_M, SP_SHIP_ALT_M = 40000.0, (0.0, 15000.0)
+SP_SHIP_AREA_M, SP_SHIP_ALT_M = 45000.0, (0.0, 15000.0)        # (2026-10-31: 40 -> 45 km)
 SP_WAVES = 'VWXYZ'                               # a lane's craft units (letters: hard rule 17)
 SP_CRAFT = 'LR'                                  # a wave's two craft, side by side
 SP_CRAFT_GAP_CM = 18000.0

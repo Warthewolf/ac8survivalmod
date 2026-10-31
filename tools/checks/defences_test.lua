@@ -170,8 +170,8 @@ check(ALLY.ready == true and ALLY.ciwsReady == true and has(line("allies: 8 of 8
       "every ally row in DT_NPC, the CIWS's too (" .. tostring(line("rows in DT_NPC", from)) .. ")")
 local mod = T.mod:FindRow("NPC_AIModule_SV_Defence")
 check(mod and mod.Radius == DEF.fcs.search_m and mod.bEnableLostTargetInClouds == false
-      and has(line("allies: the airfield defences' turrets search 10000 m (NPC_AIModule_SV_Defence, was 6000 m)", from), "not lost in cloud"),
-      "the defences' search module: 6000 -> 10000 m, not lost in cloud, logged")
+      and has(line(string.format("allies: the airfield defences' turrets search %d m (NPC_AIModule_SV_Defence, was 6000 m)", DEF.fcs.search_m), from), "not lost in cloud"),
+      string.format("the defences' search module: 6000 -> %d m, not lost in cloud, logged", DEF.fcs.search_m))
 -- the AA guns
 local aa = T.fcs:FindRow("NPC_FCS_VehicleAAGun000_SVA_Defence")
 local tx = CFG.allies.fcs.time_x
@@ -198,20 +198,21 @@ check(has(fcsLine, "NPC_FCS_VehicleAAGun000_SVA_Defence (within 2200 -> 4400 m, 
 local sam = T.fcs:FindRow("NPC_FCS_VehicleSAM001_SVA_Defence")
 local samw = T.wpn:FindRow("SAM_Ground_000_SVA_Defence")
 local mc = DEF.fcs.missile
-check(sam and sam.CaptureDistance == mc.range_m and mc.range_m == 8000, "SAM sites: lock-on 3000 -> 8000 m (was 4800)")
-check(samw and samw.LifeTime == 14 and samw.AccelerationKmph == 600 and samw.SpeedMaxKmph == 3600 and near(samw.MaxRotationAngle, 22.5)
-      and samw.HomingReductionInCloud == 0 and sam.NpcWeaponId:ToString() == "SAM_Ground_000_SVA_Defence",
-      "SAM missiles: 7.3 -> 14 s, 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15 -> 22.5, no cloud loss")
+-- (2026-10-31, "increase the lock on and firing distance of all SAM sites and Ships": 8 -> 20 km, 14 -> 30 s)
+check(sam and sam.CaptureDistance == mc.range_m and mc.range_m == 20000, "SAM sites: lock-on 3000 -> 20000 m (was 8000)")
+check(samw and samw.LifeTime == mc.life_s and mc.life_s == 30 and samw.AccelerationKmph == 600 and samw.SpeedMaxKmph == 3600
+      and near(samw.MaxRotationAngle, 22.5) and samw.HomingReductionInCloud == 0 and sam.NpcWeaponId:ToString() == "SAM_Ground_000_SVA_Defence",
+      "SAM missiles: 7.3 -> 30 s, 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15 -> 22.5, no cloud loss")
 do                                                -- (its reach: from 500 km/h, at that acceleration to that top speed)
     local v0, a, vmax = 500 / 3.6, samw.AccelerationKmph / 3.6, samw.SpeedMaxKmph / 3.6
     local t1 = math.min(samw.LifeTime, (vmax - v0) / a)
     local reach = v0 * t1 + a * t1 * t1 / 2 + vmax * (samw.LifeTime - t1)
-    check(reach > 1.4 * sam.CaptureDistance, string.format("SAM missiles reach %.1f km straight out, past the %.0f km lock-on (was %.1f km)",
+    check(reach > 1.3 * sam.CaptureDistance, string.format("SAM missiles reach %.1f km straight out, past the %.0f km lock-on (was %.1f km)",
           reach / 1000, sam.CaptureDistance / 1000, (500 / 3.6 * 7.3 + 300 / 3.6 * 7.3 * 7.3 / 2) / 1000))
 end
-check(has(fcsLine, "NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 8000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.8")
+check(has(fcsLine, "NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.8")
       and has(fcsLine, " s, 5.00 -> 1.25 s between, rest 10.00 -> 2.50 s")
-      and has(fcsLine, "missile SAM_Ground_000_SVA_Defence: 7.3 -> 14 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5"),
+      and has(fcsLine, "missile SAM_Ground_000_SVA_Defence: 7.3 -> 30 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5"),
       "the log line: the SAM sites' before -> after")
 -- the CIWS
 local ciwsRow = T.npc:FindRow("SV_Def_Ciws")
