@@ -654,8 +654,32 @@ function ALLY.awacsTick(R, now)
             end
         end
     end
-    -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own)
+    -- its orbit's backstop: its climb-out never ended (an E-767 on the fighters' scramble paths), or it's wandered off
     local f = (s and not s.queued) and (svFlags() or {}) or {}
+    local ob = aw.orbit
+    if s and not s.queued and ob and type(SV_Event) == "function" and now >= (R.orbitCheckAt or 0) then
+        R.orbitCheckAt = now + (ob.check_s or 20)
+        local why = nil
+        if (f.SV_AwacsAir or 0) <= 0 then
+            if now - (s.at or now) >= (ob.climb_s or 60) then why = string.format("its climb-out didn't end in %d s", ob.climb_s or 60) end
+        else
+            local d
+            for _, p in ipairs(R.planes) do
+                if p.unit == u and valid(p.obj) then
+                    local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+                    if okL and l then d = math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000 end
+                end
+            end
+            if d and d >= (ob.lost_km or 18) then why = string.format("%.1f km from the airfield", d) end
+        end
+        if why and now >= (R.orbitAgainAt or 0) then
+            R.orbitAgainAt = now + (ob.again_s or 60)
+            local r = SV_Event(ob.event)
+            log(string.format("allies: %s put on its orbit (%s): %s %s", aw.name, why, ob.event,
+                r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))
+        end
+    end
+    -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own)
     if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.esmAt or 0) and type(SV_Event) == "function" then
         R.esmAt = now + aw.esm.every_s
         local r = SV_Event(aw.esm.event)

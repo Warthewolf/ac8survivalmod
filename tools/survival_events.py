@@ -530,10 +530,13 @@ AWACS_MODEL = 'SV_Model_VoidWatcher'
 AWACS_MODEL_SOURCE = 'OP0005_e767_Ally_Magnolia'
 AWACS_MODEL_NAME = 'ContainerAircraft_Name_e767'
 AWACS_PATH = 'SV_Path_VoidWatcherOrbit'
-AWACS_ORBIT_KM = 7.0                         # the orbit's radius round the airfield (AIRFIELD_KM), its points, height
-AWACS_ORBIT_POINTS = 12
+# the orbit's radius round the airfield (AIRFIELD_KM), its points, height, speed. 12 km at 550 km/h needs ~12 deg of
+# bank, which an E-767 holds; 0.73.33's 7 km at 650 (~25 deg) it didn't (user, 2026-10-31: "VOID WATCHER just seems to
+# not loiter around the airfield space"). Its 25 km ESM field still covers the airfield from the circle.
+AWACS_ORBIT_KM = 12.0
+AWACS_ORBIT_POINTS = 16
 AWACS_ALT_KM = 4.5
-AWACS_SPEED = '650.0'                        # km/h on the orbit
+AWACS_SPEED = '550.0'
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
@@ -1352,6 +1355,8 @@ def build_awacs(g, stock_ep):
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
     g.execute(t_path, AWACS_EVENTS['airborne'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
+    g.execute(t_path, AWACS_EVENTS['orbit'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
+    assert 'RE_SV_AwacsOrbit' in lua, 'Scripts/sv_allies.lua never fires RE_SV_AwacsOrbit'
     g.trigger(finish, 'SV_AwacsLap', arg_changes={0: AWACS_OBJ, 2: AWACS_PATH})
     g.execute(t_path, 'SV_AwacsLap', {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
@@ -1503,6 +1508,14 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
         g.execute(nxt, ev, {0: o})
     AWACS_EVENTS['airborne'] = ev = 'SV_AwacsAirborne'
     g.trigger(finish, ev, arg_changes={0: o, 2: TAKEOFF_LEAD[2]})
+    g.execute(t_gear_up, ev, {0: o})
+    g.execute(t_attr_air, ev, {1: o})
+    g.execute(t_eng_hold, ev, {0: o})
+    flag(ev, 'SV_AwacsAir', 'Set', 1)
+    # (the same from Lua, RE_SV_AwacsOrbit: an E-767 that never reaches the fighters' climb-out's end, or wanders off its
+    # orbit, is put on it anyway: Scripts/sv_allies.lua ALLY.awacsTick's backstop)
+    AWACS_EVENTS['orbit'] = ev = 'RE_SV_AwacsOrbit'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
     g.execute(t_gear_up, ev, {0: o})
     g.execute(t_attr_air, ev, {1: o})
     g.execute(t_eng_hold, ev, {0: o})

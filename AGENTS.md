@@ -688,6 +688,16 @@ OP0005_e767_Ally_Magnolia's GameObjectDisplayName01 is ContainerAllyCallsign_Nam
 SV_Model_VoidWatcher (DT_SV_ModelRows, from the campaign's DT_NPC_Model) keeps its blueprint and paint under
 ContainerAircraft_Name_e767, the NPC row names it, and sv_allies.lua adds it to DT_NPC_Model at the main menu (not
 sold without it). defences_test covers both.
+0.73.36-coop2mp.37 (runtime 0.32.10; built and installed 2026-10-31, zip 0.73.36, hash 98898b0f...0defa0; not yet
+run in game): VOID WATCHER 1 "just seems to not loiter around the
+airfield space" (user, 2026-10-31; no log yet): its orbit was 7 km at 650 km/h (~25 deg of bank all the way round, more
+than an E-767 holds), now 12 km at 550 km/h (~12 deg) on 16 points; and its orbit started only at the end of the
+fighters' climb-out path, which a big E-767 may never reach (no orbit, no SV_AwacsAir, so no ESM either): Lua's backstop
+(ALLY.awacsTick, CFG.allies.awacs.orbit) fires RE_SV_AwacsOrbit (gear up, not invincible, engagement None, SV_AwacsAir 1,
+the orbit path) when the climb-out hasn't ended climb_s 60 after takeoff, and again when it's lost_km 18 or more off
+(`allies: VOID WATCHER 1 put on its orbit (<why>)`; defences_test). Players' own ESM / ECM affecting only their own game
+in co-op (user, the same day): research under way (Online Mode's ElectronicMeasureEffect fills the sender plane's
++0xd88 enemies / +0xd98 allies lists of {weak ptr, flag} through 0x147d27c00; nothing sends those in Survival).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

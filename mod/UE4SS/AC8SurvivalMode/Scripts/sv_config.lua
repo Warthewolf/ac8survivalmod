@@ -860,6 +860,11 @@ CFG = {
                          model = "SV_Model_VoidWatcher",
                          esm = { event = "RE_SV_AwacsEsm", every_s = 20, range_m = 25000, life_s = 24, capture_m = 60000,
                                  class = "BP_wp_esm_MS28_C" },
+                         -- its orbit's backstop (user, 2026-10-31: "VOID WATCHER just seems to not loiter around the
+                         -- airfield space"): put on its orbit (RE_SV_AwacsOrbit) when its climb-out hasn't ended
+                         -- climb_s after takeoff, and again when it's lost_km or more from the airfield (checked every
+                         -- check_s, at most every again_s)
+                         orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 18, check_s = 20, again_s = 60 },
                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
                                    health_max_x = 6.0 } },
         ships        = {
