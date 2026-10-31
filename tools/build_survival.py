@@ -1901,9 +1901,29 @@ def build_npc_rows():
         _, npc, text = survival_events.ally_ship_rows(key)
         allies.append((m22[hull], npc, text))
         allies += [(m22[t], survival_events.ally_turret_rows(t)[1], None) for t in survival_events.ALLY_TURRETS[key]]
+    # (the STORE's ships: their hulls' and turrets' ChildNPCId naming the allied turret rows, SV_Turret_<row>_Ally: a ship's
+    # parts spawn on the rows its hull's DT_NPC row names (hard rule 38), so with the stock ChildNPCId the turrets flew the
+    # stock rows and never got their own fire control: the user's "aegis ships still don't engage far enough" of 2026-10-23,
+    # found with the Spaceport fleet's of 2026-10-31; user: "I want it fixed also")
+    ally_kid = {m22[t]: survival_events.ally_turret_rows(t)[1] for k, _, _, _ in survival_events.ALLY_SHIPS
+                for t in survival_events.ALLY_TURRETS[k]}
+    ally_ship_rows = ({survival_events.ally_ship_rows(k)[1] for k, _, _, _ in survival_events.ALLY_SHIPS}
+                      | {survival_events.ally_turret_rows(t)[1] for k, _, _, _ in survival_events.ALLY_SHIPS
+                         for t in survival_events.ALLY_TURRETS[k]})
+    ally_shown = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    ally_remapped = 0
     for src, npc, text in allies:
         f = survival_events.fname(src)
         row = copy.deepcopy(rows[(f[1], f[2])])
+        if npc in ally_ship_rows:
+            for i, q in enumerate(row[2]):
+                if q[1] == 'ChildNPCId' and q[3]:
+                    kids = []
+                    for k in q[3][1]:
+                        assert ally_shown(k) in ally_kid, f'{npc}: its child {ally_shown(k)} has no allied turret row'
+                        kids.append(('name', ally_kid[ally_shown(k)], 0))
+                        ally_remapped += 1
+                    row[2][i] = (q[0], q[1], q[2], ('arr', kids))
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
         if npc == survival_events.AWACS_NPC:              # VOID WATCHER 1 on Survival's model row (no MAGNOLIA name)
             set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.AWACS_MODEL, 0))
@@ -1936,6 +1956,7 @@ def build_npc_rows():
                 row[2][i] = (q[0], q[1], q[2], ('arr', kids))
         out.append(((npc, 0), row))
     assert remapped == 3 + 1 + 1 + 4, remapped              # (the Aegis's 3 and its mount's artillery, the boat's, the Ford's 4)
+    assert ally_remapped == 3 + 1, ally_remapped           # (the Aegis's 3 turrets and its gun mount's artillery)
     # the STORE's CIWS (survival_events.DEFENCE_CIWS*): the game's land Phalanx on its allied model row (no NpcFCSId: its
     # blueprint's own arms fire, until main.lua gives it one: CFG.shop.items.Airfield.defences.ciws.fcs_row)
     f = survival_events.fname(survival_events.DEFENCE_CIWS_NPC)
