@@ -64,7 +64,9 @@ SPORT.GROUPS, SPORT.WAVES, SPORT.CRAFT, SPORT.GARRISON = GROUPS, WAVES, CRAFT, G
 -- they're in (ALLY.fleetReady): without them the fleet's turrets would have no rows, so no Spaceport Assault.
 SPORT.FLEET_ROWS = { "SV_Fleet_Mk15Aegis", "SV_Fleet_Mk41Aegis", "SV_Fleet_Mk45Aegis", "SV_Fleet_ArtAegis",
                      "SV_Fleet_Mk15FordLB", "SV_Fleet_Mk15FordRF", "SV_Fleet_Mk15FordLF", "SV_Fleet_Mk15FordRB",
-                     "SV_Fleet_SamBoat" }
+                     "SV_Fleet_SamBoat",
+                     -- (the armed hulls, 0.73.45: a ship's parts spawn on the rows its hull's row names, ChildNPCId)
+                     "SV_Fleet_AegisHull", "SV_Fleet_BoatHull", "SV_Fleet_FordHull" }
 
 -- The Ford's hull as SV_Spawn makes it (spawningUnit is its unit then), for its deck's launches; checked before each
 -- read and dropped once it's gone.
