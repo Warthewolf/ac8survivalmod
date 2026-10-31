@@ -409,8 +409,8 @@ CFG = {
     -- hard cap ... I've only ever seen 4 missiles launch at me at one time ... is there a way to increase that?"): the game
     -- allows 2 from aircraft and 2 from ships / SAM sites / turrets on every difficulty; your plane's own limits set to
     -- plane_missiles and nonplane_missiles, pursuers the aircraft that may chase you at once (0: the game's), every check_s
-    -- (user, 2026-10-31: "I want 6 missiles from aircraft and 14 missiles from ships")
-    attackers = { enabled = true, plane_missiles = 6, nonplane_missiles = 14, pursuers = 0, check_s = 2 },
+    -- (user, 2026-10-31: "I want 6 missiles from aircraft and 14 missiles from ships", "set the pursuers to 12")
+    attackers = { enabled = true, plane_missiles = 6, nonplane_missiles = 14, pursuers = 12, check_s = 2 },
     special = { enabled = true,
                 fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" },
                 -- fired (Scripts/sv_spweapons.lua; the user, 2026-10-31: "I want the Enemies to fire their Special
