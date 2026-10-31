@@ -38,3 +38,4 @@ GetLocalTime
 K32GetProcessMemoryInfo
 QueryPerformanceCounter
 QueryPerformanceFrequency
+CreateDirectoryW

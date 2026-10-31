@@ -705,6 +705,18 @@ game): the other players' ESM / ECM fields count on every game. Each plane pulls
 to role 1 around that call and back to 2 after, so the stock range / team / time rules apply (`coop2mp: the other
 players' ESM / ECM fields count on this game ...`, once). tools/re/COOP2MP.md "ESM / ECM effects across games".
 
+## Flight recorder (branch feature/flight-recorder, on COOP2MP 0.73.37; dev install only; not yet run in game)
+For the GRU pilot project (warthewolf/ac8-gru-pilot). Ported 2026-10-31 from the old remote branch's a440b49 / 0eec7c8
+(0.70.x) onto 0.73.37. The user: "none of this research is allowed to cross over to friends games at all". So:
+runtime/recorder.c is compiled only with SV_DEV (`DEV=1 sh runtime/build.sh` -> build/runtime/dev/main.dll; package_dev.sh
+puts it in the dev stage), the keys are TEST ONLY in sv_main.lua (Ctrl+F1 recorder, Ctrl+F2 test range: no rounds,
+Ctrl+F3 an ace 1.5 km on your nose; the old Ctrl+F6 / 0 / F5 are COOP2MP's tests now), the test range and its ace refuse
+while co-op is open, the recorder says nothing on the HUD then (host callouts can be mirrored), and
+tools/checks/no_dev_check.py fails package_release.sh / package_test.sh on any of it (SV_FlightRec or its log text in
+main.dll, the keys in Scripts, a recordings folder). The version stays the co-op build's, so the dev install links with
+friends. CSV: <mod>/recordings/flight_<date>_<time>.csv, a440b49's columns; root and health offsets from coop.c
+CoResolve; the log's `flight recorder: check:` line compares ComponentToWorld with RelativeLocation (unconfirmed read).
+
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
 co-op versions (0.72.2-coop.20), has an admin page for the user only (GET /admin; ADMIN_KEY in the POST body, 5 wrong

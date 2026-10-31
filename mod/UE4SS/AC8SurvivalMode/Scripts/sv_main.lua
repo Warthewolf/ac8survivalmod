@@ -772,6 +772,100 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
+    -- The flight recorder and its test range, for the GRU pilot project (warthewolf/ac8-gru-pilot), ported from
+    -- feature/flight-recorder's a440b49 / 0eec7c8 (Ctrl+F6 / Ctrl+0 / Ctrl+F5 there; those keys are COOP2MP's tests now).
+    -- Dev install only (user, 2026-10-31: "none of this research is allowed to cross over to friends games at all"):
+    -- this TEST ONLY block never ships, SV_FlightRec is only in the dev main.dll (runtime/recorder.c, SV_DEV), the test
+    -- range and its ace refuse while co-op is open (the host's spawns and holds would reach the others), and the
+    -- recorder (a file on this PC, nothing sent) says nothing on the HUD then (the host's callouts can be mirrored).
+    ;(function()                   -- (its own function: the main chunk's 200-local limit)
+    local function coopOpen() return COOP ~= nil and COOP.open == true end
+    local function say(tag, a, b)
+        log(tag .. ": " .. a .. (b and (" (" .. b .. ")") or ""))
+        if D and not coopOpen() then hudCallout(a:upper(), b and b:upper()) end
+    end
+    -- Ctrl+F1: the flight recorder on / off, in any level: every frame, your plane (with the inputs the flight engine
+    -- got) and the plane you have targeted (with the inputs an AI plane's behaviour tree commands) go to
+    -- recordings\flight_<date>_<time>.csv in the mod's folder
+    local recOn = false
+    if Key.F1 then
+        pcall(RegisterKeyBind, Key.F1, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if type(SV_FlightRec) ~= "function" then say("flight recorder", "not in this main.dll", "dev build only"); return end
+                    if recOn then
+                        recOn = false
+                        say("flight recorder", "off", string.format("%d rows saved", SV_FlightRec(0)))
+                        return
+                    end
+                    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+                    if not valid(pawn) then
+                        for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
+                            local p = valid(pc) and pc.Pawn
+                            if valid(p) then pawn = p end
+                        end
+                    end
+                    if not valid(pawn) then say("flight recorder", "no player plane here"); return end
+                    local r = SV_FlightRec(1, addrOf(pawn) or 0)
+                    recOn = r == 1
+                    local okL, loc = pcall(function() return pawn:K2_GetActorLocation() end)
+                    log(string.format("flight recorder: SV_FlightRec %s; the engine puts the plane at %s", tostring(r),
+                        okL and loc and string.format("%.1f %.1f %.1f cm", loc.X, loc.Y, loc.Z) or "?"))
+                    if recOn then say("flight recorder", "on", "target an enemy to record it too")
+                    else say("flight recorder", "could not start", "code " .. tostring(r)) end
+                end)
+                if not ok then log("flight recorder: error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+F2 in a solo run: the test range on / off (user, 2026-10-31: "the AI appears in a free flight mission instead
+    -- of survival for testing"). On: no round starts (one already up runs on; sv_rounds.lua holds the break), enemies
+    -- come only from Ctrl+F3 / Ctrl+6. Off: the next round in 5 s.
+    if Key.F2 then
+        pcall(RegisterKeyBind, Key.F2, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now then log("test range: Ctrl+F2 outside a Survival run"); return end
+                    if coopOpen() and not D.testRange then log("test range: refused, co-op is open (solo runs only)"); return end
+                    D.testRange = not D.testRange
+                    if not D.testRange and D.state == "wait" then D.at, D.announced = D.now + 5, false end
+                    say("test range", D.testRange and "test range" or "test range off",
+                        D.testRange and "no rounds - ctrl+f3 spawns an ace on your nose" or "next round in 5 s")
+                    log(string.format("test range: Ctrl+F2, %s (round %d, %s)", D.testRange and "on" or "off", D.round, D.state))
+                end)
+                if not ok then log("test range: Ctrl+F2 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+F3 in a solo run: a top-level flight (as Ctrl+6, its ace leading: post-stall allowed) 1.5 km ahead of you,
+    -- flying your way at your height (1.5 km at least): you start on the ace's tail, where it Cobras / Kulbits to shake
+    -- you (record it with Ctrl+F1)
+    if Key.F3 then
+        pcall(RegisterKeyBind, Key.F3, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if not D or not D.now or not nativeReady() then log("test range: Ctrl+F3 outside a Survival run"); return end
+                    if coopOpen() then log("test range: Ctrl+F3 refused, co-op is open (solo runs only)"); return end
+                    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+                    if not valid(pawn) then log("test range: Ctrl+F3 without your plane"); return end
+                    local loc, rot = pawn:K2_GetActorLocation(), pawn:K2_GetActorRotation()
+                    local unit
+                    for _, u in ipairs(CFG.pool) do
+                        if not unit and not D.up[u] and not PROBE_OF[u] and not ROLE.sitsOut(u) and flightSize(u) == 2 and SV_UnitAlive(u) <= 0 then unit = u end
+                    end
+                    if not unit then say("test range", "test: no free flight", "try again when some are down"); return end
+                    local yaw, z = rot.Yaw, math.max(loc.Z, 150000)
+                    local pose = { x = loc.X + 150000 * math.cos(math.rad(yaw)), y = loc.Y + 150000 * math.sin(math.rad(yaw)),
+                                   z = z, yaw = yaw % 360, why = "the test range (Ctrl+F3), 1.5 km ahead of you" }
+                    local r = spawnFlight(unit, true, pose)
+                    say("test range", "test: ace on your nose", r > 0 and "1.5 km ahead - stay on its tail" or "could not spawn")
+                    log(string.format("test range: Ctrl+F3, %s 1.5 km ahead at yaw %.0f, %.1f km up: %s", unit, yaw, z / 100000, tostring(r)))
+                end)
+                if not ok then log("test range: Ctrl+F3 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    end)()
     -- Ctrl+9 while VALKA flies the X-02S: her next paint variant (SPC.V.PAINTS), named on the HUD and in the log
     if Key.NINE then
         pcall(RegisterKeyBind, Key.NINE, mods, function()

@@ -10,6 +10,9 @@ cd "$(dirname "$0")"
 OUT=../build/runtime
 DEFS=
 [ "$OFFLINE" = 1 ] && { OUT=../build/runtime/offline; DEFS=-DSV_OFFLINE; }
+# DEV=1 build.sh: the user's own test install's build/runtime/dev/main.dll, compiled with SV_DEV (the flight recorder,
+# recorder.c: SV_FlightRec). Never in a zip for friends: tools/package_dev.sh alone uses it, package_release.sh checks.
+[ "$DEV" = 1 ] && { OUT=../build/runtime/dev; DEFS=-DSV_DEV; }
 mkdir -p "$OUT"
 BIN=../tools/llvm/LLVM/bin
 [ -x "$BIN/clang.exe" ] && PATH="$BIN:$PATH"
