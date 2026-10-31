@@ -90,9 +90,21 @@ function ATK.tick(now)
     end
     if fresh then
         table.sort(set)
-        log(string.format("attackers: your plane's missiles-at-once limits: %s (the game's: planes %s, ships / SAMs %s, chasers %s)",
-            #set > 0 and table.concat(set, ", ") or "as set", tostring(ATK.was.MaxPlaneAttackerMissiles),
-            tostring(ATK.was.MaxNonPlaneAttackerMissiles), tostring(ATK.was.MaxPursuitAttackers)))
+        -- (the attacks' waits too, for the record: the plane's own ranges and the difficulty's modifiers, DT_Difficulty
+        -- CooldownPursuit / NonpursuitAttackTimeModifier: Casual 150 % ... Ace 25 %)
+        local waits = "?"
+        pcall(function()
+            local r1, r2 = pawn.CooldownPursuitAttackTimerRange_CP, pawn.CooldownNonpursuitAttackTimerRange_CP
+            waits = string.format("chasers %.1f-%.1f s, others %.1f-%.1f s", r1.min, r1.max, r2.min, r2.max)
+        end)
+        pcall(function()
+            local row = FindFirstOf("LiveDifficultyManager").CurrentDifficultyDataTableRow
+            waits = waits .. string.format(" (the difficulty's x%.0f%% / x%.0f%%)", row.CooldownPursuitAttackTimeModifier,
+                row.CooldownNonpursuitAttackTimeModifier)
+        end)
+        log(string.format("attackers: your plane's missiles-at-once limits: %s (the game's: planes %s, ships / SAMs %s, chasers %s); "
+            .. "waits between attacks: %s", #set > 0 and table.concat(set, ", ") or "as set", tostring(ATK.was.MaxPlaneAttackerMissiles),
+            tostring(ATK.was.MaxNonPlaneAttackerMissiles), tostring(ATK.was.MaxPursuitAttackers), waits))
     elseif back then
         ATK.reverts = ATK.reverts + 1
         if ATK.reverts == 1 then log("attackers: the game put your plane's limits back; set again (" .. table.concat(set, ", ") .. ")") end
