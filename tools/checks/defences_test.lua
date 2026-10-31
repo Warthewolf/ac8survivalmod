@@ -79,6 +79,19 @@ local FCS_ROWS = {
       MagazineCapacity = 10, PredictionOffsetTime = 0.8, CaptureDistance = 2500.0, CaptureAngleRange = 30.0, ActivationTime = 0.5,
       TriggeringTime = 3.0, TriggerCount = 1, ShotIntervalTime = 3.0, RestingTime = 1.0, bEnableLostTargetInClouds = true,
       YawSpeed = 37.5, YawAngleMin = -60.0, YawAngleMax = 60.0, PitchSpeed = 30.0, PitchAngleMin = 1.0, PitchAngleMax = 60.0 } },
+    -- (the Aegis's Mk 45 and Mk 41, and the ground flak gun the ships' AA mounts go on: 0.73.52)
+    { "NPC_FCS_VesselAAGun000", { NpcAIModuleId = FName("NPC_AIModule_Turret000"), NpcWeaponId = FName("AAGUN_Vessel_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 0.8, CaptureDistance = 2200.0, CaptureAngleRange = 30.0, ActivationTime = 0.5,
+      TriggeringTime = 3.0, TriggerCount = 1, ShotIntervalTime = 3.0, RestingTime = 1.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 30.0, YawAngleMin = -110.0, YawAngleMax = 90.0, PitchSpeed = 30.0, PitchAngleMin = 0.0, PitchAngleMax = 85.0 } },
+    { "NPC_FCS_FlakGun000", { NpcAIModuleId = FName("NPC_AIModule_Turret100"), NpcWeaponId = FName("FlakGun_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 5.0, CaptureDistance = 15000.0, CaptureAngleRange = 15.0, ActivationTime = 0.2,
+      TriggeringTime = 5.0, TriggerCount = 1, ShotIntervalTime = 5.0, RestingTime = 1.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 360.0, YawAngleMin = -180.0, YawAngleMax = 180.0, PitchSpeed = 360.0, PitchAngleMin = 0.0, PitchAngleMax = 90.0 } },
+    { "NPC_FCS_VesselVLSmk41", { NpcAIModuleId = FName("NPC_AIModule_Turret000"), NpcWeaponId = FName("VLS_Vessel_000"),
+      MagazineCapacity = 10, PredictionOffsetTime = 0.0, CaptureDistance = 3000.0, CaptureAngleRange = 180.0, ActivationTime = 2.0,
+      TriggeringTime = 5.0, TriggerCount = 1, ShotIntervalTime = 5.0, RestingTime = 10.0, bEnableLostTargetInClouds = true,
+      YawSpeed = 0.0, YawAngleMin = 0.0, YawAngleMax = 0.0, PitchSpeed = 0.0, PitchAngleMin = 0.0, PitchAngleMax = 0.0 } },
 }
 local WPN_ROWS = {
     { "AAGUN_Ground_000", { MaxSpawnAngle = 1.0, LifeTime = 3.0, bIsHoming = false, DamageAreaLengthMeters = 2000.0,
@@ -87,13 +100,24 @@ local WPN_ROWS = {
       MaxRotationAngle = 15.0, HomingReductionInCloud = 0.5, DamageAreaLengthMeters = 0.0, DamageAreaRadiusMeters = 0.0 } },
     { "CIWS_Vessel_000", { MaxSpawnAngle = 1.0, LifeTime = 3.0, bIsHoming = false, DamageAreaLengthMeters = 0.0,
       DamageAreaRadiusMeters = 0.0 } },
+    { "AAGUN_Vessel_000", { damage = 1.0, MaxSpawnAngle = 1.0, LifeTime = 3.0, bIsHoming = false, DamageAreaLengthMeters = 2200.0,
+      DamageAreaRadiusMeters = 20.0 } },
+    { "FlakGun_000", { damage = 10.0, MaxSpawnAngle = 0.0, LifeTime = 15.0, bIsHoming = true, ImpactRadiusMeters = 18.0,
+      RandRangeMeters = 120.0, HeightLimitRangeMinMeters = 500.0, HeightLimitRangeMaxMeters = 12000.0, DamageAreaLengthMeters = 0.0,
+      DamageAreaRadiusMeters = 0.0 } },
+    { "VLS_Vessel_000", { damage = 40.0, MaxSpawnAngle = 0.0, LifeTime = 9.0, bIsHoming = true, AccelerationKmph = 300.0,
+      SpeedMaxKmph = 3000.0, MaxHomingAngle = 75.0, MaxRotationAngle = 30.0, HomingDelayFromStart = 1.5, HomingReductionInCloud = 0.5,
+      AltitudeAboveTargetMeters = 100.0, DistanceFromTargetMeters = 800.0, OmnidirectionalDuration = 2.0, OmnidirectionalAbility = 120.0 } },
+    { "EXSAM_Ground_000", { damage = 40.0, MaxSpawnAngle = 0.0, LifeTime = 10.0, bIsHoming = true, AccelerationKmph = 300.0,
+      SpeedMaxKmph = 3000.0, MaxHomingAngle = 90.0, MaxRotationAngle = 45.0, HomingDelayFromStart = 0.7, HomingReductionInCloud = 0.5,
+      AltitudeAboveTargetMeters = 100.0, DistanceFromTargetMeters = 900.0, OmnidirectionalDuration = 0.95, OmnidirectionalAbility = 360.0 } },
 }
 local MINE_ROWS = {                               -- DT_SV_NpcRows' allies (tools/build_survival.py build_npc_rows)
     { "SV_Ally_Moonchild", npcRow() }, { "SV_Ally_Wingmen", npcRow() }, { "SV_Ally_Aegis", npcRow() },
     { "SV_Def_Gepa", npcRow("NPC_FCS_VehicleAAGun000") }, { "SV_Def_Avng", npcRow("NPC_FCS_VehicleSAM001") },
     { "SV_Def_Ciws", npcRow() },                  -- (GR033_ciws_01's: no fire control row of its own)
-    { "SV_Turret_aegs_mk15_Ally", npcRow("NPC_FCS_VesselCIWS000") }, { "SV_Turret_aegs_mk41_Ally", npcRow() },
-    { "SV_Turret_aegs_mk45_Ally", npcRow() }, { "SV_Turret_aegs_artillery_Ally", npcRow() },
+    { "SV_Turret_aegs_mk15_Ally", npcRow("NPC_FCS_VesselCIWS000") }, { "SV_Turret_aegs_mk41_Ally", npcRow("NPC_FCS_VesselVLSmk41") },
+    { "SV_Turret_aegs_mk45_Ally", npcRow("NPC_FCS_VesselAAGun000") }, { "SV_Turret_aegs_artillery_Ally", npcRow() },
 }
 local T = {}
 local function tables(mineRows)
@@ -211,7 +235,8 @@ do                                                -- (its reach: from 500 km/h, 
           reach / 1000, sam.CaptureDistance / 1000, (500 / 3.6 * 7.3 + 300 / 3.6 * 7.3 * 7.3 / 2) / 1000))
 end
 check(has(fcsLine, "NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.8")
-      and has(fcsLine, " s, 5.00 -> 1.25 s between, rest 10.00 -> 2.50 s")
+      and has(fcsLine, string.format(" s, 5.00 -> %.2f s between, rest 10.00 -> %.2f s", 5.0 * tx * DEF.fcs.fire_x * mc.salvo_x,
+              10.0 * tx * DEF.fcs.fire_x * mc.salvo_x))
       and has(fcsLine, "missile SAM_Ground_000_SVA_Defence: 7.3 -> 30 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5"),
       "the log line: the SAM sites' before -> after")
 -- the CIWS
@@ -239,9 +264,69 @@ end
 local mk15 = T.fcs:FindRow("NPC_FCS_VesselCIWS000_SVA_Aegis")
 local mk15w = T.wpn:FindRow("CIWS_Vessel_000_SVA_Aegis")
 check(mk15 and mk15.CaptureDistance == 2500 * SHIPCFG.fcs.range_x and mk15.YawAngleMin == -60 and mk15.YawSpeed == 37.5
-      and mk15w and mk15w.LifeTime == 3.0 and T.npc:FindRow("SV_Ally_Aegis").MaxHealthDifference == SHIPCFG.health_add
+      and mk15w and mk15w.LifeTime == 3.0 * (SHIPCFG.fcs.round_reach and SHIPCFG.fcs.range_x or 1)   -- (its rounds reach its lock-on: 0.73.52)
+      and T.npc:FindRow("SV_Ally_Aegis").MaxHealthDifference == SHIPCFG.health_add
       and T.mod:FindRow("NPC_AIModule_SV_Aegis") and T.mod:FindRow("NPC_AIModule_SV_Aegis").Radius == SHIPCFG.fcs.search_m,
-      "the Aegis's Mk 15 its own row as before (x2 range, +-60, rounds 3 s), its hull +300, its 25 km search")
+      "the Aegis's Mk 15 its own row (x3 range, +-60, rounds out to it), its hull +300, its own search")
+-- the Aegis's Mk 45: its AA gun a flak gun (0.73.52: "change the AA to FLAK GUNS", "the same stats as the Boosted AA guns")
+do
+    local fk, sfc = SHIPCFG.fcs.flak, SHIPCFG.fcs
+    local mk45 = T.npc:FindRow("SV_Turret_aegs_mk45_Ally")
+    local fl = T.fcs:FindRow("NPC_FCS_VesselAAGun000_SVA_Aegis")
+    local fw = T.wpn:FindRow("FlakGun_000_SVA_Aegis")
+    check(fk and fk.enabled ~= false and mk45 and mk45.NpcFCSId0:ToString() == "NPC_FCS_VesselAAGun000_SVA_Aegis" and fl
+          and fl.NpcWeaponId:ToString() == "FlakGun_000_SVA_Aegis" and T.wpn:FindRow("AAGUN_Vessel_000_SVA_Aegis") == nil,
+          "the Mk 45 on its own fire control, which fires the flak's shells (FlakGun_000_SVA_Aegis), no AA rounds")
+    check(fl and fl.CaptureDistance == fk.range_m and near(fl.ShotIntervalTime, 3.0 * tx * sfc.fire_x) and near(fl.RestingTime, 1.0 * tx * sfc.fire_x)
+          and near(fl.ActivationTime, 0.5 * tx * sfc.lock_x) and near(fl.TriggeringTime, 3.0 * tx * sfc.lock_x)
+          and fl.YawAngleMin == -110 and fl.YawAngleMax == 90 and fl.PitchAngleMax == 85 and near(fl.CaptureAngleRange, math.min(180, 30 * CFG.allies.fcs.angle_x))
+          and fl.YawSpeed == 360 and fl.PredictionOffsetTime == 5.0 and fl.NpcAIModuleId:ToString() == "NPC_AIModule_SV_Aegis",
+          string.format("flak: %d m reach, the AA gun's timings x the boosts (%.2f s between), the mount's arcs (-110..90), the flak's slew and lead, the search",
+              fl and fl.CaptureDistance or -1, fl and fl.ShotIntervalTime or -1))
+    check(fw and near(fw.damage, 10 * fk.damage_x) and near(fw.RandRangeMeters, 120 * CFG.allies.fcs.spread_x * sfc.gun_spread_x)
+          and near(fw.ImpactRadiusMeters, 18 * sfc.round_width_x) and fw.HeightLimitRangeMinMeters == fk.min_alt_m and fw.LifeTime == 15,
+          string.format("flak shells: damage %s, bursts within %s m, %s m round, from %s m up, 15 s of flight (no missile's)",
+              tostring(fw and fw.damage), tostring(fw and fw.RandRangeMeters), tostring(fw and fw.ImpactRadiusMeters),
+              tostring(fw and fw.HeightLimitRangeMinMeters)))
+    check(has(fcsLine, "NPC_FCS_VesselAAGun000_SVA_Aegis (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m")
+          and has(fcsLine, "flak FlakGun_000_SVA_Aegis: damage 10 -> 20, bursts within 120 -> 24 m, 18 -> 27 m round, from 500 -> 50 m up"),
+          "the log line: the Mk 45 on flak")
+    -- the Aegis's Mk 41: its missiles home as the EXSAM's
+    local mc = sfc.missile
+    local vl = T.fcs:FindRow("NPC_FCS_VesselVLSmk41_SVA_Aegis")
+    local vw = T.wpn:FindRow("VLS_Vessel_000_SVA_Aegis")
+    check(vl and vl.CaptureDistance == mc.range_m and near(vl.ShotIntervalTime, 5.0 * tx * sfc.fire_x * mc.salvo_x)
+          and near(vl.RestingTime, 10.0 * tx * sfc.fire_x * mc.salvo_x) and mc.salvo_x < 1,
+          string.format("Mk 41: lock-on %s m, less waiting (salvo_x %s: %.2f s between, rest %.2f s)", tostring(vl and vl.CaptureDistance),
+              tostring(mc.salvo_x), vl and vl.ShotIntervalTime or -1, vl and vl.RestingTime or -1))
+    check(mc.homing_from == "EXSAM_Ground_000" and vw and vw.MaxHomingAngle == 90 and near(vw.MaxRotationAngle, 45 * mc.turn_x)
+          and vw.HomingDelayFromStart == 0.7 and vw.OmnidirectionalDuration == 0.95 and vw.OmnidirectionalAbility == 360
+          and vw.DistanceFromTargetMeters == 900 and vw.damage == 40 and vw.LifeTime == mc.life_s,
+          "Mk 41 missiles: the EXSAM's homing (90, turn 45 x turn_x, delay 0.7, 0.95 s / 360 all round, 900 m), then the boosts")
+    check(has(fcsLine, "missile VLS_Vessel_000_SVA_Aegis: 9.0 -> 45 s") and has(fcsLine, "turns 30.0 -> 67.5, homing as EXSAM_Ground_000 (6 of 6)"),
+          "the log line: the Mk 41's missiles homing as the EXSAM's")
+    -- the CIWS isn't an AA gun: as it was
+    check(T.wpn:FindRow("CIWS_Vessel_000_SVA_Aegis") and T.fcs:FindRow("NPC_FCS_VesselCIWS000_SVA_Aegis").NpcWeaponId:ToString() == "CIWS_Vessel_000_SVA_Aegis",
+          "the Mk 15 (CIWS) not on flak")
+    -- flak.enabled = false: the AA gun as before; homing_from none: the missiles' own homing
+    fk.enabled, mc.homing_from = false, "none"
+    local f2 = setup()
+    local fl2 = T.fcs:FindRow("NPC_FCS_VesselAAGun000_SVA_Aegis")
+    local vw2 = T.wpn:FindRow("VLS_Vessel_000_SVA_Aegis")
+    check(fl2 and fl2.NpcWeaponId:ToString() == "AAGUN_Vessel_000_SVA_Aegis" and fl2.CaptureDistance == 2200 * sfc.range_x
+          and T.wpn:FindRow("FlakGun_000_SVA_Aegis") == nil and vw2 and vw2.MaxHomingAngle == 75 and vw2.HomingDelayFromStart == 1.5,
+          "flak.enabled = false: an AA gun (x3 reach, AA rounds); homing_from none: the Mk 41's own homing")
+    fk.enabled, mc.homing_from = true, "EXSAM_Ground_000"
+    -- a game without the flak's row: the AA gun as before, logged
+    local keep = fk.fcs
+    fk.fcs = "NPC_FCS_NotThere000"
+    f2 = setup()
+    check(T.fcs:FindRow("NPC_FCS_VesselAAGun000_SVA_Aegis").NpcWeaponId:ToString() == "AAGUN_Vessel_000_SVA_Aegis"
+          and line("allies: Aegis's AA gun NPC_FCS_VesselAAGun000 NOT on flak (no row NPC_FCS_NotThere000): an AA gun as before", f2),
+          "no flak row in the game's table: the AA gun as before, logged")
+    fk.fcs = keep
+    setup()
+end
 
 print("ALLY.setup: the CIWS's fire control choices, a container without its row")
 DEF.ciws.fcs_row = "none"
