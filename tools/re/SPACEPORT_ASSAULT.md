@@ -217,3 +217,14 @@ no ships); add `spaceport` to the rotation once a test has run it.
   boat's SAM; tools/survival_events.py sp_parts, the build asserts the names against the world data).
 - The same log's fighters: their special weapons carried (2AAM, HCAA on the Su-33 / Su-47 / F-15E) but never fired in
   5 minutes while their standard missiles fired 21 times: the user's hunch about the enemies' specials (see AGENTS.md).
+- The same test, the capture (17:59:29, 20 troop vehicles in): the craft were recalled, but the round never ended (user:
+  "after the spaceport was captured, the next round didn't start"): six fighters were still up (the round's Su-47 pair
+  and two pairs off the Ford's deck), and a round ends only with its aircraft down. And "the Missile Boats don't Partol
+  Around Either": they held their spots by design.
+- 0.73.41-coop2mp.42: at the capture the round's fighters fall back (sv_spaceport.lua withdraw: every pool flight up
+  despawned by RE_SV_FlightOff_NN, Mission 22's LiveSetActiveGameObjectExecution false on its unit; off D.up, since a
+  despawned unit can still read alive (the shuttle's read 1 once); its planes marked down, no pay; the round's queue,
+  spares and later waves dropped; no more deck launches): `special: the round's fighters fall back with the capture: N
+  flights (M aircraft) taken off: ...`; the round ends, its break, then the retake. Each missile boat patrols its side of
+  its lane, 4 km to 9 km ahead of its Wasp and back (SV_Path_SpBoat<K>Out / Back on a Mission 22 ship lane's shape, the
+  STORE ships' path records at 90 km/h, PathFinish to the other leg).

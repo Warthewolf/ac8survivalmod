@@ -970,10 +970,16 @@ def spaceport_units(units, used_ids, z, top_number, v):
         port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
                   [c['beach']], c['yaw'], top_number)
         set_bools(unit_by(c['troops']), ('bIsInvincible', 'bIsAttackTargetsException'))   # (this round: can't be shot)
+    lane = desc_named(v, 'AIPathDescList', survival_events.SP_BOAT_PATH_TEMPLATE)   # the boats' patrols (a ship lane's shape)
+    boats = [s for s in survival_events.sp_fleet() if s['kind'] == 'boat']
+    for s in boats:
+        paths.append(make_path(z, used_ids, lane, s['out_path'], s['out_pts']))
+        paths.append(make_path(z, used_ids, lane, s['back_path'], s['back_pts']))
     for unit, obj, pts in survival_events.sp_garrison():          # the retake's: on the spot, targets
         port_unit(units, used_ids, z, src_troop, unit, obj, survival_events.LCAC_TROOP_ROW, pts, 180.0, top_number, tgt=True)
     print(f'  spaceport assault: ' + ', '.join(f'{n} {k}' for k, n in count.items()) + f'; {len(waves)} landing waves '
-          f'({len(craft)} craft, {len(craft) * 3} paths, {len(craft)} troop units), {len(survival_events.sp_garrison())} garrison units')
+          f'({len(craft)} craft, {len(craft) * 3} paths, {len(craft)} troop units), {len(boats)} boat patrols, '
+          f'{len(survival_events.sp_garrison())} garrison units')
 
 
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):

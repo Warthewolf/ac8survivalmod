@@ -733,6 +733,11 @@ fleet's 68 turrets its own order (Mission 16's Default_RemoteEvent_20: Normal, P
 asserted against the world data). The STORE's allied Aegis (ally_units / build_allies) still have the hull's order only:
 likely why they "didn't seem to fire all that much" (2026-10-23). The same log: the fighters carried their specials
 (2AAM, HCAA) and never fired one in 5 minutes, their standard missiles 21 times.
+0.73.41-coop2mp.42 (built 2026-10-31, zip 0.73.41, hash d268bffd...e5ef4d; installed when AC8 was closed; not yet run in
+game): the same test's capture never ended the round (six fighters still up: a round ends only with its aircraft
+down): the capture now despawns the round's pool flights (RE_SV_FlightOff_NN, Mission 22's LiveSetActiveGameObject false,
+and off D.up: a despawned unit can still read alive) and drops its queue and later waves, so the break and the retake
+follow; the missile boats patrol their lanes (4-9 km ahead of their Wasp and back, Mission 22 ship lane shape, 90 km/h).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

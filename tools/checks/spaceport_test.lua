@@ -118,7 +118,7 @@ local function spawned(pat) local t = {}; for _, s in ipairs(spawns) do if s.uni
 local function called(text) for _, c in ipairs(callouts) do if c.text == text then return c end end end
 local function paid(pat) local n = 0; for _, c in ipairs(credits) do if tostring(c.why):find(pat) then n = n + c.n end end; return n end
 local function fresh(round)
-    alive, events, spawns, callouts, credits, flights, FLAGS = {}, {}, {}, {}, {}, {}, {}
+    alive, events, spawns, callouts, credits, flights, FLAGS, planes = {}, {}, {}, {}, {}, {}, {}, {}
     RUN = { kills = 0 }
     D = { round = round or 10, state = "fighting", now = 0, at = 0, up = {}, flown = {}, queue = {}, spare = {},
           events = {}, orders = {}, taken = {}, special = { kind = "spaceport", state = "pending" } }
@@ -201,6 +201,10 @@ run(s, now + 0.25, now + 1)
 check(paid("landing craft down") > 0, "a craft shot down: paid")
 
 print("100 %: captured")
+local ER = CFG.pool[1]                          -- (a pool flight of the round still up, and one queued)
+D.up[ER], alive[ER] = true, 2
+planes = { { unit = ER, obj = { full = "p" } } }
+D.queue, D.state = { CFG.pool[2] }, "spawning"
 s.capture = 100 - SP.capture_per_troop
 FLAGS.SV_SpLandDXL = 1
 for _ = 1, 25 do now = now + 0.25; SPORT.tick(now, s) end
@@ -210,6 +214,9 @@ check(s.captured and RUN.sport and RUN.sport.retakeRound == D.round + 1, "captur
 check(called(T.sp_captured) ~= nil, "SPACEPORT CAPTURED")
 check(evs("^RE_SV_SpLcacRemove") ~= "", "the craft out recalled")
 check(SPORT.busy(s) == false, "captured: the round no longer waits for the fleet")
+check(evs("^RE_SV_FlightOff_%d%d$"):find(string.format("RE_SV_FlightOff_%02d", poolIndex(ER)), 1, true) and next(D.up) == nil
+    and planes[1].down and #D.queue == 0 and D.state == "fighting",
+    "the round's fighters fall back (its own and the deck's): RE_SV_FlightOff_NN each, D.up empty, marked down, the queue dropped (" .. evs("^RE_SV_FlightOff") .. ")")
 local before = #spawned("^SV_Unit_SpLcac")
 run(s, now + 0.25, now + SP.wave_every_s + 5)
 check(#spawned("^SV_Unit_SpLcac") == before, "no more waves once captured")

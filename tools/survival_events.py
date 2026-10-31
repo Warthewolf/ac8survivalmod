@@ -1367,6 +1367,9 @@ SP_FORD_SEA = 4                                  # the carrier group's mark
 SP_SHIP_Z = {'aegis': 300.0, 'wasp': 0.0, 'boat': 0.0, 'ford': 50.0}    # their sources' heights
 SP_AEGIS_AHEAD_CM, SP_AEGIS_SIDE_CM = 150000.0, 45000.0    # a group's Aegis: ahead of the Wasp, either side of its lane
 SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM = 400000.0, 35000.0      # its missile boats
+# each boat patrols its side of the lane, from SP_BOAT_AHEAD_CM to SP_BOAT_PATROL_CM ahead of the Wasp and back (the user's
+# test of 2026-10-31: "the Missile Boats don't Partol Around Either"), at SP_BOAT_SPEED, on a Mission 22 ship lane's shape
+SP_BOAT_PATROL_CM, SP_BOAT_SPEED, SP_BOAT_PATH_TEMPLATE = 900000.0, '90', '01_Ship1_grig_0_Path0'
 SP_RING_CM, SP_RING_DEG = 180000.0, [30, 90, 150, 210, 270, 330]   # the carrier's Aegis (none dead ahead: a Wasp's there)
 SP_SHIP_AREA_M, SP_SHIP_ALT_M = 25000.0, (0.0, 15000.0)    # as the STORE's ships (ALLY_SHIP_AREA_M): their turrets reach
 SP_WAVES = 'VWXYZ'                               # a lane's craft units (letters: hard rule 17)
@@ -1426,8 +1429,14 @@ def sp_fleet():
                 key = next(keys)
                 x, y = sx + ux * ahead - uy * side * sgn, sy + uy * ahead + ux * side * sgn
                 name = 'Aegis' if kind == 'aegis' else 'Boat'
-                out.append(dict(kind=kind, key=key, unit=f'SV_Unit_Sp{name}{key}', obj=f'SV_Obj_Sp{name}{key}',
-                                point=(x, y, SP_SHIP_Z[kind]), yaw=L['yaw'], group=L['group']))
+                s = dict(kind=kind, key=key, unit=f'SV_Unit_Sp{name}{key}', obj=f'SV_Obj_Sp{name}{key}',
+                         point=(x, y, SP_SHIP_Z[kind]), yaw=L['yaw'], group=L['group'])
+                if kind == 'boat':                    # its patrol, out along the lane and back
+                    at = lambda d: (sx + ux * d - uy * side * sgn, sy + uy * d + ux * side * sgn, SP_SHIP_Z['boat'])
+                    legs = [SP_BOAT_AHEAD_CM + (SP_BOAT_PATROL_CM - SP_BOAT_AHEAD_CM) * t for t in (0.0, 0.34, 0.67, 1.0)]
+                    s.update(out_path=f'SV_Path_SpBoat{key}Out', back_path=f'SV_Path_SpBoat{key}Back',
+                             out_pts=[at(d) for d in legs], back_pts=[at(d) for d in reversed(legs)])
+                out.append(s)
     for deg in SP_RING_DEG:
         key = next(aegis)
         a = math.radians(fyaw + deg)
@@ -1798,6 +1807,27 @@ def build_spaceport(g, flag, stock_ep):
         for p in sp_parts(s):                              # (and each turret its own: the Ladon's CIWS order)
             g.execute(t_part, up, {0: p}, delay=2.5)
             parts += 1
+    # the missile boats' patrols (the STORE's ships' lane records, Mission 22's): out at once, back at its end, out again
+    t_spath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
+    t_upath2 = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
+    for s in fleet:
+        if s['kind'] != 'boat': continue
+        up = f"SV_SpShipUpBoat{s['key']}"
+        g.execute(t_spath, up, {0: s['obj'], 2: s['out_path'], 4: SP_BOAT_SPEED}, delay=1.0)
+        g.execute(t_upath2, up, {1: s['unit'], 2: s['out_path']}, delay=1.0)
+        for ev, done, nxt in ((f"SV_SpBoatOut{s['key']}", s['out_path'], s['back_path']),
+                              (f"SV_SpBoatBack{s['key']}", s['back_path'], s['out_path'])):
+            g.trigger(finish, ev, arg_changes={0: s['obj'], 2: done})
+            g.execute(t_spath, ev, {0: s['obj'], 2: nxt, 4: SP_BOAT_SPEED}, delay=1.0)
+            g.execute(t_upath2, ev, {1: s['unit'], 2: nxt}, delay=1.0)
+    # the round's fighters falling back when the spaceport is captured (Scripts/sv_spaceport.lua withdraw: the round can
+    # end and the retake come; the user's test of 2026-10-31: "after the spaceport was captured, the next round didn't
+    # start", six fighters still up): RE_SV_FlightOff_NN, Mission 22's own despawn on the pool flight's unit
+    t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
+    for k, unit in enumerate(POOL):
+        ev = f'RE_SV_FlightOff_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_off, ev, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_SpFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
