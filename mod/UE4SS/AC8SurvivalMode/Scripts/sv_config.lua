@@ -656,6 +656,10 @@ CFG = {
             -- appears (user, 2026-10-29: "tu-95's aren't attacking the base, they fly around nearby and do nothing":
             -- with their area over the runway they circled 6-8 km out). false: no path (they circle again).
             drop_km = 3.0, run_cooldown_s = 20, bomb_damage = 10, damage_delay_s = 5, heavy_route = true, route_delay_s = 3,
+            -- the minimap's alert (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are attacking
+            -- the airfield"): each bomber flight heading for the airfield is pinged on the radar every every_s while one of
+            -- its aircraft is within within_km of it (the game's own "look here" ping on its unit, four ripples)
+            ping = { enabled = true, every_s = 12, within_km = 40 },
         },
     },
     -- Credits (Milestone 4): earned for every enemy aircraft that goes down (by its flight: bomber flights pay
@@ -851,6 +855,9 @@ CFG = {
         -- it has no weapons).
         awacs        = { enabled = true, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
                          row = "SV_Ally_VoidWatcher",
+                         -- its model row (tools/build_survival.py: Magnolia's under the game's plain E-767 name), added
+                         -- to the campaign's DT_NPC_Model at the main menu (no "MAGNOLIA" on its box)
+                         model = "SV_Model_VoidWatcher",
                          esm = { event = "RE_SV_AwacsEsm", every_s = 20, range_m = 25000, life_s = 24, capture_m = 60000,
                                  class = "BP_wp_esm_MS28_C" },
                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
@@ -1848,7 +1855,7 @@ CFG_DEFAULTS = deepCopy(CFG)
 -- true / false, text, or a comma list for a list field. [squadrons] keys are squadron sizes (value: from_round).
 -- Read once at start (the main menu builds Survival's NPC rows from CFG), so changes need a game restart.
 do                                 -- (its helpers stay inside: the main chunk's 200-local limit)
-local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bombers", skill = "tiers",
+local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bombers", ["bombers.ping"] = "airfield.bombers.ping", skill = "tiers",
                     ["skill.difficulty"] = "tiers.rank_add", enemy_missiles = "missiles", enemy_guns = "guns",
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
                     ["ammo.ace"] = "ammo.presets.ace",

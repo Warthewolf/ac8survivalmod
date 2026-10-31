@@ -146,13 +146,58 @@ from = #logs + 1
 JAM.tick()
 check(evs("JamEcm") == "" and since(from, "isn't its flight's lead") == 1, "not its flight's lead: no pod, logged")
 
+---------------------------------------------------------------------------------------------------- the raid's minimap pings
+-- (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are attacking the airfield")
+print("raidPings: each bomber flight near the airfield pinged on the minimap")
+do
+    local function count(pat) local n = 0; for _, e in ipairs(events) do if e:find(pat) then n = n + 1 end end; return n end
+    local S1 = CFG.airfield.bombers.pool[1]
+    local pg = CFG.airfield.bombers.ping
+    fresh()
+    D.up[S1], D.up[H1] = true, true
+    plane(S1, 0, "su34"); plane(H1, 0, "tu95")          -- (both 20 km out)
+    local from = #logs + 1
+    bombTick(2)
+    check(count(string.format("^RE_SV_RaidPing_%02d$", BOMBER_INDEX[S1])) == 1 and count(string.format("^RE_SV_RaidPing_%02d$", BOMBER_INDEX[H1])) == 1
+          and since(from, "pinged on the minimap, 20.0 km from the airfield") == 2, "a strike and a heavy flight 20 km out: each pinged, logged once")
+    bombTick(6); bombTick(46)
+    check(count("^RE_SV_RaidPing_") == 2, "not again within every_s (" .. pg.every_s .. " s)")
+    bombTick(50)
+    check(count("^RE_SV_RaidPing_") == 4 and since(from, "pinged on the minimap") == 2, "every_s on: both again (logged only the first time)")
+    fresh()
+    D.up[S1] = true
+    D.shipStrike = { [S1] = "SV_Unit_ShipAegisA" }
+    plane(S1, 0, "su34")
+    bombTick(2)
+    check(count("^RE_SV_RaidPing_") == 0, "a flight sent at an allied ship: not pinged (it isn't attacking the airfield)")
+    fresh()
+    D.up[S1] = true
+    local far = plane(S1, 0, "su34")
+    function far.obj:K2_GetActorLocation() return { X = AIRFIELD.X + (pg.within_km + 5) * 100000, Y = AIRFIELD.Y, Z = 200000 } end
+    bombTick(2)
+    check(count("^RE_SV_RaidPing_") == 0, "farther than within_km (" .. pg.within_km .. " km): not pinged")
+    fresh()
+    D.up[S1] = true
+    plane(S1, 0, "su34")
+    local rawCoop = COOP
+    COOP = { client = function() return true end }
+    bombTick(2)
+    check(count("^RE_SV_RaidPing_") == 0, "a co-op joiner: none of its own (the host's are forwarded)")
+    COOP = rawCoop
+    pg.enabled = false
+    bombTick(6)
+    check(count("^RE_SV_RaidPing_") == 0, "[bombers.ping] enabled = false: none")
+    pg.enabled = true
+end
+
 ---------------------------------------------------------------------------------------------------- the build in step
 print("the build's sectors and names")
 do
     local ev = readAll(MOD .. "/../../../tools/survival_events.py")
     check(ev:find('HEAVY_SECTORS = \'' .. HEAVY_SECTORS .. '\'', 1, true) ~= nil, "survival_events.HEAVY_SECTORS is sv_flights' " .. HEAVY_SECTORS)
     check(ev:find("RE_SV_HeavyRoute_{n:02d}{s}", 1, true) and ev:find("RE_SV_HeavyLoop_{H[\"n\"]:02d}{chr(65 + j)}{H[\"sector\"]}", 1, true)
-          and ev:find("RE_SV_JamEcm_{k + 1:02d}", 1, true), "the build makes the events Lua fires")
+          and ev:find("RE_SV_JamEcm_{k + 1:02d}", 1, true) and ev:find("ping = f'RE_SV_RaidPing_{k + 1:02d}'", 1, true),
+          "the build makes the events Lua fires")
 end
 
 print(fails == 0 and "heavy test: all passed" or ("heavy test: " .. fails .. " FAILED"))

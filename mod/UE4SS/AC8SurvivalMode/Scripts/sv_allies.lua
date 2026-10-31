@@ -205,7 +205,21 @@ function ALLY.setup()
         end
         if row == WINGMEN_ROW then ALLY.wingmenReady = have ~= nil end
         if row == CIWS_ROW then ALLY.ciwsReady = have ~= nil end
-        if row == AWACS_ROW then ALLY.awacsReady = have ~= nil end
+        if row == AWACS_ROW then
+            -- (its model row into DT_NPC_Model first: Survival's copy of Magnolia's under the plain E-767 name; without
+            -- it the row names a model the game hasn't, and it isn't sold)
+            local mt, mr = loadObject(ACE.model_table), loadObject(ACE.model_rows)
+            for _, t in ipairs({ mt, mr }) do if t then pin(t, nameOf(t)) end end
+            local mk = CFG.allies.awacs.model
+            local _, mh = nil, nil
+            if mt then _, mh = dtCall(mt, "FindRow", mk) end
+            if mh == nil and mt and mr then
+                local _, r = dtCall(mr, "FindRow", mk)
+                if r ~= nil then dtCall(mt, "AddRow", mk, r); _, mh = dtCall(mt, "FindRow", mk) end
+            end
+            log(string.format("allies: %s's model %s %s", CFG.allies.awacs.name, mk, mh ~= nil and "in DT_NPC_Model" or "NOT added"))
+            ALLY.awacsReady = have ~= nil and mh ~= nil
+        end
         if have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW and row ~= AWACS_ROW then n = n + 1 end
         local sh = ROW_SHIP[row] and CFG.allies.ships[ROW_SHIP[row]]
         local dk = DEF_ROW_KIND[row] and defs[DEF_ROW_KIND[row]]

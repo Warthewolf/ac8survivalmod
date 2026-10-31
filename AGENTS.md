@@ -674,6 +674,20 @@ had a freed outer; valid() (UE4SS's IsValid) checks only the object, and a pcall
 uobj_test), SV_ObjChain(address) for Lua, and sv_core.lua nameOf answers "?" without asking UE4SS when the chain isn't
 live (every name read goes through it; the shore marker's trace-hit name too). Not yet run in game. Lesson (not a hard
 rule yet): UE4SS's GetFullName on a FindAllOf result isn't safe in a frame where widgets are being torn down.
+0.73.35-coop2mp.36 (runtime 0.32.10; built and installed 2026-10-31, zip 0.73.35, hash 4e9083c3...dbda76; not yet
+run in game): (1) raid pings (user, 2026-10-31: "an alert that pings the
+aircraft via the minimap that are attacking the airfield"): RE_SV_RaidPing_NN, Mission 22's own LiveBattleNavigationExecution
+(its shuttle / control-centre "look here", template Default_PreRadioEvent_28: {tag, unit, Quadruple, false}) on bomber
+flight NN's unit; sv_flights.lua raidPings (from bombTick, once a second, the host's or solo: forwarded) fires it every
+[bombers.ping] every_s 12 while a flight up and not sent at an allied ship has an aircraft within within_km 40 of the
+airfield (`bombers: <unit> pinged on the minimap ...` once a flight; heavy_test). (2) VOID WATCHER 1's ESM never came on
+(reported by players on 0.73.33): OP0005_e767_MS28's fire control is NpcFCSId0 PlaneFlr100, 1 and 2 empty, NpcFCSId3
+MS28ESM000 (the compact research table had dropped the empty slots), so the ESM is WN_WEAPON_4, not 0.73.33's
+WN_WEAPON_2. (3) its box read MAGNOLIA (user: "Delete the MAGNOLIA tag from the EW aircraft"): the model row
+OP0005_e767_Ally_Magnolia's GameObjectDisplayName01 is ContainerAllyCallsign_Name_Magnolia; Survival's copy
+SV_Model_VoidWatcher (DT_SV_ModelRows, from the campaign's DT_NPC_Model) keeps its blueprint and paint under
+ContainerAircraft_Name_e767, the NPC row names it, and sv_allies.lua adds it to DT_NPC_Model at the main menu (not
+sold without it). defences_test covers both.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

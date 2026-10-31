@@ -551,13 +551,33 @@ do
         CaptureAngleRange = 60.0, ActivationTime = 2.0, TriggeringTime = 15.0, ShotIntervalTime = 15.0, RestingTime = 30.0 } }
     local rows = {}
     for _, r in ipairs(MINE_ROWS) do rows[#rows + 1] = r end
-    rows[#rows + 1] = { AW.row, npcRow("NPC_FCS_PlaneFlr100", { NpcFCSId1 = FName("NPC_FCS_MS28ESM000") }) }
-    ALLY.awacsReady = nil
-    local from = setup(rows)
+    -- (its ESM in slot 3, as OP0005_e767_MS28's: NpcFCSId1 and 2 empty; WN_WEAPON_4, hard rule 40)
+    rows[#rows + 1] = { AW.row, npcRow("NPC_FCS_PlaneFlr100", { NpcFCSId3 = FName("NPC_FCS_MS28ESM000") }) }
+    -- its model row: none in the game's DT_NPC_Model yet, Survival's in DT_SV_ModelRows
+    local function setupAwacs(withModel)
+        tables(rows)
+        setPaths()
+        T.mt = dt("DT_NPC_Model")
+        T.mr = dt("DT_SV_ModelRows", withModel and { { AW.model, { GameObjectDisplayName01 = "ContainerAircraft_Name_e767" } } } or {})
+        paths[ACE.model_table], paths[ACE.model_rows] = T.mt, T.mr
+        ALLY.setupDone, ALLY.tries, ALLY.ready, ALLY.ciwsReady, ALLY.wingmenReady, ALLY.awacsReady = nil, nil, nil, nil, nil, nil
+        SR.done = true
+        local f = #logs + 1
+        ALLY.setup()
+        return f
+    end
+    setupAwacs(false)
+    check(ALLY.awacsReady == false and line("allies: VOID WATCHER 1's model SV_Model_VoidWatcher NOT added") ~= nil,
+          "its model row missing: not sold (its row would name a model the game hasn't)")
+    local from = setupAwacs(true)
     local r = T.npc:FindRow(AW.row)
     local esm = T.fcs:FindRow("NPC_FCS_MS28ESM000_SVA")
-    check(ALLY.awacsReady == true and r and r.NpcFCSId1:ToString() == "NPC_FCS_MS28ESM000_SVA" and has(line("rows in DT_NPC", from), "VOID WATCHER 1 in"),
-          "its row in DT_NPC, its ESM on fire control of its own (" .. tostring(line("rows in DT_NPC", from)) .. ")")
+    check(T.mt:FindRow(AW.model) and has(line("allies: VOID WATCHER 1's model SV_Model_VoidWatcher in DT_NPC_Model", from), "in DT_NPC_Model"),
+          "its model row (Magnolia's, the plain E-767 name: no MAGNOLIA tag) into DT_NPC_Model")
+    check(ALLY.awacsReady == true and r and r.NpcFCSId3:ToString() == "NPC_FCS_MS28ESM000_SVA" and has(line("rows in DT_NPC", from), "VOID WATCHER 1 in"),
+          "its row in DT_NPC, its ESM (slot 3) on fire control of its own (" .. tostring(line("rows in DT_NPC", from)) .. ")")
+    check(has(readAll(MOD .. "/../../../tools/survival_events.py"), "AWACS_ESM_SLOT = 'WN_WEAPON_4'"),
+          "the build fires its ESM's slot: WN_WEAPON_4 (slot 3; 0.73.33's WN_WEAPON_2 was an empty one)")
     check(esm and esm.CaptureDistance == AW.esm.capture_m and esm.RestingTime == 0.5 and esm.ShotIntervalTime == 0.5
           and esm.CaptureAngleRange == 180 and has(line("allies: VOID WATCHER 1's ESM on NPC_FCS_MS28ESM000_SVA: within 60000 m", from), "ready again"),
           "its ESM's fire control: within 6000 -> 60000 m, all round, ready again in 0.5 s (rest 30 s stock)")

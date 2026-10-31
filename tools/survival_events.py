@@ -520,7 +520,15 @@ AWACS_ROW_TEMPLATE = 'e767_common'
 AWACS_NPC = 'SV_Ally_VoidWatcher'            # DT_SV_NpcRows: AWACS_SOURCE_NPC under name key AWACS_NAME_KEY
 AWACS_SOURCE_NPC = 'OP0005_e767_MS28'
 AWACS_NAME_KEY = 'SV_VoidWatcher'            # its text, VOID WATCHER 1, set by Lua (SV_SetText)
-AWACS_ESM_SLOT = 'WN_WEAPON_2'               # its row's fire control: PlaneFlr100, MS28ESM000 (hard rule 40)
+# its row's fire control: NpcFCSId0 PlaneFlr100, 1 and 2 empty, NpcFCSId3 MS28ESM000, so its ESM is WN_WEAPON_4 (hard rule
+# 40: slot n - 1). 0.73.33 fired WN_WEAPON_2, an empty slot: "it's being reported that ESM is not turning on at all"
+AWACS_ESM_SLOT = 'WN_WEAPON_4'
+# its model row: Survival's copy of Magnolia's (OP0005_e767_Ally_Magnolia: its blueprint and 01c paint) with the game's
+# plain E-767 name, not ContainerAllyCallsign_Name_Magnolia ("MAGNOLIA" on its box; user, 2026-10-31: "Delete the
+# MAGNOLIA tag from the EW aircraft"); DT_SV_ModelRows, added to DT_NPC_Model by Scripts/sv_allies.lua
+AWACS_MODEL = 'SV_Model_VoidWatcher'
+AWACS_MODEL_SOURCE = 'OP0005_e767_Ally_Magnolia'
+AWACS_MODEL_NAME = 'ContainerAircraft_Name_e767'
 AWACS_PATH = 'SV_Path_VoidWatcherOrbit'
 AWACS_ORBIT_KM = 7.0                         # the orbit's radius round the airfield (AIRFIELD_KM), its points, height
 AWACS_ORBIT_POINTS = 12
@@ -1071,6 +1079,18 @@ def build_events(stock_ep):
         g.trigger('RE_Wave2_AreaB_PathSet', run)
         for obj in objs[unit][:BOMBER_SIZES[unit]]:   # build_survival.py keeps these first aircraft
             g.execute(t_fire, run, {1: obj}, delay=BOMB_GAP_S, loop=BOMB_COUNT)
+    # the minimap's alert on a raid (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are
+    # attacking the airfield"): RE_SV_RaidPing_NN pings bomber flight NN on the radar, Mission 22's own "look here"
+    # (LiveBattleNavigationExecution {tag, unit, timing, force the battle map}: its shuttle and control-centre pings);
+    # Scripts/sv_flights.lua raidPings fires it every ping.every_s while that flight is up near the airfield, not sent at
+    # a ship. Forwarded in co-op: each joiner's game pings its copies.
+    assert '"RE_SV_RaidPing_%02d"' in runtime_lua(), 'Scripts/sv_flights.lua never fires RE_SV_RaidPing_NN'
+    t_nav = g.exec_template('LiveBattleNavigationExecution', 'Default_PreRadioEvent_28')
+    assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
+    for k, unit in enumerate(BOMBERS):
+        ping = f'RE_SV_RaidPing_{k + 1:02d}'
+        g.trigger('RE_Wave2_AreaB_PathSet', ping)                                  # a remote-event trigger
+        g.execute(t_nav, ping, {1: unit})
     assert arg_values(t_landing)[0] == 'false'
     # the run's heartbeat (Scripts/main.lua fires it every 10 s): a mission restart sets every flag back to 0, so a drop
     # in SV_Beat is a restart even in a round without a kill or an airfield hit (test of 2026-10-23: a retry after the
