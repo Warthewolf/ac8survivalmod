@@ -1887,7 +1887,7 @@ static int L_CoopSpawnPP(void* lua)
             g_siteRemoteFinish);
         return Ret(lua, -2);
     }
-    if (CoRefGet(keepPlane) && g_destroyActor) g_destroyActor(keepPlane->obj, 0);
+    if (CoRefGet(keepPlane) && g_destroyActor) { Crumb(L"coop: a real plane %p destroyed (replaced)", keepPlane->obj); g_destroyActor(keepPlane->obj, 0); }
     if (CoRefGet(keepCtrl) && g_destroyActor) g_destroyActor(keepCtrl->obj, 0);
     memset(keepPlane, 0, sizeof(*keepPlane)); memset(keepCtrl, 0, sizeof(*keepCtrl));
     void* cls = *(void**)(pawn + 0x10);                                             /* UObjectBase::ClassPrivate */
@@ -2107,14 +2107,14 @@ static int L_CoopKillPP(void* lua)
     if (ArgNumber(lua, &slotArg) && slotArg >= 0 && slotArg < CO_MAX_PLAYERS) {
         int s = (int)slotArg;
         if (CO.players[s].plane.ref.obj && CO.players[s].plane.ref.obj == g_peerPP[s].obj) memset(&CO.players[s].plane.ref, 0, sizeof(CoRef));
-        if (CoRefGet(&g_peerPP[s]) && g_destroyActor) { g_destroyActor(g_peerPP[s].obj, 0); ++n; }
+        if (CoRefGet(&g_peerPP[s]) && g_destroyActor) { Crumb(L"coop: player %d's real plane %p destroyed", s + 1, g_peerPP[s].obj); g_destroyActor(g_peerPP[s].obj, 0); ++n; }
         if (CoRefGet(&g_peerCtrl[s]) && g_destroyActor) { g_destroyActor(g_peerCtrl[s].obj, 0); ++n; }
         memset(&g_peerPP[s], 0, sizeof(CoRef)); memset(&g_peerCtrl[s], 0, sizeof(CoRef));
         if (n) Log(L"coop: player %d's real plane removed", s + 1);
         return Ret(lua, n ? 1 : 0);
     }
     if (g_follow.obj == g_ppPlane.obj) memset(&g_follow, 0, sizeof(g_follow));
-    if (CoRefGet(&g_ppPlane) && g_destroyActor) { g_destroyActor(g_ppPlane.obj, 0); ++n; }
+    if (CoRefGet(&g_ppPlane) && g_destroyActor) { Crumb(L"coop: the second player plane %p destroyed", g_ppPlane.obj); g_destroyActor(g_ppPlane.obj, 0); ++n; }
     if (CoRefGet(&g_ppCtrl) && g_destroyActor) { g_destroyActor(g_ppCtrl.obj, 0); ++n; }
     memset(&g_ppPlane, 0, sizeof(g_ppPlane)); memset(&g_ppCtrl, 0, sizeof(g_ppCtrl));
     if (n) Log(L"coop: second player plane removed");

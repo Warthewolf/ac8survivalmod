@@ -1566,6 +1566,7 @@ static void OnUnitFxFrame(uint8_t* self, float dt)
         if (!gone && UObjLive(c) == 0) gone = 2;           /* (freed already: its flag went with it) */
         if (gone) {
             *held = NULL;
+            if (g_ufxLetGo < 64) Crumb(L"guard: an AI unit's effect %p (unit %p) let go (%s)", c, self, gone == 2 ? L"freed" : L"destroyed");
             if (g_ufxLetGo++ < 8)
                 Log(L"guard: an AI unit's effect %p (unit %p, +0x2690) was %s: let go (%u so far)", c, self,
                     gone == 2 ? L"freed already (not in GUObjectArray)" : L"destroyed, before it's freed", g_ufxLetGo);
@@ -1644,9 +1645,11 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
     }
     if (why) {
         int32_t n = __atomic_add_fetch(&g_tgtSkipped, 1, __ATOMIC_RELAXED);
-        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0))  /* (worker threads: Log is locked; the first few, then 8, 16, ...) */
+        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0)) { /* (worker threads: Log is locked; the first few, then 8, 16, ...) */
             Log(L"guard: a weapon's target search skipped a gone unit's entry %p (class %d of %d: %s; %d so far)", entry, i + 1,
                 g_tcN, why, n);
+            Crumb(L"guard: target search skipped a gone unit's entry %p (class %d: %s; %d so far)", entry, i + 1, why, n);
+        }
         return 0;
     }
     int faulted = 0;
@@ -1655,9 +1658,12 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
     uint8_t r = ScCall4((ScFn4)g_tcNext[i], entry, query, a, b, &faulted, &fa, &at);
     if (faulted) {
         int32_t n = __atomic_add_fetch(&g_tgtFaults, 1, __ATOMIC_RELAXED);
-        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0))
+        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0)) {
             Log(L"guard: a weapon's target search caught a fault in an entry check (class %d of %d, its check %p: at %p reading "
                 L"%p): answered not a target (%d so far)", i + 1, g_tcN, (void*)g_tcNext[i], fa, (void*)(uintptr_t)at, n);
+            Crumb(L"guard: target check fault caught, class %d (%p) at %p reading %p, entry %p (%d so far)", i + 1,
+                  (void*)g_tcNext[i], fa, (void*)(uintptr_t)at, entry, n);
+        }
     }
     return r;
 }

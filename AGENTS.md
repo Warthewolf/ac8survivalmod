@@ -774,6 +774,29 @@ game runs sv_spweapons.lua on its own planes at its own player (the host its ene
 as their standard missiles already go: an AI's shots are decided on its target's game), each with its own cap; a joiner
 learns each flight's rows from the host's spawn (sv_coop.lua doSpawn -> SPW.noteRows: the flight's row, idx -1, and its
 lead's own, idx 0); none while that player is DOWN; RE_SV_SpecFire_ still never forwarded. spweapons_test covers it.
+0.73.44-coop2mp.45 (runtime 0.32.13; built and installed 2026-10-31, zip 0.73.44, hash 2ea9dfa9...a433c; not yet run in game): seven loggers (user: "What other loggers
+could we add?" ... "All of them"), in the log only:
+- crash breadcrumbs: <mod folder>\AC8SurvivalMode_crumbs.log (the session before: AC8SurvivalMode_crumbs.prev.log),
+  written at once with milliseconds and the thread: the native runtime's flight recycles (unregister + unit actor
+  destroyed), real / second player planes destroyed, the target guard's skips and caught faults, the effect guard's
+  let-gos; Lua's (sv_core.lua crumb() -> SV_Crumb) every SV_Spawn, every removal-type event (Remove / Off_ / RunOver /
+  Destroy), each copy taken down, teardowns, a joiner's copies of the host's spawns, a joiner's asks answered. After a
+  crash, read the crumbs.prev file first.
+- targets (sv_audit.lua): every 5 s whom the enemy aircraft aim at (TargetActor: you, each co-op player by name, the
+  allies, others, nothing) and each player's damage (health drops), `targets: last 60 s ...` a minute.
+- missile outcomes (sv_weaponlog.lua): each enemy missile at you followed to its end (hit: within hit_m 150 m as your
+  health dropped; decoyed: it went after a flare; missed), `missiles at you: last 60 s: <weapon> n (h hit, d decoyed,
+  m missed; from X km on average); this run: ...`.
+- fleet turrets (sv_weaponlog.lua, sv_spaceport.lua SPORT.turrets): per turret class each minute how many fired (their
+  missiles; their guns: any of their LiveBullets shown, looked at every turret_s 5), your range at fire, and how many
+  stayed silent with you inside their 25 km reach: `fleet: last 60 s: <class>: a of n fired ...`.
+- pay audit (sv_audit.lua, wrapping addCredits): `pay audit: last 60 s: +N Z in M pays: kills / round bonuses /
+  specials / other`, and on a joiner each kill paid within suspect_s 5 of a teardown here flagged at once (COOP.tornRecently).
+- sync health (sv_coop.lua COOP.syncReport, each minute): a joiner's copies (bound to the host's ids or not), strays
+  taken down, its asks (jn) and the answers (rs), copies torn down and teardowns; the host's asks answered.
+- the Spaceport waves (sv_spaceport.lua): `special: wave <unit>: n craft, x shot down, y landed, z troop vehicles ashore`
+  as each is done, and the round's `the Spaceport Assault's waves (...): ... the capture: 5% at +4:10, ...`.
+CFG.log.weapons (hit_m, turret_s) and CFG.log.audit ([log.audit]). Tests: audit_test, weaponlog_test, spaceport_test.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
