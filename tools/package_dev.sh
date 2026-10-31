@@ -22,6 +22,8 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
 rm -rf "$mod/Sounds/valka"
 rmdir "$mod/Sounds" 2>/dev/null || true
 python -X utf8 -I tools/novalka.py "$mod" > /dev/null
+# NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
+if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi
 # the dev main.dll (runtime/build.sh DEV=1: the flight recorder, recorder.c), for this install only
 (cd runtime && DEV=1 sh build.sh > /dev/null)
 cp build/runtime/dev/main.dll "$mod/dlls/main.dll"

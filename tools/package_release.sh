@@ -13,6 +13,8 @@
 #   (tools/coop_edition.py), release/README_COOP.txt in the readme; the zip is named ..._COOP.
 # NOVALKA=1 package_release.sh ...: a build without VALKA (user, 2026-10-25, a build for a friend): no X-02S container,
 #   no AC7 railgun sounds, VALKA switched off and out of the rotation (tools/novalka.py); the zip is named ..._NoValka.
+# NOSPACEPORT=1 package_release.sh ...: a build without the Spaceport Assault and its Retake (user, 2026-10-31, a build
+#   for friends): both switched off, their ini sections gone (tools/nospaceport.py); the zip is named ..._NoSpaceport.
 set -e
 cd "$(dirname "$0")/.."
 ed=$1
@@ -35,6 +37,10 @@ if [ "$NOVALKA" = 1 ]; then
     rmdir "$mod/Sounds" 2>/dev/null || true
     python -X utf8 -I tools/novalka.py "$mod"
     suffix=_NoValka
+fi
+if [ "$NOSPACEPORT" = 1 ]; then
+    python -X utf8 -I tools/nospaceport.py "$mod"
+    suffix=${suffix}_NoSpaceport
 fi
 sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 if [ "$COOP" = 1 ]; then
