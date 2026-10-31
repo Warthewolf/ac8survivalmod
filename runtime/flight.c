@@ -1611,11 +1611,21 @@ static void UfxInstall(void)
  * target" for an entry whose actor was set and is gone (UWeakLive) in a class that uses it unchecked (TcWeakUnchecked:
  * 3 of them), or, in the first class (sigs.h kSigTargetCheck), whose game object or actor isn't live (UObjLive), and
  * lets the game check the rest. */
+/* Runtime 0.32.12: the classes whose check uses its unit's world unchecked too (TcWorldUnchecked: the world getter
+ * 0x143fc1ca0, sigs.h kSigWorldOf, answers NULL for an object being destroyed, and some 20 checks pass that straight on:
+ * Alyssa's game, 2026-10-31 00:50 on 0.73.37, crashed in class 0x147454050's, NULL + 0x898, seconds after 13 enemy copies
+ * were taken down and their flights spawned again), and every guarded check runs through ScCall4 (safecall.h): a fault
+ * inside it comes back as "not a target", logged, instead of taking the game down. */
+#include "safecall.h"
 typedef uint8_t (*TargetCheckFn)(uint8_t* entry, void* query, void* a, void* b);
-#define TC_MAX 16                                           /* (classes guarded; the game has 4) */
+#define TC_MAX 48                                           /* (classes guarded: 4 by their fields, ~20 by the world) */
 #define TC_SCAN_MAX 256                                     /* (vtables of the family looked at; the game has 151) */
 static TargetCheckFn g_tcNext[TC_MAX];
 static uint8_t       g_tcFirst[TC_MAX];                     /* the class with the game object (+0x18) and actor (+0x28) */
+static uint8_t       g_tcKind[TC_MAX];                      /* 0 the first class, 1 its +0x20 weak actor unchecked, 2 the world */
+static uint8_t*      g_fWorldOf;                            /* found by FindFunctions (sigs.h kSigWorldOf) */
+static int           g_scReady;
+static volatile int32_t g_tgtFaults;
 static void**        g_tcSlot[TC_MAX];
 static int           g_tcN;
 static volatile int32_t g_tgtSkipped;
@@ -1628,7 +1638,7 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
         uint8_t* actor = *(uint8_t**)(entry + 0x28);
         if (go && UObjLive(go) == 0) why = L"its game object isn't live";
         else if (actor && UObjLive(actor) == 0) why = L"its actor isn't live";
-    } else if (entry) {
+    } else if (entry && g_tcKind[i] == 1) {                /* (only these hold a weak pointer at +0x20) */
         const uint8_t* w = entry + 0x20;
         if (*(const int32_t*)(w + 4) && UWeakLive(w) == 0) why = L"its actor's weak pointer resolves to nothing";
     }
@@ -1639,14 +1649,35 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
                 g_tcN, why, n);
         return 0;
     }
-    return g_tcNext[i](entry, query, a, b);
+    int faulted = 0;
+    void* fa = NULL;
+    uint64_t at = 0;
+    uint8_t r = ScCall4((ScFn4)g_tcNext[i], entry, query, a, b, &faulted, &fa, &at);
+    if (faulted) {
+        int32_t n = __atomic_add_fetch(&g_tgtFaults, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0))
+            Log(L"guard: a weapon's target search caught a fault in an entry check (class %d of %d, its check %p: at %p reading "
+                L"%p): answered not a target (%d so far)", i + 1, g_tcN, (void*)g_tcNext[i], fa, (void*)(uintptr_t)at, n);
+    }
+    return r;
 }
 #define TC_THUNK(i) static uint8_t OnTc##i(uint8_t* e, void* q, void* a, void* b) { return TcCheck(i, e, q, a, b); }
 TC_THUNK(0) TC_THUNK(1) TC_THUNK(2) TC_THUNK(3) TC_THUNK(4) TC_THUNK(5) TC_THUNK(6) TC_THUNK(7)
 TC_THUNK(8) TC_THUNK(9) TC_THUNK(10) TC_THUNK(11) TC_THUNK(12) TC_THUNK(13) TC_THUNK(14) TC_THUNK(15)
-static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc2, (void*)OnTc3, (void*)OnTc4, (void*)OnTc5,
-                                         (void*)OnTc6, (void*)OnTc7, (void*)OnTc8, (void*)OnTc9, (void*)OnTc10, (void*)OnTc11,
-                                         (void*)OnTc12, (void*)OnTc13, (void*)OnTc14, (void*)OnTc15 };
+TC_THUNK(16) TC_THUNK(17) TC_THUNK(18) TC_THUNK(19) TC_THUNK(20) TC_THUNK(21) TC_THUNK(22) TC_THUNK(23)
+TC_THUNK(24) TC_THUNK(25) TC_THUNK(26) TC_THUNK(27) TC_THUNK(28) TC_THUNK(29) TC_THUNK(30) TC_THUNK(31)
+TC_THUNK(32) TC_THUNK(33) TC_THUNK(34) TC_THUNK(35) TC_THUNK(36) TC_THUNK(37) TC_THUNK(38) TC_THUNK(39)
+TC_THUNK(40) TC_THUNK(41) TC_THUNK(42) TC_THUNK(43) TC_THUNK(44) TC_THUNK(45) TC_THUNK(46) TC_THUNK(47)
+static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc2, (void*)OnTc3, (void*)OnTc4,
+                                         (void*)OnTc5, (void*)OnTc6, (void*)OnTc7, (void*)OnTc8, (void*)OnTc9,
+                                         (void*)OnTc10, (void*)OnTc11, (void*)OnTc12, (void*)OnTc13, (void*)OnTc14,
+                                         (void*)OnTc15, (void*)OnTc16, (void*)OnTc17, (void*)OnTc18, (void*)OnTc19,
+                                         (void*)OnTc20, (void*)OnTc21, (void*)OnTc22, (void*)OnTc23, (void*)OnTc24,
+                                         (void*)OnTc25, (void*)OnTc26, (void*)OnTc27, (void*)OnTc28, (void*)OnTc29,
+                                         (void*)OnTc30, (void*)OnTc31, (void*)OnTc32, (void*)OnTc33, (void*)OnTc34,
+                                         (void*)OnTc35, (void*)OnTc36, (void*)OnTc37, (void*)OnTc38, (void*)OnTc39,
+                                         (void*)OnTc40, (void*)OnTc41, (void*)OnTc42, (void*)OnTc43, (void*)OnTc44,
+                                         (void*)OnTc45, (void*)OnTc46, (void*)OnTc47 };
 
 /* whether a class's check uses the entry's +0x20 weak actor unchecked: some `lea rcx, [reg+0x20]; call Get` (the game's
  * FWeakObjectPtr::Get, g_tcWeakGet) in its first 0x800 bytes with no `test rax, rax` in the 16 bytes after it and no
@@ -1665,6 +1696,23 @@ static int TcWeakUnchecked(const uint8_t* f)
         for (const uint8_t* q = p - 24 >= f ? p - 24 : f; q + 4 <= p && !tested; ++q) tested = q[0] == 0x0F && q[1] == 0xBA && (q[2] & 0xF8) == 0xE8 && q[3] == 0x15;
         if (!tested) return 1;
     }
+    return 0;
+}
+
+/* whether a class's check passes its unit's world on unchecked: `call <world getter>; mov rcx, rax; call` inside the
+ * function (its bounds from the exe's unwind table; else its first 0x800 bytes) */
+static int TcWorldUnchecked(const uint8_t* f)
+{
+    if (!g_fWorldOf) return 0;
+    const uint8_t* end = f + 0x800;
+    typedef struct { uint32_t begin, end, unwind; } RtFn;
+    static RtFn* (*lookup)(uint64_t pc, uint64_t* base, void* hist);
+    if (!lookup) lookup = (RtFn* (*)(uint64_t, uint64_t*, void*))GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "RtlLookupFunctionEntry");
+    uint64_t base = 0;
+    RtFn* rf = lookup ? lookup((uint64_t)(uintptr_t)f, &base, NULL) : NULL;
+    if (rf && base && base + rf->begin == (uint64_t)(uintptr_t)f) end = (const uint8_t*)(uintptr_t)(base + rf->end);
+    for (const uint8_t* p = f; p + 9 <= end && InGame(p + 9); ++p)
+        if (p[0] == 0xE8 && Rel32((uint8_t*)p) == g_fWorldOf && p[5] == 0x48 && p[6] == 0x8B && p[7] == 0xC8 && p[8] == 0xE8) return 1;
     return 0;
 }
 
@@ -1688,6 +1736,9 @@ static void TgtInstall(void)
 {
     if (!g_fTargetCheck) { Log(L"guard: the target entry check wasn't found (another game build?): not guarded"); return; }
     if (!g_uoChunks) { Log(L"guard: no GUObjectArray: the target search isn't guarded"); return; }
+    g_scReady = ScInit(GetModuleHandleW(L"kernel32.dll"));
+    Log(L"guard: the target search's fault catcher %s; the world getter %p", g_scReady ? L"in" : L"NOT in (kernel32's calls missing)",
+        g_fWorldOf);
     UfxScan one = { (uint64_t)(uintptr_t)g_fTargetCheck, { 0 }, 0 };
     for (int s = 0; s < g_nsec && one.n < 4; ++s)
         if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, UfxScanRegion, &one);
@@ -1704,25 +1755,30 @@ static void TgtInstall(void)
     }
     for (int s = 0; s < g_nsec && c.n < TC_SCAN_MAX; ++s)
         if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, TcScanRegion, &c);
-    int alone = 0;
+    int alone = 0, kinds[3] = { 0, 0, 0 };
     for (int i = 0; i < c.n && g_tcN < TC_MAX; ++i) {
         void** slot = (void**)((uint8_t*)c.vt[i] + 0x60);
         int dup = 0;
         for (int j = 0; j < g_tcN; ++j) dup |= g_tcSlot[j] == slot;
         if (dup) continue;
-        if ((uint8_t*)c.vt[i] != vtA && !TcWeakUnchecked((const uint8_t*)*slot)) {
+        const uint8_t* fn = (const uint8_t*)*slot;
+        int kind = (uint8_t*)c.vt[i] == vtA ? 0 : TcWeakUnchecked(fn) ? 1 : (g_scReady && TcWorldUnchecked(fn)) ? 2 : -1;
+        if (kind < 0) {
             ++alone;
             continue;
         }
         int k = g_tcN;
         g_tcNext[k]  = (TargetCheckFn)*slot;                /* (set before the slot points at the guard) */
         g_tcFirst[k] = (uint8_t*)c.vt[i] == vtA;
+        g_tcKind[k]  = (uint8_t)kind;
+        ++kinds[kind];
         g_tcSlot[k]  = slot;
         g_tcN = k + 1;
         void* prev = NULL;
         if (!HookSlot(slot, g_tcThunk[k], &prev, g_tcFirst[k] ? L"guard: target entry check (class with game object)" : L"guard: target entry check"))
             g_tcN = k;
     }
-    Log(L"guard: %d target entry classes guarded (%d vtables of the family, %d that don't use +0x20 as a weak pointer unchecked "
-        L"left alone%s)", g_tcN, c.n, alone, c.n >= TC_SCAN_MAX ? L"; more not looked at" : L"");
+    Log(L"guard: %d target entry classes guarded (the first %d, a weak actor unchecked %d, the world unchecked %d; %d vtables of "
+        L"the family, %d left alone%s)", g_tcN, kinds[0], kinds[1], kinds[2], c.n, alone,
+        c.n >= TC_SCAN_MAX ? L"; more not looked at" : (g_tcN >= TC_MAX ? L"; TC_MAX reached" : L""));
 }

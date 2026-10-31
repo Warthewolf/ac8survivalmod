@@ -402,7 +402,16 @@ CFG = {
     -- LAAM, HCAA, as the Shadow aces carry theirs) in its first free weapon slot, picked at random once a session; its
     -- fire control fires it by itself when the player is in its range and cone.
     special = { enabled = true,
-                fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" } },
+                fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" },
+                -- fired (Scripts/sv_spweapons.lua; the user, 2026-10-31: "I want the Enemies to fire their Special
+                -- Weapons too": their AI never picks the slot): every check_s, an enemy whose row carries a special in
+                -- slot 3 fires it at you (RE_SV_SpecFire_<NN><L>) when you're inside cone_deg of its nose at that
+                -- weapon's range (ranges: km, by its fire control's name; default for any other), first_s after it
+                -- appears and then every every_s at most, max_per_min of them across the whole sky. The host's (or
+                -- solo): at the host's plane
+                fire = { enabled = true, check_s = 1, first_s = 10, every_s = 25, cone_deg = 35, max_per_min = 8,
+                         ranges = { QAAM = { 1.0, 4.5 }, HCAA = { 2.0, 7.0 }, ["2AAM"] = { 1.5, 6.0 }, LAAM = { 4.0, 12.0 },
+                                    default = { 2.0, 7.0 } } } },
     -- Survival's own behaviour sets: a DT_NPC_LuaSet row copied from `base`, with `slots` pointing at Survival's
     -- scripts (Scripts/ai/<name>.lua, packaged at /Game/LuaSource/SurvivalMode/AI/<name> by tools/build_survival.py
     -- LUA_SCRIPTS). Made from the main menu on: the game builds a flight's behaviour when the level loads.
@@ -1543,10 +1552,19 @@ CFG = {
         -- aircraft. from_round: never before this round. ford_cm: the Ford's spot and heading (x, y cm, yaw deg:
         -- survival_events.sp_fleet), for its deck when its hull can't be read.
         spaceport = { from_round = 8, ships = { ford = 1, wasp = 4, aegis = 14, boat = 8 }, spawn_per_tick = 3,
-                      wave_every_s = 60, first_wave_s = 20, capture_per_troop = 5, troop_stay_s = 30,
+                      wave_every_s = 180, first_wave_s = 20, capture_per_troop = 5, troop_stay_s = 30,
                       troop_timeout_s = 420, remove_after_s = 60, fighter_share = 0.5, reward = 10000,
                       reward_per_round = 300, pay = { ford = 3000, wasp = 1200, aegis = 800, boat = 300, craft = 150 },
                       ford_cm = { -2964629, -26491, 3.0 },
+                      -- the turrets' own fire control (sv_spaceport.lua SPORT.FLEET_ROWS; as CFG.allies.ships' fcs, on
+                      -- top of CFG.allies.fcs; the user, 2026-10-31: "up the Activation Range and Targetting Range and
+                      -- Lifetime of ALL Ships"): search_m their AI module's reach (stock turrets 6000), range_x their
+                      -- lock-on range, round_reach their guns' rounds out to it, missile their homing missiles' lock-on
+                      -- range_m, flight life_s, acceleration x accel_x, top speed, turn x turn_x; lock_x / fire_x 2.0
+                      -- undo CFG.allies.fcs.time_x 0.5 (their stock rate of fire)
+                      fcs = { lock_x = 2.0, fire_x = 2.0, range_x = 2.0, search_m = 25000, slew_x = 1.5, round_reach = true,
+                              round_width_x = 1.0,
+                              missile = { range_m = 20000, life_s = 30, accel_x = 1.5, speed_max_kmph = 3000, turn_x = 1.0 } },
                       -- the Ford's deck, as the Alicorn's (CFG.specials.alicorn.deck): from first_s, a free size-ship
                       -- pool flight every every_s, flights + flights_per_round x the round (at most max_flights), max_up
                       -- of them up at once, ahead_m off its bow and alt_m up

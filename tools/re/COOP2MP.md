@@ -587,3 +587,20 @@ The user, 2026-10-31: "players are reporting that their own ESM and ECM isn't af
 - Test (two or more players on 0.73.37, real planes on): one fires an ESM, the others see enemies marked and their
   missiles helped inside its field; one fires an ECM, enemy missiles at the others inside it go wide. The firing game
   is unchanged.
+
+## A weapon's target search and a destroyed unit's world (2026-10-31, runtime 0.32.12)
+Alyssa's crash (a joiner, 0.73.37, 00:50:09; her crash_logs.zip): access violation reading 0x898 at AceCombat8+0x374cb08
+(0x14374caf0: a set lookup, rcx = 0x890) on a worker thread. The crash context's call stack was wrong; the minidump's
+registers and stack words give it: the ParallelFor of the weapons' target search (0x147434e50 / 0x14743516f) -> entry
+class 0x147454050's check (vtable 0x14cb77d60, slot +0x60) -> 0x14745443f `call 0x143fc1ca0` (the object's world: NULL
+for a class default, an object whose outer is gone, being destroyed (outer RF_BeginDestroyed, flag bit 15) or garbage,
+or with no world) -> `mov rcx, rax; call 0x14721cb50` (lea rdi, [rcx + 0x888], unchecked) -> 0x14374caf0(NULL + 0x890).
+Her log: at 00:50:04 "13 copies taken down (the host's run started over)", then copies spawned and shot down 1-2 s
+after appearing; the native Recycle destroys a flight's old unit actor before its new spawn (survival_rt.c), as the
+host's 12:07 crash (round 10's start, flights recycled). 13 of the family's 118 checks (151 vtables) pass the world on
+unchecked (the scratchpad's tc_world.py: `call W; mov rcx, rax; call` inside the function's unwind bounds).
+runtime/safecall.h ScCall4 wraps every guarded check: a thread-local frame, RtlCaptureContext, and a vectored exception
+handler that, for an access violation with the frame armed, copies the captured context back (the call answers 0, "not a
+target") and leaves every other exception alone. TgtInstall guards those classes as a third kind (flight.c
+TcWorldUnchecked, the world getter by sigs.h kSigWorldOf); the weak-pointer test stays on the 3 classes that hold a weak
+pointer at +0x20 (the world classes hold a raw one there). Not yet run in game; watch for `caught a fault` lines.

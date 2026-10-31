@@ -22,6 +22,10 @@ for _, row in ipairs(ROWS) do
     end
 end
 ROW_SHIP.SV_Def_Gepa, ROW_SHIP.SV_Def_Avng = "Defence", "Defence"   -- (the airfield's AA guns and SAM sites)
+-- (the Spaceport fleet's turrets, an enemy's: sv_spaceport.lua SPORT.FLEET_ROWS, their own fire control as a ship type's,
+-- CFG.specials.spaceport.fcs; apart from ROWS, so the STORE's allies don't wait on them)
+local FLEET_ROWS = SPORT and SPORT.FLEET_ROWS or {}
+for _, row in ipairs(FLEET_ROWS) do ROW_SHIP[row] = "Fleet" end
 for _, u in ipairs(CFG.allies.aircraft.units) do ALLY.unit[u] = "air" end
 for key, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units) do ALLY.unit[u] = key end end
 -- WINGMEN's DT_SV_NpcRows row (the review build's: tools/build_survival.py, its F-16C under SV_Wingmen); apart from
@@ -54,7 +58,8 @@ function ALLY.setup()
     local modules = loadObject(SEARCH_MODULE.path)
     if modules then
         pin(modules, nameOf(modules))
-        local fcsOf = { Defence = CFG.shop.items.Airfield.defences.fcs }    -- (the ships' and the airfield's defences')
+        local fcsOf = { Defence = CFG.shop.items.Airfield.defences.fcs,     -- (the ships' and the airfield's defences')
+                        Fleet = CFG.specials.spaceport and CFG.specials.spaceport.fcs }
         for key, sh in pairs(CFG.allies.ships) do fcsOf[key] = sh.fcs end
         for key, sf in pairs(fcsOf) do
             if sf and sf.search_m then
@@ -74,6 +79,7 @@ function ALLY.setup()
     end
     local function allyFcs(src, key)                 -- src .. "_SVA[_<ship>]": farther, wider, quicker, tighter
         local sf = key and (key == "Defence" and CFG.shop.items.Airfield.defences.fcs
+                            or key == "Fleet" and CFG.specials.spaceport and CFG.specials.spaceport.fcs
                             or CFG.allies.ships[key] and CFG.allies.ships[key].fcs)
         local new = src .. "_SVA" .. (sf and ("_" .. key) or "")
         local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
@@ -196,6 +202,8 @@ function ALLY.setup()
     local n = 0
     local all = { WINGMEN_ROW, CIWS_ROW, AWACS_ROW }
     for _, row in ipairs(ROWS) do all[#all + 1] = row end
+    for _, row in ipairs(FLEET_ROWS) do all[#all + 1] = row end
+    local fleetIn = 0
     local defs = CFG.shop.items.Airfield.defences
     for _, row in ipairs(all) do
         local _, have = dtCall(npc, "FindRow", row)
@@ -220,7 +228,8 @@ function ALLY.setup()
             log(string.format("allies: %s's model %s %s", CFG.allies.awacs.name, mk, mh ~= nil and "in DT_NPC_Model" or "NOT added"))
             ALLY.awacsReady = have ~= nil and mh ~= nil
         end
-        if have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW and row ~= AWACS_ROW then n = n + 1 end
+        if have ~= nil and ROW_SHIP[row] == "Fleet" then fleetIn = fleetIn + 1
+        elseif have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW and row ~= AWACS_ROW then n = n + 1 end
         local sh = ROW_SHIP[row] and CFG.allies.ships[ROW_SHIP[row]]
         local dk = DEF_ROW_KIND[row] and defs[DEF_ROW_KIND[row]]
         local add = (sh and row == "SV_Ally_" .. ROW_SHIP[row] and sh.health_add) or (dk and dk.health_add) or nil
@@ -288,6 +297,10 @@ function ALLY.setup()
         for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
     end
     ALLY.ready = n == #ROWS
+    ALLY.fleetReady = #FLEET_ROWS > 0 and fleetIn == #FLEET_ROWS
+    log(string.format("allies: the Spaceport fleet's turrets: %d of %d rows in DT_NPC on their own fire control (search %s m)%s",
+        fleetIn, #FLEET_ROWS, tostring(CFG.specials.spaceport and CFG.specials.spaceport.fcs and CFG.specials.spaceport.fcs.search_m),
+        ALLY.fleetReady and "" or ": no Spaceport Assault"))
     if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
     if #gunSaid > 0 then log("allies: guns: " .. table.concat(gunSaid, ", ")) end
     log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, CIWS %s, %s %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",

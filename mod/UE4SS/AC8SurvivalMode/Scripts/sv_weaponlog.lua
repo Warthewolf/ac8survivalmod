@@ -20,7 +20,7 @@
 --   every summary_s with anything new: `weapons: last N s: <weapon> x<n> (<shooters>), ...; carried by enemies but never
 --     fired this run: <weapon> (<n> planes), ...` and the pools' size (`<n> weapon objects, <m> in flight`).
 -- Only addresses and text are kept between looks (never a game object: the lesson of 0.73.24 / 0.73.29).
-WLOG = WLOG or {}
+WLOG = {}
 do
 local BASES = { "LiveExplosiveWeapon", "LiveAttachedInstantWeapon", "LiveElectronicWeaponBase" }
 

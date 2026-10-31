@@ -231,6 +231,7 @@ local KEEP_EVENTS = {
     "^RE_SV_Radio",            -- the tells' radio lines (sv_tells.lua): each player's own, a joiner's come as "tl"
     "^RE_SV_WolfTurn",         -- a Wolf trap's LastTGT (P1, sv_spawn.lua WOLF): onto LocalPlayer, the host here
     "^RE_SV_Salvo_",           -- the squad director's missile shots at "Player" (P2): the host's own; a joiner's by "dv"
+    "^RE_SV_SpecFire_",        -- an enemy's special weapon at "Player" (sv_spweapons.lua): the host's own
     "^RE_SV_AnomalyPack",      -- PHANTASM's pack (P7): sprung on the host's field, its LastTGT onto the host (puppets there)
     "^RE_SV_WraithBlink",      -- an ace squadron lead's blink (P9): a spot round "Player", the host here (the stream shows it)
     "^RE_SV_RunOver$",         -- a co-op run's end (sv_down.lua): each game fires its own on the host's "ro"

@@ -15,7 +15,7 @@
 -- .retake): the garrison (SV_Unit_SpGarrison<A-C>, targets, as many units as the troops that got in need) and every ship
 -- still afloat from the assault; the round ends when they and its aircraft are down. The host's (or solo): the rounds'
 -- ticks; the spawns and remote events reach the joiners as every special's do.
-SPORT = SPORT or {}
+SPORT = {}
 do
 local GROUPS, WAVES, CRAFT, GARRISON = { "A", "B", "C", "D" }, { "V", "W", "X", "Y", "Z" }, { "L", "R" }, { "A", "B", "C" }
 local AEGIS, BOATS = "ABCDEFGHIJKLMN", "ABCDEFGH"
@@ -57,6 +57,13 @@ function SPORT.fleet()
     return out
 end
 SPORT.GROUPS, SPORT.WAVES, SPORT.CRAFT, SPORT.GARRISON = GROUPS, WAVES, CRAFT, GARRISON
+-- The turrets' own DT_NPC rows (tools/survival_events.py SP_TURRETS; the user, 2026-10-31: "up the Activation Range and
+-- Targetting Range and Lifetime of ALL Ships currently at the Spaceport"): sv_allies.lua ALLY.setup puts them into
+-- DT_NPC at the main menu on fire control of their own (<FCS>_SVA_Fleet, CFG.specials.spaceport.fcs) and says whether
+-- they're in (ALLY.fleetReady): without them the fleet's turrets would have no rows, so no Spaceport Assault.
+SPORT.FLEET_ROWS = { "SV_Fleet_Mk15Aegis", "SV_Fleet_Mk41Aegis", "SV_Fleet_Mk45Aegis", "SV_Fleet_ArtAegis",
+                     "SV_Fleet_Mk15FordLB", "SV_Fleet_Mk15FordRF", "SV_Fleet_Mk15FordLF", "SV_Fleet_Mk15FordRB",
+                     "SV_Fleet_SamBoat" }
 
 -- The Ford's hull as SV_Spawn makes it (spawningUnit is its unit then), for its deck's launches; checked before each
 -- read and dropped once it's gone.
@@ -171,9 +178,13 @@ function SPORT.craftIn(s)
     return n
 end
 
--- Whether a Spaceport Assault can come: the native spawner, and none of its fleet still up.
+-- Whether a Spaceport Assault can come: the native spawner, the turrets' rows in, and none of its fleet still up.
 function SPORT.ready()
     if not nativeReady() then return false end
+    if not (ALLY and ALLY.fleetReady) then
+        if not SPORT.rowsSaid then SPORT.rowsSaid = true; log("special: no Spaceport Assault: its turrets' rows aren't in DT_NPC") end
+        return false
+    end
     for _, sh in ipairs(SPORT.fleet()) do if (aliveOf(sh.unit) or 0) > 0 then return false end end
     return true
 end

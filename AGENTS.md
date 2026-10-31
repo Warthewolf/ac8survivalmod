@@ -738,6 +738,36 @@ game): the same test's capture never ended the round (six fighters still up: a r
 down): the capture now despawns the round's pool flights (RE_SV_FlightOff_NN, Mission 22's LiveSetActiveGameObject false,
 and off D.up: a despawned unit can still read alive) and drops its queue and later waves, so the break and the retake
 follow; the missile boats patrol their lanes (4-9 km ahead of their Wasp and back, Mission 22 ship lane shape, 90 km/h).
+0.73.40 in game (the user's solo test, 2026-10-31 18:04): the turrets fired (the weapons log: the Aegis mk41 VLS 6 a
+minute, the boats' SAMs 4), so a turret's own order is what they needed.
+0.73.42-coop2mp.43 (runtime 0.32.12; built 2026-10-31, not yet run in game):
+- The fleet's weapons (user: "up the Activation Range and Targetting Range and Lifetime of ALL Ships currently at the
+  Spaceport"): each turret on Survival's own mission row and DT_NPC copy (tools/survival_events.py SP_TURRETS:
+  sv_fleet_* -> SV_Fleet_*, copies of the stock VE002 / VE004 / VE011 rows; sv_spaceport.lua SPORT.FLEET_ROWS), which
+  sv_allies.lua ALLY.setup puts into DT_NPC at the main menu on fire control of its own as the STORE ships' (key
+  "Fleet", CFG.specials.spaceport.fcs: search module 25 km, lock-on x2, guns' rounds out to it, homing missiles 20 km /
+  30 s; their stock rate of fire); `allies: the Spaceport fleet's turrets: 9 of 9 rows in DT_NPC ...`; without them no
+  Spaceport Assault (SPORT.ready, ALLY.fleetReady). Each ship's unit area 40 km. The LCAC waves every 3 minutes (user).
+- The enemies' special weapons (user: "I want the Enemies to fire their Special Weapons too"; the weapons log: carried,
+  never fired): Scripts/sv_spweapons.lua (SPW, CFG.special.fire, [special.fire]) fires RE_SV_SpecFire_<NN><L> (Mission 19's
+  LiveFireOneShotWeapon, WN_WEAPON_4 = slot 3: survival_events.SPEC_SLOT) for an enemy whose row has its special there
+  (sv_rows.lua SR.spSlot / spWeapon) with you inside 35 deg of its nose at that weapon's range (QAAM 1-4.5 km, HCAA 2-7,
+  2AAM 1.5-6, LAAM 4-12), 10 s after it appears, every 25 s at most, 8 a minute across the sky, not a held Wolf trap;
+  the host's (KEEP_EVENTS ^RE_SV_SpecFire_). `specials: <unit> <L> (<row>) fires its <weapon> at you ...`; the weapons
+  log's `first launch of` says it launched. tools/checks/spweapons_test.sh.
+- Alyssa's crash (a joiner on 0.73.37, 2026-10-31 00:50; tools/re/COOP2MP.md "A weapon's target search and a destroyed
+  unit's world"): AceCombat8+0x374cb08 reading NULL + 0x898 on a worker thread, in the weapons' target search: entry
+  class 0x147454050's check passes the world getter's answer (0x143fc1ca0: NULL for an object being destroyed) on
+  unchecked, seconds after her game took 13 copies down and their flights spawned again (the native Recycle destroys
+  a flight's old unit actor). 13 checks of the family do so. runtime/safecall.h (ScCall4: a vectored exception handler
+  armed only inside the call puts the thread back, the call answers 0) wraps every guarded check, and TgtInstall guards
+  the world-unchecked classes too (sigs.h kSigWorldOf, TcWorldUnchecked; the weak-pointer test only on its own kind):
+  `guard: the target search's fault catcher in ...`, `guard: N target entry classes guarded (the first 1, a weak actor
+  unchecked 3, the world unchecked M ...)`, `guard: a weapon's target search caught a fault in an entry check ...`.
+  tools/checks/safecall_test.sh. Also from her log: the teardown on the host's restart paid her for the copies (290 Z
+  "by you"): not yet fixed.
+- Lesson (the load test): a new global table is `X = {}`, never `X = X or {}` (the load test's stub answers every
+  global, and sv_allies.lua iterated SPORT.FLEET_ROWS at load: lua_load_test hung).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

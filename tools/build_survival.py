@@ -879,8 +879,10 @@ def spaceport_units(units, used_ids, z, top_number, v):
     src_wasp = desc_named(ww, 'UnitDescList', survival_events.SP_WASP_SOURCE[1])
     src_boat = desc_named(bw, 'UnitDescList', survival_events.SP_BOAT_SOURCE[1])
     src_ford = desc_named(fw, 'UnitDescList', survival_events.SP_FORD_SOURCE[1])
-    rows = dict((r, r) for r in survival_events.ALLY_TURRETS['Aegis'])          # the Aegis's turrets: Mission 22's own rows
-    ford_rows = {f'VE004_grfd_mk15_{p}_Ally_01': (f'sv_sp_ford_{p.lower()}', f'Mk15{p}') for p in ('LB', 'RF', 'LF', 'RB')}
+    turret = {src: mrow for src, mrow, _, _ in survival_events.SP_TURRETS}   # each turret on its own row (SP_TURRETS)
+    assert all(m in NPC_ROWS for m in turret.values()), [m for m in turret.values() if m not in NPC_ROWS]
+    rows = dict((r, turret[r]) for r in survival_events.ALLY_TURRETS['Aegis'])
+    ford_rows = {f'VE004_grfd_mk15_{p}_Ally_01': (turret[f'VE004_grfd_mk15_{p}_Ally_01'], f'Mk15{p}') for p in ('LB', 'RF', 'LF', 'RB')}
     count = {}
     for s in survival_events.sp_fleet():
         kind, unit, obj = s['kind'], s['unit'], s['obj']
@@ -904,8 +906,9 @@ def spaceport_units(units, used_ids, z, top_number, v):
             retag_parts(ks[1], obj, used_ids, z, bz_)
             for ch in ks[1]:
                 data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
-                data[:] = [(q[0], q[1], False, ('name', 'sv_sp_boat_sam', 0)) if q[1] == 'MissionNpcID' else q for q in data]
-            z.nb.add('sv_sp_boat_sam')
+                was = [q for q in data if q[1] == 'MissionNpcID'][0][3][1]
+                data[:] = [(q[0], q[1], False, ('name', turret[was], 0)) if q[1] == 'MissionNpcID' else q for q in data]
+                z.nb.add(turret[was])
         else:                                  # the Ford: Mission 16's (allied Grindylow), its four Mk 15s
             names = port_unit(units, used_ids, z, src_ford, unit, obj, 'sv_sp_ford', [s['point']], s['yaw'], top_number, tgt=True)
             u = unit_by(unit)
@@ -1893,6 +1896,7 @@ def build_npc_rows():
               (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY),
               (survival_events.AWACS_SOURCE_NPC, survival_events.AWACS_NPC, survival_events.AWACS_NAME_KEY)]
     allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
+    allies += [(stock_npc or m22[src], npc, None) for src, _, npc, stock_npc in survival_events.SP_TURRETS]   # the fleet's
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
         allies.append((m22[hull], npc, text))
@@ -2133,6 +2137,8 @@ def build_npc_table():
         extra.append((row, src, npc))
     extra.append((survival_events.DEFENCE_CIWS_ROW[0], survival_events.DEFENCE_CIWS_MISSION_SOURCE,   # and the CIWS
                   survival_events.DEFENCE_CIWS_ROW[1]))
+    for _, mrow, npc, _ in survival_events.SP_TURRETS:        # the Spaceport fleet's turrets (their own fire control)
+        extra.append((mrow, survival_events.SP_TURRET_SHAPE, npc))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         row, npc, _ = survival_events.ally_ship_rows(key)
         extra.append((row, hull, npc))

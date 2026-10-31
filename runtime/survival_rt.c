@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.11"
-#define RT_VERSION_A         "0.32.11"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.12"
+#define RT_VERSION_A         "0.32.12"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3212,6 +3212,7 @@ static void FindFunctions(void)
         { kSigUnitFxFrame,      kSigUnitFxFrameMask, sizeof(kSigUnitFxFrame), NULL, 0 },
         { kSigTargetCheck,      kSigTargetCheckMask, sizeof(kSigTargetCheck), NULL, 0 },
         { kSigPlaneEw,          NULL,              sizeof(kSigPlaneEw), NULL, 0 },
+        { kSigWorldOf,          NULL,              sizeof(kSigWorldOf), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3270,6 +3271,7 @@ static void FindFunctions(void)
     g_fUnitFxFrame      = p[57].hit;
     g_fTargetCheck      = p[58].hit;
     g_fPlaneEw          = p[59].hit;
+    g_fWorldOf          = p[60].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);

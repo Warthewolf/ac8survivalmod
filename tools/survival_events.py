@@ -1253,6 +1253,12 @@ def build_wolf(g, stock_ep, t_search, t_engage):
 # flies is checked at the main menu, sv_rows.lua SR.mslSlot, and the director fires only planes whose row has it
 # there). Never the special slot (3+): it holds a different random weapon on each co-op game.
 SALVO_SLOT = 'WN_WEAPON_3'
+# The enemies' special weapons (the user, 2026-10-31: "I want the Enemies to fire their Special Weapons too"; the weapons
+# log: their 2AAM / HCAA carried, never fired, while the standard missiles fired every minute: their AI never picks the
+# slot): Scripts/sv_spweapons.lua fires RE_SV_SpecFire_<NN><L>, one pool object's SPEC_SLOT at the player, Mission 19's
+# LiveFireOneShotWeapon as the salvo. The special is in slot 3 (sv_rows.lua puts CFG.special.fcs's pick in the first free
+# slot from 3: SR.spSlot); the jammer's (its ECM pod there, the special in 4) isn't fired.
+SPEC_SLOT = 'WN_WEAPON_4'
 
 
 def build_director(g, stock_ep, t_search, t_engage):
@@ -1274,6 +1280,10 @@ def build_director(g, stock_ep, t_search, t_engage):
     for fmt in ('"RE_SV_Salvo_%02d%s"', '"RE_SV_DirHold_%02d"', '"RE_SV_DirFree_%02d"'):
         assert fmt in lua, f'Scripts/sv_director.lua never fires {fmt}'
     assert '"^RE_SV_Salvo_"' in lua, 'Scripts/sv_coop.lua KEEP_EVENTS has no ^RE_SV_Salvo_'
+    assert '"RE_SV_SpecFire_%02d%s"' in lua and '"^RE_SV_SpecFire_"' in lua, \
+        'Scripts/sv_spweapons.lua never fires RE_SV_SpecFire_<NN><L>, or sv_coop.lua KEEP_EVENTS lacks it'
+    m = re.search(r'SPW\.FCS_SLOT\s*=\s*(\d+)', lua)
+    assert m and int(m.group(1)) + 1 == int(SPEC_SLOT.rsplit('_', 1)[1]), f'Scripts/sv_spweapons.lua SPW.FCS_SLOT is not {SPEC_SLOT} - 1'
     m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
@@ -1296,8 +1306,12 @@ def build_director(g, stock_ep, t_search, t_engage):
             ev = f'RE_SV_Salvo_{k + 1:02d}{chr(65 + j)}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
             g.execute(t_fire, ev, {0: SALVO_SLOT, 1: obj})
+            ev = f'RE_SV_SpecFire_{k + 1:02d}{chr(65 + j)}'           # (its special weapon: SPEC_SLOT)
+            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+            g.execute(t_fire, ev, {0: SPEC_SLOT, 1: obj})
             n += 1
-    print(f'  director: {n} salvo objects in {len(POOL) - len(probes)} flights (RE_SV_Salvo_<NN><L>, {SALVO_SLOT}), '
+    print(f'  director: {n} salvo objects in {len(POOL) - len(probes)} flights (RE_SV_Salvo_<NN><L>, {SALVO_SLOT}; '
+          f'specials RE_SV_SpecFire_<NN><L>, {SPEC_SLOT}), '
           f'{len(POOL)} flights held / freed (RE_SV_DirHold / DirFree_NN)')
 
 
@@ -1371,7 +1385,8 @@ SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM = 400000.0, 35000.0      # its missile boats
 # test of 2026-10-31: "the Missile Boats don't Partol Around Either"), at SP_BOAT_SPEED, on a Mission 22 ship lane's shape
 SP_BOAT_PATROL_CM, SP_BOAT_SPEED, SP_BOAT_PATH_TEMPLATE = 900000.0, '90', '01_Ship1_grig_0_Path0'
 SP_RING_CM, SP_RING_DEG = 180000.0, [30, 90, 150, 210, 270, 330]   # the carrier's Aegis (none dead ahead: a Wasp's there)
-SP_SHIP_AREA_M, SP_SHIP_ALT_M = 25000.0, (0.0, 15000.0)    # as the STORE's ships (ALLY_SHIP_AREA_M): their turrets reach
+# (their turrets engage only inside it: 40 km round each ship, as far as their boosted search and missiles reach, SP_TURRETS)
+SP_SHIP_AREA_M, SP_SHIP_ALT_M = 40000.0, (0.0, 15000.0)
 SP_WAVES = 'VWXYZ'                               # a lane's craft units (letters: hard rule 17)
 SP_CRAFT = 'LR'                                  # a wave's two craft, side by side
 SP_CRAFT_GAP_CM = 18000.0
@@ -1380,12 +1395,27 @@ SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 k
 SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
 SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
 SP_GARRISON_N = 4
-SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
+SP_NPC_ROWS = [  # the hulls: (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
     ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),
     ('sv_sp_boat', 'aegs_common', 'VE011_mslb_01'),
-    ('sv_sp_boat_sam', 'aegs_mk15', 'VE011_mslb_sam_01'),
     ('sv_sp_ford', 'aegs_common', 'VE004_grfd_01'),
-] + [(f'sv_sp_ford_{p.lower()}', 'aegs_mk15', f'VE004_grfd_mk15_{p}_01') for p in ('LB', 'RF', 'LF', 'RB')]
+]
+# The turrets, on Survival's own rows (the user, 2026-10-31: "up the Activation Range and Targetting Range and Lifetime of
+# ALL Ships currently at the Spaceport"): each turret's own DT_SV_NpcMission row (shaped as aegs_mk15) naming a
+# DT_SV_NpcRows copy of its stock DT_NPC row, which Scripts/sv_allies.lua puts into DT_NPC at the main menu on fire control
+# of its own as the STORE's ships' (<FCS>_SVA_Fleet, CFG.specials.spaceport.fcs: their search module, lock-on range, guns'
+# reach, missiles' range and flight time); the stock rows stay as they are. Scripts/sv_spaceport.lua SPORT.FLEET_ROWS
+# lists the DT_NPC rows (no digit at the end: hard rule 17).
+SP_TURRETS = [  # (the part's row in its source world data, Survival's mission row, Survival's DT_NPC row, its stock DT_NPC
+                # row: None for the Aegis's, which Mission 22's mission row names)
+    ('aegs_mk15', 'sv_fleet_mk15aegis', 'SV_Fleet_Mk15Aegis', None),
+    ('aegs_mk41', 'sv_fleet_mk41aegis', 'SV_Fleet_Mk41Aegis', None),
+    ('aegs_mk45', 'sv_fleet_mk45aegis', 'SV_Fleet_Mk45Aegis', None),
+    ('aegs_artillery', 'sv_fleet_artaegis', 'SV_Fleet_ArtAegis', None),
+] + [(f'VE004_grfd_mk15_{p}_Ally_01', f'sv_fleet_mk15ford{p.lower()}', f'SV_Fleet_Mk15Ford{p}', f'VE004_grfd_mk15_{p}_01')
+     for p in ('LB', 'RF', 'LF', 'RB')] + [
+    ('VE011_mslb_sam_01', 'sv_fleet_samboat', 'SV_Fleet_SamBoat', 'VE011_mslb_sam_01')]
+SP_TURRET_SHAPE = 'aegs_mk15'
 SP_AEGIS_ROW = 'aegs_common'                     # Mission 22's (VE002_aegs_01) and its turrets' own rows, as they are
 SP_WASP_SOURCE = ('/Game/Maps/Ingame/Mission028/WD_Mission028_global', 'AUnit01_Sea_0')
 SP_BOAT_SOURCE = ('/Game/Maps/Ingame/Training006/WD_Training006_phase02', 'EA_UNIT_2_1')
@@ -1863,6 +1893,9 @@ def build_spaceport(g, flag, stock_ep):
             trm = f"RE_SV_SpTroopsRemove{grp}{w}{c['craft']}"
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
+    lua = runtime_lua()
+    for _, _, npc, _ in SP_TURRETS:
+        assert f'"{npc}"' in lua, f'Scripts/sv_spaceport.lua SPORT.FLEET_ROWS has no {npc}'
     print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
           f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units')
 
