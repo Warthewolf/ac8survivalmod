@@ -411,6 +411,7 @@ SHOP = {
         UpFlares   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
         Airstrike  = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         Ecm        = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",
+        VoidWatcher = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",        -- (the ECM's: no AWACS icon in the game)
         Decoy      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
         Insurance  = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
         Wingmen    = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",

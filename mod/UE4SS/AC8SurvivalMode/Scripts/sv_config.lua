@@ -740,7 +740,10 @@ CFG = {
             Insurance  = { role = "insurance", label = "SECOND CHANCE", price = 50000, raise = 1.0 },
             -- a cheaper first rung of allies ("a pair of F-16s for about 5,000 before MOONCHILD at 15,000"): flies on
             -- MOONCHILD's two flights (CFG.allies.wingmen), so at most two flights of the two kinds are up together
-            Wingmen    = { role = "ally_air", ally = "wingmen", label = "WINGMEN: 2 x F-16C", price = 5000, raise = 1.2 },
+            Wingmen    = { role = "ally_air", ally = "wingmen", label = "SNIPER: 2 x F-16C, LAAMs", price = 5000, raise = 1.2 },
+            -- VOID WATCHER 1 (CFG.allies.awacs): an E-767 AWACS that takes off from the airfield and orbits it, its ESM
+            -- field over the whole airfield; one up at a time
+            VoidWatcher = { role = "ally_awacs", label = "VOID WATCHER 1: E-767 AWACS", price = 12000, raise = 1.0 },
             -- the allied aircraft's orders (CFG.allies.orders), free: each press the next one
             Orders     = { role = "orders", label = "ALLY ORDERS" },
             -- (defences' raise 1.12, was 1.25: "the sixth AA gun cost 12,210, three times the first")
@@ -831,10 +834,27 @@ CFG = {
                                    health_max_x = 4.5 } },
         -- WINGMEN (the STORE's cheaper allies): two F-16Cs on MOONCHILD's flights (its world-data units, the airframe
         -- changed before takeoff: SV_SetAircraft, tools/build_survival.py's sv_ally_wingmen row), flying as MOONCHILD
-        -- does but scaled less
-        wingmen      = { name = "VIPER", name_key = "SV_Wingmen", row = "sv_ally_wingmen", moonchild_row = "sv_ally_moonchild",
+        -- does but scaled less. Squadron SNIPER (was VIPER; user, 2026-10-31: "rename VIPER to SNIPER and change their
+        -- standard missiles to LAAM's"): their row (Survival's copy of the F-16C's) carries the game's AI LAAM where the
+        -- stock row has its standard missile, written at build time (tools/survival_events.py ALLY_WINGMEN_MISSILE),
+        -- then boosted as every allied weapon (CFG.allies.fcs)
+        wingmen      = { name = "SNIPER", name_key = "SV_Wingmen", row = "sv_ally_wingmen", moonchild_row = "sv_ally_moonchild",
                          scale = { rank_add = 0, rank_min = 2, ai_level_min = 2, health_x = 1.5, health_per_round = 0.05,
                                    health_max_x = 3.0 } },
+        -- VOID WATCHER 1 (user, 2026-10-31: "Take off from the airfield as a purchasable ally", "Rename it too VOID
+        -- WATCHER 1", "give it's ESM a huge boost in range and have it orbit around the airfield"): Mission 28's E-767
+        -- AWACS Magnolia (tools/survival_events.py AWACS_*: its own world-data unit on the E-767's row, MOONCHILD's lead's
+        -- parking spot and scramble, then an orbit 7 km round the airfield, 4.5 km up; it never fights, enemies may
+        -- hunt it). Its ESM (BP_wp_esm_MS28, a LiveElectronicSupportMeasures field round it; the AI never switches it on
+        -- by itself) is fired every esm.every_s while it's airborne (RE_SV_AwacsEsm), each field set to esm.range_m
+        -- (stock 3.2 km) for esm.life_s; its fire control's reach esm.capture_m. scale: as MOONCHILD's (health only:
+        -- it has no weapons).
+        awacs        = { enabled = true, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
+                         row = "SV_Ally_VoidWatcher",
+                         esm = { event = "RE_SV_AwacsEsm", every_s = 20, range_m = 25000, life_s = 24, capture_m = 60000,
+                                 class = "BP_wp_esm_MS28_C" },
+                         scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
+                                   health_max_x = 6.0 } },
         ships        = {
             -- search_m: its turrets' AI module (a copy of NPC_AIModule_Turret000, 6000 m, made NPC_AIModule_SV_<key>),
             -- the farthest they see anything, and no losing targets in cloud. missile: its homing missiles' own weapon
@@ -858,7 +878,8 @@ CFG = {
         ally_speakers = { { table = "/Game/Datatables/Radio/DT_SpeakerTable.DT_SpeakerTable", row = "826",
                             id = "ms25_Savia_Mercenary_Leader", process = "Ally_Fighter_Mob" } },
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
-                 takeoff_sub_wingmen = "TWO F-16s JOINING THE FIGHT",
+                 takeoff_sub_wingmen = "TWO F-16s WITH LAAMs JOINING THE FIGHT",
+                 takeoff_sub_awacs = "E-767 AWACS: ESM OVER THE AIRFIELD",
                  air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
                  sunk = "%s SUNK", lost_sub = "THE STORE CAN SEND ANOTHER",
                  strike = "STRIKE FLIGHTS INBOUND", strike_sub = "HEADING FOR OUR SHIPS",
