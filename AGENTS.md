@@ -824,6 +824,8 @@ back: `attackers: your plane's missiles-at-once limits: ... (the game's: planes 
 player's missiles are decided on their own game), with the host's [attackers] and [special.fire] (the settings sync:
 not PERSONAL; coop_settings_test checks a joiner takes them); the fleet's and the STORE Aegis's boosts are built into
 every game's rows at its main menu and the enemies' specials fire at every player (0.73.43).
+0.73.48-coop2mp.49 (built and installed 2026-10-31, zip 0.73.48, hash c89317dd...6da429f; user: "I want 6 missiles from aircraft and 14 missiles from ships"): CFG.attackers
+plane_missiles 6, nonplane_missiles 14 (survival.ini [attackers]).
 
 ## Flight recorder (branch feature/flight-recorder, on COOP2MP 0.73.37; dev install only; not yet run in game)
 For the GRU pilot project (warthewolf/ac8-gru-pilot). Ported 2026-10-31 from the old remote branch's a440b49 / 0eec7c8
