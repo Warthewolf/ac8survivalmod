@@ -704,7 +704,7 @@ game): the other players' ESM / ECM fields count on every game. Each plane pulls
 (role byte +0xED8 == 2, at 0x147d27f34), which co-op's real planes are; flight.c OnPlaneEw sets every OTHER live real plane
 to role 1 around that call and back to 2 after, so the stock range / team / time rules apply (`coop2mp: the other
 players' ESM / ECM fields count on this game ...`, once). tools/re/COOP2MP.md "ESM / ECM effects across games".
-0.73.38-coop2mp.39 (runtime 0.32.11; built 2026-10-31, NOT installed (friends were on 0.73.37), not yet run in game; zip
+0.73.38-coop2mp.39 (runtime 0.32.11; built 2026-10-31, never installed (0.73.39 has it all), not yet run in game; zip
 0.73.38, hash e52b0e3a...e9d3ec): the Spaceport Assault, round 1 (user's special of 2026-10-31; tools/re/SPACEPORT_ASSAULT.md
 "Build 0.73.38"): an enemy fleet of 27 one-ship units west of the spaceport (the Ford, 4 Wasps, 14 Aegis, 8 missile boats:
 allied descs flipped to Faction 2 on the enemy DT_NPC rows, tools/build_survival.py spaceport_units / enemy_unit), each
@@ -713,6 +713,18 @@ launches, SPACEPORT HELD / CAPTURED, and a first retake (the garrison and the sh
 Scripts/sv_spaceport.lua (SPORT), CFG.specials.spaceport, [specials.spaceport*]; SPC.kinds gained ready / busy / over /
 row (sv_rounds.lua, sv_hud.lua) and specialFor a special's from_round. Not in the rotation until tested: Ctrl+END /
 Ctrl+INS force it (test only). 1211 triggers, 2262 execs. tools/checks/spaceport_test.sh.
+0.73.39-coop2mp.40 (runtime 0.32.11; built and installed 2026-10-31, zip 0.73.39, hash 7135b5db...4be518; not yet run in
+game) = 0.73.38 + the enemy weapons log (user, 2026-10-31: "a logger that checks what enemy missiles are being fired, I
+have a feeling that none of the special weapons we gave the enemies are working"): Scripts/sv_weaponlog.lua (WLOG,
+CFG.log.weapons, [log.weapons], on by default). The native LaunchWeapon hook can't see them (0x147f7a880's three callers
+are the player weapon system and Online Mode's remote fire) and FiredExplosiveWeapons is LivePlayerPlane's alone, so Lua
+reads each enemy plane's FireControlSystemComponent.AllArms 2 s after it's created (each system's name and its projectile
+module's WeaponClass(es), `weapons: <unit> (<row>, <airframe>) carries: ...`, once an airframe and loadout) and every
+0.5 s every LiveExplosiveWeapon / LiveAttachedInstantWeapon / LiveElectronicWeaponBase: pooled, so a launch is one shown
+(bHidden false) that was hidden the look before, or shown with a new OwningGameObject (the first look only primes);
+`weapons: first launch of <weapon> by <airframe> (<unit>, <row>) at <target>` once each, and every 60 s `weapons: last
+N s: <weapon> xN (<shooters>) ...; carried by enemies but never fired this run: ...`. Guns and flares are listed, not
+watched. tools/checks/weaponlog_test.sh. Unverified: that idle pool items are hidden (logged if bHidden can't be read).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

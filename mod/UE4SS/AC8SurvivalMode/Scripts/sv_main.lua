@@ -468,6 +468,8 @@ local function probeTick(tick)
         if now and valid(survivalPC) then                               -- what hits the player (section "hits")
             local okHt, errHt = timed("hits", HIT.tick, survivalPC, now)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
+            local okWl, errWl = timed("weapons log", WLOG.tick, now)          -- (sv_weaponlog.lua)
+            if not okWl and not D.wlogErr then D.wlogErr = true; log("weapons: log error " .. tostring(errWl)) end
             if CFG.allies.kills then pcall(KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
             -- the STORE's tactical items and SECOND CHANCE (sv_tactical.lua)
             local okT, errT = timed("tactical", TAC.tick, now)
