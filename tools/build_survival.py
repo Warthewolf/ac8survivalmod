@@ -928,6 +928,16 @@ def spaceport_units(units, used_ids, z, top_number, v):
                             else q for q in ch[2]]
                 for n in names_in(ch): z.nb.add(n)
         assert names == [obj], (unit, names)
+        def part_names(children):              # (its turrets as event args write them: survival_events.sp_parts orders them)
+            out = []
+            for ch in children:
+                n = [q for q in ch[2] if q[1] == 'Name'][0][3]
+                out.append(n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}')
+                gc = [q for q in ch[2] if q[1] == 'GrandChildrens']
+                if gc and gc[0][3]: out += part_names(gc[0][3][1])
+            return out
+        got = part_names((kids(objects(u)[0]) or (0, []))[1])
+        assert sorted(got) == sorted(survival_events.sp_parts(s)), (unit, got, survival_events.sp_parts(s))
         enemy_unit(u)
         face(u, s['yaw'])
         unit_area(u, survival_events.SP_SHIP_AREA_M, survival_events.SP_SHIP_ALT_M)

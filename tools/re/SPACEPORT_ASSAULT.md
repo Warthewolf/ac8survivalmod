@@ -202,3 +202,18 @@ no ships); add `spaceport` to the rotation once a test has run it.
 - Not known yet: whether the enemy Faction flip turns Mission 28's Wasp / Mission 16's Ford hostile (the HUD's colour, the
   turrets' fire); whether the Ford's _CP_Ally part classes fight for the enemy; whether ships with no path stay put;
   whether 1211 triggers (from 819) load; the frame rate with ~110 ship objects.
+
+### 0.73.39 in game (the user's solo test, 2026-10-31 17:51-17:56, Ctrl+END in round 1)
+- The fleet came up whole (27 ships: the Ford 5 objects, Aegis 5, boats 2, Wasps 1), the Wasps' waves left every 60 s
+  on all four lanes, craft landed on the beaches 3.9 min after leaving (troops ashore), ships were sunk and paid.
+- The user: "the enemy fleet doesn't seem to target the players very much, only some of the ships are firing, none of
+  their Anti Air is firing either". The weapons log saw no launch by any ship in 5 minutes (5 weapon objects in all the
+  pools: the fighters' missiles): no turret ever fired a missile.
+- Cause: only each ship's hull had an order (Mission 22's unit-level Normal), and a hull's order doesn't reach its
+  turrets: stock missions order every turret by name (Mission 22's AC_Obj_01_Ship2_aegs_0_BP_VE002_aegs_mk45_Base_
+  Artillery, Mission 26's ..._aegs_mk41_Base), as the Ladon's CIWS needed theirs (code review of 2026-10-23).
+- 0.73.40-coop2mp.41: every turret its own order 2.5 s after its ship appears (Mission 16's Default_RemoteEvent_20, the
+  Ladon CIWS's: Normal, PlayerFirst): 68 (each Aegis's mk15, mk41, mk45 and its Artillery, the Ford's four Mk 15s, each
+  boat's SAM; tools/survival_events.py sp_parts, the build asserts the names against the world data).
+- The same log's fighters: their special weapons carried (2AAM, HCAA on the Su-33 / Su-47 / F-15E) but never fired in
+  5 minutes while their standard missiles fired 21 times: the user's hunch about the enemies' specials (see AGENTS.md).
