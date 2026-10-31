@@ -1618,8 +1618,17 @@ CFG = {
                       -- reward_per_round x the round when they're all down, garrison_pay a vehicle; fighter_share of the
                       -- round's aircraft. enabled = false: no retake (the fleet left afloat stays until the next Spaceport
                       -- Assault takes it off). test_troops: the troops Ctrl+INS's forced retake counts (test only).
+                      -- rockets (Scripts/sv_spaceport.lua's rockets; the user, 2026-10-31: "can you please build the rockets
+                      -- this time?"): Mission 19's two, launched launch_a_s / launch_b_s into the retake, boosted boost_s on,
+                      -- rocket_pay each shot down; one reaching 20.2 km escapes: escape_penalty zollars and no reward; the
+                      -- last one shot down breaks up (debris = false: it doesn't), each stage of its debris targetable in
+                      -- turn (debris_tgt_s after the kill, debris_next_s after each stage), debris_pay a piece, taken off
+                      -- debris_timeout_s after the last change
                       retake = { enabled = true, per_unit = 4, reward = 12000, reward_per_round = 300, garrison_pay = 300,
-                                 fighter_share = 0.6, test_troops = 8 } },
+                                 fighter_share = 0.6, test_troops = 8,
+                                 rockets = { enabled = true, launch_a_s = 45, launch_b_s = 110, boost_s = 12, rocket_pay = 3000,
+                                             escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
+                                             debris_pay = 400, debris_timeout_s = 120 } } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -1958,6 +1967,16 @@ CFG = {
             sp_retake_go = "SPACEPORT RETAKE",
             sp_retake_go_sub = "DESTROY THE GARRISON AND THE FLEET",
             sp_retake_row = "GARRISON: %d  FLEET: %d SHIPS",
+            sp_rocket_launch = "ROCKET LAUNCH",
+            sp_rocket_launch_sub = "SHOOT IT DOWN BEFORE IT REACHES ORBIT",
+            sp_rocket_down = "ROCKET DOWN",
+            sp_rocket_down_sub = "+%d ZOLLARS",
+            sp_rocket_escaped = "ROCKET ESCAPED",
+            sp_rocket_escaped_sub = "-%d ZOLLARS, NO RETAKE BONUS",
+            sp_debris    = "THE ROCKET BREAKS UP",
+            sp_debris_sub = "DESTROY ITS FALLING DEBRIS",
+            sp_debris_down = "DEBRIS DESTROYED",
+            sp_debris_down_sub = "THE ROCKET IS GONE",
             sp_retaken   = "SPACEPORT RETAKEN",
             sp_retaken_sub = "+%d ZOLLARS",
             shop_captured = "SHOP CLOSED: THE AIRFIELD IS CAPTURED.",
