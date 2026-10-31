@@ -406,6 +406,11 @@ local function startRound()
         log(string.format("round %d: no landing craft can come; a normal round", D.round))
         special = nil
     end
+    local rk = special and SPC.kinds[special]
+    if rk and rk.ready and not rk.ready() then                     -- (the Spaceport Assault: its fleet still up)
+        log(string.format("round %d: no %s can come now; a normal round", D.round, special))
+        special = nil
+    end
     D.special = special and { kind = special, state = "pending" } or nil
     RUN.specialPick = RUN.specialPick or {}                      -- (as it is: a forced one too; specialFor reads it)
     RUN.specialPick[D.round] = special or false
@@ -863,8 +868,16 @@ function roundsTick(now)
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: decoys down, VALKA attacks", D.round)) end
         elseif flights == 0 and D.special and D.special.kind == "amphibious" and AMPH.busy(D.special) then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the landing goes on", D.round)) end
+        elseif flights == 0 and D.special and SPC.kinds[D.special.kind] and SPC.kinds[D.special.kind].busy
+            and SPC.kinds[D.special.kind].busy(D.special) then
+            if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round, D.special.kind)) end
         elseif flights == 0 then
             if D.special and D.special.kind == "amphibious" then AMPH.roundOver(now, D.special) end
+            local ko = D.special and SPC.kinds[D.special.kind]
+            if ko and ko.over then
+                local okO, errO = pcall(ko.over, now, D.special)
+                if not okO then log("special: " .. tostring(D.special.kind) .. " round end error " .. tostring(errO)) end
+            end
             local gap = SETUP.breakS()                 -- (the menu's BREAK BETWEEN ROUNDS, sv_menu.lua)
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
