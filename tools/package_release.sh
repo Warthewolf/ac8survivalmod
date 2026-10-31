@@ -30,6 +30,9 @@ cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv "$mod"/config/survival_profile.ini*
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
+# the diagnostic loggers off for friends (tools/quiet_logs.py: the weapons log was half the Lua tick in big rounds; a
+# friend's "choppy", 2026-10-31); the user's dev install (package_dev.sh) keeps them
+python -X utf8 -I tools/quiet_logs.py "$mod"
 suffix=
 if [ "$NOVALKA" = 1 ]; then
     rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*

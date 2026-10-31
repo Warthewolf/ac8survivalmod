@@ -457,9 +457,9 @@ end
 check(has(body("sv_rounds.lua", "\nlocal function startRound%(%)"), "pcall(STATS.roundStart, D.now)"), "startRound starts the measurements' round")
 check(has(body("sv_rounds.lua", "\nfunction roundsTick%(now%)"), "pcall(STATS.roundEnd, now)"), "the clear (roundsTick) ends it")
 check(has(body("sv_tactical.lua", "\nfunction INS.tick%(now%)"), 'pcall(STATS.death, "saved")'), "SECOND CHANCE gives a death line")
-local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+local pt = body("sv_main.lua", "\nlocal function probeTickB%(tick%)")   -- (the tick's second half since 0.73.56)
 check(has(pt, 'timed("planes", planeSweep, slot)') and has(pt, 'timed("moves", ACE.movesTick, now, D)') and has(pt, "pcall(STATS.sample, D.now"),
-      "probeTick: the sweep and ACE.movesTick timed, STATS.sample every 2 s")
+      "probeTickB: the sweep and ACE.movesTick timed, STATS.sample every 2 s")
 local spawnSrc, statsSrc = readAll(MOD .. "/Scripts/sv_spawn.lua"), readAll(MOD .. "/Scripts/sv_stats.lua")
 check(has(spawnSrc, 'hookErr("roles: ROLE.spawned", pcall(ROLE.spawned') and has(spawnSrc, 'hookErr("director: DIR.spawned", pcall(DIR.spawned')
       and has(spawnSrc, 'hookErr("aces: ACE.squadUp", pcall(ACE.squadUp') and has(mainSrc, 'hookErr("stats: STATS.track", pcall(STATS.track')
@@ -598,13 +598,14 @@ do
         local b = a and src:find("\nend\r?\n", a + 1)
         return a and src:sub(a, b or #src) or ""
     end
-    local pt = body("sv_main.lua", "\nlocal function probeTick%(tick%)")
+    local pt = body("sv_main.lua", "\nlocal function probeTickB%(tick%)")   -- (the tick's second half since 0.73.56)
     local iF, iR, iA, iE = pt:find("local key = verbose and fl or flagKey", 1, true), pt:find("if not verbose then return end", 1, true),
                            pt:find("round probe: AI aircraft alive", 1, true), pt:find("enemies: nearest", 1, true)
     check(iF and iR and iA and iE and iF < iR and iR < iA and iR < iE and has(pt, "if fl and key ~= lastFlags then"),
-          "probeTick: the flags line on its key without [log] verbose; the planes alive and the nearest only with it")
+          "probeTickB: the flags line on its key without [log] verbose; the planes alive and the nearest only with it")
     local mainSrc2 = readAll(MOD .. "/Scripts/sv_main.lua")
-    check(has(mainSrc2, "if tick - pf.at >= (logVerbose() and 240 or 1200) then"), "the perf line every minute with [log] verbose, else every 5")
+    check(has(mainSrc2, "if tick - pf.at < ((logVerbose() or not D.perfSaid) and 240 or 1200) then return end"),
+          "the perf line every minute with [log] verbose, else a minute in and then every 5 (0.73.56)")
     local fs = readAll(MOD .. "/Scripts/sv_flights.lua")
     check(has(fs, "if tick % (logVerbose() and 40 or 240) == 0 then") and has(fs, 'if line ~= A.lastLine then log("ammo: now " .. line)'),
           "ammo: now every 10 s with [log] verbose, else every 60 s, each on a change")
