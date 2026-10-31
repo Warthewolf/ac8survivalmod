@@ -826,6 +826,8 @@ not PERSONAL; coop_settings_test checks a joiner takes them); the fleet's and th
 every game's rows at its main menu and the enemies' specials fire at every player (0.73.43).
 0.73.48-coop2mp.49 (built and installed 2026-10-31, zip 0.73.48, hash c89317dd...6da429f; user: "I want 6 missiles from aircraft and 14 missiles from ships"): CFG.attackers
 plane_missiles 6, nonplane_missiles 14 (survival.ini [attackers]).
+0.73.49-coop2mp.50 (built and installed 2026-10-31, zip 0.73.49; user: "set the pursuers to 12"): CFG.attackers.pursuers 12 (MaxPursuitAttackers: the aircraft that may
+chase a player at once; the game's own is logged on the attackers: line).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
