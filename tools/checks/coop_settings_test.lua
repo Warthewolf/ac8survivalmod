@@ -57,10 +57,13 @@ if ROLE == "host" then
     set("rounds", "aircraft", "f16c_common, su47_common")
     set("waves", "next_at", "6")
     set("coop", "name", "WarHost")
+    set("attackers", "nonplane_missiles", "9")         -- (the room's missiles at once and the enemies' specials: the host's)
+    set("special.fire", "every_s", "20")
 else
     set("rounds", "max_aircraft", "99")              -- (a joiner's own edits: gone while they play the host's game)
     set("zollars", "fighter", "100000")
     set("coop", "name", "Cress")
+    set("attackers", "plane_missiles", "1")            -- (gone too: the host's room, the shipped 4)
 end
 writeAll(WORK .. "/" .. ROLE .. "/config/survival.ini", ini)
 
@@ -131,6 +134,9 @@ elseif ROLE == "join" then
     check(CFG.waves == waves and CFG.waves.next_at == 6, "join: CFG.waves is the same table, host's next_at 6")
     check(CFG.aircraft == aircraft and #CFG.aircraft == 2 and CFG.aircraft[2] == "su47_common", "join: the aircraft list in place, the host's 2")
     check(CFG.coop.name == "Cress", "join: [coop] stays its own")
+    check(CFG.attackers.nonplane_missiles == 9 and CFG.attackers.plane_missiles == CFG_DEFAULTS.attackers.plane_missiles
+        and CFG.special.fire.every_s == 20, "join: the host's missiles at once (ships / SAMs 9, planes the shipped, not its own 1) "
+        .. "and its specials' every_s 20: every player feels the same")
     -- the menu's settings rows pressed while playing with the host's (COOP JOIN picked): its own setup and co-op
     -- settings change and are saved; CFG keeps the host's
     local q = {}

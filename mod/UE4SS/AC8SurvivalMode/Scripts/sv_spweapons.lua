@@ -53,6 +53,52 @@ end
 
 local function letter(k) return string.char(65 + k) end
 
+---------------------------------------------------------------------------------------------------- missiles at once
+-- The user, 2026-10-31: "is there a hard cap on how many AI turrets can target the player at once? I've only ever seen 4
+-- missiles launch at me at one time from 4 different targets". There is: the game lets at most MissileNumberLimitPlane
+-- missiles from aircraft and MissileNumberLimitNonPlane from everything else (ships, SAM sites, turrets) be in the air at a
+-- player at once, 2 and 2 on every difficulty (DT_NPC_Difficulty, Story to Ace), kept on the player's plane
+-- (LivePlayerPlane MaxPlaneAttackerMissiles / MaxNonPlaneAttackerMissiles; MaxPursuitAttackers the aircraft chasing it).
+-- CFG.attackers ([attackers]): your plane's own (an instance: the stock table stays as it is) set to plane_missiles /
+-- nonplane_missiles / pursuers (0: the game's) every check_s, again when the game puts them back (logged once a plane).
+-- Each player's own plane on their own game (co-op too).
+ATK = {}
+function ATK.tick(now)
+    local c = CFG.attackers
+    if type(c) ~= "table" or c.enabled == false or not now or now < (ATK.nextAt or 0) then return end
+    ATK.nextAt = now + (tonumber(c.check_s) or 2)
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not (pawn and valid(pawn)) then return end
+    local a = addrOf(pawn)
+    local want = { MaxPlaneAttackerMissiles = tonumber(c.plane_missiles) or 0, MaxNonPlaneAttackerMissiles = tonumber(c.nonplane_missiles) or 0,
+                   MaxPursuitAttackers = tonumber(c.pursuers) or 0 }
+    local fresh = a ~= ATK.addr
+    if fresh then ATK.addr, ATK.was, ATK.reverts = a, {}, 0 end
+    local set, back = {}, false
+    for f, w in pairs(want) do
+        local okR, v = pcall(function() return pawn[f] end)
+        if okR and type(v) == "number" then
+            if fresh then ATK.was[f] = v end
+            if w > 0 and v ~= w then
+                if not fresh then back = true end
+                local okW = pcall(function() pawn[f] = math.floor(w) end)
+                set[#set + 1] = string.format("%s %d -> %s", f, v, okW and tostring(math.floor(w)) or "NOT set")
+            end
+        elseif fresh then
+            set[#set + 1] = f .. " not readable"
+        end
+    end
+    if fresh then
+        table.sort(set)
+        log(string.format("attackers: your plane's missiles-at-once limits: %s (the game's: planes %s, ships / SAMs %s, chasers %s)",
+            #set > 0 and table.concat(set, ", ") or "as set", tostring(ATK.was.MaxPlaneAttackerMissiles),
+            tostring(ATK.was.MaxNonPlaneAttackerMissiles), tostring(ATK.was.MaxPursuitAttackers)))
+    elseif back then
+        ATK.reverts = ATK.reverts + 1
+        if ATK.reverts == 1 then log("attackers: the game put your plane's limits back; set again (" .. table.concat(set, ", ") .. ")") end
+    end
+end
+
 function SPW.tick(now)
     local c = cfg()
     if c.enabled == false or not D or not now or D.state == "wait" or not (CFG.special and CFG.special.enabled) then return end

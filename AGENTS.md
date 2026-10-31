@@ -811,6 +811,19 @@ boosts never applied; the user's "aegis ships still don't engage far enough", 20
 SV_Ally_Aegis's ChildNPCId to SV_Turret_aegs_mk45 / mk15 / mk41_Ally and SV_Turret_aegs_mk45_Ally's to
 SV_Turret_aegs_artillery_Ally (asserted, 4), so its turrets fly their own fire control (CFG.allies.ships.Aegis.fcs: 25 km
 search, x2 lock-on, 20 km / 30 s missiles) for the first time. Watch its kills and the balance.
+0.73.47-coop2mp.48 (built and installed 2026-10-31, zip 0.73.47, hash 55e7367f...40bf32e; not yet run in game): the missiles-at-once cap (user: "is there a hard cap on how
+many AI turrets can target the player at once? I've only ever seen 4 missiles launch at me at one time from 4 different
+targets"): the game allows MissileNumberLimitPlane 2 missiles from aircraft and MissileNumberLimitNonPlane 2 from
+everything else (ships, SAM sites, turrets) in the air at a player at once, on every difficulty (DT_NPC_Difficulty,
+Story to Ace), kept on the player's plane (LivePlayerPlane MaxPlaneAttackerMissiles / MaxNonPlaneAttackerMissiles,
+MaxPursuitAttackers the chasers). (Mission 10's level has a LiveFCSWorldSubsystemModule_LimitActivator for its MainGun
+arms; Survival's level has none.) sv_spweapons.lua ATK sets your plane's own (an instance; the stock table as it is) to
+CFG.attackers plane_missiles 4 / nonplane_missiles 6 (pursuers 0: the game's) every 2 s, again when the game puts them
+back: `attackers: your plane's missiles-at-once limits: ... (the game's: planes 2, ships / SAMs 2, chasers N)`. Co-op
+(user: "make it so that in COOP all players feel the same effects"): each game sets its own player's plane (each
+player's missiles are decided on their own game), with the host's [attackers] and [special.fire] (the settings sync:
+not PERSONAL; coop_settings_test checks a joiner takes them); the fleet's and the STORE Aegis's boosts are built into
+every game's rows at its main menu and the enemies' specials fire at every player (0.73.43).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

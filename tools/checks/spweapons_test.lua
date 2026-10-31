@@ -140,6 +140,30 @@ check(readAll(MOD .. "/Scripts/sv_coop.lua"):find("pcall(SPW.noteRows, unit, q.o
     "sv_coop.lua's doSpawn (a joiner's copy of the host's spawn) tells SPW its rows")
 check(readAll(MOD .. "/Scripts/sv_coop.lua"):find('"^RE_SV_SpecFire_",', 1, true) ~= nil, "the event never forwarded (KEEP_EVENTS)")
 
+print("missiles at once (ATK)")
+local pp = { full = "BP_PlayerPlane_C_1", addr = 501, MaxPlaneAttackerMissiles = 2, MaxNonPlaneAttackerMissiles = 2, MaxPursuitAttackers = 3 }
+survivalPC = { full = "PC", Pawn = pp }
+logs = {}
+ATK.tick(1)
+check(pp.MaxPlaneAttackerMissiles == CFG.attackers.plane_missiles and pp.MaxNonPlaneAttackerMissiles == CFG.attackers.nonplane_missiles
+    and pp.MaxPursuitAttackers == 3, "your plane's limits set (planes, ships / SAMs), chasers left as the game's (pursuers 0)")
+check(#logs == 1 and logs[1]:find("the game's: planes 2, ships / SAMs 2, chasers 3", 1, true), "logged with the game's: " .. tostring(logs[1]))
+pp.MaxNonPlaneAttackerMissiles = 2
+ATK.tick(2); ATK.tick(4)
+check(pp.MaxNonPlaneAttackerMissiles == CFG.attackers.nonplane_missiles and #logs == 2 and logs[2]:find("put your plane's limits back", 1, true),
+    "the game put one back: set again, logged once")
+local pp2 = { full = "BP_PlayerPlane_C_2", addr = 502, MaxPlaneAttackerMissiles = 2, MaxNonPlaneAttackerMissiles = 2, MaxPursuitAttackers = 3 }
+survivalPC.Pawn = pp2
+ATK.tick(10)
+check(pp2.MaxPlaneAttackerMissiles == CFG.attackers.plane_missiles and #logs == 3, "a new plane (a respawn): set, logged")
+CFG.attackers.enabled = false
+local pp3 = { full = "BP_PlayerPlane_C_3", addr = 503, MaxPlaneAttackerMissiles = 2, MaxNonPlaneAttackerMissiles = 2, MaxPursuitAttackers = 3 }
+survivalPC.Pawn = pp3
+ATK.tick(20)
+check(pp3.MaxPlaneAttackerMissiles == 2, "enabled = false: the game's")
+CFG.attackers.enabled = true
+survivalPC = nil
+
 print("the build")
 local se = readAll(MOD .. "/../../../tools/survival_events.py")
 check(se:find("SPEC_SLOT = 'WN_WEAPON_4'", 1, true) and SPW.FCS_SLOT == 3, "SPEC_SLOT WN_WEAPON_4 = slot 3 (SPW.FCS_SLOT)")
