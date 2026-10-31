@@ -640,6 +640,31 @@ joiner's doSpawn takes a stuck Alicorn copy off whole (RE_SV_AlcnRemove, once) b
 target guard tests the weak actor only in classes that use it unchecked (TcWeakUnchecked: no `test rax, rax` after
 the Get, no inline `bts r32, 21` before it: 0x1474515a0, 0x147439690, 0x14743a4c0) and, in the first class, only its
 raw +0x18 / +0x28 (it tests the weak itself): 4 classes. Not yet run in game.
+0.73.33-coop2mp.34 (runtime 0.32.9; built and installed 2026-10-31, zip 0.73.33, hash 864bda51...712225; not yet run in
+game): VOID WATCHER 1 and SNIPER (user, 2026-10-31: Mission 28's AWACS
+"Take off from the airfield as a purchasable ally", "Rename it too VOID WATCHER 1", "give it's ESM a huge boost in range
+and have it orbit around the airfield"; "rename VIPER to SNIPER and change their standard missiles to LAAM's", "I want
+the stock aircraft files touched but for Survival Mode"). VOID WATCHER 1: the E-767 Magnolia (OP0005_e767_MS28: flares,
+MS28ESM000 -> BP_FCS_ESM_MS28 -> BP_wp_esm_MS28, class LiveElectronicSupportMeasures) as Survival's row SV_Ally_VoidWatcher
+(DT_SV_NpcRows, name key SV_VoidWatcher) on its own world-data unit SV_Unit_VoidWatcher (one AI object copied from
+MOONCHILD's lead at Comona Airport, its desc naming sv_ally_voidwatcher on Mission 22's e767_common, so its NLID_1000
+behaviour is built at level load; callsign on its box), MOONCHILD's lead's scramble (hold, taxi, roll, climb), airborne:
+gear up, not invincible, engagement None, SV_AwacsAir 1, then SV_Path_VoidWatcherOrbit (12 points, 7 km round the
+airfield, 4.5 km up, 650 km/h; each lap's end starts it again; tools/survival_events.py AWACS_*, build_awacs). Lua
+(sv_allies.lua ALLY.awacsTick, CFG.allies.awacs): the STORE's DEFENCES page row VoidWatcher (12000 Z, one at a time),
+takeoff once you're airborne (a joiner's purchase built by the host), its ESM fired every esm.every_s 20 while airborne
+(RE_SV_AwacsEsm: WN_WEAPON_2 by Mission 19's LiveFireOneShotWeapon, forwarded in co-op), its ESM fire control
+(MS28ESM000_SVA) reaching capture_m 60 km and ready again in 0.5 s, and each new ESM field of class BP_wp_esm_MS28_C
+(NotifyOnNewObject LiveElectronicSupportMeasures; an instance, never the class) set to SupportEffectRangeMeter /
+EffectRangeMeter range_m 25000 (stock 3200), LifeTime life_s 24; the ALLIES row by name, co-op room code "v<n>",
+migration's rebuild item VoidWatcher. SNIPER (was VIPER): name in CFG; its row (Survival's copy of OP1022_f16c_01)
+carries NPC_FCS_PlaneLAAM000 where the stock row has NPC_FCS_PlaneMsl000, written at build time
+(survival_events.ALLY_WINGMEN_MISSILE, build_npc_rows; the stock row as shipped), then boosted as every ally weapon.
+Log lines: `allies: VOID WATCHER 1's ESM on <row>: within N m`, `... taxiing out`, `... ESM fired`, `... ESM field <name>:
+support range A -> B m, range A -> B m, life A -> B s`, `... lost N s after it spawned`. Not yet known in game: whether an
+E-767 follows the fighter scramble's taxi / roll / climb paths (it's invincible until airborne), whether its ESM fires on
+command (as the jammer's ECM does) and whether the field's range takes from an instance set at construction.
+tools/checks/defences_test.sh's "VOID WATCHER 1 and SNIPER" and coop_ground_test's room code cover the Lua.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

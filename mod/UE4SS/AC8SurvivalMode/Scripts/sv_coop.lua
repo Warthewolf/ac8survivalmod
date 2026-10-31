@@ -2393,9 +2393,12 @@ local function onBuildAnswer(f)
 end
 -- (a joiner) the host's allies summary in "rnd" (ALLY.roomCode: "m2w0s1") -> { m =, w =, s = } of what's in it, or nil
 local function roomAlliesOf(v)
-    if type(v) ~= "string" or v == "" or #v > 9 or v:gsub("[mws]%d%d?", "") ~= "" then return nil end
+    if type(v) ~= "string" or v == "" or #v > 12 or v:gsub("[mwvs]%d%d?", "") ~= "" then return nil end
     local t = {}
-    for k, n in v:gmatch("([mws])(%d+)") do t[k] = tonumber(n) end
+    for k, n in v:gmatch("([mwvs])(%d+)") do                 -- (each letter once: m MOONCHILD, w SNIPER, v VOID WATCHER 1, s ships)
+        if t[k] then return nil end
+        t[k] = tonumber(n)
+    end
     return t
 end
 -- (a joiner, sv_allies.lua ALLY.hudLine) the room's allied flights and ships, from the host's last "rnd" (5 s at most
@@ -2465,7 +2468,7 @@ end
 -- the next after link_s. Planes keep their owner (P.sid): one back in another slot has its plane moved with them
 -- (SV_CoopSwapPP), a slot that's someone else's has the old plane set aside, hidden (never destroyed mid-level).
 do
-local ITEM_OK = { AAGun = true, SAM = true, Ciws = true, Wingmen = true, Moonchild = true, ShipAegis = true }
+local ITEM_OK = { AAGun = true, SAM = true, Ciws = true, Wingmen = true, Moonchild = true, ShipAegis = true, VoidWatcher = true }
 local function mig() return cfg().migration or {} end
 local function sidOk(v) return type(v) == "string" and v:match("^%d+$") ~= nil and #v >= 15 and #v <= 20 end
 function M.mySid()
@@ -2489,7 +2492,8 @@ local function allyList()
     local R, out = ALLY and ALLY.run, {}
     if not R then return "" end
     for _, a in pairs(R.up or {}) do
-        local item = a.kind == "ship" and ("Ship" .. tostring(a.key)) or (a.ally == "wingmen" and "Wingmen" or "Moonchild")
+        local item = a.kind == "ship" and ("Ship" .. tostring(a.key)) or (a.ally == "wingmen" and "Wingmen")
+            or (a.ally == "awacs" and "VoidWatcher") or "Moonchild"
         local b = a.buyer and M.roster[a.buyer] and M.roster[a.buyer].sid or "0"
         if ITEM_OK[item] then out[#out + 1] = item .. ":" .. b end
     end

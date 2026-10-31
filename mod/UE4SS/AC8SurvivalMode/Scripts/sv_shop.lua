@@ -317,6 +317,15 @@ local function offer(name)
         if not AF.hp or AF.down then o.why = "THE AIRFIELD IS DOWN."
         elseif AF.hp >= (AF.max or CFG.airfield.hp) then o.why = "THE AIRFIELD IS NOT DAMAGED."
         else o.price = shopPrice(name) end
+    elseif o.role == "ally_awacs" then                                  -- VOID WATCHER 1 (CFG.allies.awacs)
+        local aw = CFG.allies.awacs
+        local up, free = ALLY.status({ aw.unit })
+        o.label = it.label
+        o.help = string.format("%s, an E-767 AWACS: it takes off from the airfield once you're airborne, orbits it and keeps its "
+            .. "ESM up over the whole airfield (%d km). It never fights; enemies may hunt it.", aw.name, math.floor(aw.esm.range_m / 1000))
+        if not (CFG.allies.enabled and aw.enabled and ALLY.awacsReady) then o.why = "NOT AVAILABLE."
+        elseif up > 0 or not free then o.why = aw.name .. " IS UP."
+        else o.price, o.unit = shopPrice(name), free end
     elseif o.role == "ally_air" or o.role == "ally_ship" then          -- CFG.allies
         local c = CFG.allies
         local units = o.role == "ally_air" and c.aircraft.units or c.ships[it.ship].units
@@ -458,7 +467,7 @@ function shopBuildFor(slot, name, price, kind)
     local it = CFG.shop.items[name]
     if not (it and D and nativeReady()) then return false, "NOT AVAILABLE RIGHT NOW." end
     local role = it.kind and "ammo" or it.role
-    if role == "ally_air" or role == "ally_ship" then
+    if role == "ally_air" or role == "ally_ship" or role == "ally_awacs" then
         local o = offer(name)
         if not o.unit then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
         return ALLY.buy(o.role, o.unit, it.ship or it.ally, price, slot)
@@ -550,7 +559,8 @@ function shopBuy(name)
         if not (after and after >= 99) then return done("COULD NOT REPAIR IT (NOTHING CHARGED).") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         return done(string.format("AIRCRAFT REPAIRED (%s%% -> %d%%) for %d.", tostring(before), after, price))
-    elseif COOP and COOP.client and COOP.client() and (o.role == "ally_air" or o.role == "ally_ship" or (o.unit and o.kind)) then
+    elseif COOP and COOP.client and COOP.client() and (o.role == "ally_air" or o.role == "ally_ship" or o.role == "ally_awacs"
+        or (o.unit and o.kind)) then
         -- co-op: the allies and the airfield's defences are the host's (one airfield, one sky for everyone): the host
         -- builds it in its game, which sends it to every game, and you pay now (refunded on a refusal or no answer;
         -- sv_coop.lua "ab" / "ak" / "ax"). The co-op run of 2026-10-30: wingmen, MOONCHILD, AEGIS, AA guns, SAM sites
@@ -559,7 +569,7 @@ function shopBuy(name)
         if not ok then return done(msg) end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         return done(msg)
-    elseif o.role == "ally_air" or o.role == "ally_ship" then
+    elseif o.role == "ally_air" or o.role == "ally_ship" or o.role == "ally_awacs" then
         local ok, msg = ALLY.buy(o.role, o.unit, it.ship or it.ally, price)
         if not ok then return done(msg) end
         LB.stat("allies", 1)

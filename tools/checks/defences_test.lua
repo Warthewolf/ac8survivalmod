@@ -525,8 +525,8 @@ end
 print("the build in step")
 do
     local bs = readAll(MOD .. "/../../../tools/build_survival.py")
-    check(has(bs, "('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',") and has(bs, "['AAGun', 'SAM', 'Ciws', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']")
-          and has(bs, "('SVStoreToDefences', 'SV_Store_ToDefences', '25')"), "build_survival.py: the DEFENCES page (25) and AIRFIELD's DEFENCES > row")
+    check(has(bs, "('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',") and has(bs, "['AAGun', 'SAM', 'Ciws', 'VoidWatcher', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']")
+          and has(bs, "('SVStoreToDefences', 'SV_Store_ToDefences', '25')"), "build_survival.py: the DEFENCES page (25, VOID WATCHER 1 its fourth row) and AIRFIELD's DEFENCES > row")
     local last = SHOP.menuRows[#SHOP.menuRows]
     check(#SHOP.menuRows == 6 and last.row == "SVStoreDefences" and last.id == "SV_StoreDefences" and last.index == 25
           and SHOP.icons.Ciws and SHOP.icons["25"], "sv_flights: SHOP.menuRows' sixth page at 25, the CIWS's and its row's icons")
@@ -534,6 +534,110 @@ do
           "the model row's blueprint the build checks is the class repairs and health look for")
     check(CFG.shop.items.Ciws and CFG.shop.items.Ciws.role == "ciws" and #DEF.ciws.units == 4 and DEF.ciws.price == 6000,
           "CFG: the STORE's Ciws item, 4 units, 6000 Z")
+end
+
+---------------------------------------------------------------------------------------------------- VOID WATCHER 1, SNIPER
+-- (user, 2026-10-31: Mission 28's AWACS "Take off from the airfield as a purchasable ally", "Rename it too VOID
+-- WATCHER 1", "give it's ESM a huge boost in range and have it orbit around the airfield"; "rename VIPER to SNIPER and
+-- change their standard missiles to LAAM's")
+print("VOID WATCHER 1 and SNIPER")
+do
+    local AW = CFG.allies.awacs
+    LB = LB or {}
+    if not LB.stat then LB.stat = function() end end    -- (sv_leaderboard's, not loaded here: an ally bought counts)
+    FCS_ROWS[#FCS_ROWS + 1] = { "NPC_FCS_PlaneFlr100", { NpcWeaponId = NONE, MagazineCapacity = 10, CaptureDistance = 1500.0,
+        CaptureAngleRange = 60.0, ActivationTime = 0.5, TriggeringTime = 1.0, ShotIntervalTime = 5.0, RestingTime = 5.0 } }
+    FCS_ROWS[#FCS_ROWS + 1] = { "NPC_FCS_MS28ESM000", { NpcWeaponId = NONE, MagazineCapacity = 10, CaptureDistance = 6000.0,
+        CaptureAngleRange = 60.0, ActivationTime = 2.0, TriggeringTime = 15.0, ShotIntervalTime = 15.0, RestingTime = 30.0 } }
+    local rows = {}
+    for _, r in ipairs(MINE_ROWS) do rows[#rows + 1] = r end
+    rows[#rows + 1] = { AW.row, npcRow("NPC_FCS_PlaneFlr100", { NpcFCSId1 = FName("NPC_FCS_MS28ESM000") }) }
+    ALLY.awacsReady = nil
+    local from = setup(rows)
+    local r = T.npc:FindRow(AW.row)
+    local esm = T.fcs:FindRow("NPC_FCS_MS28ESM000_SVA")
+    check(ALLY.awacsReady == true and r and r.NpcFCSId1:ToString() == "NPC_FCS_MS28ESM000_SVA" and has(line("rows in DT_NPC", from), "VOID WATCHER 1 in"),
+          "its row in DT_NPC, its ESM on fire control of its own (" .. tostring(line("rows in DT_NPC", from)) .. ")")
+    check(esm and esm.CaptureDistance == AW.esm.capture_m and esm.RestingTime == 0.5 and esm.ShotIntervalTime == 0.5
+          and esm.CaptureAngleRange == 180 and has(line("allies: VOID WATCHER 1's ESM on NPC_FCS_MS28ESM000_SVA: within 60000 m", from), "ready again"),
+          "its ESM's fire control: within 6000 -> 60000 m, all round, ready again in 0.5 s (rest 30 s stock)")
+    check(texts[AW.name_key] == "VOID WATCHER 1" and texts[CFG.allies.wingmen.name_key] == "SNIPER", "the names: VOID WATCHER 1, SNIPER (was VIPER)")
+    check(has(readAll(MOD .. "/../../../tools/survival_events.py"), "ALLY_WINGMEN_MISSILE = ('NPC_FCS_PlaneMsl000', 'NPC_FCS_PlaneLAAM000')")
+          and has(readAll(MOD .. "/../../../tools/build_survival.py"), "if npc == survival_events.ALLY_WINGMEN_NPC:      # SNIPER's LAAMs"),
+          "SNIPER's LAAMs written into Survival's copy of the F-16C row at build time (the stock row as shipped)")
+    -- the STORE row
+    D = { round = 3, state = "wait", now = 100, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+    RUN = RUN or {}
+    RUN.credits, RUN.spent, RUN.msg, RUN.bought = 50000, 0, RUN.msg or {}, RUN.bought or {}
+    ALLY.run = nil
+    alive[AW.unit] = 0
+    shop()
+    check(has(texts.SV_Shop_VoidWatcher, "VOID WATCHER 1: E-767 AWACS   12000 Z") and has(texts.SV_Shop_VoidWatcher_Help, "orbits it")
+          and has(texts.SV_Shop_VoidWatcher_Help, "(25 km)"), "the STORE's row: 12000 Z, its help (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+    -- bought: it waits for you to take off
+    local spent0 = RUN.spent
+    shop("VoidWatcher")
+    local R = ALLY.state()
+    local msg = RUN.msg.VoidWatcher
+    check(has(msg, "TAKES OFF ONCE YOU'RE AIRBORNE") and RUN.spent == spent0 + 12000 and R.up[AW.unit] and R.up[AW.unit].queued,
+          "bought for 12000: it waits (" .. tostring(msg) .. ")")
+    shop("VoidWatcher")
+    check(texts.SV_Shop_VoidWatcher == "VOID WATCHER 1: E-767 AWACS" and RUN.msg.VoidWatcher == "VOID WATCHER 1 IS UP."
+          and RUN.spent == spent0 + 12000, "one at a time: no price on its row, a second press says it's up, nothing charged")
+    R.nextTakeoff = 0
+    onAirfield = true
+    local n0 = #spawned
+    D.now = 200; ALLY.tick(200)
+    check(#spawned == n0, "still at the airfield: on the ground")
+    onAirfield = false
+    local c0 = #callouts
+    D.now = 201; ALLY.tick(201)
+    check(spawned[#spawned] == AW.unit and not R.up[AW.unit].queued and has(callouts[#callouts], "VOID WATCHER 1 CLEARED FOR TAKEOFF")
+          and has(callouts[#callouts], "ESM OVER THE AIRFIELD"), "you airborne: it taxis out (" .. tostring(callouts[#callouts]) .. ")")
+    -- its ESM: only once it's airborne, then every every_s
+    local air = 0
+    local rawFlags = svFlags
+    svFlags = function() return { SV_AwacsAir = air } end
+    local function esmCount() local k = 0; for _, e in ipairs(events) do if e == AW.esm.event then k = k + 1 end end; return k end
+    local e0 = esmCount()
+    D.now = 205; ALLY.tick(205)
+    check(esmCount() == e0, "on its takeoff roll: no ESM yet")
+    air = 1
+    D.now = 206; ALLY.tick(206)
+    D.now = 210; ALLY.tick(210)
+    check(esmCount() == e0 + 1, "airborne: its ESM fired (RE_SV_AwacsEsm), once")
+    D.now = 206 + AW.esm.every_s; ALLY.tick(D.now)
+    check(esmCount() == e0 + 2, "every_s (20 s) on: again")
+    -- each ESM field of its class: its range and time; another class's left as it is
+    local field = { full = "BP_wp_esm_MS28_C /Game/Maps/PL_SurvivalMode:PersistentLevel.BP_wp_esm_MS28_C_1", addr = addr(),
+                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 15 }
+    local other = { full = "BP_wp_ecm_a0_C /Game/Maps/PL_SurvivalMode:PersistentLevel.BP_wp_ecm_a0_C_1", addr = addr(),
+                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 15 }
+    ALLY.esmNew = { field, other }
+    local l0 = #logs
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(field.SupportEffectRangeMeter == 25000 and field.EffectRangeMeter == 25000 and field.LifeTime == 24
+          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1: support range 3200 -> 25000 m", l0), "life 15 -> 24 s"),
+          "its ESM field: 3200 -> 25000 m, 15 -> 24 s (an instance's; logged)")
+    check(other.SupportEffectRangeMeter == 3200 and other.LifeTime == 15, "an ECM field of another class: as it was")
+    svFlags = rawFlags
+    -- the ALLIES row and the room's code
+    check(has(ALLY.hudLine() or "", "VOID WATCHER 1") and not has(ALLY.hudLine() or "", "VOID WATCHER 1 1"),
+          "the ALLIES row: VOID WATCHER 1 by its name (" .. tostring(ALLY.hudLine()) .. ")")
+    check(ALLY.roomCode() == "v1", "co-op: the room's code v1 (" .. tostring(ALLY.roomCode()) .. ")")
+    -- shot down
+    alive[AW.unit] = 0
+    D.now = D.now + 10; R.checkAt = 0; ALLY.tick(D.now)
+    check(R.up[AW.unit] == nil and has(callouts[#callouts], "VOID WATCHER 1 FLIGHT LOST"), "shot down: lost, the STORE can send another")
+    onAirfield = true                                 -- (the STORE's texts: at the airfield)
+    shop()
+    check(has(texts.SV_Shop_VoidWatcher, "12000 Z"), "... and sells it again (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+    -- off: not sold
+    AW.enabled = false
+    shop("VoidWatcher")
+    check(texts.SV_Shop_VoidWatcher == "VOID WATCHER 1: E-767 AWACS" and RUN.msg.VoidWatcher == "NOT AVAILABLE.",
+          "[allies.awacs] enabled = false: not sold (" .. tostring(RUN.msg.VoidWatcher) .. ")")
+    AW.enabled = true
 end
 
 print(fails == 0 and "defences test: all passed" or ("defences test: " .. fails .. " FAILED"))

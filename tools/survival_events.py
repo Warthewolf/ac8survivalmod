@@ -498,7 +498,34 @@ ALLY_WINGMEN_ROW = 'sv_ally_wingmen'        # DT_SV_NpcMission row -> NpcId ALLY
 ALLY_WINGMEN_NPC = 'SV_Ally_Wingmen'
 ALLY_WINGMEN_SOURCE_NPC = 'OP1022_f16c_01'
 ALLY_WINGMEN_NAME_KEY = 'SV_Wingmen'
+# Squadron SNIPER (was VIPER; user, 2026-10-31: "rename VIPER to SNIPER and change their standard missiles to LAAM's",
+# "I think you might need to edit the aircraft files themselves"): Survival's copy of the F-16C row (ALLY_WINGMEN_NPC in
+# DT_SV_NpcRows, never the game's) has the game's AI LAAM fire control (the row the Shadow aces' LAAMs are on) where the
+# stock row has its standard missile; Scripts/sv_allies.lua then boosts it as every allied weapon (<FCS>_SVA)
+ALLY_WINGMEN_MISSILE = ('NPC_FCS_PlaneMsl000', 'NPC_FCS_PlaneLAAM000')
 ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names, set by build_survival.py
+# VOID WATCHER 1 (user, 2026-10-31: "Take off from the airfield as a purchasable ally", "Rename it too VOID WATCHER 1",
+# "give it's ESM a huge boost in range and have it orbit around the airfield"): Mission 28's E-767 AWACS Magnolia
+# (OP0005_e767_MS28: flares and its ESM, MS28ESM000 -> BP_wp_esm_MS28) under Survival's name key, one AI object copied
+# from MOONCHILD's lead parked at Comona Airport (its NPC row the E-767's in the world data, so it builds the large
+# aircraft's behaviour set NLID_1000 at level load: hard rule 20). Its appearance runs MOONCHILD's lead's scramble
+# (hold, taxi, roll, climb); airborne, gear up, no longer invincible, no fighting (engagement None) and onto its orbit
+# (AWACS_PATH: a smooth circle round the airfield, each lap's end starting it again). Lua (Scripts/sv_allies.lua,
+# CFG.allies.awacs) sells and spawns it, fires its ESM (RE_SV_AwacsEsm: AWACS_ESM_SLOT, as the jammer's ECM: the AI
+# never switches a pod on by itself) and sets each ESM field's range. SV_AwacsAir: 1 once it's airborne.
+AWACS_UNIT = 'SV_Unit_VoidWatcher'           # Scripts/sv_config.lua CFG.allies.awacs.unit
+AWACS_OBJ = 'SV_Obj_VoidWatcher'
+AWACS_ROW = 'sv_ally_voidwatcher'            # DT_SV_NpcMission row -> NpcId AWACS_NPC (on Mission 22's e767_common)
+AWACS_ROW_TEMPLATE = 'e767_common'
+AWACS_NPC = 'SV_Ally_VoidWatcher'            # DT_SV_NpcRows: AWACS_SOURCE_NPC under name key AWACS_NAME_KEY
+AWACS_SOURCE_NPC = 'OP0005_e767_MS28'
+AWACS_NAME_KEY = 'SV_VoidWatcher'            # its text, VOID WATCHER 1, set by Lua (SV_SetText)
+AWACS_ESM_SLOT = 'WN_WEAPON_2'               # its row's fire control: PlaneFlr100, MS28ESM000 (hard rule 40)
+AWACS_PATH = 'SV_Path_VoidWatcherOrbit'
+AWACS_ORBIT_KM = 7.0                         # the orbit's radius round the airfield (AIRFIELD_KM), its points, height
+AWACS_ORBIT_POINTS = 12
+AWACS_ALT_KM = 4.5
+AWACS_SPEED = '650.0'                        # km/h on the orbit
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
@@ -650,6 +677,20 @@ def heavy_routes():
     return out
 
 
+def awacs_orbit():
+    """VOID WATCHER 1's orbit (AWACS_*): AWACS_ORBIT_POINTS points (cm) on a circle round the airfield, from the point
+    due south (y up is south here: the runway's climb-out heads that way), each inside the zone."""
+    import math
+    (zx, zy), half = ZONE_KM
+    pts = []
+    for k in range(AWACS_ORBIT_POINTS):
+        a = 2 * math.pi * k / AWACS_ORBIT_POINTS
+        x, y = AIRFIELD_KM[0] + AWACS_ORBIT_KM * math.sin(a), AIRFIELD_KM[1] + AWACS_ORBIT_KM * math.cos(a)
+        assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'the AWACS orbit leaves the zone'
+        pts.append((x * 100000.0, y * 100000.0, AWACS_ALT_KM * 100000.0))
+    return pts
+
+
 def wolf_held(k):
     """A Wolf flight's object k is the trap (held until sprung): the odd ones, each bait-and-trap pair's second."""
     return k % 2 == 1
@@ -758,7 +799,7 @@ KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission
 INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
              + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
              + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
-             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
+             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS] + ['SV_AwacsAir']
              + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp']
@@ -1055,6 +1096,7 @@ def build_events(stock_ep):
     build_wolf(g, stock_ep, t_search, t_engage)
     build_director(g, stock_ep, t_search, t_engage)
     build_heavy(g, stock_ep)
+    build_awacs(g, stock_ep)
     build_jammer(g, stock_ep)
     build_wraith(g)
     return g
@@ -1273,6 +1315,31 @@ def build_heavy(g, stock_ep):
           f'RE_SV_HeavyRoute_<NN><S> / HeavyLoop_<NN><L><S>, {HEAVY_SPEED} km/h)')
 
 
+AWACS_EVENTS = {}                              # build_allies' events build_awacs goes on from ('airborne')
+
+
+def build_awacs(g, stock_ep):
+    """VOID WATCHER 1's orbit and ESM (AWACS_*): airborne (build_allies) -> AWACS_PATH on Mission 16's Ladon path record,
+    each lap's end -> AWACS_PATH again (hard rules 1, 35, as the heavies' loops); RE_SV_AwacsEsm fires AWACS_ESM_SLOT on
+    it (Mission 19's LiveFireOneShotWeapon, as the jammer's ECM), which Scripts/sv_allies.lua fires every esm.every_s
+    while it's airborne. Forwarded in co-op: each joiner's copy fields its ESM there too."""
+    lua = runtime_lua()
+    assert 'RE_SV_AwacsEsm' in lua, 'Scripts/sv_config.lua CFG.allies.awacs never names RE_SV_AwacsEsm'
+    assert AWACS_UNIT in lua and AWACS_NAME_KEY in lua, 'Scripts/sv_config.lua CFG.allies.awacs != AWACS_UNIT / AWACS_NAME_KEY'
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    g.execute(t_path, AWACS_EVENTS['airborne'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
+    g.trigger(finish, 'SV_AwacsLap', arg_changes={0: AWACS_OBJ, 2: AWACS_PATH})
+    g.execute(t_path, 'SV_AwacsLap', {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
+    g.execute(t_fire, 'RE_SV_AwacsEsm', {0: AWACS_ESM_SLOT, 1: AWACS_OBJ})
+    print(f'  VOID WATCHER 1: orbit {AWACS_PATH} ({AWACS_ORBIT_KM} km round the airfield, {AWACS_ALT_KM} km up, '
+          f'{AWACS_SPEED} km/h), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
+
+
 JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)
 
 
@@ -1398,6 +1465,28 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
             g.execute(t_eng_air, ev, {0: o})
             g.execute(t_search, ev, {0: o, 1: 'NoneSelect'})
             flag(ev, air, 'Add', 1)
+    # VOID WATCHER 1 (AWACS_*): MOONCHILD's lead's scramble for its one aircraft; airborne: gear up, no longer
+    # invincible, no fighting, SV_AwacsAir 1, then the orbit (build_awacs)
+    o = AWACS_OBJ
+    up = 'SV_AwacsUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: AWACS_UNIT})
+    flag(up, 'SV_AwacsAir', 'Set', 0)
+    g.execute(t_hold, up, {0: o, 2: TAKEOFF_LEAD[0]})
+    g.execute(t_gear_dn, up, {0: o})
+    g.execute(t_attr_hold, up, {1: o})
+    g.execute(t_eng_hold, up, {0: o})
+    g.execute(t_taxi, up, {0: o}, delay=3.0)
+    g.execute(t_attr_taxi, up, {1: o}, delay=3.0)
+    for path, nxt, tag in ((TAKEOFF_LEAD[0], t_roll, 'L1'), (TAKEOFF_LEAD[1], t_climb, 'L2')):
+        ev = f'SV_AwacsTakeoff{tag}'
+        g.trigger(finish, ev, arg_changes={0: o, 2: path})
+        g.execute(nxt, ev, {0: o})
+    AWACS_EVENTS['airborne'] = ev = 'SV_AwacsAirborne'
+    g.trigger(finish, ev, arg_changes={0: o, 2: TAKEOFF_LEAD[2]})
+    g.execute(t_gear_up, ev, {0: o})
+    g.execute(t_attr_air, ev, {1: o})
+    g.execute(t_eng_hold, ev, {0: o})
+    flag(ev, 'SV_AwacsAir', 'Set', 1)
     # Survival COOP: the other players' planes (COOP_PEER_*): gear up and no fighting as soon as each is up
     for c, unit, obj in zip(COOP_PEER_SLOTS, COOP_PEER_UNITS, COOP_PEER_OBJS):
         ev = f'SV_CoopPeerUp{c}'

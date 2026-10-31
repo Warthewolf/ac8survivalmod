@@ -349,8 +349,25 @@ def ally_units(units, used_ids, z, top_number, v):
             (ix['bShowCallSignForAlly'], 'bShowCallSignForAlly', False, ('raw', 'Bool', b'\x01')),
             (ix['GameObjectDisplayNameID02'], 'GameObjectDisplayNameID02', False, ('name', key, 0))], key=lambda q: q[0])
         z.nb.add(key)
+    # VOID WATCHER 1 (survival_events.AWACS_*): one aircraft of MOONCHILD's source, parked where its lead is, on the
+    # E-767's row (its behaviour built at level load: hard rule 20), killable, its name on its target box as the co-op
+    # stand-ins' (the desc's GameObjectDisplayNameID02, shown for an ally with bShowCallSignForAlly)
+    names = copy_unit(units, used_ids, z, survival_events.ALLY_AIR_SOURCE, survival_events.AWACS_UNIT, 1, top_number,
+                      survival_events.AWACS_OBJ, survival_events.AWACS_ROW)
+    assert names == [survival_events.AWACS_OBJ], names
+    u = unit_by(survival_events.AWACS_UNIT)
+    clear_flags(u, ('bIsInvincible',))
+    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
+                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
+        (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01')),
+        (ix['bShowCallSignForAlly'], 'bShowCallSignForAlly', False, ('raw', 'Bool', b'\x01')),
+        (ix['GameObjectDisplayNameID02'], 'GameObjectDisplayNameID02', False, ('name', survival_events.AWACS_NAME_KEY, 0))],
+        key=lambda q: q[0])
+    z.nb.add(survival_events.AWACS_NAME_KEY)
     print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
-          f'{len(survival_events.ally_ships())} ships')
+          f'{len(survival_events.ally_ships())} ships, VOID WATCHER 1 ({survival_events.AWACS_UNIT})')
 
 
 M13 = '/Game/Maps/Ingame/Mission013/'
@@ -616,6 +633,9 @@ def heavy_paths(used_ids, z, v):
         loop = H['circuit']
         paths.append(make_path(z, used_ids, src_path, H['path'], H['route'], smooth=True, after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, H['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
+    orbit = survival_events.awacs_orbit()            # VOID WATCHER 1's (survival_events.AWACS_*), into itself
+    paths.append(make_path(z, used_ids, src_path, survival_events.AWACS_PATH, orbit, smooth=True, before=orbit[-1],
+                           after=orbit[0]))
     near = sorted({(H['sector'], H['route_km']) for H in hs if H['route_km'] < survival_events.HEAVY_ROUTE_KM})
     print(f'  heavies: {2 * len(hs)} paths ({len(hs)} routes + loops); routes begun nearer: '
           + (', '.join(f'{s} {d:.1f} km' for s, d in near) or 'none'))
@@ -1235,7 +1255,7 @@ STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, titl
     ('SV_StoreTactical', 'StoreTactical', 'SV_Store_TitleTactical',
      ['Airstrike', 'Ecm', 'Decoy', 'Insurance', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
     ('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',
-     ['AAGun', 'SAM', 'Ciws', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
+     ['AAGun', 'SAM', 'Ciws', 'VoidWatcher', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
 ]
 STORE_MENU_FIRST = 20       # the first page's menu id (the game's table has 20 rows): Scripts/sv_flights.lua SHOP.menuRows
 # the landing page's rows, one per page they open (it lists 4 of Survival's beside its 2 stock rows): Scripts/sv_flights.lua
@@ -1719,7 +1739,8 @@ def build_npc_rows():
     # (under its name key) and turrets (as they are: main.lua gives every one of them fire control of its own)
     m22 = mission_npc_ids()
     allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY),
-              (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY)]
+              (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY),
+              (survival_events.AWACS_SOURCE_NPC, survival_events.AWACS_NPC, survival_events.AWACS_NAME_KEY)]
     allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
@@ -1729,6 +1750,15 @@ def build_npc_rows():
         f = survival_events.fname(src)
         row = copy.deepcopy(rows[(f[1], f[2])])
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+        if npc == survival_events.ALLY_WINGMEN_NPC:      # SNIPER's LAAMs where the F-16C's standard missile is
+            was, now = survival_events.ALLY_WINGMEN_MISSILE
+            swapped = 0
+            for i, q in enumerate(row[2]):
+                if q[1].startswith('NpcFCSId') and q[3] == ('name', was, 0):
+                    row[2][i] = (q[0], q[1], q[2], ('name', now, 0))
+                    swapped += 1
+            assert swapped == 1, f'{npc}: {was} in {swapped} fire-control slots, 1 expected'
+            z.nb.add(now)
         out.append(((npc, 0), row))
     # the STORE's CIWS (survival_events.DEFENCE_CIWS*): the game's land Phalanx on its allied model row (no NpcFCSId: its
     # blueprint's own arms fire, until main.lua gives it one: CFG.shop.items.Airfield.defences.ciws.fcs_row)
@@ -1934,6 +1964,7 @@ def build_npc_table():
     # turrets on copies of Mission 22's rows, all pointing at DT_SV_NpcRows copies (their names, their fire control)
     extra.append((survival_events.ALLY_AIR_ROW, 'f18e_common', survival_events.ALLY_AIR_NPC))
     extra.append((survival_events.ALLY_WINGMEN_ROW, 'f18e_common', survival_events.ALLY_WINGMEN_NPC))
+    extra.append((survival_events.AWACS_ROW, survival_events.AWACS_ROW_TEMPLATE, survival_events.AWACS_NPC))
     for src, (row, npc) in survival_events.DEFENCE_ROWS.items():           # the airfield's AA guns and SAM sites
         extra.append((row, src, npc))
     extra.append((survival_events.DEFENCE_CIWS_ROW[0], survival_events.DEFENCE_CIWS_MISSION_SOURCE,   # and the CIWS

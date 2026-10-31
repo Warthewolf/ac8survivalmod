@@ -32,6 +32,10 @@ local WINGMEN_ROW = "SV_Ally_Wingmen"
 -- row's kind (its health_add: CFG.shop.items.Airfield.defences[kind])
 local CIWS_ROW = "SV_Def_Ciws"
 ROW_SHIP[CIWS_ROW] = "Defence"
+-- VOID WATCHER 1's (CFG.allies.awacs: tools/build_survival.py, the E-767 Magnolia's row under SV_VoidWatcher), apart from
+-- ROWS as WINGMEN's; its unit is an allied aircraft's (logPlane: no kill credit, repaired between rounds)
+local AWACS_ROW = CFG.allies.awacs.row
+ALLY.unit[CFG.allies.awacs.unit] = "air"
 local DEF_ROW_KIND = { SV_Def_Gepa = "aa", SV_Def_Avng = "sam", [CIWS_ROW] = "ciws" }
 
 function ALLY.setup()
@@ -190,7 +194,7 @@ function ALLY.setup()
         return made[new] and new or nil
     end
     local n = 0
-    local all = { WINGMEN_ROW, CIWS_ROW }
+    local all = { WINGMEN_ROW, CIWS_ROW, AWACS_ROW }
     for _, row in ipairs(ROWS) do all[#all + 1] = row end
     local defs = CFG.shop.items.Airfield.defences
     for _, row in ipairs(all) do
@@ -201,7 +205,8 @@ function ALLY.setup()
         end
         if row == WINGMEN_ROW then ALLY.wingmenReady = have ~= nil end
         if row == CIWS_ROW then ALLY.ciwsReady = have ~= nil end
-        if have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW then n = n + 1 end
+        if row == AWACS_ROW then ALLY.awacsReady = have ~= nil end
+        if have ~= nil and row ~= WINGMEN_ROW and row ~= CIWS_ROW and row ~= AWACS_ROW then n = n + 1 end
         local sh = ROW_SHIP[row] and CFG.allies.ships[ROW_SHIP[row]]
         local dk = DEF_ROW_KIND[row] and defs[DEF_ROW_KIND[row]]
         local add = (sh and row == "SV_Ally_" .. ROW_SHIP[row] and sh.health_add) or (dk and dk.health_add) or nil
@@ -236,6 +241,18 @@ function ALLY.setup()
                     if id ~= "None" and id ~= "" and not id:find("_SVA") then
                         local new = allyFcs(id, ROW_SHIP[row])
                         if new then have["NpcFCSId" .. i] = FName(new); boosted = boosted + 1 end
+                        -- (VOID WATCHER 1's ESM: its fire control reaches capture_m, ready again at once)
+                        if new and row == AWACS_ROW and id:find("ESM", 1, true) then
+                            local esm = CFG.allies.awacs.esm
+                            local _, fr = dtCall(fcs, "FindRow", new)
+                            local okE = fr ~= nil and pcall(function()
+                                fr.CaptureDistance = esm.capture_m
+                                fr.CaptureAngleRange = 180
+                                fr.RestingTime, fr.ShotIntervalTime = 0.5, 0.5
+                            end)
+                            log(string.format("allies: %s's ESM on %s: within %d m, ready again in 0.5 s%s", CFG.allies.awacs.name,
+                                new, esm.capture_m, okE and "" or " (NOT set)"))
+                        end
                     end
                 end)
             end
@@ -253,14 +270,16 @@ function ALLY.setup()
     if type(SV_SetText) == "function" then
         if SV_SetText(CFG.allies.aircraft.name_key, CFG.allies.aircraft.name) == 1 then names = names + 1 end
         if SV_SetText(CFG.allies.wingmen.name_key, CFG.allies.wingmen.name) == 1 then names = names + 1 end
+        if SV_SetText(CFG.allies.awacs.name_key, CFG.allies.awacs.name) == 1 then names = names + 1 end
         for key, sh in pairs(CFG.allies.ships) do if SV_SetText("SV_Ship_" .. key, sh.name) == 1 then names = names + 1 end end
     end
     ALLY.ready = n == #ROWS
     if #shipSaid > 0 then log("allies: the ships' and the airfield's own fire control: " .. table.concat(shipSaid, ", ")) end
     if #gunSaid > 0 then log("allies: guns: " .. table.concat(gunSaid, ", ")) end
-    log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, CIWS %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
+    log(string.format("allies: %d of %d rows in DT_NPC%s, WINGMEN %s, CIWS %s, %s %s, %d weapons on their own fire control (x%.1f range, x%.1f times), %d names set",
         n, #ROWS, #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or "", ALLY.wingmenReady and "in" or "NOT in",
-        ALLY.ciwsReady and "in" or "NOT in", boosted, c.range_x, c.time_x, names))
+        ALLY.ciwsReady and "in" or "NOT in", CFG.allies.awacs.name, ALLY.awacsReady and "in" or "NOT in", boosted, c.range_x,
+        c.time_x, names))
 end
 
 -- CFG.allies.ally_speakers: on while a run is on (`want`), back to the game's values after it.
@@ -329,6 +348,13 @@ function ALLY.buy(role, unit, key, price, buyer)
         if not buyer then hudCallout(string.format(t.ship, sh.name), t.ship_sub) end
         return true, sh.name .. " AT SEA"
     end
+    if role == "ally_awacs" then                     -- VOID WATCHER 1: its own unit, off the ground as MOONCHILD is
+        local aw = CFG.allies.awacs
+        R.up[unit] = { kind = "air", ally = "awacs", queued = true, at = now, price = price, buyer = buyer }
+        log(string.format("allies: %s (%s) bought%s; it takes off once %s airborne", aw.name, unit,
+            buyer and string.format(" for player %d", buyer + 1) or "", buyer and "they're" or "you're"))
+        return true, aw.name .. " TAKES OFF ONCE YOU'RE AIRBORNE"
+    end
     -- an allied flight on MOONCHILD's units: MOONCHILD's F-22s, or the cheaper WINGMEN (key "wingmen")
     local wing = key == "wingmen"
     local name = wing and CFG.allies.wingmen.name or CFG.allies.aircraft.name
@@ -339,8 +365,14 @@ function ALLY.buy(role, unit, key, price, buyer)
 end
 
 -- An allied flight's name and scaling (MOONCHILD, or the WINGMEN on its units)
-local function airName(s) return (s and s.ally == "wingmen") and CFG.allies.wingmen.name or CFG.allies.aircraft.name end
-local function airScale(s) return ((s and s.ally == "wingmen") and CFG.allies.wingmen.scale or CFG.allies.aircraft.scale) or {} end
+local function airName(s)
+    if s and s.ally == "awacs" then return CFG.allies.awacs.name end
+    return (s and s.ally == "wingmen") and CFG.allies.wingmen.name or CFG.allies.aircraft.name
+end
+local function airScale(s)
+    if s and s.ally == "awacs" then return CFG.allies.awacs.scale or {} end
+    return ((s and s.ally == "wingmen") and CFG.allies.wingmen.scale or CFG.allies.aircraft.scale) or {}
+end
 
 -- An allied flight's level for this round (CFG.allies.aircraft.scale / wingmen.scale): { rank, ai, hx (health
 -- multiplier), tier name }
@@ -520,9 +552,9 @@ function ALLY.roomCode()
     local R = ALLY.run
     if not R then return "" end
     local air, c = airUp(R), CFG.allies
-    local m, w, ships = air[c.aircraft.name], air[c.wingmen.name], #ALLY.shipsAtSea()
+    local m, w, v, ships = air[c.aircraft.name], air[c.wingmen.name], air[c.awacs.name], #ALLY.shipsAtSea()
     return (m and ("m" .. math.min(m, 99)) or "") .. (w and ("w" .. math.min(w, 99)) or "")
-        .. (ships > 0 and ("s" .. math.min(ships, 99)) or "")
+        .. (v and ("v" .. math.min(v, 99)) or "") .. (ships > 0 and ("s" .. math.min(ships, 99)) or "")
 end
 
 function ALLY.hudLine()
@@ -532,11 +564,14 @@ function ALLY.hudLine()
     R = R or { up = {} }
     local parts, air, news = {}, {}, {}
     if room then
-        air[CFG.allies.aircraft.name], air[CFG.allies.wingmen.name] = room.m, room.w
+        air[CFG.allies.aircraft.name], air[CFG.allies.wingmen.name], air[CFG.allies.awacs.name] = room.m, room.w, room.v
     else
         air = airUp(R)
     end
-    for n, k in pairs(air) do parts[#parts + 1] = string.format("%s %d", n, k); news[#news + 1] = n end
+    for n, k in pairs(air) do                         -- (VOID WATCHER 1 by its name: "1" is in it)
+        parts[#parts + 1] = n == CFG.allies.awacs.name and (k > 0 and n or (n .. " (ON THE GROUND)")) or string.format("%s %d", n, k)
+        news[#news + 1] = n
+    end
     table.sort(news)                                  -- (pairs' order isn't news)
     local ships = room and (room.s or 0) or #ALLY.shipsAtSea()
     if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships; news[#news + 1] = "SHIPS" end
@@ -567,6 +602,86 @@ function ALLY.strike(bomber, ship)
         D.strikeSaid = D.round
         hudCallout(CFG.allies.text.strike, CFG.allies.text.strike_sub)
     end
+end
+
+-- VOID WATCHER 1 (CFG.allies.awacs), every tick: off the ground once its buyer's airborne and the runway's clear (as
+-- MOONCHILD), then its ESM fired every esm.every_s while it's airborne (SV_AwacsAir), and each new ESM field of its
+-- class set to esm.range_m for esm.life_s (ALLY.esmNew, from the game's NotifyOnNewObject: the field's actor)
+function ALLY.awacsTick(R, now)
+    local aw, t = CFG.allies.awacs, CFG.allies.text
+    if not aw.enabled then return end
+    local u = aw.unit
+    local s = R.up[u]
+    if s and s.queued and now >= R.nextTakeoff then
+        local ready
+        if s.buyer then ready = (COOP and COOP.airborne and COOP.airborne(s.buyer)) or now - (s.at or now) >= 90
+        else ready = not playerOnAirfield() end
+        if ready then
+            if type(SV_SetLevel) == "function" then SV_SetLevel(u, ALLY.level(s).ai * 100) end
+            spawningUnit = u
+            local r = SV_Spawn(u)
+            spawningUnit = nil
+            if r > 0 then
+                s.queued, s.at, R.nextTakeoff, R.esmAt = nil, now, now + CFG.allies.aircraft.takeoff_gap_s, nil
+                hudCallout(string.format(t.takeoff, aw.name), t.takeoff_sub_awacs)
+                log(string.format("allies: %s (%s) taxiing out", aw.name, u))
+            else
+                s.tries, R.nextTakeoff = (s.tries or 0) + 1, now + 5
+                log(string.format("allies: %s (%s) not spawned (%s)", aw.name, u, SV_ERR[r] or tostring(r)))
+                if s.tries >= 3 then                 -- never came: the zollars back (to the joiner who paid, if it was one)
+                    R.up[u] = nil
+                    if s.buyer then
+                        if COOP and COOP.refund then COOP.refund(s.buyer, s.price or 0, aw.name .. " COULD NOT TAKE OFF") end
+                    else
+                        RUN.credits, RUN.spent, RUN.dirty = RUN.credits + (s.price or 0), RUN.spent - (s.price or 0), true
+                    end
+                    log(string.format("allies: %s couldn't take off; %d zollars back", aw.name, s.price or 0))
+                end
+            end
+        end
+    end
+    -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own)
+    local f = (s and not s.queued) and (svFlags() or {}) or {}
+    if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.esmAt or 0) and type(SV_Event) == "function" then
+        R.esmAt = now + aw.esm.every_s
+        local r = SV_Event(aw.esm.event)
+        R.esmFired = (R.esmFired or 0) + 1
+        if R.esmFired == 1 or r ~= 1 then
+            log(string.format("allies: %s's ESM fired (%s %s; every %d s while it's airborne)", aw.name, aw.esm.event,
+                r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r))), aw.esm.every_s))
+        end
+    end
+    -- each new ESM field of its class: its range and time (an instance's; the class itself is never changed)
+    local q = ALLY.esmNew
+    if q and #q > 0 then
+        ALLY.esmNew = {}
+        for _, o in ipairs(q) do
+            if valid(o) and nameOf(o):find(aw.esm.class, 1, true) then
+                local was = {}
+                for _, k in ipairs({ "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }) do pcall(function() was[k] = o[k] end) end
+                pcall(function() o.SupportEffectRangeMeter = aw.esm.range_m end)
+                pcall(function() o.EffectRangeMeter = aw.esm.range_m end)
+                pcall(function() o.LifeTime = aw.esm.life_s end)
+                R.esmSet = (R.esmSet or 0) + 1
+                if R.esmSet <= 2 then
+                    local now2 = {}
+                    for _, k in ipairs({ "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }) do pcall(function() now2[k] = o[k] end) end
+                    log(string.format("allies: %s's ESM field %s: support range %s -> %s m, range %s -> %s m, life %s -> %s s",
+                        aw.name, nameOf(o):match("([^%.:]+)$") or "?", tostring(was.SupportEffectRangeMeter),
+                        tostring(now2.SupportEffectRangeMeter), tostring(was.EffectRangeMeter), tostring(now2.EffectRangeMeter),
+                        tostring(was.LifeTime), tostring(now2.LifeTime)))
+                end
+            end
+        end
+    end
+end
+-- (every ESM / ECM field the game makes, its actor at construction, for ALLY.awacsTick; only VOID WATCHER 1's class is
+-- changed there)
+if type(NotifyOnNewObject) == "function" then
+    pcall(NotifyOnNewObject, "/Script/Live.LiveElectronicSupportMeasures", function(o)
+        ALLY.esmNew = ALLY.esmNew or {}
+        if #ALLY.esmNew < 64 then ALLY.esmNew[#ALLY.esmNew + 1] = o end
+    end)
 end
 
 function ALLY.tick(now)
@@ -611,6 +726,8 @@ function ALLY.tick(now)
             end
         end
     end
+    local okA, errA = pcall(ALLY.awacsTick, R, now)
+    if not okA and not R.awacsErrSaid then R.awacsErrSaid = true; log("allies: " .. c.awacs.name .. " error " .. tostring(errA)) end
     if now >= (R.checkAt or 0) then                  -- every 2 s: losses, scaling, orders, and the enemies' on the allies
         R.checkAt = now + 2
         ALLY.scale()
@@ -622,9 +739,12 @@ function ALLY.tick(now)
                 if n <= 0 and now - s.at > 5 then
                     R.up[u], RUN.dirty = nil, true
                     local name = s.kind == "air" and airName(s) or c.ships[s.key].name
+                    if s.ally == "awacs" then R.awacsFields = {} end
                     hudCallout(string.format(s.kind == "air" and t.air_lost or t.sunk, name), t.lost_sub)
                     log(string.format("allies: %s (%s) lost %.0f s after it %s", name, u, now - s.at,
                         s.kind == "air" and "spawned" or "sailed"))
+                elseif s.ally == "awacs" and n > 0 then    -- (no orders: it orbits; airborne, the enemies may hunt it)
+                    airborne = airborne + math.min(n, f.SV_AwacsAir or 0)
                 elseif s.kind == "air" and n > 0 then
                     local up = math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
                     airborne = airborne + up

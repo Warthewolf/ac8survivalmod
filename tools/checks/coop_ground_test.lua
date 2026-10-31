@@ -316,9 +316,13 @@ else
     tick()
     local ra = COOP.roomAllies()
     check(ra and ra.m == 2 and ra.s == 1 and ra.w == nil, "join: the host's allies taken from rnd (m2s1)")
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1"
+    tick()
+    ra = COOP.roomAllies()
+    check(ra and ra.m == 2 and ra.v == 1 and ra.s == 1, "join: VOID WATCHER 1 in the host's allies (m2v1s1)")
     tick(6)
     check(COOP.roomAllies() == nil, "join: ... 6 s with no word: none")
-    for _, bad in ipairs({ "m999", "x2", "m2;s1", "m2w2s2m2w2", "" }) do
+    for _, bad in ipairs({ "m999", "x2", "m2;s1", "m2w2s2m2w2", "", "v1v1", "m99w99v99s99m1" }) do
         inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||" .. bad
         tick()
         check(COOP.roomAllies() == nil, "join: a bad allies field (" .. bad .. "): none")
