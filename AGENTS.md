@@ -854,6 +854,12 @@ boosts (lock / fire x, search, slew), 15 km reach, the bursts' scatter x spread_
 round_width_x (18 -> 27 m), damage x2 (10 -> 20), from 50 m up (500). Not yet known: whether a flak fire control fires
 from a ship's mount (the log's `an AA gun on NPC_FCS_FlakGun000's fire control`, the weapons log's flak launches);
 flak.enabled = false gives the AA guns back. The CIWS (VesselCIWS000) stay as they were.
+0.73.53-coop2mp.54 (user: "increase the Carriers aircraft spawn rate, increase Flak firing and increase missile salvos"):
+the Ford's deck first_s 45 -> 20, every_s 50 -> 25, max_up 2 -> 4, flights 3 + 0.15 -> 5 + 0.3 a round, at most 8 -> 14;
+the flak's waits (triggering, between, rest) x flak.fire_x 0.5; the SAM sites', STORE Aegis's and fleet's missiles in
+salvos of missile.salvo_n 3, salvo_gap_s 0.5 apart (a salvo in the game's fire control: TriggerCount shots
+ShotIntervalTime apart over TriggeringTime = count x interval, then RestingTime: the stock 2AAM 2 x 0.25 s, rest 7; the
+4AAM 4 x 1 s, rest 16; every ship and SAM missile row 1).
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

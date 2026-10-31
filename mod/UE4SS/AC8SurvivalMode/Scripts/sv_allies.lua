@@ -123,6 +123,11 @@ function ALLY.setup()
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
                 end
+                -- (flak: its waits x flak.fire_x on top, the arming as it is; the user, 2026-10-31: "increase Flak firing")
+                local ffx = flakFrom and tonumber(fk.fire_x) or nil
+                if ffx and ffx ~= 1 then
+                    for _, f in ipairs({ "TriggeringTime", "ShotIntervalTime", "RestingTime" }) do pcall(function() r[f] = r[f] * ffx end) end
+                end
                 local arc = ""                       -- (the turret: quicker round, all the way round)
                 if sf and (sf.slew_x or sf.yaw_full) then
                     if sf.slew_x then
@@ -251,6 +256,20 @@ function ALLY.setup()
                         local sx = missile and tonumber(mc.salvo_x) or nil
                         if sx and sx ~= 1 then
                             pcall(function() r.ShotIntervalTime, r.RestingTime = r.ShotIntervalTime * sx, r.RestingTime * sx end)
+                        end
+                        -- (bigger salvos: missile.salvo_n missiles a salvo, salvo_gap_s apart, as the game's 2AAM / 4AAM
+                        -- fire theirs (TriggerCount shots ShotIntervalTime apart over TriggeringTime = count x interval,
+                        -- then RestingTime); the user, 2026-10-31: "increase missile salvos")
+                        local sn = missile and math.floor(tonumber(mc.salvo_n) or 1) or 1
+                        if sn > 1 then
+                            local gap = tonumber(mc.salvo_gap_s) or 0.5
+                            pcall(function()
+                                r.TriggerCount = math.max(r.TriggerCount, sn)
+                                r.ShotIntervalTime = gap
+                                r.TriggeringTime = r.TriggerCount * gap
+                                r.MagazineCapacity = math.max(r.MagazineCapacity, r.TriggerCount)
+                                what = what .. string.format(", salvos of %d, %.2f s apart", r.TriggerCount, gap)
+                            end)
                         end
                     end
                 end)
