@@ -839,6 +839,21 @@ NonpursuitAttackTimeModifier 150 / 120 / 100 / 50 / 25 % (the enemies' waits bet
 missiles 8 -> 20 km, 14 -> 30 s, the defences' search 10 -> 25 km, their units' area 25 -> 30 km; the STORE's Aegis and
 the Spaceport fleet: search 25 -> 40 km, guns' lock-on x2 -> x3, missiles 20 -> 35 km and 30 -> 45 s (the fleet's 3600
 km/h), their units' areas 25 -> 45 km (the STORE's) and 40 -> 45 km (the fleet's).
+0.73.52-coop2mp.53 (user: "increase Ship AA gun accuracy and increase timing between SAM and SHIP salvos slightly"):
+a ship type's guns' spread x gun_spread_x 0.5 on top of the allies' spread_x (sv_allies.lua allyFcs, not homing weapons),
+the STORE Aegis's flak out to its lock-on (round_reach, round_width_x 1.5: it locked on 3x out with flak hurting within
+2200 m), the fleet's flak round_width_x 1.0 -> 1.5; homing missiles' time between shots and rest x missile.salvo_x 0.8
+(the airfield's SAM sites, the STORE Aegis, the fleet; the user: "no I want less waiting between firing"). The ships'
+missiles home as the EXSAM's (user: "theres a enemy in the game called EXSAM ... paste them over the ship guns and
+missiles"; missile.homing_from EXSAM_Ground_000: homing 90, turn 45 (x turn_x), homing delay the shorter, omnidirectional
+0.95 s / 360, 900 m; the game has no EXAA) and the ships' AA guns are flak guns (user: "change the AA to FLAK GUNS",
+"give the flak guns the same stats as the Boosted AA guns, I want them to be deadly"; fcs.flak): a ship's AA mount
+(NPC_FCS_VesselAAGun*: the Aegis's Mk 45, the Ford's four) on a clone of the ground flak gun's NPC_FCS_FlakGun000 (its
+blueprint BP_FCS_FlakGun_00, FlakGun_000's 50-burst shells) with the mount's arcs and the AA gun's timings, then the AA
+boosts (lock / fire x, search, slew), 15 km reach, the bursts' scatter x spread_x x gun_spread_x (120 -> 24 m), radius x
+round_width_x (18 -> 27 m), damage x2 (10 -> 20), from 50 m up (500). Not yet known: whether a flak fire control fires
+from a ship's mount (the log's `an AA gun on NPC_FCS_FlakGun000's fire control`, the weapons log's flak launches);
+flak.enabled = false gives the AA guns back. The CIWS (VesselCIWS000) stay as they were.
 
 ## Leaderboard: admin page and stock runs only (2026-10-30; Worker not yet deployed, not yet run in game)
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes

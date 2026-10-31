@@ -77,20 +77,48 @@ function ALLY.setup()
             end
         end
     end
+    -- A ship type's AA guns as flak guns (sf.flak; the user, 2026-10-31: "if you can't find an AA equivlant, change the AA
+    -- to FLAK GUNS", "give the flak guns the same stats as the Boosted AA guns, I want them to be deadly"): the game has no
+    -- ship flak, so the ground flak gun's fire control (flak.fcs, NPC_FCS_FlakGun000: its blueprint and FlakGun_000's
+    -- 50-burst shells) on the mount's own arcs and the AA gun's timings (MOUNT), then every boost the AA gun had: lock-on
+    -- and fire times, search, slew, accuracy (the bursts' scatter), width (the bursts' radius); its reach flak.range_m
+    local MOUNT = { "YawAngleMin", "YawAngleMax", "PitchAngleMin", "PitchAngleMax", "CaptureAngleRange", "ActivationTime",
+                    "TriggeringTime", "ShotIntervalTime", "RestingTime" }
+    -- A ship type's missiles home as missile.homing_from's (EXSAM_Ground_000; the user, 2026-10-31: "theres a enemy in the
+    -- game called EXSAM ... Take those stats and paste them over the ship guns and missiles"): these fields as its, the
+    -- homing delay the shorter and the damage the larger of the two, then the boosts (turn_x on its turn rate)
+    local HOMING = { "MaxHomingAngle", "MaxRotationAngle", "OmnidirectionalDuration", "OmnidirectionalAbility",
+                     "DistanceFromTargetMeters", "AltitudeAboveTargetMeters" }
     local function allyFcs(src, key)                 -- src .. "_SVA[_<ship>]": farther, wider, quicker, tighter
         local sf = key and (key == "Defence" and CFG.shop.items.Airfield.defences.fcs
                             or key == "Fleet" and CFG.specials.spaceport and CFG.specials.spaceport.fcs
                             or CFG.allies.ships[key] and CFG.allies.ships[key].fcs)
         local new = src .. "_SVA" .. (sf and ("_" .. key) or "")
         local lockX, fireX = c.time_x * (sf and sf.lock_x or 1), c.time_x * (sf and sf.fire_x or 1)
+        local fk = sf and type(sf.flak) == "table" and sf.flak.enabled ~= false and sf.flak or nil
+        local flakFrom, mount = nil, nil
+        if fk and fk.fcs and src:find("VesselAAGun", 1, true) and made[new] == nil then
+            local _, ar = dtCall(fcs, "FindRow", src)
+            local _, fr = dtCall(fcs, "FindRow", tostring(fk.fcs))
+            if ar ~= nil and fr ~= nil then
+                flakFrom, mount = tostring(fk.fcs), {}
+                for _, f in ipairs(MOUNT) do pcall(function() mount[f] = ar[f] end) end
+            else
+                log(string.format("allies: %s's AA gun %s NOT on flak (%s): an AA gun as before", key, src,
+                    ar == nil and "no such row" or ("no row " .. tostring(fk.fcs))))
+            end
+        end
         if made[new] == nil then
-            made[new] = cloneRow(fcs, src, new, function(r)
+            made[new] = cloneRow(fcs, flakFrom or src, new, function(r)
+                if mount then for f, v in pairs(mount) do pcall(function() r[f] = v end) end end   -- (the mount's arcs, the AA's timings)
                 local was = {}                       -- (the stock row's, for the log's before -> after)
                 for _, f in ipairs({ "CaptureDistance", "ActivationTime", "TriggeringTime", "ShotIntervalTime", "RestingTime",
                                      "YawAngleMin", "YawAngleMax", "YawSpeed" }) do
                     pcall(function() was[f] = r[f] end)
                 end
                 pcall(function() r.CaptureDistance = r.CaptureDistance * (sf and sf.range_x or c.range_x) end)
+                -- (flak: its own reach, flak.range_m; the ground flak's 15 km is over twice the boosted AA guns')
+                if flakFrom then pcall(function() r.CaptureDistance = tonumber(fk.range_m) or was.CaptureDistance end) end
                 pcall(function() r.CaptureAngleRange = math.min(180, r.CaptureAngleRange * c.angle_x) end)
                 for f, x in pairs({ ActivationTime = lockX, TriggeringTime = lockX, ShotIntervalTime = fireX, RestingTime = fireX }) do
                     pcall(function() r[f] = r[f] * x end)
@@ -115,7 +143,7 @@ function ALLY.setup()
                         r.PredictionOffsetTime = c.gun_lead_s or 0
                         r.TriggerCount = math.max(1, math.floor(r.TriggerCount * (c.burst_x or 1) + 0.5))
                         gunSaid[#gunSaid + 1] = string.format("%s leads %.2f s, %d-round bursts", new, r.PredictionOffsetTime, r.TriggerCount)
-                    elseif src:find("AAGun", 1, true) or src:find("CIWS", 1, true) then
+                    elseif not flakFrom and (src:find("AAGun", 1, true) or src:find("CIWS", 1, true)) then   -- (flak: its own lead)
                         local l = r.PredictionOffsetTime
                         if type(l) ~= "number" or l <= 0 then l = 0.8 end        -- (none of its own: the AA guns')
                         r.PredictionOffsetTime = l * (c.aa_lead_x or 1)
@@ -132,14 +160,47 @@ function ALLY.setup()
                     local wn = w .. "_SVA" .. (sf and ("_" .. key) or "")
                     local mc, missile = sf and sf.missile, false
                     if wpn and w ~= "None" and w ~= "" and cloneRow(wpn, w, wn, function(x)  -- (edit: a new row only)
-                        pcall(function() x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x end)
                         local homing = false
                         pcall(function() homing = x.bIsHoming == true end)
-                        if mc and homing then        -- a homing missile: flies long enough to reach range_m
+                        -- (a ship type's guns tighter still: sf.gun_spread_x on top of the allies' spread_x; the user,
+                        -- 2026-10-31: "increase Ship AA gun accuracy")
+                        local gx = (sf and not homing and tonumber(sf.gun_spread_x)) or 1
+                        pcall(function() x.MaxSpawnAngle = x.MaxSpawnAngle * c.spread_x * gx end)
+                        if flakFrom then             -- the flak's shells: the boosted AA guns' accuracy and width, deadlier
+                            local w0 = {}
+                            for _, f in ipairs({ "damage", "RandRangeMeters", "ImpactRadiusMeters", "HeightLimitRangeMinMeters" }) do
+                                pcall(function() w0[f] = x[f] end)
+                            end
+                            pcall(function() x.damage = x.damage * (tonumber(fk.damage_x) or 1) end)
+                            pcall(function() x.RandRangeMeters = x.RandRangeMeters * c.spread_x * (tonumber(sf.gun_spread_x) or 1) end)
+                            pcall(function() x.ImpactRadiusMeters = x.ImpactRadiusMeters * (tonumber(sf.round_width_x) or 1) end)
+                            if tonumber(fk.min_alt_m) then
+                                pcall(function() x.HeightLimitRangeMinMeters = math.min(x.HeightLimitRangeMinMeters, tonumber(fk.min_alt_m)) end)
+                            end
+                            pcall(function()
+                                what = string.format(", flak %s: damage %.0f -> %.0f, bursts within %.0f -> %.0f m, %.0f -> %.0f m round, "
+                                    .. "from %.0f -> %.0f m up", wn, w0.damage, x.damage, w0.RandRangeMeters, x.RandRangeMeters,
+                                    w0.ImpactRadiusMeters, x.ImpactRadiusMeters, w0.HeightLimitRangeMinMeters, x.HeightLimitRangeMinMeters)
+                            end)
+                        elseif mc and homing then    -- a homing missile: flies long enough to reach range_m
                             missile = true
                             local w0 = {}
                             for _, f in ipairs({ "LifeTime", "SpeedMaxKmph", "AccelerationKmph", "MaxRotationAngle" }) do
                                 pcall(function() w0[f] = x[f] end)
+                            end
+                            local hf, hs = mc.homing_from and tostring(mc.homing_from) or "", ""
+                            if hf ~= "" and hf:lower() ~= "none" and hf ~= w then   -- (homing as another missile's first)
+                                local _, hr = dtCall(wpn, "FindRow", hf)
+                                local n = 0
+                                if hr ~= nil then
+                                    for _, f in ipairs(HOMING) do
+                                        pcall(function() local v = hr[f]; if type(v) == "number" then x[f] = v; n = n + 1 end end)
+                                    end
+                                    pcall(function() x.HomingDelayFromStart = math.min(x.HomingDelayFromStart, hr.HomingDelayFromStart) end)
+                                    pcall(function() x.damage = math.max(x.damage, hr.damage) end)
+                                end
+                                hs = hr ~= nil and string.format(", homing as %s (%d of %d)", hf, n, #HOMING)
+                                    or (", homing NOT as " .. hf .. " (no such row)")
                             end
                             pcall(function() x.LifeTime = math.max(x.LifeTime, mc.life_s) end)
                             pcall(function() x.AccelerationKmph = x.AccelerationKmph * mc.accel_x end)
@@ -149,7 +210,7 @@ function ALLY.setup()
                             pcall(function()
                                 what = string.format(", missile %s: %.1f -> %.0f s, up to %.0f -> %.0f km/h, +%.0f -> +%.0f km/h a second, turns %.1f -> %.1f",
                                     wn, w0.LifeTime, x.LifeTime, w0.SpeedMaxKmph, x.SpeedMaxKmph, w0.AccelerationKmph,
-                                    x.AccelerationKmph, w0.MaxRotationAngle, x.MaxRotationAngle)
+                                    x.AccelerationKmph, w0.MaxRotationAngle, x.MaxRotationAngle) .. hs
                             end)
                         elseif sf and sf.round_reach and not homing then
                             -- a gun's rounds out to its new lock-on range (r's, already grown): the AA guns' flak hurts
@@ -180,16 +241,24 @@ function ALLY.setup()
                         r.NpcWeaponId = FName(wn)
                         -- a homing missile by its row, made now or before (code review of 2026-10-23: cloneRow skips
                         -- the edit for a row that's already there, and the range stayed the stock one)
-                        if mc and not missile then
+                        if mc and not missile and not flakFrom then
                             pcall(function() local _, wr = dtCall(wpn, "FindRow", wn); missile = wr ~= nil and wr.bIsHoming == true end)
                         end
                         if missile then pcall(function() r.CaptureDistance = mc.range_m end) end
+                        -- (its salvos closer together: missile.salvo_x on the time between shots and the rest after a
+                        -- volley, homing missiles only; the user, 2026-10-31: "Slightly ... no I want less waiting
+                        -- between firing")
+                        local sx = missile and tonumber(mc.salvo_x) or nil
+                        if sx and sx ~= 1 then
+                            pcall(function() r.ShotIntervalTime, r.RestingTime = r.ShotIntervalTime * sx, r.RestingTime * sx end)
+                        end
                     end
                 end)
                 if sf then                           -- (the stock row's -> its own)
                     pcall(function()
-                        shipSaid[#shipSaid + 1] = string.format("%s (within %d -> %d m, arm %.2f -> %.2f s, lock %.2f -> %.2f s, "
-                            .. "%.2f -> %.2f s between, rest %.2f -> %.2f s%s%s%s)", new, math.floor(was.CaptureDistance or 0),
+                        shipSaid[#shipSaid + 1] = string.format("%s (%swithin %d -> %d m, arm %.2f -> %.2f s, lock %.2f -> %.2f s, "
+                            .. "%.2f -> %.2f s between, rest %.2f -> %.2f s%s%s%s)", new,
+                            flakFrom and ("an AA gun on " .. flakFrom .. "'s fire control, ") or "", math.floor(was.CaptureDistance or 0),
                             math.floor(r.CaptureDistance), was.ActivationTime or 0, r.ActivationTime, was.TriggeringTime or 0,
                             r.TriggeringTime, was.ShotIntervalTime or 0, r.ShotIntervalTime, was.RestingTime or 0, r.RestingTime,
                             shipModule[key] and (", search " .. shipModule[key]) or "", arc, what)
