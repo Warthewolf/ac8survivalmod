@@ -180,6 +180,8 @@ end
 
 ---------------------------------------------------------------------------------------------------- the natives, wrapped
 -- (registered by dlls/main.dll before this script ran; every part calls them by their global names)
+-- (the crash breadcrumbs, sv_core.lua's crumb: a part loaded without it, as the tests load this one, gets none)
+local crumb = crumb or function() end
 local rawSpawn, rawSetAircraft, rawSetLevel, rawUnitAlive = SV_Spawn, SV_SetAircraft, SV_SetLevel, SV_UnitAlive
 local acOps, levels = {}, {}                                 -- host: per unit, since its last spawn
 if rawSetAircraft then
@@ -204,6 +206,7 @@ if rawSpawn then
     SV_Spawn = function(unit, x, y, z, yaw)
         local r
         if x ~= nil then r = rawSpawn(unit, x, y, z, yaw) else r = rawSpawn(unit) end
+        crumb(string.format("spawn %s%s: %s", tostring(unit), x ~= nil and " at a pose" or "", tostring(r)))
         if COOP.host() and type(unit) == "string" and not SLOT_OF[unit] then
             local ops, lvl = acOps[unit], levels[unit]
             acOps[unit], levels[unit] = nil, nil
@@ -273,6 +276,10 @@ if rawEvent then
     SV_Event = function(name, ...)
         local r
         if hostDownSkips(name) then r = -20 else r = rawEvent(name, ...) end
+        local nm = tostring(name)
+        if nm:find("Remove", 1, true) or nm:find("Off_", 1, true) or nm:find("RunOver", 1, true) or nm:find("Destroy", 1, true) then
+            crumb("event " .. nm .. ": " .. tostring(r))
+        end
         if COOP.host() and mirroredEvent(name) then send(true, "ev", name) end
         return r
     end
@@ -558,6 +565,8 @@ end
 
 -- a joiner asked for the whole picture (it loaded in, or its link came back): every flight with anything alive
 local function hostSync(to)
+    M.cnt.jnGot = M.cnt.jnGot + 1
+    crumb("coop: player " .. tostring((to or 0) + 1) .. " asked for the whole picture: sent (rs)")
     sendTo(to, true, "rs")
     sendRoster(to)
     local n = 0
@@ -660,7 +669,10 @@ local function killCopy(id, o, torn)
     if torn then
         local a = addrOf(o)
         if a then M.torn = M.torn or {}; M.torn[a] = os.clock() end
+        M.tornLast = os.clock()                          -- (the pay audit, sv_audit.lua: COOP.tornRecently)
+        M.cnt.torn = M.cnt.torn + 1
     end
+    crumb(string.format("copy %s taken down (id %s%s)", nameOf(o), tostring(id), torn and ", torn: not a kill" or ""))
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
     local P0 = M.peers[0]
@@ -745,6 +757,9 @@ end
 
 local function killAllCopies(why)
     local n, loose, seen = 0, 0, {}
+    crumb("copies: all taken down (" .. tostring(why) .. ")")
+    M.tornWhy = tostring(why)
+    M.cnt.teardowns = M.cnt.teardowns + 1
     if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end   -- (the defences' cached actors: freed soon)
     for id, c in pairs(M.copies) do
         killCopy(id, c.obj, true); n = n + 1
@@ -815,6 +830,7 @@ local function doSpawn(q)
         M.pendBind[unit] = nil
     end
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
+    crumb(string.format("coop: the host's %s spawned here (gen %s)", tostring(unit), tostring(q.gen)))
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
     spawningUnit, spawningIdx = nil, nil
@@ -1025,9 +1041,12 @@ local function strayTick(now)
         M.resyncAt = now + 120
         M.jnAt = os.clock()
         send(true, "jn")
+        M.cnt.jnSent = M.cnt.jnSent + 1
         log("coop: strays here: the host asked for the whole picture again (jn)")
     end
     if n > 0 then
+        M.cnt.strays = M.cnt.strays + n
+        M.tornWhy = "strays"
         log(string.format("coop: %d stray enemy copies taken down (here %d s, never bound to the host's)%s", n, STRAY_S,
             #names > 0 and (": " .. table.concat(names, ", ", 1, math.min(#names, 6))) or ""))
     end
@@ -1311,6 +1330,36 @@ local function localPlayer()
     return e
 end
 function COOP.me() return localPlayer() end
+-- Sync health (the user's loggers of 2026-10-31): what this game kept of the host's flights and how often the picture
+-- was rebuilt, a line a minute from sv_audit.lua (COOP.syncReport): on a joiner its copies (bound to the host's ids or
+-- not), the strays taken down, its asks for the whole picture (jn) and the host's answers (rs), the copies it tore down
+-- and its teardowns; on the host the joiners' asks it answered. Counted since the last report.
+M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0 }
+function COOP.syncReport()
+    local c = M.cnt
+    M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0 }
+    if COOP.host() then
+        return string.format("host: %d joiners linked, %d asks for the whole picture answered (rs)", M.linkedPeers or 0, c.jnGot)
+    end
+    local flights, copies, bound = 0, 0, 0
+    for _, cu in pairs(M.cunits or {}) do
+        flights = flights + 1
+        for ord, o in pairs(cu.planes or {}) do
+            if valid(o) then
+                copies = copies + 1
+                if cu.binds and cu.binds[ord] then bound = bound + 1 end
+            end
+        end
+    end
+    return string.format("joiner: %d copies of %d flights (%d bound to the host's ids, %d not), %d strays taken down, %d asks "
+        .. "for the whole picture (jn), %d answers (rs), %d copies torn down in %d teardowns", copies, flights, bound,
+        copies - bound, c.strays, c.jnSent, c.rsGot, c.torn, c.teardowns)
+end
+-- whether this game tore copies down itself within the last s seconds (and why last): the pay audit's suspect window
+function COOP.tornRecently(s)
+    return M.tornLast ~= nil and os.clock() - M.tornLast <= (s or 5), M.tornWhy
+end
+
 function COOP.players()
     local out = {}
     local e = localPlayer()
@@ -2976,6 +3025,7 @@ local function onJoinerMessage(f)
             hostEvent(f[2])
         end
     elseif k == "rs" then
+        M.cnt.rsGot = M.cnt.rsGot + 1
         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
         killAllCopies("the host's run started over")
         if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)
