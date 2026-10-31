@@ -807,7 +807,9 @@ CFG = {
                              -- SAM sites' missiles 8 -> 20 km and 14 -> 30 s, the defences' search 10 -> 25 km)
                              fcs = { lock_x = 0.75, fire_x = 0.5, range_x = 2.0, search_m = 25000, slew_x = 2.0, yaw_full = true,
                                      round_reach = true, round_width_x = 1.5,
-                                     missile = { range_m = 20000, life_s = 30, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5 } },
+                                     -- (salvo_x: less waiting between the SAM sites' shots and salvos, x0.8; 2026-10-31)
+                                     missile = { range_m = 20000, life_s = 30, accel_x = 2.0, speed_max_kmph = 3600, turn_x = 1.5,
+                                                 salvo_x = 0.8 } },
                          } },
         },
     },
@@ -902,9 +904,19 @@ CFG = {
             -- (user, 2026-10-31: "increase the lock on and firing distance of all SAM sites and Ships": search 25 -> 40
             -- km, the guns' lock-on x2 -> x3, the missiles 20 -> 35 km and 30 -> 45 s)
             Aegis = { name = "DDG AEGIS", turrets = "aegs", health_add = 300,
-                      fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 3.0, search_m = 40000,
+                      -- (2026-10-31, "increase Ship AA gun accuracy": its guns' spread x gun_spread_x more, its rounds
+                      -- out to its new lock-on and round_width_x wider (round_reach); salvo_x 0.8: less waiting between
+                      -- its missiles' shots and salvos ("no I want less waiting between firing"); "theres a enemy ...
+                      -- called EXSAM ... paste them over the ship guns and missiles": its missiles home as homing_from's;
+                      -- "change the AA to FLAK GUNS", "the same stats as the Boosted AA guns, I want them to be deadly":
+                      -- flak, its Mk 45 an AA gun on the ground flak's fire control (sv_allies.lua allyFcs), reaching
+                      -- range_m, its shells' damage x damage_x, bursting from min_alt_m up; enabled = false: an AA gun)
+                      fcs = { lock_x = 0.5, fire_x = 0.5, range_x = 3.0, search_m = 40000, gun_spread_x = 0.5,
+                              round_reach = true, round_width_x = 1.5,
+                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50 },
                                                   missile = { range_m = 35000, life_s = 45, accel_x = 2.0,
-                                                              speed_max_kmph = 3600, turn_x = 1.5 } },
+                                                              speed_max_kmph = 3600, turn_x = 1.5, salvo_x = 0.8,
+                                                              homing_from = "EXSAM_Ground_000" } },
                       -- (the STORE sends the first free one: their lanes start 11.5 (A), 11.9 (C), 13.0 (D) and 13.6 km
                       -- (B) from the airfield, all inside its 20 km missiles' reach of the bombers' run-in; nearest first)
                       units = { "SV_Unit_ShipAegisA", "SV_Unit_ShipAegisC", "SV_Unit_ShipAegisD", "SV_Unit_ShipAegisB" } },
@@ -1579,9 +1591,14 @@ CFG = {
                       -- undo CFG.allies.fcs.time_x 0.5 (their stock rate of fire)
                       -- (user, 2026-10-31: "increase the lock on and firing distance of all SAM sites and Ships":
                       -- search 25 -> 40 km, the guns' lock-on x2 -> x3, the missiles 20 -> 35 km, 30 -> 45 s, 3600 km/h)
+                      -- (2026-10-31: "increase Ship AA gun accuracy": gun_spread_x, round_width_x 1.0 -> 1.5; salvo_x
+                      -- 0.8, homing_from, flak: the STORE Aegis's (CFG.allies.ships.Aegis.fcs): the Aegis's Mk 45 and the
+                      -- Ford's four mounts flak guns, the missiles homing as the EXSAM's)
                       fcs = { lock_x = 2.0, fire_x = 2.0, range_x = 3.0, search_m = 40000, slew_x = 1.5, round_reach = true,
-                              round_width_x = 1.0,
-                              missile = { range_m = 35000, life_s = 45, accel_x = 1.5, speed_max_kmph = 3600, turn_x = 1.0 } },
+                              round_width_x = 1.5, gun_spread_x = 0.5,
+                              flak = { enabled = true, fcs = "NPC_FCS_FlakGun000", range_m = 15000, damage_x = 2.0, min_alt_m = 50 },
+                              missile = { range_m = 35000, life_s = 45, accel_x = 1.5, speed_max_kmph = 3600, turn_x = 1.0,
+                                          salvo_x = 0.8, homing_from = "EXSAM_Ground_000" } },
                       -- the Ford's deck, as the Alicorn's (CFG.specials.alicorn.deck): from first_s, a free size-ship
                       -- pool flight every every_s, flights + flights_per_round x the round (at most max_flights), max_up
                       -- of them up at once, ahead_m off its bow and alt_m up
