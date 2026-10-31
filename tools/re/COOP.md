@@ -561,7 +561,7 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   invincible, <where>` (`... (your plane wasn't flying: N m/s): done` for a crashed one); `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
   over in round N`; `down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): fired`.
 - **Test keys** (TEST ONLY, stripped): T1 Ctrl+F6, the floor solo on / off (`down-test: health N (floor 0.1),
-  MinHealth M` once a second: let an enemy shoot you down to 0.1 HP and stay there); T2 Ctrl+END (each press: 1 DOWN
+  MinHealth M` once a second: let an enemy shoot you down to 0.1 HP and stay there); T2 Ctrl+END (removed in 0.73.54 with T1: Ctrl+END is the Spaceport's; each press: 1 DOWN
   solo, watching MOONCHILD / VIPER, else the nearest enemies, O the next; 2 back by the loiter; 3 DOWN; 4 back by
   SV_Respawn): `down-test: T2 step N`, `spectate: view ...`, `down: loiter ...`, `revive: respawn d=...`. If UE4SS has
   no END key the log says `test: T2 not bound`.
