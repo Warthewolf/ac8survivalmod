@@ -1,4 +1,4 @@
-# Spaceport Assault and Retake (special rounds, design of 2026-10-31; nothing built yet)
+# Spaceport Assault and Retake (special rounds, design of 2026-10-31; round 1 built in 0.73.38, untested)
 
 The user's idea (2026-10-31): a defence-style special at the Comona spaceport. If the defence fails, the next round
 is a second special, an offensive one to retake the spaceport while Mission 19's ("Moonlight and Shadows") two rockets
@@ -144,3 +144,61 @@ references another export (hard rule 34: scanned).
    success / failure branch, the Ford's deck launches.
 4. Round 2: troops targetable, the rockets' launch, chase, split and debris, escape and penalty, ships carried over.
 5. Co-op (the ships and parts linked as the Alicorn's and the landing craft's are; events forwarded), tests, build.
+
+## Build 0.73.38-coop2mp.39 (round 1 and a first retake; built 2026-10-31, not yet run in game)
+Steps 3 and part of 4 of the plan. Not in the special rotation yet (CFG.specials.rotation, the ini's): a dev install
+forces it with **Ctrl+END** (the next round is the Spaceport Assault) and **Ctrl+INS** (a retake with test_troops 8 and
+no ships); add `spaceport` to the rotation once a test has run it.
+- The fleet (tools/survival_events.py sp_fleet, tools/build_survival.py spaceport_units): 27 one-ship units, every one
+  an enemy (Faction 2, no tags, TGT and a box), holding its spot (no path), its unit area 25 km / 0-15 km (as the STORE's
+  ships), Mission 22's Normal ship engagement order 2 s after it appears (SV_SpShipUp*):
+  - the Ford SV_Unit_SpFord at the fifth sea mark (-29.65, -0.26) km facing the pad (3 deg): Mission 16's
+    A_Unit_01_Ship0 on sv_sp_ford (VE004_grfd_01), its four Mk 15s SV_Obj_SpFord_Mk15<LB|RF|LF|RB> on
+    sv_sp_ford_<lb|rf|lf|rb> (VE004_grfd_mk15_<pos>_01) with Mission 16's _CP_Ally part classes (import_from: an ally
+    class on an enemy, unverified); bIsLanding, the callsign and bIsEscortedUnit off;
+  - the Wasps SV_Unit_SpWasp<A-D> on the first four marks (north to south): Mission 28's AUnit01_Sea_0 on sv_sp_wasp
+    (VE023_wasp_01), not invincible, not an attack-target exception;
+  - 14 Aegis SV_Unit_SpAegis<A-N>: Survival's copy of Mission 22's AC_Unit_01_Ship1 on its own rows (aegs_common and its
+    turrets' aegs_mk15 / mk41 / mk45 / artillery: VE002_*, the enemy rows), A-H 1.5 km ahead of each Wasp 450 m either
+    side of its lane, I-N in a 1.8 km ring round the Ford (30, 90 ... 330 deg off its heading);
+  - 8 missile boats SV_Unit_SpBoat<A-H>: Training006's EA_UNIT_2_1 (its first boat) on sv_sp_boat (VE011_mslb_01), its
+    SAM part on sv_sp_boat_sam (VE011_mslb_sam_01), 4 km ahead of each Wasp 350 m either side.
+- The landing craft: each Wasp's lane from 500 m ahead of it to the beach it faces (SP_WASP_BEACH), five waves V-Z of two
+  craft (SV_Unit_SpLcac<g><w>, Mission 13's LCACs at 220 km/h, ~11.9 km); each craft its path in and out, its troops
+  SV_Unit_SpTroops<g><w><c> (a BTR-90, invincible, an attack-target exception, no box) and their drive to the troops'
+  spot nearest the beach (a spiral of spots 40 m apart round it). Records as the airfield's assault (build_spaceport).
+- Lua (Scripts/sv_spaceport.lua, SPORT; CFG.specials.spaceport, survival.ini [specials.spaceport], .ships, .pay, .deck,
+  .retake): the fleet spawned 3 ships every 0.5 s; each Wasp afloat sends its next free wave first_wave_s 20 after the
+  fleet appears and every wave_every_s 60; a landing puts its troops ashore, their arrival adds capture_per_troop 5 %,
+  they go in troop_stay_s 30 later (taken off: a wave's troops can come again), or are taken off troop_timeout_s 420
+  after landing if they never arrive; a wave is taken off remove_after_s 60 after its first landing. 100 %: SPACEPORT
+  CAPTURED, the craft out recalled, no more landings, the round ends with its aircraft (the ships stay afloat) and the
+  next round is the retake (RUN.sport, sv_spawn.lua specialFor). Every ship sunk with nothing coming in: SPACEPORT
+  HELD, reward 10000 + 300 x the round. Pay a ship by kind (Ford 3000, Wasp 1200, Aegis 800, boat 300) and 150 a craft.
+  The round's fighters: fighter_share 0.5 of its aircraft (SPC.kinds budget). From round from_round 8.
+- The Ford's deck (deck, as the Alicorn's): first_s 45 on, a free pool 2-ship every every_s 50 ahead_m 600 off its bow,
+  alt_m 1100 up, flights 3 + 0.15 x the round (at most 8), max_up 2, none while you're down at the airfield (but in
+  co-op while another player flies). The hull's position from its actor (checked valid each read), else ford_cm.
+- The retake (kind "retake", only after a capture; .retake): the garrison (SV_Unit_SpGarrison<A-C>, 4 targetable
+  BTR-90s each on a troops' spot, one unit per per_unit 4 troops that got in, 3 at most) and every ship still afloat from
+  the assault (its deck too); the round ends when they and its aircraft are down: reward 12000 + 300 x the round,
+  garrison_pay 300 a vehicle. **Mission 19's rockets are not in it yet** (step 4's chase, split, debris and escape).
+- The rounds: SPC.kinds' new ready / busy / over / row hooks (sv_rounds.lua startRound and the fighting state, sv_hud.lua's
+  NEXT row: FLEET: n SHIPS  LANDING CRAFT: n  SPACEPORT CAPTURE: n %), a special's from_round in specialFor's random picks.
+- Co-op: every spawn goes through SV_Spawn with spawningUnit set (mirrored, ships and parts linked by key), the RE_SV_Sp*
+  removals are forwarded to the joiners like every special's.
+- Log lines: `special: round N, the Spaceport Assault: 27 ships coming in west of the spaceport`, `special: spaceport
+  fleet: <kind> <unit>: 1 up` (27 of them), `special: the Wasp of group G sends landing craft SV_Unit_SpLcac<g><w>: 2 up`,
+  `special: SV_Unit_SpLcac<g><w> craft <c> on the beach; troops ...: 1 up`, `special: troops ... reached the spaceport;
+  N% captured`, `special: troops ... gone in; taken off`, `special: ... are away; taken off`, `special: spaceport fleet:
+  <kind> <unit> sunk`, `special: round N, the spaceport is captured ...` / `... the spaceport held ...`, `special: the
+  Ford's deck launch N: ...`, the retake's `special: the spaceport's garrison ...` and `special: round N, the Spaceport
+  Retake: ...`.
+- Test checklist (dev install, Ctrl+END in a run): the 27 ships appear west of the spaceport, red (enemy) with boxes and
+  TGT marks, and fire at you; the Ford's four guns and the boats' SAMs fire; the craft leave the Wasps, land on the four
+  beaches, their troops drive to the spaceport and the meter climbs; a sunk Wasp sends no more; fighters launch off the
+  Ford's bow; sink the fleet -> SPACEPORT HELD; let it fall -> SPACEPORT LOST, the next round's garrison and the ships
+  left; the frame rate and the perf line's Lua tick with the whole fleet up; in co-op the same on a joiner.
+- Not known yet: whether the enemy Faction flip turns Mission 28's Wasp / Mission 16's Ford hostile (the HUD's colour, the
+  turrets' fire); whether the Ford's _CP_Ally part classes fight for the enemy; whether ships with no path stay put;
+  whether 1211 triggers (from 819) load; the frame rate with ~110 ship objects.

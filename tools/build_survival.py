@@ -832,6 +832,140 @@ def lcac_units(units, used_ids, z, top_number, v):
           f'{len(craft)} troop units')
 
 
+def enemy_unit(u, tgt=True):
+    """Unit desc `u` and its AI objects an enemy's (Faction 2, as Training006's missile boats and every stock enemy):
+    no tags (they're another mission's or the allies'), and with tgt a target box and the TGT mark on each object."""
+    assert any(q[1] == 'Faction' for q in u[2]), 'no Faction on the unit'
+    u[2][:] = [(q[0], q[1], False, ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x02'))) if q[1] == 'Faction' else
+               (q[0], q[1], False, ('arr', [])) if q[1] == 'Tags' and q[3] is not None else q for q in u[2]]
+    sc = uprop.U.schema('LiveAIObjectDesc')
+    ix = {n: k for k, (n, t) in sc.items() if n in ('TargetMarkType', 'bShowHUDBox')}
+    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
+        ob[2][:] = [(q[0], q[1], False, ('arr', [])) if q[1] == 'Tags' and q[3] is not None else q for q in ob[2]]
+        if tgt:
+            ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
+                (ix['TargetMarkType'], 'TargetMarkType', False, ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01'))),
+                (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01'))], key=lambda q: q[0])
+
+
+def set_bools(u, names):
+    """Every AI object of unit desc `u` with these bool properties true."""
+    sc = uprop.U.schema('LiveAIObjectDesc')
+    ix = {n: k for k, (n, t) in sc.items() if n in names}
+    assert len(ix) == len(names), (names, ix)
+    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
+        ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [(ix[n], n, False, ('raw', 'Bool', b'\x01')) for n in names],
+                          key=lambda q: q[0])
+
+
+def spaceport_units(units, used_ids, z, top_number, v):
+    """The Spaceport Assault (survival_events.SP_*): the enemy fleet (14 Aegis, 4 Wasps, 8 missile boats and the Ford,
+    each a one-ship unit at its spot), each lane's waves of landing craft and their paths, each craft's troops
+    (invincible, no box) and their drive to the troops' spot, and the retake's garrison (targetable)."""
+    import math
+    unit_by = lambda n: [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == n][0]
+    objects = lambda u: [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]
+    kids = lambda ob: ([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'] or [(0, 0, 0, None)])[0][3]
+    def face(u, yaw):
+        for ob in objects(u):
+            ob[2][:] = [(q[0], q[1], False, vec(0.0, yaw, 0.0, 'Rotator')) if q[1] == 'Rotation' else q for q in ob[2]]
+    def load(pkg):
+        zs = ZenPkg(stock(pkg))
+        w, _ = props_of(zs, zs.export_index(pkg.rsplit('/', 1)[1]), 'LiveWorldData')
+        return zs, w
+    wz, ww = load(survival_events.SP_WASP_SOURCE[0])
+    bz_, bw = load(survival_events.SP_BOAT_SOURCE[0])
+    fz, fw = load(survival_events.SP_FORD_SOURCE[0])
+    src_wasp = desc_named(ww, 'UnitDescList', survival_events.SP_WASP_SOURCE[1])
+    src_boat = desc_named(bw, 'UnitDescList', survival_events.SP_BOAT_SOURCE[1])
+    src_ford = desc_named(fw, 'UnitDescList', survival_events.SP_FORD_SOURCE[1])
+    rows = dict((r, r) for r in survival_events.ALLY_TURRETS['Aegis'])          # the Aegis's turrets: Mission 22's own rows
+    ford_rows = {f'VE004_grfd_mk15_{p}_Ally_01': (f'sv_sp_ford_{p.lower()}', f'Mk15{p}') for p in ('LB', 'RF', 'LF', 'RB')}
+    count = {}
+    for s in survival_events.sp_fleet():
+        kind, unit, obj = s['kind'], s['unit'], s['obj']
+        count[kind] = count.get(kind, 0) + 1
+        if kind == 'aegis':                    # Survival's own copy of Mission 22's allied Aegis, made an enemy
+            names = copy_unit(units, used_ids, z, survival_events.SP_AEGIS_SOURCE, unit, 1, top_number, obj,
+                              survival_events.SP_AEGIS_ROW)
+            u = unit_by(unit)
+            clear_flags(u, ('bIsAttackTargetsException',))
+            retag_turrets(kids(objects(u)[0])[1], obj, rows, used_ids, z)
+            set_unit_point(u, s['point'])
+        elif kind == 'wasp':                   # Mission 28's (allied, invincible, an attack-target exception)
+            names = port_unit(units, used_ids, z, src_wasp, unit, obj, 'sv_sp_wasp', [s['point']], s['yaw'], top_number, tgt=True)
+            u = unit_by(unit)
+            clear_flags(u, ('bIsInvincible', 'bIsAttackTargetsException', 'bShowCallSignForAlly'))
+        elif kind == 'boat':                   # Training006's (enemy already): its first boat, its SAM launcher
+            names = port_unit(units, used_ids, z, src_boat, unit, obj, 'sv_sp_boat', [s['point']], s['yaw'], top_number, tgt=True)
+            u = unit_by(unit)
+            ks = kids(objects(u)[0])
+            assert ks and len(ks[1]) == 1, unit
+            retag_parts(ks[1], obj, used_ids, z, bz_)
+            for ch in ks[1]:
+                data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+                data[:] = [(q[0], q[1], False, ('name', 'sv_sp_boat_sam', 0)) if q[1] == 'MissionNpcID' else q for q in data]
+            z.nb.add('sv_sp_boat_sam')
+        else:                                  # the Ford: Mission 16's (allied Grindylow), its four Mk 15s
+            names = port_unit(units, used_ids, z, src_ford, unit, obj, 'sv_sp_ford', [s['point']], s['yaw'], top_number, tgt=True)
+            u = unit_by(unit)
+            clear_flags(u, ('bIsLanding', 'bShowCallSignForAlly'))
+            u[2][:] = [(q[0], q[1], True, None) if q[1] == 'bIsEscortedUnit' else q for q in u[2]]
+            ks = kids(objects(u)[0])
+            assert ks and len(ks[1]) == 4, unit
+            for ch in ks[1]:                   # (their components end in digits, _01.._04: named by their place instead)
+                data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+                row = [q for q in data if q[1] == 'MissionNpcID'][0][3][1]
+                new_row, place = ford_rows[row]
+                data[:] = [(q[0], q[1], False, ('name', new_row, 0)) if q[1] == 'MissionNpcID' else
+                           (q[0], q[1], False, import_from(z, fz, q[3])) if q[1] == 'Class' and q[3] is not None else q
+                           for q in data]
+                name = f'{obj}_{place}'
+                uid = new_unique_id(used_ids, 'AC8SurvivalMode:' + name)
+                ch[2][:] = [(q[0], q[1], False, ('name', name, 0)) if q[1] == 'Name' else
+                            (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else
+                            (q[0], q[1], False, ('name', 'WD_SurvivalMode_global', 0)) if q[1] == 'WorldDataName' and q[3] is not None
+                            else q for q in ch[2]]
+                for n in names_in(ch): z.nb.add(n)
+        assert names == [obj], (unit, names)
+        enemy_unit(u)
+        face(u, s['yaw'])
+        unit_area(u, survival_events.SP_SHIP_AREA_M, survival_events.SP_SHIP_ALT_M)
+    # the landing craft (Mission 13's, as lcac_units) and their troops
+    m13 = stock_wd(M13 + 'WD_Mission013_global')
+    src_craft = desc_named(m13, 'UnitDescList', survival_events.LCAC_SOURCE_UNIT)
+    src_troop = desc_named(m13, 'UnitDescList', survival_events.LCAC_TROOP_SOURCE)
+    src_path = desc_named(m13, 'AIPathDescList', survival_events.LCAC_SOURCE_PATH)
+    src_drive = desc_named(m13, 'AIPathDescList', survival_events.LCAC_TROOP_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    craft = survival_events.sp_craft()
+    waves = []
+    for c in craft:
+        if c['unit'] not in waves: waves.append(c['unit'])
+    for wu in waves:
+        cs = [c for c in craft if c['unit'] == wu]
+        names = port_unit(units, used_ids, z, src_craft, wu, cs[0]['obj_base'], survival_events.LCAC_ROW,
+                          [c['start'] for c in cs], cs[0]['yaw'], top_number, tgt=True)
+        assert names == [c['obj'] for c in cs], names
+    for c in craft:
+        (sx, sy, sz), (bx, by, bz) = c['start'], c['beach']
+        at = lambda t, zz: (sx + (bx - sx) * t, sy + (by - sy) * t, zz)
+        shore = 1.0 - min(0.08, 60000.0 / c['length'])           # the last point at sea, up to 600 m off the beach
+        paths.append(make_path(z, used_ids, src_path, c['path'], [at(0.0, 0.0), at(0.35, sz), at(0.7, sz), at(shore, sz), at(1.0, bz)]))
+        paths.append(make_path(z, used_ids, src_path, c['back'], [at(1.0, bz), at(shore, sz), at(0.6, sz), at(0.2, sz), at(-0.05, sz)]))
+        (gx, gy, gz) = c['spot']
+        gnd = survival_events.LCAC_GROUND_Z
+        drive = [(bx, by, bz)] + [(bx + (gx - bx) * t, by + (gy - by) * t, gnd) for t in (0.25, 0.5, 0.75)] + [(gx, gy, gz)]
+        paths.append(make_path(z, used_ids, src_drive, c['drive'], drive))
+        port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
+                  [c['beach']], c['yaw'], top_number)
+        set_bools(unit_by(c['troops']), ('bIsInvincible', 'bIsAttackTargetsException'))   # (this round: can't be shot)
+    for unit, obj, pts in survival_events.sp_garrison():          # the retake's: on the spot, targets
+        port_unit(units, used_ids, z, src_troop, unit, obj, survival_events.LCAC_TROOP_ROW, pts, 180.0, top_number, tgt=True)
+    print(f'  spaceport assault: ' + ', '.join(f'{n} {k}' for k, n in count.items()) + f'; {len(waves)} landing waves '
+          f'({len(craft)} craft, {len(craft) * 3} paths, {len(craft)} troop units), {len(survival_events.sp_garrison())} garrison units')
+
+
 def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
     """A new unit `new_unit`: a copy of `src_unit`'s desc (faction, point, area, tags) holding its first `size` AI
     objects, named obj_name (numbered _0, _1, ... when more than one) with new UniqueIDs, on NPC row `npc_row` (their
@@ -1014,6 +1148,7 @@ def build_wd_global():
     split_units(units, used_ids, z, top_number)
     ally_units(units, used_ids, z, top_number, v)
     lcac_units(units, used_ids, z, top_number, v)
+    spaceport_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
     heavy_paths(used_ids, z, v)
     alcn_units(units, used_ids, z, top_number, v)
@@ -1943,7 +2078,8 @@ def build_npc_table():
     rows = dict(dt['rows'])
     npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
     extra = list(NPC_EXTRA)
-    for new_row, src, npc in POOL_EXTRA:
+    # (the Spaceport Assault's enemy ships, survival_events.SP_NPC_ROWS: shaped as an Aegis hull or turret row)
+    for new_row, src, npc in POOL_EXTRA + survival_events.SP_NPC_ROWS:
         assert (new_row, 0) not in rows, new_row
         row = copy.deepcopy(rows[(src, 0)])
         nid = survival_events.fname(npc)                                    # (its numeric tail: hard rule 17)

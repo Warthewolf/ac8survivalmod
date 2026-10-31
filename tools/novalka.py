@@ -24,7 +24,7 @@ def main(mod):
     s = open(p, encoding='utf-8', newline='').read()
     s = sub(s, ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, valka',
             ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch', 'ini rotation')
-    s = sub(s, ' glitch (AB.L..IN), valka (VALKA); leave one out to', ' glitch (AB.L..IN); leave one out to', 'ini note')
+    s = sub(s, ' glitch (AB.L..IN), valka (VALKA), spaceport', ' glitch (AB.L..IN), spaceport', 'ini note')
     m = re.search(r'\[specials\.valka\][^\[]*', s)
     assert m, 'ini: no [specials.valka]'
     s = s[:m.start()] + s[m.end():]

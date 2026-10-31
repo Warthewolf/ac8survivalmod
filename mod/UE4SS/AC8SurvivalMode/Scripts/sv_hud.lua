@@ -454,6 +454,8 @@ function hudTick(now, paused, pc)
     elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then
         local craft, ashore = AMPH.counts()
         nextS = string.format(t.amphib_row, craft, ashore, AMPH.capture())
+    elseif D.special and SPC.kinds[D.special.kind] and SPC.kinds[D.special.kind].row and SPC.kinds[D.special.kind].row(D.special, t) then
+        nextS = SPC.kinds[D.special.kind].row(D.special, t)          -- (the Spaceport Assault's: sv_spaceport.lua)
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
         local _, ashore = AMPH.counts()

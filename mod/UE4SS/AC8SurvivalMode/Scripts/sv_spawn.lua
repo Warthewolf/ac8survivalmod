@@ -841,6 +841,11 @@ end
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 function specialFor(round)
     local sp = CFG.specials
+    -- the round after a captured spaceport is its retake (sv_spaceport.lua; CFG.specials.spaceport.retake)
+    local spr = sp.spaceport
+    if RUN.sport and RUN.sport.retakeRound == round and not (spr and spr.retake and spr.retake.enabled == false) then
+        return "retake"
+    end
     local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
     if sx <= 0 then return nil end
     if sp.enabled and sp.random and #sp.rotation > 0 then
@@ -852,7 +857,8 @@ function specialFor(round)
             -- Every 10 rounds"): one that started in round r can't come again before r + cooldown_rounds
             local function ready(k)
                 local last = RUN.specialAt and RUN.specialAt[k]
-                return specialOn(k) and (not last or round - last >= (sp.cooldown_rounds or 0))
+                local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
+                return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
             end
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
