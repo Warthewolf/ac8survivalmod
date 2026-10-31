@@ -622,11 +622,39 @@ do
     local e0 = esmCount()
     D.now = 205; ALLY.tick(205)
     check(esmCount() == e0, "on its takeoff roll: no ESM yet")
+    -- its orbit's backstop: a climb-out that never ends, then a plane that wanders off
+    local function orbitCount() local k = 0; for _, e in ipairs(events) do if e == AW.orbit.event then k = k + 1 end end; return k end
+    local o0 = orbitCount()
+    R.orbitCheckAt, R.orbitAgainAt = 0, 0
+    D.now = 230; ALLY.tick(230)
+    check(orbitCount() == o0, "30 s after takeoff, still climbing: left to it")
+    R.orbitCheckAt = 0
+    D.now = 262; ALLY.tick(262)
+    check(orbitCount() == o0 + 1 and line("allies: VOID WATCHER 1 put on its orbit (its climb-out didn't end in 60 s)") ~= nil,
+          "61 s on, its climb-out never ended: put on its orbit (RE_SV_AwacsOrbit), logged")
+    local vw = { full = "BP_OP0005_e767_CP_Ally_C_1", addr = addr() }
+    local at = { X = AIRFIELD.X + 2500000, Y = AIRFIELD.Y }
+    function vw:K2_GetActorLocation() return at end
+    R.planes[#R.planes + 1] = { obj = vw, unit = AW.unit, name = "e767" }
     air = 1
-    D.now = 206; ALLY.tick(206)
-    D.now = 210; ALLY.tick(210)
+    R.orbitCheckAt = 0
+    D.now = 263; ALLY.tick(263)
+    check(orbitCount() == o0 + 1, "airborne 25 km out, again_s (60 s) not up: not again yet")
+    R.orbitCheckAt = 0
+    D.now = 330; ALLY.tick(330)
+    check(orbitCount() == o0 + 2 and line("put on its orbit (25.0 km from the airfield)") ~= nil, "wandered 25 km off: put back on its orbit")
+    at = { X = AIRFIELD.X + 1200000, Y = AIRFIELD.Y }
+    R.orbitCheckAt, R.orbitAgainAt = 0, 0
+    D.now = 331; ALLY.tick(331)
+    check(orbitCount() == o0 + 2, "on its 12 km orbit: left alone")
+    air = 0
+    R.esmAt = nil
+    air = 1
+    e0 = esmCount()
+    D.now = 406; ALLY.tick(406)
+    D.now = 410; ALLY.tick(410)
     check(esmCount() == e0 + 1, "airborne: its ESM fired (RE_SV_AwacsEsm), once")
-    D.now = 206 + AW.esm.every_s; ALLY.tick(D.now)
+    D.now = 406 + AW.esm.every_s; ALLY.tick(D.now)
     check(esmCount() == e0 + 2, "every_s (20 s) on: again")
     -- each ESM field of its class: its range and time; another class's left as it is
     local field = { full = "BP_wp_esm_MS28_C /Game/Maps/PL_SurvivalMode:PersistentLevel.BP_wp_esm_MS28_C_1", addr = addr(),
