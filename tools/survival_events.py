@@ -1955,6 +1955,12 @@ def build_spaceport(g, flag, stock_ep):
         ev = f'RE_SV_FlightOff_{k + 1:02d}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
         g.execute(t_off, ev, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
+        # (0.73.64, hotfix12) the same switched on: the co-op host's STORE (the game's minigame) switches every AI plane
+        # off and SetMinigameAIObject didn't spare them (test of 2026-11-01 23:09:59): Scripts/sv_coop.lua fires
+        # RE_SV_FlightOn_NN on each flight up while the host is in the STORE with others flying
+        on = f'RE_SV_FlightOn_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', on)
+        g.execute(t_off, on, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'true'})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_SpFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})

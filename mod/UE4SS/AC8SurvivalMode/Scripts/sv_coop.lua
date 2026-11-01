@@ -226,6 +226,7 @@ end
 -- and gun, VALKA), bomb runs, flight / escort / bomber orders, the landing craft's removals. All but these:
 local KEEP_EVENTS = {
     "^RE_SV_RepairAircraft$", "^RE_SV_Decoy", "^RE_SV_Ally", "^RE_SV_Strike", "^RE_SV_Beat$",   -- each player's own
+    "^RE_SV_FlightOn_",        -- (hotfix12) the host's own planes woken under its STORE
     "^RE_SV_Hunt_",            -- the host's flights after the joiners' planes (a joiner's copies go for the joiner anyway)
     "^RE_SV_AceTurn_", "^RE_SV_AceKulbit_",  -- moves around the host's plane: a joiner sees them in the copies' stream
     "^RE_SV_GlitchBlink", "^RE_SV_ValkaTp_",
@@ -3641,6 +3642,19 @@ function COOP.tick(tick)
                         end
                     end
                 end
+                -- (hotfix12) hotfix11's marks didn't spare them (23:09:59: marked 4 of 4, still listed, 0 moved). While
+                -- the manager holds AI planes, each flight up is switched on again by the game's own switch
+                -- (RE_SV_FlightOn_NN: LiveSetActiveGameObject true, as RE_SV_FlightOff_NN switches one off), every 2 s.
+                M.flOn = M.flOn or 0
+                if mgMine > 0 and CFG.coop.store_keep_ai ~= false and type(SV_Event) == "function" and poolIndex then
+                    local nOn = 0
+                    for u in pairs(D and D.up or {}) do
+                        local k = poolIndex(u)
+                        if k and SV_Event(string.format("RE_SV_FlightOn_%02d", k)) == 1 then nOn = nOn + 1 end
+                    end
+                    M.flOn = M.flOn + nOn
+                    M.flOnLast = nOn
+                end
                 local okB, mgFlag = false, nil
                 for _, p in ipairs(planes or {}) do
                     if not p.down and p.obj and liveAddr(p.obj) then
@@ -3669,6 +3683,8 @@ function COOP.tick(tick)
                         mg and "found" or "NOT found", #mgSizes > 0 and table.concat(mgSizes, ", ") or "-",
                         #top > 0 and table.concat(top, ", ") or "none", mgMine, mgOn, okB and tostring(mgFlag) or "?",
                         M.mgMarkN or 0, M.mgMarkTry or 0, tostring(M.mgTickMgr or "?")))
+                    log(string.format("coop: hotfix12: flights switched on again (RE_SV_FlightOn_NN): %d this check, %d so far",
+                        M.flOnLast or 0, M.flOn or 0))
                 end
             end)
             if not okF then once("frzcheck", "coop: airfield freeze check error " .. tostring(errF)) end
@@ -3682,7 +3698,7 @@ function COOP.tick(tick)
         log(string.format("coop: back off the airfield: the freeze check ran %d times; minigame marks taken off %d of %d",
             M.frzN or 0, un, #(M.mgMarked or {})))
         M.frzPos, M.frzN, M.frzAt, M.frzFixSaid, M.frzOn, M.frzFixed = nil, nil, nil, nil, nil, nil
-        M.mgMarked, M.mgMarkN, M.mgMarkTry, M.mgTickMgr = nil, nil, nil, nil
+        M.mgMarked, M.mgMarkN, M.mgMarkTry, M.mgTickMgr, M.flOn, M.flOnLast = nil, nil, nil, nil, nil, nil
     end
     -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield, 8 DOWN: shot down and
     -- waiting for a revive, sv_down.lua, not "alive" then; the sync's 16 gear down, 32 afterburner, 64 gun firing,
