@@ -36,6 +36,12 @@ None of this is merged into COOP2MP (now 0.73.58) or main.
    data) and the EP names them; next: decode the EP records (tools/checks/ep_dump.py needs tools/scriptobjs.pkl) and
    compare the orbit / rage exec records with the circuit's, then the speeds. Fallback: Mission 22's teleport record
    (hard rule 39) to turn VOID WATCHER back.
+2b. **The DOWN loiter doesn't orbit the airfield** (user, 2026-11-01): a shot-down player's plane "just continues
+   flying east" instead of circling the airfield. Not an AI path: sv_down.lua flies it with the runtime's loiter
+   autopilot (`SV_Down(pawn, AIRFIELD.X, AIRFIELD.Y, alt_m 2500, radius_m 4000)`, runtime/flight.c), so the cause is
+   likely the autopilot's steering (its roll / yaw sign probes misread before: runtime 0.28.7's notes) or the
+   airfield point it's given, not the event records. Next: a log of a DOWN with the loiter's lines (`down:` /
+   `loiter`), check the target point against AIRFIELD and the heading error it computes (+Y is south, item 6).
 3. **Ladon appearance re-fire.** A Ladon's own VLS volley after its first pass re-fired its appearance trigger
    (SV_LadonRun<Key> reset to 0, the inbound route restarted from (-42, 4): "the Ladon left the map"). Hotfix 2 stops
    the volleys after the first pass; the build fix is to gate the appearance records (tools/survival_events.py
