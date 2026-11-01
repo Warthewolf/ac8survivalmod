@@ -537,6 +537,7 @@ AWACS_ORBIT_KM = 12.0
 AWACS_ORBIT_POINTS = 16
 AWACS_ALT_KM = 4.5
 AWACS_SPEED = '550.0'
+AWACS_AREA_M = 6000.0                       # its orbit: its unit area on the airport (build_awacs, 0.73.62)
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
@@ -1638,15 +1639,22 @@ def build_awacs(g, stock_ep):
     m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
-    g.execute(t_path, AWACS_EVENTS['airborne'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
-    g.execute(t_path, AWACS_EVENTS['orbit'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
+    # (0.73.62) Its orbit is its unit area, not a path: the path was ignored (it flew straight on: to 163 km on
+    # 2026-10-31, south-west on 2026-11-01, after the climb-out's PathFinish fired its SV_AwacsAir / ESM records). An AI
+    # plane with no target circles inside its area (the bombers with 6 km on the airport circled 8-12 km out, MINDRIPPER's
+    # guards circle him: confirmed): the area onto the airport (the bombers' LiveUnitMoveActor, AIRFIELD_MARK) at
+    # AWACS_AREA_M (Mission 6's LiveChangeUnitRadius), at airborne and on Lua's backstop (RE_SV_AwacsOrbit).
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
+    t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
+    assert arg_values(t_bmove)[3] == AIRFIELD_MARK, arg_values(t_bmove)
     assert 'RE_SV_AwacsOrbit' in lua, 'Scripts/sv_allies.lua never fires RE_SV_AwacsOrbit'
-    g.trigger(finish, 'SV_AwacsLap', arg_changes={0: AWACS_OBJ, 2: AWACS_PATH})
-    g.execute(t_path, 'SV_AwacsLap', {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED})
+    for ev in (AWACS_EVENTS['airborne'], AWACS_EVENTS['orbit']):
+        g.execute(t_bmove, ev, {0: AWACS_UNIT}, delay=1.0)
+        g.execute(t_radius, ev, {0: AWACS_UNIT, 1: 'NoneSelect', 2: f'{AWACS_AREA_M:.1f}'}, delay=1.5)
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
     g.execute(t_fire, 'RE_SV_AwacsEsm', {0: AWACS_ESM_SLOT, 1: AWACS_OBJ})
-    print(f'  VOID WATCHER 1: orbit {AWACS_PATH} ({AWACS_ORBIT_KM} km round the airfield, {AWACS_ALT_KM} km up, '
-          f'{AWACS_SPEED} km/h), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
+    print(f'  VOID WATCHER 1: orbit = its unit area on {AIRFIELD_MARK} ({AWACS_AREA_M:.0f} m), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
 
 
 JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)

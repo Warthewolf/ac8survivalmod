@@ -780,6 +780,26 @@ function ALLY.awacsTick(R, now)
                 r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))
         end
     end
+    -- (0.73.62) where it is every 30 s while airborne: its orbit is its unit area now (tools/survival_events.py
+    -- build_awacs), so the log shows whether it circles the airfield (+Y is south on Comona)
+    if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.awPosAt or 0) then
+        R.awPosAt = now + 30
+        pcall(function()                                    -- (a log line only: never stops the ESM below)
+            for _, p in ipairs(R.planes) do
+                if p.unit == u and liveAddr(p.obj) then
+                    local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+                    local okR, r = pcall(function() return p.obj:K2_GetActorRotation() end)
+                    if okL and l then
+                        local dx, dy = (l.X - AIRFIELD.X) / 100000, (l.Y - AIRFIELD.Y) / 100000
+                        local brg = (math.deg(math.atan(dx, -dy)) + 360) % 360       -- (compass: north is -Y)
+                        log(string.format("allies: %s at %.1f km from the airfield, bearing %03d, %.1f km up, heading %s",
+                            aw.name, math.sqrt(dx * dx + dy * dy), math.floor(brg + 0.5), l.Z / 100000,
+                            (okR and r) and string.format("%03d", math.floor((r.Yaw + 90 + 360) % 360 + 0.5)) or "?"))
+                    end
+                end
+            end
+        end)
+    end
     -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own)
     if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.esmAt or 0) and type(SV_Event) == "function" then
         R.esmAt = now + aw.esm.every_s
