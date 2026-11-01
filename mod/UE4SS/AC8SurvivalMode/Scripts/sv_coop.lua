@@ -3519,6 +3519,24 @@ function COOP.tick(tick)
                     if a then
                         n = n + 1
                         planeAt[a] = p
+                        -- (hotfix11) hotfix10's test (2026-11-01 22:35:37): the STORE's minigame manager put all 4 AI
+                        -- planes in its DeactivatedList(2) and they stopped; their actor ticks back on did nothing (an AI
+                        -- object ticks in the game's own tick manager: bAlwaysTickInTickManager). Mark each one a
+                        -- minigame AI object (the game's SetMinigameAIObject: what a minigame keeps running) while
+                        -- the host is down here, before the STORE opens; taken back off at takeoff.
+                        if CFG.coop.store_keep_ai ~= false and not p.mgSet then
+                            local okS = pcall(function() p.obj:SetMinigameAIObject(true) end)
+                            local okR, rb = pcall(function() return p.obj.bMinigameAIObject end)
+                            p.mgSet = true
+                            M.mgMarked = M.mgMarked or {}
+                            M.mgMarked[#M.mgMarked + 1] = p
+                            M.mgMarkN = (M.mgMarkN or 0) + ((okS and okR and rb == true) and 1 or 0)
+                            M.mgMarkTry = (M.mgMarkTry or 0) + 1
+                            if not M.mgTickMgr then
+                                local okT2, tm = pcall(function() return p.obj.bAlwaysTickInTickManager end)
+                                M.mgTickMgr = okT2 and tostring(tm) or "?"
+                            end
+                        end
                         local okC, cd = pcall(function() return p.obj.CustomTimeDilation end)
                         if okC and type(cd) == "number" and cd < 0.99 then
                             dilN = dilN + 1
@@ -3647,15 +3665,24 @@ function COOP.tick(tick)
                     local top = {}
                     for i = 1, math.min(10, #mc) do top[#top + 1] = mc[i][1] .. " x" .. mc[i][2] end
                     log(string.format("coop: the minigame manager %s: %s; deactivated by class: %s; %d of them AI planes' (switched on again: %d); "
-                        .. "a plane's bMinigameAIObject %s", mg and "found" or "NOT found", #mgSizes > 0 and table.concat(mgSizes, ", ") or "-",
-                        #top > 0 and table.concat(top, ", ") or "none", mgMine, mgOn, okB and tostring(mgFlag) or "?"))
+                        .. "a plane's bMinigameAIObject %s (hotfix11: marked %d of %d tried; bAlwaysTickInTickManager %s)",
+                        mg and "found" or "NOT found", #mgSizes > 0 and table.concat(mgSizes, ", ") or "-",
+                        #top > 0 and table.concat(top, ", ") or "none", mgMine, mgOn, okB and tostring(mgFlag) or "?",
+                        M.mgMarkN or 0, M.mgMarkTry or 0, tostring(M.mgTickMgr or "?")))
                 end
             end)
             if not okF then once("frzcheck", "coop: airfield freeze check error " .. tostring(errF)) end
         end
     elseif M.frzPos then
-        log(string.format("coop: back off the airfield: the freeze check ran %d times", M.frzN or 0))
+        local un = 0
+        for _, p in ipairs(M.mgMarked or {}) do                -- (hotfix11: the minigame marks off again)
+            p.mgSet = nil
+            if p.obj and liveAddr(p.obj) and pcall(function() p.obj:SetMinigameAIObject(false) end) then un = un + 1 end
+        end
+        log(string.format("coop: back off the airfield: the freeze check ran %d times; minigame marks taken off %d of %d",
+            M.frzN or 0, un, #(M.mgMarked or {})))
         M.frzPos, M.frzN, M.frzAt, M.frzFixSaid, M.frzOn, M.frzFixed = nil, nil, nil, nil, nil, nil
+        M.mgMarked, M.mgMarkN, M.mgMarkTry, M.mgTickMgr = nil, nil, nil, nil
     end
     -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield, 8 DOWN: shot down and
     -- waiting for a revive, sv_down.lua, not "alive" then; the sync's 16 gear down, 32 afterburner, 64 gun firing,
