@@ -502,6 +502,23 @@ static const uint8_t kSigUnitFxFrameMask[53] = {
     0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
+/* (runtime 0.32.16) Another AI unit class's per-frame update 0x147cb86c0 (self, float dt): a vtable slot of its class
+ * (0x14c51ccf8 holds it; it calls 0x147c5be20 first, as kSigUnitFxFrame's does). Its helper 0x147cb99c0 calls through
+ * the component it holds at +0x42c0 (0x147cb9e09, `call [rax+0x2c8]`), checking only that component's garbage flag:
+ * the co-op run of 2026-11-01 (a joiner, 22:48:3x, the Ladons 90 km out below sea level) crashed there, jumping to
+ * address 0 through a freed component's vtable. flight.c OnUnitFx2Frame lets go of a destroyed or freed one first.
+ * Unique 61 bytes; its call and branch targets wildcarded. */
+static const uint8_t kSigUnitFx2Frame[61] = {
+    0x48, 0x8B, 0xC4, 0x55, 0x53, 0x48, 0x8D, 0x68, 0xC8, 0x48, 0x81, 0xEC, 0x28, 0x01, 0x00, 0x00, 0x48, 0x89, 0x70,
+    0x10, 0x48, 0x8B, 0xD9, 0x48, 0x89, 0x78, 0xE8, 0x0F, 0x29, 0x70, 0xD8, 0x0F, 0x28, 0xF1, 0xE8, 0x00, 0x00, 0x00,
+    0x00, 0x33, 0xF6, 0x39, 0xB3, 0x70, 0x43, 0x00, 0x00, 0x0F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x57, 0xC0, 0x0F,
+    0x2F, 0x83, 0x6C, 0x43,
+};
+static const uint8_t kSigUnitFx2FrameMask[61] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
 /* The game's per-unit target entry's check (vfunc +0x60 of its vtable 0x14cb78378: whether that unit passes a weapon's
  * target search, run on worker threads in a ParallelFor, 0x1474703c0 -> 0x147434e50): 0x147443690 (entry, query) -> bool.
  * The entry holds raw pointers to its unit's game object (+0x18) and actor (+0x28) and reads both (+0x18 through IsA at

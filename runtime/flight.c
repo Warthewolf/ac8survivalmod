@@ -1608,6 +1608,46 @@ static void UfxInstall(void)
     }
 }
 
+/* ---- the same bug in a second unit update (runtime 0.32.16) ------------------------------------------------------
+ * sigs.h kSigUnitFx2Frame: 0x147cb86c0 (self, float dt) calls through the component held at +0x42c0 checking only its
+ * garbage flag; a joiner crashed there on 2026-11-01 (a jump to 0 through a freed vtable). Let go the same way. */
+#define UFX2_OFF 0x42c0
+static uint8_t*      g_fUnitFx2Frame;                      /* found by FindFunctions */
+static UnitFxFrameFn g_nextUnitFx2Frame;
+static uint32_t      g_ufx2LetGo;
+
+static void OnUnitFx2Frame(uint8_t* self, float dt)
+{
+    uint8_t** held = self ? (uint8_t**)(self + UFX2_OFF) : NULL;
+    if (held && Readable(held, 8) && *held) {
+        uint8_t* c = *held;
+        int gone = !Readable(c, 0x10) || (*(uint32_t*)(c + 8) & RF_MIRRORED_GARBAGE);
+        if (!gone && UObjLive(c) == 0) gone = 2;
+        if (gone) {
+            *held = NULL;
+            if (g_ufx2LetGo < 64) Crumb(L"guard: an AI unit's +0x42c0 component %p (unit %p) let go (%s)", c, self, gone == 2 ? L"freed" : L"destroyed");
+            if (g_ufx2LetGo++ < 8)
+                Log(L"guard: an AI unit's component %p (unit %p, +0x42c0) was %s: let go (%u so far)", c, self,
+                    gone == 2 ? L"freed already (not in GUObjectArray)" : L"destroyed, before it's freed", g_ufx2LetGo);
+        }
+    }
+    g_nextUnitFx2Frame(self, dt);
+}
+
+static void Ufx2Install(void)
+{
+    if (!g_fUnitFx2Frame) { Log(L"guard: the second AI unit update wasn't found (another game build?): not guarded"); return; }
+    UfxScan c = { (uint64_t)(uintptr_t)g_fUnitFx2Frame, { 0 }, 0 };
+    for (int s = 0; s < g_nsec && c.n < 4; ++s)
+        if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, UfxScanRegion, &c);
+    if (!c.n) { Log(L"guard: the second AI unit update %p is in no vtable: not guarded", g_fUnitFx2Frame); return; }
+    g_nextUnitFx2Frame = (UnitFxFrameFn)g_fUnitFx2Frame;
+    for (int i = 0; i < c.n; ++i) {
+        void* prev = NULL;
+        HookSlot(c.slots[i], (void*)OnUnitFx2Frame, &prev, L"guard: second AI unit update (+0x42c0)");
+    }
+}
+
 /* ---- a game bug guarded: a weapon's target search reading a freed unit (runtime 0.32.8) -------------------------
  * Each unit a weapon can aim at has target entries, of a family of classes over one base (vtables sharing its slots
  * +0x00, +0x18, +0x28, +0x50); a weapon's search asks every entry, on worker threads (the ParallelFor 0x1474703c0 ->
