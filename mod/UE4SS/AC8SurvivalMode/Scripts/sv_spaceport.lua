@@ -71,7 +71,7 @@ SPORT.FLEET_ROWS = { "SV_Fleet_Mk15Aegis", "SV_Fleet_Mk41Aegis", "SV_Fleet_Mk45A
 -- The Ford's hull as SV_Spawn makes it (spawningUnit is its unit then), for its deck's launches; checked before each
 -- read and dropped once it's gone.
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
-    if spawningUnit == FORD and not (SPORT.fordActor and valid(SPORT.fordActor)) then SPORT.fordActor = o end
+    if spawningUnit == FORD and not (SPORT.fordActor and liveAddr(SPORT.fordActor)) then SPORT.fordActor = o end
 end)
 -- The fleet's turrets as SV_Spawn makes them (the user's loggers of 2026-10-31: sv_weaponlog.lua's fleet watch): every
 -- object of a ship unit, kept by address once its class reads as a turret's (a mount: mk15 / mk41 / mk45 / the artillery /
@@ -89,7 +89,7 @@ function SPORT.partsTick()
     local keep, now = {}, os.clock()
     for _, np in ipairs(SPORT.newParts) do
         if now - np.at < 0.5 then keep[#keep + 1] = np                    -- (a moment to be named)
-        elseif valid(np.obj) then
+        elseif liveAddr(np.obj) then
             local cls = ((nameOf(np.obj):match("([%w_]+)$") or "?"):gsub("_C_%d+$", ""):gsub("_C$", ""))
             local low = cls:lower()
             for _, k in ipairs(TURRET_CLASS) do
@@ -107,7 +107,7 @@ end
 local function fordAt()
     local c = cfg()
     local a = SPORT.fordActor
-    if a and not valid(a) then SPORT.fordActor, a = nil, nil end
+    if a and not liveAddr(a) then SPORT.fordActor, a = nil, nil end
     local at
     if a then pcall(function() local v = a:K2_GetActorLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end) end
     local f = c.ford_cm or {}

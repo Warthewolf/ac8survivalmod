@@ -956,4 +956,10 @@ tools/checks/leaderboard_test.sh): a new setting that's only on screen or each p
 - Commit with git after every working test build. Message format: `[agent] what changed`.
 - Before starting, pull/read the latest commits and this file.
 - Record any new lesson here under "Hard rules" once a test build confirms it.
-- Never delete or overwrite game files directly. Work on copies inside this folder.
+- Never delete or overwrite game files directly. Work on copies inside this folder
+0.73.59-coop2mp.60 (runtime 0.32.14; built 2026-11-01, not yet installed or run in game): hotfixes 1-10 of the testers'
+0.73.37 (branch hotfix/0.73.37, HOTFIX_NOTES.md) merged over 0.73.58: Ladon volleys after the first pass off, rage circuit off,
+Ladon rounds and VOID WATCHER off, liveAddr() (SV_ObjChain) before reads of objects kept between ticks (now in the loggers,
+the specials' fire and the Spaceport too), svLevelOn guarding level-wide checks, FindSpawner not over an unloading level,
+co-op's STORE-freeze probes. COOP2MP is the working main; feature/flight-recorder holds the recorder only (6fd01ab).
+.

@@ -31,6 +31,8 @@ function log(s) logs[#logs + 1] = s end
 function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and o.full or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
+function liveAddr(o) return valid(o) and (addrOf(o) or 1) or nil end   -- (sv_core liveAddr: the runtime's live check, here valid())
+svLevelOn = true                                                         -- (sv_config: Survival's level loaded)
 part("sv_config.lua")
 local paid = {}
 function addCredits(n, why) paid[#paid + 1] = { n = n, why = why } end

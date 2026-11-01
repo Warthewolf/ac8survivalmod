@@ -31,17 +31,17 @@ local function sample(pawn)
     local pawnAddr = addrOf(pawn)
     local allies = {}
     pcall(function()
-        for _, a in ipairs(ALLY.state().planes or {}) do if valid(a.obj) then local x = addrOf(a.obj); if x then allies[x] = true end end end
+        for _, a in ipairs(ALLY.state().planes or {}) do if liveAddr(a.obj) then local x = addrOf(a.obj); if x then allies[x] = true end end end
     end)
     T.looks = T.looks + 1
     for _, p in ipairs(planes or {}) do
-        if not p.down and p.unit and valid(p.obj) then
+        if not p.down and p.unit and liveAddr(p.obj) then
             local bb = aiBlackboard(p)
             if bb then
                 T.planes = T.planes + 1
                 local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
                 local who = "nothing"
-                if okT and valid(t) then
+                if okT and liveAddr(t) then
                     local a = addrOf(t)
                     local slot = a and COOP and COOP.open and COOP.slotOfAddr and COOP.slotOfAddr(a)
                     if a and a == pawnAddr then who = "you"
@@ -142,6 +142,7 @@ end
 
 function AUDIT.tick(now)
     local c = cfg()
+    if not svLevelOn then return end                     -- (hotfix8: never over a level being unloaded)
     if c.enabled == false or not D or not now then return end
     if now >= (AUDIT.sampleAt or 0) then
         AUDIT.sampleAt = now + (tonumber(c.sample_s) or 5)

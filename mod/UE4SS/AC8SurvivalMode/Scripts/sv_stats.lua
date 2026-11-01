@@ -406,10 +406,11 @@ local function unitAt(addr)                           -- the enemy (its flight, 
     return nil
 end
 local function aimedElsewhere(m, pa)                  -- a missile homing on something else (an ally's, a ship's)
-    if not (pa and valid(m.obj)) then return false end
+    if not (pa and liveAddr(m.obj)) then return false end
     local ok, t = pcall(function() return m.obj.TargetToHome end)
-    if not (ok and valid(t)) then return false end
-    return addrOf(t) ~= pa
+    local ta = ok and t and liveAddr(t)
+    if not ta then return false end
+    return ta ~= pa
 end
 -- What caused a drop of your health now: "missile" (an enemy missile within 800 m, seen in the last 0.6 s: the HIT
 -- log's own test; who fired it, its name, and whether missiles of two shooters were within bracket_km in the last

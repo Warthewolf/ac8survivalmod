@@ -1602,14 +1602,15 @@ local function watchShots(pawn, out)
     local okL = pcall(function() arr:ForEach(function(_, e) list[#list + 1] = e:get() end) end)
     if not okL then once("fxeach", "coopfire: your plane's FiredExplosiveWeapons can't be walked: your missiles aren't sent"); return end
     for _, w in ipairs(list) do
-        local a = valid(w) and addrOf(w)
+        local a = liveAddr(w)                              -- (hotfix2: not valid(): see sv_core liveAddr)
         if a then
             cur[a] = true
             if S.primed and not S.seen[a] then
                 local k = kindOf(w)
                 if k then
                     local okT, t = pcall(function() return w.TargetToHome end)
-                    out[#out + 1] = string.format("%s:%d:0", k, (okT and valid(t)) and idOfAddr(addrOf(t)) or 0)
+                    local ta = okT and t and liveAddr(t)
+                    out[#out + 1] = string.format("%s:%d:0", k, ta and idOfAddr(ta) or 0)
                     if k == "s" then S.spShotAt = os.clock() end     -- (a special weapon in flight: not electronic)
                 end
             end
@@ -3460,6 +3461,201 @@ function COOP.tick(tick)
                 ok and "unpaused" or "COULD NOT unpause", M.unpauses))
         end
         if M.unpauses == 1 then callout("CO-OP: THE GAME KEEPS RUNNING", "OTHER PLAYERS ARE STILL FLYING") end
+    end
+    -- (hotfix6) The host's landing STORE stops the world without pausing it (VanesCreed-'s host log of 2026-11-01: in
+    -- the STORE 00:07:00-00:09:54 of round 16, not paused, its frames running, yet no enemy moved or died for anyone
+    -- for those 3 minutes, as in round 15's visit): most likely the world's time dilation. While another player is
+    -- linked it's kept at 1, as the pause above is undone; and the world's clock is watched, so the next log says
+    -- what stops it if that isn't it.
+    if (M.linkedPeers or 0) > 0 and valid(survivalPC) then
+        local okW, errW = pcall(function()
+            local gs = cdo("/Script/Engine.Default__GameplayStatics")
+            local okD, dil = pcall(function() return gs:GetGlobalTimeDilation(survivalPC) end)
+            dil = (okD and type(dil) == "number") and dil or nil
+            if dil and dil < 0.99 then
+                local okS = pcall(function() gs:SetGlobalTimeDilation(survivalPC, 1.0) end)
+                M.dilFixes = (M.dilFixes or 0) + 1
+                if M.dilFixes == 1 or M.dilFixes % 40 == 0 then
+                    log(string.format("coop: time dilation was %.3f with %d players%s: set back to 1 (%s; %d times)", dil,
+                        playerCount(), playerOnAirfield() and " (you're down at the airfield)" or "",
+                        okS and "set" or "COULD NOT set", M.dilFixes))
+                end
+            end
+            local t, rt = gameClock(survivalPC), os.clock()
+            if t then
+                if M.wcT and t == M.wcT then                     -- the world's clock didn't move since last tick
+                    M.wcStill = M.wcStill or rt
+                    if rt - M.wcStill >= 3 and not M.wcSaid then
+                        M.wcSaid = true
+                        log(string.format("coop: the world's clock has stood still %.0f s with %d players (paused %s, time dilation %s%s)",
+                            rt - M.wcStill, playerCount(), tostring(gamePaused(survivalPC)), dil and string.format("%.3f", dil) or "?",
+                            playerOnAirfield() and ", you're down at the airfield" or ""))
+                    end
+                else
+                    if M.wcSaid then log(string.format("coop: the world's clock runs again after %.0f s", rt - (M.wcStill or rt))) end
+                    M.wcStill, M.wcSaid = nil, nil
+                end
+                M.wcT = t
+            end
+        end)
+        if not okW then once("worldclock", "coop: world clock check error " .. tostring(errW)) end
+    end
+    -- (hotfix7) hotfix6's test (2026-11-01 00:45-00:46, round 1): with the host down at the airfield "all enemies froze",
+    -- yet the world's clock ran, unpaused, time dilation 1. So it's done to the planes themselves: each AI plane's own
+    -- time dilation (CustomTimeDilation), its tick or its controller's switched off. Every 2 s while the host is down
+    -- at the airfield with another player linked, each one is undone and the planes that moved are counted, so the log
+    -- says which it was and whether undoing it let them fly.
+    if svLevelOn and (M.linkedPeers or 0) > 0 and COOP.host() and playerOnAirfield() then   -- (hotfix8: svLevelOn)
+        local rt = os.clock()
+        if rt >= (M.frzAt or 0) then
+            M.frzAt = rt + 2
+            local okF, errF = pcall(function()
+                local n, moved, dilN, tickN, ctlN, fixD, fixT, fixC = 0, 0, 0, 0, 0, 0, 0, 0
+                local compOff, compFix, compSeen = 0, 0, 0
+                local planeAt = {}
+                local pos, had = {}, M.frzPos ~= nil
+                for _, p in ipairs(planes or {}) do
+                    local a = (not p.down) and p.obj and not tostring(p.unit or ""):find("CoopPeer", 1, true) and liveAddr(p.obj)
+                    if a then
+                        n = n + 1
+                        planeAt[a] = p
+                        local okC, cd = pcall(function() return p.obj.CustomTimeDilation end)
+                        if okC and type(cd) == "number" and cd < 0.99 then
+                            dilN = dilN + 1
+                            if pcall(function() p.obj.CustomTimeDilation = 1.0 end) then fixD = fixD + 1 end
+                        end
+                        local okT, te = pcall(function() return p.obj:IsActorTickEnabled() end)
+                        if okT and te == false then
+                            tickN = tickN + 1
+                            if pcall(function() p.obj:SetActorTickEnabled(true) end) then fixT = fixT + 1 end
+                        end
+                        local okK, ctl = pcall(function() return p.obj.Controller end)
+                        if okK and ctl and liveAddr(ctl) then
+                            local okE, ce = pcall(function() return ctl:IsActorTickEnabled() end)
+                            if okE and ce == false then
+                                ctlN = ctlN + 1
+                                if pcall(function() ctl:SetActorTickEnabled(true) end) then fixC = fixC + 1 end
+                            end
+                        end
+                        -- (hotfix8) hotfix7's test (01:11:08): the STORE switched every plane's tick off; switched back on,
+                        -- they still didn't move. Its components: each one seen ticking here (landed, the STORE not yet
+                        -- up, the planes flying) and then found off is switched back on, by class in the log.
+                        M.acomp = M.acomp or StaticFindObject("/Script/Engine.ActorComponent")
+                        M.frzOn = M.frzOn or {}
+                        local okA, comps = pcall(function() return p.obj:K2_GetComponentsByClass(M.acomp) end)
+                        if okA and comps then
+                            local list = {}
+                            pcall(function() comps:ForEach(function(_, e) list[#list + 1] = e:get() end) end)
+                            compSeen = compSeen + #list
+                            for _, c in ipairs(list) do
+                                local ca = liveAddr(c)
+                                if ca then
+                                    local okE, en = pcall(function() return c:IsComponentTickEnabled() end)
+                                    if okE and en == true then
+                                        if not M.frzOn[ca] then
+                                            local okN, cn = pcall(function() return c:GetClass():GetFName():ToString() end)
+                                            M.frzOn[ca] = okN and cn or "?"
+                                        end
+                                    elseif okE and en == false and M.frzOn[ca] then
+                                        compOff = compOff + 1
+                                        if pcall(function() c:SetComponentTickEnabled(true) end) then
+                                            compFix = compFix + 1
+                                            M.frzFixed = M.frzFixed or {}
+                                            M.frzFixed[M.frzOn[ca]] = (M.frzFixed[M.frzOn[ca]] or 0) + 1
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+                        if okL and l then
+                            local q = M.frzPos and M.frzPos[a]
+                            if q and math.sqrt((l.X - q[1]) ^ 2 + (l.Y - q[2]) ^ 2 + (l.Z - q[3]) ^ 2) > 5000 then moved = moved + 1 end
+                            pos[a] = { l.X, l.Y, l.Z }
+                        end
+                    end
+                end
+                M.frzPos, M.frzN = pos, (M.frzN or 0) + 1
+                -- (hotfix10) hotfix9's test (01:56:40-01:58:14): the planes' ticks back on, no component of theirs off,
+                -- still 0 moved. The game's LiveMiniGameManager (a world subsystem: the in-game hangar is its
+                -- "minigame") keeps what the STORE switched off in DeactivatedListForMinigame / DeactivatedList2 /
+                -- HiddenList / DeactivatedVFXList. Read them; whatever in them is an AI plane's (the plane or one of its
+                -- components) is switched back on: an actor's tick, a component SetActive(true) and its tick.
+                local mg = M.mgr
+                if not (mg and liveAddr(mg)) then
+                    local okM, f = pcall(FindFirstOf, "LiveMiniGameManager")
+                    mg = okM and f and liveAddr(f) and f or nil
+                    M.mgr = mg
+                end
+                local mgSizes, mgCls, mgMine, mgOn = {}, {}, 0, 0
+                if mg then
+                    for _, key in ipairs({ "DeactivatedListForMinigame", "DeactivatedList2ForMinigame", "HiddenListForMinigame",
+                                           "DeactivatedVFXListForMinigame" }) do
+                        local items = {}
+                        pcall(function() mg[key]:ForEach(function(_, e) items[#items + 1] = e:get() end) end)
+                        mgSizes[#mgSizes + 1] = string.format("%s %d", (key:gsub("ForMinigame", "")), #items)
+                        if key ~= "HiddenListForMinigame" then
+                            for _, o in ipairs(items) do
+                                local oa = liveAddr(o)
+                                if oa then
+                                    local okN, cn = pcall(function() return o:GetClass():GetFName():ToString() end)
+                                    cn = okN and cn or "?"
+                                    mgCls[cn] = (mgCls[cn] or 0) + 1
+                                    local isComp = M.acomp and select(2, pcall(function() return o:IsA(M.acomp) end)) == true
+                                    local own = oa
+                                    if isComp then
+                                        local okO, ow = pcall(function() return o:GetOwner() end)
+                                        own = okO and ow and liveAddr(ow) or nil
+                                    end
+                                    if own and planeAt[own] then
+                                        mgMine = mgMine + 1
+                                        local ok1
+                                        if isComp then
+                                            ok1 = pcall(function() o:SetActive(true, false) end)
+                                            pcall(function() o:SetComponentTickEnabled(true) end)
+                                        else
+                                            ok1 = pcall(function() o:SetActorTickEnabled(true) end)
+                                        end
+                                        if ok1 then mgOn = mgOn + 1 end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                local okB, mgFlag = false, nil
+                for _, p in ipairs(planes or {}) do
+                    if not p.down and p.obj and liveAddr(p.obj) then
+                        okB, mgFlag = pcall(function() return p.obj.bMinigameAIObject end)
+                        break
+                    end
+                end
+                local anyFix = fixD + fixT + fixC + compFix > 0
+                if had and (M.frzN == 2 or M.frzN % 5 == 0 or anyFix and not M.frzFixSaid) then
+                    if anyFix then M.frzFixSaid = true end
+                    local cls = {}
+                    for k, v in pairs(M.frzFixed or {}) do cls[#cls + 1] = k .. " x" .. v end
+                    table.sort(cls)
+                    log(string.format("coop: you're down at the airfield with %d players: %d AI planes, %d moved over 50 m in 2 s; "
+                        .. "own time dilation under 1 on %d (set to 1: %d), tick off on %d (on: %d), controller tick off on %d (on: %d), "
+                        .. "components switched off since %d (on again: %d; so far by class: %s; %d components seen)",
+                        playerCount(), n, moved, dilN, fixD, tickN, fixT, ctlN, fixC, compOff, compFix,
+                        #cls > 0 and table.concat(cls, ", ") or "none", compSeen))
+                    local mc = {}
+                    for k, v in pairs(mgCls) do mc[#mc + 1] = { k, v } end
+                    table.sort(mc, function(x, y) return x[2] > y[2] end)
+                    local top = {}
+                    for i = 1, math.min(10, #mc) do top[#top + 1] = mc[i][1] .. " x" .. mc[i][2] end
+                    log(string.format("coop: the minigame manager %s: %s; deactivated by class: %s; %d of them AI planes' (switched on again: %d); "
+                        .. "a plane's bMinigameAIObject %s", mg and "found" or "NOT found", #mgSizes > 0 and table.concat(mgSizes, ", ") or "-",
+                        #top > 0 and table.concat(top, ", ") or "none", mgMine, mgOn, okB and tostring(mgFlag) or "?"))
+                end
+            end)
+            if not okF then once("frzcheck", "coop: airfield freeze check error " .. tostring(errF)) end
+        end
+    elseif M.frzPos then
+        log(string.format("coop: back off the airfield: the freeze check ran %d times", M.frzN or 0))
+        M.frzPos, M.frzN, M.frzAt, M.frzFixSaid, M.frzOn, M.frzFixed = nil, nil, nil, nil, nil, nil
     end
     -- our own plane, streamed (flags: 1 in Survival's level, 2 alive, 4 down at the airfield, 8 DOWN: shot down and
     -- waiting for a revive, sv_down.lua, not "alive" then; the sync's 16 gear down, 32 afterburner, 64 gun firing,

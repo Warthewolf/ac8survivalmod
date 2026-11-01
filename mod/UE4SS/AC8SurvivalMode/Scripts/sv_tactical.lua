@@ -150,9 +150,11 @@ end
 
 -- A missile (HIT.msl entry) homing on you: true, false (on something else), or nil when its target can't be read
 local function onYou(m, pa)
+    if not liveAddr(m.obj) then return nil end
     local ok, tgt = pcall(function() return m.obj.TargetToHome end)
-    if not (ok and valid(tgt)) then return nil end
-    return addrOf(tgt) == pa
+    local ta = ok and tgt and liveAddr(tgt)
+    if not ta then return nil end
+    return ta == pa
 end
 
 -- ECM: every enemy missile homing on you (or, its target unreadable, within kill_m) inside range_km loses its lock;
@@ -170,7 +172,7 @@ local function ecmTick(now)
     local c, pawn = CFG.tactical.ecm, pawnOf()
     local pa = pawn and addrOf(pawn)
     for _, m in ipairs(HIT.msl) do
-        if m.d and m.d <= c.range_km * 1000 and valid(m.obj) and not m.ecmDone then
+        if m.d and m.d <= c.range_km * 1000 and liveAddr(m.obj) and not m.ecmDone then
             local mine = onYou(m, pa)
             if mine or (mine == nil and m.d <= c.kill_m) then
                 if not m.ecm then
@@ -196,7 +198,7 @@ local function autoTick(now)
         local pawn, n = pawnOf(), 0
         local pa = pawn and addrOf(pawn)
         for _, m in ipairs(HIT.msl) do
-            if m.d and m.d <= c.ecm.auto_km * 1000 and valid(m.obj) and now - (m.seen or -1e9) < 1 then
+            if m.d and m.d <= c.ecm.auto_km * 1000 and liveAddr(m.obj) and now - (m.seen or -1e9) < 1 then
                 local mine = onYou(m, pa)
                 if mine or (mine == nil and m.d <= 1500) then n = n + 1 end
             end
