@@ -887,9 +887,10 @@ CFG = {
         -- by itself) is fired every esm.every_s while it's airborne (RE_SV_AwacsEsm), each field set to esm.range_m
         -- (stock 3.2 km) for esm.life_s; its fire control's reach esm.capture_m. scale: as MOONCHILD's (health only:
         -- it has no weapons).
+        -- (back on in 0.73.60, user 2026-11-01: "turn the Ladon's back on as well as VOID WATCHER" to test them)
         -- enabled = false (hotfix4, user 2026-11-01): not sold (the STORE shows it NOT AVAILABLE) until its orbit is
         -- fixed in a build: the host's run of 2026-10-31 saw it fly straight out to 163 km, RE_SV_AwacsOrbit no help
-        awacs        = { enabled = false, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
+        awacs        = { enabled = true, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
                          row = "SV_Ally_VoidWatcher",
                          -- its model row (tools/build_survival.py: Magnolia's under the game's plain E-767 name), added
                          -- to the campaign's DT_NPC_Model at the main menu (no "MAGNOLIA" on its box)
@@ -1548,9 +1549,10 @@ CFG = {
         -- and from its next pass over the airfield it flies a tighter circuit at the build's faster speed
         -- (tools/survival_events.py LADON_RAGE: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
         -- path). false: as before
+        -- (back on in 0.73.60, user 2026-11-01: "turn the Ladon's back on as well as VOID WATCHER" to test them)
         -- enabled = false (hotfix4, user 2026-11-01: "turn off VOID WATCHER and the LADON Rounds"): no Ladon round
         -- until their paths are fixed in a build (the enraged one's rage circuit isn't followed)
-        ladon = { enabled = false, names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
+        ladon = { enabled = true, names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.05, health_max_x = 2.5,
                   -- rage.circuit false (hotfix3): no switch to the rage circuit (RE_SV_LadonRage<Key>). The host's run of
                   -- 2026-10-31 17:43: MISHKA, enraged, took it at its next pass and flew a straight line east, 87 km
