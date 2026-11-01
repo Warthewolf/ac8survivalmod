@@ -32,21 +32,25 @@ The economy review build (Lua 0.70.x, runtime 0.19.0) has never been run. Use th
 | 7 | MissedWeapon_V2 on invincible dummies: hits counted? first one dropped (hard rule 6)? | AIRFIELD Q1, Q2 | M22 strike round, count per bomb |
 | 8 | Compass: is north -Y? | ECONOMY_REVIEW | raid callout vs minimap |
 
-## Phase 1b: STORE freeze while the host is landed (user, 2026-11-01; top priority)
-Bug: while the host sits landed at the airfield with the STORE (in-game hangar) open, the aircraft freeze.
-Nothing about it is in the notes yet. Find out what stops them:
-1. What the in-game hangar does on open / close: trace `FinishInGameHangar` and the open path
-   (DT_LiveMenuIngameHangarCommands, AIRFIELD_SHOP_UI.md, UI_SHOP_SAVE.md). Look for SetGamePaused,
-   global / actor time dilation, `bIsPausable`, a world tick switch, or the AI being suspended (BrainComponent / AIModule).
-2. Log while it's open, every tick: `GetGlobalTimeDilation`, `IsGamePaused`, the game clock (`roundClock`), and for a few
-   enemy / ally planes their location, `CustomTimeDilation` and `IsActorTickEnabled`. Note which one changes first.
-3. Check Survival's own side: sv_shop.lua / sv_main.lua code that runs while landed (shop input, ammo panel, rearm
-   re-apply), the chase (RE_SV_Chase every 6 s) and SV_Spawn while the player is in the hangar.
-4. Compare with stock: land in a mission with a stock airfield (M22, M015 rearming) and see whether the AI freezes there too.
-   If stock freezes, it's the game's hangar pause and we either accept it or keep the world ticking (hook the pause / restore
-   time dilation). If stock doesn't, it's ours.
-5. If "host" means the online session host: also check whether the hangar's pause is sent to clients (replicated pause / time dilation).
-Done when: the log names the switch that stops the planes, and a fix is tested landed for a whole round.
+## Phase 1b: STORE freeze while the online host is landed (user, 2026-11-01; top priority)
+Bug: in an online session, while the **host** sits landed at the airfield with the STORE (in-game hangar) open, the
+aircraft freeze. The notes don't cover the online session yet, so this starts with its basics.
+1. Session basics: which machine owns the AI planes (host = server / authority?), how plane movement reaches the clients
+   (replicated movement or the game's own sync), and where Survival's Lua runs (host only, or every player).
+   Dump with reflection: the planes' `bReplicates` / `bReplicateMovement` / `NetUpdateFrequency` / `Role`, and the GameState / PlayerState classes.
+2. Trace what the in-game hangar does on open / close (`FinishInGameHangar`, DT_LiveMenuIngameHangarCommands,
+   AIRFIELD_SHOP_UI.md, UI_SHOP_SAVE.md). Look for SetGamePaused, global time dilation, the server's world tick, net
+   update switches, or the AI being suspended (BrainComponent).
+3. Log on host **and** client every tick while the host is landed: `IsGamePaused`, `GetGlobalTimeDilation`, the game
+   clock, and for a few planes location, `CustomTimeDilation`, `IsActorTickEnabled`, net role. Which planes freeze
+   (enemies, allies, the client's own plane?), on which screen, and does it change first on the host or the client?
+4. Compare: the client landed while the host flies (no freeze = it's the host's / server's pause); a stock online-mode
+   airfield, if one exists; Survival offline (landing alone).
+5. Survival's own side while landed: sv_shop.lua / sv_main.lua (shop input, ammo panel, rearm re-apply), the chase
+   (RE_SV_Chase every 6 s), SV_Spawn, and anything gated on the local player being in the hangar that runs only on the host.
+6. Likely fixes, by cause: the hangar pauses the server -> keep the server's world running (hook the pause, restore time
+   dilation) only while a session is online; Survival's own code stops the round -> gate it on the player, not the world.
+Done when: the log names the switch that stops the planes, and a fix is tested online with the host landed for a whole round.
 
 ## Phase 2: enemies and AI (difficulty depends on it)
 - PilotRank range and clamp (0..5? AI_BEHAVIOURS Q). Live write of PilotRank / AILevel (+0x1048) after spawn: does behaviour change?
