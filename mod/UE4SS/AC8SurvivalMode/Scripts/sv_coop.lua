@@ -799,6 +799,19 @@ local function doSpawn(q)
                 local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end
             end
             if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
+        elseif not cu and not q.untrackedDown then
+            -- (0.73.70) up but no longer tracked here (a resync's teardown missed it): Cress's VOID WATCHER copy of
+            -- 2026-11-01 21:11 stayed up unbound after his "jn", the host's fresh spawn was refused ("its last flight
+            -- is still up") and the copy flew its own AI off the map. Take its planes down (torn: not a kill), then
+            -- the host's comes in its place.
+            q.untrackedDown = true
+            local nd = 0
+            for _, p in ipairs(planes or {}) do
+                if p.unit == unit and not p.down and p.obj and liveAddr(p.obj) then killCopy(0, p.obj, true); nd = nd + 1 end
+            end
+            if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
+            log(string.format("coop: %s is up here but no longer tracked (%d alive): %d of its planes taken down for the host's",
+                unit, rawUnitAlive(unit), nd))
         end
         -- (the Alicorn's last copy can't be shot down here: its parked pools are invincible, so it's taken off whole,
         -- as the host does when one is left from last time, and the host's fresh one comes in its place)
