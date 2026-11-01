@@ -3506,6 +3506,11 @@ function COOP.tick(tick)
     -- time dilation (CustomTimeDilation), its tick or its controller's switched off. Every 2 s while the host is down
     -- at the airfield with another player linked, each one is undone and the planes that moved are counted, so the log
     -- says which it was and whether undoing it let them fly.
+    -- (0.73.66) STORE_FIX false: the check only logs. Every switch-back-on it tried (actor / component ticks, the minigame
+    -- marks, RE_SV_FlightOn_NN) left the planes frozen, and re-activating what the STORE's minigame had switched off
+    -- is the likely cause of the renderer crashes of 2026-11-01 (23:04, 23:11, 23:32, all in 0x142c6c1a0 under it).
+    -- [coop] store_fix = true brings them back, for a test only.
+    STORE_FIX = CFG.coop.store_fix == true
     if svLevelOn and (M.linkedPeers or 0) > 0 and COOP.host() and playerOnAirfield() then   -- (hotfix8: svLevelOn)
         local rt = os.clock()
         if rt >= (M.frzAt or 0) then
@@ -3544,19 +3549,19 @@ function COOP.tick(tick)
                         local okC, cd = pcall(function() return p.obj.CustomTimeDilation end)
                         if okC and type(cd) == "number" and cd < 0.99 then
                             dilN = dilN + 1
-                            if pcall(function() p.obj.CustomTimeDilation = 1.0 end) then fixD = fixD + 1 end
+                            if STORE_FIX and pcall(function() p.obj.CustomTimeDilation = 1.0 end) then fixD = fixD + 1 end
                         end
                         local okT, te = pcall(function() return p.obj:IsActorTickEnabled() end)
                         if okT and te == false then
                             tickN = tickN + 1
-                            if pcall(function() p.obj:SetActorTickEnabled(true) end) then fixT = fixT + 1 end
+                            if STORE_FIX and pcall(function() p.obj:SetActorTickEnabled(true) end) then fixT = fixT + 1 end
                         end
                         local okK, ctl = pcall(function() return p.obj.Controller end)
                         if okK and ctl and liveAddr(ctl) then
                             local okE, ce = pcall(function() return ctl:IsActorTickEnabled() end)
                             if okE and ce == false then
                                 ctlN = ctlN + 1
-                                if pcall(function() ctl:SetActorTickEnabled(true) end) then fixC = fixC + 1 end
+                                if STORE_FIX and pcall(function() ctl:SetActorTickEnabled(true) end) then fixC = fixC + 1 end
                             end
                         end
                         -- (hotfix8) hotfix7's test (01:11:08): the STORE switched every plane's tick off; switched back on,
@@ -3580,7 +3585,7 @@ function COOP.tick(tick)
                                         end
                                     elseif okE and en == false and M.frzOn[ca] then
                                         compOff = compOff + 1
-                                        if pcall(function() c:SetComponentTickEnabled(true) end) then
+                                        if STORE_FIX and pcall(function() c:SetComponentTickEnabled(true) end) then
                                             compFix = compFix + 1
                                             M.frzFixed = M.frzFixed or {}
                                             M.frzFixed[M.frzOn[ca]] = (M.frzFixed[M.frzOn[ca]] or 0) + 1
@@ -3632,7 +3637,8 @@ function COOP.tick(tick)
                                     if own and planeAt[own] then
                                         mgMine = mgMine + 1
                                         local ok1
-                                        if isComp then
+                                        if not STORE_FIX then ok1 = false
+                                        elseif isComp then
                                             ok1 = pcall(function() o:SetActive(true, false) end)
                                             pcall(function() o:SetComponentTickEnabled(true) end)
                                         else
@@ -3649,7 +3655,7 @@ function COOP.tick(tick)
                 -- the manager holds AI planes, each flight up is switched on again by the game's own switch
                 -- (RE_SV_FlightOn_NN: LiveSetActiveGameObject true, as RE_SV_FlightOff_NN switches one off), every 2 s.
                 M.flOn = M.flOn or 0
-                if mgMine > 0 and CFG.coop.store_keep_ai ~= false and type(SV_Event) == "function" and poolIndex then
+                if mgMine > 0 and STORE_FIX and type(SV_Event) == "function" and poolIndex then
                     local nOn = 0
                     for u in pairs(D and D.up or {}) do
                         local k = poolIndex(u)
