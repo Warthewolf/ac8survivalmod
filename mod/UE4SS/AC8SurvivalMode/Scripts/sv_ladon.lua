@@ -249,8 +249,25 @@ function SPC.ladonTick(now, s)
             end
             -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at
             -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
-            if now - s.at >= 5 and runs > L.runs and now - (L.bombAt or 0) >= 30 then
-                L.runs, L.bombAt, s.runs = runs, now, (s.runs or 0) + 1
+            -- (0.73.69) or by distance: after a lap it circles in its unit area on the airport, and no PathFinish
+            -- counts its passes then. A pass: within 2.5 km of the airfield after being 5 km or more out.
+            local near = false
+            if L.passes and L.passes >= 1 then
+                for _, p in ipairs(planes) do
+                    if p.unit == L.unit and not p.down and liveAddr(p.obj) then
+                        local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+                        if okL and l then
+                            local dkm = math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000
+                            if dkm >= 5 then L.armed = true
+                            elseif dkm <= 2.5 and L.armed then near = true end
+                        end
+                        break
+                    end
+                end
+            end
+            if now - s.at >= 5 and (runs > L.runs or near) and now - (L.bombAt or 0) >= 30 then
+                L.armed = false
+                L.runs, L.bombAt, s.runs = math.max(runs, L.runs), now, (s.runs or 0) + 1
                 L.passes = (L.passes or 0) + 1
                 if not L.passed and c.volley_after_pass == false then
                     log(string.format("special: Ladon %s: no more volleys after its first pass (volley_after_pass false)", c.names[k] or k))
