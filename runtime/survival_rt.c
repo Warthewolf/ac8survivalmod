@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.15"
-#define RT_VERSION_A         "0.32.15"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.16"
+#define RT_VERSION_A         "0.32.16"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3302,6 +3302,7 @@ static void FindFunctions(void)
         { kSigTargetCheck,      kSigTargetCheckMask, sizeof(kSigTargetCheck), NULL, 0 },
         { kSigPlaneEw,          NULL,              sizeof(kSigPlaneEw), NULL, 0 },
         { kSigWorldOf,          NULL,              sizeof(kSigWorldOf), NULL, 0 },
+        { kSigUnitFx2Frame,     kSigUnitFx2FrameMask, sizeof(kSigUnitFx2Frame), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3361,6 +3362,7 @@ static void FindFunctions(void)
     g_fTargetCheck      = p[58].hit;
     g_fPlaneEw          = p[59].hit;
     g_fWorldOf          = p[60].hit;
+    g_fUnitFx2Frame     = p[61].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3381,8 +3383,8 @@ static void FindFunctions(void)
     Log(L"coop2mp: weapons fired %p, remote plane fire %p, launch weapon %p, flares %p, network manager %p, select special %p, arm "
         L"special %p, gear site %p", g_fPlaneFired, g_fRemoteFire, g_fLaunchWeapon, g_fFireFlares, g_fNetManager, g_fSelectSpecial,
         g_fArmSpecial, g_fGearSite);
-    Log(L"guard: AI unit effect update %p, target entry check %p; coop2mp: plane electronic update %p", g_fUnitFxFrame,
-        g_fTargetCheck, g_fPlaneEw);
+    Log(L"guard: AI unit effect update %p, a second unit update %p, target entry check %p; coop2mp: plane electronic update %p",
+        g_fUnitFxFrame, g_fUnitFx2Frame, g_fTargetCheck, g_fPlaneEw);
     __atomic_store_n(&g_scanned, 1, __ATOMIC_RELEASE);
 }
 
@@ -3410,6 +3412,7 @@ static int Install(void)
     else Log(L"remote player plane update not found; SV_CoopFeed does nothing (COOP2MP)");
     UoFind();                                              /* (GUObjectArray, for the guards' liveness check: flight.c) */
     UfxInstall();                                          /* (the AI unit effect guard: flight.c) */
+    Ufx2Install();                                         /* (its second update's, +0x42c0: flight.c) */
     TgtInstall();                                          /* (the target search guard: flight.c) */
     if (g_fPlaneEw && HookInline(g_fPlaneEw, 15, (void*)OnPlaneEw, (void**)&g_nextPlaneEw, L"plane electronic update")) {}
     else Log(L"coop2mp: the plane electronic update wasn't found: other players' ESM / ECM fields help no one here");
