@@ -540,6 +540,7 @@ AWACS_ORBIT_KM = 12.0
 AWACS_ORBIT_POINTS = 16
 AWACS_ALT_KM = 4.5
 AWACS_SPEED = '550.0'
+AWACS_ALT_BAND_M = (3500.0, 5000.0)          # its unit area's height band (build_survival.py, 0.73.68)
 AWACS_AREA_M = 6000.0                       # its orbit: its unit area on the airport (build_awacs, 0.73.62)
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,

@@ -357,8 +357,9 @@ def ally_units(units, used_ids, z, top_number, v):
     assert names == [survival_events.AWACS_OBJ], names
     u = unit_by(survival_events.AWACS_UNIT)
     clear_flags(u, ('bIsInvincible',))
-    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
+    # (0.73.68) its area's height band too: with the area alone it circled the airfield but climbed on and on (the
+    # test of 2026-11-01 23:41: 0.4 -> 2.2 -> 3.5 km in 60 s, "continues climbing but doesn't level out")
+    unit_area(u, survival_events.AWACS_AREA_M, survival_events.AWACS_ALT_BAND_M)
     ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
     ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
         (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01')),
