@@ -32,6 +32,22 @@ The economy review build (Lua 0.70.x, runtime 0.19.0) has never been run. Use th
 | 7 | MissedWeapon_V2 on invincible dummies: hits counted? first one dropped (hard rule 6)? | AIRFIELD Q1, Q2 | M22 strike round, count per bomb |
 | 8 | Compass: is north -Y? | ECONOMY_REVIEW | raid callout vs minimap |
 
+## Phase 1b: STORE freeze while the host is landed (user, 2026-11-01; top priority)
+Bug: while the host sits landed at the airfield with the STORE (in-game hangar) open, the aircraft freeze.
+Nothing about it is in the notes yet. Find out what stops them:
+1. What the in-game hangar does on open / close: trace `FinishInGameHangar` and the open path
+   (DT_LiveMenuIngameHangarCommands, AIRFIELD_SHOP_UI.md, UI_SHOP_SAVE.md). Look for SetGamePaused,
+   global / actor time dilation, `bIsPausable`, a world tick switch, or the AI being suspended (BrainComponent / AIModule).
+2. Log while it's open, every tick: `GetGlobalTimeDilation`, `IsGamePaused`, the game clock (`roundClock`), and for a few
+   enemy / ally planes their location, `CustomTimeDilation` and `IsActorTickEnabled`. Note which one changes first.
+3. Check Survival's own side: sv_shop.lua / sv_main.lua code that runs while landed (shop input, ammo panel, rearm
+   re-apply), the chase (RE_SV_Chase every 6 s) and SV_Spawn while the player is in the hangar.
+4. Compare with stock: land in a mission with a stock airfield (M22, M015 rearming) and see whether the AI freezes there too.
+   If stock freezes, it's the game's hangar pause and we either accept it or keep the world ticking (hook the pause / restore
+   time dilation). If stock doesn't, it's ours.
+5. If "host" means the online session host: also check whether the hangar's pause is sent to clients (replicated pause / time dilation).
+Done when: the log names the switch that stops the planes, and a fix is tested landed for a whole round.
+
 ## Phase 2: enemies and AI (difficulty depends on it)
 - PilotRank range and clamp (0..5? AI_BEHAVIOURS Q). Live write of PilotRank / AILevel (+0x1048) after spawn: does behaviour change?
 - Open questions in BEHAVIOUR_NATIVE_LOGIC §14, BEHAVIOUR_NATIVE_MOVE and BEHAVIOUR_SCRIPTS §7: blackboard keys our
