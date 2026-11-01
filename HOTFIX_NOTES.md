@@ -24,13 +24,21 @@ settings: the rage circuit off, Ladon rounds and VOID WATCHER off (tests turn th
 | 10 | The LiveMiniGameManager's lists (DeactivatedListForMinigame, DeactivatedList2ForMinigame, HiddenListForMinigame, DeactivatedVFXListForMinigame) read while the host is at the airfield; entries that are an AI plane's switched on again (component SetActive(true) + tick, actor tick); a plane's bMinigameAIObject logged | sv_coop.lua | Not yet run |
 
 ## Open problems
-1. **Enemies freeze for everyone while the co-op host is in the landing STORE.** Not a pause (hotfix6: world clock
-   runs, time dilation 1). On opening the STORE every AI plane's actor tick goes off (hotfix7); switching it back on
-   leaves them frozen (hotfix9). Lead: the in-game hangar is the game's "minigame"; LiveMiniGameManager (a world
-   subsystem) keeps lists of what it deactivated, and the level has a `Mission022_MiniGame` sublevel. Hotfix10 logs
-   `coop: the minigame manager ...`. If the planes aren't in its lists, look at how the minigame starts
-   (LiveSystemObjectMinigameBase, LiveMinigameSettings, bMinigameAIObject) in the exe. Solo the freeze is fine (the
-   stock design); only co-op needs the world to keep running.
+1. **Enemies freeze for everyone while the co-op host is in the landing STORE.** (The probes were removed in 0.73.67;
+   to be reverse engineered.) What the tests of 2026-11-01 showed:
+   - The moment the host's STORE opens, the world subsystem LiveMiniGameManager puts every AI plane (and the airfield's
+     BP_GR000_dummy target points, and a Ladon's parts) in its DeactivatedListForMinigame / DeactivatedList2ForMinigame;
+     they stop (0 moved over 50 m in 2 s) and move again the moment it closes and the lists empty.
+   - Not a pause: the world clock runs, global time dilation 1, the planes' CustomTimeDilation 1.
+   - Didn't wake them: their actor / controller / component ticks switched back on (hotfix 7-10; AI objects tick in
+     the game's own tick manager, bAlwaysTickInTickManager false on them), SetMinigameAIObject(true) on each before
+     the STORE (hotfix 11: still listed), Mission 22's LiveSetActiveGameObject true on each flight every 2 s (hotfix 12,
+     RE_SV_FlightOn_NN: 104 fired, accepted, nothing).
+   - Re-activating what the minigame switched off likely caused the host's renderer crashes (23:04, 23:11, 23:32, all
+     in 0x142c6c1a0, the per-view loop over scene primitives, views 0xddd0 apart). Never switch them back on blindly.
+   - Next: find the code that fills DeactivatedListForMinigame (its property offset on LiveMiniGameManager, then the
+     writer in the exe), see what it calls on each object, and undo exactly that for AI planes in co-op only, or
+     stop the minigame from collecting them (a filter it checks). Solo, the freeze is the stock design and stays.
 2. **Paths that are ignored.** VOID WATCHER's orbit (SV_Path_VoidWatcherOrbit, 550 km/h) and the enraged Ladon's rage
    circuit (SV_Path_Ladon<Key>Rage, 3000 km/h): the AI flies straight (VOID WATCHER to 163 km, 2026-10-31 17:25-17:46;
    MISHKA 87 km east and below sea level, 17:43-17:46) though RE_SV_AwacsOrbit fires. Their path descs in
