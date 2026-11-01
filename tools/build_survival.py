@@ -653,6 +653,7 @@ def ladon_units(units, used_ids, z, top_number, v):
         assert rage[0] == loop[0] and rage[-1] == loop[-1], 'the rage circuit starts and ends where the circuit does'
         paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
+        paths.append(make_path(z, used_ids, src_path, L['loop_b'], loop, smooth=True, before=loop[-1], after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, L['rage'], rage, smooth=True, before=rage[-1], after=rage[0]))
         print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit + rage circuit')
 

@@ -35,6 +35,7 @@
 #define DN_FLIPS_MAX   6       /* sign flips at most in one DOWN                                                   */
 #define DN_CHECK_BANK  90.0    /* deg: the pitch check counts only under this bank                                 */
 #define DN_DIVE_DEG    -40.0   /* the dive backstop: a descent steeper than this ...                                */
+#define DN_TURN_PULL   0.45    /* the pull in a turn at full bank and 30+ deg off the heading wanted (0.32.15)       */
 #define DN_DIVE_S      10.0    /* ... this long, with the climb wanted 20 deg above it, flips the pitch sign       */
 #define DN_BANK_MAX    40.0    /* deg                                                                              */
 #define DN_SLEW        3.0     /* input units a second (outside the probes)                                        */
@@ -239,8 +240,12 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if (CoAbs(bank) < 90.0) c->bankI = DnClamp(c->bankI + 0.01 * eb * dt, -0.25, 0.25);
         double uR = DnClamp(0.025 * eb - 0.005 * c->rp + c->bankI, -0.5, 0.5);
         double cb = Cos(bank * D2R);
+        /* (runtime 0.32.15) the turn's pull: AC8 holds a banked plane's nose level by itself, so a bank with no pull
+         * doesn't turn it (the test of 2026-11-01 22:47: bank 40 held for 30 s, the heading error 129 -> 171 deg, the
+         * plane straight east at 165 m/s). Pull with the bank while the heading is off, on top of the altitude's. */
+        double pullT = DnClamp(CoAbs(e) / 30.0, 0.0, 1.0) * DN_TURN_PULL * CoAbs(Sin(bank * D2R));
         double uP = CoAbs(bank) > 100.0 ? 0.0                  /* upside down: roll back first, no pull at the ground */
-                  : DnClamp((0.03 * (gammaWant - gamma) - 0.006 * c->rth) / (cb > 0.6 ? cb : 0.6), -0.35, 0.5);
+                  : DnClamp(pullT + (0.03 * (gammaWant - gamma) - 0.006 * c->rth) / (cb > 0.6 ? cb : 0.6), -0.35, 0.6);
         tR = c->sRoll * uR; tP = c->sPitch * uP;
         c->dist = rr; c->headErr = e; c->bankWant = bankWant; c->gamma = gamma;
         break;
