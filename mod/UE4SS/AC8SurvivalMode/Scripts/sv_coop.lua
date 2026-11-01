@@ -692,7 +692,9 @@ local function killCopy(id, o, torn)
 end
 
 local function bindCopy(id, o, unit)
-    if M.dead[id] then killCopy(id, o); return end
+    -- (a copy spawned for a plane the host had already lost: torn, not this player's kill. The co-op runs of 2026-11-01
+    -- paid +100 "by you" for each, "up 0 s", after every resync)
+    if M.dead[id] then killCopy(id, o, true); return end
     local a = addrOf(o)
     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
@@ -780,7 +782,7 @@ local function killAllCopies(why)
             if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
         end
     end
-    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
+    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ, M.softRs = {}, {}, {}, {}, nil, nil
     if n + loose > 0 then
         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
@@ -1052,7 +1054,35 @@ local function strayTick(now)
     end
 end
 
+-- (a joiner) SOFT_RS_S after a soft resync, its spawns done: every flight here the host's answer didn't name (or named in
+-- another generation, which doSpawn has replaced) taken down, torn
+local SOFT_RS_S = 8
+local function softResyncTick(now)
+    local r = M.softRs
+    if not r or now - r.at < SOFT_RS_S or #M.spawnQ > 0 then return end
+    M.softRs = nil
+    local n, units = 0, 0
+    for unit, cu in pairs(M.cunits) do
+        if r.seen[unit] ~= cu.gen then
+            units = units + 1
+            for ord, o in pairs(cu.planes or {}) do
+                local id = cu.binds and cu.binds[ord]
+                killCopy(id or 0, o, true); n = n + 1
+                if id then M.copies[id] = nil end
+            end
+            for key, o in pairs(cu.gobjs or {}) do
+                local id = cu.gbinds and cu.gbinds[key]
+                killCopy(id or 0, o, true); n = n + 1
+                if id then M.copies[id] = nil end
+            end
+            M.cunits[unit] = nil
+        end
+    end
+    log(string.format("coop: soft resync done: %d flights the host no longer has taken down here (%d copies)", units, n))
+end
+
 local function clientTick()
+    pcall(softResyncTick, os.clock())
     pcall(strayTick, os.clock())
     pcall(M.buildTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
@@ -2950,6 +2980,7 @@ local function onJoinerMessage(f)
             end
         end
         M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = tonumber(f[6]) or 0 }
+        if M.softRs then M.softRs.seen[unit] = tonumber(f[6]) or 0 end
     elseif k == "bd" then
         local unit, gen, ord, id = f[2], tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
         if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
@@ -3026,6 +3057,19 @@ local function onJoinerMessage(f)
         end
     elseif k == "rs" then
         M.cnt.rsGot = M.cnt.rsGot + 1
+        -- the answer to this game's own "jn" in the same level: the host's picture again, not a new run. Its copies stay
+        -- and are bound again by the "sp" / "bd" that follow (doSpawn keeps a flight already up in the same generation);
+        -- what the host no longer sends is taken down by softResyncTick. Until 0.73.70 every copy was taken down and
+        -- spawned again: the specials and allies couldn't come back ("its last flight is still up") and flew on by their
+        -- own AI (VOID WATCHER stuck at take-off pitch, MOONCHILD under the sea), KOT went down with MISHKA on the
+        -- joiner's game, a DOWN player was revived with their weapons still off, and the weapons' target lists kept the
+        -- freed copies (Crash1, 2026-11-01: 65536 faults caught in a second, then the crash). Co-op runs of 2026-11-01.
+        if M.jnAt ~= nil and os.clock() - M.jnAt < 15 and D and levelReady() then
+            M.softRs = { at = os.clock(), seen = {} }
+            M.cnt.softRs = (M.cnt.softRs or 0) + 1
+            log("coop: the host's whole picture (the answer to our jn): copies kept, bound again; flights it no longer has taken down")
+            return
+        end
         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
         killAllCopies("the host's run started over")
         if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)

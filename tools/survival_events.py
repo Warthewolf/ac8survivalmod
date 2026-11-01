@@ -246,6 +246,12 @@ def ladons():
                         route=place(LADON_ROUTE), circuit=place(LADON_LOOP),
                         # its rage (P7, LADON_RAGE): path, its PathFinish trigger, the flag and Lua's remote event
                         rage=f'SV_Path_Ladon{key}Rage', rage_lap=f'SV_LadonRageLap{key}', rage_flag=f'SV_LadonRage{key}',
+                        # each circuit's twin (the same points, a path of its own): the game ignores a path order for
+                        # the path a plane is already on, so a circuit started again into itself was never flown. The
+                        # co-op run of 2026-11-01: lap 1 flown, then both Ladons flew straight on east off the map,
+                        # down to 100 m. Laps alternate between the two.
+                        loop_b=f'SV_Path_Ladon{key}LoopB', lap_b=f'SV_LadonLapB{key}',
+                        rage_b=f'SV_Path_Ladon{key}RageB', rage_lap_b=f'SV_LadonRageLapB{key}',
                         rage_ev=f'RE_SV_LadonRage{key}', rage_route=place(LADON_RAGE)))
     return out
 
@@ -530,10 +536,15 @@ AWACS_MODEL = 'SV_Model_VoidWatcher'
 AWACS_MODEL_SOURCE = 'OP0005_e767_Ally_Magnolia'
 AWACS_MODEL_NAME = 'ContainerAircraft_Name_e767'
 AWACS_PATH = 'SV_Path_VoidWatcherOrbit'
+# the orbit's twin (the same circle, a path of its own): laps alternate, as the Ladons' circuits do. Started again into
+# itself, the orbit was never flown past its first lap: VOID WATCHER 1 circled tightly 4-6 km SW of the airfield on its
+# own AI from then on (the co-op run of 2026-11-01, "flying in tight circles making them an easy target")
+AWACS_PATH_B = 'SV_Path_VoidWatcherOrbitB'
 # the orbit's radius round the airfield (AIRFIELD_KM), its points, height, speed. 12 km at 550 km/h needs ~12 deg of
 # bank, which an E-767 holds; 0.73.33's 7 km at 650 (~25 deg) it didn't (user, 2026-10-31: "VOID WATCHER just seems to
 # not loiter around the airfield space"). Its 25 km ESM field still covers the airfield from the circle.
-AWACS_ORBIT_KM = 12.0
+AWACS_ORBIT_KM = 7.0             # (user's tester, 2026-11-01: "a circle with a 5-7 kilometer radius"; 12 until 0.73.70,
+                                 # whose loose circles were the orbit not flown at all, AWACS_PATH_B; ~19 deg of bank)
 AWACS_ORBIT_POINTS = 16
 AWACS_ALT_KM = 4.5
 AWACS_SPEED = '550.0'
@@ -1642,7 +1653,9 @@ def build_awacs(g, stock_ep):
     g.execute(t_path, AWACS_EVENTS['orbit'], {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED}, delay=1.0)
     assert 'RE_SV_AwacsOrbit' in lua, 'Scripts/sv_allies.lua never fires RE_SV_AwacsOrbit'
     g.trigger(finish, 'SV_AwacsLap', arg_changes={0: AWACS_OBJ, 2: AWACS_PATH})
-    g.execute(t_path, 'SV_AwacsLap', {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED})
+    g.execute(t_path, 'SV_AwacsLap', {0: AWACS_OBJ, 2: AWACS_PATH_B, 4: AWACS_SPEED})
+    g.trigger(finish, 'SV_AwacsLapB', arg_changes={0: AWACS_OBJ, 2: AWACS_PATH_B})
+    g.execute(t_path, 'SV_AwacsLapB', {0: AWACS_OBJ, 2: AWACS_PATH, 4: AWACS_SPEED})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
     g.execute(t_fire, 'RE_SV_AwacsEsm', {0: AWACS_ESM_SLOT, 1: AWACS_OBJ})
     print(f'  VOID WATCHER 1: orbit {AWACS_PATH} ({AWACS_ORBIT_KM} km round the airfield, {AWACS_ALT_KM} km up, '
@@ -2082,11 +2095,14 @@ def build_ladon(g, flag, stock_ep):
         flag(L['up'], L['rage_flag'], 'Set', 0)
         g.trigger('RE_SpawnEnemy_kokatu_1st', L['rage_ev'])
         flag(L['rage_ev'], L['rage_flag'], 'Set', 1)
-        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop']), (L['rage_lap'], L['rage'])):
+        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop']), (L['lap_b'], L['loop_b']),
+                         (L['rage_lap'], L['rage']), (L['rage_lap_b'], L['rage_b'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
-            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
-            g.execute(t_path, ev, {0: L['obj'], 2: L['rage'], 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
+            nxt = L['loop_b'] if path == L['loop'] else L['loop']             # (never the path it's on: its twin)
+            nxt_rage = L['rage_b'] if path == L['rage'] else L['rage']
+            g.execute(t_path, ev, {0: L['obj'], 2: nxt, 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
+            g.execute(t_path, ev, {0: L['obj'], 2: nxt_rage, 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
     import re
     lua = runtime_lua()
     assert '"RE_SV_LadonRage"' in lua, 'Scripts/sv_ladon.lua never fires RE_SV_LadonRage<Key>'

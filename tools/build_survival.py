@@ -654,7 +654,10 @@ def ladon_units(units, used_ids, z, top_number, v):
         paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, L['rage'], rage, smooth=True, before=rage[-1], after=rage[0]))
-        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit + rage circuit')
+        # (each circuit's twin: laps alternate, survival_events.ladons loop_b / rage_b)
+        paths.append(make_path(z, used_ids, src_path, L['loop_b'], loop, smooth=True, before=loop[-1], after=loop[0]))
+        paths.append(make_path(z, used_ids, src_path, L['rage_b'], rage, smooth=True, before=rage[-1], after=rage[0]))
+        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit + rage circuit (each twice)')
 
 
 def heavy_paths(used_ids, z, v):
@@ -672,6 +675,8 @@ def heavy_paths(used_ids, z, v):
         paths.append(make_path(z, used_ids, src_path, H['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
     orbit = survival_events.awacs_orbit()            # VOID WATCHER 1's (survival_events.AWACS_*), into itself
     paths.append(make_path(z, used_ids, src_path, survival_events.AWACS_PATH, orbit, smooth=True, before=orbit[-1],
+                           after=orbit[0]))
+    paths.append(make_path(z, used_ids, src_path, survival_events.AWACS_PATH_B, orbit, smooth=True, before=orbit[-1],
                            after=orbit[0]))
     near = sorted({(H['sector'], H['route_km']) for H in hs if H['route_km'] < survival_events.HEAVY_ROUTE_KM})
     print(f'  heavies: {2 * len(hs)} paths ({len(hs)} routes + loops); routes begun nearer: '
