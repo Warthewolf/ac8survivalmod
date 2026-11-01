@@ -1,0 +1,22 @@
+1. (The STORE freeze is known and parked: enemies hold while the host is in the STORE.)
+	known, not inquiered abount
+
+
+2. Get shot down in co-op: does the DOWN plane circle the airfield, or fly off east? Get revived from the STORE.
+	client saw my marker where i was shot down, my map showed my "plane" correctly in a holding pattern around the airbase
+
+
+3. Ctrl+4 (Ladons): do both hold their circuit and stay on the map? Does the round end when both bodies are down?
+	test A. weird desync when killing one ladon, client saw both diw, host saw one die, killed the other, round ended before 2md pass on the base
+	test B. let Ladons follow their path un opposed, they did 2 runs on the airbase, 2nd run was basically just them turning around and bombing it again though, no real path there, they then fucked off.
+
+	bug noticed, their wings are static, assuming whole model is
+
+
+4. Buy VOID WATCHER 1 (STORE, DEFENCES page): does it take off, circle the airfield, fire its ESM?
+	worked correctly, but perhaps expand their holding pattern to a circle with a 5-7 kilometer radius, they were flying in tight circles making them an easy target for enemies and hard to defend for us
+
+
+5. Quit to the main menu and restart a mission: any crash?
+
+	flawless, no crash on restart

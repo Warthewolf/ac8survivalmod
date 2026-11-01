@@ -1,0 +1,1018 @@
+10:42:30.886 t15872 lua: copies: all taken down (the host's run started over)
+10:43:54.693 t15872 lua: copies: all taken down (a new run here)
+10:43:55.188 t15872 lua: copies: all taken down (the host's run started over)
+10:44:09.048 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 1)
+10:44:10.590 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 2)
+10:45:44.927 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+10:45:47.466 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 4)
+10:46:52.196 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+10:47:14.646 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147449486 taken down (id 4)
+10:47:18.724 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147449486 taken down (id 0, torn: not a kill)
+10:47:18.968 t15872 lua: copies: all taken down (the host's run started over)
+10:47:18.968 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147449740 taken down (id 1, torn: not a kill)
+10:47:18.969 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147449704 taken down (id 2, torn: not a kill)
+10:47:18.969 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147449519 taken down (id 3, torn: not a kill)
+10:47:18.969 t15872 lua: copy BP_OP0005_e767_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0005_e767_CP_Ally_C_2147448339 taken down (id 5, torn: not a kill)
+10:47:18.971 t15872 lua: copy BP_OP0005_e767_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0005_e767_CP_LeftChildWing_C_2147448338 taken down (id 6, torn: not a kill)
+10:47:18.971 t15872 lua: copy BP_OP0005_e767_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0005_e767_CP_RightChildWing_C_2147448336 taken down (id 7, torn: not a kill)
+10:47:18.971 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147448697 taken down (id 0, torn: not a kill)
+10:47:18.971 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147448669 taken down (id 0, torn: not a kill)
+10:47:19.232 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 4)
+10:47:19.232 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 1974F20510
+10:47:19.232 t15872 recycle SV_Unit_Ciws_A: done
+10:47:19.234 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 2)
+10:47:19.234 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 1921E35BC0
+10:47:19.235 t15872 recycle ERA_Unit_01_Dep_Air0: done
+10:47:19.240 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+10:47:19.240 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 17ACA950
+10:47:19.240 t15872 recycle SV_Unit_SAM_A: done
+10:47:19.242 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 1)
+10:47:19.242 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 16FB2A7290
+10:47:19.243 t15872 recycle ERA_Unit_02_Dep_Air0: done
+10:47:19.612 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147447954 taken down (id 4)
+10:47:20.764 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147447986 taken down (id 3)
+10:47:26.878 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+10:47:28.406 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447876 taken down (id 2)
+10:47:39.096 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447876 taken down (id 0, torn: not a kill)
+10:47:39.096 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147447986 taken down (id 0, torn: not a kill)
+10:47:39.096 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147447954 taken down (id 0, torn: not a kill)
+10:47:53.865 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447911 taken down (id 1)
+10:47:54.388 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447911 taken down (id 0, torn: not a kill)
+10:48:14.772 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+10:48:14.775 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+10:48:14.782 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+10:48:17.822 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 9)
+10:48:17.823 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 7289B700
+10:48:17.823 t15872 recycle ERA_Unit_01_Dep_Air0: done
+10:48:20.883 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 10)
+10:48:24.198 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 11)
+10:51:12.528 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147447142 taken down (id 12)
+10:51:12.786 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447254 taken down (id 9)
+10:51:13.054 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447254 taken down (id 0, torn: not a kill)
+10:51:13.054 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147447142 taken down (id 0, torn: not a kill)
+10:51:13.548 t15872 lua: copies: all taken down (the host's run started over)
+10:51:13.548 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147447064 taken down (id 14, torn: not a kill)
+10:51:13.548 t15872 lua: copy BP_OP0057_sstb_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0057_sstb_CP_C_2147447399 taken down (id 8, torn: not a kill)
+10:51:13.548 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147447219 taken down (id 10, torn: not a kill)
+10:51:13.550 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147447174 taken down (id 11, torn: not a kill)
+10:51:13.550 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147447099 taken down (id 13, torn: not a kill)
+10:51:13.550 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147447919 taken down (id 0, torn: not a kill)
+10:51:13.550 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447315 taken down (id 0, torn: not a kill)
+10:51:13.552 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447318 taken down (id 0, torn: not a kill)
+10:51:13.553 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447312 taken down (id 0, torn: not a kill)
+10:51:13.553 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447303 taken down (id 0, torn: not a kill)
+10:51:13.555 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447297 taken down (id 0, torn: not a kill)
+10:51:13.555 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447300 taken down (id 0, torn: not a kill)
+10:51:13.556 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447309 taken down (id 0, torn: not a kill)
+10:51:13.557 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447306 taken down (id 0, torn: not a kill)
+10:51:13.558 t15872 lua: copy BP_GR000_dummy_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR000_dummy_CP_C_2147447294 taken down (id 0, torn: not a kill)
+10:51:13.559 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147447994 taken down (id 0, torn: not a kill)
+10:51:13.559 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447390 taken down (id 0, torn: not a kill)
+10:51:13.559 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447379 taken down (id 0, torn: not a kill)
+10:51:13.560 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147447349 taken down (id 0, torn: not a kill)
+10:51:13.560 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447364 taken down (id 0, torn: not a kill)
+10:51:13.560 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447369 taken down (id 0, torn: not a kill)
+10:51:13.560 t15872 lua: copy BP_BPD_ControlCenter_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_BPD_ControlCenter_C_2147447339 taken down (id 0, torn: not a kill)
+10:51:13.561 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447384 taken down (id 0, torn: not a kill)
+10:51:13.561 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147447374 taken down (id 0, torn: not a kill)
+10:51:13.561 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147447354 taken down (id 0, torn: not a kill)
+10:51:13.562 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147447359 taken down (id 0, torn: not a kill)
+10:51:13.562 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147447344 taken down (id 0, torn: not a kill)
+10:51:13.808 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 9)
+10:51:13.808 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 72C16050
+10:51:13.809 t15872 recycle ERA_Unit_01_Dep_Air0: done
+10:51:13.815 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 4)
+10:51:13.815 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 16A0BB1750
+10:51:13.815 t15872 recycle SV_Unit_Ciws_A: done
+10:51:13.818 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+10:51:13.818 t15872 recycle SV_Unit_Shuttle: unregistering and destroying its unit actor 3F6C1B700
+10:51:13.818 t15872 recycle SV_Unit_Shuttle: done
+10:51:13.821 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 11)
+10:51:13.821 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 16A0BB7720
+10:51:13.821 t15872 recycle EA_Unit_01_Air0: done
+10:51:13.825 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 10)
+10:51:13.826 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 6B83CA4C0
+10:51:13.826 t15872 recycle ERA_Unit_06_Dep_Air0: done
+10:51:13.830 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+10:51:13.830 t15872 recycle AA_Unit_01_Ground0: unregistering and destroying its unit actor 5604A4C0
+10:51:13.830 t15872 recycle AA_Unit_01_Ground0: done
+10:51:13.838 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+10:51:13.838 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 738D44F0
+10:51:13.838 t15872 recycle SV_Unit_SAM_A: done
+10:51:14.188 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147446083 taken down (id 9)
+10:51:14.189 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147445892 taken down (id 12)
+10:51:14.834 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147446048 taken down (id 10)
+10:51:21.714 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+10:51:21.716 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+10:51:25.813 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147445923 taken down (id 11)
+10:51:33.458 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147445923 taken down (id 0, torn: not a kill)
+10:51:33.458 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147445892 taken down (id 0, torn: not a kill)
+10:51:33.458 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147446083 taken down (id 0, torn: not a kill)
+10:51:33.458 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147446048 taken down (id 0, torn: not a kill)
+10:58:05.432 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147445994 taken down (id 13)
+10:58:05.697 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147445994 taken down (id 0, torn: not a kill)
+10:58:06.211 t15872 lua: copies: all taken down (the host's run started over)
+10:58:06.211 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147445960 taken down (id 14, torn: not a kill)
+10:58:06.211 t15872 lua: copy BP_OP0057_sstb_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0057_sstb_CP_C_2147446002 taken down (id 8, torn: not a kill)
+10:58:06.213 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445858 taken down (id 0, torn: not a kill)
+10:58:06.213 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445848 taken down (id 0, torn: not a kill)
+10:58:06.215 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147445818 taken down (id 0, torn: not a kill)
+10:58:06.216 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445833 taken down (id 0, torn: not a kill)
+10:58:06.218 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445838 taken down (id 0, torn: not a kill)
+10:58:06.218 t15872 lua: copy BP_BPD_ControlCenter_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_BPD_ControlCenter_C_2147445808 taken down (id 0, torn: not a kill)
+10:58:06.219 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445853 taken down (id 0, torn: not a kill)
+10:58:06.221 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147445843 taken down (id 0, torn: not a kill)
+10:58:06.222 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147445823 taken down (id 0, torn: not a kill)
+10:58:06.223 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147445828 taken down (id 0, torn: not a kill)
+10:58:06.224 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147445813 taken down (id 0, torn: not a kill)
+10:58:06.225 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147446010 taken down (id 0, torn: not a kill)
+10:58:06.225 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147445787 taken down (id 0, torn: not a kill)
+10:58:06.458 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 11)
+10:58:06.458 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 6918D1750
+10:58:06.459 t15872 recycle EA_Unit_01_Air0: done
+10:58:06.464 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+10:58:06.465 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 3EB576970
+10:58:06.466 t15872 recycle SV_Unit_SAM_A: done
+10:58:06.829 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147442439 taken down (id 13)
+10:58:12.832 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147442405 taken down (id 14)
+10:58:14.113 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+10:58:14.115 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+10:58:14.116 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+10:58:14.116 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+10:58:26.089 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147442439 taken down (id 0, torn: not a kill)
+10:58:26.089 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147442405 taken down (id 0, torn: not a kill)
+10:58:34.243 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 12)
+10:58:34.244 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1757EE6050
+10:58:34.244 t15872 recycle ERA_Unit_02_Dep_Air0: done
+10:58:37.300 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 13)
+10:58:37.300 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 67C805730
+10:58:37.300 t15872 recycle ERA_Unit_01_Dep_Air0: done
+10:58:40.622 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 14)
+10:58:40.622 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 1914AB32B0
+10:58:40.622 t15872 recycle EA_Unit_01_Air0: done
+10:58:43.918 t15872 lua: coop: the host's EA_Unit_01_Air1 spawned here (gen 15)
+10:59:07.609 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147442097 taken down (id 16)
+10:59:11.956 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147442097 taken down (id 0, torn: not a kill)
+10:59:16.782 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147442129 taken down (id 15)
+10:59:17.051 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147442129 taken down (id 0, torn: not a kill)
+10:59:20.091 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147441910 taken down (id 21)
+10:59:20.092 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147441909 taken down (id 23)
+10:59:20.092 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147441908 taken down (id 24)
+10:59:20.092 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147441906 taken down (id 25)
+10:59:20.336 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147441883 taken down (id 27)
+10:59:20.594 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147441885 taken down (id 22)
+10:59:20.594 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147441884 taken down (id 26)
+10:59:20.594 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147441882 taken down (id 28)
+10:59:22.115 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147441910 taken down (id 0, torn: not a kill)
+10:59:22.115 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147441885 taken down (id 0, torn: not a kill)
+10:59:28.221 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147442059 taken down (id 17)
+10:59:32.310 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147442059 taken down (id 0, torn: not a kill)
+10:59:35.095 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147442024 taken down (id 18)
+10:59:37.392 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147442024 taken down (id 0, torn: not a kill)
+10:59:41.470 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147441985 taken down (id 19)
+10:59:42.498 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147441985 taken down (id 0, torn: not a kill)
+10:59:44.032 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147441952 taken down (id 20)
+10:59:47.621 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147441952 taken down (id 0, torn: not a kill)
+11:00:05.490 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 16)
+11:00:05.491 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 190F26C940
+11:00:05.491 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:00:08.808 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 17)
+11:00:08.809 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 67C3E52A0
+11:00:08.809 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:00:11.856 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 18)
+11:00:14.914 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 19)
+11:00:14.914 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 72F03740
+11:00:14.914 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:00:18.224 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 20)
+11:00:21.783 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 21)
+11:00:34.798 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147441120 taken down (id 30)
+11:00:38.598 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147441120 taken down (id 0, torn: not a kill)
+11:00:38.859 t15872 lua: copies: all taken down (the host's run started over)
+11:00:38.859 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147441056 taken down (id 31, torn: not a kill)
+11:00:38.859 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147441022 taken down (id 32, torn: not a kill)
+11:00:38.859 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440936 taken down (id 33, torn: not a kill)
+11:00:38.859 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440901 taken down (id 34, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440841 taken down (id 35, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440806 taken down (id 36, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147440742 taken down (id 37, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147440710 taken down (id 38, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440672 taken down (id 39, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440640 taken down (id 40, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147441155 taken down (id 29, torn: not a kill)
+11:00:38.861 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147442368 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147441908 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147441909 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147441883 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147441884 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147441882 taken down (id 0, torn: not a kill)
+11:00:38.863 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147441906 taken down (id 0, torn: not a kill)
+11:00:39.111 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 19)
+11:00:39.111 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 2949FC020
+11:00:39.111 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:00:39.116 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 21)
+11:00:39.118 t15872 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 1620F9C940
+11:00:39.118 t15872 recycle ERA_Unit_03_Dep_Air0: done
+11:00:39.123 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 17)
+11:00:39.123 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 17AC84D0
+11:00:39.124 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:00:39.128 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 18)
+11:00:39.129 t15872 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 165C468DF0
+11:00:39.129 t15872 recycle ERA_Unit_05_Dep_Air0: done
+11:00:39.133 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 16)
+11:00:39.133 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 182FD260
+11:00:39.133 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:00:39.139 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 20)
+11:00:39.139 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 14173BB270
+11:00:39.140 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:00:39.144 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+11:00:39.144 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 16980C0510
+11:00:39.144 t15872 recycle SV_Unit_SAM_A: done
+11:00:39.492 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440051 taken down (id 30)
+11:00:45.986 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440123 taken down (id 34)
+11:00:46.747 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:00:46.749 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:00:47.003 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+11:00:47.004 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:00:58.988 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440123 taken down (id 0, torn: not a kill)
+11:00:58.989 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440051 taken down (id 0, torn: not a kill)
+11:01:00.267 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440086 taken down (id 29)
+11:01:04.112 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440086 taken down (id 0, torn: not a kill)
+11:01:07.914 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147440193 taken down (id 32)
+11:01:09.177 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147440193 taken down (id 0, torn: not a kill)
+11:01:14.256 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440157 taken down (id 33)
+11:01:14.261 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147440157 taken down (id 0, torn: not a kill)
+11:01:22.412 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147440226 taken down (id 31)
+11:01:24.439 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147440226 taken down (id 0, torn: not a kill)
+11:01:35.386 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440366 taken down (id 35)
+11:01:35.908 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440293 taken down (id 39)
+11:01:35.910 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440261 taken down (id 40)
+11:01:38.693 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147439982 taken down (id 38)
+11:01:39.698 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147439982 taken down (id 0, torn: not a kill)
+11:01:39.698 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440366 taken down (id 0, torn: not a kill)
+11:01:39.698 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440293 taken down (id 0, torn: not a kill)
+11:01:39.698 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147440261 taken down (id 0, torn: not a kill)
+11:01:46.060 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440331 taken down (id 36)
+11:01:47.087 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147440013 taken down (id 37)
+11:01:49.908 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147440013 taken down (id 0, torn: not a kill)
+11:01:49.908 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147440331 taken down (id 0, torn: not a kill)
+11:02:09.520 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 22)
+11:02:09.521 t15872 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1971585730
+11:02:09.521 t15872 recycle ERA_Unit_05_Dep_Air0: done
+11:02:12.825 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 23)
+11:02:12.825 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 66C70E010
+11:02:12.826 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:02:16.147 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 24)
+11:02:16.148 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 6C730A030
+11:02:16.148 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:02:19.453 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 25)
+11:02:22.640 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 26)
+11:02:25.919 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 27)
+11:02:25.921 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 1757EE3BD0
+11:02:25.921 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:02:29.255 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 28)
+11:02:29.255 t15872 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 72F02070
+11:02:29.256 t15872 recycle ERA_Unit_03_Dep_Air0: done
+11:02:40.486 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437763 taken down (id 51)
+11:02:41.013 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437763 taken down (id 0, torn: not a kill)
+11:02:41.504 t15872 lua: copies: all taken down (the host's run started over)
+11:02:41.504 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147438587 taken down (id 45, torn: not a kill)
+11:02:41.504 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147438552 taken down (id 46, torn: not a kill)
+11:02:41.505 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147438473 taken down (id 47, torn: not a kill)
+11:02:41.505 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147438442 taken down (id 48, torn: not a kill)
+11:02:41.505 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437978 taken down (id 49, torn: not a kill)
+11:02:41.505 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437944 taken down (id 50, torn: not a kill)
+11:02:41.505 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437728 taken down (id 52, torn: not a kill)
+11:02:41.506 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437632 taken down (id 53, torn: not a kill)
+11:02:41.506 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437611 taken down (id 54, torn: not a kill)
+11:02:41.506 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147438760 taken down (id 41, torn: not a kill)
+11:02:41.506 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147438727 taken down (id 42, torn: not a kill)
+11:02:41.507 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147438674 taken down (id 43, torn: not a kill)
+11:02:41.507 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147438643 taken down (id 44, torn: not a kill)
+11:02:41.507 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147439948 taken down (id 0, torn: not a kill)
+11:02:41.742 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 23)
+11:02:41.743 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 16A19F2070
+11:02:41.743 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:02:41.748 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 27)
+11:02:41.749 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 16BFDCEDC0
+11:02:41.749 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:02:41.756 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 28)
+11:02:41.757 t15872 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 197712ADE0
+11:02:41.757 t15872 recycle ERA_Unit_03_Dep_Air0: done
+11:02:41.761 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 26)
+11:02:41.762 t15872 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 6CC466970
+11:02:41.762 t15872 recycle ERA_Unit_04_Dep_Air0: done
+11:02:41.769 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 22)
+11:02:41.769 t15872 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 16A19F0510
+11:02:41.769 t15872 recycle ERA_Unit_05_Dep_Air0: done
+11:02:41.775 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 24)
+11:02:41.776 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 16A19FE4A0
+11:02:41.776 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:02:41.781 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 25)
+11:02:41.782 t15872 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 16A19F52A0
+11:02:41.783 t15872 recycle ERA_Unit_08_Dep_Air0: done
+11:02:41.786 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+11:02:41.787 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 16A1C0E4A0
+11:02:41.787 t15872 recycle SV_Unit_SAM_A: done
+11:02:42.124 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437293 taken down (id 51)
+11:02:49.393 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:02:49.629 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:02:49.630 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 5)
+11:02:49.632 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:02:56.760 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147436964 taken down (id 47)
+11:03:01.371 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147436964 taken down (id 0, torn: not a kill)
+11:03:01.371 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437293 taken down (id 0, torn: not a kill)
+11:03:09.769 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147437327 taken down (id 44)
+11:03:11.282 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147437358 taken down (id 43)
+11:03:11.539 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147437358 taken down (id 0, torn: not a kill)
+11:03:11.539 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147437327 taken down (id 0, torn: not a kill)
+11:03:22.480 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147437073 taken down (id 42)
+11:03:26.800 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147437073 taken down (id 0, torn: not a kill)
+11:03:31.374 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437220 taken down (id 53)
+11:03:31.900 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437220 taken down (id 0, torn: not a kill)
+11:03:33.931 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437200 taken down (id 54)
+11:03:37.009 t15872 lua: copy BP_OP1023_f14d_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1023_f14d_CP_C_2147437200 taken down (id 0, torn: not a kill)
+11:03:53.053 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147437106 taken down (id 41)
+11:03:57.395 t15872 lua: copy BP_OP1022_f16c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1022_f16c_CP_C_2147437106 taken down (id 0, torn: not a kill)
+11:03:58.669 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437002 taken down (id 46)
+11:04:00.948 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147436933 taken down (id 48)
+11:04:02.491 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147436933 taken down (id 0, torn: not a kill)
+11:04:02.491 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437002 taken down (id 0, torn: not a kill)
+11:04:13.924 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437037 taken down (id 45)
+11:04:17.728 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437037 taken down (id 0, torn: not a kill)
+11:04:26.128 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437258 taken down (id 52)
+11:04:27.936 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147437258 taken down (id 0, torn: not a kill)
+11:04:39.355 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437143 taken down (id 50)
+11:04:42.908 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437177 taken down (id 49)
+11:04:43.163 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437177 taken down (id 0, torn: not a kill)
+11:04:43.163 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147437143 taken down (id 0, torn: not a kill)
+11:04:43.421 t15872 lua: copies: all taken down (the host's run started over)
+11:04:43.421 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147436899 taken down (id 0, torn: not a kill)
+11:04:43.670 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+11:04:43.671 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 198A0FD260
+11:04:43.671 t15872 recycle SV_Unit_SAM_A: done
+11:04:51.297 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:04:51.298 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:04:51.299 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:05:04.780 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 29)
+11:05:04.780 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 730A09A0
+11:05:04.780 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:05:07.873 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 30)
+11:05:07.874 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 72DF2070
+11:05:07.874 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:05:11.151 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 31)
+11:05:11.152 t15872 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 6A1636E00
+11:05:11.152 t15872 recycle ERA_Unit_08_Dep_Air0: done
+11:05:14.210 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 32)
+11:05:14.210 t15872 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 194C5BDB80
+11:05:14.211 t15872 recycle ERA_Unit_04_Dep_Air0: done
+11:05:17.286 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 33)
+11:05:17.286 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 1921E39710
+11:05:17.287 t15872 recycle EA_Unit_01_Air0: done
+11:05:20.860 t15872 lua: coop: the host's EA_Unit_01_Air1 spawned here (gen 34)
+11:05:20.860 t15872 recycle EA_Unit_01_Air1: unregistering and destroying its unit actor 682F24060
+11:05:20.860 t15872 recycle EA_Unit_01_Air1: done
+11:05:23.909 t15872 lua: coop: the host's EA_Unit_01_Air2 spawned here (gen 35)
+11:05:49.060 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147434147 taken down (id 65)
+11:05:49.061 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147434146 taken down (id 67)
+11:05:49.061 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147434145 taken down (id 68)
+11:05:49.061 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147434144 taken down (id 69)
+11:05:49.323 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147434147 taken down (id 0, torn: not a kill)
+11:05:56.198 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147434124 taken down (id 66)
+11:05:56.198 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147434123 taken down (id 70)
+11:05:56.198 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147434121 taken down (id 72)
+11:05:56.198 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147434122 taken down (id 71)
+11:05:59.508 t15872 lua: copy BP_OP0011_tu95_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_C_2147434124 taken down (id 0, torn: not a kill)
+11:07:03.392 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:07:19.424 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147433990 taken down (id 76)
+11:07:19.424 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147433988 taken down (id 83)
+11:07:19.424 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147433987 taken down (id 84)
+11:07:20.978 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147433990 taken down (id 0, torn: not a kill)
+11:07:21.471 t15872 lua: copies: all taken down (the host's run started over)
+11:07:21.471 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147434260 taken down (id 62, torn: not a kill)
+11:07:21.471 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147434223 taken down (id 63, torn: not a kill)
+11:07:21.471 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147434191 taken down (id 64, torn: not a kill)
+11:07:21.472 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147433352 taken down (id 89, torn: not a kill)
+11:07:21.472 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147433354 taken down (id 88, torn: not a kill)
+11:07:21.472 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147433356 taken down (id 87, torn: not a kill)
+11:07:21.472 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147434053 taken down (id 73, torn: not a kill)
+11:07:21.472 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147434030 taken down (id 74, torn: not a kill)
+11:07:21.473 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147434010 taken down (id 75, torn: not a kill)
+11:07:21.473 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147434050 taken down (id 77, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147434048 taken down (id 78, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147434028 taken down (id 79, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147434027 taken down (id 80, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147434008 taken down (id 81, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147434007 taken down (id 82, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147433359 taken down (id 85, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147434497 taken down (id 55, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147434466 taken down (id 56, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147434430 taken down (id 57, torn: not a kill)
+11:07:21.474 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147434398 taken down (id 58, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147434360 taken down (id 59, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147434329 taken down (id 60, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147434294 taken down (id 61, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147433358 taken down (id 86, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147434562 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147433987 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147433988 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147434145 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147434146 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_RightChildWing_C_2147434122 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_gsh23_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_gsh23_CP_C_2147434123 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147434121 taken down (id 0, torn: not a kill)
+11:07:21.475 t15872 lua: copy BP_OP0011_tu95_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0011_tu95_CP_LeftChildWing_C_2147434144 taken down (id 0, torn: not a kill)
+11:07:21.735 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 33)
+11:07:21.735 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 686F6E4A0
+11:07:21.736 t15872 recycle EA_Unit_01_Air0: done
+11:07:21.742 t15872 lua: coop: the host's EA_Unit_01_Air2 spawned here (gen 35)
+11:07:21.743 t15872 recycle EA_Unit_01_Air2: unregistering and destroying its unit actor 162E73A4C0
+11:07:21.744 t15872 recycle EA_Unit_01_Air2: done
+11:07:21.752 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 30)
+11:07:21.752 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1718A70510
+11:07:21.752 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:07:21.759 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 31)
+11:07:21.760 t15872 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 6B83CB270
+11:07:21.760 t15872 recycle ERA_Unit_08_Dep_Air0: done
+11:07:21.764 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 29)
+11:07:21.764 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 154AF07BB0
+11:07:21.765 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:07:21.770 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 32)
+11:07:21.771 t15872 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 686F69280
+11:07:21.771 t15872 recycle ERA_Unit_04_Dep_Air0: done
+11:07:21.777 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:07:21.777 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 681B7A950
+11:07:21.782 t15872 recycle SV_Unit_ShipAegisA: done
+11:07:21.786 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 3)
+11:07:21.786 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 197712B270
+11:07:21.786 t15872 recycle SV_Unit_SAM_A: done
+11:07:22.115 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432906 taken down (id 76)
+11:07:22.255 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432904 taken down (id 83)
+11:07:22.255 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432903 taken down (id 84)
+11:07:24.032 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432816 taken down (id 59)
+11:07:25.306 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:07:28.619 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432946 taken down (id 74)
+11:07:28.619 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432944 taken down (id 79)
+11:07:28.619 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432943 taken down (id 80)
+11:07:29.382 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:07:29.633 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:07:29.634 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:07:39.069 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432926 taken down (id 75)
+11:07:39.069 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432924 taken down (id 81)
+11:07:39.069 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432923 taken down (id 82)
+11:07:41.364 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432816 taken down (id 0, torn: not a kill)
+11:07:41.364 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432946 taken down (id 0, torn: not a kill)
+11:07:41.364 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432926 taken down (id 0, torn: not a kill)
+11:07:41.364 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432906 taken down (id 0, torn: not a kill)
+11:07:48.251 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432785 taken down (id 60)
+11:07:51.596 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432785 taken down (id 0, torn: not a kill)
+11:07:57.443 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432966 taken down (id 73)
+11:07:57.443 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432964 taken down (id 77)
+11:07:57.443 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432963 taken down (id 78)
+11:08:01.778 t15872 lua: copy BP_OP0012_t160_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_C_2147432966 taken down (id 0, torn: not a kill)
+11:08:16.042 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147432686 taken down (id 61)
+11:08:17.076 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147432686 taken down (id 0, torn: not a kill)
+11:09:07.662 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147432581 taken down (id 0, torn: not a kill)
+11:09:09.202 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 38)
+11:09:09.203 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 6B8160080
+11:09:09.203 t15872 recycle SV_Unit_SAM_A: done
+11:09:09.466 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 39)
+11:09:09.467 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 67C047290
+11:09:09.467 t15872 recycle SV_Unit_Ciws_A: done
+11:09:20.661 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:09:42.056 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147432653 taken down (id 62)
+11:09:43.583 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147432653 taken down (id 0, torn: not a kill)
+11:09:44.080 t15872 lua: copies: all taken down (the host's run started over)
+11:09:44.080 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147433041 taken down (id 63, torn: not a kill)
+11:09:44.080 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147433009 taken down (id 64, torn: not a kill)
+11:09:44.080 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147431571 taken down (id 96, torn: not a kill)
+11:09:44.080 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147431572 taken down (id 95, torn: not a kill)
+11:09:44.081 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147431573 taken down (id 94, torn: not a kill)
+11:09:44.081 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147431574 taken down (id 93, torn: not a kill)
+11:09:44.081 t15872 lua: copy BP_OP1005_f22a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1005_f22a_CP_C_2147432458 taken down (id 91, torn: not a kill)
+11:09:44.082 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147432606 taken down (id 89, torn: not a kill)
+11:09:44.082 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147432607 taken down (id 88, torn: not a kill)
+11:09:44.082 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147432608 taken down (id 87, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147432610 taken down (id 85, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432751 taken down (id 55, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147432720 taken down (id 56, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147432883 taken down (id 57, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147432851 taken down (id 58, torn: not a kill)
+11:09:44.083 t15872 lua: copy BP_OP1005_f22a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1005_f22a_CP_C_2147432486 taken down (id 90, torn: not a kill)
+11:09:44.084 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147431575 taken down (id 92, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147432609 taken down (id 86, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147431713 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147431704 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432944 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432963 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432903 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432923 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432964 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432924 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_LeftChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_LeftChildWing_C_2147432904 taken down (id 0, torn: not a kill)
+11:09:44.085 t15872 lua: copy BP_OP0012_t160_CP_RightChildWing_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0012_t160_CP_RightChildWing_C_2147432943 taken down (id 0, torn: not a kill)
+11:09:44.338 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:09:44.339 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 19316C2070
+11:09:44.339 t15872 recycle SV_Unit_ShipAegisA: done
+11:09:44.344 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 39)
+11:09:44.345 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 197539A030
+11:09:44.345 t15872 recycle SV_Unit_Ciws_A: done
+11:09:44.348 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 33)
+11:09:44.348 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 72F02990
+11:09:44.348 t15872 recycle EA_Unit_01_Air0: done
+11:09:44.354 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 30)
+11:09:44.354 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 16BFB1A030
+11:09:44.354 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:09:44.360 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 29)
+11:09:44.361 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 16BFE58960
+11:09:44.361 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:09:44.366 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:09:44.366 t15872 recycle SV_Unit_ShipAegisC: unregistering and destroying its unit actor 67665A950
+11:09:44.367 t15872 recycle SV_Unit_ShipAegisC: done
+11:09:44.371 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 38)
+11:09:44.372 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 67C3E84D0
+11:09:44.372 t15872 recycle SV_Unit_SAM_A: done
+11:09:46.625 t15872 lua: coop: the host's SV_Unit_MoonchildB spawned here (gen 41)
+11:09:47.395 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147431159 taken down (id 64)
+11:09:51.976 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:09:51.978 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:09:52.228 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:09:52.230 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:10:03.942 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147431159 taken down (id 0, torn: not a kill)
+11:10:20.249 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147431026 taken down (id 56)
+11:10:24.331 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147431026 taken down (id 0, torn: not a kill)
+11:10:26.104 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147431092 taken down (id 58)
+11:10:29.431 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147431092 taken down (id 0, torn: not a kill)
+11:10:37.591 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147431191 taken down (id 63)
+11:10:38.094 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147431057 taken down (id 55)
+11:10:39.623 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147431191 taken down (id 0, torn: not a kill)
+11:10:39.623 t15872 lua: copy BP_OP1002_f02a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1002_f02a_CP_C_2147431057 taken down (id 0, torn: not a kill)
+11:10:41.388 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 42)
+11:11:02.332 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147431124 taken down (id 57)
+11:11:05.131 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147431124 taken down (id 0, torn: not a kill)
+11:11:23.467 t15872 lua: coop: the host's SV_Unit_LadonMishka spawned here (gen 44)
+11:11:23.485 t15872 lua: coop: the host's SV_Unit_LadonKot spawned here (gen 43)
+11:13:24.287 t15872 lua: copy BP_OP0045_ladn_Engine_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_R_Base_C_2147429888 taken down (id 132)
+11:13:55.102 t15872 lua: copy BP_OP0045_ladn_Engine_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_L_Base_C_2147429887 taken down (id 133)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_Wing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_L_Base_C_2147429893 taken down (id 128)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429892 taken down (id 129)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429890 taken down (id 130)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_TailWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_R_Base_C_2147429889 taken down (id 131)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_Wing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_R_Base_C_2147429886 taken down (id 134)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_VLS_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_L_Base_C_2147429884 taken down (id 136)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_LCIWS_BL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BL_Base_C_2147429881 taken down (id 137)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_VLS_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_R_Base_C_2147429879 taken down (id 138)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_LCIWS_BR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BR_Base_C_2147429876 taken down (id 139)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_LCIWS_FL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FL_Base_C_2147429874 taken down (id 140)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_LCIWS_FR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FR_Base_C_2147429872 taken down (id 141)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_AShMHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AShMHatch_Base_C_2147429870 taken down (id 142)
+11:13:56.372 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429866 taken down (id 144)
+11:13:56.372 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429864 taken down (id 146)
+11:13:56.372 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429863 taken down (id 147)
+11:13:56.372 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429862 taken down (id 148)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_UAVHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_UAVHatch_Base_C_2147429861 taken down (id 149)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_VariableWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_L_Base_C_2147429859 taken down (id 150)
+11:13:56.372 t15872 lua: copy BP_OP0045_ladn_VariableWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_R_Base_C_2147429858 taken down (id 151)
+11:13:56.374 t15872 lua: copy BP_OP0045_ladn_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_CP_C_2147429894 taken down (id 103)
+11:13:56.374 t15872 lua: copy BP_OP0045_ladn_TailWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_L_Base_C_2147429885 taken down (id 135)
+11:13:58.417 t15872 lua: copy BP_OP0045_ladn_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_CP_C_2147429894 taken down (id 0, torn: not a kill)
+11:13:58.912 t15872 lua: copies: all taken down (the host's run started over)
+11:13:58.912 t15872 lua: copy BP_OP0045_ladn_VariableWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_L_Base_C_2147429772 taken down (id 126, torn: not a kill)
+11:13:58.912 t15872 lua: copy BP_OP0045_ladn_VariableWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_R_Base_C_2147429771 taken down (id 127, torn: not a kill)
+11:13:58.912 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429868 taken down (id 143, torn: not a kill)
+11:13:58.914 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429865 taken down (id 145, torn: not a kill)
+11:13:58.915 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147431228 taken down (id 85, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147431227 taken down (id 86, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147431226 taken down (id 87, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147431225 taken down (id 88, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147431224 taken down (id 89, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147430985 taken down (id 92, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147430984 taken down (id 93, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147430983 taken down (id 94, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147430982 taken down (id 95, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147430981 taken down (id 96, torn: not a kill)
+11:13:58.916 t15872 lua: copy BP_OP1005_f22a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1005_f22a_CP_C_2147430893 taken down (id 97, torn: not a kill)
+11:13:58.917 t15872 lua: copy BP_OP1005_f22a_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1005_f22a_CP_C_2147430866 taken down (id 98, torn: not a kill)
+11:13:58.918 t15872 lua: copy BP_OP0045_ladn_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_CP_C_2147429799 taken down (id 102, torn: not a kill)
+11:13:58.919 t15872 lua: copy BP_OP0045_ladn_Wing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_L_Base_C_2147429798 taken down (id 104, torn: not a kill)
+11:13:58.919 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429797 taken down (id 105, torn: not a kill)
+11:13:58.919 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429796 taken down (id 106, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_TailWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_R_Base_C_2147429795 taken down (id 107, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_Engine_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_R_Base_C_2147429794 taken down (id 108, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_Engine_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_L_Base_C_2147429793 taken down (id 109, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_Wing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_R_Base_C_2147429792 taken down (id 110, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_TailWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_L_Base_C_2147429791 taken down (id 111, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_VLS_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_L_Base_C_2147429790 taken down (id 112, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_LCIWS_BL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BL_Base_C_2147429788 taken down (id 113, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_VLS_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_R_Base_C_2147429787 taken down (id 114, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_LCIWS_BR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BR_Base_C_2147429785 taken down (id 115, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_LCIWS_FL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FL_Base_C_2147429784 taken down (id 116, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_LCIWS_FR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FR_Base_C_2147429783 taken down (id 117, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0045_ladn_AShMHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AShMHatch_Base_C_2147429782 taken down (id 118, torn: not a kill)
+11:13:58.920 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429780 taken down (id 119, torn: not a kill)
+11:13:58.921 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429779 taken down (id 120, torn: not a kill)
+11:13:58.921 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429778 taken down (id 121, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429777 taken down (id 122, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429776 taken down (id 123, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429775 taken down (id 124, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0045_ladn_UAVHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_UAVHatch_Base_C_2147429774 taken down (id 125, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147430956 taken down (id 0, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147431199 taken down (id 0, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0045_ladn_LCIWS_BL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BL_Base_C_2147429881 taken down (id 0, torn: not a kill)
+11:13:58.922 t15872 lua: copy BP_OP0045_ladn_TailWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_R_Base_C_2147429889 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_VLS_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_L_Base_C_2147429884 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_LCIWS_FL_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FL_Base_C_2147429874 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_Engine_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_L_Base_C_2147429887 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_AShMHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AShMHatch_Base_C_2147429870 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_VLS_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VLS_R_Base_C_2147429879 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_Engine_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Engine_R_Base_C_2147429888 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429863 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_Wing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_R_Base_C_2147429886 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429892 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_VariableWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_L_Base_C_2147429859 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_UAVHatch_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_UAVHatch_Base_C_2147429861 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429862 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_LCIWS_FR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_FR_Base_C_2147429872 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429866 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_VariableWing_R_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_VariableWing_R_Base_C_2147429858 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_LCIWS_BR_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_LCIWS_BR_Base_C_2147429876 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_Wing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_Wing_L_Base_C_2147429893 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_AirIntake_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_AirIntake_Base_C_2147429890 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0045_ladn_TailWing_L_Base_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0045_ladn_TailWing_L_Base_C_2147429885 taken down (id 0, torn: not a kill)
+11:13:58.923 t15872 lua: copy BP_OP0047_lasm_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP0047_lasm_CP_C_2147429864 taken down (id 0, torn: not a kill)
+11:13:59.178 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 39)
+11:13:59.180 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 16BFB17290
+11:13:59.180 t15872 recycle SV_Unit_Ciws_A: done
+11:13:59.182 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:13:59.183 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 695D4A030
+11:13:59.183 t15872 recycle SV_Unit_ShipAegisA: done
+11:13:59.190 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:13:59.190 t15872 recycle SV_Unit_ShipAegisC: unregistering and destroying its unit actor 179D96C020
+11:13:59.190 t15872 recycle SV_Unit_ShipAegisC: done
+11:13:59.198 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 38)
+11:13:59.198 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 6A163EDC0
+11:13:59.198 t15872 recycle SV_Unit_SAM_A: done
+11:14:06.819 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:14:06.820 t15872 lua: coop: the host's SV_Unit_LadonKot spawned here (gen 43)
+11:14:07.073 t15872 lua: coop: the host's SV_Unit_LadonMishka spawned here (gen 44)
+11:14:07.075 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:14:07.076 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:14:07.078 t15872 lua: coop: the host's SV_Unit_MoonchildB spawned here (gen 41)
+11:14:07.079 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 42)
+11:14:07.079 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:15:27.501 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air1 spawned here (gen 45)
+11:15:31.065 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 46)
+11:15:31.066 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 681B76970
+11:15:31.066 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:15:34.887 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 47)
+11:15:34.887 t15872 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 72F00E30
+11:15:34.887 t15872 recycle ERA_Unit_08_Dep_Air0: done
+11:15:38.722 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 48)
+11:15:38.722 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 681B73BD0
+11:15:38.722 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:15:42.548 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 49)
+11:15:42.549 t15872 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 681E05730
+11:15:42.549 t15872 recycle ERA_Unit_05_Dep_Air0: done
+11:15:46.375 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 50)
+11:15:46.375 t15872 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 6CC464980
+11:15:46.376 t15872 recycle ERA_Unit_04_Dep_Air0: done
+11:15:49.961 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 51)
+11:15:49.962 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 1416D0DB80
+11:15:49.962 t15872 recycle EA_Unit_01_Air0: done
+11:15:53.267 t15872 lua: coop: the host's ERB_Unit_01_Air2 spawned here (gen 52)
+11:17:16.167 t15872 lua: coop: the host's SV_Unit_SAM_B spawned here (gen 53)
+11:17:18.462 t15872 lua: coop: the host's SV_Unit_AAGun_A spawned here (gen 54)
+11:17:43.495 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147427304 taken down (id 158)
+11:17:46.849 t15872 guard: an AI unit's effect 1751E13990 (unit 151DDEAAC0) let go (freed)
+11:17:46.850 t15872 guard: an AI unit's effect 1914AC3990 (unit 682C95580) let go (freed)
+11:17:46.850 t15872 guard: an AI unit's effect 1939ADB890 (unit 176593D560) let go (freed)
+11:17:46.851 t15872 guard: an AI unit's effect 175829A8B0 (unit 67C570040) let go (destroyed)
+11:17:47.808 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147427304 taken down (id 0, torn: not a kill)
+11:17:48.590 t15872 lua: copies: all taken down (the host's run started over)
+11:17:48.590 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147427427 taken down (id 155, torn: not a kill)
+11:17:48.590 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147427383 taken down (id 156, torn: not a kill)
+11:17:48.590 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147428054 taken down (id 95, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147428053 taken down (id 96, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147427273 taken down (id 159, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147427237 taken down (id 160, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147427206 taken down (id 161, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147427164 taken down (id 162, torn: not a kill)
+11:17:48.591 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147427130 taken down (id 163, torn: not a kill)
+11:17:48.593 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147427046 taken down (id 164, torn: not a kill)
+11:17:48.593 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147427012 taken down (id 165, torn: not a kill)
+11:17:48.593 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426975 taken down (id 166, torn: not a kill)
+11:17:48.594 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426941 taken down (id 167, torn: not a kill)
+11:17:48.594 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426893 taken down (id 168, torn: not a kill)
+11:17:48.594 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426859 taken down (id 169, torn: not a kill)
+11:17:48.594 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426825 taken down (id 170, torn: not a kill)
+11:17:48.594 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147426791 taken down (id 171, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147427351 taken down (id 157, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147427459 taken down (id 154, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147428055 taken down (id 94, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147428093 taken down (id 85, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147428092 taken down (id 86, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147428091 taken down (id 87, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147428090 taken down (id 88, torn: not a kill)
+11:17:48.595 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147428089 taken down (id 89, torn: not a kill)
+11:17:48.596 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147427523 taken down (id 152, torn: not a kill)
+11:17:48.596 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147427491 taken down (id 153, torn: not a kill)
+11:17:48.596 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147428057 taken down (id 92, torn: not a kill)
+11:17:48.597 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147428056 taken down (id 93, torn: not a kill)
+11:17:48.597 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147428028 taken down (id 0, torn: not a kill)
+11:17:48.597 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147428108 taken down (id 0, torn: not a kill)
+11:17:48.597 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147426562 taken down (id 0, torn: not a kill)
+11:17:48.598 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147426553 taken down (id 0, torn: not a kill)
+11:17:48.826 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 46)
+11:17:48.828 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 177280D6F0
+11:17:48.828 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:17:48.834 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 39)
+11:17:48.834 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 1784207290
+11:17:48.835 t15872 recycle SV_Unit_Ciws_A: done
+11:17:48.839 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:17:48.840 t15872 recycle SV_Unit_ShipAegisC: unregistering and destroying its unit actor 16B1666050
+11:17:48.840 t15872 recycle SV_Unit_ShipAegisC: done
+11:17:48.844 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:17:48.845 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 17841F7BB0
+11:17:48.845 t15872 recycle SV_Unit_ShipAegisA: done
+11:17:48.851 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 48)
+11:17:48.852 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 17A1742500
+11:17:48.852 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:17:48.856 t15872 lua: coop: the host's ERA_Unit_08_Dep_Air0 spawned here (gen 47)
+11:17:48.857 t15872 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 1906FB1BE0
+11:17:48.857 t15872 recycle ERA_Unit_08_Dep_Air0: done
+11:17:48.863 t15872 lua: coop: the host's ERA_Unit_05_Dep_Air0 spawned here (gen 49)
+11:17:48.863 t15872 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 169BC7F250
+11:17:48.864 t15872 recycle ERA_Unit_05_Dep_Air0: done
+11:17:48.869 t15872 lua: coop: the host's ERA_Unit_04_Dep_Air0 spawned here (gen 50)
+11:17:48.869 t15872 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 17A0E3E010
+11:17:48.869 t15872 recycle ERA_Unit_04_Dep_Air0: done
+11:17:48.876 t15872 lua: coop: the host's SV_Unit_AAGun_A spawned here (gen 54)
+11:17:48.876 t15872 recycle SV_Unit_AAGun_A: unregistering and destroying its unit actor 17A1831750
+11:17:48.877 t15872 recycle SV_Unit_AAGun_A: done
+11:17:48.880 t15872 lua: coop: the host's SV_Unit_SAM_B spawned here (gen 53)
+11:17:48.881 t15872 recycle SV_Unit_SAM_B: unregistering and destroying its unit actor 17A0E3C940
+11:17:48.881 t15872 recycle SV_Unit_SAM_B: done
+11:17:48.883 t15872 lua: coop: the host's SV_Unit_SAM_A spawned here (gen 38)
+11:17:48.884 t15872 recycle SV_Unit_SAM_A: unregistering and destroying its unit actor 17A185A4C0
+11:17:48.884 t15872 recycle SV_Unit_SAM_A: done
+11:17:48.889 t15872 lua: coop: the host's ERB_Unit_01_Air2 spawned here (gen 52)
+11:17:48.889 t15872 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 1784203740
+11:17:48.890 t15872 recycle ERB_Unit_01_Air2: done
+11:17:48.899 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 51)
+11:17:48.899 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 16AB1FA950
+11:17:48.900 t15872 recycle EA_Unit_01_Air0: done
+11:17:48.906 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air1 spawned here (gen 45)
+11:17:48.907 t15872 recycle ERA_Unit_01_Dep_Air1: unregistering and destroying its unit actor 17CF87E930
+11:17:48.908 t15872 recycle ERA_Unit_01_Dep_Air1: done
+11:17:49.222 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425175 taken down (id 158)
+11:17:54.202 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424734 taken down (id 152)
+11:17:55.439 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424702 taken down (id 153)
+11:17:56.464 t15872 lua: coop: the host's SV_Unit_LadonMishka spawned here (gen 44)
+11:17:56.466 t15872 lua: coop: the host's SV_Unit_LadonKot spawned here (gen 43)
+11:17:56.467 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:17:56.468 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:17:56.717 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:17:56.718 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:17:56.719 t15872 lua: coop: the host's SV_Unit_MoonchildB spawned here (gen 41)
+11:17:56.720 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 42)
+11:18:08.189 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424734 taken down (id 0, torn: not a kill)
+11:18:08.189 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424702 taken down (id 0, torn: not a kill)
+11:18:08.189 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425175 taken down (id 0, torn: not a kill)
+11:18:19.136 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147425240 taken down (id 160)
+11:18:19.136 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147425302 taken down (id 95)
+11:18:19.136 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147425301 taken down (id 96)
+11:18:21.912 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147425076 taken down (id 163)
+11:18:23.437 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147425240 taken down (id 0, torn: not a kill)
+11:18:23.437 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147425076 taken down (id 0, torn: not a kill)
+11:18:31.077 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424771 taken down (id 167)
+11:18:33.611 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424771 taken down (id 0, torn: not a kill)
+11:18:37.949 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425354 taken down (id 157)
+11:18:38.712 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425354 taken down (id 0, torn: not a kill)
+11:18:42.525 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147425266 taken down (id 88)
+11:18:42.525 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147425265 taken down (id 89)
+11:18:45.327 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425144 taken down (id 159)
+11:18:48.895 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425144 taken down (id 0, torn: not a kill)
+11:18:49.145 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147425209 taken down (id 161)
+11:18:52.214 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147425110 taken down (id 162)
+11:18:54.001 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147425209 taken down (id 0, torn: not a kill)
+11:18:54.001 t15872 lua: copy BP_OP1032_f18e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1032_f18e_CP_C_2147425110 taken down (id 0, torn: not a kill)
+11:18:57.816 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424805 taken down (id 166)
+11:18:59.080 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424805 taken down (id 0, torn: not a kill)
+11:19:02.152 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424638 taken down (id 155)
+11:19:04.167 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424638 taken down (id 0, torn: not a kill)
+11:19:06.729 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147425267 taken down (id 87)
+11:19:09.776 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147425268 taken down (id 86)
+11:19:12.580 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147425303 taken down (id 94)
+11:19:21.757 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424670 taken down (id 154)
+11:19:24.558 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147424670 taken down (id 0, torn: not a kill)
+11:19:30.919 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147425304 taken down (id 93)
+11:19:40.807 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147425005 taken down (id 165)
+11:19:44.874 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147425005 taken down (id 0, torn: not a kill)
+11:19:49.458 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147425039 taken down (id 164)
+11:19:49.959 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147425039 taken down (id 0, torn: not a kill)
+11:19:50.213 t15872 lua: copies: all taken down (the host's run started over)
+11:19:50.213 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147425385 taken down (id 156, torn: not a kill)
+11:19:50.213 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424944 taken down (id 168, torn: not a kill)
+11:19:50.213 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424910 taken down (id 169, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424876 taken down (id 170, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147424842 taken down (id 171, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147425269 taken down (id 85, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147425305 taken down (id 92, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147425268 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147425267 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147425266 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147425265 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147424952 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147425320 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147424960 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147424968 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147425304 taken down (id 0, torn: not a kill)
+11:19:50.215 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147425303 taken down (id 0, torn: not a kill)
+11:19:50.216 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147425302 taken down (id 0, torn: not a kill)
+11:19:50.216 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147425301 taken down (id 0, torn: not a kill)
+11:19:50.728 t15872 lua: coop: the host's ERA_Unit_07_Dep_Air0 spawned here (gen 46)
+11:19:50.729 t15872 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 17CF87B700
+11:19:50.729 t15872 recycle ERA_Unit_07_Dep_Air0: done
+11:19:50.735 t15872 lua: coop: the host's SV_Unit_Ciws_A spawned here (gen 39)
+11:19:50.735 t15872 recycle SV_Unit_Ciws_A: unregistering and destroying its unit actor 17838BBB90
+11:19:50.735 t15872 recycle SV_Unit_Ciws_A: done
+11:19:50.740 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:19:50.741 t15872 recycle SV_Unit_ShipAegisC: unregistering and destroying its unit actor 175759F6E0
+11:19:50.741 t15872 recycle SV_Unit_ShipAegisC: done
+11:19:50.746 t15872 lua: coop: the host's SV_Unit_ShipAegisA spawned here (gen 36)
+11:19:50.746 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 1758BD4060
+11:19:50.746 t15872 recycle SV_Unit_ShipAegisA: done
+11:19:50.752 t15872 lua: coop: the host's SV_Unit_AAGun_A spawned here (gen 54)
+11:19:50.753 t15872 recycle SV_Unit_AAGun_A: unregistering and destroying its unit actor 155E339710
+11:19:50.753 t15872 recycle SV_Unit_AAGun_A: done
+11:19:50.756 t15872 lua: coop: the host's SV_Unit_SAM_B spawned here (gen 53)
+11:19:50.756 t15872 recycle SV_Unit_SAM_B: unregistering and destroying its unit actor 16B1666E00
+11:19:50.756 t15872 recycle SV_Unit_SAM_B: done
+11:19:50.760 t15872 lua: coop: the host's ERB_Unit_01_Air2 spawned here (gen 52)
+11:19:50.761 t15872 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 14173B1750
+11:19:50.761 t15872 recycle ERB_Unit_01_Air2: done
+11:19:51.100 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147422591 taken down (id 157)
+11:19:51.242 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147422541 taken down (id 93)
+11:19:51.242 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147422540 taken down (id 94)
+11:19:51.243 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147422539 taken down (id 95)
+11:19:51.243 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147422538 taken down (id 96)
+11:19:51.479 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147422505 taken down (id 86)
+11:19:51.480 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147422504 taken down (id 87)
+11:19:51.480 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147422503 taken down (id 88)
+11:19:51.480 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147422502 taken down (id 89)
+11:19:58.377 t15872 lua: coop: the host's SV_Unit_LadonMishka spawned here (gen 44)
+11:19:58.378 t15872 lua: coop: the host's SV_Unit_LadonKot spawned here (gen 43)
+11:19:58.641 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:19:58.642 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:19:58.643 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:19:58.644 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:19:58.646 t15872 lua: coop: the host's SV_Unit_MoonchildB spawned here (gen 41)
+11:19:58.646 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 42)
+11:20:06.761 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422427 taken down (id 169)
+11:20:08.805 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147422622 taken down (id 156)
+11:20:09.058 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 55)
+11:20:09.058 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 1718A74060
+11:20:09.058 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:20:10.316 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422427 taken down (id 0, torn: not a kill)
+11:20:10.316 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147422622 taken down (id 0, torn: not a kill)
+11:20:10.316 t15872 lua: copy BP_OP1008_j39e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1008_j39e_CP_C_2147422591 taken down (id 0, torn: not a kill)
+11:20:14.388 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422393 taken down (id 170)
+11:20:15.414 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422393 taken down (id 0, torn: not a kill)
+11:20:15.656 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422359 taken down (id 171)
+11:20:20.512 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422359 taken down (id 0, torn: not a kill)
+11:20:24.074 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422461 taken down (id 168)
+11:20:24.837 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147422506 taken down (id 85)
+11:20:25.603 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147422461 taken down (id 0, torn: not a kill)
+11:20:34.521 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147422112 taken down (id 173)
+11:20:35.798 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147422112 taken down (id 0, torn: not a kill)
+11:20:53.853 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147422144 taken down (id 172)
+11:20:56.132 t15872 lua: copy BP_OP1026_su47_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1026_su47_CP_C_2147422144 taken down (id 0, torn: not a kill)
+11:21:15.250 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 56)
+11:21:15.251 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 17738F09A0
+11:21:15.251 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:21:18.291 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 57)
+11:21:18.292 t15872 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 198A0FC940
+11:21:18.292 t15872 recycle ERA_Unit_03_Dep_Air0: done
+11:21:21.604 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 58)
+11:21:21.605 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 1508E930
+11:21:21.605 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:21:24.891 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 59)
+11:21:24.892 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 1783EFB700
+11:21:24.892 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:21:28.198 t15872 lua: coop: the host's EB_Unit_01_Air0 spawned here (gen 60)
+11:21:31.763 t15872 lua: coop: the host's ERB_Unit_01_Air2 spawned here (gen 61)
+11:21:31.764 t15872 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 17842012C0
+11:21:31.764 t15872 recycle ERB_Unit_01_Air2: done
+11:21:35.062 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 62)
+11:21:35.062 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 72C13740
+11:21:35.062 t15872 recycle EA_Unit_01_Air0: done
+11:25:59.633 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147421209 taken down (id 175)
+11:26:02.166 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147421209 taken down (id 0, torn: not a kill)
+11:26:02.434 t15872 lua: copies: all taken down (the host's run started over)
+11:26:02.434 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420819 taken down (id 186, torn: not a kill)
+11:26:02.434 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420787 taken down (id 187, torn: not a kill)
+11:26:02.436 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420717 taken down (id 188, torn: not a kill)
+11:26:02.436 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420683 taken down (id 189, torn: not a kill)
+11:26:02.436 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420649 taken down (id 190, torn: not a kill)
+11:26:02.436 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420615 taken down (id 191, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420534 taken down (id 192, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147420500 taken down (id 193, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147421244 taken down (id 174, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147421166 taken down (id 176, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147421133 taken down (id 177, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147421089 taken down (id 178, torn: not a kill)
+11:26:02.437 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147421054 taken down (id 179, torn: not a kill)
+11:26:02.438 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147421013 taken down (id 180, torn: not a kill)
+11:26:02.438 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147420982 taken down (id 181, torn: not a kill)
+11:26:02.438 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420947 taken down (id 182, torn: not a kill)
+11:26:02.438 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420915 taken down (id 183, torn: not a kill)
+11:26:02.438 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420883 taken down (id 184, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147422542 taken down (id 92, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147420851 taken down (id 185, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_GR005_avng_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR005_avng_CP_C_2147422469 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_GR033_ciws_CP_Ally_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR033_ciws_CP_Ally_C_2147422557 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147422477 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147422541 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147422540 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147422539 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147422538 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147422505 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147422504 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147422503 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147422506 taken down (id 0, torn: not a kill)
+11:26:02.440 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147422502 taken down (id 0, torn: not a kill)
+11:26:02.668 t15872 lua: coop: the host's SV_Unit_ShipAegisC spawned here (gen 40)
+11:26:02.669 t15872 recycle SV_Unit_ShipAegisC: unregistering and destroying its unit actor 178420C020
+11:26:02.670 t15872 recycle SV_Unit_ShipAegisC: done
+11:26:02.676 t15872 lua: coop: the host's ERA_Unit_02_Dep_Air0 spawned here (gen 56)
+11:26:02.677 t15872 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 16A19F0080
+11:26:02.677 t15872 recycle ERA_Unit_02_Dep_Air0: done
+11:26:02.683 t15872 lua: coop: the host's SV_Unit_AAGun_A spawned here (gen 54)
+11:26:02.684 t15872 recycle SV_Unit_AAGun_A: unregistering and destroying its unit actor 1784200510
+11:26:02.684 t15872 recycle SV_Unit_AAGun_A: done
+11:26:02.687 t15872 lua: coop: the host's ERA_Unit_03_Dep_Air0 spawned here (gen 57)
+11:26:02.688 t15872 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 1921A26050
+11:26:02.688 t15872 recycle ERA_Unit_03_Dep_Air0: done
+11:26:02.695 t15872 lua: coop: the host's ERA_Unit_01_Dep_Air0 spawned here (gen 58)
+11:26:02.696 t15872 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 17A1648960
+11:26:02.696 t15872 recycle ERA_Unit_01_Dep_Air0: done
+11:26:02.701 t15872 lua: coop: the host's ERB_Unit_01_Air2 spawned here (gen 61)
+11:26:02.702 t15872 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 15FA797BB0
+11:26:02.703 t15872 recycle ERB_Unit_01_Air2: done
+11:26:02.711 t15872 lua: coop: the host's EB_Unit_01_Air0 spawned here (gen 60)
+11:26:02.712 t15872 recycle EB_Unit_01_Air0: unregistering and destroying its unit actor 72F06050
+11:26:02.712 t15872 recycle EB_Unit_01_Air0: done
+11:26:02.720 t15872 lua: coop: the host's ERA_Unit_06_Dep_Air0 spawned here (gen 59)
+11:26:02.722 t15872 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 17ACE010
+11:26:02.722 t15872 recycle ERA_Unit_06_Dep_Air0: done
+11:26:02.726 t15872 lua: coop: the host's EA_Unit_01_Air0 spawned here (gen 62)
+11:26:02.728 t15872 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 16E1912E20
+11:26:02.728 t15872 recycle EA_Unit_01_Air0: done
+11:26:03.050 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414599 taken down (id 175)
+11:26:03.188 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147414662 taken down (id 93)
+11:26:03.188 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147414661 taken down (id 94)
+11:26:03.188 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147414660 taken down (id 95)
+11:26:03.189 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147414659 taken down (id 96)
+11:26:04.710 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414449 taken down (id 179)
+11:26:10.305 t15872 lua: coop: the host's SV_Unit_LadonMishka spawned here (gen 44)
+11:26:10.306 t15872 lua: coop: the host's SV_Unit_LadonKot spawned here (gen 43)
+11:26:10.308 t15872 lua: coop: the host's SV_Unit_MoonchildA spawned here (gen 37)
+11:26:10.309 t15872 lua: coop: the host's SV_Unit_Shuttle spawned here (gen 8)
+11:26:10.310 t15872 lua: coop: the host's SV_Unit_PadDummies spawned here (gen 6)
+11:26:10.557 t15872 lua: coop: the host's AA_Unit_01_Ground0 spawned here (gen 7)
+11:26:10.558 t15872 lua: coop: the host's SV_Unit_MoonchildB spawned here (gen 41)
+11:26:10.559 t15872 lua: coop: the host's SV_Unit_VoidWatcher spawned here (gen 42)
+11:26:22.512 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414599 taken down (id 0, torn: not a kill)
+11:26:22.513 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414449 taken down (id 0, torn: not a kill)
+11:26:28.376 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414634 taken down (id 174)
+11:26:32.693 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414634 taken down (id 0, torn: not a kill)
+11:26:37.038 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414176 taken down (id 185)
+11:26:37.800 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414176 taken down (id 0, torn: not a kill)
+11:27:13.697 t15872 lua: copies: all taken down (host migration)
+11:27:13.697 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414144 taken down (id 186, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414112 taken down (id 187, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147414411 taken down (id 188, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147414377 taken down (id 189, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147414343 taken down (id 190, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147414309 taken down (id 191, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147414012 taken down (id 192, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1025_f15e_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1025_f15e_CP_C_2147413978 taken down (id 193, torn: not a kill)
+11:27:13.698 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147414553 taken down (id 176, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1004_f15c_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1004_f15c_CP_C_2147414520 taken down (id 177, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1030_su33_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1030_su33_CP_C_2147414484 taken down (id 178, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147414077 taken down (id 180, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1027_m21b_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1027_m21b_CP_C_2147414046 taken down (id 181, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414272 taken down (id 182, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414240 taken down (id 183, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_OP1009_su34_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_OP1009_su34_CP_C_2147414208 taken down (id 184, torn: not a kill)
+11:27:13.699 t15872 lua: copy BP_VE002_aegs_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_CP_C_2147414663 taken down (id 92, torn: not a kill)
+11:27:13.700 t15872 lua: copy BP_GR002_gepa_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_GR002_gepa_CP_C_2147414561 taken down (id 0, torn: not a kill)
+11:27:13.700 t15872 lua: copy BP_VE002_aegs_mk15_01_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk15_01_CP_C_2147414662 taken down (id 0, torn: not a kill)
+11:27:13.700 t15872 lua: copy BP_VE002_aegs_mk41_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk41_CP_C_2147414661 taken down (id 0, torn: not a kill)
+11:27:13.700 t15872 lua: copy BP_VE002_aegs_mk45_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_aegs_mk45_CP_C_2147414660 taken down (id 0, torn: not a kill)
+11:27:13.700 t15872 lua: copy BP_VE002_artillery_CP_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_VE002_artillery_CP_C_2147414659 taken down (id 0, torn: not a kill)
+11:27:18.776 t15872 recycle SV_Unit_ShipAegisA: unregistering and destroying its unit actor 1784201BE0
+11:27:18.778 t15872 recycle SV_Unit_ShipAegisA: done
+11:27:18.782 t15872 lua: spawn SV_Unit_ShipAegisA: 5
+11:27:18.785 t15872 recycle SV_Unit_AAGun_A: unregistering and destroying its unit actor 16B1660080
+11:27:18.785 t15872 recycle SV_Unit_AAGun_A: done
+11:27:18.788 t15872 lua: spawn SV_Unit_AAGun_A: 1

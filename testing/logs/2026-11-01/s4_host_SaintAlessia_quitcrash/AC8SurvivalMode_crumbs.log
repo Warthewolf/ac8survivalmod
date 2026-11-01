@@ -1,0 +1,233 @@
+12:36:58.692 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:40:03.204 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:40:12.092 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:40:15.273 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:41:01.843 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:42:10.745 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 33411ADE0
+12:42:10.745 t25152 recycle ERA_Unit_04_Dep_Air0: done
+12:42:10.755 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:42:13.809 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 149477B700
+12:42:13.810 t25152 recycle ERA_Unit_02_Dep_Air0: done
+12:42:13.820 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:42:17.113 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+12:43:04.163 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:44:01.835 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 12F8E5D6F0
+12:44:01.835 t25152 recycle ERA_Unit_02_Dep_Air0: done
+12:44:01.843 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:44:05.021 t25152 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 31BFA3BD0
+12:44:05.022 t25152 recycle ERA_Unit_06_Dep_Air0: done
+12:44:05.035 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+12:44:08.087 t25152 lua: spawn EA_Unit_01_Air1 at a pose: 8
+12:44:11.149 t25152 lua: spawn EA_Unit_01_Air0 at a pose: 2
+12:45:06.401 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:46:00.708 t25152 lua: spawn SV_Unit_AAGun_A: 1
+12:46:48.393 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+12:46:51.722 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+12:46:54.977 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 12D816A030
+12:46:54.977 t25152 recycle ERA_Unit_04_Dep_Air0: done
+12:46:54.987 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:46:58.269 t25152 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 474208960
+12:46:58.269 t25152 recycle ERA_Unit_06_Dep_Air0: done
+12:46:58.278 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+12:47:01.440 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1494776E00
+12:47:01.441 t25152 recycle ERA_Unit_02_Dep_Air0: done
+12:47:01.452 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:47:04.778 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+12:47:49.629 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:50:02.983 t25152 lua: spawn SV_Unit_PadDummies: 9
+12:50:02.996 t25152 lua: spawn AA_Unit_01_Ground0: 11
+12:50:03.001 t25152 lua: spawn SV_Unit_Shuttle: 1
+12:50:06.038 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 1240CBBB90
+12:50:06.039 t25152 recycle ERA_Unit_04_Dep_Air0: done
+12:50:06.051 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:50:09.244 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1C7ED2990
+12:50:09.245 t25152 recycle ERA_Unit_05_Dep_Air0: done
+12:50:09.260 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+12:50:12.416 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 477271BE0
+12:50:12.416 t25152 recycle ERA_Unit_08_Dep_Air0: done
+12:50:12.432 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+12:50:15.595 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1C7583BD0
+12:50:15.596 t25152 recycle ERA_Unit_02_Dep_Air0: done
+12:50:15.607 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:50:18.765 t25152 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 12BFCBCDD0
+12:50:18.766 t25152 recycle EA_Unit_01_Air0: done
+12:50:18.782 t25152 lua: spawn EA_Unit_01_Air0 at a pose: 2
+12:50:21.846 t25152 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+12:51:03.270 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:53:10.639 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:54:26.553 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 1294343BD0
+12:54:26.554 t25152 recycle ERA_Unit_08_Dep_Air0: done
+12:54:26.563 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+12:54:29.720 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 12C0CA4060
+12:54:29.720 t25152 recycle ERA_Unit_04_Dep_Air0: done
+12:54:29.731 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:54:33.021 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 13C5757720
+12:54:33.023 t25152 recycle ERA_Unit_01_Dep_Air0: done
+12:54:33.033 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+12:54:36.103 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 313E2C4B0
+12:54:36.103 t25152 recycle ERA_Unit_05_Dep_Air0: done
+12:54:36.116 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+12:54:39.179 t25152 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 1316137BB0
+12:54:39.179 t25152 recycle EA_Unit_01_Air0: done
+12:54:39.192 t25152 lua: spawn EA_Unit_01_Air0 at a pose: 2
+12:54:42.365 t25152 recycle EA_Unit_01_Air1: unregistering and destroying its unit actor 1432AC4980
+12:54:42.366 t25152 recycle EA_Unit_01_Air1: done
+12:54:42.376 t25152 lua: spawn EA_Unit_01_Air1 at a pose: 6
+12:54:45.424 t25152 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 14A2244980
+12:54:45.424 t25152 recycle ERB_Unit_01_Air2: done
+12:54:45.446 t25152 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+12:55:44.873 t25152 lua: spawn SV_Unit_VoidWatcher: 3
+12:55:48.310 t25152 lua: event RE_SV_ShuttleRemove: 1
+12:56:04.074 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+12:56:14.481 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:56:36.584 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+12:58:16.670 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+12:58:29.452 t25152 lua: spawn SV_Unit_SAM_A: 1
+12:58:30.834 t25152 lua: spawn SV_Unit_Ciws_A: 1
+12:58:38.727 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+12:59:17.716 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 47420C020
+12:59:17.718 t25152 recycle ERA_Unit_08_Dep_Air0: done
+12:59:17.728 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+12:59:20.885 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 11AC9F09A0
+12:59:20.886 t25152 recycle ERA_Unit_01_Dep_Air0: done
+12:59:20.895 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+12:59:24.072 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 14A1123740
+12:59:24.073 t25152 recycle ERA_Unit_02_Dep_Air0: done
+12:59:24.084 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:59:27.377 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 11AC9F2070
+12:59:27.378 t25152 recycle ERA_Unit_04_Dep_Air0: done
+12:59:27.388 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+12:59:30.586 t25152 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+12:59:34.007 t25152 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+12:59:37.273 t25152 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 12C5B92500
+12:59:37.273 t25152 recycle ERA_Unit_06_Dep_Air0: done
+12:59:37.286 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+12:59:40.483 t25152 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+13:01:11.746 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:01:15.040 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:05:08.901 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 1240CCBB90
+13:05:08.902 t25152 recycle ERA_Unit_01_Dep_Air0: done
+13:05:08.914 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+13:05:11.956 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1240CB8DF0
+13:05:11.957 t25152 recycle ERA_Unit_05_Dep_Air0: done
+13:05:11.973 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+13:05:15.143 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1240CCADE0
+13:05:15.143 t25152 recycle ERA_Unit_02_Dep_Air0: done
+13:05:15.156 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+13:05:18.303 t25152 recycle ERA_Unit_02_Dep_Air1: unregistering and destroying its unit actor 4A1FE6E00
+13:05:18.304 t25152 recycle ERA_Unit_02_Dep_Air1: done
+13:05:18.325 t25152 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+13:05:21.500 t25152 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 12FF380E30
+13:05:21.500 t25152 recycle ERA_Unit_06_Dep_Air0: done
+13:05:21.518 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+13:05:24.694 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 12FF3809A0
+13:05:24.695 t25152 recycle ERA_Unit_08_Dep_Air0: done
+13:05:24.706 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+13:05:27.877 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 14A2245BC0
+13:05:27.877 t25152 recycle ERA_Unit_04_Dep_Air0: done
+13:05:27.888 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+13:05:31.077 t25152 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+13:05:34.246 t25152 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 127C8C5BC0
+13:05:34.246 t25152 recycle ERA_Unit_07_Dep_Air0: done
+13:05:34.255 t25152 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+13:05:37.549 t25152 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+13:05:40.735 t25152 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 1B2CE010
+13:05:40.736 t25152 recycle EA_Unit_01_Air0: done
+13:05:40.747 t25152 lua: spawn EA_Unit_01_Air0 at a pose: 2
+13:05:45.198 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:06:15.130 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:07:57.891 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:09:09.215 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:09:34.900 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:10:12.812 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1C7ED4980
+13:10:12.813 t25152 recycle ERA_Unit_02_Dep_Air0: done
+13:10:12.823 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+13:10:15.850 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 127C8C9280
+13:10:15.850 t25152 recycle ERA_Unit_01_Dep_Air0: done
+13:10:15.860 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+13:10:19.136 t25152 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 2EC26E4A0
+13:10:19.136 t25152 recycle ERA_Unit_03_Dep_Air0: done
+13:10:19.147 t25152 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+13:10:49.270 t25152 lua: spawn SV_Unit_SAM_B: 1
+13:11:10.754 t25152 recycle ERA_Unit_07_Dep_Air0: unregistering and destroying its unit actor 1231E0CDD0
+13:11:10.756 t25152 recycle ERA_Unit_07_Dep_Air0: done
+13:11:10.771 t25152 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+13:11:13.907 t25152 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 327BECDD0
+13:11:13.908 t25152 recycle ERA_Unit_06_Dep_Air0: done
+13:11:13.919 t25152 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+13:11:17.334 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 4A1FE4E10
+13:11:17.335 t25152 recycle ERA_Unit_05_Dep_Air0: done
+13:11:17.350 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+13:11:20.525 t25152 recycle ERA_Unit_02_Dep_Air1: unregistering and destroying its unit actor 128613B270
+13:11:20.526 t25152 recycle ERA_Unit_02_Dep_Air1: done
+13:11:20.548 t25152 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+13:11:24.077 t25152 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 157F4E10
+13:11:24.077 t25152 recycle ERB_Unit_01_Air2: done
+13:11:24.105 t25152 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+13:11:26.757 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:11:27.254 t25152 lua: spawn EB_Unit_01_Air0 at a pose: 6
+13:11:30.552 t25152 recycle EA_Unit_01_Air1: unregistering and destroying its unit actor 1240CB4060
+13:11:30.553 t25152 recycle EA_Unit_01_Air1: done
+13:11:30.570 t25152 lua: spawn EA_Unit_01_Air1 at a pose: 8
+13:11:37.323 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:12:03.666 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:13:29.219 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:14:11.132 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:15:09.891 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1413A144F0
+13:15:09.891 t25152 recycle ERA_Unit_05_Dep_Air0: done
+13:15:09.903 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+13:15:12.957 t25152 recycle ERA_Unit_02_Dep_Air0: unregistering and destroying its unit actor 1285E36050
+13:15:12.957 t25152 recycle ERA_Unit_02_Dep_Air0: done
+13:15:12.973 t25152 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+13:15:16.152 t25152 lua: spawn ERA_Unit_04_Dep_Air1 at a pose: 4
+13:15:19.434 t25152 lua: spawn ERA_Unit_07_Dep_Air1 at a pose: 4
+13:15:22.735 t25152 recycle ERA_Unit_01_Dep_Air1: unregistering and destroying its unit actor 31C2164E0
+13:15:22.735 t25152 recycle ERA_Unit_01_Dep_Air1: done
+13:15:22.755 t25152 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+13:15:26.043 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 2EC26BB90
+13:15:26.043 t25152 recycle ERA_Unit_01_Dep_Air0: done
+13:15:26.059 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+13:15:29.338 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 1240CC4E10
+13:15:29.338 t25152 recycle ERA_Unit_08_Dep_Air0: done
+13:15:29.351 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+13:15:32.654 t25152 recycle ERA_Unit_05_Dep_Air1: unregistering and destroying its unit actor 12E177D260
+13:15:32.655 t25152 recycle ERA_Unit_05_Dep_Air1: done
+13:15:32.676 t25152 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+13:15:35.968 t25152 lua: spawn ERA_Unit_06_Dep_Air1 at a pose: 4
+13:15:56.944 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:16:28.555 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:18:51.298 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:31:31.804 t25152 recycle ERA_Unit_04_Dep_Air0: unregistering and destroying its unit actor 149432E010
+13:31:31.805 t25152 recycle ERA_Unit_04_Dep_Air0: done
+13:31:31.818 t25152 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+13:32:10.144 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:33:01.819 t25152 lua: spawn SV_Unit_Glitch at a pose: 1
+13:36:34.708 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
+13:37:04.094 t25152 recycle ERA_Unit_08_Dep_Air0: unregistering and destroying its unit actor 477272500
+13:37:04.096 t25152 recycle ERA_Unit_08_Dep_Air0: done
+13:37:04.107 t25152 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+13:37:07.549 t25152 recycle ERA_Unit_02_Dep_Air1: unregistering and destroying its unit actor 13353ABB90
+13:37:07.549 t25152 recycle ERA_Unit_02_Dep_Air1: done
+13:37:07.565 t25152 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+13:37:10.982 t25152 recycle ERA_Unit_03_Dep_Air0: unregistering and destroying its unit actor 130E1B6970
+13:37:10.982 t25152 recycle ERA_Unit_03_Dep_Air0: done
+13:37:10.993 t25152 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+13:38:08.492 t25152 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 4747C8DF0
+13:38:08.492 t25152 recycle ERA_Unit_01_Dep_Air0: done
+13:38:08.509 t25152 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+13:38:11.908 t25152 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1231E06970
+13:38:11.909 t25152 recycle ERA_Unit_05_Dep_Air0: done
+13:38:11.924 t25152 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+13:38:15.216 t25152 recycle EA_Unit_01_Air0: unregistering and destroying its unit actor 127C8C1BE0
+13:38:15.217 t25152 recycle EA_Unit_01_Air0: done
+13:38:15.230 t25152 lua: spawn EA_Unit_01_Air0 at a pose: 2
+13:38:18.646 t25152 recycle ERB_Unit_01_Air2: unregistering and destroying its unit actor 11E1AA2070
+13:38:18.646 t25152 recycle ERB_Unit_01_Air2: done
+13:38:18.668 t25152 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+13:39:09.984 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:39:11.608 t25152 recycle EB_Unit_01_Air0: unregistering and destroying its unit actor 1240CC4980
+13:39:11.609 t25152 recycle EB_Unit_01_Air0: done
+13:39:11.634 t25152 lua: spawn EB_Unit_01_Air0 at a pose: 6
+13:39:27.003 t25152 lua: spawn SV_Unit_MoonchildA: 2
+13:39:36.362 t25152 lua: coop: player 3 asked for the whole picture: sent (rs)
+13:39:38.196 t25152 lua: coop: player 2 asked for the whole picture: sent (rs)
