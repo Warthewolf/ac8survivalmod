@@ -1618,16 +1618,20 @@ static uint32_t      g_ufx2LetGo;
 
 static void OnUnitFx2Frame(uint8_t* self, float dt)
 {
-    uint8_t** held = self ? (uint8_t**)(self + UFX2_OFF) : NULL;
-    if (held && Readable(held, 8) && *held) {
+    /* (0.32.17) +0x42c8 too: the host's crash of 2026-11-01 23:26 (a Ladon round), the next helper 0x147cba030 calling
+     * through a freed component held at +0x42c8 (0x147cba299, `call [rax+0x2c8]`), past 0.32.16's +0x42c0 guard */
+    static const uint32_t offs[2] = { UFX2_OFF, 0x42c8 };
+    for (int i = 0; self && i < 2; ++i) {
+        uint8_t** held = (uint8_t**)(self + offs[i]);
+        if (!Readable(held, 8) || !*held) continue;
         uint8_t* c = *held;
         int gone = !Readable(c, 0x10) || (*(uint32_t*)(c + 8) & RF_MIRRORED_GARBAGE);
         if (!gone && UObjLive(c) == 0) gone = 2;
         if (gone) {
             *held = NULL;
-            if (g_ufx2LetGo < 64) Crumb(L"guard: an AI unit's +0x42c0 component %p (unit %p) let go (%s)", c, self, gone == 2 ? L"freed" : L"destroyed");
+            if (g_ufx2LetGo < 64) Crumb(L"guard: an AI unit's +0x%x component %p (unit %p) let go (%s)", offs[i], c, self, gone == 2 ? L"freed" : L"destroyed");
             if (g_ufx2LetGo++ < 8)
-                Log(L"guard: an AI unit's component %p (unit %p, +0x42c0) was %s: let go (%u so far)", c, self,
+                Log(L"guard: an AI unit's component %p (unit %p, +0x%x) was %s: let go (%u so far)", c, self, offs[i],
                     gone == 2 ? L"freed already (not in GUObjectArray)" : L"destroyed, before it's freed", g_ufx2LetGo);
         }
     }
