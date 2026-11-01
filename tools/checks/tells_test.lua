@@ -516,16 +516,7 @@ do
           "the deck launch and a Ladon's rage: their radio calls, no callout")
     local pt = body("sv_main.lua", "\nlocal function probeTickB%(tick%)")
     check(has(pt, 'timed("tells", TELL.tick, now)'), "probeTickB: TELL.tick every 250 ms, timed")
-    local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
-    local k0, inside = mainSrc:find("Key.ZERO", 1, true), false
-    if k0 then
-        local before = mainSrc:sub(1, k0)
-        local lastB, lastE = 0, 0
-        for p in before:gmatch("()TEST ONLY BEGIN") do lastB = p end
-        for p in before:gmatch("()TEST ONLY END") do lastE = p end
-        inside = lastB > lastE and mainSrc:find("TEST ONLY END", k0, true) ~= nil
-    end
-    check(inside, "Ctrl+0 (every line in turn) inside a TEST ONLY block")
+    check(not readAll(MOD .. "/Scripts/sv_main.lua"):find("Key.ZERO", 1, true), "Ctrl+0 (the tells catalog) gone (0.73.60 key clean up)")
 end
 
 ---------------------------------------------------------------------------------------------------- co-op
