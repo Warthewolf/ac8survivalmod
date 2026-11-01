@@ -136,7 +136,7 @@ function SPW.tick(now)
         local k = p.k
         if not p.down and p.unit and k and k >= 0 and k <= 5 and not p.spwSeen then p.spwSeen = now end   -- (its first look)
         if not p.down and p.unit and k and k >= 0 and k <= 5 and poolIndex(p.unit) and now - (p.spwSeen or now) >= first
-            and now >= (p.spwAt or 0) and valid(p.obj) and not (D.wolf and D.wolf[p.unit] and D.wolf[p.unit].held[k]) then
+            and now >= (p.spwAt or 0) and liveAddr(p.obj) and not (D.wolf and D.wolf[p.unit] and D.wolf[p.unit].held[k]) then
             local row = rowOf(p)
             if row and SR.spSlot[row] == SPW.FCS_SLOT then
                 local at, fwd

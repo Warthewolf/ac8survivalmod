@@ -118,6 +118,8 @@ function log(s) logs[#logs + 1] = s; logFile:write(os.date("%H:%M:%S ") .. s .. 
 function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and o.full or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
+function liveAddr(o) return valid(o) and (addrOf(o) or 1) or nil end   -- (sv_core liveAddr: the runtime's live check, here valid())
+svLevelOn = true                                                         -- (sv_config: Survival's level loaded)
 local FLAGS = {}
 function svFlags() return FLAGS end
 part("sv_config.lua")
@@ -498,6 +500,7 @@ end
 local function tickL(from, to)
     for t = from, to do D.now = t; SPC.ladonTick(t, D.special); TELL.tick(t) end
 end
+LA.rage.circuit = true                                    -- (hotfix3 ships it false; the circuit path is checked here)
 s = ladonRound()
 tickL(0, 40)
 local v0 = count("^RE_SV_LadonVolley")

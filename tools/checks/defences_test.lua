@@ -636,6 +636,7 @@ end
 print("VOID WATCHER 1 and SNIPER")
 do
     local AW = CFG.allies.awacs
+    AW.enabled = true                                     -- (hotfix4 ships it off; the AWACS is checked here)
     LB = LB or {}
     if not LB.stat then LB.stat = function() end end    -- (sv_leaderboard's, not loaded here: an ally bought counts)
     FCS_ROWS[#FCS_ROWS + 1] = { "NPC_FCS_PlaneFlr100", { NpcWeaponId = NONE, MagazineCapacity = 10, CaptureDistance = 1500.0,

@@ -1538,6 +1538,14 @@ static int L_ObjChain(void* lua)
 {
     uint8_t* o = ArgObject(lua);
     if (!o) return Ret(lua, 0);
+    /* (hotfix8) every object of the chain must be committed, readable memory before UObjLive reads it (+0xC, +0x20):
+     * Lua asked about an object of a level already unloaded (the host's quit to the main menu, 2026-11-01 01:13:14),
+     * its memory released, and UObjLive's first read crashed (main.dll+0x14735, reading +0xC). Not live, then. */
+    const uint8_t* p = o;
+    for (int depth = 0; p && depth < 64; ++depth) {
+        if (((uintptr_t)p & 7) || !Readable(p, 0x28)) return Ret(lua, 0);
+        p = *(const uint8_t* const*)(p + 0x20);
+    }
     return Ret(lua, UObjChainLive(o));
 }
 

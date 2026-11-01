@@ -88,7 +88,7 @@ end
 -- The enemy planes' fire control, each read once 2 s after it's created (twice more if it isn't built yet).
 local function carriedTick(R, now)
     for _, p in ipairs(planes or {}) do
-        if not p.wlog and p.unit and valid(p.obj) and now - (p.born or now) >= 2 then
+        if not p.wlog and p.unit and liveAddr(p.obj) and now - (p.born or now) >= 2 then
             local lines, ws = armsOf(p.obj)
             p.wlogTries = (p.wlogTries or 0) + 1
             if lines or p.wlogTries >= 3 then
@@ -158,7 +158,7 @@ local function turretTick(R, now, you)
     if not (SPORT and SPORT.turrets and next(SPORT.turrets)) then return end
     local reach = (CFG.specials.spaceport and CFG.specials.spaceport.fcs and CFG.specials.spaceport.fcs.search_m or 25000)
     for a, tr in pairs(SPORT.turrets) do
-        if not valid(tr.obj) then SPORT.turrets[a] = nil
+        if not liveAddr(tr.obj) then SPORT.turrets[a] = nil
         else
             local p = you and at(tr.obj)
             if p then
@@ -169,11 +169,11 @@ local function turretTick(R, now, you)
     end
     local okB, list = pcall(FindAllOf, TURRET_GUN_BASE)
     for _, b in ipairs(okB and list or {}) do
-        if valid(b) then
+        if liveAddr(b) then
             local okH, hidden = pcall(function() return b.bHidden end)
             if okH and hidden == false then
                 local okO, o = pcall(function() return b.OwningGameObject end)
-                local tr = okO and valid(o) and SPORT.turrets[addrOf(o)]
+                local tr = okO and liveAddr(o) and SPORT.turrets[addrOf(o)]
                 if tr then tr.gun = true end
             end
         end
@@ -205,7 +205,7 @@ end
 
 function WLOG.tick(now)
     local c = cfg()
-    if c.enabled == false or not D or not now then return end
+    if c.enabled == false or not D or not now or not svLevelOn then return end   -- (svLevelOn: FindAllOf over a level being unloaded, hotfix8)
     if now < (WLOG.nextAt or 0) then return end
     WLOG.nextAt = now + (tonumber(c.every_s) or 0.5)
     local R = run()
@@ -233,7 +233,7 @@ function WLOG.tick(now)
     for _, base in ipairs(BASES) do
         local okF, list = pcall(FindAllOf, base)
         for _, w in ipairs(okF and list or {}) do
-            local a = valid(w) and addrOf(w)
+            local a = liveAddr(w)
             if a and not cur[a] then
                 total = total + 1
                 local okH, hidden = pcall(function() return w.bHidden end)
@@ -253,13 +253,13 @@ function WLOG.tick(now)
                         if mp then tk.minM = math.min(tk.minM, dist(mp, you)) end
                         pcall(function()
                             local t = w.TargetToHome
-                            if valid(t) and addrOf(t) ~= pawnAddr and short(t):lower():find("flare", 1, true) then tk.decoy = true end
+                            if liveAddr(t) and addrOf(t) ~= pawnAddr and short(t):lower():find("flare", 1, true) then tk.decoy = true end
                         end)
                     end
                     if isNew and kind ~= "you" and kind ~= "none" then
                         local weapon = short(w)
                         local okTg, tg = pcall(function() return w.TargetToHome end)
-                        if you and okTg and valid(tg) and addrOf(tg) == pawnAddr and not weapon:find("^Default__") then
+                        if you and okTg and liveAddr(tg) and addrOf(tg) == pawnAddr and not weapon:find("^Default__") then
                             if R.track[a] and R.track[a].goneAt then settle(R, R.track[a]) end
                             local mp = at(w)
                             local d = mp and dist(mp, you) or 0
@@ -268,7 +268,7 @@ function WLOG.tick(now)
                         local tr = kind == "other" and SPORT and SPORT.turrets and oa and SPORT.turrets[oa]
                         if tr then
                             tr.shots = (tr.shots or 0) + 1
-                            if you and valid(tr.obj) then
+                            if you and liveAddr(tr.obj) then
                                 local tp = at(tr.obj)
                                 if tp then tr.atKm, tr.atKmN = (tr.atKm or 0) + dist(tp, you) / 1000, (tr.atKmN or 0) + 1 end
                             end
@@ -283,7 +283,7 @@ function WLOG.tick(now)
                             if not R.said[key] then
                                 R.said[key] = true
                                 local tgt = "none"
-                                pcall(function() local t = w.TargetToHome; if valid(t) then tgt = (addrOf(t) == pawnAddr) and "you" or short(t) end end)
+                                pcall(function() local t = w.TargetToHome; if liveAddr(t) then tgt = (addrOf(t) == pawnAddr) and "you" or short(t) end end)
                                 local row = p and D.flightRow and D.flightRow[p.unit] or nil
                                 log(string.format("weapons: first launch of %s by %s%s at %s (%s)", weapon, who,
                                     p and string.format(" (%s, %s)", tostring(p.unit), tostring(row or "?")) or (kind == "other" and " (not an enemy plane)" or ""),

@@ -1166,10 +1166,11 @@ local function missilesOn(me, now, km_)
     if not (list and me.obj) then return 0 end
     local pa, n, lim = addrOf(me.obj), 0, km_ * 1000
     for _, m in ipairs(list) do
-        if m.d and m.d <= lim and now - (m.seen or -1e9) <= 1.0 and valid(m.obj) then
+        if m.d and m.d <= lim and now - (m.seen or -1e9) <= 1.0 and liveAddr(m.obj) then
             local ok, t = pcall(function() return m.obj.TargetToHome end)
-            if ok and valid(t) then
-                if addrOf(t) == pa then n = n + 1 end
+            local ta = ok and t and liveAddr(t)
+            if ta then
+                if ta == pa then n = n + 1 end
             elseif m.d <= MSL_NEAR_M then
                 n = n + 1
             end
