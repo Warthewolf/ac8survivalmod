@@ -243,6 +243,9 @@ def ladons():
                         npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
                         loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
                         over=f'SV_LadonOver{key}', lap=f'SV_LadonLap{key}',
+                        # (0.73.62) a second copy of the circuit: each lap starts the other one (restarting the path
+                        # just finished was ignored: both flew straight east out of the zone after lap 1, 2026-11-01)
+                        loop_b=f'SV_Path_Ladon{key}LoopB', lap_b=f'SV_LadonLapB{key}',
                         route=place(LADON_ROUTE), circuit=place(LADON_LOOP),
                         # its rage (P7, LADON_RAGE): path, its PathFinish trigger, the flag and Lua's remote event
                         rage=f'SV_Path_Ladon{key}Rage', rage_lap=f'SV_LadonRageLap{key}', rage_flag=f'SV_LadonRage{key}',
@@ -2090,10 +2093,11 @@ def build_ladon(g, flag, stock_ep):
         flag(L['up'], L['rage_flag'], 'Set', 0)
         g.trigger('RE_SpawnEnemy_kokatu_1st', L['rage_ev'])
         flag(L['rage_ev'], L['rage_flag'], 'Set', 1)
-        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop']), (L['rage_lap'], L['rage'])):
+        for ev, path, nxt in ((L['over'], L['path'], L['loop']), (L['lap'], L['loop'], L['loop_b']),
+                              (L['lap_b'], L['loop_b'], L['loop']), (L['rage_lap'], L['rage'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
-            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
+            g.execute(t_path, ev, {0: L['obj'], 2: nxt, 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
             g.execute(t_path, ev, {0: L['obj'], 2: L['rage'], 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
     import re
     lua = runtime_lua()
