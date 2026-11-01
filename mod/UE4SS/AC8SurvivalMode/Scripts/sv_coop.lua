@@ -3525,7 +3525,10 @@ function COOP.tick(tick)
                         -- object ticks in the game's own tick manager: bAlwaysTickInTickManager). Mark each one a
                         -- minigame AI object (the game's SetMinigameAIObject: what a minigame keeps running) while
                         -- the host is down here, before the STORE opens; taken back off at takeoff.
-                        if CFG.coop.store_keep_ai ~= false and not p.mgSet then
+                        -- (0.73.64: OFF. The two crashes of 2026-11-01 23:04 / 23:11 were in the renderer's per-view
+                        -- loop over scene objects, each seconds after planes were marked (at the run's start on the
+                        -- runway, then in the STORE), and the marks didn't stop the freeze either. Never again.)
+                        if false and not p.mgSet then
                             local okS = pcall(function() p.obj:SetMinigameAIObject(true) end)
                             local okR, rb = pcall(function() return p.obj.bMinigameAIObject end)
                             p.mgSet = true
