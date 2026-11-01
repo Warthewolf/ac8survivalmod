@@ -202,6 +202,22 @@ function addrOf(o)
     return ok and a or nil
 end
 
+-- (hotfix2, the host's crash of 2026-10-31 16:56:09: an access violation inside UE4SS reading [garbage + 0x20], from
+-- Survival's Lua tick, a second after coop's watchShots first saw your BP_plwp_hpaa_a0_C. valid() is UE4SS's IsValid,
+-- which reads the object itself: on a freed one it can pass, and a property read after it walks garbage; a pcall
+-- doesn't catch it.) o's address when the runtime says o and every outer above it are live objects (SV_ObjChain, which
+-- reads only GUObjectArray), else nil (null too). Ask it, not valid(), before reading an object kept between ticks or
+-- taken from a game array (a weapon in flight, its target).
+function liveAddr(o)
+    local a = addrOf(o)
+    if not a or a == 0 then return nil end
+    if type(SV_ObjChain) == "function" then
+        local r = SV_ObjChain(a)
+        if r == 1 then return a elseif r == 0 then return nil end
+    end
+    return valid(o) and a or nil                          -- (-1: the runtime can't tell; as before)
+end
+
 local function hex(a) return a and string.format("%X", a) or "?" end
 
 -- A DataTable's row names in table order, as strings (nil when they can't be read). GetRowNames may hand back FNames

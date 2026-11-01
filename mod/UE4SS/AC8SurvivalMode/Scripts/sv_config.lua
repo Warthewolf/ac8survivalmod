@@ -14,6 +14,12 @@ levelTick = nil              -- tick count when Survival's level was loaded (nil
 pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
     local n = nameOf(w)
     if n:find("PL_SurvivalMode", 1, true) then levelTick = -1 end      -- picked up by the next tick
+    -- (hotfix8) svLevelOn: Survival's level is the one loaded (another main level, the main menu's PL_MainMenu or a
+    -- hangar's, ends it). Hotfix7's airfield check ran on the main menu over the old level's planes and crashed the
+    -- host (2026-11-01 01:13:14, quitting to the main menu): checks over a level's objects ask it first. (hotfix9: not
+    -- the TransitionMap: the seamless travel makes one after Survival's level loads, which turned it off all run.)
+    if n:find("PL_SurvivalMode", 1, true) then svLevelOn = true
+    elseif n:find("/PL_", 1, true) then svLevelOn = false end
     -- every level and sublevel the game makes, so a crash while loading shows the last one (AC8SurvivalMode_lua.log)
     log("world: " .. (n:match("(/Game/[^%.:]+)") or n))
 end)
@@ -853,7 +859,9 @@ CFG = {
         -- by itself) is fired every esm.every_s while it's airborne (RE_SV_AwacsEsm), each field set to esm.range_m
         -- (stock 3.2 km) for esm.life_s; its fire control's reach esm.capture_m. scale: as MOONCHILD's (health only:
         -- it has no weapons).
-        awacs        = { enabled = true, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
+        -- enabled = false (hotfix4, user 2026-11-01): not sold (the STORE shows it NOT AVAILABLE) until its orbit is
+        -- fixed in a build: the host's run of 2026-10-31 saw it fly straight out to 163 km, RE_SV_AwacsOrbit no help
+        awacs        = { enabled = false, name = "VOID WATCHER 1", name_key = "SV_VoidWatcher", unit = "SV_Unit_VoidWatcher",
                          row = "SV_Ally_VoidWatcher",
                          -- its model row (tools/build_survival.py: Magnolia's under the game's plain E-767 name), added
                          -- to the campaign's DT_NPC_Model at the main menu (no "MAGNOLIA" on its box)
@@ -1495,10 +1503,20 @@ CFG = {
         -- and from its next pass over the airfield it flies a tighter circuit at the build's faster speed
         -- (tools/survival_events.py LADON_RAGE: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
         -- path). false: as before
-        ladon = { names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
+        -- enabled = false (hotfix4, user 2026-11-01: "turn off VOID WATCHER and the LADON Rounds"): no Ladon round
+        -- until their paths are fixed in a build (the enraged one's rage circuit isn't followed)
+        ladon = { enabled = false, names = { Kot = "KOT", Mishka = "MISHKA" }, health_add = -800, speed_x = 1.0, bomb_damage = 20,
                   bomb_per_round = 1, health_per_round = 0.05, health_max_x = 2.5,
-                  rage = { enabled = true, volley_every_s = 25, volley_warn_s = 0, first_s = 5 },
+                  -- rage.circuit false (hotfix3): no switch to the rage circuit (RE_SV_LadonRage<Key>). The host's run of
+                  -- 2026-10-31 17:43: MISHKA, enraged, took it at its next pass and flew a straight line east, 87 km
+                  -- out and below sea level, until it was down: the rage path isn't followed. It keeps its own circuit.
+                  rage = { enabled = true, volley_every_s = 25, volley_warn_s = 0, first_s = 5, circuit = false },
                   volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
+                  -- volley_after_pass false: no VLS volleys once a Ladon has made its first pass over the airfield
+                  -- (patch ladon1, 2026-10-31: on its circuit, each volley re-fired its appearance, which sent it
+                  -- back onto its route from the far west: "the Ladon decided to leave the map"). Its CIWS / pulse
+                  -- cannons and its bombing runs stay. true: as before. pos_log_s: its position in the log every N s.
+                  volley_after_pass = false, pos_log_s = 15,
                   missile_damage = 10, missile_homing_x = 0.85, missile_turn_x = 0.5,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
