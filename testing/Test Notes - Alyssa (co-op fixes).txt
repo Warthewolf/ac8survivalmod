@@ -1,0 +1,59 @@
+SURVIVAL MODE - CO-OP FIX TEST (build from branch claude/coop-fixes)
+Tester: Saint Alessia (host) + at least one joiner (Shazzy if possible)
+
+Everyone: play on the SAME build. After the session, zip and send BOTH players' logs:
+  AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log, UE4SS.log (+ any UECC crash folder)
+Write your answers under each question. Times help a lot (rough clock time is fine).
+
+
+1. Desync / ghost enemies: play 6+ normal rounds together.
+   Do both players see the same enemies in the same places? Any enemies one player sees and the other doesn't?
+   Joiner: did you ever get "BACK IN THE FIGHT / THE HOST'S RUN STARTED OVER" when nobody restarted?
+
+
+
+2. Joiner credits: does the joiner ever get +100 for a kill they didn't make (a plane that pops in and dies instantly)?
+
+
+
+3. Ladons (host presses Ctrl+4 during a round; the next round is the Ladons).
+   Test A: kill ONE Ladon. Does the other stay alive on BOTH screens? Round ends only when both are down?
+
+
+
+   Test B: next Ladon round, leave them alone. Do they keep circling the airfield and bombing it
+   (3rd, 4th pass...), or still fly off east / into the ground?
+
+
+
+   Wings still static? (yes / no)
+
+
+
+4. VOID WATCHER 1 (STORE > DEFENCES): buy it and watch it for a few minutes.
+   Does it circle the airfield at roughly 7 km? Does it look the same for host and joiner
+   (joiner: no stuck take-off pitch / "space shuttle")?
+
+
+
+5. MOONCHILD / SNIPER (STORE > ALLIES): buy them. Joiner: do they fly normally, or go underwater / off the map?
+
+
+
+6. Revive: get the joiner shot down, revive them from the STORE. After coming back, can they lock and fire missiles?
+   Also try being down while landed at the airfield.
+
+
+
+7. STORE > DEFENCES: buy a SAM site, then look at the AA GUN row. Does it still say BUILD AA GUN?
+   Press it: does it build an AA gun?
+
+
+
+8. Quit to main menu (host first, then once with the joiner quitting first). Any crash?
+
+
+
+9. Anything else weird (host's plane doing a wheelie on the ground, freezes, missing target boxes...):
+
+
