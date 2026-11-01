@@ -434,6 +434,11 @@ local function backInFight(pawn, s)
     for f, v in pairs(s and s.attackers or {}) do              -- (unless something set its own meanwhile: a pressure preset)
         pcall(function() if pawn[f] == 0 then pawn[f] = v end end)
     end
+    -- (and whatever was saved, the weapons on: DOWN's own values never stay. The co-op run of 2026-11-01: revived by a
+    -- resync, on the ground, SV_Respawn after, and no missile would lock or fire for the rest of the run)
+    for _, iv in ipairs(INPUTS) do
+        pcall(function() if pawn[iv[1]] == iv[2] then pawn[iv[1]] = not iv[2] end end)
+    end
 end
 local function loiter(pawn)
     if type(SV_Down) ~= "function" then return "no SV_Down (runtime 0.28.5 or later)" end
@@ -825,6 +830,11 @@ function DOWN.tick()
         local want, at = St.respawnAt, playerLocation()
         St.respawnAt = nil
         if at then log(string.format("revive: respawn d=%.0f m", km(at, want) * 1000)) end
+        if not St.down and valid(pawn) then                 -- (the respawn may set the plane up again: weapons on once more)
+            backInFight(pawn, nil)
+            local okW, off = pcall(function() return pawn.bIsWeaponSystemDisabled end)
+            log("revive: weapons after the respawn: " .. ((okW and off == false) and "on" or ("NOT on (" .. tostring(off) .. ")")))
+        end
     end
     if St.restore and valid(pawn) then                      -- (a restart while you were down)
         local okR, errR = pcall(restoreAfter, pawn)

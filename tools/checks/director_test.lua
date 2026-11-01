@@ -989,6 +989,17 @@ do
     for _ = 1, 9 do inbox[#inbox + 1] = "0|dv|RE_SV_Salvo_02A|" .. U .. "|0" end
     COOP.tick(26)
     check(#M.dvQ == 8 and has(line("coop: the host's director event RE_SV_Salvo_02A dropped"), "more than 8 a second"), "at most 8 a second")
+    -- (an "rs" answering this game's own "jn" is a soft resync, sv_coop.lua: the copies and the queue kept)
+    local nCopies = 0
+    for _ in pairs(M.copies) do nCopies = nCopies + 1 end
+    M.jnAt = os.clock()
+    inbox[#inbox + 1] = "0|rs"
+    COOP.tick(26.5)
+    local kept = 0
+    for _ in pairs(M.copies) do kept = kept + 1 end
+    check(M.softRs ~= nil and M.dvQ ~= nil and kept == nCopies
+          and line("coop: the host's whole picture (the answer to our jn): copies kept") ~= nil, "the answer to our own jn (\"rs\"): a soft resync, copies kept")
+    M.softRs, M.jnAt = nil, nil
     inbox[#inbox + 1] = "0|rs"
     COOP.tick(27)
     check(M.dvQ == nil, "the host's restart (\"rs\"): the queue gone")

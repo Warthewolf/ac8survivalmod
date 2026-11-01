@@ -415,19 +415,30 @@ function shopTexts()
     if type(SV_SetText) ~= "function" then return end
     RUN.offerShown = RUN.offerShown or {}
     SH.labels = SH.labels or {}
-    local changed, nChanged = {}, 0
+    local changed, nChanged, shared = {}, 0, {}
     for name in pairs(CFG.shop.items) do
         local o = offer(name)
         RUN.offerShown[name] = o.role
         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
         local was = SH.labels[name]
-        if was and was ~= label then changed[rowKey(was)], nChanged = label, nChanged + 1 end
+        if was and was ~= label then
+            local k = rowKey(was)
+            if changed[k] ~= nil and changed[k] ~= label then shared[k] = true end   -- (two rows had that text)
+            changed[k], nChanged = label, nChanged + 1
+        end
         SH.labels[name] = label
         local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
         SV_SetText("SV_Shop_" .. name, label)
         SV_SetText("SV_Shop_" .. name .. "_Help", help)
     end
+    -- relabel() finds a row on screen by its old text, so a text two items share can't say which row it is. The old
+    -- fourth row (Airfield, not on the STORE's pages but worked out with the rest) offers the next defence under the
+    -- DEFENCES row's own text ("BUILD AA GUN   4000 Z"); when its turn moved on to the SAM site, every TextBlock showing
+    -- the AA text was rewritten, the real AA row too: two BUILD SAM SITE rows, the first still buying an AA gun
+    -- (co-op run of 2026-11-01, "the Buy AA was another Buy SAM site"). Such a text is left for the page's next opening.
+    for _, lab in pairs(SH.labels) do local k = rowKey(lab); if changed[k] ~= nil then shared[k] = true end end
+    for k in pairs(shared) do if changed[k] ~= nil then changed[k], nChanged = nil, nChanged - 1 end end
     if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
         relabelQueue(changed)
         SHOP.relabelFlush(SH.pressAt ~= nil and os.clock() - SH.pressAt < 1)

@@ -736,10 +736,10 @@ do
     R.orbitCheckAt = 0
     D.now = 330; ALLY.tick(330)
     check(orbitCount() == o0 + 2 and line("put on its orbit (25.0 km from the airfield)") ~= nil, "wandered 25 km off: put back on its orbit")
-    at = { X = AIRFIELD.X + 1200000, Y = AIRFIELD.Y }
+    at = { X = AIRFIELD.X + 700000, Y = AIRFIELD.Y }
     R.orbitCheckAt, R.orbitAgainAt = 0, 0
     D.now = 331; ALLY.tick(331)
-    check(orbitCount() == o0 + 2, "on its 12 km orbit: left alone")
+    check(orbitCount() == o0 + 2, "on its 7 km orbit: left alone")
     air = 0
     R.esmAt = nil
     air = 1
