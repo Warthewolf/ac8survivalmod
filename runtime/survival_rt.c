@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.11"
-#define RT_VERSION_A         "0.32.11"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.11.2"
+#define RT_VERSION_A         "0.32.11.2"    /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -1094,6 +1094,11 @@ static void*    g_spawnerVt;
 static uint8_t* g_phase;
 static void*    g_wd;
 static FNameRaw g_wdName;
+/* 1: this level's spawner was found and has since gone (the level is being torn down): no search until SV_Reset.
+ * (hotfix5: a joiner's crash of 2026-11-01 00:09:44, 0.73.37 hotfix4: the level going away after a pause, the
+ * cached spawner no longer live, FindSpawner searched again and UE4SS's FindAllOf read a freed object's class in
+ * GUObjectArray, an access violation at UE4SS.dll+0x2ab5bd, called from Survival's Lua tick.) */
+static int      g_spawnerLost;
 
 static int LiveObject(void* o)
 {
@@ -1112,7 +1117,12 @@ static int FindSpawner(void)
     if (!g_wdName.index && !MakeName(WD_NAME, &g_wdName)) return 0;      /* Survival's world data isn't loaded */
     if (g_spawner && LiveObject(g_spawner) && *(void**)g_spawner == g_spawnerVt && PhaseWorldData(g_phase) == g_wd)
         return 1;
+    if (g_spawner) {                                   /* it was found and has gone: the level is going away */
+        g_spawnerLost = 1;
+        Log(L"spawner: this level's LiveUnitSpawner is gone (the level is ending): no search until the next run");
+    }
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
+    if (g_spawnerLost) return 0;                       /* (FindAllOf over objects being freed crashed: hotfix5) */
     PtrVector v = { NULL, NULL, NULL };
     g_findAllOf(L"LiveUnitSpawner", &v);
     for (void** p = v.first; p && p < v.last && !g_spawner; ++p) {
@@ -2769,6 +2779,7 @@ static int L_MenuSetting(void* lua)
 static int L_Reset(void* lua)
 {
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
+    g_spawnerLost = 0;                             /* a new run: search for its spawner again (hotfix5) */
     g_shopHead = g_shopCount = 0;                  /* a pick made as the level ended isn't bought in the next run */
     return Ret(lua, 1);
 }

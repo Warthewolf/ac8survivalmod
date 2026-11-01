@@ -149,12 +149,14 @@ function SPC.ladonRage(now, s, downKey)
         if k2 ~= downKey and L2.alive and SV_UnitAlive(L2.unit) > 0 then       -- (both down in one second: no rage)
             s.raged, L2.rage, L2.rageAt = k2, true, now
             L2.volleyAt = now + math.max(1, tonumber(rg.first_s) or 0)
-            local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5
+            -- (hotfix3: rg.circuit false: its circuit kept, the rage path isn't followed; CFG.specials.ladon.rage)
+            local r = rg.circuit == false and -99 or (type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5)
             local name = c.names[k2] or k2:upper()
             if TELL then pcall(TELL.say, "ladon_rage", TELL.ALL) end
             log(string.format("special: Ladon %s enraged (%s down): volleys every %d s, the rage circuit from its next pass (RE_SV_LadonRage%s %s)",
                 name, c.names[downKey] or downKey, tonumber(rg.volley_every_s) or c.volley_every_s, k2,
-                r == 1 and "fired" or ("not fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
+                r == 1 and "fired" or r == -99 and "not fired: rage.circuit false, it keeps its own circuit"
+                or ("not fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
             return true
         end
     end
@@ -182,7 +184,8 @@ function SPC.ladonTick(now, s)
         end
     end
     for k, L in pairs(s.units) do
-        if L.alive and now >= (L.volleyAt or s.at + 10) then             -- a missile volley while you're in range
+        -- (patch ladon1: none after its first pass while volley_after_pass is false; see CFG.specials.ladon)
+        if L.alive and now >= (L.volleyAt or s.at + 10) and (c.volley_after_pass ~= false or not L.passed) then
             local near
             for _, p in ipairs(planes) do
                 if p.unit == L.unit and not p.down and valid(p.obj) and p.dist then near = math.min(near or p.dist, p.dist) end
@@ -220,10 +223,39 @@ function SPC.ladonTick(now, s)
         end
         if L.alive then
             local runs = f["SV_LadonRun" .. k] or 0
+            -- (patch ladon1) its pass count went down: only its appearance record sets it to 0, so the appearance
+            -- fired again (and sent it back onto its route from the far west); count from here, or no pass after
+            -- it would ever be counted (runs > L.runs)
+            if runs < L.runs then
+                L.resets = (L.resets or 0) + 1
+                log(string.format("special: Ladon %s's pass count reset %d -> %d (its appearance fired again, %d so far; last volley %s)",
+                    c.names[k] or k, L.runs, runs, L.resets, s.volleyWho and string.format("%s's %.0f s ago", s.volleyWho, now - (s.volleyAny or now)) or "none"))
+                L.runs = runs
+            end
+            if now >= (L.posAt or 0) and (c.pos_log_s or 0) > 0 then   -- (patch ladon1) where it is, for its track
+                L.posAt = now + c.pos_log_s
+                for _, p in ipairs(planes) do
+                    if p.unit == L.unit and not p.down and valid(p.obj) then
+                        local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+                        if okL and l then
+                            log(string.format("special: Ladon %s at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield; pass flag %d, passes %d%s",
+                                c.names[k] or k, l.X / 100000, l.Y / 100000, l.Z / 100000,
+                                math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000, runs, L.passes or 0,
+                                L.passed and c.volley_after_pass == false and ", volleys off" or ""))
+                        end
+                        break
+                    end
+                end
+            end
             -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at
             -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
             if now - s.at >= 5 and runs > L.runs and now - (L.bombAt or 0) >= 30 then
                 L.runs, L.bombAt, s.runs = runs, now, (s.runs or 0) + 1
+                L.passes = (L.passes or 0) + 1
+                if not L.passed and c.volley_after_pass == false then
+                    log(string.format("special: Ladon %s: no more volleys after its first pass (volley_after_pass false)", c.names[k] or k))
+                end
+                L.passed = true
                 local dmg = c.bomb_damage + (c.bomb_per_round or 0) * math.max(0, D.round - CFG.specials.first)
                 if CFG.airfield.enabled and not AF.down then AF.bomb = AF.bomb + dmg end
                 hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
@@ -355,7 +387,7 @@ local function around(me, now)
     for i = 1, math.min(3, #ms) do
         local m = ms[i]
         mt[#mt + 1] = string.format("%s %.0f m%s%s", m.name, m.d, m.from and (" from " .. m.from) or "",
-            valid(m.obj) and "" or " (gone: it hit)")
+            liveAddr(m.obj) and "" or " (gone: it hit)")
     end
     local es = {}
     for _, p in ipairs(planes) do
@@ -426,7 +458,7 @@ function HIT.tick(pc, now)
         HIT.sweepUntil, HIT.sweepN = nil, nil
     end
     for _, o in ipairs(new) do                             -- the new missiles: enemies' tracked, the Ladons' toned down
-        if valid(o) then
+        if liveAddr(o) then                                -- (hotfix2: caught a tick ago; not valid(), sv_core liveAddr)
             local n = short(o)
             if not n:find("^BP_plwp_") and not n:find("^Default__") then
                 if n == LADON_MSL then nerf(o) elseif n == LADON_CERTAIN then certain(o) end
@@ -440,7 +472,7 @@ function HIT.tick(pc, now)
     local me = at(pawn)
     local keep = {}
     for _, m in ipairs(HIT.msl) do                         -- where each one is (kept 2 s after it's gone)
-        if valid(m.obj) and now - m.born < 30 then
+        if liveAddr(m.obj) and now - m.born < 30 then     -- (hotfix2: not valid(), sv_core liveAddr)
             if not m.from then                             -- (its shooter's address: which plane, for the measurements)
                 local nm, w = owner(m.obj)
                 m.from = nm
