@@ -35,7 +35,7 @@
 #define DN_FLIPS_MAX   6       /* sign flips at most in one DOWN                                                   */
 #define DN_CHECK_BANK  90.0    /* deg: the pitch check counts only under this bank                                 */
 #define DN_DIVE_DEG    -40.0   /* the dive backstop: a descent steeper than this ...                                */
-#define DN_TURN_PULL   0.45    /* the pull in a turn at full bank and 30+ deg off the heading wanted (0.32.15)       */
+#define DN_TURN_PULL   0.6     /* the pull in a turn at full bank and 30+ deg off the heading wanted (0.32.15)       */
 #define DN_DIVE_S      10.0    /* ... this long, with the climb wanted 20 deg above it, flips the pitch sign       */
 #define DN_BANK_MAX    40.0    /* deg                                                                              */
 #define DN_SLEW        3.0     /* input units a second (outside the probes)                                        */
@@ -68,6 +68,7 @@ typedef struct {
     double altI;                             /* the altitude error integral, m s                                      */
     double radI;                             /* the radius error integral, deg of heading (turned in when positive)  */
     double bankI;                            /* the bank error integral, roll input                                   */
+    double lastPull, pullAt;                 /* (0.32.18) the turn's pull last step, and when it last pulled          */
     double oP, oR;                           /* the inputs last given (raw: what BuildFlightInput's out gets)         */
     double lastBank;                         /* the bank last asked for (its side kept through ~180 deg errors)      */
     double chk[4];                           /* the in-flight check: roll rate x input and |input| x dt summed; pitch */
@@ -203,7 +204,7 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         break;
     default: {                                                 /* DN_CIRCLE */
         DnCheck(c, 0, c->sRoll * c->oR, c->rp, dt);             /* (the inputs given over the last dt, the rates now) */
-        if (CoAbs(bank) < DN_CHECK_BANK) DnCheck(c, 1, c->sPitch * c->oP, c->rq, dt);
+        if (CoAbs(bank) < DN_CHECK_BANK && t - c->pullAt > 3.0) DnCheck(c, 1, c->sPitch * c->oP, c->rq, dt);
         double x = (pos[0] - c->cx) / 100.0, y = (pos[1] - c->cy) / 100.0, h = pos[2] / 100.0;
         double rr = CoSqrt(x * x + y * y), R = c->radius;
         double vh = CoSqrt(c->v[0] * c->v[0] + c->v[1] * c->v[1]) / 100.0, vz = c->v[2] / 100.0;
@@ -243,9 +244,15 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         /* (runtime 0.32.15) the turn's pull: AC8 holds a banked plane's nose level by itself, so a bank with no pull
          * doesn't turn it (the test of 2026-11-01 22:47: bank 40 held for 30 s, the heading error 129 -> 171 deg, the
          * plane straight east at 165 m/s). Pull with the bank while the heading is off, on top of the altitude's. */
-        double pullT = DnClamp(CoAbs(e) / 30.0, 0.0, 1.0) * DN_TURN_PULL * CoAbs(Sin(bank * D2R));
+        double pullT = DnClamp((CoAbs(e) - 70.0) / 40.0, 0.0, 1.0) * DN_TURN_PULL * CoAbs(Sin(bank * D2R));   /* (0.32.18: only well off the heading: 70 -> 110 deg) */
         double uP = CoAbs(bank) > 100.0 ? 0.0                  /* upside down: roll back first, no pull at the ground */
-                  : DnClamp(pullT + (0.03 * (gammaWant - gamma) - 0.006 * c->rth) / (cb > 0.6 ? cb : 0.6), -0.35, 0.6);
+                  : DnClamp(pullT + DnClamp((0.03 * (gammaWant - gamma) - 0.006 * c->rth) / (cb > 0.6 ? cb : 0.6),
+                                            pullT > 0.05 ? -0.08 : -0.35, 0.5), -0.35, 0.7);
+        /* (0.32.18) while it turns, the altitude's push down is held to -0.08: above its height in the test of
+         * 2026-11-01 23:49 it cancelled the turn's pull (inputs pitch 0.01-0.03 at bank 40, the heading error ~165 deg,
+         * east again); the turn comes first, the height after */
+        c->lastPull = pullT;
+        if (pullT > 0.02) c->pullAt = t;                       /* (no pitch check until 3 s after the pull) */
         tR = c->sRoll * uR; tP = c->sPitch * uP;
         c->dist = rr; c->headErr = e; c->bankWant = bankWant; c->gamma = gamma;
         break;

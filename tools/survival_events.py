@@ -196,6 +196,7 @@ LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, offset north m
 # isn't its end, so it can't "finish" as it begins) and ends over it, so every PathFinish, the bombing run, is over the
 # airfield (code review of 2026-10-23: they ended 6.6 km NE of it).
 LADON_AIRFIELD = (16.1, -4.4, 1.2)
+LADON_CIRCLE_M = 4000.0                      # a Ladon's area on the airport after a lap (0.73.69)
 LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
                (7, -19, 2.0), (12, -11, 1.6), LADON_AIRFIELD]
 LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), LADON_AIRFIELD]
@@ -2071,6 +2072,10 @@ def build_ladon(g, flag, stock_ep):
                                lambda a, e: a[1] == 'B_Obj_01_Air0_Ladon0_VLS0' and a[2] == 'A_Obj_01_Air0_f18c_0')
     assert arg_values(t_hatch)[0] == 'WN_WEAPON_1' and arg_values(t_vls)[0] == 'WN_WEAPON_2', (arg_values(t_hatch), arg_values(t_vls))
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
+    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
+    t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
+    t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
+    assert arg_values(t_bmove)[3] == AIRFIELD_MARK, arg_values(t_bmove)
     for L in ladons():
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
         flag(L['up'], L['flag'], 'Set', 0)
@@ -2098,6 +2103,12 @@ def build_ladon(g, flag, stock_ep):
                               (L['lap_b'], L['loop_b'], L['loop']), (L['rage_lap'], L['rage'], L['loop'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
             flag(ev, L['flag'], 'Add', 1)
+            if ev != L['over']:
+                # (0.73.69) after a lap its next path is ignored (both flew straight east out of the zone after pass 2,
+                # with alternating copies too, 2026-11-01 23:47): its unit area onto the airport, where an AI plane
+                # circles (VOID WATCHER's orbit, confirmed the same night); Lua counts its passes by distance then
+                g.execute(t_bmove, ev, {0: L['unit']}, delay=0.5)
+                g.execute(t_radius, ev, {0: L['unit'], 1: 'NoneSelect', 2: f'{LADON_CIRCLE_M:.1f}'}, delay=1.0)
             g.execute(t_path, ev, {0: L['obj'], 2: nxt, 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
             g.execute(t_path, ev, {0: L['obj'], 2: L['rage'], 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
     import re
