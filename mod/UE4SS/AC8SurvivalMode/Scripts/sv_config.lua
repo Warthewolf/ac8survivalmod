@@ -1628,7 +1628,7 @@ CFG = {
         -- enabled = false: no Spaceport Assault and no retake, forced or not (tools/nospaceport.py: friends' builds without
         -- them, NOSPACEPORT=1; user, 2026-10-31)
         spaceport = { enabled = true, from_round = 8, ships = { ford = 1, wasp = 4, aegis = 14, boat = 8 }, spawn_per_tick = 3,
-                      wave_every_s = 180, first_wave_s = 20, capture_per_troop = 5, troop_stay_s = 30,
+                      wave_every_s = 180, first_wave_s = 20, capture_per_troop = 10, troop_stay_s = 30,   -- (capture 5 -> 10: user, 2026-11-02)
                       troop_timeout_s = 420, remove_after_s = 60, fighter_share = 0.5, reward = 10000,
                       reward_per_round = 300, pay = { ford = 3000, wasp = 1200, aegis = 800, boat = 300, craft = 150 },
                       ford_cm = { -2964629, -26491, 3.0 },
