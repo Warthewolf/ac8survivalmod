@@ -650,10 +650,13 @@ def ladon_units(units, used_ids, z, top_number, v):
         assert far < radius * 0.9, (L['unit'], far, radius)
         # smooth: wide banked turns (players saw sharp flat turns with 1.2 km tangents, 2026-10-23); the route runs on
         # into its circuit's arc A, and each arc (survival_events.ladon_circuit, 0.73.73) into the other along the circle
-        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=arc_a[0]))
+        # (0.73.74) the route runs on into LADON_LAPS laps of its circuit in the same path (no handover: see
+        # survival_events.LADON_LAPS); its PathFinish (pass flag, then arc A) comes only when the laps run out
+        laps = (arc_a + arc_b) * survival_events.LADON_LAPS
+        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'] + laps, smooth=True, after=arc_a[0]))
         paths.append(make_path(z, used_ids, src_path, L['arc_a'], arc_a, smooth=True, before=L['a_before'], after=L['a_after']))
         paths.append(make_path(z, used_ids, src_path, L['arc_b'], arc_b, smooth=True, before=L['b_before'], after=L['b_after']))
-        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit arcs '
+        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + {survival_events.LADON_LAPS} laps in its path + circuit arcs '
               f'{len(arc_a)} + {len(arc_b)}')
 
 

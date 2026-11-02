@@ -1019,4 +1019,13 @@ rotation (user: "install spaceport into the new patch"; from round 8; novalka.py
   volley_after_pass stays false); VOID WATCHER a lead-in turn then a 6 km two-arc orbit (SV_AwacsLeg, `legs N` in its
   30 s line), the area orbit as backstop. Candidate hard rule once confirmed: the path handover above. The heavy
   bombers' figure-8 likely has the same flaw (not changed).
+0.73.74-coop2mp.75 (runtime 0.32.21; built and installed 2026-11-02, not yet run in game; friends' zip hash 92d5cdcf...115f16):
+the user's test of 0.73.73 (23:13-23:17, Ctrl+4): the Ladons finished their route over the airfield (pass flag 1) but
+never flew arc A (legs 0): they held the route's descending end tangent to 0.2 km, 29 km out, and the leash at 22 km
+didn't turn them in 8 s. VOID WATCHER took the same kind of PathFinish handover (climb-out -> lead-in) and flew its 6 km
+circle perfectly (6.0 km at every check), so the handover fails at the Ladons' 2500 km/h (arc A 2.5 km ahead = 3.6 s).
+Now each Ladon's route path carries LADON_LAPS (15, ~18 min) laps of its circuit after the route, one path from its
+appearance, no handover until they run out (arcs A / B as before after that); Lua counts its first pass by distance too.
+Candidate hard rule once confirmed: a fast AI plane (2500 km/h) doesn't take a new path at a PathFinish; put what it
+must fly into the path started at its appearance.
 

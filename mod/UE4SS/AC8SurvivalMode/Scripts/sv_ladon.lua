@@ -299,8 +299,10 @@ function SPC.ladonTick(now, s)
             -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
             -- Its first pass is its route's end (SV_LadonRun<Key>); the rest by distance, its circuit round the airfield
             -- with no pass flag (0.73.69, 0.73.73): within 2.5 km of the airfield after being 5 km or more out.
+            -- (0.73.74) its first pass by distance too: its route runs on into its circuit's laps in one path
+            -- (tools/survival_events.py LADON_LAPS), so no route's end over the airfield until the laps run out
             local near = false
-            if dkm and L.passes and L.passes >= 1 then
+            if dkm then
                 if dkm >= 5 then L.armed = true
                 elseif dkm <= 2.5 and L.armed then near = true end
             end
