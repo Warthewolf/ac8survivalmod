@@ -1074,6 +1074,7 @@ end
 -- code review of 2026-10-25: they were only cleared when she was shot down, so the loop played on into the next run)
 function SPC.V.cleanup(s)
     if type(s) ~= "table" then return end
+    if s.redOn then s.redOn = false; hudRed(false) end    -- (0.73.76) never left red (the run over, the level left)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
     SPC.V.portalStop(s)
@@ -1264,6 +1265,21 @@ SPC.V.PAINTS = {
     { name = "CHARACTER, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", flat_normal = true },
     { name = "CHARACTER + WHITE LIVEMAP, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base",
       livemap = "white", flat_normal = true },
+    -- (0.73.76) the Falken add-on's way (tools/re/FALKEN_MATERIALS.md: an AC7 aircraft whose paint draws in AC8): an
+    -- instance of a stock aircraft's GEAR material (MI_*_Gear -> MP_Gear -> M_Live_Vehicle_Base), which samples
+    -- ordinary textures and has skinned-mesh shaders, not the virtual-texture skin master (black, rule 44). The x40a's
+    -- own gear instance; her colour (and normal) map, the stock neutral Livemap, the base's emissive, turbine, detail and
+    -- damage normals off. 15: with her normal map; 16: the Falken's exactly (flat normal, normal strength 0).
+    { name = "X-40A GEAR, HER NORMALS", parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+      tex = { Livemap = "/Game/Base/Texture/Common/T_Livemap", Detail_Normal = "/Engine/EngineMaterials/DefaultNormal",
+              Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
+      scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
+    { name = "X-40A GEAR, FALKEN'S (FLAT NORMAL)", parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+      flat_normal = true,
+      tex = { Livemap = "/Game/Base/Texture/Common/T_Livemap", Normalmap = "/Engine/EngineMaterials/DefaultNormal",
+              Detail_Normal = "/Engine/EngineMaterials/DefaultNormal", Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
+      scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, NormalIntencity = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
+                  PlayerPlane_Damage = 0 } },
 }
 -- her own textures, for the `parent` variants
 SPC.V.PAINT_OWN = { Basecolor = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_C",
@@ -1349,6 +1365,16 @@ function SPC.V.paint(c, s, body, k)
         if pv.flat_normal then set[#set + 1] = "its own flat normal" end
         local live = pv.livemap and paintTex(pv.livemap)
         if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
+        for slot, path in pairs(pv.tex or {}) do        -- (0.73.76) more textures by path (the gear variants)
+            local t = loadObject(path .. "." .. path:match("[^/]+$"))
+            local ok = false
+            if valid(t) then ok = pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) end
+            set[#set + 1] = slot .. " " .. path:match("[^/]+$") .. (ok and "" or " NOT set")
+        end
+        for n, v in pairs(pv.scalars or {}) do          -- (0.73.76) scalar values (the gear variants)
+            local ok = pcall(function() mid:SetScalarParameterValue(FName(n), v) end)
+            set[#set + 1] = string.format("%s %g%s", n, v, ok and "" or " NOT set")
+        end
         local n = 0
         for _, i in ipairs(s.paintSlots) do
             if pcall(function() body:SetMaterial(i, mid) end) then n = n + 1 end
@@ -1851,10 +1877,15 @@ function SPC.valkaTick(now, s)
         return
     end
     if s.state ~= "hunt" then return end
+    if not s.redOn and c.red and c.red.enabled ~= false then  -- (0.73.76) the screen to red while she's up (hudRed)
+        s.redOn = true
+        hudRed(true, c.red)
+    end
     s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
     s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
+        if s.redOn then s.redOn = false; hudRed(false) end  -- (0.73.76) the red fades away after she dies
         if s.modelComp then s.wreckUntil = now + (c.wreck_s or 15) end
         V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
         if s.invertUntil then V.invert(c, s, false, now) end
