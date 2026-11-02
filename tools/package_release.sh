@@ -41,6 +41,12 @@ if [ "$NOVALKA" = 1 ]; then
     python -X utf8 -I tools/novalka.py "$mod"
     suffix=_NoValka
 fi
+# SONG=1 (with VALKA): her round's song from build/valka_music (git-ignored, the user's own track; user, 2026-11-03:
+# "i want them to have the song too")
+if [ "$SONG" = 1 ] && [ "$NOVALKA" != 1 ]; then
+    if ls build/valka_music/*.wav > /dev/null 2>&1; then mkdir -p "$mod/Sounds/valka" && cp build/valka_music/*.wav "$mod/Sounds/valka/"
+    else echo "SONG=1: no song in build/valka_music"; exit 1; fi
+fi
 if [ "$NOSPACEPORT" = 1 ]; then
     python -X utf8 -I tools/nospaceport.py "$mod"
     suffix=${suffix}_NoSpaceport

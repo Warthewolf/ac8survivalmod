@@ -1164,12 +1164,12 @@ SPC.V.PAINTS = {
     -- own gear instance; her colour (and normal) map, the stock neutral Livemap, the base's emissive, turbine, detail and
     -- damage normals off. 15: with her normal map; 16: the Falken's exactly (flat normal, normal strength 0).
     { name = "X-40A GEAR, HER NORMALS", parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
-      tex = { Livemap = "/Game/Base/Texture/Common/T_Livemap", Detail_Normal = "/Engine/EngineMaterials/DefaultNormal",
+      tex = { Livemap = "rt:0,0.75,1", Detail_Normal = "/Engine/EngineMaterials/DefaultNormal",
               Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
       scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     { name = "X-40A GEAR, FALKEN'S (FLAT NORMAL)", parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
       flat_normal = true,
-      tex = { Livemap = "/Game/Base/Texture/Common/T_Livemap", Normalmap = "/Engine/EngineMaterials/DefaultNormal",
+      tex = { Livemap = "rt:0,0.75,1", Normalmap = "/Engine/EngineMaterials/DefaultNormal",
               Detail_Normal = "/Engine/EngineMaterials/DefaultNormal", Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
       scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, NormalIntencity = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
                   PlayerPlane_Damage = 0 } },
@@ -1185,6 +1185,26 @@ local function paintTex(k)
     local p = SPC.V.PAINT_TEX[k]
     return p and loadObject(p .. "." .. p:match("[^/]+$"))
 end
+-- (0.73.76) a flat colour as a texture, "rt:R,G,B" (0-1, linear): a 4x4 render target cleared to it, made once a
+-- colour (the user's screenshot of 00:22: black blotches on her body; AC8's T_Livemap isn't flat, 111 of its 256 DXT1
+-- blocks differ, so its pattern landed on her UVs; the Falken add-on gives its body a flat 4x4 Livemap, 0 / 0.75 / 1:
+-- no metal, roughness 0.75, unshadowed). Nil if it can't be made.
+SPC.V.flatTex = {}
+local function flatTexture(spec)
+    local t = SPC.V.flatTex[spec]
+    if t and valid(t) then return t end
+    local r, g, b = spec:match("^rt:([%d%.]+),([%d%.]+),([%d%.]+)$")
+    if not r then return nil end
+    local krl = StaticFindObject("/Script/Engine.Default__KismetRenderingLibrary")
+    if not valid(krl) then return nil end
+    local col = { R = tonumber(r), G = tonumber(g), B = tonumber(b), A = 1 }
+    local ok, rt = pcall(function() return krl:CreateRenderTarget2D(survivalPC, 4, 4, 2, col, false, false) end)   -- (2: RTF_RGBA8, linear)
+    if not (ok and valid(rt)) then log("special: VALKA's paint: a flat texture " .. spec .. " couldn't be made (" .. tostring(rt) .. ")"); return nil end
+    pcall(function() krl:ClearRenderTarget2D(survivalPC, rt, col) end)
+    SPC.V.flatTex[spec] = rt
+    return rt
+end
+
 -- name -> value of a material instance's own scalar / vector overrides
 local function paintValues(mi)
     local sc, ve = {}, {}
@@ -1258,8 +1278,8 @@ function SPC.V.paint(c, s, body, k)
         if pv.flat_normal then set[#set + 1] = "its own flat normal" end
         local live = pv.livemap and paintTex(pv.livemap)
         if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
-        for slot, path in pairs(pv.tex or {}) do        -- (0.73.76) more textures by path (the gear variants)
-            local t = loadObject(path .. "." .. path:match("[^/]+$"))
+        for slot, path in pairs(pv.tex or {}) do        -- (0.73.76) more textures by path (the gear variants), or a flat "rt:R,G,B"
+            local t = path:sub(1, 3) == "rt:" and flatTexture(path) or loadObject(path .. "." .. path:match("[^/]+$"))
             local ok = false
             if valid(t) then ok = pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) end
             set[#set + 1] = slot .. " " .. path:match("[^/]+$") .. (ok and "" or " NOT set")

@@ -1064,3 +1064,12 @@ on her own railguns at her reveal and before every shot (the opener's had set s.
 her rounds live eml_life_s 8 s (was at least 30); MINDRIPPER's gun rounds' life x gun_life_x 4 (was x gun_reach_x 20,
 its range unchanged); her health 2000 (was 900); her default paint 16 (the Falken's exact: flat normal). The Spaceport
 Assault's capture_per_troop 5 -> 10. All untested in game.
+0.73.76 friends' zip WITH VALKA (2026-11-03, user: "package a build for my friends ... set Valka to appear randomly",
+"i want them to have the song too"): `BUILD_NAME=COOP2MP COOP=1 SONG=1 sh tools/package_release.sh online 0.73.76`
+(no NOVALKA: her X-02S container and AC7 railgun sounds in; SONG=1 copies build/valka_music/*.wav, git-ignored, into
+Sounds/valka) = AC8SurvivalMode_COOP2MP_0.73.76_Online_COOP.zip (72 MB, hash 38821dbe...96bf8: register on /admin);
+VALKA in the random rotation, her test key stripped. Same session: her red sky set on the scale the log gave (the sky's
+values are 1 1 1 white, fog 0: sun / light red, sky params' sun 1.8 / 0.3 / 0.15, a faint red haze, strength 1.0;
+the tints left a dark purple sky); her paint's Livemap a flat 4x4 render target cleared to 0 / 0.75 / 1 ("rt:R,G,B":
+KismetRenderingLibrary.CreateRenderTarget2D, RTF_RGBA8) as the Falken's, since AC8's T_Livemap isn't flat (111 of 256
+DXT1 blocks differ: her black blotches). Not yet run in game.
