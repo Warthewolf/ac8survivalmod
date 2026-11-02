@@ -1074,7 +1074,7 @@ end
 -- code review of 2026-10-25: they were only cleared when she was shot down, so the loop played on into the next run)
 function SPC.V.cleanup(s)
     if type(s) ~= "table" then return end
-    if s.redOn then s.redOn = false; hudRed(false) end    -- (0.73.76) never left red (the run over, the level left)
+    if s.redOn or s.moodOn then SPC.V.moodOff(nil, s) end  -- (0.73.76) never left red or playing (the run over, the level left)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
     SPC.V.portalStop(s)
@@ -1724,6 +1724,20 @@ function SPC.valkaArrive(now, at, yaw)
     return true
 end
 
+-- (0.73.76) Her round's mood, once: the screen fading to red (hudRed) and the song (SND.songStart, CFG.specials.valka.
+-- song) together, as the round's flying enemies are all down (user, 2026-11-02: "make sure that the red begins to fade
+-- after the enemies that fly in the round are dead"); both fade out after her death (moodOff).
+function SPC.V.mood(c, s)
+    if s.moodOn then return end
+    s.moodOn = true
+    if c.red and c.red.enabled ~= false then s.redOn = true; hudRed(true, c.red) end
+    pcall(SND.songStart, c.song)
+end
+function SPC.V.moodOff(c, s, now)
+    if s.redOn then s.redOn = false; hudRed(false) end
+    if c then pcall(SND.songFade, c.song and c.song.out_s or 5) else pcall(SND.songStop) end
+end
+
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
@@ -1756,6 +1770,7 @@ function SPC.valkaTick(now, s)
             for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
             s.clearAt = s.clearAt or now + c.lurk_s
         end
+        V.mood(c, s)                                    -- (0.73.76) the flyers down (or none): red and her song
         if now < (s.clearAt or now) then return end
         s.emlAt, s.emlYaw = V.emlSpawn(c)
         if not s.emlAt then                             -- no railgun: she comes as she is, the reveal without the shot
@@ -1877,15 +1892,12 @@ function SPC.valkaTick(now, s)
         return
     end
     if s.state ~= "hunt" then return end
-    if not s.redOn and c.red and c.red.enabled ~= false then  -- (0.73.76) the screen to red while she's up (hudRed)
-        s.redOn = true
-        hudRed(true, c.red)
-    end
+    V.mood(c, s)                                        -- (0.73.76) red and her song, if her round had no lurk
     s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
     s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
-        if s.redOn then s.redOn = false; hudRed(false) end  -- (0.73.76) the red fades away after she dies
+        V.moodOff(c, s, now)                            -- (0.73.76) the red and her song fade away after she dies
         if s.modelComp then s.wreckUntil = now + (c.wreck_s or 15) end
         V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
         if s.invertUntil then V.invert(c, s, false, now) end

@@ -115,6 +115,63 @@ function SND.stopAll()
         for h in pairs(SND.live) do SV_SndStop(h, 0) end
     end
     SND.live = {}
+    SND.songStop(true)
+end
+
+-- (0.73.76) A song (CFG.specials.valka.song, the user's own track in their VALKA build: "have it start as the Red Starts
+-- to Fade in ... Fade out after her death", "at 75% volume"): one voice, centred, not panned, at `volume` (linear),
+-- looped unless loop = false; SND.songFade(s) fades it out over s seconds, then it stops. With game_music = "stop" the
+-- game's mission track is stopped while it plays (its BGM controller's <track>_Stop) and posted again after.
+SND.song = nil
+local function songMusicBack(sg)
+    if sg and sg.track and type(SV_PlayBGM) == "function" then
+        local r = SV_PlayBGM(sg.track)
+        log("sound: the game's music back after the song: " .. sg.track .. " (" .. tostring(r) .. ")")
+    end
+end
+function SND.songStart(sc)
+    if SND.song or type(sc) ~= "table" or sc.enabled == false or not sc.file then return end
+    local id = SND.id(sc.file)
+    if not id then return end
+    local v = math.max(0, math.min(1, tonumber(sc.volume) or 0.75))
+    local h = SV_SndPlay(id, v, v, 1, sc.loop == false and 0 or 1)
+    if not h or h <= 0 then log("sound: the song " .. sc.file .. " didn't play (" .. tostring(h) .. ")"); return end
+    SND.song = { h = h, v = v, top = v, at = os.clock() }
+    local said = ""
+    if sc.game_music == "stop" and type(SV_BGMNames) == "function" and type(SV_PlayBGM) == "function" then
+        local track = (SV_BGMNames() or ""):match("^([^|]*)") or ""
+        local stop = track:gsub("_Play$", "_Stop")
+        if track ~= "" and stop ~= track then
+            SND.song.track = track
+            said = string.format("; the game's %s stopped (%s: %s)", track, stop, tostring(SV_PlayBGM(stop)))
+        else
+            said = "; the game's music left as it is (no track to stop: '" .. track .. "')"
+        end
+    end
+    log(string.format("sound: the song %s playing at %d%%%s%s", sc.file, math.floor(v * 100 + 0.5),
+        sc.loop == false and "" or ", looped", said))
+end
+function SND.songFade(secs)
+    local sg = SND.song
+    if not sg or sg.fadeS then return end
+    sg.fadeS, sg.fadeAt = math.max(0.1, tonumber(secs) or 5), os.clock()
+    log(string.format("sound: the song fading out over %.0f s", sg.fadeS))
+end
+function SND.songStop(quiet)
+    local sg = SND.song
+    if not sg then return end
+    SND.song = nil
+    if type(SV_SndStop) == "function" then SV_SndStop(sg.h, 0) end
+    if not quiet then log("sound: the song stopped") end
+    songMusicBack(sg)
+end
+local function songTick()
+    local sg = SND.song
+    if not (sg and sg.fadeS) then return end
+    local t = (os.clock() - sg.fadeAt) / sg.fadeS
+    if t >= 1 then SND.songStop(); return end
+    local v = sg.top * (1 - t)
+    if SV_SndSet(sg.h, v, v, 1) ~= 1 then SND.song = nil; songMusicBack(sg) end
 end
 
 -- the game paused / running: Survival's sounds silent while it's paused (their clock stops, a loop would play on)
@@ -138,6 +195,7 @@ end
 -- every tick: the playing voices follow their source and you (pan, distance); the finished ones dropped
 function SND.tick()
     if type(SV_SndSet) ~= "function" then return end
+    pcall(songTick)                                     -- (0.73.76) the song's fade
     for h, v in pairs(SND.live) do
         local where = v.at
         if type(v.at) == "function" then                -- (its source gone: where it last was, not on you)

@@ -23,6 +23,9 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
 rm -rf "$mod/Sounds/valka"
 rmdir "$mod/Sounds" 2>/dev/null || true
 python -X utf8 -I tools/novalka.py "$mod" > /dev/null
+else
+# (her round's song, the user's own track: build/valka_music, git-ignored, never in a friends' zip)
+if ls build/valka_music/*.wav > /dev/null 2>&1; then mkdir -p "$mod/Sounds/valka" && cp build/valka_music/*.wav "$mod/Sounds/valka/"; fi
 fi
 # NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
 if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi
