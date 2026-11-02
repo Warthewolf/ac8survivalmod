@@ -97,7 +97,7 @@ end
 -- also returns the copies stored inside other blueprints' WidgetTrees ("..._C:WidgetTree.X"), which are never on
 -- screen (test of 2026-10-22: the landing menu's ammo panel and the TIME row were first found that way).
 function liveWidget(w)
-    return valid(w) and nameOf(w):find("/Engine/Transient", 1, true) ~= nil
+    return liveObj(w) and nameOf(w):find("/Engine/Transient", 1, true) ~= nil    -- (0.73.73: liveObj, kept ones too)
 end
 
 -- The landing menu's live windows (WBP_Menu_IngameHangar_Common_000_C), found once a tick for everyone who asks: the
@@ -223,6 +223,147 @@ function liveAddr(o)
     return valid(o) and a or nil                          -- (-1: the runtime can't tell; as before)
 end
 
+-- (0.73.73) o is still the engine's live object: liveAddr when the runtime can tell (GUObjectArray), else valid(). For an
+-- object kept between ticks (the player controller, a widget found a tick before), which valid() reads even once freed.
+function liveObj(o)
+    if o == nil then return false end
+    if type(SV_ObjChain) == "function" then return liveAddr(o) ~= nil end
+    return valid(o)
+end
+
+---------------------------------------------------------------------------------------------------- the level going away
+-- (0.73.73, the testers' logs of 0.73.70, 2026-11-01) The moment Survival's level starts going away (Quit Mission, a
+-- quit to the main menu, the next level loading), and the walks over every object held while a level comes or goes:
+--   * the plane sweep paid for every plane the unload destroyed, before `run over: left` 8 s later: 6 runs, up to 26
+--     kills / 4,340 Z (A10 11:31:57.386: four planes "down", you firing nothing, 63 ms before `world: .../PL_MainMenu`);
+--   * the host crashed inside UE4SS's FindAllOf over a freed object on Quit Mission (A20 13:40:38, UE4SS.dll+0x2ab5bd,
+--     the address hotfix5's native spawner search crashed at as a level unloaded).
+-- levelGoing(): true from the first sign until the next level's reset (LEAVE.reset, sv_main.lua): another main level
+-- loading (svLevelOn false, sv_config.lua's world watch) or this level's LiveUnitSpawner gone, as the native runtime
+-- says once it has answered in this level (SV_UnitAlive -1 "not ready" / -6; hotfix5's g_spawnerLost, its log line
+-- `spawner: this level's LiveUnitSpawner is gone` in the same second as every quit of those logs, never at a restart:
+-- the two restarts kept their spawner).
+LEAVE = { why = nil, at = nil, seen = false, probeAt = nil, unpaid = 0, hard = false, badAt = nil }
+function LEAVE.reset()
+    LEAVE.why, LEAVE.at, LEAVE.seen, LEAVE.probeAt, LEAVE.unpaid, LEAVE.unpaidSaid = nil, nil, false, nil, 0, nil
+    LEAVE.hard, LEAVE.badAt = false, nil
+end
+local WALK_LEAVE_S, WALK_WORLD_S = 8, 3
+function levelGoing()
+    -- (0.73.73 review) two kinds of sign: another level loading (hard: it stays until the next level's reset) and the
+    -- unit spawner gone (soft). A soft one latches only when the spawner stays gone a second (one odd answer as a
+    -- pause-menu restart makes its spawner again latched it for the rest of the run: no kill paid from then on), and
+    -- lets go when the spawner answers again; svFlags (the restart's own check) runs on under a soft one (levelLeaving).
+    if not D and not LEAVE.why then return false end
+    local why, now = nil, os.clock()
+    if svLevelOn == false then
+        if not LEAVE.hard then why = "another level is loading" end
+        LEAVE.hard = true
+    -- (the runtime asked only once a plane of this level is up: before its spawner is found each ask searches every
+    -- object for it, the walk this guards against; nothing to pay for before then anyway)
+    elseif type(SV_UnitAlive) == "function" and levelTick and levelTick >= 0 and type(planes) == "table" and (#planes > 0 or LEAVE.why) then
+        local every = LEAVE.why and 1 or 0.1              -- (10 times a second at most; once a second while latched)
+        if not LEAVE.probeAt or now - LEAVE.probeAt >= every then
+            LEAVE.probeAt = now
+            local u = CFG and type(CFG.pool) == "table" and CFG.pool[1] or nil
+            local ok, r = false, nil
+            if u then ok, r = pcall(SV_UnitAlive, u) end
+            if ok and type(r) == "number" then
+                if r == -1 or r == -6 then
+                    if LEAVE.seen and not LEAVE.why then
+                        LEAVE.badAt = LEAVE.badAt or now
+                        if now - LEAVE.badAt >= 1 then why = string.format("its unit spawner is gone: SV_UnitAlive %d", r) end
+                    end
+                elseif r ~= -5 then
+                    LEAVE.seen, LEAVE.badAt = true, nil           -- (its spawner answered in this level)
+                    if LEAVE.why and not LEAVE.hard then
+                        log("level: its unit spawner answers again (" .. tostring(r) .. "): Survival's level is NOT going away after all; kills paid again")
+                        crumb("level going away: false alarm")
+                        LEAVE.why, LEAVE.at = nil, nil
+                    end
+                end
+            end
+        end
+    end
+    if why and not LEAVE.why then
+        LEAVE.why, LEAVE.at = why, now
+        log(string.format("level: Survival's level is going away (%s): no kill paid or counted from here, no walk over "
+            .. "every object for %d s", why, WALK_LEAVE_S))
+        crumb("level going away: " .. why)
+    elseif why and LEAVE.hard then
+        LEAVE.why = why                                   -- (a soft sign first, now the next level: hard from here)
+    end
+    return LEAVE.why ~= nil, LEAVE.why
+end
+-- (0.73.73 review) only the hard sign: another level loading
+function levelLeaving() return LEAVE.hard == true end
+
+-- UE4SS's FindAllOf / FindFirstOf walk every object in GUObjectArray and read each one's class chain; over objects being
+-- freed that read crashes (2b above; 2c, A15 20:27:56: UE4SS.dll+0x3e60be, a class check on a freed object 1 s after a
+-- round's last kill). Every walk of this mod's Lua (all its parts call these two globals) waits while walkHold() says
+-- why: the level going away (WALK_LEAVE_S from its first sign), a run still on with another level loading, a main level
+-- just made (WALK_WORLD_S: the main menu, a hangar, the transition map out of a run), or the engine freeing objects (the
+-- runtime's SV_GcBusy, when it has one). A held walk finds nothing (nil, as a walk that found none), logged once a hold.
+WALK = { held = 0, heldWhy = nil, worldAt = nil, world = nil }
+function walkHold()
+    local now = os.clock()
+    if LEAVE.why and now - (LEAVE.at or now) < WALK_LEAVE_S then return LEAVE.why end
+    if D and svLevelOn == false then return "another level is loading" end
+    if WALK.worldAt and now - WALK.worldAt < WALK_WORLD_S then return "a level is loading (" .. tostring(WALK.world) .. ")" end
+    if D then
+        local going, why = levelGoing()
+        if going and now - (LEAVE.at or now) < WALK_LEAVE_S then return why end
+    end
+    return nil
+end
+-- (0.73.73 review) walkHold's reasons, or the engine freeing objects (the runtime's SV_GcBusy): for the walks that come
+-- round often and can skip a pass (the weapons log's looks). Not for every walk: an incremental purge runs often in
+-- play, and a one-shot walk held then (the shuttle pad's removal, the Ladon missiles' toning, a round's repairs) lost
+-- its work.
+function walkBusy()
+    local why = walkHold()
+    if why then return why end
+    if type(SV_GcBusy) == "function" then
+        local ok, b = pcall(SV_GcBusy)
+        if ok and b == 1 then return "the engine is freeing objects" end
+    end
+    return nil
+end
+do
+    local rawAll, rawFirst = FindAllOf, FindFirstOf
+    local function held(fn, cls)
+        local why = walkHold()
+        if not why then
+            if WALK.heldWhy then
+                log(string.format("walks: the hold is over (%d walks over every object waited)", WALK.held))
+                WALK.heldWhy, WALK.held = nil, 0
+            end
+            return false
+        end
+        WALK.held = WALK.held + 1
+        if WALK.heldWhy ~= why then
+            WALK.heldWhy = why
+            log(string.format("walks: %s(%s) and every walk over every object held: %s", fn, tostring(cls), why))
+        end
+        return true
+    end
+    if type(rawAll) == "function" then
+        function FindAllOf(cls) if held("FindAllOf", cls) then return nil end return rawAll(cls) end
+    end
+    if type(rawFirst) == "function" then
+        function FindFirstOf(cls) if held("FindFirstOf", cls) then return nil end return rawFirst(cls) end
+    end
+end
+-- (a main level made: the hold above. Not Survival's own, whose sublevels load blocking the game thread anyway, nor the
+-- transition map made as it loads; the transition map out of a run, or from the main menu, yes)
+pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
+    local n = nameOf(w)
+    local main = n:find("/PL_", 1, true) ~= nil and not n:find("PL_SurvivalMode", 1, true)
+    if main or (n:find("TransitionMap", 1, true) and (LEAVE.why or not D)) then
+        WALK.worldAt, WALK.world = os.clock(), n:match("([%w_]+)$") or "?"
+    end
+end)
+
 local function hex(a) return a and string.format("%X", a) or "?" end
 
 -- A DataTable's row names in table order, as strings (nil when they can't be read). GetRowNames may hand back FNames
@@ -245,10 +386,15 @@ function rowNames(dt)
     return l and table.concat(l, ", ") or "?"
 end
 
+-- (0.73.73: kept once found, while it's live: it lives the whole session, and up to three walks over every object a call
+-- were made each time; walkHold)
+local GI = { obj = nil }
 function gameInstance()
+    if GI.obj ~= nil and liveObj(GI.obj) then return GI.obj end
+    GI.obj = nil
     for _, cls in ipairs({ "BP_LiveGameInstance_C", "LiveGameInstance", "GameInstance" }) do
         local gi = FindFirstOf(cls)
-        if valid(gi) then return gi end
+        if valid(gi) then GI.obj = gi; return gi end
     end
     return nil
 end
@@ -603,15 +749,21 @@ function svFlags()
     -- (was 0.2 s: with the 250 ms tick that walked every flag of the event package each tick, hundreds of map
     -- entries through two pcalls each; user, 2026-10-23: "the custom HUD ... seems a bit laggy")
     if now - flagCache.at < 1.0 then return flagCache.t end
+    -- (0.73.73) none while the level is going away: its containers go with it, and the look for them again (FindAllOf)
+    -- walked every object as they were freed (the host's crash on Quit Mission, A20 13:40:38, UE4SS.dll+0x2ab5bd)
+    if levelLeaving() then flagCache.at, flagCache.t, flagCache.cs = now, nil, nil; return nil end   -- (0.73.73 review: the hard sign only, so a restart is still seen)
     local cs = flagCache.cs
     -- (a gone container is found by its validity; the timed look again every 120 s, was 30: each FindAllOf walk was a
-    -- 22-29 ms hitch in a friend's late rounds, economy review of 2026-10-25)
+    -- 22-29 ms hitch in a friend's late rounds, economy review of 2026-10-25. 0.73.73: liveObj, not valid(), on the kept
+    -- ones; while the walks are held (walkHold), the ones still live)
     local stale = not cs or now - flagCache.found > 120 or (#cs == 0 and now - flagCache.found > 2)
-    for _, c in ipairs(cs or {}) do if not valid(c) then stale = true end end
-    if stale then cs, flagCache.found = FindAllOf("LiveEventContainer") or {}, now; flagCache.cs = cs end
+    local live = {}
+    for _, c in ipairs(cs or {}) do if liveObj(c) then live[#live + 1] = c else stale = true end end
+    if stale and not walkHold() then cs, flagCache.found = FindAllOf("LiveEventContainer") or {}, now; flagCache.cs = cs
+    else cs = live end
     local t = nil
     for _, c in ipairs(cs) do
-        if valid(c) then
+        if liveObj(c) then
             t = t or {}
             pcall(function()
                 c.FlagData.IntegerFiled:ForEach(function(k, v)
@@ -653,7 +805,7 @@ survivalPC = nil             -- the player controller in Survival's level (found
 
 -- Where the player is (cm), or nil.
 function playerLocation()
-    local pc = valid(survivalPC) and survivalPC or FindFirstOf("PlayerController")
+    local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")      -- (0.73.73: liveObj, kept)
     local ok, l = pcall(function()
         local v = pc.Pawn:K2_GetActorLocation()
         return { X = v.X, Y = v.Y, Z = v.Z }

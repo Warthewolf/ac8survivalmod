@@ -36,7 +36,8 @@ local function slotTexts(panel, slot)
     -- (none yet: looked for again every 2 s, not every call, three times at most: a panel with no ammo slots, such as the
     -- confirmation's, walked every TextBlock in memory every 2 s while you were down at the airfield; the co-op run of
     -- 2026-10-30's "ammo panel" up to 95 ms a tick. The TextBlocks' names are read once a second for every panel)
-    if not c or (not c.found and (c.tries or 0) < 3 and os.clock() - c.at > 2) then
+    -- (0.73.73: not while the walks are held, walkHold: a held walk finds nothing, and isn't a try)
+    if (not c or (not c.found and (c.tries or 0) < 3 and os.clock() - c.at > 2)) and not walkHold() then
         c = { slots = {}, at = os.clock(), tries = (c and c.tries or 0) + 1 }
         local base = nameOf(panel):match("^%S+%s+(.+)$") or nameOf(panel)
         if not (SH.tbNames and os.clock() - SH.tbNames.at < 1) then
@@ -53,11 +54,15 @@ local function slotTexts(panel, slot)
         end
         SH.slotCache[key] = c
     end
-    local e = c.slots[slot]
+    local e = c and c.slots[slot]
     if not e then return nil, nil end
-    if not (e.count and valid(e.count)) then
-        for _, t in pairs(e.all) do
-            local v = widgetText(t)
+    -- (0.73.73: the TextBlocks are kept between ticks: liveObj before any read, a gone one dropped)
+    if e.name and not liveObj(e.name) then e.name = nil end
+    if not (e.count and liveObj(e.count)) then
+        e.count = nil
+        for k, t in pairs(e.all) do
+            local v = liveObj(t) and widgetText(t) or nil
+            if not liveObj(t) then e.all[k] = nil end
             if v and (v:match("^%s*%d+%s*$") or v:match("^%s*%-+%s*$")) then e.count = t
             elseif v and v:match("%a") then e.name = t end
         end
@@ -211,15 +216,54 @@ end
 -- HUD ... seems a bit laggy"). Timed as "planes" in the perf line (coop-perf step 10). Returns where you are (or nil
 -- / false) when a plane was visited this tick.
 local tornSeen = 0                                 -- (co-op copies this game took down itself: COOP.tornDown)
+-- (0.73.73) Nothing is paid or counted once the level is going away (levelGoing, sv_core.lua): the testers' logs of
+-- 0.73.70, 6 runs paid for the planes a quit to the main menu destroyed, up to 26 kills / 4,340 Z "by you" (A10, A06,
+-- A04, A08, A16, A19), counted in the leaderboard's and the learning layer's kills too. And a plane gone from the game
+-- without being seen at 0 health (destroyed, not shot down) is paid VANISH_HOLD_S later, and only if the level is still
+-- on then: in A10 the first four went 63 ms before the main menu's world was made (11:31:57.386 / .449).
+local VANISH_HOLD_S = 1.0
+local function goneWithLevel(p, why)                -- (not paid, not counted: the first one of a level logged)
+    LEAVE.unpaid = (LEAVE.unpaid or 0) + 1
+    if not LEAVE.unpaidSaid then
+        LEAVE.unpaidSaid = true
+        log(string.format("round probe: %s gone with the level (%s): not paid or counted, nor any plane after it", p.name, tostring(why)))
+    end
+end
+local function downCounted(p, you, now)              -- a plane shot down: the kill's lines, its pay and the measurements
+    log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
+        p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
+    local okG, g = pcall(KILL.geom, p, you or nil)                     -- (its aspect and your last shots)
+    if not okG then g = nil end
+    pcall(probeKill, p, you or nil, g)
+    local okC, by = pcall(creditKill, p)
+    if not okC then log("credits: error " .. tostring(by)); by = nil end
+    hookErr("stats: STATS.down", pcall(STATS.down, p, g, by, now))
+    if p.unit and p.unit:find("^SV_Unit_Ladon") then           -- (its parts with it: sv_ladon.lua)
+        hookErr("special: ladonPartsDown", pcall(ladonPartsDown, p))
+    end
+end
+local function vanishedTick()                       -- (each sweep) the planes held VANISH_HOLD_S: paid now, or not at all
+    local q = D and D.vanished
+    if not (q and #q > 0) then return end
+    local keep, going = {}, levelGoing()
+    for _, e in ipairs(q) do
+        if going then goneWithLevel(e.p, LEAVE.why)
+        elseif os.clock() - e.at >= VANISH_HOLD_S then downCounted(e.p, e.you, e.now)
+        else keep[#keep + 1] = e end
+    end
+    D.vanished = keep
+end
 local function planeSweep(slot)
     local you = nil
+    pcall(vanishedTick)
     for i, p in ipairs(planes) do
         if not p.down and i % 8 == slot then
             if you == nil then you = playerLocation() or false end
-            local up = valid(p.obj)
+            -- (0.73.73: liveObj before the health read: the plane is kept between ticks, and a freed one read garbage)
+            local up, dead = liveObj(p.obj), false
             if up then
                 local ok, h = pcall(function() return p.obj.HealthInternal end)
-                if ok and type(h) == "number" and h <= 0 then up = false end
+                if ok and type(h) == "number" and h <= 0 then up, dead = false, true end
             end
             if up then
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
@@ -238,30 +282,64 @@ local function planeSweep(slot)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
                 hookErr("stats: STATS.track", pcall(STATS.track, p, you or nil, D and D.now))   -- (sv_stats.lua)
-            elseif COOP and COOP.tornDown and COOP.tornDown(p) then           -- (a co-op copy this game took down
+            -- (0.73.73: tornDown in a pcall: with no address it errs, and the error stopped this slot's sweep at it each tick)
+            elseif COOP and COOP.tornDown and select(2, pcall(COOP.tornDown, p)) == true then   -- (a co-op copy this game took down
                 p.down = true                                                      -- itself: no kill, no pay, no stats)
                 tornSeen = tornSeen + 1
                 if tornSeen <= 3 or tornSeen % 25 == 0 then
                     log(string.format("round probe: %s taken down here (co-op, not a kill; %d so far)", p.name, tornSeen))
                 end
+            elseif levelGoing() then                                           -- (0.73.73: the level going away)
+                p.down = true
+                goneWithLevel(p, LEAVE.why)
             else
                 p.down = true
-                pcall(KILL.read, p)                                                -- (the last hits, if it's still there)
-                log("round probe: " .. p.name .. " down" .. (p.at and string.format(", last seen %.1f km up%s",
-                    p.at.Z / 100000, you and string.format(", %.1f km from you", km(p.at, you)) or "") or ""))
-                local okG, g = pcall(KILL.geom, p, you or nil)                     -- (its aspect and your last shots)
-                if not okG then g = nil end
-                pcall(probeKill, p, you or nil, g)
-                local okC, by = pcall(creditKill, p)
-                if not okC then log("credits: error " .. tostring(by)); by = nil end
-                hookErr("stats: STATS.down", pcall(STATS.down, p, g, by, D and D.now))
-                if p.unit and p.unit:find("^SV_Unit_Ladon") then           -- (its parts with it: sv_ladon.lua)
-                    hookErr("special: ladonPartsDown", pcall(ladonPartsDown, p))
+                if dead then
+                    pcall(KILL.read, p)                                        -- (the last hits: it's still there)
+                    downCounted(p, you, D and D.now)
+                elseif D then                                                  -- (gone without its death seen: held)
+                    D.vanished = D.vanished or {}
+                    D.vanished[#D.vanished + 1] = { p = p, you = you, at = os.clock(), now = D.now }
                 end
             end
         end
     end
     return you
+end
+
+-- The run's over: Survival's level was left. Every part stops with D, so nothing of the run reads the level's objects
+-- after this. (0.73.73: at once when the level is going away for sure, leaveNow, not only once its player controller had
+-- been gone 8 s: every part read the level's objects as they were freed for those 8 s, paying for its planes on the way.)
+local function runLeft(why)
+    log(string.format("run over: left Survival's level in round %d with %d zollars (%s)", D.round, RUN.credits, tostring(why)))
+    local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
+    if not okL then log("leaderboard: error " .. tostring(errL)) end
+    if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
+    if D.special then pcall(SPC.V.cleanup, D.special) end
+    pcall(SND.stopAll)
+    pcall(TAC.reset)                       -- (the gun's class default back to stock)
+    if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
+    local held = D.vanished and #D.vanished or 0
+    if held > 0 or (LEAVE.unpaid or 0) > 0 then
+        log(string.format("round probe: %d planes gone with the level: not paid or counted", (LEAVE.unpaid or 0) + held))
+    end
+    D, A, survivalPC, callouts = nil, nil, nil, {}
+    if levelTick ~= -1 then levelTick = nil end           -- (-1: Survival's level loading again, its reset to come)
+    planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
+    ALLY.run = nil
+    HIT.reset()
+end
+-- The level going away for sure (0.73.73): another level loading, or its spawner gone (levelGoing) with your plane gone
+-- too. A restart keeps both (the testers' two of 2026-11-01), and the restart's own check needs the run (D) to start over.
+local function leaveNow()
+    if not (D and levelGoing()) then LEAVE.pawnGoneAt = nil; return false end
+    if svLevelOn == false then return true end
+    local pawn = nil
+    if liveObj(survivalPC) then pcall(function() pawn = survivalPC.Pawn end) end
+    if pawn ~= nil and liveObj(pawn) then LEAVE.pawnGoneAt = nil; return false end
+    -- (0.73.73 review) your plane gone 3 s, not one look: a restart swaps the old pawn for the new one
+    LEAVE.pawnGoneAt = LEAVE.pawnGoneAt or os.clock()
+    return os.clock() - LEAVE.pawnGoneAt >= 3
 end
 
 -- (probeTick's round clock, for its second half: probeTickB)
@@ -296,6 +374,7 @@ local function probeTick(tick)
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
+        LEAVE.reset()                              -- (0.73.73: this level's spawner not yet seen, nothing going away)
         log("rounds: native spawner " .. (type(SV_Version) == "function" and ("runtime " .. tostring(SV_Version())) or "missing") ..
             "; round 1 in " .. CFG.first_round_delay_s .. " s")
         local first = SETUP.startRound()                -- (the menu's START AT ROUND, sv_menu.lua)
@@ -371,11 +450,12 @@ local function probeTick(tick)
         local okM, errM = pcall(SHOP.menuSetup)
         if not okM then log("shop: store setup error " .. tostring(errM)); SH.menuDone = true end
     end
+    if leaveNow() then runLeft(LEAVE.why) end      -- (0.73.73: the level going away, at once)
     if D then
-        if not valid(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
+        if not liveObj(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
         -- the run is over once Survival's player controller has been gone 8 s (the level was left: before, the run went
         -- on at the main menu and in stock missions, rewriting their ammo panels and paying vanished planes as kills)
-        if valid(survivalPC) then D.pcSeen, D.pcLost = true, 0
+        if liveObj(survivalPC) then D.pcSeen, D.pcLost = true, 0
         elseif D.pcSeen and tick % 4 == 0 then D.pcLost = (D.pcLost or 0) + 1 end
         -- a mission restart from the pause menu reloads the mission in the same level (no new World, so the reset below
         -- never ran and the run kept its round: user, 2026-10-22), but it sets the event package's flags back to 0: Survival's
@@ -398,20 +478,7 @@ local function probeTick(tick)
                 end
             end
         end
-        if (D.pcLost or 0) >= 8 then
-            log(string.format("run over: left Survival's level in round %d with %d zollars", D.round, RUN.credits))
-            local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
-            if not okL then log("leaderboard: error " .. tostring(errL)) end
-            if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
-            if D.special then pcall(SPC.V.cleanup, D.special) end
-            pcall(SND.stopAll)
-            pcall(TAC.reset)                       -- (the gun's class default back to stock)
-            if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
-            D, A, levelTick, survivalPC, callouts = nil, nil, nil, nil, {}
-            planes, pending, lastAlive, SH.panels, SHUTTLE.obj = {}, {}, nil, nil, nil
-            ALLY.run = nil
-            HIT.reset()
-        end
+        if (D.pcLost or 0) >= 8 then runLeft("its player controller gone 8 s") end
     end
     if D then
         local now, paused = roundClock(tick)
@@ -466,6 +533,7 @@ end
 -- whole on one frame every 250 ms (15-38 ms on the user's PC, worst 357 ms: a frame that long four times a second; a
 -- friend's report of 2026-10-31, "choppy" and stuttering in solo play): in two halves, each part still once a tick.
 local function probeTickB(tick)
+    if leaveNow() then runLeft(LEAVE.why) end      -- (0.73.73: the level going away since the first half)
     if D then
         local now, paused = bNow, bPaused
         if now then
@@ -478,11 +546,11 @@ local function probeTickB(tick)
             local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
             if not okA2 then log("shop: ammo panel error " .. tostring(errA2)) end
         end
-        if now and valid(survivalPC) then                               -- Survival's own sounds follow (sv_sound.lua)
+        if now and liveObj(survivalPC) then                              -- Survival's own sounds follow (sv_sound.lua)
             local okSn, errSn = timed("sound", SND.tick)
             if not okSn and not D.sndErr then D.sndErr = true; log("sound: error " .. tostring(errSn)) end
         end
-        if now and valid(survivalPC) then                               -- what hits the player (section "hits")
+        if now and liveObj(survivalPC) then                              -- what hits the player (section "hits")
             local okHt, errHt = timed("hits", HIT.tick, survivalPC, now)
             if not okHt and not D.hitErr then D.hitErr = true; log("hits: error " .. tostring(errHt)) end
             local okWl, errWl = timed("weapons log", WLOG.tick, now)          -- (sv_weaponlog.lua)

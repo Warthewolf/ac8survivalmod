@@ -309,7 +309,17 @@ end
 -- A text on screen, in place: the game reads a row's label when its page opens (tools/re/AIRFIELD_SHOP_UI.md, the
 -- STORE's labels), so a changed label's live TextBlock gets the new text
 local function textKey(s) return (tostring(s):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+-- (0.73.73) Not while the walks over every object are held (walkHold, sv_core.lua: right after a quit the main menu's
+-- texts changed as the run's level was freed, and a TextBlock walk then read freed objects): the changed labels wait in
+-- RELABEL and go on screen at the next texts' pass with the walks free (MENU.tick's, every 2 s)
+local RELABEL = {}
 local function relabel(changed)
+    for oldK, new in pairs(changed) do                 -- (a label changed twice while waiting: straight to its newest)
+        for k, v in pairs(RELABEL) do if textKey(v) == oldK then RELABEL[k] = new end end
+        if RELABEL[oldK] == nil then RELABEL[oldK] = new end
+    end
+    if walkHold() or next(RELABEL) == nil then return 0 end
+    changed, RELABEL = RELABEL, {}
     local n = 0
     for _, tb in ipairs(FindAllOf("TextBlock") or {}) do
         if liveWidget(tb) then
@@ -333,9 +343,9 @@ function MENU.texts(onScreen, why)
             pcall(SV_SetText, k, v)
         end
     end
-    if onScreen and n > 0 then
+    if onScreen and (n > 0 or next(RELABEL) ~= nil) then
         local ok, m = pcall(relabel, changed)
-        log(string.format("menu: %d text(s) changed (%s), %s on screen", n, tostring(why), ok and tostring(m) or ("? " .. tostring(m))))
+        if n > 0 or not ok or m ~= 0 then log(string.format("menu: %d text(s) changed (%s), %s on screen", n, tostring(why), ok and tostring(m) or ("? " .. tostring(m)))) end
     end
 end
 
@@ -430,12 +440,12 @@ end
 -- Only new managers are looked at (NotifyOnNewObject), each for up to a minute while its list fills; FindAllOf walks
 -- every object in the game (a visible hitch: sv_core.lua svFlags), so it runs only until the first one is found.
 local function isMain(m)
-    if not valid(m) or nameOf(m):find("Default__", 1, true) then return nil end
+    if not liveObj(m) or nameOf(m):find("Default__", 1, true) then return nil end     -- (0.73.73: liveObj, kept)
     local ids, n = listIds(m)
     if ids and n > 0 and ids.CampaignFreeMissionDifficulty then return ids, n end
 end
 local function mainManager()
-    if valid(PG.mgrObj) then
+    if PG.mgrObj ~= nil and liveObj(PG.mgrObj) then           -- (0.73.73: the last main menu's is freed by now)
         local ids, n = isMain(PG.mgrObj)
         if ids then return PG.mgrObj, ids, n end
     end
@@ -444,7 +454,7 @@ local function mainManager()
         local f = PG.fresh[i]
         local ids, n = isMain(f.obj)
         if ids then PG.fresh = {}; return f.obj, ids, n end
-        if not valid(f.obj) or now - f.at > 60 then table.remove(PG.fresh, i) end
+        if not liveObj(f.obj) or now - f.at > 60 then table.remove(PG.fresh, i) end
     end
     if not PG.foundOnce and now - PG.searched > 2 then            -- (one that was there before this script ran)
         PG.searched = now
@@ -580,6 +590,7 @@ function MENU.tick(tick)
     if D ~= MENU.lastD then
         MENU.lastD = D
         if D then
+            RELABEL = {}                                               -- (0.73.73: the main menu's waiting labels: gone with it)
             local m = MENU.mode or "solo"
             local q = (m == "solo") and SOLO or m
             log(string.format("menu: the run plays %s's setup (%s): %s; leaderboard: %s", MODE_NAME[m] or m, profileName(m),

@@ -882,7 +882,9 @@ CFG = {
         -- VOID WATCHER 1 (user, 2026-10-31: "Take off from the airfield as a purchasable ally", "Rename it too VOID
         -- WATCHER 1", "give it's ESM a huge boost in range and have it orbit around the airfield"): Mission 28's E-767
         -- AWACS Magnolia (tools/survival_events.py AWACS_*: its own world-data unit on the E-767's row, MOONCHILD's lead's
-        -- parking spot and scramble, then an orbit 7 km round the airfield, 4.5 km up; it never fights, enemies may
+        -- parking spot and scramble, then an orbit 6 km round the airfield, 4.5 km up (0.73.73: SA's "a circle with a
+        -- 5-7 kilometer radius"; tools/survival_events.py awacs_orbit: a path again, its lead-in started where the
+        -- climb-out leaves it); it never fights, enemies may
         -- hunt it). Its ESM (BP_wp_esm_MS28, a LiveElectronicSupportMeasures field round it; the AI never switches it on
         -- by itself) is fired every esm.every_s while it's airborne (RE_SV_AwacsEsm), each field set to esm.range_m
         -- (stock 3.2 km) for esm.life_s; its fire control's reach esm.capture_m. scale: as MOONCHILD's (health only:
@@ -900,8 +902,10 @@ CFG = {
                          -- its orbit's backstop (user, 2026-10-31: "VOID WATCHER just seems to not loiter around the
                          -- airfield space"): put on its orbit (RE_SV_AwacsOrbit) when its climb-out hasn't ended
                          -- climb_s after takeoff, and again when it's lost_km or more from the airfield (checked every
-                         -- check_s, at most every again_s)
-                         orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 18, check_s = 20, again_s = 60 },
+                         -- check_s, at most every again_s). (0.73.73) RE_SV_AwacsOrbit takes it off its path onto the
+                         -- area orbit round the airport (0.73.62-0.73.72's); lost_km 18 -> 10 (its orbit 6 km out, its
+                         -- lead-in inside it), check_s 20 -> 10
+                         orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 10, check_s = 10, again_s = 60 },
                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
                                    health_max_x = 6.0 } },
         ships        = {
@@ -1206,7 +1210,10 @@ CFG = {
              -- are each player's own, the rest the host's.
              revive = { enabled = true, floor_hp = 0.1, price = 2500, raise = 1.25, safe_s = 5,
                         loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", near_km = 8, drift_km = 10, key = "O", ctrl = false,
-                        camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true } },
+                        camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true,
+                        -- (0.73.73) parked_safe: in co-op your plane is invincible while it's on the ground at your
+                        -- airfield (the world runs on while players are linked: store_keep_world); false: off
+                        parked_safe = true } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
     -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
@@ -1258,9 +1265,9 @@ CFG = {
         chance   = 0.3,
         first    = 4,
         every    = 5,
-        -- (not "spaceport" yet, the Spaceport Assault: untested in game, forced with Ctrl+END in a dev install until a
-        -- test has run it; add it here or in survival.ini's rotation to get it)
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka" },
+        -- ("spaceport", the Spaceport Assault, in the rotation from 0.73.73 (user, 2026-11-02: "install spaceport into the
+        -- new patch"); from its own from_round; its retake comes the round after a lost one)
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka", "spaceport" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
@@ -1550,9 +1557,9 @@ CFG = {
         -- rage (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster"; their round
         -- stays theirs alone, user 2026-10-25, so no escorts; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): one shot down, the
         -- other is enraged: its volleys every rage.volley_every_s (the first first_s on, rage.volley_warn_s in range),
-        -- and from its next pass over the airfield it flies a tighter circuit at the build's faster speed
-        -- (tools/survival_events.py LADON_RAGE: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
-        -- path). false: as before
+        -- and from the end of the arc it's on it goes round its circuit at the build's faster speed
+        -- (tools/survival_events.py LADON_RAGE_SPEED: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
+        -- speed; 0.73.73: the same circle, its old tighter rage circuit was never flown). false: as before
         -- (back on in 0.73.60, user 2026-11-01: "turn the Ladon's back on as well as VOID WATCHER" to test them)
         -- enabled = false (hotfix4, user 2026-11-01: "turn off VOID WATCHER and the LADON Rounds"): no Ladon round
         -- until their paths are fixed in a build (the enraged one's rage circuit isn't followed)
@@ -1561,13 +1568,20 @@ CFG = {
                   -- rage.circuit false (hotfix3): no switch to the rage circuit (RE_SV_LadonRage<Key>). The host's run of
                   -- 2026-10-31 17:43: MISHKA, enraged, took it at its next pass and flew a straight line east, 87 km
                   -- out and below sea level, until it was down: the rage path isn't followed. It keeps its own circuit.
+                  -- (0.73.73: true now only speeds it up round its own circle, LADON_RAGE_SPEED; not yet tried in game)
                   rage = { enabled = true, volley_every_s = 25, volley_warn_s = 0, first_s = 5, circuit = false },
                   volley_every_s = 45, volley_range_km = 8, volley_warn_s = 10, volley_gap_s = 22,
                   -- volley_after_pass false: no VLS volleys once a Ladon has made its first pass over the airfield
                   -- (patch ladon1, 2026-10-31: on its circuit, each volley re-fired its appearance, which sent it
                   -- back onto its route from the far west: "the Ladon decided to leave the map"). Its CIWS / pulse
                   -- cannons and its bombing runs stay. true: as before. pos_log_s: its position in the log every N s.
+                  -- (0.73.73: its appearance's records now run once a spawn, so a fire again can't restart its route;
+                  -- not yet tried with volleys on: true for a test, the log says when it fires again)
                   volley_after_pass = false, pos_log_s = 15,
+                  -- (0.73.73) the backstop: a Ladon leash_km or more from the airfield after its first pass is off its
+                  -- circuit (which keeps it within ~17 km): taken off its path, its unit area onto the airport, where it
+                  -- circles (RE_SV_LadonLeash<Key>), at most every leash_every_s. 0: off
+                  leash_km = 22, leash_every_s = 90,
                   missile_damage = 10, missile_homing_x = 0.85, missile_turn_x = 0.5,
                   reward = 6000, reward_per_round = 200,
                   npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
@@ -2255,7 +2269,12 @@ function presetName()
     if now - presetCache.at > 30 then           -- kept 30 s (Select Difficulty is hidden in Survival's pause menu)
         local dm = FindFirstOf("LiveDifficultyManager")
         local ok, d = pcall(function() return dm.CurrentDifficulty end)
-        presetCache.at, presetCache.name, presetCache.d = now, (ok and CFG.ammo.by_difficulty[d]) or "standard", ok and d or nil
+        if ok and d ~= nil then
+            presetCache.at, presetCache.name, presetCache.d = now, CFG.ammo.by_difficulty[d] or "standard", d
+        else                                    -- (0.73.73) not found (a held walk, or none): the last answer kept, asked
+            presetCache.at = now - 25           -- again in 5 s, not on every call (each ask is a walk over every object)
+            presetCache.name = presetCache.name or "standard"
+        end
     end
     return presetCache.name, presetCache.d
 end

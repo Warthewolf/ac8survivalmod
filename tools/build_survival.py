@@ -645,18 +645,16 @@ def ladon_units(units, used_ids, z, top_number, v):
         u[2][:] = sorted([q for q in u[2] if q[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
                          ('raw', 'Float', struct.pack('<f', radius)))], key=lambda q: q[0])
         u[2][:] = [(q[0], q[1], False, vec(ax * 100000.0, ay * 100000.0, 0.0)) if q[1] == 'SpawnPoint' else q for q in u[2]]
-        far = max(math.dist((ax * 100000.0, ay * 100000.0), pt[:2]) for pt in L['route'] + L['circuit'] + L['rage_route']) / 100.0
+        arc_a, arc_b = L['arc_a_pts'], L['arc_b_pts']
+        far = max(math.dist((ax * 100000.0, ay * 100000.0), pt[:2]) for pt in L['route'] + arc_a + arc_b) / 100.0
         assert far < radius * 0.9, (L['unit'], far, radius)
         # smooth: wide banked turns (players saw sharp flat turns with 1.2 km tangents, 2026-10-23); the route runs on
-        # into the circuit, and the circuit (it ends over the airfield and starts just past it) into itself; the rage
-        # circuit (P7, survival_events.LADON_RAGE: the enraged one's, from its next pass) the same way into itself
-        loop, rage = L['circuit'], L['rage_route']
-        assert rage[0] == loop[0] and rage[-1] == loop[-1], 'the rage circuit starts and ends where the circuit does'
-        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[0]))
-        paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
-        paths.append(make_path(z, used_ids, src_path, L['loop_b'], loop, smooth=True, before=loop[-1], after=loop[0]))
-        paths.append(make_path(z, used_ids, src_path, L['rage'], rage, smooth=True, before=rage[-1], after=rage[0]))
-        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit + rage circuit')
+        # into its circuit's arc A, and each arc (survival_events.ladon_circuit, 0.73.73) into the other along the circle
+        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=arc_a[0]))
+        paths.append(make_path(z, used_ids, src_path, L['arc_a'], arc_a, smooth=True, before=L['a_before'], after=L['a_after']))
+        paths.append(make_path(z, used_ids, src_path, L['arc_b'], arc_b, smooth=True, before=L['b_before'], after=L['b_after']))
+        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit arcs '
+              f'{len(arc_a)} + {len(arc_b)}')
 
 
 def heavy_paths(used_ids, z, v):
@@ -672,9 +670,27 @@ def heavy_paths(used_ids, z, v):
         loop = H['circuit']
         paths.append(make_path(z, used_ids, src_path, H['path'], H['route'], smooth=True, after=loop[0]))
         paths.append(make_path(z, used_ids, src_path, H['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
-    orbit = survival_events.awacs_orbit()            # VOID WATCHER 1's (survival_events.AWACS_*), into itself
-    paths.append(make_path(z, used_ids, src_path, survival_events.AWACS_PATH, orbit, smooth=True, before=orbit[-1],
-                           after=orbit[0]))
+    # VOID WATCHER 1's orbit (survival_events.awacs_orbit, 0.73.73): the lead-in from the climb-out's end, then its arcs,
+    # each into the other; the climb-out's end and way out as survival_events has them
+    se = survival_events
+    for el in paths:
+        f = {p[1]: p[3] for p in el[2]}
+        if f['Name'][1:3] == (se.TAKEOFF_LEAD[2], 0):
+            last = {p[1]: p[3] for p in f['PathPointDescList'][1][-1][2]}
+            pos, tan = struct.unpack('<3d', last['Pos'][2]), struct.unpack('<3d', last['tan'][2])
+            break
+    else:
+        raise LookupError(se.TAKEOFF_LEAD[2])
+    assert math.dist(pos, [c * 100000.0 for c in se.AWACS_CLIMB_END]) < 5000.0, ('AWACS_CLIMB_END', pos)
+    want = math.atan2(se.AWACS_CLIMB_DIR[1], se.AWACS_CLIMB_DIR[0])
+    assert abs(math.remainder(math.atan2(tan[1], tan[0]) - want, 2 * math.pi)) < math.radians(2.0), ('AWACS_CLIMB_DIR', tan)
+    o = se.awacs_orbit()
+    paths.append(make_path(z, used_ids, src_path, se.AWACS_PATH_IN, o['in'], smooth=True, before=o['in_before'],
+                           after=o['in_after']))
+    paths.append(make_path(z, used_ids, src_path, se.AWACS_ARC_B, o['arc_b'], smooth=True, before=o['b_before'],
+                           after=o['b_after']))
+    paths.append(make_path(z, used_ids, src_path, se.AWACS_ARC_A, o['arc_a'], smooth=True, before=o['a_before'],
+                           after=o['a_after']))
     near = sorted({(H['sector'], H['route_km']) for H in hs if H['route_km'] < survival_events.HEAVY_ROUTE_KM})
     print(f'  heavies: {2 * len(hs)} paths ({len(hs)} routes + loops); routes begun nearer: '
           + (', '.join(f'{s} {d:.1f} km' for s, d in near) or 'none'))

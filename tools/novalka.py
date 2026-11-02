@@ -18,12 +18,12 @@ def main(mod):
     p = os.path.join(mod, 'Scripts', 'sv_config.lua')
     s = open(p, encoding='utf-8', newline='').read()
     s = sub(s, 'valka    = { enabled = true,', 'valka    = { enabled = false,', 'sv_config valka')
-    s = sub(s, '"glitch", "valka" }', '"glitch" }', 'sv_config rotation')
+    s = sub(s, '"glitch", "valka", "spaceport" }', '"glitch", "spaceport" }', 'sv_config rotation')
     open(p, 'w', encoding='utf-8', newline='').write(s)
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, valka',
-            ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch', 'ini rotation')
+    s = sub(s, ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, valka, spaceport',
+            ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, spaceport', 'ini rotation')
     s = sub(s, ' glitch (AB.L..IN), valka (VALKA), spaceport', ' glitch (AB.L..IN), spaceport', 'ini note')
     m = re.search(r'\[specials\.valka\][^\[]*', s)
     assert m, 'ini: no [specials.valka]'
@@ -38,7 +38,7 @@ def main(mod):
                 bad.append(os.path.join(d, f))
     assert not bad, f'VALKA files still staged: {bad}'
     lua = open(os.path.join(mod, 'Scripts', 'sv_config.lua'), encoding='utf-8').read()
-    assert 'rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch" }' in lua
+    assert 'rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "spaceport" }' in lua
     print(f'novalka: VALKA switched off and out of the rotation in {mod}; no X-02S container or AC7 sounds staged')
 
 

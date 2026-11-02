@@ -805,7 +805,7 @@ function KILL.side(o, pawnAddr)
 end
 
 function KILL.read(p)
-    if not (CFG.allies.kills and valid(p.obj)) then return end
+    if not (CFG.allies.kills and liveObj(p.obj)) then return end           -- (0.73.73: liveObj: kept between ticks)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     local pa = valid(pawn) and addrOf(pawn) or nil
     local d = {}

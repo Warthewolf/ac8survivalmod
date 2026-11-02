@@ -273,7 +273,8 @@ static struct {
     DownCtl c;
     double lastLog, startAt;
 } DN;
-static int g_dnKnown, g_dnSRoll = 1, g_dnSPitch = 1;     /* the input signs learned (kept for the next DOWN) */
+static int g_dnKnown, g_dnSRoll = DN_PRIOR_ROLL, g_dnSPitch = DN_PRIOR_PITCH;   /* the input signs learned (kept for the next
+                                                       DOWN); before any, AC8's own (0.32.21: down_ctl.c DN_PRIOR_*) */
 static const wchar_t* const kDnPhase[] = { L"starting", L"settling", L"roll probe", L"levelling", L"pitch probe", L"circling" };
 
 static void DownLog(const wchar_t* why)
@@ -282,10 +283,11 @@ static void DownLog(const wchar_t* why)
     int32_t ph = c->phase >= 0 && c->phase <= DN_CIRCLE ? c->phase : 0;
     Log(L"down: %s (%s, %d s): %d m from the centre (radius %d), %d m high (want %d), heading error %d deg, bank %d "
         L"(want %d), climb %d deg; inputs pitch %d, roll %d (x1000); input signs roll %d, pitch %d (rates along the "
-        L"inputs roll %d, pitch %d deg/s; %d flips)", why, kDnPhase[ph],
+        L"inputs roll %d, pitch %d deg/s; %d flips); turning %d deg/s x10 (want %d), pull %d deg/s x10", why, kDnPhase[ph],
         (int32_t)(CoNow() - DN.startAt), (int32_t)c->dist, (int32_t)c->radius, (int32_t)(c->p[2] / 100.0), (int32_t)c->alt,
         (int32_t)c->headErr, (int32_t)c->r[2], (int32_t)c->bankWant, (int32_t)c->gamma, (int32_t)(c->oP * 1000.0),
-        (int32_t)(c->oR * 1000.0), c->sRoll, c->sPitch, (int32_t)c->resp[0], (int32_t)c->resp[1], c->flips);
+        (int32_t)(c->oR * 1000.0), c->sRoll, c->sPitch, (int32_t)c->resp[0], (int32_t)c->resp[1], c->flips,
+        (int32_t)(c->turn * 10.0), (int32_t)(c->turnWant * 10.0), (int32_t)(c->lastPull * 10.0));   /* (0.32.21: the turn and pull) */
 }
 
 static void DownApply(uint8_t* plane, float* out)
@@ -314,6 +316,9 @@ static void DownApply(uint8_t* plane, float* out)
         if (l & DN_FLIPPED_DIVE)
             Log(L"down: pitch input sign flipped to %d: a dive steeper than 40 deg for 10 s didn't pull out; %d flips",
                 DN.c.sPitch, DN.c.flips);
+        else if (l & DN_FLIPPED_CLIMB)                     /* (0.32.21) */
+            Log(L"down: pitch input sign flipped to %d: the climb angle moved against the inputs (%d deg/s along them); %d flips",
+                DN.c.sPitch, (int32_t)DN.c.resp[1], DN.c.flips);
         else if (l & DN_FLIPPED_PITCH)
             Log(L"down: pitch input sign flipped to %d: the plane pitched against the inputs (%d deg/s along them); %d flips",
                 DN.c.sPitch, (int32_t)DN.c.resp[1], DN.c.flips);
@@ -347,6 +352,7 @@ static void DownStop(const wchar_t* why)
 static void FdLog(void);                                /* COOP2MP's fed plane (below) */
 static void FlNetLog(void);                             /* and the other players' real planes (T3) */
 static void FnLog(void);                                /* and their launches (T4b) */
+static void TgtLog(void);                               /* (0.32.21) and the event guard's calls */
 
 /* From OnBuildInput (survival_rt.c), after the game's BuildFlightInput and SV_Invert: DOWN, then the input record. */
 static void FlightInputHook(uint8_t* plane, float* out)
@@ -361,6 +367,7 @@ static void FlightInputHook(uint8_t* plane, float* out)
     FdLog();
     FlNetLog();
     FnLog();
+    TgtLog();
 }
 
 /* SV_Down(plane, cx_cm, cy_cm, alt_m, radius_m) -> 1 (on, or its circle changed when it's on for that plane already: the
@@ -396,7 +403,9 @@ static int L_Down(void* lua)
     Log(L"down: autopilot on plane %p: circling (%d, %d) m at %d m, radius %d m; the plane at (%d, %d) m, %d m high, heading %d, "
         L"bank %d; %s", plane, (int32_t)(cx / 100), (int32_t)(cy / 100), (int32_t)alt, (int32_t)rad, (int32_t)(p[0] / 100),
         (int32_t)(p[1] / 100), (int32_t)(p[2] / 100), (int32_t)r[1], (int32_t)r[2],
-        g_dnKnown ? L"input signs known (checked again in flight)" : L"learning the input signs first (about 5 s of small roll and pitch inputs)");
+        g_dnKnown ? L"input signs known (checked again in flight)"
+        : p[2] / 100.0 < DN_PROBE_MIN_M ? L"low: circling at once on AC8's input signs (roll +1, pitch -1), checked in flight"
+        : L"learning the input signs first (about 5 s of small roll and pitch inputs; AC8's roll +1, pitch -1 kept if they tell nothing)");
     return Ret(lua, 1);
 }
 
@@ -1549,6 +1558,41 @@ static int L_ObjChain(void* lua)
     return Ret(lua, UObjChainLive(o));
 }
 
+/* ---- whether the engine is freeing objects (runtime 0.32.21) ------------------------------------------------------
+ * UE 5.4's IsIncrementalPurgePending(): GObjIncrementalPurgeIsInProgress || GObjPurgeIsRequired, both read by
+ * IncrementalPurgeGarbage's early-out (sigs.h kSigPurgeGarbage; 0x1419c8590 in the 2026-11-02 build, the flags at
+ * 0x14e41bae0 / 0x14e41bae8). While either is set, objects destroyed are waiting to be freed (or being freed on the async
+ * purge thread): Scripts/sv_core.lua walkHold holds its FindAllOf walks then (crash 2c of 2026-11-01: UE4SS's FindAllOf
+ * reading a freed object right after mass destruction). SV_GcBusy() -> 1 busy, 0 not, -1 the flags weren't found. */
+static uint8_t*          g_fPurgeGarbage;                   /* found by FindFunctions */
+static volatile uint8_t* g_gcPurgeRequired;
+static volatile uint8_t* g_gcPurgeInProgress;
+
+static void GcFind(void)
+{
+    uint8_t* f = g_fPurgeGarbage;
+    if (!f || f[0x2d] != 0x0F || f[0x2e] != 0xB6 || f[0x2f] != 0x05 || f[0x38] != 0x38 || f[0x39] != 0x05) {
+        Log(L"guard: the engine's purge flags weren't found (IncrementalPurgeGarbage %p; another game build?): SV_GcBusy answers -1", f);
+        return;
+    }
+    uint8_t* req = RipRel(f + 0x2d, 7);
+    uint8_t* inProg = RipRel(f + 0x38, 6);
+    if (!InGame(req) || !InGame(inProg) || !Readable(req, 1) || !Readable(inProg, 1)) {
+        Log(L"guard: the engine's purge flags %p / %p aren't the game's data: SV_GcBusy answers -1", req, inProg);
+        return;
+    }
+    g_gcPurgeRequired = req;
+    g_gcPurgeInProgress = inProg;
+    Log(L"guard: the engine's purge flags: purge required at %p (now %d), incremental purge in progress at %p (now %d), from "
+        L"IncrementalPurgeGarbage %p: SV_GcBusy", req, (int32_t)*req, inProg, (int32_t)*inProg, f);
+}
+
+static int L_GcBusy(void* lua)
+{
+    if (!g_gcPurgeRequired || !g_gcPurgeInProgress) return Ret(lua, -1);
+    return Ret(lua, (*g_gcPurgeRequired || *g_gcPurgeInProgress) ? 1 : 0);
+}
+
 static void UoFind(void)
 {
     if (!g_fTargetCheck || g_fTargetCheck[0xe0] != 0xE8) { Log(L"guard: GUObjectArray not found (another game build?): liveness by flags only"); return; }
@@ -1669,31 +1713,81 @@ static void Ufx2Install(void)
  * Alyssa's game, 2026-10-31 00:50 on 0.73.37, crashed in class 0x147454050's, NULL + 0x898, seconds after 13 enemy copies
  * were taken down and their flights spawned again), and every guarded check runs through ScCall4 (safecall.h): a fault
  * inside it comes back as "not a target", logged, instead of taking the game down. */
+/* Runtime 0.32.21: what the family is, and every event's objects. The "target entries" are the game's EVENTS
+ * (FLive*Event: slot 1 answers the event type, a trigger's EventType) and slot +0x60 is their Match(event, trigger, a, b):
+ * the event processor (0x147420eb0 in the 2026-11-02 build) runs a ParallelFor over the triggers of the event's type,
+ * and the per-trigger check (0x1474210c0, 0x147435060 before the update: active, LifeCount, MonitorEvents, priority)
+ * calls the event's Match (at 0x1474211cc); tools/re/UNIQUE_ACTIONS.md 7. The co-op host's crash of 2026-11-01 10:24
+ * (0.73.70, the testers' session S1) was EnemyBehind's Match (type 0x1b; vtable 0x14cb62be8, Match 0x14742ced0 in the
+ * 2026-11-02 build, 0x147440b60 before) at +0xc7, just after `call [rax+0xcb0]`: its victim (+0x18) a co-op player's
+ * real plane, its chaser (+0x20) an AI game object already freed (IsA LiveAIGameObject still true, its first 8 bytes a
+ * heap pointer, the allocator's free list: the "vtable" slot read 0, rip 0). Events are queued as shared pointers
+ * holding raw object pointers the GC doesn't see, so one can outlive what it names. 0.32.20's scan never saw that class:
+ * it overrides base slot +0x50 (its debug text). Now the family is the vtables sharing three base slots that answer an
+ * event type (slot 1: `mov al, imm8; ret`; 151 in the 2026-11-02 build, each its own type), a guarded function is
+ * hooked in every vtable that holds it, and a fourth kind: a Match that loads an event object (+0x18..+0x30) and tests
+ * it as a UObject or calls through it (uobj.h UoEventObjs; 23 classes besides the first, EnemyBehind's +0x18 and +0x20
+ * among them) answers "no match" for an event whose object is freed (UObjAllocated: not the garbage test, so an event
+ * about an object that still exists is matched as the game would). Those reads are the event's own fields and
+ * GUObjectArray, before the game's check runs; ScCall4 (a context capture a call) stays where 0.32.20 had it: the first
+ * class, the weak-actor and the world classes, whose faults are inside the game's check. A class of event objects
+ * alone calls its check straight on: its Match runs per trigger per event on the workers, EnemyBehind's every frame. */
 #include "safecall.h"
 typedef uint8_t (*TargetCheckFn)(uint8_t* entry, void* query, void* a, void* b);
-#define TC_MAX 48                                           /* (classes guarded: 4 by their fields, ~20 by the world) */
-#define TC_SCAN_MAX 256                                     /* (vtables of the family looked at; the game has 151) */
+#define TC_MAX 64                                           /* (functions guarded: 37 in the 2026-11-02 build) */
+#define TC_SCAN_MAX 256                                     /* (vtables of the family looked at; the game has 152) */
+#define TCK_FIRST 1                                         /* the class with the game object (+0x18) and actor (+0x28) */
+#define TCK_WEAK  2                                         /* its +0x20 weak actor used unchecked */
+#define TCK_WORLD 4                                         /* its unit's world passed on unchecked */
+#define TCK_OBJS  8                                         /* event objects (g_tcObjs) used as UObjects */
+#define TCK_CATCH (TCK_FIRST | TCK_WEAK | TCK_WORLD)        /* (these through ScCall4) */
+#define TC_SAMPLE 64                                        /* (the call count: one call in about this many) */
 static TargetCheckFn g_tcNext[TC_MAX];
-static uint8_t       g_tcFirst[TC_MAX];                     /* the class with the game object (+0x18) and actor (+0x28) */
-static uint8_t       g_tcKind[TC_MAX];                      /* 0 the first class, 1 its +0x20 weak actor unchecked, 2 the world */
+static uint8_t       g_tcKind[TC_MAX];                      /* TCK_* bits */
+static uint8_t       g_tcObjs[TC_MAX];                      /* TCK_OBJS: bit (offset >> 3) of each object field */
+static int16_t       g_tcType[TC_MAX];                      /* the event type (slot 1's answer), -1 not known: the log's */
+/* calls through the guard, sampled (an event and trigger pair whose address bits 4-9 are 0: about 1 in TC_SAMPLE), each
+ * class on its own cache line: the workers seldom write and never to a line another class's counter shares */
+typedef struct { _Alignas(64) volatile uint32_t n; } TcCount;
+static TcCount       g_tcCalls[TC_MAX];
 static uint8_t*      g_fWorldOf;                            /* found by FindFunctions (sigs.h kSigWorldOf) */
 static int           g_scReady;
 static volatile int32_t g_tgtFaults;
-static void**        g_tcSlot[TC_MAX];
 static int           g_tcN;
-static volatile int32_t g_tgtSkipped;
+static volatile int32_t g_tgtSkipped, g_evSkipped;
 
 static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
 {
+    if (!((((uintptr_t)entry ^ (uintptr_t)query) >> 4) & (TC_SAMPLE - 1))) g_tcCalls[i].n = g_tcCalls[i].n + 1;
+    uint8_t kind = g_tcKind[i];
     const wchar_t* why = NULL;
-    if (entry && g_tcFirst[i]) {                           /* (its weak actor it tests itself: 0x147443cb0) */
+    const uint8_t* obj = NULL;
+    int off = 0;
+    if (entry && (kind & TCK_FIRST)) {                     /* (its weak actor it tests itself: 0x147443cb0) */
         uint8_t* go    = *(uint8_t**)(entry + 0x18);
         uint8_t* actor = *(uint8_t**)(entry + 0x28);
         if (go && UObjLive(go) == 0) why = L"its game object isn't live";
         else if (actor && UObjLive(actor) == 0) why = L"its actor isn't live";
-    } else if (entry && g_tcKind[i] == 1) {                /* (only these hold a weak pointer at +0x20) */
-        const uint8_t* w = entry + 0x20;
-        if (*(const int32_t*)(w + 4) && UWeakLive(w) == 0) why = L"its actor's weak pointer resolves to nothing";
+    } else if (entry) {
+        if (kind & TCK_WEAK) {                             /* (only these hold a weak pointer at +0x20) */
+            const uint8_t* w = entry + 0x20;
+            if (*(const int32_t*)(w + 4) && UWeakLive(w) == 0) why = L"its actor's weak pointer resolves to nothing";
+        }
+        for (int s = 3; !why && s <= 6; ++s) {             /* (0.32.21) the event's objects: freed ones */
+            if (!(g_tcObjs[i] & (1u << s))) continue;
+            const uint8_t* o = *(const uint8_t* const*)(entry + s * 8);
+            if (o && UObjAllocated(o) == 0) { why = L"freed"; off = s * 8; obj = o; }
+        }
+    }
+    if (off) {
+        int32_t n = __atomic_add_fetch(&g_evSkipped, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0)) {
+            Log(L"guard: an event of type %d not matched: its object at +0x%x (%p) was freed (class %d of %d, event %p; %d so far)",
+                (int32_t)g_tcType[i], (uint32_t)off, (void*)obj, i + 1, g_tcN, entry, n);
+            Crumb(L"guard: event type %d not matched, its +0x%x object %p freed (event %p; %d so far)", (int32_t)g_tcType[i],
+                  (uint32_t)off, (void*)obj, entry, n);
+        }
+        return 0;
     }
     if (why) {
         int32_t n = __atomic_add_fetch(&g_tgtSkipped, 1, __ATOMIC_RELAXED);
@@ -1704,6 +1798,7 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
         }
         return 0;
     }
+    if (!(kind & TCK_CATCH)) return g_tcNext[i](entry, query, a, b);   /* (event objects alone: no fault catcher) */
     int faulted = 0;
     void* fa = NULL;
     uint64_t at = 0;
@@ -1711,10 +1806,11 @@ static uint8_t TcCheck(int i, uint8_t* entry, void* query, void* a, void* b)
     if (faulted) {
         int32_t n = __atomic_add_fetch(&g_tgtFaults, 1, __ATOMIC_RELAXED);
         if (n <= 4 || (n < 100000 && (n & (n - 1)) == 0)) {
-            Log(L"guard: a weapon's target search caught a fault in an entry check (class %d of %d, its check %p: at %p reading "
-                L"%p): answered not a target (%d so far)", i + 1, g_tcN, (void*)g_tcNext[i], fa, (void*)(uintptr_t)at, n);
-            Crumb(L"guard: target check fault caught, class %d (%p) at %p reading %p, entry %p (%d so far)", i + 1,
-                  (void*)g_tcNext[i], fa, (void*)(uintptr_t)at, entry, n);
+            Log(L"guard: a weapon's target search caught a fault in an entry check (class %d of %d, event type %d, its check %p: "
+                L"at %p reading %p): answered not a target (%d so far)", i + 1, g_tcN, (int32_t)g_tcType[i], (void*)g_tcNext[i], fa,
+                (void*)(uintptr_t)at, n);
+            Crumb(L"guard: target check fault caught, class %d (%p, event type %d) at %p reading %p, entry %p (%d so far)", i + 1,
+                  (void*)g_tcNext[i], (int32_t)g_tcType[i], fa, (void*)(uintptr_t)at, entry, n);
         }
     }
     return r;
@@ -1726,6 +1822,8 @@ TC_THUNK(16) TC_THUNK(17) TC_THUNK(18) TC_THUNK(19) TC_THUNK(20) TC_THUNK(21) TC
 TC_THUNK(24) TC_THUNK(25) TC_THUNK(26) TC_THUNK(27) TC_THUNK(28) TC_THUNK(29) TC_THUNK(30) TC_THUNK(31)
 TC_THUNK(32) TC_THUNK(33) TC_THUNK(34) TC_THUNK(35) TC_THUNK(36) TC_THUNK(37) TC_THUNK(38) TC_THUNK(39)
 TC_THUNK(40) TC_THUNK(41) TC_THUNK(42) TC_THUNK(43) TC_THUNK(44) TC_THUNK(45) TC_THUNK(46) TC_THUNK(47)
+TC_THUNK(48) TC_THUNK(49) TC_THUNK(50) TC_THUNK(51) TC_THUNK(52) TC_THUNK(53) TC_THUNK(54) TC_THUNK(55)
+TC_THUNK(56) TC_THUNK(57) TC_THUNK(58) TC_THUNK(59) TC_THUNK(60) TC_THUNK(61) TC_THUNK(62) TC_THUNK(63)
 static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc2, (void*)OnTc3, (void*)OnTc4,
                                          (void*)OnTc5, (void*)OnTc6, (void*)OnTc7, (void*)OnTc8, (void*)OnTc9,
                                          (void*)OnTc10, (void*)OnTc11, (void*)OnTc12, (void*)OnTc13, (void*)OnTc14,
@@ -1735,7 +1833,10 @@ static void* const g_tcThunk[TC_MAX] = { (void*)OnTc0, (void*)OnTc1, (void*)OnTc
                                          (void*)OnTc30, (void*)OnTc31, (void*)OnTc32, (void*)OnTc33, (void*)OnTc34,
                                          (void*)OnTc35, (void*)OnTc36, (void*)OnTc37, (void*)OnTc38, (void*)OnTc39,
                                          (void*)OnTc40, (void*)OnTc41, (void*)OnTc42, (void*)OnTc43, (void*)OnTc44,
-                                         (void*)OnTc45, (void*)OnTc46, (void*)OnTc47 };
+                                         (void*)OnTc45, (void*)OnTc46, (void*)OnTc47, (void*)OnTc48, (void*)OnTc49,
+                                         (void*)OnTc50, (void*)OnTc51, (void*)OnTc52, (void*)OnTc53, (void*)OnTc54,
+                                         (void*)OnTc55, (void*)OnTc56, (void*)OnTc57, (void*)OnTc58, (void*)OnTc59,
+                                         (void*)OnTc60, (void*)OnTc61, (void*)OnTc62, (void*)OnTc63 };
 
 /* whether a class's check uses the entry's +0x20 weak actor unchecked: some `lea rcx, [reg+0x20]; call Get` (the game's
  * FWeakObjectPtr::Get, g_tcWeakGet) in its first 0x800 bytes with no `test rax, rax` in the 16 bytes after it and no
@@ -1757,25 +1858,52 @@ static int TcWeakUnchecked(const uint8_t* f)
     return 0;
 }
 
-/* whether a class's check passes its unit's world on unchecked: `call <world getter>; mov rcx, rax; call` inside the
- * function (its bounds from the exe's unwind table; else its first 0x800 bytes) */
-static int TcWorldUnchecked(const uint8_t* f)
+/* the end of the function starting at f: the exe's unwind table, else f + 0x800 */
+static const uint8_t* TcFnEnd(const uint8_t* f)
 {
-    if (!g_fWorldOf) return 0;
-    const uint8_t* end = f + 0x800;
     typedef struct { uint32_t begin, end, unwind; } RtFn;
     static RtFn* (*lookup)(uint64_t pc, uint64_t* base, void* hist);
     if (!lookup) lookup = (RtFn* (*)(uint64_t, uint64_t*, void*))GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "RtlLookupFunctionEntry");
     uint64_t base = 0;
     RtFn* rf = lookup ? lookup((uint64_t)(uintptr_t)f, &base, NULL) : NULL;
-    if (rf && base && base + rf->begin == (uint64_t)(uintptr_t)f) end = (const uint8_t*)(uintptr_t)(base + rf->end);
+    if (rf && base && base + rf->begin == (uint64_t)(uintptr_t)f) return (const uint8_t*)(uintptr_t)(base + rf->end);
+    return f + 0x800;
+}
+
+/* whether a class's check passes its unit's world on unchecked: `call <world getter>; mov rcx, rax; call` inside the
+ * function (its bounds from the exe's unwind table; else its first 0x800 bytes) */
+static int TcWorldUnchecked(const uint8_t* f)
+{
+    if (!g_fWorldOf) return 0;
+    const uint8_t* end = TcFnEnd(f);
     for (const uint8_t* p = f; p + 9 <= end && InGame(p + 9); ++p)
         if (p[0] == 0xE8 && Rel32((uint8_t*)p) == g_fWorldOf && p[5] == 0x48 && p[6] == 0x8B && p[7] == 0xC8 && p[8] == 0xE8) return 1;
     return 0;
 }
 
-/* the family's vtables: the first class's (whose slot +0x60 is kSigTargetCheck), then every other with its base slots */
-typedef struct { uint64_t base[4]; void** vt[TC_SCAN_MAX]; int n; } TcScan;
+/* (0.32.21) the event objects a class's check uses (uobj.h UoEventObjs over its code) */
+static uint8_t TcEventObjs(const uint8_t* f)
+{
+    const uint8_t* end = TcFnEnd(f);
+    if (end <= f || !InGame(end + 0x48)) return 0;
+    return (uint8_t)UoEventObjs(f, (size_t)(end - f), g_exe, g_exe + g_exeSize);
+}
+
+/* the event type a vtable's slot 1 answers (`mov al, imm8; ret`), -1 if it isn't that */
+static int TcType(void** vt)
+{
+    const uint8_t* s1 = (const uint8_t*)vt[1];
+    return InGame(s1) && s1[0] == 0xB0 && s1[2] == 0xC3 ? s1[1] : -1;
+}
+
+/* the family's vtables: the first class's (whose slot +0x60 is kSigTargetCheck), then every other with its base slots
+ * (0.32.21: three, +0x00 +0x18 +0x28; EnemyBehind's +0x50 is its own) */
+/* (0.32.21) a vtable is an event class's when it shares those three slots AND answers an event type (its slot 1, the
+ * type getter: `mov al, imm8; ret`): 152 vtables share the slots in the 2026-11-02 build, 151 answer a type, each its
+ * own; the other (0x14c577918, its +0x60 a stub) isn't looked at. A sibling class sharing the slots without a type
+ * getter is never hooked. The counts go to the log: those sharing the 3 slots, those keeping +0x50 too (0.32.20's
+ * rule), those with a type getter, the distinct types. */
+typedef struct { uint64_t base[4]; void** vt[TC_SCAN_MAX]; int n, n3, n50, nType, nDistinct; uint32_t seen[8]; } TcScan;
 static const int kTcBase[4] = { 0x00, 0x18, 0x28, 0x50 };
 static void TcScanRegion(uint8_t* p, size_t n, void* vctx)
 {
@@ -1784,10 +1912,37 @@ static void TcScanRegion(uint8_t* p, size_t n, void* vctx)
     for (; a + 0x68 <= p + n && c->n < TC_SCAN_MAX; a += 8) {
         if (*(uint64_t*)a != c->base[0]) continue;
         int same = 1;
-        for (int k = 1; k < 4 && same; ++k) same = *(uint64_t*)(a + kTcBase[k]) == c->base[k];
+        for (int k = 1; k < 3 && same; ++k) same = *(uint64_t*)(a + kTcBase[k]) == c->base[k];
         uint8_t* f = *(uint8_t**)(a + 0x60);
-        if (same && InGame(f)) c->vt[c->n++] = (void**)a;
+        if (!same || !InGame(f)) continue;
+        ++c->n3;
+        if (*(uint64_t*)(a + 0x50) == c->base[3]) ++c->n50;
+        int type = TcType((void**)a);
+        if (type < 0) continue;                            /* (not an event class: never hooked) */
+        ++c->nType;
+        if (!(c->seen[type >> 5] & (1u << (type & 31)))) { c->seen[type >> 5] |= 1u << (type & 31); ++c->nDistinct; }
+        c->vt[c->n++] = (void**)a;
     }
+}
+
+/* a vtable slot pointed at the guard: one aligned 8-byte store (worker threads may read it at any time) */
+static int TcSetSlot(void** slot, void* fn)
+{
+    DWORD old = 0, ignored = 0;
+    if (((uintptr_t)slot & 7) || !VirtualProtect(slot, 8, PAGE_READWRITE, &old)) return 0;
+    __atomic_store_n(slot, fn, __ATOMIC_SEQ_CST);
+    VirtualProtect(slot, 8, old, &ignored);
+    return 1;
+}
+
+static void TcAppend(wchar_t* buf, size_t cap, const wchar_t* fmt, ...)
+{
+    size_t n = WLen(buf);
+    if (n + 2 >= cap) return;
+    va_list ap;
+    va_start(ap, fmt);
+    VFmt(buf + n, cap - n, fmt, ap);
+    va_end(ap);
 }
 
 static void TgtInstall(void)
@@ -1811,34 +1966,82 @@ static void TgtInstall(void)
         c.base[k] = *(uint64_t*)(vtA + kTcBase[k]);
         if (!InGame((void*)(uintptr_t)c.base[k])) { Log(L"guard: the target entries' vtable %p isn't the expected shape: not guarded", vtA); return; }
     }
+    if (TcType((void**)vtA) < 0) { Log(L"guard: the target entries' vtable %p answers no event type: not guarded", vtA); return; }
     for (int s = 0; s < g_nsec && c.n < TC_SCAN_MAX; ++s)
         if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, TcScanRegion, &c);
-    int alone = 0, kinds[3] = { 0, 0, 0 };
-    for (int i = 0; i < c.n && g_tcN < TC_MAX; ++i) {
+    Log(L"guard: the event family: %d vtables share its 3 base slots, %d of them its +0x50 too, %d answer an event type (%d "
+        L"distinct): those %d looked at, %d not", c.n3, c.n50, c.nType, c.nDistinct, c.n, c.n3 - c.n);
+    /* (0.32.21) one guard index a Match function, hooked in every vtable holding it */
+    static void* fns[TC_SCAN_MAX];
+    static int8_t idxOf[TC_SCAN_MAX];
+    static wchar_t objsList[600];
+    int nf = 0, alone = 0, slots = 0, kinds[4] = { 0, 0, 0, 0 };
+    objsList[0] = 0;
+    for (int i = 0; i < c.n; ++i) {
         void** slot = (void**)((uint8_t*)c.vt[i] + 0x60);
-        int dup = 0;
-        for (int j = 0; j < g_tcN; ++j) dup |= g_tcSlot[j] == slot;
-        if (dup) continue;
-        const uint8_t* fn = (const uint8_t*)*slot;
-        int kind = (uint8_t*)c.vt[i] == vtA ? 0 : TcWeakUnchecked(fn) ? 1 : (g_scReady && TcWorldUnchecked(fn)) ? 2 : -1;
-        if (kind < 0) {
-            ++alone;
-            continue;
+        void* fn = *slot;
+        int j = 0;
+        while (j < nf && fns[j] != fn) ++j;
+        if (j == nf) {                                     /* a function not seen yet: which kinds it is */
+            fns[nf] = fn; idxOf[nf] = -1; ++nf;
+            const uint8_t* f = (const uint8_t*)fn;
+            int kind = (uint8_t*)c.vt[i] == vtA ? TCK_FIRST : 0;
+            uint8_t objs = 0;
+            if (!kind) {
+                if (TcWeakUnchecked(f)) kind |= TCK_WEAK;
+                if (g_scReady && TcWorldUnchecked(f)) kind |= TCK_WORLD;
+                objs = TcEventObjs(f);
+                if (objs) kind |= TCK_OBJS;
+            }
+            if (!kind) { ++alone; continue; }
+            if (g_tcN >= TC_MAX) continue;
+            int k = g_tcN++;
+            g_tcNext[k] = (TargetCheckFn)fn;               /* (set before any slot points at the guard) */
+            g_tcKind[k] = (uint8_t)kind;
+            g_tcObjs[k] = objs;
+            g_tcType[k] = (int16_t)TcType(c.vt[i]);
+            idxOf[j] = (int8_t)k;
+            for (int b = 0; b < 4; ++b) kinds[b] += (kind >> b) & 1;
+            if (objs) {
+                TcAppend(objsList, 600, L"%s%d", objsList[0] ? L", " : L"", (int32_t)g_tcType[k]);
+                for (int s = 3; s <= 6; ++s) if (objs & (1u << s)) TcAppend(objsList, 600, L" +0x%x", (uint32_t)(s * 8));
+            }
         }
-        int k = g_tcN;
-        g_tcNext[k]  = (TargetCheckFn)*slot;                /* (set before the slot points at the guard) */
-        g_tcFirst[k] = (uint8_t*)c.vt[i] == vtA;
-        g_tcKind[k]  = (uint8_t)kind;
-        ++kinds[kind];
-        g_tcSlot[k]  = slot;
-        g_tcN = k + 1;
-        void* prev = NULL;
-        if (!HookSlot(slot, g_tcThunk[k], &prev, g_tcFirst[k] ? L"guard: target entry check (class with game object)" : L"guard: target entry check"))
-            g_tcN = k;
+        int k = idxOf[j];
+        if (k < 0) continue;
+        if (TcSetSlot(slot, g_tcThunk[k])) ++slots;
+        else Log(L"guard: the event check slot %p (class %d) couldn't be written: not guarded there", (void*)slot, k + 1);
     }
-    Log(L"guard: %d target entry classes guarded (the first %d, a weak actor unchecked %d, the world unchecked %d; %d vtables of "
-        L"the family, %d left alone%s)", g_tcN, kinds[0], kinds[1], kinds[2], c.n, alone,
+    int caught = 0;
+    for (int k = 0; k < g_tcN; ++k) caught += (g_tcKind[k] & TCK_CATCH) != 0;
+    Log(L"guard: %d target entry classes guarded in %d vtable slots (the first %d, a weak actor unchecked %d, the world unchecked %d, "
+        L"event objects checked %d; %d through the fault catcher, %d called straight on; %d event vtables, %d functions, %d left "
+        L"alone%s)", g_tcN, slots, kinds[0], kinds[1], kinds[2], kinds[3], caught, g_tcN - caught, c.n, nf, alone,
         c.n >= TC_SCAN_MAX ? L"; more not looked at" : (g_tcN >= TC_MAX ? L"; TC_MAX reached" : L""));
+    Log(L"guard: the event types whose objects are checked (type +offsets): %s", objsList[0] ? objsList : L"none");
+}
+
+/* (0.32.21) every 5 minutes in the mission (from FlightInputHook): how busy the guarded checks were (the guard's cost) */
+static void TgtLog(void)
+{
+    static double next;
+    if (!g_tcN) return;
+    double now = CoNow();
+    if (next <= 0) { next = now + 300.0; return; }
+    if (now < next) return;
+    next = now + 300.0;
+    uint32_t total = 0, top = 0;
+    int topI = 0;
+    for (int i = 0; i < g_tcN; ++i) {
+        uint32_t n = g_tcCalls[i].n * TC_SAMPLE;           /* (sampled: about 1 call in TC_SAMPLE counted) */
+        g_tcCalls[i].n = 0;
+        total += n;
+        if (n > top) { top = n; topI = i; }
+    }
+    Log(L"guard: the guarded event checks, the last 5 minutes: about %u calls (%u a second; the busiest class %d, event type %d, "
+        L"about %u, %s); so far events not matched for a freed object %d, gone units' entries skipped %d, faults caught %d", total,
+        total / 300u, topI + 1, (int32_t)g_tcType[topI], top, (g_tcKind[topI] & TCK_CATCH) ? L"through the fault catcher" : L"called straight on",
+        g_evSkipped, g_tgtSkipped, g_tgtFaults);
 }
 
 /* ---- The STORE freeze (runtime 0.32.20; tools/re/STORE_FREEZE.md) ----------------------------------------------------

@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.20"
-#define RT_VERSION_A         "0.32.20"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.21"
+#define RT_VERSION_A         "0.32.21"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3161,7 +3161,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopBind", L_CoopBind }, { "SV_CoopPeerAt", L_CoopPeerAt }, { "SV_CoopReset", L_CoopReset },
         { "SV_CoopSpawnPP", L_CoopSpawnPP }, { "SV_CoopKillPP", L_CoopKillPP }, { "SV_CoopFollow", L_CoopFollow },
         { "SV_CoopPPRole", L_CoopPPRole }, { "SV_CoopFeed", L_CoopFeed }, { "SV_CoopPPFx", L_CoopPPFx },
-        { "SV_CoopFire", L_CoopFire }, { "SV_CoopShots", L_CoopShots }, { "SV_CoopPPShot", L_CoopPPShot }, { "SV_CoopPeerIds", L_CoopPeerIds }, { "SV_CoopSwapPP", L_CoopSwapPP }, { "SV_ObjChain", L_ObjChain }, { "SV_StoreKeepAI", L_StoreKeepAI },
+        { "SV_CoopFire", L_CoopFire }, { "SV_CoopShots", L_CoopShots }, { "SV_CoopPPShot", L_CoopPPShot }, { "SV_CoopPeerIds", L_CoopPeerIds }, { "SV_CoopSwapPP", L_CoopSwapPP }, { "SV_ObjChain", L_ObjChain }, { "SV_StoreKeepAI", L_StoreKeepAI }, { "SV_GcBusy", L_GcBusy },
         { "SV_CoopLoadout", L_CoopLoadout }, { "SV_SpawnCam", L_SpawnCam }, { "SV_StickNow", L_StickNow }, { "SV_PPName", L_PPName }, { "SV_CoopPaint", L_CoopPaint }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
@@ -3305,6 +3305,7 @@ static void FindFunctions(void)
         { kSigUnitFx2Frame,     kSigUnitFx2FrameMask, sizeof(kSigUnitFx2Frame), NULL, 0 },
         { kSigMgDeactivate,     kSigMgDeactivateMask, sizeof(kSigMgDeactivate), NULL, 0 },
         { kSigMgRestore,        kSigMgRestoreMask, sizeof(kSigMgRestore), NULL, 0 },
+        { kSigPurgeGarbage,     kSigPurgeGarbageMask, sizeof(kSigPurgeGarbage), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3367,6 +3368,7 @@ static void FindFunctions(void)
     g_fUnitFx2Frame     = p[61].hit;
     g_fMgDeactivate     = p[62].hit;                    /* (the STORE freeze: flight.c) */
     g_fMgRestore        = p[63].hit;
+    g_fPurgeGarbage     = p[64].hit;                    /* (runtime 0.32.21: SV_GcBusy, flight.c) */
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3415,6 +3417,7 @@ static int Install(void)
     if (g_fRemoteUpdate && HookInline(g_fRemoteUpdate, 18, (void*)OnRemoteUpdate, (void**)&g_nextRemoteUpdate, L"remote player plane update")) {}
     else Log(L"remote player plane update not found; SV_CoopFeed does nothing (COOP2MP)");
     UoFind();                                              /* (GUObjectArray, for the guards' liveness check: flight.c) */
+    GcFind();                                              /* (the engine's purge flags, SV_GcBusy: flight.c) */
     UfxInstall();                                          /* (the AI unit effect guard: flight.c) */
     Ufx2Install();                                         /* (its second update's, +0x42c0: flight.c) */
     TgtInstall();                                          /* (the target search guard: flight.c) */

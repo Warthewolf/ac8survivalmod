@@ -257,7 +257,7 @@ end
 -- TAC.reset). Each one's stock value is read from the aircraft once, before Survival changes it.
 do
 local function activator(pawn)
-    if valid(UP.act) and UP.actPawn == addrOf(pawn) then return UP.act end
+    if liveObj(UP.act) and UP.actPawn == addrOf(pawn) then return UP.act end   -- (0.73.73: liveObj: kept between ticks)
     UP.act, UP.actPawn = nil, nil
     local pa = addrOf(pawn)
     for _, a in ipairs(FindAllOf("LivePlayerWeaponActivator") or {}) do

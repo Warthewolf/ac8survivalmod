@@ -555,6 +555,86 @@ check(evs("^RE_SV_LadonRage") == "" and not s.units.Mishka.rage, "rage off: KOT 
 LA.rage.enabled = true
 check(mirroredEvent("RE_SV_LadonRageMishka"), "co-op: RE_SV_LadonRage<Key> forwarded (harmless: the copies follow the stream)")
 
+-- (0.73.73) the circuit's passes, the backstop and the appearance's mark (tools/survival_events.py build_ladon: the
+-- circuit's two arcs, RE_SV_LadonLeash<Key>, SV_LadonDone<Key> / RE_SV_LadonRearm<Key>, SV_LadonSeen<Key>)
+print("a Ladon's circuit, its backstop and its appearance's mark (0.73.73)")
+do
+    local function put(o, km) o.at = { X = AIRFIELD.X + km * 100000, Y = AIRFIELD.Y, Z = 150000 } end
+    check(LA.leash_km == 22 and LA.leash_every_s == 90 and LA.volley_after_pass == false,
+          "CFG: leash_km 22, leash_every_s 90, volley_after_pass still false")
+    local B = 100                                             -- (the round clock well on: a first pass's 30 s)
+    s = ladonRound()
+    FLAGS.SV_LadonSeenKot = 1                                 -- (its spawn's own fire of its appearance)
+    put(kot, 40); put(mishka, 40)
+    tickL(B + 0, B + 9)
+    FLAGS.SV_LadonRunKot = 1; put(kot, 0.3)                   -- its route's end over the airfield
+    tickL(B + 10, B + 10)
+    local K = s.units.Kot
+    check(K.passes == 1 and line("special: Ladon KOT's pass over the airfield (1)") ~= nil, "its route's end: pass 1 (SV_LadonRun)")
+    put(kot, 16); tickL(B + 11, B + 50)                        -- round its circuit, 16 km out
+    put(kot, 1.0); tickL(B + 51, B + 53)
+    check(K.passes == 2 and has(line("special: Ladon KOT's pass over the airfield"), "(1)"),
+          "back over the airfield after 16 km out: pass 2, by distance (its flag still 1)")
+    FLAGS.SV_LadonRunKot = 2; tickL(B + 54, B + 70)            -- (an old circuit's end, 3 s after that pass)
+    check(K.passes == 2 and line("special: Ladon KOT's pass flag 1 -> 2 3 s after a pass counted: the same pass") ~= nil,
+          "a pass flag up 3 s after a counted pass: the same pass, not counted again (A19 12:02:34)")
+    FLAGS.SV_LadonLegKot = 3
+    K.posAt = nil
+    tickL(B + 71, B + 71)
+    check(has(line("special: Ladon KOT at "), "pass flag 2, legs 3, passes 2"), "its position line: pass flag, legs, passes ("
+          .. tostring(line("special: Ladon KOT at ")) .. ")")
+    local l0 = count("^RE_SV_LadonLeashKot")
+    put(kot, 25); s.nextAt = nil; tickL(B + 72, B + 72)
+    check(count("^RE_SV_LadonLeashKot") == l0 + 1
+          and has(line("special: Ladon KOT 25.0 km from the airfield after 2 pass(es), off its circuit (legs 3)"), "RE_SV_LadonLeashKot fired; 1 so far"),
+          "25 km out after its passes: off its path, its area onto the airport (RE_SV_LadonLeashKot), logged")
+    tickL(B + 73, B + 161)
+    check(count("^RE_SV_LadonLeashKot") == l0 + 1, "... not again within leash_every_s")
+    tickL(B + 162, B + 162)
+    check(count("^RE_SV_LadonLeashKot") == l0 + 2, "... again leash_every_s (90 s) on, still out")
+    check(count("^RE_SV_LadonLeashMishka") == 0, "MISHKA 40 km out on its route, before its first pass: never")
+    check(mirroredEvent("RE_SV_LadonLeashKot") and mirroredEvent("RE_SV_LadonRearmKot"),
+          "co-op: the backstop and the arming forwarded (harmless: the copies follow the stream)")
+    FLAGS.SV_LadonSeenKot = 2; tickL(B + 163, B + 163)
+    check(has(line("special: Ladon KOT's appearance fired again (1 so far this spawn"), "its route and pass count kept")
+          and K.runs == 2 and K.passes == 2, "its appearance fired again: logged, its pass count kept")
+    alive.SV_Unit_LadonKot = 0
+    tickL(B + 164, B + 164)
+    check(count("^RE_SV_LadonRearmKot") == 1 and line("special: Ladon KOT's appearance armed for its next spawn (down)") ~= nil,
+          "KOT down: its appearance armed for its next spawn (RE_SV_LadonRearmKot)")
+    planes[2].down = true; alive.SV_Unit_LadonMishka = -7
+    tickL(B + 165, B + 165)
+    check(count("^RE_SV_LadonRearmMishka") == 1 and line("special: Ladon MISHKA's appearance armed for its next spawn (gone)") ~= nil,
+          "MISHKA gone: armed too")
+    -- the sweep (HIT.tick, every game): a mark left set with the unit down
+    FLAGS.SV_LadonDoneKot, alive.SV_Unit_LadonKot, alive.SV_Unit_LadonMishka = 1, 0, 0
+    local r0 = count("^RE_SV_LadonRearmKot")
+    SPC.rearmNow, SPC.rearmAt, SPC.rearmed = nil, nil, nil
+    SPC.ladonRearmTick(500)
+    check(count("^RE_SV_LadonRearmKot") == r0 + 1 and line("special: Ladon KOT's appearance armed for its next spawn (its unit's down)") ~= nil,
+          "the sweep: KOT's mark set, its unit down: armed")
+    check(count("^RE_SV_LadonRearmMishka") == 1, "... MISHKA's mark clear: left alone")
+    SPC.ladonRearmTick(503); SPC.ladonRearmTick(520)
+    check(count("^RE_SV_LadonRearmKot") == r0 + 1, "... not again within 30 s")
+    alive.SV_Unit_LadonKot = 2
+    SPC.ladonRearmTick(600)
+    check(count("^RE_SV_LadonRearmKot") == r0 + 1, "its unit up: left alone")
+    SPC.ladonRearmTick(10)                                    -- (a new run's clock)
+    check(SPC.rearmNow == 10 and (SPC.rearmAt or 0) <= 15, "a new run's clock: the sweep's times start again")
+    alive.SV_Unit_LadonKot = 0
+    -- a spawn with its mark still set: armed just before SV_Spawn, logged
+    local wasReady = SPC.ladonReady
+    SPC.ladonReady = true
+    run(9); D.special = { kind = "ladon" }
+    FLAGS = { SV_LadonDoneKot = 1 }
+    local r1, n1 = count("^RE_SV_LadonRearmKot"), #spawns
+    check(SPC.ladonSpawn(0) and count("^RE_SV_LadonRearmKot") == r1 + 1 and count("^RE_SV_LadonRearmMishka") == 1
+          and #spawns == n1 + 2 and has(line("special: Ladon KOT's appearance armed for its next spawn"), "still set at its spawn"),
+          "a spawn with KOT's mark still set: armed before SV_Spawn, logged; MISHKA's clear: not")
+    alive.SV_Unit_LadonKot, alive.SV_Unit_LadonMishka = 0, 0
+    FLAGS, SPC.ladonReady = {}, wasReady
+end
+
 ---------------------------------------------------------------------------------------------------- the ALICORN's deck
 print("the ALICORN's deck (SPC.alicornTick)")
 local AL = SP.alicorn

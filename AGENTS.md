@@ -986,4 +986,37 @@ stays. RestoreForMinigame (kSigMgRestore) hooked log-only. Log lines: `minigame:
 objects skipped (co-op)`, `minigame: type N deactivated the world's AI ...` (solo, with the first objects' bytes),
 `minigame: type N ends: restore ...`, `coop: a STORE opening keeps the world's AI flying (players linked)`. Not yet known:
 the minigame type in Survival's flow, whether the parked host plane can be damaged meanwhile.
+0.73.73-coop2mp.74 (runtime 0.32.21; built 2026-11-02, not yet run in game): the fixes from the testers' logs of 0.73.70
+(20 archives, 2026-11-01: Saint Alessia hosting, Shazzy, cressendo; all on the pre-update game) and the Spaceport in the
+rotation (user: "install spaceport into the new patch"; from round 8; novalka.py / nospaceport.py follow the new line).
+- Co-op resync loop (every joiner log): a copy the host killed ("dn") stayed in its flight's planes, so strayTick took it
+  down again as a stray and sent "jn", and the "rs" answer tore every copy down. Now: dn takes the copy off its flight;
+  strays only count copies up; the answer to a joiner's own jn is a repair (rs|j ... rz: copies kept and rebound, only
+  what's missing spawned again, what the host has no more taken down); rs|n the host's new run, rs|m a migration's
+  level. Every object a joiner spawns is registered (M.objsOf) so a refused or replaced host spawn takes the stale one
+  down whatever it is (the ghost VOID WATCHER / MOONCHILD); bd / gd for an unspawned generation wait (pendBind). Ally
+  health no longer compounds on joiners (ALLY.scale: a joiner's allies are the host's); no phantom kills (dead on
+  arrival = torn); no free revives (DOWN.reset only on rs|n). VOID WATCHER's ESM fields are pooled: range / life applied
+  on every launch. tools/checks/resync_test.sh.
+- Quitting: levelGoing() (sv_core.lua) from the first sign the level goes (svLevelOn, the spawner gone: SV_UnitAlive -1 /
+  -6): no kill paid or counted (up to 26 kills / 4,340 Z were paid on quits), FindAllOf / FindFirstOf held (walkHold:
+  also 3 s after a main level's world, and while SV_GcBusy: the engine's purge flags) for crashes 2b / 2c.
+  tools/checks/teardown_test.sh.
+- Revives: DOWN restored the weapon flags it found, so a player downed with the gear out came back with the landing lock
+  (couldn't fire); now armed as flying, CancelLanding, the gear raised, re-armed 10 s if the game locks again. Co-op:
+  invincible while on the ground at your airfield ([coop.revive] parked_safe).
+- Host crash S1 (rip 0 in the EnemyBehind event's Match, a freed AI chaser held by a queued event): the target guard is
+  the events' Match family (152 vtables, 119 functions); uobj.h UoEventObjs finds the event fields each Match loads and
+  answers "no match" for a freed one (37 classes in 38 slots). SV_GcBusy (GObjPurgeIsRequired /
+  GObjIncrementalPurgeIsInProgress from IncrementalPurgeGarbage, kSigPurgeGarbage).
+- DOWN loiter (climbed to 10 km, circled 7 km): AC8 holds the nose and speed, so a 40 deg bank barely turns; the circle
+  control banks so one pull gives the wanted turn and climb (~90 deg in a level turn), priors roll +1 / pitch -1, harder
+  in-flight sign checks. flight_test 67 of 67 with an AC8-like model.
+- Ladons leaving after lap 2 and VOID WATCHER's orbit: a path started at a PathFinish is only flown when it begins a
+  little ahead of the plane along its way (and ends far off); the 2nd circuit began 1.5 km to the side, so the Ladons
+  held the old path's end tangent. Now two arcs of an 8 km circle through the airfield hand over to each other (Mission
+  16's chaining), a leash at 22 km (RE_SV_LadonLeash), the appearance gated (SV_LadonDone, not turned on:
+  volley_after_pass stays false); VOID WATCHER a lead-in turn then a 6 km two-arc orbit (SV_AwacsLeg, `legs N` in its
+  30 s line), the area orbit as backstop. Candidate hard rule once confirmed: the path handover above. The heavy
+  bombers' figure-8 likely has the same flaw (not changed).
 

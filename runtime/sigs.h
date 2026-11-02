@@ -577,6 +577,25 @@ static const uint8_t kSigWorldOf[32] = {
     0x74, 0x5B, 0x8B, 0x40, 0x08, 0xC1, 0xE8, 0x0F,
 };
 
+/* (runtime 0.32.21) UE 5.4's IncrementalPurgeGarbage(bool bUseTimeLimit, double TimeLimit) (0x1419c8590 in the 2026-11-02
+ * build; its IncrementalDestroyGarbage 0x1419c87b0 news up FAsyncPurge): GExitPurge's test, then the early-out on
+ * IsIncrementalPurgePending(): `movzx eax, byte [rip+GObjPurgeIsRequired]` at +0x2d, `cmp [rip+
+ * GObjIncrementalPurgeIsInProgress], al` at +0x38. flight.c GcFind reads both for SV_GcBusy. mksig.py; RIP-relative
+ * operands and the call wildcarded. */
+static const uint8_t kSigPurgeGarbage[68] = {
+    0x40, 0x53, 0x48, 0x83, 0xEC, 0x30, 0x80, 0x3D, 0x6D, 0x7C, 0xA2, 0x0C,
+    0x00, 0x0F, 0xB6, 0xD9, 0x0F, 0x29, 0x74, 0x24, 0x20, 0x0F, 0x28, 0xF1,
+    0x74, 0x13, 0xC6, 0x05, 0x2F, 0x35, 0xA5, 0x0C, 0x01, 0xE8, 0x8A, 0x73,
+    0x0E, 0x00, 0xC6, 0x05, 0x5B, 0xB0, 0x26, 0x0C, 0x01, 0x0F, 0xB6, 0x05,
+    0x1C, 0x35, 0xA5, 0x0C, 0x84, 0xC0, 0x75, 0x0C, 0x38, 0x05, 0x1A, 0x35,
+    0xA5, 0x0C, 0x0F, 0x84, 0x78, 0x01, 0x00, 0x00,
+};
+static const uint8_t kSigPurgeGarbageMask[68] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1,
+    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+};
+
 /* (runtime 0.32.20) The STORE freeze (tools/re/STORE_FREEZE.md): DeactivateForMinigame(ULiveMiniGameManager* mgr,
  * TArray<ALiveAIGameObject*>* objs) (0x1478eb7b0 in the 2026-11-02 build), called once, from StartMinigameInternal, when a
  * minigame (the airfield STORE) starts: every AI object goes into cinematic mode (+0xdf8) and, when active and alive, is

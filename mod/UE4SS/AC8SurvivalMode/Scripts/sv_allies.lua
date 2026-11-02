@@ -501,30 +501,45 @@ function ALLY.level(s)
 end
 
 -- Each allied aircraft at this round's level: its rank, and its health raised by the growth since it was last set
--- (p.full: its full health now, what the repairs between rounds bring it back to)
+-- (p.full: its full health now, what the repairs between rounds bring it back to).
+-- (0.73.73) Raised by the growth past the most it's been raised to (p.hx never comes down), so a round number that goes
+-- back and forth can't raise it again: each co-op resync flipped a joiner's D.round to 0 and back, and its copy of the
+-- host's VOID WATCHER grew x1.56 every time (Shazzy's A02 11:17:51: "health x3.12 (74399 -> 116062)"; A04 13:39:41
+-- 210659 -> 396039; the host's own 6.5-7.6k). And a co-op joiner's allied planes are all copies of the host's (a joiner's
+-- purchases are built by the host): their health is the host's ("hp", sv_coop.lua), only their rank is set here.
 function ALLY.scale()
     local R = ALLY.state()
     if #R.planes == 0 then return end
+    local hostsCopies = COOP ~= nil and COOP.client ~= nil and COOP.client() == true
     for i = #R.planes, 1, -1 do
         local p = R.planes[i]
-        if not valid(p.obj) then table.remove(R.planes, i)
+        if not liveAddr(p.obj) then table.remove(R.planes, i)
         elseif p.round ~= D.round then
             local L = ALLY.level(R.up[p.unit])
             p.round = D.round
             pcall(function() p.obj.PilotRank = L.rank end)
-            local was = p.hx or 1
-            p.hx = L.hx
-            local ok, h0, h1 = pcall(function()
-                local h = p.obj.HealthInternal
-                if L.hx > was and h > 0 then p.obj.HealthInternal = math.floor(h * L.hx / was + 0.5) end
-                return h, p.obj.HealthInternal
-            end)
-            if ok then
-                local okM, mh = pcall(function() return p.obj.MaxHealth end)
-                p.full = (okM and type(mh) == "number") and math.floor(mh * 10 * L.hx + 0.5) or math.max(p.full or 0, h1 or 0)
+            if hostsCopies then
+                if not p.copySaid then
+                    p.copySaid = true
+                    log(string.format("allies: %s (%s) is the host's: PilotRank %d here, its health the host's", p.name, p.unit, L.rank))
+                end
+            else
+                local was = p.hx or 1
+                local grow = L.hx > was
+                p.hx = math.max(was, L.hx)
+                local ok, h0, h1 = pcall(function()
+                    local h = p.obj.HealthInternal
+                    if grow and h > 0 then p.obj.HealthInternal = math.floor(h * L.hx / was + 0.5) end
+                    return h, p.obj.HealthInternal
+                end)
+                if ok then
+                    local okM, mh = pcall(function() return p.obj.MaxHealth end)
+                    p.full = (okM and type(mh) == "number") and math.floor(mh * 10 * p.hx + 0.5) or math.max(p.full or 0, h1 or 0)
+                end
+                log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)%s", p.name, p.unit,
+                    D.round, L.tier, L.rank, p.hx, ok and tostring(h0) or "?", ok and tostring(h1) or "?",
+                    grow and "" or string.format(" (not raised: this round's x%.2f it's had already)", L.hx)))
             end
-            log(string.format("allies: %s (%s) at round %d's level (%s): PilotRank %d, health x%.2f (%s -> %s)", p.name, p.unit,
-                D.round, L.tier, L.rank, L.hx, ok and tostring(h0) or "?", ok and tostring(h1) or "?"))
         end
     end
 end
@@ -719,9 +734,31 @@ function ALLY.strike(bomber, ship)
     end
 end
 
+-- (0.73.73) VOID WATCHER 1's ESM field o, new ("new") or launched again from the pool ("again"): its range and time
+-- ours. Logged: the first two new ones (as before), the first two launched again, then every 25th.
+local ESM_KEYS = { "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }
+local function esmSet(R, aw, o, how)
+    local was, now2 = {}, {}
+    for _, k in ipairs(ESM_KEYS) do pcall(function() was[k] = o[k] end) end
+    pcall(function() o.SupportEffectRangeMeter = aw.esm.range_m end)
+    pcall(function() o.EffectRangeMeter = aw.esm.range_m end)
+    pcall(function() o.LifeTime = aw.esm.life_s end)
+    R.esmSet = (R.esmSet or 0) + 1
+    local again = how == "again"
+    local n
+    if again then R.esmAgain = (R.esmAgain or 0) + 1; n = R.esmAgain else R.esmNewN = (R.esmNewN or 0) + 1; n = R.esmNewN end
+    if (not again and n > 2) or (again and n > 2 and n % 25 ~= 0) then return end
+    for _, k in ipairs(ESM_KEYS) do pcall(function() now2[k] = o[k] end) end
+    log(string.format("allies: %s's ESM field %s%s: support range %s -> %s m, range %s -> %s m, life %s -> %s s", aw.name,
+        nameOf(o):match("([^%.:]+)$") or "?", again and string.format(" launched again (pooled; %d so far)", n) or "",
+        tostring(was.SupportEffectRangeMeter), tostring(now2.SupportEffectRangeMeter), tostring(was.EffectRangeMeter),
+        tostring(now2.EffectRangeMeter), tostring(was.LifeTime), tostring(now2.LifeTime)))
+end
+
 -- VOID WATCHER 1 (CFG.allies.awacs), every tick: off the ground once its buyer's airborne and the runway's clear (as
--- MOONCHILD), then its ESM fired every esm.every_s while it's airborne (SV_AwacsAir), and each new ESM field of its
--- class set to esm.range_m for esm.life_s (ALLY.esmNew, from the game's NotifyOnNewObject: the field's actor)
+-- MOONCHILD), then its ESM fired every esm.every_s while it's airborne (SV_AwacsAir), and each ESM field of its class set
+-- to esm.range_m for esm.life_s, new (ALLY.esmNew, from the game's NotifyOnNewObject: the field's actor) or launched
+-- again (R.esmFields: they're pooled)
 function ALLY.awacsTick(R, now)
     local aw, t = CFG.allies.awacs, CFG.allies.text
     if not aw.enabled then return end
@@ -776,7 +813,7 @@ function ALLY.awacsTick(R, now)
         if why and now >= (R.orbitAgainAt or 0) then
             R.orbitAgainAt = now + (ob.again_s or 60)
             local r = SV_Event(ob.event)
-            log(string.format("allies: %s put on its orbit (%s): %s %s", aw.name, why, ob.event,
+            log(string.format("allies: %s taken off its path onto the area orbit (%s): %s %s", aw.name, why, ob.event,
                 r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))
         end
     end
@@ -792,9 +829,12 @@ function ALLY.awacsTick(R, now)
                     if okL and l then
                         local dx, dy = (l.X - AIRFIELD.X) / 100000, (l.Y - AIRFIELD.Y) / 100000
                         local brg = (math.deg(math.atan(dx, -dy)) + 360) % 360       -- (compass: north is -Y)
-                        log(string.format("allies: %s at %.1f km from the airfield, bearing %03d, %.1f km up, heading %s",
+                        -- (0.73.73) legs: SV_AwacsLeg, +1 at each orbit arc's end (tools/survival_events.py awacs_orbit):
+                        -- rising, the path orbit is flown; stuck, it isn't (the backstop's area orbit takes over)
+                        log(string.format("allies: %s at %.1f km from the airfield, bearing %03d, %.1f km up, heading %s; legs %d",
                             aw.name, math.sqrt(dx * dx + dy * dy), math.floor(brg + 0.5), l.Z / 100000,
-                            (okR and r) and string.format("%03d", math.floor((r.Yaw + 90 + 360) % 360 + 0.5)) or "?"))
+                            (okR and r) and string.format("%03d", math.floor((r.Yaw + 90 + 360) % 360 + 0.5)) or "?",
+                            tonumber(f.SV_AwacsLeg) or 0))
                     end
                 end
             end
@@ -810,27 +850,41 @@ function ALLY.awacsTick(R, now)
                 r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r))), aw.esm.every_s))
         end
     end
-    -- each new ESM field of its class: its range and time (an instance's; the class itself is never changed)
+    -- each ESM field of its class: its range and time (an instance's; the class itself is never changed).
+    -- (0.73.73) The fields are pooled: the game builds two and launches them again and again, so NotifyOnNewObject sees
+    -- only the first two (every tester session of 2026-11-01 logged two fields, BP_wp_esm_MS28_C_2147435332 and _2147434941
+    -- in A14, while the weapons log counted 2-3 launches a minute for 7 minutes), and each later launch flew the game's own
+    -- range and time ("the ESM only lasted the same amount of time that a player's does", Shazzy). Each field seen is
+    -- kept (R.esmFields, by address), and set again whenever it's launched: shown after it was hidden, or shown with the
+    -- game's range on it (the launch wrote its own)
     local q = ALLY.esmNew
     if q and #q > 0 then
         ALLY.esmNew = {}
         for _, o in ipairs(q) do
-            if valid(o) and nameOf(o):find(aw.esm.class, 1, true) then
-                local was = {}
-                for _, k in ipairs({ "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }) do pcall(function() was[k] = o[k] end) end
-                pcall(function() o.SupportEffectRangeMeter = aw.esm.range_m end)
-                pcall(function() o.EffectRangeMeter = aw.esm.range_m end)
-                pcall(function() o.LifeTime = aw.esm.life_s end)
-                R.esmSet = (R.esmSet or 0) + 1
-                if R.esmSet <= 2 then
-                    local now2 = {}
-                    for _, k in ipairs({ "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }) do pcall(function() now2[k] = o[k] end) end
-                    log(string.format("allies: %s's ESM field %s: support range %s -> %s m, range %s -> %s m, life %s -> %s s",
-                        aw.name, nameOf(o):match("([^%.:]+)$") or "?", tostring(was.SupportEffectRangeMeter),
-                        tostring(now2.SupportEffectRangeMeter), tostring(was.EffectRangeMeter), tostring(now2.EffectRangeMeter),
-                        tostring(was.LifeTime), tostring(now2.LifeTime)))
-                end
+            local a = liveAddr(o)
+            if a and nameOf(o):find(aw.esm.class, 1, true) then
+                R.esmFields = R.esmFields or {}
+                local okH, hid = pcall(function() return o.bHidden end)
+                R.esmFields[a] = { obj = o, name = nameOf(o), shown = okH and hid == false }
+                esmSet(R, aw, o, "new")
             end
+        end
+    end
+    for a, e in pairs(R.esmFields or {}) do
+        if liveAddr(e.obj) ~= a or nameOf(e.obj) ~= e.name then
+            R.esmFields[a] = nil                             -- (gone, or its address another object's now)
+        else
+            local okH, hid = pcall(function() return e.obj.bHidden end)
+            local blind = not okH or type(hid) ~= "boolean"
+            local shown = not blind and hid == false
+            if blind and not R.esmHidSaid then
+                R.esmHidSaid = true
+                log(string.format("allies: %s's ESM field's bHidden can't be read: a launch is told by its range alone", aw.name))
+            end
+            local okR, rng = pcall(function() return e.obj.EffectRangeMeter end)
+            local theirs = okR and type(rng) == "number" and math.abs(rng - aw.esm.range_m) > 0.5
+            if (shown and not e.shown) or (theirs and (shown or blind)) then esmSet(R, aw, e.obj, "again") end
+            e.shown = shown
         end
     end
 end
