@@ -681,9 +681,21 @@ end
 -- loop that queues one game-thread job at a time keeps all Lua work in one place. A tick is 250 ms in two halves 125
 -- ms apart (probeTick, then probeTickB), so no one frame carries all of it (a friend's "choppy", 2026-10-31).
 local tick, rowsStopped, queued, half, tA = 0, false, false, 1, 0
+-- (0.73.75) a tick queued for the game thread and never run held the loop for good: the user's test of 2026-11-02 23:24:49,
+-- UE4SS "Error: [Lua::Registry::get_function_ref] Ref was not function" 16 ms after a test key's handler queued its own
+-- (both queue game-thread callbacks at once); from then on no tick ran: the round's clock never counted down, the run
+-- never ended at the main menu ("run over" never logged) and SURVIVAL MODE's pages never opened. A tick queued
+-- TICK_LOST_S ago and not run is taken as lost and queued again (a long blocking load just runs one extra tick after).
+local queuedAt, lostTicks, TICK_LOST_S = 0, 0, 5
 LoopAsync(125, function()
-    if queued then return false end
-    queued = true
+    if queued then
+        if os.clock() - queuedAt < TICK_LOST_S then return false end
+        lostTicks = lostTicks + 1
+        log(string.format("tick: the game thread never ran the tick queued %.1f s ago (lost: UE4SS's \"Ref was not function\"?): queued again (%d so far)",
+            os.clock() - queuedAt, lostTicks))
+        pcall(crumb, "tick lost: queued again")
+    end
+    queued, queuedAt = true, os.clock()
     ExecuteInGameThread(function()
         half = 1 - half
         if half == 1 then                           -- the second half: probeTickB, the leaderboard's polls, the perf line

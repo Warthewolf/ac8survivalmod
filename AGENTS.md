@@ -1028,4 +1028,12 @@ Now each Ladon's route path carries LADON_LAPS (15, ~18 min) laps of its circuit
 appearance, no handover until they run out (arcs A / B as before after that); Lua counts its first pass by distance too.
 Candidate hard rule once confirmed: a fast AI plane (2500 km/h) doesn't take a new path at a PathFinish; put what it
 must fly into the path started at its appearance.
+0.73.75-coop2mp.76 (built and installed 2026-11-02, not yet run in game): the user's test of 0.73.74 (23:22-23:25): the
+round's clock never counted down and, back at the main menu, SURVIVAL MODE opened nothing: Survival's Lua tick stopped at
+23:24:49, 16 ms after a test key's handler queued its game-thread callback, with UE4SS logging "Error:
+[Lua::Registry::get_function_ref] Ref was not function" (no traceback): the loop's queued tick was lost, and the loop
+queues the next only once the last has run (queued stayed true), so nothing ticked again (no "run over: left", the run
+still on at the main menu, where the menu's code only runs with no run). sv_main.lua's loop now takes a tick queued
+TICK_LOST_S (5) ago and not run as lost and queues it again: `tick: the game thread never ran the tick queued N s ago
+...: queued again`. Not yet known: why the ref went bad (two callbacks queued at once from different threads?).
 
