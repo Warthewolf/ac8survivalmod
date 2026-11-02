@@ -1472,6 +1472,9 @@ CFG = {
                      -- WPO, character base); test key Ctrl+9 cycles them
                      -- (0.73.76) the screen fades to red as she shows and back after she dies (sv_hud.lua hudRed)
                      red = { enabled = true, alpha = 0.3, in_s = 3, out_s = 5, color = { 0.85, 0, 0 } },
+                     -- (0.73.76) her song (the user's own track, in their VALKA build only: Soundsalka\Void.wav, staged by
+                     -- VALKA=1 package_dev.sh from build/valka_music): with the red, at volume (linear), faded out after her death
+                     song = { enabled = true, file = "valka/Void.wav", volume = 0.75, loop = true, out_s = 5, game_music = "stop" },
                      paint = 15,            -- (0.73.76 15: the x40a's gear material, the Falken add-on's way; 11: AC8's character master)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
