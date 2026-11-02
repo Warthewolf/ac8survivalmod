@@ -966,3 +966,11 @@ co-op's STORE-freeze probes. COOP2MP is the working main; feature/flight-recorde
 STORE freeze): specials.ladon.enabled and allies.awacs.enabled true again; the rage circuit and the volleys after the
 first pass stay off (their paths aren't followed: HOTFIX_NOTES open problems 2-3). Not yet run in game.
 .
+0.73.71-coop2mp.72 (runtime 0.32.19; built and installed 2026-11-02, not yet run in game): the AC8 update of 2026-11-02
+(exe and main paks replaced at 19:48; SURVIVAL MODE opened Campaign Training: "menu: game functions not found"). 50 of
+53 signatures still matched; the main menu decide (0x147b3fa10), the difficulty page's next menu (0x146eb70a0) and set
+difficulty (0x147b817c0) moved with only displacements changed: new sigs with those wildcarded (each checked by its
+vtable: slot 0xDF the base, slot 0x111 building CampaignFreeMission). kSigDiffNext can't be wildcarded (its string's lea
+is all that tells it from ~20 FName builders) and breaks every patch. Of the 1971 stock packages the build pulls, 2 changed
+(DT_NPC_Model, EP_Mission015_global); pre-patch copies kept in build/prepatch. UE4SS's FUObjectHashTables /
+ProcessConsoleExec warnings predate the patch. Patch diff: Claude Docs "AC8 Patch of 2 Nov 2026: What Changed".
