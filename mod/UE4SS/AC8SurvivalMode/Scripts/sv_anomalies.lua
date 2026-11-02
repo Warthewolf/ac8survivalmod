@@ -1645,10 +1645,13 @@ function SPC.V.mood(c, s)
     s.moodOn = true
     if c.red and c.red.enabled ~= false then s.redOn = true; hudRed(true, c.red) end
     pcall(SND.songStart, c.song)
+    if COOP and COOP.valkaMood then pcall(COOP.valkaMood, true) end      -- (0.73.76) every joiner's too
 end
 function SPC.V.moodOff(c, s, now)
     if s.redOn then s.redOn = false; hudRed(false, nil, c == nil) end   -- (a cleanup: the sky back at once)
     if c then pcall(SND.songFade, c.song and c.song.out_s or 5) else pcall(SND.songStop) end
+    if s.moodOn and COOP and COOP.valkaMood then pcall(COOP.valkaMood, false) end   -- (0.73.76) every joiner's too
+    s.moodOn = false
 end
 
 -- Every tick of VALKA's round.
@@ -1776,6 +1779,7 @@ function SPC.valkaTick(now, s)
         local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
         local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
         V.model(c, s, o)                                                     -- her X-02S
+        if COOP and COOP.valkaReveal then pcall(COOP.valkaReveal, c.unit) end   -- (0.73.76) on every joiner's copy too
         s.singleN = V.singleShot(c)                     -- her own railguns ((0.73.76) always: the opener's set it to 1 first,
         log(string.format("special: %s's own railguns single-shot: %d launcher modules", c.name, s.singleN or 0))  -- so hers kept their bursts)
         V.radar(c)

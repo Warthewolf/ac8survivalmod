@@ -52,6 +52,19 @@ local function sendTo(to, reliable, ...)
     return SV_CoopSend(table.concat(parts, "|"), reliable and 1 or 0, to or -1) > 0
 end
 local function send(reliable, ...) return sendTo(nil, reliable, ...) end
+-- (0.73.76) VALKA in co-op (user, 2026-11-03: "will the red sky sync in coop?" ... "do it"): her round runs on the host
+-- alone, so the host tells every joiner when her mood (the red sky, her song) starts and ends ("vm|1" / "vm|0") and when
+-- she shows ("vr|<unit>": each game puts her X-02S and paint on its own copy of her); a joiner who links mid-fight gets
+-- both with the host's whole picture.
+function COOP.valkaMood(on)
+    M.vmood = on == true
+    if not on then M.vrev = nil end
+    if COOP.host() then send(true, "vm", on and 1 or 0) end
+end
+function COOP.valkaReveal(unit)
+    M.vrev = unit
+    if COOP.host() then send(true, "vr", unit) end
+end
 local function split(s)
     local t = {}
     for f in (s .. "|"):gmatch("([^|]*)|") do t[#t + 1] = f end
@@ -598,6 +611,8 @@ local function hostSync(to)
             if g.dead then sendTo(to, true, "dn", g.id, "r") end
         end
     end
+    if M.vmood then sendTo(to, true, "vm", 1) end            -- ((0.73.76) VALKA's mood and her model, if she's up)
+    if M.vrev then sendTo(to, true, "vr", M.vrev) end
     sendTo(to, true, "rz", n)
     -- (everything's health again with the next second's: a copy spawned again there has its stock health till then)
     for _, e in pairs(M.byId) do e.sentHp = nil end
@@ -3257,6 +3272,22 @@ local function onJoinerMessage(f)
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end
+    elseif k == "vm" and COOP.client() then              -- ((0.73.76) the host's VALKA mood: the red sky and her song here too)
+        local c = CFG.specials.valka
+        if c and D then
+            if f[2] == "1" then
+                if c.red and c.red.enabled ~= false then hudRed(true, c.red) end
+                pcall(SND.songStart, c.song)
+            else
+                hudRed(false)
+                pcall(SND.songFade, c.song and c.song.out_s or 5)
+                M.vr = nil
+            end
+            log("coop: the host's VALKA " .. (f[2] == "1" and "mood on: the sky red and her song here too" or "mood off: the sky and her song fading"))
+        end
+    elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
+        local unit = short(f[2], 96)
+        if D and unit == (CFG.specials.valka and CFG.specials.valka.unit) then M.vr = { unit = unit, at = os.clock(), st = {} } end
     elseif k == "rz" then                                -- ((0.73.73) the end of the host's picture: what's here settled)
         if M.rep and not M.rep.done then repairDone("rz") end
     elseif k == "rs" then
@@ -3615,9 +3646,36 @@ function COOP.storeKeepTick(c)
     end
 end
 
+-- (0.73.76) a joiner's VALKA: her X-02S and paint on its copy of her once it's here (up to 30 s after "vr"), then its
+-- wing sweep each tick, as her round does on the host
+function COOP.valkaTick()
+    local v = M.vr
+    if not (v and D and COOP.client()) then return end
+    local cu = M.cunits[v.unit]
+    local o = nil
+    for _, p in pairs(cu and cu.planes or {}) do if liveAddr(p) then o = p; break end end
+    if not o then
+        if v.done or os.clock() - v.at > 30 then
+            if not v.done then log("coop: VALKA's copy here never came: her X-02S not put on") end
+            M.vr = nil
+        end
+        return
+    end
+    if not v.done then
+        local ok = SPC.V.model(CFG.specials.valka, v.st, o)
+        if ok then
+            v.done = true
+            log("coop: VALKA's X-02S on this game's copy of her (" .. nameOf(o) .. ")")
+        elseif os.clock() - v.at > 30 then M.vr = nil end
+        return
+    end
+    pcall(SPC.V.modelTick, v.st, o, (D and D.now) or os.clock())
+end
+
 function COOP.tick(tick)
     local c = cfg()
     pcall(COOP.storeKeepTick, c)
+    pcall(COOP.valkaTick)
     if not c.enabled then return end
     -- Co-op opens when the player picks COOP HOST or COOP JOIN (Survival's menu page, or the flat SURVIVAL CO-OP rows),
     -- as that role, and closes when they pick any other entry (SV_MenuChoice, the runtime's: the entry, 1 SURVIVAL MODE,

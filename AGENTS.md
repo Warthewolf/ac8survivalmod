@@ -1073,3 +1073,11 @@ values are 1 1 1 white, fog 0: sun / light red, sky params' sun 1.8 / 0.3 / 0.15
 the tints left a dark purple sky); her paint's Livemap a flat 4x4 render target cleared to 0 / 0.75 / 1 ("rt:R,G,B":
 KismetRenderingLibrary.CreateRenderTarget2D, RTF_RGBA8) as the Falken's, since AC8's T_Livemap isn't flat (111 of 256
 DXT1 blocks differ: her black blotches). Not yet run in game.
+VALKA in co-op (0.73.76, 2026-11-03, user: "will the red sky sync in coop?" ... "do it"; untested in game): her
+round runs on the host alone (a joiner has no D.special), so the host sends "vm|1" / "vm|0" when her mood (red sky,
+song) starts and ends (sv_coop.lua COOP.valkaMood, from SPC.V.mood / moodOff) and "vr|<unit>" at her reveal
+(COOP.valkaReveal); a joiner (only from the host) turns its own sky red and plays the song, and COOP.valkaTick puts her
+X-02S and paint on its copy of her (M.cunits[unit].planes, up to 30 s) and runs its wing sweep; the host's whole
+picture (rz) resends both while they're on; runLeft puts the sky back at once on every game. Friends' zip rebuilt with
+it: AC8SurvivalMode_COOP2MP_0.73.76_Online_COOP.zip, hash de48331d...7f24e39 (replaces 38821dbe...). Log lines:
+`coop: the host's VALKA mood on: the sky red and her song here too`, `coop: VALKA's X-02S on this game's copy of her`.
