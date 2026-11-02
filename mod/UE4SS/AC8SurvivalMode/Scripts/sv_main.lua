@@ -816,7 +816,8 @@ if type(RegisterKeyBind) == "function" and Key then
     ;(function()                   -- (its own function: the main chunk's 200-local limit)
     local TEST_SPECIALS = { { "ONE", "shuttle", "COMONA DEFENSE" }, { "TWO", "anomaly", "THE ANOMALY" },
                             { "THREE", "amphibious", "AMPHIBIOUS ASSAULT" }, { "FOUR", "ladon", "THE LADONS" },
-                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },   -- (Ctrl+8 VALKA: parked, gone)
+                            { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },
+                            { "EIGHT", "valka", "VALKA" },   -- (0.73.76: back for the user's own VALKA build; a build without her logs it)
                             -- (the Spaceport Assault and its retake, sv_spaceport.lua: Ctrl+END / Ctrl+INS)
                             { "END", "spaceport", "SPACEPORT ASSAULT" }, { "INS", "retake", "SPACEPORT RETAKE" } }
     for i, ts in ipairs(TEST_SPECIALS) do

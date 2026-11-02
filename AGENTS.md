@@ -1043,4 +1043,14 @@ queues the next only once the last has run (queued stayed true), so nothing tick
 still on at the main menu, where the menu's code only runs with no run). sv_main.lua's loop now takes a tick queued
 TICK_LOST_S (5) ago and not run as lost and queues it again: `tick: the game thread never ran the tick queued N s ago
 ...: queued again`. Not yet known: why the ref went bad (two callbacks queued at once from different threads?).
-
+0.73.76-coop2mp.77 (built and installed 2026-11-02 for the user only, WITH VALKA: `VALKA=1 sh tools/package_dev.sh <name>`;
+never in a friends' zip; not yet run in game): VALKA picked back up (user: "fix valka and add her to a special build for
+me only"). Her paint: tools/re/FALKEN_MATERIALS.md (the Falken add-on, another AC7 aircraft whose paint draws in AC8:
+its body instances hang off a stock aircraft's GEAR instance, MI_*_Gear -> MP_Gear -> M_Live_Vehicle_Base, which samples
+ordinary textures with skinned-mesh shaders; hard rule 44's skin master needs virtual textures). New paint variants 15
+(default: MI_PP0016_x40a_Gear at run time, her colour and normal maps, the stock T_Livemap, emissive / turbine / detail
+and damage normals off) and 16 (the Falken's exactly, flat normal); Ctrl+9 still cycles them. The screen fades to red as
+she shows (her first hunt tick) and back after she dies (sv_hud.lua hudRed: a full-screen Image on the HUD root, under
+every text; CFG.specials.valka.red alpha 0.3, in_s 3, out_s 5). Ctrl+8 forces her round again. Also the 0.73.76 log
+tidy-ups (the Ladons' pass number, the tick watchdog at 10 s). Log lines: `special: VALKA's paint 15 X-40A GEAR, HER
+NORMALS: N slots on MI_PP0016_x40a_Gear, ...`, `hud: the screen fading to red` / `fading back from red`.

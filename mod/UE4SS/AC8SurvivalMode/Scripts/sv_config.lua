@@ -1470,7 +1470,9 @@ CFG = {
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
                      -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
                      -- WPO, character base); test key Ctrl+9 cycles them
-                     paint = 11,            -- (11: AC8's character master, ordinary textures: SPC.V.PAINTS)
+                     -- (0.73.76) the screen fades to red as she shows and back after she dies (sv_hud.lua hudRed)
+                     red = { enabled = true, alpha = 0.3, in_s = 3, out_s = 5, color = { 0.85, 0, 0 } },
+                     paint = 15,            -- (0.73.76 15: the x40a's gear material, the Falken add-on's way; 11: AC8's character master)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
                      -- apart in game; tools/x02s/ue_import.py ue_quat converts them now)

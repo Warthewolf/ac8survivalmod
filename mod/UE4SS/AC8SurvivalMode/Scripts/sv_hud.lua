@@ -105,6 +105,13 @@ local function hudBuild(pc)
     H.font = font
     if not font then hudLog("font", "HUD font not loaded (" .. tostring(why) .. "); using the default font") end
 
+    -- (0.73.76) a red layer over the whole screen (the root, not the 16:9 canvas), under every text: VALKA's (hudRed)
+    H.red = newWidget("Image", "RedFade")
+    H.red:SetColorAndOpacity({ R = 1, G = 0, B = 0, A = 1 })
+    H.red:SetRenderOpacity(0)
+    slotIn(root, H.red, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+    H.redA, H.redSet = 0, -1
+
     local scale = newWidget("ScaleBox", "Scale")
     scale:SetStretch(2)                                     -- EStretch::ScaleToFit
     slotIn(root, scale, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
@@ -394,6 +401,34 @@ local function hideGameInfo(now)
     end
 end
 
+-- (0.73.76) The screen fades to red as VALKA shows, stays while she's up, and fades away after she dies (user,
+-- 2026-11-02: "the screen fading to red as she appears ... fading out after she dies"; CFG.specials.valka.red: its
+-- colour, alpha, in_s / out_s). hudRed(true / false); hudTick runs the fade.
+RED = { want = false, cfg = nil, at = nil }
+function hudRed(on, cfg)
+    if RED.want == (on == true) then return end
+    RED.want, RED.cfg = on == true, cfg or RED.cfg
+    log("hud: the screen " .. (on and "fading to red" or "fading back from red"))
+end
+local function redTick(now)
+    if not (H and H.red) then return end
+    local rc = RED.cfg or {}
+    local top = RED.want and (tonumber(rc.alpha) or 0.3) or 0
+    local dt = RED.at and math.max(0, math.min(1, now - RED.at)) or 0
+    RED.at = now
+    local span = RED.want and (tonumber(rc.in_s) or 3) or (tonumber(rc.out_s) or 5)
+    local step = (tonumber(rc.alpha) or 0.3) * dt / math.max(0.1, span)
+    if H.redA < top then H.redA = math.min(top, H.redA + step) elseif H.redA > top then H.redA = math.max(top, H.redA - step) end
+    if math.abs(H.redA - H.redSet) >= 0.004 or (H.redA == 0 and H.redSet ~= 0) then
+        H.redSet = H.redA
+        local col = rc.color or { 1, 0, 0 }
+        pcall(function()
+            H.red:SetColorAndOpacity({ R = col[1], G = col[2], B = col[3], A = 1 })
+            H.red:SetRenderOpacity(H.redA)
+        end)
+    end
+end
+
 function hudTick(now, paused, pc)
     if hudOff or not CFG.hud.enabled or not D then return end
     if not (H and liveObj(H.widget)) then                     -- (0.73.73: liveObj, kept between ticks)
@@ -409,6 +444,7 @@ function hudTick(now, paused, pc)
             return
         end
     end
+    pcall(redTick, now)                                        -- (0.73.76) VALKA's red screen
     local pawnOk = false
     pcall(function() pawnOk = valid(pc.Pawn) end)
     local gameHud = true
