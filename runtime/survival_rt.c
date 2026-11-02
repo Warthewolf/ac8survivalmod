@@ -23,8 +23,8 @@
 #include "win32_min.h"
 #include "sigs.h"
 
-#define RT_VERSION           L"0.32.18"
-#define RT_VERSION_A         "0.32.18"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.19"
+#define RT_VERSION_A         "0.32.19"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -3250,9 +3250,9 @@ static void FindFunctions(void)
     HookedPattern(hp, hm, 15, kSigHangarDecide + 15, sizeof(kSigHangarDecide) - 15);
     HookedPattern(ip, im, 16, kSigBuildInput + 16, sizeof(kSigBuildInput) - 16);
     Pattern p[] = {
-        { kSigBase,       NULL, sizeof(kSigBase),       NULL, 0 }, { kSigMainDecide,    NULL, sizeof(kSigMainDecide),    NULL, 0 },
+        { kSigBase,       NULL, sizeof(kSigBase),       NULL, 0 }, { kSigMainDecide, kSigMainDecideMask, sizeof(kSigMainDecide), NULL, 0 },
         { kSigDiffDecide, NULL, sizeof(kSigDiffDecide), NULL, 0 }, { kSigDiffNext,      NULL, sizeof(kSigDiffNext),      NULL, 0 },
-        { kSigGotoMenu,   NULL, sizeof(kSigGotoMenu),   NULL, 0 }, { kSigSetDifficulty, NULL, sizeof(kSigSetDifficulty), NULL, 0 },
+        { kSigGotoMenu,   NULL, sizeof(kSigGotoMenu),   NULL, 0 }, { kSigSetDifficulty, kSigSetDifficultyMask, sizeof(kSigSetDifficulty), NULL, 0 },
         { kSigTransition, NULL, sizeof(kSigTransition), NULL, 0 }, { tp, tm, sizeof(kSigTransition) + sizeof(kSigTransitionTail), NULL, 0 },
         { kSigText,       NULL, sizeof(kSigText),       NULL, 0 }, { xp, xm, sizeof(kSigText), NULL, 0 },
         { kSigSpawnUnit,      kSigSpawnUnitMask,      sizeof(kSigSpawnUnit),      NULL, 0 },
