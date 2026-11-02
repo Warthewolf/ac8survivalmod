@@ -105,13 +105,6 @@ local function hudBuild(pc)
     H.font = font
     if not font then hudLog("font", "HUD font not loaded (" .. tostring(why) .. "); using the default font") end
 
-    -- (0.73.76) a red layer over the whole screen (the root, not the 16:9 canvas), under every text: VALKA's (hudRed)
-    H.red = newWidget("Image", "RedFade")
-    H.red:SetColorAndOpacity({ R = 1, G = 0, B = 0, A = 1 })
-    H.red:SetRenderOpacity(0)
-    slotIn(root, H.red, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
-    H.redA, H.redSet = 0, -1
-
     local scale = newWidget("ScaleBox", "Scale")
     scale:SetStretch(2)                                     -- EStretch::ScaleToFit
     slotIn(root, scale, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
@@ -401,31 +394,103 @@ local function hideGameInfo(now)
     end
 end
 
--- (0.73.76) The screen fades to red as VALKA shows, stays while she's up, and fades away after she dies (user,
--- 2026-11-02: "the screen fading to red as she appears ... fading out after she dies"; CFG.specials.valka.red: its
--- colour, alpha, in_s / out_s). hudRed(true / false); hudTick runs the fade.
-RED = { want = false, cfg = nil, at = nil }
-function hudRed(on, cfg)
-    if RED.want == (on == true) then return end
-    RED.want, RED.cfg = on == true, cfg or RED.cfg
-    log("hud: the screen " .. (on and "fading to red" or "fading back from red"))
+-- (0.73.76) VALKA's red sky (user, 2026-11-03: "red sky instead of red screen"; CFG.specials.valka.red): the way the Sky
+-- Editor's SkyLive mod changes a sky live: the level's sky actor (LiveCloudlyActor) has the sun light, sky light and
+-- height fog that light aircraft, ground and haze (their colours blended towards red), and the sky's own params
+-- (CloudlySkyParams .Data.SunIntensity.RGB, sRGB 0-255: the sky dome's sun colour), also written into the renderer's
+-- working copies (CloudlyRenderer .Data.SkyRendererMainThread.OurSkyParams / .SkyParamsRO). Every value's original is
+-- kept and written back exactly (the sky asset is shared: never left red). hudRed(true / false[, cfg, now]); redTick
+-- (hudTick, 4 times a second) runs the blend: strength over in_s, back over out_s.
+RED = { want = false, cfg = nil, at = nil, k = 0, b = nil }
+local function srgbLin(c)
+    c = (tonumber(c) or 0) / 255
+    if c <= 0.04045 then return c / 12.92 end
+    return ((c + 0.055) / 1.055) ^ 2.4
+end
+local function lerp(a, b, k) return a + (b - a) * k end
+local function skyFind()
+    local a = nil
+    for _, cn in ipairs({ "LiveCloudlyActor", "CloudlyActor" }) do
+        local ok, l = pcall(FindAllOf, cn)
+        for _, o in ipairs(ok and l or {}) do if liveObj(o) then a = o; break end end
+        if a then break end
+    end
+    if not a then return nil end
+    local b, got = { actor = a, rend = {} }, {}
+    pcall(function() b.sun = a.SunLight end)
+    pcall(function() b.skyl = a.SkyLight end)
+    pcall(function() b.fog = a.HeightFog end)
+    if valid(b.sun) and pcall(function() local q = b.sun.LightColor; b.sunCol = { srgbLin(q.R), srgbLin(q.G), srgbLin(q.B) } end) then got[#got + 1] = "sun" end
+    if valid(b.skyl) and pcall(function() local q = b.skyl.LightColor; b.skyCol = { srgbLin(q.R), srgbLin(q.G), srgbLin(q.B) } end) then got[#got + 1] = "sky light" end
+    if valid(b.fog) and pcall(function() local q = b.fog.FogInscatteringLuminance; b.fogCol = { q.R, q.G, q.B } end) then got[#got + 1] = "fog" end
+    if pcall(function() local q = a.CloudlySkyParamsAsset.Data.SunIntensity.RGB; b.rgb = { q.X, q.Y, q.Z } end) and b.rgb then got[#got + 1] = "sky params" end
+    local okR, rl = pcall(FindAllOf, "CloudlyRenderer")
+    for _, r in ipairs(okR and rl or {}) do if liveObj(r) then b.rend[#b.rend + 1] = r end end
+    log(string.format("hud: VALKA's sky: %s (%s), %d renderer(s)", nameOf(a), #got > 0 and table.concat(got, ", ") or "nothing readable", #b.rend))
+    return b
+end
+local function rgbWrite(st, v)                       -- a sky params struct's SunIntensity.RGB
+    pcall(function() local q = st.SunIntensity.RGB; q.X, q.Y, q.Z = v[1], v[2], v[3] end)
+end
+local function skyApply(b, k, rc)
+    local function mix(o, t) return { lerp(o[1], t[1], k), lerp(o[2], t[2], k), lerp(o[3], t[3], k) } end
+    if b.sunCol and valid(b.sun) then
+        local c = mix(b.sunCol, rc.sun or { 1, 0.1, 0.05 })
+        pcall(function() b.sun:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }, true) end)
+    end
+    if b.skyCol and valid(b.skyl) then
+        local c = mix(b.skyCol, rc.sky or { 0.85, 0.12, 0.08 })
+        pcall(function() b.skyl:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
+    end
+    if b.fogCol and valid(b.fog) then
+        local c = mix(b.fogCol, rc.fog or { 0.6, 0.04, 0.02 })
+        pcall(function() b.fog:SetFogInscatteringColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
+    end
+    if b.rgb then
+        local v = mix(b.rgb, rc.sky_rgb or { 255, 60, 40 })
+        if liveObj(b.actor) then pcall(function() rgbWrite(b.actor.CloudlySkyParamsAsset.Data, v) end) end
+        for _, r in ipairs(b.rend) do
+            if liveObj(r) then
+                pcall(function()
+                    local d = r.Data
+                    for _, arr in ipairs({ d.SkyRendererMainThread.OurSkyParams, d.SkyParamsRO }) do
+                        pcall(function() arr:ForEach(function(_, e) rgbWrite(e:get(), v) end) end)
+                    end
+                end)
+            end
+        end
+    end
+end
+function hudRed(on, cfg, now)
+    on = on == true
+    if cfg then RED.cfg = cfg end
+    if RED.want ~= on then
+        RED.want = on
+        log("hud: the sky " .. (on and "turning red" or "going back from red"))
+    end
+    if not on and now and RED.b then                 -- (at once: a cleanup, no tick may follow)
+        skyApply(RED.b, 0, RED.cfg or {})
+        RED.b, RED.k = nil, 0
+        log("hud: the sky put back as it was (at once)")
+    end
 end
 local function redTick(now)
-    if not (H and H.red) then return end
     local rc = RED.cfg or {}
-    local top = RED.want and (tonumber(rc.alpha) or 0.3) or 0
+    if not RED.want and RED.k <= 0 then RED.at = now; return end
+    if RED.want and not RED.b then
+        RED.b = skyFind()
+        if not RED.b then RED.want = false; log("hud: VALKA's sky: no sky actor found; the sky stays as it is"); return end
+    end
     local dt = RED.at and math.max(0, math.min(1, now - RED.at)) or 0
     RED.at = now
+    local top = tonumber(rc.strength) or 0.85
     local span = RED.want and (tonumber(rc.in_s) or 3) or (tonumber(rc.out_s) or 5)
-    local step = (tonumber(rc.alpha) or 0.3) * dt / math.max(0.1, span)
-    if H.redA < top then H.redA = math.min(top, H.redA + step) elseif H.redA > top then H.redA = math.max(top, H.redA - step) end
-    if math.abs(H.redA - H.redSet) >= 0.004 or (H.redA == 0 and H.redSet ~= 0) then
-        H.redSet = H.redA
-        local col = rc.color or { 1, 0, 0 }
-        pcall(function()
-            H.red:SetColorAndOpacity({ R = col[1], G = col[2], B = col[3], A = 1 })
-            H.red:SetRenderOpacity(H.redA)
-        end)
+    local step = top * dt / math.max(0.1, span)
+    if RED.want then RED.k = math.min(top, RED.k + step) else RED.k = math.max(0, RED.k - step) end
+    if RED.b then
+        if not liveObj(RED.b.actor) then RED.b, RED.k = nil, 0; return end      -- (its level gone: nothing to put back)
+        skyApply(RED.b, RED.k, rc)
+        if RED.k <= 0 and not RED.want then RED.b = nil; log("hud: the sky put back as it was") end
     end
 end
 

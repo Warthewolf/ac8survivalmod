@@ -1054,3 +1054,13 @@ she shows (her first hunt tick) and back after she dies (sv_hud.lua hudRed: a fu
 every text; CFG.specials.valka.red alpha 0.3, in_s 3, out_s 5). Ctrl+8 forces her round again. Also the 0.73.76 log
 tidy-ups (the Ladons' pass number, the tick watchdog at 10 s). Log lines: `special: VALKA's paint 15 X-40A GEAR, HER
 NORMALS: N slots on MI_PP0016_x40a_Gear, ...`, `hud: the screen fading to red` / `fading back from red`.
+0.73.76 VALKA build, later the same night (user's test: paint 15 "looked better but was still bugged out", the portal
+bugged, the music player played on, rounds lived too long, bursts): her portal deleted (code and CFG); a red SKY instead
+of the red screen (sv_hud.lua hudRed/redTick, SkyLive's way: the level's LiveCloudlyActor's sun light, sky light and
+height fog colours and the sky params' SunIntensity.RGB, the renderer's copies too, originals put back exactly, at once
+on a cleanup; CFG.specials.valka.red strength / in_s / out_s / colours); the song at 90% with AC8's system mute
+(AKE_System_BGM_Mute_On / _Off: the music player's jukebox kept playing past the stale hangar track's _Stop); single-shot
+on her own railguns at her reveal and before every shot (the opener's had set s.singleN, so hers kept their bursts);
+her rounds live eml_life_s 8 s (was at least 30); MINDRIPPER's gun rounds' life x gun_life_x 4 (was x gun_reach_x 20,
+its range unchanged); her health 2000 (was 900); her default paint 16 (the Falken's exact: flat normal). The Spaceport
+Assault's capture_per_troop 5 -> 10. All untested in game.

@@ -1449,7 +1449,7 @@ CFG = {
         -- forced WARNING is on from her round's start until she's down (user, 2026-10-24).
         -- enabled = false: she never comes, whatever `rotation` says (a build without her X-02S and AC7 sounds:
         -- tools/package_release.sh novalka)
-        valka    = { enabled = true, name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 900,
+        valka    = { enabled = true, name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 2000,
                      health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
                      disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                      anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
@@ -1471,11 +1471,15 @@ CFG = {
                      -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
                      -- WPO, character base); test key Ctrl+9 cycles them
                      -- (0.73.76) the screen fades to red as she shows and back after she dies (sv_hud.lua hudRed)
-                     red = { enabled = true, alpha = 0.3, in_s = 3, out_s = 5, color = { 0.85, 0, 0 } },
+                     -- (the sky, not the screen: sv_hud.lua hudRed; user, 2026-11-03 "red sky instead of red screen"):
+                     -- strength how far towards red (0-1), in_s / out_s; the level's sun light, sky light and height fog
+                     -- colours (linear), and the sky's own sun colour (sRGB 0-255), as SkyLive / the Sky Editor change it
+                     red = { enabled = true, strength = 0.85, in_s = 3, out_s = 5, sun = { 1.0, 0.10, 0.05 },
+                             sky = { 0.85, 0.12, 0.08 }, fog = { 0.6, 0.04, 0.02 }, sky_rgb = { 255, 60, 40 } },
                      -- (0.73.76) her song (the user's own track, in their VALKA build only: Soundsalka\Void.wav, staged by
                      -- VALKA=1 package_dev.sh from build/valka_music): with the red, at volume (linear), faded out after her death
-                     song = { enabled = true, file = "valka/Void.wav", volume = 0.75, loop = true, out_s = 5, game_music = "stop" },
-                     paint = 15,            -- (0.73.76 15: the x40a's gear material, the Falken add-on's way; 11: AC8's character master)
+                     song = { enabled = true, file = "valka/Void.wav", volume = 0.9, loop = true, out_s = 5, game_music = "mute" },
+                     paint = 16,            -- (0.73.76 15: the x40a's gear material, the Falken add-on's way; 11: AC8's character master)
                      -- her swing wings: unswept below sweep_kmh[1], swept above [2] (AC7's), a full travel in sweep_s
                      -- (0.67.1-0.67.6 had it off: its keys went in without the AC7 -> UE axis change, and her wings came
                      -- apart in game; tools/x02s/ue_import.py ue_quat converts them now)
@@ -1489,14 +1493,6 @@ CFG = {
                      -- elements { name, size (fraction of the screen) } on AC8's own flare, faded over life_s along AC7's
                      -- alpha curve (time fraction, alpha), intensity_x times the stock flare's brightness. If it doesn't
                      -- load, the flash above shows instead.
-                     -- her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"): opens
-                     -- lead_s before the opener's shot where she comes out, open_s / hold_s / close_s; sizes x diameter_m,
-                     -- which grows to at least min_deg wide from where you are:
-                     -- the lensing (lens_x the barrier refraction's strength), the glow and photon ring (their brightness x
-                     -- the stock flare's), the black horizon 1.0
-                     portal = { enabled = true, diameter_m = 120, min_deg = 1.5, lead_s = 3.0, open_s = 1.2, hold_s = 5.0, close_s = 1.0,
-                                lens_size = 2.4, lens_x = 3, glow_size = 2.0, glow_x = 4, ring_size = 1.3, ring_x = 8,
-                                textures = "/Game/Mods/SurvivalMode/Valka/Portal/" },
                      flare = { enabled = true, life_s = 7, intensity_x = 6,
                                path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                                elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },
@@ -1509,7 +1505,7 @@ CFG = {
                      -- (the land battleship's class default stays stock). The opener's shot is aimed at a dummy
                      -- opener_miss_up_m above you and its rounds do no damage (user: "that first shot HAS to miss me").
                      -- (tools/survival_events.py VALKA_MISS_UP_M: keep in step)
-                     eml_life_s = 30, opener_miss_up_m = 250,
+                     eml_life_s = 8, opener_miss_up_m = 250,   -- ((0.73.76) 30 -> 8: they lived too long)
                      -- her railguns on the minimap (user, 2026-10-24: "add a minimap beam as to where the railgun is being
                      -- fired from"): their launchers' radar display on, forced, in radar_hud's style
                      -- (ELiveFCSRailGunHUDControl: 0 RailGun, 1 LongRangeRailGun, 2 DiffusionRailGun), and the railgun
@@ -1718,7 +1714,7 @@ CFG = {
                      aggression = 5, provoke_cone_deg = 30, surround_m = { 20, 60 },
                      -- its gun on top of that (user, 2026-10-24: "increase its gun accuracy and distance 20x"): spread
                      -- / gun_accuracy_x, firing range and its rounds' life (how far they fly) x gun_reach_x
-                     gun_accuracy_x = 20, gun_reach_x = 20,
+                     gun_accuracy_x = 20, gun_reach_x = 20, gun_life_x = 4,   -- ((0.73.76) its rounds' life x4, not x20)
                      -- and it leads you (user, 2026-10-24: "make MINDRIPPER lead targets with its gun"): it aims where
                      -- you'll be gun_lead_s ahead (PredictionOffsetTime; its rounds fly 833 m/s, so 1 s suits ~0.8 km)
                      gun_lead_s = 1.0,

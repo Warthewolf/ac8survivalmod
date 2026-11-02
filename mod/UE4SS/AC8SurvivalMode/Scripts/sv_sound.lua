@@ -124,6 +124,9 @@ end
 -- game's mission track is stopped while it plays (its BGM controller's <track>_Stop) and posted again after.
 SND.song = nil
 local function songMusicBack(sg)
+    if sg and sg.muted and type(SV_PlayBGM) == "function" then
+        log("sound: the game's music back after the song (AKE_System_BGM_Mute_Off: " .. tostring(SV_PlayBGM("AKE_System_BGM_Mute_Off")) .. ")")
+    end
     if sg and sg.track and type(SV_PlayBGM) == "function" then
         local r = SV_PlayBGM(sg.track)
         log("sound: the game's music back after the song: " .. sg.track .. " (" .. tostring(r) .. ")")
@@ -138,7 +141,13 @@ function SND.songStart(sc)
     if not h or h <= 0 then log("sound: the song " .. sc.file .. " didn't play (" .. tostring(h) .. ")"); return end
     SND.song = { h = h, v = v, top = v, at = os.clock() }
     local said = ""
-    if sc.game_music == "stop" and type(SV_BGMNames) == "function" and type(SV_PlayBGM) == "function" then
+    if sc.game_music == "mute" and type(SV_PlayBGM) == "function" then
+        -- (0.73.76) AC8's system mute, whatever plays (the pause menu's music player too: its jukebox kept playing past
+        -- the _Stop of the controller's last track, which was the hangar's: tools/re/MUSIC_RADIO_CAMERA.md)
+        local r = SV_PlayBGM("AKE_System_BGM_Mute_On")
+        SND.song.muted = true
+        said = "; the game's music muted (AKE_System_BGM_Mute_On: " .. tostring(r) .. ")"
+    elseif sc.game_music == "stop" and type(SV_BGMNames) == "function" and type(SV_PlayBGM) == "function" then
         local track = (SV_BGMNames() or ""):match("^([^|]*)") or ""
         local stop = track:gsub("_Play$", "_Stop")
         if track ~= "" and stop ~= track then

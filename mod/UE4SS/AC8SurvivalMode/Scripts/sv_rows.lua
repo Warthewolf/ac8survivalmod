@@ -344,7 +344,7 @@ function searchSetup()
         local reach, acc = AN.gun_reach_x or 1, AN.gun_accuracy_x or 1
         return gunRow(src, { range = g.range_m * 1.5 * reach, angle = math.min(180, g.angle_deg * 1.5), aim = g.aim_s / AGG,
                              burst = math.min(200, g.burst * AGG), rest = g.rest_s / AGG, damage_x = g.damage_x * 2,
-                             spread = g.spread_deg / 2 / acc, life_x = reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
+                             spread = g.spread_deg / 2 / acc, life_x = AN.gun_life_x or reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
     end
     -- The fighter roles' fire control (CFG.roles, P1; made only with roles on at the main menu, as the rows are made
     -- once a session): the Wolf airframes' gun leads you by wolf.gun_lead_s ("guns lead on" can't be switched live:
