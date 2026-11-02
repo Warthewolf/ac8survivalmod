@@ -573,8 +573,8 @@ do
     check(K.passes == 1 and line("special: Ladon KOT's pass over the airfield (1)") ~= nil, "its route's end: pass 1 (SV_LadonRun)")
     put(kot, 16); tickL(B + 11, B + 50)                        -- round its circuit, 16 km out
     put(kot, 1.0); tickL(B + 51, B + 53)
-    check(K.passes == 2 and has(line("special: Ladon KOT's pass over the airfield"), "(1)"),
-          "back over the airfield after 16 km out: pass 2, by distance (its flag still 1)")
+    check(K.passes == 2 and has(line("special: Ladon KOT's pass over the airfield"), "(2)"),
+          "back over the airfield after 16 km out: pass 2, by distance (its flag still 1; 0.73.76: the log names the pass, 2)")
     FLAGS.SV_LadonRunKot = 2; tickL(B + 54, B + 70)            -- (an old circuit's end, 3 s after that pass)
     check(K.passes == 2 and line("special: Ladon KOT's pass flag 1 -> 2 3 s after a pass counted: the same pass") ~= nil,
           "a pass flag up 3 s after a counted pass: the same pass, not counted again (A19 12:02:34)")
