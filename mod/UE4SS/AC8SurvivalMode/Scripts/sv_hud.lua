@@ -436,22 +436,25 @@ local function rgbWrite(st, v)                       -- a sky params struct's Su
 end
 local function skyApply(b, k, rc)
     -- (0.73.76, the user's screenshot of 00:12: "the red is waaay to bright": set colours made the haze and sky glow)
-    -- every colour is a tint of its own value now (x tint, green and blue down): redder, never brighter
-    local function mix(o, t) return { lerp(o[1], o[1] * t[1], k), lerp(o[2], o[2] * t[2], k), lerp(o[3], o[3] * t[3], k) } end
+    -- every colour is a tint of its own value now (x tint, green and blue down): redder, never brighter. Then (00:22,
+    -- "turn the sky more red": the tint left a dark purple sky; the log: sun 1 1 1, sky light 1 1 1, fog 0 0 0, the sky
+    -- params' sun 1 1 1, so the 255s of the first try blew it white): set colours on that scale, red up, green and blue
+    -- down, a faint red haze
+    local function mix(o, t) return { lerp(o[1], t[1], k), lerp(o[2], t[2], k), lerp(o[3], t[3], k) } end
     if b.sunCol and valid(b.sun) then
-        local c = mix(b.sunCol, rc.sun_tint or { 1, 0.35, 0.3 })
+        local c = mix(b.sunCol, rc.sun or { 1, 0.25, 0.15 })
         pcall(function() b.sun:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }, true) end)
     end
     if b.skyCol and valid(b.skyl) then
-        local c = mix(b.skyCol, rc.light_tint or { 1, 0.4, 0.35 })
+        local c = mix(b.skyCol, rc.light or { 1, 0.3, 0.2 })
         pcall(function() b.skyl:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
     if b.fogCol and valid(b.fog) then
-        local c = mix(b.fogCol, rc.fog_tint or { 1, 0.3, 0.25 })
+        local c = mix(b.fogCol, rc.fog or { 0.1, 0.012, 0.006 })
         pcall(function() b.fog:SetFogInscatteringColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
     if b.rgb then
-        local v = mix(b.rgb, rc.sky_tint or { 1, 0.4, 0.35 })
+        local v = mix(b.rgb, rc.sky_sun or { 1.8, 0.3, 0.15 })
         if liveObj(b.actor) then pcall(function() rgbWrite(b.actor.CloudlySkyParamsAsset.Data, v) end) end
         for _, r in ipairs(b.rend) do
             if liveObj(r) then

@@ -1471,12 +1471,12 @@ CFG = {
                      -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
                      -- WPO, character base); test key Ctrl+9 cycles them
                      -- (0.73.76) the screen fades to red as she shows and back after she dies (sv_hud.lua hudRed)
-                     -- (the sky, not the screen: sv_hud.lua hudRed; user, 2026-11-03 "red sky instead of red screen"):
-                     -- strength how far towards the tints (0-1), in_s / out_s; each a tint of the sky's own colour
-                     -- (R, G, B multipliers: green and blue down, never brighter; "the red is waaay to bright" with set
-                     -- colours): the level's sun light, sky light, height fog and the sky params' sun colour
-                     red = { enabled = true, strength = 0.75, in_s = 3, out_s = 5, sun_tint = { 1, 0.35, 0.3 },
-                             light_tint = { 1, 0.4, 0.35 }, fog_tint = { 1, 0.3, 0.25 }, sky_tint = { 1, 0.4, 0.35 } },
+                     -- (the sky, not the screen: sv_hud.lua hudRed; user, 2026-11-03 "red sky instead of red screen",
+                     -- "turn the sky more red"): strength how far towards these (0-1), in_s / out_s; the level's sun light
+                     -- and sky light colours (0-1), its height fog's (Comona's is off: 0, so a faint haze), and the sky
+                     -- params' sun colour (normally 1 1 1; more than 1 is brighter: it colours the whole dome)
+                     red = { enabled = true, strength = 1.0, in_s = 3, out_s = 5, sun = { 1, 0.25, 0.15 },
+                             light = { 1, 0.3, 0.2 }, fog = { 0.1, 0.012, 0.006 }, sky_sun = { 1.8, 0.3, 0.15 } },
                      -- (0.73.76) her song (the user's own track, in their VALKA build only: Soundsalka\Void.wav, staged by
                      -- VALKA=1 package_dev.sh from build/valka_music): with the red, at volume (linear), faded out after her death
                      song = { enabled = true, file = "valka/Void.wav", volume = 1.0, loop = true, out_s = 5, game_music = "mute" },
