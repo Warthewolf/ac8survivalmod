@@ -427,27 +427,31 @@ local function skyFind()
     local okR, rl = pcall(FindAllOf, "CloudlyRenderer")
     for _, r in ipairs(okR and rl or {}) do if liveObj(r) then b.rend[#b.rend + 1] = r end end
     log(string.format("hud: VALKA's sky: %s (%s), %d renderer(s)", nameOf(a), #got > 0 and table.concat(got, ", ") or "nothing readable", #b.rend))
+    local function c3(v) return v and string.format("%.3g %.3g %.3g", v[1], v[2], v[3]) or "-" end
+    log(string.format("hud: VALKA's sky, as it was: sun %s, sky light %s, fog %s, sky params' sun %s", c3(b.sunCol), c3(b.skyCol), c3(b.fogCol), c3(b.rgb)))
     return b
 end
 local function rgbWrite(st, v)                       -- a sky params struct's SunIntensity.RGB
     pcall(function() local q = st.SunIntensity.RGB; q.X, q.Y, q.Z = v[1], v[2], v[3] end)
 end
 local function skyApply(b, k, rc)
-    local function mix(o, t) return { lerp(o[1], t[1], k), lerp(o[2], t[2], k), lerp(o[3], t[3], k) } end
+    -- (0.73.76, the user's screenshot of 00:12: "the red is waaay to bright": set colours made the haze and sky glow)
+    -- every colour is a tint of its own value now (x tint, green and blue down): redder, never brighter
+    local function mix(o, t) return { lerp(o[1], o[1] * t[1], k), lerp(o[2], o[2] * t[2], k), lerp(o[3], o[3] * t[3], k) } end
     if b.sunCol and valid(b.sun) then
-        local c = mix(b.sunCol, rc.sun or { 1, 0.1, 0.05 })
+        local c = mix(b.sunCol, rc.sun_tint or { 1, 0.35, 0.3 })
         pcall(function() b.sun:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }, true) end)
     end
     if b.skyCol and valid(b.skyl) then
-        local c = mix(b.skyCol, rc.sky or { 0.85, 0.12, 0.08 })
+        local c = mix(b.skyCol, rc.light_tint or { 1, 0.4, 0.35 })
         pcall(function() b.skyl:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
     if b.fogCol and valid(b.fog) then
-        local c = mix(b.fogCol, rc.fog or { 0.6, 0.04, 0.02 })
+        local c = mix(b.fogCol, rc.fog_tint or { 1, 0.3, 0.25 })
         pcall(function() b.fog:SetFogInscatteringColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
     if b.rgb then
-        local v = mix(b.rgb, rc.sky_rgb or { 255, 60, 40 })
+        local v = mix(b.rgb, rc.sky_tint or { 1, 0.4, 0.35 })
         if liveObj(b.actor) then pcall(function() rgbWrite(b.actor.CloudlySkyParamsAsset.Data, v) end) end
         for _, r in ipairs(b.rend) do
             if liveObj(r) then
