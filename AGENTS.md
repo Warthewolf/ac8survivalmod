@@ -249,6 +249,13 @@ Copy a working stock pattern before inventing a new one.
     and hits on it reach the player plane's damage (0x147d5a430) but are never applied. Confirmed by T1c-T1e
     (tools/re/COOP2MP.md, 2026-10-30).
 
+54. A fast AI plane (the Ladons at 2500 km/h) doesn't take a new path handed over at its last path's PathFinish, even
+    one started 2.5 km ahead along its way: it holds the old path's end tangent (0.73.73, the user's test of 2026-11-02
+    23:16: legs 0, down to 0.2 km 29 km out), while a slow one does (VOID WATCHER at 450-550 km/h took its climb-out ->
+    lead-in handover). Put everything such a plane must fly into the path started at its appearance: the Ladons' route
+    carries 15 laps of their circuit (survival_events.LADON_LAPS), and they looped the airfield 4 passes until shot down
+    (0.73.75, the test of 23:31-23:39). Confirmed 2026-11-02.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
