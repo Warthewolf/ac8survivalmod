@@ -3371,8 +3371,25 @@ end
 function COOP.ownRoot() return M.ownRoot() end
 
 
+-- The STORE freeze (0.73.72, runtime 0.32.20; tools/re/STORE_FREEZE.md): the game's DeactivateForMinigame stops every
+-- AI plane when a minigame (the airfield STORE) starts. While players are linked the runtime skips it (SV_StoreKeepAI),
+-- so the world keeps flying for the others; solo, or co-op closed, the stock freeze stays. Logged once per change.
+function COOP.storeKeepTick(c)
+    if type(SV_StoreKeepAI) ~= "function" then return end
+    local want = (c.enabled and COOP.open and c.store_keep_world ~= false and (M.linkedPeers or 0) > 0) and 1 or 0
+    if want == M.storeKeep then return end
+    local old = SV_StoreKeepAI(want)
+    M.storeKeep = want
+    if type(old) == "number" and old < 0 then
+        once("storekeep", "coop: the STORE's world freeze can't be skipped here (the runtime didn't hook it: " .. tostring(old) .. ")")
+    else
+        log("coop: a STORE opening " .. (want == 1 and "keeps the world's AI flying (players linked)" or "stops the world's AI (stock)"))
+    end
+end
+
 function COOP.tick(tick)
     local c = cfg()
+    pcall(COOP.storeKeepTick, c)
     if not c.enabled then return end
     -- Co-op opens when the player picks COOP HOST or COOP JOIN (Survival's menu page, or the flat SURVIVAL CO-OP rows),
     -- as that role, and closes when they pick any other entry (SV_MenuChoice, the runtime's: the entry, 1 SURVIVAL MODE,

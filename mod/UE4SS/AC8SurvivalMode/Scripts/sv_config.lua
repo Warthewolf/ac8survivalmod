@@ -1146,6 +1146,10 @@ CFG = {
              -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
              -- yet, each at most this long; 0: never
              join_wait_s = 90,
+             -- store_keep_world (0.73.72, the STORE freeze: tools/re/STORE_FREEZE.md): while players are linked, a STORE
+             -- opening (the airfield's minigame) doesn't stop the world's AI for everyone (runtime SV_StoreKeepAI skips the
+             -- game's DeactivateForMinigame); false: the stock freeze. Solo the stock freeze always stays.
+             store_keep_world = true,
              -- migration (the user, 2026-10-31: "if the Host does leave, it automatically tries to find the next best
              -- host"): when the host's game goes, the player with the best link takes over as host and the others join
              -- them; the round in play starts again, the allies and the airfield's defences are built again. after_s:

@@ -975,3 +975,15 @@ vtable: slot 0xDF the base, slot 0x111 building CampaignFreeMission). kSigDiffNe
 is all that tells it from ~20 FName builders) and breaks every patch. Of the 1971 stock packages the build pulls, 2 changed
 (DT_NPC_Model, EP_Mission015_global); pre-patch copies kept in build/prepatch. UE4SS's FUObjectHashTables /
 ProcessConsoleExec warnings predate the patch. Patch diff: Claude Docs "AC8 Patch of 2 Nov 2026: What Changed".
+0.73.72-coop2mp.73 (runtime 0.32.20; built and installed 2026-11-02, not yet run in game): the STORE freeze, reverse
+engineered (tools/re/STORE_FREEZE.md, the new exe): a minigame's start (the airfield STORE) calls DeactivateForMinigame
+(0x1478eb7b0, sigs.h kSigMgDeactivate), which puts every AI object into cinematic mode (+0xdf8; its tick then never
+reaches the flight tick) and deactivates the live ones (SetActiveGameObject false: +0x3f4 0, the AI tick flag +0x25d9
+off) into the manager's lists; either lock freezes a plane, which is why hotfixes 7-12 (ticks, bMinigameAIObject,
+LiveSetActiveGameObject) each cleared at most one. flight.c OnMgDeactivate skips the call while SV_StoreKeepAI(1)
+(sv_coop.lua COOP.storeKeepTick: co-op open with players linked, [coop] store_keep_world = true); solo the stock freeze
+stays. RestoreForMinigame (kSigMgRestore) hooked log-only. Log lines: `minigame: type N starts; its deactivation of N AI
+objects skipped (co-op)`, `minigame: type N deactivated the world's AI ...` (solo, with the first objects' bytes),
+`minigame: type N ends: restore ...`, `coop: a STORE opening keeps the world's AI flying (players linked)`. Not yet known:
+the minigame type in Survival's flow, whether the parked host plane can be damaged meanwhile.
+
