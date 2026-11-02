@@ -334,7 +334,7 @@ function SPC.ladonTick(now, s)
                 local dmg = c.bomb_damage + (c.bomb_per_round or 0) * math.max(0, D.round - CFG.specials.first)
                 if CFG.airfield.enabled and not AF.down then AF.bomb = AF.bomb + dmg end
                 hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
-                log(string.format("special: Ladon %s's pass over the airfield (%d): -%d%s", c.names[k] or k, runs, dmg,
+                log(string.format("special: Ladon %s's pass over the airfield (%d): -%d%s", c.names[k] or k, L.passes, dmg,   -- (0.73.76: its pass count, not the route's flag)
                     L.rage and string.format(" (enraged %.0f s ago)", now - (L.rageAt or now)) or ""))
             end
             local n, gone = SV_UnitAlive(L.unit), false

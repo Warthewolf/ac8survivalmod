@@ -686,12 +686,12 @@ local tick, rowsStopped, queued, half, tA = 0, false, false, 1, 0
 -- (both queue game-thread callbacks at once); from then on no tick ran: the round's clock never counted down, the run
 -- never ended at the main menu ("run over" never logged) and SURVIVAL MODE's pages never opened. A tick queued
 -- TICK_LOST_S ago and not run is taken as lost and queued again (a long blocking load just runs one extra tick after).
-local queuedAt, lostTicks, TICK_LOST_S = 0, 0, 5
+local queuedAt, lostTicks, TICK_LOST_S = 0, 0, 10   -- (0.73.76: 10 s; 5 s fired during level loads, 2026-11-02 23:30 / 23:31)
 LoopAsync(125, function()
     if queued then
         if os.clock() - queuedAt < TICK_LOST_S then return false end
         lostTicks = lostTicks + 1
-        log(string.format("tick: the game thread never ran the tick queued %.1f s ago (lost: UE4SS's \"Ref was not function\"?): queued again (%d so far)",
+        log(string.format("tick: the game thread hasn't run the tick queued %.1f s ago (lost, or a very long load): queued again (%d so far)",
             os.clock() - queuedAt, lostTicks))
         pcall(crumb, "tick lost: queued again")
     end
