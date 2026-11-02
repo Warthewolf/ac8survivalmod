@@ -1840,3 +1840,87 @@ static void TgtInstall(void)
         L"the family, %d left alone%s)", g_tcN, kinds[0], kinds[1], kinds[2], c.n, alone,
         c.n >= TC_SCAN_MAX ? L"; more not looked at" : (g_tcN >= TC_MAX ? L"; TC_MAX reached" : L""));
 }
+
+/* ---- The STORE freeze (runtime 0.32.20; tools/re/STORE_FREEZE.md) ----------------------------------------------------
+ * A minigame's start (the airfield STORE) calls DeactivateForMinigame(mgr, &ActorManager->CachedAIGameObjects), which
+ * puts every AI object into cinematic mode and deactivates the live ones: the world's planes stop for every player while
+ * the co-op host shops (tests of 2026-11-01). While SV_StoreKeepAI(1) (Lua: co-op linked) the call is skipped, so nothing
+ * is deactivated, put into cinematic mode or listed, and the stock restore at the STORE's close finds nothing to undo.
+ * No component is touched (switching the minigame's components back on was the likely cause of the renderer crashes of
+ * 2026-11-01). Solo (flag 0) the stock freeze stays. RestoreForMinigame is hooked log-only, for the test. */
+typedef void (*MgListFn)(uint8_t* mgr, uint8_t* objs);
+static uint8_t*        g_fMgDeactivate;                     /* found by FindFunctions (sigs.h kSigMgDeactivate) */
+static uint8_t*        g_fMgRestore;                        /* (kSigMgRestore) */
+static MgListFn        g_nextMgDeactivate;
+static MgListFn        g_nextMgRestore;
+static volatile int    g_storeKeepAI;                       /* SV_StoreKeepAI(0 / 1) */
+
+static int MgType(uint8_t* mgr)                             /* the minigame starting / ending: ELiveMinigameType (8 Hangar) */
+{
+    uint8_t* cur = (mgr && UObjLive(mgr) == 1) ? *(uint8_t**)(mgr + 0x60) : NULL;   /* CurrentMiniGameObject */
+    return (cur && UObjLive(cur) == 1) ? cur[0xfb8] : -1;                         /* MyMinigameType */
+}
+
+static int MgNum(uint8_t* arr) { return arr ? *(int32_t*)(arr + 8) : -1; }
+
+static void MgLogObjects(const wchar_t* what, uint8_t* list)  /* the first 3 objects of one of the manager's lists */
+{
+    int n = MgNum(list);
+    uint8_t** data = (n > 0) ? *(uint8_t***)list : NULL;
+    for (int i = 0; data && i < n && i < 3; ++i) {
+        uint8_t* o = data[i];
+        if (!o || UObjLive(o) != 1) { Log(L"minigame:   %s[%d] %p: not live", what, i, o); continue; }
+        Log(L"minigame:   %s[%d] %p: active +0x3f4 = %d, cinematic +0xdf8 = %d, tick off +0x25d9 = %d", what, i, o,
+            (int)o[0x3f4], (int)o[0xdf8], (int)o[0x25d9]);
+    }
+}
+
+static void OnMgDeactivate(uint8_t* mgr, uint8_t* objs)
+{
+    int type = MgType(mgr), n = MgNum(objs);
+    if (g_storeKeepAI) {
+        Log(L"minigame: type %d starts; its deactivation of %d AI objects skipped (co-op): they keep flying", type, n);
+        Crumb(L"minigame deactivation skipped, type %d, %d objects", type, n);
+        return;
+    }
+    g_nextMgDeactivate(mgr, objs);
+    if (mgr && UObjLive(mgr) == 1) {
+        Log(L"minigame: type %d deactivated the world's AI: %d objects; lists %d / hidden %d / %d", type, n,
+            MgNum(mgr + 0x68), MgNum(mgr + 0x78), MgNum(mgr + 0x88));
+        MgLogObjects(L"deactivated", mgr + 0x68);
+    }
+}
+
+static void OnMgRestore(uint8_t* mgr, uint8_t* objs)
+{
+    if (mgr && UObjLive(mgr) == 1) {
+        Log(L"minigame: type %d ends: restore of %d AI objects; lists were %d / hidden %d / %d (co-op keep %d)", MgType(mgr),
+            MgNum(objs), MgNum(mgr + 0x68), MgNum(mgr + 0x78), MgNum(mgr + 0x88), (int)g_storeKeepAI);
+        MgLogObjects(L"listed", mgr + 0x68);
+    }
+    g_nextMgRestore(mgr, objs);
+}
+
+static void MgInstall(void)
+{
+    if (!g_uoChunks) { Log(L"minigame: no GUObjectArray: the STORE freeze isn't hooked"); return; }
+    if (g_fMgDeactivate && HookInline(g_fMgDeactivate, 16, (void*)OnMgDeactivate, (void**)&g_nextMgDeactivate,
+                                      L"minigame AI deactivation")) {}
+    else Log(L"minigame: the AI deactivation wasn't found (another game build?): the STORE still freezes the world in co-op");
+    if (g_fMgRestore && HookInline(g_fMgRestore, 15, (void*)OnMgRestore, (void**)&g_nextMgRestore, L"minigame AI restore")) {}
+    else Log(L"minigame: the AI restore wasn't found: not logged");
+}
+
+/* SV_StoreKeepAI(on) -> the old value (0 / 1), SV_ERR_NO_GAME when the deactivation isn't hooked; no argument: ask */
+static int L_StoreKeepAI(void* lua)
+{
+    double on = -1;
+    ArgNumber(lua, &on);
+    if (!g_nextMgDeactivate) return Ret(lua, SV_ERR_NO_GAME);
+    int old = g_storeKeepAI;
+    if (on >= 0 && (on != 0) != (old != 0)) {
+        g_storeKeepAI = on != 0;                           /* (Lua ticks on the game thread, as the hook) */
+        Log(L"minigame: the world's AI %s when a minigame (the STORE) starts", on != 0 ? L"keeps flying (co-op)" : L"stops (stock)");
+    }
+    return Ret(lua, old);
+}
