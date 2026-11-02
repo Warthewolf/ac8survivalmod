@@ -98,7 +98,7 @@ db.prepare(`INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills
 const e = await boardEmbeds(env);
 const ace = e[0].fields.find((f) => f.name.toLowerCase().includes("ace")).value;
 check(`'Naish' and 'naish' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
-check(`the boards: ${e.length} embeds (round, score, specials)`, e.length === 3 && e[2].fields.length === 6);
+check(`the boards: ${e.length} embeds (round, score, specials: ${e[2] && e[2].fields.length} of them)`, e.length === 3 && e[2].fields.length === 8);   // (the Spaceport Assault and Retake since 0.73.38)
 const x = await extraEmbeds(env, null, null, Math.floor(Date.now() / 1000));
 check(`the second message: ${x.map((m) => m.title.split(" —")[0]).join(", ")}`, x.length === 3 && x[0].fields.length === 5);
 check(`records: most ace squadron kills ${JSON.stringify(x[0].fields[3].value)}`, x[0].fields[3].value.includes("— 28 "));   // (the 30th of these was rate limited)
@@ -131,6 +131,7 @@ check("a bad aircraft code is refused", checkRun({ ...run, aircraft: "<b>" }) !=
 // ---------------------------------------------------------------------------------------------- the co-op version
 check("a co-op build's version is taken (0.72.2-coop.20)", checkRun({ ...run, mod: "0.72.2-coop.20" }) === null);
 check("Stable 1's co-op version is taken (0.71.5-coop.17)", checkRun({ ...run, mod: "0.71.5-coop.17" }) === null);
+check("a COOP2MP build's version is taken (0.73.73-coop2mp.74)", checkRun({ ...run, mod: "0.73.73-coop2mp.74" }) === null);
 check("a plain version still is (0.72.2)", checkRun({ ...run, mod: "0.72.2" }) === null);
 for (const bad of ["0.72.2-coop", "0.72.2-beta.1", "0.72.2-coop.12345", "<b>", "0.72.2 -coop.1"])
   check(`a bad version is refused (${bad})`, checkRun({ ...run, mod: bad }) === "bad mod version");

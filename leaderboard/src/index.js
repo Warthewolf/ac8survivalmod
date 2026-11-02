@@ -36,9 +36,10 @@ const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined)
 const jet = (code) => (code ? own(AIRCRAFT, code) || code.toUpperCase() : null);
 const RATE_PER_HOUR = 30;                     // runs one IP may submit in an hour (every ended run is sent, restarts too)
 const API = "https://discord.com/api/v10";
-// The mod's VERSION: "0.72.2", or a Survival COOP build's with its tag, "0.72.2-coop.20" (tools/coop_edition.py
-// COOP_TAG; every co-op build's runs were refused as "bad mod version" before, user's run summary of 2026-10-30)
-const MOD_RE = /^[0-9.]{1,16}(-coop\.[0-9]{1,4})?$/;
+// The mod's VERSION: "0.72.2", or a Survival COOP build's with its tag, "0.72.2-coop.20" or, from the COOP2MP builds,
+// "0.73.73-coop2mp.74" (tools/coop_edition.py COOP_TAG; every co-op build's runs were refused as "bad mod version"
+// before, user's run summary of 2026-10-30; every COOP2MP build's too, until 2026-11-02)
+const MOD_RE = /^[0-9.]{1,16}(-coop(2mp)?\.[0-9]{1,4})?$/;
 const BUILD_RE = /^[0-9a-f]{64}$/;            // a build hash (runtime/build_hash.c, tools/build_hash.py): SHA-256, hex
 
 // The score, worked out here from the run (the game shows the same number; Scripts/main.lua runScore):
@@ -653,7 +654,7 @@ const ADMIN_ACTIONS = {
 
   "builds/add": async (env, body, now) => {
     const mod = String(body.mod || "").trim(), build = String(body.build || "").trim().toLowerCase();
-    if (!MOD_RE.test(mod)) return { error: "the mod version isn't one the game sends (e.g. 0.72.2 or 0.72.2-coop.20)", status: 400 };
+    if (!MOD_RE.test(mod)) return { error: "the mod version isn't one the game sends (e.g. 0.72.2, 0.72.2-coop.20 or 0.73.73-coop2mp.74)", status: 400 };
     if (!BUILD_RE.test(build)) return { error: "the build hash must be 64 hex characters", status: 400 };
     const note = String(body.note || "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 80);
     await env.DB.prepare("INSERT OR REPLACE INTO builds (mod, build, note, added) VALUES (?, ?, ?, ?)").bind(mod, build, note, now).run();
