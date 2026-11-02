@@ -213,6 +213,13 @@ LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-1
 LADON_CIRCUIT_KM = 8.0                       # its radius: the old circuit's tightest turns (~8 km) were flown at 2500
 LADON_ARC_STEP_DEG = 18.0                    # its points (and each arc's start past the other's end) every N deg
 LADON_CIRCUIT_ALT_KM = (1.25, 2.0)           # over the airfield, on the far side (the old circuit's)
+# (0.73.74) The circuit's laps are part of the route's own path, LADON_LAPS of them after the route (each lap arc A then
+# arc B, ending over the airfield where the next begins): the test of 2026-11-02 23:16 (0.73.73) showed arc A handed
+# over at the route's PathFinish was never flown at LADON_SPEED (2500 km/h: its start 2.5 km ahead is 3.6 s away; the
+# Ladons held the route's end tangent, descending to 0.2 km 29 km out, legs 0), while VOID WATCHER took the same kind of
+# handover at 450-550 km/h. The one path an AI plane has always flown is the first one, started at its appearance; so no
+# handover at all until the laps run out (~72 s a lap at 2500: 15 laps ~18 minutes); then arc A / B as before.
+LADON_LAPS = 15
 # The enraged Ladon (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster";
 # Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): Lua fires
 # RE_SV_LadonRage<Key>, which sets SV_LadonRage<Key>, and each arc's end starts the next at LADON_RAGE_SPEED (flag-gated
