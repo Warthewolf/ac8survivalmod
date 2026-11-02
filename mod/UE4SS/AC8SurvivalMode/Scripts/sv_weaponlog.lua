@@ -207,6 +207,7 @@ function WLOG.tick(now)
     local c = cfg()
     if c.enabled == false or not D or not now or not svLevelOn then return end   -- (svLevelOn: FindAllOf over a level being unloaded, hotfix8)
     if now < (WLOG.nextAt or 0) then return end
+    if walkBusy and walkBusy() then return end            -- (0.73.73 review: its walks wait while the engine frees objects; next tick again)
     WLOG.nextAt = now + (tonumber(c.every_s) or 0.5)
     local R = run()
     carriedTick(R, now)

@@ -34,6 +34,7 @@ end
 local M = {
     nextId = 0, units = {}, byId = {},        -- host: the flights mirrored, and every aircraft by stream id
     cunits = {}, copies = {}, dead = {},       -- joiner: the host's flights here, the bound copies, ids already down
+    objsOf = {}, downAt = {},                  -- joiner (0.73.73): every object of each unit spawned here; when one went down
     spawnQ = {}, hunts = {}, mirror = 0,       -- joiner's spawns waiting, host's hunt orders waiting, inside the rounds
     peers = {}, roster = {}, hiFrom = {},      -- the other players' planes here by slot; the roster (host: kept, joiner: told)
     lastD = nil, said = {}, nextRnd = 0, nextHp = 0, nextAf = 0, nextInfo = 0, nextHi = 0,
@@ -90,6 +91,12 @@ end
 local function health(o)
     local ok, h = pcall(function() return o.HealthInternal end)
     return ok and type(h) == "number" and h or nil
+end
+-- (0.73.73) o's address while it's a live object (sv_core's liveAddr: GUObjectArray, outers too), else nil: for objects
+-- kept between ticks (the copies, the units' objects)
+local function live(o)
+    if type(liveAddr) == "function" then return liveAddr(o) end
+    return valid(o) and addrOf(o) or nil
 end
 local function playerName(slot)
     local r = M.roster[slot]
@@ -479,7 +486,11 @@ local function hostTick()
                 local okF, l = pcall(r.fn)
                 evs = (okF and type(l) == "table") and l or {}
             end
-            for _, name in ipairs(evs) do sendTo(r.to, true, "ev", name) end
+            -- ((0.73.73) with the unit they're for: a joiner fires them only on a copy it spawned again since, not one
+            -- it kept through the resync, which had them already)
+            for _, name in ipairs(evs) do
+                if r.unit then sendTo(r.to, true, "ev", name, r.unit) else sendTo(r.to, true, "ev", name) end
+            end
             if #evs > 0 then log(string.format("coop: player %d brought up to date: %s", r.to + 1, table.concat(evs, ", "))) end
         end
     end
@@ -563,11 +574,16 @@ local function hostTick()
     end
 end
 
--- a joiner asked for the whole picture (it loaded in, or its link came back): every flight with anything alive
+-- a joiner asked for the whole picture (it loaded in, or its link came back): every flight with anything alive.
+-- (0.73.73) "rs|j" first: the answer to its own "jn", not the host's new run ("rs|n"), so the joiner keeps and checks
+-- what it has instead of tearing it all down; its deaths as "dn|<id>|r" (long since: not that joiner's kills); "rz" when
+-- the picture's whole, so it knows which of its flights the host no longer has. The testers' logs of 0.73.70: every
+-- answer took all of a joiner's copies down ("29 copies taken down (the host's run started over)") and its fresh spawns
+-- were refused while the ones it couldn't finish stayed up ("its last flight is still up", 409 times).
 local function hostSync(to)
     M.cnt.jnGot = M.cnt.jnGot + 1
-    crumb("coop: player " .. tostring((to or 0) + 1) .. " asked for the whole picture: sent (rs)")
-    sendTo(to, true, "rs")
+    crumb("coop: player " .. tostring((to or 0) + 1) .. " asked for the whole picture: sent (rs|j)")
+    sendTo(to, true, "rs", "j")
     sendRoster(to)
     local n = 0
     for unit, u in pairs(M.units) do
@@ -575,13 +591,17 @@ local function hostSync(to)
         sendUnit(to, unit, u)
         for ord, pl in pairs(u.planes) do
             sendTo(to, true, "bd", unit, u.gen, ord, pl.id)
-            if pl.dead then sendTo(to, true, "dn", pl.id) end
+            if pl.dead then sendTo(to, true, "dn", pl.id, "r") end
         end
         for key, g in pairs(u.ground) do
             sendTo(to, true, "gd", unit, u.gen, key, g.id)
-            if g.dead then sendTo(to, true, "dn", g.id) end
+            if g.dead then sendTo(to, true, "dn", g.id, "r") end
         end
     end
+    sendTo(to, true, "rz", n)
+    -- (everything's health again with the next second's: a copy spawned again there has its stock health till then)
+    for _, e in pairs(M.byId) do e.sentHp = nil end
+    M.nextHp = 0
     -- the Alicorn's fresh copy there: its core open, under water, as here (events of the fight it missed)
     local s = D and D.special
     if s and s.kind == "alicorn" and s.state == "sail" then
@@ -590,7 +610,7 @@ local function hostSync(to)
         if s.dived then ev[#ev + 1] = "RE_SV_AlcnDive" end
         if #ev > 0 then
             M.replays = M.replays or {}
-            M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, events = ev }
+            M.replays[#M.replays + 1] = { at = os.clock() + 12, to = to, events = ev, unit = SPC and SPC.alicornUnit or nil }
         end
     end
     -- the game's attack throttle in force here (CFG.late.pressure, sv_rounds.lua roundPressure: forwarded when fired,
@@ -663,16 +683,26 @@ end
 -- co-op run of 2026-10-31: three joiners' teardowns (the host's answer to their own "jn") paid 5-14 kills "by you"
 -- each, 750-2,230 zollars, in the seconds after.
 local TORN_S = 30
-local function killCopy(id, o, torn)
-    if type(SV_CoopBind) == "function" then SV_CoopBind(id, 0) end
-    if not valid(o) then return end
+-- force (0.73.73): an invincible copy too (a taxiing ally, the shuttle, the pad's guns and dummies): the host's is gone or
+-- spawning afresh. Without it the testers' joiners couldn't finish them ("a copy here couldn't be finished (health 9300
+-- after)"), they stayed up unbound, flying their own AI ("VOID WATCHER became a space shuttle", MOONCHILD "submersible"),
+-- and the host's next spawn of the unit was refused.
+local function killCopy(id, o, torn, force)
+    if type(SV_CoopBind) == "function" and type(id) == "number" and id > 0 then SV_CoopBind(id, 0) end
+    local a = live(o)
+    if not a then return end
+    M.downAt[a] = os.clock()                             -- (0.73.73: strayTick leaves it alone)
     if torn then
-        local a = addrOf(o)
-        if a then M.torn = M.torn or {}; M.torn[a] = os.clock() end
+        M.torn = M.torn or {}; M.torn[a] = os.clock()
         M.tornLast = os.clock()                          -- (the pay audit, sv_audit.lua: COOP.tornRecently)
         M.cnt.torn = M.cnt.torn + 1
     end
-    crumb(string.format("copy %s taken down (id %s%s)", nameOf(o), tostring(id), torn and ", torn: not a kill" or ""))
+    crumb(string.format("copy %s taken down (id %s%s%s)", nameOf(o), tostring(id), torn and ", torn: not a kill" or "",
+        force and ", forced" or ""))
+    if force then
+        pcall(function() o:SetIsInvincible(false) end)
+        pcall(function() o.bIsInvincible = false end)
+    end
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
     local P0 = M.peers[0]
@@ -691,13 +721,72 @@ local function killCopy(id, o, torn)
     end
 end
 
-local function bindCopy(id, o, unit)
-    if M.dead[id] then killCopy(id, o); return end
+-- (0.73.73) a copy whose host id is already down: taken down as not a kill (torn) and off its flight's planes here. The
+-- testers' logs of 0.73.70: each resync spawned the host's flights again here, and the copies of planes the host had
+-- shot down long before went down on arrival "by you": 109 kills, ~13,470 zollars (A04 13:39:40, "up 1 s ...; by you")
+local function deadOnArrival(id, o, unit, ord, key)
+    killCopy(id, o, true, true)
+    M.copies[id] = nil
+    local cu, a = M.cunits[unit], addrOf(o)
+    if cu and ord and cu.planes[ord] and addrOf(cu.planes[ord]) == a then cu.planes[ord] = nil end
+    if cu and key and cu.gobjs and cu.gobjs[key] and addrOf(cu.gobjs[key]) == a then cu.gobjs[key] = nil end
+end
+local function bindCopy(id, o, unit, ord)
+    if M.dead[id] then deadOnArrival(id, o, unit, ord, nil); return end
     local a = addrOf(o)
     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
     pcall(function() o:SetMinHealth(0.1) end)               -- (it goes down when the host's does)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a, ally = allyUnit(unit) }   -- (ally: the host's allies' copy)
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a, ally = allyUnit(unit),   -- (ally: the host's allies' copy)
+                     unit = unit, ord = ord }               -- (0.73.73: its place in its flight here, "dn")
+end
+
+-- (0.73.73) every object of each of the host's units spawned here, by address (its name too: an address freed and used
+-- again is another object), kept past a teardown until it's down or gone: a refused spawn of the host's takes down
+-- whatever of that unit is still up here, whatever its kind (doSpawn). 0.73.70's take-down walked the enemy planes only,
+-- and found none in 187 of 187 tries: the shuttle's pad (PadDummies, AA_Unit_01_Ground0), the defences, the allies'
+-- flights and the shuttle were never in it.
+local function noteObj(unit, o)
+    local a = type(unit) == "string" and addrOf(o)
+    if not a then return end
+    local reg = M.objsOf[unit]
+    if not reg then reg = {}; M.objsOf[unit] = reg end
+    reg[a] = { obj = o, name = nameOf(o) }
+end
+local function pruneObjs()                               -- (strayTick, every 5 s: what's down or gone dropped)
+    for unit, reg in pairs(M.objsOf) do
+        for a, e in pairs(reg) do
+            -- (0.73.73 review) unreadable health counts as up, as takeUnitDown has it: dropping such an object here hid
+            -- it from a later refused spawn's take-down, the ghost this registry is for
+            if not live(e.obj) or (health(e.obj) or 1) <= 0 then reg[a] = nil end
+        end
+        if next(reg) == nil then M.objsOf[unit] = nil end
+    end
+end
+-- whatever of `unit` is still up here (its flight here `cu`, if any, and every object of it spawned here), taken down:
+-- torn (not a kill), forced (invincible too). How many.
+local function takeUnitDown(unit, cu)
+    local n, seen, idOf = 0, {}, {}
+    for id, c in pairs(M.copies) do if c.addr then idOf[c.addr] = id end end
+    local function one(o, name)
+        local a = live(o)
+        if not a or seen[a] or (name and nameOf(o) ~= name) then return end
+        seen[a] = true
+        local id = idOf[a]
+        if (health(o) or 1) > 0 then killCopy(id or 0, o, true, true); n = n + 1 end
+        if id then M.copies[id] = nil end
+    end
+    if cu then
+        for _, o in pairs(cu.planes or {}) do one(o) end
+        for _, o in pairs(cu.gobjs or {}) do one(o) end
+    end
+    local reg = M.objsOf[unit]
+    for a, e in pairs(reg or {}) do
+        one(e.obj, e.name)                               -- (still up after it: kept, for the next try)
+        if not live(e.obj) or nameOf(e.obj) ~= e.name or (health(e.obj) or 0) <= 0 then reg[a] = nil end
+    end
+    if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
+    return n
 end
 
 -- (a joiner) copy o's health scaled here (sv_ai.lua enemyLate: CFG.late, a Skirmisher's x0.75, as the host scales its
@@ -714,40 +803,43 @@ function COOP.copyScaled(o, h0, h1)
 end
 
 local function clientPlane(o, unit)
-    local cu = M.cunits[unit]
-    if not cu then return end
     -- (the Alicorn's 131 parked pools: the host gives them no ids, hostPlane, so neither does this game's count. Counted
     -- here, they were "strays" 15 s on, their copies couldn't be taken down (put away invincible), the "jn" resync took
     -- the Alicorn's tanks and core down here and its fresh copy was refused, "its last flight is still up": the co-op
     -- run of 2026-10-31, two joiners couldn't target the Alicorn at all)
     local a = addrOf(o)
     if SPC and SPC.alcnPool and a and SPC.alcnPool.set[a] then return end
+    noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
+    local cu = M.cunits[unit]
+    if not cu then return end
     cu.n = cu.n + 1
     cu.planes[cu.n] = o
     local id = cu.binds[cu.n]
-    if id then bindCopy(id, o, unit) end
+    if id then bindCopy(id, o, unit, cu.n) end
 end
 
 -- a ship's, vehicle's or part's copy (groundTick): not moved, held up until the host's goes down, its hits sent
-local function bindGround(id, o, unit)
-    if M.dead[id] then killCopy(id, o); M.copies[id] = nil; return end
+local function bindGround(id, o, unit, key)
+    if M.dead[id] then deadOnArrival(id, o, unit, nil, key); return end
     pcall(function() o:SetMinHealth(0.1) end)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o), ally = allyUnit(unit) }  -- (addr: a shot's target, "fx")
+    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o), ally = allyUnit(unit),  -- (addr: a shot's target, "fx")
+                     unit = unit, key = key }
 end
 clientGround = function(o, unit)
+    noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
     local cu = M.cunits[unit]
     if not cu then return end
     cu.gcount, cu.gobjs = cu.gcount or {}, cu.gobjs or {}
     local key = groundKey(o, cu.gcount)
     cu.gobjs[key] = o
     local id = cu.gbinds and cu.gbinds[key]
-    if id then bindGround(id, o, unit) end
+    if id then bindGround(id, o, unit, key) end
 end
 
 -- (sv_main.lua planeSweep) plane p, just down here, is a copy this game took down itself (killCopy's torn): not a kill
 function COOP.tornDown(p)
     local a = p and (p.addr or (valid(p.obj) and addrOf(p.obj)))
-    local t = a and M.torn and M.torn[a]
+    local t = a and M.torn and M.torn[a] or nil   -- (0.73.73: a plane with no address gave false, and os.clock() - false errored)
     if M.torn and os.clock() >= (M.tornPruneAt or 0) then
         M.tornPruneAt = os.clock() + TORN_S
         for k, at in pairs(M.torn) do if os.clock() - at > TORN_S then M.torn[k] = nil end end
@@ -755,6 +847,8 @@ function COOP.tornDown(p)
     return t ~= nil and os.clock() - t <= TORN_S
 end
 
+-- (the planes forced, invincible or not, 0.73.73: one left up flies on unbound by its own AI, "VOID WATCHER became a
+-- space shuttle"; ships, vehicles and parts as before: the stream never moves them anyway)
 local function killAllCopies(why)
     local n, loose, seen = 0, 0, {}
     crumb("copies: all taken down (" .. tostring(why) .. ")")
@@ -762,8 +856,8 @@ local function killAllCopies(why)
     M.cnt.teardowns = M.cnt.teardowns + 1
     if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end   -- (the defences' cached actors: freed soon)
     for id, c in pairs(M.copies) do
-        killCopy(id, c.obj, true); n = n + 1
-        local a = c.addr or (valid(c.obj) and addrOf(c.obj))
+        killCopy(id, c.obj, true, c.key == nil); n = n + 1
+        local a = c.addr or live(c.obj)
         if a then seen[a] = true end
     end
     -- (and every copy spawned here that never got its id from the host: the user's co-op run of 2026-10-30, both links
@@ -772,46 +866,130 @@ local function killAllCopies(why)
     -- even though i'm into the next round")
     for _, cu in pairs(M.cunits or {}) do
         for _, o in pairs(cu.planes or {}) do
-            local a = valid(o) and addrOf(o)
-            if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
+            local a = live(o)
+            if a and not seen[a] then seen[a] = true; killCopy(0, o, true, true); loose = loose + 1 end
         end
         for _, o in pairs(cu.gobjs or {}) do
-            local a = valid(o) and addrOf(o)
+            local a = live(o)
             if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
         end
     end
-    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
+    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ, M.rep = {}, {}, {}, {}, nil, nil
     if n + loose > 0 then
         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
     end
 end
 
+-- (0.73.73) The host's answer to this game's own "jn" ("rs|j" ... "rz", hostSync) is a repair, not a teardown. What's here
+-- is kept and checked against the host's picture: a flight up here of the host's generation stays as it is (the
+-- picture's ids bind its copies again); one of an older generation is taken down for the host's fresh spawn (doSpawn);
+-- one the host no longer has at all is taken down at the picture's end; one missing a plane the host still has up is
+-- spawned again (its planes are moved by the stream; a ship or part missing alone isn't: a fresh one would start its
+-- path over). Nothing is paid for, nobody DOWN comes back, the round's records go on. The testers' logs of 0.73.70: every
+-- answer tore all of a joiner's copies down (2,689 copies, 115 times), "all explode and none come back" for 7 minutes
+-- (A04 13:15:57), a Ladon gone here while the host's flew on (A02 11:13:58), the round cut short 58 times.
+local REP_WAIT_S, JUDGE_AFTER_S = 10, 3
+local function onResync()
+    M.rep = { at = os.clock(), units = {}, ids = {}, rebound = 0 }
+    M.spawnQ, M.pendBind = {}, nil                       -- (the picture sends every flight the host has up again)
+    M.cnt.repairs = M.cnt.repairs + 1
+    crumb("coop: the host's whole picture is coming (rs|j): the copies here kept")
+    log("coop: the host's whole picture is coming (rs|j, its answer to this game's jn): the copies here are kept and checked against it")
+end
+-- (while the picture comes) the host's id `id` for plane `ord` (or part `key`) of its flight `unit`, generation gen
+local function repNote(unit, gen, id, ord, key)
+    local rp = M.rep
+    local pu = rp and not rp.done and rp.units[unit]
+    if not (pu and pu.gen == gen) then return end
+    if ord then pu.alive[ord] = id else pu.galive[key] = id end
+    rp.ids[id] = { unit = unit, ord = ord, key = key }
+end
+-- the host's id for a plane (field "binds", by its order) or part ("gbinds", by its key) of its flight `unit`, generation
+-- gen, whose spawn here is still to come: kept until doSpawn spawns that generation (one generation a unit)
+local function pendKeep(unit, gen, field, k, id)
+    M.pendBind = M.pendBind or {}
+    local pb = M.pendBind[unit]
+    if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
+    pb[field][k] = id
+end
+local function upHere(o) return o ~= nil and live(o) ~= nil and (health(o) or 1) > 0 end
+local function repairDone(why)
+    local rp = M.rep
+    if not rp or rp.done then return end
+    rp.done = os.clock()
+    local whole = why == "rz"
+    local kept, fresh, redo, gone, gaps, nPic = 0, 0, {}, {}, {}, 0
+    for unit, pu in pairs(rp.units) do
+        nPic = nPic + 1
+        local cu = M.cunits[unit]
+        if not (cu and cu.gen == pu.gen and cu.upAt) then fresh = fresh + 1 end
+    end
+    for unit, cu in pairs(M.cunits) do
+        local pu = rp.units[unit]
+        if not pu then
+            if whole then                                -- (the host has none of it up: down here too)
+                gone[#gone + 1] = string.format("%s (%d)", unit, takeUnitDown(unit, cu))
+                M.cunits[unit] = nil
+            end
+        elseif pu.gen == cu.gen and cu.upAt then
+            local miss, gmiss = 0, 0
+            if rp.done - cu.upAt >= JUDGE_AFTER_S then   -- (a flight just up here: its copies may not all be seen yet)
+                for ord in pairs(pu.alive) do if not upHere(cu.planes[ord]) then miss = miss + 1 end end
+                for key in pairs(pu.galive) do if not upHere(cu.gobjs and cu.gobjs[key]) then gmiss = gmiss + 1 end end
+            end
+            if miss > 0 then
+                cu.respawn = true
+                redo[#redo + 1] = string.format("%s (%d of its planes)", unit, miss)
+            else
+                kept = kept + 1
+                if gmiss > 0 then gaps[#gaps + 1] = string.format("%s (%d)", unit, gmiss) end
+            end
+        end
+    end
+    local function list(t) return #t > 0 and (": " .. table.concat(t, ", ", 1, math.min(#t, 6)) .. (#t > 6 and ", ..." or "")) or "" end
+    log(string.format("coop: the host's picture (%d flights%s): %d kept here as they were (%d copies bound again), %d spawned "
+        .. "again (a plane the host has up wasn't here%s), %d new or newer here, %d taken down (the host has none of them up%s)%s",
+        nPic, whole and "" or ("; " .. tostring(why) .. ": the flights it didn't name kept"), kept, rp.rebound, #redo, list(redo),
+        fresh, #gone, list(gone), #gaps > 0 and string.format("; %d kept missing ships or parts the host has up (not spawned "
+        .. "again: they'd start their paths over)%s", #gaps, list(gaps)) or ""))
+end
+-- the host's replay of `unit`'s state for a fresh copy (hostSync: the Alicorn's open core and dive, "ev|<event>|<unit>"):
+-- not fired on a copy here that was kept through the resync, which had it already (its AdvancePhase again would move it
+-- on a phase). Whether it's skipped.
+local function keptThrough(unit, name)
+    local cu, rp = unit and M.cunits[unit], M.rep
+    if not (cu and rp and cu.at and cu.at < rp.at) then return false end
+    log(string.format("coop: the host's %s for %s not fired here: its copy here was kept through the resync (it had it)",
+        tostring(name), tostring(unit)))
+    return true
+end
+
+local function unitUp(cu) return cu ~= nil and ((cu.n or 0) > 0 or next(cu.gobjs or {}) ~= nil) end
 local function doSpawn(q)
     local unit = q.unit
+    local rp = M.rep
+    if q.rep and rp and not rp.done then                 -- (0.73.73) a repair's: once the host's whole picture is in
+        if os.clock() - rp.at < REP_WAIT_S then q.at = os.clock() + 0.5; return false end
+        repairDone(string.format("no end of the host's picture in %d s", REP_WAIT_S))
+    end
     local had = M.cunits[unit]
-    if had and had.gen == q.gen and had.n > 0 then return true end   -- (that flight is up here already)
-    if rawUnitAlive and rawUnitAlive(unit) > 0 then      -- the copy of its last flight still up: down first
-        local cu = M.cunits[unit]
-        if cu and cu.gen ~= q.gen then
-            for ord, o in pairs(cu.planes) do local id = cu.binds[ord]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end end
-            for key, o in pairs(cu.gobjs or {}) do
-                local id = cu.gbinds and cu.gbinds[key]; killCopy(id or 0, o, true); if id then M.copies[id] = nil end
-            end
-            if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
-        elseif not cu and not q.untrackedDown then
-            -- (0.73.70) up but no longer tracked here (a resync's teardown missed it): Cress's VOID WATCHER copy of
-            -- 2026-11-01 21:11 stayed up unbound after his "jn", the host's fresh spawn was refused ("its last flight
-            -- is still up") and the copy flew its own AI off the map. Take its planes down (torn: not a kill), then
-            -- the host's comes in its place.
-            q.untrackedDown = true
-            local nd = 0
-            for _, p in ipairs(planes or {}) do
-                if p.unit == unit and not p.down and p.obj and liveAddr(p.obj) then killCopy(0, p.obj, true); nd = nd + 1 end
-            end
-            if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
-            log(string.format("coop: %s is up here but no longer tracked (%d alive): %d of its planes taken down for the host's",
-                unit, rawUnitAlive(unit), nd))
+    if had and had.gen == q.gen and not had.respawn and (unitUp(had) or os.clock() - (had.at or 0) < JUDGE_AFTER_S) then
+        return true                                      -- (that flight is up here already)
+    end
+    local alive = rawUnitAlive and rawUnitAlive(unit) or 0
+    if type(alive) == "number" and alive > 0 then        -- the copy of its last flight still up: down first
+        if not q.downDone then
+            -- (0.73.73) whatever of it is up here, whatever its kind, tracked or not (takeUnitDown). 0.73.70's take-down
+            -- walked the enemy planes only ("0 of its planes taken down", 187 of 187), and a "bd" / "gd" for the queued
+            -- spawn had put an empty flight of the same generation in M.cunits, so neither take-down ran at all: 409
+            -- refusals ("its last flight is still up"), the stale copies flying on unbound
+            q.downDone = true
+            local why = (had and had.respawn and "a plane of it the host has up wasn't here: spawned again")
+                or (had and had.gen ~= q.gen and ("its last flight here, gen " .. tostring(had.gen)))
+                or (had and "spawned here, nothing of it seen") or "no longer tracked here"
+            log(string.format("coop: %s is up here (%d alive; %s): %d of its objects taken down for the host's (gen %s)",
+                unit, alive, why, takeUnitDown(unit, had), tostring(q.gen)))
         end
         -- (the Alicorn's last copy can't be shot down here: its parked pools are invincible, so it's taken off whole,
         -- as the host does when one is left from last time, and the host's fresh one comes in its place)
@@ -853,7 +1031,12 @@ local function doSpawn(q)
     end
     M.lastSpawnAt = os.clock()
     if type(r) ~= "number" or r <= 0 then
-        log("coop: the host's " .. unit .. " not spawned here (" .. (SV_ERR[r] or tostring(r)) .. ")")
+        local left = {}                                  -- ((0.73.73) what of it here couldn't be taken down)
+        for _, e in pairs(M.objsOf[unit] or {}) do
+            if upHere(e.obj) and nameOf(e.obj) == e.name then left[#left + 1] = tostring(e.name):match("([^%.:]+)$") or "?" end
+        end
+        log("coop: the host's " .. unit .. " not spawned here (" .. (SV_ERR[r] or tostring(r)) .. ")" .. (#left > 0 and
+            string.format("; %d of its objects here still up: %s", #left, table.concat(left, ", ", 1, math.min(#left, 4))) or ""))
     else
         M.cunits[unit].upAt = M.lastSpawnAt                  -- (its appearance orders 2 s on: holdDue)
     end
@@ -993,25 +1176,42 @@ local function clientRounds(now)
         local q = M.evQ
         M.evQ = nil
         for _, e in ipairs(q) do
-            if os.clock() - e.at < 60 then hostEvent(e.name) end      -- (a hold: once its copy has had its orders)
-        end
+            if os.clock() - e.at < 60 and not keptThrough(e.unit, e.name) then hostEvent(e.name) end   -- (a hold: once its
+        end                                                                                             -- copy's had its orders)
     end
 end
 
 -- (a joiner, every 5 s) a copy spawned here that's still not bound to the host's plane STRAY_S on: never driven by the
--- host, it would fly on by its own AI (the co-op run of 2026-10-30: enemies seen a round after the host had cleared them)
-local STRAY_S = 15
+-- host, it would fly on by its own AI (the co-op run of 2026-10-30: enemies seen a round after the host had cleared them).
+-- (0.73.73) A stray is up: not a copy the host has said is down, nor one taken down here in the last DOWN_KEEP_S. The
+-- host's "dn" took its copy down and left it in its flight's planes here, so 0.73.70 counted each of the host's kills a
+-- stray a few seconds on and asked for the whole picture: 105 of the testers' 115 "jn" came within 12 s of the host's
+-- kill (A04's crumbs: 12:41:00.089 "copy ..._2147415945 taken down (id 1)", 12:41:01.643 the same copy "taken down (id 0,
+-- torn: not a kill)", 12:41:02 every copy torn down). A stray is taken down, then the host's picture asked for: its
+-- answer is a repair (onResync), which brings a flight the host still has up whole again here, bound to the host's.
+local STRAY_S, DOWN_KEEP_S = 15, 30
+local function strayable(o, a, id)
+    if id and M.dead[id] then return false end
+    local t = M.downAt[a]
+    if t and os.clock() - t < DOWN_KEEP_S then return false end
+    return (health(o) or 1) > 0
+end
 local function strayTick(now)
     if now < (M.strayAt or 0) then return end
     M.strayAt = now + 5
+    pruneObjs()
+    for a, t in pairs(M.downAt) do if now - t >= DOWN_KEEP_S then M.downAt[a] = nil end end
     local bound = {}
-    for _, c in pairs(M.copies) do local a = c.addr or (valid(c.obj) and addrOf(c.obj)); if a then bound[a] = true end end
-    local n = 0
+    for _, c in pairs(M.copies) do local a = c.addr or live(c.obj); if a then bound[a] = true end end
+    local found, inFound = {}, {}
     for unit, cu in pairs(M.cunits) do
         if cu.at and now - cu.at >= STRAY_S then
             for ord, o in pairs(cu.planes or {}) do
-                local a = valid(o) and addrOf(o)
-                if a and not bound[a] then killCopy(0, o, true); cu.planes[ord] = nil; n = n + 1 end
+                local a = live(o)
+                if a and not bound[a] and not inFound[a] and strayable(o, a, cu.binds and cu.binds[ord]) then
+                    inFound[a] = true
+                    found[#found + 1] = { o = o, a = a, cu = cu, ord = ord, what = unit .. " #" .. ord }
+                end
             end
         end
     end
@@ -1019,17 +1219,17 @@ local function strayTick(now)
     -- players' AI stand-ins skipped) that isn't one of the host's: the user, 2026-10-30, "I'm seeing players go after enemies
     -- that I'm not seeing, no target boxes or anything, however on their side they see aircraft there"
     M.strayFirst = M.strayFirst or {}
-    local stillHere, names = {}, {}
+    local stillHere = {}
     for _, p in ipairs(planes or {}) do
         local o = p.obj
-        local a = valid(o) and addrOf(o)
-        if a and not p.down and not (p.unit and SLOT_OF[p.unit]) and not bound[a] then
+        local a = live(o)
+        if a and not inFound[a] and not p.down and not (p.unit and SLOT_OF[p.unit]) and not bound[a] then
             stillHere[a] = true
             local first = M.strayFirst[a]
             if not first then M.strayFirst[a] = now
-            elseif now - first >= STRAY_S and (health(o) or 1) > 0 then
-                killCopy(0, o, true); n = n + 1; M.strayFirst[a] = nil
-                names[#names + 1] = (p.unit or "?") .. " " .. tostring(p.name)
+            elseif now - first >= STRAY_S and strayable(o, a) then
+                inFound[a] = true
+                found[#found + 1] = { o = o, a = a, what = (p.unit or "?") .. " " .. tostring(p.name) }
             end
         end
     end
@@ -1039,7 +1239,7 @@ local function strayTick(now)
         if cu.at and not cu.bindSaid and now - cu.at >= 20 and (cu.n or 0) > 0 then
             cu.bindSaid = true
             local nb = 0
-            for ord in pairs(cu.planes or {}) do if cu.binds and cu.binds[ord] then nb = nb + 1 end end
+            for ord = 1, cu.n do if cu.binds and cu.binds[ord] then nb = nb + 1 end end
             if nb < (cu.n or 0) then
                 -- (which generation it was spawned as, and the host's last ids for that unit: whether they came at all.
                 -- The co-op run of 2026-10-31: flights re-spawned after a resync went unbound, 57 on one joiner's game)
@@ -1050,19 +1250,30 @@ local function strayTick(now)
             end
         end
     end
-    if n > 0 and now >= (M.resyncAt or 0) and now - (M.jnAt or -1e9) >= 30 and COOP.client() then
-        M.resyncAt = now + 120
-        M.jnAt = os.clock()
+    if #found == 0 or not COOP.client() then return end
+    local rp = M.rep
+    if rp and not rp.done then return end                -- (the host's picture on its way: it may bind them)
+    local names = {}
+    for i, f in ipairs(found) do
+        if i <= 6 then names[i] = f.what end
+        killCopy(0, f.o, true, true)
+        if f.cu and f.ord and f.cu.planes[f.ord] == f.o then f.cu.planes[f.ord] = nil end
+        M.strayFirst[f.a] = nil
+    end
+    M.cnt.strays = M.cnt.strays + #found
+    M.tornWhy = "strays"
+    -- (then the host's picture, at most every 2 minutes: a repair, onResync; a flight it still has up that lost a plane
+    -- here comes again whole, bound to the host's)
+    local asked = false
+    if now >= (M.resyncAt or 0) and now - (M.jnAt or -1e9) >= 30 then
+        M.resyncAt, M.jnAt = now + 120, os.clock()
         send(true, "jn")
         M.cnt.jnSent = M.cnt.jnSent + 1
-        log("coop: strays here: the host asked for the whole picture again (jn)")
+        asked = true
     end
-    if n > 0 then
-        M.cnt.strays = M.cnt.strays + n
-        M.tornWhy = "strays"
-        log(string.format("coop: %d stray enemy copies taken down (here %d s, never bound to the host's)%s", n, STRAY_S,
-            #names > 0 and (": " .. table.concat(names, ", ", 1, math.min(#names, 6))) or ""))
-    end
+    log(string.format("coop: %d stray enemy copies taken down (here %d s, never bound to the host's)%s: %s", #found, STRAY_S,
+        asked and "; asked the host for its whole picture (jn): a flight of these it still has up comes again" or "",
+        table.concat(names, ", ")))
 end
 
 local function clientTick()
@@ -1160,6 +1371,7 @@ end
 local function realOn() return cfg().real_planes == true and type(SV_CoopSpawnPP) == "function" end
 function COOP.realOn() return COOP.open and realOn() end
 local function spawnReal(slot, P, code, lo, pt)
+    if walkHold and walkHold() then return nil, "the walks are held (a level going away)" end   -- (0.73.73: a held search could orphan it)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil, "you have no plane here yet" end
     local path = COOP.planeClassPath(code)
@@ -1347,10 +1559,10 @@ function COOP.me() return localPlayer() end
 -- was rebuilt, a line a minute from sv_audit.lua (COOP.syncReport): on a joiner its copies (bound to the host's ids or
 -- not), the strays taken down, its asks for the whole picture (jn) and the host's answers (rs), the copies it tore down
 -- and its teardowns; on the host the joiners' asks it answered. Counted since the last report.
-M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0 }
+M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0, repairs = 0 }
 function COOP.syncReport()
     local c = M.cnt
-    M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0 }
+    M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0, repairs = 0 }
     if COOP.host() then
         return string.format("host: %d joiners linked, %d asks for the whole picture answered (rs)", M.linkedPeers or 0, c.jnGot)
     end
@@ -1365,8 +1577,8 @@ function COOP.syncReport()
         end
     end
     return string.format("joiner: %d copies of %d flights (%d bound to the host's ids, %d not), %d strays taken down, %d asks "
-        .. "for the whole picture (jn), %d answers (rs), %d copies torn down in %d teardowns", copies, flights, bound,
-        copies - bound, c.strays, c.jnSent, c.rsGot, c.torn, c.teardowns)
+        .. "for the whole picture (jn), %d answers (rs; %d of them repairs, the copies kept), %d copies torn down in %d teardowns",
+        copies, flights, bound, copies - bound, c.strays, c.jnSent, c.rsGot, c.repairs or 0, c.torn, c.teardowns)
 end
 -- whether this game tore copies down itself within the last s seconds (and why last): the pay audit's suspect window
 function COOP.tornRecently(s)
@@ -2963,57 +3175,51 @@ local function onJoinerMessage(f)
                 if row then ops[#ops + 1] = { row = row, idx = tonumber(idx) } end
             end
         end
-        M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = tonumber(f[6]) or 0 }
+        local gen = tonumber(f[6]) or 0
+        local rp = M.rep
+        local rep = rp ~= nil and not rp.done                 -- ((0.73.73) part of the host's picture: a repair's)
+        if rep then rp.units[unit] = { gen = gen, alive = {}, galive = {} } end
+        M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = gen, rep = rep }
     elseif k == "bd" then
-        local unit, gen, ord, id = f[2], tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
+        local unit, gen, ord, id = short(f[2], 96), tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
         if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
-        local bl = type(unit) == "string" and M.bdLast[unit]                                 -- ids per unit: strayTick's
-        if type(unit) == "string" and (not bl or bl.gen ~= gen) then                         -- bound line; capped)
+        local bl = M.bdLast[unit]                                                         -- ids per unit: strayTick's
+        if not bl or bl.gen ~= gen then                                                   -- bound line; capped)
             if not bl then M.bdLastN = M.bdLastN + 1 end
             bl = { gen = gen, n = 0 }; M.bdLast[unit] = bl
         end
-        if bl then bl.n = bl.n + 1 end
+        bl.n = bl.n + 1
+        if not (gen and ord and id) then return end
+        M.dead[id] = nil                                 -- ((0.73.73) named by the host now: up, until its "dn" says not)
+        repNote(unit, gen, id, ord, nil)
         local cu = M.cunits[unit]
-        if not cu or cu.gen ~= gen then                   -- (its spawn is still queued: keep the id for it)
-            cu = { gen = gen, n = 0, planes = {}, binds = {} }
-            local queued = false
-            for _, q in ipairs(M.spawnQ) do if q.unit == unit and q.gen == gen then queued = true end end
-            if not queued then
-                -- (nor queued yet: kept for when it is, not dropped. The co-op run of 2026-10-30: a joiner still loading
-                -- as the host's round came in got 1 bind of 4, and its other copies flew on by their own AI)
-                if gen and ord and id then
-                    M.pendBind = M.pendBind or {}
-                    local pb = M.pendBind[unit]
-                    if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
-                    pb.binds[ord] = id
-                end
-                return
-            end
-            M.cunits[unit] = cu
+        if not cu or cu.gen ~= gen then
+            -- (its spawn here still to come, queued or not yet sent: kept for it, not dropped. The co-op run of 2026-10-30:
+            -- a joiner still loading as the host's round came in got 1 bind of 4, and its other copies flew on by their own
+            -- AI. (0.73.73) Never as an empty flight of that generation in M.cunits: it took the place of the copies still up
+            -- here, which doSpawn then never took down, and the host's spawn was refused: "its last flight is still up")
+            pendKeep(unit, gen, "binds", ord, id)
+            return
         end
+        local o, c = cu.planes[ord], M.copies[id]
+        -- (0.73.73 review) a copy kept through a repair (rs|j) may have been freed since: bindCopy calls into it
+        -- (SetMinHealth), which a pcall can't catch on a freed object: checked live first, as "gd" does
+        local oa = o and live(o)
+        if o and not oa then cu.planes[ord] = nil; o = nil end
+        if o and M.rep and not M.rep.done and not (c and c.addr == oa) then M.rep.rebound = M.rep.rebound + 1 end
         cu.binds[ord] = id
-        if cu.planes[ord] then bindCopy(id, cu.planes[ord], unit) end
+        if o then bindCopy(id, o, unit, ord) end
     elseif k == "gd" then                                -- a ship's, vehicle's or part's id (hostGround)
         local unit, gen, key, id = short(f[2], 96), tonumber(f[3]), short(f[4], 96), tonumber(f[5])
         if not (gen and id and id >= 1 and id <= 65535 and id == math.floor(id)) then return end
+        M.dead[id] = nil                                 -- ((0.73.73) as a plane's "bd")
+        repNote(unit, gen, id, nil, key)
         local cu = M.cunits[unit]
-        if not cu or cu.gen ~= gen then                   -- (its spawn is still queued: keep the id for it)
-            local queued = false
-            for _, q in ipairs(M.spawnQ) do if q.unit == unit and q.gen == gen then queued = true end end
-            if not queued then                            -- (nor queued yet: kept, as a plane's "bd")
-                M.pendBind = M.pendBind or {}
-                local pb = M.pendBind[unit]
-                if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
-                pb.gbinds[key] = id
-                return
-            end
-            cu = { gen = gen, n = 0, planes = {}, binds = {}, gbinds = {} }
-            M.cunits[unit] = cu
-        end
+        if not cu or cu.gen ~= gen then pendKeep(unit, gen, "gbinds", key, id); return end   -- (as a plane's "bd")
         cu.gbinds = cu.gbinds or {}
         cu.gbinds[key] = id
         local o = cu.gobjs and cu.gobjs[key]
-        if o and valid(o) then bindGround(id, o, unit) end
+        if o and live(o) then bindGround(id, o, unit, key) end
     elseif k == "hp" then
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
@@ -3028,26 +3234,48 @@ local function onJoinerMessage(f)
         local id = tonumber(f[2])
         if id then
             M.dead[id] = true
+            local rp = M.rep
+            local r = rp and not rp.done and rp.ids[id]       -- (the host's picture: down there)
+            local pu = r and rp.units[r.unit]
+            if pu then if r.ord then pu.alive[r.ord] = nil else pu.galive[r.key] = nil end end
             local c = M.copies[id]
-            if c then killCopy(id, c.obj); M.copies[id] = nil end
+            if c then
+                -- ((0.73.73) forced: the host's is down, invincible here or not; "dn|<id>|r", a death the host's picture
+                -- repeats, is long since: not this game's kill. Off its flight's planes here: strayTick counted it a stray)
+                killCopy(id, c.obj, f[3] == "r", true)
+                M.copies[id] = nil
+                local cu = c.unit and M.cunits[c.unit]
+                if cu and c.ord and cu.planes[c.ord] and addrOf(cu.planes[c.ord]) == c.addr then cu.planes[c.ord] = nil end
+                if cu and c.key and cu.gobjs and cu.gobjs[c.key] and addrOf(cu.gobjs[c.key]) == c.addr then cu.gobjs[c.key] = nil end
+            end
         end
     elseif k == "ev" then
+        local unit = (f[3] and f[3] ~= "") and short(f[3], 96) or nil   -- ((0.73.73) a replay for that unit's fresh copy)
         if mirroredEvent(f[2]) and D and rawEvent and not levelReady() then    -- (held until this level is ready)
             M.evQ = M.evQ or {}
-            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock() } end
-        elseif mirroredEvent(f[2]) and D and rawEvent then
+            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock(), unit = unit } end
+        elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end
+    elseif k == "rz" then                                -- ((0.73.73) the end of the host's picture: what's here settled)
+        if M.rep and not M.rep.done then repairDone("rz") end
     elseif k == "rs" then
         M.cnt.rsGot = M.cnt.rsGot + 1
+        -- ((0.73.73) "rs|j": the host's answer to this game's own "jn", a repair: nothing torn down, no new run here,
+        -- nobody DOWN brought back, the round's records kept)
+        if f[2] == "j" then return onResync() end
+        -- "rs|n": the host's new run; "rs|m": a host by migration in its level (the same run, the round in play again);
+        -- a bare "rs" (before 0.73.73): the host's new run, or its answer to this game's own "jn" of the last 15 s
+        local resync = f[2] == "m" or ((f[2] == nil or f[2] == "") and M.jnAt ~= nil and os.clock() - M.jnAt < 15)
         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
-        killAllCopies("the host's run started over")
-        if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)
-        -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; an "rs" that
-        -- isn't the answer to this game's own "jn" of the last 15 s is the host's new run, which ends the run's records)
-        local resync = M.jnAt ~= nil and os.clock() - M.jnAt < 15
+        killAllCopies(resync and (f[2] == "m" and "a new host's level" or "the host's resync") or "the host's run started over")
+        -- ((0.73.73) only the host's new run brings a player who's DOWN back: Shazzy, A02 11:26:02, "revive: back (the host's
+        -- run started over) after 81 s down" on the answer to his own "jn", and A09, A10, A12 the same)
+        if not resync and DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end
+        -- (the measurements, sv_stats.lua: the open round ends here, not at the host's next round number; the host's new run
+        -- ends the run's records too)
         if STATS and D then pcall(STATS.hostReset, D.now, resync) end
-        -- (the host's new run, not the answer to this game's own "jn": the money and gear start over here too)
+        -- (the host's new run: the money and gear start over here too)
         if D and not resync and type(newRunHere) == "function" then
             local okN, errN = pcall(newRunHere, "the host's run started over")
             if not okN then log("run: error " .. tostring(errN)) end
@@ -3463,12 +3691,21 @@ function COOP.tick(tick)
                                                        lo = P.lo, row = P.row } or {}
         end
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
-        M.joinHits, M.pendBind, M.strayFirst = nil, nil, nil
+        M.joinHits, M.pendBind, M.strayFirst, M.rep, M.downAt = nil, nil, nil, nil, {}
         M.replays, groundNew, M.holdQ = {}, {}, nil
+        -- ((0.73.73) the units' objects kept, a restart in the same level keeps the actors: those of a level gone, or whose
+        -- address is another object's now, dropped)
+        for unit, reg in pairs(M.objsOf) do
+            for a, e in pairs(reg) do if not live(e.obj) or nameOf(e.obj) ~= e.name then reg[a] = nil end end
+            if next(reg) == nil then M.objsOf[unit] = nil end
+        end
         M.svcpUsable = {}                                              -- (the stand-ins' damage-0 rows in before it loaded)
         for row, sv in pairs(M.svcpReady or {}) do M.svcpUsable[row] = sv end
         if D then
-            if COOP.host() then send(true, "rs") else M.jnAt = os.clock(); send(true, "jn") end
+            -- ((0.73.73) "rs|n": the host's new run, which a joiner starts over with; "rs|m" a host by migration's level, the
+            -- same run: a joiner keeps its money and nobody DOWN comes back)
+            if COOP.host() then send(true, "rs", (M.mig and M.mig.hosting) and "m" or "n")
+            else M.jnAt = os.clock(); send(true, "jn") end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
             if COOP.client() and M.state ~= "linked" then
                 callout(M.auto and "CO-OP: LOOKING FOR A HOST" or "CO-OP: WAITING FOR THE HOST",

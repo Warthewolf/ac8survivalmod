@@ -394,7 +394,7 @@ function roundClock(tick)
     local t = gameClock(survivalPC)
     if D.clock == nil then
         if t then D.clock = "game"; log("rounds: on the game clock (stops while paused)")
-        elseif tick - levelTick >= 20 then
+        elseif tick - levelTick >= 20 and not walkHold() then          -- (0.73.73: the player controller's look held)
             D.clock = "ticks"; log("rounds: the game clock can't be read; using real time (rounds keep running while paused)")
         else return nil end
         D.at = (D.clock == "game" and t or tick / 4) + CFG.first_round_delay_s
@@ -472,7 +472,7 @@ end
 
 function shopRowsTick(tick)
     if not CFG.shop.enabled or tick % 16 ~= 1 or containerState ~= true then return end
-    local pc = valid(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
+    local pc = liveObj(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
     if pc and valid(pc) and inSurvival(pc) then
         -- without the native landing-menu hook a shop row would reach the stock decide, which reads it as a page number
         if type(SV_ShopRequest) ~= "function" or type(SV_SetText) ~= "function" or SV_ShopRequest(1) ~= 1 then

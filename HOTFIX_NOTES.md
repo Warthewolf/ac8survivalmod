@@ -41,14 +41,16 @@ settings: the rage circuit off, Ladon rounds and VOID WATCHER off (tests turn th
    - Next: find the code that fills DeactivatedListForMinigame (its property offset on LiveMiniGameManager, then the
      writer in the exe), see what it calls on each object, and undo exactly that for AI planes in co-op only, or
      stop the minigame from collecting them (a filter it checks). Solo, the freeze is the stock design and stays.
-2. **Paths that are ignored.** VOID WATCHER's orbit (SV_Path_VoidWatcherOrbit, 550 km/h) and the enraged Ladon's rage
+2. **Paths that are ignored.** Cause found 2026-11-02 (0.73.73, not yet run in game): a path started at a PathFinish
+   must begin a little ahead of the plane along its way and end far off, or the plane holds the old path's end tangent;
+   the Ladons' circuit and VOID WATCHER's orbit are rebuilt that way (AGENTS.md 0.73.73). VOID WATCHER's orbit (SV_Path_VoidWatcherOrbit, 550 km/h) and the enraged Ladon's rage
    circuit (SV_Path_Ladon<Key>Rage, 3000 km/h): the AI flies straight (VOID WATCHER to 163 km, 2026-10-31 17:25-17:46;
    MISHKA 87 km east and below sea level, 17:43-17:46) though RE_SV_AwacsOrbit fires. Their path descs in
    WD_SurvivalMode_global match the working circuit's (ControlType 1, same fields, unique ids and names, empty tube
    data) and the EP names them; next: decode the EP records (tools/checks/ep_dump.py needs tools/scriptobjs.pkl) and
    compare the orbit / rage exec records with the circuit's, then the speeds. Fallback: Mission 22's teleport record
    (hard rule 39) to turn VOID WATCHER back.
-3. **Ladon appearance re-fire.** A Ladon's own VLS volley after its first pass re-fired its appearance trigger
+3. **Ladon appearance re-fire.** Gated in 0.73.73 (SV_LadonDone, re-armed by Lua), not yet turned on (volley_after_pass false). A Ladon's own VLS volley after its first pass re-fired its appearance trigger
    (SV_LadonRun<Key> reset to 0, the inbound route restarted from (-42, 4): "the Ladon left the map"). Hotfix 2 stops
    the volleys after the first pass; the build fix is to gate the appearance records (tools/survival_events.py
    build_ladon, also SV_AwacsUp) so they run once per spawn (a flag Lua sets just before SV_Spawn, cleared by the

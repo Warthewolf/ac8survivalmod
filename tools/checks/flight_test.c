@@ -7,7 +7,14 @@
  *     away, from an inverted dive near the centre and from a climb beside it; called twice a frame as BuildFlightInput
  *     is, once with a pause in a probe, once with the signs known.
  *     Passes when it learned the signs and, over the last 50 s of 200, flew within 30 % of the radius and 120 m of the
- *     altitude, never past 70 deg of bank once circling.
+ *     altitude, never past 115 deg of bank once circling (runtime 0.32.21: was 70; the loiter now turns by the pull, a
+ *     level turn near 90 deg in AC8, which a bank alone barely turns).
+ *  (runtime 0.32.21) 3. kind 4, AC8 as the testers' DOWN logs of 2026-11-01 show it (ModelStep), from their starts: the
+ *     0.32.20 loiter failed it as in the game (5.4-24 km high, 1.5-5 km off the circle, the +1 pitch prior diving the
+ *     respawned plane into the ground); also never under 300 m after 5 s from 1000 m or more, never 1500 m over the
+ *     height wanted after a minute, and from a start 15 m up never lower. The model's attitude is a rotation matrix (the
+ *     Euler angles clamped at 85 deg pinned a plane diving straight down). FLIGHT_TRACE=1 prints each flight every 10 s,
+ *     =2 every second of the first 40.
  * The model plane is no AC8 flight model (that one isn't known): a constant 160 m/s, body rates following the inputs
  * (180 deg/s roll, 35 deg/s pitch per unit, lagged), the nose sagging in a bank and a little turn from bank alone: it
  * turns no tighter than ~1.8 km at 40 deg of bank (AC8's planes turn far tighter), so the circles asked are wider. */
@@ -156,43 +163,93 @@ static void FlagsTest(void)
 }
 
 /* ---- 2. DOWN's autopilot against model planes ---- */
-typedef struct { double x, y, z, th, ps, ph, p, q; } Model;          /* m; deg; body rates deg/s */
+typedef struct { double x, y, z, th, ps, ph, p, q; int haveR; double R[3][3]; } Model;   /* m; deg; body rates deg/s;
+                                                     (0.32.21) its attitude, body to world (north = x, east = y, down) */
 static double Wrap(double a) { while (a > 180) a -= 360; while (a < -180) a += 360; return a; }
 /* kind 0: rate-command roll; 1: bank-angle roll (an assisted mode); 2: a quicker, tighter-turning plane (260 m/s, 250 deg/s
  * roll, 60 deg/s pitch, more sag and turn from bank); 3: a late plane (Fly hands it its inputs 0.4 s late; 200 m/s, 70 deg/s
  * roll, 25 deg/s pitch): the user's co-op run of 2026-10-30, where AC8's plane answered the roll probe with -3 / +2 deg/s
- * and the sign read from that was wrong; the probe may read it wrong here too, the in-flight check has to put it right */
+ * and the sign read from that was wrong; the probe may read it wrong here too, the in-flight check has to put it right.
+ * (runtime 0.32.21) kind 4: AC8 as the testers' DOWN logs of 2026-11-01 show it (0.73.70, 11 episodes): the speed held
+ * (165 m/s, climbing or not), the nose held where it is (no sag: a 55 deg climb held for a minute with no pitch input),
+ * a bank alone turning little (~1.3 deg/s at 40 deg), the pull the turn: at 40 deg of bank it climbs more than it turns,
+ * the inputs answered ~0.35 s late (Fly hands them over late: the probes read 0-2 deg/s for pitch, -21..+3 for roll),
+ * 120 deg/s roll and 25 deg/s pitch per unit (the in-flight check's 4-8 deg/s at ~0.3) */
 static void ModelStep(Model* m, const float* in, int sr, int sp, int kind, double dt)
 {
-    const double V = kind == 2 ? 260.0 : kind == 3 ? 200.0 : 160.0, D = CO_PI / 180.0, sag = kind == 2 ? 10.0 : 6.0,
-                 turn = kind == 2 ? 12.0 : 6.0;
-    double pc = kind == 1 ? (sr * in[2] * 75.0 - m->ph) / 0.35 : sr * in[2] * (kind == 2 ? 250.0 : kind == 3 ? 70.0 : 180.0);
-    double qc = sp * in[0] * (kind == 2 ? 60.0 : kind == 3 ? 25.0 : 35.0);
+    const double V = kind == 2 ? 260.0 : kind == 3 ? 200.0 : kind == 4 ? 165.0 : 160.0, D = CO_PI / 180.0,
+                 sag = kind == 2 ? 10.0 : kind == 4 ? 0.0 : 6.0, turn = kind == 2 ? 12.0 : kind == 4 ? 2.0 : 6.0;
+    double pc = kind == 1 ? (sr * in[2] * 75.0 - m->ph) / 0.35
+                          : sr * in[2] * (kind == 2 ? 250.0 : kind == 3 ? 70.0 : kind == 4 ? 120.0 : 180.0);
+    double qc = sp * in[0] * (kind == 2 ? 60.0 : kind == 3 || kind == 4 ? 25.0 : 35.0);
     m->p += (pc - m->p) * fmin(1.0, dt / 0.1);
     m->q += (qc - m->q) * fmin(1.0, dt / 0.15);
-    double ph = m->ph * D, th = m->th * D;
-    double php = m->p + m->q * sin(ph) * tan(th);
-    double thp = m->q * cos(ph) - sag * (1.0 - cos(ph));                 /* the nose sags in a bank */
-    double psp = m->q * sin(ph) / cos(th) + turn * sin(ph);               /* and bank alone turns a little */
-    m->ph = Wrap(m->ph + php * dt); m->th += thp * dt; m->ps = Wrap(m->ps + psp * dt);
-    if (m->th > 85) m->th = 85;
-    if (m->th < -85) m->th = -85;
-    th = m->th * D;
-    m->x += V * cos(th) * cos(m->ps * D) * dt; m->y += V * cos(th) * sin(m->ps * D) * dt; m->z += V * sin(th) * dt;
+    /* (0.32.21) the attitude as a rotation matrix (it was Euler angles with the nose clamped at +-85 deg: a plane diving
+     * straight down stayed pinned there with its roll spinning, which no plane does; the inverted-dive flights could
+     * end in that trap). The same motion away from the vertical: body roll and pitch rates, the nose sagging in a bank
+     * (about the horizontal axis across the heading) and a bank alone turning a little (about the vertical); the Euler
+     * angles are read back from it as the game's FRotator is */
+    double (*R)[3] = m->R;
+    if (!m->haveR) {
+        double c1 = cos(m->ps * D), s1 = sin(m->ps * D), c2 = cos(m->th * D), s2 = sin(m->th * D), c3 = cos(m->ph * D), s3 = sin(m->ph * D);
+        R[0][0] = c1 * c2; R[0][1] = c1 * s2 * s3 - s1 * c3; R[0][2] = c1 * s2 * c3 + s1 * s3;
+        R[1][0] = s1 * c2; R[1][1] = s1 * s2 * s3 + c1 * c3; R[1][2] = s1 * s2 * c3 - c1 * s3;
+        R[2][0] = -s2;     R[2][1] = c2 * s3;                R[2][2] = c2 * c3;
+        m->haveR = 1;
+    }
+    /* (NED: the Euler pitch is up positive, so the nose sags about the across-heading axis Rz(yaw)(0,1,0) negatively) */
+    double ph = m->ph * D, ps = m->ps * D;
+    double wb[3] = { m->p * D, m->q * D, 0.0 };
+    double ww[3] = { -(-sag * (1.0 - cos(ph))) * D * sin(ps) * 1.0, (-sag * (1.0 - cos(ph))) * D * cos(ps), turn * sin(ph) * D };
+    double N[3][3];
+    for (int i = 0; i < 3; ++i)                         /* R (I + [wb]x dt), then (I + [ww]x dt) R */
+        for (int j = 0; j < 3; ++j) {
+            double v = R[i][j];
+            if (j == 0) v += (R[i][1] * wb[2] - R[i][2] * wb[1]) * dt;
+            if (j == 1) v += (R[i][2] * wb[0] - R[i][0] * wb[2]) * dt;
+            if (j == 2) v += (R[i][0] * wb[1] - R[i][1] * wb[0]) * dt;
+            N[i][j] = v;
+        }
+    for (int j = 0; j < 3; ++j) {
+        double a = N[0][j], b = N[1][j], cc = N[2][j];
+        N[0][j] = a + (ww[1] * cc - ww[2] * b) * dt;
+        N[1][j] = b + (ww[2] * a - ww[0] * cc) * dt;
+        N[2][j] = cc + (ww[0] * b - ww[1] * a) * dt;
+    }
+    for (int j = 0; j < 3; ++j) {                       /* (columns orthonormal again: Gram-Schmidt) */
+        for (int k = 0; k < j; ++k) {
+            double d = N[0][j] * N[0][k] + N[1][j] * N[1][k] + N[2][j] * N[2][k];
+            for (int i = 0; i < 3; ++i) N[i][j] -= d * N[i][k];
+        }
+        double n = sqrt(N[0][j] * N[0][j] + N[1][j] * N[1][j] + N[2][j] * N[2][j]);
+        for (int i = 0; i < 3; ++i) N[i][j] /= n;
+    }
+    memcpy(m->R, N, sizeof(N));
+    m->th = asin(fmax(-1.0, fmin(1.0, -R[2][0]))) / D;
+    m->ps = atan2(R[1][0], R[0][0]) / D;
+    m->ph = atan2(R[2][1], R[2][2]) / D;
+    m->x += V * R[0][0] * dt; m->y += V * R[1][0] * dt; m->z -= V * R[2][0] * dt;
 }
 
 typedef struct { const char* name; double x, y, z, ps, th, ph, alt, R; } Start;
 
-/* known: 1 the signs given (the true ones), -1 the WRONG ones given as known (a bad probe kept from an earlier DOWN) */
+#ifndef DN_PRIOR_ROLL                                     /* (down_ctl.c before 0.32.21: +1 / +1) */
+#define DN_PRIOR_ROLL  1
+#define DN_PRIOR_PITCH 1
+#endif
+static int g_trace;                                       /* FLIGHT_TRACE=1: every flight's state every 10 s */
+
+/* known: 1 the signs given (the true ones), -1 the WRONG ones given as known (a bad probe kept from an earlier DOWN);
+ * unknown, the priors flight.c starts with (down_ctl.c DN_PRIOR_*) */
 static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInProbe, int quiet)
 {
     DownCtl c;
-    DownInit(&c, 0, 0, s->alt, s->R, known != 0, known ? known * sr : 1, known ? known * sp : 1);
+    DownInit(&c, 0, 0, s->alt, s->R, known != 0, known ? known * sr : DN_PRIOR_ROLL, known ? known * sp : DN_PRIOR_PITCH);
     Model m = { s->x, s->y, s->z, s->th, s->ps, s->ph, 0, 0 };
     const double dt = 1.0 / 60.0;
-    double t = 100.0, sumR = 0, sumH = 0, maxBank = 0, minZ = 1e9;
+    double t = 100.0, sumR = 0, sumH = 0, maxBank = 0, minZ = 1e9, minZ5 = 1e9, maxZ60 = -1e9;
     int n = 0, flipsAt = -1;
-    static float late[64][5];                             /* kind 3's inputs, handed over 24 frames (0.4 s) late */
+    static float late[64][5];                             /* kind 3's inputs, handed over 24 frames (0.4 s) late; kind 4's 21 */
     static const float none[5] = { 0, 0, 0, 0, 0 };
     for (int k = 0; k < (int)(200.0 / dt); ++k) {
         if (pauseInProbe && k == 100) t += 1.5;           /* a pause in the roll probe: the probe starts over */
@@ -203,10 +260,18 @@ static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInP
         if (memcmp(out, again, sizeof(out))) { printf("FAILED: a second call in the frame changed the inputs\n"); g_fail = 1; return 0; }
         const float* in = out;
         if (kind == 3) { memcpy(late[k % 64], out, sizeof(out)); in = k >= 24 ? late[(k - 24) % 64] : none; }
+        if (kind == 4) { memcpy(late[k % 64], out, sizeof(out)); in = k >= 21 ? late[(k - 21) % 64] : none; }
         ModelStep(&m, in, sr, sp, kind, dt);
         if (c.flips && flipsAt < 0) flipsAt = k;
         t += dt;
         if (m.z < minZ) minZ = m.z;
+        if (k * dt >= 5.0 && m.z < minZ5) minZ5 = m.z;
+        if (k * dt >= 60.0 && m.z > maxZ60) maxZ60 = m.z;
+        if (g_trace && k % (g_trace > 1 ? 60 : 600) == 0 && (g_trace < 2 || k * dt < 40.0))
+            printf("    %3.0f s: %5.0f m from the centre, %5.0f m high, heading error %4.0f, bank %4.0f (want %4.0f), climb %3.0f "
+                   "(nose %3.0f); inputs pitch %4.0f, roll %4.0f; signs %+d %+d; phase %d, %d flips\n", k * dt,
+                   sqrt(m.x * m.x + m.y * m.y), m.z, c.headErr, m.ph, c.bankWant, c.gamma, m.th, c.oP * 1000, c.oR * 1000,
+                   c.sRoll, c.sPitch, c.phase, c.flips);
         if (k * dt >= 150.0) {
             sumR += fabs(sqrt(m.x * m.x + m.y * m.y) - s->R); sumH += fabs(m.z - s->alt); ++n;
             if (fabs(m.ph) > maxBank) maxBank = fabs(m.ph);
@@ -215,15 +280,23 @@ static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInP
     double eR = sumR / n, eH = sumH / n;
     /* (a plane that answers on time, its signs learned by the probe or given right: the in-flight check never flips one;
      * wrong signs given: flipped back within 30 s) */
-    int flipsOk = kind == 3 || pauseInProbe ? 1 : known < 0 ? (c.flips >= 1 && flipsAt >= 0 && flipsAt * dt < 30.0) : c.flips == 0;
-    int ok = c.phase == DN_CIRCLE && c.sRoll == sr && c.sPitch == sp && eR < 0.3 * s->R && eH < 120.0 && maxBank < 70.0 && flipsOk;
+    int flipsOk = kind == 3 || kind == 4 || pauseInProbe ? 1 : known < 0 ? (c.flips >= 1 && flipsAt >= 0 && flipsAt * dt < 30.0) : c.flips == 0;
+    /* (0.32.21) the AC8-like plane turns by the pull: its level turns are flown near 90 deg of bank */
+    int ok = c.phase == DN_CIRCLE && c.sRoll == sr && c.sPitch == sp && eR < 0.3 * s->R && eH < 120.0 &&
+             maxBank < 115.0 && flipsOk;
+    /* (0.32.21) the AC8-like plane: never below 300 m after 5 s from a start at 1000 m or more (the dive of 2026-11-01
+     * 13:00:13, 2500 m -> 224 m in 10 s), never 1500 m over the height wanted after a minute (the climbs to 5-11 km) */
+    if (kind == 4 && ((s->z >= 1000.0 && minZ5 < 300.0) || maxZ60 > s->alt + 1500.0)) ok = 0;
+    if (kind == 4 && s->z < 100.0 && minZ < s->z - 3.0) ok = 0;   /* (a start 15 m up: no lower, the airfield is there) */
     if (!quiet || !ok)
         printf("%s %s, signs roll %+d pitch %+d%s%s: now %+d %+d (probes %.0f/%.0f, %.0f/%.0f deg/s; %d flips); last 50 s: %.0f m "
-               "off the %.0f m circle, %.0f m off %.0f m, bank up to %.0f deg; lowest %.0f m: %s\n", s->name,
-               kind == 1 ? "bank-angle roll" : kind == 2 ? "quick plane" : kind == 3 ? "late plane" : "rate roll", sr, sp,
+               "off the %.0f m circle, %.0f m off %.0f m, bank up to %.0f deg; lowest %.0f m (%.0f after 5 s), highest after a "
+               "minute %.0f m: %s\n", s->name,
+               kind == 1 ? "bank-angle roll" : kind == 2 ? "quick plane" : kind == 3 ? "late plane" : kind == 4 ? "AC8-like plane" :
+               "rate roll", sr, sp,
                known > 0 ? ", signs known" : known < 0 ? ", WRONG signs known" : "", pauseInProbe ? ", paused in a probe" : "",
                c.sRoll, c.sPitch, c.probeRate[0], c.probeRate[1], c.probeRate[2], c.probeRate[3], c.flips,
-               eR, s->R, eH, s->alt, maxBank, minZ, ok ? "ok" : "FAILED");
+               eR, s->R, eH, s->alt, maxBank, minZ, minZ5, maxZ60, ok ? "ok" : "FAILED");
     if (c.flips && (!quiet || !ok)) printf("    (first flip %.1f s in)\n", flipsAt * dt);
     if (!ok) g_fail = 1;
     return ok;
@@ -233,6 +306,7 @@ int main(void)
 {
     FlagsTest();
     g_quiet = 1;
+    g_trace = getenv("FLIGHT_TRACE") ? atoi(getenv("FLIGHT_TRACE")) : 0;   /* (2: every second of the first 40) */
     static const Start starts[] = {
         { "far, flying away", 9000, 0, 1200, 0, 0, 0, 2000, 2500 },
         { "near, inverted dive", 300, -200, 2500, 135, -20, 120, 1500, 2200 },
@@ -255,6 +329,21 @@ int main(void)
     for (int kind = 0; kind <= 3; kind += 3)
         for (int st = 0; st < 3; ++st)
             for (int sr = -1; sr <= 1; sr += 2) { ++runs; good += Fly(&starts[st], sr, 1, kind, -1, 0, 0); }
+    /* (0.32.21) the AC8-like plane (kind 4) from the testers' DOWN starts: the respawn 4 km out (A04 / A19 / A20), low
+     * beside the airfield just shot down (A17: 15 m high, bank 54), far and flying away; its own signs (roll +1, pitch -1:
+     * all 11 episodes) unknown and known, and every other pair unknown (a player's other control set-up) */
+    static const Start ac8[] = {
+        { "respawned 4 km out", 3681, -1556, 2500, -23, 0, 0, 2500, 4000 },
+        { "low beside the airfield", 1968, -658, 15, -171, 0, 54, 2500, 4000 },
+        { "far, flying away", 9000, 0, 1200, 0, 0, 0, 2500, 4000 },
+    };
+    for (int st = 0; st < 3; ++st) {
+        ++runs; good += Fly(&ac8[st], 1, -1, 4, 0, 0, 0);
+        ++runs; good += Fly(&ac8[st], 1, -1, 4, 1, 0, 0);
+    }
+    for (int sr = -1; sr <= 1; sr += 2)
+        for (int sp = -1; sp <= 1; sp += 2)
+            if (sr != 1 || sp != -1) { ++runs; good += Fly(&ac8[0], sr, sp, 4, 0, 0, 0); }
     printf("down: %d of %d flights ok\n", good, runs);
     printf(g_fail ? "flight test: FAILED\n" : "flight test: passed\n");
     return g_fail ? 1 : 0;

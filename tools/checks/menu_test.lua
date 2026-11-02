@@ -202,5 +202,31 @@ dofile(MOD .. "/Scripts/sv_config.lua")
 check(CFG.setup.offline.zollars == 2500 and CFG.setup.offline.specials == "off" and CFG.setup.host.zollars == 1000 and CFG.menu.last == "offline",
       "survival.ini read again: the saved setups and last mode")
 check(CFG_DEFAULTS.setup.online.zollars == 0, "the shipped setup stays the shipped one")
+
+-- (0.73.73) the labels on screen while the walks over every object are held (sv_core.lua walkHold: right after a quit the
+-- main menu's texts changed as the run's level was freed; a TextBlock walk then read freed objects): they wait, and go
+-- on screen once the walks are free
+print("the main menu's relabel while the walks are held")
+do
+    local held = "a level is loading (test)"
+    walkHold = function() return held end
+    liveObj = function(o) return o ~= nil end
+    local tb = { text = "?" }
+    function tb:GetText() local s = self.text; return { ToString = function() return s end } end
+    function tb:SetText(v) self.text = v end
+    local walks = 0
+    FindAllOf = function(c) walks = walks + 1; if c == "TextBlock" then return { tb } end return {} end
+    liveWidget = function(w) return w == tb end
+    local before = {}
+    for k, v in pairs(texts) do before[k] = v end
+    press("Enemies")
+    local oldT, newT
+    for k, v in pairs(texts) do if before[k] and before[k] ~= "" and before[k] ~= v then oldT, newT = before[k], v end end
+    check(oldT ~= nil and walks == 0, "a label changed while the walks are held: nothing walked (" .. tostring(oldT) .. ")")
+    tb.text = oldT
+    held = nil
+    MENU.texts(true, "test")
+    check(walks == 1 and tb.text == newT, "the walks free: the waiting label on screen (" .. tostring(oldT) .. " -> " .. tostring(tb.text) .. ")")
+end
 print(fails == 0 and "menu: all passed" or ("menu: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

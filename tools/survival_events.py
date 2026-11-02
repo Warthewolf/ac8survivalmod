@@ -183,32 +183,48 @@ def lcac_craft():
 # names"). Two Ladons, each a copy of Mission 16's B_Unit_01_Air0 (its 18 parts: ChildAIObjectDescs with the parts'
 # blueprint classes as imports, hard rule 7), each on a mission row of its own (sv_ladon_<key> -> SV_Ladon_<Key> in
 # DT_SV_NpcRows, which Scripts/main.lua gives its name, health and speed). From the far west they fly LADON_ROUTE, a
-# long way round, and over the airfield; each time a Ladon ends a pass over it (the end of the route, then of each
-# LADON_LOOP circuit round the airfield) SV_LadonRun<Key> goes up by one and main.lua drops its bombs on the airfield.
+# long way round, and over the airfield (its end: SV_LadonRun<Key> goes up by one, its first bombing run), then round
+# and round the circuit (LADON_CIRCUIT_*), over the airfield once a lap; Scripts/sv_ladon.lua counts those passes by
+# distance and drops its bombs on the airfield.
 LADON_SOURCE_UNIT = 'B_Unit_01_Air0'
 LADON_SOURCE_PATH = '01_Air0_Ladon_Path1'
 LADON_SOURCE_ROW = 'OP0045_radn_01'          # Mission 16's mission row (NpcId OP0045_ladn_01)
 LADON_NPC_SOURCE = 'OP0045_ladn_01'          # DT_NPC (1200 HP, LuaSet 0031_CP)
 LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, offset north m, height offset m) - main.lua CFG.specials.ladon
 # (x km, y km, altitude km): from the far west (Mission 22's combat zone runs to x -44 km), north, back south across
-# the island's west, east along the south and in over the airfield (16.1, -4.4), where the route ends. The circuit
-# starts a little past the airfield (LADON_LOOP[0]: a new path begins ahead of the aircraft, hard rule 2; its start
-# isn't its end, so it can't "finish" as it begins) and ends over it, so every PathFinish, the bombing run, is over the
-# airfield (code review of 2026-10-23: they ended 6.6 km NE of it).
+# the island's west, east along the south and in over the airfield (16.1, -4.4), where the route ends.
 LADON_AIRFIELD = (16.1, -4.4, 1.2)
-LADON_CIRCLE_M = 4000.0                      # a Ladon's area on the airport after a lap (0.73.69)
 LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
                (7, -19, 2.0), (12, -11, 1.6), LADON_AIRFIELD]
-LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), LADON_AIRFIELD]
-# The enraged Ladon's circuit (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster";
-# Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): a tighter loop
-# round the airfield (~35 km, ~42 s a lap at LADON_RAGE_SPEED, so each pass still bombs: Lua counts one in 30 s at
-# most), from the same point just past the airfield as LADON_LOOP (hard rule 2) to over it, at the circuit's heights
-# where it runs near them. Lua fires RE_SV_LadonRage<Key>, which sets SV_LadonRage<Key>; each PathFinish then starts the
-# rage circuit instead of the old one (flag-gated records, no delay: hard rule 26), so the switch comes at its next pass
-# over the airfield, never mid-path.
-LADON_RAGE = [(16.72, -3.03, 1.25), (21.0, 0.5, 1.5), (23.0, -7.0, 1.8), (15.5, -11.5, 2.0), (10.5, -7.0, 1.8), LADON_AIRFIELD]
+# (0.73.73) The circuit: a circle through the airfield, met along the route's way in (its tangent there is the route's
+# last leg), the Ladon going round it for good (ladon_circuit). Why: an AI plane handed a new path at its last one's
+# PathFinish flies it only when the new path's start lies a little ahead of it, along its way (hard rule 2): the route
+# ran into the old circuit's first point, 6 deg off its way, and it was flown; that circuit ended over the airfield
+# heading (0.99, -0.15) with its own start 1.5 km off to the side (74-88 deg), so every circuit after it (the same path
+# again, 0.73.61; a copy, 0.73.62; the copy with the unit area moved, 0.73.69) was never flown: the Ladons held that
+# path's end tangent exactly, heading and descent (A19, 12:02:13-12:03:24: (0.989, -0.148), -1.3 deg, from 1.1 km to
+# 0.1 km and 50 km east; the tangent (0.988, -0.151), -1.26 deg), and no PathFinish came again (their pass flag stayed
+# 2). The rage circuit (HOTFIX_NOTES open problem 2: "87 km east and below sea level") started at the same point.
+# So the circle is two arcs, A (from LADON_ARC_STEP_DEG past the airfield to the far side) and B (from a step past A's
+# end back to over the airfield), each one's end starting the other: every new path starts one step (2.5 km) ahead of
+# the plane along the circle, and its own end is half a circle away (Mission 16's own chain is built so: Path0 to
+# Path6, each next path 1-4 km ahead within 10 deg). Heights from LADON_CIRCUIT_ALT_KM[0] over the airfield to [1] on
+# the far side.
+LADON_CIRCUIT_KM = 8.0                       # its radius: the old circuit's tightest turns (~8 km) were flown at 2500
+LADON_ARC_STEP_DEG = 18.0                    # its points (and each arc's start past the other's end) every N deg
+LADON_CIRCUIT_ALT_KM = (1.25, 2.0)           # over the airfield, on the far side (the old circuit's)
+# The enraged Ladon (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster";
+# Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): Lua fires
+# RE_SV_LadonRage<Key>, which sets SV_LadonRage<Key>, and each arc's end starts the next at LADON_RAGE_SPEED (flag-gated
+# records, no delay: hard rule 26). (0.73.73) The same circle, faster: a tighter circuit of its own would need a new
+# path started off the circle, which is what was never flown.
 LADON_RAGE_SPEED = '3000.0'                  # km/h (Mission 16's Ladon: 1200-3200)
+# (0.73.73) Lua's backstop (Scripts/sv_ladon.lua, CFG.specials.ladon.leash_*): a Ladon leash_km from the airfield
+# after its first pass is off its circuit; RE_SV_LadonLeash<Key> takes it off its path (Mission 22's
+# LiveAIPathExitExecution, as its airport strike leaves its path) and moves its unit area onto the airport at
+# LADON_LEASH_AREA_M, where an AI plane with no path circles (VOID WATCHER's, 0.73.62). (0.73.69 moved the area onto
+# the airport at every lap but never took the Ladon off its path: it flew on 50 km east all the same.)
+LADON_LEASH_AREA_M = 6000.0
 # the Ladons' unit area (a unit only fights inside it; build_survival.ladon_units): centred on the whole job, not the
 # spawn, big enough for all of it (code review of 2026-10-23: 40 km round the spawn left the airfield 59 km out, so the
 # AI kept turning them back west)
@@ -230,10 +246,39 @@ LADON_VLS = ['VLS0', 'VLS1']
 LADON_SPEED = '2500.0'                       # km/h (user, 2026-10-23: "make the Ladon Speed 2500"; was 1500. Mission 16: 1200-3200)
 
 
-def ladons():
-    """One dict per Ladon: unit, object, mission / NPC rows, paths, flag, events, its route (cm)."""
+def circle_point(c, r, a0, sense, psi_deg, alt_km):
+    """(x, y, alt) km on the circle round c (km) of radius r, psi_deg round from angle a0 (rad) in `sense` (+1 / -1)."""
     import math
+    a = a0 + sense * math.radians(psi_deg)
+    return (c[0] + r * math.cos(a), c[1] + r * math.sin(a), alt_km)
+
+
+def ladon_circuit():
+    """KOT's circuit (LADON_CIRCUIT_*, km): the circle through LADON_AIRFIELD along the route's last leg, its centre on
+    that leg's left. {'centre', 'arc_a', 'arc_b' (points), 'a_before', 'a_after', 'b_before', 'b_after' (the points just
+    outside each arc, for its tangents), 'pt' (psi deg round from the airfield -> point)}."""
+    import math
+    (ax, ay, _), (px, py, _) = LADON_AIRFIELD, LADON_ROUTE[-2]
+    n = math.hypot(ax - px, ay - py)
+    ux, uy = (ax - px) / n, (ay - py) / n                  # the way in over the airfield
+    r = LADON_CIRCUIT_KM
+    c = (ax - r * uy, ay + r * ux)                         # (left of it: the circle runs on along u, counter-clockwise)
+    a0 = math.atan2(ay - c[1], ax - c[0])
+    lo, hi = LADON_CIRCUIT_ALT_KM
+    pt = lambda psi: circle_point(c, r, a0, 1, psi, lo + (hi - lo) * (1.0 - math.cos(math.radians(psi))) / 2.0)
+    step = LADON_ARC_STEP_DEG
+    assert abs(180.0 / step - round(180.0 / step)) < 1e-9, 'LADON_ARC_STEP_DEG must divide 180'
+    k = int(round(180.0 / step))
+    arc_a = [pt(step * i) for i in range(1, k + 1)]                    # one step past the airfield .. the far side
+    arc_b = [pt(180.0 + step * i) for i in range(1, k + 1)]            # one step past that .. over the airfield
+    return dict(centre=c, pt=pt, arc_a=arc_a, arc_b=arc_b, a_before=pt(0.0), a_after=pt(180.0 + step),
+                b_before=pt(180.0), b_after=pt(360.0 + step))
+
+
+def ladons():
+    """One dict per Ladon: unit, object, mission / NPC rows, paths, flags, events, its route and circuit's arcs (cm)."""
     out = []
+    cc = ladon_circuit()
     for key, side_m, up_m in LADONS:
         def place(pts):
             """pts shifted side_m north (+y) and up_m up: one fixed shift for the whole track, so its shape, its
@@ -242,15 +287,23 @@ def ladons():
             return [(x * 100000.0, (y + side_m / 1000.0) * 100000.0, (a * 1000.0 + up_m) * 100.0) for x, y, a in pts]
         out.append(dict(key=key, unit=f'SV_Unit_Ladon{key}', obj=f'SV_Obj_Ladon{key}', row=f'sv_ladon_{key.lower()}',
                         npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
-                        loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
-                        over=f'SV_LadonOver{key}', lap=f'SV_LadonLap{key}',
-                        # (0.73.62) a second copy of the circuit: each lap starts the other one (restarting the path
-                        # just finished was ignored: both flew straight east out of the zone after lap 1, 2026-11-01)
-                        loop_b=f'SV_Path_Ladon{key}LoopB', lap_b=f'SV_LadonLapB{key}',
-                        route=place(LADON_ROUTE), circuit=place(LADON_LOOP),
-                        # its rage (P7, LADON_RAGE): path, its PathFinish trigger, the flag and Lua's remote event
-                        rage=f'SV_Path_Ladon{key}Rage', rage_lap=f'SV_LadonRageLap{key}', rage_flag=f'SV_LadonRage{key}',
-                        rage_ev=f'RE_SV_LadonRage{key}', rage_route=place(LADON_RAGE)))
+                        flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}', over=f'SV_LadonOver{key}',
+                        route=place(LADON_ROUTE),
+                        # (0.73.73) its circuit's two arcs (ladon_circuit), their PathFinish triggers and the points just
+                        # outside each (its tangents); SV_LadonLeg<Key> + 1 at each arc's end (the log's "legs": the
+                        # circuit being flown)
+                        arc_a=f'SV_Path_Ladon{key}ArcA', arc_b=f'SV_Path_Ladon{key}ArcB',
+                        leg_a=f'SV_LadonLegA{key}', leg_b=f'SV_LadonLegB{key}', leg=f'SV_LadonLeg{key}',
+                        arc_a_pts=place(cc['arc_a']), arc_b_pts=place(cc['arc_b']),
+                        a_before=place([cc['a_before']])[0], a_after=place([cc['a_after']])[0],
+                        b_before=place([cc['b_before']])[0], b_after=place([cc['b_after']])[0],
+                        # (0.73.73) its appearance runs once a spawn (HOTFIX_NOTES open problem 3): SV_LadonDone<Key> set
+                        # by it, cleared by Lua's RE_SV_LadonRearm<Key> once it's gone; SV_LadonSeen<Key> counts its
+                        # appearance's fires (Lua logs a fire again); Lua's backstop RE_SV_LadonLeash<Key>
+                        done=f'SV_LadonDone{key}', seen=f'SV_LadonSeen{key}', rearm=f'RE_SV_LadonRearm{key}',
+                        leash=f'RE_SV_LadonLeash{key}',
+                        # its rage (P7): the flag and Lua's remote event (the same circuit, LADON_RAGE_SPEED)
+                        rage_flag=f'SV_LadonRage{key}', rage_ev=f'RE_SV_LadonRage{key}'))
     return out
 
 
@@ -514,7 +567,8 @@ ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names,
 # from MOONCHILD's lead parked at Comona Airport (its NPC row the E-767's in the world data, so it builds the large
 # aircraft's behaviour set NLID_1000 at level load: hard rule 20). Its appearance runs MOONCHILD's lead's scramble
 # (hold, taxi, roll, climb); airborne, gear up, no longer invincible, no fighting (engagement None) and onto its orbit
-# (AWACS_PATH: a smooth circle round the airfield, each lap's end starting it again). Lua (Scripts/sv_allies.lua,
+# (awacs_orbit: a lead-in from the climb-out onto a circle round the airfield, then its two arcs, each one's end starting
+# the other; 0.73.73). Lua (Scripts/sv_allies.lua,
 # CFG.allies.awacs) sells and spawns it, fires its ESM (RE_SV_AwacsEsm: AWACS_ESM_SLOT, as the jammer's ECM: the AI
 # never switches a pod on by itself) and sets each ESM field's range. SV_AwacsAir: 1 once it's airborne.
 AWACS_UNIT = 'SV_Unit_VoidWatcher'           # Scripts/sv_config.lua CFG.allies.awacs.unit
@@ -533,16 +587,34 @@ AWACS_ESM_SLOT = 'WN_WEAPON_4'
 AWACS_MODEL = 'SV_Model_VoidWatcher'
 AWACS_MODEL_SOURCE = 'OP0005_e767_Ally_Magnolia'
 AWACS_MODEL_NAME = 'ContainerAircraft_Name_e767'
-AWACS_PATH = 'SV_Path_VoidWatcherOrbit'
-# the orbit's radius round the airfield (AIRFIELD_KM), its points, height, speed. 12 km at 550 km/h needs ~12 deg of
-# bank, which an E-767 holds; 0.73.33's 7 km at 650 (~25 deg) it didn't (user, 2026-10-31: "VOID WATCHER just seems to
-# not loiter around the airfield space"). Its 25 km ESM field still covers the airfield from the circle.
-AWACS_ORBIT_KM = 12.0
-AWACS_ORBIT_POINTS = 16
+# (0.73.73) Its orbit, a path again (SA's test of 2026-11-01: "perhaps expand their holding pattern to a circle with a
+# 5-7 kilometer radius, they were flying in tight circles making them an easy target"; its unit-area orbit since 0.73.62
+# ran 0.9-6.9 km from the airfield, turning tight). The orbit paths of 0.73.33-0.73.61 were never flown for the reason
+# the Ladons' circuit wasn't (LADON_CIRCUIT_KM's note): the circle's start wasn't ahead of the plane along its way out of
+# the climb-out. So: the lead-in (AWACS_PATH_IN) starts a step along a turn out of the climb-out's own end, on its way
+# (AWACS_CLIMB_END / _DIR, Mission 22's 01_Air0_f18e_0_Path2: 0.4 km up, heading 234, climbing 30 deg; build_survival.py
+# checks them on the stock path), turning the circle's way at the widest radius that meets the circle tangentially from
+# inside (~2.9 km), climbing to AWACS_IN_TOP_KM, then on round the circle AWACS_IN_CIRCLE_DEG to AWACS_ALT_KM; then
+# arcs B and A in turn (as the Ladons': each starts a step past the other's end, its own end half a circle away). Its
+# unit area (AWACS_AREA_M) takes the circle in with room (the Ladons' 40 km area once turned them back off their
+# route); Lua's backstop RE_SV_AwacsOrbit takes it off its path onto the area orbit at AWACS_FALLBACK_AREA_M
+# (0.73.62-0.73.72's).
+AWACS_PATH_IN = 'SV_Path_VoidWatcherIn'
+AWACS_ARC_A = 'SV_Path_VoidWatcherArcA'
+AWACS_ARC_B = 'SV_Path_VoidWatcherArcB'
+AWACS_CLIMB_END = (15.288252, -3.91496, 0.4)  # km: TAKEOFF_LEAD[2]'s last point
+AWACS_CLIMB_DIR = (-27610.5, 19978.8)          # its tangent there (cm, horizontal)
+AWACS_ORBIT_KM = 6.0                         # 550 km/h round 6 km: ~22 deg of bank
+AWACS_ARC_STEP_DEG = 15.0                    # its points (and each arc's start past the other's end) every N deg
+AWACS_IN_STEP_DEG = 20.0                     # the lead-in turn's points every N deg (its first one N deg on)
+AWACS_IN_TOP_KM = 3.5                        # the lead-in's height where it meets the circle (its area's floor)
+AWACS_IN_CIRCLE_DEG = 300.0                  # then round the circle, climbing to AWACS_ALT_KM
 AWACS_ALT_KM = 4.5
 AWACS_SPEED = '550.0'
+AWACS_IN_SPEED = '450.0'                     # the lead-in (its turn ~29 deg of bank at 450)
 AWACS_ALT_BAND_M = (3500.0, 5000.0)          # its unit area's height band (build_survival.py, 0.73.68)
-AWACS_AREA_M = 6000.0                       # its orbit: its unit area on the airport (build_awacs, 0.73.62)
+AWACS_AREA_M = 9000.0                        # its unit area on the airport, the orbit inside it (0.73.62: 6 km)
+AWACS_FALLBACK_AREA_M = 6000.0               # Lua's backstop's area orbit (0.73.62-0.73.72's orbit)
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
@@ -695,17 +767,49 @@ def heavy_routes():
 
 
 def awacs_orbit():
-    """VOID WATCHER 1's orbit (AWACS_*): AWACS_ORBIT_POINTS points (cm) on a circle round the airfield, from the point
-    due south (y up is south here: the runway's climb-out heads that way), each inside the zone."""
+    """VOID WATCHER 1's orbit (AWACS_*; 0.73.73), cm: {'in', 'arc_a', 'arc_b' (points), 'in_before', 'in_after',
+    'a_before', 'a_after', 'b_before', 'b_after' (the points just outside each, for its tangents)} and, km / deg, the
+    lead-in's turn {'rho', 'turn', 'sense'} and the circle {'centre', 'pt' (psi deg round from the lead-in's join)}. The
+    lead-in turns from the climb-out's end (AWACS_CLIMB_*) to the side that gives the wider turn, on the circle of radius
+    rho that touches the orbit from inside, so it meets the orbit along it; the orbit goes round the same way."""
     import math
     (zx, zy), half = ZONE_KM
-    pts = []
-    for k in range(AWACS_ORBIT_POINTS):
-        a = 2 * math.pi * k / AWACS_ORBIT_POINTS
-        x, y = AIRFIELD_KM[0] + AWACS_ORBIT_KM * math.sin(a), AIRFIELD_KM[1] + AWACS_ORBIT_KM * math.cos(a)
+    c, r = AIRFIELD_KM, AWACS_ORBIT_KM
+    ex, ey, ez = AWACS_CLIMB_END
+    n = math.hypot(*AWACS_CLIMB_DIR)
+    hx, hy = AWACS_CLIMB_DIR[0] / n, AWACS_CLIMB_DIR[1] / n
+    wx, wy = ex - c[0], ey - c[1]
+    best = None
+    for s in (1, -1):                                      # +1: its centre on the left, a counter-clockwise turn
+        px, py = -s * hy, s * hx
+        rho = (r * r - wx * wx - wy * wy) / (2.0 * (wx * px + wy * py) + 2.0 * r)
+        if best is None or rho > best[0]: best = (rho, s, px, py)
+    rho, s, px, py = best
+    q = (ex + rho * px, ey + rho * py)                     # the lead-in turn's centre
+    qd = math.hypot(q[0] - c[0], q[1] - c[1])
+    assert abs(qd - (r - rho)) < 1e-6 and 2.5 <= rho <= r / 2.0 + 1e-9, ('the AWACS lead-in turn', rho, qd)
+    j = (c[0] + r * (q[0] - c[0]) / qd, c[1] + r * (q[1] - c[1]) / qd)   # where it meets the orbit
+    b0 = math.atan2(ey - q[1], ex - q[0])
+    turn = math.degrees((math.atan2(j[1] - q[1], j[0] - q[0]) - b0) * s) % 360.0
+    m = int(math.ceil(turn / AWACS_IN_STEP_DEG))
+    lead = [circle_point(q, rho, b0, s, turn * k / m, ez + (AWACS_IN_TOP_KM - ez) * k / m) for k in range(1, m + 1)]
+    a0 = math.atan2(j[1] - c[1], j[0] - c[0])
+    pt = lambda psi, alt: circle_point(c, r, a0, s, psi, alt)
+    step = AWACS_ARC_STEP_DEG
+    k_in, k_arc = AWACS_IN_CIRCLE_DEG / step, 180.0 / step
+    assert abs(k_in - round(k_in)) < 1e-9 and abs(k_arc - round(k_arc)) < 1e-9, 'AWACS_ARC_STEP_DEG must divide both'
+    k_in, k_arc = int(round(k_in)), int(round(k_arc))
+    climb = [pt(step * i, AWACS_IN_TOP_KM + (AWACS_ALT_KM - AWACS_IN_TOP_KM) * i / k_in) for i in range(1, k_in + 1)]
+    pe = AWACS_IN_CIRCLE_DEG                                # the lead-in's end; arc B from a step past it, then arc A
+    arc_b = [pt(pe + step * i, AWACS_ALT_KM) for i in range(1, k_arc + 1)]
+    arc_a = [pt(pe + 180.0 + step * i, AWACS_ALT_KM) for i in range(1, k_arc + 1)]
+    for x, y, _ in lead + climb + arc_a + arc_b:
         assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'the AWACS orbit leaves the zone'
-        pts.append((x * 100000.0, y * 100000.0, AWACS_ALT_KM * 100000.0))
-    return pts
+    cm = lambda p: (p[0] * 100000.0, p[1] * 100000.0, p[2] * 100000.0)
+    return dict(rho=rho, turn=turn, sense=s, centre=c, pt=pt,
+                **{'in': [cm(p) for p in lead + climb]}, arc_a=[cm(p) for p in arc_a], arc_b=[cm(p) for p in arc_b],
+                in_before=cm((ex, ey, ez)), in_after=cm(arc_b[0]),
+                b_before=cm(climb[-1]), b_after=cm(arc_a[0]), a_before=cm(arc_b[-1]), a_after=cm(arc_b[0]))
 
 
 def wolf_held(k):
@@ -821,6 +925,9 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
              + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
              + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp']
              + [f'SV_LadonRage{key}' for key, _, _ in LADONS])
+# (0.73.73) a Ladon's circuit legs flown, its appearance's once-a-spawn mark and its fires (build_ladon); VOID WATCHER
+# 1's orbit legs flown (build_awacs)
+INT_FLAGS += ([f'SV_Ladon{f}{key}' for f in ('Leg', 'Done', 'Seen') for key, _, _ in LADONS] + ['SV_AwacsLeg'])
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -1632,9 +1739,10 @@ AWACS_EVENTS = {}                              # build_allies' events build_awac
 
 
 def build_awacs(g, stock_ep):
-    """VOID WATCHER 1's orbit and ESM (AWACS_*): airborne (build_allies) -> AWACS_PATH on Mission 16's Ladon path record,
-    each lap's end -> AWACS_PATH again (hard rules 1, 35, as the heavies' loops); RE_SV_AwacsEsm fires AWACS_ESM_SLOT on
-    it (Mission 19's LiveFireOneShotWeapon, as the jammer's ECM), which Scripts/sv_allies.lua fires every esm.every_s
+    """VOID WATCHER 1's orbit and ESM (AWACS_*): the climb-out's end -> the lead-in (AWACS_PATH_IN) on Mission 16's Ladon
+    path record; its end -> arc B; each arc's end -> the other (awacs_orbit; hard rules 1, 2, 35), SV_AwacsLeg + 1 at
+    each; Lua's backstop RE_SV_AwacsOrbit takes it off its path onto the area orbit. RE_SV_AwacsEsm fires AWACS_ESM_SLOT
+    on it (Mission 19's LiveFireOneShotWeapon, as the jammer's ECM), which Scripts/sv_allies.lua fires every esm.every_s
     while it's airborne. Forwarded in co-op: each joiner's copy fields its ESM there too."""
     lua = runtime_lua()
     assert 'RE_SV_AwacsEsm' in lua, 'Scripts/sv_config.lua CFG.allies.awacs never names RE_SV_AwacsEsm'
@@ -1644,22 +1752,39 @@ def build_awacs(g, stock_ep):
     m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
     t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
-    # (0.73.62) Its orbit is its unit area, not a path: the path was ignored (it flew straight on: to 163 km on
-    # 2026-10-31, south-west on 2026-11-01, after the climb-out's PathFinish fired its SV_AwacsAir / ESM records). An AI
-    # plane with no target circles inside its area (the bombers with 6 km on the airport circled 8-12 km out, MINDRIPPER's
-    # guards circle him: confirmed): the area onto the airport (the bombers' LiveUnitMoveActor, AIRFIELD_MARK) at
-    # AWACS_AREA_M (Mission 6's LiveChangeUnitRadius), at airborne and on Lua's backstop (RE_SV_AwacsOrbit).
+    # (0.73.62-0.73.72) Its orbit was its unit area, not a path (the path was never flown: it flew straight on, to
+    # 163 km on 2026-10-31): it circled 0.9-6.9 km from the airfield, turning tight (2026-11-01). (0.73.73) A path
+    # again, started where the plane is going (awacs_orbit): the climb-out's end (its airborne records, build_allies)
+    # -> the lead-in, as the Ladons' route's end -> their circuit; then the arcs. Its unit area still onto the airport (the bombers'
+    # LiveUnitMoveActor, AIRFIELD_MARK) at AWACS_AREA_M (Mission 6's LiveChangeUnitRadius), round the whole orbit.
     m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
     t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
     t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
     assert arg_values(t_bmove)[3] == AIRFIELD_MARK, arg_values(t_bmove)
+    t_exit = g.exec_template('LiveAIPathExitExecution', 'Default_CompositeEvent_19', lambda a, e: a[0] != 'NoneSelect')
+    assert arg_values(t_exit)[1] == 'NoneSelect', arg_values(t_exit)
     assert 'RE_SV_AwacsOrbit' in lua, 'Scripts/sv_allies.lua never fires RE_SV_AwacsOrbit'
-    for ev in (AWACS_EVENTS['airborne'], AWACS_EVENTS['orbit']):
+    for ev, area in ((AWACS_EVENTS['airborne'], AWACS_AREA_M), (AWACS_EVENTS['orbit'], AWACS_FALLBACK_AREA_M)):
+        if ev == AWACS_EVENTS['orbit']:
+            # (0.73.73) Lua's backstop (its climb-out never ended, or it's off its orbit): off any path first (Mission
+            # 22's airport strike leaves its path so), then the area orbit of 0.73.62-0.73.72 round the airport
+            g.execute(t_exit, ev, {0: AWACS_OBJ})
         g.execute(t_bmove, ev, {0: AWACS_UNIT}, delay=1.0)
-        g.execute(t_radius, ev, {0: AWACS_UNIT, 1: 'NoneSelect', 2: f'{AWACS_AREA_M:.1f}'}, delay=1.5)
+        g.execute(t_radius, ev, {0: AWACS_UNIT, 1: 'NoneSelect', 2: f'{area:.1f}'}, delay=1.5)
+    g.flags.add('SV_AwacsLeg')                             # (set 0 by its appearance: build_allies)
+    t_flag = g.exec_template('LiveFlagOperation_IntExecution', pred=lambda a, e: a[1] == 'Set')
+    g.execute(t_path, AWACS_EVENTS['airborne'], {0: AWACS_OBJ, 2: AWACS_PATH_IN, 4: AWACS_IN_SPEED})
+    for ev, path, nxt in (('SV_AwacsLegIn', AWACS_PATH_IN, AWACS_ARC_B), ('SV_AwacsLegB', AWACS_ARC_B, AWACS_ARC_A),
+                          ('SV_AwacsLegA', AWACS_ARC_A, AWACS_ARC_B)):
+        g.trigger(finish, ev, arg_changes={0: AWACS_OBJ, 2: path})
+        g.execute(t_flag, ev, {0: 'SV_AwacsLeg', 1: 'Add', 2: 1})
+        g.execute(t_path, ev, {0: AWACS_OBJ, 2: nxt, 4: AWACS_SPEED})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
     g.execute(t_fire, 'RE_SV_AwacsEsm', {0: AWACS_ESM_SLOT, 1: AWACS_OBJ})
-    print(f'  VOID WATCHER 1: orbit = its unit area on {AIRFIELD_MARK} ({AWACS_AREA_M:.0f} m), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
+    o = awacs_orbit()
+    print(f'  VOID WATCHER 1: orbit {AWACS_ORBIT_KM:.1f} km round the airfield ({"counter-" if o["sense"] > 0 else ""}clockwise; '
+          f'its lead-in a {o["turn"]:.0f} deg turn of {o["rho"]:.2f} km, then {AWACS_IN_CIRCLE_DEG:.0f} deg climbing), its '
+          f'area {AWACS_AREA_M:.0f} m ({AWACS_FALLBACK_AREA_M:.0f} m on the backstop), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
 
 
 JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)
@@ -1793,6 +1918,7 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
     up = 'SV_AwacsUp'
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: AWACS_UNIT})
     flag(up, 'SV_AwacsAir', 'Set', 0)
+    flag(up, 'SV_AwacsLeg', 'Set', 0)                      # (0.73.73: its orbit's legs flown, build_awacs)
     g.execute(t_hold, up, {0: o, 2: TAKEOFF_LEAD[0]})
     g.execute(t_gear_dn, up, {0: o})
     g.execute(t_attr_hold, up, {1: o})
@@ -2055,8 +2181,9 @@ def build_spaceport(g, flag, stock_ep):
 
 def build_ladon(g, flag, stock_ep):
     """The Ladons (LADON*), on Mission 16's records: appearance -> its route (PathFinish triggers: hard rule 1) and
-    Mission 16's Normal engagement order; the end of the route or of a circuit -> SV_LadonRun<Key> + 1 and the next
-    circuit."""
+    Mission 16's Normal engagement order; the end of the route -> SV_LadonRun<Key> + 1 and its circuit's arc A; each
+    arc's end -> SV_LadonLeg<Key> + 1 and the other arc (ladon_circuit). RE_SV_LadonLeash<Key> (Lua's backstop): off its
+    path, its area onto the airport. RE_SV_LadonRearm<Key>: its appearance may run again (the next spawn)."""
     m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
     t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
     t_eng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_CompositeEvent_83',
@@ -2076,13 +2203,27 @@ def build_ladon(g, flag, stock_ep):
     t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
     t_bmove = g.exec_template('LiveUnitMoveActor', 'Default_CompositeEvent_19')       # unit area onto AreaB_MarkActor0
     assert arg_values(t_bmove)[3] == AIRFIELD_MARK, arg_values(t_bmove)
+    # (0.73.73) Mission 22's airport strike leaves its path so (Default_CompositeEvent_19: LiveAIPathExitExecution on
+    # each aircraft, then its area onto the airport)
+    t_exit = g.exec_template('LiveAIPathExitExecution', 'Default_CompositeEvent_19', lambda a, e: a[0] != 'NoneSelect')
+    assert arg_values(t_exit)[1] == 'NoneSelect', arg_values(t_exit)
     for L in ladons():
-        g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
-        flag(L['up'], L['flag'], 'Set', 0)
-        g.execute(t_path, L['up'], {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0)
-        g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
+        up = L['up']
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: L['unit']})
+        # (0.73.73) once a spawn (HOTFIX_NOTES open problem 3: a volley after its first pass fired its appearance again,
+        # which set its pass count to 0 and sent it back onto its route from the far west, "the Ladon left the map"):
+        # what restarts it is gated on SV_LadonDone<Key> 0 (conditions are read as the appearance fires: hard rule 26),
+        # which its last record sets 1 half a second on; Lua's RE_SV_LadonRearm<Key> clears it once that Ladon is gone.
+        # Its orders, harmless again, stay ungated (a co-op joiner's copies, spawned again, need them). Each fire
+        # counted.
+        once = lambda: [g.cond(L['done'], 'Leq', 0)]
+        flag(up, L['seen'], 'Add', 1)
+        flag(up, L['flag'], 'Set', 0, conds=once())
+        flag(up, L['leg'], 'Set', 0, conds=once())
+        g.execute(t_path, up, {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0, conds=once())
+        g.execute(t_eng, up, {0: L['obj']}, delay=2.0)
         for part in LADON_CIWS:
-            g.execute(t_ciws, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
+            g.execute(t_ciws, up, {0: f"{L['obj']}_{part}"}, delay=2.5)
         # one launcher a volley (user, 2026-10-23: "nerf the enemy LADONs VLS, way too insane": both at once shot the
         # player down within 9 s of the first volley): RE_SV_LadonVolley<Key>L / R, main.lua alternates them
         for side, part in zip('LR', LADON_VLS):
@@ -2093,29 +2234,39 @@ def build_ladon(g, flag, stock_ep):
             # BP_wp_vls_certain_ladon, the scripted sure kill it fires at the allied F/A-18s: flares did nothing
             # against it (user, 2026-10-23: "the VLS guidance needs to be nerfed ... Flares don't even work")
             g.execute(t_vls, volley, {0: 'WN_WEAPON_1', 1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
-        # its rage (P7, LADON_RAGE): Lua's RE_SV_LadonRage<Key> sets the flag (its appearance clears it), and each
-        # PathFinish starts the old circuit or, enraged, the rage circuit (conditions checked as the PathFinish fires, after
-        # Lua set the flag: hard rule 26), so the switch is at its next pass over the airfield
-        flag(L['up'], L['rage_flag'], 'Set', 0)
+        # its rage (P7): Lua's RE_SV_LadonRage<Key> sets the flag (its appearance clears it), and each arc's end starts
+        # the next at LADON_RAGE_SPEED (conditions checked as the PathFinish fires, after Lua set the flag: hard rule 26)
+        flag(up, L['rage_flag'], 'Set', 0, conds=once())
         g.trigger('RE_SpawnEnemy_kokatu_1st', L['rage_ev'])
         flag(L['rage_ev'], L['rage_flag'], 'Set', 1)
-        for ev, path, nxt in ((L['over'], L['path'], L['loop']), (L['lap'], L['loop'], L['loop_b']),
-                              (L['lap_b'], L['loop_b'], L['loop']), (L['rage_lap'], L['rage'], L['loop'])):
+        # (0.73.73) the route's end over the airfield (its first pass: SV_LadonRun<Key>) -> arc A; each arc's end -> the
+        # other arc (ladon_circuit: every new path one step ahead of it, its own end half a circle away), as Mission 16
+        # chains its Ladon's paths (PathFinish -> the next path, no delay). Its later passes Lua counts by distance.
+        for ev, path, nxt in ((L['over'], L['path'], L['arc_a']), (L['leg_a'], L['arc_a'], L['arc_b']),
+                              (L['leg_b'], L['arc_b'], L['arc_a'])):
             g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
-            flag(ev, L['flag'], 'Add', 1)
-            if ev != L['over']:
-                # (0.73.69) after a lap its next path is ignored (both flew straight east out of the zone after pass 2,
-                # with alternating copies too, 2026-11-01 23:47): its unit area onto the airport, where an AI plane
-                # circles (VOID WATCHER's orbit, confirmed the same night); Lua counts its passes by distance then
-                g.execute(t_bmove, ev, {0: L['unit']}, delay=0.5)
-                g.execute(t_radius, ev, {0: L['unit'], 1: 'NoneSelect', 2: f'{LADON_CIRCLE_M:.1f}'}, delay=1.0)
+            flag(ev, L['flag'] if ev == L['over'] else L['leg'], 'Add', 1)
             g.execute(t_path, ev, {0: L['obj'], 2: nxt, 4: LADON_SPEED}, conds=[g.cond(L['rage_flag'], 'Leq', 0)])
-            g.execute(t_path, ev, {0: L['obj'], 2: L['rage'], 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
+            g.execute(t_path, ev, {0: L['obj'], 2: nxt, 4: LADON_RAGE_SPEED}, conds=[g.cond(L['rage_flag'], 'Geq', 1)])
+        # (0.73.73) Lua's backstop, a Ladon off its circuit: off its path, its area onto the airport (LADON_LEASH_AREA_M)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', L['leash'])
+        g.execute(t_exit, L['leash'], {0: L['obj']})
+        g.execute(t_bmove, L['leash'], {0: L['unit']}, delay=0.5)
+        g.execute(t_radius, L['leash'], {0: L['unit'], 1: 'NoneSelect', 2: f'{LADON_LEASH_AREA_M:.1f}'}, delay=1.0)
+        # (0.73.73) its appearance may run again (Lua, once this Ladon is gone; it's set half a second after a fire)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', L['rearm'])
+        flag(L['rearm'], L['done'], 'Set', 0)
+        flag(up, L['done'], 'Set', 1, delay=0.5)           # (its appearance's last record: after every check above)
     import re
     lua = runtime_lua()
-    assert '"RE_SV_LadonRage"' in lua, 'Scripts/sv_ladon.lua never fires RE_SV_LadonRage<Key>'
+    for name in ('"RE_SV_LadonRage"', '"RE_SV_LadonLeash"', '"RE_SV_LadonRearm"', '"SV_LadonLeg"', '"SV_LadonSeen"',
+                 '"SV_LadonDone"'):
+        assert name in lua, f'Scripts/sv_ladon.lua never names {name}'
     m = re.search(r'names = \{ Kot = "\w+", Mishka = "\w+" \}', lua)
     assert m and all(f'{k} = ' in m.group(0) for k, _, _ in LADONS), 'Scripts/sv_config.lua CFG.specials.ladon.names != LADONS'
+    cc = ladon_circuit()
+    print(f'  ladons: circuit {LADON_CIRCUIT_KM:.1f} km round ({cc["centre"][0]:.2f}, {cc["centre"][1]:.2f}), arcs of '
+          f'{len(cc["arc_a"])} points every {LADON_ARC_STEP_DEG:.0f} deg, each started a step ahead of the other\'s end')
 
 
 def build_alicorn(g, flag, stock_ep):

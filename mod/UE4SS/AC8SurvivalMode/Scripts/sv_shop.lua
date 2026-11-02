@@ -7,6 +7,7 @@
 function SHOP.storeCheck()
     if SH.store ~= nil then return SH.store end
     if not SH.menuOk then SH.store = false; return false end
+    if walkHold() then return nil end                 -- (0.73.73: a held walk finds no manager; not a try)
     SH.storeTries = (SH.storeTries or 0) + 1
     local ok, got = pcall(function()
         local m = FindFirstOf("LiveMenuManager")
@@ -42,6 +43,7 @@ end
 do
 local texCache = {}
 local function texture(path)
+    if texCache[path] and not liveObj(texCache[path]) then texCache[path] = nil end   -- (0.73.73: kept: a freed one dropped)
     if texCache[path] == nil then
         local name = path:match("[^/]+$")
         texCache[path] = loadObject(path .. "." .. name) or false
@@ -80,7 +82,7 @@ function SHOP.decorTick(tick)
                 local a = row and addrOf(row)
                 if a and item then
                     local d = SH.decor[a]
-                    if not d or not valid(d.img) then
+                    if not d or not liveObj(d.img) then                  -- (0.73.73: liveObj, kept between ticks)
                         local ok, err = pcall(function()
                             local canvas = child(row, "CanvasPanel_79")
                             if not canvas then error("no CanvasPanel_79 in the row") end
@@ -94,18 +96,18 @@ function SHOP.decorTick(tick)
                         end)
                         if not ok and not SH.decorSaid then SH.decorSaid = true; log("shop: row icons failed: " .. tostring(err)) end
                     end
-                    if d and d.item ~= item and valid(d.img) then
+                    if d and d.item ~= item and liveObj(d.img) then
                         local own = item == "RepairAircraft" or item == "UpAirframe" or item == "Insurance"
                         local tex = (own and planeIcon()) or texture(SHOP.icons[item] or SHOP.icons.Airfield)
                         if tex then pcall(function() d.img:SetBrushFromTexture(tex, false) end) end
                         d.item = item
                         if not SH.decorDone then SH.decorDone = true; log("shop: row icons on the landing menu") end
                     end
-                elseif a and SH.decor[a] and valid(SH.decor[a].img) then     -- a stock row now: no icon
+                elseif a and SH.decor[a] and liveObj(SH.decor[a].img) then   -- a stock row now: no icon
                     pcall(function() SH.decor[a].img:SetVisibility(1) end)
                     SH.decor[a].item, SH.decor[a].hidden = nil, true
                 end
-                if a and item and SH.decor[a] and SH.decor[a].hidden then
+                if a and item and SH.decor[a] and SH.decor[a].hidden and liveObj(SH.decor[a].img) then
                     pcall(function() SH.decor[a].img:SetVisibility(4) end); SH.decor[a].hidden = nil
                 end
             end
@@ -372,6 +374,7 @@ end
 -- of the co-op run of 2026-10-30, "shop" up to 195 ms a tick). None found that way: every TextBlock, as before, logged.
 local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
 local function relabel(changed)
+    if walkHold() then return nil end                  -- (0.73.73: a held walk finds no row: not "none under a row")
     local n, rows, all = 0, 0, SH.relabelAll
     for _, t in ipairs(FindAllOf("TextBlock") or {}) do
         local nm = valid(t) and nameOf(t) or ""
@@ -397,10 +400,12 @@ function SHOP.relabelFlush(force)
     if not playerOnAirfield() then SH.relabelQ = nil; return end
     local now = os.clock()
     if not force and now < (SH.relabelAt or 0) then return end
+    if walkHold() then return end                    -- (0.73.73: the walks held, walkHold: the labels wait, kept)
     local q = SH.relabelQ
     SH.relabelQ, SH.relabelAt = nil, now + 2
     local okR, n = pcall(relabel, q)
-    if okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
+    if okR and n == nil then SH.relabelQ = q                 -- (held after all: back in the queue)
+    elseif okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
 end
 local function relabelQueue(changed)
     local q = SH.relabelQ or {}
@@ -523,7 +528,7 @@ function shopBuy(name)
         RUN.ups[it.up] = nxt
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
-        local okU, errU = pcall(UP.apply, survivalPC and valid(survivalPC) and survivalPC.Pawn)
+        local okU, errU = pcall(UP.apply, survivalPC and liveObj(survivalPC) and survivalPC.Pawn)
         if not okU then log("upgrades: error " .. tostring(errU)) end
         return done(string.format("%s TIER %d for %d.", it.label, nxt, price))
     elseif o.role == "tactical" then
@@ -628,7 +633,7 @@ function SHOP.sound(name)
     local ok, err = pcall(function()
         local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
         if not valid(lib) then error("LiveSoundBlueprintLibrary not found") end
-        lib:PostEventByName(valid(survivalPC) and survivalPC or FindFirstOf("PlayerController"), FName(name))
+        lib:PostEventByName(liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController"), FName(name))
     end)
     if not ok and not SH.soundSaid then SH.soundSaid = true; log("shop: menu sound " .. name .. " failed: " .. tostring(err)) end
 end

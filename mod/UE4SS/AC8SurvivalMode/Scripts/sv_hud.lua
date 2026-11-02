@@ -370,8 +370,9 @@ local function hideGameInfo(now)
     local hc = CFG.hud
     if not (hc.hide_game_timer or hc.hide_score_limit) then return end
     local have = H.info and #H.info > 0
-    for _, e in ipairs(H.info or {}) do if not valid(e.w) then have = false end end
-    if not have and (not H.infoAt or now >= H.infoAt) then      -- look again only while they aren't found
+    -- (0.73.73: liveObj on the kept widgets: valid() read a freed one; and none looked for while the walks are held)
+    for _, e in ipairs(H.info or {}) do if not liveObj(e.w) then have = false end end
+    if not have and (not H.infoAt or now >= H.infoAt) and not walkHold() then   -- look again only while they aren't found
         H.infoAt, H.info, H.infoSaid = now + 2, {}, H.infoSaid or {}
         for _, w in ipairs(FindAllOf("WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C") or {}) do
             if liveWidget(w) then                                    -- a live panel, not a blueprint's template
@@ -385,8 +386,8 @@ local function hideGameInfo(now)
             end
         end
     end
-    for _, e in ipairs(H.info) do
-        if valid(e.w) and e.w:GetVisibility() ~= e.vis then
+    for _, e in ipairs(H.info or {}) do
+        if liveObj(e.w) and e.w:GetVisibility() ~= e.vis then
             e.w:SetVisibility(e.vis)
             if not H.infoSaid[e.what] then H.infoSaid[e.what] = true; log("hud: the game's " .. e.what .. " hidden (" .. nameOf(e.w) .. ")") end
         end
@@ -395,9 +396,9 @@ end
 
 function hudTick(now, paused, pc)
     if hudOff or not CFG.hud.enabled or not D then return end
-    if not (H and valid(H.widget)) then
+    if not (H and liveObj(H.widget)) then                     -- (0.73.73: liveObj, kept between ticks)
         H = nil
-        if not valid(pc) then return end
+        if not liveObj(pc) then return end
         hudTries = hudTries + 1
         local ok, err = pcall(hudBuild, pc)
         if not ok then

@@ -4,8 +4,9 @@
 
 ---------------------------------------------------------------------------------------------------- ladon
 -- CFG.specials.ladon; tools/survival_events.py LADON* builds the units (Mission 16's Ladon, parts and all), routes and
--- records. Ladon <Key> is unit SV_Unit_Ladon<Key> on DT_NPC row SV_Ladon_<Key>; each pass over the airfield adds one to
--- SV_LadonRun<Key>.
+-- records. Ladon <Key> is unit SV_Unit_Ladon<Key> on DT_NPC row SV_Ladon_<Key>; its route's end over the airfield adds
+-- one to SV_LadonRun<Key> (its first pass), each arc of its circuit flown one to SV_LadonLeg<Key> (0.73.73), and its
+-- passes round the circuit are counted here by distance.
 do
 local KEYS = { "Kot", "Mishka" }
 
@@ -102,6 +103,34 @@ function SPC.ladonSetup()
         table.concat({ c.names.Kot, c.names.Mishka }, ", "), c.health_add, c.speed_x))
 end
 
+-- (0.73.73) Ladon `k`'s appearance may run again (its next spawn): RE_SV_LadonRearm<Key> clears SV_LadonDone<Key>, which
+-- its appearance sets so that a fire again (HOTFIX_NOTES open problem 3: after a volley) never restarts its route
+-- (tools/survival_events.py build_ladon). Fired once that Ladon is gone, and before a spawn if it's still set.
+local function ladonRearm(k, why)
+    local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonRearm" .. k) or -5
+    log(string.format("special: Ladon %s's appearance armed for its next spawn (%s): RE_SV_LadonRearm%s %s",
+        CFG.specials.ladon.names[k] or k, why, k, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
+end
+
+-- (0.73.73) every 5 s in Survival's level, on every game (HIT.tick: a co-op joiner's copies set the mark too, and a
+-- joiner may host the next Ladon round after a migration): a Ladon whose mark is set and whose unit isn't up is armed
+-- again, long before its next spawn (ladonSpawn's own arming, just before SV_Spawn, may come too late for its
+-- appearance). At most every 30 s a Ladon.
+function SPC.ladonRearmTick(now)
+    if SPC.rearmNow and now < SPC.rearmNow then SPC.rearmAt, SPC.rearmed = nil, nil end   -- (a new run's clock)
+    SPC.rearmNow = now
+    if not svLevelOn or now < (SPC.rearmAt or 0) or type(SV_UnitAlive) ~= "function" then return end
+    SPC.rearmAt = now + 5
+    local f = svFlags() or {}
+    SPC.rearmed = SPC.rearmed or {}
+    for _, k in ipairs(KEYS) do
+        if (f["SV_LadonDone" .. k] or 0) > 0 and SV_UnitAlive("SV_Unit_Ladon" .. k) <= 0 and now >= (SPC.rearmed[k] or 0) then
+            SPC.rearmed[k] = now + 30
+            ladonRearm(k, "its unit's down")
+        end
+    end
+end
+
 function SPC.ladonSpawn(now)
     local c, t = CFG.specials.ladon, CFG.hud.text
     if not (nativeReady() and SPC.ladonReady) then
@@ -110,9 +139,13 @@ function SPC.ladonSpawn(now)
     end
     local s = D.special
     s.units, s.state, s.at, s.runs, s.planeFrom = {}, "run", now, 0, #planes + 1
+    local f0 = svFlags() or {}
     for _, k in ipairs(KEYS) do
         local unit = "SV_Unit_Ladon" .. k
         local r, was = SV_UnitAlive(unit), nil
+        if r <= 0 and (f0["SV_LadonDone" .. k] or 0) > 0 then        -- (its last one's rearm never came: now, late)
+            ladonRearm(k, "still set at its spawn: its route may not start")
+        end
         if r > 0 then was = true                     -- still up from before (a restart mid-round): this round's, then
         else spawningUnit = unit; r = SV_Spawn(unit); spawningUnit = nil end
         log(string.format("special: Ladon %s (%s): %s", c.names[k] or k, unit, r > 0 and (was and "still up, taken on" or "up") or
@@ -137,10 +170,11 @@ function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
 -- one Ladon dies the other changes route and volleys faster"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
 -- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next rage.first_s on (once you're in
 -- range; its tell first, never in the same second: with the other's gap gone it had come with it, code review of unit
--- 9), and RE_SV_LadonRage<Key> sets its flag, so its next pass over the airfield ends on the tighter, faster rage
--- circuit (tools/survival_events.py LADON_RAGE: its PathFinish records pick the path by the flag; never a path changed
--- mid-way). Forwarded to co-op joiners (their copies are moved by the host's stream; harmless). The tell (its radio
--- call) to every player. Once a round.
+-- 9), and RE_SV_LadonRage<Key> sets its flag, so from the end of the arc it's on it goes round its circuit faster
+-- (tools/survival_events.py LADON_RAGE_SPEED: each arc's PathFinish records pick the speed by the flag; never a path
+-- changed mid-way; 0.73.73: the same circle, no tighter rage circuit of its own, which was never flown). Forwarded to
+-- co-op joiners (their copies are moved by the host's stream; harmless). The tell (its radio call) to every player.
+-- Once a round.
 function SPC.ladonRage(now, s, downKey)
     local c = CFG.specials.ladon
     local rg = c.rage
@@ -149,13 +183,13 @@ function SPC.ladonRage(now, s, downKey)
         if k2 ~= downKey and L2.alive and SV_UnitAlive(L2.unit) > 0 then       -- (both down in one second: no rage)
             s.raged, L2.rage, L2.rageAt = k2, true, now
             L2.volleyAt = now + math.max(1, tonumber(rg.first_s) or 0)
-            -- (hotfix3: rg.circuit false: its circuit kept, the rage path isn't followed; CFG.specials.ladon.rage)
+            -- (hotfix3: rg.circuit false: its circuit's speed kept; CFG.specials.ladon.rage)
             local r = rg.circuit == false and -99 or (type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5)
             local name = c.names[k2] or k2:upper()
             if TELL then pcall(TELL.say, "ladon_rage", TELL.ALL) end
-            log(string.format("special: Ladon %s enraged (%s down): volleys every %d s, the rage circuit from its next pass (RE_SV_LadonRage%s %s)",
+            log(string.format("special: Ladon %s enraged (%s down): volleys every %d s, faster round its circuit from its next arc (RE_SV_LadonRage%s %s)",
                 name, c.names[downKey] or downKey, tonumber(rg.volley_every_s) or c.volley_every_s, k2,
-                r == 1 and "fired" or r == -99 and "not fired: rage.circuit false, it keeps its own circuit"
+                r == 1 and "fired" or r == -99 and "not fired: rage.circuit false, it keeps its speed"
                 or ("not fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
             return true
         end
@@ -232,38 +266,60 @@ function SPC.ladonTick(now, s)
                     c.names[k] or k, L.runs, runs, L.resets, s.volleyWho and string.format("%s's %.0f s ago", s.volleyWho, now - (s.volleyAny or now)) or "none"))
                 L.runs = runs
             end
-            if now >= (L.posAt or 0) and (c.pos_log_s or 0) > 0 then   -- (patch ladon1) where it is, for its track
-                L.posAt = now + c.pos_log_s
-                for _, p in ipairs(planes) do
-                    if p.unit == L.unit and not p.down and valid(p.obj) then
-                        local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
-                        if okL and l then
-                            log(string.format("special: Ladon %s at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield; pass flag %d, passes %d%s",
-                                c.names[k] or k, l.X / 100000, l.Y / 100000, l.Z / 100000,
-                                math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000, runs, L.passes or 0,
-                                L.passed and c.volley_after_pass == false and ", volleys off" or ""))
-                        end
-                        break
-                    end
+            -- (0.73.73) its appearance fired again (SV_LadonSeen<Key> counts its fires): since 0.73.73 that can't restart
+            -- its route or its pass count (its records run once a spawn: tools/survival_events.py build_ladon); logged,
+            -- for HOTFIX_NOTES open problem 3 (a volley after its first pass fired it)
+            local seen = f["SV_LadonSeen" .. k] or 0
+            if seen > 0 and not L.seen0 then L.seen0, L.seen = seen, seen
+            elseif L.seen and seen > L.seen then
+                L.seen = seen
+                log(string.format("special: Ladon %s's appearance fired again (%d so far this spawn; last volley %s): its route and pass count kept (SV_LadonDone %d)",
+                    c.names[k] or k, seen - L.seen0, s.volleyWho and string.format("%s's %.0f s ago", s.volleyWho, now - (s.volleyAny or now)) or "none",
+                    f["SV_LadonDone" .. k] or 0))
+            end
+            -- (0.73.73) where it is, once a second (its body: the unit's first plane up): its track, its passes after the
+            -- first, the backstop below
+            local l, dkm
+            for _, p in ipairs(planes) do
+                if p.unit == L.unit and not p.down and liveAddr(p.obj) then
+                    local okL, at = pcall(function() return p.obj:K2_GetActorLocation() end)
+                    if okL and at then l, dkm = at, math.sqrt((at.X - AIRFIELD.X) ^ 2 + (at.Y - AIRFIELD.Y) ^ 2) / 100000 end
+                    break
                 end
+            end
+            local legs = f["SV_LadonLeg" .. k] or 0
+            if l and now >= (L.posAt or 0) and (c.pos_log_s or 0) > 0 then   -- (patch ladon1) where it is, for its track
+                L.posAt = now + c.pos_log_s
+                -- (legs: its circuit's arcs flown, SV_LadonLeg<Key>: two a lap, each one's end starting the other)
+                log(string.format("special: Ladon %s at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield; pass flag %d, legs %d, passes %d%s",
+                    c.names[k] or k, l.X / 100000, l.Y / 100000, l.Z / 100000, dkm, runs, legs, L.passes or 0,
+                    L.passed and c.volley_after_pass == false and ", volleys off" or ""))
             end
             -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at
             -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
-            -- (0.73.69) or by distance: after a lap it circles in its unit area on the airport, and no PathFinish
-            -- counts its passes then. A pass: within 2.5 km of the airfield after being 5 km or more out.
+            -- Its first pass is its route's end (SV_LadonRun<Key>); the rest by distance, its circuit round the airfield
+            -- with no pass flag (0.73.69, 0.73.73): within 2.5 km of the airfield after being 5 km or more out.
             local near = false
-            if L.passes and L.passes >= 1 then
-                for _, p in ipairs(planes) do
-                    if p.unit == L.unit and not p.down and liveAddr(p.obj) then
-                        local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
-                        if okL and l then
-                            local dkm = math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000
-                            if dkm >= 5 then L.armed = true
-                            elseif dkm <= 2.5 and L.armed then near = true end
-                        end
-                        break
-                    end
-                end
+            if dkm and L.passes and L.passes >= 1 then
+                if dkm >= 5 then L.armed = true
+                elseif dkm <= 2.5 and L.armed then near = true end
+            end
+            -- (0.73.73) a pass flag up within 30 s of a pass counted is that pass (A19, 12:01:59 / 12:02:34: the old
+            -- circuit's end over the airfield 3 s after the distance had counted it, counted again 35 s on)
+            if runs > L.runs and L.bombAt and now - L.bombAt < 30 then
+                log(string.format("special: Ladon %s's pass flag %d -> %d %.0f s after a pass counted: the same pass",
+                    c.names[k] or k, L.runs, runs, now - L.bombAt))
+                L.runs = runs
+            end
+            -- (0.73.73) the backstop: after its first pass its circuit keeps it within ~17 km of the airfield
+            -- (tools/survival_events.py LADON_CIRCUIT_KM); leash_km or more out, it's off it (A19, 0.73.70: 50 km east
+            -- after its second pass): RE_SV_LadonLeash<Key> takes it off its path and its unit area onto the airport,
+            -- where it circles; at most every leash_every_s
+            if dkm and L.passes and L.passes >= 1 and (c.leash_km or 0) > 0 and dkm >= c.leash_km and now >= (L.leashAt or 0) then
+                L.leashAt, L.leashes = now + (c.leash_every_s or 90), (L.leashes or 0) + 1
+                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonLeash" .. k) or -5
+                log(string.format("special: Ladon %s %.1f km from the airfield after %d pass(es), off its circuit (legs %d): off its path, its area onto the airport (RE_SV_LadonLeash%s %s; %d so far)",
+                    c.names[k] or k, dkm, L.passes, legs, k, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r)), L.leashes))
             end
             if now - s.at >= 5 and (runs > L.runs or near) and now - (L.bombAt or 0) >= 30 then
                 L.armed = false
@@ -289,6 +345,7 @@ function SPC.ladonTick(now, s)
                 if not flying then
                     L.alive, gone, s.escaped = false, true, true
                     log(string.format("special: Ladon %s gone without being shot down (SV_UnitAlive %d); no pay", c.names[k] or k, n))
+                    ladonRearm(k, "gone")
                 end
             end
             if n > 0 and not gone and bodyDown(L.unit, s.planeFrom) then   -- (its body down, parts still up: down)
@@ -302,6 +359,7 @@ function SPC.ladonTick(now, s)
                 LB.stat("air", 1)
                 hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, pay))
                 log(string.format("special: round %d, Ladon %s down %.0f s after it appeared", D.round, c.names[k] or k, now - s.at))
+                ladonRearm(k, "down")
                 pcall(SPC.ladonRage, now, s, k)              -- (the other one enraged: P7)
             end
         end
@@ -429,6 +487,7 @@ end
 function HIT.tick(pc, now)
     local new = HIT.new
     HIT.new = {}
+    if now then pcall(SPC.ladonRearmTick, now) end         -- (0.73.73: a gone Ladon's appearance armed again)
     -- Weapons are pooled (LiveWeaponBase is a LiveObjectPoolItem: the co-op fire research of 2026-10-29), so a volley's
     -- reused missiles never come in as new objects: for sweep_s after each volley (HIT.sweepUntil, sv_ladon's volley)
     -- every Ladon missile up is toned down again (from the class default, so twice is the same as once)

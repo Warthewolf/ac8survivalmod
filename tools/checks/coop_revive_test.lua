@@ -633,6 +633,144 @@ tick()
 check(not DOWN.me() and msgs("rb") == "-1>rb|0|2|1", "down again within 15 s of the last revive, the joiner landed: revived again ("
       .. msgs("rb") .. msgs("rx") .. ")")
 
+---------------------------------------------------------------------------------------------------- the landing's lock
+-- (0.73.73, the testers' logs of 0.73.70: Shazzy, A04, down 13:36:53 at 41 m by the airfield with the gear out, revived
+-- 13:38:07 and "unable to shoot" until he landed and rearmed; cressendo, A10, gear out 11:26:11, down 11:26:15, his FCS
+-- locked after the revive until he lowered and raised the gear. DOWN put back the inputs as it found them: the landing's
+-- lock.) The plane's own functions, stubbed: the gear (GetGearDownRate, the gear key), IsOnGround, the weapon system,
+-- CancelLanding
+local function landingPawn()
+    pawn.gearRate, pawn.onGround, pawn.calls, pawn.bEnableChangeTargetInput = 0, false, {}, true
+    function pawn:GetGearDownRate() return self.gearRate end
+    function pawn:IsOnGround() return self.onGround end
+    function pawn:IsWeaponSystemDisabled() return self.bIsWeaponSystemDisabled end
+    function pawn:DisableWeaponSystem(b) self.calls[#self.calls + 1] = "DisableWeaponSystem(" .. tostring(b) .. ")"; self.bIsWeaponSystemDisabled = b end
+    function pawn:CancelLanding(f) self.calls[#self.calls + 1] = "CancelLanding(" .. tostring(f) .. ")" end
+    function pawn:OnGearPressed() self.calls[#self.calls + 1] = "OnGearPressed"; self.gearRate = 1 - self.gearRate end
+    function pawn:OnGearReleased() self.calls[#self.calls + 1] = "OnGearReleased" end
+end
+local function called(what) return has(table.concat(pawn.calls, ","), what) end
+print("a revive after going down with the gear out: armed, the landing cancelled, gear up, watched")
+scene("join", 1, { [0] = FLY, [2] = FLY })
+landingPawn()
+pawn.gearRate, pawn.onGround = 1, true                              -- (rolling out at the airfield, the gear out:
+pawn.bEnableWeaponInput, pawn.bIsWeaponSystemDisabled = false, true -- the game's landing lock on)
+from = #logs + 1
+pawn.HealthInternal = 1
+tick()
+local dl = line("^down: you're down", from)
+check(DOWN.me() and has(dl, "bEnableWeaponInput false -> false") and has(dl, "bIsWeaponSystemDisabled true -> true")
+      and has(dl, "gear DOWN (1.00), on the ground"), "down: what it found logged (the landing's lock, the gear out, on the ground): " .. tostring(dl))
+pawn.gearRate, pawn.onGround = 0, false                             -- (the loiter flies it, the gear raised)
+ticks(2)
+from = #logs + 1
+pawn.calls = {}
+inbox[#inbox + 1] = "0|rb|1|1|2"
+tick()
+check(not DOWN.me() and pawn.bEnableWeaponInput == true and pawn.bEnableFlareInput == true and pawn.bIsWeaponSystemDisabled == false,
+      "revived: armed as a flying plane's, not the landing's lock DOWN found")
+check(called("CancelLanding(true)") and called("DisableWeaponSystem(false)") and not called("OnGearPressed"),
+      "the landing cancelled (down with the gear out), DisableWeaponSystem(false), the gear left up: " .. table.concat(pawn.calls, ","))
+local rl = line("^revive: your weapons armed", from)
+check(has(rl, "bEnableWeaponInput false -> true") and has(rl, "bIsWeaponSystemDisabled true -> false")
+      and has(rl, "the landing cancelled: called") and has(rl, "DOWN found bEnableWeaponInput false") and has(rl, "gear DOWN, on the ground")
+      and has(rl, "the gear now up (0.00)"), "logged: " .. tostring(rl))
+local bl, ri = nil, nil
+for i = from, #logs do if logs[i]:find("^revive: back") then bl = i elseif logs[i]:find("^revive: your weapons armed") then ri = i end end
+check(bl and ri and bl < ri, "armed after the plane's placed (SV_Respawn's reset can't undo it)")
+pawn.bIsWeaponSystemDisabled = true                                  -- (the game puts its lock back)
+tick()
+check(pawn.bIsWeaponSystemDisabled == false and has(line("^revive: the game locked your weapons again", from), "bIsWeaponSystemDisabled true"),
+      "the game's lock again: taken off, logged")
+pawn.calls = {}
+pawn.bEnableWeaponInput = false
+tick()
+check(pawn.bEnableWeaponInput == true and called("CancelLanding(true)")
+      and has(line("^revive: the game locked your weapons again", from), "the game's landing cancelled"), "again: armed, the landing cancelled")
+ticks(10)
+check(line("^revive: your weapons 10 s after the revive: armed %(locked again by the game 2 times%)", from) ~= nil,
+      "the watch's end logged: " .. tostring(line("^revive: your weapons 10 s", from)))
+pawn.bIsWeaponSystemDisabled = true
+tick()
+check(pawn.bIsWeaponSystemDisabled == true, "after the watch: the game's own (a landing of yours) left alone")
+pawn.bIsWeaponSystemDisabled = false
+-- down in the air, the gear up; revived with it still down: the gear key, let go a pass on; no landing to cancel
+pawn.HealthInternal = 1
+tick()
+check(DOWN.me(), "(down again, in the air, the gear up)")
+pawn.gearRate = 1
+pawn.calls, from = {}, #logs + 1
+inbox[#inbox + 1] = "0|rb|1|2|2"
+tick()
+check(called("OnGearPressed") and pawn.gearRate == 0 and not called("OnGearReleased") and not called("CancelLanding"),
+      "revived with the gear still down: the gear key pressed, no landing cancelled: " .. table.concat(pawn.calls, ","))
+check(has(line("^revive: your weapons armed", from), ": raised (the gear key)") and has(line("^revive: your weapons armed", from), "the landing cancelled: not needed"),
+      "logged: " .. tostring(line("^revive: your weapons armed", from)))
+tick()
+check(called("OnGearReleased"), "the gear key let go the next pass")
+ticks(2)
+check(line("^revive: your gear 2 s after the revive: up %(0%.00%)", from) ~= nil, "the gear read 2 s on: up")
+-- a landing of yours within the watch: left to the game
+grounded = true
+pawn.bIsWeaponSystemDisabled = true
+tick()
+check(pawn.bIsWeaponSystemDisabled == true, "on the airfield within the watch (landing): the game's lock left alone")
+ticks(10)
+check(has(line("^revive: your weapons 10 s after the revive", from), "you're landing: left to the game"), "logged at the watch's end")
+grounded = false
+
+---------------------------------------------------------------------------------------------------- parked
+-- (0.73.73: Shazzy, A02, a joiner, left the STORE at 11:24:25 and sat at the airfield, 7 m up, 0 m/s, until an Su-33's
+-- missiles took him to the floor, 11:24:37-41; with players linked the world runs on while you're down there)
+print("parked at your airfield (co-op): invincible on the ground")
+scene("join", 1, { [0] = FLY, [2] = FLY })
+landingPawn()
+grounded, pawn.at = true, { X = 1609639, Y = -436414, Z = 700 }
+from = #logs + 1
+ticks(1)
+check(pawn.invincible == true and line("^airfield: on the ground at your airfield", from) ~= nil and DOWN.parked(),
+      "still at 7 m by the runway: invincible, logged")
+pawn.HealthInternal = 1                                    -- (its floor: no hit gets through an invincible plane in game)
+pawn.HealthInternal = 800
+grounded, pawn.at = false, nil
+tick()
+check(pawn.invincible == true, "just off the ground: still, for 1 s")
+ticks(1.25)
+check(pawn.invincible == false and not DOWN.parked() and line("^airfield: off the ground after %d+ s: invincible off$", from) ~= nil,
+      "off the ground 1 s: invincible off, logged: " .. tostring(line("^airfield: off the ground", from)))
+grounded, pawn.onGround = true, true                       -- (the game's IsOnGround: the takeoff roll at any speed)
+tick()
+check(pawn.invincible == true, "IsOnGround: on")
+grounded, pawn.onGround = false, false
+ticks(1.5)
+check(pawn.invincible == false, "airborne: off")
+CFG.coop.revive.parked_safe = false
+grounded, pawn.at = true, { X = 1609639, Y = -436414, Z = 700 }
+ticks(1)
+check(pawn.invincible == false and not DOWN.parked(), "[coop.revive] parked_safe = false: not protected")
+CFG.coop.revive.parked_safe = nil
+scene(nil, nil)
+landingPawn()
+grounded, pawn.at = true, { X = 1609639, Y = -436414, Z = 700 }
+ticks(1)
+check(pawn.invincible == false and not DOWN.parked(), "solo: not protected (the stock game's STORE freeze as ever)")
+-- a revive's invincibility not cut short by leaving the ground
+scene("join", 1, { [0] = FLY, [2] = FLY })
+landingPawn()
+pawn.HealthInternal = 1
+tick()
+inbox[#inbox + 1] = "0|rb|1|1|2"
+tick()
+check(not DOWN.me() and pawn.invincible == true, "(revived: safe_s invincible)")
+grounded, pawn.at = true, { X = 1609639, Y = -436414, Z = 700 }
+ticks(1)
+grounded, pawn.at = false, nil
+from = #logs + 1
+ticks(1.5)
+check(pawn.invincible == true and has(line("^airfield: off the ground", from), "left on"), "off the ground within safe_s: its invincibility left on")
+ticks(3)
+check(pawn.invincible == false, "then safe_s runs out: off")
+
 ---------------------------------------------------------------------------------------------------- everyone down
 print("everyone down: the run's over")
 scene("host", 0, { [1] = FLY, [2] = FLY })

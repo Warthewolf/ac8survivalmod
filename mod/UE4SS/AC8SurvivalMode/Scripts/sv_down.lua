@@ -46,6 +46,11 @@ local GROUND_MS, GROUND_S = 40, 3
 local EDGE_CM, EDGE_EVERY_S = 500000, 20
 -- a restart's put-back waits this long for the level's player plane at most
 local RESTORE_S = 60
+-- (0.73.73) after a revive the weapons are watched this long (armTick): a lock the game puts back is taken off again
+local ARM_WATCH_S = 10
+-- (0.73.73) parked: on the ground at your airfield in co-op (parkedTick): under PARK_Z_CM and slower than GROUND_MS when
+-- the game's IsOnGround can't be read; the guard's off PARK_OFF_S after you leave the ground
+local PARK_Z_CM, PARK_OFF_S = 3000, 1
 local INPUTS = { { "bEnableWeaponInput", false }, { "bEnableFlareInput", false }, { "bIsWeaponSystemDisabled", true } }
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
 -- "native" respawn: 4 km out from the runway along its heading (Comona's runway, yaw -23: the takeoff's way), 500 m up
@@ -54,7 +59,7 @@ local St = { down = false, since = {}, count = 0, pending = {}, reviving = {}, c
 DOWN.St = St                                    -- (the offline test's)
 
 local function rc() local c = CFG.coop and CFG.coop.revive; return type(c) == "table" and c or {} end
-local function pawnOf() return survivalPC and valid(survivalPC) and survivalPC.Pawn or nil end
+local function pawnOf() return survivalPC and liveObj(survivalPC) and survivalPC.Pawn or nil end
 local function mySlot() return (COOP and COOP.slot) or 0 end
 local function linked() return COOP ~= nil and COOP.open == true and COOP.linked ~= nil and COOP.linked() > 0 end
 local function num(v, d) v = tonumber(v); return (v and v == v and v > -1e12 and v < 1e12) and v or d end
@@ -123,7 +128,7 @@ end
 local function camOn(obj)
     local a = addrOf(obj)
     local have = a and St.cams[a]
-    if have and valid(have) then return have end
+    if have and liveObj(have) then return have end                -- (0.73.73: liveObj on what's kept between ticks)
     local cls = StaticFindObject("/Script/Engine.CameraComponent")
     if not valid(cls) then return nil, "no CameraComponent class" end
     local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
@@ -162,7 +167,7 @@ local function camOn(obj)
     return comp
 end
 local function setView(target, blend)
-    if not (survivalPC and valid(survivalPC) and valid(target)) then return false end
+    if not (survivalPC and liveObj(survivalPC) and liveObj(target)) then return false end
     return pcall(function() survivalPC:SetViewTargetWithBlend(target, blend or 0, 0, 0, false) end)
 end
 -- A player plane (COOP2MP's real planes: the ADFX-02 has no AI stand-in) carries cameras of its own, and the view on an
@@ -171,7 +176,7 @@ end
 -- and back on as the view leaves it.
 local function unhush()
     for _, c in ipairs(St.hushed or {}) do
-        if valid(c) then pcall(function() c:Activate(false) end) end
+        if liveObj(c) then pcall(function() c:Activate(false) end) end
     end
     St.hushed = {}
 end
@@ -225,7 +230,7 @@ local function armOn(obj)
     local a = addrOf(obj)
     St.arms = St.arms or {}
     local have = a and St.arms[a]
-    if have and valid(have) then return have end
+    if have and liveObj(have) then return have end
     local cls = StaticFindObject("/Script/Engine.SpringArmComponent")
     if not valid(cls) then return nil, "no SpringArmComponent class" end
     local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
@@ -264,10 +269,12 @@ local function rigOn(obj)
     local arm, err = armOn(obj)
     if not arm then return nil, err end
     local actor = St.camActor
-    if not valid(actor) then
+    if not liveObj(actor) then
         actor = nil
         local okL, q = pcall(function() local v = obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
         if not (okL and q and type(q.X) == "number") then return nil, "its place can't be read" end
+        -- (0.73.73: not while the walks are held, walkHold: the camera actor spawned couldn't be found, and stayed)
+        if type(walkHold) == "function" and walkHold() then return nil, "the walks over every object are held" end
         local ca = SV_SpawnCam(q.X, q.Y, q.Z + 3000)
         if type(ca) ~= "number" or ca <= 0 then return nil, "SV_SpawnCam " .. tostring(ca) end
         for _, x in ipairs(FindAllOf("CameraActor") or {}) do if valid(x) and addrOf(x) == ca then actor = x end end
@@ -294,7 +301,7 @@ local function orbitTick(now)
     local arm = w and St.arms and St.arms[w.addr]
     local dt = math.min(0.5, math.max(0, now - (St.orbitAt or now)))
     St.orbitAt = now
-    if not (arm and valid(arm) and w.viewAddr and w.viewAddr ~= w.addr) or type(SV_StickNow) ~= "function" then return end
+    if not (arm and liveObj(arm) and w.viewAddr and w.viewAddr ~= w.addr) or type(SV_StickNow) ~= "function" then return end
     local okS, s = pcall(SV_StickNow)
     if not (okS and type(s) == "string") then return end
     local v = {}
@@ -356,8 +363,8 @@ local function viewSelf(blend)
     unhush()
     local h, pawn = St.home, pawnOf()
     blend = blend or num((rc().camera or {}).blend_s, 0.5)
-    if h and not h.pawn and valid(h.obj) then setView(h.obj, blend)
-    elseif valid(pawn) then setView(pawn, blend) end
+    if h and not h.pawn and liveObj(h.obj) then setView(h.obj, blend)
+    elseif liveObj(pawn) then setView(pawn, blend) end
 end
 -- the next player to watch (the key, or the one watched is gone): the one after the current in slot order, else the first
 function DOWN.nextView(why)
@@ -385,7 +392,7 @@ local function spectateTick(now)
         if okV and addrOf(vt) ~= (w.viewAddr or w.addr) then
             St.reverts = St.reverts + 1
             local t = w.viewAddr ~= w.addr and St.camActor
-            setView((t and valid(t)) and t or w.obj, 0)
+            setView((t and liveObj(t)) and t or w.obj, 0)
             if St.reverts <= 3 or St.reverts % 20 == 0 then
                 log(string.format("spectate: view put back on %s (the game took it back %d times)", w.name, St.reverts))
             end
@@ -406,18 +413,59 @@ function DOWN.hudLine()
 end
 
 ---------------------------------------------------------------------------------------------------- down and back
+-- (0.73.73) The weapons as a flying plane has them: DOWN's INPUTS the other way, and the target change (a landing's lock
+-- may take it too); each only where it reads as a boolean that differs. Then the game's own DisableWeaponSystem(false)
+-- (LivePlayerPlane, BlueprintCallable). Returns what changed ("<field> <was> -> <now>") and whether that call ran.
+local ARMED = { { "bEnableWeaponInput", true }, { "bEnableFlareInput", true }, { "bIsWeaponSystemDisabled", false },
+                { "bEnableChangeTargetInput", true } }
+local function arm(pawn)
+    local parts = {}
+    for _, f in ipairs(ARMED) do
+        local okR, v = pcall(function() return pawn[f[1]] end)
+        if okR and type(v) == "boolean" and v ~= f[2] then
+            local okW = pcall(function() pawn[f[1]] = f[2] end)
+            parts[#parts + 1] = string.format("%s %s -> %s%s", f[1], tostring(v), tostring(f[2]), okW and "" or " FAILED")
+        end
+    end
+    local okD = pcall(function() pawn:DisableWeaponSystem(false) end)
+    return parts, okD
+end
+-- whether the weapons are locked now (any of DOWN's three, or the game's IsWeaponSystemDisabled), and how
+local function lockedNow(pawn)
+    local why = {}
+    for _, f in ipairs(INPUTS) do
+        local okR, v = pcall(function() return pawn[f[1]] end)
+        if okR and type(v) == "boolean" and v == f[2] then why[#why + 1] = f[1] .. " " .. tostring(v) end
+    end
+    local okI, dis = pcall(function() return pawn:IsWeaponSystemDisabled() end)
+    if okI and dis == true then why[#why + 1] = "IsWeaponSystemDisabled" end
+    return #why > 0, table.concat(why, ", ")
+end
+-- the landing gear: true down, false up, nil can't tell; and its rate (GetGearDownRate, 0 up .. 1 down) when read
+local function gearDown(pawn)
+    local ok, r = pcall(function() return pawn:GetGearDownRate() end)
+    if ok and type(r) == "number" then return r > 0.5, r end
+    local okV, vis = pcall(function() return pawn.LandingGearOnMesh:IsVisible() end)   -- (sv_coop.lua's gear watch)
+    if okV and type(vis) == "boolean" then return vis, nil end
+    return nil, nil
+end
 -- your plane out of the fight; what it had, for the way back
 local function outOfFight(pawn)
     local s, parts = { inputs = {}, attackers = {} }, {}
     pcall(function() pawn:SetIsInvincible(true) end)
     parts[#parts + 1] = pcall(function() pawn:SetActorHiddenInGame(true) end) and "hidden" or "hidden FAILED"
     parts[#parts + 1] = pcall(function() pawn:SetActorEnableCollision(false) end) and "no collision" or "collision FAILED"
-    for _, f in ipairs(INPUTS) do
+    for _, f in ipairs(INPUTS) do                   -- (0.73.73: what it was logged too; never put back, ARMED is)
         local okR, v = pcall(function() return pawn[f[1]] end)
         local okW = okR and pcall(function() pawn[f[1]] = f[2] end)
         if okW then s.inputs[f[1]] = v end
-        parts[#parts + 1] = f[1] .. " " .. tostring(f[2]) .. (okW and "" or " FAILED")
+        parts[#parts + 1] = f[1] .. " " .. (okR and (tostring(v) .. " -> ") or "") .. tostring(f[2]) .. (okW and "" or " FAILED")
     end
+    local gd, rate = gearDown(pawn)
+    local okG, og = pcall(function() return pawn:IsOnGround() end)
+    s.gear, s.ground = gd, (okG and og == true) or nil
+    parts[#parts + 1] = "gear " .. (gd == nil and "?" or (gd and "DOWN" or "up")) .. (rate and string.format(" (%.2f)", rate) or "")
+        .. (s.ground and ", on the ground" or "")
     for _, f in ipairs(ATTACKERS) do                -- (the enemies' limits on attacking you: guesses, untested)
         local okR, v = pcall(function() return pawn[f] end)
         local okW = okR and type(v) == "number" and pcall(function() pawn[f] = 0 end)
@@ -426,14 +474,23 @@ local function outOfFight(pawn)
     end
     return s, table.concat(parts, ", ")
 end
+-- Back in the fight: shown, collision, the attackers' limits, and the weapons armed as a flying plane's (ARMED, arm())
+-- whatever DOWN found. (0.73.73: they were put back as DOWN found them, and a plane down with its gear out at the airfield
+-- had the landing's lock on then, weapons and flares off until the gear's raised there: the revive put that lock back.
+-- Shazzy, A04: down 13:36:53 0.9 km from the airfield, 41 m up, gear out since 13:36:45; revived 13:38:07, "unable to
+-- shoot", no shot sent until he landed and rearmed; cressendo, A10: gear out 11:26:11, down 11:26:15 at 16 m, revived
+-- 11:26:55, locked until he lowered and raised the gear at 11:27:14-22 ("reviving an ally with their landing gears out
+-- will lock their fcs"). Shazzy's revive of 13:00:17, down in the air with the gear up, fired at once.) Returns what
+-- arm() changed and whether DisableWeaponSystem(false) ran.
 local function backInFight(pawn, s)
-    if not valid(pawn) then return end
+    if not liveObj(pawn) then return {}, false end
     pcall(function() pawn:SetActorHiddenInGame(false) end)
     pcall(function() pawn:SetActorEnableCollision(true) end)
-    for f, v in pairs(s and s.inputs or {}) do pcall(function() pawn[f] = v end) end
+    local parts, okD = arm(pawn)
     for f, v in pairs(s and s.attackers or {}) do              -- (unless something set its own meanwhile: a pressure preset)
         pcall(function() if pawn[f] == 0 then pawn[f] = v end end)
     end
+    return parts, okD
 end
 local function loiter(pawn)
     if type(SV_Down) ~= "function" then return "no SV_Down (runtime 0.28.5 or later)" end
@@ -484,6 +541,37 @@ local function goDown(pawn, h)
     DOWN.nextView("you're down")
 end
 
+-- (0.73.73, DOWN.back after the plane's placed) Out of the landing it went down in, weapons armed, gear up: what lowering
+-- and raising the gear at an airfield did for cressendo (A10). A plane DOWN found with its gear out or on the ground
+-- (saved.gear / saved.ground: outOfFight) has the game's landing state cancelled first (CancelLanding(true), the plane's
+-- own BlueprintCallable); then the weapons armed again (arm(): SV_Respawn may have reset them); the gear key pressed if
+-- the gear's still down (let go the next pass); then ARM_WATCH_S watched (armTick: a lock the game puts back taken off,
+-- the gear read 2 s on). Not yet run in game: the game's landing lock is reverse engineered only this far.
+local function rearm(pawn, saved, before)
+    saved = saved or {}
+    if not liveObj(pawn) then St.arm = nil; return end
+    local landed = saved.gear == true or saved.ground == true
+    local cancel = "not needed"
+    if landed then
+        local okC = pcall(function() pawn:CancelLanding(true) end)
+        cancel = okC and "called" or "not callable"
+    end
+    local armed, okD = arm(pawn)
+    for i, x in ipairs(before or {}) do table.insert(armed, i, x) end      -- (what backInFight changed first)
+    local gd, rate = gearDown(pawn)
+    local pressed = false
+    if gd == true then pressed = pcall(function() pawn:OnGearPressed() end) end
+    St.arm = { untilT = os.clock() + ARM_WATCH_S, relocks = 0, release = pressed, gearAt = os.clock() + 2, pressed = pressed }
+    local found = {}
+    for _, f in ipairs(INPUTS) do found[#found + 1] = f[1] .. " " .. tostring((saved.inputs or {})[f[1]]) end
+    log(string.format("revive: your weapons armed: %s; DisableWeaponSystem(false) %s; the landing cancelled: %s (DOWN found %s, "
+        .. "gear %s%s); the gear now %s%s%s",
+        #armed > 0 and table.concat(armed, ", ") or "nothing to change", okD and "called" or "not callable", cancel,
+        table.concat(found, ", "), saved.gear == nil and "?" or (saved.gear and "DOWN" or "up"),
+        saved.ground and ", on the ground" or "", gd == nil and "?" or (gd and "DOWN" or "up"),
+        rate and string.format(" (%.2f)", rate) or "", gd == true and (pressed and ": raised (the gear key)" or ": the gear key FAILED") or ""))
+end
+
 -- Back in the fight (revived, the run started over, a test): the loiter off, the plane as it was, the view yours,
 -- repaired (the stock repair and the health written), safe_s invincible, where the loiter left you or "native"
 function DOWN.back(how, respawn)
@@ -493,7 +581,8 @@ function DOWN.back(how, respawn)
     local onGround = grounded()
     St.down, St.since[mySlot()] = false, nil
     if type(SV_Down) == "function" then pcall(SV_Down, 0) end
-    backInFight(pawn, St.saved)
+    local saved = St.saved or {}
+    local armedFirst = backInFight(pawn, St.saved)
     St.saved = nil
     viewSelf()
     St.home = nil
@@ -530,6 +619,7 @@ function DOWN.back(how, respawn)
     end
     log(string.format("revive: back (%s) after %.0f s down: repaired (event %s, health %s), %s s invincible, %s", how, downFor,
         r == 1 and "fired" or (SV_ERR[r] or tostring(r)), okW and "written" or "NOT written", tostring(rc().safe_s), placed))
+    pcall(rearm, pawn, saved, armedFirst)           -- (0.73.73: after the placement, SV_Respawn's too)
     callout("BACK IN THE FIGHT", string.upper(tostring(how)))
     LB.stat("revived", 1)
 end
@@ -583,6 +673,7 @@ function DOWN.reset(why, newLevel)
     end
     St.since, St.count, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
+    St.arm = nil                                                -- (0.73.73: no revive's watch over the next run's plane)
 end
 
 -- After a restart while you were down (DOWN.reset's St.restore), at the first pass with the level's player: the plane DOWN
@@ -796,6 +887,98 @@ function DOWN.syncTo(to)
     for _, e in ipairs(downList()) do if e.slot ~= to then COOP.msg(to, "dw", e.slot, St.count, "q") end end
 end
 
+---------------------------------------------------------------------------------------------------- after a revive, parked
+-- (0.73.73, each pass for ARM_WATCH_S after a revive) the gear key let go a pass after its press; the gear read 2 s on;
+-- a lock the game puts back on the weapons taken off again (arm()), and on its second return the game's landing
+-- state cancelled (CancelLanding(true): the lock is the landing's), never on or over your airfield or with the gear down
+-- (a landing of yours); the outcome logged at the end
+local function armTick(pawn, now)
+    local a = St.arm
+    if not a then return end
+    if St.down or not liveObj(pawn) then St.arm = nil; return end
+    if a.release then a.release = false; pcall(function() pawn:OnGearReleased() end) end
+    local gd, rate = nil, nil
+    if a.gearAt and now >= a.gearAt then
+        a.gearAt = nil
+        gd, rate = gearDown(pawn)
+        if a.pressed or gd then
+            log(string.format("revive: your gear 2 s after the revive: %s%s", gd == nil and "?" or (gd and "DOWN" or "up"),
+                rate and string.format(" (%.2f)", rate) or ""))
+        end
+    end
+    local landing = playerOnAirfield() == true
+    if not landing then
+        if gd == nil then gd = gearDown(pawn) end
+        landing = gd == true and not a.pressed
+    end
+    local locked, how = lockedNow(pawn)
+    if locked and not landing then
+        a.relocks = a.relocks + 1
+        local parts, okD = arm(pawn)
+        local cancel = ""
+        if a.relocks == 2 then
+            local okC = pcall(function() pawn:CancelLanding(true) end)
+            cancel = okC and "; the game's landing cancelled (CancelLanding(true))" or "; CancelLanding(true) not callable"
+        end
+        if a.relocks <= 3 then
+            log(string.format("revive: the game locked your weapons again (%s): armed again (%s; DisableWeaponSystem(false) %s)%s",
+                how, #parts > 0 and table.concat(parts, ", ") or "nothing to change", okD and "called" or "not callable", cancel))
+        end
+        locked = lockedNow(pawn)
+    end
+    if now >= a.untilT then
+        St.arm = nil
+        log(string.format("revive: your weapons %d s after the revive: %s (locked again by the game %d times)%s", ARM_WATCH_S,
+            locked and ("LOCKED: " .. how) or "armed", a.relocks, landing and "; you're landing: left to the game" or ""))
+    end
+end
+-- (0.73.73, each pass) Parked at your airfield in co-op: your plane invincible while it's on the ground there (the game's
+-- IsOnGround, else under PARK_Z_CM and slower than GROUND_MS; or nowhere to be read, the landing menu's), off PARK_OFF_S
+-- after it leaves the ground. Stock AC8 freezes every AI object while the landing menu is open (the minigame, the STORE
+-- freeze), but with other players linked the world runs on (0.73.72, [coop] store_keep_world), and nothing protects you
+-- taxiing or waiting on the runway either: Shazzy (A02, a joiner) left the STORE at 11:24:25 and sat at 7 m, 0 m/s, until
+-- an Su-33's missiles took him to the floor at 11:24:37-41 (4 hits); the host's game already takes its flights off a
+-- player landed at their airfield ("is landed at their airfield: onto ..."), but a joiner's copies aim at it there.
+-- [coop.revive] parked_safe = false turns it off. A SECOND CHANCE's or a revive's invincibility is left to run out.
+local function parkedTick(pawn, now)
+    local on = false
+    if rc().parked_safe ~= false and linked() and not St.down and liveObj(pawn) and playerOnAirfield() then
+        local okG, g = pcall(function() return pawn:IsOnGround() end)
+        local at = playerLocation()
+        local m = St.parkM
+        if at and (not m or now - m.t >= 0.5) then
+            if m and now > m.t then St.parkSpeed = km(at, m) * 1000 / (now - m.t) end
+            St.parkM = { X = at.X, Y = at.Y, Z = at.Z, t = now }
+        end
+        -- (0.73.73 review) an unreadable location (the landing menu) keeps a parked plane's protection but never grants
+        -- one: stale reads mid-fight made you invincible anywhere (playerOnAirfield says yes to an unreadable location)
+        if at == nil then
+            on = St.parked ~= nil
+        else
+            on = (okG and g == true) or (St.parkSpeed ~= nil and St.parkSpeed < GROUND_MS and at.Z < PARK_Z_CM)
+        end
+    end
+    local a = liveObj(pawn) and addrOf(pawn) or nil
+    if on then
+        St.parkOffAt = nil
+        if not St.parked or St.parked.addr ~= a then
+            St.parked = { at = now, addr = a }
+            log("airfield: on the ground at your airfield (co-op: the world runs on): invincible until you're off it")
+        end
+        pcall(function() pawn:SetIsInvincible(true) end)
+    elseif St.parked then
+        St.parkOffAt = St.parkOffAt or now
+        if now - St.parkOffAt >= PARK_OFF_S then
+            local held = St.down or St.safeUntil ~= nil or (INS ~= nil and INS.safeUntil ~= nil)
+            if not held and a and St.parked.addr == a then pcall(function() pawn:SetIsInvincible(false) end) end
+            log(string.format("airfield: off the ground after %.0f s: invincible off%s", now - St.parked.at,
+                held and " (a revive's, a SECOND CHANCE's or DOWN's left on)" or ""))
+            St.parked, St.parkOffAt, St.parkM, St.parkSpeed = nil, nil, nil, nil
+        end
+    end
+end
+function DOWN.parked() return St.parked ~= nil end
+
 ---------------------------------------------------------------------------------------------------- the tick
 -- (the host) every player in the mission down (present: you, and each other whose game says it's in the level and was
 -- heard from in PRESENT_MS)
@@ -830,6 +1013,12 @@ function DOWN.tick()
         local okR, errR = pcall(restoreAfter, pawn)
         if not okR then St.restore = nil; log("down: after the restart: error " .. tostring(errR)) end
     end
+    if St.arm then                                          -- (0.73.73: after a revive: the weapons and the gear)
+        local okA, errA = pcall(armTick, pawn, now)
+        if not okA then St.arm = nil; logOnce("armTick", "revive: the weapons' watch: error " .. tostring(errA)) end
+    end
+    local okP, errP = pcall(parkedTick, pawn, now)          -- (0.73.73: parked at your airfield in co-op)
+    if not okP then logOnce("parkedTick", "airfield: the parked guard: error " .. tostring(errP)) end
     if St.down then
         if valid(pawn) then
             pcall(function() pawn:SetIsInvincible(true) end)

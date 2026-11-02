@@ -21,13 +21,15 @@ def main(mod):
     s = open(p, encoding='utf-8', newline='').read()
     s = sub(s, 'spaceport = { enabled = true, from_round = 8,', 'spaceport = { enabled = false, from_round = 8,', 'sv_config spaceport')
     s = sub(s, 'retake = { enabled = true, per_unit = 4,', 'retake = { enabled = false, per_unit = 4,', 'sv_config retake')
+    s, n = re.subn(r'(rotation\s*=\s*\{[^}]*?), "spaceport"', r'\1', s)     # (in the rotation from 0.73.73)
+    assert n == 1, f'sv_config: {n} rotations with the spaceport'
     assert not re.search(r'rotation\s*=\s*\{[^}]*"spaceport"', s), 'sv_config: spaceport in the rotation'
     open(p, 'w', encoding='utf-8', newline='').write(s)
 
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
     nl = '\r\n' if '\r\n' in s else '\n'
-    note = re.compile(r', spaceport \(the Spaceport' + re.escape(nl) + r'; Assault, not in the list yet: new and untested; its retake '
+    note = re.compile(r', spaceport \(the Spaceport' + re.escape(nl) + r'; Assault, from round 8; its retake '
                       r'comes only after a lost one\)')
     assert len(note.findall(s)) == 1, 'ini: the rotation note'
     s = note.sub('', s)
@@ -42,6 +44,8 @@ def main(mod):
     assert gone >= 2, f'ini: {gone} [specials.spaceport*] sections'
     s = nl.join(out)
     assert 'specials.spaceport' not in s, 'ini: a [specials.spaceport*] line left'
+    s, n = re.subn(r'^(;?rotation\s*=.*?), spaceport', r'\1', s, flags=re.M)
+    assert n == 1, f'ini: {n} rotations with the spaceport'
     assert not re.search(r'^;?rotation\s*=.*spaceport', s, re.M), 'ini: spaceport in the rotation'
     open(p, 'w', encoding='utf-8', newline='').write(s)
     lua = open(os.path.join(mod, 'Scripts', 'sv_config.lua'), encoding='utf-8').read()

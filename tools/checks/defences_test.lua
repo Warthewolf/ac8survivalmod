@@ -724,7 +724,7 @@ do
     check(orbitCount() == o0, "30 s after takeoff, still climbing: left to it")
     R.orbitCheckAt = 0
     D.now = 262; ALLY.tick(262)
-    check(orbitCount() == o0 + 1 and line("allies: VOID WATCHER 1 put on its orbit (its climb-out didn't end in 60 s)") ~= nil,
+    check(orbitCount() == o0 + 1 and line("allies: VOID WATCHER 1 taken off its path onto the area orbit (its climb-out didn't end in 60 s)") ~= nil,
           "61 s on, its climb-out never ended: put on its orbit (RE_SV_AwacsOrbit), logged")
     local vw = { full = "BP_OP0005_e767_CP_Ally_C_1", addr = addr() }
     local at = { X = AIRFIELD.X + 2500000, Y = AIRFIELD.Y }
@@ -736,11 +736,12 @@ do
     check(orbitCount() == o0 + 1, "airborne 25 km out, again_s (60 s) not up: not again yet")
     R.orbitCheckAt = 0
     D.now = 330; ALLY.tick(330)
-    check(orbitCount() == o0 + 2 and line("put on its orbit (25.0 km from the airfield)") ~= nil, "wandered 25 km off: put back on its orbit")
-    at = { X = AIRFIELD.X + 1200000, Y = AIRFIELD.Y }
+    check(orbitCount() == o0 + 2 and line("onto the area orbit (25.0 km from the airfield)") ~= nil, "wandered 25 km off: put back on its orbit")
+    local onKm = (AW.orbit.lost_km or 18) * 0.6           -- (on its orbit: well inside lost_km, whatever the orbit's size)
+    at = { X = AIRFIELD.X + onKm * 100000, Y = AIRFIELD.Y }
     R.orbitCheckAt, R.orbitAgainAt = 0, 0
     D.now = 331; ALLY.tick(331)
-    check(orbitCount() == o0 + 2, "on its 12 km orbit: left alone")
+    check(orbitCount() == o0 + 2, string.format("on its orbit (%.1f km out, lost_km %s): left alone", onKm, tostring(AW.orbit.lost_km)))
     air = 0
     R.esmAt = nil
     air = 1
@@ -762,6 +763,32 @@ do
           and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1: support range 3200 -> 25000 m", l0), "life 15 -> 24 s"),
           "its ESM field: 3200 -> 25000 m, 15 -> 24 s (an instance's; logged)")
     check(other.SupportEffectRangeMeter == 3200 and other.LifeTime == 15, "an ECM field of another class: as it was")
+    -- (0.73.73) the fields are pooled: the game launches the same two again and again (every tester session of 2026-11-01
+    -- logged two fields while the weapons log counted 2-3 launches a minute), so a field launched again from the pool,
+    -- with the game's own range and time written on it, is set again; one idle in the pool (hidden) is left alone
+    field.bHidden = true
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    field.bHidden, field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = false, 3200, 3200, 15
+    l0 = #logs
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(field.SupportEffectRangeMeter == 25000 and field.EffectRangeMeter == 25000 and field.LifeTime == 24
+          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1 launched again (pooled; 1 so far)", l0), "life 15 -> 24 s"),
+          "its ESM field launched again from the pool (shown, the game's range on it): 25000 m and 24 s again, logged")
+    field.LifeTime = 23.5                              -- (its time running down, as the game may count it)
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(field.LifeTime == 23.5, "... while it's out: left alone (a running time never set back)")
+    field.bHidden = true
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = 3200, 3200, 15     -- (back in the pool, reset)
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(field.EffectRangeMeter == 3200 and field.LifeTime == 15, "... idle in the pool (hidden): left alone")
+    field.bHidden = false                              -- (launched again, the range as the pool left it)
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(field.EffectRangeMeter == 25000 and field.LifeTime == 24 and has(line("launched again (pooled; 2 so far)", l0), "BP_wp_esm_MS28_C_1"),
+          "... and its next launch (shown after hidden): set again")
+    field.gone = true
+    D.now = D.now + 0.25; ALLY.tick(D.now)
+    check(R.esmFields and next(R.esmFields) == nil, "a field gone: dropped from the list (never read again)")
     svFlags = rawFlags
     -- the ALLIES row and the room's code
     check(has(ALLY.hudLine() or "", "VOID WATCHER 1") and not has(ALLY.hudLine() or "", "VOID WATCHER 1 1"),
@@ -799,6 +826,46 @@ do
     check(texts.SV_Shop_VoidWatcher == "VOID WATCHER 1: E-767 AWACS" and RUN.msg.VoidWatcher == "NOT AVAILABLE.",
           "[allies.awacs] enabled = false: not sold (" .. tostring(RUN.msg.VoidWatcher) .. ")")
     AW.enabled = true
+end
+
+---------------------------------------------------------------------------------------------------- ALLY.scale (0.73.73)
+-- An allied plane's health raised by the growth past the most it's had, never again for a round number that comes back:
+-- each co-op resync flipped a joiner's D.round to 0 and back and its copy of the host's VOID WATCHER grew x1.56 a time
+-- (Shazzy's A02 11:17:51: "health x3.12 (74399 -> 116062)"); and on a joiner, whose allies are all the host's copies,
+-- only the rank is set (their health is the host's, "hp").
+print("ALLY.scale: an allied plane's health raised once a round's growth; a joiner's copies of the host's left to the host")
+do
+    local AW = CFG.allies.awacs
+    local R = ALLY.state()
+    local keep = { planes = R.planes, up = R.up[AW.unit], D = D, client = COOP and COOP.client }
+    local function hx(round) local L = ALLY.level({ ally = "awacs" }); return L.hx end
+    local pl = { full = "BP_OP0005_e767_CP_Ally_C_9", addr = addr(), HealthInternal = 50000, MaxHealth = 5000, PilotRank = 1 }
+    R.planes, R.up[AW.unit] = { { obj = pl, unit = AW.unit, name = "e767" } }, { kind = "air", ally = "awacs" }
+    COOP = COOP or {}
+    COOP.client = function() return false end
+    D = { round = 8, state = "fight", now = 900, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+    local x8 = hx(8)
+    ALLY.scale()
+    local h8 = pl.HealthInternal
+    check(h8 == math.floor(50000 * x8 + 0.5) and pl.PilotRank > 1, string.format("round 8: health x%.2f (50000 -> %d), its rank set", x8, h8))
+    local from = #logs + 1
+    D.round = 0; ALLY.scale(); D.round = 8; ALLY.scale(); D.round = 0; ALLY.scale(); D.round = 8; ALLY.scale()
+    check(pl.HealthInternal == h8 and has(line("not raised: this round's x", from), "e767"),
+          "the round number to 0 and back, twice (a joiner's resync): not raised again (" .. pl.HealthInternal .. ")")
+    D.round = 9
+    local x9 = hx(9)
+    ALLY.scale()
+    check(math.abs(pl.HealthInternal - math.floor(h8 * x9 / x8 + 0.5)) <= 1, string.format("round 9: raised by its growth only, x%.3f (%d)", x9 / x8, pl.HealthInternal))
+    check(R.planes[1].full == math.floor(5000 * 10 * x9 + 0.5), "its full health (the repairs') x" .. string.format("%.2f", x9))
+    -- a co-op joiner: the host's copy, its health the host's
+    local cp = { full = "BP_OP0005_e767_CP_Ally_C_10", addr = addr(), HealthInternal = 7400, MaxHealth = 5000, PilotRank = 1 }
+    R.planes = { { obj = cp, unit = AW.unit, name = "e767" } }
+    COOP.client = function() return true end
+    from = #logs + 1
+    D.round = 8; ALLY.scale(); D.round = 0; ALLY.scale(); D.round = 8; ALLY.scale()
+    check(cp.HealthInternal == 7400 and cp.PilotRank > 1 and has(line("is the host's: PilotRank", from), "its health the host's"),
+          "a co-op joiner: the host's copy's rank set, its health left to the host's (logged once)")
+    R.planes, R.up[AW.unit], D, COOP.client = keep.planes, keep.up, keep.D, keep.client
 end
 
 print(fails == 0 and "defences test: all passed" or ("defences test: " .. fails .. " FAILED"))
