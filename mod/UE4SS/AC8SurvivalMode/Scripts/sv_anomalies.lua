@@ -833,7 +833,7 @@ function SPC.V.rounds(c, harmless)
     local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
     local okD, d0 = pcall(function() return cdo.damage end)
     local okL, l0 = pcall(function() return cdo.LifeTime end)
-    local life = math.max(c.eml_life_s or 0, (okL and type(l0) == "number") and l0 or 0)
+    local life = tonumber(c.eml_life_s) or ((okL and type(l0) == "number") and l0 or 10)   -- ((0.73.76) eml_life_s itself: they lived too long)
     if not SPC.V.roundSaid and valid(cdo) then         -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
         SPC.V.roundSaid = true
         local said = {}
@@ -849,8 +849,8 @@ function SPC.V.rounds(c, harmless)
         if valid(r) and not nameOf(r):find("Default__", 1, true) then
             n = n + 1
             for _, f in ipairs(SPC.V.ROUND_ONE) do pcall(function() r[f[1]] = f[2] end) end
-            pcall(function() if (r.LifeTime or 0) < life then r.LifeTime = life end end)
-            pcall(function() if (r.EffectiveTime or 0) > 0 and r.EffectiveTime < life then r.EffectiveTime = life end end)
+            pcall(function() r.LifeTime = life end)
+            pcall(function() if (r.EffectiveTime or 0) > 0 then r.EffectiveTime = math.min(r.EffectiveTime, life) end end)
             pcall(function() r.damage = harmless and 0 or (okD and d0 or r.damage) end)
         end
     end
@@ -947,112 +947,6 @@ function SPC.V.flareStop(s)
         s.flare = nil
     end
 end
--- Her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"; CFG.specials.valka.portal):
--- one billboard of world-space elements on AC8's own effect materials, our textures on them (tools/x02s prepare.py
--- portal_textures): the barrier's refraction (the lensing), the accretion glow and the photon ring on the additive
--- flare, the event horizon on M_Smoke01 made black. It opens over open_s, holds, collapses over close_s.
-SPC.V.PORTAL_MAT = {
-    lens = "/Game/VFX/Vehicles/Weapon/UAV/Barrier/M_VFX_UAVBarrierSpriteRefraction",
-    disc = "/Game/VFX/Vehicles/Weapon/Impact/Materials/M_Smoke01",
-    flare = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
-}
-local function portalMid(kml, kind)
-    local p = SPC.V.PORTAL_MAT[kind]
-    local m, why = loadObject(p .. "." .. p:match("[^/]+$"))
-    if not valid(m) then return nil, why end
-    local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, m, FName("None"), 0) end)
-    if ok and valid(mid) then return mid end
-    return nil, tostring(mid)
-end
-local function portalTex(p, name)
-    return loadObject(p.textures .. name .. "." .. name)
-end
-function SPC.V.portalStart(c, s, at, now)
-    local p = c.portal
-    SPC.V.portalStop(s)
-    if not p or not p.enabled or not at then return 0 end
-    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
-    if not valid(kml) then return 0 end
-    local a, comp, whyB = SPC.V.billboard(at)
-    if not a then log("special: VALKA's portal: " .. tostring(whyB)); return 0 end
-    -- at least min_deg wide where you are (14 km out, 120 m was half a degree: test of 2026-10-25, unseen)
-    local d = math.max(p.diameter_m, (at.km or 0) * 1000 * math.tan(math.rad(p.min_deg or 0))) * 100
-    local po = { actor = a, comp = comp, from = now, glow = {}, said = {}, up = 0 }
-    local function add(name, mid, size)
-        if mid and pcall(function() comp:AddElement(mid, nil, false, size, size, nil) end) then
-            po.said[#po.said + 1] = name
-            po.up = po.up + 1
-            return true
-        end
-        po.said[#po.said + 1] = name .. " NOT up"
-    end
-    local lens = portalMid(kml, "lens")                -- the lensing: the barrier's refraction, stronger
-    if lens then
-        pcall(function()
-            local b = lens:K2_GetScalarParameterValue(FName("RefractionIntensity"))
-            lens:SetScalarParameterValue(FName("RefractionIntensity"), ((type(b) == "number" and b ~= 0) and b or 1) * p.lens_x)
-        end)
-        add("lens", lens, d * p.lens_size)
-    end
-    for _, e in ipairs({ { "glow", "T_SV_Portal_Glow", p.glow_size, p.glow_x }, { "ring", "T_SV_Portal_Ring", p.ring_size, p.ring_x } }) do
-        local mid, tex = portalMid(kml, "flare"), portalTex(p, e[2])
-        if mid and valid(tex) then
-            local base = 1
-            pcall(function()
-                mid:SetTextureParameterValue(FName("EmissiveMap"), tex)
-                mid:SetTextureParameterValue(FName("MaskMap"), tex)
-                local b = mid:K2_GetScalarParameterValue(FName("Emissive_Intensity"))
-                if type(b) == "number" and b > 0 then base = b end
-            end)
-            if add(e[1], mid, d * e[3]) then po.glow[#po.glow + 1] = { mid = mid, base = base * e[4] } end
-        else
-            po.said[#po.said + 1] = e[1] .. " NOT up (" .. (mid and ("no texture " .. e[2]) or "no material") .. ")"
-        end
-    end
-    local disc, tex = portalMid(kml, "disc"), portalTex(p, "T_SV_Portal_Disc")   -- the event horizon: black
-    if disc and valid(tex) then
-        pcall(function()
-            disc:SetTextureParameterValue(FName("BaseTexture"), tex)
-            disc:SetVectorParameterValue(FName("LerpColor1"), { R = 0, G = 0, B = 0, A = 1 })
-            disc:SetVectorParameterValue(FName("LerpColor2"), { R = 0, G = 0, B = 0, A = 1 })
-            disc:SetScalarParameterValue(FName("BrightnessIntensity"), 0)
-        end)
-        add("horizon", disc, d)
-    else
-        po.said[#po.said + 1] = "horizon NOT up"
-    end
-    s.portal = po
-    SPC.V.portalTick(c, s, now)
-    log(string.format("special: VALKA's portal at %.0f, %.0f, %.0f (%.0f m): %s", at.X / 100, at.Y / 100, at.Z / 100,
-        d / 100, table.concat(po.said, ", ")))
-    if po.up == 0 then SPC.V.portalStop(s) end
-    return po.up
-end
--- every tick: open, hold, close (its size and glow); gone after
-function SPC.V.portalTick(c, s, now)
-    local po, p = s.portal, c.portal
-    if not po then return end
-    local t = now - po.from
-    local k
-    if t < p.open_s then k = t / p.open_s
-    elseif t < p.open_s + p.hold_s then k = 1
-    elseif t < p.open_s + p.hold_s + p.close_s then k = 1 - (t - p.open_s - p.hold_s) / p.close_s
-    else SPC.V.portalStop(s); return end
-    k = math.max(0.02, k * k * (3 - 2 * k))             -- (eased)
-    if not valid(po.actor) then SPC.V.portalStop(s); return end
-    pcall(function() po.comp:SetWorldScale3D({ X = k, Y = k, Z = k }) end)
-    local pulse = 1 + 0.25 * math.sin(t * 9)
-    for _, g in ipairs(po.glow) do
-        pcall(function() g.mid:SetScalarParameterValue(FName("Emissive_Intensity"), g.base * k * pulse) end)
-    end
-end
-function SPC.V.portalStop(s)
-    if s.portal then
-        local a = s.portal.actor
-        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
-        s.portal = nil
-    end
-end
 -- her railgun's sounds (CFG.sound.valka, sv_sound.lua): the charge at `at` (a location, or a function giving hers),
 -- its loop rising over `len` s, the shot (the round passing you pass_speed_ms later), and the loop stopped
 function SPC.V.sndCharge(s, at, now)
@@ -1077,7 +971,6 @@ function SPC.V.cleanup(s)
     if s.redOn or s.moodOn then SPC.V.moodOff(nil, s) end  -- (0.73.76) never left red or playing (the run over, the level left)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
-    SPC.V.portalStop(s)
     s.passAt = nil
 end
 function SPC.V.sndShot(s, at, now)
@@ -1734,7 +1627,7 @@ function SPC.V.mood(c, s)
     pcall(SND.songStart, c.song)
 end
 function SPC.V.moodOff(c, s, now)
-    if s.redOn then s.redOn = false; hudRed(false) end
+    if s.redOn then s.redOn = false; hudRed(false, nil, c == nil) end   -- (a cleanup: the sky back at once)
     if c then pcall(SND.songFade, c.song and c.song.out_s or 5) else pcall(SND.songStop) end
 end
 
@@ -1742,7 +1635,6 @@ end
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
     V.flareTick(c, s, now)
-    V.portalTick(c, s, now)
     if s.roundsUntil then                               -- after a shot: its rounds live long (the opener's harmless)
         local harmless = s.harmUntil and now < s.harmUntil
         local n, life = SPC.V.rounds(c, harmless)
@@ -1820,10 +1712,6 @@ function SPC.valkaTick(now, s)
         end
         if valid(e) then setGone(e, true); SPC.V.mark(c, e) end
         V.sndRise(s, now, c.charge_s)
-        if c.portal and c.portal.enabled and not s.portalAt and now >= s.chargeAt - (c.portal.lead_s or 1) then
-            s.portalAt = now
-            V.portalStart(c, s, s.emlAt, now)
-        end
         if now < s.chargeAt then return end
         V.singleShot(c)                                 -- (in case its module came late)
         V.emlWeapon(c)
@@ -1868,7 +1756,8 @@ function SPC.valkaTick(now, s)
         local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
         local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
         V.model(c, s, o)                                                     -- her X-02S
-        if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- her own railguns
+        s.singleN = V.singleShot(c)                     -- her own railguns ((0.73.76) always: the opener's set it to 1 first,
+        log(string.format("special: %s's own railguns single-shot: %d launcher modules", c.name, s.singleN or 0))  -- so hers kept their bursts)
         V.radar(c)
         do
             local nW, whyW = V.emlWeapon(c)
@@ -1904,7 +1793,6 @@ function SPC.valkaTick(now, s)
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
         V.event("RE_SV_ValkaAlertOff")
         V.flareStop(s)
-        V.portalStop(s)
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
@@ -1972,6 +1860,7 @@ function SPC.valkaTick(now, s)
     -- her railgun: warning and charge, then one shot (when you're in front of her, near enough)
     if s.chargeAt then V.sndRise(s, now, c.railgun_charge_s) end
     if s.chargeAt and now >= s.chargeAt then
+        V.singleShot(c)                                 -- (0.73.76) every launcher single-shot right before each shot (no bursts)
         V.event("RE_SV_ValkaRailgun")
         V.event("RE_SV_ValkaChargeOff")
         V.sndShot(s, at, now)
