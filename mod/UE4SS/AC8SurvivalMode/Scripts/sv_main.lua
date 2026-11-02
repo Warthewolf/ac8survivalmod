@@ -317,6 +317,7 @@ local function runLeft(why)
     if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
     if D.special then pcall(SPC.V.cleanup, D.special) end
     pcall(SND.stopAll)
+    pcall(hudRed, false, nil, true)        -- ((0.73.76) VALKA's red sky put back at once, a joiner's too: no tick may follow)
     pcall(TAC.reset)                       -- (the gun's class default back to stock)
     if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
     local held = D.vanished and #D.vanished or 0
