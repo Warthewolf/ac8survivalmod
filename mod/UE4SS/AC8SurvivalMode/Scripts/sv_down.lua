@@ -71,10 +71,14 @@ local function upper(s, max)                    -- a name for the HUD and the ST
 end
 local function name(slot) return upper((COOP and COOP.name and COOP.name(slot)) or ("PLAYER " .. (slot + 1)), 14) end
 local function callout(text, sub) if type(hudCallout) == "function" then pcall(hudCallout, text, sub) end end
-local function priceFor(n)
+-- ((0.73.78, economy C6, approved 2026-11-03) price + price_per_round x the round (sv_ai.lua itemPrice / priceRound: in
+-- a break the next round), x raise for each revive in the run; `round` another round's (the host's check of a price
+-- asked as the round changed)
+local function priceFor(n, round)
     local c = rc()
-    return math.floor(num(c.price, 2500) * num(c.raise, 1) ^ (n or 0) / 10 + 0.5) * 10
+    return itemPrice(num(c.price, 2000), num(c.price_per_round, 0), num(c.raise, 1), n or 0, round)
 end
+DOWN.priceFor = priceFor                        -- (the offline test's)
 
 -- Revives on: co-op open with another game linked, in a run
 function DOWN.active() return rc().enabled == true and D ~= nil and linked() end
@@ -764,8 +768,9 @@ function DOWN.offer()
     local t = l[1]
     o.slot = t.slot
     o.label = "REVIVE " .. name(t.slot) .. (#l > 1 and string.format(" (+%d)", #l - 1) or "")
-    o.help = string.format("%s has been down %d s: buys them back, repaired, in the air. Revives this run: %d (each costs x%g more).",
-        name(t.slot), math.floor(os.clock() - t.since), St.count, num(c.raise, 1))
+    o.help = string.format("%s has been down %d s: buys them back, repaired, in the air. Revives this run: %d (each costs x%g more%s).",
+        name(t.slot), math.floor(os.clock() - t.since), St.count, num(c.raise, 1),
+        num(c.price_per_round, 0) > 0 and string.format(", and %d more a round", num(c.price_per_round, 0)) or "")
     if St.pending[t.slot] then o.why = "ASKED: WAITING FOR THE HOST."; return o end
     o.price = priceFor(St.count)
     return o
@@ -778,7 +783,10 @@ local function hostRevive(slot, by, price)
     elseif slot == by then why = "NOT YOURSELF"
     elseif not isDown(slot) then why = "NOT DOWN"
     elseif St.reviving[slot] and os.clock() - St.reviving[slot] < REVIVING_S then why = "ALREADY BEING REVIVED"
-    elseif price ~= priceFor(St.count) then why = "THE PRICE CHANGED: NOW " .. priceFor(St.count)
+    -- ((0.73.78, C6) the price by the round: one asked at the last round's price is taken too, the round having changed
+    -- on its way here (a joiner's round is the host's "rnd", a moment behind; never ahead)
+    elseif price ~= priceFor(St.count) and not (priceRound() > 1 and price == priceFor(St.count, priceRound() - 1)) then
+        why = "THE PRICE CHANGED: NOW " .. priceFor(St.count)
     elseif not onAirfield(by) then why = "NOT AT THE AIRFIELD" end
     if why then
         log(string.format("revive: player %s's revive of player %s refused: %s", tostring((tonumber(by) or -1) + 1),
@@ -787,7 +795,8 @@ local function hostRevive(slot, by, price)
     end
     St.count, St.reviving[slot], St.since[slot] = St.count + 1, os.clock(), nil
     COOP.msg(nil, "rb", slot, St.count, by)
-    log(string.format("revive: player %d revived player %d for %d (the run's revive %d)", by + 1, slot + 1, price, St.count))
+    log(string.format("revive: player %d revived player %d for %d (the run's revive %d; round %d's price)", by + 1, slot + 1,
+        price, St.count, priceRound()))
     LB.stat("revives", 1, by)                       -- ((0.73.77) by: the co-op run's squad, revives given)
     if slot == mySlot() then DOWN.back("revived by " .. name(by))
     else callout(name(slot) .. " BACK", "REVIVED BY " .. name(by)) end

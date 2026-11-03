@@ -724,7 +724,8 @@ end
 local function airUp(R)
     local air = {}
     for u, s in pairs(R.up) do                        -- (aircraft up; a flight waiting to take off shows 0)
-        if s.kind == "air" then
+        -- ((0.73.78, G5) VOID WATCHER 1 going home isn't counted: not in the room's code, hudLine names it so)
+        if s.kind == "air" and not s.home then
             local n = airName(s)
             air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, SV_UnitAlive(u)))
         end
@@ -734,7 +735,7 @@ end
 
 -- (co-op, the host) the room's allied flights and ships for the joiners' ALLIES rows, in "rnd": "m<n>w<n>s<n>", a
 -- letter only for what's bought (m MOONCHILD's aircraft up, w the WINGMEN's, 0 while waiting to take off; s the ships
--- at sea). The allies are all the host's (a joiner's purchases are built here), so a joiner's own R.up stays empty and
+-- at sea; v VOID WATCHER 1, none once it's going home: (0.73.78) airUp). The allies are all the host's (a joiner's purchases are built here), so a joiner's own R.up stays empty and
 -- its row showed only the defences, whose copies it counts itself (the user's co-op run of 2026-10-30).
 function ALLY.roomCode()
     local R = ALLY.run
@@ -761,6 +762,11 @@ function ALLY.hudLine()
         news[#news + 1] = n
     end
     table.sort(news)                                  -- (pairs' order isn't news)
+    local home = not room and R.up[CFG.allies.awacs.unit]          -- ((0.73.78, G5) its service over, on its way out)
+    if home and home.home then
+        parts[#parts + 1] = CFG.allies.awacs.name .. " (GOING HOME)"
+        news[#news + 1] = CFG.allies.awacs.name .. " HOME"
+    end
     local ships = room and (room.s or 0) or #ALLY.shipsAtSea()
     if ships > 0 then parts[#parts + 1] = "SHIPS " .. ships; news[#news + 1] = "SHIPS" end
     local dc = R.defCount
@@ -813,10 +819,179 @@ local function esmSet(R, aw, o, how)
         tostring(now2.EffectRangeMeter), tostring(was.LifeTime), tostring(now2.LifeTime)))
 end
 
+-- (0.73.78, plan G5: "3 rounds of service, rising price, 8-10 km field, a strike flight after it"; a tester of the
+-- 5-player run of 2026-11-02: it "wins the fight for you", one bought in round 16 lasted 92 minutes, to round 34)
+-- VOID WATCHER 1's plane up here and its km from the airfield, or nil
+local function awacsPlane(R, u)
+    for _, p in ipairs(R.planes) do
+        if p.unit == u and liveAddr(p.obj) then
+            local okL, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+            if okL and l then return p.obj, math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) / 100000 end
+            return p.obj, nil
+        end
+    end
+    return nil, nil
+end
+-- Its service (CFG.allies.awacs.service, home): a round counted as it clears with it up service.min_s or more of it;
+-- service.rounds counted, it's sent home (RE_SV_AwacsHome: the end of the arc it's on starts its exit, tools/
+-- survival_events.py AWACS_OUT_*); once it's gone_km out, its exit flown (SV_AwacsOut 2) or max_s on (area_s on the
+-- backstop's area orbit, where no arc ends) it's taken off (RE_SV_AwacsRemove), and 2 s later off the spawner's list
+-- (SV_Recycle(unit, 1): a despawned unit can still count alive, and SV_Spawn spawns it again only once it's off) and
+-- out of R.up: the STORE sells another. s.removeAt keeps ALLY.tick's loss check from calling it lost meanwhile.
+local function awacsService(R, s, now, f)
+    local aw, t = CFG.allies.awacs, CFG.allies.text
+    local sv, hm, u = aw.service or {}, aw.home or {}, aw.unit
+    if s.removeAt then
+        if now < s.removeAt + 2 then return end
+        local rec = "no SV_Recycle in this runtime: the STORE's next one may not spawn"
+        if type(SV_Recycle) == "function" then
+            local okR, r = pcall(SV_Recycle, u, 1)
+            rec = okR and ("SV_Recycle " .. tostring(r)) or ("SV_Recycle error " .. tostring(r))
+        end
+        R.up[u], RUN.dirty = nil, true
+        if ALLY.forgetAlive then ALLY.forgetAlive(u) end
+        log(string.format("allies: %s home after %d rounds (%s): off the spawner's list (%s); the STORE can send another",
+            aw.name, s.served or 0, s.goneWhy or "?", rec))
+        return
+    end
+    if s.home then
+        if now < (R.homeCheckAt or 0) then return end
+        R.homeCheckAt = now + 2
+        local _, d = awacsPlane(R, u)
+        local why
+        if (tonumber(f.SV_AwacsOut) or 0) >= 2 then why = "its exit flown"
+        elseif d and d >= (hm.gone_km or 20) then why = string.format("%.1f km out", d)
+        elseif s.areaOrbit and now - s.home >= (hm.area_s or 30) then why = string.format("%d s on the area orbit, no arc to leave from", hm.area_s or 30)
+        elseif now - s.home >= (hm.max_s or 360) then why = string.format("%d s after it was sent home", hm.max_s or 360)
+        end
+        if s.outSaid ~= (tonumber(f.SV_AwacsOut) or 0) then
+            s.outSaid = tonumber(f.SV_AwacsOut) or 0
+            if s.outSaid == 1 then
+                log(string.format("allies: %s on its way out (its arc's end took its exit, %s)", aw.name,
+                    d and string.format("%.1f km from the airfield", d) or "?"))
+            end
+        end
+        if why then
+            s.removeAt, s.goneWhy = now, why
+            local r = type(SV_Event) == "function" and SV_Event(hm.remove) or -5
+            log(string.format("allies: %s taken off (%s): %s %s", aw.name, why, hm.remove,
+                r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))
+        end
+        return
+    end
+    local rounds = tonumber(sv.rounds) or 0
+    if rounds <= 0 or not (D and D.round) then return end
+    if D.state ~= "wait" then s.inRound = D.round; return end
+    if s.inRound == D.round and s.counted ~= D.round then             -- (its round just cleared)
+        s.counted = D.round
+        local upS = now - (s.at or now)
+        if upS >= (sv.min_s or 60) then
+            s.served = (s.served or 0) + 1
+            log(string.format("allies: %s has served %d of its %d rounds (round %d clear)", aw.name, s.served, rounds, D.round))
+        else
+            log(string.format("allies: %s up only %d s of round %d: not counted (%d of %d served)", aw.name, math.floor(upS),
+                D.round, s.served or 0, rounds))
+        end
+    end
+    if (s.served or 0) >= rounds then
+        s.home = now
+        local r = type(SV_Event) == "function" and SV_Event(hm.event) or -5
+        hudCallout(string.format(t.awacs_home, aw.name), string.format(t.awacs_home_sub, s.served))
+        log(string.format("allies: %s has served %d rounds: going home (%s %s; %s)", aw.name, s.served, hm.event,
+            r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r))),
+            s.areaOrbit and string.format("on the area orbit: taken off %d s on", hm.area_s or 30)
+                or "out along its exit from the end of the arc it's on"))
+    end
+end
+-- The round's strike flight after it (CFG.allies.awacs.strike): once a round while it's airborne and serving, one of
+-- the round's fighter flights up after_s or more (not an ace squadron's, a role flight that keeps its own set, a Wolf,
+-- an escort, the jammer's, nor one held, aimed elsewhere by a reversal or decoyed) has each plane's
+-- EngagementOrderOverride onto it (Normal, TargetFirst: co-op's huntReal, hard rule 53; the STORE's ships get the
+-- event package's AttackOnly order, which wants a build per target), again every again_s; back on you
+-- (PlayerOnlyNoLimit, as it came: COOP.huntHost's) once it's lost, going home or gone. The hunt leaves it alone after.
+local ORDER_NORMAL, PRIO_PLAYER_ONLY_NO_LIMIT, PRIO_TARGET_FIRST, FIRE_BITS = 0, 8, 9, 7     -- (sv_coop.lua's)
+local function orderPlanes(u, target, prio)
+    local n, total = 0, 0
+    for _, p in ipairs(planes or {}) do
+        if p.unit == u and not p.down and liveAddr(p.obj) then
+            total = total + 1
+            if pcall(function() p.obj:EngagementOrderOverride(ORDER_NORMAL, target, prio, 0, false, FIRE_BITS, false) end) then n = n + 1 end
+        end
+    end
+    return n, total
+end
+local function strikeOk(R, u, now, after)
+    if not poolIndex(u) or (BOMBER_UNIT and BOMBER_UNIT[u]) or (PROBE_OF and PROBE_OF[u]) then return false end
+    if not (R.seen[u] and now - R.seen[u] >= after) then return false end
+    if (D.escortUnits and D.escortUnits[u]) or D.jammerUnit == u or (D.jammer and D.jammer.unit == u)
+        or (D.aceSquad and D.aceSquad[u]) then return false end
+    if ROLE and ((ROLE.ownSet and ROLE.ownSet(u)) or (ROLE.flight and ROLE.flight(u) == "wolf")) then return false end
+    if (WOLF and WOLF.holding and WOLF.holding(u)) or (DIR and DIR.holding and DIR.holding(u))
+        or (TAC and TAC.decoyed and TAC.decoyed(u, now)) or now < ((D.aceMoveAt and D.aceMoveAt[u]) or 0) then return false end
+    return true
+end
+local function awacsStrike(R, s, now, f)
+    local aw, t = CFG.allies.awacs, CFG.allies.text
+    local st = aw.strike or {}
+    local S = R.awStrike
+    local serving = s ~= nil and not s.queued and not s.home and not s.removeAt and (f.SV_AwacsAir or 0) > 0
+    if S and (not serving or S.s ~= s or not (D and D.up and D.up[S.unit])) then
+        R.awStrike = nil
+        if D and D.up and D.up[S.unit] then
+            local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
+            local n = (pawn and liveAddr(pawn)) and orderPlanes(S.unit, pawn, PRIO_PLAYER_ONLY_NO_LIMIT) or 0
+            local how = string.format("%d planes back on you", n)
+            if n == 0 and poolIndex(S.unit) and type(SV_Event) == "function" then
+                local r = SV_Event(string.format("RE_SV_FlightOrders_%02d", poolIndex(S.unit)))
+                how = "its appearance's orders again (RE_SV_FlightOrders " .. (r == 1 and "fired)" or "NOT fired)")
+            end
+            log(string.format("allies: %s off %s (%s): %s", S.unit, aw.name, (s == nil or S.s ~= s) and "it's gone"
+                or (s.home and "it's going home") or "it's not airborne", how))
+        end
+        S = nil
+    end
+    if not (st.enabled and serving and D and D.up and D.state ~= "wait" and (D.round or 0) >= (st.from_round or 1)) then return end
+    if S then                                                        -- (its order again now and then)
+        if now >= S.again then
+            S.again = now + (st.again_s or 15)
+            local vw = awacsPlane(R, aw.unit)
+            if vw then orderPlanes(S.unit, vw, PRIO_TARGET_FIRST) end
+        end
+        return
+    end
+    if R.awStrikeRound == D.round or now < (R.awStrikeAt or 0) then return end
+    R.awStrikeAt = now + 2
+    local vw = awacsPlane(R, aw.unit)
+    if not vw then return end
+    local cands = {}
+    for u in pairs(D.up) do if strikeOk(R, u, now, st.after_s or 4) then cands[#cands + 1] = u end end
+    table.sort(cands)                                                 -- (pairs' order isn't a choice)
+    if #cands == 0 then
+        if R.awStrikeNone ~= D.round then
+            R.awStrikeNone = D.round
+            log(string.format("allies: no fighter flight free to send after %s yet (round %d)", aw.name, D.round))
+        end
+        return
+    end
+    local u = cands[math.random(#cands)]
+    local n, total = orderPlanes(u, vw, PRIO_TARGET_FIRST)
+    if n == 0 then
+        log(string.format("allies: %s NOT sent after %s: none of its %d planes took the order", u, aw.name, total))
+        return
+    end
+    R.awStrike = { unit = u, s = s, at = now, again = now + (st.again_s or 15) }
+    R.awStrikeRound = D.round
+    R.hunted[u] = true                                                -- (the hunt's AIFirst order would take it off)
+    hudCallout(t.strike, string.format(t.strike_awacs_sub, aw.name))
+    log(string.format("allies: %s sent after %s: round %d's strike flight (%d of %d planes, Normal / TargetFirst onto it)",
+        u, aw.name, D.round, n, total))
+end
+
 -- VOID WATCHER 1 (CFG.allies.awacs), every tick: off the ground once its buyer's airborne and the runway's clear (as
 -- MOONCHILD), then its ESM fired every esm.every_s while it's airborne (SV_AwacsAir), and each ESM field of its class set
 -- to esm.range_m for esm.life_s, new (ALLY.esmNew, from the game's NotifyOnNewObject: the field's actor) or launched
--- again (R.esmFields: they're pooled)
+-- again (R.esmFields: they're pooled). ((0.73.78, G5) its rounds of service, going home and the strike flight after it:
+-- awacsService, awacsStrike; while it's going home no ESM, no backstop)
 function ALLY.awacsTick(R, now)
     local aw, t = CFG.allies.awacs, CFG.allies.text
     if not aw.enabled then return end
@@ -854,7 +1029,8 @@ function ALLY.awacsTick(R, now)
     -- its orbit's backstop: its climb-out never ended (an E-767 on the fighters' scramble paths), or it's wandered off
     local f = (s and not s.queued) and (svFlags() or {}) or {}
     local ob = aw.orbit
-    if s and not s.queued and ob and type(SV_Event) == "function" and now >= (R.orbitCheckAt or 0) then
+    -- ((0.73.78, G5) not once it's going home: its way out is meant to leave the orbit)
+    if s and not s.queued and not s.home and ob and type(SV_Event) == "function" and now >= (R.orbitCheckAt or 0) then
         R.orbitCheckAt = now + (ob.check_s or 20)
         local why = nil
         if (f.SV_AwacsAir or 0) <= 0 then
@@ -872,10 +1048,18 @@ function ALLY.awacsTick(R, now)
         if why and now >= (R.orbitAgainAt or 0) then
             R.orbitAgainAt = now + (ob.again_s or 60)
             local r = SV_Event(ob.event)
+            if r == 1 then s.areaOrbit = true end           -- ((0.73.78, G5) off its arcs: no arc's end to go home from)
             log(string.format("allies: %s taken off its path onto the area orbit (%s): %s %s", aw.name, why, ob.event,
                 r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))
         end
     end
+    -- ((0.73.78, G5) its rounds of service and its way home, then the round's strike flight after it (or back off it))
+    if s and not s.queued then
+        local okV, errV = pcall(awacsService, R, s, now, f)
+        if not okV and not R.awServiceErr then R.awServiceErr = true; log("allies: " .. aw.name .. "'s service error " .. tostring(errV)) end
+    end
+    local okK, errK = pcall(awacsStrike, R, R.up[u], now, f)
+    if not okK and not R.awStrikeErr then R.awStrikeErr = true; log("allies: " .. aw.name .. "'s strike flight error " .. tostring(errK)) end
     -- (0.73.62) where it is every 30 s while airborne: its orbit is its unit area now (tools/survival_events.py
     -- build_awacs), so the log shows whether it circles the airfield (+Y is south on Comona)
     if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.awPosAt or 0) then
@@ -890,17 +1074,19 @@ function ALLY.awacsTick(R, now)
                         local brg = (math.deg(math.atan(dx, -dy)) + 360) % 360       -- (compass: north is -Y)
                         -- (0.73.73) legs: SV_AwacsLeg, +1 at each orbit arc's end (tools/survival_events.py awacs_orbit):
                         -- rising, the path orbit is flown; stuck, it isn't (the backstop's area orbit takes over)
-                        log(string.format("allies: %s at %.1f km from the airfield, bearing %03d, %.1f km up, heading %s; legs %d",
+                        log(string.format("allies: %s at %.1f km from the airfield, bearing %03d, %.1f km up, heading %s; legs %d%s",
                             aw.name, math.sqrt(dx * dx + dy * dy), math.floor(brg + 0.5), l.Z / 100000,
                             (okR and r) and string.format("%03d", math.floor((r.Yaw + 90 + 360) % 360 + 0.5)) or "?",
-                            tonumber(f.SV_AwacsLeg) or 0))
+                            tonumber(f.SV_AwacsLeg) or 0,     -- ((0.73.78, G5) on its way home: SV_AwacsOut 1 out, 2 flown)
+                            s.home and string.format("; going home (exit %d)", tonumber(f.SV_AwacsOut) or 0) or ""))
                     end
                 end
             end
         end)
     end
-    -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own)
-    if s and not s.queued and (f.SV_AwacsAir or 0) > 0 and now >= (R.esmAt or 0) and type(SV_Event) == "function" then
+    -- its ESM, fired while it's airborne (COOP: forwarded, so every game's copy fields its own); ((0.73.78, G5) not once
+    -- it's going home)
+    if s and not s.queued and not s.home and (f.SV_AwacsAir or 0) > 0 and now >= (R.esmAt or 0) and type(SV_Event) == "function" then
         R.esmAt = now + aw.esm.every_s
         local r = SV_Event(aw.esm.event)
         R.esmFired = (R.esmFired or 0) + 1
@@ -1020,7 +1206,8 @@ function ALLY.tick(now)
         for u, s in pairs(R.up) do
             if not s.queued then
                 local n = ALLY.alive(u, now)             -- ((0.73.77) the share's count, at most 2.5 s old: B3)
-                if n <= 0 and now - s.at > 5 then
+                -- ((0.73.78, G5) VOID WATCHER 1 taken off on its way home isn't lost: awacsService takes it out of R.up)
+                if n <= 0 and now - s.at > 5 and not s.removeAt then
                     R.up[u], RUN.dirty = nil, true
                     local name = s.kind == "air" and airName(s) or c.ships[s.key].name
                     if s.ally == "awacs" then R.awacsFields = {} end
@@ -1028,7 +1215,8 @@ function ALLY.tick(now)
                     log(string.format("allies: %s (%s) lost %.0f s after it %s", name, u, now - s.at,
                         s.kind == "air" and "spawned" or "sailed"))
                 elseif s.ally == "awacs" and n > 0 then    -- (no orders: it orbits; airborne, the enemies may hunt it)
-                    airborne = airborne + math.min(n, f.SV_AwacsAir or 0)
+                    -- ((0.73.78, G5) not once it's going home: no hunters sent for it then)
+                    airborne = airborne + (s.home and 0 or math.min(n, f.SV_AwacsAir or 0))
                 elseif s.kind == "air" and n > 0 then
                     local up = math.min(n, f["SV_AllyAir" .. u:sub(-1)] or 0)
                     airborne = airborne + up

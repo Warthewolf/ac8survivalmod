@@ -356,8 +356,11 @@ CFG = {
             phantom   = { roles = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 }, openers = { "blink" },
                           blink = { enabled = true, every_s = 20, tailed_km = 2.5, tail_deg = 70, on_hit = true,
                                     move_gap_s = 10 } },
+            -- ((0.73.78, plan G4) health_add 600 -> 0: MaxHealthDifference is in MaxHealth HP, ten times the log's units
+            -- (HealthInternal), so +600 was +6,000 on a 60-115 HP body: Harvest's 9,900-10,725 in the 5-player run of
+            -- 2026-11-02, Inferno's Su-57 1,564. Each tier's health is [aces.health]'s now, set as a plane is first seen)
             reaper = { turn_add = { pitch = 180, roll = 360, yaw = 45 }, speed_x = 1.25, cruise_x = 1.15,
-                       health_add = 600, post_stall = true, hunt = true, no_provoke = true, moves = true,
+                       health_add = 0, post_stall = true, hunt = true, no_provoke = true, moves = true,
                        roles = { duelist = 1.0, lancer = 0.0, wolf = 0.0, skirm = 0.0 },
                        openers = { "kulbit", "blink", "high" },
                        blink = { enabled = true, every_s = 30, tailed_km = 2.5, tail_deg = 70, on_hit = false,
@@ -387,6 +390,37 @@ CFG = {
                                     trap = { km = 4.0, spring_s = 8, wait_s = 15, hold_max_s = 300 },
                                     kulbit = { km = 2.5 },
                                     blink = { km = 4.0 } } },
+        -- (0.73.78, plan G4; the 5-player run of 2026-11-02, rounds 20-40: "it took us 30+ missiles ... to down a single
+        -- aircraft and there were over twenty of them per wave"; the user, 2026-11-03: "health per tier instead, smaller
+        -- ace rounds, Harvest every other ace round")
+        -- health: each squadron's health in HP (MaxHealth; the log's "health" numbers, HealthInternal, are ten times it),
+        -- its wingmen's `wing`, its named lead's `lead`, whatever airframe row it flies (the campaign's CP_Named /
+        -- CP_Shadow bodies included), set as each plane is first seen (sv_ai.lua ACE.setHealth: MaxHealth and health,
+        -- the share of a plane hit before kept). A squadron flown at a higher tier's skill (rotation below) keeps its own.
+        -- late: CFG.late's health x on top (false: these are the whole of it). enabled = false: each airframe's own
+        -- health, x CFG.late's, as before (and the rows' health_add)
+        health = { enabled = true, late = false,
+                   mercenary = { wing = 100, lead = 250 }, legend = { wing = 120, lead = 320 },
+                   demon = { wing = 140, lead = 380 }, phantom = { wing = 160, lead = 460 },
+                   reaper = { wing = 180, lead = 540 } },
+        -- round: an ace round's size (the tester: "ace fights when there was only 6-10 of them while my entire screen
+        -- was filled with missile alerts"): aircraft[1] in the first ace round (first_round), per_round more for each
+        -- round past it, at most aircraft[2]; at most up[1] .. up[2] of them up at once the same way (up_per_round), in
+        -- waves of up - next_at, the next wave when next_at or fewer of the last are left (a 6-ship comes as a wave of its
+        -- own). Both x the menu's ENEMY AIRCRAFT %, then co-op's [coop] aircraft_per_player within aircraft[2] / up[2].
+        -- enabled = false: an ace round is as big as a normal one (the round's budget and the waves' max_up)
+        round = { enabled = true, aircraft = { 12, 24 }, per_round = 0.5, up = { 6, 10 }, up_per_round = 0.15, next_at = 2 },
+        -- rotation: from from_round the top squadron (Harvest: the last tier with a line-up) flies only every top_every-th
+        -- ace round (2: every other one; promoted earlier, it counts); the ace rounds between fly one of `standins` (the
+        -- one flown longest ago) at the round's tier's skill (its AI level, fire control, reactions and levers), with its
+        -- own airframes, health and personality (roles, openers, blinks). enabled = false: the round's tier's squadron
+        rotation = { enabled = true, from_round = 28, top_every = 2, standins = { "phantom", "demon", "legend", "mercenary" } },
+        -- break_off: after_s of an ace round (counted while the round's flying, not while you're down at the airfield
+        -- alone) its squadron's aircraft still up break off (engagement None, no more openers, reversals or specials) and
+        -- leave: each flight despawned once all of it is far_km from every player, or leave_s after the break; what was
+        -- shot down was paid as it went, the rest pays nothing, its later waves never come, and the round ends as its
+        -- other aircraft go (IMPROVEMENTS "Pacing and rounds" 3: Harvest's rounds ran 8-15 minutes)
+        break_off = { enabled = true, after_s = 360, leave_s = 12, far_km = 4.0 },
     },
     -- Enemy search range (user 2026-10-22: no chase, enemies should always have the player in view). Mission 22's
     -- fighters use AI module NPC_AIModule_Plane000: 6 km search radius, and they lose a target hidden in cloud.
@@ -708,10 +742,16 @@ CFG = {
     -- Economy review of 2026-10-25 (a friend's 3-hour run: special rounds paid 4-10 times more a minute than normal ones):
     -- round_bonus 250 (was 100), and every kill pays x (1 + round_x_per_round x (round - 1)), at most round_x_max. A kill
     -- an ally, an allied ship or an airfield defence made (CFG.allies.kills) pays ally_x of it, an airstrike's
-    -- airstrike_x.
+    -- airstrike_x ((0.73.78, economy C4, approved 2026-11-03) 0.25, was 0.5: an airstrike paid for itself).
     credits = {
         start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 250, special_x = 2.0,
-        round_x_per_round = 0.02, round_x_max = 1.5, ally_x = 0.5, airstrike_x = 0.5,
+        round_x_per_round = 0.02, round_x_max = 1.5, ally_x = 0.5, airstrike_x = 0.25,
+        -- special_split (0.73.78, economy C3, approved 2026-11-03): in co-op a special's reward (a boss down, the Alicorn
+        -- sunk, the shuttle launched, the spaceport held or retaken, and what a special pays as it goes: landing craft,
+        -- the fleet, ballast tanks, rockets ...; not the round bonus, not kills) pays each player the reward x players ^
+        -- -special_split (sv_coop.lua COOP.specialShare, the host's setting): 0.5 = 1 / sqrt(players), 71 % with 2, 58 %
+        -- with 3, 50 % with 4, 45 % with 5; 0 the whole reward to everyone (before 0.73.78), 1 an equal split. Solo: x1.
+        special_split = 0.5,
         -- team_x (0.73.77, economy C1, approved 2026-11-03): in co-op a teammate's kill (the player the host names for it,
         -- sv_coop.lua) pays min(team_x, 1 / (players - 1)) of a kill on every game, your own x1: 0.5 with 2 or 3
         -- players, 0.33 with 4, 0.25 with 5 (the host's setting). Before, a joiner was paid x1 for every kill it saw.
@@ -773,18 +813,24 @@ CFG = {
             UpBays     = { role = "upgrade", up = "bays", label = "WEAPON BAYS", tiers = { 4000, 8000 }, step = 0.5 },
             UpGun      = { role = "upgrade", up = "gun", label = "GUN", tiers = { 4000, 7000, 11000 }, step = 0.15 },
             UpFlares   = { role = "upgrade", up = "flares", label = "FLARE PODS", tiers = { 2500, 4500, 7000 }, step = 2 },
-            -- tactical items, carried until used, at most `max` of each (CFG.tactical: how they work)
-            Airstrike  = { role = "tactical", tac = "airstrike", label = "AIRSTRIKE", price = 6000, raise = 1.0, max = 2 },
-            Ecm        = { role = "tactical", tac = "ecm", label = "ECM BURST", price = 4000, raise = 1.0, max = 2 },
-            Decoy      = { role = "tactical", tac = "decoy", label = "DECOY", price = 4000, raise = 1.0, max = 2 },
+            -- tactical items, carried until used, at most `max` of each (CFG.tactical: how they work).
+            -- price_per_round ((0.73.78, economy C4 / C5, approved 2026-11-03; any item with a price can have one): the
+            -- price is price + price_per_round x the round (the round in play, in a break the next one), then x raise for
+            -- each bought: AIRSTRIKE 4000 + 300 a round (5500 at round 5, 10000 at 20, 17500 at 45; was 6000 flat), ECM
+            -- BURST and DECOY 2500 + 200 a round (3500 at 5, 6500 at 20, 11500 at 45; were 4000 flat)
+            Airstrike  = { role = "tactical", tac = "airstrike", label = "AIRSTRIKE", price = 4000, price_per_round = 300, raise = 1.0, max = 2 },
+            Ecm        = { role = "tactical", tac = "ecm", label = "ECM BURST", price = 2500, price_per_round = 200, raise = 1.0, max = 2 },
+            Decoy      = { role = "tactical", tac = "decoy", label = "DECOY", price = 2500, price_per_round = 200, raise = 1.0, max = 2 },
             -- one shoot-down survived (CFG.insurance), one held at a time ("insurance as a high-end purchase")
             Insurance  = { role = "insurance", label = "SECOND CHANCE", price = 50000, raise = 1.0 },
             -- a cheaper first rung of allies ("a pair of F-16s for about 5,000 before MOONCHILD at 15,000"): flies on
             -- MOONCHILD's two flights (CFG.allies.wingmen), so at most two flights of the two kinds are up together
             Wingmen    = { role = "ally_air", ally = "wingmen", label = "SNIPER: 2 x F-16C, LAAMs", price = 5000, raise = 1.2 },
             -- VOID WATCHER 1 (CFG.allies.awacs): an E-767 AWACS that takes off from the airfield and orbits it, its ESM
-            -- field over the whole airfield; one up at a time
-            VoidWatcher = { role = "ally_awacs", label = "VOID WATCHER 1: E-767 AWACS", price = 12000, raise = 1.0 },
+            -- field over the whole airfield; one up at a time. ((0.73.78, plan G5) raise 1.0 -> 1.25, as MOONCHILD's and the
+            -- AEGIS's: each purchase in the run x1.25 dearer, a co-op room's counted together, a joiner's checked by the
+            -- host at the host's price: sv_shop.lua shopBuildFor)
+            VoidWatcher = { role = "ally_awacs", label = "VOID WATCHER 1: E-767 AWACS", price = 12000, raise = 1.25 },
             -- the allied aircraft's orders (CFG.allies.orders), free: each press the next one
             Orders     = { role = "orders", label = "ALLY ORDERS" },
             -- (defences' raise 1.12, was 1.25: "the sixth AA gun cost 12,210, three times the first")
@@ -905,8 +951,31 @@ CFG = {
                          -- its model row (tools/build_survival.py: Magnolia's under the game's plain E-767 name), added
                          -- to the campaign's DT_NPC_Model at the main menu (no "MAGNOLIA" on its box)
                          model = "SV_Model_VoidWatcher",
-                         esm = { event = "RE_SV_AwacsEsm", every_s = 20, range_m = 25000, life_s = 24, capture_m = 60000,
+                         -- ((0.73.78, plan G5: "its field 8-10 km, over the airfield and not the whole map") range_m
+                         -- 25000 -> 9000: its orbit is 6 km round the airfield, so a 9 km field always holds the whole
+                         -- airfield with 3 km to spare past it, and reaches 15 km out at most (25 km covered the fight);
+                         -- the stock field's 8 km support / 4 km effect. every_s 20 -> 30, life_s 24 -> 15: a 24 s field
+                         -- every 20 s never went off; now it's up half the time, a pulse every 30 s)
+                         esm = { event = "RE_SV_AwacsEsm", every_s = 30, range_m = 9000, life_s = 15, capture_m = 60000,
                                  class = "BP_wp_esm_MS28_C" },
+                         -- ((0.73.78, plan G5: "3 rounds of service") it serves `rounds` rounds, one counted as it clears
+                         -- with VOID WATCHER 1 up min_s or more of it, then goes home in the break: no landing an AI plane
+                         -- can fly (tools/survival_events.py AWACS_OUT_*), so the end of the arc it's on starts its exit
+                         -- (home.event, RE_SV_AwacsHome) and it's taken off (home.remove, RE_SV_AwacsRemove, then
+                         -- SV_Recycle) gone_km from the airfield, at the exit's end, or max_s after it was sent home
+                         -- (area_s when the backstop's area orbit had it: no arc's end to leave from). No ESM, no backstop,
+                         -- no hunters and no strike flight once it's going home; the STORE sells another then.
+                         -- rounds = 0: it serves until it's shot down, as before)
+                         service = { rounds = 3, min_s = 60 },
+                         home = { event = "RE_SV_AwacsHome", remove = "RE_SV_AwacsRemove", gone_km = 20, max_s = 360,
+                                  area_s = 30 },
+                         -- ((0.73.78, plan G5: "a strike flight after it") each round it's up and airborne, from
+                         -- from_round, one of the round's fighter flights up after_s or more (not an ace squadron's, a
+                         -- role flight that keeps its own set, a Wolf, an escort, the jammer's, nor one held or decoyed)
+                         -- is sent after it: each plane's EngagementOrderOverride onto it (Normal, TargetFirst, as co-op's
+                         -- huntReal sends flights onto a player's real plane: hard rule 53), given again every again_s,
+                         -- back on you (PlayerOnlyNoLimit) once it's lost or going home. enabled = false: none, as before)
+                         strike = { enabled = true, from_round = 1, after_s = 4, again_s = 15 },
                          -- its orbit's backstop (user, 2026-10-31: "VOID WATCHER just seems to not loiter around the
                          -- airfield space"): put on its orbit (RE_SV_AwacsOrbit) when its climb-out hasn't ended
                          -- climb_s after takeoff, and again when it's lost_km or more from the airfield (checked every
@@ -956,6 +1025,9 @@ CFG = {
         text = { takeoff = "%s CLEARED FOR TAKEOFF", takeoff_sub = "TWO F-22s JOINING THE FIGHT",
                  takeoff_sub_wingmen = "TWO F-16s WITH LAAMs JOINING THE FIGHT",
                  takeoff_sub_awacs = "E-767 AWACS: ESM OVER THE AIRFIELD",
+                 -- ((0.73.78, G5) VOID WATCHER 1's service over, and the strike flight sent after it)
+                 awacs_home = "%s GOING HOME", awacs_home_sub = "%d ROUNDS SERVED: THE STORE CAN SEND ANOTHER",
+                 strike_awacs_sub = "HEADING FOR %s",
                  air_lost = "%s FLIGHT LOST", ship = "%s AT SEA", ship_sub = "ALLIED SHIP JOINING THE FIGHT",
                  sunk = "%s SUNK", lost_sub = "THE STORE CAN SEND ANOTHER",
                  strike = "STRIKE FLIGHTS INBOUND", strike_sub = "HEADING FOR OUR SHIPS",
@@ -967,15 +1039,18 @@ CFG = {
     -- Tactical items (economy review of 2026-10-25: "one-use tactical items ... priced to compete with allies"), bought
     -- in the STORE and carried until used: each by its key in flight (Ctrl+F1 / F2 / F3; keys = false: none), or by
     -- itself when `auto` and its moment comes.
-    --   airstrike: the enemy flight with the most aircraft within range_km of you (no specials, no aces leading)
-    --              destroyed delay_s after the call; its kills pay CFG.credits.airstrike_x. auto: when auto_near or more
-    --              enemies are within auto_km of you.
+    --   airstrike: the enemy flight with the most aircraft within range_km of you (no specials, never an ace squadron's
+    --              flights) hit delay_s after the call, at most max_hit of its aircraft (the nearest you); its kills pay
+    --              CFG.credits.airstrike_x. Only by its key, never by itself, and per_round a round at most, bought or
+    --              called ((0.73.78, plan G6, approved 2026-11-03; tester, 2026-11-02: "Airstrikes end furballs in 5
+    --              seconds": it had an auto call at 8 enemies within 10 km, spared only a flight an ace led and hit the
+    --              whole flight). per_round 0: no limit; max_hit 0: the whole flight.
     --   ecm:       for ecm_s every enemy missile within range_km of you loses its lock (homing off; one still closing
     --              within kill_m is destroyed). auto: when auto_missiles or more are within auto_km of you.
     --   decoy:     the enemy fighter flight nearest you breaks off for decoy_s (RE_SV_Decoy_NN: no engagement), then
     --              comes back (RE_SV_DecoyEnd_NN: its orders again). auto: a flight of auto_size or more within auto_km.
     tactical = { keys = true,
-                 airstrike = { delay_s = 4, range_km = 15, auto = true, auto_near = 8, auto_km = 10 },
+                 airstrike = { delay_s = 4, range_km = 15, per_round = 1, max_hit = 4 },
                  ecm = { ecm_s = 10, range_km = 4, kill_m = 500, auto = true, auto_missiles = 2, auto_km = 2.5 },
                  decoy = { decoy_s = 30, range_km = 12, auto = true, auto_size = 4, auto_km = 4 } },
     -- SECOND CHANCE (the STORE's Insurance; economy review: "50,000 for one free continue: the friend died holding 26,770
@@ -1229,14 +1304,16 @@ CFG = {
              -- could land at the airfield and buy you back ... you get put into a spectator camera and you can switch
              -- between the players currently active"). Co-op only: your plane is held at floor_hp; there you're DOWN,
              -- flown round the airfield (loiter: alt_m up, radius_m round) and watch another player; any other player at
-             -- their airfield buys you back from the STORE's AIRFIELD page for price, x raise for each revive in the run
+             -- their airfield buys you back from the STORE's AIRFIELD page for price + price_per_round x the round (the
+             -- round in play, in a break the next one; (0.73.78, economy C6, approved 2026-11-03) 2000 + 150 a round:
+             -- 3500 at round 10, 6500 at 30; was 2500 flat), x raise for each revive in the run
              -- (the host's count), and you're back repaired, safe_s seconds invincible, where the loiter left you
              -- (respawn "loiter"; farther than near_km from the airfield: "native" instead) or 4 km out from the runway at 500 m
              -- ("native"). Everyone down: the run's over.
              -- down_round_bonus: a downed player still gets the round bonuses. key / ctrl: the next player to watch;
              -- camera: back_m behind and up_m above the plane you watch, blend_s to swing over. key, ctrl and camera
              -- are each player's own, the rest the host's.
-             revive = { enabled = true, floor_hp = 0.1, price = 2500, raise = 1.25, safe_s = 5,
+             revive = { enabled = true, floor_hp = 0.1, price = 2000, price_per_round = 150, raise = 1.25, safe_s = 5,
                         loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", near_km = 8, drift_km = 10, key = "O", ctrl = false,
                         camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true,
                         -- (0.73.73) parked_safe: in co-op your plane is invincible while it's on the ground at your
@@ -1946,6 +2023,8 @@ CFG = {
             anomaly_down      = "%s DOWN",
             anomaly_down_sub  = "+%d ZOLLARS",
             aces_round   = "ACE SQUADRONS: %s",
+            aces_break   = "%s BREAKS OFF",                -- ((0.73.78) CFG.aces.break_off: the squadron's name)
+            aces_break_sub = "%d OF THEM LEAVING",
             ladon_sub    = "LADONS INBOUND",
             lb_title     = "RUN OVER: %s",
             lb_lines     = { "ROUND REACHED  %d", "SCORE  %s", "KILLS  %d AIR, %d GROUND", "SPECIALS BEATEN  %d",
@@ -1979,6 +2058,9 @@ CFG = {
             airstrike_none = "AIRSTRIKE HELD",
             airstrike_none_sub = "NO ENEMY FLIGHT WITHIN %d KM",
             airstrike_hit = "AIRSTRIKE: %d DOWN",
+            -- ((0.73.78, plan G6) a call refused: the round's airstrike used; only an ace squadron's flights near)
+            airstrike_once_sub = "ONE A ROUND: THE NEXT IN ROUND %d",
+            airstrike_aces_sub = "NEVER ON AN ACE SQUADRON",
             ecm          = "ECM BURST",
             ecm_sub      = "ENEMY LOCKS BROKEN FOR %d SECONDS",
             decoy        = "DECOY RELEASED",
@@ -2604,15 +2686,88 @@ function TIER.pay(base, i)
     local x = (i and (tp[i] or tp[#tp])) or 1
     return math.floor(base * x / 10 + 0.5) * 10, x
 end
--- An ace round (CFG.aces first_round / every): the round's tier's squadrons only.
+-- (0.73.78, plan G4) The ace squadrons' health, rounds and rotation (CFG.aces health / round / rotation): pure maths of
+-- CFG and the run's record (RUN.aceSinceTop, RUN.aceAt: sv_rounds.lua aceFlown keeps them), tools/checks/aces_test.lua.
+-- ACE.healthFor(row, round): the health (HP, MaxHealth) of an aircraft on mission row `row` (sv_ace_<tier>_<key>_<l|w>,
+-- any level's copy: _sv, _svb ...), its tier's key, "lead" or "wing", and the tier's wing and lead HP; nil for any other
+-- row (the specials' MINDRIPPER guards, AB.L..IN, VALKA: not a tier of CFG.aces.health) or with it off. CFG.late's x on
+-- top when health.late (round: the round it flies in).
+function ACE.healthFor(row, round)
+    local h = CFG.aces.health
+    if not (CFG.aces.enabled and type(h) == "table" and h.enabled and type(row) == "string") then return nil end
+    local tk, part = row:match("^sv_ace_(%a+)_%w+_([lw])")
+    local t = tk and h[tk]
+    if type(t) ~= "table" then return nil end
+    local wing, lead = tonumber(t.wing), tonumber(t.lead)
+    local hp = (part == "l") and lead or wing
+    if not (hp and hp > 0) then return nil end
+    local x = (h.late and round) and TIER.lateHealthX(round) or 1
+    return hp * x, tk, part == "l" and "lead" or "wing", wing, lead
+end
+-- ACE.roundSize(round): an ace round's aircraft, the most of them up at once, the next wave's next_at and the two
+-- ceilings (aircraft[2], up[2]), before the menu's % and co-op; nil when CFG.aces.round is off. aircraft[1] at the
+-- first ace round (CFG.aces.first_round) + per_round a round past it, at most aircraft[2], whole 2-ships; up the same
+-- way with up_per_round (rounded)
+function ACE.roundSize(round)
+    local c = CFG.aces.round
+    if not (type(c) == "table" and c.enabled and round) then return nil end
+    local a, u = type(c.aircraft) == "table" and c.aircraft or {}, type(c.up) == "table" and c.up or {}
+    local a1, u1 = tonumber(a[1]) or 12, tonumber(u[1]) or 6
+    local a2, u2 = math.max(a1, tonumber(a[2]) or a1), math.max(u1, tonumber(u[2]) or u1)
+    local past = math.max(0, round - (tonumber(CFG.aces.first_round) or round))
+    local top = math.max(2, math.floor(a2 / 2) * 2)
+    local n = math.min(top, math.max(2, math.floor(math.min(a2, a1 + (tonumber(c.per_round) or 0) * past) / 2 + 0.5) * 2))
+    local up = math.max(2, math.floor(math.min(u2, u1 + (tonumber(c.up_per_round) or 0) * past) + 0.5))
+    return n, up, math.max(0, math.floor(tonumber(c.next_at) or 2)), top, math.max(2, math.floor(u2 + 0.5))
+end
+-- ACE.top(): the top squadron's key, the last tier with a line-up (Harvest's "reaper"), or nil
+function ACE.top()
+    for k = #CFG.tiers.list, 1, -1 do
+        local n = CFG.tiers.list[k].name:lower()
+        if ACE.roster[n] then return n end
+    end
+    return nil
+end
+-- ACE.squadFor(round, ti): the squadron an ace round of tier ti flies in round `round`: the tier's own, but from
+-- rotation.from_round the top squadron only every top_every-th ace round (RUN.aceSinceTop: ace rounds flown since it
+-- last flew one, nil before it ever has); between, one of rotation.standins (a line-up with a usable row, the one whose
+-- last ace round is longest ago: RUN.aceAt, never flown first, ties by the list's order) at tier ti's skill. Returns its
+-- key, true for a stand-in, and why (the log's)
+function ACE.squadFor(round, ti)
+    local t = ti and CFG.tiers.list[ti]
+    local tk = t and t.name and t.name:lower()
+    local r = CFG.aces.rotation
+    if not (tk and type(r) == "table" and r.enabled and round and round >= (tonumber(r.from_round) or math.huge)) then return tk, false end
+    if tk ~= ACE.top() then return tk, false end
+    local every = math.max(1, math.floor(tonumber(r.top_every) or 2))
+    local since = RUN and RUN.aceSinceTop
+    if since == nil or since >= every - 1 then return tk, false end
+    local best, bestAt = nil, nil
+    for _, k in ipairs(type(r.standins) == "table" and r.standins or {}) do
+        k = tostring(k):lower()
+        local usable = false
+        for _, key in ipairs(ACE.roster[k] or {}) do if SR and SR.usable and SR.usable[ACE.row(k, key, "w")] then usable = true end end
+        if k ~= tk and usable and type(CFG.aces[k]) == "table" then
+            local at = RUN and RUN.aceAt and RUN.aceAt[k] or -math.huge
+            if not best or at < bestAt then best, bestAt = k, at end
+        end
+    end
+    local sq = CFG.aces[tk] and CFG.aces[tk].squadron or tk
+    if not best then return tk, false, string.format("no stand-in squadron can fly: %s again", tostring(sq)) end
+    return best, true, string.format("%s flies every %d%s ace round, its last %d ago", tostring(sq), every,
+        every == 2 and "nd" or every == 3 and "rd" or "th", since + 1)
+end
 -- An ace round (CFG.aces first_round / every; never a special round): the tier index whose squadrons fly it (the
--- round's tier, or the first one above it that has squadrons), or nil.
+-- round's tier, or the first one above it that has squadrons), or nil; then (0.73.78) the squadron that flies it at that
+-- tier's skill, whether it stands in for the top one, and why (ACE.squadFor)
 function aceRound(round, special)
     local a = CFG.aces
     if special or not (a.enabled and CFG.tiers.enabled and round >= a.first_round
         and (round - a.first_round) % math.max(1, math.floor(a.every)) == 0) then return nil end
     local ti = TIER.pick(round)
-    for k = ti, #CFG.tiers.list do if ACE.roster[CFG.tiers.list[k].name:lower()] then return k end end
+    for k = ti, #CFG.tiers.list do
+        if ACE.roster[CFG.tiers.list[k].name:lower()] then return k, ACE.squadFor(round, k) end
+    end
     return nil
 end
 function withLevel(base, over)                    -- a copy of `base` with `over`'s fields

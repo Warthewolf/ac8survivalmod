@@ -282,8 +282,12 @@ function spawnFlight(unit, maxLevel, pose)
     D.flightRole[unit] = role
     local base, how = pickAircraft(tier, role)
     local ac = searchAircraft(base, fcsLevel)
-    local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
+    -- (ace rounds only; (0.73.78, plan G4) the round's squadron, D.roundSquad: a stand-in for the top one flies at this
+    -- tier's skill, CFG.aces.rotation; the dev key's maxLevel: the top tier's own)
+    local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, (not maxLevel and D.roundSquad) or tier.name:lower(), fcsLevel)
     if ace then ac, how = ace.wing, "ace squadron" end
+    D.flightSquad = D.flightSquad or {}
+    D.flightSquad[unit] = ace and ace.tier or nil      -- ((0.73.78) its squadron's key: ROLE.ownSet, the break-off)
     -- (a squadron's opener at first contact, P9's ace personalities: its tier's openers in turn, sv_ai.lua ACE.pickOpener;
     -- "high" spawns it higher, "trap" holds a Wolf flight's trap: ROLE.spawned)
     local op = nil
@@ -366,6 +370,18 @@ function spawnFlight(unit, maxLevel, pose)
             local name = ace.lead and tostring(c[ace.key] or ace.key)
             log(string.format("aces: %s is %s squadron (%s)%s", unit, tostring(c.squadron), ace.key,
                 name and (", led by " .. name .. " (" .. ace.lead .. ")") or ", no ace (already up)"))
+            -- ((0.73.78, plan G4) its health, its squadron's tier's: CFG.aces.health, set on each plane as the sweep first
+            -- sees it, sv_ai.lua ACE.setHealth)
+            local wh, htk, _, hw, hl = ACE.healthFor(ace.wing, D.round)
+            local lh = ace.lead and ACE.healthFor(ace.lead, D.round)
+            if wh then
+                local wings = math.max(0, r - (lh and 1 or 0))
+                log(string.format("aces: %s %s health %d (tier %s: wing %s, lead %s)%s%s", tostring(c.squadron), name or "wingmen",
+                    math.floor((lh or wh) + 0.5), htk, tostring(hw), tostring(hl),
+                    lh and string.format("; its %d wingm%sn %d", wings, wings == 1 and "a" or "e", math.floor(wh + 0.5))
+                        or string.format(", %d of them", r),
+                    (tier.name and ace.tier ~= tier.name:lower()) and string.format("; flown at the %s tier's skill", tier.name) or ""))
+            end
             D.aceSaid = D.aceSaid or {}
             if name and CFG.aces.callout and not D.aceSaid[ace.id] then
                 D.aceSaid[ace.id] = true
@@ -579,7 +595,11 @@ function ROLE.ownSet(unit, tier)
         local ti = D.flightTier and D.flightTier[unit]
         tier = ti and CFG.tiers.list[ti]
     end
-    local fl = type(tier) == "table" and tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()]
+    -- ((0.73.78, plan G4) a squadron standing in at a higher tier's skill, CFG.aces.rotation: its own squadron's levers,
+    -- so Bounty's Lancers and Valkyrie's Wolf pairs keep their own set in a Reaper round too)
+    local sq = D.flightSquad and D.flightSquad[unit]
+    local fl = (sq and CFG.aces.flight and CFG.aces.flight[sq])
+        or (type(tier) == "table" and tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()])
     return not (type(fl) == "table" and (fl.moves or (fl.hunt and fl.no_provoke)))
 end
 
@@ -893,6 +913,14 @@ end
 function poolIndex(unit)
     local n, k = tostring(unit):match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
     return n and (tonumber(n) - 1) * 3 + tonumber(k) + 1
+end
+-- ((0.73.78) the other way: pool flight i's unit, ERA_Unit_NN_Dep_AirK, or nil for an index past the pool)
+function poolUnit(i)
+    i = tonumber(i)
+    if not (i and i >= 1 and i == math.floor(i)) then return nil end
+    local u = string.format("ERA_Unit_%02d_Dep_Air%d", (i - 1) // 3 + 1, (i - 1) % 3)
+    for _, x in ipairs(CFG.pool or {}) do if x == u then return u end end
+    return nil
 end
 
 -- Comona Defense: the pad (once a run: its guns and SAMs stay up between specials) and the shuttle, both where the

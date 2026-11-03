@@ -165,7 +165,7 @@ end
 -- CFG.aces.flight <tier>.hunt: that tier's aircraft keep the player as their target (blackboard TargetActor)
 function ACE.hunt(p)
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
-    if not (fl and fl.hunt) then return end
+    if not (fl and fl.hunt) or p.leaving then return end     -- ((0.73.78) not one breaking off: sv_rounds.lua aceBreakOff)
     if TELL and TELL.hunted then pcall(TELL.hunted, p) end    -- (its flight close: the "hunt" tell, CFG.tells hunt_km)
     if fl.no_provoke and not roleOwn(p) then    -- (every 2 s: an engagement order sets it again)
         pcall(function() if p.obj.bPermissionToProvoke then p.obj.bPermissionToProvoke = false end end)
@@ -214,7 +214,7 @@ function ACE.movesTick(now, D)
     for _, p in ipairs(planes) do
         local fl = not p.down and p.unit and p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]
         -- (not a flight the squad director holds back: its top cover or regroup, sv_director.lua)
-        if fl and fl.moves and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) and not roleOwn(p)
+        if fl and fl.moves and not p.leaving and now >= (D.aceMoveAt[p.unit] or 0) and valid(p.obj) and not roleOwn(p)
             and not (DIR and DIR.holding and DIR.holding(p.unit)) then
             local pn, pk = p.unit:match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
             if pn then
@@ -864,12 +864,57 @@ function scaleHealth(o, x)
     return h0, h1
 end
 
+-- (0.73.78, plan G4) An ace squadron plane's mission row: its lead's own for object 0 (an ace leading it), else its
+-- flight's: the host's records (sv_spawn.lua D.leadRow / D.flightRow), a co-op joiner's from the host's spawns
+-- (sv_spweapons.lua SPW.leadRow / SPW.row). nil when neither knows the flight.
+function ACE.rowOf(p)
+    local u = p and p.unit
+    if not u then return nil end
+    local lr = p.k == 0 and ((D and D.leadRow and D.leadRow[u] and D.leadRow[u].row) or (SPW and SPW.leadRow and SPW.leadRow[u]))
+    return lr or (D and D.flightRow and D.flightRow[u]) or (SPW and SPW.row and SPW.row[u]) or nil
+end
+-- (0.73.78, plan G4; the 5-player run of 2026-11-02: Harvest's planes 9,900-10,725 in the log's units, "30+ missiles"
+-- a plane) Plane p of an ace squadron (its row, ACE.healthFor: CFG.aces.health) gets its tier's health, not its row's x
+-- CFG.late: MaxHealth the HP, HealthInternal (HP x 10) at the share it had (one hit before the sweep saw it stays hit).
+-- A co-op joiner's copy: at most that, never raised (the host's "hp" brings the host's own, before or after this; the
+-- expectation moves with it, COOP.copyScaled). True when p is an ace's (CFG.late's x isn't for it). Logged once a round
+-- for each tier and part, with what it had.
+local aceHpSaid = {}
+function ACE.setHealth(p, round)
+    local hp, tk, part, wing, lead = ACE.healthFor(ACE.rowOf(p), round)
+    if not hp then return false end
+    local o = p.obj
+    if not valid(o) then return true end
+    local okH, h0 = pcall(function() return o.HealthInternal end)
+    if not (okH and type(h0) == "number" and h0 > 0) then return true end
+    local okM, m0 = pcall(function() return o.MaxHealth end)
+    local want = math.max(1, math.floor(hp * 10 + 0.5))
+    local copy = COOP and COOP.client and COOP.client()
+    local share = (okM and type(m0) == "number" and m0 > 0) and math.min(1, h0 / (m0 * 10)) or 1
+    local h1 = copy and math.min(h0, want) or math.max(1, math.floor(want * share + 0.5))
+    local okW = pcall(function() o.MaxHealth = hp end)
+    if h1 ~= h0 then pcall(function() o.HealthInternal = h1 end) end
+    p.aceHp = hp
+    if copy and h1 ~= h0 and COOP.copyScaled then COOP.copyScaled(o, h0, h1) end
+    local key = tostring(round) .. "|" .. tk .. "|" .. part
+    if not aceHpSaid[key] then
+        aceHpSaid[key] = true
+        log(string.format("aces: health on %s (%s, %s %s): %d -> %d (MaxHealth %s -> %s HP%s; tier %s: wing %s, lead %s)%s",
+            tostring(p.name), tostring(ACE.rowOf(p)), tk, part, h0, h1, okM and tostring(m0) or "?", tostring(hp),
+            okW and "" or ", NOT written", tk, tostring(wing), tostring(lead), copy and " (a co-op copy: the host's own comes with \"hp\")" or ""))
+    end
+    return true
+end
+
 local lateSaid = {}
 function enemyLate(p, round)
     if p.late ~= nil then return end
     p.late = false
     local u = p.unit
     if not (u and (poolIndex(u) or BOMBER_UNIT[u])) then return end
+    -- ((0.73.78, plan G4) an ace squadron's plane: its tier's health, CFG.aces.health, in place of what follows)
+    local okA, ace = pcall(ACE.setHealth, p, round)
+    if not okA then log("aces: health error " .. tostring(ace)) elseif ace then p.late = true; return end
     local x = TIER.lateHealthX(round)
     local role = ROLE.flight(u)                       -- (its fighter role's health, CFG.roles.health_x; ace squadrons keep theirs)
     local rx = role and not (D and D.aceSquad and D.aceSquad[u]) and tonumber(CFG.roles.health_x and CFG.roles.health_x[role]) or 1
@@ -960,6 +1005,27 @@ function addCredits(n, why)
     RUN.credits, RUN.earned, RUN.dirty = RUN.credits + n, RUN.earned + n, true
     RUN.msg = {}            -- a shop result ("NOT ENOUGH ZOLLARS ...") is stale once the credits change
     log(string.format("credits: +%d (%s), now %d", n, why, RUN.credits))
+end
+
+-- (0.73.78, economy C4-C6, approved 2026-11-03) Prices that grow with the round. priceRound(): the round a price goes
+-- by, the round in play and in a break (D.state "wait") the next one, what's bought there is for (the round number
+-- changes at a round's start, so a break priced by it would change when everyone's in the air), at least 1; a joiner's
+-- D.round / D.state are the host's ("rnd"), so its prices are the host's. itemPrice: (price + perRound x that round) x
+-- raise ^ n, to 10 Z: the STORE's rows (sv_shop.lua shopPrice) and the revives (sv_down.lua priceFor).
+function priceRound()
+    if not D then return 1 end
+    return math.max(1, (tonumber(D.round) or 0) + (D.state == "wait" and 1 or 0))
+end
+function itemPrice(price, perRound, raise, n, round)
+    local p = (tonumber(price) or 0) + (tonumber(perRound) or 0) * (round or priceRound())
+    return math.floor(p * (tonumber(raise) or 1) ^ (n or 0) / 10 + 0.5) * 10
+end
+-- (0.73.78, economy C3) a special's reward as each player gets it: in co-op the host's addCredits (sv_coop.lua) pays and
+-- sends reward x COOP.specialShare(); its callout shows that, not the whole reward
+function specialPay(n)
+    local x = (COOP and COOP.specialShare and COOP.host and COOP.host()) and COOP.specialShare() or 1
+    if type(n) ~= "number" or type(x) ~= "number" or x >= 1 or n <= 0 then return n end
+    return math.max(1, math.floor(n * x + 0.5))
 end
 
 -- Kill pay's multiplier now: CFG.credits.special_x in a special round, else 1.

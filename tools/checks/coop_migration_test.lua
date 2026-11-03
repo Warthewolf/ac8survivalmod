@@ -111,6 +111,18 @@ local s1 = #sent
 M.sqAt = 0
 tick()
 check(#sentOf("sq", s1 + 1) == 0 and #sentOf("al", s1 + 1) == 0, "not again while nothing changed (30 s)")
+-- ((0.73.78, plan G5) VOID WATCHER 1 sent home after its rounds of service: out of the rebuild list, so a new host
+-- doesn't bring a retired one back)
+ALLY.run.up.SV_Unit_VoidWatcher.home = 100
+local sH = #sent
+M.sqAt = 0
+tick()
+local alH = sentOf("al", sH + 1)[1]
+check(alH and has(alH, "al|AAGun:0,Ciws:0,Ciws:0,ShipAegis:0,Wingmen:" .. SID.b) and not has(alH, "VoidWatcher"),
+      "G5: VOID WATCHER 1 going home: not in the allies up any more (" .. tostring(alH) .. ")")
+ALLY.run.up.SV_Unit_VoidWatcher.home = nil
+M.sqAt = 0
+tick()
 inbox[#inbox + 1] = "2|hi|" .. VERSION .. "|0.32.7|su35_common|Bee|su35||||SU35"
 tick()
 local pi2 = nil

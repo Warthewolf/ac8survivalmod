@@ -72,11 +72,13 @@ pays ...). Then: pick a difficulty -> hangar -> sortie. You start over Comona Ai
     UPGRADES: for the rest of the run, in tiers: AIRFRAME (+25 % health a tier), WEAPON BAYS (+50 % missiles and
               special weapons), GUN (+15 % damage), FLARE PODS (+2 flares). Buy the extra ammo after.
     TACTICAL: items you carry until you use them (up to 2 each):
-              AIRSTRIKE  (Ctrl+F1) destroys the biggest enemy flight near you
+              AIRSTRIKE  (Ctrl+F1) destroys up to 4 aircraft of the biggest enemy flight near you, never an ace
+                         squadron's; one a round (bought or called), only when you call it; its kills pay a quarter
               ECM BURST  (Ctrl+F2) breaks every missile lock on you for 10 seconds
               DECOY      (Ctrl+F3) the nearest enemy flight breaks off for 30 seconds
-              Each also goes off by itself when it's needed (8 enemies close, 2 missiles closing in, a big flight
-              on you). SECOND CHANCE: survive one shoot-down (not a crash into the ground).
+              They cost more as the rounds go up. ECM BURST and DECOY also go off by themselves when they're needed
+              (2 missiles closing in, a big flight on you). SECOND CHANCE: survive one shoot-down (not a crash into
+              the ground).
     AIRFIELD: REPAIR AIRCRAFT, REPAIR AIRFIELD (repairs its AA guns and SAM sites too), BUILD AA GUN, BUILD SAM SITE
     ALLIES:   WINGMEN (two F-16Cs, cheap), MOONCHILD (two F-22s), AEGIS DESTROYER, and ALLY ORDERS: HUNT (anywhere),
               COVER (stay with you) or DEFEND (the airfield). Ctrl+F4 changes the order in flight.

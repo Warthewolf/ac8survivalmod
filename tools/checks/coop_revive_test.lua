@@ -217,14 +217,21 @@ end
 
 ---------------------------------------------------------------------------------------------------- the floor
 print("the prices")
--- (the user, 2026-10-30: "lower the cost for reviving": 2500, x1.25 a revive, was 5000 x1.5)
+-- (the user, 2026-10-30: "lower the cost for reviving": 2500, x1.25 a revive, was 5000 x1.5; (0.73.78, economy C6,
+-- approved 2026-11-03) 2000 + 150 x the round, x1.25 a revive in the run)
 do
     local cr = CFG.coop.revive
-    check(cr.price == 2500 and cr.raise == 1.25, "shipped: 2500 a revive, x1.25 for each one in the run (" .. tostring(cr.price) .. " x" .. tostring(cr.raise) .. ")")
+    check(cr.price == 2000 and cr.price_per_round == 150 and cr.raise == 1.25, "shipped: 2000 + 150 a round, x1.25 for each one in the run ("
+          .. tostring(cr.price) .. " + " .. tostring(cr.price_per_round) .. " x" .. tostring(cr.raise) .. ")")
+    local D0 = D
+    local function at(round, state, n) D = { round = round, state = state }; local v = DOWN.priceFor(n); D = D0; return v end
     local p = {}
-    for n = 0, 2 do p[#p + 1] = math.floor(cr.price * cr.raise ^ n / 10 + 0.5) * 10 end
-    check(table.concat(p, " ") == "2500 3130 3910", "the run's first three: " .. table.concat(p, " "))
-    cr.price, cr.raise = 5000, 1.5         -- (the checks below were written for 5000 x1.5: the logic is the same)
+    for n = 0, 2 do p[#p + 1] = at(10, "fighting", n) end
+    check(table.concat(p, " ") == "3500 4380 5470", "round 10: the run's first three 3500 4380 5470 (" .. table.concat(p, " ") .. ")")
+    check(at(30, "fighting", 0) == 6500 and at(1, "spawning", 0) == 2150, "round 30: 6500; round 1: 2150 (" .. at(30, "fighting", 0) .. ", " .. at(1, "spawning", 0) .. ")")
+    check(at(9, "wait", 0) == 3500 and at(0, "wait", 0) == 2150, "in the break after round 9: round 10's 3500; before round 1: round 1's 2150")
+    check(DOWN.priceFor(0, 20) == 5000, "another round's price on asking: round 20, 5000")
+    cr.price, cr.raise, cr.price_per_round = 5000, 1.5, 0   -- (the checks below were written for 5000 x1.5 flat: the logic is the same)
 end
 
 print("the floor")
@@ -477,6 +484,38 @@ inbox[#inbox + 1] = "1|dw|2"
 tick()
 check(msgs("rx") == "2>rx|1|NOT DOWN|1 2>rx|x|A BAD REQUEST", "not down; a bad request (" .. msgs("rx") .. ")")
 check(msgs("dw") == "" and line("revive: player 2 said another player is down; ignored", from) ~= nil, "a dw for another slot: ignored")
+
+print("revives: the price by the round (0.73.78, economy C6)")
+do
+    local cr = CFG.coop.revive
+    cr.price, cr.raise, cr.price_per_round = 2000, 1.25, 150
+    scene("host", 0, { [1] = FLY, [2] = AIRFIELD_F })
+    D.round, D.state = 10, "fighting"
+    peer(1, DOWNED); inbox[#inbox + 1] = "1|dw|1"; tick()
+    local o = DOWN.offer()
+    check(o.price == 3500 and has(o.help, "and 150 more a round"), "round 10: the row's price 3500, its help says 150 more a round ("
+          .. tostring(o.price) .. ")")
+    sent = {}
+    from = #logs + 1
+    inbox[#inbox + 1] = "2|rv|1|3500"
+    tick()
+    check(msgs("rb") == "-1>rb|1|1|2" and St.count == 1 and has(line("revive: player 3 revived player 2 for 3500", from), "round 10's price"),
+          "round 10: player 3's revive at 3500 taken (round 10's price, logged)")
+    peer(1, FLY); tick()
+    D.state = "wait"                                  -- (round 10 cleared: the break's prices are round 11's)
+    clock = clock + 16
+    peer(1, DOWNED); inbox[#inbox + 1] = "1|dw|1"; tick()
+    sent = {}
+    inbox[#inbox + 1] = "2|rv|1|3500"
+    tick()
+    check(msgs("rx") == "2>rx|1|THE PRICE CHANGED: NOW 4560|1", "the break: the run's first revive's price again: refused, round 11's 4560 said ("
+          .. msgs("rx") .. ")")
+    sent = {}
+    inbox[#inbox + 1] = "2|rv|1|4380"
+    tick()
+    check(msgs("rb") == "-1>rb|1|2|2" and St.count == 2, "... round 10's price for the second revive (4380), asked as the round changed: taken")
+    cr.price, cr.raise, cr.price_per_round = 5000, 1.5, 0
+end
 
 print("revives: by the host, the STORE's row")
 scene("host", 0, { [1] = FLY, [2] = FLY })

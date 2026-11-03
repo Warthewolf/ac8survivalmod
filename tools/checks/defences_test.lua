@@ -12,7 +12,10 @@
 --   the STORE: the DEFENCES page's CIWS row (its price and raise, its four units in order, ALL BUILT), the old fourth
 --     row's turn takes the CIWS;
 --   ALLY.tick / hudLine: the CIWS on the ALLIES row, a lost one's callout and line; repairs; KILL.side's "defences";
---   the build in step: build_survival.py's DEFENCES page and model check, sv_flights' SHOP.menuRows and icons.
+--   the build in step: build_survival.py's DEFENCES page and model check, sv_flights' SHOP.menuRows and icons;
+--   (0.73.78, plan G5) VOID WATCHER 1's limits: its 9 km ESM pulse, x1.25 a purchase (a co-op joiner's ask at the
+--     room's price), 3 rounds of service then home (RE_SV_AwacsHome, taken off out of the way, SV_Recycle, sold again),
+--     the round's strike flight after it and back on you.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -730,8 +733,10 @@ do
     ALLY.run = nil
     alive[AW.unit] = 0
     shop()
+    -- ((0.73.78, G5) its help: the field's 9 km, its 3 rounds of service and the strike flight after it)
     check(has(texts.SV_Shop_VoidWatcher, "VOID WATCHER 1: E-767 AWACS   12000 Z") and has(texts.SV_Shop_VoidWatcher_Help, "orbits it")
-          and has(texts.SV_Shop_VoidWatcher_Help, "(25 km)"), "the STORE's row: 12000 Z, its help (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+          and has(texts.SV_Shop_VoidWatcher_Help, "(9 km) for 3 rounds, then goes home") and has(texts.SV_Shop_VoidWatcher_Help, "a strike flight goes after it"),
+          "the STORE's row: 12000 Z, its help (" .. tostring(texts.SV_Shop_VoidWatcher) .. ": " .. tostring(texts.SV_Shop_VoidWatcher_Help) .. ")")
     -- bought: it waits for you to take off
     local spent0 = RUN.spent
     shop("VoidWatcher")
@@ -796,39 +801,43 @@ do
     D.now = 406 + AW.esm.every_s; ALLY.tick(D.now)
     check(esmCount() == e0 + 2, "every_s (20 s) on: again")
     -- each ESM field of its class: its range and time; another class's left as it is
+    -- ((0.73.78, G5) 9000 m for 15 s: the stub's other numbers the game's own, 3200 and 10000 s, as the logs had it)
+    local RG, LF = AW.esm.range_m, AW.esm.life_s
+    check(RG == 9000 and LF == 15 and AW.esm.every_s == 30, string.format("G5: its ESM field %d m for %d s every %d s "
+          .. "(was 25000 m for 24 s every 20 s: up all the time over the whole fight)", RG, LF, AW.esm.every_s))
     local field = { full = "BP_wp_esm_MS28_C /Game/Maps/PL_SurvivalMode:PersistentLevel.BP_wp_esm_MS28_C_1", addr = addr(),
-                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 15 }
+                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 10000 }
     local other = { full = "BP_wp_ecm_a0_C /Game/Maps/PL_SurvivalMode:PersistentLevel.BP_wp_ecm_a0_C_1", addr = addr(),
-                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 15 }
+                    SupportEffectRangeMeter = 3200, EffectRangeMeter = 3200, LifeTime = 10000 }
     ALLY.esmNew = { field, other }
     local l0 = #logs
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    check(field.SupportEffectRangeMeter == 25000 and field.EffectRangeMeter == 25000 and field.LifeTime == 24
-          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1: support range 3200 -> 25000 m", l0), "life 15 -> 24 s"),
-          "its ESM field: 3200 -> 25000 m, 15 -> 24 s (an instance's; logged)")
-    check(other.SupportEffectRangeMeter == 3200 and other.LifeTime == 15, "an ECM field of another class: as it was")
+    check(field.SupportEffectRangeMeter == RG and field.EffectRangeMeter == RG and field.LifeTime == LF
+          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1: support range 3200 -> " .. RG .. " m", l0), "life 10000 -> " .. LF .. " s"),
+          "its ESM field: 3200 -> " .. RG .. " m, 10000 -> " .. LF .. " s (an instance's; logged)")
+    check(other.SupportEffectRangeMeter == 3200 and other.LifeTime == 10000, "an ECM field of another class: as it was")
     -- (0.73.73) the fields are pooled: the game launches the same two again and again (every tester session of 2026-11-01
     -- logged two fields while the weapons log counted 2-3 launches a minute), so a field launched again from the pool,
     -- with the game's own range and time written on it, is set again; one idle in the pool (hidden) is left alone
     field.bHidden = true
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    field.bHidden, field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = false, 3200, 3200, 15
+    field.bHidden, field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = false, 3200, 3200, 10000
     l0 = #logs
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    check(field.SupportEffectRangeMeter == 25000 and field.EffectRangeMeter == 25000 and field.LifeTime == 24
-          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1 launched again (pooled; 1 so far)", l0), "life 15 -> 24 s"),
-          "its ESM field launched again from the pool (shown, the game's range on it): 25000 m and 24 s again, logged")
-    field.LifeTime = 23.5                              -- (its time running down, as the game may count it)
+    check(field.SupportEffectRangeMeter == RG and field.EffectRangeMeter == RG and field.LifeTime == LF
+          and has(line("allies: VOID WATCHER 1's ESM field BP_wp_esm_MS28_C_1 launched again (pooled; 1 so far)", l0), "life 10000 -> " .. LF .. " s"),
+          "its ESM field launched again from the pool (shown, the game's range on it): " .. RG .. " m and " .. LF .. " s again, logged")
+    field.LifeTime = LF - 0.5                          -- (its time running down, as the game may count it)
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    check(field.LifeTime == 23.5, "... while it's out: left alone (a running time never set back)")
+    check(field.LifeTime == LF - 0.5, "... while it's out: left alone (a running time never set back)")
     field.bHidden = true
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = 3200, 3200, 15     -- (back in the pool, reset)
+    field.SupportEffectRangeMeter, field.EffectRangeMeter, field.LifeTime = 3200, 3200, 10000  -- (back in the pool, reset)
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    check(field.EffectRangeMeter == 3200 and field.LifeTime == 15, "... idle in the pool (hidden): left alone")
+    check(field.EffectRangeMeter == 3200 and field.LifeTime == 10000, "... idle in the pool (hidden): left alone")
     field.bHidden = false                              -- (launched again, the range as the pool left it)
     D.now = D.now + 0.25; ALLY.tick(D.now)
-    check(field.EffectRangeMeter == 25000 and field.LifeTime == 24 and has(line("launched again (pooled; 2 so far)", l0), "BP_wp_esm_MS28_C_1"),
+    check(field.EffectRangeMeter == RG and field.LifeTime == LF and has(line("launched again (pooled; 2 so far)", l0), "BP_wp_esm_MS28_C_1"),
           "... and its next launch (shown after hidden): set again")
     field.gone = true
     D.now = D.now + 0.25; ALLY.tick(D.now)
@@ -844,7 +853,8 @@ do
     check(R.up[AW.unit] == nil and has(callouts[#callouts], "VOID WATCHER 1 FLIGHT LOST"), "shot down: lost, the STORE can send another")
     onAirfield = true                                 -- (the STORE's texts: at the airfield)
     shop()
-    check(has(texts.SV_Shop_VoidWatcher, "12000 Z"), "... and sells it again (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+    -- ((0.73.78, G5) raise 1.25: the second x1.25)
+    check(has(texts.SV_Shop_VoidWatcher, "15000 Z"), "... and sells it again, x1.25 dearer (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
     -- co-op: a joiner's purchase, built here by the host, takes off once that joiner is airborne (else 90 s on)
     COOP = COOP or {}
     local rawAir, rawRefund = COOP.airborne, COOP.refund
@@ -870,6 +880,185 @@ do
     check(texts.SV_Shop_VoidWatcher == "VOID WATCHER 1: E-767 AWACS" and RUN.msg.VoidWatcher == "NOT AVAILABLE.",
           "[allies.awacs] enabled = false: not sold (" .. tostring(RUN.msg.VoidWatcher) .. ")")
     AW.enabled = true
+end
+
+---------------------------------------------------------------------------------------------------- (0.73.78) G5
+-- VOID WATCHER 1's limits (plan G5; the user, 2026-11-03: "3 rounds of service, rising price, 8-10 km field, a strike
+-- flight after it"; a tester of the 5-player run: it "wins the fight for you", one bought in round 16 lasted 92 minutes)
+print("(0.73.78) G5: VOID WATCHER 1 serves 3 rounds and goes home, its price rises x1.25, a strike flight goes after it")
+do
+    local AW = CFG.allies.awacs
+    AW.enabled = true
+    local keep = { COOP = COOP, flags = svFlags, rec = SV_Recycle, pc = survivalPC, planes = planes }
+    COOP = nil
+    ALLY.run, alive, events, callouts = nil, {}, {}, {}
+    RUN.credits, RUN.spent, RUN.bought, RUN.msg = 200000, 0, {}, {}
+    D = { round = 5, state = "wait", now = 1000, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+    local flags = { SV_AwacsAir = 0 }
+    svFlags = function() return flags end
+    local recycled = {}
+    SV_Recycle = function(u, force) recycled[#recycled + 1] = u .. ":" .. tostring(force); return 1 end
+    local function count(name) local k = 0; for _, e in ipairs(events) do if e == name then k = k + 1 end end; return k end
+    local function calloutHas(part) for _, c in ipairs(callouts) do if has(c, part) then return c end end; return nil end
+    local now = 1000
+    local function step(dt, n) for _ = 1, n or 1 do now = now + (dt or 0.25); D.now = now; ALLY.tick(now) end end
+    -- its price: 12000, then x1.25 a purchase
+    onAirfield = true
+    shop()
+    check(has(texts.SV_Shop_VoidWatcher, "12000 Z") and CFG.shop.items.VoidWatcher.raise == 1.25, "G5: the first one 12000 Z, raise 1.25 (was 1.0)")
+    local c0 = RUN.credits
+    shop("VoidWatcher")
+    check(c0 - RUN.credits == 12000 and RUN.bought.VoidWatcher == 1, "G5: bought for 12000")
+    local R = ALLY.state()
+    onAirfield = false
+    R.nextTakeoff = 0
+    step()
+    local s = R.up[AW.unit]
+    check(s and not s.queued, "G5: it takes off once you're airborne")
+    local vw = { full = "BP_OP0005_e767_CP_Ally_C_77", addr = addr() }
+    local at = { X = AIRFIELD.X + 600000, Y = AIRFIELD.Y, Z = 450000 }
+    function vw:K2_GetActorLocation() return at end
+    function vw:K2_GetActorRotation() return { Yaw = 0 } end
+    R.planes[#R.planes + 1] = { obj = vw, unit = AW.unit, name = "e767" }
+    flags.SV_AwacsAir = 1
+    -- the round's strike flight: a pool flight up 4 s, each plane onto it (Normal, TargetFirst); not an escort's
+    local orders = {}
+    local function enemy(name) return { full = name, addr = addr(), EngagementOrderOverride = function(self, o, tgt, prio)
+        orders[#orders + 1] = { who = self.full, tgt = tgt, prio = prio, order = o } end } end
+    local U, ESC = "ERA_Unit_02_Dep_Air1", "ERA_Unit_03_Dep_Air0"
+    local e1, e2, e3 = enemy("BP_OP1004_f15c_1"), enemy("BP_OP1004_f15c_2"), enemy("BP_OP1004_f15c_3")
+    planes = { { obj = e1, unit = U }, { obj = e2, unit = U }, { obj = e3, unit = ESC } }
+    D.up = { [ESC] = true }
+    D.escortUnits = { [ESC] = true }
+    D.state = "fighting"
+    local pawn = { full = "BP_PlayerPlane", addr = addr() }
+    survivalPC = { full = "PlayerController", addr = addr(), Pawn = pawn }
+    step(0.25, 40)                                      -- (10 s: the escort's up long enough, but it's an escort)
+    check(#orders == 0 and line("allies: no fighter flight free to send after VOID WATCHER 1 yet (round 5)") ~= nil,
+          "G5: only a raid's escort up: no strike flight (logged once)")
+    D.up[U] = true
+    step(0.25, 8)                                       -- (2 s: seen, not 4 s up yet)
+    check(#orders == 0, "G5: a fighter flight just up: not yet (after_s 4)")
+    local l0 = #logs
+    step(0.25, 24)
+    check(#orders == 2 and orders[1].tgt == vw and orders[2].tgt == vw and orders[1].prio == 9 and orders[1].order == 0
+          and has(line("allies: " .. U .. " sent after VOID WATCHER 1: round 5's strike flight (2 of 2 planes", l0), "TargetFirst")
+          and calloutHas("HEADING FOR VOID WATCHER 1") ~= nil and R.hunted[U] == true,
+          "G5: 4 s up: its 2 planes onto VOID WATCHER 1 (Normal, TargetFirst), logged, called out, the hunt leaves it alone")
+    D.up["ERA_Unit_04_Dep_Air0"] = true
+    planes[#planes + 1] = { obj = enemy("BP_OP1004_f15c_4"), unit = "ERA_Unit_04_Dep_Air0" }
+    local n0 = #orders
+    step(0.25, 64)                                      -- (16 s: its order once more at 15 s)
+    local again = 0
+    for i = n0 + 1, #orders do if orders[i].who == "BP_OP1004_f15c_4" then again = -100 elseif orders[i].tgt == vw then again = again + 1 end end
+    check(again == 2, "G5: one strike flight a round (another flight up: not sent); its order given again after again_s (15 s)")
+    -- its rounds of service: one counted as it clears with it up 60 s or more of it
+    step(0.25, 200)                                     -- (50 s more: up over 60 s)
+    D.state = "wait"
+    l0 = #logs
+    step()
+    check(s.served == 1 and has(line("allies: VOID WATCHER 1 has served 1 of its 3 rounds (round 5 clear)", l0), "round 5"),
+          "G5: round 5 clear: 1 of 3 served, logged")
+    step(0.25, 8)
+    check(s.served == 1, "G5: ... counted once")
+    -- rounds 6 and 7 (the strike flight left up here across them, kept on it: in a game a round ends with it down)
+    for r = 6, 7 do
+        D.round, D.state = r, "fighting"
+        step(0.25, 8)
+        step(30, 3)
+        D.state = "wait"
+        l0 = #logs
+        step()
+    end
+    local ev0 = count(AW.home.event)
+    check(s.served == 3 and s.home ~= nil and count(AW.home.event) == 1
+          and line("allies: VOID WATCHER 1 has served 3 rounds: going home (RE_SV_AwacsHome fired; out along its exit", l0) ~= nil
+          and calloutHas("VOID WATCHER 1 GOING HOME") and calloutHas("3 ROUNDS SERVED"),
+          "G5: round 7 clear: 3 served, sent home (RE_SV_AwacsHome), logged and called out")
+    check(has(ALLY.hudLine() or "", "VOID WATCHER 1 (GOING HOME)") and not has(ALLY.roomCode(), "v"),
+          "G5: the ALLIES row says it's going home (" .. tostring(ALLY.hudLine()) .. "); the room's code has no v (" .. ALLY.roomCode() .. ")")
+    -- going home: no ESM, no backstop (it's meant to leave the orbit), the strike flight back on you
+    local e0, o0 = count(AW.esm.event), count(AW.orbit.event)
+    at = { X = AIRFIELD.X + 1200000, Y = AIRFIELD.Y, Z = 450000 }   -- (12 km out: past lost_km)
+    R.orbitCheckAt, R.orbitAgainAt = 0, 0
+    l0 = #logs
+    D.round, D.state = 8, "fighting"
+    step(0.25, 160)
+    local back = 0
+    for i = 1, #orders do if orders[i].tgt == pawn and orders[i].prio == 8 then back = back + 1 end end
+    check(count(AW.esm.event) == e0 and count(AW.orbit.event) == o0, "G5: going home: no ESM fired, no backstop onto the area orbit")
+    check(back == 2 and has(line("allies: " .. U .. " off VOID WATCHER 1 (it's going home): 2 planes back on you", l0), "back on you"),
+          "G5: its strike flight back on you (PlayerOnlyNoLimit), logged")
+    local strikes0 = #orders
+    step(0.25, 40)
+    local newStrike = false
+    for i = strikes0 + 1, #orders do if orders[i].tgt == vw then newStrike = true end end
+    check(not newStrike, "G5: no strike flight sent after it while it's going home (round 8)")
+    -- its exit: SV_AwacsOut 1 logged; 20 km out: taken off (RE_SV_AwacsRemove), 2 s on off the spawner's list
+    flags.SV_AwacsOut = 1
+    l0 = #logs
+    step(0.25, 12)
+    check(line("allies: VOID WATCHER 1 on its way out (its arc's end took its exit", l0) ~= nil, "G5: its exit begun (SV_AwacsOut 1): logged")
+    check(count(AW.home.remove) == 0 and R.up[AW.unit] ~= nil, "G5: 12 km out: not taken off yet")
+    at = { X = AIRFIELD.X + 2100000, Y = AIRFIELD.Y, Z = 450000 }
+    callouts = {}
+    l0 = #logs
+    step(0.25, 9)
+    check(count(AW.home.remove) == 1 and has(line("allies: VOID WATCHER 1 taken off (21.0 km out): RE_SV_AwacsRemove fired", l0), "fired"),
+          "G5: 21 km out: taken off (RE_SV_AwacsRemove), logged")
+    alive[AW.unit] = 0                                 -- (despawned: its unit may read 0 or still count it)
+    step(0.25, 12)
+    check(R.up[AW.unit] == nil and recycled[#recycled] == AW.unit .. ":1"
+          and has(line("allies: VOID WATCHER 1 home after 3 rounds (21.0 km out): off the spawner's list (SV_Recycle 1)", l0), "STORE can send another")
+          and not calloutHas("FLIGHT LOST"),
+          "G5: 2 s on: SV_Recycle(unit, 1), out of the allies, logged; never called lost")
+    check(ALLY.hudLine() == nil or not has(ALLY.hudLine(), "VOID WATCHER"), "G5: ... and off the ALLIES row")
+    onAirfield = true
+    shop()
+    check(has(texts.SV_Shop_VoidWatcher, "15000 Z"), "G5: the STORE sells another, x1.25 dearer (" .. tostring(texts.SV_Shop_VoidWatcher) .. ")")
+    -- the backstop's area orbit: no arc's end to leave from, taken off area_s after it was sent home
+    ALLY.run, events = nil, {}
+    R = ALLY.state()
+    R.up[AW.unit] = { kind = "air", ally = "awacs", at = now - 500, served = 3, home = now, areaOrbit = true }
+    R.planes = { { obj = vw, unit = AW.unit, name = "e767" } }
+    at = { X = AIRFIELD.X + 600000, Y = AIRFIELD.Y, Z = 450000 }
+    flags.SV_AwacsOut = 0
+    alive[AW.unit] = 1                                  -- (up: the last one's taken-off 0 gone)
+    step(1, 20)
+    check(count(AW.home.remove) == 0, "G5: on the area orbit, sent home: not taken off in 20 s")
+    l0 = #logs
+    step(1, 12)
+    check(count(AW.home.remove) == 1 and line("allies: VOID WATCHER 1 taken off (30 s on the area orbit, no arc to leave from)", l0) ~= nil,
+          "G5: ... taken off area_s (30 s) on")
+    step(1, 3)
+    R.up[AW.unit] = nil
+    alive[AW.unit] = 0
+    -- co-op: a joiner's ask at the host's price (the room's purchases counted here); a migration's rebuild free
+    COOP = { airborne = function() return false end, refund = function() end }
+    RUN.bought.VoidWatcher = 1
+    l0 = #logs
+    local okL, msgL = shopBuildFor(2, "VoidWatcher", 12000, nil, true)
+    check(not okL and has(msgL, "THE PRICE IS NOW 15000") and R.up[AW.unit] == nil
+          and line("shop: player 3's VoidWatcher at 12000 refused: the room's price is 15000 (bought 1 times this run)", l0) ~= nil,
+          "G5: co-op: a joiner's ask under the room's price refused (" .. tostring(msgL) .. ")")
+    local okH, msgH = shopBuildFor(2, "VoidWatcher", 15000, nil, true)
+    check(okH and R.up[AW.unit] and R.up[AW.unit].buyer == 2 and RUN.bought.VoidWatcher == 2,
+          "G5: ... at it: built for them, counted in the room's purchases (2) (" .. tostring(msgH) .. ")")
+    R.up[AW.unit] = nil
+    local okM = shopBuildFor(nil, "VoidWatcher", 0, nil)
+    check(okM and R.up[AW.unit] and RUN.bought.VoidWatcher == 2, "G5: a host by migration building the old room's again: free, not counted")
+    R.up[AW.unit] = nil
+    -- rounds 0: it serves until it's shot down, as before
+    local keepRounds = AW.service.rounds
+    AW.service.rounds = 0
+    alive[AW.unit] = 1
+    R.up[AW.unit] = { kind = "air", ally = "awacs", at = now - 500 }
+    D.round, D.state = 9, "fighting"; step()
+    D.state = "wait"; step(0.25, 4)
+    check(R.up[AW.unit] and not R.up[AW.unit].home and not R.up[AW.unit].served, "G5: [allies.awacs.service] rounds = 0: never sent home")
+    AW.service.rounds = keepRounds
+    COOP, svFlags, SV_Recycle, survivalPC, planes = keep.COOP, keep.flags, keep.rec, keep.pc, keep.planes
+    ALLY.run, alive, D = nil, {}, nil
 end
 
 ---------------------------------------------------------------------------------------------------- ALLY.scale (0.73.73)

@@ -27,6 +27,21 @@ local function ordinary(unit)
     return not (D.aceOf and D.aceOf[unit])
 end
 
+-- ((0.73.78, plan G6) The flight `unit` is an ace squadron's, any of its flights (the wing's too, which `ordinary` let
+-- an airstrike hit: Harvest's wing flights in the tester's run of 2026-11-02): the host's spawner's record (D.aceSquad,
+-- D.aceOf); a joiner has none, so the rows the host's spawn set there (SPW.row / leadRow, sv_coop.lua doSpawn): an ace
+-- row, sv_ace_<tier>_<airframe>_<part>.)
+local function aceFlight(unit)
+    if (D.aceSquad and D.aceSquad[unit]) or (D.aceOf and D.aceOf[unit]) then return true end
+    if type(SPW) ~= "table" then return false end
+    for _, t in ipairs({ SPW.row or {}, SPW.leadRow or {} }) do
+        local r = t[unit]
+        if type(r) == "string" and r:lower():find("^sv_ace_") then return true end
+    end
+    return false
+end
+TAC.aceFlight = aceFlight                             -- (the offline test's)
+
 -- Enemy flights near you: { [unit] = { n = aircraft up, d = nearest km, planes = { p, ... } } }, and the aircraft count
 -- within km of you.
 local function flightsNear(km_)
@@ -81,19 +96,46 @@ function TAC.use(kind, how)
         return false
     end
     if kind == "airstrike" then
+        -- ((0.73.78, plan G6) the player's call only: its key (the auto call at auto_near enemies is gone, autoTick)
+        if how ~= "key" then log("tactical: airstrike (" .. tostring(how) .. ") refused: only its key calls it"); return false end
         if TAC.strike then return false end                          -- (one at a time)
-        local fl = flightsNear(c.airstrike.range_km)
-        local best, bu
-        for u, f in pairs(fl) do
-            if ordinary(u) and (not best or f.n > best.n or (f.n == best.n and f.d < best.d)) then best, bu = f, u end
-        end
-        if not best then
-            if how == "key" then hudCallout(t.airstrike_none, string.format(t.airstrike_none_sub, c.airstrike.range_km)) end
+        -- ((0.73.78, plan G6) per_round a round: the round's call made, held till the next round)
+        local lim = math.floor(tonumber(c.airstrike.per_round) or 0)
+        local calls = (RUN.strikeCalls and RUN.strikeCalls.round == D.round) and RUN.strikeCalls.n or 0
+        if lim > 0 and calls >= lim then
+            hudCallout(t.airstrike_none, string.format(t.airstrike_once_sub, D.round + 1))
+            log(string.format("tactical: airstrike held: %d called in round %d already (%d a round, [tactical.airstrike] per_round)",
+                calls, D.round, lim))
             return false
         end
-        TAC.strike = { unit = bu, at = now + c.airstrike.delay_s, planes = best.planes }
-        hudCallout(t.airstrike, string.format(t.airstrike_sub, best.n))
-        log(string.format("tactical: airstrike (%s) on %s, %d aircraft %.1f km from you, in %d s", how, bu, best.n, best.d, c.airstrike.delay_s))
+        local fl = flightsNear(c.airstrike.range_km)
+        local best, bu
+        local aces = 0
+        for u, f in pairs(fl) do
+            if ordinary(u) and aceFlight(u) then aces = aces + f.n            -- ((0.73.78, G6) never an ace squadron's)
+            elseif ordinary(u) and (not best or f.n > best.n or (f.n == best.n and f.d < best.d)) then best, bu = f, u end
+        end
+        if not best then
+            hudCallout(t.airstrike_none, aces > 0 and t.airstrike_aces_sub or string.format(t.airstrike_none_sub, c.airstrike.range_km))
+            if aces > 0 then
+                log(string.format("tactical: airstrike held: only an ace squadron's flights within %d km (%d aircraft): never on them",
+                    c.airstrike.range_km, aces))
+            end
+            return false
+        end
+        -- ((0.73.78, G6) at most max_hit of the flight, the nearest you first)
+        local hit, max = best.planes, math.floor(tonumber(c.airstrike.max_hit) or 0)
+        if max > 0 and #hit > max then
+            local you = playerLocation()
+            table.sort(hit, function(a, b) return km(a.at, you) < km(b.at, you) end)
+            hit = { table.unpack(hit, 1, max) }
+        end
+        RUN.strikeCalls = { round = D.round, n = calls + 1 }
+        TAC.strike = { unit = bu, at = now + c.airstrike.delay_s, planes = hit, round = D.round }
+        hudCallout(t.airstrike, string.format(t.airstrike_sub, #hit))
+        log(string.format("tactical: airstrike (%s) on %s, %d of its %d aircraft %.1f km from you, in %d s (round %d's %d of %s%s)",
+            how, bu, #hit, best.n, best.d, c.airstrike.delay_s, D.round, calls + 1, lim > 0 and tostring(lim) or "any",
+            aces > 0 and string.format("; %d of an ace squadron's near, spared", aces) or ""))
     elseif kind == "ecm" then
         if TAC.ecmUntil and now < TAC.ecmUntil then return false end
         TAC.ecmUntil, TAC.ecmN = now + c.ecm.ecm_s, 0
@@ -142,7 +184,11 @@ local function strikeTick(now)
             if ok then n = n + 1 else failed = failed or tostring(err) end
         end
     end
-    if n == 0 then RUN.items.airstrike = (RUN.items.airstrike or 0) + 1; RUN.dirty = true end   -- (nothing hit: it's back)
+    if n == 0 then                                                    -- (nothing hit: it's back, and the round's call)
+        RUN.items.airstrike = (RUN.items.airstrike or 0) + 1; RUN.dirty = true
+        local sc = RUN.strikeCalls
+        if sc and sc.round == s.round then sc.n = math.max(0, sc.n - 1) end
+    end
     local t = CFG.hud.text
     if n > 0 then hudCallout(string.format(t.airstrike_hit, n), nil) end
     log(string.format("tactical: airstrike on %s: %d hit%s", s.unit, n, failed and (" (" .. failed .. ")") or ""))
@@ -205,10 +251,8 @@ local function autoTick(now)
         end
         if n >= c.ecm.auto_missiles then TAC.use("ecm", "auto") end
     end
-    if (RUN.items.airstrike or 0) > 0 and c.airstrike.auto and not TAC.strike then
-        local _, near = flightsNear(c.airstrike.auto_km)
-        if near >= c.airstrike.auto_near then TAC.use("airstrike", "auto") end
-    end
+    -- ((0.73.78, plan G6) no airstrike here any more: it went by itself at auto_near enemies within auto_km (in the
+    -- tester's run of 2026-11-02 two players called 14 in one round); it's always the player's call now, Ctrl+F1)
     if (RUN.items.decoy or 0) > 0 and c.decoy.auto then
         local fl = flightsNear(c.decoy.auto_km)
         for u, f in pairs(fl) do

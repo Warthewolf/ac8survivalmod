@@ -167,7 +167,7 @@ function AMPH.roundOver(now, s)
     if not s.captured then
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "landing repelled")
-        hudCallout(t.repelled, string.format(t.repelled_sub, pay))
+        hudCallout(t.repelled, string.format(t.repelled_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
         log(string.format("special: round %d, the landing was repelled", D.round))
     end
 end

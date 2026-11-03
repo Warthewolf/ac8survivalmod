@@ -188,6 +188,9 @@ pr.enabled = true
 print("startRound on its real code")
 CFG.airfield.enabled = false                          -- (normal rounds without bombers: the table's waves)
 CFG.specials.enabled = false
+-- ((0.73.78, plan G4) rounds 25, 28 and 31 are ace rounds (16, then every 3rd), which fly their own size now
+-- (CFG.aces.round, checked after the table): off here, so the table's rounds are as big as a normal one, as before)
+CFG.aces.round.enabled = false
 local function fresh(round)
     planes = {}
     D = { round = round - 1, startRound = 1, state = "wait", at = 0, now = 1000, up = {}, flown = {}, queue = {}, spare = {},
@@ -304,6 +307,30 @@ fresh(35)
 local solo = play(35)
 check(solo.budget == 60 and solo.cap == 26, "host alone: one player's 60 and 26")
 COOP.open, COOP.role = false, nil
+
+---------------------------------------------------------------------------------------------------- (0.73.78) ace rounds
+print("(0.73.78, plan G4) the ace rounds among the late rounds (CFG.aces.round)")
+CFG.aces.round.enabled = true
+PRESET = "standard"
+for _, c in ipairs({ { 25, 16, 7 }, { 28, 18, 8 }, { 31, 20, 8 } }) do
+    fresh(c[1])
+    local r = play(c[1])
+    check(D.roundTier ~= nil and r.budget == c[2] and r.cap == c[3] - 2 and r.picked <= c[2] and D.aceNextAt == 2,
+          string.format("round %d (an ace round): %d aircraft, %d up at once: waves of %d (%d, %s)", c[1], c[2], c[3], c[3] - 2,
+              r.budget, tostring(r.cap)))
+end
+fresh(35)
+local r35 = play(35)
+check(D.roundTier == nil and r35.budget == 60 and r35.cap == 26 and D.aceNextAt == nil, "round 35 (not an ace round): the late rounds' 60, 26 up, as before")
+COOP.open, COOP.role = true, "host"
+M.roster = { [0] = {}, [1] = {}, [2] = {}, [3] = {} }
+fresh(28)
+local co = play(28)
+check(co.budget == 24 and co.cap == 8, string.format("4 players, round 28: 18 x1.45 cut to the ace round's 24, 12 up cut to 10: waves of 8 (%d / %s)",
+    co.budget, tostring(co.cap)))
+M.roster = { [0] = {} }
+COOP.open, COOP.role = false, nil
+CFG.aces.round.enabled = false
 
 ---------------------------------------------------------------------------------------------------- the attack throttle
 print("the attack throttle (RE_SV_Pressure)")
