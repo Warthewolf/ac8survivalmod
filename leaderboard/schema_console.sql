@@ -16,3 +16,7 @@ CREATE TABLE IF NOT EXISTS specials_archive ( reset_id TEXT NOT NULL, reset_at I
 CREATE INDEX IF NOT EXISTS specials_archive_reset ON specials_archive (reset_id);
 CREATE TABLE IF NOT EXISTS admin_fails ( ip_hash TEXT NOT NULL, at INTEGER NOT NULL );
 CREATE INDEX IF NOT EXISTS admin_fails_ip ON admin_fails (ip_hash, at);
+CREATE TABLE IF NOT EXISTS squads ( run_id TEXT NOT NULL, slot INTEGER NOT NULL, pilot TEXT NOT NULL, aircraft TEXT, air_kills INTEGER NOT NULL, ground_kills INTEGER NOT NULL, revives INTEGER NOT NULL, host INTEGER NOT NULL, PRIMARY KEY (run_id, slot) );
+CREATE INDEX IF NOT EXISTS squads_pilot ON squads (pilot COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS squads_archive ( reset_id TEXT NOT NULL, reset_at INTEGER NOT NULL, run_id TEXT NOT NULL, slot INTEGER, pilot TEXT, aircraft TEXT, air_kills INTEGER, ground_kills INTEGER, revives INTEGER, host INTEGER );
+CREATE INDEX IF NOT EXISTS squads_archive_reset ON squads_archive (reset_id);

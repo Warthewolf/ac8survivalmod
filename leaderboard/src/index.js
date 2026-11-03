@@ -4,8 +4,15 @@
 //                       0.72.x with the build's hash in X-SV-Build (signed with the run): a run counts only from a build
 //                       registered on /admin
 //   POST /interactions  Discord's slash commands (/leaderboard, /pilot), signed by Discord
-//   GET  /setup?key=..  after deploying: registers the slash commands and makes the leaderboard messages (two pinned:
-//                       rounds / scores / specials, and records / aircraft / this week)
+//   GET  /setup?key=..  after deploying: registers the slash commands and makes the leaderboard messages (three pinned:
+//                       rounds / scores / specials, records / aircraft / this week, and CO-OP)
+//
+// Co-op runs (from the COOP2MP builds, 2026-11-03; testing/2026-11-03/PLAN_desync_lag_compatibility.md, Workstream H):
+// the host sends ONE record for the whole room, its run_id the host's, pilot the host's name, kills the squad's sums,
+// zollars the host's own, plus "coop": {"players": N, "squad": [{"pilot", "aircraft", "air", "ground", "revives",
+// "host"}, ...]} (host first). Its limits scale with the players; it's stored in runs (players, squad, crew set; NULL on
+// a solo run) with its squad in squads, and it's on the CO-OP boards only: every solo board and record reads
+// "players IS NULL".
 //   GET  /admin         the admin page (the user only: ADMIN_KEY): reset the boards (archived, so it can be undone),
 //                       restore the last reset, the builds runs are accepted from, build verification on / off;
 //                       its actions are POST /admin/<action> with the key in the JSON body, never in the address
@@ -53,17 +60,30 @@ function score(run) {
 // ------------------------------------------------------------------------------------------------- checks
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const HOWS = ["died", "restart", "left"];
+const PILOT_RE = /^[A-Za-z0-9 _.\-]{1,24}$/;   // a pilot name (the game's LB.pilot() keeps only these)
+const CODE_RE = /^[a-z0-9]{2,12}$/;            // an aircraft code
+const COOP_MIN = 2, COOP_MAX = 24;             // a co-op squad's size (Survival COOP: up to 24 players)
 
 // A run as the game sends it, or the reason it's refused. Generous limits: they catch typing in numbers, not play.
+// A co-op run (run.coop) has the limits that grow with the squad scaled by its players; a run without it is checked
+// exactly as before.
 function checkRun(run) {
   if (!run || typeof run !== "object") return "not a run";
   if (run.v !== 1) return "unknown format";
   if (typeof run.run_id !== "string" || !/^[0-9a-f]{16,64}$/.test(run.run_id)) return "bad run id";
-  if (typeof run.pilot !== "string" || !/^[A-Za-z0-9 _.\-]{1,24}$/.test(run.pilot)) return "bad pilot name";
+  if (typeof run.pilot !== "string" || !PILOT_RE.test(run.pilot)) return "bad pilot name";
   if (!DIFFICULTIES.includes(run.difficulty)) return "bad difficulty";
   if (!isInt(run.round, 1, 1000)) return "bad round";
-  if (!run.kills || !isInt(run.kills.air, 0, run.round * 70)) return "too many air kills for the rounds";
-  if (!isInt(run.kills.ground, 0, run.round * 40 + 100)) return "too many ground kills for the rounds";
+  if (run.coop === null) delete run.coop;      // (no co-op block: a solo run)
+  let n = 1;
+  if (run.coop !== undefined) {
+    if (typeof run.coop !== "object" || Array.isArray(run.coop) || !isInt(run.coop.players, COOP_MIN, COOP_MAX))
+      return "bad co-op players";
+    n = run.coop.players;
+  }
+  const forThem = n > 1 ? "the rounds and players" : "the rounds";
+  if (!run.kills || !isInt(run.kills.air, 0, run.round * 70 * n)) return `too many air kills for ${forThem}`;
+  if (!isInt(run.kills.ground, 0, (run.round * 40 + 100) * n)) return `too many ground kills for ${forThem}`;
   if (!run.zollars || !isInt(run.zollars.earned, 0, 100000000) || !isInt(run.zollars.spent, 0, 100000000)) return "bad zollars";
   if (!isInt(run.time_s, Math.max(0, (run.round - 1) * 25), 48 * 3600)) return "run time doesn't fit the rounds";
   if (!["died", "quit"].includes(run.ended)) return "bad ending";
@@ -76,12 +96,12 @@ function checkRun(run) {
         || !run.edited.every((e) => typeof e === "string" && e.length >= 1 && e.length <= 80)) return "bad edited list";
     if (run.edited.length) return `edited run (${run.edited[0].replace(/[^A-Za-z0-9_. +\-]/g, "").slice(0, 40)})`;
   }
-  if (run.aircraft !== undefined && (typeof run.aircraft !== "string" || !/^[a-z0-9]{2,12}$/.test(run.aircraft))) return "bad aircraft";
+  if (run.aircraft !== undefined && (typeof run.aircraft !== "string" || !CODE_RE.test(run.aircraft))) return "bad aircraft";
   // (from mod 0.50.0; older runs leave them out)
   if (run.how !== undefined && !HOWS.includes(run.how)) return "bad ending";
   if (run.tier !== undefined && (typeof run.tier !== "string" || !/^[A-Za-z]{1,16}$/.test(run.tier))) return "bad tier";
   if (run.aces !== undefined && !isInt(run.aces, 0, run.kills.air)) return "bad ace kills";
-  if (run.allies !== undefined && !isInt(run.allies, 0, run.round * 10)) return "bad allies";
+  if (run.allies !== undefined && !isInt(run.allies, 0, run.round * 10 * n)) return "bad allies";
   if (run.af_down !== undefined && !isInt(run.af_down, 0, run.round)) return "bad airfield losses";
   if (run.captured !== undefined && !isInt(run.captured, 0, run.round)) return "bad captures";
   const sp = run.specials || [];
@@ -91,10 +111,53 @@ function checkRun(run) {
         || !isInt(s.seconds, 5, 3600) || typeof s.won !== "boolean")
       return "bad special";
   }
+  if (run.coop !== undefined) {
+    const why = checkSquad(run);
+    if (why) return why;
+  }
   // a special this Worker doesn't know yet (a newer mod than the deployed Worker) is left out, not the whole run
   run.specials = sp.filter((s) => own(SPECIALS, s.kind));
   return null;
 }
+
+// A co-op run's squad: everyone who flew, the host first ("host": true, the others false or left out), each a pilot name
+// (unique in the squad, ignoring case, as the boards group pilots), an optional aircraft code, their air / ground kills
+// (adding up to the run's) and the revives they gave. The reason it's refused, or null with run.coop left holding only
+// what's stored.
+function checkSquad(run) {
+  const c = run.coop, n = c.players;
+  if (!Array.isArray(c.squad) || c.squad.length !== n) return "squad doesn't match its players";
+  const maxRevives = run.round * n * 2;        // (every player brought back twice a round)
+  const names = new Set(), squad = [];
+  let air = 0, ground = 0, revives = 0;
+  for (let i = 0; i < n; i++) {
+    const p = c.squad[i];
+    if (!p || typeof p !== "object" || Array.isArray(p)) return "bad squad entry";
+    if (typeof p.pilot !== "string" || !PILOT_RE.test(p.pilot)) return "bad squad pilot name";
+    if (names.has(p.pilot.toLowerCase())) return "squad pilot named twice";
+    names.add(p.pilot.toLowerCase());
+    if (p.aircraft !== undefined && p.aircraft !== null && (typeof p.aircraft !== "string" || !CODE_RE.test(p.aircraft)))
+      return "bad squad aircraft";
+    if (!isInt(p.air, 0, run.kills.air) || !isInt(p.ground, 0, run.kills.ground)) return "bad squad kills";
+    const rv = p.revives === undefined || p.revives === null ? 0 : p.revives;
+    if (!isInt(rv, 0, maxRevives)) return "bad squad revives";
+    if (p.host !== undefined && p.host !== null && typeof p.host !== "boolean") return "bad squad host";
+    if ((p.host === true) !== (i === 0)) return "squad's host isn't first";
+    air += p.air; ground += p.ground; revives += rv;
+    squad.push({ pilot: p.pilot, aircraft: p.aircraft || null, air: p.air, ground: p.ground, revives: rv, host: i === 0 });
+  }
+  if (squad[0].pilot.toLowerCase() !== run.pilot.toLowerCase()) return "squad's host isn't the run's pilot";
+  if (air !== run.kills.air || ground !== run.kills.ground) return "squad's kills don't add up to the run's";
+  if (revives > maxRevives) return "too many revives for the rounds and players";
+  run.coop = { players: n, squad };
+  return null;
+}
+
+// What a co-op run is stored with on runs: squad, its pilots in squad order (the boards show it); crew, the same names in
+// lower case and sorted (one squad, whoever hosted, is one entry on the boards, as one pilot is solo). Pilot names have
+// no commas.
+const squadOf = (coop) => coop.squad.map((p) => p.pilot).join(",");
+const crewOf = (coop) => coop.squad.map((p) => p.pilot.toLowerCase()).sort().join(",");
 
 // ------------------------------------------------------------------------------------------------- crypto
 const enc = new TextEncoder();
@@ -149,16 +212,27 @@ async function discord(env, method, path, json) {
 const fmtTime = (s) => `${Math.floor(s / 3600) ? Math.floor(s / 3600) + "h " : ""}${Math.floor(s / 60) % 60}m ${s % 60}s`;
 const num = (n) => n.toLocaleString("en-US");
 
+// A pilot name in Discord's markdown (names may hold "_", which would turn the rest of a line italic)
+const esc = (s) => String(s).replace(/[\\_*~`|>]/g, "\\$&");
+
+// A run's post in #survival-runs; a co-op run's lists its squad (its description: up to 24 lines, within Discord's 4096)
 function runEmbed(run, sc, verified = true) {
   const won = (run.specials || []).filter((s) => s.won);
+  const c = run.coop;
+  const revives = c ? c.squad.reduce((t, p) => t + p.revives, 0) : 0;
   return {
-    title: `${run.pilot} reached round ${run.round} (${DIFF_NAME[run.difficulty]})`,
+    title: c ? `${run.pilot}'s squad of ${c.players} reached round ${run.round} (${DIFF_NAME[run.difficulty]})`
+             : `${run.pilot} reached round ${run.round} (${DIFF_NAME[run.difficulty]})`,
+    ...(c ? { description: c.squad.map((p) => `**${esc(p.pilot)}**${p.host ? " (host)" : ""}` +
+        (p.aircraft ? ` · ${jet(p.aircraft)}` : "") + ` · ${p.air} air, ${p.ground} ground` +
+        (p.revives ? ` · ${plural(p.revives, "revive")} given` : "")).join("\n") } : {}),
     color: run.ended === "died" ? 0xc0392b : 0x2e86c1,
     fields: [
       { name: "Score", value: num(sc), inline: true },
-      { name: "Kills", value: `${run.kills.air} air, ${run.kills.ground} ground`, inline: true },
+      { name: c ? "Squad kills" : "Kills", value: `${run.kills.air} air, ${run.kills.ground} ground`, inline: true },
       { name: "Time", value: fmtTime(run.time_s), inline: true },
-      ...(run.aircraft ? [{ name: "Aircraft", value: jet(run.aircraft), inline: true }] : []),
+      ...(run.aircraft && !c ? [{ name: "Aircraft", value: jet(run.aircraft), inline: true }] : []),
+      ...(revives ? [{ name: "Revives", value: String(revives), inline: true }] : []),
       ...(run.tier ? [{ name: "Enemy tier", value: run.tier, inline: true }] : []),
       ...(run.aces ? [{ name: "Ace squadron kills", value: String(run.aces), inline: true }] : []),
       ...(run.allies ? [{ name: "Allies called in", value: String(run.allies), inline: true }] : []),
@@ -166,13 +240,15 @@ function runEmbed(run, sc, verified = true) {
           run.captured ? `captured ${run.captured}x` : ""].filter(Boolean).join(", "), inline: true }] : []),
       { name: "Specials beaten", value: won.length ? won.map((s) => `${SPECIALS[s.kind]} (round ${s.round}, ${fmtTime(s.seconds)})`).join("\n") : "none" },
     ],
-    footer: { text: `${run.ended === "died" ? "Shot down" : run.how === "restart" ? "Restarted" : "Left the run"} · Survival Mode ${run.mod}` +
+    footer: { text: `${run.ended === "died" ? (c ? "Every player shot down" : "Shot down") : run.how === "restart" ? "Restarted" : "Left the run"}` +
+                    `${c ? ` · Co-op, ${c.players} players` : ""} · Survival Mode ${run.mod}` +
                     (verified ? "" : " · older mod, build not checked") },
   };
 }
 
 // The boards, as embeds: highest round and score per difficulty (best run per pilot), fastest beaten specials.
-// Pilots are grouped ignoring case (as /pilot finds them); every query goes to D1 in one batch.
+// Pilots are grouped ignoring case (as /pilot finds them); every query goes to D1 in one batch. Solo runs only
+// (players IS NULL): co-op runs are on coopEmbeds' boards.
 async function boardEmbeds(env, onlyBoard, onlyDiff) {
   await ensureSchema(env);
   const diffs = onlyDiff ? [onlyDiff] : DIFFICULTIES;
@@ -183,11 +259,11 @@ async function boardEmbeds(env, onlyBoard, onlyDiff) {
   for (const [, col] of boards)
     for (const d of diffs)
       // (one aggregate: SQLite takes the other columns, the aircraft too, from each pilot's best run)
-      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, aircraft FROM runs WHERE difficulty = ?
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, aircraft FROM runs WHERE difficulty = ? AND players IS NULL
          GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 10`).bind(d));
   for (const [kind] of kinds)
     stmts.push(env.DB.prepare(`SELECT pilot, MIN(seconds) AS best, difficulty FROM specials WHERE kind = ? AND won = 1
-       ${onlyDiff ? "AND difficulty = ?" : ""} GROUP BY pilot COLLATE NOCASE ORDER BY best ASC LIMIT 5`)
+       AND players IS NULL ${onlyDiff ? "AND difficulty = ?" : ""} GROUP BY pilot COLLATE NOCASE ORDER BY best ASC LIMIT 5`)
       .bind(...(onlyDiff ? [kind, onlyDiff] : [kind])));
   const answers = stmts.length ? await env.DB.batch(stmts) : [];
   let n = 0;
@@ -232,22 +308,24 @@ async function extraEmbeds(env, onlyBoard, onlyDiff, nowS = Math.floor(Date.now(
   const dw = onlyDiff ? "AND difficulty = ?" : "";
   const da = onlyDiff ? [onlyDiff] : [];
   const stmts = [];
+  // (solo runs only, as boardEmbeds)
   if (want("records")) {
     for (const [, expr] of RECORDS)
-      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${expr}) AS best, difficulty FROM runs WHERE ${expr} > 0 ${dw}
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${expr}) AS best, difficulty FROM runs WHERE ${expr} > 0 AND players IS NULL ${dw}
          GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(...da));
     stmts.push(env.DB.prepare(`SELECT r.pilot AS pilot, MAX(c.n) AS best, r.difficulty AS difficulty
-       FROM (SELECT run_id, COUNT(*) AS n FROM specials WHERE won = 1 GROUP BY run_id) c JOIN runs r ON r.run_id = c.run_id
-       ${onlyDiff ? "WHERE r.difficulty = ?" : ""} GROUP BY r.pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(...da));
+       FROM (SELECT run_id, COUNT(*) AS n FROM specials WHERE won = 1 AND players IS NULL GROUP BY run_id) c
+       JOIN runs r ON r.run_id = c.run_id WHERE r.players IS NULL ${onlyDiff ? "AND r.difficulty = ?" : ""}
+       GROUP BY r.pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(...da));
   }
   if (want("aircraft"))
-    stmts.push(env.DB.prepare(`SELECT aircraft, pilot, MAX(round) AS best, difficulty FROM runs WHERE aircraft IS NOT NULL ${dw}
-       GROUP BY aircraft ORDER BY best DESC LIMIT 15`).bind(...da));
+    stmts.push(env.DB.prepare(`SELECT aircraft, pilot, MAX(round) AS best, difficulty FROM runs WHERE aircraft IS NOT NULL
+       AND players IS NULL ${dw} GROUP BY aircraft ORDER BY best DESC LIMIT 15`).bind(...da));
   const since = weekStart(nowS);
   if (want("weekly"))
     for (const col of ["round", "score"])
-      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, difficulty, aircraft FROM runs WHERE submitted >= ? ${dw}
-         GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(since, ...da));
+      stmts.push(env.DB.prepare(`SELECT pilot, MAX(${col}) AS best, difficulty, aircraft FROM runs WHERE submitted >= ?
+         AND players IS NULL ${dw} GROUP BY pilot COLLATE NOCASE ORDER BY best DESC LIMIT 5`).bind(since, ...da));
   const answers = stmts.length ? await env.DB.batch(stmts) : [];
   let n = 0;
   const lines = (results, fmt, none) => results.length ? results.map((r, i) => `${i + 1}. ${fmt(r)}`).join("\n") : none;
@@ -270,6 +348,93 @@ async function extraEmbeds(env, onlyBoard, onlyDiff, nowS = Math.floor(Date.now(
     out.push({ title: `This week — top 5 (since ${day} 00:00 UTC; resets every Monday)`, color: 0xe67e22, fields });
   }
   return out;
+}
+
+// ------------------------------------------------------------------------------------------------- CO-OP
+// The third pinned message and /leaderboard coop [size]: the top 10 by round and by score for squads of 2, 3-4 and 5+,
+// co-op records (longest run, most specials beaten, most revives) and this week's co-op best. A squad is its set of
+// pilots (runs.crew), so its best run stands for it, as a pilot's does solo; the same four with another host are one
+// squad.
+const SIZES = [["2", 2, 2], ["3-4", 3, 4], ["5+", 5, COOP_MAX]];
+const SIZE_NAME = { "2": "2 players", "3-4": "3-4 players", "5+": "5+ players" };
+
+// A squad on a board: the host in bold, the others while they fit in about 40 characters, then "+N"
+function squadText(csv) {
+  const names = String(csv || "").split(",").filter(Boolean);
+  if (!names.length) return "**?**";
+  let out = `**${esc(names[0])}**`, len = names[0].length, i = 1;
+  for (; i < names.length && len + 2 + names[i].length <= 40; i++) { out += `, ${esc(names[i])}`; len += 2 + names[i].length; }
+  return i < names.length ? `${out} +${names.length - i}` : out;
+}
+
+// Discord's limits: a field's value 1024 characters, a message's embeds 6000 in all (titles, descriptions, field names
+// and values, footers). A board's lines are cut to fit its field, and the longest boards lose their last lines until
+// the message fits (24-character names on every line of every board would pass 6000).
+function clipLines(lines, max = 1024) {
+  const out = [];
+  let len = -1;
+  for (const l of lines) { if (len + 1 + l.length > max) break; len += 1 + l.length; out.push(l); }
+  return out.join("\n");
+}
+const embedLength = (e) => (e.title || "").length + (e.description || "").length + (e.footer ? (e.footer.text || "").length : 0)
+  + (e.fields || []).reduce((t, f) => t + f.name.length + f.value.length, 0);
+function fitEmbeds(embeds, max = 5800) {
+  let total = embeds.reduce((t, e) => t + embedLength(e), 0);
+  while (total > max) {
+    let cut = null;
+    for (const e of embeds)
+      for (const f of e.fields || []) {
+        const lines = f.value.split("\n").length;
+        if (lines > 1 && (!cut || lines > cut.lines || (lines === cut.lines && f.value.length > cut.f.value.length))) cut = { f, lines };
+      }
+    if (!cut) break;
+    const at = cut.f.value.lastIndexOf("\n");
+    total -= cut.f.value.length - at;
+    cut.f.value = cut.f.value.slice(0, at);
+  }
+  return embeds;
+}
+
+async function coopEmbeds(env, onlySize, onlyDiff, nowS = Math.floor(Date.now() / 1000)) {
+  await ensureSchema(env);
+  const sizes = SIZES.filter(([s]) => s === onlySize).length ? SIZES.filter(([s]) => s === onlySize) : SIZES;
+  const lo = sizes[0][1], hi = sizes[sizes.length - 1][2];
+  const dw = onlyDiff ? "AND difficulty = ?" : "", rdw = onlyDiff ? "AND r.difficulty = ?" : "";
+  const da = onlyDiff ? [onlyDiff] : [];
+  // each squad's best run by col (SQLite takes squad, players and difficulty from the row with the MAX)
+  const best = (col, from, to, extra = "", args = [], limit = 10) => env.DB.prepare(`SELECT squad, players, MAX(${col}) AS best,
+     difficulty FROM runs WHERE players BETWEEN ? AND ? ${extra} ${dw} GROUP BY crew ORDER BY best DESC LIMIT ${limit}`)
+    .bind(from, to, ...args, ...da);
+  const perRun = (sub) => env.DB.prepare(`SELECT r.squad AS squad, r.players AS players, MAX(c.n) AS best, r.difficulty AS difficulty
+     FROM (${sub}) c JOIN runs r ON r.run_id = c.run_id WHERE c.n > 0 AND r.players BETWEEN ? AND ? ${rdw}
+     GROUP BY r.crew ORDER BY best DESC LIMIT 5`).bind(lo, hi, ...da);
+  const since = weekStart(nowS);
+  const stmts = [];
+  for (const col of ["round", "score"])
+    for (const [, from, to] of sizes) stmts.push(best(col, from, to));
+  stmts.push(best("time_s", lo, hi, "AND time_s > 0", [], 5));
+  stmts.push(perRun("SELECT run_id, COUNT(*) AS n FROM specials WHERE won = 1 AND players IS NOT NULL GROUP BY run_id"));
+  stmts.push(perRun("SELECT run_id, SUM(revives) AS n FROM squads GROUP BY run_id"));
+  for (const col of ["round", "score"]) stmts.push(best(col, lo, hi, "AND submitted >= ?", [since], 5));
+  const answers = await env.DB.batch(stmts);
+  let n = 0;
+  const lines = (results, show, none) => results.length
+    ? clipLines(results.map((r, i) => `${i + 1}. ${squadText(r.squad)} — ${show(r.best)} (${r.players} players, ${DIFF_NAME[r.difficulty]})`))
+    : none;
+  const tag = onlySize && sizes.length === 1 ? ` (${SIZE_NAME[sizes[0][0]]})` : "";
+  const out = [];
+  for (const [col, title, show, color] of [["round", "highest round", (v) => `round ${v}`, 0xd4ac0d], ["score", "score", (v) => num(v), 0xb7950b]])
+    out.push({ title: `Co-op ${title} — top 10`, color, fields: sizes.map(([s]) => ({ name: SIZE_NAME[s], inline: true,
+      value: lines(answers[n++].results, show, "no runs yet") })) });
+  out.push({ title: `Co-op records — top 5${tag}`, color: 0x16a085, fields: [
+    { name: "Longest run", inline: true, value: lines(answers[n++].results, (v) => fmtTime(v), "no runs yet") },
+    { name: "Most specials beaten", inline: true, value: lines(answers[n++].results, (v) => String(v), "none beaten yet") },
+    { name: "Most revives", inline: true, value: lines(answers[n++].results, (v) => String(v), "no revives yet") }] });
+  const day = new Date(since * 1000).toUTCString().slice(0, 11);
+  out.push({ title: `Co-op this week — top 5${tag} (since ${day} 00:00 UTC; resets every Monday)`, color: 0xe67e22, fields: [
+    { name: "Highest round", inline: true, value: lines(answers[n++].results, (v) => `round ${v}`, "no runs this week yet") },
+    { name: "Score", inline: true, value: lines(answers[n++].results, (v) => num(v), "no runs this week yet") }] });
+  return fitEmbeds(out);
 }
 
 async function setting(env, key) {
@@ -317,22 +482,34 @@ async function refreshBoards(env, force) {
     { content: "**AC8 Survival Mode — leaderboard** (updated after every run)", embeds: await boardEmbeds(env) }, force);
   const two = await updatePinned(env, "board_message_2", "Records coming up...",
     { content: "**AC8 Survival Mode — records, aircraft and this week**", embeds: await extraEmbeds(env) }, force);
-  return { ...two, oneRemade: !!one.remade };
+  // (the third, made and pinned the first time it's missing, as the second was)
+  const three = await updatePinned(env, "board_message_3", "Co-op boards coming up...",
+    { content: "**AC8 Survival Mode — CO-OP** (squads of 2 to 24 players; solo runs are on the boards above)",
+      embeds: await coopEmbeds(env) }, force);
+  return { ...two, oneRemade: !!one.remade, three };
 }
 
 // Columns added after the first databases were made (aircraft; how / tier / aces / allies / af_down / captured from
 // mod 0.50.0; build / verified from 0.72.x: the build hash a run came with, 1 when that build was registered, 0 for an
-// older mod's run taken while verification was off), added to an older database once per Worker instance.
+// older mod's run taken while verification was off; players / squad / crew from the co-op runs of 2026-11-03: the squad's
+// size, its pilots in squad order and its crew key, squadOf / crewOf, all NULL on a solo run), added to an older
+// database once per Worker instance. specials gets players too (NULL on a solo run's), so the solo specials boards
+// leave co-op runs out.
 const NEW_COLUMNS = { aircraft: "TEXT", how: "TEXT", tier: "TEXT", aces: "INTEGER", allies: "INTEGER", af_down: "INTEGER",
-                      captured: "INTEGER", build: "TEXT", verified: "INTEGER" };
+                      captured: "INTEGER", build: "TEXT", verified: "INTEGER", players: "INTEGER", squad: "TEXT", crew: "TEXT" };
+const SPECIAL_NEW_COLUMNS = { players: "INTEGER" };
 const RUN_COLS = ["run_id", "pilot", "difficulty", "round", "score", "air_kills", "ground_kills", "earned", "spent", "time_s",
                   "ended", "mod_version", "submitted", "ip_hash", ...Object.keys(NEW_COLUMNS)];
-const SPECIAL_COLS = ["run_id", "kind", "round", "seconds", "won", "pilot", "difficulty"];
+const SPECIAL_COLS = ["run_id", "kind", "round", "seconds", "won", "pilot", "difficulty", ...Object.keys(SPECIAL_NEW_COLUMNS)];
+const SQUAD_COLS = ["run_id", "slot", "pilot", "aircraft", "air_kills", "ground_kills", "revives", "host"];
 // Tables added with the admin page (2026-10-30), made here on a database that hasn't them (schema.sql has them too):
 //   builds            the builds runs are taken from (registered on /admin from a release's .buildhash.txt)
 //   builds_seen       builds runs came from that weren't registered (shown on /admin; the newest 100 kept)
 //   resets            each reset of the boards; runs_archive / specials_archive hold what it took off, so it can be undone
 //   admin_fails       wrong admin keys, for the lock-out
+// and with the co-op runs (2026-11-03):
+//   squads            each co-op run's players (slot 0 the host): their name, aircraft, kills and revives given
+//   squads_archive    what a reset took off squads (with runs_archive, so the reset's undo puts them back)
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS builds (mod TEXT NOT NULL, build TEXT NOT NULL, note TEXT, added INTEGER NOT NULL,
      PRIMARY KEY (mod, build))`,
@@ -352,6 +529,13 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS admin_fails (ip_hash TEXT NOT NULL, at INTEGER NOT NULL)",
   "CREATE INDEX IF NOT EXISTS admin_fails_ip ON admin_fails (ip_hash, at)",
   "CREATE INDEX IF NOT EXISTS runs_week ON runs (submitted)",                                     // (this week's board)
+  `CREATE TABLE IF NOT EXISTS squads (run_id TEXT NOT NULL, slot INTEGER NOT NULL, pilot TEXT NOT NULL, aircraft TEXT,
+     air_kills INTEGER NOT NULL, ground_kills INTEGER NOT NULL, revives INTEGER NOT NULL, host INTEGER NOT NULL,
+     PRIMARY KEY (run_id, slot))`,
+  "CREATE INDEX IF NOT EXISTS squads_pilot ON squads (pilot COLLATE NOCASE)",                      // (/pilot)
+  `CREATE TABLE IF NOT EXISTS squads_archive (reset_id TEXT NOT NULL, reset_at INTEGER NOT NULL, run_id TEXT NOT NULL,
+     slot INTEGER, pilot TEXT, aircraft TEXT, air_kills INTEGER, ground_kills INTEGER, revives INTEGER, host INTEGER)`,
+  "CREATE INDEX IF NOT EXISTS squads_archive_reset ON squads_archive (reset_id)",
 ];
 let haveSchema = false;
 async function ensureSchema(env) {
@@ -359,11 +543,16 @@ async function ensureSchema(env) {
   // (one round trip for them all: one at a time, 15 of them on each fresh Worker instance, they and the boards' queries
   // took a slash command past Discord's 3 s: "The application did not respond", 2026-10-30)
   await env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql)));
-  for (const table of ["runs", "runs_archive"]) {
+  for (const [table, cols] of [["runs", NEW_COLUMNS], ["runs_archive", NEW_COLUMNS], ["specials", SPECIAL_NEW_COLUMNS],
+                               ["specials_archive", SPECIAL_NEW_COLUMNS]]) {
     const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
     const have = new Set(results.map((r) => r.name));
-    for (const [col, type] of Object.entries(NEW_COLUMNS))
-      if (!have.has(col)) await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run();
+    for (const [col, type] of Object.entries(cols)) {
+      if (have.has(col)) continue;
+      // (two fresh Worker instances may both find it missing: the second one's "duplicate column" is no error)
+      try { await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); }
+      catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
+    }
   }
   haveSchema = true;
 }
@@ -418,18 +607,26 @@ async function submit(req, env, ctx) {
   } else if (await verifyOn(env)) {
     return json({ ok: false, error: "no build check: update or reinstall survival mode" }, 422);
   }
+  // (a co-op run: the same score on the squad's totals; stored with its size, squad and crew, its specials marked with
+  // its size, and its squad's rows: all in the one batch, so a run is never stored without its squad)
   const sc = score(run);
   const opt = (v) => (v === undefined ? null : v);
+  const c = run.coop || null;
   const batch = [env.DB.prepare(
     `INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
-     mod_version, submitted, ip_hash, aircraft, how, tier, aces, allies, af_down, captured, build, verified)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     mod_version, submitted, ip_hash, aircraft, how, tier, aces, allies, af_down, captured, build, verified, players, squad, crew)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(run.run_id, run.pilot, run.difficulty, run.round, sc, run.kills.air, run.kills.ground, run.zollars.earned,
           run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, opt(run.aircraft), opt(run.how), opt(run.tier),
-          opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured), build || null, verified)];
+          opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured), build || null, verified,
+          c ? c.players : null, c ? squadOf(c) : null, c ? crewOf(c) : null)];
   for (const s of run.specials || [])
-    batch.push(env.DB.prepare("INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(run.run_id, s.kind, s.round, s.seconds, s.won ? 1 : 0, run.pilot, run.difficulty));
+    batch.push(env.DB.prepare(`INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty, players)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(run.run_id, s.kind, s.round, s.seconds, s.won ? 1 : 0, run.pilot, run.difficulty, c ? c.players : null));
+  if (c)
+    c.squad.forEach((p, slot) => batch.push(env.DB.prepare(`INSERT INTO squads (${SQUAD_COLS.join(", ")})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(run.run_id, slot, p.pilot, p.aircraft, p.air, p.ground, p.revives, p.host ? 1 : 0)));
   await env.DB.batch(batch);
   // the post and the boards: a Discord hiccup mustn't lose the run (it's stored), so their errors are only logged; they
   // run after the reply (ctx.waitUntil), so a rate-limit wait never holds the game past its 15 s timeout (code review
@@ -443,35 +640,50 @@ async function submit(req, env, ctx) {
   return json({ ok: true, score: sc });
 }
 
+// A pilot's solo runs (as before: co-op runs left out of them) and, in a field of its own, the co-op runs they flew in,
+// as host or in the squad: their own kills and revives from the squad, the run's round and score.
 async function pilotEmbed(env, name) {
-  const runs = await env.DB.prepare(
-    "SELECT difficulty, MAX(round) AS round, MAX(score) AS score, COUNT(*) AS n FROM runs WHERE pilot = ? COLLATE NOCASE GROUP BY difficulty")
-    .bind(name).all();
-  if (!runs.results.length) return { title: `No runs from ${name} yet`, color: 0x7f8c8d };
-  const sp = await env.DB.prepare(
-    "SELECT kind, MIN(seconds) AS best FROM specials WHERE pilot = ? COLLATE NOCASE AND won = 1 GROUP BY kind").bind(name).all();
-  const tot = await env.DB.prepare(`SELECT COUNT(*) AS runs, SUM(air_kills) AS air, SUM(ground_kills) AS ground,
-     SUM(time_s) AS time_s, SUM(earned) AS earned, SUM(COALESCE(aces, 0)) AS aces FROM runs WHERE pilot = ? COLLATE NOCASE`)
-    .bind(name).first();
-  const fav = await env.DB.prepare(`SELECT aircraft, COUNT(*) AS n FROM runs WHERE pilot = ? COLLATE NOCASE AND aircraft IS NOT NULL
-     GROUP BY aircraft ORDER BY n DESC LIMIT 1`).bind(name).first();
-  return {
-    title: `${name} — Survival Mode`,
-    color: 0x2e86c1,
-    fields: [
-      ...runs.results.map((r) => ({ name: DIFF_NAME[r.difficulty],
-        value: `best round ${r.round}\nbest score ${num(r.score)}\n${r.n} run${r.n === 1 ? "" : "s"}`, inline: true })),
-      { name: "Fastest specials", value: sp.results.length ? sp.results.map((s) => `${SPECIALS[s.kind]}: ${fmtTime(s.best)}`).join("\n") : "none beaten yet" },
-      { name: "Totals", value: `${num(tot.runs)} runs, ${fmtTime(tot.time_s || 0)} flown\n${num(tot.air || 0)} air / ${num(tot.ground || 0)} ground kills` +
-          `${tot.aces ? `, ${num(tot.aces)} ace squadron` : ""}\n${num(tot.earned || 0)} Z earned` +
-          (fav ? `\nmost flown: ${jet(fav.aircraft)}` : "") },
-    ],
-  };
+  await ensureSchema(env);
+  const [runs, sp, tots, favs, cos, coBests] = await env.DB.batch([
+    env.DB.prepare(`SELECT difficulty, MAX(round) AS round, MAX(score) AS score, COUNT(*) AS n FROM runs WHERE pilot = ? COLLATE NOCASE
+       AND players IS NULL GROUP BY difficulty`).bind(name),
+    env.DB.prepare(`SELECT kind, MIN(seconds) AS best FROM specials WHERE pilot = ? COLLATE NOCASE AND won = 1 AND players IS NULL
+       GROUP BY kind`).bind(name),
+    env.DB.prepare(`SELECT COUNT(*) AS runs, SUM(air_kills) AS air, SUM(ground_kills) AS ground, SUM(time_s) AS time_s,
+       SUM(earned) AS earned, SUM(COALESCE(aces, 0)) AS aces FROM runs WHERE pilot = ? COLLATE NOCASE AND players IS NULL`).bind(name),
+    env.DB.prepare(`SELECT aircraft, COUNT(*) AS n FROM runs WHERE pilot = ? COLLATE NOCASE AND aircraft IS NOT NULL
+       AND players IS NULL GROUP BY aircraft ORDER BY n DESC LIMIT 1`).bind(name),
+    env.DB.prepare(`SELECT COUNT(*) AS runs, SUM(s.host) AS hosted, SUM(s.air_kills) AS air, SUM(s.ground_kills) AS ground,
+       SUM(s.revives) AS revives, SUM(r.time_s) AS time_s, MAX(r.score) AS score
+       FROM squads s JOIN runs r ON r.run_id = s.run_id WHERE s.pilot = ? COLLATE NOCASE`).bind(name),
+    env.DB.prepare(`SELECT r.round AS round, r.players AS players, r.difficulty AS difficulty
+       FROM squads s JOIN runs r ON r.run_id = s.run_id WHERE s.pilot = ? COLLATE NOCASE ORDER BY r.round DESC, r.score DESC LIMIT 1`)
+      .bind(name),
+  ]);
+  const tot = tots.results[0], fav = favs.results[0], co = cos.results[0], coBest = coBests.results[0];
+  if (!runs.results.length && !co.runs) return { title: `No runs from ${name} yet`, color: 0x7f8c8d };
+  const fields = runs.results.length ? [
+    ...runs.results.map((r) => ({ name: DIFF_NAME[r.difficulty],
+      value: `best round ${r.round}\nbest score ${num(r.score)}\n${r.n} run${r.n === 1 ? "" : "s"}`, inline: true })),
+    { name: "Fastest specials", value: sp.results.length ? sp.results.map((s) => `${SPECIALS[s.kind]}: ${fmtTime(s.best)}`).join("\n") : "none beaten yet" },
+    { name: "Totals", value: `${num(tot.runs)} runs, ${fmtTime(tot.time_s || 0)} flown\n${num(tot.air || 0)} air / ${num(tot.ground || 0)} ground kills` +
+        `${tot.aces ? `, ${num(tot.aces)} ace squadron` : ""}\n${num(tot.earned || 0)} Z earned` +
+        (fav ? `\nmost flown: ${jet(fav.aircraft)}` : "") },
+  ] : [{ name: "Solo", value: "no solo runs yet" }];
+  if (co.runs)
+    fields.push({ name: "Co-op", value: `${plural(co.runs, "run")} (hosted ${num(co.hosted || 0)}), ${fmtTime(co.time_s || 0)} flown\n` +
+      `best round ${coBest.round} (${coBest.players} players, ${DIFF_NAME[coBest.difficulty]}), best score ${num(co.score || 0)}\n` +
+      `their own kills: ${num(co.air || 0)} air / ${num(co.ground || 0)} ground` +
+      (co.revives ? `\n${plural(co.revives, "revive")} given` : "") });
+  return { title: `${name} — Survival Mode`, color: 0x2e86c1, fields };
 }
 
 // A slash command's answer (a message's data: embeds, or content).
 async function commandReply(env, it) {
   const opt = Object.fromEntries((it.data.options || []).map((o) => [o.name, o.value]));
+  // (/leaderboard board:Co-op [size] [difficulty]; a size alone means the co-op board too)
+  if (it.data.name === "leaderboard" && (opt.board === "coop" || opt.size))
+    return { embeds: await coopEmbeds(env, opt.size || null, opt.difficulty || null) };
   if (it.data.name === "leaderboard")
     return { embeds: EXTRA_BOARDS.includes(opt.board)
       ? await extraEmbeds(env, opt.board, opt.difficulty || null)
@@ -516,9 +728,12 @@ const COMMANDS = [
   { name: "leaderboard", description: "AC8 Survival Mode leaderboards", options: [
     { type: 3, name: "board", description: "Which board", required: false,
       choices: [{ name: "Highest round", value: "round" }, { name: "Score", value: "score" }, { name: "Fastest specials", value: "specials" },
-                { name: "Records", value: "records" }, { name: "Best per aircraft", value: "aircraft" }, { name: "This week", value: "weekly" }] },
+                { name: "Records", value: "records" }, { name: "Best per aircraft", value: "aircraft" }, { name: "This week", value: "weekly" },
+                { name: "Co-op", value: "coop" }] },
     { type: 3, name: "difficulty", description: "Which difficulty", required: false,
-      choices: DIFFICULTIES.map((d) => ({ name: DIFF_NAME[d], value: d })) }] },
+      choices: DIFFICULTIES.map((d) => ({ name: DIFF_NAME[d], value: d })) },
+    { type: 3, name: "size", description: "Co-op squad size (the co-op board)", required: false,
+      choices: SIZES.map(([s]) => ({ name: SIZE_NAME[s], value: s })) }] },
   { name: "pilot", description: "A pilot's best Survival Mode runs", options: [
     { type: 3, name: "name", description: "The pilot name", required: true }] },
 ];
@@ -540,6 +755,8 @@ async function setup(req, env) {
     const two = await refreshBoards(env, true);
     if (two && two.oneRemade) done.push("the leaderboard message was gone: made again");
     if (two && two.made) done.push(`records message ${two.remade ? "was gone: made again" : "made"}${two.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
+    if (two && two.three && two.three.made)
+      done.push(`co-op message ${two.three.remade ? "was gone: made again" : "made"}${two.three.pinned ? " and pinned" : " (pinning failed: give the bot Manage Messages)"}`);
     done.push("leaderboard up to date");
   } catch (e) {
     console.log(String(e && e.stack || e));
@@ -574,8 +791,9 @@ async function adminDenied(req, env, key) {
 
 // What the page shows: the boards' size, verification, the builds, builds seen that aren't registered, the resets.
 async function adminStatus(env) {
-  const [runs, specials, builds, seen, resets] = await env.DB.batch([
+  const [runs, coop, specials, builds, seen, resets] = await env.DB.batch([
     env.DB.prepare("SELECT COUNT(*) AS n FROM runs"),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM runs WHERE players IS NOT NULL"),
     env.DB.prepare("SELECT COUNT(*) AS n FROM specials"),
     env.DB.prepare(`SELECT b.mod AS mod, b.build AS build, b.note AS note, b.added AS added,
        (SELECT COUNT(*) FROM runs r WHERE r.build = b.build AND r.mod_version = b.mod) AS runs
@@ -586,7 +804,7 @@ async function adminStatus(env) {
     env.DB.prepare("SELECT reset_id, at, runs, specials, restored FROM resets ORDER BY at DESC, rowid DESC LIMIT 10"),
   ]);
   const undo = resets.results.find((r) => r.restored === null) || null;
-  return { runs: runs.results[0].n, specials: specials.results[0].n, verify: await verifyOn(env),
+  return { runs: runs.results[0].n, coop: coop.results[0].n, specials: specials.results[0].n, verify: await verifyOn(env),
            builds: builds.results, seen: seen.results, resets: resets.results, undo };
 }
 
@@ -609,24 +827,29 @@ const plural = (n, one) => `${num(n)} ${one}${n === 1 ? "" : "s"}`;
 const ADMIN_ACTIONS = {
   status: async () => ({ done: "unlocked" }),
 
-  // Everything on the boards (runs and specials: the round / score / specials boards, records, aircraft and this week
-  // all read those two) moved to the archive under a new reset id, in one batch (D1 runs a batch as one transaction).
+  // Everything on the boards (runs, specials and the co-op runs' squads: the round / score / specials boards, records,
+  // aircraft, this week and CO-OP all read those) moved to the archive under a new reset id, in one batch (D1 runs a
+  // batch as one transaction).
   reset: async (env, body, now) => {
     if (word(body.confirm) !== "RESET") return { error: "type RESET in the box to confirm", status: 400 };
     const id = `${now}-${hex(crypto.getRandomValues(new Uint8Array(4)))}`;
-    const rc = RUN_COLS.join(", "), sc = SPECIAL_COLS.join(", ");
+    const rc = RUN_COLS.join(", "), sc = SPECIAL_COLS.join(", "), qc = SQUAD_COLS.join(", ");
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO resets (reset_id, at, runs, specials) VALUES (?, ?, (SELECT COUNT(*) FROM runs),
          (SELECT COUNT(*) FROM specials))`).bind(id, now),
       env.DB.prepare(`INSERT INTO runs_archive (reset_id, reset_at, ${rc}) SELECT ?, ?, ${rc} FROM runs`).bind(id, now),
       env.DB.prepare(`INSERT INTO specials_archive (reset_id, reset_at, ${sc}) SELECT ?, ?, ${sc} FROM specials`).bind(id, now),
+      env.DB.prepare(`INSERT INTO squads_archive (reset_id, reset_at, ${qc}) SELECT ?, ?, ${qc} FROM squads`).bind(id, now),
+      env.DB.prepare("DELETE FROM squads"),
       env.DB.prepare("DELETE FROM specials"),
       env.DB.prepare("DELETE FROM runs"),
     ]);
-    const r = await env.DB.prepare("SELECT runs, specials FROM resets WHERE reset_id = ?").bind(id).first();
+    const r = await env.DB.prepare(`SELECT runs, specials, (SELECT COUNT(*) FROM runs_archive WHERE reset_id = ?
+       AND players IS NOT NULL) AS coop FROM resets WHERE reset_id = ?`).bind(id, id).first();
     const discordDone = await adminAnnounce(env, `**The Survival Mode leaderboard was reset.** ${plural(r.runs, "run")} ` +
       "went to the archive; the boards start again from zero.");
-    return { done: `reset: ${plural(r.runs, "run")} and ${plural(r.specials, "special result")} archived (undo: Restore the last reset)`,
+    return { done: `reset: ${plural(r.runs, "run")}${r.coop ? ` (${num(r.coop)} co-op)` : ""} and ` +
+                   `${plural(r.specials, "special result")} archived (undo: Restore the last reset)`,
              reset_id: id, discord: discordDone };
   },
 
@@ -635,15 +858,17 @@ const ADMIN_ACTIONS = {
   restore: async (env, body, now) => {
     const last = await env.DB.prepare("SELECT reset_id, at FROM resets WHERE restored IS NULL ORDER BY at DESC, rowid DESC LIMIT 1").first();
     if (!last) return { error: "there's no reset to undo", status: 404 };
-    const rc = RUN_COLS.join(", "), sc = SPECIAL_COLS.join(", ");
+    const rc = RUN_COLS.join(", "), sc = SPECIAL_COLS.join(", "), qc = SQUAD_COLS.join(", ");
     const counts = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM runs_archive WHERE reset_id = ?) AS runs,
        (SELECT COUNT(*) FROM specials_archive WHERE reset_id = ?) AS specials`).bind(last.reset_id, last.reset_id).first();
     await env.DB.batch([
       env.DB.prepare(`INSERT OR IGNORE INTO runs (${rc}) SELECT ${rc} FROM runs_archive WHERE reset_id = ?`).bind(last.reset_id),
       env.DB.prepare(`INSERT INTO specials (${sc}) SELECT ${sc} FROM specials_archive WHERE reset_id = ?
          AND run_id NOT IN (SELECT run_id FROM specials)`).bind(last.reset_id),
+      env.DB.prepare(`INSERT OR IGNORE INTO squads (${qc}) SELECT ${qc} FROM squads_archive WHERE reset_id = ?`).bind(last.reset_id),
       env.DB.prepare("DELETE FROM runs_archive WHERE reset_id = ?").bind(last.reset_id),
       env.DB.prepare("DELETE FROM specials_archive WHERE reset_id = ?").bind(last.reset_id),
+      env.DB.prepare("DELETE FROM squads_archive WHERE reset_id = ?").bind(last.reset_id),
       env.DB.prepare("UPDATE resets SET restored = ? WHERE reset_id = ?").bind(now, last.reset_id),
     ]);
     const day = new Date(last.at * 1000).toUTCString().slice(0, 22);
@@ -771,8 +996,9 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
   </section>
   <section>
     <h2>Reset the leaderboard</h2>
-    <p>Takes every run off the boards (round, score, specials, records, aircraft and this week) and keeps them in the archive,
-      so the reset can be undone. The pinned boards are updated and a note goes to the runs channel.</p>
+    <p>Takes every run off the boards (round, score, specials, records, aircraft, this week and co-op, with the co-op runs'
+      squads) and keeps them in the archive, so the reset can be undone. The pinned boards are updated and a note goes to the
+      runs channel.</p>
     <label for="confirm">Type RESET to confirm</label>
     <input id="confirm" autocomplete="off" autocapitalize="characters" spellcheck="false">
     <button id="resetBtn" class="danger" type="button">Reset the leaderboard</button>
@@ -810,8 +1036,8 @@ async function act(button, action, extra) {
 }
 function render(s) {
   STATE = s;
-  $("counts").textContent = s.runs + " run" + (s.runs === 1 ? "" : "s") + " and " + s.specials + " special result" +
-    (s.specials === 1 ? "" : "s") + " on the boards.";
+  $("counts").textContent = s.runs + " run" + (s.runs === 1 ? "" : "s") + (s.coop ? " (" + s.coop + " co-op)" : "") +
+    " and " + s.specials + " special result" + (s.specials === 1 ? "" : "s") + " on the boards.";
   const v = $("verify");
   v.textContent = s.verify ? "ON" : "OFF";
   v.className = "pill " + (s.verify ? "on" : "off");
@@ -903,4 +1129,5 @@ export default {
   },
 };
 
-export { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed, commandReply, commandFollowUp };      // (for tests)
+export { score, checkRun, boardEmbeds, extraEmbeds, weekStart, pilotEmbed, commandReply, commandFollowUp,      // (for tests)
+         coopEmbeds, runEmbed, fitEmbeds, squadText, COMMANDS };

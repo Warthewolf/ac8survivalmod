@@ -104,8 +104,15 @@ end
 -- STORE's row icons and co-op's music hold each walked every object for them every other tick down at the airfield
 -- (the perf lines of the co-op run of 2026-10-30: "icons" up to 6.2 ms a tick on average, "shop" up to 195 ms)
 local LW = {}
-function landingWindows(tick)
+function landingWindows(tick, maxAge)
     if LW.tick == tick and LW.list then return LW.list end
+    -- ((0.73.77, Workstream B4) maxAge: a walk up to that many ticks old will do, its windows still live: the ammo panel's
+    -- and the STORE labels' checks for a new page, on the ticks between the icons' walks)
+    if maxAge and LW.list and LW.tick and tick > LW.tick and tick - LW.tick <= maxAge then
+        local out = {}
+        for _, w in ipairs(LW.list) do if liveObj(w) then out[#out + 1] = w end end
+        return out
+    end
     local out = {}
     for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
         if liveWidget(w) then out[#out + 1] = w end
@@ -247,6 +254,7 @@ LEAVE = { why = nil, at = nil, seen = false, probeAt = nil, unpaid = 0, hard = f
 function LEAVE.reset()
     LEAVE.why, LEAVE.at, LEAVE.seen, LEAVE.probeAt, LEAVE.unpaid, LEAVE.unpaidSaid = nil, nil, false, nil, 0, nil
     LEAVE.hard, LEAVE.badAt = false, nil
+    LEAVE.gone = nil                                     -- ((0.73.77) the teardown gate's: levelGate, below)
 end
 local WALK_LEAVE_S, WALK_WORLD_S = 8, 3
 function levelGoing()
@@ -347,11 +355,28 @@ do
         end
         return true
     end
+    -- ((0.73.77, Workstream B1) each walk timed by class for the perf line's "walks:" (sv_main.lua perfLine empties
+    -- WALK.stat): a walk reads every object the game holds, so one that costs more late in a run shows there)
+    WALK.stat = {}
+    local function timedWalk(raw, key, cls)
+        local t0 = os.clock()
+        local r = raw(cls)
+        local dt = (os.clock() - t0) * 1000
+        local st = WALK.stat
+        if st then
+            local e = st[key]
+            if not e then e = { n = 0, ms = 0, max = 0, found = 0 }; st[key] = e end
+            e.n, e.ms = e.n + 1, e.ms + dt
+            if dt > e.max then e.max = dt end
+            if type(r) == "table" and #r > e.found then e.found = #r end
+        end
+        return r
+    end
     if type(rawAll) == "function" then
-        function FindAllOf(cls) if held("FindAllOf", cls) then return nil end return rawAll(cls) end
+        function FindAllOf(cls) if held("FindAllOf", cls) then return nil end return timedWalk(rawAll, tostring(cls), cls) end
     end
     if type(rawFirst) == "function" then
-        function FindFirstOf(cls) if held("FindFirstOf", cls) then return nil end return rawFirst(cls) end
+        function FindFirstOf(cls) if held("FindFirstOf", cls) then return nil end return timedWalk(rawFirst, "first " .. tostring(cls), cls) end
     end
 end
 -- (a main level made: the hold above. Not Survival's own, whose sublevels load blocking the game thread anyway, nor the
@@ -363,6 +388,148 @@ pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
         WALK.worldAt, WALK.world = os.clock(), n:match("([%w_]+)$") or "?"
     end
 end)
+
+---------------------------------------------------------------------------------------------------- the teardown gate
+-- (0.73.77, plan F1) The crash on quit (Shazzy 2026-11-02 16:57:02 while DOWN and spectating, cressendo 2026-11-03
+-- 10:42:25 from flight; 0.73.76 both): UE4SS's Lua property lookup on an object the closing level had freed
+-- (UE4SS.dll+0x2ab5bd), a second after the runtime's `this level's LiveUnitSpawner is gone`. levelGoing() waits that
+-- second before it believes the spawner gone (a restart's odd answer), and every part read the level's objects meanwhile.
+-- The runtime's teardown gate (0.32.22, SV_LevelGone) closes the moment the spawner's world is freed, marked garbage or
+-- being purged (a restart keeps its world: never then), and stays closed until the next Survival level's SV_Reset.
+-- levelGate(), first thing in each tick half (sv_main.lua probeTick / probeTickB, and before COOP.tick): when it closes,
+-- the level is going for sure (LEAVE's hard sign: no kill paid, walks held), every part's kept objects are dropped, never
+-- walked or put back (levelDrop: LEVEL_DROPS, the parts' own droppers, and the core's lists), the run ends there (the
+-- caller's runLeft, whose cleanups drop instead of restoring while levelTorn()), and the halves' level work is held
+-- GATE_HOLD_S. A new Survival level loading (levelTick -1) goes on: its reset (SV_Reset) opens the gate. After the hold
+-- the halves run as after any run's end (no D). Without SV_LevelGone (an older main.dll): never closed, as before.
+GATE = { closed = false, at = nil, held = 0, waitSet = nil }
+LEVEL_DROPS = {}               -- name -> function(why): that part's kept level objects forgotten, none of them touched
+local GATE_HOLD_S = 10
+function levelTorn() return LEAVE.gone == true end
+function levelDrop(why)
+    local names = {}
+    for name, fn in pairs(LEVEL_DROPS) do
+        local ok, err = pcall(fn, why)
+        if ok then names[#names + 1] = name else log("level gate: " .. tostring(name) .. "'s drop error " .. tostring(err)) end
+    end
+    if ALLY and type(ALLY.forgetActors) == "function" then pcall(ALLY.forgetActors) end    -- (the defences' actor list)
+    if COOP and type(COOP.levelDrop) == "function" then                                   -- (co-op's copies and planes,
+        local ok, err = pcall(COOP.levelDrop, why)                                         --  when sv_coop.lua has one)
+        if ok then names[#names + 1] = "coop" else log("level gate: coop's drop error " .. tostring(err)) end
+    end
+    planes, pending, lastAlive = {}, {}, nil              -- (the core's: every AI plane of the level, those just made)
+    survivalPC, H = nil, nil                               -- (the player controller, the HUD layer: the level's)
+    table.sort(names)
+    return names
+end
+function levelGate()
+    levelGateStep()
+    -- (CFG.recycle.destroy_after_s to the runtime, once a session: F2b)
+    if GATE.waitSet == nil and type(SV_RecycleWait) == "function" and type(CFG) == "table" and type(CFG.recycle) == "table" then
+        local s = math.floor(math.max(0, math.min(600, tonumber(CFG.recycle.destroy_after_s) or 30)))
+        local ok = pcall(SV_RecycleWait, s)
+        GATE.waitSet = ok
+        log(string.format("recycle: a recycled flight's old unit actor is destroyed %d s after it's freed to spawn again%s", s,
+            ok and "" or " (not set: SV_RecycleWait failed)"))
+    end
+    if type(SV_LevelGone) ~= "function" then return false end
+    local ok, g = pcall(SV_LevelGone)
+    if not ok or g ~= 1 then
+        if GATE.closed then
+            log(string.format("level gate: open again (a new Survival level: SV_Reset; %d tick halves were held)", GATE.held))
+            GATE.closed, GATE.held = false, 0
+        end
+        return false
+    end
+    local now = os.clock()
+    if not GATE.closed then
+        GATE.closed, GATE.at, GATE.held = true, now, 0
+        LEAVE.gone, LEAVE.hard = true, true
+        if not LEAVE.why then LEAVE.why, LEAVE.at = "its world is gone (the runtime's teardown gate)", now end
+        local names = levelDrop("the level torn down")
+        log(string.format("level gate: closed (Survival's level is being torn down%s): its objects dropped, never walked or put "
+            .. "back (%s and the core's lists); the run ends here; the tick halves' level work held %d s",
+            D and string.format(", round %d", D.round or 0) or ", no run on", #names > 0 and table.concat(names, ", ") or "no part's",
+            GATE_HOLD_S))
+        crumb("level gate closed: objects dropped")
+    end
+    if levelTick == -1 then return false end               -- (a new Survival level loading: its reset opens the gate)
+    if now - (GATE.at or now) >= GATE_HOLD_S then return false end
+    GATE.held = GATE.held + 1
+    return true
+end
+-- the gate's caller, each half, is also where the recycle test below steps (it's a game-thread job: no timer of its own)
+function levelGateStep()
+    -- TEST ONLY BEGIN (the bomber raid recycle test's steps, RECYCLE_TEST below)
+    if RECYCLE_TEST and RECYCLE_TEST.on then
+        local ok, err = pcall(RECYCLE_TEST.tick)
+        if not ok then RECYCLE_TEST.on = false; log("test: Ctrl+F11 recycle test error " .. tostring(err) .. "; stopped") end
+    end
+    -- TEST ONLY END
+end
+
+-- TEST ONLY BEGIN
+-- Ctrl+F11 in a run (plan F2d): the round 3 bomber raid's crash pattern 20 times, to test the recycle and the path tracker
+-- guard (runtime 0.32.22) solo: each cycle takes the strike flight EA_Unit_01_Air0 and the heavy flight EA_Unit_01_Air1
+-- off the phase's list (SV_Recycle force 1, alive or not: their unit actors destroyed CFG.recycle.destroy_after_s later;
+-- 0 there is the 0.32.21 way, at once, the crashes' pattern), spawns the strike flight 0.5 s on and the heavies (their
+-- route: a path) 3 s on, every 10 s. Pressed again: stopped. Lines `test: F2d cycle N/20: ...`, and the runtime's
+-- `recycle ...` / `guard: AI path tracking ...` in AC8SurvivalMode.log. Pressing it makes the run unranked (LB.testKey).
+RECYCLE_TEST = { on = false, n = 0, total = 20, step = 0, at = 0, units = { "EA_Unit_01_Air0", "EA_Unit_01_Air1" } }
+function RECYCLE_TEST.tick()
+    local T = RECYCLE_TEST
+    local now = os.clock()
+    if not (D and D.now) or levelTorn() then T.on = false; log("test: F2d recycle test stopped (no run, or the level going)"); return end
+    if now < T.at then return end
+    if T.step == 0 then
+        if T.n >= T.total then
+            for _, u in ipairs(T.units) do pcall(SV_Recycle, u, 1); D.up[u] = nil end
+            T.on = false
+            log(string.format("test: F2d recycle test done: %d cycles; the last flights taken off again", T.n))
+            hudCallout("TEST: RECYCLE TEST DONE", string.format("%d CYCLES", T.n))
+            return
+        end
+        T.n = T.n + 1
+        local r = {}
+        for _, u in ipairs(T.units) do
+            local okR, v = pcall(SV_Recycle, u, 1)
+            r[#r + 1] = u .. " " .. tostring(okR and v or ("error " .. tostring(v)))
+            D.up[u] = nil
+        end
+        log(string.format("test: F2d cycle %d/%d: taken off the list: %s", T.n, T.total, table.concat(r, ", ")))
+        T.step, T.at = 1, now + 0.5
+    elseif T.step == 1 then
+        local okS, r = pcall(spawnFlight, T.units[1])
+        log(string.format("test: F2d cycle %d/%d: the strike flight %s: %s", T.n, T.total, T.units[1], tostring(okS and r or ("error " .. tostring(r)))))
+        T.step, T.at = 2, now + 2.5
+    elseif T.step == 2 then
+        local okS, r = pcall(spawnFlight, T.units[2])
+        log(string.format("test: F2d cycle %d/%d: the heavy flight %s: %s", T.n, T.total, T.units[2], tostring(okS and r or ("error " .. tostring(r)))))
+        T.step, T.at = 0, now + 7
+    end
+end
+if type(RegisterKeyBind) == "function" and Key and Key.F11 then
+    local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
+    pcall(RegisterKeyBind, Key.F11, mods, function()
+        ExecuteInGameThread(function()
+            local ok, err = pcall(function()
+                if LB and LB.testKey then pcall(LB.testKey, Key.F11) end
+                local T = RECYCLE_TEST
+                if T.on then T.on = false; log("test: Ctrl+F11, the F2d recycle test stopped at cycle " .. T.n); return end
+                if not (D and D.now) or type(SV_Recycle) ~= "function" then
+                    log("test: Ctrl+F11 outside a Survival run, or no SV_Recycle (runtime 0.32.22)"); return
+                end
+                T.on, T.n, T.step, T.at = true, 0, 0, 0
+                local wait = type(SV_RecycleWait) == "function" and SV_RecycleWait() or "?"
+                log(string.format("test: Ctrl+F11, the F2d recycle test: %d cycles of %s, unit actors destroyed %s s after", T.total,
+                    table.concat(T.units, " + "), tostring(wait)))
+                hudCallout("TEST: RECYCLE TEST", string.format("%d CYCLES", T.total))
+            end)
+            if not ok then log("test: Ctrl+F11 error " .. tostring(err)) end
+        end)
+    end)
+end
+-- TEST ONLY END
 
 local function hex(a) return a and string.format("%X", a) or "?" end
 

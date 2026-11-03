@@ -22,9 +22,10 @@
 
 #include "win32_min.h"
 #include "sigs.h"
+#include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.21"
-#define RT_VERSION_A         "0.32.21"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.22"
+#define RT_VERSION_A         "0.32.22"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -1172,6 +1173,133 @@ static int LiveObject(void* o)
     return o && Readable(o, 0x28) && !(*(uint32_t*)((uint8_t*)o + 8) & RF_NOT_LIVE);
 }
 
+/* ---- the teardown gate (runtime 0.32.22, plan F1a) ------------------------------------------------------------------
+ * The crash on quit (Shazzy 2026-11-02 16:57:02 while DOWN, cressendo 2026-11-03 10:42:25 from flight; both 0.32.21):
+ * UE4SS.dll+0x2ab5bd is the Lua UObject's property lookup (mov rcx, [GetClassPrivate(obj)] before FindProperty, in the
+ * function at UE4SS+0x2aad40 with the "Tried setting member variable" / "The UObject instance is nullptr" texts): Survival's
+ * Lua reading a field of an object the closing level had freed. The two main.dll "frames" (+0x1abe8, +0x68b7) are stale
+ * return addresses the stack scan found: +0x1abe8 is SpawnerReady's call of ResolveUE4SS, +0x68b7 L_UnitAlive's call of
+ * set_integer (named from the map of this source, whose code is byte for byte the shipped 0.32.21's), left by the
+ * SV_UnitAlive levelGoing() asks in the same tick; neither runs UE4SS's property code. Both came about a second after
+ * `this level's LiveUnitSpawner is gone`, which is levelGoing()'s one-second wait before it believes it: every part read
+ * the level's objects for that second. The gate: closed the moment the spawner's world (kept when the spawner was found
+ * live) is freed, marked garbage, being destroyed, or unreachable while the engine purges (never on a mere GC mark: a
+ * pause-menu restart keeps its world, and one that makes its spawner again doesn't close it); open again at SV_Reset (the
+ * next Survival level). While closed, SV_LevelGone() answers 1 (Lua holds its level work and drops its object lists:
+ * sv_core.lua levelGate), the spawner answers "not ready", the deferred unit destroys are dropped (the level destroys
+ * them) and an address from Lua is used only while it's a live object (ArgObject). */
+static volatile int32_t g_teardown;            /* 1: closed: Survival's level is being torn down */
+static void*            g_world;               /* the spawner's world, kept when it was found live (SpawnerReady) */
+static int              GcPurgePending(void);  /* (flight.c: the engine's purge flags) */
+static int              RcDrop(void);          /* (below: the deferred unit destroys) */
+
+/* why o (an object kept by the runtime) is gone, or NULL while it's still the engine's live object */
+static const wchar_t* ObjGoneWhy(void* o)
+{
+    uint8_t* p = (uint8_t*)o;
+    if (!p || !Readable(p, 0x28)) return L"its memory was released";
+    uint32_t rf = *(uint32_t*)(p + 8);
+    if (rf & (0x8000 | 0x10000 | 0x40000000)) return L"it is being destroyed";   /* RF_BeginDestroyed, Finish, MirroredGarbage */
+    if (!g_uoChunks) return LiveObject(p) ? NULL : L"its flags say it isn't live";
+    if (UObjAllocated(p) == 0) return L"it was freed";
+    int32_t idx = *(const int32_t*)(p + 0xC);
+    const uint8_t* item = (*g_uoChunks)[idx >> 16] + (size_t)(idx & 0xFFFF) * 0x18;
+    uint32_t f = *(const uint32_t*)(item + 8);
+    if (f & UO_GARBAGE) return L"it was marked garbage";
+    if ((f & *g_uoGcFlag) && GcPurgePending()) return L"it is unreachable and being purged";
+    return NULL;
+}
+
+static void TeardownClose(const wchar_t* why)
+{
+    if (g_teardown) return;
+    g_teardown = 1;
+    int dropped = RcDrop();
+    Log(L"teardown gate: closed (Survival's level is going: its world %p: %s): Lua holds its level work and drops its object "
+        L"lists, the runtime touches no level object until the next Survival level (SV_Reset); %d deferred unit destroys "
+        L"dropped (the level destroys them)", g_world, why, dropped);
+    Crumb(L"teardown gate closed: world %p %s; %d deferred destroys dropped", g_world, why, dropped);
+}
+
+/* 1 the gate is closed (checked now: its world gone closes it) */
+static int32_t  g_worldIdx;                    /* its InternalIndex and name (+0x18) when kept: a new world made in */
+static uint64_t g_worldName;                   /* its memory (the main menu's, the same size) is another object */
+static int TeardownCheck(void)
+{
+    if (g_teardown) return 1;
+    if (!g_world) return 0;                            /* (no Survival level seen since SV_Reset) */
+    const wchar_t* why = ObjGoneWhy(g_world);
+    if (!why && (*(int32_t*)((uint8_t*)g_world + 0xC) != g_worldIdx || *(uint64_t*)((uint8_t*)g_world + 0x18) != g_worldName))
+        why = L"its memory is another object's";
+    if (!why) return 0;
+    TeardownClose(why);
+    return 1;
+}
+
+/* ---- a recycled flight's unit actor destroyed later (runtime 0.32.22, plan F2b) --------------------------------------
+ * The crash at the round 3 bomber raid (Shazzy, 2026-11-02 16:06:37 and 18:02:16): a game worker in AC8's AI path
+ * tracking (ULiveAIPathTickerSubsystem's FLivePathTrackTickFunction, flight.c's path tracker guard) read a freed object
+ * 3-5 s after Survival destroyed the last bomber flight's unit actor (EA_Unit_01_Air0) for its respawn, 2-3 s after the
+ * heavy flight's first spawn. Taking the unit off the phase's list is what lets its desc spawn again (hard rule 16); the
+ * actor's destroy now waits g_rcWaitMs (Lua's CFG.recycle.destroy_after_s, SV_RecycleWait; 30 s by default, 0 the
+ * 0.32.21 way: at once), done from the next spawner call after that, only while the unit is still a live object of this
+ * level (a restart's or the level's own destroy came first: nothing). The gate drops the queue. */
+#define RC_MAX 64
+typedef struct { uint8_t* unit; int32_t idx; uint64_t due; wchar_t name[48]; } RcEntry;
+static RcEntry  g_rc[RC_MAX];
+static int      g_rcN;
+static uint32_t g_rcWaitMs = 30000;
+static uint32_t g_rcDone, g_rcSkipped;
+
+static int RcDrop(void)
+{
+    int n = g_rcN;
+    g_rcN = 0;
+    return n;
+}
+
+/* 1 queued; 0 the queue is full (the caller destroys it at once, as before) */
+static int RcDefer(uint8_t* unit, const wchar_t* name)
+{
+    if (!g_rcWaitMs || g_rcN >= RC_MAX || !Readable(unit, 0x10)) return 0;
+    RcEntry* e = &g_rc[g_rcN++];
+    e->unit = unit;
+    e->idx = *(int32_t*)(unit + 0xC);
+    e->due = GetTickCount64() + g_rcWaitMs;
+    size_t k = 0;
+    while (name && name[k] && k < 47) { e->name[k] = name[k]; ++k; }
+    e->name[k] = 0;
+    return 1;
+}
+
+/* the entries due: each unit actor destroyed if it's still the same live object (game thread: a spawner call) */
+static void RcDrain(void)
+{
+    if (!g_rcN || g_teardown) return;
+    uint64_t now = GetTickCount64();
+    int keep = 0;
+    for (int i = 0; i < g_rcN; ++i) {
+        RcEntry e = g_rc[i];
+        if (now < e.due) { g_rc[keep++] = e; continue; }
+        const wchar_t* why = ObjGoneWhy(e.unit);
+        if (!why && *(int32_t*)(e.unit + 0xC) != e.idx) why = L"its slot is another object's";
+        if (why) {
+            ++g_rcSkipped;
+            Log(L"recycle %s: its old unit actor %p wasn't destroyed %d s on (%s: something else destroyed it)", e.name, e.unit,
+                (int32_t)(g_rcWaitMs / 1000), why);
+            Crumb(L"recycle %s: deferred destroy of %p skipped (%s)", e.name, e.unit, why);
+            continue;
+        }
+        Crumb(L"recycle %s: destroying its old unit actor %p (deferred %d s)", e.name, e.unit, (int32_t)(g_rcWaitMs / 1000));
+        g_destroyActor(e.unit, 0);
+        ++g_rcDone;
+        Crumb(L"recycle %s: destroyed", e.name);
+        Log(L"recycle %s: its old unit actor %p destroyed, %d s after it was taken off the phase's list (%u so far, %u gone "
+            L"before, %d waiting)", e.name, e.unit, (int32_t)(g_rcWaitMs / 1000), g_rcDone, g_rcSkipped, g_rcN - i - 1 + keep);
+    }
+    g_rcN = keep;
+}
+
 static void* PhaseWorldData(uint8_t* phase)
 {
     if (!phase || !Readable(phase + LY.phaseWd, 8)) return NULL;
@@ -1187,6 +1315,7 @@ static int FindSpawner(void)
     if (g_spawner) {                                   /* it was found and has gone: the level is going away */
         g_spawnerLost = 1;
         Log(L"spawner: this level's LiveUnitSpawner is gone (the level is ending): no search until the next run");
+        Crumb(L"spawner gone (teardown gate %s)", TeardownCheck() ? L"closed: its world is going too" : L"open: its world is still live");
     }
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
     if (g_spawnerLost) return 0;                       /* (FindAllOf over objects being freed crashed: hotfix5) */
@@ -1215,6 +1344,7 @@ static int SpawnerReady(void)
     if (!ResolveUE4SS()) return SV_ERR_NO_GAME;
     if (!g_scanned) return SV_ERR_NOT_READY;       /* the signature scan is still running */
     if (!g_spawnUnit || !g_unregisterUnit || !g_destroyActor || !ResolveLayout()) return SV_ERR_NO_GAME;
+    if (TeardownCheck()) return SV_ERR_NOT_READY;  /* (0.32.22: the level is being torn down) */
     if (!FindSpawner()) return SV_ERR_NOT_READY;
     /* A spawner whose level isn't in a world yet (Survival's level still loading) spawns into no world: a co-op
      * joiner spawning the host's flights as its level loaded crashed in UWorld::SpawnActor reading world+0x30 (two
@@ -1225,6 +1355,13 @@ static int SpawnerReady(void)
         if (said++ % 20 == 0) Log(L"spawner %p: no world yet (the level is still loading); spawns wait", g_spawner);
         return SV_ERR_LOADING;
     }
+    if (world != g_world) {                            /* (0.32.22: the teardown gate watches this world) */
+        Log(L"teardown gate: watching world %p (spawner %p)%s", world, g_spawner, g_world ? L"; it replaced the last one" : L"");
+        g_worldIdx = *(int32_t*)((uint8_t*)world + 0xC);
+        g_worldName = *(uint64_t*)((uint8_t*)world + 0x18);
+        g_world = world;
+    }
+    RcDrain();                                         /* (0.32.22: the recycled flights' unit actors due) */
     return 1;
 }
 
@@ -1283,21 +1420,30 @@ static int32_t UnitArrayNum(uint8_t* unit, const wchar_t* prop)
     return a && Readable(a, sizeof(*a)) ? a->num : -1;
 }
 
-/* Takes the desc's last flight off the phase's list if it was shot down. 1 removed, 0 none, -1 still up. */
-static int Recycle(uint8_t* desc, const wchar_t* name)
+/* Takes the desc's last flight off the phase's list if it was shot down. 1 removed, 0 none, -1 still up.
+ * force (0.32.22, SV_Recycle): 1 off the list even while it still counts aircraft alive; 2 that, its actor destroyed at
+ * once (the 0.32.21 way: F2d's test). Otherwise the actor's destroy is deferred (RcDefer). */
+static int Recycle(uint8_t* desc, const wchar_t* name, int force)
 {
     uint8_t* unit = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId));
     if (!unit) return 0;
     int32_t alive = UnitArrayNum(unit, L"AliveChildAIGameObjects");
-    if (alive != 0) {
+    if (alive != 0 && !force) {
         Log(L"spawn %s: its last flight is still up (%d alive); not spawned again", name, alive);
         return -1;
     }
-    Crumb(L"recycle %s: unregistering and destroying its unit actor %p", name, unit);
+    int later = force != 2 && RcDefer(unit, name);
+    Crumb(L"recycle %s: unregistering its unit actor %p (%d alive)%s", name, unit, alive, later ? L", its destroy deferred" : L" and destroying it");
     g_unregisterUnit(g_phase, unit);
-    g_destroyActor(unit, 0);
+    if (!later) g_destroyActor(unit, 0);
     Crumb(L"recycle %s: done", name);
-    Log(L"spawn %s: its last flight was shot down; took it off the phase's list and removed its unit actor", name);
+    if (later)
+        Log(L"spawn %s: its last flight %s; took it off the phase's list, its unit actor %p destroyed %d s on (%d waiting)", name,
+            alive ? L"was taken down (forced, aircraft still counted alive)" : L"was shot down", unit, (int32_t)(g_rcWaitMs / 1000), g_rcN);
+    else
+        Log(L"spawn %s: its last flight %s; took it off the phase's list and removed its unit actor%s", name,
+            alive ? L"was taken down (forced, aircraft still counted alive)" : L"was shot down",
+            force == 2 ? L" at once (forced)" : g_rcWaitMs ? L" (the deferred queue is full)" : L"");
     return 1;
 }
 
@@ -1341,7 +1487,7 @@ static int64_t Spawn(const wchar_t* name, const double* pose)
     FNameRaw fn;
     uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
     if (!desc) { Log(L"spawn %s: no unit of that name in %s", name, WD_NAME); return SV_ERR_NO_UNIT; }
-    if (Recycle(desc, name) < 0) return SV_ERR_UP;
+    if (Recycle(desc, name, 0) < 0) return SV_ERR_UP;
     if (pose) SetPose(desc, pose);
     uint8_t* unit = (uint8_t*)g_spawnUnit(g_spawner, &fn, g_wd);
     if (!unit) { Log(L"spawn %s: the game spawned nothing", name); return SV_ERR_REFUSED; }
@@ -2488,6 +2634,7 @@ static int L_PlaneLevel(void* lua)
     double addr = 0;
     if (!ArgNumber(lua, &addr) || addr <= 0) return Ret(lua, SV_ERR_BAD_ARGS);
     uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)addr;
+    if (g_teardown) return Ret(lua, SV_ERR_NOT_READY);     /* (0.32.22: the level is being torn down) */
     if (!LiveObject(plane) || !Readable(plane + PLANE_AI_LEVEL, 2)) return Ret(lua, SV_ERR_BAD_ARGS);
     return Ret(lua, *(uint16_t*)(plane + PLANE_AI_LEVEL));
 }
@@ -2503,6 +2650,7 @@ static int L_PlayerTarget(void* lua)
     double addr = 0;
     if (!ArgNumber(lua, &addr) || addr <= 0) return Ret(lua, SV_ERR_BAD_ARGS);
     uint8_t* plane = (uint8_t*)(uintptr_t)(uint64_t)addr;
+    if (g_teardown) return Ret(lua, SV_ERR_NOT_READY);     /* (0.32.22: the level is being torn down) */
     if (!LiveObject(plane) || !Readable(plane + PLAYER_TARGET_HOLDER, 8)) return Ret(lua, SV_ERR_BAD_ARGS);
     uint8_t* holder = *(uint8_t**)(plane + PLAYER_TARGET_HOLDER);
     if (!holder || !Readable(holder + PLAYER_TARGET, 8)) return Ret(lua, 0);
@@ -2859,7 +3007,63 @@ static int L_Reset(void* lua)
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
     g_spawnerLost = 0;                             /* a new run: search for its spawner again (hotfix5) */
     g_shopHead = g_shopCount = 0;                  /* a pick made as the level ended isn't bought in the next run */
+    if (g_teardown) {                              /* (0.32.22) the next Survival level: the gate opens */
+        Log(L"teardown gate: open (a new Survival level: SV_Reset)");
+        Crumb(L"teardown gate open (SV_Reset)");
+    }
+    g_teardown = 0;
+    g_world = NULL;                                /* (the next SpawnerReady keeps this level's; a restart's is the same one) */
+    PtReset();                                     /* (the path tracker guard's skip list: flight.c) */
     return Ret(lua, 1);
+}
+
+/* (0.32.22, plan F1a) SV_LevelGone() -> 1 the teardown gate is closed (Survival's level is being torn down: no level
+ * object may be touched until the next level's SV_Reset), 0 open. Lua asks at the top of each tick half (sv_core.lua
+ * levelGate). Checked at the call: the world it watches gone closes it. */
+static int L_LevelGone(void* lua) { return Ret(lua, TeardownCheck()); }
+
+/* (0.32.22) SV_Recycle(unit [, force]) -> 1 taken off the phase's list (so its desc can spawn again; its unit actor
+ * destroyed later, F2b), 0 nothing to do (not on the list), SV_ERR_UP (-3: aircraft still counted alive and force 0), or
+ * an SV_ERR code (-1 not ready / the level going, -2 no unit, -4 bad arguments). force 1: off the list even while it
+ * still counts aircraft alive (a joiner's stuck copies, a special's leftovers); 2: that, its actor destroyed at once (the
+ * 0.32.21 way, for the F2d test). Behind the target and path tracker guards. Every call logged. */
+static int L_Recycle(void* lua)
+{
+    wchar_t name[96];
+    double force = 0;
+    if (!ArgName(lua, name, 96)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &force);
+    int f = force >= 2 ? 2 : force >= 1 ? 1 : 0;
+    int64_t r = SpawnerReady();
+    if (r == 1) {
+        FNameRaw fn;
+        uint8_t* desc = MakeName(name, &fn) ? FindDesc(&fn) : NULL;
+        if (!desc) r = SV_ERR_NO_UNIT;
+        else { int rc = Recycle(desc, name, f); r = rc < 0 ? SV_ERR_UP : rc; }
+    }
+    Log(L"recycle %s (SV_Recycle, force %d): %s (%d)", name, f, r == 1 ? L"taken off the phase's list" : r == 0 ? L"not on the "
+        L"phase's list: nothing to do" : r == SV_ERR_UP ? L"still up: not forced" : L"not done", (int32_t)r);
+    return Ret(lua, r);
+}
+
+/* (0.32.22) SV_RecycleWait(seconds) -> the old wait in seconds: how long a recycled flight's unit actor waits before it's
+ * destroyed (0: at once, the 0.32.21 way); SV_RecycleWait(-1) destroys every one waiting now (the break between rounds);
+ * no argument: ask */
+static int L_RecycleWait(void* lua)
+{
+    double s = -2;
+    ArgNumber(lua, &s);
+    int64_t old = (int64_t)(g_rcWaitMs / 1000);
+    if (s >= 0 && s <= 600) {
+        uint32_t ms = (uint32_t)(s * 1000.0);
+        if (ms != g_rcWaitMs) Log(L"recycle: a recycled flight's unit actor is destroyed %d s after it's taken off the list%s",
+                                  (int32_t)s, ms ? L"" : L" (at once, as before 0.32.22)");
+        g_rcWaitMs = ms;
+    } else if (s == -1 && g_rcN) {
+        for (int i = 0; i < g_rcN; ++i) g_rc[i].due = 0;
+        if (SpawnerReady() == 1) Log(L"recycle: every recycled flight's unit actor waiting was destroyed now (asked)");
+    }
+    return Ret(lua, old);
 }
 
 /* The Offline edition (runtime/build.sh OFFLINE=1, user, 2026-10-23: "None of the Code for sending the files remains")
@@ -3151,6 +3355,7 @@ static void RegisterLua(void* lua)
     static const struct { const char* name; LuaFn fn; } kFns[] = {
         { "SV_Version", L_Version }, { "SV_MenuChoice", L_MenuChoice }, { "SV_Spawn", L_Spawn }, { "SV_SetAircraft", L_SetAircraft },
         { "SV_UnitAlive", L_UnitAlive }, { "SV_LogUnits", L_LogUnits }, { "SV_Reset", L_Reset }, { "SV_Crumb", L_Crumb },
+        { "SV_LevelGone", L_LevelGone }, { "SV_Recycle", L_Recycle }, { "SV_RecycleWait", L_RecycleWait },   /* (0.32.22) */
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
         { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
@@ -3306,6 +3511,7 @@ static void FindFunctions(void)
         { kSigMgDeactivate,     kSigMgDeactivateMask, sizeof(kSigMgDeactivate), NULL, 0 },
         { kSigMgRestore,        kSigMgRestoreMask, sizeof(kSigMgRestore), NULL, 0 },
         { kSigPurgeGarbage,     kSigPurgeGarbageMask, sizeof(kSigPurgeGarbage), NULL, 0 },
+        { kSigPathTrackTick,    kSigPathTrackTickMask, sizeof(kSigPathTrackTick), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -3369,6 +3575,7 @@ static void FindFunctions(void)
     g_fMgDeactivate     = p[62].hit;                    /* (the STORE freeze: flight.c) */
     g_fMgRestore        = p[63].hit;
     g_fPurgeGarbage     = p[64].hit;                    /* (runtime 0.32.21: SV_GcBusy, flight.c) */
+    g_fPathTrackTick    = p[65].hit;                    /* (runtime 0.32.22: the path tracker guard, flight.c) */
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -3421,6 +3628,7 @@ static int Install(void)
     UfxInstall();                                          /* (the AI unit effect guard: flight.c) */
     Ufx2Install();                                         /* (its second update's, +0x42c0: flight.c) */
     TgtInstall();                                          /* (the target search guard: flight.c) */
+    PtInstall();                                           /* (0.32.22: the AI path tracking guard: flight.c) */
     MgInstall();                                           /* (the STORE freeze: flight.c) */
     if (g_fPlaneEw && HookInline(g_fPlaneEw, 15, (void*)OnPlaneEw, (void**)&g_nextPlaneEw, L"plane electronic update")) {}
     else Log(L"coop2mp: the plane electronic update wasn't found: other players' ESM / ECM fields help no one here");

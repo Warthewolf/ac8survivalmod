@@ -1214,6 +1214,14 @@ def build_events(stock_ep):
         ping = f'RE_SV_RaidPing_{k + 1:02d}'
         g.trigger('RE_Wave2_AreaB_PathSet', ping)                                  # a remote-event trigger
         g.execute(t_nav, ping, {1: unit})
+    # (0.73.77, plan A7: "end the long tail") the round's last enemies pinged the same way: RE_SV_LastPing_NN on pool
+    # flight NN, fired by Scripts/sv_rounds.lua tailTick when a round has had no kill for [rounds.tail] quiet_s with 1-4
+    # of its aircraft left (a bomber flight's own RE_SV_RaidPing_NN); forwarded in co-op as the raid pings are
+    assert '"RE_SV_LastPing_%02d"' in runtime_lua(), 'Scripts/sv_rounds.lua never fires RE_SV_LastPing_NN'
+    for k, unit in enumerate(POOL):
+        ping = f'RE_SV_LastPing_{k + 1:02d}'
+        g.trigger('RE_Wave2_AreaB_PathSet', ping)
+        g.execute(t_nav, ping, {1: unit})
     assert arg_values(t_landing)[0] == 'false'
     # the run's heartbeat (Scripts/main.lua fires it every 10 s): a mission restart sets every flag back to 0, so a drop
     # in SV_Beat is a restart even in a round without a kill or an airfield hit (test of 2026-10-23: a retry after the

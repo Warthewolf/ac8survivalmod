@@ -1458,7 +1458,19 @@ static uint8_t* ArgObject(void* lua)                       /* an address from Lu
 {
     double a = 0;
     if (!ArgNumber(lua, &a) || a <= 0) return NULL;
-    return (uint8_t*)(uintptr_t)(uint64_t)a;
+    uint8_t* o = (uint8_t*)(uintptr_t)(uint64_t)a;
+    /* (0.32.22, plan F1a) while the teardown gate is closed only a live object is used: one of the closing level may
+     * already be freed (the main menu's own objects are live and pass) */
+    if (g_teardown) {
+        static uint32_t refused;
+        int live = ((uintptr_t)o & 7) || !Readable(o, 0x28) ? 0 : UObjLive(o);
+        if (live < 0) live = LiveObject(o);
+        if (live != 1) {
+            if (refused++ < 4) Log(L"teardown gate: an address from Lua refused (%p: not a live object; %u so far)", o, refused);
+            return NULL;
+        }
+    }
+    return o;
 }
 
 /* SV_CoopOpen(mode, role, partner, port, delayMs, version [, maxPlayers]) -> 1, or < 0: -1 bad args, -2 no Steam,

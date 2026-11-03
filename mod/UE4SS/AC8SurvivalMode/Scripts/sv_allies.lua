@@ -460,6 +460,7 @@ function ALLY.buy(role, unit, key, price, buyer)
         log(string.format("allies: %s (%s): %s", sh.name, unit, r > 0 and "at sea" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
         if r <= 0 then return false, "COULD NOT SEND IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
         R.up[unit] = { kind = "ship", key = key, at = now, price = price, buyer = buyer }
+        if R.alive then R.alive[unit] = nil end      -- ((0.73.77) its count asked afresh: ALLY.alive)
         if not buyer then hudCallout(string.format(t.ship, sh.name), t.ship_sub) end
         return true, sh.name .. " AT SEA"
     end
@@ -572,35 +573,52 @@ end
 -- took every copy here down and the host's defences spawned again at once, the count unchanged, so the old list was
 -- kept and read every 2 s; all three crashed 4-9 s on (access violation in UE4SS's FindProperty, from a Lua read).
 -- (ALLY.forgetActors: a co-op joiner's teardown drops the list too.)
+-- (0.73.77, Workstream B3) Run every tick now: the actors are found again one class a tick (DEF_CLASSES' three walks
+-- over every object in one tick, every 30 s and after every loss, were the allies part's worst tick, 123-144 ms in the
+-- testers' host logs of 2026-11-01), when the count changes, one is lost or every DEF_WALK_S (was 30); their health read
+-- every 2 s as before. A kept actor is checked with liveAddr (GUObjectArray), not valid(), before each read.
+local DEF_WALK_S = 120
 local function defenceHealth(R, now)
     local n = 0
     for _, kind in ipairs(DEF_KINDS) do n = n + (R.defCount and R.defCount[kind] or 0) end
-    if n == 0 then R.defActors = nil; return nil end
-    if not R.defActors or R.defActorsN ~= n or now >= (R.defActorsAt or 0) then
-        R.defActors, R.defActorsN, R.defActorsAt = {}, n, now + 30
-        for _, cls in ipairs(DEF_CLASSES) do
-            for _, o in ipairs(FindAllOf(cls) or {}) do
-                if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
-                    local ok, l, h = pcall(function() return o:K2_GetActorLocation(), o.HealthInternal end)
-                    if ok and l and type(h) == "number" and h > 0
-                        and math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) < 400000 then
-                        R.defActors[#R.defActors + 1] = o
-                    end
+    if n == 0 then R.defActors, R.defWalk = nil, nil; return nil end
+    if not R.defWalk and (not R.defActors or R.defActorsN ~= n or now >= (R.defActorsAt or 0)) then
+        R.defWalk = { i = 0, list = {}, n = n }
+    end
+    local w = R.defWalk
+    if w then                                             -- (one class this tick)
+        w.i = w.i + 1
+        for _, o in ipairs(FindAllOf(DEF_CLASSES[w.i]) or {}) do
+            if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
+                local ok, l, h = pcall(function() return o:K2_GetActorLocation(), o.HealthInternal end)
+                if ok and l and type(h) == "number" and h > 0
+                    and math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2) < 400000 then
+                    w.list[#w.list + 1] = o
                 end
             end
         end
+        if w.i < #DEF_CLASSES then return R.defHp end
+        R.defActors, R.defActorsN, R.defActorsAt, R.defWalk, R.defHpAt = w.list, w.n, now + DEF_WALK_S, nil, nil
+        if not R.defWalkSaid then
+            R.defWalkSaid = true
+            log(string.format("allies: the airfield defences' actors found one class a tick: %d for %d up (again when that "
+                .. "changes or in %d s; 0.73.77)", #w.list, n, DEF_WALK_S))
+        end
     end
+    if not R.defActors then return nil end
+    if now < (R.defHpAt or 0) then return R.defHp end     -- (their health every 2 s)
+    R.defHpAt = now + 2
     local sum, k = 0, 0
     for i = #R.defActors, 1, -1 do
         local o, h, mh = R.defActors[i], nil, nil
-        if valid(o) then
+        if liveAddr(o) then
             local ok, a, b = pcall(function() return o.HealthInternal, o.MaxHealth end)
             if ok then h, mh = a, b end
         end
         if type(h) == "number" and type(mh) == "number" and h > 0 and mh > 0 then
             sum, k = sum + math.min(1, h / (mh * 10)), k + 1
         else
-            table.remove(R.defActors, i)                  -- (down or gone: never read again; found again next time)
+            table.remove(R.defActors, i)                  -- (down or gone: never read again; found again next tick on)
             R.defActorsAt = 0
         end
     end
@@ -608,9 +626,49 @@ local function defenceHealth(R, now)
 end
 
 -- (sv_coop.lua killAllCopies: a co-op joiner took every copy down) the cached actors dropped before they're freed
+-- ((0.73.77) a look for them that's under way too)
 function ALLY.forgetActors()
     local R = ALLY.run
-    if R then R.defActors = nil end
+    if R then R.defActors, R.defWalk = nil, nil end
+end
+
+-- (0.73.77, Workstream B3) Each allied and defence unit's SV_UnitAlive, a share each tick (as the plane sweep visits an
+-- eighth of the planes): the native walks the spawner's whole unit list for each ask, and ALLY.tick asked for every
+-- bought ally and all ten defence units in one tick every 2 s. ALLY.alive(u, now): the count read for it in the last
+-- 2.5 s of the round clock (now, else D.now), else asked now; one that has none up (a defence not built, a flight
+-- not bought) is good for ALIVE_IDLE_S (a spawn here forgets its count: ALLY.forgetAlive). Visited: R.up's units and
+-- every defence unit, unit i on the tick where i % 8 is the slot, one with none up every 4th visit.
+local ALIVE_FRESH_S, ALIVE_IDLE_S = 2.5, 8.5
+function ALLY.alive(u, now)
+    now = now or (D and D.now) or 0
+    local R = ALLY.run
+    local e = R and R.alive and R.alive[u]
+    if e and now >= e.at and now - e.at <= ((e.n or 0) > 0 and ALIVE_FRESH_S or ALIVE_IDLE_S) then return e.n end
+    local n = SV_UnitAlive(u)
+    if R then R.alive = R.alive or {}; R.alive[u] = { n = n, at = now } end
+    return n
+end
+function ALLY.forgetAlive(u)                          -- (a unit just spawned: its count asked afresh)
+    local R = ALLY.run
+    if R and R.alive then R.alive[u] = nil end
+end
+local function aliveShare(R, now)
+    R.alive = R.alive or {}
+    R.aliveSlot = ((R.aliveSlot or -1) + 1) % 8
+    local units, i = {}, 0
+    for u in pairs(R.up) do units[#units + 1] = u end
+    table.sort(units)                                     -- (pairs' order changes: the same unit, the same slot)
+    local d = CFG.shop.items.Airfield.defences
+    for _, kind in ipairs(DEF_KINDS) do
+        for _, u in ipairs(d[kind] and d[kind].units or {}) do units[#units + 1] = u end
+    end
+    for _, u in ipairs(units) do
+        i = i + 1
+        local e = R.alive[u]
+        if i % 8 == R.aliveSlot and not (e and (e.n or 0) <= 0 and now >= e.at and now - e.at < ALIVE_IDLE_S - 0.5) then
+            R.alive[u] = { n = SV_UnitAlive(u), at = now }
+        end
+    end
 end
 
 function ALLY.repairDefences()
@@ -775,6 +833,7 @@ function ALLY.awacsTick(R, now)
             spawningUnit = nil
             if r > 0 then
                 s.queued, s.at, R.nextTakeoff, R.esmAt = nil, now, now + CFG.allies.aircraft.takeoff_gap_s, nil
+                if R.alive then R.alive[u] = nil end -- ((0.73.77) its count asked afresh: ALLY.alive)
                 hudCallout(string.format(t.takeoff, aw.name), t.takeoff_sub_awacs)
                 log(string.format("allies: %s (%s) taxiing out", aw.name, u))
             else
@@ -897,9 +956,12 @@ if type(NotifyOnNewObject) == "function" then
     end)
 end
 
+-- ((0.73.77, Workstream B1) the allies part's shares in the perf line, "allies/<share>": sv_main.lua's PERF)
+local function pa(name, t0) if PERF and PERF.add then PERF.add(name, t0) end end
 function ALLY.tick(now)
     if not (CFG.allies.enabled and D and nativeReady()) then return end
     local R, c, t = ALLY.state(), CFG.allies, CFG.allies.text
+    local t0 = os.clock()
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
         local ready
@@ -919,6 +981,7 @@ function ALLY.tick(now)
             local name = airName(s)
             if r > 0 then
                 s.queued, s.at, R.nextTakeoff = nil, now, now + c.aircraft.takeoff_gap_s
+                if R.alive then R.alive[u] = nil end -- ((0.73.77) its count asked afresh: ALLY.alive)
                 R.orderGiven = R.orderGiven or {}
                 R.orderGiven[u] = nil                -- (its orders once it's airborne)
                 hudCallout(string.format(t.takeoff, name), s.ally == "wingmen" and t.takeoff_sub_wingmen or t.takeoff_sub)
@@ -939,8 +1002,16 @@ function ALLY.tick(now)
             end
         end
     end
+    pa("allies/takeoffs", t0)
+    t0 = os.clock()
     local okA, errA = pcall(ALLY.awacsTick, R, now)
     if not okA and not R.awacsErrSaid then R.awacsErrSaid = true; log("allies: " .. c.awacs.name .. " error " .. tostring(errA)) end
+    pa("allies/VOID WATCHER", t0)
+    t0 = os.clock()
+    local okS, errS = pcall(aliveShare, R, now)      -- ((0.73.77) a share of the units' counts: B3)
+    if not okS and not R.aliveErrSaid then R.aliveErrSaid = true; log("allies: the units' counts error " .. tostring(errS)) end
+    pa("allies/counts", t0)
+    t0 = os.clock()
     if now >= (R.checkAt or 0) then                  -- every 2 s: losses, scaling, orders, and the enemies' on the allies
         R.checkAt = now + 2
         ALLY.scale()
@@ -948,7 +1019,7 @@ function ALLY.tick(now)
         R.orderGiven = R.orderGiven or {}
         for u, s in pairs(R.up) do
             if not s.queued then
-                local n = SV_UnitAlive(u)
+                local n = ALLY.alive(u, now)             -- ((0.73.77) the share's count, at most 2.5 s old: B3)
                 if n <= 0 and now - s.at > 5 then
                     R.up[u], RUN.dirty = nil, true
                     local name = s.kind == "air" and airName(s) or c.ships[s.key].name
@@ -1028,7 +1099,7 @@ function ALLY.tick(now)
         R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0, ciws = 0 }
         for _, kind in ipairs(DEF_KINDS) do
             for _, u in ipairs(d[kind] and d[kind].units or {}) do
-                local up = SV_UnitAlive(u) > 0
+                local up = ALLY.alive(u, now) > 0        -- ((0.73.77) the share's count: B3)
                 if up then R.defCount[kind] = R.defCount[kind] + 1 end
                 if R.defUp[u] and not up then
                     hudCallout(string.format(t.def_lost, d[kind].label), t.def_lost_sub)
@@ -1038,9 +1109,13 @@ function ALLY.tick(now)
                 R.defUp[u] = up
             end
         end
-        local okD, hp = pcall(defenceHealth, R, now)
-        R.defHp = okD and hp or nil
     end
+    pa("allies/checks", t0)
+    t0 = os.clock()
+    local okD, hp = pcall(defenceHealth, R, now)      -- ((0.73.77) every tick: its walks one class a tick, B3)
+    R.defHp = okD and hp or nil
+    pa("allies/defence health", t0)
+    t0 = os.clock()
     for i = #R.events, 1, -1 do
         local e = R.events[i]
         if now >= e.at then
@@ -1049,5 +1124,6 @@ function ALLY.tick(now)
             log(string.format("allies: %s (%s) %s", e.name, e.why, r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
         end
     end
+    pa("allies/events", t0)
 end
 end

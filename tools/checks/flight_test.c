@@ -69,6 +69,11 @@ static int ArgNumber(void* lua, double* v) { if (U.luaStackSize(lua) < 1 || !U.l
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 
 static void Crumb(const wchar_t* fmt, ...) { (void)fmt; }      /* (the crash breadcrumbs: survival_rt.c's, not here) */
+static volatile int32_t g_teardown;                              /* (runtime 0.32.22: survival_rt.c's teardown gate, open) */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#include "../../runtime/uobj.h"                                  /* (ArgObject's check while the gate is closed) */
+#pragma clang diagnostic pop
 #include "../../runtime/coop.c"
 #include "../../runtime/down_ctl.c"
 

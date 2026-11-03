@@ -26,10 +26,28 @@
 --   the Spaceport fleet's turrets (sv_spaceport.lua SPORT.turrets): every turret_s while one's up, which fired (their
 --     missiles, from the launches above; their guns, any of their LiveBullets shown) and which stayed silent with you
 --     inside their reach (CFG.specials.spaceport.fcs.search_m); every summary_s `fleet: ...` by turret class.
--- Only addresses and text are kept between looks (never a game object: the lesson of 0.73.24 / 0.73.29).
-WLOG = {}
+-- Only addresses and text are kept between looks (never a game object: the lesson of 0.73.24 / 0.73.29), but for the
+-- weapon objects themselves since 0.73.77, each checked live (liveAddr) before it's read and dropped the first time it's
+-- gone (below).
+WLOG = { new = {} }
 do
 local BASES = { "LiveExplosiveWeapon", "LiveAttachedInstantWeapon", "LiveElectronicWeaponBase" }
+-- (0.73.77, Workstream B) The weapon objects are kept as the game makes them (NotifyOnNewObject on the three bases; a
+-- pool only grows, its items launched again and again), R.pool[address] = { obj, base }, and each look goes over those:
+-- it walked every object three times for them (every_s 0.5: six walks over every object a second), the host's largest
+-- part in the testers' logs of 2026-11-01 (37-49 ms a tick, 41-61 % of it). A walk every WALK_S still, the first look's
+-- too, for any the queue dropped (WLOG.new keeps NEW_MAX between looks) or made before the run.
+local WALK_S, NEW_MAX = 30, 600
+-- (the teardown gate's drop, sv_core.lua levelDrop: the weapon objects kept and queued forgotten, none of them touched)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["weapons log"] = function() WLOG.new, WLOG.r = {}, nil end end
+if type(NotifyOnNewObject) == "function" then
+    for _, base in ipairs(BASES) do
+        pcall(NotifyOnNewObject, "/Script/Live." .. base, function(o)
+            local c = CFG and CFG.log and CFG.log.weapons
+            if D and c and c.enabled ~= false and #WLOG.new < NEW_MAX then WLOG.new[#WLOG.new + 1] = { o = o, base = base } end
+        end)
+    end
+end
 
 local function cfg() return CFG.log and CFG.log.weapons or {} end
 local function short(o)                                    -- "BP_wp_vls_ladon" from "... .BP_wp_vls_ladon_C_2147..."
@@ -46,7 +64,7 @@ end
 local function run()
     if not WLOG.r or WLOG.r.D ~= D then
         WLOG.r = { D = D, carried = {}, fired = {}, said = {}, loadouts = {}, state = {}, win = {}, winAt = nil, done = {},
-                   track = {}, out = {}, outRun = {} }
+                   track = {}, out = {}, outRun = {}, pool = {}, walkAt = nil }
     end
     return WLOG.r
 end
@@ -203,6 +221,14 @@ local function turretReport(secs)
     log(string.format("fleet: last %d s: %s", secs, table.concat(t, "; ")))
 end
 
+-- ((0.73.77, Workstream B1) its lists for the perf line's "lists:" (sv_main.lua perfLists): { name, size } pairs)
+function WLOG.sizes()
+    local R = WLOG.r
+    if not R then return {} end
+    local function n(t) local k = 0; for _ in pairs(t or {}) do k = k + 1 end; return k end
+    return { { "weapon objects", n(R.pool) }, { "weapons tracked", n(R.track) }, { "weapons queued", #WLOG.new } }
+end
+
 function WLOG.tick(now)
     local c = cfg()
     if c.enabled == false or not D or not now or not svLevelOn then return end   -- (svLevelOn: FindAllOf over a level being unloaded, hotfix8)
@@ -231,10 +257,29 @@ function WLOG.tick(now)
         if not okT and not R.turErr then R.turErr = true; log("fleet: turret watch error " .. tostring(errT)) end
     end
     local total, flying, cur, hidErr = 0, 0, {}, 0
-    for _, base in ipairs(BASES) do
-        local okF, list = pcall(FindAllOf, base)
-        for _, w in ipairs(okF and list or {}) do
-            local a = liveAddr(w)
+    -- ((0.73.77) the kept weapon objects: the new ones in, the walk every WALK_S; then each one live)
+    local q = WLOG.new
+    WLOG.new = {}
+    for _, e in ipairs(q) do
+        local a = liveAddr(e.o)
+        if a and not R.pool[a] then R.pool[a] = { obj = e.o, base = e.base } end
+    end
+    if now >= (R.walkAt or 0) then
+        R.walkAt = now + WALK_S
+        for _, base in ipairs(BASES) do
+            local okF, list = pcall(FindAllOf, base)
+            for _, w in ipairs(okF and list or {}) do
+                local a = liveAddr(w)
+                if a and not R.pool[a] then R.pool[a] = { obj = w, base = base } end
+            end
+        end
+        R.walks = (R.walks or 0) + 1
+    end
+    for a0, e in pairs(R.pool) do
+        local w, base = e.obj, e.base
+        local a = liveAddr(w)
+        if a ~= a0 then R.pool[a0] = nil; a = nil end       -- (gone: dropped at once)
+        do
             if a and not cur[a] then
                 total = total + 1
                 local okH, hidden = pcall(function() return w.bHidden end)

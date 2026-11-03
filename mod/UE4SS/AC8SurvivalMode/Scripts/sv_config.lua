@@ -418,6 +418,10 @@ CFG = {
     -- (user, 2026-10-31: "I want 6 missiles from aircraft and 14 missiles from ships", "set the pursuers to 12", "increase
     -- the number of ships and sam site targetting to 40")
     attackers = { enabled = true, plane_missiles = 6, nonplane_missiles = 40, pursuers = 12, check_s = 2 },
+    -- (0.73.77, plan F2b) a recycled flight (shot down, taken off the phase's list so it can spawn again) has its old unit
+    -- actor destroyed destroy_after_s later, not at the next spawn (runtime 0.32.22, SV_RecycleWait): Shazzy's two crashes
+    -- at the round 3 bomber raid came 3-5 s after that destroy, in the game's AI path tracking. 0: at once, as before.
+    recycle = { destroy_after_s = 30 },
     special = { enabled = true,
                 fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" },
                 -- fired (Scripts/sv_spweapons.lua; the user, 2026-10-31: "I want the Enemies to fire their Special
@@ -708,6 +712,10 @@ CFG = {
     credits = {
         start = 0, fighter = 100, bomber = 200, heavy = 400, round_bonus = 250, special_x = 2.0,
         round_x_per_round = 0.02, round_x_max = 1.5, ally_x = 0.5, airstrike_x = 0.5,
+        -- team_x (0.73.77, economy C1, approved 2026-11-03): in co-op a teammate's kill (the player the host names for it,
+        -- sv_coop.lua) pays min(team_x, 1 / (players - 1)) of a kill on every game, your own x1: 0.5 with 2 or 3
+        -- players, 0.33 with 4, 0.25 with 5 (the host's setting). Before, a joiner was paid x1 for every kill it saw.
+        team_x = 0.5,
         tier_pay = { 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0 },
         models = { su34 = "bomber", tu95 = "heavy", t160 = "heavy" },
     },
@@ -1019,7 +1027,13 @@ CFG = {
     -- the round's start, which a long stop at the airfield used up). From CFG.late.aircraft_from_round max_up grows
     -- with late.max_up_per_round a round, up to late.max_up_cap (TIER.maxUp).
     waves = { enabled = true, max_up = 18, max_up_by_preset = { casual = 14, standard = 18, ace = 22 }, next_at = 4,
-              timeout_s = 0, callout = true },
+              timeout_s = 0, callout = true,
+              -- ((0.73.77) plan A7, "end the long tail": rounds waited up to 9 min on their last enemy in the 0.73.76
+              -- runs, round 13's last 3 on one held Wolf trap) the host's: a round quiet_s without a kill with max_left or
+              -- fewer of its aircraft up pings them on the minimap (RE_SV_LastPing_NN / a bomber flight's RE_SV_RaidPing_NN,
+              -- Mission 22's LiveBattleNavigationExecution), again every every_s till the next kill, and (release) lets
+              -- any of them held back go (a Wolf trap freed onto you, a top cover diving on the nearest player)
+              tail = { enabled = true, quiet_s = 90, max_left = 4, every_s = 12, release = true } },
     -- Late rounds (economy review: "quality over quantity after round 15 ... raise ace share, health and accuracy
     -- instead"): from from_round, every enemy aircraft's health x (1 + health_per_round x rounds past it), at most
     -- health_max_x, and the chance a pilot flies one tier up (CFG.tiers.promote_chance) + promote_per_round a round, at
@@ -1135,13 +1149,16 @@ CFG = {
     -- playing ACE COMBAT 8 too, or that friend's name or SteamID64) or "udp" (LAN or a VPN such as Radmin / Tailscale /
     -- ZeroTier: the host listens on `port`, UDP; the joiner sets partner = the host's IP address). interp_ms: how far
     -- behind the other game the planes are drawn (smooths the network out). split_share: the share of the host's
-    -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard: co-op runs aren't sent.
+    -- fighter flights sent after the joiner (the stock allied-hunt order). leaderboard ((0.73.77) true; Workstream H2):
+    -- a co-op run goes to the leaderboard as one team run, sent by its host with every player's kills and revives given
+    -- (sv_leaderboard.lua LB.coopRecord; joiners send nothing; a host by migration sends it if the first host didn't);
+    -- false: co-op runs aren't sent (the host's setting decides; each player's own [coop]).
     -- max_players: the host's room, 2 to 24 (you included; user, 2026-10-26: "allow up to 24 players in a lobby ... leave
     -- it there for choice"); joiners link to the host only, which relays their planes. The host down at the airfield
     -- holds the new enemies only while nobody else flies (user, 2026-10-29: "the game isn't paused for the other
     -- players"; sv_rounds.lua othersFlying).
     coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 24,
-             split_share = 0.5, callouts = true, leaderboard = false,
+             split_share = 0.5, callouts = true, leaderboard = true,
              -- each other player as their own airframe's player plane, as AC8's Online Mode shows them (COOP2MP T3,
              -- tools/re/COOP2MP.md); false: an AI stand-in of their airframe, as 0.72 (also the fallback)
              real_planes = true,
@@ -1154,6 +1171,10 @@ CFG = {
              -- opening (the airfield's minigame) doesn't stop the world's AI for everyone (runtime SV_StoreKeepAI skips the
              -- game's DeactivateForMinigame); false: the stock freeze. Solo the stock freeze always stays.
              store_keep_world = true,
+             -- force_recycle (0.73.77, plan A3): a joiner's copy of one of the host's flights the game refused 6 times
+             -- ("its last flight is still up": a wreck it still counts) is taken off the game's unit list anyway, the
+             -- runtime's SV_Recycle(unit, 1), its last resort; false: spawned anyway and refused, as before. Each player's own.
+             force_recycle = true,
              -- migration (the user, 2026-10-31: "if the Host does leave, it automatically tries to find the next best
              -- host"): when the host's game goes, the player with the best link takes over as host and the others join
              -- them; the round in play starts again, the allies and the airfield's defences are built again. after_s:
@@ -1161,6 +1182,13 @@ CFG = {
              -- host waited for; wait_s: the new host's round held this long for everyone to be back; break_s: its break.
              -- Steam only (each player's Steam ID).
              migration = { enabled = true, after_s = 30, link_s = 20, wait_s = 60, break_s = 15 },
+             -- rejoin (0.73.77, plan workstream C: liljojofett left in a Su-47 and came back in a Rafale M, and everyone
+             -- kept seeing the Su-47): a player who left (or whose game started over) and comes back in another aircraft
+             -- or with other weapons gets a new plane here; their old one is set aside, never destroyed (a live player
+             -- plane: 0.73.11's crash): hidden, collision and tick off, moved aside_alt_km up (0: left where it is).
+             -- wait_s: back in the mission, how long their old plane stays hidden waiting for their airframe. A change by
+             -- a player who never left still waits for the next level. enabled = false: their plane here is kept.
+             rejoin = { enabled = true, wait_s = 10, aside_alt_km = 30 },
              -- real_paint: their paint (skin and emblems) on their real plane; false: the airframe's default
              real_paint = true,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
@@ -1489,6 +1517,10 @@ CFG = {
                      -- the opener's flash: flash_layers copies of it at once (its light adds up), flash_scale big (user,
                      -- 2026-10-24: "put that further away and turn its brightness up a lot ... it was quite hard to see")
                      flash = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", flash_scale = 12.0, flash_s = 3.0, flash_layers = 4,
+                     -- ((0.73.77) plan D5; the user, 2026-11-03, with a screenshot: her arrival's flash covered most of the
+                     -- screen) the lens flash's elements below are sized as shares of the screen, so it's as big at 14 km as
+                     -- close by: each one's size x flash_size_x (1: AC7's own; 0.5 halves them)
+                     flash_size_x = 0.5,
                      -- the opener's light as AC7 Mission 18's lens flash (user, 2026-10-24: "rebuild the Effect that Mihaly
                      -- uses when it spawns in on Mission 18"; ms18_LensEffect1, tools/x02s builds it): screen-space billboard
                      -- elements { name, size (fraction of the screen) } on AC8's own flare, faded over life_s along AC7's
@@ -1627,7 +1659,9 @@ CFG = {
         spaceport = { enabled = true, from_round = 8, ships = { ford = 1, wasp = 4, aegis = 14, boat = 8 }, spawn_per_tick = 3,
                       wave_every_s = 180, first_wave_s = 20, capture_per_troop = 10, troop_stay_s = 30,   -- (capture 5 -> 10: user, 2026-11-02)
                       troop_timeout_s = 420, remove_after_s = 60, fighter_share = 0.5, reward = 10000,
-                      reward_per_round = 300, pay = { ford = 3000, wasp = 1200, aegis = 800, boat = 300, craft = 150 },
+                      -- (0.73.77, the economy's C2: a ship pays its price once, when its hull goes; turret: a turret
+                      -- shot off while its hull floats, the landing craft's rate. Before, price x every part lost)
+                      reward_per_round = 300, pay = { ford = 3000, wasp = 1200, aegis = 800, boat = 300, craft = 150, turret = 150 },
                       ford_cm = { -2964629, -26491, 3.0 },
                       -- the turrets' own fire control (sv_spaceport.lua SPORT.FLEET_ROWS; as CFG.allies.ships' fcs, on
                       -- top of CFG.allies.fcs; the user, 2026-10-31: "up the Activation Range and Targetting Range and
@@ -1651,19 +1685,25 @@ CFG = {
                       -- of them up at once, ahead_m off its bow and alt_m up
                       -- (user, 2026-10-31: "increase the Carriers aircraft spawn rate": first_s 45 -> 20, every_s 50 -> 25,
                       -- max_up 2 -> 4, flights 3 -> 5, flights_per_round 0.15 -> 0.3, max_flights 8 -> 14)
+                      -- (0.73.77, the plan's I8: reserve, the deck's flights held back from the round's fighters when
+                      -- the round is planned and launched first, each again once it's down; 0: none, as before. Round
+                      -- 13's fighters took every free 2-ship and the deck launched 2 of 8)
                       deck = { enabled = true, first_s = 20, every_s = 25, size = 2, max_up = 4, flights = 5,
-                               flights_per_round = 0.3, max_flights = 14, ahead_m = 600, alt_m = 1100 },
+                               flights_per_round = 0.3, max_flights = 14, ahead_m = 600, alt_m = 1100, reserve = 4 },
                       -- the retake, the round after a captured spaceport: the garrison (a unit of 4 targetable vehicles
                       -- for every per_unit troop vehicles that got in, 3 at most) and the ships still afloat; reward +
                       -- reward_per_round x the round when they're all down, garrison_pay a vehicle; fighter_share of the
-                      -- round's aircraft. enabled = false: no retake (the fleet left afloat stays until the next Spaceport
-                      -- Assault takes it off). test_troops: the troops Ctrl+INS's forced retake counts (test only).
+                      -- round's aircraft. enabled = false: no retake (0.73.77: the fleet left afloat is taken off at the
+                      -- lost assault's end). test_troops: the troops Ctrl+INS's forced retake counts (test only).
                       -- rockets (Scripts/sv_spaceport.lua's rockets; the user, 2026-10-31: "can you please build the rockets
                       -- this time?"): Mission 19's two, launched launch_a_s / launch_b_s into the retake, boosted boost_s on,
                       -- rocket_pay each shot down; one reaching 20.2 km escapes: escape_penalty zollars and no reward; the
                       -- last one shot down breaks up (debris = false: it doesn't), each stage of its debris targetable in
                       -- turn (debris_tgt_s after the kill, debris_next_s after each stage), debris_pay a piece, taken off
                       -- debris_timeout_s after the last change
+                      -- (0.73.77, the plan's I5: a rocket neither shot down nor escaped timeout_s after its launch is
+                      -- taken off, no penalty; an escape counts only from escape_min_m up (a climb that ends lower is
+                      -- taken off, no penalty); the last one's debris only once its split is seen, split_wait_s at most)
                       retake = { enabled = true, per_unit = 4, reward = 12000, reward_per_round = 300, garrison_pay = 300,
                                  fighter_share = 0.6, test_troops = 8,
                                  -- (island: the island's air defences and armour, ad_pay / armour_pay each; extra_aircraft
@@ -1672,7 +1712,8 @@ CFG = {
                                  extra_aircraft = 6, island = { enabled = true, ad_pay = 600, armour_pay = 400 },
                                  rockets = { enabled = true, launch_a_s = 45, launch_b_s = 110, boost_s = 12, rocket_pay = 3000,
                                              escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
-                                             debris_pay = 400, debris_timeout_s = 120 } } },
+                                             debris_pay = 400, debris_timeout_s = 120,
+                                             timeout_s = 240, escape_min_m = 15000, split_wait_s = 10 } } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -1951,6 +1992,7 @@ CFG = {
             lb_queued    = "NO CONNECTION: IT WILL BE SENT NEXT TIME",
             lb_refused   = "NOT ACCEPTED: %s",
             lb_unranked  = "NOT RANKED: %s",              -- (an edited run: LB.edited, sv_leaderboard.lua)
+            lb_coop_host = "CO-OP: THE HOST SENDS THE RUN",   -- ((0.73.77) a co-op joiner's summary: LB.send)
 
             alicorn_sub  = "SUBMARINE CONTACT",
             alicorn_go   = "THE ALICORN",

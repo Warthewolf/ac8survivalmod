@@ -1966,10 +1966,18 @@ def build_npc_rows():
     schema = uprop.U.schema('LiveNpcDataTable')
     model_idx = [k for k, (n, t) in schema.items() if n == 'ModelId'][0]
     skin_idx = [k for k, (n, t) in schema.items() if n == 'AirframeSkinId'][0]
+    emptied = []
     for tier, key, lead, wing in ACES:
         for src, (_, npc, text) in zip((lead, wing), ace_rows(tier, key)):
             f = survival_events.fname(src)
             row = copy.deepcopy(rows[(f[1], f[2])])
+            # (0.73.77, G1) a scripted sure kill's slot emptied (the Phantom Su-47s' NPC_FCS_PlaneMsl302 and Mission 19's
+            # hit missile, the Reaper F-22 wings' NPC_FCS_PlaneMsl100): Lua gives a free slot from 3 a special weapon
+            for q in [q for q in row[2] if q[1].startswith('NpcFCSId') and q[3] and q[3][0] == 'name']:
+                why = certain_kill(q[3][1] if q[3][2] == 0 else f'{q[3][1]}_{q[3][2] - 1}')
+                if why:
+                    drop_prop(row[2], q[0])
+                    emptied.append(f'{npc} {q[1]}: {why}')
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
             if (tier, key) in ACE_MODELS:
                 set_prop(row[2], model_idx, 'ModelId', ('name', ACE_MODELS[(tier, key)][0], 0))
@@ -2072,6 +2080,7 @@ def build_npc_rows():
     assert chk['rows'] == dt['rows']
     print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies, the CIWS on '
           f'{survival_events.DEFENCE_CIWS_MODEL})')
+    print(f'  aces: {len(emptied)} scripted sure-kill slots emptied (G1)' + ''.join(f'\n    {e}' for e in emptied))
     save(z, DATA + 'DT_SV_NpcRows')
 
 
@@ -2131,6 +2140,67 @@ def build_rows():
                            ('SurvivalMenu', edit_pages_row)] + [(f'SurvivalSet{w}', edit_setting_row(w)) for w in SETTING_ROWS])
 
 
+def check_no_certain_kill():
+    """(0.73.77, plan G1) Fails the build when a row Survival builds for an enemy, or a fire control the Lua puts on one
+    (CFG.special.fcs, the bosses' weapons ...), carries a scripted sure kill (certain_kill; hard rule 36). Every
+    DT_SV_NpcMission row but the allies' and the co-op stand-ins' (<row>_svcp: damage 0) is followed to the DT_NPC row it
+    flies (the stock DT_NPC, DT_SV_NpcRows, DT_SV_AlcnNpc; for a row whose DT_NPC row Lua clones, its source's: <row>_sv[bcd]
+    the row's, the roles' and probes' NPC_SOURCE's) and down every ChildNPCId (ships', the Ladons', the Alicorn's parts).
+    Reads the packages this build saved."""
+    plain = lambda k: k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'
+    nm = lambda v: plain(v[1:3]) if v and v[0] == 'name' else None
+
+    def load(path, st, built=True):
+        fn = os.path.join(OUT, path[len('/Game/'):]) + '.uasset' if built else stock(path)
+        z = ZenPkg(data=open(fn, 'rb').read())
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    npc = load('/Game/Datatables/AI/NPC/DT_NPC', 'LiveNpcDataTable', built=False)
+    for t in ('DT_SV_NpcRows', 'DT_SV_AlcnNpc'): npc.update(load(DATA + t, 'LiveNpcDataTable'))
+    mission = load(NPC_TABLE, 'LiveNpcMissionDataTable')
+    se = survival_events
+    allied = ({se.ALLY_AIR_ROW, se.ALLY_WINGMEN_ROW, se.AWACS_ROW, se.DEFENCE_CIWS_ROW[0], se.SHUTTLE_NPC_ROW}
+              | {row for row, _ in se.DEFENCE_ROWS.values()}
+              | {se.ally_ship_rows(k)[0] for k, _, _, _ in se.ALLY_SHIPS}
+              | {se.ally_turret_rows(t)[0] for k, _, _, _ in se.ALLY_SHIPS for t in se.ALLY_TURRETS[k]})
+    bad = []
+
+    def carries(row, path, seen):
+        if row in seen: return
+        seen.add(row)
+        r = npc.get(row)
+        if r is None:
+            bad.append(f'{path}: no DT_NPC row {row} (what does it carry?)'); return
+        for i in range(6):
+            f = nm(r.get(f'NpcFCSId{i}'))
+            why = f and certain_kill(f)
+            if why: bad.append(f'{path} slot {i}: {why}')
+        kids = r.get('ChildNPCId')
+        for k in (kids[1] if kids and kids[0] == 'arr' else []):
+            carries(nm(k), f'{path} > {nm(k)}', seen)
+
+    def source(m, depth=0):
+        n = nm(mission[m].get('NpcId'))
+        if n in npc or depth > 4: return n
+        b = re.match(r'^(.*)_sv[bcd]?$', m)
+        if b and b.group(1) in mission: return source(b.group(1), depth + 1)
+        if NPC_SOURCE.get(m) in mission: return source(NPC_SOURCE[m], depth + 1)
+        return n
+    enemies = [m for m in sorted(mission) if m not in allied and not m.endswith(COOP_STANDIN_SUFFIX[0])]
+    for m in enemies:
+        n = source(m)
+        carries(n, f'{m} -> {n}', set())
+    lua_fcs = sorted(set(re.findall(r'"(NPC_FCS_\w+)"', survival_events.runtime_lua())))
+    for f in lua_fcs:
+        why = certain_kill(f)
+        if why: bad.append(f'Scripts/*.lua names {why}')
+    if bad:
+        raise SystemExit('G1: a scripted sure kill on an enemy (hard rule 36; PLAIN_NPC_IDS, build_npc_rows):\n  '
+                         + '\n  '.join(bad))
+    print(f'  sure kills: none on {len(enemies)} enemy rows (their parts too) nor on the {len(lua_fcs)} fire controls '
+          f'the Lua names (G1)')
+
+
 # ---------------------------------------------------------------- NPC mission table
 # The spawner caches the aircraft of every row of the world data's NPC table once, when the level starts, and a
 # spawn only looks there (tools/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
@@ -2139,6 +2209,7 @@ def build_rows():
 NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
 NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
 NPC_ROWS = set()           # its row names, filled by build_npc_table
+NPC_SOURCE = {}            # (0.73.77) each Survival row whose DT_NPC row Lua makes -> the mission row it was copied from
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
 NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
@@ -2218,6 +2289,60 @@ def coop_standin_rows():
 # gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
 SPIKE_SUFFIXES = ['b', 'c', 'd']
 
+# (0.73.77, plan G1) No scripted sure kills on enemies. A stock mission's "hit missile" fire controls (BP_FCS_HitMSL_*,
+# which launch BP_MSL_certain_kill_*: homing 180 deg, turning without limit, flares do nothing; hard rule 36) are meant
+# for its events alone (CaptureDistance 0: their AI never picks them), but Scripts/sv_rows.lua copies every
+# NPC_FCS_PlaneMsl* slot onto Survival's missile fire control with a capture distance, so their AI fired them: Mission
+# 22's F/A-18E row (OP1032_f18e_Ally_MS22) carries NPC_FCS_PlaneMsl300 (Missile_300, 9999 damage) in slot 5, which
+# one-shot cressendo twice in round 6 (150 HP each) and liljojofett in round 41 of the 0.73.76 runs; the Phantom Su-47s
+# carry NPC_FCS_PlaneMsl302 (the same) and the Reaper F-22 wings NPC_FCS_PlaneMsl100. Mission 22's Su-33 row
+# (OP1030_su33_02) carries Mission 13's scripted anti-ship pair (1200 damage, unlimited turn). The stock mission rows
+# that name such a row are pointed at the airframe's plain campaign enemy row instead (the one every other mission's
+# <airframe>_common names: Flr / Gun / Msl only), and the aces' copies (build_npc_rows) have those slots emptied;
+# check_no_certain_kill fails the build on any enemy row that still carries one.
+PLAIN_NPC_IDS = {'f18e_common': ('OP1032_f18e_Ally_MS22', 'OP1032_f18e_01'),   # mission row: (stock NpcId, plain)
+                 'su33_common': ('OP1030_su33_02', 'OP1030_su33_01')}
+CERTAIN_KILL_DAMAGE = 1000.0       # a weapon this strong takes a whole health bar (a player's is 100-300 HP)
+CERTAIN_KILL_TURN = 10000.0        # MaxRotationAngle of the scripted kills: a missile that turns without limit
+_FCS_TABLES = {}
+
+
+def npc_fcs_tables():
+    """(fire control rows, weapon rows): the campaign's DT_NPC_FCS / DT_NPC_Weapon and Online Mode's _ON tables, each
+    plain row name -> {property: value} (a campaign row first)."""
+    if not _FCS_TABLES:
+        def load(path, st):
+            z = ZenPkg(stock(path))
+            dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+            return {(k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+        for key, st, paths in (('fcs', 'LiveNpcFCSDataTable', ['/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS',
+                                                                 ON_NPC + 'DT_NPC_FCS_ON']),
+                               ('wpn', 'LiveNpcWeaponDataTable', ['/Game/Datatables/AI/NPC/Weapon/DT_NPC_Weapon',
+                                                                   ON_NPC + 'DT_NPC_Weapon_ON'])):
+            t = {}
+            for path in paths:
+                for k, v in load(path, st).items(): t.setdefault(k, v)
+            _FCS_TABLES[key] = t
+    return _FCS_TABLES['fcs'], _FCS_TABLES['wpn']
+
+
+def certain_kill(fcs_row):
+    """Why fire control `fcs_row` is a scripted sure kill, or None: a hit missile's blueprint (BP_FCS_HitMSL_*) or one
+    named certain, or a weapon of CERTAIN_KILL_DAMAGE or more, or one turning CERTAIN_KILL_TURN deg (no flare shakes it)."""
+    fcs, wpn = npc_fcs_tables()
+    r = fcs.get(fcs_row)
+    if r is None: return None
+    bp = r.get('FCSBlueprintClass')
+    cls = bp[2][1] if bp and bp[0] == 'soft' and bp[2] and bp[2][0] == 'name' else ''
+    w = r.get('NpcWeaponId')
+    wname = (w[1] if w[2] == 0 else f'{w[1]}_{w[2] - 1}') if w and w[0] == 'name' else None
+    wr = wpn.get(wname, {}) if wname else {}
+    f = lambda v: struct.unpack('<f', v[2])[0] if v and v[0] == 'raw' and v[1] == 'Float' else 0.0
+    dmg, turn = f(wr.get('damage')), f(wr.get('MaxRotationAngle'))
+    if 'hitmsl' in cls.lower() or 'certain' in cls.lower() or dmg >= CERTAIN_KILL_DAMAGE or turn >= CERTAIN_KILL_TURN:
+        return f'{fcs_row} ({cls or "?"}, weapon {wname}: {dmg:.0f} damage, turns {turn:.0f} deg)'
+    return None
+
 
 def build_npc_table():
     z = ZenPkg(stock(NPC_TABLE_STOCK))
@@ -2227,6 +2352,16 @@ def build_npc_table():
     assert o == len(p), (o, len(p))
     rows = dict(dt['rows'])
     npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
+    # (0.73.77, G1) the stock rows that named a sure kill: on their airframe's plain enemy row (PLAIN_NPC_IDS), before
+    # anything below copies them or names their <NpcId>_SV clones
+    for mrow, (was, plain) in PLAIN_NPC_IDS.items():
+        have = [q for q in rows[(mrow, 0)][2] if q[0] == npc_idx][0][3]
+        assert (have[1] if have[2] == 0 else f'{have[1]}_{have[2] - 1}') == was, f'{mrow}: NpcId {have}, {was} expected'
+        nid = survival_events.fname(plain)
+        set_prop(rows[(mrow, 0)][2], npc_idx, 'NpcId', nid)
+        z.nb.add(nid[1])
+        print(f'  {mrow}: {was} -> {plain} (no scripted sure kill: G1)')
+    NPC_SOURCE.clear()
     extra = list(NPC_EXTRA)
     # (the Spaceport Assault's enemy ships, survival_events.SP_NPC_ROWS: shaped as an Aegis hull or turret row)
     for new_row, src, npc in POOL_EXTRA + survival_events.SP_NPC_ROWS:
@@ -2282,6 +2417,7 @@ def build_npc_table():
         set_prop(row[2], npc_idx, 'NpcId', ('name', npc, 0))
         for n in (new_row, npc): z.nb.add(n)
         dt['rows'].append(((new_row, 0), row))
+        NPC_SOURCE[new_row] = src                                       # (check_no_certain_kill: a Lua-made row's)
     for table, wanted in NPC_IMPORT:
         zs = ZenPkg(stock(table))
         ds, os_ = dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')
@@ -2361,6 +2497,7 @@ if __name__ == '__main__':
     build_npc_table()
     build_shop_rows()
     build_rows()
+    check_no_certain_kill()              # (0.73.77, G1: after the NPC tables it reads are saved)
     try:
         build_menu_pages()
     except Exception:                    # (the rest of the build still comes: the main menu keeps the flat rows)

@@ -1081,3 +1081,64 @@ X-02S and paint on its copy of her (M.cunits[unit].planes, up to 30 s) and runs 
 picture (rz) resends both while they're on; runLeft puts the sky back at once on every game. Friends' zip rebuilt with
 it: AC8SurvivalMode_COOP2MP_0.73.76_Online_COOP.zip, hash de48331d...7f24e39 (replaces 38821dbe...). Log lines:
 `coop: the host's VALKA mood on: the sky red and her song here too`, `coop: VALKA's X-02S on this game's copy of her`.
+
+## 0.73.77-coop2mp.78: the 1.0.0 plan's bug fixes and the co-op leaderboard (runtime 0.32.22; 2026-11-03; not yet run in game)
+The cloud session's hand-off of 2026-11-03 (testing/2026-11-03: README, PLAN_desync_lag_compatibility.md = the 1.0.0 plan,
+ECONOMY_change_proposal.md, IMPROVEMENTS.md) built by 8 agents in one tree (user: "start working on all the bug fixes
+firstly, then start work on the COOP leaderboards with multiple agents"). None of it is a hard rule until a test confirms it.
+- Copies (plan A, sv_coop.lua): a joiner's copies held at 1 HP by the MinHealth FIELD (floorOn; SetMinHealth(0.1) kept 0);
+  a hit the floor clips is sent whole from the copy's DamageHistoryMap (M.historyOf, trusted once your plane is in one:
+  M.ownSeen); a copy put there by something else goes back up; "hp" never touches a copy down here; a refused spawn's
+  wrecks are taken down, then SV_Recycle(unit, 1) after 6 tries ([coop] force_recycle); the joiner's sync line counts the
+  floor and refusals (A6); the host's run-over ("ro") goes again with the picture to a player who links after it (A9).
+  claude/coop-fixes (57dce73) checked: all in or superseded but its STORE relabel fix (ported, defences_test).
+- Kill pay (economy C1): each "dn" names the killer (hostKiller: most damage, else the host if it fired in 15 s, else the
+  side); every game pays its own kills x1 and a teammate's x min([zollars] team_x 0.5, 1 / (players - 1)); the host's
+  tally COOP.killTally(). Log `credits: ... by player N x0.33`.
+- Rejoin in another aircraft (C): after sys|left / sys|restart (po / rj on joiners) the old real plane is set aside
+  (unbound, hidden, collision and tick off, 30 km up) and moved out of its native slot with SV_CoopSwapPP, since
+  SV_CoopSpawnPP DESTROYS what its slot holds (migration's retirePeer had that latent crash; fixed the same way); a new
+  plane spawned; stand-ins on a free unit (M.unitSlot); [coop.rejoin]. coop_rejoin_test.sh.
+- VALKA's mood (D): M.valkaWatch on the host mirrors her moodOn / reveal to joiners, logs each send, sends off when her
+  round ends with it on; joiners drop it on rs, a new run or taking over. gloom's run (no mood on dukka) was likely the
+  first 0.73.76 zip (38821dbe, before the sync): check the build hash line. "rnd" field 11 = the host's round special
+  (joiners' music), field 12 = the host's special:state (D.hostSpecial).
+- Crash on quit (F1): UE4SS.dll+0x2ab5bd is UE4SS's Lua UObject property lookup on a FREED object (not FindAllOf); the
+  dump's main.dll+0x1abe8 / +0x68b7 were stale return addresses (map them: build/runtime/main_<ver>_<ts>.map, the
+  shipped 0.32.21's main_0.32.21_6ae89927.map). The runtime's teardown gate (g_teardown on the spawner's world: freed,
+  garbage, being destroyed, unreachable in a purge or reused) closes at once; SV_LevelGone(); sv_core.lua levelGate /
+  levelDrop / LEVEL_DROPS (each part's lists forgotten, none touched; COOP.levelDrop), tick halves held until a new level.
+- Bomber-raid crash (F2): AI path tracking (ULiveAIPathTickerSubsystem's tick 0x147dd5120, ParallelFor body
+  0x147dd53f0) holding a deleted movement controller (+0x1c0, base vtable 0x14cbf8550); who keeps it isn't found.
+  runtime/pathguard.h (kSigPathTrackTick) leaves out a tracker that's freed or faults; a recycled flight's unit actor is
+  destroyed [recycle] destroy_after_s 30 later (SV_RecycleWait); SV_Recycle(unit, force 0/1/2); Ctrl+F11 (test only)
+  the raid's spawns 20 times. Crash readers tools/checks/mdmp.py / deep.py (--map); the release readmes' crash note.
+- Lag (B): every call of the tick halves timed by name, a second `perf: lists:` line (lists, walks by class, natives,
+  Lua heap); joiners' `planes` drops downed planes 10 s on (the host's was already pruned at each round start); Ladon
+  missiles and weapon objects kept as made, not walked; allied / defence counts a share per tick (ALLY.alive); STORE
+  texts only at the airfield, sent on change. perf_test.sh. Lesson: feed a growing object list with NotifyOnNewObject
+  and liveAddr, never re-walk it with FindAllOf.
+- Specials and gameplay: G1 enemy rows never carry a stock "hit missile" (BP_FCS_HitMSL_*: capture 0, only events fire
+  them, but sv_rows' svFcs gave them a capture distance): f18e_common / su33_common on their plain campaign rows, the
+  aces' slots emptied, build_survival.py check_no_certain_kill fails the build. G2 UP.healthGuard (sv_tactical.lua, from
+  HIT.tick) restores AIRFRAME the same pass the airfield resets it, never a hit. D4 SPC.cleanUp / endTick / clientClean
+  (sv_rounds.lua): every special's objects recorded and taken down at its end, checked 2 s later (SV_Recycle); VALKA's
+  opener railgun (invincible: RE_SV_ValkaEmlRemove's LiveDestroyUnitExecution never killed it; likely the white minimap
+  square, user 2026-11-03) removed 4 s after its shot, her parts at her death. MINDRIPPER's field on joiners
+  (ANOM.clientTick) only from a live copy while the host's Anomaly hunts (it lingered round a wreck for rounds, user
+  2026-11-03). A7 [waves.tail] RE_SV_LastPing_NN; A8 the run-over held for a player loading in (join_wait_s 90); A10 no
+  SV_Invert while DOWN; D5 [specials.valka] flash_size_x 0.5.
+- Spaceport (I, economy C2): ships counted by their hull (SPORT.shipObjs: paid and called once, turrets finished off,
+  pay.turret 150 alone); "landing craft sunk" / "troop vehicle destroyed" (never " down (", so joiners are paid); the
+  escape penalty on every game ("db"); leftover fleets taken off; withdrawn flights recycled; rockets end by timeout or a
+  real climb, debris only after a seen split; clocks wait while you're landed solo; "spx" carries the NEXT row and the
+  pending retake; deck.reserve 4. tools/re/SPACEPORT_ASSAULT.md's 0.73.77 section has the I9 checklist.
+- Co-op leaderboard (H2-H5): [coop] leaderboard on; the host sends one team run ("coop": players, squad [{pilot,
+  aircraft, air, ground, revives, host}], host first, sums = kills); every game keeps the squad from lb|r / lb|p / lb|s /
+  lb|x (joiners answer lb|n), so a host by migration sends it under the same run id; joiners never send. The Worker
+  (leaderboard/, not deployed) checks it (limits x players, unique names ignoring case, host = pilot), stores squads, a
+  third pinned CO-OP message (2 / 3-4 / 5+), /leaderboard board:Co-op [size], /pilot's Co-op field; solo boards read
+  players IS NULL. Deploy it BEFORE any build that sends co-op runs, then /setup once, then register the build.
+- Open (from the agents): sv_audit's damage audit may still count the airfield reset; LiveSetActiveGameObject by unit
+  never switched the shuttle off (RE_SV_FlightOff_NN likely the same); a joiner who kills ship turrets may get each as a
+  ground kill if GetAttachParentActor doesn't see them attached; set-aside planes pile up one per changed-aircraft rejoin.

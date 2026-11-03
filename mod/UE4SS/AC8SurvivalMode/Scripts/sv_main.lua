@@ -74,8 +74,14 @@ local function hangarAmmoTick(tick)
     if not (CFG.ammo.enabled and A and A.applied and A.caps and A.max) or tick % 2 ~= 1 then return end
     if not playerOnAirfield() then SH.panels, SH.slotCache, SH.tbNames = nil, nil, nil; return end   -- the landing menu only exists down there
     -- every 2 s, all of them: the STORE pages show their own panel, made when the page opens, while the landing
-    -- page's stays valid (report of 2026-10-23: the STORE still showed the stock counts)
-    if tick % 8 == 1 or not SH.panels then
+    -- page's stays valid (report of 2026-10-23: the STORE still showed the stock counts). ((0.73.77, Workstream B4) Only
+    -- when the landing menu's windows changed since (a page opened or closed: SHOP.windowsKey, from the icons' walk, no
+    -- walk of its own), a kept panel is gone, or every 8 s: this walk over every object ran every 2 s down there.)
+    local wkey = SHOP.windowsKey and SHOP.windowsKey(tick) or nil
+    local gone = false
+    for _, w in ipairs(SH.panels or {}) do if not liveObj(w) then gone = true end end
+    if not SH.panels or gone or (tick % 8 == 1 and (wkey ~= SH.panelKey or tick % 32 == 1)) then
+        SH.panelKey = wkey
         SH.panels = {}
         for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_WeaponDetail_002_C") or {}) do
             if liveWidget(w) then SH.panels[#SH.panels + 1] = w end
@@ -138,7 +144,12 @@ local function creditKill(p)
     ti = ti or (D and D.round and TIER.index(D.round))
     local c = CFG.credits
     local by = p.struck and "airstrike" or KILL.by(p)
-    local byX = (by == "airstrike" and (c.airstrike_x or 1)) or (by ~= "you" and (c.ally_x or 1)) or 1
+    -- ((0.73.77, economy C1) in co-op the host names each kill's player (sv_coop.lua KILL.by, p.killer): a teammate's
+    -- pays COOP.teamShare(), min(team_x, 1 / (players - 1)), on every game; on a joiner every kill was paid as its own)
+    local byX = (by == "airstrike" and (c.airstrike_x or 1))
+        or (by == "wingmate" and COOP and COOP.teamShare and COOP.teamShare())
+        or (by ~= "you" and (c.ally_x or 1)) or 1
+    local byText = (by == "wingmate" and type(p.killer) == "number") and ("player " .. (p.killer + 1)) or by
     local rx = TIER.roundX(D and D.round)
     local jx = p.jammer and (CFG.jammer.pay_x or 1) or 1
     -- your kill of a plane the squadron director used in a tactic within tag_s (CFG.late.director_pay; behaviour roadmap
@@ -151,14 +162,15 @@ local function creditKill(p)
     local pay, x = TIER.pay((c[kind] or 0) * TIER.specialX() * rx * byX * jx * dx, ti)
     addCredits(pay, string.format("%s down (%s%s%s%s%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
         TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or "", rx ~= 1 and string.format(", round x%.2f", rx) or "",
-        by ~= "you" and string.format(", by %s x%.2f", by, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or "",
+        by ~= "you" and string.format(", by %s x%.2f", byText, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or "",
         dx ~= 1 and string.format(", director %s x%g", tostring(dt.tactic), dx) or ""))
     RUN.kills[by] = (RUN.kills[by] or 0) + 1
     if RUN.roundKills then RUN.roundKills[by] = (RUN.roundKills[by] or 0) + 1 end
     if by ~= "you" and by ~= "airstrike" then
         local d = p.dmg or {}
-        log(string.format("kills: %s (%s) went down to the %s (damage: you %.0f, allies %.0f, ships %.0f, defences %.0f)", p.name,
-            tostring(p.unit), by, d.you or 0, d.allies or 0, d.ships or 0, d.defences or 0))
+        log(string.format("kills: %s (%s) went down to %s (damage: you %.0f, allies %.0f, ships %.0f, defences %.0f)%s", p.name,
+            tostring(p.unit), by == "wingmate" and byText ~= by and byText or ("the " .. by), d.you or 0, d.allies or 0,
+            d.ships or 0, d.defences or 0, p.hostNamed and ", named by the host" or ""))
     end
     if p.jammer then
         local t = CFG.hud.text
@@ -197,16 +209,24 @@ function newRunHere(why)
         .. "the loadout as a new run's", tostring(why), RUN.credits, tostring(had)))
 end
 
+-- (0.73.77, Workstream B1) The time since t0 added to the run's tick timer (D.perf) as part `name`. Every call the tick
+-- halves make goes through it now (timed below, or perfAdd around a block whose text the checks read), so the perf
+-- line's untimed rest has names: Shake Shack's host of 2026-11-02 went from 15 to 85 ms a tick over 46 rounds, the
+-- untimed rest 6 -> 36 ms of it. A name with a "/" ("allies/defences") is a share of the part before the "/", timed
+-- inside it (sv_allies.lua, sv_shop.lua, sv_ladon.lua through PERF.add): shown apart, never counted twice.
+local function perfAdd(name, t0)
+    local pf = D and D.perf
+    if not pf then return end
+    local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
+    pf.parts[name] = e
+    local dt = (os.clock() - t0) * 1000
+    e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
+end
+PERF = { add = perfAdd, pruned = 0 }
 local function timed(name, fn, ...)                -- pcall(fn, ...), its time added to the run's tick timer (D.perf)
     local t0 = os.clock()
     local ok, err = pcall(fn, ...)
-    local pf = D and D.perf
-    if pf then
-        local e = pf.parts[name] or { n = 0, sum = 0, max = 0 }
-        pf.parts[name] = e
-        local dt = (os.clock() - t0) * 1000
-        e.n, e.sum, e.max = e.n + 1, e.sum + dt, math.max(e.max, dt)
-    end
+    perfAdd(name, t0)
     return ok, err
 end
 
@@ -307,6 +327,37 @@ local function planeSweep(slot)
     return you
 end
 
+-- (0.73.77, Workstream B2) A plane seen down PLANE_KEEP_S ago comes off `planes` (every 2 s, probeTickB). Before, the
+-- host's and solo's list lost its downed planes only at a round's start (sv_rounds.lua pruneDown), and a co-op joiner's
+-- never: a joiner runs no startRound, so every aircraft of its run stayed in `planes`, which a dozen parts walk every
+-- tick (the sweep, the hits, the director, the tail watch, the co-op stray watch, the weapons log...). Not while a
+-- special keeps an index into the list (a Ladon round's s.planeFrom, sv_ladon.lua: its bodies' down entries count
+-- there); its round's start prunes it. The down entries live on wherever another part holds them (D.vanished, the
+-- director's tags): only the list lets go. How many came off (PERF.pruned, the perf line's), first one logged a level.
+local PLANE_KEEP_S = 10
+local function prunePlanes()
+    local s = D and D.special
+    if s and s.planeFrom then return 0 end
+    local now, keep, cut = os.clock(), {}, 0
+    for _, p in ipairs(planes) do
+        if p.down then
+            p.downSeen = p.downSeen or now
+            if now - p.downSeen >= PLANE_KEEP_S then cut = cut + 1 else keep[#keep + 1] = p end
+        else
+            keep[#keep + 1] = p
+        end
+    end
+    if cut == 0 then return 0 end
+    planes = keep
+    PERF.pruned = PERF.pruned + cut
+    if D and not D.pruneSaid then
+        D.pruneSaid = true
+        log(string.format("round probe: %d downed aircraft off the list %d s after they went down, %d still on it "
+            .. "(0.73.77: every 2 s, not only at a round's start)", cut, PLANE_KEEP_S, #keep))
+    end
+    return cut
+end
+
 -- The run's over: Survival's level was left. Every part stops with D, so nothing of the run reads the level's objects
 -- after this. (0.73.73: at once when the level is going away for sure, leaveNow, not only once its player controller had
 -- been gone 8 s: every part read the level's objects as they were freed for those 8 s, paying for its planes on the way.)
@@ -346,6 +397,7 @@ end
 -- (probeTick's round clock, for its second half: probeTickB)
 local bNow, bPaused
 local function probeTick(tick)
+    if levelGate() then if D then runLeft(LEAVE.why) end return end   -- ((0.73.77) F1: the level torn down: sv_core.lua levelGate)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode (" .. memText() .. ")")
@@ -353,6 +405,7 @@ local function probeTick(tick)
         if type(SV_Invert) == "function" then SV_Invert(0, 0, 0, 0) end   -- (the Anomaly's field)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
         SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
+        SH.textSent, SH.rowTexts, SH.textSaid = nil, nil, nil   -- ((0.73.77) its texts sent afresh, its rows found again: B4)
         do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
             local an, got, want = CFG.specials.anomaly, 0, 0
             local function keep(path)
@@ -419,9 +472,10 @@ local function probeTick(tick)
                 or (CFG.music.hold_clock and "held while the BGM is paused" or "stock")))
         end
     end
-    local okSR, errSR = pcall(shopRowsTick, tick)
+    local okSR, errSR = timed("shop rows", shopRowsTick, tick)
     if not okSR then log("shop: rows error " .. tostring(errSR)) end
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
+        local tSu = os.clock()                               -- ((0.73.77) "setup" in the perf line: B1)
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)
         if not okG then log("game Lua: error " .. tostring(errG)) end
         if not PROF.menuDone then                        -- (the learning layer's saved profile, once a session: P6; the AI's
@@ -450,8 +504,12 @@ local function probeTick(tick)
         if not okP then log("probe: setup error " .. tostring(errP)); PR.tries = 20 end
         local okM, errM = pcall(SHOP.menuSetup)
         if not okM then log("shop: store setup error " .. tostring(errM)); SH.menuDone = true end
+        perfAdd("setup", tSu)
     end
+    local tLv = os.clock()                         -- ((0.73.77) "leave check", both halves: B1)
     if leaveNow() then runLeft(LEAVE.why) end      -- (0.73.73: the level going away, at once)
+    perfAdd("leave check", tLv)
+    local tRc = os.clock()                         -- ((0.73.77) "restart check": the controller, the flags: B1)
     if D then
         if not liveObj(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
         -- the run is over once Survival's player controller has been gone 8 s (the level was left: before, the run went
@@ -481,9 +539,12 @@ local function probeTick(tick)
         end
         if (D.pcLost or 0) >= 8 then runLeft("its player controller gone 8 s") end
     end
+    perfAdd("restart check", tRc)
     if D then
+        local tCk = os.clock()                     -- ((0.73.77) "clock": B1)
         local now, paused = roundClock(tick)
         pcall(SND.setPaused, paused)                                    -- (Survival's own sounds hold their breath)
+        perfAdd("clock", tCk)
         if now then
             local okR, errR = timed("rounds", roundsTick, now)
             if not okR then log("rounds: error " .. tostring(errR)) end
@@ -496,6 +557,7 @@ local function probeTick(tick)
             -- In co-op the store doesn't pause the game (sv_coop.lua's online-style pause keeps the world running while
             -- others are linked), so the hold never came on there (friends' logs of 2026-10-26: rearmed and bought in the
             -- store, no hold) and the track ended early: then the landing menu being up holds it.
+            local tMh = os.clock()                 -- ((0.73.77) "music hold": B1)
             if type(SV_MusicHold) == "function" then
                 local hold = 0
                 if playerOnAirfield() then
@@ -516,12 +578,13 @@ local function probeTick(tick)
                     log("music: track clock " .. (hold == 1 and "held (landing store)" or "running"))
                 end
             end
+            perfAdd("music hold", tMh)
             local okF, errF = timed("airfield", airfieldTick, tick)
             if not okF then log("airfield: error " .. tostring(errF)) end
             local okB, errB = timed("bombers", bombTick, tick)
             if not okB then log("bombers: error " .. tostring(errB)) end
         end
-        if tick % 4 == 1 then pcall(LB.deathCheck, survivalPC) end      -- shot down: the run's over
+        if tick % 4 == 1 then timed("death check", LB.deathCheck, survivalPC) end   -- shot down: the run's over
         if PPTEST and PPTEST.tick then pcall(PPTEST.tick, os.clock()) end   -- (COOP2MP's test key: nil in releases, stripped)
         bNow, bPaused = now, paused
     else
@@ -534,7 +597,10 @@ end
 -- whole on one frame every 250 ms (15-38 ms on the user's PC, worst 357 ms: a frame that long four times a second; a
 -- friend's report of 2026-10-31, "choppy" and stuttering in solo play): in two halves, each part still once a tick.
 local function probeTickB(tick)
+    if levelGate() then if D then runLeft(LEAVE.why) end return end   -- ((0.73.77) F1: the level torn down: sv_core.lua levelGate)
+    local tLv = os.clock()                         -- ((0.73.77) "leave check", both halves: B1)
     if leaveNow() then runLeft(LEAVE.why) end      -- (0.73.73: the level going away since the first half)
+    perfAdd("leave check", tLv)
     if D then
         local now, paused = bNow, bPaused
         if now then
@@ -562,7 +628,7 @@ local function probeTickB(tick)
             if not okSw and not D.spwErr then D.spwErr = true; log("specials: error " .. tostring(errSw)) end
             local okAu, errAu = timed("audit", AUDIT.tick, now)               -- (sv_audit.lua)
             if not okAu and not D.auditErr then D.auditErr = true; log("audit: error " .. tostring(errAu)) end
-            if CFG.allies.kills then pcall(KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
+            if CFG.allies.kills then timed("kill marks", KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)
             -- the STORE's tactical items and SECOND CHANCE (sv_tactical.lua)
             local okT, errT = timed("tactical", TAC.tick, now)
             if not okT and not D.tacErr then D.tacErr = true; log("tactical: error " .. tostring(errT)) end
@@ -573,7 +639,7 @@ local function probeTickB(tick)
                 if not okDn and D and not D.downErr then D.downErr = true; log("down: error " .. tostring(errDn)) end
             end
         end
-        if tick % 40 == 9 and type(SV_Event) == "function" then pcall(SV_Event, "RE_SV_Beat") end   -- (restart detection)
+        if tick % 40 == 9 and type(SV_Event) == "function" then timed("beat", SV_Event, "RE_SV_Beat") end   -- (restart detection)
         if ACE.squadTick then                   -- the ace squadrons' openers and blinks (P9, sv_ai.lua; before the reversals)
             local okSq, errSq = timed("squads", ACE.squadTick, now, D, paused)
             if not okSq and D and not D.squadErr then D.squadErr = true; log("aces: squadron error " .. tostring(errSq)) end
@@ -600,15 +666,17 @@ local function probeTickB(tick)
         if not okA then log("ammo: error " .. tostring(errA)) end
     end
     if levelTick then
-        if tick - levelTick == 8 then logDifficulty("at mission start") end
-        if tick - levelTick == 48 then logDifficulty("10 s into the mission") end
+        if tick - levelTick == 8 then timed("difficulty", logDifficulty, "at mission start") end
+        if tick - levelTick == 48 then timed("difficulty", logDifficulty, "10 s into the mission") end
     end
+    local tNp = os.clock()                                          -- ((0.73.77) "new planes": B1)
     local keep = {}
     for _, p in ipairs(pending) do
         p.age = p.age + 1
         if p.age >= 2 then pcall(logPlane, p.obj, p.unit, p.k) else keep[#keep + 1] = p end
     end
     pending = keep
+    perfAdd("new planes", tNp)
     if not levelTick then return end                                -- the rest in Survival only
     local slot = tick % 8
     local okPl, you = timed("planes", planeSweep, slot)            -- (each aircraft every 2 s: planeSweep above)
@@ -618,16 +686,22 @@ local function probeTickB(tick)
         you = nil
     end
     if slot ~= 0 then return end                                    -- every 2 s: the summaries
+    timed("prune", prunePlanes)                                     -- ((0.73.77) planes down 10 s off the list: B2)
+    local tSs = os.clock()                                          -- ((0.73.77) "stats sample": B1)
     if D then hookErr("stats: STATS.sample", pcall(STATS.sample, D.now, you or nil)) end   -- (the measurements, P6's samples)
-    local okJ, errJ = pcall(JAM.tick)                               -- (the jammer's boost on the enemies near it)
+    perfAdd("stats sample", tSs)
+    local okJ, errJ = timed("jammer", JAM.tick)                     -- (the jammer's boost on the enemies near it)
     if not okJ and not D.jamErr then D.jamErr = true; log("jammer: error " .. tostring(errJ)) end
     -- (the log's diagnostics: with [log] verbose the flags on every change, the planes alive, the nearest every 10 s;
     -- without, the flags once a level and when one that isn't a counter changes, flagLine's key)
+    local tFl = os.clock()                                          -- ((0.73.77) "flags": B1)
     local verbose = logVerbose()
     local fl, flagged, flagKey = flagLine()
     local key = verbose and fl or flagKey
     if fl and key ~= lastFlags then log("round probe: flags " .. fl); lastFlags = key end
+    perfAdd("flags", tFl)
     if not verbose then return end
+    local tVb = os.clock()                                          -- ((0.73.77) "verbose": [log] verbose's lines, B1)
     local alive, nearest = 0, nil
     for _, p in ipairs(planes) do
         if not p.down then
@@ -645,6 +719,7 @@ local function probeTickB(tick)
         log(string.format("enemies: nearest %s from you; %d flights up (%d flagged up)",
             nearest and string.format("%.1f km", nearest) or "(player not found)", flights, flagged or 0))
     end
+    perfAdd("verbose", tVb)
 end
 
 ---------------------------------------------------------------------------------------------------- the one tick
@@ -652,7 +727,108 @@ end
 -- the untimed rest last (the co-op run of 2026-10-30's lines named the four worst single ticks only, which left most of
 -- an average 9-30 ms tick unexplained); a minute in, then every five (every minute with [log] verbose); the worst half is
 -- the longest the game thread waited on one frame.
+-- (0.73.77, Workstream B1) The natives the parts call most, counted and timed for the perf line's second line
+-- ("natives: ..."), wrapped here as sv_main.lua runs last (every part calls them by their global names at call time;
+-- sv_coop.lua's own raw copies aren't counted). SV_UnitAlive walks the spawner's whole unit list, a memory check on each
+-- unit, and that list grows with every unit spawned in the level: its cost can grow over a run with nothing in Lua
+-- growing. SV_ObjChain is liveAddr's: how many kept objects every part checks a tick.
+local NAT, NAT_NAMES = {}, { "SV_UnitAlive", "SV_Event", "SV_Spawn", "SV_SetText", "SV_ObjChain" }
+do
+    local function done(e, t0, ...)
+        local dt = (os.clock() - t0) * 1000
+        e.n, e.ms = e.n + 1, e.ms + dt
+        if dt > e.max then e.max = dt end
+        return ...
+    end
+    for _, name in ipairs(NAT_NAMES) do
+        local raw = _G[name]
+        if type(raw) == "function" then
+            local e = { n = 0, ms = 0, max = 0 }
+            NAT[name] = e
+            if name == "SV_ObjChain" then          -- (counted only: thousands a tick, each as cheap as the clock's read)
+                _G[name] = function(...) e.n = e.n + 1; return raw(...) end
+            else
+                _G[name] = function(...) local t0 = os.clock(); return done(e, t0, raw(...)) end
+            end
+        end
+    end
+end
+
+-- (0.73.77, B1) The perf line's second line: the long-lived lists' sizes (every list a part keeps between ticks: one that
+-- grows over a long run shows here, the plan's first suspect `planes`), the walks over every object (sv_core.lua WALK.stat,
+-- by class: each reads every object, so their cost grows with what the game holds), the natives above, the Lua heap.
+local function sizeOf(t) local n = 0; if type(t) == "table" then for _ in pairs(t) do n = n + 1 end end; return n end
+local function perfLists()
+    local up = 0
+    for _, p in ipairs(planes or {}) do if not p.down then up = up + 1 end end
+    local out = { string.format("planes %d (%d up; %d down taken off since)", #(planes or {}), up, PERF.pruned) }
+    local function add(name, n) if type(n) == "number" and n > 0 then out[#out + 1] = name .. " " .. n end end
+    add("new planes", #(pending or {}))
+    add("held", D.vanished and #D.vanished)
+    add("flights up", sizeOf(D.up))
+    add("events", D.events and #D.events)
+    local R = ALLY.run
+    if R then
+        add("allied planes", R.planes and #R.planes)
+        add("allies up", sizeOf(R.up))
+        add("ESM fields", sizeOf(R.esmFields))
+        add("defences' actors", R.defActors and #R.defActors)
+    end
+    add("missiles", HIT.msl and #HIT.msl)
+    add("Ladon missiles", sizeOf(HIT.ladonPool))
+    add("kill marks", sizeOf(KILL.fired))
+    add("store icons", sizeOf(SH.decor))
+    local m = RUN and RUN.metrics
+    if m then add("kill records", m.kills and #m.kills); add("tail records", m.tw and #m.tw) end
+    if WLOG and WLOG.sizes then
+        local okW, w = pcall(WLOG.sizes)
+        if okW and type(w) == "table" then for _, e in ipairs(w) do add(e[1], e[2]) end end
+    end
+    if COOP and COOP.sizes then                    -- (sv_coop.lua's: its copies, flights, ids, torn ...)
+        local okC, cs = pcall(COOP.sizes)
+        if okC and type(cs) == "table" then for _, e in ipairs(cs) do add("co-op " .. tostring(e[1]), e[2]) end end
+    end
+    return table.concat(out, ", ")
+end
+local function perfWalks(n)
+    local st = WALK and WALK.stat
+    local list, k, ms, worst, worstCls = {}, 0, 0, 0, nil
+    for cls, e in pairs(st or {}) do
+        list[#list + 1] = { cls, e }
+        k, ms = k + e.n, ms + e.ms
+        if e.max > worst then worst, worstCls = e.max, cls end
+    end
+    if WALK then WALK.stat = {} end
+    if k == 0 then return "walks: none" end
+    table.sort(list, function(a, b) return a[2].ms > b[2].ms end)
+    local top = {}
+    for i = 1, math.min(6, #list) do
+        local e = list[i][2]
+        top[#top + 1] = string.format("%s %dx %.0f ms (%d found)", list[i][1], e.n, e.ms, e.found)
+    end
+    return string.format("walks: %d (%.2f a tick), %.1f ms a tick, worst %.0f ms (%s); most: %s", k, k / math.max(1, n),
+        ms / math.max(1, n), worst, tostring(worstCls), table.concat(top, ", "))
+end
+local function perfNatives(n)
+    local t = {}
+    for _, name in ipairs(NAT_NAMES) do
+        local e = NAT[name]
+        if e and e.n > 0 and name == "SV_ObjChain" then
+            t[#t + 1] = string.format("%s %.0f a tick", name, e.n / math.max(1, n))
+            e.n = 0
+        elseif e and e.n > 0 then
+            t[#t + 1] = string.format("%s %.1f a tick %.2f ms (worst %.0f)", name, e.n / math.max(1, n), e.ms / math.max(1, n), e.max)
+            e.n, e.ms, e.max = 0, 0, 0
+        end
+    end
+    return "natives: " .. (#t > 0 and table.concat(t, ", ") or "none")
+end
+
 local function perfLine(tA, tB, tick)
+    if not D.perf then                             -- ((0.73.77) a new period: the walks and natives counted from here)
+        if WALK then WALK.stat = {} end
+        for _, e in pairs(NAT) do e.n, e.ms, e.max = 0, 0, 0 end
+    end
     local pf = D.perf or { n = 0, sum = 0, max = 0, maxA = 0, maxB = 0, parts = {}, at = tick }
     D.perf = pf
     pf.n, pf.sum = pf.n + 1, pf.sum + tA + tB
@@ -660,20 +836,32 @@ local function perfLine(tA, tB, tick)
     pf.sumA = (pf.sumA or 0) + tA
     if tick - pf.at < ((logVerbose() or not D.perfSaid) and 240 or 1200) then return end
     D.perfSaid = true
-    local parts, timedSum = {}, 0
-    for k, v in pairs(pf.parts) do parts[#parts + 1] = { k, v }; timedSum = timedSum + v.sum end
-    table.sort(parts, function(a, b) return a[2].sum > b[2].sum end)
-    local top = {}
-    for i = 1, math.min(12, #parts) do
-        local v = parts[i][2]
-        top[#top + 1] = string.format("%s %.1f/%.0f %d%%", parts[i][1], v.sum / math.max(1, pf.n), v.max,
-            math.floor(100 * v.sum / math.max(pf.sum, 0.001) + 0.5))
+    -- ((0.73.77) every part (it was the top 12, which hid the small ones); the shares within a part, "allies/defences",
+    -- apart: their time is in their part's already)
+    local parts, subs, timedSum = {}, {}, 0
+    for k, v in pairs(pf.parts) do
+        if k:find("/", 1, true) then subs[#subs + 1] = { k, v }
+        else parts[#parts + 1] = { k, v }; timedSum = timedSum + v.sum end
+    end
+    local function fmt(list)
+        table.sort(list, function(a, b) return a[2].sum > b[2].sum end)
+        local top = {}
+        for i = 1, #list do
+            local v = list[i][2]
+            top[#top + 1] = string.format("%s %.1f/%.0f %d%%", list[i][1], v.sum / math.max(1, pf.n), v.max,
+                math.floor(100 * v.sum / math.max(pf.sum, 0.001) + 0.5))
+        end
+        return table.concat(top, ", ")
     end
     local rest = math.max(0, pf.sum - timedSum)
     log(string.format("perf: tick avg %.1f ms (halves %.1f + %.1f), worst half %.1f ms (first %.0f, second %.0f) over %d ticks; "
-        .. "parts (ms a tick / worst, share): %s; untimed %.1f %d%%; %s", pf.sum / pf.n, pf.sumA / pf.n, (pf.sum - pf.sumA) / pf.n,
-        pf.max, pf.maxA, pf.maxB, pf.n, table.concat(top, ", "), rest / pf.n, math.floor(100 * rest / math.max(pf.sum, 0.001) + 0.5),
-        memText()))
+        .. "parts (ms a tick / worst, share): %s; untimed %.1f %d%%; within them: %s; %s", pf.sum / pf.n, pf.sumA / pf.n,
+        (pf.sum - pf.sumA) / pf.n, pf.max, pf.maxA, pf.maxB, pf.n, fmt(parts), rest / pf.n,
+        math.floor(100 * rest / math.max(pf.sum, 0.001) + 0.5), #subs > 0 and fmt(subs) or "-", memText()))
+    local okL, lists = pcall(perfLists)
+    log(string.format("perf: lists: %s; %s; %s; Lua heap %.1f MB", okL and lists or ("error " .. tostring(lists)),
+        perfWalks(pf.n), perfNatives(pf.n), collectgarbage("count") / 1024))
+    PERF.pruned = 0
     D.perf = nil
 end
 
@@ -703,30 +891,31 @@ LoopAsync(125, function()
             local t1 = os.clock()
             local okB, errB = pcall(probeTickB, tick)
             if not okB then log("round probe: error (second half) " .. tostring(errB)) end
-            if tick % 4 == 3 then pcall(ALLY.speakerTick, D ~= nil) end        -- the run's ally speakers, on and off
-            if tick % 4 == 1 then pcall(LB.poll) end                         -- the leaderboard sends' answers
-            if tick % 20 == 7 then pcall(LB.queueTick) end                   -- runs waiting to be sent
+            if tick % 4 == 3 then timed("speakers", ALLY.speakerTick, D ~= nil) end   -- the run's ally speakers, on and off
+            if tick % 4 == 1 then timed("leaderboard", LB.poll) end                  -- the leaderboard sends' answers
+            if tick % 20 == 7 then timed("leaderboard", LB.queueTick) end            -- runs waiting to be sent
             local tB = (os.clock() - t1) * 1000
             if D then pcall(perfLine, tA, tB, tick) end
             queued = false
             return
         end
         tick = tick + 1
+        local t0 = os.clock()                       -- ((0.73.77) the rows' watch and the info maps in the first half too: B1)
         if not rowsStopped and (tick % 4 == 0 or not (ready[1] and ready[2])) then   -- watching for reloads: 1/s
-            local ok, r = pcall(watchRows)
+            local ok, r = timed("rows watch", watchRows)
             if not ok then log("rows: error " .. tostring(r)) end
             if ok and r == false then rowsStopped = true end
         end
         if tick % 8 == 2 then
-            local okI, errI = pcall(infoMapsTick)
+            local okI, errI = timed("info maps", infoMapsTick)
             if not okI then log("info maps: error " .. tostring(errI)) end
         end
-        local t0 = os.clock()
         local ok, err = pcall(probeTick, tick)
         if not ok then log("round probe: error " .. tostring(err)) end
         local okM, errM = timed("menu", MENU.tick, tick)   -- Survival's menu pages and the run setups (sv_menu.lua)
         if not okM then log("menu: error " .. tostring(errM)) end
-        if COOP and COOP.tick then                  -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
+        if COOP and COOP.tick and not levelGate() then   -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
+            -- ((0.73.77) F1: held while the level is torn down: its copies and planes are the level's)
             local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
             if not okC then log("coop: error " .. tostring(errC)) end
         end

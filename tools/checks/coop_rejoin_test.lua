@@ -1,0 +1,514 @@
+-- coop_rejoin_test.lua <mod dir> <work dir> (run by tools/checks/coop_rejoin_test.sh): 0.73.77, the plan's workstreams
+-- C and D, on the real sv_config.lua and sv_coop.lua (M exposed) and sv_anomalies.lua's mood functions, the game and the
+-- runtime stubbed (SV_CoopSpawnPP destroys what its slot holds, as coop.c does):
+--   C, real planes, the host: a loadout change by a player who never left keeps their plane (the next level's); one who
+--     left and is back in another aircraft: the old plane set aside (unbound, hidden, collision and tick off, moved up,
+--     moved out of its slot in the runtime before the new one spawns: never destroyed), the new one spawned, the line;
+--     back in the same aircraft: kept; back with no airframe heard yet: the old plane hidden, then replaced; no airframe
+--     in wait_s: kept; a newcomer in the slot a set-aside plane is kept in: moved on first; a game started over ("rj");
+--   C, a joiner: the host's "po" / "rj" mark it, the host's "pi" brings the new airframe;
+--   C4, AI stand-ins: the old one set aside, its unit never flown again, the new one on a free unit, mapped back to its
+--     player (their plane, their name on its box);
+--   D1-D2, VALKA's mood: SPC.V.mood tells the joiners first (an error in the host's own sky doesn't stop it), the host's
+--     watch on her round's state (a mood set another way, her reveal, her end, the run over, her round gone with it on),
+--     again in the whole picture for a joiner who asks (jn); a joiner: on / off, not here without a run, off on the
+--     host's new run, a new run here, this game becoming the host;
+--   D3, a joiner's special-round music: the host's "rnd" field 11, its specialFor never rolling dice of its own; the
+--     host's field from its pick, never rolling a round not picked yet;
+--   rejoin off; the migration's set-aside the same way.
+local MOD, WORK = arg[1], arg[2]
+local fails = 0
+local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
+do
+    local rawOpen = io.open
+    io.open = function(p, m) return rawOpen((tostring(p):gsub("\\", "/")), m) end
+end
+local clock = 100
+os.clock = function() return clock end           -- luacheck: ignore
+
+-- the game, stubbed
+local logs, callouts = {}, {}
+function log(s) logs[#logs + 1] = s end
+VERSION = "0.73.77-rejoin.test"
+SCRIPT_DIR = WORK .. "/Scripts/"
+KILL, LB = { side = function() end }, { send = function() end }
+RUN = { credits = 1000, spent = 0, msg = {}, bought = {} }
+SETUP = { startRound = function() return 1 end, specialsX = function() return 1 end }
+function roundsTick() end
+function airfieldTick() end
+function bombTick() end
+function logPlane() end
+function hudCallout(t, sub) callouts[#callouts + 1] = tostring(t) .. " / " .. tostring(sub) end
+function addCredits() end
+local ppList = {}
+function FindAllOf(c) if c == "LivePlayerPlane" then return ppList end return {} end
+function FindFirstOf() return nil end
+function StaticFindObject() return nil end
+function valid(o) return type(o) == "table" and not o.gone end
+function nameOf(o) return type(o) == "table" and (o.full or "?") or "?" end
+function addrOf(o) return type(o) == "table" and o.addr or nil end
+function inSurvival() return true end
+function playerOnAirfield() return false end
+function gamePaused() return false end
+function NotifyOnNewObject() end
+local classes = {}
+function loadObject(path) local o = { addr = 7000 + #classes, path = path }; classes[o.addr] = path; classes[#classes + 1] = o; return o end
+SV_ERR = {}
+
+local nextAddr = 1000
+local function plane(full)
+    nextAddr = nextAddr + 1
+    local o = { full = full, addr = nextAddr, X = 1000, Y = 2000, Z = 300000, HealthInternal = 1000 }
+    function o:SetActorHiddenInGame(v) self.hidden = v end
+    function o:SetActorEnableCollision(v) self.coll = v end
+    function o:SetActorTickEnabled(v) self.tick = v end
+    function o:K2_GetActorLocation() return { X = self.X, Y = self.Y, Z = self.Z } end
+    function o:K2_SetActorLocation(v) self.X, self.Y, self.Z = v.X, v.Y, v.Z; return true end
+    function o:K2_DestroyActor() self.destroyed = true end
+    function o:SetIsInvincible() end
+    return o
+end
+local pawn = plane("BP_PlayerPlane_PP0022_f16c_C_0")
+survivalPC = { Pawn = pawn, full = "PC" }
+
+-- the runtime, stubbed: its per-slot real planes (g_peerPP) and calls in order
+local seq, native, sent, inbox, setAc, names, alive = {}, {}, {}, {}, {}, {}, {}
+local function seqSince(n) local t = {}; for i = n + 1, #seq do t[#t + 1] = seq[i] end; return table.concat(t, ", ") end
+function SV_CoopSend(msg, rel, to) sent[#sent + 1] = (to or -1) .. ">" .. msg; return 1 end
+function SV_CoopRecv() return table.remove(inbox, 1) or "" end
+function SV_CoopInfo() return "open=1;mode=steam;state=linked;slot=0;players=2;max=24;me=0;cands=0;tele=1;peers=1/linked/40/10/Lil" end
+function SV_CoopOpen() return 1 end
+function SV_CoopClose() end
+function SV_CoopMe() end
+function SV_CoopReset() end
+function SV_CoopTrack() return 1 end
+function SV_CoopBind() return 1 end
+function SV_CoopPeer(s, a) seq[#seq + 1] = "peer " .. s .. "=" .. tostring(a); return 1 end
+function SV_CoopSwapPP(a, b) native[a], native[b] = native[b], native[a]; seq[#seq + 1] = "swap " .. a .. "<>" .. b; return 1 end
+function SV_CoopSpawnPP(pawnA, x, y, z, yaw, clsA, slot, lo, pt)
+    local old = native[slot]
+    if old and not old.gone then old.destroyedBySpawn, old.gone = true, true end   -- (coop.c: "a second call removes that slot's")
+    local d = (classes[clsA] or ""):match("Plane/([^/]+)/") or "PP0000_x"
+    local o = plane("BP_PlayerPlane_" .. d .. "_C_" .. nextAddr)
+    o.X, o.Y, o.Z = x, y, z
+    native[slot] = o
+    ppList[#ppList + 1] = o
+    seq[#seq + 1] = "spawnPP " .. slot .. " " .. d
+    return o.addr
+end
+local peerState = {}
+function SV_CoopPeerAt(slot) return peerState[slot] or "" end
+function SV_Spawn(unit) seq[#seq + 1] = "spawn " .. unit; return 1 end
+function SV_SetAircraft(unit, row) setAc[#setAc + 1] = unit .. "=" .. tostring(row); return 1 end
+function SV_SetLevel() return 1 end
+function SV_UnitAlive(u) return alive[u] or 0 end
+function SV_Event() return 1 end
+function SV_SetText(k, n) names[k] = n end
+function SV_MenuSetting() return "" end
+local menu = 0
+function SV_MenuChoice() return menu end
+
+dofile(MOD .. "/Scripts/sv_config.lua")
+do                                                -- (sv_spawn.lua's own specialOn / specialFor, before sv_coop wraps it)
+    local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
+    local a1 = sp:find("function specialOn(kind)", 1, true)
+    local tail = "    return specialOn(kind) and kind or nil\nend\n"
+    local a2 = a1 and sp:find(tail, a1, true)
+    assert(a1 and a2, "sv_spawn.lua: specialOn / specialFor not found")
+    assert(load(sp:sub(a1, a2 + #tail - 1), "=sv_spawn specialFor"))()
+end
+local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
+assert(load(src, "=sv_coop.lua"))()
+local M = _G.M
+CFG.coop.enabled = true
+local function tick(dt) clock = clock + (dt or 0.25); M.nextInfo = 0; COOP.tick(0) end
+local function line(part, from) for i = #logs, from or 1, -1 do if has(logs[i], part) then return logs[i] end end end
+local function sentOf(kind, from) local t = {}; for i = from or 1, #sent do if sent[i]:match("^%-?%d+>" .. kind .. "|") then t[#t + 1] = sent[i] end end; return t end
+local FRESH = "500000,0,300000,0,90,0,1000,100,3,100"      -- (in the mission, alive, a tenth of a second old)
+local LO1, LO2, LO3 = "11,12//1,2", "21,22//3,4", "31,32//5,6"
+local function hi(slot, row, code, lo, ac) return string.format("%d|hi|%s|0.32.21|%s|Lil|%s|%s||%s", slot, VERSION, row, code, lo or "", ac or "") end
+
+---------------------------------------------------------------------------------------------------- C: real planes, the host
+print("C: a rejoin in another aircraft, real planes (the host)")
+menu = 16 + 3; tick()
+check(COOP.host(), "hosting")
+D = { round = 5, state = "fighting", now = 100, startRound = 1, up = {}, flown = {} }
+tick()
+inbox[#inbox + 1] = "1|sys|joined"
+inbox[#inbox + 1] = hi(1, "su47_common", "su47", LO1, "SU-47")
+peerState[1] = FRESH
+tick(); tick(4)
+local su47 = native[1]
+check(su47 and has(su47.full, "su47") and M.peers[1] and M.peers[1].obj == su47 and M.peers[1].real,
+      "player 2's real Su-47 spawned in their slot (" .. tostring(su47 and su47.full) .. ")")
+-- a loadout change by a player who never left: kept (the next level's has it)
+local from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = hi(1, "su47_common", "su47", LO2, "SU-47")
+tick()
+check(native[1] == su47 and M.peers[1].obj == su47 and not has(seqSince(n0), "spawnPP") and line("player 2's loadout changed: their real plane here keeps", from),
+      "new weapons from a player who never left: their plane kept, said so (today's rule)")
+-- they leave: marked, hidden
+from = #logs + 1
+inbox[#inbox + 1] = "1|sys|left"
+peerState[1] = ""
+tick()
+check(M.left[1] ~= nil and su47.hidden == true and line("coop: player 2 left: if they're back in another aircraft", from),
+      "left: their plane hidden, a rejoin marked (" .. tostring(line("coop: player 2 left", from)) .. ")")
+-- back 18 s later in a Rafale M (liljojofett, Shake Shack's run of 2026-11-02)
+clock = clock + 18
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "1|sys|joined"
+inbox[#inbox + 1] = hi(1, "rflm_common", "rflm", LO2, "RAFALE M")
+peerState[1] = FRESH
+tick()
+local rflm = native[1]
+check(rflm and has(rflm.full, "rflm") and M.peers[1].obj == rflm and M.peers[1].real and M.peers[1].code == "rflm",
+      "back in a Rafale M: their real Rafale M spawned (" .. tostring(rflm and rflm.full) .. ")")
+check(line("coop: player 2 rejoined in rflm (was su47): old plane set aside, new one spawned (their real plane)", from) ~= nil,
+      "the plan's line: rejoined in rflm (was su47): old plane set aside, new one spawned")
+local order = seqSince(n0)
+local pU, pS, pP = order:find("peer 1=0", 1, true), order:find("swap 1<>23", 1, true), order:find("spawnPP 1 PP0014_rflm", 1, true)
+check(pU and pS and pP and pU < pS and pS < pP, "unbound, moved out of slot 2 into slot 24, then the new one spawned in slot 2 (" .. order .. ")")
+check(not su47.gone and not su47.destroyedBySpawn and not su47.destroyed and native[23] == su47 and M.parkAt[23] and M.parkAt[23].obj == su47,
+      "the Su-47 never destroyed: kept in slot 24 in the runtime")
+check(su47.hidden == true and su47.coll == false and su47.tick == false and su47.Z == 3000000,
+      "the Su-47 hidden, collision and tick off, 30 km up (" .. tostring(su47.Z) .. ")")
+check(line("coop: player 2's plane here set aside, hidden (they rejoined in another aircraft): kept in slot 24, tick off, moved 30 km up", from) ~= nil,
+      "the set-aside's line (" .. tostring(line("set aside", from)) .. ")")
+tick()
+check(M.peers[1].shown == true and has(seq[#seq] or "", "peer 1=" .. rflm.addr) or line("coop: player 2's plane shown", from) ~= nil,
+      "the new one shown and bound to their stream")
+-- back in the same aircraft: kept
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "1|sys|joined"; inbox[#inbox + 1] = hi(1, "rflm_common", "rflm", LO2, "RAFALE M"); peerState[1] = FRESH
+tick()
+check(native[1] == rflm and M.peers[1].obj == rflm and not has(seqSince(n0), "spawnPP") and not has(seqSince(n0), "swap")
+      and line("coop: player 2 is back in the same rflm: their plane here kept", from) ~= nil and rflm.hidden == false,
+      "back in the same Rafale M with the same weapons: kept and shown")
+-- back with no airframe heard yet: the old plane stays hidden, then replaced
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "1|sys|joined"; inbox[#inbox + 1] = hi(1, "", "", "", ""); peerState[1] = FRESH
+tick(); tick(2)
+check(rflm.hidden == true and M.peers[1].obj == rflm and line("coop: player 2's plane shown", from) == nil and not has(seqSince(n0), "spawnPP"),
+      "back, no airframe heard yet: their old plane stays hidden (not shown with their new stream)")
+inbox[#inbox + 1] = hi(1, "su57_common", "su57", LO3, "SU-57")
+tick()
+local su57 = native[1]
+check(su57 and has(su57.full, "su57") and M.peers[1].obj == su57 and native[22] == rflm and not rflm.gone
+      and line("coop: player 2 rejoined in su57 (was rflm)", from) ~= nil,
+      "their airframe comes: the Rafale M set aside in slot 23, their Su-57 spawned")
+-- back with no airframe for wait_s: kept
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "1|sys|joined"; inbox[#inbox + 1] = hi(1, "", "", "", ""); peerState[1] = FRESH
+tick(); tick(9)
+check(su57.hidden == true, "9 s on: still hidden")
+tick(1.5)
+check(su57.hidden == false and line("coop: player 2 is back, no airframe heard from them in 10 s: their plane here kept", from) ~= nil
+      and not has(seqSince(n0), "spawnPP"), "none in 10 s: their plane kept and shown")
+-- the same weapons on a new airframe? the same airframe with new weapons after a rejoin: replaced
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+from = #logs + 1
+inbox[#inbox + 1] = "1|sys|joined"; inbox[#inbox + 1] = hi(1, "su57_common", "su57", LO1, "SU-57"); peerState[1] = FRESH
+tick()
+check(native[1] ~= su57 and has(native[1].full, "su57") and not su57.gone and line("coop: player 2 rejoined in su57 with other weapons (was su57)", from) ~= nil,
+      "back in the same airframe with other weapons: a new one with them (the old kept aside)")
+local su57b = native[1]
+-- a newcomer in slot 24, where the Su-47 is kept: moved on before their plane spawns
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "23|sys|joined"
+inbox[#inbox + 1] = string.format("23|hi|%s|0.32.21|f15c_common|New|f15c|||F-15C", VERSION)
+peerState[23] = FRESH
+tick()
+order = seqSince(n0)
+local moved = order:match("swap 23<>(%d+)")
+local sw, sp = order:find("swap 23<>", 1, true), order:find("spawnPP 23 PP0004_f15c", 1, true)
+check(sw and sp and sw < sp and not su47.gone and moved and native[tonumber(moved)] == su47,
+      "a newcomer in slot 24: the Su-47 kept there moved to slot " .. tostring(moved and tonumber(moved) + 1) .. " first, then their F-15C (" .. order .. ")")
+check(line("coop: a set-aside plane kept in slot 24 moved to slot", from) ~= nil, "said so")
+check(not rflm.gone and not su57.gone and not su47.gone, "nothing set aside was ever destroyed")
+-- a game started over: marked, the joiners told
+local s0 = #sent
+inbox[#inbox + 1] = "1|sys|restart"
+tick()
+check(M.left[1] ~= nil and M.left[1].why == "started their game over" and sentOf("rj", s0 + 1)[1] == "-1>rj|1",
+      "their game started over: marked, every joiner told (rj|1)")
+M.left[1] = nil
+-- rejoin off: kept
+CFG.coop.rejoin.enabled = false
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+check(M.left[1] == nil, "[coop.rejoin] enabled = false: nothing marked (their plane kept, as before)")
+CFG.coop.rejoin.enabled = true
+peerState[23] = ""
+
+---------------------------------------------------------------------------------------------------- C: a joiner
+print("C: a rejoin seen by a joiner")
+COOP.reopen("join", "test")
+COOP.slot, M.state = 2, "linked"
+M.peers, M.left, M.parkAt, M.aside = {}, {}, {}, {}
+native = {}
+inbox[#inbox + 1] = string.format("0|pi|1|su47_common|%s|Lil|su47|%s||SU-47|", VERSION, LO1)
+peerState[1] = FRESH
+tick(); tick(1)
+local jsu47 = native[1]
+check(jsu47 and has(jsu47.full, "su47") and M.peers[1].obj == jsu47, "a joiner: player 2's real Su-47 here")
+inbox[#inbox + 1] = "0|po|1"; peerState[1] = ""
+tick()
+check(M.left[1] ~= nil, "the host's po: marked")
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = string.format("0|pi|1|rflm_common|%s|Lil|rflm|%s||RAFALE M|", VERSION, LO2)
+peerState[1] = FRESH
+tick()
+check(native[1] and has(native[1].full, "rflm") and not jsu47.gone and jsu47.hidden == true
+      and line("coop: player 2 rejoined in rflm (was su47): old plane set aside, new one spawned", from) ~= nil,
+      "the host's pi with their Rafale M: the Su-47 set aside here too, their Rafale M spawned (" .. seqSince(n0) .. ")")
+peerState[1] = ""                                 -- (not back in the mission yet: the mark waits)
+inbox[#inbox + 1] = "0|rj|1"
+tick()
+check(M.left[1] ~= nil and M.left[1].why == "started their game over", "the host's rj: marked")
+inbox[#inbox + 1] = "0|rj|99"
+tick()
+check(M.left[98] == nil, "a slot that can't be: ignored")
+M.left[1] = nil
+peerState[1] = ""
+
+---------------------------------------------------------------------------------------------------- C4: AI stand-ins
+print("C4: AI stand-ins (real planes off)")
+COOP.reopen("host", "test")
+M.peers, M.left, M.parkAt, M.aside, M.standUnit, M.unitSlot, M.asideUnit = {}, {}, {}, {}, {}, {}, {}
+native = {}
+CFG.coop.real_planes = false
+inbox[#inbox + 1] = "1|sys|joined"
+inbox[#inbox + 1] = hi(1, "su47_common", "su47", LO1, "SU-47")
+peerState[1] = FRESH
+n0 = #seq
+tick()
+check(has(seqSince(n0), "spawn SV_Unit_CoopPeerB"), "player 2's stand-in on their own unit, B (" .. seqSince(n0) .. ")")
+local sb = plane("BP_OP0001_su47_C_1")
+logPlane(sb, "SV_Unit_CoopPeerB")
+check(M.peers[1].obj == sb, "... up as player 2's plane")
+inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
+clock = clock + 18
+from, n0 = #logs + 1, #seq
+inbox[#inbox + 1] = "1|sys|joined"; inbox[#inbox + 1] = hi(1, "rflm_common", "rflm", LO2, "RAFALE M"); peerState[1] = FRESH
+tick()
+order = seqSince(n0)
+check(sb.hidden == true and sb.coll == false and sb.tick == false and not sb.destroyed and M.asideUnit.SV_Unit_CoopPeerB == true,
+      "the Su-47 stand-in set aside: hidden, collision and tick off, its unit B never flown again")
+check(has(order, "peer 1=0") and has(order, "spawn SV_Unit_CoopPeerA") and not has(order, "spawn SV_Unit_CoopPeerB"),
+      "the new one on a free unit: this game's own slot's, A (" .. order .. ")")
+check(line("coop: player 2 rejoined in rflm_common (was su47_common): old plane set aside, new one spawned (an AI stand-in, SV_Unit_CoopPeerA)", from) ~= nil,
+      "the plan's line, for a stand-in (" .. tostring(line("rejoined", from)) .. ")")
+local sa = plane("BP_OP0014_rflm_C_1")
+logPlane(sa, "SV_Unit_CoopPeerA")
+check(M.peers[1].obj == sa and M.peers[0] == nil, "unit A's plane up as player 2's (not the host's own slot)")
+tick()
+check(names.SV_CoopName_A == "LIL", "player 2's name on unit A's box (" .. tostring(names.SV_CoopName_A) .. ")")
+-- a player in slot 1 (unit A's own): another free unit for them, never A
+from, n0 = #logs + 1, #seq
+COOP.slot = 0
+CFG.coop.real_planes = true
+peerState[1] = ""
+
+---------------------------------------------------------------------------------------------------- D1-D2: VALKA, the host
+print("D: VALKA's mood on every joiner (the host)")
+CFG.coop.real_planes = true
+SPC = { V = {} }
+do                                                -- (sv_anomalies.lua's own mood functions)
+    local an = readAll(MOD .. "/Scripts/sv_anomalies.lua")
+    local a1 = an:find("function SPC.V.mood(c, s)", 1, true)
+    local tail = "\n    s.moodOn = false\nend\n"
+    local a2 = a1 and an:find(tail, a1, true)
+    assert(a1 and a2, "sv_anomalies.lua: SPC.V.mood / moodOff not found")
+    assert(load(an:sub(a1, a2 + #tail - 1), "=sv_anomalies mood"))()
+end
+local reds, songs = {}, {}
+function hudRed(on) reds[#reds + 1] = on and "on" or "off" end
+SND = { songStart = function() songs[#songs + 1] = "start" end, songFade = function() songs[#songs + 1] = "fade" end,
+        songStop = function() songs[#songs + 1] = "stop" end }
+local vc = CFG.specials.valka
+-- her round (the lurk after her decoys, or no decoys: SPC.V.mood)
+D.special = { kind = "valka", state = "lurk" }
+local s1 = #sent
+from = #logs + 1
+SPC.V.mood(vc, D.special)
+check(sentOf("vm", s1 + 1)[1] == "-1>vm|1" and line("coop: VALKA's mood on (the red sky, her song): sent to every joiner (1 linked)", from) ~= nil,
+      "SPC.V.mood: every joiner told at once, logged")
+check(reds[#reds] == "on" and songs[#songs] == "start", "... and this game's sky and song")
+tick()
+check(#sentOf("vm", s1 + 1) == 1, "the watch sends it no second time")
+D.special.state, D.special.revealedAt = "hunt", clock
+tick()
+check(sentOf("vr", s1 + 1)[1] == "-1>vr|" .. vc.unit, "her reveal (revealedAt) sent by the watch: vr|" .. vc.unit)
+-- a joiner who asks for the whole picture while she's up
+local s2 = #sent
+inbox[#inbox + 1] = "1|jn"
+tick()
+check(sentOf("vm", s2 + 1)[1] == "1>vm|1" and sentOf("vr", s2 + 1)[1] == "1>vr|" .. vc.unit, "a joiner's jn while she's up: vm|1 and vr in its picture")
+-- her end
+local s3 = #sent
+from = #logs + 1
+D.special.state = "done"
+SPC.V.moodOff(vc, D.special, clock)
+check(sentOf("vm", s3 + 1)[1] == "-1>vm|0" and line("coop: VALKA's mood off: sent to every joiner", from) ~= nil and songs[#songs] == "fade",
+      "her death: vm|0 to every joiner, logged; her song fading here")
+tick()
+check(#sentOf("vm", s3 + 1) == 1, "... once")
+-- an error in this game's sky never keeps the joiners from it
+local rawRed = hudRed
+hudRed = function() error("no sky") end
+D.special = { kind = "valka", state = "lurk" }
+local s4 = #sent
+SPC.V.mood(vc, D.special)
+hudRed = rawRed
+check(sentOf("vm", s4 + 1)[1] == "-1>vm|1" and D.special.moodOn == true, "this game's sky erring: the joiners told all the same")
+-- the run over with her up (D gone)
+local s5 = #sent
+local Dk = D
+D = nil
+tick()
+check(sentOf("vm", s5 + 1)[1] == "-1>vm|0", "the run over with her up: vm|0 (the watch)")
+D = Dk
+-- a mood on by any other way (moodOn set, nothing said): the watch says it
+D.special = { kind = "valka", state = "hunt", moodOn = true }
+local s6 = #sent
+tick()
+check(sentOf("vm", s6 + 1)[1] == "-1>vm|1", "her mood on another way (a start that never called SPC.V.mood): the watch sends vm|1")
+-- her round gone with her mood on (replaced without her end): faded here and everywhere
+local s7 = #sent
+from = #logs + 1
+D.special = { kind = "ladon", state = "hunt" }
+tick()
+check(sentOf("vm", s7 + 1)[1] == "-1>vm|0" and line("coop: VALKA's round went with her mood still on", from) ~= nil and songs[#songs] == "fade",
+      "her round replaced with her mood on: faded here, vm|0 to every joiner")
+-- her round over with her mood still on (she couldn't spawn after her lurk turned it on: "done", no moodOff)
+D.special = { kind = "valka", state = "lurk", moodOn = true }
+tick()
+local s10 = #sent
+from = #logs + 1
+D.special.state = "done"
+songs = {}
+tick()
+check(sentOf("vm", s10 + 1)[1] == "-1>vm|0" and #sentOf("vm", s10 + 1) == 1 and line("coop: VALKA's round is over with her mood still on", from) ~= nil
+      and songs[1] == "fade" and D.special.moodOn == false, "her round over with her mood on (no moodOff): faded here, vm|0 once")
+D.special = nil
+tick()
+
+---------------------------------------------------------------------------------------------------- D2: VALKA, a joiner
+print("D: VALKA's mood on a joiner")
+COOP.reopen("join", "test")
+COOP.slot, M.state = 2, "linked"
+M.vmood = nil
+reds, songs = {}, {}
+local Dj = D
+D = nil
+from = #logs + 1
+inbox[#inbox + 1] = "0|vm|1"
+tick()
+check(line("coop: the host's VALKA mood on: not here (no run here yet: it comes again with the host's picture)", from) ~= nil and #reds == 0,
+      "vm|1 with no run here: said so, nothing turned red")
+D = Dj
+M.lastD = D
+from = #logs + 1
+inbox[#inbox + 1] = "0|vm|1"
+tick()
+check(reds[#reds] == "on" and songs[#songs] == "start" and M.vmHere == true
+      and line("coop: the host's VALKA mood on: the sky red and her song here too", from) ~= nil, "vm|1: the sky red, her song, logged")
+inbox[#inbox + 1] = "0|vm|1"
+tick()
+check(line("(again: the host's picture)", from) ~= nil, "again (the host's picture): said so")
+inbox[#inbox + 1] = "0|vm|0"
+tick()
+check(reds[#reds] == "off" and songs[#songs] == "fade" and not M.vmHere and line("coop: the host's VALKA mood off: the sky and her song fading", from) ~= nil,
+      "vm|0: the sky back, her song fading")
+inbox[#inbox + 1] = "0|vm|1"; tick()
+from = #logs + 1
+inbox[#inbox + 1] = "0|rs|n"
+tick()
+check(not M.vmHere and reds[#reds] == "off" and line("coop: VALKA's mood off here (the host's run started over)", from) ~= nil,
+      "the host's new run with her up here: off here")
+D = { round = 1, state = "wait", now = 100, startRound = 1, up = {}, flown = {} }
+M.lastD = D
+inbox[#inbox + 1] = "0|vm|1"; tick()
+from = #logs + 1
+D = { round = 1, state = "wait", now = 100, startRound = 1, up = {}, flown = {} }
+tick()
+check(not M.vmHere and line("coop: VALKA's mood off here (a new run here)", from) ~= nil, "a new run here with her up: off here")
+inbox[#inbox + 1] = "0|vm|1"; tick()
+from = #logs + 1
+COOP.reopen("host", "test")
+local s8 = #sent
+tick()
+check(not M.vmHere and line("coop: VALKA's mood off here (this game is the host now)", from) ~= nil and #sentOf("vm", s8 + 1) == 0,
+      "this game becomes the host with the old host's mood on: off here, nothing sent")
+
+---------------------------------------------------------------------------------------------------- D3: special-round music
+print("D3: a joiner's special-round music is the host's")
+COOP.reopen("join", "test")
+COOP.slot, M.state = 2, "linked"
+RUN.specialPick = {}
+from = #logs + 1
+inbox[#inbox + 1] = "0|rnd|7|fighting|0.0|1|1|5||||anomaly"
+tick()
+check(M.rnd and M.rnd.special == "anomaly" and specialFor(7) == "anomaly", "the host's round 7 is its Anomaly: specialFor(7) here too")
+check(line("coop: round 7 is its anomaly special on the host: a special round's music here", from) ~= nil, "said so, once a round")
+check(specialFor(8) == nil and RUN.specialPick[7] == nil and RUN.specialPick[8] == nil, "no dice rolled here (RUN.specialPick untouched)")
+inbox[#inbox + 1] = "0|rnd|8|wait|5.0|0|0|0||||"
+tick()
+check(specialFor(8) == nil and line("coop: round 8 is a normal round on the host: a normal round's music here", from) ~= nil,
+      "a normal round there: a normal round's music here")
+inbox[#inbox + 1] = "0|rnd|9|fighting|0.0|1|1|5||||Drop Table"
+tick()
+check(specialFor(9) == nil, "a field that isn't a word: none")
+-- the host's field: from its pick, never a round not picked yet
+COOP.reopen("host", "test")
+D.round = 12
+CFG.specials.enabled, CFG.specials.random = true, true
+RUN.specialPick = { [12] = "ladon" }
+local s9 = #sent
+M.nextRnd = 0
+tick()
+local function field11(m)                         -- ("<to>>rnd|f2|...": f[1] "rnd")
+    local f = {}
+    for x in ((m or ""):gsub("^%-?%d+>", "") .. "|"):gmatch("([^|]*)|") do f[#f + 1] = x end
+    return f[11]
+end
+local r1 = sentOf("rnd", s9 + 1)[1]
+check(field11(r1) == "ladon", "the host's rnd: field 11 its round's special (" .. tostring(r1) .. ")")
+D.round = 13
+RUN.specialPick = {}
+s9 = #sent
+M.nextRnd = 0
+tick()
+r1 = sentOf("rnd", s9 + 1)[1]
+check(field11(r1) == "" and RUN.specialPick[13] == nil, "a round not picked yet: an empty field, its dice not rolled (" .. tostring(r1) .. ")")
+
+---------------------------------------------------------------------------------------------------- the hooks
+print("the hooks, by their place in the source")
+do
+    local an = readAll(MOD .. "/Scripts/sv_anomalies.lua")
+    check(has(an, "V.mood(c, s)                                    -- (0.73.76) the flyers down (or none): red and her song")
+          and has(an, "V.mood(c, s)                                        -- (0.73.76) red and her song, if her round had no lurk")
+          and has(an, "V.moodOff(c, s, now)                            -- (0.73.76) the red and her song fade away after she dies"),
+          "sv_anomalies: her lurk and hunt call SPC.V.mood, her death SPC.V.moodOff")
+    local cs = readAll(MOD .. "/Scripts/sv_coop.lua")
+    check(has(cs, "local okVw, errVw = pcall(M.valkaWatch)"), "sv_coop: the host's watch every co-op tick")
+    check(has(cs, "if M.vmood then sendTo(to, true, \"vm\", 1) end"), "sv_coop: hostSync resends her mood")
+    check(has(cs, "local okF, whyF = M.nativeFree(slot)"), "sv_coop: spawnReal frees the slot first")
+    check(has(readAll(MOD .. "/Scripts/sv_flights.lua"), "musicNext(specialFor(D.round) ~= nil)"), "sv_flights: the music asks specialFor")
+end
+
+do
+    local errs = {}
+    for _, l in ipairs(logs) do
+        if l:find("player plane error", 1, true) or l:find("mood watch error", 1, true) or l:find("message error", 1, true) then errs[#errs + 1] = l end
+    end
+    check(#errs == 0, "no error in the parts touched (" .. tostring(errs[1]) .. ")")
+end
+
+print(fails == 0 and "co-op rejoin test: all passed" or ("co-op rejoin test: " .. fails .. " FAILED"))
+os.exit(fails == 0 and 0 or 1)

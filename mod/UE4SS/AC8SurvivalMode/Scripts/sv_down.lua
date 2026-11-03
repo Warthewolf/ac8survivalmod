@@ -587,6 +587,7 @@ function DOWN.back(how, respawn)
     viewSelf()
     St.home = nil
     local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
+    if valid(pawn) and UP and UP.healthGuard then pcall(UP.healthGuard, pawn, "the revive's repair") end   -- ((0.73.77) G2)
     local okW = valid(pawn) and pcall(function() pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5) end)
     St.safeUntil = os.clock() + num(rc().safe_s, 5)
     if valid(pawn) then pcall(function() pawn:SetIsInvincible(true) end) end
@@ -674,6 +675,17 @@ function DOWN.reset(why, newLevel)
     St.since, St.count, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
     St.arm = nil                                                -- (0.73.73: no revive's watch over the next run's plane)
+    St.wasIn, St.heldFor = nil, nil                             -- ((0.73.77) A8: everyone loads in again)
+end
+-- (0.73.77, plan F1b) the level torn down (sv_core.lua levelGate, the runtime's teardown gate): the level's objects DOWN
+-- keeps are forgotten, none of them touched (the plane watched, the cameras on it switched off, the spectator's camera
+-- actor, the cameras found): Shazzy's quit crash of 2026-11-02 came while DOWN and spectating
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS.down = function(why)
+        local n = (St.watch and 1 or 0) + #(St.hushed or {}) + (St.camActor and 1 or 0)
+        St.watch, St.hushed, St.camActor, St.cams = nil, {}, nil, {}
+        if n > 0 then log(string.format("down: %s: the plane watched and its cameras forgotten (%d objects, none touched)", tostring(why), n)) end
+    end
 end
 
 -- After a restart while you were down (DOWN.reset's St.restore), at the first pass with the level's player: the plane DOWN
@@ -776,7 +788,7 @@ local function hostRevive(slot, by, price)
     St.count, St.reviving[slot], St.since[slot] = St.count + 1, os.clock(), nil
     COOP.msg(nil, "rb", slot, St.count, by)
     log(string.format("revive: player %d revived player %d for %d (the run's revive %d)", by + 1, slot + 1, price, St.count))
-    LB.stat("revives", 1)
+    LB.stat("revives", 1, by)                       -- ((0.73.77) by: the co-op run's squad, revives given)
     if slot == mySlot() then DOWN.back("revived by " .. name(by))
     else callout(name(slot) .. " BACK", "REVIVED BY " .. name(by)) end
     return true
@@ -984,12 +996,17 @@ function DOWN.parked() return St.parked ~= nil end
 -- heard from in PRESENT_MS)
 local function everyoneDown()
     local n, up = 0, 0
+    local seen = {}
+    St.wasIn = St.wasIn or {}
     for _, e in ipairs(COOP.players()) do
+        if not e.isMe then seen[e.slot] = true end
         if e.isMe or (e.inLevel and num(e.age, 1e9) < PRESENT_MS) then
             n = n + 1
             if e.alive ~= false then up = up + 1 end
+            if not e.isMe then St.wasIn[e.slot] = true end  -- ((0.73.77) A8: in the mission once since they linked)
         end
     end
+    for s in pairs(St.wasIn) do if not seen[s] then St.wasIn[s] = nil end end   -- (dropped: a rejoin loads in again)
     return n >= 1 and up == 0, n
 end
 
@@ -1067,7 +1084,33 @@ function DOWN.tick()
         -- (not only while another game is linked: the last joiner gone with you down ends it too)
         local all, n = false, 0
         if rc().enabled == true and not St.ended and (St.down or linked()) then all, n = everyoneDown() end
-        if all then
+        -- ((0.73.77) plan A8) not while a player who linked is still loading in (no plane in the mission yet): they can
+        -- still fly to the airfield and buy the others back. Saint Alessia's run of 2026-11-03: the host ended it at
+        -- 16:54:15 ("every player in the mission is down (2)") with scaraboy13's plane 9 s from arriving; he fought VALKA
+        -- alone in a run already over. Who: sv_coop.lua COOP.joinWaiting on the round clock (the roster's players not in
+        -- the mission, each for its [coop] join_wait_s, 90, from when they were first seen out), as the round holds use it,
+        -- less any who've been in the mission since they linked (everyoneDown's St.wasIn: one gone from it, a lost link,
+        -- doesn't hold the run)
+        local wait = nil
+        if rc().enabled == true and not St.ended and COOP.joinWaiting and D.now then   -- (every pass: each one's 90 s from
+            local okW, w = pcall(COOP.joinWaiting, D.now)                              -- when they were first seen out)
+            if okW and type(w) == "table" and #w > 0 then
+                local was = {}
+                for s in pairs(St.wasIn or {}) do was[tostring(COOP.name and COOP.name(s) or s)] = true end
+                for _, nm in ipairs(w) do if not was[tostring(nm)] then wait = wait or {}; wait[#wait + 1] = tostring(nm) end end
+            end
+        end
+        if all and wait then
+            St.allDownAt = nil
+            local who = table.concat(wait, ", ")
+            if St.heldFor ~= who then
+                St.heldFor = who
+                log(string.format("down: run over held: player %s still loading in (linked, no plane in the mission yet; "
+                    .. "every player in it is down: %d)", who, n))
+            end
+        elseif all then
+            if St.heldFor then log("down: run over no longer held (" .. St.heldFor .. ": in the mission now, or waited for long enough)") end
+            St.heldFor = nil
             St.allDownAt = St.allDownAt or now
             if now - St.allDownAt >= RO_CONFIRM_S then
                 COOP.msg(nil, "ro", D.round or 0)
@@ -1075,7 +1118,7 @@ function DOWN.tick()
                 DOWN.runOver(D.round, "every player down")
             end
         else
-            St.allDownAt = nil
+            St.allDownAt, St.heldFor = nil, nil
         end
     else
         if St.down and not linked() then                   -- (down, the host's link gone: nobody can revive you)

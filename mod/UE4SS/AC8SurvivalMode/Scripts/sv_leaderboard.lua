@@ -15,7 +15,11 @@ local function stats()
                                specials = {} }
     return RUN.stats
 end
-function LB.stat(what, n) if D then local st = stats(); st[what] = (st[what] or 0) + (n or 1) end end
+-- slot: the co-op player it's theirs (a revive given: sv_down.lua hostRevive), for a co-op run's squad (LB.coopTally)
+function LB.stat(what, n, slot)
+    if D then local st = stats(); st[what] = (st[what] or 0) + (n or 1) end
+    if slot ~= nil and LB.coopTally then pcall(LB.coopTally, slot, what, n or 1) end
+end
 function LB.special(kind, won, seconds)
     if not D then return end
     local sp = stats().specials
@@ -41,14 +45,28 @@ local function json(r)
     -- Worker refuses a run that says it was edited or that comes from other files than it's sent from)
     local ed = {}
     for i, k in ipairs(r.edited or {}) do if i <= 8 then ed[#ed + 1] = jstr(tostring(k):sub(1, 80)) end end
+    -- ((0.73.77) a co-op run's squad, LB.coopRecord: "coop":{"players":N,"squad":[{"pilot","aircraft","air","ground",
+    -- "revives","host"}]}, the host first; a solo run has none)
+    local co = ""
+    if type(r.coop) == "table" and type(r.coop.squad) == "table" and #r.coop.squad >= 2 then
+        local sq = {}
+        for _, p in ipairs(r.coop.squad) do
+            local ac = type(p.aircraft) == "string" and #p.aircraft <= 12 and p.aircraft:match("^[a-z0-9][a-z0-9]+$")
+            sq[#sq + 1] = string.format('{"pilot":%s%s,"air":%d,"ground":%d,"revives":%d%s}', jstr(p.pilot),
+                ac and (',"aircraft":' .. jstr(ac)) or "", math.floor(p.air), math.floor(p.ground), math.floor(p.revives),
+                p.host and ',"host":true' or "")
+        end
+        co = string.format(',"coop":{"players":%d,"squad":[%s]}', #sq, table.concat(sq, ","))
+    end
     return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
         .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"how":%s,"aces":%d,"allies":%d,"af_down":%d,'
-        .. '"captured":%d,"specials":[%s],"edited":[%s]%s%s%s}', jstr(r.run_id), jstr(r.pilot),
+        .. '"captured":%d,"specials":[%s],"edited":[%s]%s%s%s%s}', jstr(r.run_id), jstr(r.pilot),
         jstr(r.difficulty), r.round, jstr(r.mod), r.kills.air, r.kills.ground, r.zollars.earned, r.zollars.spent, r.time_s,
         jstr(r.ended), jstr(r.how), r.aces, r.allies, r.af_down, r.captured, table.concat(sp, ","), table.concat(ed, ","),
         (r.aircraft and r.aircraft:match("^[a-z0-9][a-z0-9]+$")) and (',"aircraft":' .. jstr(r.aircraft)) or "",
         (r.tier and r.tier:match("^%a+$")) and (',"tier":' .. jstr(r.tier)) or "",
-        (type(r.build) == "string" and r.build:match("^%x+$") and #r.build == 64) and (',"build":' .. jstr(r.build:lower())) or "")
+        (type(r.build) == "string" and r.build:match("^%x+$") and #r.build == 64) and (',"build":' .. jstr(r.build:lower())) or "",
+        co)
 end
 
 -- An edited run isn't ranked (user, 2026-10-30: "we need a way that the Leaderboards can detect if a run has been edited
@@ -70,7 +88,8 @@ end
 --   - (a head start, start_round, and SP ONLINE's custom rules are refused before this: LB.send, SETUP.ranked)
 -- The build itself (an edited script or container) is the runtime's build hash's: the Worker refuses an unknown build.
 local EDIT_FREE = { hud = true, sound = true, music = true, log = true, ai_watch = true, stats = true, leaderboard = true,
-                    menu = true, setup = true, coop = true }
+                    menu = true, setup = true, coop = true,
+                    recycle = true }   -- ((0.73.77) each game's crash workaround: when a recycled flight's actor goes)
 local EDIT_FREE_PART = { text = true, sounds = true, camera = true }
 local EDIT_FREE_LEAF = { key = true, keys = true, ctrl = true, label = true, what = true, name = true, squadron = true,
                          title = true, help = true }
@@ -203,6 +222,339 @@ function LB.deathCheck(pc)
     end
 end
 
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
+---------------------------------------------------------------------------------------------------- a co-op run
+-- (0.73.77) One team run per co-op run, sent by its host (Workstream H2, testing/2026-11-03/PLAN_desync_lag_
+-- compatibility.md; leaderboard/README.md): the solo record and "coop": { players, squad = [{ pilot, aircraft, air,
+-- ground, revives, host }] }. LB.co is the co-op run this game is in: { id (the record's run_id), mine (this game hosts
+-- it), stats (the RUN.stats it's for), started, squad = { [key] = { slot, name, pilot, jet, air, ground, revives, n } },
+-- specials, run, sent }; a player's key is their Steam ID ("sid<id>"), else (UDP) their slot and name. The host keeps:
+--   - the squad: everyone seen in Survival's level in the run (COOP.players()), a player who left with what they did;
+--   - each joiner's own kills (LB.coopKill from sv_coop.lua tallyKill: the player the host's "dn" names, economy C1's
+--     hostKiller, the one who did it the most damage; ground targets whole ones only, not a ship's turret) and the
+--     revives each player gave (LB.stat("revives", 1, by): sv_down.lua hostRevive);
+--   - the host's line: the run's kills as its game counts them (the AI allies' and defences' too, as a solo run's) less
+--     the joiners'. The record's kills are the squad's sums, its zollars the host's own.
+-- Every game keeps a copy from the host's "lb" messages (lb|r the run, lb|p the players, lb|s the specials, lb|x sent;
+-- each joiner answers lb|n with its leaderboard pilot name), so a host by host migration (sv_coop.lua becomeHost ->
+-- LB.coopTakeover) carries the run on and sends it under the same run id, the old host in its squad. A joiner sends
+-- nothing; a run nobody else flew in goes as a solo run. The host sends at its run's end (died, restart, left: a host
+-- quitting to the main menu keeps the link, so the others' runs stop there too); a run it sent isn't sent again by a
+-- host by migration (the Worker would refuse the run id twice).
+LB.co = nil
+do
+local RESEND_S, BATCH_S, MAX_SQUAD, PACK = 30, 2, 24, 800
+local function cleanName(s) return (tostring(s or ""):gsub("[^%w _%.%-]", ""):gsub("^%s+", ""):gsub("%s+$", ""):sub(1, 24)) end
+local function whole(v, hi) v = tonumber(v); return (v and v == math.floor(v) and v >= 0 and v <= hi) and v or nil end
+local function mySlot() return COOP.slot or 0 end
+local function id8(co) return tostring(co.id):sub(1, 8) end
+-- a player's key: their Steam ID, else their slot and name
+local function keyOf(slot)
+    local r = COOP.roster and COOP.roster(slot)
+    local sid = r and r.sid
+    if slot == mySlot() and not sid and COOP.mySid then sid = COOP.mySid() end
+    if type(sid) == "string" and sid:match("^%d+$") and #sid <= 20 then return "sid" .. sid end
+    return "slot" .. slot .. ":" .. cleanName(r and r.name)
+end
+-- slot's entry in co's squad (made when `make`): the same player under the key they had before their Steam ID was known
+-- here moved over; their name and aircraft (the first one seen, as a solo run's) from the co-op roster
+local function entry(co, slot, make)
+    local k = keyOf(slot)
+    local e = co.squad[k]
+    if not e and k:sub(1, 3) == "sid" then
+        local pre = "slot" .. slot .. ":"
+        for k2, e2 in pairs(co.squad) do
+            if k2:sub(1, #pre) == pre then co.squad[k2], co.squad[k], e2.key, e = nil, e2, k, e2; break end
+        end
+    end
+    if not e then
+        if not make then return nil end
+        co.n = co.n + 1
+        e = { key = k, slot = slot, air = 0, ground = 0, revives = 0, n = co.n }
+        co.squad[k] = e
+        log(string.format("leaderboard: co-op run %s: player %d (%s) in the squad", id8(co), slot + 1,
+            tostring(COOP.name and COOP.name(slot) or "?")))
+    end
+    e.slot = slot
+    local r = COOP.roster and COOP.roster(slot)
+    if r then
+        local nm = cleanName(r.name)
+        if nm ~= "" then e.name = nm end
+        local code = tostring(r.code or ""):lower()
+        if not e.jet and #code <= 12 and code:match("^[a-z0-9][a-z0-9]+$") then e.jet = code end
+    end
+    if co.pnames and co.pnames[k] then e.pilot = co.pnames[k] end
+    return e
+end
+-- the squad as it's sent: { e, pilot, aircraft, air, ground, revives, host }, this game's own line first (the host's:
+-- the run's kills less the others'), the others by what they did, MAX_SQUAD at most, the names unique
+local function lines(co, st)
+    local myKey = keyOf(mySlot())
+    local me, others, oa, og = nil, {}, 0, 0
+    for k, e in pairs(co.squad) do if k == myKey then me = e else others[#others + 1] = e end end
+    table.sort(others, function(a, b)
+        local x, y = a.air + a.ground + a.revives, b.air + b.ground + b.revives
+        if x ~= y then return x > y end
+        return a.n < b.n
+    end)
+    while #others > MAX_SQUAD - 1 do table.remove(others) end
+    for _, e in ipairs(others) do oa, og = oa + e.air, og + e.ground end
+    local out, used = {}, {}
+    local function add(e, host)
+        -- (the host's line: the record's own pilot exactly, as the Worker checks; first, so never renamed)
+        local nm = host and LB.pilot() or cleanName(e.pilot or e.name)
+        if nm == "" then nm = "Pilot " .. ((tonumber(e.slot) or 0) + 1) end
+        local base, i = nm, 1
+        while used[nm:lower()] do i = i + 1; local sfx = " " .. i; nm = base:sub(1, 24 - #sfx) .. sfx end
+        used[nm:lower()] = true
+        local x = { e = e, pilot = nm, aircraft = host and (st.jet or e.jet) or e.jet, air = e.air, ground = e.ground,
+                    revives = e.revives, host = host }
+        if host then x.air, x.ground = math.max(0, (st.air or 0) - oa), math.max(0, (st.ground or 0) - og) end
+        out[#out + 1] = x
+    end
+    if me then add(me, true) end
+    for _, e in ipairs(others) do add(e, false) end
+    return out
+end
+-- (the host) the co-op run of this game's run: a new one for a new run, or (a host by migration) the one it was in
+local function hostRun(now)
+    local st = stats()
+    local co = LB.co
+    if co and co.mine and co.stats == st then return co, st end
+    if co and co.adopt then
+        -- the run this game was a joiner in: its record goes on from the old host's last word (its start, kills, aces,
+        -- allies, the airfield's losses, the specials); this game's own money
+        co.mine, co.adopt, co.stats, co.allAt = true, nil, st, 0
+        local run = co.run or {}
+        if co.started then st.started = math.min(st.started or os.time(), co.started) end
+        if run.air then st.air, st.ground = run.air, run.ground end
+        for _, k in ipairs({ "aces", "allies", "af_down", "captured" }) do st[k] = math.max(st[k] or 0, run[k] or 0) end
+        local sp, top = {}, 0
+        for i in pairs(co.specials) do if i > top then top = i end end
+        for i = 1, top do if co.specials[i] then sp[#sp + 1] = co.specials[i] end end
+        for _, x in ipairs(st.specials or {}) do sp[#sp + 1] = x end
+        st.specials = sp
+        local n = 0
+        for _ in pairs(co.squad) do n = n + 1 end
+        log(string.format("leaderboard: co-op run %s carried on here (host migration): %d in its squad, %d air / %d ground "
+            .. "kills, %d specials, started %d s ago%s", id8(co), n, st.air or 0, st.ground or 0, #sp, os.time() - (st.started or os.time()),
+            co.sent and "; its first host sent it already" or ""))
+        return co, st
+    end
+    local id = {}
+    for _ = 1, 32 do id[#id + 1] = string.format("%x", math.random(0, 15)) end
+    co = { id = table.concat(id), mine = true, stats = st, squad = {}, n = 0, specials = {}, pnames = {}, at = now, allAt = 0 }
+    LB.co = co
+    log("leaderboard: co-op run " .. id8(co) .. " started: this game hosts it and keeps its squad (it sends the run)")
+    return co, st
+end
+-- the squad's players now: this game's own always (the host's line is the record's first), the others in the level
+local function squadNow(co)
+    entry(co, mySlot(), true)
+    for _, p in ipairs(COOP.players()) do
+        if not p.isMe and p.inLevel and COOP.slotOk(p.slot) then entry(co, p.slot, true) end
+    end
+end
+-- (the host, once a second) the squad, and what changed to everyone every BATCH_S, all of it every RESEND_S and to a
+-- player who links: packed entries ("key,slot,air,ground,revives,aircraft,pilot;..."), as many as fit in a message
+local function hostTick(now)
+    local co, st = hostRun(now)
+    squadNow(co)
+    if now < (co.outAt or 0) then return end
+    co.outAt = now + BATCH_S
+    local linked = COOP.linked and COOP.linked() or 0
+    if linked == 0 then co.linkedN = 0; return end
+    local all = now >= (co.allAt or 0) or linked > (co.linkedN or 0)
+    co.linkedN = linked
+    if all then co.allAt = now + RESEND_S end
+    local round = math.max(D.round or 0, (co.run and co.run.round) or 0)
+    local hdr = table.concat({ st.air or 0, st.ground or 0, st.aces or 0, st.allies or 0, st.af_down or 0, st.captured or 0, round }, "/")
+    if all or hdr ~= co.hdrSent then
+        co.hdrSent = hdr
+        COOP.msg(nil, "lb", "r", co.id, math.max(0, os.time() - (st.started or os.time())), st.air or 0, st.ground or 0,
+            st.aces or 0, st.allies or 0, st.af_down or 0, st.captured or 0, round)
+    end
+    local pack = {}
+    local function flush(kind) if #pack > 0 then COOP.msg(nil, "lb", kind, co.id, table.concat(pack, ";")); pack = {} end end
+    local size = 0
+    for _, x in ipairs(lines(co, st)) do
+        local item = table.concat({ x.e.key, x.e.slot, x.air, x.ground, x.revives, x.aircraft or "", x.pilot }, ",")
+        if all or item ~= x.e.sent then
+            x.e.sent = item
+            if size + #item > PACK then flush("p"); size = 0 end
+            pack[#pack + 1], size = item, size + #item + 1
+        end
+    end
+    flush("p")
+    local sp = st.specials or {}
+    size = 0
+    for i = all and 1 or ((co.spSent or 0) + 1), math.min(#sp, 200) do
+        local s = sp[i]
+        local item = table.concat({ i, tostring(s.kind), s.round, s.seconds, s.won and 1 or 0 }, ",")
+        if size + #item > PACK then flush("s"); size = 0 end
+        pack[#pack + 1], size = item, size + #item + 1
+    end
+    flush("s")
+    co.spSent = #sp
+    if co.sent and all then COOP.msg(nil, "lb", "x", co.id) end
+end
+-- (each pass of LB.poll, once a second) the host's squad; a joiner's pilot name to the host, as it hears of the run and
+-- every 2 minutes after
+function LB.coopTick()
+    if not (COOP and COOP.open and D and RUN) then return end
+    local now = os.clock()
+    if COOP.host() then return hostTick(now) end
+    local co = LB.co
+    if COOP.client() and co and not co.mine and not co.adopt and now >= (co.nameAt or 0) then
+        co.nameAt = now + 120
+        COOP.msg(0, "lb", "n", co.id, LB.pilot())
+    end
+end
+-- (the host) n of what (air, ground: a joiner's kill; revives: a revive given) for the player in slot
+function LB.coopTally(slot, what, n)
+    if not (COOP and COOP.host and COOP.host() and D and RUN and COOP.slotOk(slot)) then return end
+    if what ~= "revives" and (what ~= "air" and what ~= "ground" or slot == mySlot()) then return end   -- (the host's: its count)
+    local co = hostRun(os.clock())
+    local e = entry(co, slot, true)
+    e[what] = e[what] + (whole(n, 1000) or 1)
+    if what ~= "revives" and not e.said then
+        e.said = true
+        log(string.format("leaderboard: co-op run %s: player %d (%s)'s first kill counted for them (%s)", id8(co), slot + 1,
+            tostring(e.pilot or e.name or "?"), what))
+    end
+end
+-- (the host, sv_coop.lua tallyKill: the player its "dn" named, economy C1's hostKiller) a joiner's kill of the host's
+-- object e: a plane (air), or a whole ground target (not a part on another: a ship's turret, a Ladon's pod, the
+-- Alicorn's tanks, which the run's own count takes with their hull, if at all). The host's own: its count, not tallied.
+function LB.coopKill(slot, e)
+    if type(e) ~= "table" or slot == mySlot() then return end
+    if e.key then
+        local o = e.obj
+        local okP, par = false, nil
+        if liveAddr(o) then okP, par = pcall(function() return o:GetAttachParentActor() end) end
+        if okP and par ~= nil and valid(par) then
+            if not LB.partSaid then
+                LB.partSaid = true
+                log(string.format("leaderboard: player %d's kill of %s not counted for them: a part of %s (whole targets only)",
+                    slot + 1, nameOf(o), nameOf(par)))
+            end
+            return
+        end
+    end
+    LB.coopTally(slot, e.key and "ground" or "air", 1)
+end
+-- (a joiner becoming the host by migration: sv_coop.lua becomeHost) the co-op run it was in goes on here
+function LB.coopTakeover()
+    local co = LB.co
+    if co and not co.mine then
+        co.adopt = true
+        log("leaderboard: co-op run " .. id8(co) .. ": this game takes it over (host migration); it sends the run")
+    end
+end
+-- The leaderboard's messages (sv_coop.lua hands them over): from a joiner (from set) lb|n|<run id>|<pilot>; from the host
+-- lb|r|<run id>|<age s>|<air>|<ground>|<aces>|<allies>|<af_down>|<captured>, lb|p|<run id>|<key,slot,air,ground,revives,
+-- aircraft,pilot;...>, lb|s|<run id>|<i,kind,round,seconds,won;...>, lb|x|<run id> (the host sent it)
+function LB.coopMsg(f, from)
+    local k, id = f[2], tostring(f[3] or "")
+    if not (id:match("^%x+$") and #id >= 16 and #id <= 64) then return end
+    local co = LB.co
+    if from ~= nil then
+        if k == "n" and co and co.mine and co.id == id and COOP.slotOk(from) and from ~= mySlot() then
+            local nm = cleanName(f[4])
+            if nm == "" then return end
+            co.pnames = co.pnames or {}
+            local key = keyOf(from)
+            if co.pnames[key] ~= nm then
+                co.pnames[key] = nm
+                local e = entry(co, from, false)
+                log(string.format("leaderboard: co-op run %s: player %d goes on the leaderboard as %s%s", id8(co), from + 1, nm,
+                    e and "" or " (once in the level)"))
+            end
+        end
+        return
+    end
+    if COOP.host() then return end                              -- (this game hosts: its own run's word)
+    if co and (co.mine or co.adopt) then
+        -- (a run this game hosted before it joined; or the same one: a takeover undone, sv_coop.lua migStepBack)
+        if co.id == id then co.mine, co.adopt, co.stats = false, nil, nil else co = nil end
+    end
+    if not co or co.id ~= id then
+        co = { id = id, mine = false, squad = {}, n = 0, specials = {}, run = {} }
+        LB.co = co
+        log("leaderboard: co-op run " .. id8(co) .. ": the host's (the host sends it); its squad kept here too, for host migration")
+    end
+    if k == "r" then
+        local age = whole(f[4], 48 * 3600)
+        if age then co.started = os.time() - age end
+        local run = {}
+        for i, key in ipairs({ "air", "ground", "aces", "allies", "af_down", "captured", "round" }) do run[key] = whole(f[4 + i], 1000000) or 0 end
+        co.run = run
+    elseif k == "p" then
+        for item in tostring(f[4] or ""):gmatch("[^;]+") do
+            local key, slot, a, g, rv, ac, pilot = item:match("^([^,]+),(%d+),(%d+),(%d+),(%d+),([^,]*),([^,]*)$")
+            slot = whole(slot, 23)
+            if key and slot and (key:match("^sid%d+$") or key:match("^slot%d+:[%w _%.%-]*$")) and #key <= 48 then
+                local e = co.squad[key]
+                if not e and co.n < 64 then co.n = co.n + 1; e = { key = key, n = co.n }; co.squad[key] = e end
+                if e then
+                    e.slot, e.air, e.ground, e.revives = slot, whole(a, 1000000) or 0, whole(g, 1000000) or 0, whole(rv, 100000) or 0
+                    e.jet = (#ac <= 12 and ac:match("^[a-z0-9][a-z0-9]+$")) or nil
+                    local nm = cleanName(pilot)
+                    e.pilot = nm ~= "" and nm or nil
+                end
+            end
+        end
+    elseif k == "s" then
+        for item in tostring(f[4] or ""):gmatch("[^;]+") do
+            local i, kind, rd, secs, won = item:match("^(%d+),(%l+),(%d+),(%d+),([01])$")
+            i, rd, secs = whole(i, 200), whole(rd, 1000), whole(secs, 3600)
+            if i and i >= 1 and rd and secs and #kind <= 16 then co.specials[i] = { kind = kind, round = rd, seconds = secs, won = won == "1" } end
+        end
+    elseif k == "x" then
+        co.sent = true
+    end
+end
+-- (LB.finish, before the score) this run as a co-op one: a joiner's isn't sent (r.coopJoiner); the host's gets the
+-- squad, the co-op run's id and the squad's kills; a host by migration's that its first host sent isn't sent again
+-- (r.coopSent). Nothing when co-op isn't open, or nobody else flew in the run.
+function LB.coopRecord(r, st, how)
+    if not (COOP and COOP.open) then return end
+    if COOP.client() then r.coopJoiner = true; return end
+    if not COOP.host() then return end
+    local co = hostRun(os.clock())
+    squadNow(co)
+    -- (the run's own as they are now: a host by migration's taken over in that call too) its round the highest reached,
+    -- the first host's too (a migration plays its round again: D.round one lower until it starts), never under a special's
+    r.specials, r.aces, r.allies, r.af_down, r.captured = st.specials, st.aces or 0, st.allies or 0, st.af_down or 0, st.captured or 0
+    r.time_s = math.max(0, os.time() - (st.started or os.time()))
+    r.round = math.max(r.round, (co.run and co.run.round) or 0)
+    for _, s in ipairs(r.specials or {}) do if (tonumber(s.round) or 0) > r.round then r.round = s.round end end
+    local list = lines(co, st)
+    if #list < 2 then
+        log("leaderboard: co-op run " .. id8(co) .. ": nobody else flew in it; it goes as a solo run")
+        return
+    end
+    local air, ground, sq, said = 0, 0, {}, {}
+    for _, x in ipairs(list) do
+        air, ground = air + x.air, ground + x.ground
+        sq[#sq + 1] = { pilot = x.pilot, aircraft = x.aircraft, air = x.air, ground = x.ground, revives = x.revives, host = x.host }
+        said[#said + 1] = string.format("%s%s %d/%d/%d", x.pilot, x.host and " (host)" or "", x.air, x.ground, x.revives)
+    end
+    r.run_id, r.kills, r.coop, r.coopSent = co.id, { air = air, ground = ground }, { players = #sq, squad = sq }, co.sent
+    log(string.format("leaderboard: co-op run %s over (%s): %d players (air / ground kills / revives given): %s", id8(co),
+        tostring(how), #sq, table.concat(said, ", ")))
+end
+-- (LB.send, the host's co-op run sent) everyone told, so a host by migration doesn't send it again
+function LB.coopSent(r)
+    local co = LB.co
+    if r and r.coop and co and co.mine and r.run_id == co.id then
+        co.sent = true
+        if COOP and COOP.open then COOP.msg(nil, "lb", "x", co.id) end
+    end
+end
+end
+-- ONLINE ONLY END
+
 -- The run's over (died / restart / left): its record, sent at once, and its summary on screen.
 function LB.finish(how)
     if not D or not D.round or D.round < 1 then return end
@@ -222,6 +574,11 @@ function LB.finish(how)
                 tier = CFG.tiers.enabled and (CFG.tiers.list[TIER.index(D.round)] or {}).name or nil,
                 -- (the summary's own: kills by allies and ships, by airfield defences; not sent)
                 by_allies = st.by_allies or 0, by_defences = st.by_defences or 0 }
+-- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
+    -- ((0.73.77) a co-op run: the host's gets its squad, the co-op run's id and the squad's kills; a joiner's isn't sent)
+    local okC, errC = pcall(LB.coopRecord, r, st, how)
+    if not okC then log("leaderboard: the co-op run's squad couldn't be made: " .. tostring(errC)) end
+-- ONLINE ONLY END
     r.score, r.won = score(r)
     log(string.format("leaderboard: run over (%s): round %d, score %d, %d air / %d ground kills, %d specials beaten, %s",
         how, r.round, r.score, r.kills.air, r.kills.ground, r.won, clockText(r.time_s)))
@@ -252,6 +609,18 @@ local function post(body, sh)
 end
 
 function LB.send(sh)
+    -- ((0.73.77) a co-op run is sent once, by its host, LB.coopRecord: a joiner's never; a host by migration's not again
+    -- when its first host sent it)
+    if sh.run.coopJoiner then
+        sh.state = "host"
+        log("leaderboard: a co-op run; the host sends it")
+        return
+    end
+    if sh.run.coopSent then
+        sh.state = "host"
+        log("leaderboard: a co-op run its first host sent already (before host migration); not sent again")
+        return
+    end
     if D and (D.startRound or 1) > 1 then              -- (a head start: START AT ROUND on the menu, or the ini's start_round)
         sh.state = "local"
         log("leaderboard: the run started at round " .. D.startRound .. " (start_round); not sent")
@@ -274,9 +643,10 @@ function LB.send(sh)
     local body = json(sh.run)
     LB.queue[#LB.queue + 1] = body; saveQueue()
     local id = post(body, sh)
+    pcall(LB.coopSent, sh.run)                          -- ((0.73.77) a co-op run: every game told it's in)
     if id > 0 then
         sh.state = "sending"
-        log("leaderboard: sending the run (job " .. id .. ")")
+        log("leaderboard: sending the run (job " .. id .. ")" .. (sh.run.coop and string.format(" (co-op, %d players)", sh.run.coop.players) or ""))
     else
         sh.state = "queued"
         log("leaderboard: not sent now (" .. tostring(id == -8 and "this build has no leaderboard address" or id) .. "); kept for later")
@@ -288,8 +658,11 @@ local WHY = { [-12007] = "the server's name didn't resolve (DNS, or the address 
               [-12002] = "timed out", [-12175] = "the secure connection failed (TLS)",
               [-12038] = "the certificate's name didn't match (a proxy in the way?)" }
 
--- Once a second, at the main menu and in runs: the sends' answers (reading a job's result frees its native slot).
+-- Once a second, at the main menu and in runs: the sends' answers (reading a job's result frees its native slot), and a
+-- co-op run's squad ((0.73.77) LB.coopTick)
 function LB.poll()
+    local okT, errT = pcall(LB.coopTick)
+    if not okT and not LB.coopErrSaid then LB.coopErrSaid = true; log("leaderboard: co-op squad error " .. tostring(errT)) end
     for i = #LB.jobs, 1, -1 do
         local j = LB.jobs[i]
         local st = SV_PostResult(j.id)
@@ -339,6 +712,7 @@ function LB.hud(now)
     lines[8] = (sh.state == "sending" and t.lb_sending) or (sh.state == "sent" and string.format(t.lb_sent, money(tonumber(sh.score or r.score) or r.score)))
         or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
         or (sh.state == "unranked" and string.format(t.lb_unranked or "NOT RANKED: %s", tostring(sh.why):upper():sub(1, 48)))
+        or (sh.state == "host" and (t.lb_coop_host or "CO-OP: THE HOST SENDS THE RUN"))     -- ((0.73.77) a co-op joiner's)
         or ""
     setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
     for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end

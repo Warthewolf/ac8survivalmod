@@ -161,6 +161,8 @@ check(op and op.role == "host" and op.partner == SID.a .. "," .. SID.c .. ",auto
 check(COOP.host() and M.mig and M.mig.hosting, "it's the host")
 check(copy.HealthInternal == 0, "the old host's copies taken down")
 check(hostPlane.hidden == true and M.peers[0] == nil, "the old host's plane set aside, hidden")
+check(M.parkAt and M.parkAt[23] and M.parkAt[23].obj == hostPlane and has(table.concat(swaps, " "), "0<>23"),
+      "(0.73.77) ... and kept out of its slot in the runtime (slot 24): the next real plane spawned in slot 1 can't destroy it")
 check(D.round == 4 and D.state == "wait" and D.at == 500 + 15 and D.startRound == 1, "round 5 again after 15 s (D.round 4, wait, at +15)")
 check(callouts[#callouts] and has(callouts[#callouts], "YOU ARE THE NEW HOST") and has(callouts[#callouts], "ROUND 5"), "said: YOU ARE THE NEW HOST, ROUND 5")
 local names = COOP.joinWaiting(0)

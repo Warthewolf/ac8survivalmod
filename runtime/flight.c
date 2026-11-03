@@ -353,6 +353,7 @@ static void FdLog(void);                                /* COOP2MP's fed plane (
 static void FlNetLog(void);                             /* and the other players' real planes (T3) */
 static void FnLog(void);                                /* and their launches (T4b) */
 static void TgtLog(void);                               /* (0.32.21) and the event guard's calls */
+static void PtLog(void);                                /* (0.32.22) and the path tracker guard's */
 
 /* From OnBuildInput (survival_rt.c), after the game's BuildFlightInput and SV_Invert: DOWN, then the input record. */
 static void FlightInputHook(uint8_t* plane, float* out)
@@ -368,6 +369,7 @@ static void FlightInputHook(uint8_t* plane, float* out)
     FlNetLog();
     FnLog();
     TgtLog();
+    PtLog();
 }
 
 /* SV_Down(plane, cx_cm, cy_cm, alt_m, radius_m) -> 1 (on, or its circle changed when it's on for that plane already: the
@@ -1593,6 +1595,12 @@ static int L_GcBusy(void* lua)
     return Ret(lua, (*g_gcPurgeRequired || *g_gcPurgeInProgress) ? 1 : 0);
 }
 
+/* (0.32.22) the same for the runtime: 1 a purge is pending or running (the teardown gate's "unreachable" test) */
+static int GcPurgePending(void)
+{
+    return g_gcPurgeRequired && g_gcPurgeInProgress && (*g_gcPurgeRequired || *g_gcPurgeInProgress);
+}
+
 static void UoFind(void)
 {
     if (!g_fTargetCheck || g_fTargetCheck[0xe0] != 0xE8) { Log(L"guard: GUObjectArray not found (another game build?): liveness by flags only"); return; }
@@ -2042,6 +2050,75 @@ static void TgtLog(void)
         L"about %u, %s); so far events not matched for a freed object %d, gone units' entries skipped %d, faults caught %d", total,
         total / 300u, topI + 1, (int32_t)g_tcType[topI], top, (g_tcKind[topI] & TCK_CATCH) ? L"through the fault catcher" : L"called straight on",
         g_evSkipped, g_tgtSkipped, g_tgtFaults);
+}
+
+/* ---- a game bug guarded: AI path tracking reading a freed object (runtime 0.32.22, plan F2) --------------------------
+ * Shazzy's two crashes at the round 3 bomber raid (2026-11-02 16:06:37 and 18:02:16, a game worker thread, no mod code on
+ * the stack) were in AC8's AI path tracking: ULiveAIPathTickerSubsystem (a world subsystem: PathTrackTickFunction,
+ * PathTrackers) ticks every ULiveAIPathTracker (UObject: OwningActor +0x28, OwningAIGameObject +0x30, OwningUnit +0x38,
+ * TrackingTargetAIPath +0x40, SplineComponent +0x48; a unit and each AI object hold one, ALiveUnit / ALiveAIGameObject
+ * .AIPathTracker) on worker threads: FLivePathTrackTickFunction::ExecuteTick (sigs.h kSigPathTrackTick) takes the
+ * subsystem's lock (+0x70) and runs a ParallelFor over PathTrackers (+0x60), each through the TFunctionRef thunk
+ * 0x147de3ef0 into the body 0x147dd53f0 (captures, index). The body reads the tracker's AI object's activation (+0x3f4,
+ * +0xdb8, +0xda8) and, for a tracker following a path (state +0x60 == 1), updates its native path movement (+0x1c0: a
+ * TSharedFromThis class over the base vtable 0x14cbf8550, weak object pointers +0x30 / +0x38 / +0x40 it checks, a weak
+ * shared state +0x48 / +0x50) with 0x147ddb3c0 -> its virtual Update (+0x40) -> 0x147ddcea0 -> 0x147ddbf40. The first crash
+ * was 0x147ddbf40's `call [rax+0x48]` through a freed object's vtable (0x147ddc6a9, rip 0), the second 0x147ddb860's
+ * weak-state pin `mov rbx, [rcx+0x50]` on a freed movement object (rcx garbage): the movement's objects outlive what
+ * they point at, a few seconds after Survival destroyed the last bomber flight's unit actor (its trackers').
+ * The guard (the target search's way): the thunk (16 bytes: the 7 of `mov edx, [rdx]; jmp body` and int3 padding) is
+ * rewritten to `jmp [rip+2]` and our address in its last 8 bytes (two aligned 8-byte stores: the address first, then the
+ * jump), so every tracker goes through OnPathTrackItem: a tracker that is freed, or whose objects (+0x28..+0x48) are
+ * freed, is left out this frame; the rest run the body through ScCall4 (safecall.h), a fault there coming back as "left
+ * out" and that tracker left out for the rest of the level (PtReset at SV_Reset). A tracker's own memory is read only
+ * inside the catcher. */
+#include "pathguard.h"                                      /* (PtGuarded, OnPathTrackItem, PtReset: tools/checks/pathguard_test.c) */
+static uint8_t*          g_fPathTrackTick;                  /* found by FindFunctions (sigs.h kSigPathTrackTick) */
+static uint8_t*          g_ptThunk;
+
+static void PtInstall(void)
+{
+    uint8_t* f = g_fPathTrackTick;
+    if (!f) { Log(L"guard: the AI path tracking tick wasn't found (another game build?): not guarded"); return; }
+    if (f[0xba] != 0x48 || f[0xbb] != 0x8D || f[0xbc] != 0x05) { Log(L"guard: the AI path tracking tick %p isn't the expected code: not guarded", f); return; }
+    uint8_t* th = RipRel(f + 0xba, 7);
+    int pad = InGame(th) && InGame(th + 16) && !((uintptr_t)th & 15) && th[0] == 0x8B && th[1] == 0x12 && th[2] == 0xE9;
+    for (int k = 7; pad && k < 16; ++k) pad = th[k] == 0xCC;
+    if (!pad) { Log(L"guard: the AI path tracking thunk %p isn't `mov edx, [rdx]; jmp` + 9 int3 (hooked by another mod?): not guarded", th); return; }
+    uint8_t* body = Rel32(th + 2);
+    static const uint8_t kBody[20] = { 0x40, 0x53, 0x48, 0x83, 0xEC, 0x30, 0x48, 0x8B, 0x01, 0x4C, 0x63, 0xC2, 0x48, 0x8B, 0x50,
+                                       0x60, 0x4A, 0x8B, 0x1C, 0xC2 };   /* push rbx ... mov rdx, [rax+0x60]; mov rbx, [rdx+r8*8] */
+    if (!InGame(body) || memcmp(body, kBody, sizeof(kBody)) != 0) {
+        Log(L"guard: the AI path tracking body %p isn't the expected code: not guarded", body);
+        return;
+    }
+    if (g_scTls == 0xFFFFFFFFu) g_scReady = ScInit(GetModuleHandleW(L"kernel32.dll"));
+    g_ptBody = (PtBodyFn)body;
+    g_ptThunk = th;
+    DWORD old = 0, ignored = 0;
+    if (!VirtualProtect(th, 16, PAGE_EXECUTE_READWRITE, &old)) { Log(L"guard: the AI path tracking thunk %p couldn't be written: not guarded", th); return; }
+    __atomic_store_n((uint64_t*)(th + 8), (uint64_t)(uintptr_t)OnPathTrackItem, __ATOMIC_SEQ_CST);   /* (never run: int3s) */
+    __atomic_store_n((uint64_t*)th, 0xCCCC0000000225FFull, __ATOMIC_SEQ_CST);                       /* FF 25 02 00 00 00: jmp [rip+2] */
+    VirtualProtect(th, 16, old, &ignored);
+    FlushInstructionCache(GetCurrentProcess(), th, 16);
+    Log(L"guard: AI path tracking guarded (tick %p, thunk %p -> body %p; trackers with freed objects left out, faults caught: %s)",
+        f, th, body, g_scTls != 0xFFFFFFFFu ? L"the fault catcher in" : L"NO fault catcher (kernel32's calls missing)");
+}
+
+/* every 5 minutes in the mission (FlightInputHook): how busy the path tracker guard was */
+static void PtLog(void)
+{
+    static double next;
+    if (!g_ptThunk) return;
+    double now = CoNow();
+    if (next <= 0) { next = now + 300.0; return; }
+    if (now < next) return;
+    next = now + 300.0;
+    uint32_t calls = g_ptCalls.n * PT_SAMPLE;
+    g_ptCalls.n = 0;
+    Log(L"guard: AI path tracking, the last 5 minutes: about %u tracker updates (%u a second); so far left out %d (freed), faults "
+        L"caught %d, trackers left out for the level %d", calls, calls / 300u, g_ptSkipped, g_ptFaults,
+        g_ptBadN < PT_BAD_MAX ? g_ptBadN : PT_BAD_MAX);
 }
 
 /* ---- The STORE freeze (runtime 0.32.20; tools/re/STORE_FREEZE.md) ----------------------------------------------------
