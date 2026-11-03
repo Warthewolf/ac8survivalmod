@@ -630,7 +630,7 @@ function SPORT.roundOver(now, s)
         local pay = math.floor((c.reward or 0) + (c.reward_per_round or 0) * D.round)
         addCredits(pay, "spaceport held")
         LB.special("spaceport", true, now - (s.at or now))
-        hudCallout(t.sp_held, string.format(t.sp_held_sub, pay))
+        hudCallout(t.sp_held, string.format(t.sp_held_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
         log(string.format("special: round %d, the spaceport held (%d%% captured)", D.round, s.capture or 0))
         RUN.sport = nil
         SPORT.tidyFleet("the spaceport held")
@@ -903,7 +903,7 @@ local function rocketsTick(now, s)
         local pay = tierPay(rc.rocket_pay or 0) * down
         addCredits(pay, "a rocket shot down")
         LB.stat("ground", down)
-        hudCallout(t.sp_rocket_down, string.format(t.sp_rocket_down_sub, pay))
+        hudCallout(t.sp_rocket_down, string.format(t.sp_rocket_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
         log(string.format("special: a rocket shot down (+%d); %d of %d down, %d escaped, %d taken off", pay, rk.kills, rk.n,
             rocketsEscaped(rk), rocketsLost(rk)))
     end
@@ -1062,7 +1062,7 @@ function SPORT.retakeOver(now, s)
     end
     addCredits(pay, "spaceport retaken")
     LB.special("retake", true, now - (s.at or now))
-    hudCallout(t.sp_retaken, string.format(t.sp_retaken_sub, pay))
+    hudCallout(t.sp_retaken, string.format(t.sp_retaken_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
     log(string.format("special: round %d, the spaceport was retaken", D.round))
 end
 

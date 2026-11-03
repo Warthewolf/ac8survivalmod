@@ -461,7 +461,7 @@ local function specialTick(now)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "shuttle launched")
         LB.special("shuttle", true, cd)
-        hudCallout(t.launched, string.format(t.launched_sub, pay))
+        hudCallout(t.launched, string.format(t.launched_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
         log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
             launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
             tostring(shuttleHealth())))
@@ -521,6 +521,8 @@ local function makeWaves(special, fighters, bombers, cap)
     while i <= #fighters and size(fighters[i]) <= left do        -- the first wave's fighters (escorts first)
         one[#one + 1] = fighters[i]; left = left - size(fighters[i]); i = i + 1
     end
+    -- ((0.73.78) never an empty first wave: a flight bigger than the cap (a 6-ship in an ace round's waves of 4) leads alone)
+    if #one == 0 and #bombers == 0 and i <= #fighters then one[1] = fighters[i]; i = i + 1 end
     for _, u in ipairs(bombers) do one[#one + 1] = u end
     local cur, n = nil, 0
     for k = i, #fighters do
@@ -612,6 +614,185 @@ function pressureNow(why)
     roundPressure(nil, why)
 end
 
+-- (0.73.78, plan G4) Flight `unit`'s planes taken off without a kill (despawned: an ace squadron's break-off below, the
+-- Spaceport's withdrawal): marked down and withdrawn, so the sweep neither pays nor counts them. On every game: the
+-- host's (or solo) as it despawns them, a co-op joiner's as the host's RE_SV_FlightOff_NN reaches it (sv_coop.lua
+-- hostEvent; before, a joiner's sweep paid the vanished copies as its kills a second on). The planes marked.
+function flightWithdrawn(unit)
+    local n = 0
+    for _, p in ipairs(planes or {}) do
+        if p.unit == unit and not p.down then p.down, p.withdrawn, n = true, true, n + 1 end
+    end
+    return n
+end
+
+-- (0.73.78, plan G4; IMPROVEMENTS "Pacing and rounds" 3) The ace rounds' record, their break-off and its flights:
+--   aceFlown(sq)       startRound: squadron sq flies this ace round (RUN.aceSinceTop: ace rounds since the top squadron
+--                      last flew one, nil until it has; RUN.aceAt[sq]: the round; CFG.aces.rotation, ACE.squadFor)
+--   aceGoneRecycle()   startRound, before the picks: the flights a break-off despawned (D.aceGone) still reading up (a
+--                      despawned unit does) recycled (SV_Recycle(unit, 1)), else kept out of this round's picks (D.taken),
+--                      as the Spaceport's withdrawn ones (sv_spaceport.lua SPORT.planRound)
+--   aceBreakTick(now)  roundsTick, the host's (or solo): an ace round's clock (D.aceBreak; not while you're down at the
+--                      airfield with nobody else flying), after_s on its squadron's flights up break off (RE_SV_DirHold_NN:
+--                      engagement None; no openers, reversals, hunt or specials; its queue and later waves dropped), each
+--                      despawned (RE_SV_FlightOff_NN, flightWithdrawn) once all of it is far_km from every player or
+--                      leave_s on (CFG.aces.break_off)
+local aceFlown, aceGoneRecycle, aceBreakTick
+do
+local function fire(ev)
+    local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+    return r == 1, r == 1 and "fired" or ("not fired: " .. tostring(SV_ERR and SV_ERR[r] or r))
+end
+local function mmss(s) s = math.max(0, math.floor(s + 0.5)); return string.format("%d:%02d", s // 60, s % 60) end
+local function playersAt()                          -- where every player is (COOP.players: you first), else you
+    local out = {}
+    if COOP and COOP.players then
+        local ok, l = pcall(COOP.players)
+        if ok and type(l) == "table" then for _, e in ipairs(l) do if e.at and e.alive ~= false then out[#out + 1] = e.at end end end
+    end
+    if #out == 0 then local at = playerLocation(); if at then out[1] = at end end
+    return out
+end
+local function roundKillsNow()
+    local n = 0
+    for _, v in pairs(RUN.roundKills or {}) do n = n + (tonumber(v) or 0) end
+    return n
+end
+
+function aceFlown(sq)
+    if not (RUN and sq) then return end
+    if sq == ACE.top() then RUN.aceSinceTop = 0
+    elseif RUN.aceSinceTop then RUN.aceSinceTop = RUN.aceSinceTop + 1 end
+    RUN.aceAt = RUN.aceAt or {}
+    RUN.aceAt[sq] = D.round
+end
+
+function aceGoneRecycle()
+    local g = D.aceGone
+    if not (g and next(g)) then return end
+    local done, kept, gone = {}, {}, 0
+    for u in pairs(g) do
+        if SV_UnitAlive(u) <= 0 then
+            g[u], gone = nil, gone + 1
+        else
+            local r = nil
+            if type(SV_Recycle) == "function" then
+                local okR, x = pcall(SV_Recycle, u, 1)
+                r = okR and tonumber(x) or nil
+            end
+            if r == 1 or (r == 0 and SV_UnitAlive(u) <= 0) then
+                g[u] = nil
+                done[#done + 1] = u
+            else
+                if D.taken then D.taken[u] = true end
+                kept[#kept + 1] = u .. (r and string.format(" (SV_Recycle %s)", (SV_ERR and SV_ERR[r]) or tostring(r)) or "")
+            end
+        end
+    end
+    table.sort(done); table.sort(kept)
+    log(string.format("aces: the flights a break-off took off: %d down since, %d recycled (SV_Recycle)%s%s", gone, #done,
+        #done > 0 and (": " .. table.concat(done, ", ")) or "", #kept > 0 and string.format("; %d still up kept out of round %d's "
+            .. "picks%s: %s", #kept, D.round, type(SV_Recycle) == "function" and "" or " (no SV_Recycle in this runtime)",
+            table.concat(kept, ", ")) or ""))
+end
+
+local function breakOff(now, B)
+    local c = CFG.aces.break_off or {}
+    local units, n = {}, 0
+    for u in pairs(D.up or {}) do
+        if D.aceSquad and D.aceSquad[u] and poolIndex(u) then
+            local a = SV_UnitAlive(u)
+            if a > 0 then units[#units + 1] = u; n = n + a end
+        end
+    end
+    table.sort(units)
+    local later = 0                                 -- (this wave's flights not up yet and the waves still to come)
+    for _, u in ipairs(D.queue or {}) do if type(u) == "string" and u:sub(1, 1) ~= "@" then later = later + flightSize(u) end end
+    for w = (D.wave or 1) + 1, #(D.waves or {}) do
+        for _, u in ipairs(D.waves[w]) do if type(u) == "string" and u:sub(1, 1) ~= "@" then later = later + flightSize(u) end end
+    end
+    D.queue, D.spare = {}, {}
+    if D.waves then D.wave = #D.waves end
+    if D.state == "spawning" or D.state == "wave" then D.state = "fighting" end
+    B.state, B.at, B.leaveBy, B.units, B.gone, B.n0 = "leaving", now, now + math.max(0, tonumber(c.leave_s) or 12), {}, 0, n
+    local held = {}
+    D.aceMoveAt = D.aceMoveAt or {}
+    for _, u in ipairs(units) do
+        B.units[u] = true
+        local ok, why = fire(string.format("RE_SV_DirHold_%02d", poolIndex(u)))   -- (engagement None; forwarded in co-op)
+        if not ok then held[#held + 1] = u .. " (" .. why .. ")" end
+        if D.squad then D.squad[u] = nil end         -- (no opener or blink of its squadron's now)
+        D.aceMoveAt[u] = math.huge                   -- (no reversal, nor the director's cover turn: ACE.movesTick, DIR)
+        for _, p in ipairs(planes) do
+            if p.unit == u and not p.down then p.leaving, p.spwAt = true, math.huge end   -- (no hunt, no special fired)
+        end
+    end
+    local sq = D.roundSquad and CFG.aces[D.roundSquad]
+    local name = tostring(sq and sq.squadron or D.roundSquad or "the squadron")
+    log(string.format("aces: round %d: %s breaks off %s in (CFG.aces.break_off after_s %s): %d aircraft in %d flights leave%s, "
+        .. "%d more never come; %d shot down this round, paid as they went%s", D.round, name, mmss(B.t), tostring(c.after_s),
+        n, #units, #units > 0 and (" (" .. table.concat(units, ", ") .. ")") or "", later, roundKillsNow(),
+        #held > 0 and ("; not held: " .. table.concat(held, ", ")) or ""))
+    if n > 0 then
+        local t = CFG.hud.text
+        hudCallout(string.format(t.aces_break or "%s BREAKS OFF", name:upper()), string.format(t.aces_break_sub or "%d OF THEM LEAVING", n))
+    end
+    if #units == 0 then B.state = "done" end
+end
+
+local function leaveTick(now, B)
+    local far = tonumber((CFG.aces.break_off or {}).far_km) or 4
+    local pls = playersAt()
+    local left = 0
+    for _, u in ipairs((function() local t = {}; for x in pairs(B.units) do t[#t + 1] = x end; table.sort(t); return t end)()) do
+        local go, why = now >= B.leaveBy, "leave_s on"
+        if not go then
+            local near = nil
+            for _, p in ipairs(planes) do
+                if p.unit == u and not p.down and p.at then
+                    for _, at in ipairs(pls) do
+                        local d = km(p.at, at)
+                        if not near or d < near then near = d end
+                    end
+                end
+            end
+            go, why = (near == nil or near >= far), near and string.format("%.1f km from the nearest player", near) or "none of it seen"
+        end
+        if go then
+            local ok, how = fire(string.format("RE_SV_FlightOff_%02d", poolIndex(u)))
+            local m = flightWithdrawn(u)
+            D.up[u] = nil
+            D.aceGone = D.aceGone or {}
+            D.aceGone[u] = true
+            B.units[u], B.gone = nil, B.gone + m
+            log(string.format("aces: %s gone (%s, %.0f s after the break): %d aircraft, unpaid; RE_SV_FlightOff_%02d %s", u, why,
+                now - B.at, m, poolIndex(u), how))
+        else
+            left = left + 1
+        end
+    end
+    if left == 0 then
+        B.state = "done"
+        log(string.format("aces: round %d: the break-off is over %.0f s on: %d of the %d leaving shot down meanwhile, %d gone unpaid",
+            D.round, now - B.at, math.max(0, B.n0 - B.gone), B.n0, B.gone))
+    end
+end
+
+function aceBreakTick(now)
+    local B = D.aceBreak
+    if not B or B.state == "done" or now < (B.checkAt or 0) then return end
+    B.checkAt = now + 1
+    if B.state == "on" then
+        local dt = math.max(0, now - (B.seen or now))
+        B.seen = now
+        if not (playerOnAirfield() and othersFlying() == 0) then B.t = B.t + dt end
+        if B.t >= (tonumber((CFG.aces.break_off or {}).after_s) or 360) then breakOff(now, B) end
+    elseif B.state == "leaving" then
+        leaveTick(now, B)
+    end
+end
+end
+
 local function startRound()
     D.round = D.round + 1
     pruneDown()
@@ -659,22 +840,45 @@ local function startRound()
     -- (user, 2026-10-22: "when an ACE team spawns, no other aircraft other than those special to those levels should
     -- spawn"): an ace round (CFG.aces every) is its tier's squadrons throughout, with no bomber raid
     D.roundTier = nil
-    local aceTi = (D.nextTierRound == D.round and D.nextTier) or aceRound(D.round, special)   -- (the one its callout named)
+    -- ((0.73.78, plan G4) the squadron that flies it, D.roundSquad: the tier's own, or a stand-in for the top one at this
+    -- tier's skill, CFG.aces.rotation; its size, D.aceNextAt; its break-off clock, D.aceBreak)
+    D.roundSquad, D.aceNextAt, D.aceBreak = nil, nil, nil
+    local aceTi, aceSq, aceStandin, aceWhy
+    if D.nextTierRound == D.round and D.nextTier then              -- (the one its callout named)
+        aceTi, aceSq, aceStandin, aceWhy = D.nextTier, D.nextSquad, D.nextStandin, D.nextWhy
+    else
+        aceTi, aceSq, aceStandin, aceWhy = aceRound(D.round, special)
+    end
     if aceTi then
         local ti = aceTi
         local tn = CFG.tiers.list[ti].name
         if ACE.roster[tn:lower()] then
             D.roundTier = ti
-            local c = CFG.aces[tn:lower()] or {}
+            if not aceSq then aceSq, aceStandin, aceWhy = ACE.squadFor(D.round, ti) end
+            if not (aceSq and ACE.roster[aceSq] and type(CFG.aces[aceSq]) == "table") then aceSq, aceStandin = tn:lower(), false end
+            D.roundSquad = aceSq
+            local c = CFG.aces[aceSq] or {}
             if D.aceRoundSaid ~= D.round then
                 D.aceRoundSaid = D.round
-                log(string.format("aces: round %d is a %s round (%s squadron only)", D.round, tn, tostring(c.squadron)))
+                log(string.format("aces: round %d is a %s round (%s squadron only%s)", D.round, tn, tostring(c.squadron),
+                    aceStandin and string.format(", standing in at the %s tier's skill: %s", tn, tostring(aceWhy)) or ""))
             end
+            aceFlown(aceSq)
         end
     end
-    D.nextTier, D.nextTierRound = nil, nil
+    D.nextTier, D.nextTierRound, D.nextSquad, D.nextStandin, D.nextWhy = nil, nil, nil, nil, nil
+    -- ((0.73.78, plan G4) an ace round's own size, ACE.roundSize: x the menu's %, then co-op's more within its ceiling)
+    local aceN, aceUp, aceNext, aceTop, aceUpTop = nil, nil, nil, nil, nil
+    if D.roundTier then aceN, aceUp, aceNext, aceTop, aceUpTop = ACE.roundSize(D.round) end
+    if aceN then
+        local ex = SETUP.enemyX()
+        local was = budget
+        budget = math.max(2, math.floor(aceN * ex / 2 + 0.5) * 2)
+        if COOP and COOP.more then budget = COOP.more(budget, "max_aircraft", math.max(budget, math.floor(aceTop * ex + 0.5))) end
+        log(string.format("aces: round %d's squadron: %d aircraft (CFG.aces.round: %d, at most %d%s; a normal round's %d)",
+            D.round, budget, aceN, aceTop, ex ~= 1 and string.format(", x%.2f the menu's", ex) or "", was))
     -- (co-op: more for more players, up to the room's cap, which grows with the late rounds: TIER.coopCap)
-    if COOP and COOP.more then budget = COOP.more(budget, "max_aircraft", TIER.coopCap(D.round)) end
+    elseif COOP and COOP.more then budget = COOP.more(budget, "max_aircraft", TIER.coopCap(D.round)) end
     D.budget = budget
     local spk = special and SPC.kinds[special]
     local alone = spk and SPC.kindValue(spk.alone)                  -- (a special that flies alone: no fighters)
@@ -695,6 +899,10 @@ local function startRound()
     if SPORT and SPORT.planRound then
         local okSp, errSp = pcall(SPORT.planRound, special, pick)
         if not okSp then log("special: the Spaceport's round plan error " .. tostring(errSp)) end
+    end
+    do                                              -- ((0.73.78, plan G4) the flights an ace break-off despawned: aceGone)
+        local okAg, errAg = pcall(aceGoneRecycle)
+        if not okAg then log("aces: the break-off's recycle error " .. tostring(errAg)) end
     end
     local function raidShare()                      -- a raid's bombers: raid_share of the round, whole 2-ships, max_bombers
         return math.min(math.floor(budget * b.raid_share / 2 + 0.5) * 2, b.max_bombers or budget)
@@ -775,7 +983,8 @@ local function startRound()
     -- snapshot (ROLE.live): the whole pool as before)
     local fighters, nFighters
     if ROLE.live and nWant > 0 then
-        local aceKey = D.roundTier and CFG.tiers.list[D.roundTier] and CFG.tiers.list[D.roundTier].name:lower() or nil
+        -- ((0.73.78) the round's squadron's own roles: a stand-in's at a higher tier's skill too, D.roundSquad)
+        local aceKey = D.roundTier and (D.roundSquad or (CFG.tiers.list[D.roundTier] and CFG.tiers.list[D.roundTier].name:lower())) or nil
         fighters, nFighters = ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)
     else
         fighters, nFighters = pick(CFG.pool, nWant, function(u) return PROBE_OF[u] end)
@@ -814,8 +1023,19 @@ local function startRound()
         end
         if D.jammerUnit then log(string.format("round %d: the jammer flies with %s", D.round, D.jammerUnit)) end
     end
-    local cap = waveCap(D.round)
-    if COOP and COOP.more then cap = COOP.more(cap, "max_up") end           -- (co-op: more for more players)
+    local cap
+    if aceN then                                    -- ((0.73.78, plan G4) an ace round: at most `up` at once, CFG.aces.round)
+        local ex = SETUP.enemyX()
+        local up = math.max(2, math.floor(aceUp * ex + 0.5))
+        if COOP and COOP.more then up = COOP.more(up, "max_up", math.max(up, math.floor(aceUpTop * ex + 0.5))) end
+        D.aceNextAt = math.max(0, math.min(aceNext, up - 2))   -- (a wave of 2 at least)
+        cap = math.max(2, up - D.aceNextAt)
+        log(string.format("aces: round %d: at most %d of them up at once: waves of %d, the next when %d or fewer are left",
+            D.round, up, cap, D.aceNextAt))
+    else
+        cap = waveCap(D.round)
+        if COOP and COOP.more then cap = COOP.more(cap, "max_up") end       -- (co-op: more for more players)
+    end
     D.waves = makeWaves(spk and special or nil, fighters, bombers, cap)
     D.wave, D.queue = 1, D.waves[1]
     D.spare = {}
@@ -847,6 +1067,9 @@ local function startRound()
     if not okP then log("pressure: error " .. tostring(errP)) end
     if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
+    -- ((0.73.78, plan G4) an ace round's clock to its break-off, CFG.aces.break_off: aceBreakTick)
+    local bo = CFG.aces.break_off
+    if D.roundTier and type(bo) == "table" and bo.enabled then D.aceBreak = { state = "on", t = 0, seen = D.now, n = nFighters } end
     RUN.roundKills = { you = 0, allies = 0, ships = 0, defences = 0, airstrike = 0 }
     pcall(STATS.roundStart, D.now)                  -- (the round's measurements, sv_stats.lua)
     if DIR then                                     -- (the squad director, P2: the round's budgets, wave 1's pincer)
@@ -958,6 +1181,7 @@ end
 local function tailTick(now, alive)
     local c = CFG.waves and CFG.waves.tail
     if not (type(c) == "table" and c.enabled) then return end
+    if D.aceBreak and D.aceBreak.state == "leaving" then return end   -- ((0.73.78) an ace break-off's: none freed, none pinged)
     local T = D.tail
     if not T or T.round ~= D.round or alive ~= T.alive then        -- (a kill, or a new flight: its clock again)
         if T and T.pings and T.round == D.round and alive < T.alive then
@@ -1023,19 +1247,25 @@ function roundsTick(now)
     pressureAfterBoss(now)                          -- (the band's attack throttle again once an Anomaly / VALKA is down)
     local okW, errW = pcall(WOLF.tick, now)          -- (the Wolf trap's holds and releases: CFG.roles.wolf, sv_spawn.lua)
     if not okW and tostring(errW) ~= D.wolfErr then D.wolfErr = tostring(errW); log("roles: wolf error " .. D.wolfErr) end
+    if D.aceBreak and D.state ~= "wait" then         -- ((0.73.78, plan G4) an ace round's break-off: CFG.aces.break_off)
+        local okB, errB = pcall(aceBreakTick, now)
+        if not okB and tostring(errB) ~= D.aceBreakErr then D.aceBreakErr = tostring(errB); log("aces: break-off error " .. D.aceBreakErr) end
+    end
     if D.state == "wait" then
         if not D.announced and now >= D.at - CFG.hud.start_callout_lead_s then
             D.announced = true
             local t = CFG.hud.text
             local nextSpecial = D.forceSpecial or specialFor(D.round + 1)
-            local nextAce = aceRound(D.round + 1, nextSpecial)          -- (once: it picks the tier)
+            -- (once: it picks the tier; (0.73.78) and the squadron, CFG.aces.rotation)
+            local nextAce, nextSq, nextStandin, nextWhy = aceRound(D.round + 1, nextSpecial)
             local nk = nextSpecial and SPC.kinds[nextSpecial]
             if nk and SPC.kindValue(nk.disguise) then nk = nil end      -- (VALKA: called out as a normal round)
             if nk then
                 hudCallout(string.format(t.special, D.round + 1), type(nk.sub) == "function" and nk.sub(t) or t[nk.sub])
             elseif nextAce then
                 D.nextTier, D.nextTierRound = nextAce, D.round + 1   -- startRound flies this one
-                local tn = CFG.tiers.list[D.nextTier].name:lower()
+                D.nextSquad, D.nextStandin, D.nextWhy = nextSq, nextStandin, nextWhy
+                local tn = (nextSq and type(CFG.aces[nextSq]) == "table") and nextSq or CFG.tiers.list[D.nextTier].name:lower()
                 local c = CFG.aces[tn] or {}
                 hudCallout(string.format(t.start, D.round + 1), string.format(t.aces_round, tostring(c.squadron or tn):upper()))
             else
@@ -1119,16 +1349,17 @@ function roundsTick(now)
         end
         local w = CFG.waves
         local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
+        local nextAt = D.aceNextAt or w.next_at        -- ((0.73.78, plan G4) an ace round's own: CFG.aces.round next_at)
         -- (the intensity director, behaviour roadmap P4: "above 80 intensity it holds the next wave back, so a bigger
         -- round is longer, not denser": asked only once the gate's open, the wave due, DIR.holdWave starts its hold
         -- then, or says the one on; it ends by itself, 30 s at most)
-        if (alive <= w.next_at or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave")) then
+        if (alive <= nextAt or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave")) then
             D.wave, D.waveAt = D.wave + 1, now
             D.queue = D.waves[D.wave]
             local n = 0
             for _, u in ipairs(D.queue) do if u:sub(1, 1) ~= "@" then n = n + flightSize(u) end end
             log(string.format("round %d: wave %d of %d (%d aircraft) with %d of the last wave's left%s", D.round, D.wave,
-                #D.waves, n, alive, alive > w.next_at and string.format(" (%d s on)", w.timeout_s) or ""))
+                #D.waves, n, alive, alive > nextAt and string.format(" (%d s on)", w.timeout_s) or ""))
             if w.callout then
                 local t = CFG.hud.text
                 hudCallout(string.format(t.wave_in, D.wave, #D.waves), string.format(t.wave_in_sub, n))

@@ -101,6 +101,12 @@ local function kindOf(why, n)
                          "valka", "glitch", "shuttle", "troop" }) do       -- (first: "landing craft down (lane A)" isn't a kill)
         if w:find(k, 1, true) then return "specials" end
     end
+    -- ((0.73.78) a boss's pay is "<its name> down": MINDRIPPER's and AB.L..IN's names aren't in the list above, so the audit
+    -- filed them as "other"; every special's own name counts)
+    for _, sc in pairs(type(CFG) == "table" and type(CFG.specials) == "table" and CFG.specials or {}) do
+        local nm = type(sc) == "table" and type(sc.name) == "string" and sc.name ~= "" and sc.name:lower()
+        if nm and w:find(nm, 1, true) then return "specials" end
+    end
     if w:find(" down (", 1, true) then return "kills" end
     if w:find("cleared", 1, true) then return "round bonuses" end
     return n < 0 and "spent" or "other"

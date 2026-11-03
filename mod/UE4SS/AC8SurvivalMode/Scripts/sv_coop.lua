@@ -652,8 +652,11 @@ local function hostTick()
         -- "<kind>:<state>" ("anomaly:hunt", "valka:done"), or "": a joiner's field only while the host's Anomaly hunts
         -- (ANOM.clientTick), its copies' leftovers taken off once the host's is over (sv_rounds.lua SPC.clientClean)
         local ss = (sp and type(sp.kind) == "string" and type(sp.state) == "string") and (sp.kind .. ":" .. sp.state) or ""
+        -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases this run, counted here (sv_shop.lua shopBuildFor): each
+        -- joiner's STORE prices it from them, so the room's price rises x raise a purchase whoever buys it)
+        local vb = math.max(0, math.min(999, math.floor(tonumber(RUN and RUN.bought and RUN.bought.VoidWatcher) or 0)))
         send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al,
-            spk, ss)
+            spk, ss, string.format("%d", vb))
     end
     -- ((0.73.77, the plan's I7: S12) the Spaceport (sv_spaceport.lua SPORT.coopCode): its NEXT row's numbers for the
     -- joiners' rows, and a retake due or in play, which each joiner keeps for a host migration ("spx"; as it changes,
@@ -1353,6 +1356,14 @@ local function hostEvent(name)                          -- (a joiner) one of the
     freeWaiting(name)
     local r = rawEvent(name)
     if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+    -- ((0.73.78, plan G4) a flight the host despawned (an ace break-off, the Spaceport's withdrawal): its copies here off,
+    -- unpaid (sv_rounds.lua flightWithdrawn), fired here or not (the host's "dn" finishes them then); before, this game's
+    -- sweep paid the vanished copies as its own kills a second on)
+    local fo = tonumber(tostring(name):match("^RE_SV_FlightOff_(%d%d)$"))
+    local fu = fo and poolUnit and poolUnit(fo)
+    if fu and flightWithdrawn then
+        log(string.format("coop: the host took %s off (%s): %d of its copies here off, unpaid", fu, name, flightWithdrawn(fu)))
+    end
 end
 
 local function clientRounds(now)
@@ -3206,7 +3217,7 @@ local function onBuildAsk(from, f)
     end
     local ok, msg = false, "NOT AVAILABLE RIGHT NOW."
     if type(shopBuildFor) == "function" then
-        local okC, a, b = pcall(shopBuildFor, from, name, math.floor(price), kind)
+        local okC, a, b = pcall(shopBuildFor, from, name, math.floor(price), kind, true)   -- ((0.73.78) true: a joiner's ask)
         if okC then ok, msg = a, b else msg = "THE HOST COULDN'T BUILD IT"; log("shop: build for player " .. (from + 1) .. ": " .. tostring(a)) end
     end
     log(string.format("shop: player %d's %s (%d): %s", from + 1, name, math.floor(price), ok and ("built: " .. tostring(msg)) or ("refused: " .. tostring(msg))))
@@ -3335,7 +3346,8 @@ local function allyList()
         local item = a.kind == "ship" and ("Ship" .. tostring(a.key)) or (a.ally == "wingmen" and "Wingmen")
             or (a.ally == "awacs" and "VoidWatcher") or "Moonchild"
         local b = a.buyer and M.roster[a.buyer] and M.roster[a.buyer].sid or "0"
-        if ITEM_OK[item] then out[#out + 1] = item .. ":" .. b end
+        -- ((0.73.78, plan G5) not VOID WATCHER 1 once its service is over: a new host doesn't bring a retired one back)
+        if ITEM_OK[item] and not a.home then out[#out + 1] = item .. ":" .. b end
     end
     local dc = R.defCount or {}
     for kind, item in pairs({ aa = "AAGun", sam = "SAM", ciws = "Ciws" }) do
@@ -3670,6 +3682,13 @@ local function onJoinerMessage(f)
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
                   waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock(),
                   allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs }
+        -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases (the host's count): this game's STORE prices it from it,
+        -- as the host checks a joiner's ask)
+        local vb = tonumber(f[13])
+        if vb and vb == math.floor(vb) and vb >= 0 and vb <= 999 and RUN and RUN.bought and (RUN.bought.VoidWatcher or 0) ~= vb then
+            RUN.bought.VoidWatcher, RUN.dirty = vb, true
+            log(string.format("coop: VOID WATCHER 1 bought %d times in the room (the host's count): the STORE's price here from it", vb))
+        end
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end
@@ -4038,6 +4057,16 @@ function M.noDownBonus()
 end
 addCredits = function(n, why)
     local bonus = M.mirror > 0 and type(why) == "string" and not why:find(" down %(") and n > 0
+    -- ((0.73.78, economy C3) a special's pay split: the host pays and sends each player's share, so every game pays the
+    -- same, the joiners from "cr" as before; specialPay (sv_ai.lua) shows the same on the special's callout)
+    if COOP.host() and bonus and M.specialPay(why) then
+        local x = COOP.specialShare()
+        if x < 1 then
+            local whole = n
+            n = specialPay(whole)
+            why = string.format("%s, co-op share x%.2f of %d (%d players)", why, x, whole, playerCount())
+        end
+    end
     if COOP.host() and bonus and M.noDownBonus() then
         log("revive: the round's bonus (" .. tostring(n) .. ") not paid: you're down (down_round_bonus off)")
     else
@@ -4116,6 +4145,18 @@ function COOP.teamShare()
     local n = COOP.open and playerCount() or 1
     return math.min(cap, 1 / math.max(1, n - 1))
 end
+-- (0.73.78, economy C3, approved 2026-11-03) a special's reward in co-op pays each player x players ^ -special_split
+-- (CFG.credits.special_split, the host's setting, 0-1): 0.5 = 1 / sqrt(players), 0.71 with 2, 0.58 with 3, 0.5 with 4,
+-- 0.45 with 5; 1 solo or alone. Every game paid the whole reward before, so a special put N rewards into the run.
+function COOP.specialShare()
+    local e = tonumber(CFG.credits and CFG.credits.special_split) or 0.5
+    local n = COOP.open and playerCount() or 1
+    if n <= 1 or not (e > 0) then return 1 end
+    return math.min(1, n ^ -math.min(e, 1))
+end
+-- a pay of the host's round logic that is a special's (its reward, or what it pays as it goes: landing craft, the
+-- spaceport's fleet, ballast tanks, rockets ...): every one the joiners are sent ("cr") but the round's bonus
+function M.specialPay(why) return type(why) == "string" and not why:find("^round %d+ cleared") end
 -- ((0.73.77, plan H2) for the co-op run's squad, sv_leaderboard.lua: a slot's roster entry (name, sid, code; read
 -- only) and this game's Steam ID)
 function COOP.roster(slot) return M.roster[slot] end

@@ -694,6 +694,11 @@ def heavy_paths(used_ids, z, v):
                            after=o['b_after']))
     paths.append(make_path(z, used_ids, src_path, se.AWACS_ARC_A, o['arc_a'], smooth=True, before=o['a_before'],
                            after=o['a_after']))
+    # ((0.73.78, G5) its ways home: from each arc's end straight out along its tangent, se.AWACS_OUT_*)
+    paths.append(make_path(z, used_ids, src_path, se.AWACS_OUT_B, o['out_b'], smooth=True, before=o['out_b_before'],
+                           after=o['out_b_after']))
+    paths.append(make_path(z, used_ids, src_path, se.AWACS_OUT_A, o['out_a'], smooth=True, before=o['out_a_before'],
+                           after=o['out_a_after']))
     near = sorted({(H['sector'], H['route_km']) for H in hs if H['route_km'] < survival_events.HEAVY_ROUTE_KM})
     print(f'  heavies: {2 * len(hs)} paths ({len(hs)} routes + loops); routes begun nearer: '
           + (', '.join(f'{s} {d:.1f} km' for s, d in near) or 'none'))

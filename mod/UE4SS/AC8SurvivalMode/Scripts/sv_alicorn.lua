@@ -549,7 +549,7 @@ function SPC.alicornTick(now, s)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "the Alicorn sunk")
         LB.stat("ground", 1); LB.special("alicorn", true, now - s.at)
-        hudCallout(t.alicorn_down, string.format(t.alicorn_down_sub, pay))
+        hudCallout(t.alicorn_down, string.format(t.alicorn_down_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
         log(string.format("special: round %d, the Alicorn sunk %.0f s after it appeared (core %s, hull %d; %d deck launches)", D.round,
             now - s.at, coreUp and "up" or "down", hull, s.deckN or 0))
         D.alicornRemoveAt = now + 20                    -- (off once it has gone down)

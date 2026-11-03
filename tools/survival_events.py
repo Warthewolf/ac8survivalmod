@@ -622,6 +622,20 @@ AWACS_IN_SPEED = '450.0'                     # the lead-in (its turn ~29 deg of 
 AWACS_ALT_BAND_M = (3500.0, 5000.0)          # its unit area's height band (build_survival.py, 0.73.68)
 AWACS_AREA_M = 9000.0                        # its unit area on the airport, the orbit inside it (0.73.62: 6 km)
 AWACS_FALLBACK_AREA_M = 6000.0               # Lua's backstop's area orbit (0.73.62-0.73.72's orbit)
+# (0.73.78, plan G5: "3 rounds of service, rising price, 8-10 km field, a strike flight after it") Its way home. Survival
+# has no landing an AI plane can fly (the stock missions' landings are the player's, LiveSetTakeoffAndLandingEventExecution;
+# no stock record lands an AI plane), so it flies out and is taken off: after Lua's RE_SV_AwacsHome (SV_AwacsHome 1) the
+# end of the arc it's on starts its exit instead of the other arc (the conditions are read as the PathFinish fires, after
+# Lua set the flag: hard rule 26, the Ladons' rage's way), a straight leg along that arc's end tangent from a step ahead
+# of it (as each arc starts: hard rule 54's handover, which VOID WATCHER takes at 550 km/h) out to AWACS_OUT_KM at the
+# orbit's height (its area's band), its area AWACS_HOME_AREA_M round the airport so it isn't turned back. SV_AwacsOut 1 as
+# the exit starts, 2 at its end. Lua takes it off (RE_SV_AwacsRemove, Mission 22's own despawn on its unit, then
+# SV_Recycle) once it's far enough out, at the exit's end or after a time (hard rule 4).
+AWACS_OUT_A = 'SV_Path_VoidWatcherOutA'      # from arc A's end
+AWACS_OUT_B = 'SV_Path_VoidWatcherOutB'      # from arc B's end
+AWACS_OUT_KM = 24.0                          # the exit's length from the arc's end
+AWACS_OUT_STEP_KM = 3.0                      # its points every N km (its first a step of the arc ahead)
+AWACS_HOME_AREA_M = 40000.0                  # its unit area round the airport on the way out (AREA_RADIUS_M's)
 # Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
@@ -812,11 +826,33 @@ def awacs_orbit():
     arc_a = [pt(pe + 180.0 + step * i, AWACS_ALT_KM) for i in range(1, k_arc + 1)]
     for x, y, _ in lead + climb + arc_a + arc_b:
         assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'the AWACS orbit leaves the zone'
+    # (0.73.78, G5) its exits (AWACS_OUT_*): from each arc's end along the circle's tangent there, the first point a step
+    # of the arc (its chord) ahead, then every AWACS_OUT_STEP_KM to AWACS_OUT_KM, at the orbit's height
+    chord = 2.0 * r * math.sin(math.radians(step) / 2.0)
+
+    def exit_from(psi):
+        e = pt(psi, AWACS_ALT_KM)
+        a = a0 + s * math.radians(psi)
+        tx, ty = -s * math.sin(a), s * math.cos(a)
+        ds, d = [], chord
+        while d <= AWACS_OUT_KM + 1e-9:
+            ds.append(d)
+            d += AWACS_OUT_STEP_KM
+        out = [(e[0] + tx * d, e[1] + ty * d, AWACS_ALT_KM) for d in ds]
+        nxt = ds[-1] + AWACS_OUT_STEP_KM
+        return e, out, (e[0] + tx * nxt, e[1] + ty * nxt, AWACS_ALT_KM)
+    eb, out_b, out_b_after = exit_from(pe + 180.0)                 # arc B's end
+    ea, out_a, out_a_after = exit_from(pe + 360.0)                 # arc A's end
+    assert math.dist(eb[:2], arc_b[-1][:2]) < 1e-6 and math.dist(ea[:2], arc_a[-1][:2]) < 1e-6, 'the AWACS exits: not at the arcs\' ends'
+    for x, y, _ in out_a + out_b:
+        assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'an AWACS exit leaves the zone'
     cm = lambda p: (p[0] * 100000.0, p[1] * 100000.0, p[2] * 100000.0)
     return dict(rho=rho, turn=turn, sense=s, centre=c, pt=pt,
                 **{'in': [cm(p) for p in lead + climb]}, arc_a=[cm(p) for p in arc_a], arc_b=[cm(p) for p in arc_b],
                 in_before=cm((ex, ey, ez)), in_after=cm(arc_b[0]),
-                b_before=cm(climb[-1]), b_after=cm(arc_a[0]), a_before=cm(arc_b[-1]), a_after=cm(arc_b[0]))
+                b_before=cm(climb[-1]), b_after=cm(arc_a[0]), a_before=cm(arc_b[-1]), a_after=cm(arc_b[0]),
+                out_a=[cm(p) for p in out_a], out_b=[cm(p) for p in out_b], out_a_before=cm(ea), out_b_before=cm(eb),
+                out_a_after=cm(out_a_after), out_b_after=cm(out_b_after))
 
 
 def wolf_held(k):
@@ -935,6 +971,8 @@ INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for 
 # (0.73.73) a Ladon's circuit legs flown, its appearance's once-a-spawn mark and its fires (build_ladon); VOID WATCHER
 # 1's orbit legs flown (build_awacs)
 INT_FLAGS += ([f'SV_Ladon{f}{key}' for f in ('Leg', 'Done', 'Seen') for key, _, _ in LADONS] + ['SV_AwacsLeg'])
+# (0.73.78, G5) VOID WATCHER 1 sent home (Lua's RE_SV_AwacsHome) and its exit (1 begun, 2 flown: build_awacs)
+INT_FLAGS += ['SV_AwacsHome', 'SV_AwacsOut']
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -1789,17 +1827,41 @@ def build_awacs(g, stock_ep):
     g.flags.add('SV_AwacsLeg')                             # (set 0 by its appearance: build_allies)
     t_flag = g.exec_template('LiveFlagOperation_IntExecution', pred=lambda a, e: a[1] == 'Set')
     g.execute(t_path, AWACS_EVENTS['airborne'], {0: AWACS_OBJ, 2: AWACS_PATH_IN, 4: AWACS_IN_SPEED})
-    for ev, path, nxt in (('SV_AwacsLegIn', AWACS_PATH_IN, AWACS_ARC_B), ('SV_AwacsLegB', AWACS_ARC_B, AWACS_ARC_A),
-                          ('SV_AwacsLegA', AWACS_ARC_A, AWACS_ARC_B)):
+    # ((0.73.78, G5) each arc's end: the other arc while it serves (SV_AwacsHome 0), its exit once it's sent home (1):
+    # fresh conditions a record, as the Ladons' rage's; the lead-in's end always onto arc B, whose end then takes it out)
+    staying, homing = (lambda: [g.cond('SV_AwacsHome', 'Leq', 0)]), (lambda: [g.cond('SV_AwacsHome', 'Geq', 1)])
+    for ev, path, nxt, out in (('SV_AwacsLegIn', AWACS_PATH_IN, AWACS_ARC_B, None), ('SV_AwacsLegB', AWACS_ARC_B, AWACS_ARC_A, AWACS_OUT_B),
+                               ('SV_AwacsLegA', AWACS_ARC_A, AWACS_ARC_B, AWACS_OUT_A)):
         g.trigger(finish, ev, arg_changes={0: AWACS_OBJ, 2: path})
         g.execute(t_flag, ev, {0: 'SV_AwacsLeg', 1: 'Add', 2: 1})
-        g.execute(t_path, ev, {0: AWACS_OBJ, 2: nxt, 4: AWACS_SPEED})
+        if out is None:
+            g.execute(t_path, ev, {0: AWACS_OBJ, 2: nxt, 4: AWACS_SPEED})
+            continue
+        g.execute(t_path, ev, {0: AWACS_OBJ, 2: nxt, 4: AWACS_SPEED}, conds=staying())
+        g.execute(t_path, ev, {0: AWACS_OBJ, 2: out, 4: AWACS_SPEED}, conds=homing())
+        g.execute(t_flag, ev, {0: 'SV_AwacsOut', 1: 'Set', 2: 1}, conds=homing())
+        g.execute(t_radius, ev, {0: AWACS_UNIT, 1: 'NoneSelect', 2: f'{AWACS_HOME_AREA_M:.1f}'}, delay=0.5, conds=homing())
+    # ((0.73.78, G5) the exit's end (SV_AwacsOut 2: Lua takes it off), Lua's RE_SV_AwacsHome (sent home: the flag the arcs'
+    # ends read) and RE_SV_AwacsRemove (taken off: Mission 22's own despawn on its unit, LiveSetActiveGameObjectExecution
+    # false, as RE_SV_FlightOff_NN; SV_AwacsAir 0). Forwarded in co-op: each joiner's copy goes with it)
+    for ev, path in (('SV_AwacsOutDoneA', AWACS_OUT_A), ('SV_AwacsOutDoneB', AWACS_OUT_B)):
+        g.trigger(finish, ev, arg_changes={0: AWACS_OBJ, 2: path})
+        g.execute(t_flag, ev, {0: 'SV_AwacsOut', 1: 'Set', 2: 2})
+    assert '"RE_SV_AwacsHome"' in lua and '"RE_SV_AwacsRemove"' in lua, 'Scripts/sv_config.lua CFG.allies.awacs.home never names RE_SV_AwacsHome / Remove'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsHome')
+    g.execute(t_flag, 'RE_SV_AwacsHome', {0: 'SV_AwacsHome', 1: 'Set', 2: 1})
+    t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsRemove')
+    g.execute(t_off, 'RE_SV_AwacsRemove', {0: 'NoneSelect', 1: AWACS_UNIT, 2: 'NoneSelect', 3: 'false'})
+    g.execute(t_flag, 'RE_SV_AwacsRemove', {0: 'SV_AwacsAir', 1: 'Set', 2: 0})
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AwacsEsm')
     g.execute(t_fire, 'RE_SV_AwacsEsm', {0: AWACS_ESM_SLOT, 1: AWACS_OBJ})
     o = awacs_orbit()
     print(f'  VOID WATCHER 1: orbit {AWACS_ORBIT_KM:.1f} km round the airfield ({"counter-" if o["sense"] > 0 else ""}clockwise; '
           f'its lead-in a {o["turn"]:.0f} deg turn of {o["rho"]:.2f} km, then {AWACS_IN_CIRCLE_DEG:.0f} deg climbing), its '
-          f'area {AWACS_AREA_M:.0f} m ({AWACS_FALLBACK_AREA_M:.0f} m on the backstop), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT})')
+          f'area {AWACS_AREA_M:.0f} m ({AWACS_FALLBACK_AREA_M:.0f} m on the backstop), its ESM on RE_SV_AwacsEsm ({AWACS_ESM_SLOT}); '
+          f'home: exits of {len(o["out_a"])} + {len(o["out_b"])} points, {AWACS_OUT_KM:.0f} km out from each arc\'s end '
+          f'(RE_SV_AwacsHome, RE_SV_AwacsRemove; 0.73.78)')
 
 
 JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)
@@ -1934,6 +1996,8 @@ def build_allies(g, flag, t_search, t_move, t_bsearch):
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: AWACS_UNIT})
     flag(up, 'SV_AwacsAir', 'Set', 0)
     flag(up, 'SV_AwacsLeg', 'Set', 0)                      # (0.73.73: its orbit's legs flown, build_awacs)
+    flag(up, 'SV_AwacsHome', 'Set', 0)                     # ((0.73.78, G5) not sent home yet, no exit flown)
+    flag(up, 'SV_AwacsOut', 'Set', 0)
     g.execute(t_hold, up, {0: o, 2: TAKEOFF_LEAD[0]})
     g.execute(t_gear_dn, up, {0: o})
     g.execute(t_attr_hold, up, {1: o})

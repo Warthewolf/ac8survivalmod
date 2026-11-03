@@ -154,6 +154,14 @@ local GAMEPLAY = {
     { "probe.behaviour", function(c) c.probe.behaviour = true end },
     { "aces.flight.reaper.openers", function(c) c.aces.flight.reaper.openers = { "none" } end },
     { "shop.items.Flares.price", function(c) c.shop.items.Flares.price = 1 end },
+    -- ((0.73.78, economy C3-C5 and plan G6) the per-round prices, the airstrike's pay and limits, the specials' split:
+    -- gameplay, counted; the shipped values are the defaults, so a stock run stays unedited (above))
+    { "shop.items.Airstrike.price_per_round", function(c) c.shop.items.Airstrike.price_per_round = 0 end },
+    { "shop.items.Ecm.price_per_round", function(c) c.shop.items.Ecm.price_per_round = 100 end },
+    { "credits.airstrike_x", function(c) c.credits.airstrike_x = 0.5 end },
+    { "credits.special_split", function(c) c.credits.special_split = 0 end },
+    { "tactical.airstrike.per_round", function(c) c.tactical.airstrike.per_round = 0 end },
+    { "tactical.airstrike.max_hit", function(c) c.tactical.airstrike.max_hit = 0 end },
 }
 for _, g in ipairs(GAMEPLAY) do
     local saved = deepCopy(CFG)
@@ -203,6 +211,9 @@ CFG.coop.revive.price = 100
 check(edited(true)[1] == "coop.revive.price", "a co-op run: the room's revive price counts")
 check(#edited(false) == 0, "the same setting in a solo run doesn't")
 CFG.coop.revive.price = CFG_DEFAULTS.coop.revive.price
+CFG.coop.revive.price_per_round = 0                -- ((0.73.78, economy C6) the revive's price by the round)
+check(edited(true)[1] == "coop.revive.price_per_round" and #edited(false) == 0, "a co-op run: the revive's price a round counts; solo it doesn't")
+CFG.coop.revive.price_per_round = CFG_DEFAULTS.coop.revive.price_per_round
 CFG.coop.revive.key, CFG.coop.revive.camera.back_m, CFG.coop.name, CFG.coop.transport = "P", 50, "Wolf", "udp"
 check(#edited(true) == 0, "a co-op run: each player's key, camera, name and link don't")
 CFG.setup.host.zollars = 5000

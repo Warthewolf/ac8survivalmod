@@ -615,6 +615,8 @@ check(shortOk, string.format("a group too small for its share (wolf 0.9 of 30): 
       tostring(shortLine or rl)))
 CFG.roles.mix = (function() local m = {}; for k, v in pairs(CFG_DEFAULTS.roles.mix) do m[k] = { table.unpack(v) } end; return m end)()
 -- an ace round: its squadron's own roles (P9's ace personalities, unit 10: Bounty the Lancers'), then the rest
+-- ((0.73.78, plan G4) at a normal round's 30 here, CFG.aces.round off; its own 12 below)
+CFG.aces.round.enabled = false
 fresh(16)
 D.nextTier, D.nextTierRound = 6, 16
 startRound()
@@ -630,6 +632,12 @@ byA, tA = roundPicks()
 check(D.roundTier == 6 and byA.duelist == 24 and tA == 30 and has(line("roles: round 16"), "an ace round's mix"),
       string.format("personalities off: an ace round's 24 duelists, then the rest (%d of %d)", byA.duelist or 0, tA))
 CFG.aces.personality.enabled = true
+CFG.aces.round.enabled = true
+fresh(16)
+D.nextTier, D.nextTierRound = 6, 16
+startRound()
+byA, tA = roundPicks()
+check(D.roundTier == 6 and byA.lancer == 12 and tA == 12, string.format("(0.73.78) its own size: Bounty's 12, all Lancers (%d of %d)", byA.lancer or 0, tA))
 -- the jammer: only a duelist or Skirmisher flight
 CFG.jammer.chance, CFG.jammer.from_round = 1.0, 2
 SR.usable[CFG.jammer.aircraft] = SR.usable[CFG.jammer.aircraft] or "e18g_common_sv"

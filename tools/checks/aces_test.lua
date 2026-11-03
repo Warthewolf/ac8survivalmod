@@ -20,6 +20,16 @@
 --     personality off; the round line's counts;
 --   co-op: a joiner who meets a squadron first (its tell by "tl", the salvo on its copies by "dv", no blink round it),
 --     a joiner's game (nothing), KEEP_EVENTS (^RE_SV_WraithBlink kept);
+--   (0.73.78, plan G4) each tier's health (ACE.healthFor: every squadron's wing / lead, none for the specials' rows,
+--     late, off; ACE.setHealth through enemyLate on the host: the lead and wingman of a Harvest flight from the old
+--     715 HP bodies, one hit before, an ordinary flight's late x as before; a joiner's copies; a stand-in's own health
+--     and its spawn line); the ace rounds' size (ACE.roundSize, startRound: 18 at round 28 in waves of 6, the menu's %,
+--     co-op within 24 / 10, off); the rotation (ACE.squadFor, startRound: Harvest at 28, Bounty at 31 at the Reaper
+--     tier's skill with its own roles, rows and health, Harvest at 34, Valkyrie at 37; top_every 3; before from_round;
+--     off; ROLE.ownSet for a stand-in; the break's callout names it); the break-off (aceBreakTick: its clock held while
+--     you're down alone, the hold, the queue dropped, the far flight despawned unpaid, the near one at leave_s, one shot
+--     down meanwhile; aceGoneRecycle with and without SV_Recycle; off; a joiner's copies off unpaid on the host's
+--     RE_SV_FlightOff_NN, poolUnit);
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -107,9 +117,12 @@ for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l
 part("sv_rows.lua"); part("sv_ai.lua")
 hudCallout = function(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
-part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
+part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" },
+    -- ((0.73.78) the ace rounds' record, recycle and break-off, as globals here)
+    { "\nlocal aceFlown, aceGoneRecycle, aceBreakTick", "\naceFlown, aceGoneRecycle, aceBreakTick = nil, nil, nil" } })
 part("sv_tactical.lua"); part("sv_stats.lua"); part("sv_tells.lua"); part("sv_director.lua")
-part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" },
+    { "\nlocal function hostEvent%(name%)", "\nfunction hostEvent(name)" } })
 local M = _G.M
 function searchAircraft(a) return a end
 function playerOnAirfield() return grounded end          -- (sv_rounds.lua's own reads where you are)
@@ -248,6 +261,9 @@ check(letters, "every one of the 48 names in letters (hard rule 17)")
 
 ---------------------------------------------------------------------------------------------------- the role mix
 print("each squadron's ace-round roles (ROLE.mixFor, startRound)")
+-- ((0.73.78) the draw at a normal round's size, each round its tier's own squadron: CFG.aces.round / rotation off here,
+-- their own section below)
+AC.round.enabled, AC.rotation.enabled = false, false
 local function w(tk) local x, band = ROLE.mixFor(16, tk); return x, band end
 local m, b = w("mercenary")
 check(b == "ace:mercenary" and m.lancer == 1 and m.duelist == 0, "Bounty: the Lancers' (band ace:mercenary)")
@@ -328,6 +344,7 @@ AC.personality.enabled = false
 from = aceRoundOf("Mercenary", 16)
 check(has(line("roles: round 16", from), "an ace round's mix"), "personality off: ace_mix's line, as before")
 AC.personality.enabled = true
+AC.round.enabled, AC.rotation.enabled = true, true
 
 ---------------------------------------------------------------------------------------------------- spawnFlight
 print("spawnFlight: the opener, its altitude, Valkyrie's trap, ACE.squadUp")
@@ -781,6 +798,265 @@ for _, id in ipairs({ "mercenary_in", "legend_in", "demon_in", "phantom_in", "re
     check(e and e.sure == true and e.hud == nil and e.urgent == nil and e.args == nil and #e.radio > 0, id .. ": sure, its lines, nothing for the HUD")
 end
 
+---------------------------------------------------------------------------------------------------- (0.73.78) health
+print("(0.73.78, plan G4) each tier's health (ACE.healthFor, ACE.setHealth through enemyLate)")
+local RP = tierOf("Reaper")
+check(AC.reaper and AC.flight.reaper.health_add == 0, "the Reaper rows' health_add 0 (was 600 HP: +6,000 in the log's units)")
+local function hf(row, round) return { ACE.healthFor(row, round) } end
+local x = hf("sv_ace_reaper_su57_w_svd", 30)
+check(x[1] == 180 and x[2] == "reaper" and x[3] == "wing" and x[4] == 180 and x[5] == 540, "a Harvest wingman (any level's row): 180 HP (tier reaper: wing 180, lead 540)")
+check(hf("sv_ace_reaper_su57_l_sv", 30)[1] == 540 and hf("sv_ace_reaper_adfx02_l_svb", 30)[1] == 540
+      and hf("sv_ace_reaper_rafale_w", 40)[1] == 180, "its leads 540 (the CP_Named Su-57, the ADFX-02), the Rafale's Typhoon wing 180")
+check(hf("sv_ace_mercenary_f15c_w_sv", 16)[1] == 100 and hf("sv_ace_legend_rafale_l_sv", 19)[1] == 320
+      and hf("sv_ace_demon_su57_w_sv", 22)[1] == 140 and hf("sv_ace_phantom_su57_w_sv", 25)[1] == 160
+      and hf("sv_ace_phantom_su57_l_sv", 25)[1] == 460, "Bounty 100, Valkyrie's lead 320, Inferno 140, Wraith's Shadow Su-57 160 / its lead 460")
+check(hf("sv_ace_anomaly_f04e_w_sv", 20)[1] == nil and hf("sv_ace_valka_x40a_l", 20)[1] == nil and hf("sv_ace_glitch_e18g_l", 20)[1] == nil
+      and hf("su57_common_sv", 30)[1] == nil and hf(nil, 30)[1] == nil, "none for the specials' rows (MINDRIPPER's guards, VALKA, AB.L..IN), a plain row or none")
+AC.health.late = true
+check(math.abs(hf("sv_ace_reaper_su57_w", 30)[1] - 180 * TIER.lateHealthX(30)) < 1e-9 and math.abs(hf("sv_ace_reaper_su57_w", 30)[1] - 270) < 1e-9,
+      "late = true: [late]'s x on top (x1.5 at round 30: 270)")
+AC.health.late = false
+AC.health.enabled = false
+check(hf("sv_ace_reaper_su57_w", 30)[1] == nil, "health off: none (each airframe's own, as before)")
+AC.health.enabled = true
+-- on the host: a Harvest flight's lead and wingman, the old 715 HP bodies (7,150 in the log's units)
+local function body(p, h, m) p.obj.HealthInternal, p.obj.MaxHealth, p.late = h, m, nil end
+fresh(30, "Reaper")
+from_ = #logs + 1
+U = "ERA_Unit_01_Dep_Air0"
+spawnFlight(U)
+local lp, wp = plane(U, 0, KM(10, 0), nil, RP), plane(U, 1, KM(10.2, 0), nil, RP)
+body(lp, 7150, 715); body(wp, 7150, 715)
+enemyLate(lp, 30); enemyLate(wp, 30)
+check(lp.obj.HealthInternal == 5400 and lp.obj.MaxHealth == 540 and wp.obj.HealthInternal == 1800 and wp.obj.MaxHealth == 180 and lp.late and wp.late,
+      string.format("its lead 5,400 (540 HP), its wingman 1,800 (180 HP), not x1.5 (%s / %s)", tostring(lp.obj.HealthInternal), tostring(wp.obj.HealthInternal)))
+local hl = line("aces: Harvest ", from_)
+check(has(hl, " health 540 (tier reaper: wing 180, lead 540); its 1 wingman 180") and not has(hl, "skill"),
+      "the flight's health line as it spawns: " .. tostring(hl))
+check(since(from_, "^aces: health on .*%(sv_ace_reaper_%w+_l, reaper lead%): 7150 %-> 5400 %(MaxHealth 715 %-> 540 HP; tier reaper") == 1
+      and since(from_, "^aces: health on .*reaper wing%): 7150 %-> 1800") == 1,
+      "each tier and part's first plane logged: " .. tostring(line("aces: health on ", from_)))
+local hit = plane(U, 2, KM(10.4, 0), nil, RP)
+body(hit, 3575, 715)
+enemyLate(hit, 30)
+check(hit.obj.HealthInternal == 900 and hit.obj.MaxHealth == 180, "a wingman hit before the sweep saw it (half): half of its new health (" .. tostring(hit.obj.HealthInternal) .. ")")
+-- an ordinary flight in the same round: the late x as before
+D.leadRow, D.flightRow = {}, { ERA_Unit_02_Dep_Air0 = "su57_common_sv" }
+local op = plane("ERA_Unit_02_Dep_Air0", 1, KM(12, 0), nil, RP)
+body(op, 1000, 100)
+enemyLate(op, 30)
+check(op.obj.HealthInternal == 1500, "an ordinary flight's plane: x1.5 late, as before (" .. tostring(op.obj.HealthInternal) .. ")")
+-- a co-op joiner's copy: its row from the host's spawn (SPW), at most the tier's, never raised
+fresh(30)
+COOP.open, COOP.role, COOP.slot = true, "join", 1
+SPW = { row = {}, leadRow = {} }                  -- (sv_spweapons.lua's records of the host's spawns; that part isn't loaded here)
+SPW.row, SPW.leadRow = { ERA_Unit_01_Dep_Air1 = "sv_ace_reaper_typhoon_w_sv" }, { ERA_Unit_01_Dep_Air1 = "sv_ace_reaper_typhoon_l_sv" }
+local c0, c1, c2 = plane("ERA_Unit_01_Dep_Air1", 0, KM(9, 0), nil, RP), plane("ERA_Unit_01_Dep_Air1", 1, KM(9, 0), nil, RP),
+    plane("ERA_Unit_01_Dep_Air1", 2, KM(9, 0), nil, RP)
+body(c0, 7150, 715); body(c1, 700, 70); body(c2, 1800, 715)
+enemyLate(c0, 30); enemyLate(c1, 30); enemyLate(c2, 30)
+check(c0.obj.HealthInternal == 5400 and c0.obj.MaxHealth == 540 and c1.obj.HealthInternal == 700 and c1.obj.MaxHealth == 180
+      and c2.obj.HealthInternal == 1800 and c2.obj.MaxHealth == 180,
+      "a joiner's copies: the lead cut to 5,400, a stock body's 700 kept (the host's \"hp\" brings 1,800), one the host already set kept; MaxHealth the tier's")
+COOP.open, COOP.role, COOP.slot = false, nil, nil
+SPW.row, SPW.leadRow = {}, {}
+-- a stand-in squadron (rotation, below) keeps its own tier's health at the Reaper tier's skill
+fresh(31, "Reaper")
+D.roundSquad = "phantom"
+from_ = #logs + 1
+spawnFlight("ERA_Unit_02_Dep_Air2")
+check(D.flightSquad["ERA_Unit_02_Dep_Air2"] == "phantom" and D.flightTier["ERA_Unit_02_Dep_Air2"] == RP
+      and has(line("aces: ERA_Unit_02_Dep_Air2 is Wraith squadron", from_), "Wraith")
+      and has(line("aces: Wraith ", from_), "(tier phantom: wing 160, lead 460)") and has(line("aces: Wraith ", from_), "flown at the Reaper tier's skill"),
+      "Wraith standing in: its own airframes and health at the Reaper tier's skill: " .. tostring(line("aces: Wraith ", from_)))
+
+---------------------------------------------------------------------------------------------------- (0.73.78) sizes
+print("(0.73.78, plan G4) smaller ace rounds (ACE.roundSize, startRound)")
+local function rs(r) return table.concat({ ACE.roundSize(r) }, ",") end
+check(rs(16) == "12,6,2,24,10" and rs(22) == "16,7,2,24,10" and rs(28) == "18,8,2,24,10" and rs(34) == "22,9,2,24,10"
+      and rs(40) == "24,10,2,24,10" and rs(60) == "24,10,2,24,10",
+      "12 aircraft and 6 up at round 16, 18 / 8 at 28, 24 / 10 from 40 (" .. rs(16) .. "; " .. rs(28) .. "; " .. rs(40) .. ")")
+local function waveSizes()
+    local t, most = {}, 0
+    for _, wv in ipairs(D.waves) do
+        local n = 0
+        for _, u in ipairs(wv) do if u:sub(1, 1) ~= "@" then n = n + flightSize(u) end end
+        t[#t + 1] = n
+        most = math.max(most, n)
+    end
+    return t, most
+end
+local function sixOnly(wv) return #wv == 1 and flightSize(wv[1]) == 6 end
+local function harvestRound(r) RUN.aceSinceTop, RUN.aceAt = nil, {}; return aceRoundOf("Reaper", r) end
+from = harvestRound(28)
+by, total = roundPicks()
+local ws = waveSizes()
+local okWaves = true
+for i, wv in ipairs(D.waves) do if ws[i] > 6 and not sixOnly(wv) then okWaves = false end end
+check(total == 18 and D.roundSquad == "reaper" and D.aceNextAt == 2 and okWaves and (by.duelist or 0) == 18,
+      string.format("round 28, Harvest's: 18 duelists in waves of 6 at most (%s), the next when 2 are left (%d)", table.concat(ws, " + "), total))
+local normal28 = TIER.roundBudget(28, levelFor(28))
+check(has(line("aces: round 28's squadron: 18 aircraft", from), "a normal round's " .. normal28) and has(line("aces: round 28: at most 8", from), "waves of 6, the next when 2 or fewer"),
+      "its lines: " .. tostring(line("aces: round 28's squadron", from)) .. " / " .. tostring(line("aces: round 28: at most", from)))
+check(D.aceBreak and D.aceBreak.state == "on" and D.aceBreak.t == 0, "its break-off clock on (D.aceBreak)")
+local emptyFirst, sixes = 0, 0
+for _ = 1, 40 do
+    aceRoundOf("Mercenary", 16)
+    if #D.waves[1] == 0 then emptyFirst = emptyFirst + 1 end
+    for _, wv in ipairs(D.waves) do if sixOnly(wv) then sixes = sixes + 1 end end
+end
+check(emptyFirst == 0 and sixes > 0, string.format("round 16, Bounty's 12 in waves of 4: never an empty first wave, a 6-ship alone (%d of 40 rounds had one)", sixes))
+local rawX = SETUP.enemyX
+SETUP.enemyX = function() return 2 end
+harvestRound(40)
+by, total = roundPicks()
+check(total == 48, "the menu's ENEMY AIRCRAFT 200 %: 48 (" .. total .. ")")
+SETUP.enemyX = rawX
+local rawMore = COOP.more                          -- (co-op: 5 players' x1.6, within the ceilings)
+COOP.more = function(n, k, cap) return math.max(n, math.min(math.floor(n * 1.6 + 0.5), tonumber(cap) or n)) end
+from = harvestRound(28)
+by, total = roundPicks()
+check(total == 24 and has(line("aces: round 28: at most 10 of them up at once: waves of 8", from), "8"),
+      "5 players: 29 cut to its 24, 13 up cut to its 10 (" .. total .. "; " .. tostring(line("aces: round 28: at most", from)) .. ")")
+COOP.more = rawMore
+AC.round.enabled = false
+harvestRound(28)
+by, total = roundPicks()
+check(total > 24 and D.aceNextAt == nil, "round off: a normal round's size (" .. total .. " of " .. normal28 .. "), the waves' own next_at")
+AC.round.enabled = true
+check(has(readAll(MOD .. "/Scripts/sv_rounds.lua"), "local nextAt = D.aceNextAt or w.next_at"), "the next wave by the ace round's next_at (roundsTick)")
+
+---------------------------------------------------------------------------------------------------- (0.73.78) rotation
+print("(0.73.78, plan G4) Harvest every other ace round from 28 (ACE.squadFor, aceRound, startRound)")
+RUN.aceSinceTop, RUN.aceAt = nil, { mercenary = 16, legend = 19, demon = 22, phantom = 25 }
+check(ACE.top() == "reaper" and select(1, ACE.squadFor(28, RP)) == "reaper", "round 28: Harvest (it hasn't flown)")
+from = aceRoundOf("Reaper", 28)
+check(D.roundSquad == "reaper" and RUN.aceSinceTop == 0 and RUN.aceAt.reaper == 28, "... flown: RUN.aceSinceTop 0, RUN.aceAt.reaper 28")
+from = aceRoundOf("Reaper", 31)
+check(D.roundTier == RP and D.roundSquad == "mercenary" and RUN.aceSinceTop == 1 and RUN.aceAt.mercenary == 31,
+      "round 31: Bounty (met longest ago, round 16) at the Reaper tier's skill (" .. tostring(D.roundSquad) .. ")")
+check(has(line("aces: round 31 is a Reaper round", from), "(Bounty squadron only, standing in at the Reaper tier's skill: Harvest flies every 2nd ace round, its last 1 ago)"),
+      "its line: " .. tostring(line("aces: round 31 is a", from)))
+check(has(line("roles: round 31", from), "the Bounty squadron's roles"), "... drawn by Bounty's own roles (the Lancers'): " .. tostring(line("roles: round 31", from)))
+U = D.waves[1][1]
+from_ = #logs + 1
+spawnFlight(U)
+check(D.flightSquad[U] == "mercenary" and D.flightTier[U] == RP and D.aceSquad[U] and has(line("aces: " .. U .. " is Bounty squadron", from_), "Bounty")
+      and has(line("aces: Bounty ", from_), "(tier mercenary: wing 100, lead 250)"), "its flights: Bounty's rows and health, the Reaper tier: " .. tostring(line("aces: Bounty ", from_)))
+D.aceSquad, D.flightSquad = { ERA_Unit_03_Dep_Air0 = true }, { ERA_Unit_03_Dep_Air0 = "mercenary" }
+check(ROLE.ownSet("ERA_Unit_03_Dep_Air0", CFG.tiers.list[RP]) == true, "a stand-in Bounty Lancer flight keeps its own set (no Reaper levers: ROLE.ownSet)")
+D.flightSquad.ERA_Unit_03_Dep_Air0 = "reaper"
+check(ROLE.ownSet("ERA_Unit_03_Dep_Air0", CFG.tiers.list[RP]) == false, "Harvest's in a Lancer flight: its tier's levers, as before")
+aceRoundOf("Reaper", 34)
+check(D.roundSquad == "reaper" and RUN.aceSinceTop == 0, "round 34: Harvest again")
+aceRoundOf("Reaper", 37)
+check(D.roundSquad == "legend", "round 37: Valkyrie (round 19's) at the Reaper tier's skill (" .. tostring(D.roundSquad) .. ")")
+AC.rotation.top_every = 3
+RUN.aceSinceTop, RUN.aceAt = nil, { mercenary = 16, legend = 19, demon = 22, phantom = 25 }
+local seq = {}
+for _, r in ipairs({ 28, 31, 34, 37, 40 }) do aceRoundOf("Reaper", r); seq[#seq + 1] = D.roundSquad end
+check(table.concat(seq, ",") == "reaper,mercenary,legend,reaper,demon", "top_every 3: Harvest, two stand-ins, Harvest ... (" .. table.concat(seq, ",") .. ")")
+AC.rotation.top_every = 2
+RUN.aceSinceTop, RUN.aceAt = 0, {}
+check(select(1, ACE.squadFor(25, RP)) == "reaper", "before from_round (a Phantom round promoted): Harvest whatever")
+AC.rotation.enabled = false
+check(select(1, ACE.squadFor(31, RP)) == "reaper", "rotation off: the tier's own")
+AC.rotation.enabled = true
+check(select(1, ACE.squadFor(31, tierOf("Phantom"))) == "phantom", "a lower tier's round: its own squadron")
+-- the break's callout names the stand-in (roundsTick's wait: aceRound once, its squadron kept for startRound)
+fresh(30); D.state, D.at, D.announced = "wait", 1000, false
+RUN.aceSinceTop, RUN.aceAt = 0, { reaper = 28, mercenary = 16, legend = 19, demon = 22, phantom = 25 }
+callouts = {}
+local rawAmph = AMPH.runTick                        -- (sv_amphib.lua isn't loaded here: its tick in every round)
+AMPH.runTick = rawAmph or function() end
+roundsTick(1000 - 1)
+AMPH.runTick = rawAmph
+check(D.nextTier == RP and D.nextSquad == "mercenary" and D.nextStandin == true and said("ROUND 31") ~= nil
+      and has(said("ROUND 31").sub, "BOUNTY"), "the break before round 31: its callout names Bounty, the squadron kept for its start ("
+      .. tostring(said("ROUND 31") and said("ROUND 31").sub) .. ")")
+
+---------------------------------------------------------------------------------------------------- (0.73.78) break-off
+print("(0.73.78, IMPROVEMENTS pacing 3) the 6-minute break-off (aceBreakTick, flightWithdrawn, aceGoneRecycle)")
+local B1, B2 = "ERA_Unit_01_Dep_Air1", "ERA_Unit_02_Dep_Air2"
+local function breakSetup()
+    fresh(28, "Reaper")
+    D.roundSquad, D.state = "reaper", "fighting"
+    D.aceBreak = { state = "on", t = 0, seen = 100, n = 10 }
+    D.aceSquad, D.up = { [B1] = true, [B2] = true }, { [B1] = true, [B2] = true }
+    D.squad = { [B1] = { tk = "reaper" }, [B2] = { tk = "reaper" } }
+    D.waves = { { B1, B2, "ERA_Unit_01_Dep_Air0" }, { "ERA_Unit_02_Dep_Air0" } }
+    D.wave, D.queue = 1, D.waves[1]
+    table.remove(D.queue, 1); table.remove(D.queue, 1)   -- (B1 and B2 up; one 2-ship of this wave still to come)
+    RUN.roundKills = { you = 5, allies = 1, ships = 0, defences = 0, airstrike = 0 }
+    local near = { plane(B1, 0, KM(2, 0), nil, RP), plane(B1, 1, KM(2.2, 0), nil, RP),
+                   plane(B1, 2, KM(2.4, 0), nil, RP), plane(B1, 3, KM(2.6, 0), nil, RP) }
+    local far = {}
+    for k = 0, 5 do far[#far + 1] = plane(B2, k, KM(15, 0), nil, RP) end
+    return near, far
+end
+local function tickB(t0, t1)
+    for t = t0, t1 do D.now = t; aceBreakTick(t) end
+end
+local near, far = breakSetup()
+from = #logs + 1
+tickB(100, 459)
+check(D.aceBreak.state == "on" and evs("^RE_SV_DirHold") == "", "5:59 in: no break yet")
+grounded = true
+tickB(460, 520)
+check(D.aceBreak.state == "on" and math.abs(D.aceBreak.t - 360) <= 1.01, "down at the airfield alone: its clock held (" .. D.aceBreak.t .. " s)")
+grounded = false
+tickB(521, 522)
+check(D.aceBreak.state == "leaving" and evs("^RE_SV_DirHold") == "RE_SV_DirHold_02;RE_SV_DirHold_06",
+      "6:00 of flying: both flights held at engagement None (" .. evs("^RE_SV_DirHold") .. ")")
+check(#D.queue == 0 and D.wave == #D.waves and D.state == "fighting" and D.squad[B1] == nil and D.aceMoveAt[B1] == math.huge
+      and near[1].leaving and near[1].spwAt == math.huge and not near[1].down,
+      "its queue and later waves dropped, no openers, reversals, hunt or specials; still up meanwhile")
+local bl = line("aces: round 28: Harvest breaks off", from)
+check(has(bl, "breaks off 6:00 in") and has(bl, "10 aircraft in 2 flights leave") and has(bl, "4 more never come") and has(bl, "6 shot down this round"),
+      "its line: " .. tostring(bl))
+check(said("HARVEST BREAKS OFF") and said("HARVEST BREAKS OFF").sub == "10 OF THEM LEAVING", "its callout: HARVEST BREAKS OFF, 10 OF THEM LEAVING")
+-- the far flight (15 km off) goes at the next look; the near one (2 km) waits for leave_s
+tickB(523, 523)
+check(D.up[B2] == nil and D.aceGone[B2] and far[1].down and far[1].withdrawn and evs("^RE_SV_FlightOff") == "RE_SV_FlightOff_06"
+      and D.up[B1] and not near[1].down, "the flight 15 km off despawned (RE_SV_FlightOff_06), its planes withdrawn: unpaid")
+near[4].down = true                                -- (one of the near flight's shot down meanwhile: the sweep's, paid)
+tickB(524, 534)
+check(D.up[B1] == nil and near[1].withdrawn and not near[4].withdrawn and D.aceBreak.state == "done"
+      and has(line("aces: " .. B1 .. " gone (leave_s on"), "3 aircraft, unpaid")
+      and has(line("aces: round 28: the break-off is over"), "1 of the 10 leaving shot down meanwhile, 9 gone unpaid"),
+      "the near one at leave_s (12 s), one of it shot down before: " .. tostring(line("aces: round 28: the break-off is over")))
+-- the next round's plan: the despawned flights recycled (they read up), or kept out of its picks
+alive[B1], alive[B2] = 4, 6
+local recycled = {}
+SV_Recycle = function(u) recycled[#recycled + 1] = u; alive[u] = 0; return 1 end
+D.taken = {}
+from_ = #logs + 1
+aceGoneRecycle()
+check(#recycled == 2 and next(D.aceGone) == nil and has(line("aces: the flights a break-off took off", from_), "2 recycled"),
+      "the next round's start: both recycled (SV_Recycle): " .. tostring(line("aces: the flights a break-off took off", from_)))
+SV_Recycle = nil
+D.aceGone, alive[B1] = { [B1] = true }, 4
+aceGoneRecycle()
+check(D.taken[B1] and D.aceGone[B1] and has(line("aces: the flights a break-off took off"), "kept out of round 28's picks (no SV_Recycle"),
+      "no SV_Recycle: kept out of the picks")
+-- off: no clock
+AC.break_off.enabled = false
+aceRoundOf("Reaper", 28)
+check(D.aceBreak == nil, "break_off off: no clock")
+AC.break_off.enabled = true
+-- a co-op joiner: the host's RE_SV_FlightOff_NN takes its copies off unpaid (sv_coop.lua hostEvent)
+check(poolUnit(5) == "ERA_Unit_02_Dep_Air1" and poolUnit(1) == "ERA_Unit_01_Dep_Air0" and poolUnit(99) == nil and poolIndex(poolUnit(17)) == 17,
+      "poolUnit: poolIndex's other way")
+fresh(28)
+COOP.open, COOP.role, COOP.slot = true, "join", 1
+local cp = { plane(B1, 0, KM(3, 0), nil, RP), plane(B1, 1, KM(3, 0), nil, RP) }
+local other = plane("ERA_Unit_03_Dep_Air0", 0, KM(3, 0), nil, RP)
+from_ = #logs + 1
+hostEvent("RE_SV_FlightOff_02")
+check(cp[1].down and cp[1].withdrawn and cp[2].withdrawn and not other.down and has(line("coop: the host took " .. B1, from_), "2 of its copies here off, unpaid"),
+      "a joiner: the host's RE_SV_FlightOff_02 takes its 2 copies off unpaid, nothing else")
+COOP.open, COOP.role, COOP.slot = false, nil, nil
+
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
 local mainSrc, spawnSrc, roundsSrc = readAll(MOD .. "/Scripts/sv_main.lua"), readAll(MOD .. "/Scripts/sv_spawn.lua"), readAll(MOD .. "/Scripts/sv_rounds.lua")
@@ -794,7 +1070,7 @@ check(s1 and s2 and s3 and s4 and s1 < s2 and s2 < s4 and s4 < s3, "sv_spawn.lua
 check(has(spawnSrc, 'if role == "wolf" and ace.opener == "trap" then') and has(spawnSrc, 'WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)'),
       "ROLE.spawned: a trap squadron holds its trap until first contact")
 check(has(roundsSrc, "ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)"), "sv_rounds.lua: an ace round draws by its tier's key")
-check(has(readAll(MOD .. "/Scripts/main.lua"), 'VERSION = "0.73.77"'), "main.lua VERSION 0.73.77")
+check(has(readAll(MOD .. "/Scripts/main.lua"), 'VERSION = "0.73.78"'), "main.lua VERSION 0.73.78")
 
 logFile:close()
 print(fails == 0 and "aces test: all passed" or ("aces test: " .. fails .. " FAILED"))

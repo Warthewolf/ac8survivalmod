@@ -874,8 +874,9 @@ COOP.open, COOP.role, COOP.slot = false, nil, nil
 print("the hooks, by their place in the source")
 do
     local sr = readAll(MOD .. "/Scripts/sv_rounds.lua")
-    check(has(sr, '(alive <= w.next_at or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave"))'),
-          "sv_rounds roundsTick: the wave gate waits for the hold")
+    -- ((0.73.78, plan G4) the gate's next_at an ace round's own when it has one: D.aceNextAt)
+    check(has(sr, '(alive <= nextAt or timedOut) and not (DIR and DIR.holdWave and DIR.holdWave(now, "wave"))')
+          and has(sr, "local nextAt = D.aceNextAt or w.next_at"), "sv_rounds roundsTick: the wave gate waits for the hold")
     check(has(sr, 'DIR.holdWave(now, "spawning")') and has(sr, "TIER.roundBudget(D.round, levelFor(D.round))")
           and has(sr, "local level = levelFor(D.round + 1)"), "... a later wave's spawns; startRound's aircraft and the spike callout on levelFor")
     check(has(sr, "D.at = now + CFG.spawn_gap_s + gapAdd") and has(sr, "pcall(DIR.gap, now)"), "... the spawn gap's add (DIR.gap)")

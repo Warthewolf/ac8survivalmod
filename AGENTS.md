@@ -1142,3 +1142,30 @@ firstly, then start work on the COOP leaderboards with multiple agents"). None o
 - Open (from the agents): sv_audit's damage audit may still count the airfield reset; LiveSetActiveGameObject by unit
   never switched the shuttle off (RE_SV_FlightOff_NN likely the same); a joiner who kills ship turrets may get each as a
   ground kill if GetAttachParentActor doesn't see them attached; set-aside planes pile up one per changed-aircraft rejoin.
+
+## 0.73.78-coop2mp.79: the 1.0.0 plan's balance (runtime 0.32.22 unchanged; 2026-11-03; not yet run in game)
+The decisions of 2026-11-03 (economy C3-C6, plan G4-G6), built by 3 agents (user: "Continue"). Not hard rules until tested.
+- Economy (C3-C6, G6): a co-op special's pay (every relayed "cr" pay but the round bonus) is reward x players^-special_split
+  ([zollars] special_split 0.5), split once in sv_coop.lua's addCredits, the callouts each player's share (specialPay).
+  Prices by the round: priceRound() / itemPrice() (sv_ai.lua), `price_per_round` on any STORE item: airstrike 4000 + 300 a
+  round (its kills x airstrike_x 0.25), ECM burst / decoy 2500 + 200, revive (2000 + 150 a round) x1.25 a revive (the host
+  also takes the previous round's price). The airstrike by key only (no auto), per_round 1, never on an ace squadron's
+  flights (D.aceSquad; a joiner reads SPW rows sv_ace_*), max_hit 4 nearest. economy_test.sh.
+- Aces (G4): Harvest's ~10,000 was the Reaper tier's health_add 600 in MaxHealthDifference, which counts in MaxHealth HP
+  while the log's HealthInternal is x10 (+6,000 in log units on 60-115 HP bodies), not the named-ace bodies. Now health
+  per tier ([aces.health.<tier>], MaxHealth HP; ACE.healthFor / ACE.setHealth from enemyLate; a copy is only lowered):
+  wing / lead in log units Bounty 1,000 / 2,500, Valkyrie 1,200 / 3,200, Inferno 1,400 / 3,800, Wraith 1,600 / 4,600,
+  Harvest 1,800 / 5,400. Ace rounds 12-24 planes, 6-10 up ([aces.round]); from round 28 Harvest every 2nd ace round, the
+  squadron met longest ago at Reaper skill between ([aces.rotation]); after 360 s the rest break off (RE_SV_DirHold_NN,
+  then RE_SV_FlightOff_NN unpaid 4 km from every player or 12 s on, recycled at the next round: [aces.break_off]). A
+  joiner's copies of a flight the host takes off with RE_SV_FlightOff_NN are unpaid.
+- VOID WATCHER 1 (G5): serves [allies.awacs.service] rounds 3 (a round counted as it clears with it up 60 s+), then
+  RE_SV_AwacsHome: the arc it's on ends into its exit (SV_Path_VoidWatcherOutA/B, 24 km along the tangent; SV_AwacsHome /
+  SV_AwacsOut gate the arcs' PathFinish), taken off at gone_km 20 / the exit's end / max_s 360 (RE_SV_AwacsRemove, then
+  SV_Recycle 2 s on), sold again; raise 1.25 room-wide (a joiner's ask checked at the host's price, "rnd" field 13 the
+  count); ESM range 9 km, 15 s every 30 s; one strike flight a round onto it (EngagementOrderOverride TargetFirst), back
+  on you after. Survival has no landing an AI plane can fly (the stock landing nodes are the player's).
+- Open: the Spaceport rocket-escape penalty costs every player the whole amount; decoys may target ace flights; MOONCHILD,
+  SNIPER and AEGIS prices count each joiner's own purchases (VOID WATCHER's are room-wide); RE_SV_FlightOff_NN
+  (LiveSetActiveGameObject by unit) may not switch a flight off (it never switched the shuttle off): the break-off and the
+  capture's withdrawal fall back on the next round's recycle; other despawns may reach joiners as "dn" with no killer.

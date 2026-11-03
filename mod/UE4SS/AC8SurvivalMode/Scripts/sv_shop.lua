@@ -123,10 +123,20 @@ end
 
 local shopTexts, shopBuy             -- (the shop's helpers stay inside the block: the 200-local limit)
 do
+-- ((0.73.78, economy C4 / C5) + price_per_round x the round: sv_ai.lua itemPrice / priceRound. The row's label, the NOT
+-- ENOUGH ZOLLARS check, the charge, a joiner's "ab" ask and its refund all take this one price)
 local function shopPrice(name)
     local it = CFG.shop.items[name]
-    return math.floor(it.price * it.raise ^ (RUN.bought[name] or 0) / 10 + 0.5) * 10
+    return itemPrice(it.price, it.price_per_round, it.raise, RUN.bought[name] or 0)
 end
+
+-- ((0.73.78, plan G6) the airstrikes bought this round (RUN.strikeBuys: { round = priceRound(), n }) and whether
+-- another may be: CFG.tactical.airstrike.per_round a round, bought or called (sv_tactical.lua TAC.use: called)
+function SHOP.strikesBought()
+    local b = RUN.strikeBuys
+    return (b and b.round == priceRound()) and b.n or 0
+end
+local function strikeLimit() return math.floor(tonumber(CFG.tactical.airstrike.per_round) or 0) end
 
 -- The shop is closed after a lost special (CFG.specials.shuttle.shop_closed_rounds): through round RUN.shopClosedUntil,
 -- including the break before it, and open again in the break after it.
@@ -243,7 +253,9 @@ local UP_HELP = {
     flares   = "Carry %d more flares for the rest of the run (tier %d of %d). Buy them after.",
 }
 local TAC_HELP = {
-    airstrike = "Destroys the biggest enemy flight within %d km of you (Ctrl+F1, or by itself when %d are near). Kills pay half. You carry %d.",
+    -- ((0.73.78, plan G6) only by its key, at most max_hit of the flight, never an ace squadron's, per_round a round;
+    -- its kills pay airstrike_x (C4))
+    airstrike = "Destroys up to %d aircraft of the biggest enemy flight within %d km of you, never an ace squadron's (Ctrl+F1). %s Kills pay %d%%. You carry %d.",
     ecm       = "Breaks every enemy missile lock on you for %d seconds (Ctrl+F2, or by itself when %d missiles close in). You carry %d.",
     decoy     = "The nearest enemy flight breaks off for %d seconds (Ctrl+F3, or by itself when a flight of %d+ is close). You carry %d.",
 }
@@ -295,10 +307,25 @@ local function offer(name)
     elseif o.role == "tactical" then
         local c, have = CFG.tactical[it.tac], RUN.items and RUN.items[it.tac] or 0
         o.label = string.format("%s (%d/%d)", it.label, have, it.max or 1)
-        local a = it.tac == "airstrike" and c.range_km or it.tac == "ecm" and c.ecm_s or c.decoy_s
-        local b = it.tac == "airstrike" and c.auto_near or it.tac == "ecm" and c.auto_missiles or c.auto_size
-        o.help = string.format(TAC_HELP[it.tac], a, b, have)
-        if have >= (it.max or 1) then o.why = "YOU CARRY AS MANY AS YOU CAN." else o.price = shopPrice(name) end
+        local lim = it.tac == "airstrike" and strikeLimit() or 0
+        if it.tac == "airstrike" then
+            local hits = math.floor(tonumber(c.max_hit) or 0)
+            local once = lim <= 0 and "" or (lim == 1 and "One a round, bought or called." or string.format("%d a round, bought or called.", lim))
+            o.help = string.format(TAC_HELP.airstrike, hits > 0 and hits or 99, c.range_km, once,
+                math.floor((CFG.credits.airstrike_x or 1) * 100 + 0.5), have)
+            if hits <= 0 then o.help = o.help:gsub("up to 99 aircraft of ", "") end
+        else
+            o.help = string.format(TAC_HELP[it.tac], it.tac == "ecm" and c.ecm_s or c.decoy_s,
+                it.tac == "ecm" and c.auto_missiles or c.auto_size, have)
+        end
+        if have >= (it.max or 1) then o.why = "YOU CARRY AS MANY AS YOU CAN."
+        elseif lim > 0 and SHOP.strikesBought() >= lim then
+            -- ((0.73.78, plan G6) the round's airstrike bought: the row says so, no price on it)
+            local r = priceRound()
+            o.label = string.format("%s (%d/%d): %s", it.label, have, it.max or 1, lim == 1 and "ONE A ROUND" or (lim .. " A ROUND"))
+            o.why = string.format("%s A ROUND: THE NEXT AFTER ROUND %d.", lim == 1 and "ONE" or tostring(lim), r)
+            o.help = o.help .. string.format(" Bought for round %d: the next once it's over.", r)
+        else o.price = shopPrice(name) end
     elseif o.role == "insurance" then
         o.label = it.label .. (RUN.insured and ": HELD" or "")
         o.help = "Survive one shoot-down: at the brink your aircraft is repaired and shielded for a moment. One at a time; not a crash into the ground."
@@ -328,8 +355,12 @@ local function offer(name)
         local aw = CFG.allies.awacs
         local up, free = ALLY.status({ aw.unit })
         o.label = it.label
-        o.help = string.format("%s, an E-767 AWACS: it takes off from the airfield once you're airborne, orbits it and keeps its "
-            .. "ESM up over the whole airfield (%d km). It never fights; enemies may hunt it.", aw.name, math.floor(aw.esm.range_m / 1000))
+        -- ((0.73.78, plan G5) its rounds of service, its ESM's reach and the strike flight after it, from CFG)
+        local rounds = aw.service and tonumber(aw.service.rounds) or 0
+        o.help = string.format("%s, an E-767 AWACS: it takes off from the airfield once you're airborne, orbits it and pulses its "
+            .. "ESM over the airfield (%d km)%s. It never fights; %s", aw.name, math.floor(aw.esm.range_m / 1000),
+            rounds > 0 and string.format(" for %d rounds, then goes home", rounds) or "",
+            (aw.strike and aw.strike.enabled) and "a strike flight goes after it each round." or "enemies may hunt it.")
         if not (CFG.allies.enabled and aw.enabled and ALLY.awacsReady) then o.why = "NOT AVAILABLE."
         elseif up > 0 or not free then o.why = aw.name .. " IS UP."
         else o.price, o.unit = shopPrice(name), free end
@@ -545,14 +576,25 @@ end
 -- (co-op host) joiner `slot`'s purchase of item `name` (an allied flight or ship, or a defence of `kind`) for `price`,
 -- which they pay on their own game: built here (its spawn goes to every game, sv_coop.lua's SV_Spawn); true and the
 -- row's message, or false and why not. Nothing is charged here.
-function shopBuildFor(slot, name, price, kind)
+-- ((0.73.78, plan G5) asked: a joiner's purchase (sv_coop.lua "ab"), not a host by migration building the old room's
+-- again (free). VOID WATCHER 1's price is the room's: a joiner's ask under this game's price is refused (refunded on
+-- their game), one built is counted here (RUN.bought, which "rnd" sends to every joiner's STORE: sv_coop.lua).)
+function shopBuildFor(slot, name, price, kind, asked)
     local it = CFG.shop.items[name]
     if not (it and D and nativeReady()) then return false, "NOT AVAILABLE RIGHT NOW." end
     local role = it.kind and "ammo" or it.role
     if role == "ally_air" or role == "ally_ship" or role == "ally_awacs" then
         local o = offer(name)
         if not o.unit then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
-        return ALLY.buy(o.role, o.unit, it.ship or it.ally, price, slot)
+        local room = asked and role == "ally_awacs"
+        if room and o.price and (tonumber(price) or 0) < o.price then
+            log(string.format("shop: player %s's %s at %d refused: the room's price is %d (bought %d times this run)",
+                slot and tostring(slot + 1) or "?", name, tonumber(price) or 0, o.price, RUN.bought[name] or 0))
+            return false, string.format("THE PRICE IS NOW %d", o.price)
+        end
+        local ok, msg = ALLY.buy(o.role, o.unit, it.ship or it.ally, price, slot)
+        if ok and room then RUN.bought[name], RUN.dirty = (RUN.bought[name] or 0) + 1, true end
+        return ok, msg
     end
     local d = CFG.shop.items.Airfield.defences
     if not (kind and type(d[kind]) == "table" and d[kind].units) then
@@ -614,7 +656,10 @@ function shopBuy(name)
         RUN.items[it.tac] = (RUN.items[it.tac] or 0) + 1
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
-        return done(string.format("%s READY (%d carried) for %d.", it.label, RUN.items[it.tac], price))
+        if it.tac == "airstrike" then                -- ((0.73.78, plan G6) counted for its round: SHOP.strikesBought)
+            RUN.strikeBuys = { round = priceRound(), n = SHOP.strikesBought() + 1 }
+        end
+        return done(string.format("%s READY (%d carried) for %d (round %d's price).", it.label, RUN.items[it.tac], price, priceRound()))
     elseif o.role == "insurance" then
         RUN.insured = true
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price

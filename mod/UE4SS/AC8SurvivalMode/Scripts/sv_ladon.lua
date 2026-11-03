@@ -359,7 +359,7 @@ function SPC.ladonTick(now, s)
                 local pay = c.reward + (c.reward_per_round or 0) * D.round
                 addCredits(pay, "Ladon " .. (c.names[k] or k) .. " down")
                 LB.stat("air", 1)
-                hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, pay))
+                hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
                 log(string.format("special: round %d, Ladon %s down %.0f s after it appeared", D.round, c.names[k] or k, now - s.at))
                 ladonRearm(k, "down")
                 pcall(SPC.ladonRage, now, s, k)              -- (the other one enraged: P7)

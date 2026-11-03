@@ -604,7 +604,8 @@ function ANOM.glitchTick(now, s)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
         LB.special("glitch", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
+        -- ((0.73.78, economy C3) each player's share in co-op: specialPay, sv_ai.lua)
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))
         log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks; phase %d, %d blinks behind you, %d LastTGT)",
             D.round, c.name, now - s.at, s.frenzies or 0, s.blinks or 0, s.phase or 1, s.behindBlinks or 0, s.turns or 0))
         return
@@ -1889,7 +1890,7 @@ function SPC.valkaTick(now, s)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
         LB.special("valka", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
         log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d turns, %d scrambles)",
             D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0, s.turns or 0, s.scrambles or 0))
         return
@@ -2143,7 +2144,7 @@ function ANOM.tick(now, s)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
         LB.special("anomaly", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
         log(string.format("special: round %d, %s shot down %.0f s after it appeared (its pack sprang %d times)", D.round,
             c.name, now - s.at, s.packSprings or 0))
         return

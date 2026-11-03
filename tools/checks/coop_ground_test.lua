@@ -217,10 +217,18 @@ if ROLE == "host" then
     check(#ord == 1 and ord[1] == "a joiner/defend", "host: a joiner's order taken (defend), a made-up one not")
     -- the room's allies in "rnd" (ALLY.roomCode), for the joiners' ALLIES rows
     ALLY.roomCode = function() return "m2s1" end
+    -- ((0.73.78, plan G5) and the room's VOID WATCHER 1 purchases, counted here: every joiner's STORE prices it from them)
+    RUN = RUN or {}
+    RUN.bought = RUN.bought or {}
+    local vbWas = RUN.bought.VoidWatcher
+    RUN.bought.VoidWatcher = 2
     local b4 = #sent
     M.nextRnd = 0
     tick(1)
     check(table.concat(sent, "\n", b4 + 1):find("rnd|[^\n]*|m2s1"), "host: the room's allies in rnd (m2s1)")
+    local rl = table.concat(sent, "\n", b4 + 1):match("rnd|[^\n]*") or ""
+    check(rl:match("|m2s1|[^|]*|[^|]*|2$") ~= nil, "host: ... and the room's VOID WATCHER 1 purchases last (2: " .. rl .. ")")
+    RUN.bought.VoidWatcher = vbWas
     ALLY = nil
     -- COVER for a joiner (COOP.coverFor): the allied planes onto the enemies nearest that joiner's real plane, the
     -- flights sent onto that plane reaching twice as far and counted at half their distance
@@ -326,6 +334,25 @@ else
     tick()
     ra = COOP.roomAllies()
     check(ra and ra.m == 2 and ra.v == 1 and ra.s == 1, "join: VOID WATCHER 1 in the host's allies (m2v1s1)")
+    -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases from the host's rnd: this STORE prices it from them (the
+    -- host refuses an ask under its price); none, or a bad count, leaves it)
+    RUN.bought.VoidWatcher = nil
+    local vbLog = #logs
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1|||3"
+    tick()
+    local vbSaid = false
+    for i = vbLog + 1, #logs do if logs[i]:find("coop: VOID WATCHER 1 bought 3 times in the room (the host's count)", 1, true) then vbSaid = true end end
+    check(RUN.bought.VoidWatcher == 3 and vbSaid,
+          "join: the room's VOID WATCHER 1 purchases taken from rnd (3), logged")
+    for _, bad in ipairs({ "x", "-1", "1.5", "1000" }) do
+        inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1|||" .. bad
+        tick()
+        check(RUN.bought.VoidWatcher == 3, "join: a bad count (" .. bad .. "): left at 3")
+    end
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1"
+    tick()
+    check(RUN.bought.VoidWatcher == 3, "join: an rnd without the count (an older host's): left as it is")
+    RUN.bought.VoidWatcher = nil
     tick(6)
     check(COOP.roomAllies() == nil, "join: ... 6 s with no word: none")
     for _, bad in ipairs({ "m999", "x2", "m2;s1", "m2w2s2m2w2", "", "v1v1", "m99w99v99s99m1" }) do
