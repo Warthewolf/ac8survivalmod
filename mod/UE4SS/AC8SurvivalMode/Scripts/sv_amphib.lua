@@ -109,7 +109,9 @@ function AMPH.tick(now, s)
         local alive = lane.removed and 0 or (aliveOf(unit) or lane.alive)
         if alive < lane.alive and not lane.removed then
             local pay = tierPay(c.craft_pay) * (lane.alive - alive)
-            addCredits(pay, string.format("landing craft down (lane %s)", l))
+            -- ((0.73.77, the plan's I2: S3) "sunk", not "down (": sv_coop.lua's addCredits doesn't send the joiners a
+            -- pay whose reason has " down (" (a plane kill, each game's own), so they were never paid for a craft)
+            addCredits(pay, string.format("landing craft sunk (lane %s)", l))
             LB.stat("ground", lane.alive - alive)
             log(string.format("special: lane %s: %d landing craft left", l, alive))
         end
@@ -197,7 +199,8 @@ function AMPH.runTick(now)
         if tr.alive > 0 then
             local n = aliveOf(tr.unit) or tr.alive
             if n < tr.alive then
-                addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle down (" .. tr.unit .. ")")
+                -- ((0.73.77, I2: S3) not "down (", the co-op filter's plane kills: the joiners are paid it too)
+                addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle destroyed (" .. tr.unit .. ")")
                 LB.stat("ground", tr.alive - n)
                 log(string.format("special: troops %s: %d left", tr.unit, n))
             end
@@ -211,7 +214,8 @@ function AMPH.runTick(now)
             if (f["SV_LcacRunway" .. tr.lane .. tr.craft] or 0) >= 1 then
                 tr.reached = true
                 if not RUN.captured then
-                    A.capture = math.min(100, (A.capture or 0) + c.capture_per_troop)
+                    -- ((0.73.77) a whole share: a fraction in the ini stopped the rounds at the %d below, as the Spaceport's S11)
+                    A.capture = math.min(100, (A.capture or 0) + math.floor((tonumber(c.capture_per_troop) or 0) + 0.5))
                     RUN.dirty = true
                     hudCallout(t.on_runway, string.format(t.on_runway_sub, A.capture))
                     log(string.format("special: troops %s reached the runway; airfield %d%% captured", tr.unit, A.capture))

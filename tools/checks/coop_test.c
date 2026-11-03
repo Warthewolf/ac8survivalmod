@@ -68,6 +68,13 @@ static void* VCall(void* obj, int slot) { (void)obj; (void)slot; return NULL; }
 static int InGame(const void* p) { (void)p; return 0; }
 static int ArgNumber(void* lua, double* v) { if (U.luaStackSize(lua) < 1 || !U.luaIsNumber(lua, 1)) return 0; *v = U.luaGetNumber(lua, 1); return 1; }
 static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
+static volatile int32_t g_teardown;                              /* (runtime 0.32.22: survival_rt.c's teardown gate, open) */
+static void Crumb(const wchar_t* fmt, ...) { (void)fmt; }      /* (survival_rt.c's crash breadcrumbs: coop.c calls them since
+                                                                    runtime 0.32.13; this test didn't compile without it) */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#include "../../runtime/uobj.h"                                  /* (ArgObject's check while the gate is closed) */
+#pragma clang diagnostic pop
 
 #define COOP_TEST 1
 #include "../../runtime/coop.c"

@@ -8,8 +8,13 @@ A Cloudflare Worker that takes finished Survival runs from the game and puts the
 - a second pinned message keeps the **records** (most kills, longest run, most zollars earned, most ace squadron kills
   and most specials beaten in one run), the **best run on each aircraft**, and **this week's** best rounds and scores
   (the week starts Monday 00:00 UTC);
-- slash commands: `/leaderboard [board] [difficulty]` (boards: round, score, specials, records, aircraft, this week)
-  and `/pilot <name>` (best runs, fastest specials, totals and most flown aircraft).
+- a third pinned message, **CO-OP**, keeps the co-op runs: the top 10 by highest round and by score for squads of
+  **2**, **3-4** and **5+** players, the co-op **records** (longest run, most specials beaten, most revives) and
+  **this week's** co-op best. The first two messages are solo runs only;
+- slash commands: `/leaderboard [board] [difficulty] [size]` (boards: round, score, specials, records, aircraft, this
+  week, co-op; `size` 2 / 3-4 / 5+ picks one squad size of the co-op board, and on its own means the co-op board) and
+  `/pilot <name>` (best solo runs, fastest specials, totals and most flown aircraft, and the co-op runs they flew in,
+  as host or in the squad).
 
 Players appear under their Steam name (the mod reads it from the game's Steam), or under the `pilot` name they set in
 `survival.ini`'s `[leaderboard]` section. The game sends every finished run here over HTTPS (Survival's own runtime; it never talks to
@@ -28,7 +33,15 @@ Only **stock runs** count (from mod 0.72.x):
   verification on and off.
 
 **Score** = 1000 a round reached + 100 an aircraft + 50 a ground or sea target + 3000 a special round beaten,
-x 0.75 Casual / 1.0 Standard / 1.5 Ace.
+x 0.75 Casual / 1.0 Standard / 1.5 Ace. A co-op run's is the same, on the squad's totals.
+
+**Co-op runs** (COOP2MP builds that send them): the host sends one run for the whole room (its run id, so it's never
+counted twice), with the squad: every player who flew, host first, each with their pilot name, aircraft, kills and the
+revives they gave. Its limits grow with the players (air kills up to 70 a round x players, ground kills (40 a round +
+100) x players, allies 10 a round x players); the squad must be 2-24 players, as long as `players` says, with names
+that pass the pilot rule and are different (ignoring case), the host first and named as the run's pilot, and kills
+that add up to the run's. Each co-op run's post in #survival-runs lists its squad. A squad on the boards is its set of
+pilots, whoever hosted: its best run stands for it, as a pilot's does solo.
 
 It's free: Cloudflare's free plan covers Workers and D1 (the database) many times over for this.
 
@@ -98,6 +111,31 @@ into git).
 4. Runs from co-op builds (`0.72.2-coop.20`, Stable 1's `0.71.5-coop.17`) are taken now: they were all refused as
    `bad mod version` before.
 
+## Updating the Worker to co-op runs and the CO-OP board (2026-11-03)
+What changed: the Worker takes co-op runs (above), stores each with its squad, keeps them off the solo boards and
+records, and shows them on a third pinned message (CO-OP), in `/leaderboard`'s new Co-op board and `size` option, and
+in `/pilot`. Versions from every build are taken (`1.0.0`, `0.73.76`, `0.73.76-coop.20`, `0.73.76-coop2mp.77`).
+Solo runs are checked and scored exactly as before.
+
+1. **Deploy this Worker before giving out a build that sends co-op runs.** The Worker deployed now doesn't know the
+   `coop` block: it would refuse most co-op runs (too many kills for one pilot) and count a small one as the host's
+   solo run.
+2. Cloudflare → **Workers & Pages** → `ac8-survival-leaderboard` → **Edit code**. Replace everything with
+   `src/index.js` (all of it) and **Deploy**.
+3. Nothing to run in D1's console: the Worker makes its new tables (`squads`, `squads_archive`) and the new columns
+   (`players`, `squad`, `crew` on `runs` / `runs_archive`; `players` on `specials` / `specials_archive`) itself the
+   first time it's used. Every run already stored stays a solo run. (By hand instead: the new lines at the end of
+   `schema_console.sql` make the tables; the columns are left to the Worker.)
+4. Open `https://ac8-survival-leaderboard.<you>.workers.dev/setup?key=<ADMIN_KEY>` once: it registers the slash
+   command's new Co-op board and `size` option and makes and pins the CO-OP message (its answer says `co-op message
+   made and pinned`). Until then the CO-OP message is made by the first run sent.
+5. Register the new build's hash on the admin page (its `.buildhash.txt`, below) **before** players send runs from
+   it, as for every release: runs from an unregistered build are refused as `edited or unknown build`.
+
+The admin page's **Reset** and **Restore** cover co-op runs and their squads too (the status line counts the co-op
+runs). Discord's limits are kept: the CO-OP message's boards lose their last lines if 24-character names everywhere
+would pass Discord's 6000 characters a message, and a long squad shows its host and the names that fit, then `+N`.
+
 ## The admin page
 Open `https://ac8-survival-leaderboard.<you>.workers.dev/admin` (a phone's browser works), type your `ADMIN_KEY` and
 press **Unlock**. Your browser's password manager can keep it. The key goes in each request's body, never in the
@@ -110,10 +148,11 @@ address, so it's in no history or log. Five wrong keys from one address lock tha
 - **Builds seen but not registered**: builds runs came from that were refused. Normally it's empty; if your own
   release shows up here you forgot to register it. Register a build from here only if you packaged it: an edited copy
   shows up here too.
-- **Reset the leaderboard**: type `RESET` and press the red button. Every run and special result goes into the archive
-  (`runs_archive` / `specials_archive`) under a reset id, so the reset can be undone; the boards (round, score,
-  specials, records, best per aircraft, this week) start from zero, the pinned messages are updated and a note goes to
-  #survival-runs. A run from before the reset that the game sends again isn't put back on the fresh boards.
+- **Reset the leaderboard**: type `RESET` and press the red button. Every run, special result and co-op squad goes into
+  the archive (`runs_archive` / `specials_archive` / `squads_archive`) under a reset id, so the reset can be undone; the
+  boards (round, score, specials, records, best per aircraft, this week, co-op) start from zero, the pinned messages are
+  updated and a note goes to #survival-runs. A run from before the reset that the game sends again isn't put back on the
+  fresh boards.
 - **Restore the last reset**: puts the latest reset's runs back (runs sent since stay). Pressed again, it undoes the
   reset before that one.
 
@@ -139,6 +178,9 @@ proof against a determined cheater. A reset or removing that pilot's runs is the
 
 ## Testing locally
 `node test/worker.test.mjs` (Node 22 or newer) runs the Worker against an in-memory database with Discord stubbed out:
-the checks, the boards, co-op versions, the admin page and its actions, builds, verification, reset and restore.
+the checks, the boards, co-op versions, the admin page and its actions, builds, verification, reset and restore, and the
+co-op runs (a team run taken and posted with its squad, refused for too many kills for its players or a mismatched
+squad, duplicates, a solo run from a COOP2MP build, the CO-OP boards and the slash command, `/pilot`, Discord's size
+limits, reset and restore with co-op runs in).
 `sh tools/checks/build_hash_test.sh` checks that the game's runtime and `tools/build_hash.py` work out the same build
 hash and signature; `sh tools/checks/leaderboard_test.sh` the game's edited-run check.

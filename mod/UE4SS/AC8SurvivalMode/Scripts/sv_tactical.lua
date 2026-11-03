@@ -274,6 +274,33 @@ local function step(key)
     return 0
 end
 
+-- (0.73.77, plan G2) AIRFRAME kept through the airfield: every stop there the game puts the aircraft's MaxHealth back
+-- to its stock (120 on the FA-36) and its health to that full, and UP.apply's 2 s pass raised them again up to 2 s later,
+-- so the hit log counted each reset as damage ("-30 HP ... health now 100% (120 HP)") and a player who looked saw the
+-- stock health (cressendo, 0.73.76: "the FA-36 upgrade doesn't work"). Called every hit-log pass (sv_ladon.lua HIT.tick,
+-- before it reads your health) and right after a repair (the STORE's, SECOND CHANCE's, a revive's): the upgrade's
+-- MaxHealth back at once, the health as the same share of it (full after the game's own repair). True when it put it
+-- back (HIT.tick then counts no hit); `why` for the log.
+function UP.healthGuard(pawn, why)
+    if not (CFG.upgrades.enabled and tier("airframe") > 0 and valid(pawn)) then return false end
+    local b = UP.pawn == addrOf(pawn) and UP.base or nil          -- (the stock read by UP.apply on this aircraft)
+    if not (b and b.health) then return false end
+    local okM, mh = pcall(function() return pawn.MaxHealth end)
+    if not (okM and type(mh) == "number" and mh > 0) then return false end
+    local want = b.health * (1 + step("airframe") * tier("airframe"))
+    if math.abs(mh - want) <= 0.01 then return false end
+    local okH, h = pcall(function() return pawn.HealthInternal end)
+    local frac = (okH and type(h) == "number") and math.min(1, h / (mh * 10)) or 1
+    pcall(function() pawn.MaxHealth = want end)
+    if okH and type(h) == "number" and h > 0 then pcall(function() pawn.HealthInternal = math.floor(want * 10 * frac + 0.5) end) end
+    UP.guarded = (UP.guarded or 0) + 1
+    if UP.guarded <= 3 or UP.guarded % 10 == 0 then
+        log(string.format("upgrades: the game put your airframe back to %.0f HP (%s): tier %d's %.0f HP again at once, health %.0f%% "
+            .. "of it (not a hit; %d times this run)", mh, why or "an airfield stop", tier("airframe"), want, frac * 100, UP.guarded))
+    end
+    return true
+end
+
 function UP.apply(pawn)
     if not (CFG.upgrades.enabled and valid(pawn)) then return end
     local pa = addrOf(pawn)
@@ -356,7 +383,7 @@ end
 -- Back to stock (a new run, or the run's over): the gun classes' default damage
 function TAC.reset()
     for _, g in pairs(UP.gunBase) do pcall(function() g.cdo.damage = g.damage end) end
-    UP.gunBase, UP.base, UP.pawn, UP.act, UP.actPawn = {}, {}, nil, nil, nil
+    UP.gunBase, UP.base, UP.pawn, UP.act, UP.actPawn, UP.guarded = {}, {}, nil, nil, nil, nil
     TAC.ecmUntil, TAC.strike, TAC.autoAt = nil, nil, nil
     INS.min, INS.pawn, INS.safeUntil = nil, nil, nil     -- (its fields only: INS.tick lives on the table)
 end
@@ -413,6 +440,7 @@ function INS.tick(now)
         RUN.insured, RUN.dirty = false, true
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
         pcall(function() pawn.HealthInternal = math.floor(mh * 10 + 0.5) end)
+        pcall(UP.healthGuard, pawn, "SECOND CHANCE's repair")   -- ((0.73.77) G2: the AIRFRAME upgrade's, if the repair took it)
         pcall(function() pawn:SetIsInvincible(true) end)
         INS.safeUntil = now + c.safe_s
         local t = CFG.hud.text

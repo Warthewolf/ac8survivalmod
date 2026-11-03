@@ -72,6 +72,11 @@ function SHOP.decorTick(tick)
     if not CFG.shop.enabled or tick % 2 ~= 0 or not playerOnAirfield() then return end
     local imgClass = StaticFindObject("/Script/UMG.Image")
     if not valid(imgClass) then return end
+    -- ((0.73.77, Workstream B2) the icons of rows gone with their pages off the list every 16 s down there: each page
+    -- opened makes new rows, so it only grew through a level)
+    if tick % 64 == 0 then
+        for a, d in pairs(SH.decor) do if not liveObj(d.img) then SH.decor[a] = nil end end
+    end
     for _, win in ipairs(landingWindows(tick)) do
         if valid(win) then
             local list = child(win, "WBP_Menu_Pause_List_000")
@@ -373,12 +378,46 @@ end
 -- TextBlock's text was read each time a label changed, and in co-op another player's kill changes them (the perf lines
 -- of the co-op run of 2026-10-30, "shop" up to 195 ms a tick). None found that way: every TextBlock, as before, logged.
 local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+-- ((0.73.77, Workstream B4) the landing menu's windows now, as one key: their addresses (a STORE page opened or closed
+-- changes it). From the icons' walk of this tick or the last two (landingWindows' maxAge): no walk of its own.)
+-- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the STORE's kept widgets forgotten, none of them touched)
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS.store = function() SH.rowTexts, SH.panels, SH.slotCache, SH.tbNames, SH.decor = nil, nil, nil, nil, {} end
+end
+function SHOP.windowsKey(tick)
+    local t = {}
+    for _, w in ipairs(landingWindows(tick or SH.tick or 0, 2)) do t[#t + 1] = tostring(addrOf(w)) end
+    table.sort(t)
+    return table.concat(t, ",")
+end
 local function relabel(changed)
     if walkHold() then return nil end                  -- (0.73.73: a held walk finds no row: not "none under a row")
     local n, rows, all = 0, 0, SH.relabelAll
-    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
-        local nm = valid(t) and nameOf(t) or ""
-        if nm:find("/Engine/Transient", 1, true) and (all or nm:find("WBP_Menu_Text_Focus", 1, true)) then
+    -- ((0.73.77, Workstream B4) the STORE rows' TextBlocks kept while the landing menu's windows stay the same (their
+    -- key), each checked live before it's read: every TextBlock's full name was read on every relabel, the "shop" part's
+    -- worst ticks (mobi118's host of 2026-11-02: 12.5 ms a tick on average, 488 ms at worst). Walked again when a page
+    -- opens or closes, or one kept is gone.)
+    local key = (not all) and SHOP.windowsKey(SH.tick) or nil
+    local kept = SH.rowTexts
+    if kept and (all or kept.key ~= key or key == "") then kept = nil end
+    if kept then
+        for _, t in ipairs(kept.list) do if not liveObj(t) then kept = nil; break end end
+    end
+    local list = kept and kept.list or nil
+    if not list then
+        list = {}
+        for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+            local nm = valid(t) and nameOf(t) or ""
+            if nm:find("/Engine/Transient", 1, true) and (all or nm:find("WBP_Menu_Text_Focus", 1, true)) then list[#list + 1] = t end
+        end
+        SH.rowTexts = (not all and key ~= "" and #list > 0) and { key = key, list = list } or nil
+        SH.rowWalks = (SH.rowWalks or 0) + 1
+    else
+        SH.rowKept = (SH.rowKept or 0) + 1
+        if SH.rowKept == 1 then log(string.format("shop: the STORE rows' %d TextBlocks kept for its labels while its pages stay (0.73.77)", #list)) end
+    end
+    for _, t in ipairs(list) do
+        if kept or valid(t) then
             rows = rows + 1
             local ok, v = pcall(function() return t:GetText():ToString() end)
             local new = ok and type(v) == "string" and changed[rowKey(v)]
@@ -416,23 +455,61 @@ local function relabelQueue(changed)
     SH.relabelQ = q
 end
 
+-- ((0.73.77, Workstream B4) a text sent to the runtime only when it changed: SV_SetText keeps each in its table for the
+-- session; SH.textSent is emptied at every level load. Sent and skipped counted for the perf line's "shop/texts".)
+local function setText(k, v)
+    SH.textSent = SH.textSent or {}
+    if SH.textSent[k] == v then SH.textSkip = (SH.textSkip or 0) + 1; return end
+    if SV_SetText(k, v) == 1 then SH.textSent[k] = v end
+end
+-- ((0.73.77, Workstream B4) the rows' offers ask SV_UnitAlive once a unit while they're worked out: the three defence rows
+-- asked for every defence unit three times over and the allies' rows for each of theirs, about 70 asks of the spawner's
+-- whole unit list each time the texts were made. Nothing is spawned while the offers are worked out (offer() only reads),
+-- so one answer a unit holds for all of them; the native's own function is put back however the offers end.)
+local textsNow
 function shopTexts()
     if type(SV_SetText) ~= "function" then return end
+    local raw = SV_UnitAlive
+    if type(raw) ~= "function" then return textsNow() end
+    local memo, asked = {}, 0
+    SV_UnitAlive = function(u)
+        local v = memo[u]
+        if v == nil then v = raw(u); memo[u] = v; asked = asked + 1 end
+        return v
+    end
+    local ok, err = pcall(textsNow)
+    SV_UnitAlive = raw
+    SH.textAsks = (SH.textAsks or 0) + asked
+    if not ok then error(err, 0) end
+end
+textsNow = function()
     RUN.offerShown = RUN.offerShown or {}
     SH.labels = SH.labels or {}
-    local changed, nChanged = {}, 0
+    local changed, nChanged, shared = {}, 0, {}
     for name in pairs(CFG.shop.items) do
         local o = offer(name)
         RUN.offerShown[name] = o.role
         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
         local was = SH.labels[name]
-        if was and was ~= label then changed[rowKey(was)], nChanged = label, nChanged + 1 end
+        if was and was ~= label then
+            local k = rowKey(was)
+            if changed[k] ~= nil and changed[k] ~= label then shared[k] = true end   -- ((0.73.77) two rows had that text)
+            changed[k], nChanged = label, nChanged + 1
+        end
         SH.labels[name] = label
         local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
-        SV_SetText("SV_Shop_" .. name, label)
-        SV_SetText("SV_Shop_" .. name .. "_Help", help)
+        setText("SV_Shop_" .. name, label)
+        setText("SV_Shop_" .. name .. "_Help", help)
     end
+    -- ((0.73.77, from claude/coop-fixes 57dce73) relabel() finds a row on screen by its old text, so a text two items
+    -- share can't say which row it is. The old fourth row (Airfield, not on the STORE's pages but worked out with the
+    -- rest) offers the next defence under the DEFENCES row's own text ("BUILD AA GUN   4000 Z"); when its turn moved on to
+    -- the SAM site, every TextBlock showing the AA text was rewritten, the real AA row too: two BUILD SAM SITE rows, the
+    -- first still buying an AA gun (co-op run of 2026-11-01, "the Buy AA was another Buy SAM site"). Such a text is left
+    -- for the page's next opening.)
+    for _, lab in pairs(SH.labels) do local k = rowKey(lab); if changed[k] ~= nil then shared[k] = true end end
+    for k in pairs(shared) do if changed[k] ~= nil then changed[k], nChanged = nil, nChanged - 1 end end
     if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
         relabelQueue(changed)
         SHOP.relabelFlush(SH.pressAt ~= nil and os.clock() - SH.pressAt < 1)
@@ -455,12 +532,12 @@ function shopTexts()
           what = "Allied fighters and ships, and the allies' orders." },
     }
     for _, p in ipairs(PAGES) do
-        SV_SetText(p.title, "AIRFIELD STORE: " .. p.name .. "   " .. z)
-        SV_SetText("SV_Store_To" .. p.key, p.name .. " >")
-        SV_SetText("SV_Store_To" .. p.key .. "_Help", z .. ". " .. p.what)
+        setText(p.title, "AIRFIELD STORE: " .. p.name .. "   " .. z)
+        setText("SV_Store_To" .. p.key, p.name .. " >")
+        setText("SV_Store_To" .. p.key .. "_Help", z .. ". " .. p.what)
         if p.landing then
-            SV_SetText(p.landing, "STORE: " .. p.name .. (p.key == "Airfield" and " & ALLIES" or "") .. " >")
-            SV_SetText(p.landing .. "_Help", z .. ". " .. p.what)
+            setText(p.landing, "STORE: " .. p.name .. (p.key == "Airfield" and " & ALLIES" or "") .. " >")
+            setText(p.landing .. "_Help", z .. ". " .. p.what)
         end
     end
 end
@@ -485,6 +562,7 @@ function shopBuildFor(slot, name, price, kind)
     local f = defenceFor(kind)
     if not f then return false, "ALL BUILT." end
     local r = SV_Spawn(f.unit)
+    if ALLY.forgetAlive then ALLY.forgetAlive(f.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
     if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
     -- (slot nil: a host by migration building the old room's again, its own or a buyer's who's gone)
     log(string.format("shop: %s built for %s (%s, %d paid on their game)", f.def.label, slot and ("player " .. (slot + 1)) or "the room",
@@ -555,7 +633,8 @@ function shopBuy(name)
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
         local okW, errW = pcall(function()
             local pawn = survivalPC.Pawn
-            pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5)
+            if UP and UP.healthGuard then pcall(UP.healthGuard, pawn, "the STORE's repair") end   -- ((0.73.77) G2: the
+            pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5)                              -- AIRFRAME's full)
         end)
         RUN.acHp = nil
         local after = aircraftHealth()
@@ -583,6 +662,7 @@ function shopBuy(name)
         return done(string.format("%s for %d.", msg, price))
     elseif o.unit then                               -- a defence
         local r = SV_Spawn(o.unit)
+        if ALLY.forgetAlive then ALLY.forgetAlive(o.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
         if r <= 0 then return done("COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.defences.built = RUN.defences.built + 1
@@ -638,8 +718,13 @@ function SHOP.sound(name)
     if not ok and not SH.soundSaid then SH.soundSaid = true; log("shop: menu sound " .. name .. " failed: " .. tostring(err)) end
 end
 
+-- ((0.73.77, Workstream B1) the shop part's shares in the perf line, "shop/<share>": sv_main.lua's PERF)
+local function pa(name, t0) if PERF and PERF.add then PERF.add(name, t0) end end
+local function nKeys(t) local n = 0; for _ in pairs(t or {}) do n = n + 1 end; return n end
 function shopTick(tick)
     if not CFG.shop.enabled or not D then return end
+    SH.tick = tick                                   -- ((0.73.77) the landing windows' walk of this tick: SHOP.windowsKey)
+    local t0 = os.clock()
     if type(SV_ShopRequest) == "function" then
         -- every press waiting (the landing menu's hook queues them), and the texts straight after: taking one press
         -- per tick and updating the texts once a second left ~1 s with no change on screen, so purchases seemed not to
@@ -669,15 +754,26 @@ function shopTick(tick)
         end
     end
     if tick % 4 == 3 then pcall(SHOP.healthCheck) end
+    pa("shop/presses", t0)
+    t0 = os.clock()
     -- the texts when something changed: down at the airfield (where they're read) at once after a press of yours, else
     -- every 0.5 s at most (in co-op every player's kill changes them: the co-op run of 2026-10-30 worked out all the rows'
-    -- offers nearly every tick down there), at most every 5 s in flight (every kill changed them, and all 21 rows' offers
-    -- were worked out each time: economy review of 2026-10-25, "frame-time cost grows with round size")
+    -- offers nearly every tick down there). ((0.73.77, Workstream B4) Never in flight: they're read only by the landing
+    -- menu, and RUN.dirty waits, so the first tick down at the airfield makes them; in flight every kill had them all
+    -- worked out every 5 s, all 21 rows' offers and ~70 asks of the spawner. Logged once a level.)
     local pressed = SH.pressAt ~= nil and os.clock() - SH.pressAt < 0.3
-    if RUN.dirty and ((playerOnAirfield() and (pressed or tick >= (SH.groundTick or 0))) or tick >= (SH.textTick or 0)) then
-        RUN.dirty, SH.textTick, SH.groundTick = false, tick + 20, tick + 2
+    if RUN.dirty and playerOnAirfield() and (pressed or tick >= (SH.groundTick or 0)) then
+        RUN.dirty, SH.groundTick = false, tick + 2
         local ok, err = pcall(shopTexts)
         if not ok then log("shop: text error " .. tostring(err)) end
+        if not SH.textSaid then
+            SH.textSaid = true
+            log(string.format("shop: the STORE's texts made down at the airfield only, a text sent when it changes (0.73.77; "
+                .. "%d sent, %d unchanged, %d units asked)", nKeys(SH.textSent), SH.textSkip or 0, SH.textAsks or 0))
+        end
     end
+    pa("shop/texts", t0)
+    t0 = os.clock()
     SHOP.relabelFlush(false)
+    pa("shop/labels", t0)
 end

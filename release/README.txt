@@ -166,6 +166,18 @@ AC8IoStoreLoader.log):
   (paste that path into the File Explorer address bar)
 Copy the logs right after you close the game (they're rewritten every time it starts).
 
+After a crash, send this
+------------------------
+Before you start the game again (it rewrites the logs), zip and send:
+1. The newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
+   (sort by date): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
+2. From ...\Win64\ue4ss\Mods\AC8SurvivalMode\: AC8SurvivalMode_lua.log, AC8SurvivalMode.log,
+   AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (the crumbs.prev file is the crashed session's last
+   steps, if you already started the game again).
+3. ...\Win64\ue4ss\UE4SS.log
+4. A line on what happened: the round, what you were doing (flying, in the STORE, DOWN and spectating, quitting the
+   mission, a special round), and in co-op who hosted.
+
 To uninstall, delete the two folders listed in Install step 2.
 
 

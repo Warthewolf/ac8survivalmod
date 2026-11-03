@@ -21,9 +21,21 @@ local function pickFx(c)
     for _ = 1, n do fx[table.remove(pool, math.random(#pool))] = true end
     return fx
 end
+-- ((0.73.77) plan A10) you're DOWN (co-op's revives, sv_down.lua): no control scrambling then, MINDRIPPER's field nor
+-- VALKA's (SV_Invert scrambled the host's spectator camera in Saint Alessia's run of 2026-11-03), and no callout of it
+local function downNow()
+    local ok, d = pcall(function() return DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true end)
+    return ok and d == true
+end
+ANOM.downNow = downNow
 local function setField(on, s)
     if ANOM.on == on then return end
+    if on and downNow() then
+        if not ANOM.downSaid then ANOM.downSaid = true; log("special: anomaly field held off: you're DOWN (no SV_Invert, no callout)") end
+        return
+    end
     ANOM.on = on
+    if on then ANOM.downSaid = nil end
     local c, t = CFG.specials.anomaly, CFG.hud.text
     local fx = on and pickFx(c) or {}
     if on then
@@ -869,6 +881,28 @@ function SPC.V.radar(c)
     end
     return n
 end
+-- ((0.73.77) D4) and off again: every launcher's (her death, the host's VALKA over on a joiner) or, with owner (an
+-- actor's address), only that actor's (her opener railgun's, as it's removed: her own stay on). How many went off.
+function SPC.V.radarOff(owner)
+    if walkHold and walkHold() then return 0 end           -- (no object walk while a level comes or goes)
+    local n = 0
+    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
+    for _, m in ipairs(ok and list or {}) do
+        local mine = owner == nil
+        if not mine and liveObj(m) then
+            local o = m
+            for _ = 1, 4 do                                   -- (the module's outers up to its actor)
+                local okO, out = pcall(function() return o:GetOuter() end)
+                if not (okO and liveObj(out)) then break end
+                if addrOf(out) == owner then mine = true; break end
+                o = out
+            end
+        end
+        if mine and pcall(function() m.IsDispRadarMap = false; m.ForceAlertDisp = false end) then n = n + 1 end
+    end
+    log(string.format("special: VALKA's railgun minimap display off on %d launchers%s", n, owner and " (her opener's)" or ""))
+    return n
+end
 -- a plain actor spawned at `at` with a MaterialBillboardComponent (her flare's and portal's); actor, component, or nil
 -- and why not
 function SPC.V.billboard(at)
@@ -905,23 +939,28 @@ function SPC.V.flareStart(c, s, at, now)
     if not a then log("special: VALKA's flare: " .. tostring(whyB)); return 0 end
     local fl = { actor = a, comp = comp, mids = {}, from = now, life = f.life_s }
     local said = {}
+    -- ((0.73.77) D5: each element's screen share x flash_size_x, [specials.valka]; 1 = AC7's own sizes)
+    local kx = tonumber(c.flash_size_x) or 1
+    if not (kx > 0 and kx <= 4) then kx = 1 end
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
         local mi, why = loadObject(p .. "." .. p:match("[^/]+$"))
+        local size = e[2] * kx
         local okM, mid = false, nil                     -- (not `valid(mi) and pcall(...)`: `and` keeps only pcall's first value)
         if valid(mi) then okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end) end
-        if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, e[2], e[2], nil) end) then
+        if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, size, size, nil) end) then
             local okB, b = pcall(function() return mid:K2_GetScalarParameterValue(FName("Emissive_Intensity")) end)
             fl.mids[#fl.mids + 1] = { mid = mid, base = (okB and type(b) == "number" and b > 0) and b or 1 }
-            said[#said + 1] = string.format("%s %.1f (base %.3g)", e[1], e[2], fl.mids[#fl.mids].base)
+            said[#said + 1] = string.format("%s %.2f (base %.3g)", e[1], size, fl.mids[#fl.mids].base)
         else
             said[#said + 1] = e[1] .. " NOT up (" .. tostring(valid(mi) and mid or why) .. ")"
         end
     end
     s.flare = fl
     SPC.V.flareTick(c, s, now)
-    log(string.format("special: VALKA's flare (AC7 M18 lens flash): %d of %d elements, %.0f s: %s", #fl.mids, #f.elements,
-        f.life_s, table.concat(said, ", ")))
+    log(string.format("special: VALKA's flare (AC7 M18 lens flash): %d of %d elements, %.0f s, sizes x%.2f (flash_size_x; her "
+        .. "shot's burst flash_scale %.1f): %s", #fl.mids, #f.elements, f.life_s, kx, tonumber(c.flash_scale) or 0,
+        table.concat(said, ", ")))
     if #fl.mids == 0 then SPC.V.flareStop(s) end
     return #fl.mids
 end
@@ -943,7 +982,8 @@ end
 function SPC.V.flareStop(s)
     if s.flare then
         local a = s.flare.actor
-        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
+        -- ((0.73.77, plan F1b) not while the level is torn down, levelTorn: it goes with the level, and valid() reads it)
+        if not (levelTorn and levelTorn()) and valid(a) then pcall(function() a:K2_DestroyActor() end) end
         s.flare = nil
     end
 end
@@ -1077,6 +1117,11 @@ end
 -- the scrambled controls on (random_min..random_max of random_fx, as MINDRIPPER's field) or off
 function SPC.V.invert(c, s, on, now)
     local t = CFG.hud.text
+    if on and downNow() then                            -- ((0.73.77) A10: you're DOWN: left alone, no scramble or callout)
+        s.invertUntil = nil
+        log(string.format("special: %s's scramble skipped: you're DOWN (SV_Invert not called)", c.name))
+        return
+    end
     local fx = on and pickFx(c) or {}
     if on then
         local names = {}
@@ -1089,7 +1134,7 @@ function SPC.V.invert(c, s, on, now)
     local function b(k) return fx[k] and 1 or 0 end
     local r = type(SV_Invert) == "function" and SV_Invert(b("pitch"), b("roll"), c.fade_s, pawn and addrOf(pawn) or 0,
         b("yaw"), b("swap"), b("throttle")) or "no runtime"
-    hudCallout(on and t.anomaly_field or t.anomaly_clear, on and s.fxText or nil)
+    if not downNow() then hudCallout(on and t.anomaly_field or t.anomaly_clear, on and s.fxText or nil) end
     log(string.format("special: %s scrambles your controls: %s (SV_Invert %s)", c.name, on and s.fxText or "back",
         tostring(r)))
 end
@@ -1643,14 +1688,16 @@ end
 function SPC.V.mood(c, s)
     if s.moodOn then return end
     s.moodOn = true
-    if c.red and c.red.enabled ~= false then s.redOn = true; hudRed(true, c.red) end
+    -- (0.73.76) every joiner's too; (0.73.77, plan D1) told first, and this game's sky in a pcall: an error there left
+    -- moodOn set and the joiners never told (sv_coop.lua's M.valkaWatch holds them to moodOn as well)
+    if COOP and COOP.valkaMood then pcall(COOP.valkaMood, true) end
+    if c.red and c.red.enabled ~= false then s.redOn = true; pcall(hudRed, true, c.red) end
     pcall(SND.songStart, c.song)
-    if COOP and COOP.valkaMood then pcall(COOP.valkaMood, true) end      -- (0.73.76) every joiner's too
 end
 function SPC.V.moodOff(c, s, now)
-    if s.redOn then s.redOn = false; hudRed(false, nil, c == nil) end   -- (a cleanup: the sky back at once)
+    if s.moodOn and COOP and COOP.valkaMood then pcall(COOP.valkaMood, false) end   -- (0.73.76) every joiner's too ((0.73.77) first)
+    if s.redOn then s.redOn = false; pcall(hudRed, false, nil, c == nil) end        -- (a cleanup: the sky back at once)
     if c then pcall(SND.songFade, c.song and c.song.out_s or 5) else pcall(SND.songStop) end
-    if s.moodOn and COOP and COOP.valkaMood then pcall(COOP.valkaMood, false) end   -- (0.73.76) every joiner's too
     s.moodOn = false
 end
 
@@ -1678,6 +1725,15 @@ function SPC.valkaTick(now, s)
     if s.emlRemoveAt and now >= s.emlRemoveAt then      -- her railgun's gone eml_remove_s after its shot
         s.emlRemoveAt = nil
         V.event("RE_SV_ValkaEmlRemove")
+        -- ((0.73.77) D4: that event's LiveDestroyUnitExecution never took it down (invincible from setGone: "1 of 1
+        -- aircraft alive" to the end of every run, its box on, firing at players near the base): its minimap display
+        -- off, then finished off by Lua, SV_UnitAlive asked 2 s on: `special: VALKA's opener railgun removed` / NOT)
+        if liveObj(V.emlActor) then pcall(V.radarOff, addrOf(V.emlActor)) end
+        if SPC.cleanUp then
+            local okC, errC = pcall(SPC.cleanUp, { c.eml_unit }, string.format("%.0f s after its shot", c.eml_remove_s or 4), true, now)
+            if not okC then log("special: VALKA's opener railgun: clean-up error " .. tostring(errC)) end
+        end
+        V.emlActor = nil
     end
     if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, the opener
         if D.state ~= "fighting" then return end
@@ -1800,7 +1856,8 @@ function SPC.valkaTick(now, s)
             okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
         return
     end
-    if s.state == "done" and s.wreckUntil and now < s.wreckUntil and valid(s.modelOwner) then
+    -- ((0.73.77) liveObj, not valid(): the clean-up may take her unit off the native list while the wreck falls)
+    if s.state == "done" and s.wreckUntil and now < s.wreckUntil and liveObj(s.modelOwner) then
         V.modelHide(s, s.modelOwner)                    -- her X-02S falls, not the x40a's wreck
         return
     end
@@ -1819,6 +1876,16 @@ function SPC.valkaTick(now, s)
         V.flareStop(s)
         V.sndStop(s)
         ANOM.cleanFx(now, true)
+        -- ((0.73.77) D4 / the white square left on the minimap: her railguns' forced minimap display off, and what's
+        -- left of her unit (the x40a's parts, invincible while her X-02S flew: partsGone; RailGunCK, Mission 26's sure kill,
+        -- hit dukka two VALKA rounds on) and of her opener's taken down at once, not after the wreck's fall; the round's
+        -- clean-up (sv_rounds.lua SPC.endTick) looks again then)
+        pcall(V.radarOff)
+        if SPC.cleanUp then
+            local okC, nC = pcall(SPC.cleanUp, { c.unit, c.eml_unit }, "her death", true, now)
+            log(string.format("special: %s down: %s of her unit's objects still up, taken off", c.name,
+                okC and tostring(nC) or ("? (error " .. tostring(nC) .. ")")))
+        end
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
         LB.special("valka", true, now - s.at)
@@ -1848,7 +1915,7 @@ function SPC.valkaTick(now, s)
         if okF and n > 0 then offNose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
     end
     -- the scrambled controls: a chance every invert_every_s, for invert_s
-    if s.invertUntil and now >= s.invertUntil then V.invert(c, s, false, now) end
+    if s.invertUntil and (now >= s.invertUntil or downNow()) then V.invert(c, s, false, now) end   -- ((0.73.77) A10: DOWN)
     if not s.invertUntil and now >= s.invertAt then
         s.invertAt = now + c.invert_every_s
         if math.random() < c.invert_chance then s.scrambles = (s.scrambles or 0) + 1; V.invert(c, s, true, now) end
@@ -2102,7 +2169,10 @@ function ANOM.tick(now, s)
     local pawn = valid(survivalPC) and survivalPC.Pawn
     local a = pawn and addrOf(pawn)
     if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end   -- a new plane: switch again
-    if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
+    if downNow() then                                                  -- ((0.73.77) A10: none on you while you're DOWN)
+        if ANOM.on then setField(false, nil); log("special: anomaly field off: you're DOWN")
+        elseif s.dist < c.field_km then setField(true, s) end         -- (setField holds it off: logged once)
+    elseif ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
     elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end      -- (0.3 km: no flicker)
     local okP, errP = pcall(ANOM.packTick, now, s, c)                                       -- (its pack: P7)
     if not okP and tostring(errP) ~= s.packErr then s.packErr = tostring(errP); log("special: pack error " .. s.packErr) end
@@ -2111,10 +2181,38 @@ end
 -- A Survival COOP joiner's own field (sv_coop.lua clientRounds; code review of 2026-10-26: the host's field events
 -- switched every joiner's field on the host's distance): the joiner runs no rounds, so its distance to its copy of the
 -- Anomaly decides it here, as ANOM.tick does for the host. Off once the copy is gone.
+-- (0.73.77) The user, 2026-11-03: "After shooting down Mindripper, the field ... lingered for other players but not me ...
+-- still getting his controls reversed in much further rounds when flying near where we shot Mindripper down": any copy
+-- of its unit that was still a valid object counted, a wreck or a copy left up by the copy desync (plan A1) too, so its
+-- crash site scrambled that joiner for the rest of the run (the host runs its own state, so never had it). Now only
+-- while the host's round has the Anomaly up (sv_coop.lua "rnd" field 11: D.hostSpecial, its kind and state) and only a
+-- live copy (not down, health above 0), off at once when the host's is over; never on a joiner who's DOWN (A10).
+local function liveCopy(unit)
+    local p
+    for _, q in ipairs(planes) do
+        if q.unit == unit and not q.down and liveObj(q.obj) then
+            local okH, h = pcall(function() return q.obj.HealthInternal end)
+            if okH and type(h) == "number" and h > 0 then p = q end
+        end
+    end
+    return p
+end
+ANOM.liveCopy = liveCopy
 function ANOM.clientTick()
     local c = CFG.specials.anomaly
-    local p
-    for _, q in ipairs(planes) do if q.unit == c.unit and valid(q.obj) then p = q end end
+    local hs = D and D.hostSpecial
+    if not (hs and hs.kind == "anomaly" and hs.state == "hunt") then
+        if ANOM.on then
+            setField(false, nil)
+            log("coop: the Anomaly is over on the host: its field off here")
+        end
+        return
+    end
+    if downNow() then
+        if ANOM.on then setField(false, nil); log("special: anomaly field off: you're DOWN") end
+        return
+    end
+    local p = liveCopy(c.unit)
     local you = playerLocation()
     if not (p and you) then
         if ANOM.on then setField(false, nil) end
@@ -2150,8 +2248,8 @@ function ANOM.clientGlitch(now)
     end
     if now < (cs.podsAt or 0) then return end
     cs.podsAt = now + math.max(1, tonumber(ph.ecm_check_s) or 3)
-    local o
-    for _, q in ipairs(planes) do if q.unit == c.unit and not q.down and valid(q.obj) then o = q.obj end end
+    local p = liveCopy(c.unit)                         -- ((0.73.77) a live copy only: not a wreck, health above 0)
+    local o = p and p.obj
     if o then pcall(glitchPodsOff, c, cs, o) end
 end
 end

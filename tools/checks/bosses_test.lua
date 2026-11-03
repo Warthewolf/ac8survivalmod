@@ -37,6 +37,11 @@
 --   the pack's spring when its event doesn't fire (not logged as sprung); an enraged Ladon's volleys under the gap;
 --   co-op: KEEP_EVENTS (the pack and AB.L..IN's LastTGT kept, a Ladon's rage forwarded), AB.L..IN's phase in "rnd" and
 --     a joiner's copy's pods switched off in phase 3 (ANOM.clientGlitch);
+--   (0.73.77) the specials' clean-up (plan D4: SPC.cleanUp / cleanTick / endTick / clientClean, VALKA's opener railgun
+--     removed or NOT, SV_Recycle, a plane off the round's list, the Alicorn's pools left, a joiner's copies, radarOff);
+--     MINDRIPPER's field on a joiner only while the host's hunts and only on a live copy ("rnd" field 12); A10 (no
+--     scrambling while you're DOWN); D5 (flash_size_x); A7 (tailTick's pings and releases); G2 (UP.healthGuard in
+--     HIT.tick: the airfield's reset never a hit);
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -128,8 +133,10 @@ for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l
 part("sv_rows.lua"); part("sv_ai.lua")
 hudCallout = function(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
-part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
+part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" },
+                             { "\nlocal function tailTick%(", "\nfunction tailTick(" } })
 part("sv_ladon.lua"); part("sv_alicorn.lua"); part("sv_stats.lua"); part("sv_tells.lua")
+part("sv_tactical.lua")                                   -- ((0.73.77) G2: UP.healthGuard with HIT.tick)
 part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" },
                            { "\nlocal function onJoinerMessage%(f%)", "\nfunction onJoinerMessage(f)" } })
 function searchAircraft(a) return a end
@@ -1257,6 +1264,312 @@ do
     FA["BP_wp_vls_certain_ladon_C"], OBJ[CDO], planes = nil, keepCdo, {}
 end
 
+---------------------------------------------------------------------------------------------------- (0.73.77) D4
+print("the specials' clean-up (0.73.77, plan D4: boss parts left behind, VALKA's opener railgun)")
+do
+    local VA = SP.valka
+    local recycled = nil
+    local function obj(full, hp)                              -- (an object of a special's unit: invincible, boxed)
+        local o = mkObj(full, KM(14, 0), nil, hp)
+        o.bIsInvincible, o.bShowHUDBox = true, true
+        function o:SetIsInvincible(v) self.bIsInvincible = v end
+        function o:SetMinHealth(v) self.minH = v end
+        function o:ModifyHealth(d)
+            if not self.bIsInvincible and not self.stuck then self.HealthInternal = math.max(0, self.HealthInternal + d * 10) end
+        end
+        function o:SetActive(a) self.active = a end
+        function o:SetActorTickEnabled(t) self.ticking = t end
+        function o:IsA() return self.plane == true end
+        return o
+    end
+    SPC.cleanQ = {}
+    local f = #logs + 1
+    local eml = obj("SV_Obj_ValkaEml_C_1", 1000)
+    SPC.CLEAN_OBJ[VA.eml_unit] = { at = os.clock(), eml }
+    alive[VA.eml_unit] = 1
+    planes = {}
+    local n = SPC.cleanUp({ VA.eml_unit }, "4 s after its shot", true, 100)
+    check(n == 1 and eml.HealthInternal == 0 and eml.bIsInvincible == false,
+          "VALKA's opener railgun (invincible from setGone, RE_SV_ValkaEmlRemove never took it down): made mortal, finished off")
+    check(line("special: VALKA's opener railgun 4 s after its shot: 1 alive, 1 of its 1 recorded objects still up: 1 finished off, 0 switched off", f) ~= nil,
+          "... logged")
+    alive[VA.eml_unit] = 0
+    SPC.cleanTick(101)
+    check(line("special: VALKA's opener railgun removed", f) == nil, "... its check not before 2 s")
+    SPC.cleanTick(102)
+    check(line("special: VALKA's opener railgun removed", f) ~= nil and SPC.CLEAN_OBJ[VA.eml_unit] == nil,
+          "2 s on, SV_UnitAlive 0: `special: VALKA's opener railgun removed`, its list dropped")
+    local stuck = obj("SV_Obj_ValkaEml_C_2", 1000)
+    stuck.stuck = true                                        -- (takes no damage)
+    SPC.CLEAN_OBJ[VA.eml_unit] = { at = os.clock(), stuck }
+    alive[VA.eml_unit] = 1
+    SPC.cleanUp({ VA.eml_unit }, "a test", true, 200)
+    check(stuck.HealthInternal == 1000 and stuck.active == false and stuck.hidden == true and stuck.bShowHUDBox == false
+          and stuck.bIsNotLockonTarget == true and stuck.ticking == false, "one that takes no damage: switched off (SetActive false, hidden, no box, lock or tick)")
+    SPC.cleanTick(202)
+    check(line("special: VALKA's opener railgun NOT removed (1 alive) (no SV_Recycle in this runtime)", f) ~= nil,
+          "... still up 2 s on, no SV_Recycle: `NOT removed (1 alive)`")
+    SV_Recycle = function(u, force) recycled = u .. "/" .. tostring(force); alive[u] = 0; return 1 end
+    SPC.cleanUp({ VA.eml_unit }, "a test", true, 300)
+    SPC.cleanTick(302)
+    check(recycled == VA.eml_unit .. "/1" and line("special: VALKA's opener railgun removed (SV_Recycle: 1)", f) ~= nil,
+          "... with SV_Recycle: SV_Recycle(unit, 1), removed")
+    -- her own unit at her death: her plane off the round's list (no pay) and finished off, her parts too, a pool left
+    local body = obj("BP_OP1016_x40a_Valka_C_3", 2000)
+    body.plane = true
+    local rgck, pool = obj("BP_OP1016_x40a_RailGunCK_C_4", 800), obj("BP_OP0001_uavm_ON_C_5", 100)
+    SPC.CLEAN_OBJ[VA.unit] = { at = os.clock(), body, rgck, pool }
+    planes = { { unit = VA.unit, obj = body, addr = body.addr, name = "VALKA" } }
+    alive[VA.unit] = 2
+    SPC.cleanUp({ VA.unit }, "her death", true, 400)
+    check(planes[1].down == true and planes[1].cleaned == true and body.HealthInternal == 0,
+          "a plane of the unit: off the round's list first (no pay), then finished off")
+    check(rgck.HealthInternal == 0, "her RailGunCK part (Mission 26's sure kill, invincible while her X-02S flew): finished off")
+    check(pool.HealthInternal == 100 and pool.active == nil, "a parked pool (_uavm_ON_): left to the unit's removal")
+    -- a joiner ("parts"): a copy's plane switched off, never killed; its parts finished off; no SV_Recycle there
+    OBJ["/Script/Live.LiveAIPlane"] = { full = "LiveAIPlane" }
+    local cBody, cCk = obj("BP_OP1016_x40a_Valka_C_6", 2000), obj("BP_OP1016_x40a_RailGunCK_C_7", 800)
+    cBody.plane = true
+    SPC.CLEAN_OBJ[VA.unit] = { at = os.clock(), cBody, cCk }
+    planes, recycled, SPC.cleanQ = {}, nil, {}
+    alive[VA.unit] = 2
+    SPC.cleanUp({ VA.unit }, "the host's valka over", "parts", 500)
+    check(cBody.HealthInternal == 2000 and cBody.active == false and cBody.bShowHUDBox == false and cBody.hidden == true,
+          "a joiner: her copy's plane switched off (its box gone), never killed (the host's kill)")
+    check(cCk.HealthInternal == 0, "... its parts finished off (this game's own, as ladonPartsDown's)")
+    SPC.cleanTick(502)
+    check(recycled == nil and line("special: VALKA's unit (SV_Unit_Valka) here (a joiner's copies) NOT removed (2 alive)", f) ~= nil,
+          "... no SV_Recycle on a joiner, logged")
+    SV_Recycle = nil
+    OBJ["/Script/Live.LiveAIPlane"] = nil
+    -- SPC.endTick: when (her end after the wreck's fall; a round clear 3 s on; the next round at once; the Alicorn 25 s)
+    SPC.cleanQ = {}
+    SPC.CLEAN_OBJ[VA.unit], SPC.CLEAN_OBJ[VA.eml_unit] = nil, nil
+    alive[VA.unit], alive[VA.eml_unit] = 0, 0
+    local sv = { kind = "valka", state = "done", wreckUntil = 615 }
+    SPC.endTick(600, sv)
+    check(sv.cleanAt == 616 and not sv.cleaned, "her end: her units cleaned up after her X-02S's fall (wreck_s + 1)")
+    SPC.endTick(610, sv)
+    check(not sv.cleaned, "... not before")
+    local f2 = #logs + 1
+    SPC.endTick(616, sv)
+    check(sv.cleaned and line("special: VALKA's unit (SV_Unit_Valka) at the end of its valka fight: 0 alive", f2) ~= nil
+          and line("special: VALKA's opener railgun at the end of its valka fight", f2) ~= nil, "... then both her units, logged")
+    SPC.cleanTick(618)
+    check(line("special: VALKA's unit (SV_Unit_Valka) removed", f2) ~= nil and line("special: VALKA's opener railgun removed", f2) ~= nil,
+          "2 s on: both removed")
+    local sl = { kind = "ladon", state = "run" }
+    SPC.endTick(700, sl)
+    check(sl.cleanAt == nil, "a special still up: no clean-up")
+    SPC.endTick(700, sl, "its round clear")
+    check(sl.cleanAt == 703 and not sl.cleaned, "its round clear: 3 s on")
+    SPC.endTick(701, sl, "the next round's start", true)
+    check(sl.cleaned == true, "the next round's start: at once")
+    local sa = { kind = "alicorn", state = "done" }
+    SPC.endTick(800, sa)
+    check(sa.cleanAt == 825, "the Alicorn: 25 s on (after RE_SV_AlcnRemove, not as it sinks)")
+    check(#SPC.cleanUnitsOf("ladon") == 2 and SPC.cleanUnitsOf("shuttle")[1] == nil, "the kinds' units (the Ladons' two; the shuttle its own removal)")
+    -- her railguns' minimap display off: all of them, or her opener's only
+    local actorA, actorB = { full = "Opener", addr = 881 }, { full = "Valka", addr = 882 }
+    local fcsA, fcsB = { full = "FCS_A", addr = 883, GetOuter = function() return actorA end }, { full = "FCS_B", addr = 884, GetOuter = function() return actorB end }
+    local mA = { full = "ModA", addr = 885, IsDispRadarMap = true, ForceAlertDisp = true, GetOuter = function() return fcsA end }
+    local mB = { full = "ModB", addr = 886, IsDispRadarMap = true, ForceAlertDisp = true, GetOuter = function() return fcsB end }
+    FA.LiveFCSModule_LauncherTripleRailCannon = { mA, mB }
+    check(SPC.V.radarOff(actorA.addr) == 1 and mA.IsDispRadarMap == false and mB.IsDispRadarMap == true,
+          "radarOff(her opener): its launcher's display off, hers left on")
+    check(SPC.V.radarOff() == 2 and mB.ForceAlertDisp == false, "radarOff(): every launcher's (her death)")
+    FA.LiveFCSModule_LauncherTripleRailCannon = nil
+    -- a joiner (SPC.clientClean): the host's special over -> its copies' leftovers 5 s on; VALKA's opener's at her reveal
+    run(20)
+    SPC.cl, SPC.cleanQ = { up = {}, due = {} }, {}
+    D.hostSpecial = { kind = "ladon", state = "run" }
+    SPC.clientClean(900)
+    check(SPC.cl.up.ladon == 900 and #SPC.cl.due == 0, "a joiner: the host's Ladons up, seen")
+    D.hostSpecial = { kind = "ladon", state = "done" }
+    SPC.clientClean(901)
+    check(#SPC.cl.due == 1 and SPC.cl.due[1].at == 906, "the host's Ladons over: their copies' clean-up 5 s on")
+    local vls = obj("BP_OP0045_ladn_VLS_L_Base_C_8", 3000)
+    SPC.CLEAN_OBJ.SV_Unit_LadonKot = { at = os.clock(), vls }
+    local f3 = #logs + 1
+    SPC.clientClean(906)
+    check(vls.HealthInternal == 0 and line("coop: the host's ladon over: 1 of its copies' objects still up here, taken off", f3) ~= nil,
+          "... a VLS launcher copy left up (mobi118's rounds 39-46): finished off here, logged")
+    D.hostSpecial = { kind = "valka", state = "hunt" }
+    SPC.clientClean(1000)
+    check(#SPC.cl.due == 1 and SPC.cl.due[1].at == 1000 + (VA.eml_remove_s or 4) + 2 and SPC.cl.due[1].list[1] == VA.eml_unit,
+          "VALKA shows on the host: her opener's copy taken off here eml_remove_s + 2 s on")
+    SPC.clientClean(1001)
+    check(#SPC.cl.due == 1, "... once")
+    D.hostSpecial = nil
+    SPC.cl, SPC.cleanQ = { up = {}, due = {} }, {}
+    SPC.CLEAN_OBJ = {}
+    alive[VA.unit], alive[VA.eml_unit] = nil, nil
+end
+
+print("co-op: MINDRIPPER's field on a joiner (0.73.77: it lingered round its crash site for rounds)")
+do
+    run(20)
+    local copyM = mkObj("BP_OP0001_f04e_Mindripper_C_9", KM(1, 0), nil, 10000)
+    planes = { { unit = AN.unit, obj = copyM } }
+    you = KM(0, 0)
+    ANOM.on, ANOM.pawn = false, pawn.addr
+    D.hostSpecial = { kind = "anomaly", state = "hunt" }
+    ANOM.clientTick()
+    check(ANOM.on == true, "the host's Anomaly hunting, its live copy 1 km off: the field on")
+    copyM.HealthInternal = 0
+    ANOM.clientTick()
+    check(ANOM.on == false, "its copy at 0 health but still a valid object (a wreck, a desync's leftover): the field off")
+    copyM.HealthInternal = 10000
+    planes[1].down = true
+    ANOM.clientTick()
+    check(ANOM.on == false, "a copy marked down: no field")
+    planes[1].down = nil
+    ANOM.clientTick()
+    check(ANOM.on == true, "(a live copy again: on)")
+    local f = #logs + 1
+    D.hostSpecial = { kind = "anomaly", state = "done" }
+    ANOM.clientTick()
+    check(ANOM.on == false and line("coop: the Anomaly is over on the host: its field off here", f) ~= nil,
+          "the host's Anomaly over, its copy still up here: off at once, logged")
+    D.hostSpecial = nil
+    ANOM.clientTick()
+    check(ANOM.on == false, "no special on the host (rounds later, near its crash site): never on")
+    onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "", "", "", "anomaly", "anomaly:hunt" })
+    check(M.rnd.hostSpecial and M.rnd.hostSpecial.kind == "anomaly" and M.rnd.hostSpecial.state == "hunt",
+          "\"rnd\" field 12: the host's special and its state read")
+    onJoinerMessage({ "rnd", "20", "fighting", "0.0", "1", "1", "1", "", "", "", "", "bad;one" })
+    check(M.rnd.hostSpecial == nil, "... anything else: none")
+    M.rnd, planes = nil, {}
+    -- AB.L..IN's copy: a wreck's pods never touched
+    local gcopy = mkObj("BP_OP0001_e18g_Glitch_C_10", KM(0, 0), nil, 0)
+    planes = { { unit = GL.unit, obj = gcopy } }
+    check(ANOM.liveCopy(GL.unit) == nil, "AB.L..IN on a joiner: a copy at 0 health isn't its live copy")
+    planes = {}
+end
+
+print("A10: you DOWN: no control scrambling (MINDRIPPER's field, VALKA's)")
+do
+    local downNow, inv = false, 0
+    local keepDown, keepInv = DOWN, SV_Invert
+    DOWN = { me = function() return downNow end }
+    SV_Invert = function() inv = inv + 1; return 1 end
+    anomalyRound()
+    atk(2.5)
+    downNow = true
+    local f = #logs + 1
+    tickA(0, 1)
+    check(ANOM.on ~= true and inv == 0 and line("special: anomaly field held off: you're DOWN", f) ~= nil,
+          "inside MINDRIPPER's field while DOWN: held off, no SV_Invert")
+    downNow = false
+    tickA(1.25, 1.25)
+    check(ANOM.on == true and inv == 1, "revived: the field again")
+    downNow = true
+    tickA(1.5, 1.5)
+    check(ANOM.on == false and inv == 2 and line("special: anomaly field off: you're DOWN", f) ~= nil, "DOWN inside it: off at once")
+    local vs, n0 = {}, #callouts
+    SPC.V.invert(SP.valka, vs, true, 10)
+    check(vs.invertUntil == nil and inv == 2 and #callouts == n0, "VALKA's scramble while you're DOWN: skipped, no SV_Invert, no callout")
+    downNow = false
+    SPC.V.invert(SP.valka, vs, true, 10)
+    check(vs.invertUntil ~= nil and inv == 3, "not DOWN: scrambled as ever")
+    DOWN, SV_Invert = keepDown, keepInv
+end
+
+print("D5: VALKA's arrival flash, its sizes x flash_size_x")
+do
+    local sizes = {}
+    local comp = { AddElement = function(self, mid, a, b, w) sizes[#sizes + 1] = w end }
+    local actor = { full = "Actor_1", addr = 991, K2_DestroyActor = function() end }
+    local keepBB, keepLoad = SPC.V.billboard, loadObject
+    SPC.V.billboard = function() return actor, comp end
+    loadObject = function(p) return { full = p } end
+    local KML = "/Script/Engine.Default__KismetMaterialLibrary"
+    OBJ[KML] = { full = "KML", CreateDynamicMaterialInstance = function()
+        return { full = "MID", K2_GetScalarParameterValue = function() return 2 end, SetScalarParameterValue = function() end }
+    end }
+    check(SP.valka.flash_size_x == 0.5 and has(defaultIni, ";flash_size_x     = 0.5") and has(defaultIni, ";flash_scale      = 12.0"),
+          "[specials.valka] flash_size_x 0.5, flash_scale beside it in the ini")
+    local s = {}
+    local f = #logs + 1
+    local n = SPC.V.flareStart(SP.valka, s, KM(14, 0), 0)
+    check(n == 4 and math.abs(sizes[1] - 0.8) < 1e-9 and math.abs(sizes[2] - 0.6) < 1e-9 and math.abs(sizes[4] - 0.2) < 1e-9,
+          "its four elements at half AC7's screen shares (Glare 0.8, Ring 0.6, Shine 0.45, Bokeh 0.2)")
+    check(has(line("special: VALKA's flare", f), "sizes x0.50 (flash_size_x; her shot's burst flash_scale 12.0)"),
+          "the sizes on the flare's line: " .. tostring(line("special: VALKA's flare", f)))
+    SPC.V.flareStop(s)
+    SPC.V.billboard, loadObject, OBJ[KML] = keepBB, keepLoad, nil
+end
+
+print("A7: the round's last enemies pinged on the minimap (tailTick)")
+do
+    run(12)
+    local u1, u2 = CFG.pool[1], CFG.pool[2]
+    D.up[u1], D.up[u2] = true, true
+    alive[u1], alive[u2] = 1, 2
+    local freedW, relD = {}, {}
+    local keepWH, keepWF, keepDIR = WOLF.holding, WOLF.free, DIR
+    WOLF.holding = function(u) return u == u1 end
+    WOLF.free = function(u, why, turn) freedW[#freedW + 1] = u .. (turn and "+turn" or ""); return 1 end
+    DIR = { holding = function(u) return u == u2 end, release = function(u) relD[#relD + 1] = u; return true end }
+    events = {}
+    tailTick(0, 3)
+    check(D.tail and D.tail.since == 0 and count("LastPing") == 0, "the tail's clock starts")
+    tailTick(89, 3)
+    check(count("LastPing") == 0, "89 s without a kill: nothing yet")
+    local f = #logs + 1
+    tailTick(90, 3)
+    check(evs("^RE_SV_LastPing") == string.format("RE_SV_LastPing_%02d;RE_SV_LastPing_%02d", poolIndex(u1), poolIndex(u2)),
+          "90 s without a kill, 3 left: each flight pinged (" .. evs("^RE_SV_LastPing") .. ")")
+    check(freedW[1] == u1 .. "+turn" and relD[1] == u2, "... a Wolf trap freed onto you, a director's hold let go")
+    check(line("round: last 3 enemies pinged on the minimap (round 12, no kill for 90 s; ping 1)", f) ~= nil, "... logged")
+    tailTick(95, 3)
+    check(count("LastPing") == 2, "not again before every_s")
+    tailTick(102, 3)
+    check(count("LastPing") == 4, "every_s on: again")
+    tailTick(103, 2)
+    check(D.tail.since == 103 and line("round 12: a kill 13 s after the tail's first ping (2 left)", f) ~= nil, "a kill: its clock again, logged")
+    tailTick(150, 2)
+    check(count("LastPing") == 4, "... 47 s on: nothing")
+    run(12); D.up[u1] = true; alive[u1] = 6; events = {}
+    tailTick(0, 6); tailTick(100, 6)
+    check(count("LastPing") == 0, "6 left (max_left 4): no pings")
+    CFG.waves.tail.enabled = false
+    run(12); D.up[u1] = true; alive[u1] = 1
+    tailTick(0, 1); tailTick(100, 1)
+    check(count("LastPing") == 0, "[waves.tail] enabled false: none")
+    CFG.waves.tail.enabled = true
+    WOLF.holding, WOLF.free, DIR = keepWH, keepWF, keepDIR
+    alive[u1], alive[u2] = nil, nil
+end
+
+print("G2: the AIRFRAME upgrade kept through the airfield (UP.healthGuard in HIT.tick)")
+do
+    local st = 0
+    for _, it in pairs(CFG.shop.items) do if it.role == "upgrade" and it.up == "airframe" then st = it.step end end
+    local want = 120 * (1 + st)
+    RUN.ups = { airframe = 1 }
+    local p = mkObj("BP_PlayerPlane_PP0018_fa36_C_1", KM(0, 0), nil, want * 10)
+    p.MaxHealth = want
+    local pc = { Pawn = p }
+    UP.pawn, UP.base, UP.guarded = p.addr, { health = 120 }, nil
+    HIT.reset()
+    run(6)
+    HIT.tick(pc, 1)
+    p.MaxHealth, p.HealthInternal = 120, 1200                 -- (the game's reset at the airfield)
+    local f = #logs + 1
+    HIT.tick(pc, 3)
+    check(p.MaxHealth == want and p.HealthInternal == want * 10, string.format("the game's reset to 120 HP: tier 1's %.0f HP back the same pass", want))
+    check(line("hit: ", f) == nil, "... never logged as a hit")
+    check(line(string.format("upgrades: the game put your airframe back to 120 HP (an airfield stop): tier 1's %.0f HP again at once", want), f) ~= nil,
+          "... logged")
+    p.HealthInternal = want * 10 - 300
+    HIT.tick(pc, 5)
+    check(has(line("hit: ", f), "hit: -30 HP in 1 hit"), "a real hit after it: logged as ever")
+    RUN.ups = nil
+    check(UP.healthGuard(p) == false, "no AIRFRAME tier: nothing to keep")
+    HIT.reset()
+end
+
 print("the hooks, by their place in the source")
 local function body(file, from_)
     local src = readAll(MOD .. "/Scripts/" .. file)
@@ -1270,10 +1583,22 @@ check(has(body("sv_alicorn.lua", "\nfunction SPC%.alicornTick%("), "pcall(SPC.al
 check(has(body("sv_ladon.lua", "\nfunction SPC%.ladonTick%("), "pcall(SPC.ladonRage, now, s, k)"), "ladonTick: the rage at a kill")
 check(has(readAll(MOD .. "/Scripts/sv_hud.lua"), "t.glitch_row_allout"), "the HUD row: AB.L..IN's phase 3")
 check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), '"^RE_SV_AnomalyPack",'), "KEEP_EVENTS: ^RE_SV_AnomalyPack")
-check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), 'alive, lv, gp, al)'), "the host's \"rnd\": AB.L..IN's phase")
+check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), 'alive, lv, gp, al,'), "the host's \"rnd\": AB.L..IN's phase")   -- ((0.73.77) the round's special after it)
 check(has(body("sv_coop.lua", "\nlocal function clientRounds%("), "D.glitchPhase = r.glitchPhase")
       and has(body("sv_coop.lua", "\nlocal function clientRounds%("), "pcall(ANOM.clientGlitch, now)"), "clientRounds: the phase kept, the copy's pods")
 check(has(body("sv_rounds.lua", "\nlocal function startRound%("), "D.taken = taken"), "startRound: the round's own flights for the deck")
+-- (0.73.77)
+check(has(body("sv_rounds.lua", "\nlocal function specialTick%("), "pcall(SPC.endTick, now, D.special)")
+      and has(body("sv_rounds.lua", "\nlocal function specialTick%("), "pcall(SPC.cleanTick, now)"), "specialTick: a finished special cleaned up, its checks")
+check(has(body("sv_rounds.lua", "\nlocal function startRound%("), "\"the next round's start\", true"), "startRound: the last special cleaned up before it's replaced")
+check(has(body("sv_rounds.lua", "\nfunction roundsTick%("), "pcall(tailTick, now, alive)")
+      and has(body("sv_rounds.lua", "\nfunction roundsTick%("), "pcall(SPC.endTick, now, D.special, \"its round clear\")"),
+      "roundsTick: the tail while fighting, the clean-up's backstop at the round clear")
+check(has(readAll(MOD .. "/Scripts/sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.eml_unit }"), "valkaTick: her opener railgun cleaned up at its removal")
+check(has(readAll(MOD .. "/Scripts/sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.unit, c.eml_unit }, \"her death\""), "valkaTick: her unit at her death")
+check(has(body("sv_coop.lua", "\nlocal function clientRounds%("), "D.hostSpecial = r.hostSpecial")
+      and has(body("sv_coop.lua", "\nlocal function clientRounds%("), "pcall(SPC.clientClean, now)"), "clientRounds: the host's special kept, its copies' clean-up")
+check(has(readAll(MOD .. "/Scripts/sv_ladon.lua"), "pcall(UP.healthGuard, pawn)"), "HIT.tick: the AIRFRAME upgrade before the health is read")
 
 logFile:close()
 if fails > 0 then print("bosses test: " .. fails .. " FAILED"); os.exit(1) end

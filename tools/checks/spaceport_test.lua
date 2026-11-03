@@ -131,6 +131,7 @@ local function fresh(round)
     D = { round = round or 10, state = "fighting", now = 0, at = 0, up = {}, flown = {}, queue = {}, spare = {},
           events = {}, orders = {}, taken = {}, special = { kind = "spaceport", state = "pending" } }
     SPORT.fordActor = nil
+    SPORT.shipObjs, SPORT.rkObjs, SPORT.hostRow = {}, {}, nil      -- ((0.73.77) the objects as SV_Spawn makes them)
 end
 local now = 0
 local function run(s, from, to, every)           -- the special's tick every 0.25 s
@@ -206,7 +207,11 @@ run(s, now + 0.25, tLand + SP.remove_after_s + 1)
 check(evs("^RE_SV_SpLcacRemoveAV$") ~= "" and s.lanes.A.waves.V == nil, "the wave taken off remove_after_s after its first landing")
 alive.SV_Unit_SpLcacCW = 1                       -- a craft of wave C W shot down
 run(s, now + 0.25, now + 1)
-check(paid("landing craft down") > 0, "a craft shot down: paid")
+check(paid("landing craft sunk") > 0, "a craft shot down: paid")
+-- ((0.73.77, I2: S3) its reason isn't one sv_coop.lua's addCredits keeps from the joiners: " down (", a plane kill)
+local craftWhy = nil
+for _, c in ipairs(credits) do if tostring(c.why):find("landing craft") then craftWhy = c.why end end
+check(craftWhy and not craftWhy:find(" down %("), "the craft's pay reaches the joiners: no \" down (\" in its reason (" .. tostring(craftWhy) .. ")")
 
 print("100 %: captured")
 local ER = CFG.pool[1]                          -- (a pool flight of the round still up, and one queued)
@@ -225,6 +230,7 @@ check(SPORT.busy(s) == false, "captured: the round no longer waits for the fleet
 check(evs("^RE_SV_FlightOff_%d%d$"):find(string.format("RE_SV_FlightOff_%02d", poolIndex(ER)), 1, true) and next(D.up) == nil
     and planes[1].down and #D.queue == 0 and D.state == "fighting",
     "the round's fighters fall back (its own and the deck's): RE_SV_FlightOff_NN each, D.up empty, marked down, the queue dropped (" .. evs("^RE_SV_FlightOff") .. ")")
+check(D.spWithdrawn and D.spWithdrawn[ER], "(0.73.77, I4) the withdrawn flight kept for the next round's plan (D.spWithdrawn)")
 local before = #spawned("^SV_Unit_SpLcac")
 run(s, now + 0.25, now + SP.wave_every_s + 5)
 check(#spawned("^SV_Unit_SpLcac") == before, "no more waves once captured")
@@ -327,16 +333,17 @@ check(evs("^RE_SV_SpDebriTgt3$") ~= "" and s3.rk.done and called(T.sp_debris_dow
 SPORT.retakeOver(now, s3)
 check(paid("spaceport retaken") > 0, "no escape: the retake reward paid")
 -- an escape: the penalty, no reward, its despawn not a kill; the other shot down breaks up; the debris never splits: taken off
+-- ((0.73.77, I5) with no height to read, an escape counts only ESCAPE_MIN_S (50 s) after its launch: the flag at +60 s)
 local s4 = retakeWithRockets()
-rtick(s4, 0, RK.launch_a_s + 0.5)
+rtick(s4, 0, RK.launch_a_s + 59)
 FLAGS.SV_SpRocketEscA = 1
-rtick(s4, RK.launch_a_s + 4, RK.launch_a_s + 4)
+rtick(s4, RK.launch_a_s + 60, RK.launch_a_s + 60)
 alive.SV_Unit_SpRockets = 1                     -- (its despawn a second later)
-rtick(s4, RK.launch_a_s + 5, RK.launch_a_s + 5)
+rtick(s4, RK.launch_a_s + 61, RK.launch_a_s + 61)
 check(called(T.sp_rocket_escaped) ~= nil and RUN.credits == 20000 - RK.escape_penalty and paid("a rocket shot down") == 0
       and s4.rk.kills == 0 and evs("^RE_SV_SpRocketSplitOn$") ~= "",
       "A escaped: ROCKET ESCAPED, -escape_penalty, its despawn not a kill, the split on for B")
-rtick(s4, RK.launch_a_s + 5.5, RK.launch_b_s + 0.5)
+rtick(s4, RK.launch_a_s + 61.5, RK.launch_b_s + 0.5)
 alive.SV_Unit_SpRockets = 0
 rtick(s4, RK.launch_b_s + 1, RK.launch_b_s + 1 + RK.debris_tgt_s + 1)
 check(s4.rk.stage == 1 and evs("^RE_SV_SpDebriTgt1$") ~= "", "B shot down after A escaped: it breaks up (stage 1)")
@@ -346,9 +353,9 @@ SPORT.retakeOver(now, s4)
 check(paid("spaceport retaken") == 0 and since(1, "reward withheld: 1 rocket escaped") >= 1, "an escape: no retake reward")
 -- both escape: no debris
 local s5 = retakeWithRockets()
-rtick(s5, 0, RK.launch_b_s + 0.5)
+rtick(s5, 0, RK.launch_b_s + 59)
 FLAGS.SV_SpRocketEscA, FLAGS.SV_SpRocketEscB = 1, 1
-rtick(s5, RK.launch_b_s + 4, RK.launch_b_s + 5)
+rtick(s5, RK.launch_b_s + 60, RK.launch_b_s + 61)
 check(s5.rk.done and not s5.rk.stage and evs("^RE_SV_SpDebriTgt") == "" and RUN.credits == 20000 - 2 * RK.escape_penalty,
       "both escaped: done, no debris, two penalties")
 -- off: no rockets
@@ -408,12 +415,36 @@ check(SPC.kinds.retake.ready() == false and specialFor(D.round + 1) ~= "retake",
 CFG.specials.spaceport.retake.enabled = true
 RUN.sport = nil
 
-print("startRound: its fleet still up")
+print("startRound: its fleet still up (0.73.77, I3: S4: it comes, the leftovers taken off first)")
 fresh(10)
 alive.SV_Unit_SpAegisC = 1
 D.forceSpecial, D.state = "spaceport", "wait"
 local okR, errR = pcall(startRound)
-check(okR and D.special == nil, "a spaceport with a ship still up: a normal round (" .. tostring(errR) .. ")")
+check(okR and D.special ~= nil and D.special.kind == "spaceport", "a spaceport with a ship still up from before: it comes (" .. tostring(errR) .. ")")
+events = {}
+alive.SV_Unit_SpAegisC = 1
+check(SPORT.spawn(0) == true and evs("^RE_SV_SpFleetRemove$") ~= "" and since(1, "were still up from before %(AegisC%)") >= 1,
+    "its spawn: the leftover taken off (RE_SV_SpFleetRemove), logged")
+-- a leftover still going after the removal: the queue waits, then counts it as it is
+fresh(10)
+s = D.special
+alive.SV_Unit_SpWaspA = 1
+local rawEv = SV_Event
+SV_Event = function(name) events[#events + 1] = name; return 1 end      -- (a removal that takes a while)
+SPORT.spawn(0)
+run(s, 0, 2)
+check(#spawned("^SV_Unit_SpWaspA$") == 0 and #s.queue == 26, "the new fleet waits for the leftover (the Ford out, " .. #s.queue .. " queued)")
+alive.SV_Unit_SpWaspA = 0
+run(s, 2.25, 8)
+check(#spawned("^SV_Unit_Sp[FWAB]") == 27 and #s.queue == 0, "the leftover gone: the whole fleet spawned (" .. #spawned("^SV_Unit_Sp[FWAB]") .. ")")
+fresh(10)
+s = D.special
+alive.SV_Unit_SpWaspA = 1
+SPORT.spawn(0)
+run(s, 0, 15)
+check(#s.queue == 0 and #spawned("^SV_Unit_Sp[FWAB]") == 26 and s.ships.SV_Unit_SpWaspA and s.ships.SV_Unit_SpWaspA.old,
+    "still up 8 s on: counted in this fleet as it is, the rest spawned (" .. #spawned("^SV_Unit_Sp[FWAB]") .. ")")
+SV_Event = rawEv
 
 print("roundsTick: the generic busy and round end")
 fresh(10)
@@ -439,6 +470,349 @@ for _, l in ipairs(wl) do if l:find("^special: wave SV_Unit_SpLcacAV: 2 craft, 0
 check(avl ~= nil, "each wave's line as it's done (AV: 2 craft, 1 landed, its troops ashore): " .. tostring(avl or wl[1]))
 check(#sl >= 2 and sl[1]:find("troop vehicles: 2 ashore, 2 got in", 1, true) and sl[1]:find("the capture: ", 1, true),
     "the round's line at its end, the capture's timeline: " .. tostring(sl[1]))
+
+---------------------------------------------------------------------------------------------------- 0.73.77: Workstream I
+-- (testing/2026-11-03/PLAN_desync_lag_compatibility.md I1-I8, the review's S1-S13, the economy's C2)
+SP.retake.island.enabled = false                 -- (the garrison, the ships and the rockets alone below)
+local function tp(base) return (TIER.pay(base * TIER.specialX(), TIER.index(D.round))) end
+local function count(t, text) local n = 0; for _, c in ipairs(t) do if c.text == text then n = n + 1 end end; return n end
+local nextAddr = 5000
+local function obj(cls, x, y, z)
+    nextAddr = nextAddr + 1
+    local o = { full = cls .. "_C /Game/x.PersistentLevel." .. cls .. "_C_" .. nextAddr, addr = nextAddr, HealthInternal = 1000,
+                pos = { X = x or -2964629, Y = y or -26491, Z = z or 50 } }
+    function o:SetMinHealth() end
+    function o:ModifyHealth(d) self.HealthInternal = math.max(0, self.HealthInternal + d) end
+    function o:K2_GetActorLocation() return self.pos end
+    function o:SetActorHiddenInGame(h) self.hidden = h end
+    function o:SetActorEnableCollision() end
+    function o:SetIsInvincible(v) self.inv = v end
+    for _, f in ipairs(onNew) do f(o) end
+    return o
+end
+
+print("I1: a ship counted by its hull (S1, S2, S5; the economy's C2)")
+-- each ship its hull and its turrets, as the game makes them (SV_UnitAlive: its objects still up)
+local PARTS = { SV_Unit_SpAegis = { "BP_VE002_aegs_CP", "BP_VE002_aegs_mk15_01_CP", "BP_VE002_aegs_mk41_CP", "BP_VE002_aegs_mk45_CP",
+                                    "BP_VE002_artillery_CP" },
+                SV_Unit_SpFord = { "BP_VE004_grfd_CP", "BP_VE004_grfd_mk15_01_CP_Ally", "BP_VE004_grfd_mk15_02_CP_Ally",
+                                   "BP_VE004_grfd_mk15_03_CP_Ally", "BP_VE004_grfd_mk15_04_CP_Ally" },
+                SV_Unit_SpBoat = { "BP_VE011_mslb_CP", "BP_VE011_mslb_sam_CP" }, SV_Unit_SpWasp = { "BP_VE023_wasp_CP" } }
+local objs = {}
+local rawSpawn, rawAlive, rawEvent = SV_Spawn, SV_UnitAlive, SV_Event
+SV_Spawn = function(unit, ...)
+    local l = nil
+    for pre, x in pairs(PARTS) do if unit:find("^" .. pre) then l = x end end
+    if not l then return rawSpawn(unit, ...) end
+    spawns[#spawns + 1] = { unit = unit }
+    objs[unit] = {}
+    for i, cls in ipairs(l) do objs[unit][i] = obj(cls) end
+    return #l
+end
+SV_UnitAlive = function(u)
+    if objs[u] then
+        local n = 0
+        for _, o in ipairs(objs[u]) do if not o.gone and o.HealthInternal > 0 then n = n + 1 end end
+        return n
+    end
+    return rawAlive(u)
+end
+SV_Event = function(name)
+    if name == "RE_SV_SpFleetRemove" then for _, l in pairs(objs) do for _, o in ipairs(l) do o.HealthInternal = 0 end end end
+    return rawEvent(name)
+end
+fresh(13)
+local sI = D.special
+SPORT.spawn(0)
+run(sI, 0, 5)
+clock = clock + 5                                -- (their objects a moment old: the hull told)
+local L0 = #logs
+run(sI, 5.25, 7)
+check(since(L0, "27 of its 27 ships counted by their hull") == 1, "every ship's hull told (logged once)")
+check(sI.ships.SV_Unit_SpAegisA.hull == objs.SV_Unit_SpAegisA[1] and sI.ships.SV_Unit_SpFord.hull == objs.SV_Unit_SpFord[1]
+      and sI.ships.SV_Unit_SpWaspA.hull == objs.SV_Unit_SpWaspA[1], "the hull: the one object that isn't a turret (a Wasp's only one)")
+credits, callouts = {}, {}
+objs.SV_Unit_SpAegisA[3].HealthInternal = 0      -- (its mk41 shot off)
+run(sI, now + 0.25, now + 1.25)
+check(paid("turret shot off") == tp(SP.pay.turret) and paid("aegis sunk") == 0 and SPORT.shipsUp(sI) == 27,
+      "a turret shot off alone: pay.turret (" .. paid("turret shot off") .. "), not sunk, still afloat")
+L0 = #logs
+objs.SV_Unit_SpAegisA[1].HealthInternal = 0      -- (its hull down: the turrets still up)
+run(sI, now + 0.25, now + 1.25)
+local tleft = 0
+for i = 2, 5 do if objs.SV_Unit_SpAegisA[i].HealthInternal > 0 then tleft = tleft + 1 end end
+check(paid("aegis sunk") == tp(SP.pay.aegis) and since(L0, "SV_Unit_SpAegisA sunk %(its hull down") == 1 and SPORT.shipsUp(sI) == 26,
+      "its hull down: sunk once, its price once (" .. paid("aegis sunk") .. "), no longer afloat")
+check(tleft == 0 and since(L0, "3 of its turrets still up finished off") == 1, "its 3 turrets still up finished off with it")
+run(sI, now + 0.25, now + 3)
+check(paid("aegis sunk") == tp(SP.pay.aegis) and since(L0, "SV_Unit_SpAegisA sunk") == 1, "never paid or sunk again")
+objs.SV_Unit_SpFord[1].HealthInternal = 0        -- the Ford's hull: CARRIER SUNK once
+run(sI, now + 0.25, now + 4)
+check(count(callouts, T.sp_ford_down) == 1 and paid("ford sunk") == tp(SP.pay.ford), "the Ford's hull down: CARRIER SUNK once, paid once (S2)")
+local nfl = #flights
+run(sI, now + 0.25, now + 3 * SP.deck.every_s)
+check(#flights == nfl, "the Ford sunk by its hull: no more deck launches (" .. (#flights - nfl) .. ")")
+local bA = objs.SV_Unit_SpBoatA                  -- a turret the finish can't take: the boat still counted sunk
+bA[2].ModifyHealth = function() error("refused") end
+bA[1].HealthInternal = 0
+L0 = #logs
+run(sI, now + 0.25, now + 1.25)
+check(sI.ships.SV_Unit_SpBoatA.sunk and since(L0, "1 NOT %(still up%)") == 1 and SV_UnitAlive("SV_Unit_SpBoatA") == 1,
+      "a turret the finish didn't take: the boat sunk all the same (afloat only while its hull lives)")
+for _, l in pairs(objs) do l[1].HealthInternal = 0 end
+for u in pairs(alive) do if u:find("^SV_Unit_SpLcac") then alive[u] = 0 end end   -- (the craft out sunk too)
+run(sI, now + 0.25, now + 2.25)
+check(not SPORT.busy(sI) and SPORT.shipsUp(sI) == 0, "every hull down, nothing coming in: the round doesn't wait on a turret")
+events = {}
+L0 = #logs
+SPORT.roundOver(now, sI)
+check(evs("^RE_SV_SpFleetRemove$") ~= "" and since(L0, "the spaceport held: 1 of the fleet's units still had parts up %(BoatA%)") == 1,
+      "held: the turret left up taken off at the round's end (RE_SV_SpFleetRemove)")
+check(paid("aegis sunk") == 14 * tp(SP.pay.aegis) and paid("ford sunk") == tp(SP.pay.ford) and paid("wasp sunk") == 4 * tp(SP.pay.wasp)
+      and paid("boat sunk") == 8 * tp(SP.pay.boat), "each ship paid its price once: the fleet " .. (paid(" sunk") - paid("craft sunk")))
+SV_Spawn, SV_UnitAlive, SV_Event = rawSpawn, rawAlive, rawEvent
+
+print("I2: co-op money (S3 above; S9: the escape penalty on every game)")
+local debits = {}
+COOP = { host = function() return true end, client = function() return false end, players = function() return {} end,
+         debit = function(n, why) debits[#debits + 1] = { n = n, why = why } end }
+local sD = retakeWithRockets()
+rtick(sD, 0, RK.launch_a_s + 59)
+FLAGS.SV_SpRocketEscA = 1
+rtick(sD, RK.launch_a_s + 60, RK.launch_a_s + 61)
+check(#debits == 1 and debits[1].n == RK.escape_penalty and RUN.credits == 20000 - RK.escape_penalty,
+      "the host: the penalty off its zollars and sent to every joiner (COOP.debit " .. tostring(debits[1] and debits[1].n) .. ")")
+COOP.host, COOP.client = function() return false end, function() return true end
+RUN.credits = 3000
+local took = SPORT.debit(RK.escape_penalty, "rocket A escaped", true)
+check(took == 3000 and RUN.credits == 0 and #debits == 1 and since(1, "credits: %-3000 %(rocket A escaped, the host's round%), now 0") >= 1,
+      "a joiner: the host's penalty off its own zollars (what it has of it), never sent on")
+COOP = nil
+
+print("I3: a fleet no retake can follow is taken off (S4)")
+fresh(10)
+s = D.special
+SPORT.spawn(0)
+run(s, 0, 5)
+s.captured = true
+RUN.sport = { retakeRound = 11, troops = 8, lostRound = 10, ships = {} }
+SP.retake.enabled = false
+events = {}
+SPORT.roundOver(6, s)
+SP.retake.enabled = true
+check(evs("^RE_SV_SpFleetRemove$") ~= "" and RUN.sport == nil and since(1, "no retake follows") >= 1,
+      "lost with the retake off: the fleet taken off at once, nothing pending")
+local noPick = function() return {}, 0 end
+fresh(11)
+alive.SV_Unit_SpAegisC = 1
+RUN.sport = { retakeRound = 11, troops = 8, lostRound = 10, ships = { SV_Unit_SpAegisC = { kind = "aegis", group = "B" } } }
+SPORT.planRound("retake", noPick)
+check(RUN.sport ~= nil and evs("^RE_SV_SpFleetRemove$") == "", "the retake's own round: its fleet kept for it")
+SPORT.planRound("ladon", noPick)
+check(RUN.sport == nil and evs("^RE_SV_SpFleetRemove$") ~= "" and since(1, "Retake due in round 11 didn't come %(round 11 is ladon%)") >= 1,
+      "a retake that didn't come: the fleet left from its assault taken off, forgotten")
+
+print("I4: the fighters withdrawn at a capture (S6)")
+fresh(13)
+local W1, W2 = CFG.pool[1], CFG.pool[4]
+D.spWithdrawn, alive[W1], alive[W2] = { [W1] = true, [W2] = true }, 2, 0
+SPORT.planRound(nil, noPick)
+check(D.taken[W1] and not D.taken[W2] and D.spWithdrawn[W1] and not D.spWithdrawn[W2]
+      and since(1, "1 still up kept out of round 13's picks %(no SV_Recycle in this runtime%)") >= 1,
+      "no SV_Recycle: one still up kept out of the round's picks, one down forgotten")
+local recycled = {}
+SV_Recycle = function(u, force) recycled[#recycled + 1] = u .. ":" .. force; alive[u] = 0; return 1 end
+D.taken = {}
+SPORT.planRound(nil, noPick)
+check(recycled[1] == W1 .. ":1" and not D.taken[W1] and next(D.spWithdrawn) == nil and since(1, "1 recycled %(SV_Recycle%): " .. W1) >= 1,
+      "SV_Recycle(unit, 1): the one still up recycled in the next round's plan")
+SV_Recycle = nil
+
+print("I5: rockets and debris that always end (S7, S8)")
+local sE = retakeWithRockets()                   -- an escape flag 4 s after its launch, no height read: not an escape
+rtick(sE, 0, RK.launch_a_s + 0.5)
+FLAGS.SV_SpRocketEscA = 1
+rtick(sE, RK.launch_a_s + 4, RK.launch_a_s + 5)
+check(sE.rk.lost.A and not sE.rk.escaped.A and RUN.credits == 20000 and since(1, "rocket A's climb ended short") >= 1,
+      "an escape 4 s on (no height read): taken off, no penalty")
+alive.SV_Unit_SpRockets = 1
+rtick(sE, RK.launch_a_s + 5.5, RK.launch_a_s + 6)
+check(sE.rk.kills == 0 and evs("^RE_SV_SpRocketSplitOn$") ~= "", "its despawn not a kill; one left, the split on")
+rtick(sE, RK.launch_a_s + 6.5, RK.launch_b_s + 1)
+alive.SV_Unit_SpRockets = 0
+rtick(sE, RK.launch_b_s + 1.5, RK.launch_b_s + 2)
+check(sE.rk.stage == 1, "the other shot down: it breaks up")
+local sT = retakeWithRockets()                   -- nothing ends them: each taken off timeout_s after its launch
+rtick(sT, 0, RK.launch_b_s + RK.timeout_s + 1)
+check(sT.rk.done and sT.rk.lost.A and sT.rk.lost.B and RUN.credits == 20000 and not SPORT.retakeBusy(sT)
+      and since(1, "rocket B neither shot down nor escaped") >= 1 and since(1, "the rockets are done: 0 shot down, 0 escaped, 2 taken off") >= 1,
+      "a rocket neither down nor escaped timeout_s on: taken off, no penalty; the round goes on")
+local sB = retakeWithRockets()                   -- both down in one look: no split, no debris
+rtick(sB, 0, RK.launch_b_s + 1)
+alive.SV_Unit_SpRockets = 0
+L0 = #logs
+rtick(sB, RK.launch_b_s + 1.5, RK.launch_b_s + 2)
+check(sB.rk.done and not sB.rk.stage and evs("^RE_SV_SpDebriTgt") == "" and since(L0, "went down without breaking up %(its split wasn't on yet") == 1,
+      "both rockets down at once: no split, no debris marked as targets")
+-- each one's object: told by its pad, its height and its kill read from it; the debris up from under the sea
+local rkO, debO = {}, {}
+local spawnNoObj = SV_Spawn
+SV_Spawn = function(unit, ...)
+    if unit == "SV_Unit_SpRockets" then                    -- (B's pad first: told apart by their pads, not their order)
+        local r = spawnNoObj(unit, ...)
+        rkO = { obj("BP_OP0058_crkt_CP", -1325196, 59778, 76000), obj("BP_OP0058_crkt_CP", -1384043, -41261, 76000) }
+        return r
+    elseif unit:find("^SV_Unit_SpDebri") then
+        local r = spawnNoObj(unit, ...)
+        if unit == "SV_Unit_SpDebriB" then alive[unit] = nil; return -3 end    -- (one that never came)
+        debO[unit] = { obj("BP_OP0058_crkt_ABR_p1", 0, 0, -50000), obj("BP_OP0058_crkt_L_p1", 0, 0, -50000) }
+        return r
+    end
+    return spawnNoObj(unit, ...)
+end
+local sO = retakeWithRockets()
+rtick(sO, 0, 3)
+check(sO.rk.byObj and sO.rk.obj.A == rkO[2] and sO.rk.obj.B == rkO[1] and since(1, "each one's height and kill read from it") >= 1,
+      "the rockets' objects told apart by their pads")
+rtick(sO, 3.5, RK.launch_a_s + 15)
+rkO[2].pos.Z = 200000                            -- (A at 2 km, its path's end flag)
+FLAGS.SV_SpRocketEscA = 1
+rtick(sO, RK.launch_a_s + 15.5, RK.launch_a_s + 61)
+check(sO.rk.lost.A and RUN.credits == 20000 and since(1, "rocket A's climb ended short %(at 2000 m") >= 1,
+      "an escape at 2 km, 60 s on: below escape_min_m, taken off, no penalty")
+rtick(sO, RK.launch_a_s + 61.5, RK.launch_b_s + 70)
+rkO[1].pos.Z = 2020000                           -- (B at 20.2 km: its climb's end)
+FLAGS.SV_SpRocketEscB = 1
+rtick(sO, RK.launch_b_s + 70.5, RK.launch_b_s + 71)
+check(sO.rk.escaped.B and RUN.credits == 20000 - RK.escape_penalty and sO.rk.done, "B at 20.2 km: escaped, the penalty; the rockets done")
+local sK = retakeWithRockets()
+rtick(sK, 0, RK.launch_a_s + 1)
+rkO[2].HealthInternal = 0                        -- (A down: its unit's count unchanged)
+rtick(sK, RK.launch_a_s + 1.5, RK.launch_b_s + 1)
+check(sK.rk.kills == 1 and paid("a rocket shot down") == tp(RK.rocket_pay) and evs("^RE_SV_SpRocketSplitOn$") ~= "",
+      "A's object at 0 health: a kill (its unit's count unchanged), the split on")
+rkO[1].HealthInternal = 0
+L0 = #logs
+rtick(sK, RK.launch_b_s + 1.5, RK.launch_b_s + 1 + RK.split_wait_s + 1)
+check(sK.rk.done and not sK.rk.stage and since(L0, "no debris came up in 10 s") == 1, "B down, its debris still 500 m down: no split, done")
+local sS = retakeWithRockets()
+rtick(sS, 0, RK.launch_b_s + 1)
+rkO[2].HealthInternal, rkO[1].HealthInternal = 0, 100
+rtick(sS, RK.launch_b_s + 1.5, RK.launch_b_s + 3)
+rkO[1].HealthInternal = 0
+for _, o in ipairs(debO.SV_Unit_SpDebriA) do o.pos.Z = 1500000 end
+L0 = #logs
+rtick(sS, RK.launch_b_s + 3.5, RK.launch_b_s + 4)
+check(sS.rk.stage == 1 and since(L0, "the last rocket broke up %(its debris seen coming up%)") == 1, "B down, its debris up: stage 1")
+credits = {}
+rtick(sS, now + 0.5, now + RK.debris_tgt_s + 1)
+alive.SV_Unit_SpDebriA = 0
+rtick(sS, now + 0.5, now + 2 * RK.debris_next_s + 3)
+alive.SV_Unit_SpDebriC = 0
+rtick(sS, now + 0.5, now + RK.debris_next_s + 2)
+check(sS.rk.done and paid("the rocket's debris") == 4 * tp(RK.debris_pay), "a debris unit that never came pays nothing (" ..
+      paid("the rocket's debris") .. " for 4 pieces)")
+SV_Spawn = spawnNoObj
+
+print("I6: the clocks wait while you're down at the airfield (S10)")
+fresh(10)
+s = D.special
+SPORT.spawn(0)
+run(s, 0, 5)
+grounded = true
+L0 = #logs
+run(s, 5.25, 50)
+check(#spawned("^SV_Unit_SpLcac") == 0 and since(L0, "clocks wait while you're down at the airfield") == 1, "down at the airfield: no wave")
+grounded = false
+run(s, 50.25, 62)
+check(#spawned("^SV_Unit_SpLcac") == 0 and since(L0, "clocks run again") == 1, "flying again: the waves' clocks moved on by the time held")
+run(s, 62.25, 68)
+check(#spawned("^SV_Unit_SpLcac") == 4, "the first waves first_wave_s of flying after the fleet came (" .. #spawned("^SV_Unit_SpLcac") .. ")")
+local sG = retakeWithRockets()
+grounded = true
+rtick(sG, 0, 60)
+check(not sG.rk.launched.A, "down at the airfield: no rocket launched")
+grounded = false
+rtick(sG, 60.5, 60 + RK.launch_a_s - 2)
+check(not sG.rk.launched.A, "flying again: its launch moved on by the time held")
+rtick(sG, 60 + RK.launch_a_s - 1.5, 60 + RK.launch_a_s + 3)
+check(sG.rk.launched.A ~= nil, "rocket A launched launch_a_s of flying into the retake")
+
+print("I7: a whole capture share (S11); the pending retake on the joiners (S12)")
+fresh(10)
+s = D.special
+SPORT.spawn(0)
+run(s, 0, 5)
+SP.capture_per_troop = 7.4
+s.troops = { { unit = "SV_Unit_SpTroopsAVL", key = "AVL", at = now - 5 } }
+FLAGS.SV_SpAtAVL = 1
+local okC, errC = pcall(run, s, now + 0.25, now + 1.25)
+SP.capture_per_troop = 10
+check(okC and s.capture == 7 and math.type(s.capture) == "integer" and SPORT.row(s, T):find("CAPTURE: 7%%"),
+      "capture_per_troop 7.4: 7 % a vehicle, the row and logs fine (" .. tostring(errC or s.capture) .. ")")
+check(SPORT.coopCode() == "a:27:0:7;-", "the host's share in the assault: " .. SPORT.coopCode())
+s.capture, s.captured = 100, true
+RUN.sport = { retakeRound = 11, troops = 9, lostRound = 10, ships = {} }
+SPORT.roundOver(now, s)
+local code = SPORT.coopCode()
+check(code:find("^%-;11:9:10:AegisA,") ~= nil and select(2, code:gsub(",", ",")) == 26, "after the capture: the retake due, 27 ships (" .. code:sub(1, 40) .. "...)")
+COOP = { host = function() return false end, client = function() return true end, players = function() return {} end }
+local hostRun = RUN
+RUN = { credits = 0 }
+SPORT.fromHost(code)
+local nShips = 0
+for _ in pairs(RUN.sport and RUN.sport.ships or {}) do nShips = nShips + 1 end
+check(RUN.sport and RUN.sport.fromHost and RUN.sport.retakeRound == 11 and nShips == 27 and since(1, "kept here for a host migration") >= 1,
+      "a joiner keeps the host's pending retake (for a host migration)")
+SPORT.fromHost("a:5:2:30;-")
+check(SPORT.clientRow(T) == string.format(T.sp_row, 5, 2, 30) and RUN.sport == nil and since(1, "no longer pending") >= 1,
+      "a joiner's NEXT row: the host's Spaceport row; the retake no longer pending")
+SPORT.fromHost("a:5:2:300;1:2:3:Bogus,AegisA")
+check(SPORT.hostRow == nil and RUN.sport and RUN.sport.ships.SV_Unit_SpAegisA and not RUN.sport.ships.SV_Unit_SpBogus,
+      "the host's share checked: a capture over 100 dropped, units of the fleet only")
+SPORT.fromHost("a:5:2:30;-")
+clock = clock + 6
+check(SPORT.clientRow(T) == nil, "the host's row 5 s old: none")
+COOP = nil
+check(SPORT.clientRow(T) == nil, "not a joiner: none")
+RUN = hostRun
+-- a host by migration: the retake comes, the old host's ships (taken down with its copies here) spawned again
+fresh(11)
+RUN.sport = { retakeRound = 11, troops = 8, lostRound = 10, fromHost = true,
+              ships = { SV_Unit_SpAegisC = { kind = "aegis", group = "B" }, SV_Unit_SpFord = { kind = "ford", group = "Ford" } } }
+check(specialFor(11) == "retake", "a host by migration: specialFor still brings the retake")
+D.special = { kind = "retake", state = "pending" }
+SP.retake.rockets.enabled = false
+check(SPORT.retakeSpawn(0) and #spawned("^SV_Unit_SpAegisC$") == 1 and #spawned("^SV_Unit_SpFord$") == 1 and SPORT.shipsUp(D.special) == 2
+      and since(1, "spawned again on this game") >= 1, "its ships spawned again on the new host")
+check(SPORT.coopCode() == "r:8:2;11:8:10:AegisC,Ford", "the retake in play shared (for the next migration): " .. SPORT.coopCode())
+SP.retake.rockets.enabled = true
+
+print("I8: the Ford's deck flights held back when the round is planned (S13)")
+fresh(12)
+D.forceSpecial, D.state = "spaceport", "wait"
+local okP, errP = pcall(startRound)
+local held = {}
+for u in pairs(D.spDeck or {}) do held[#held + 1] = u end
+local planned = math.min(SP.deck.max_flights, SP.deck.flights + math.floor(13 * SP.deck.flights_per_round))
+check(okP and #held == math.min(SP.deck.reserve, planned) and since(1, "held back from round 13's fighters for it") >= 1,
+      "round 13: " .. #held .. " 2-ships held back for the deck (" .. tostring(errP) .. ")")
+local inWaves = false
+for _, w in ipairs(D.waves or {}) do for _, u in ipairs(w) do if D.spDeck and D.spDeck[u] then inWaves = true end end end
+local inSpare = false
+for _, u in ipairs(D.spare or {}) do if D.spDeck and D.spDeck[u] then inSpare = true end end
+check(not inWaves and not inSpare, "none of them among the round's fighters or spares")
+s = D.special
+SPORT.spawn(0)
+run(s, 0, SP.deck.first_s + 1)
+check(#flights == 1 and D.spDeck[flights[1].unit] and since(1, "%(held for the deck%)") >= 1, "the deck launches one held for it")
+run(s, SP.deck.first_s + 1.25, SP.deck.first_s + 4 * SP.deck.every_s)
+local first = flights[1].unit
+alive[first], D.up[first] = 0, nil                -- (shot down: launched again)
+local nb = #flights
+run(s, now + 0.25, now + SP.deck.every_s + 1)
+check(#flights == nb + 1 and D.spDeck[flights[#flights].unit], "one shot down: a held flight launched again")
+SP.retake.island.enabled = true
 
 print(fails == 0 and "spaceport test: all passed" or ("spaceport test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

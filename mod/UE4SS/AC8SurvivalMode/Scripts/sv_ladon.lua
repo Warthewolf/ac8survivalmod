@@ -483,6 +483,25 @@ end
 function HIT.reset()
     HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil
     HIT.ladonUntil, HIT.ladonSweepAt = nil, nil
+    HIT.ladonPool, HIT.ladonWalkAt = {}, nil                -- ((0.73.77) B5: the Ladon missiles kept, below)
+end
+
+-- (0.73.77, Workstream B5) Every Ladon missile the game has made, by address: HIT.ladonPool[a] = { obj, name, certain }.
+-- They come in through HIT.new as they're made (NotifyOnNewObject; a pool only grows, its items launched again and
+-- again), so the toning sweep below goes over these instead of walking every object for the two classes on each sweep
+-- (twice every 0.5 s while a Ladon is up, every tick of a volley): gloom's Ladon round of 2026-11-02, the hits part 7.5 ms
+-- a tick (27 % of the tick); the testers' of 2026-11-01, 13-27 ms. A walk every LADON_WALK_S still, for one HIT.new
+-- dropped (it keeps 200 a tick); each kept one checked live, and its name, before it's touched (an address used again).
+local LADON_WALK_S = 10
+-- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the missiles kept here forgotten, none of them touched)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS.hits = function() HIT.reset() end end
+local function ladonKeep(o, isCertain)
+    local a = liveAddr(o)
+    if not a then return false end
+    HIT.ladonPool = HIT.ladonPool or {}
+    if HIT.ladonPool[a] then return false end
+    HIT.ladonPool[a] = { obj = o, name = nameOf(o), certain = isCertain }
+    return true
 end
 
 -- every tick in a run (now: the round clock)
@@ -508,26 +527,50 @@ function HIT.tick(pc, now)
     local ladonOn = HIT.ladonUntil and now and now < HIT.ladonUntil and now >= (HIT.ladonSweepAt or 0)
     if volleyOn or ladonOn then
         if ladonOn then HIT.ladonSweepAt = now + 0.5 end
+        local tS = os.clock()
+        -- ((0.73.77, B5) from the kept pool, ladonKeep; the walk for the two classes every LADON_WALK_S only)
+        if now >= (HIT.ladonWalkAt or 0) then
+            HIT.ladonWalkAt = now + LADON_WALK_S
+            local added = 0
+            for cls, isCertain in pairs({ [LADON_MSL .. "_C"] = false, [LADON_CERTAIN .. "_C"] = true }) do
+                for _, o in ipairs(FindAllOf(cls) or {}) do
+                    if valid(o) and not short(o):find("^Default__") and ladonKeep(o, isCertain) then added = added + 1 end
+                end
+            end
+            HIT.ladonWalks = (HIT.ladonWalks or 0) + 1
+            if HIT.ladonWalks == 2 and not HIT.poolSaid then
+                HIT.poolSaid = true
+                local k = 0
+                for _ in pairs(HIT.ladonPool or {}) do k = k + 1 end
+                log(string.format("hits: the Ladons' missiles toned from their pool as it's kept (%d now; a walk every %d s for "
+                    .. "any missed: %d more this time; 0.73.77)", k, LADON_WALK_S, added))
+            end
+        end
         local n = 0
-        for cls, fn in pairs({ [LADON_MSL .. "_C"] = nerf, [LADON_CERTAIN .. "_C"] = certain }) do
-            for _, o in ipairs(FindAllOf(cls) or {}) do
-                if valid(o) and not short(o):find("^Default__") then
-                    if fn == certain then
-                        local okD, d = pcall(function() return o.damage end)
-                        if okD and type(d) == "number" and d > (tonumber(CFG.specials.ladon.missile_damage) or 10) + 0.5 then
-                            HIT.certainCaught = (HIT.certainCaught or 0) + 1
-                            if now - (HIT.certainCaughtSaid or -1e9) >= 60 then
-                                HIT.certainCaughtSaid = now
-                                log(string.format("hits: a Ladon's sure-kill missile caught at damage %.0f, made ordinary (%d so far; %s)",
-                                    d, HIT.certainCaught, volleyOn and "a volley's" or "its own fire control's"))
-                            end
+        for a, e in pairs(HIT.ladonPool or {}) do
+            local o = e.obj
+            if liveAddr(o) ~= a or nameOf(o) ~= e.name then
+                HIT.ladonPool[a] = nil                    -- (gone, or its address another object's now)
+            else
+                if e.certain then
+                    local okD, d = pcall(function() return o.damage end)
+                    if okD and type(d) == "number" and d > (tonumber(CFG.specials.ladon.missile_damage) or 10) + 0.5 then
+                        HIT.certainCaught = (HIT.certainCaught or 0) + 1
+                        if now - (HIT.certainCaughtSaid or -1e9) >= 60 then
+                            HIT.certainCaughtSaid = now
+                            log(string.format("hits: a Ladon's sure-kill missile caught at damage %.0f, made ordinary (%d so far; %s)",
+                                d, HIT.certainCaught, volleyOn and "a volley's" or "its own fire control's"))
                         end
                     end
-                    fn(o); n = n + 1
+                    certain(o)
+                else
+                    nerf(o)
                 end
+                n = n + 1
             end
         end
         if volleyOn and n > (HIT.sweepN or 0) then HIT.sweepN = n end
+        if PERF and PERF.add then PERF.add("hits/Ladon missiles", tS) end
     elseif HIT.sweepUntil and not volleyOn then
         if not HIT.sweepSaid then
             HIT.sweepSaid = true
@@ -539,7 +582,8 @@ function HIT.tick(pc, now)
         if liveAddr(o) then                                -- (hotfix2: caught a tick ago; not valid(), sv_core liveAddr)
             local n = short(o)
             if not n:find("^BP_plwp_") and not n:find("^Default__") then
-                if n == LADON_MSL then nerf(o) elseif n == LADON_CERTAIN then certain(o) end
+                if n == LADON_MSL then nerf(o); ladonKeep(o, false)                  -- ((0.73.77) kept: B5)
+                elseif n == LADON_CERTAIN then certain(o); ladonKeep(o, true) end
                 if #HIT.msl >= 60 then table.remove(HIT.msl, 1) end
                 HIT.msl[#HIT.msl + 1] = { obj = o, name = n, born = now }
             end
@@ -549,6 +593,10 @@ function HIT.tick(pc, now)
     if not valid(pawn) then return end
     local me = at(pawn)
     local keep = {}
+    local tM = os.clock()
+    -- ((0.73.77, Workstream B5) one more than MSL_FAR_M off read every other tick (half of them each tick), the near ones
+    -- every tick: a Ladon volley fills the 60, each read every tick; what's near you at a hit, around(), is the near ones)
+    local MSL_FAR_M = 3000
     for _, m in ipairs(HIT.msl) do                         -- where each one is (kept 2 s after it's gone)
         if liveAddr(m.obj) and now - m.born < 30 then     -- (hotfix2: not valid(), sv_core liveAddr)
             if not m.from then                             -- (its shooter's address: which plane, for the measurements)
@@ -556,19 +604,29 @@ function HIT.tick(pc, now)
                 m.from = nm
                 if w then m.fromAddr = addrOf(w) end
             end
-            local v = me and at(m.obj)
-            if v then m.d, m.seen = km(v, me) * 1000, now end
+            local far = m.d and m.d > MSL_FAR_M
+            m.alt = far and not m.alt or false             -- (a far one: read one tick, skipped the next)
+            if not m.alt then
+                local v = me and at(m.obj)
+                if v then m.d, m.seen = km(v, me) * 1000, now end
+            end
             keep[#keep + 1] = m
         elseif now - (m.seen or m.born) < 2 then keep[#keep + 1] = m end
     end
     HIT.msl = keep
+    if PERF and PERF.add then PERF.add("hits/missiles", tM) end
     local okA, addr = pcall(function() return tostring(pawn:GetAddress()) end)
     if not okA then addr = nameOf(pawn) end
     if addr ~= HIT.pawn then HIT.pawn, HIT.h, HIT.sum = addr, nil, nil end    -- (a new aircraft: a restart)
+    -- ((0.73.77) G2: the AIRFRAME upgrade put back the moment the game resets it at the airfield, before the health is
+    -- read: the reset and its restore are never a hit)
+    local okG, guarded = true, false
+    if UP and UP.healthGuard then okG, guarded = pcall(UP.healthGuard, pawn) end
     local ok, h = pcall(function() return pawn.HealthInternal end)
     if not ok or type(h) ~= "number" then return end
     local last = HIT.h
     HIT.h = h
+    if okG and guarded then last = nil end
     if last and h < last then
         if not HIT.sum then HIT.sum, HIT.n, HIT.near = 0, 0, me and around(me, now) or "?" end   -- (as it was at the first)
         HIT.sum, HIT.n = HIT.sum + (last - h), HIT.n + 1

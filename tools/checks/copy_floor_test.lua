@@ -1,0 +1,393 @@
+-- copy_floor_test.lua <mod dir> <work dir> <role: host|join> (run by tools/checks/copy_floor_test.sh): 0.73.77's fixes of
+-- the enemy copy desync and the joiners' kill pay, on the real sv_config.lua and sv_coop.lua (M exposed), the spawner and
+-- the game's health stubbed as the runtime's and the game's (every hit clamped at the MinHealth field; SetMinHealth keeps
+-- whole points only; each object's DamageHistoryMap). The logs of 0.73.76 (2026-11-02, plan Workstream A and the economy
+-- proposal's C1): joiners' copies had no floor (SetMinHealth(0.1) = 0) and went down to the ships' copies there long
+-- before the host's kill, the host's "hp" wrote health back onto the wrecks, their flights' next spawns were refused,
+-- one run ended while a player loaded in, and every kill a joiner saw was paid as its own.
+-- join: A1 the floor (the field written; a copy the ships' copies take to it put back up, nothing sent; your own lethal
+--   hit sent whole, the copy waiting at 1 HP for the host's "dn"; a crash there not sent once your plane's in the maps;
+--   a hit at the floor whose health doesn't move found in the map); A2 the host's "hp" never onto a copy down here; A3 a
+--   refused spawn's wrecks taken down, then SV_Recycle after 6 tries (or off, or missing); A6 the sync report's floor,
+--   refused and skipped counts; A9 the host's run-over while the level loads; C1 each kill by the player the host named.
+-- host: C1 the killer in each "dn" (the most damage, the host's own, a side's, none for one gone), KILL.by by it, the
+--   team share, the run's tally and the sync report's line; A9 a joiner who asks for the picture after the run-over gets
+--   it, a new level forgets it.
+local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
+local fails = 0
+local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
+do
+    local rawOpen = io.open
+    io.open = function(p, m) return rawOpen((tostring(p):gsub("\\", "/")), m) end
+end
+
+local clock = 100
+os.clock = function() return clock end           -- luacheck: ignore
+
+local logs = {}
+function log(s) logs[#logs + 1] = s end
+local function line(pat, from)
+    for i = #logs, from or 1, -1 do if logs[i]:find(pat, 1, true) then return logs[i] end end
+    return nil
+end
+VERSION = "0.73.77-floor.test"
+SCRIPT_DIR = WORK .. "/" .. ROLE .. "/Scripts/"
+-- (the kill attribution's raw parts, sv_ai.lua's: an Aegis's turret is "ships"; KILL.by's own answer "raw")
+KILL = { side = function(o) return (type(o) == "table" and tostring(o.name):find("aegs", 1, true)) and "ships" or "other" end,
+         read = function() end, by = function() return "raw" end, fired = {} }
+LB = { send = function() end }
+RUN = {}
+function roundsTick() end
+function airfieldTick() end
+function bombTick() end
+function logPlane() end
+function hudCallout() end
+function addCredits() end
+function poolIndex() return nil end
+SPC = {}
+function FindAllOf() return {} end
+function FindFirstOf() return nil end
+local GS = {}
+function GS:ApplyDamage(o, dmg)
+    if not (o.invincible or o.bIsInvincible) then o.HealthInternal = math.max(math.floor((o.MinHealth or 0) * 10), o.HealthInternal - dmg) end
+end
+function StaticFindObject(p)
+    if tostring(p):find("GameplayStatics", 1, true) then return GS end
+    return { cls = "LiveAIPlane" }
+end
+function valid(o) return type(o) == "table" and not o.gone end
+function nameOf(o) return type(o) == "table" and o.name or "?" end
+function addrOf(o) return type(o) == "table" and o.addr or nil end
+function inSurvival() return true end
+function playerOnAirfield() return false end
+function gamePaused() return false end
+function cdo() return nil end
+SV_ERR = { [-3] = "its last flight is still up" }
+local sent, inbox = {}, {}
+function SV_CoopSend(msg, rel, to) sent[#sent + 1] = (to or -1) .. ">" .. msg; return 1 end
+function SV_CoopRecv() return table.remove(inbox, 1) or "" end
+function SV_CoopInfo() return "open=1;state=linked;peers=1/linked/40/10/p" end
+function SV_CoopOpen() return 1 end
+function SV_CoopClose() end
+function SV_CoopMe() end
+function SV_CoopReset() end
+function SV_CoopTrack() return 1 end
+function SV_CoopBind() return 1 end
+function SV_MenuSetting() return "" end
+local menu = 0
+function SV_MenuChoice() return menu end
+function SV_Event() return 1 end
+function SV_SetAircraft() return 1 end
+function SV_SetLevel() return 1 end
+local recycled = {}
+
+-- the game's objects: health x 10, every hit clamped at the MinHealth field (SetMinHealth keeps whole points), each
+-- hit added in full to the DamageHistoryMap (o.hist: attacker -> health) before the clamp. A wreck (0 health) the game
+-- still counts in its unit (wreck) is let go by the game's own death check on its next ModifyHealth, unless stubborn.
+local notify = {}
+function NotifyOnNewObject(cls, fn) notify[cls] = notify[cls] or {}; table.insert(notify[cls], fn) end
+local nextAddr = 0x1000
+local function obj(cls, hp, plane)
+    nextAddr = nextAddr + 0x10
+    local o = { name = cls .. "_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. cls .. "_C_" .. nextAddr,
+                addr = nextAddr, HealthInternal = hp, plane = plane == true, hist = {} }
+    function o:IsA() return self.plane end
+    function o:GetAddress() return self.addr end
+    function o:SetMinHealth(v) self.MinHealth = math.floor(v) end
+    function o:SetIsInvincible(b) self.invincible = b end
+    function o:ModifyHealth(d)
+        if self.invincible then return end
+        if self.wreck and not self.stubborn then self.wreck = false end
+        self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + d * 10)
+    end
+    o.DamageHistoryMap = { ForEach = function(_, fn)
+        for k, v in pairs(o.hist) do fn({ get = function() return k end }, { get = function() return v end }) end
+    end }
+    return o
+end
+-- a hit as the game deals it: in full into the map, the health clamped at the floor
+local function hit(o, by, hpDmg)
+    o.hist[by] = (o.hist[by] or 0) + hpDmg
+    o.HealthInternal = math.max(math.floor((o.MinHealth or 0) * 10), o.HealthInternal - hpDmg * 10)
+end
+local UNITS = {
+    ERA_Unit_01_Dep_Air0 = { { "BP_OP1022_f16c_CP", 5000, true }, { "BP_OP1022_f16c_CP", 5000, true } },
+    ERA_Unit_02_Dep_Air0 = { { "BP_OP1030_su33_CP", 5000, true }, { "BP_OP1030_su33_CP", 5000, true } },
+    ERA_Unit_03_Dep_Air0 = { { "BP_OP1009_su34_CP", 5000, true } },
+    ERA_Unit_04_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
+    ERA_Unit_05_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
+    ERA_Unit_06_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
+}
+local world, pendingPlanes = {}, {}
+local function up(o) return not o.gone and (o.wreck or o.HealthInternal > 0) end
+function SV_Spawn(unit)
+    for _, o in ipairs(world[unit] or {}) do if up(o) then return -3 end end
+    world[unit] = {}
+    for i, d in ipairs(UNITS[unit] or {}) do
+        local o = obj(d[1], d[2], d[3])
+        world[unit][i] = o
+        for _, fn in ipairs(notify["/Script/Live.LiveAIGameObject"] or {}) do fn(o) end
+        if o.plane then pendingPlanes[#pendingPlanes + 1] = { o = o, unit = spawningUnit, k = i - 1 } end
+    end
+    return #world[unit]
+end
+function SV_UnitAlive(unit)
+    if not world[unit] then return -7 end
+    local n = 0
+    for _, o in ipairs(world[unit]) do if up(o) then n = n + 1 end end
+    return n
+end
+function SV_Recycle(unit, force) recycled[#recycled + 1] = unit .. "/" .. tostring(force); world[unit] = nil; return 1 end
+
+local downs = {}
+DOWN = { reset = function() end, me = function() return false end, onJoiner = function(f) downs[#downs + 1] = table.concat(f, "|") end,
+         syncTo = function() end }
+STATS = { hostReset = function() end, roundEnd = function() end, roundStart = function() end }
+function newRunHere() end
+
+dofile(MOD .. "/Scripts/sv_config.lua")
+local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
+assert(load(src, "=sv_coop.lua"))()
+local M = _G.M
+CFG.coop.enabled = true
+local function tick(dt)
+    clock = clock + (dt or 0.25)
+    local p = pendingPlanes
+    pendingPlanes = {}
+    for _, e in ipairs(p) do logPlane(e.o, e.unit, e.k) end
+    COOP.tick(0)
+    if COOP.client() then roundsTick(clock) end
+end
+local function run(s, dt) local t = 0; while t < s do tick(dt or 0.25); t = t + (dt or 0.25) end end
+local function msgs(kind, from)
+    local t = {}
+    for i = from or 1, #sent do if sent[i]:match("^%-?%d+>" .. kind .. "|") then t[#t + 1] = sent[i] end end
+    return t
+end
+local pawn = { addr = 0x9, HealthInternal = 1000, name = "pawn" }
+function pawn:GetAddress() return self.addr end
+
+if ROLE == "host" then
+    menu = 16 + 3; tick()
+    check(COOP.host(), "host: hosting")
+    D = { round = 3, state = "fight", now = clock }
+    survivalPC = { Pawn = pawn }
+    tick()
+    local U1, U2 = "ERA_Unit_01_Dep_Air0", "ERA_Unit_02_Dep_Air0"
+    spawningUnit = U1; SV_Spawn(U1); spawningUnit = nil
+    spawningUnit = U2; SV_Spawn(U2); spawningUnit = nil
+    run(1.5)
+    local ids = {}
+    for _, m in ipairs(msgs("bd")) do
+        local u, ord, id = m:match("bd|([%w_]+)|%d+|(%d+)|(%d+)")
+        ids[u .. "#" .. ord] = tonumber(id)
+    end
+    local e1, e2, e3, e4 = world[U1][1], world[U1][2], world[U2][1], world[U2][2]
+    local i1, i2, i3, i4 = ids[U1 .. "#1"], ids[U1 .. "#2"], ids[U2 .. "#1"], ids[U2 .. "#2"]
+    check(i1 and i2 and i3 and i4, "host: four planes linked")
+
+    print("host: C1, the kill's player named in its dn")
+    local aegis = obj("BP_VE002_aegs_mk41", 9000)
+    inbox[#inbox + 1] = "1|ht|" .. i1 .. "|300.0"              -- (player 2's hits: 300 of its 500)
+    tick()
+    hit(e1, pawn, 150); hit(e1, aegis, 50)                     -- (yours 150, the ships' 50: it's down)
+    local s0 = #sent
+    tick()
+    check(table.concat(msgs("dn", s0 + 1), " ") == "-1>dn|" .. i1 .. "||1", "host: a joiner's kill (300 of its damage, yours 150): \"dn|"
+          .. i1 .. "||1\" (" .. table.concat(msgs("dn", s0 + 1), " ") .. ")")
+    hit(e2, pawn, 600); hit(e2, aegis, 100)
+    s0 = #sent; tick()
+    check(table.concat(msgs("dn", s0 + 1), " ") == "-1>dn|" .. i2 .. "||0", "host: your own kill: \"dn|" .. i2 .. "||0\"")
+    hit(e3, aegis, 900)
+    s0 = #sent; tick()
+    check(table.concat(msgs("dn", s0 + 1), " ") == "-1>dn|" .. i3 .. "||s", "host: the allied ships' kill: \"dn|" .. i3 .. "||s\"")
+    e4.gone = true
+    s0 = #sent; tick()
+    check(table.concat(msgs("dn", s0 + 1), " ") == "-1>dn|" .. i4 .. "||", "host: one gone (not shot down): no player named")
+    local p1, p2, p3, p4 = { addr = e1.addr, obj = e1 }, { addr = e2.addr, obj = e2 }, { addr = e3.addr, obj = e3 }, { addr = e4.addr, obj = e4 }
+    check(KILL.by(p1) == "wingmate" and p1.killer == 1 and KILL.by(p2) == "you" and p2.killer == 0 and KILL.by(p3) == "ships"
+          and KILL.by(p4) == "raw", "host: KILL.by goes by the player named: player 2's a teammate's (p.killer 1), yours, the ships', the raw rule for one gone")
+    local t, nt = COOP.killTally(), 0
+    for _ in pairs(t) do nt = nt + 1 end
+    check(t[1] and t[1].air == 1 and t[0] and t[0].air == 1 and nt == 2,
+          "host: the run's tally: one each for player 1 and 2, none for the ships' or the gone one")
+    local rep = COOP.syncReport()
+    check(has(rep, "the run's kills by player: player 1 1, player 2 1"), "host: the sync report's line: " .. rep)
+    -- the share: min(team_x, 1 / (players - 1))
+    local function share(n) M.roster = {}; for s = 0, n - 1 do M.roster[s] = { name = "p" .. s } end; return COOP.teamShare() end
+    check(share(2) == 0.5 and share(3) == 0.5 and math.abs(share(4) - 1 / 3) < 1e-9 and share(5) == 0.25 and share(6) == 0.2,
+          "host: a teammate's kill pays 0.5 with 2 or 3 players, 0.33 with 4, 0.25 with 5, 0.2 with 6")
+    CFG.credits.team_x = 0.3
+    check(share(3) == 0.3 and share(2) == 0.3, "host: ... at most [zollars] team_x")
+    CFG.credits.team_x = 0.5
+
+    print("host: A9, the run-over for a player who links after it")
+    s0 = #sent
+    COOP.msg(nil, "ro", 7)
+    check(table.concat(msgs("ro", s0 + 1), " ") == "-1>ro|7" and M.ro and M.ro.round == 7, "host: the run-over sent and kept")
+    local from = #logs + 1
+    s0 = #sent
+    inbox[#inbox + 1] = "1|jn"
+    tick()
+    local pic = {}
+    for i = s0 + 1, #sent do if sent[i]:match("^1>") then pic[#pic + 1] = sent[i] end end
+    check(pic[#pic] == "1>ro|7" or has(table.concat(pic, " "), "1>ro|7"), "host: the picture for a player who asked after it carries \"ro|7\"")
+    check(has(line("coop: player 2 linked after the run-over (round 7", from), "sent it again (ro)"), "host: ... logged")
+    D = { round = 1, state = "wait", now = clock }
+    tick()
+    check(M.ro == nil and next(COOP.killTally()) == nil, "host: a new level: the run-over and the tally forgotten")
+    s0 = #sent
+    inbox[#inbox + 1] = "1|jn"
+    tick()
+    local any = false
+    for i = s0 + 1, #sent do if sent[i]:match("^1>ro|") then any = true end end
+    check(not any, "host: ... the next picture has no run-over")
+else
+    menu = 16 + 4; tick()
+    check(COOP.client(), "join: joined")
+    COOP.slot = 1
+    D = { round = 5, state = "fight", now = clock }
+    survivalPC = { Pawn = pawn }
+    tick(); run(3.5)
+    M.jnAt, M.resyncAt = nil, 0
+    local U1, U2 = "ERA_Unit_01_Dep_Air0", "ERA_Unit_02_Dep_Air0"
+    local from = #logs + 1
+    for _, m in ipairs({ "sp|" .. U1 .. "|-|-|-1|1", "bd|" .. U1 .. "|1|1|11", "bd|" .. U1 .. "|1|2|12",
+                         "sp|" .. U2 .. "|-|-|-1|2", "bd|" .. U2 .. "|2|1|21", "bd|" .. U2 .. "|2|2|22" }) do
+        inbox[#inbox + 1] = "0|" .. m
+    end
+    run(1)
+    local a1, a2, b1, b2 = world[U1][1], world[U1][2], world[U2][1], world[U2][2]
+    print("join: A1, the floor")
+    check(a1.MinHealth == 1.0 and b2.MinHealth == 1.0 and M.copies[11] and M.copies[22],
+          "join: every copy held at 1 HP: the MinHealth field written (0.73.76's SetMinHealth(0.1) kept 0)")
+    check(has(line("coop: copies held at 1.0 HP until the host's kill (the field written; MinHealth reads back 1.0)", from), "1.0"),
+          "join: ... logged once: " .. tostring(line("copies held at", from)))
+    -- the host's allied ship's copy here takes a1 to the floor: nothing sent, a1 back up
+    local ship = obj("BP_VE002_aegs_mk41", 50000)
+    M.copies[90] = { obj = ship, exp = 50000, addr = ship.addr, ally = true, hp = 50000 }
+    local s0 = #sent
+    hit(a1, ship, 600)
+    check(a1.HealthInternal == 10, "join: (the ships' copy's 600 on a 500 HP copy: it stops at 1 HP)")
+    tick()
+    check(#msgs("ht", s0 + 1) == 0 and a1.HealthInternal == 5000 and not M.copies[11].floorAt,
+          "join: taken to the floor by the host's ally's copy here: nothing sent, put back up to the host's 500 HP")
+    -- your own missile: 800 on a 500 HP copy
+    from = #logs + 1
+    hit(a2, pawn, 800)
+    s0 = #sent; tick()
+    check(table.concat(msgs("ht", s0 + 1), " ") == "-1>ht|12|800.0", "join: your 800 at the floor sent whole (not 499.0): "
+          .. table.concat(msgs("ht", s0 + 1), " "))
+    check(a2.HealthInternal == 10 and M.copies[12].floorAt ~= nil, "join: ... and the copy waits at 1 HP for the host's kill")
+    check(line("coop: your hits read from the copies' damage maps", from) ~= nil, "join: your plane seen in a copy's map: logged")
+    -- the host's kill, 0.3 s on: down here, its player named
+    tick(0.3)
+    inbox[#inbox + 1] = "0|dn|12||1"
+    tick()
+    check(a2.HealthInternal <= 0 and M.copies[12] == nil and M.killer[a2.addr] and M.killer[a2.addr].code == "1",
+          "join: the host's dn|12||1: down here, the floor off first, its player kept")
+    local pa2 = { addr = a2.addr, obj = a2 }
+    check(KILL.by(pa2) == "you" and pa2.killer == 1 and pa2.hostNamed == true, "join: KILL.by: your kill (player 2 named)")
+    -- a crash into the floor, now your plane is known in the maps: nothing sent, back up
+    s0 = #sent
+    b1.HealthInternal = 10
+    tick()
+    check(#msgs("ht", s0 + 1) == 0 and b1.HealthInternal == 5000, "join: a copy at the floor with nothing of yours (a crash): nothing sent, back up")
+    -- the host says less than the floor: your hit only raises it to the floor; found in the map
+    inbox[#inbox + 1] = "0|hp|22:5"
+    tick()
+    check(b2.HealthInternal == 5, "join: (the host's hp 5: below the floor here)")
+    hit(b2, pawn, 3)
+    check(b2.HealthInternal == 10, "join: (your 3 on it: the clamp raises it to the floor)")
+    s0 = #sent; tick()
+    check(table.concat(msgs("ht", s0 + 1), " ") == "-1>ht|22|3.0" and M.copies[22].floorAt ~= nil,
+          "join: ... your hit found in its map and sent (" .. table.concat(msgs("ht", s0 + 1), " ") .. ")")
+    s0 = #sent; tick()
+    check(#msgs("ht", s0 + 1) == 0, "join: ... once")
+    inbox[#inbox + 1] = "0|hp|22:2000"
+    tick()
+    check(b2.HealthInternal == 2000 and M.copies[22].floorAt == nil, "join: the host's hp 2000 (it had more than you sent): off the floor")
+
+    print("join: A2, the host's hp never onto a copy down here")
+    b1.HealthInternal = 0                                      -- (down here: the floor didn't hold)
+    inbox[#inbox + 1] = "0|hp|21:3000"
+    tick()
+    check(b1.HealthInternal == 0, "join: hp|21:3000 onto a copy at 0 here: not written (0.73.76: the wreck back up, an invisible enemy)")
+
+    print("join: C1, the host's player named on each kill")
+    inbox[#inbox + 1] = "0|dn|11||0"
+    tick()
+    local pa1 = { addr = a1.addr, obj = a1 }
+    check(KILL.by(pa1) == "wingmate" and pa1.killer == 0, "join: dn|11||0: the host's kill, a teammate's here (p.killer 0)")
+    inbox[#inbox + 1] = "0|dn|22||s"
+    tick()
+    check(KILL.by({ addr = b2.addr, obj = b2 }) == "ships", "join: dn|22||s: the allied ships' kill")
+    inbox[#inbox + 1] = "0|dn|21"
+    tick()
+    check(KILL.by({ addr = b1.addr, obj = b1 }) == "raw", "join: a dn with no player (an older host's): the raw rule, as before")
+
+    print("join: A3, a refused spawn's wrecks, then SV_Recycle")
+    local U3, U4, U5, U6 = "ERA_Unit_03_Dep_Air0", "ERA_Unit_04_Dep_Air0", "ERA_Unit_05_Dep_Air0", "ERA_Unit_06_Dep_Air0"
+    local w3 = obj("BP_OP1009_su34_CP", 0, true); w3.wreck = true
+    world[U3] = { w3 }
+    planes = { { obj = w3, unit = U3, down = true } }
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|sp|" .. U3 .. "|-|-|-1|30"
+    run(3)
+    check(world[U3][1] ~= w3 and has(line("coop: " .. U3 .. " is up here (1 alive; no longer tracked here)", from), "and 1 wrecks of it still in the world"),
+          "join: a wreck it still counts (nothing tracked): taken down again, the game's death check lets it go")
+    check(has(line("coop: " .. U3 .. " unstuck after 2 tries", from), "(0 up, 1 wrecks)"), "join: ... and spawned: " .. tostring(line("unstuck", from)))
+    local w4 = obj("BP_OP1027_m21b_CP", 0, true); w4.wreck, w4.stubborn = true, true
+    world[U4] = { w4 }
+    planes[#planes + 1] = { obj = w4, unit = U4, down = true }
+    inbox[#inbox + 1] = "0|sp|" .. U4 .. "|-|-|-1|31"
+    run(10)
+    check(recycled[1] == U4 .. "/1" and world[U4] and world[U4][1] ~= w4 and has(line("coop: " .. U4 .. " unstuck: still 1 alive here after 6 tries", from), "SV_Recycle: recycled"),
+          "join: one the game won't let go: SV_Recycle(unit, 1) after 6 tries, then spawned (" .. tostring(line(U4 .. " unstuck", from)) .. ")")
+    CFG.coop.force_recycle = false
+    local w5 = obj("BP_OP1027_m21b_CP", 0, true); w5.wreck, w5.stubborn = true, true
+    world[U5] = { w5 }
+    inbox[#inbox + 1] = "0|sp|" .. U5 .. "|-|-|-1|32"
+    run(10)
+    check(#recycled == 1 and world[U5][1] == w5 and has(line("coop: " .. U5 .. "'s last copies are still up; spawning anyway", from), "force_recycle off")
+          and has(line("coop: the host's " .. U5 .. " not spawned here", from), "its last flight is still up"),
+          "join: [coop] force_recycle = false: no recycle, refused as before")
+    CFG.coop.force_recycle = true
+    local keep = SV_Recycle
+    SV_Recycle = nil
+    local w6 = obj("BP_OP1027_m21b_CP", 0, true); w6.wreck, w6.stubborn = true, true
+    world[U6] = { w6 }
+    inbox[#inbox + 1] = "0|sp|" .. U6 .. "|-|-|-1|33"
+    run(10)
+    check(has(line("coop: " .. U6 .. "'s last copies are still up; spawning anyway", from), "no SV_Recycle in this runtime"),
+          "join: an older runtime (no SV_Recycle): as before, logged")
+    SV_Recycle = keep
+    -- a wreck kept in the units' objects for the take-down, then dropped
+    local reg = M.objsOf[U1]
+    local kept = reg and reg[a2.addr] ~= nil
+    run(125, 1)
+    check(kept and (M.objsOf[U1] == nil or M.objsOf[U1][a2.addr] == nil), "join: a wreck kept in the unit's objects (for a refused spawn's take-down), dropped 120 s on")
+
+    print("join: A6, the sync report")
+    local rep = COOP.syncReport()
+    check(has(rep, "the floor: 0 copies there now") and has(rep, "2 went there") and has(rep, "2 put back up (not your kill)")
+          and has(rep, "2 flights refused here") and has(rep, "1 unstuck (1 by SV_Recycle)") and has(rep, "hp for 1 dead copies skipped"),
+          "join: " .. rep)
+    check(has(rep, "their longest wait 0.") or has(rep, "their longest wait 1."), "join: ... the longest wait at the floor (the host's dn 0.55 s on)")
+
+    print("join: A9, the host's run-over while the level loads")
+    local d0 = #downs
+    local keepD = D
+    D = nil
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|ro|9"
+    tick()
+    check(#downs == d0 + 1 and downs[#downs] == "ro|9" and has(line("coop: the host's run is over (round 9); this level is still loading", from), "comes again"),
+          "join: ro with no level yet: handed to sv_down.lua (which needs the level) and logged: it comes with the picture")
+    D = keepD
+end
+print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
+if fails > 0 then for i = math.max(1, #logs - 30), #logs do print("    log: " .. logs[i]) end end
+os.exit(fails == 0 and 0 or 1)

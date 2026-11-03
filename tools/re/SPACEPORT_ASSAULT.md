@@ -228,3 +228,54 @@ no ships); add `spaceport` to the rotation once a test has run it.
   flights (M aircraft) taken off: ...`; the round ends, its break, then the retake. Each missile boat patrols its side of
   its lane, 4 km to 9 km ahead of its Wasp and back (SV_Path_SpBoat<K>Out / Back on a Mission 22 ship lane's shape, the
   STORE ships' path records at 90 km/h, PathFinish to the other leg).
+
+## 0.73.77: the plan's Workstream I (S1-S13 of testing/2026-11-03/IMPROVEMENTS.md; not yet run in game)
+Lua only (sv_spaceport.lua, small hooks in sv_rounds.lua startRound, sv_coop.lua, sv_hud.lua, sv_amphib.lua); no build
+data. tools/checks/spaceport_test.sh covers each piece.
+- I1 (S1, S2, S5; the economy's C2): every object of a ship as SV_Spawn makes it (SPORT.shipObjs); its hull is the one
+  that isn't a turret (class mk15 / mk41 / mk45 / artillery / _sam / aagun; a Wasp's only one). Sunk once, when its hull
+  is gone or at 0 (or its whole unit is down): its price once, WASP / CARRIER SUNK once, its turrets still up finished
+  off as ladonPartsDown does; afloat only while its hull lives (the round, the retake, the deck). A turret shot off while
+  the hull floats pays pay.turret (150). A hull not told in 5 looks: that ship counted by its unit as before. At the
+  end with every ship sunk, parts still up go with RE_SV_SpFleetRemove. Lines: `special: spaceport fleet: N of its M
+  ships counted by their hull`, `... <kind> <unit> sunk (its hull down; +P once; N of its turrets still up finished
+  off[, K NOT (still up)])`, `... lost N turret(s) (+P), its hull still up`, `special: the spaceport held: N of the
+  fleet's units still had parts up (...): taken off`.
+- I2 (S3, S9): the craft's pay is `landing craft sunk (...)` (the amphibious special's `landing craft sunk (lane X)`,
+  `troop vehicle destroyed (...)`), no longer matching sv_coop.lua's " down (" filter, so the joiners get them ("cr").
+  The escape penalty goes through SPORT.debit: `credits: -N (rocket A escaped), now M` on the host, "db" to every joiner
+  (`coop: a penalty of N (...) sent to every joiner`), each taking what it has: `credits: -N (rocket A escaped, the
+  host's round), now M`.
+- I3 (S4): SPORT.ready no longer refuses with a ship up; SPORT.spawn takes leftovers off (`special: N ships of the
+  spaceport's fleet were still up from before (...): taken off (RE_SV_SpFleetRemove 1); the new fleet waits up to 8 s`),
+  a leftover still up 8 s on is counted in the new fleet. A capture with the retake off takes the fleet off at the
+  round's end (`... no retake follows ...`); a retake that was due and didn't come takes it off when the next round is
+  planned (`special: the Spaceport Retake due in round N didn't come (round N is <kind>): ...`).
+- I4 (S6): the flights withdrawn at a capture (D.spWithdrawn) are recycled when the next round is planned
+  (SV_Recycle(unit, 1), the native agent's), else kept out of that round's picks while they read up: `special: the
+  fighters withdrawn at the capture: N down since, N recycled (SV_Recycle)...; N still up kept out of round N's picks`.
+- I5 (S7, S8): each rocket's object told by its pad (`special: the rockets' objects: 2 found (A N m from its pad, B ...);
+  each one's height and kill read from it`), else counted by the unit as before. An escape only from escape_min_m
+  (15 km; with no height read, 50 s after its launch): `special: rocket A escaped (its climb's end at N m, N s after its
+  launch)` / `special: rocket A's climb ended short (at N m, ...): taken off, no penalty`; timeout_s (240) after its
+  launch with no end: `special: rocket A neither shot down nor escaped N s after its launch (...): taken off, no
+  penalty` (hidden, no box). The debris only once the split is seen (stage 1 up from 500 m down, split_wait_s 10 at
+  most; with no debris object to read, the split on before the last kill): `special: the last rocket broke up (its
+  debris seen coming up | its split was on)`, else `special: the last rocket went down without breaking up (...): no
+  debris`. Each debris unit's count from its spawn.
+- I6 (S10): down at the airfield with nobody else flying, the Wasps' next waves and the rockets' launches wait:
+  `special: the spaceport's clocks wait while you're down at the airfield ...` / `... run again (N s held this round)`.
+- I7 (S11, S12): the capture's share is whole (capture_per_troop rounded). The host sends "spx" (`<row>;<pending>`,
+  SPORT.coopCode): a joiner's NEXT row shows the host's Spaceport row (SPORT.clientRow), and the retake due or in play
+  is kept as the joiner's RUN.sport (`coop: the host's Spaceport Retake is due in round N (M ships carried): kept here
+  for a host migration`), so a new host by migration plays it, spawning the carried ships again (`special: the retake's
+  ships spawned again on this game ...`); the host logs `coop: the Spaceport's state sent to the joiners: ...` when the
+  pending part changes.
+- I8 (S13): deck.reserve (4) 2-ships held back for the Ford when the round is planned (SPORT.planRound from
+  startRound): `special: the Ford's deck: N of N 2-ships held back from round N's fighters for it (N launches planned)`;
+  a launch of one says `(held for the deck)`; one shot down is launched again.
+- I9 (the session to play): Ctrl+END until a capture (let the troops in), then the retake (Ctrl+INS forces one alone):
+  one `sunk` line and one pay per ship (an Aegis 2,400 at round 13), CARRIER SUNK once, the hull summary line with 27 of
+  27; on a joiner `credits: +N (landing craft sunk (...) (the host's round))` and the NEXT row in both rounds; land
+  during the assault (solo) and see the clocks line; the rockets' objects line, an escape's height, the split's line;
+  the round after the retake: no `didn't come` or leftovers; a later Spaceport starts (no `no spaceport can come now`).

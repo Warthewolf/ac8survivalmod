@@ -68,9 +68,14 @@ local function obj(cls, hp, plane)
     local o = { name = cls .. "_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. cls .. "_C_" .. nextAddr,
                 addr = nextAddr, HealthInternal = hp, min = 0, plane = plane }
     function o:IsA() return self.plane == true end
-    function o:SetMinHealth(v) self.min = v * 10 end
+    -- (as the game's: SetMinHealth keeps whole points only; every hit is clamped at the MinHealth field, which 0.73.77's
+    -- floor writes: KILLS_HEALTH_DEATH.md 1-2)
+    function o:SetMinHealth(v) self.MinHealth = math.floor(v); self.min = self.MinHealth * 10 end
     -- (as the game's: damage from another player's real plane, role 2, is refused outright: hard rule 53)
-    function o:ModifyHealth(d, causer) if causer and causer.role2 then return 0 end; self.HealthInternal = math.max(self.min, self.HealthInternal + d * 10) end
+    function o:ModifyHealth(d, causer)
+        if causer and causer.role2 then return 0 end
+        self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + d * 10)
+    end
     return o
 end
 local UNITS = {
@@ -267,7 +272,8 @@ else
     local lc = world.SV_Unit_LcacA
     check(lc and #lc == 2, "join: the host's landing craft spawned here")
     check(lc[1].gone or lc[1].HealthInternal <= 0, "join: the craft the host sank is down here too (" .. tostring(lc and lc[1].HealthInternal) .. ")")
-    check(lc[2].min > 0 and lc[2].HealthInternal > 0, "join: the other is held up until the host's goes down")
+    check((lc[2].MinHealth or 0) >= 1 and lc[2].HealthInternal > 0,
+          "join: the other is held up until the host's goes down (at 1 HP: the MinHealth field, 0.73.77)")
     local al = world.SV_Unit_Alicorn
     check(al and al[2].HealthInternal <= 0 and al[5].HealthInternal <= 0, "join: the Alicorn's tanks down as on the host")
     check(al and al[6].HealthInternal > 0, "join: its core still up")

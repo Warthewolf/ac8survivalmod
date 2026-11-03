@@ -8,7 +8,12 @@
 --     (solo), texts, key bindings and the camera;
 --   - a co-op run: the room's rules count (the host's setup, [coop]'s rules), each player's key and camera don't;
 --   - a test key pressed in a run, and at the main menu (the next run's); a head start; SP ONLINE's START RUN label;
---   - the Worker's answers: taken, refused (unqueued); no build hash from the runtime.
+--   - the Worker's answers: taken, refused (unqueued); no build hash from the runtime;
+--   - (0.73.77, plan H2 / H5) a co-op run: the host's one record with its squad (names sanitized and unique ignoring
+--     case, the host first as the run's pilot, the kills adding up, one who left with their kills, a part not counted),
+--     a joiner keeping the host's word and sending nothing, a host by migration sending it under the same run id (and
+--     not one its first host sent), a squad trimmed to 24, a co-op host nobody joined and a solo run as before. Every
+--     body is written for the Worker's checkRun (leaderboard_bodies.mjs).
 -- override / override_error: a Scripts/survival_config.lua (returning a table / failing) found by require: edited.
 local MOD, WORK, MODE = arg[1], arg[2], arg[3] or "plain"
 local fails = 0
@@ -71,9 +76,14 @@ function SV_CoopInfo() return "open=1;state=searching;peers=" end
 Key = { F8 = 119, F9 = 120 }
 STATS = { runEnd = function() end }                             -- (sv_stats.lua, not loaded here)
 
+local tallyHook = 0
 local function run(name, chunk)
     local src = readAll(MOD .. "/Scripts/" .. name)
-    if name == "sv_coop.lua" then src = src:gsub("\nlocal M = {", "\nM = {", 1) end
+    if name == "sv_coop.lua" then
+        src = src:gsub("\nlocal M = {", "\nM = {", 1)
+        -- ((0.73.77) the host's kill named in its "dn" counted for the squad: economy C1's tallyKill, called by hostTick)
+        src, tallyHook = src:gsub("\nlocal function tallyKill%(", "\nfunction tallyKill(", 1)
+    end
     assert(load(src, chunk or ("=" .. name)))()
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
@@ -256,6 +266,195 @@ newRun(); LB.finish("died")
 check(#posts == 1 and not posts[1]:find('"build"', 1, true) and logged("no build hash"), "no build hash from the runtime: sent without one, logged")
 results[1] = 200; LB.poll()
 buildHash = BUILD
+
+-- ---------------------------------------------------------------------------------------- a co-op run's squad (0.73.77)
+-- (plan H2: one team run per co-op run, sent by the host, LB.coopRecord; each joiner's copy from the host's "lb"
+-- messages, LB.coopMsg; a host by migration sends it, LB.coopTakeover.) Every body sent is also written for the Worker's
+-- own checkRun (leaderboard_bodies.mjs, from leaderboard_test.sh when node is there).
+local bodies = {}
+local function keep(want, what, body) bodies[#bodies + 1] = want .. "\t" .. what .. "\t" .. body end
+keep("ok", "a solo run without a build hash", posts[1] or "")
+VERSION = "0.73.77-coop2mp.78"                              -- (a COOP2MP build's, plan H1)
+local wire = {}
+local rawCoopSend, rawPlayers, rawAddrOf = SV_CoopSend, COOP.players, addrOf
+function SV_CoopSend(msg, rel, to) wire[#wire + 1] = { msg = msg, to = to }; return 1 end
+local players = {}
+COOP.players = function() return players end
+addrOf = function(o) return type(o) == "table" and o.addr or nil end      -- (a ground target's: its part check)
+local function fields(s) local t = {}; for x in (s .. "|"):gmatch("([^|]*)|") do t[#t + 1] = x end; return t end
+local function lbWire(skipX)
+    local out = {}
+    for _, w in ipairs(wire) do if w.msg:sub(1, 3) == "lb|" and not (skipX and w.msg:sub(1, 5) == "lb|x|") then out[#out + 1] = w end end
+    return out
+end
+local function coopPart(b) return b:match(',"coop":(%b{})') end
+local function sumIn(part, key) local n = 0; for v in part:gmatch('"' .. key .. '":(%d+)') do n = n + tonumber(v) end; return n end
+local function lastPost() return posts[#posts] or "" end
+local SID = { "76561198000000001", "76561198000000002", "76561198000000003", "76561198000000004" }
+check(tallyHook == 1 and type(tallyKill) == "function", "the test reaches sv_coop.lua's tallyKill (the host's named kills)")
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+CFG.leaderboard.pilot = ""                                  -- (the run's pilot: the Steam name, Naish)
+COOP.open, COOP.role, COOP.slot, M.linkedPeers = true, "host", 0, 3
+M.roster = { [0] = { name = "Naish", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
+             [2] = { name = "\208\146\208\158\208\155\208\154", sid = SID[3], code = "fa36" },   -- (Cyrillic: no Latin letters)
+             [3] = { name = "NAISH", sid = SID[4], code = "adfx02" } }
+players = { { slot = 0, isMe = true }, { slot = 1, inLevel = true }, { slot = 2, inLevel = true }, { slot = 3, inLevel = true } }
+LB.co = nil
+newRun(); RUN.stats.air, RUN.stats.ground = 40, 6           -- (the host's count: every kill its game saw, as solo)
+wire = {}
+LB.poll()
+local co = LB.co
+local n = 0
+for _ in pairs(co and co.squad or {}) do n = n + 1 end
+check(co and co.mine and #co.id == 32 and n == 4, "the host's co-op run: its id and 4 in the squad (" .. n .. ")")
+local hostId = co and co.id or "?"
+local w1 = lbWire()
+check(#w1 >= 2 and w1[1].msg:find("^lb|r|" .. hostId .. "|%d+|40|6|") and w1[2].msg:find("^lb|p|" .. hostId .. "|sid" .. SID[1] .. ",0,40,6,0,f16c,Naish"),
+    "the host tells everyone: lb|r (the run) and lb|p (the players): " .. tostring(w1[2] and w1[2].msg:sub(1, 90)))
+LB.coopMsg(fields("lb|n|" .. hostId .. "|Wolfie"), 1)       -- (player 2's leaderboard name)
+check(logged("player 2 goes on the leaderboard as Wolfie"), "a joiner's leaderboard name taken (lb|n)")
+for _ = 1, 5 do tallyKill({ unit = "SV_Unit_Pool_01" }, { slot = 1 }) end
+local function obj(a, parent)                                -- (a game object as sv_core's valid() reads it)
+    return { addr = a, IsValid = function() return true end, GetAttachParentActor = function() return parent end }
+end
+for i = 1, 2 do tallyKill({ unit = "SV_Unit_Amphib", key = "BP_LCAC#" .. i, obj = obj(900 + i, nil) }, { slot = 2 }) end
+tallyKill({ unit = "SV_Unit_Aegis", key = "BP_mk45#1", obj = obj(950, obj(951, nil)) }, { slot = 2 })   -- (a turret on its hull)
+for _ = 1, 2 do tallyKill({ unit = "SV_Unit_Pool_02" }, { slot = 3 }) end
+tallyKill({ unit = "SV_Unit_Pool_02" }, { slot = 0 })       -- (the host's own: in its count already)
+tallyKill({ unit = "SV_Unit_Pool_02" }, { side = "allies" })  -- (no player's)
+LB.stat("revives", 1, 1); LB.stat("revives", 1, 0)
+check(logged("player 3's kill of ? not counted for them: a part of"), "a part (a turret on a ship) isn't a ground kill for the squad")
+M.roster[3] = nil                                           -- (player 4 leaves: they keep what they did)
+players = { { slot = 0, isMe = true }, { slot = 1, inLevel = true }, { slot = 2, inLevel = true } }
+co.outAt, co.allAt = 0, 0
+LB.poll()
+local migrWire = lbWire(true)                                -- (what a joiner has before the host's run ends)
+LB.finish("died")
+local b = lastPost()
+local cp = coopPart(b) or ""
+check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and b:find('"pilot":"Naish"', 1, true)
+    and b:find('"kills":{"air":40,"ground":6}', 1, true), "the host sends one record: the co-op run's id, its pilot, the squad's kills")
+check(cp == '{"players":4,"squad":[{"pilot":"Naish","aircraft":"f16c","air":33,"ground":4,"revives":1,"host":true},'
+    .. '{"pilot":"Wolfie","aircraft":"su57","air":5,"ground":0,"revives":1},{"pilot":"Pilot 3","aircraft":"fa36","air":0,"ground":2,"revives":0},'
+    .. '{"pilot":"NAISH 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}',
+    "its squad: the host first (the run's kills less the joiners'), a joiner's own name, a non-Latin name as Pilot 3, a name "
+    .. "twice ignoring case as NAISH 2, the one who left with their kills: " .. cp)
+check(sumIn(cp, "air") == 40 and sumIn(cp, "ground") == 6, "the squad's kills add up to the run's exactly")
+check(logged("leaderboard: co-op run " .. hostId:sub(1, 8) .. " over (died): 4 players") and logged("(co-op, 4 players)"),
+    "logged: the squad, and the co-op send")
+local sentX = false
+for _, w in ipairs(wire) do if w.msg == "lb|x|" .. hostId then sentX = true end end
+check(sentX, "everyone told it's sent (lb|x)")
+keep("ok", "the host's co-op run (4 players, one who left)", b)
+keep("squad's kills don't add up to the run's", "the same run with its squad's kills changed", (b:gsub('"air":33', '"air":32', 1)))
+
+-- a joiner: the host's word kept, nothing sent
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+COOP.role, COOP.slot, LB.co = "join", 1, nil
+CFG.leaderboard.pilot = "Wolfie"
+M.roster = { [0] = { name = "Naish", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
+             [2] = { name = "\208\146\208\158\208\155\208\154", sid = SID[3], code = "fa36" } }
+for _, w in ipairs(migrWire) do LB.coopMsg(fields(w.msg)) end
+co = LB.co
+local mn = 0
+for _ in pairs(co and co.squad or {}) do mn = mn + 1 end
+local hostLine = co and co.squad["sid" .. SID[1]]
+check(co and co.id == hostId and not co.mine and mn == 4 and hostLine and hostLine.air == 33 and hostLine.pilot == "Naish"
+    and co.run.air == 40, "a joiner keeps the host's squad (" .. mn .. ") and run (lb|r, lb|p)")
+wire = {}
+LB.poll()
+check(wire[1] and wire[1].msg == "lb|n|" .. hostId .. "|Wolfie" and wire[1].to == 0, "a joiner tells the host its leaderboard name (lb|n)")
+newRun(); LB.finish("died")
+check(#posts == 0 and LB.show.state == "host" and summaryLine(LB.show) == "host" and logged("leaderboard: a co-op run; the host sends it"),
+    "a joiner sends nothing: \"leaderboard: a co-op run; the host sends it\"")
+check(string.format(CFG.hud.text.lb_coop_host) == "CO-OP: THE HOST SENDS THE RUN", "its summary says the host sends it")
+
+-- that joiner takes over by host migration: the same run sent, under the host's run id, the old host in the squad
+LB.coopTakeover()
+COOP.role, COOP.slot, M.linkedPeers = "host", 0, 1
+M.roster = { [0] = { name = "Wolf", sid = SID[2], code = "su57" }, [1] = { name = "\208\146\208\158\208\155\208\154", sid = SID[3], code = "fa36" } }
+players = { { slot = 0, isMe = true }, { slot = 1, inLevel = true } }
+newRun(); RUN.stats.air, RUN.stats.started = 7, os.time() - 300   -- (this game's own view, joined later)
+D.round = 6                                                 -- (migration plays round 7 again: one lower until it starts)
+LB.poll()
+check(LB.co.mine and RUN.stats.air == 40 and RUN.stats.ground == 6 and os.time() - RUN.stats.started >= 890
+    and logged("carried on here (host migration): 4 in its squad, 40 air / 6 ground"), "a host by migration carries the run on (its start, kills)")
+LB.stat("air", 1)                                           -- (a kill counted here: player 2's, now in slot 1)
+tallyKill({ unit = "SV_Unit_Pool_03" }, { slot = 1 })
+LB.finish("died")
+b = lastPost(); cp = coopPart(b) or ""
+check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and b:find('"pilot":"Wolfie"', 1, true)
+    and b:find('"kills":{"air":41,"ground":6}', 1, true), "the host by migration sends it: the first host's run id, its own pilot")
+check(cp == '{"players":4,"squad":[{"pilot":"Wolfie","aircraft":"su57","air":5,"ground":0,"revives":1,"host":true},'
+    .. '{"pilot":"Naish","aircraft":"f16c","air":33,"ground":4,"revives":1},{"pilot":"Pilot 3","aircraft":"fa36","air":1,"ground":2,"revives":0},'
+    .. '{"pilot":"NAISH 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}', "its squad: the new host first, the old one with what they did: " .. cp)
+check(b:match('"time_s":(%d+)') and tonumber(b:match('"time_s":(%d+)')) >= 890, "its time from the first host's start")
+check(b:find('"round":7,', 1, true), "its round the first host's (7), though this game's is 6 till the round starts again")
+keep("ok", "a host by migration's co-op run", b)
+
+-- a run its first host sent already: a host by migration doesn't send it again
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+COOP.role, COOP.slot, LB.co = "join", 1, nil
+M.roster = { [0] = { name = "Naish", sid = SID[1] }, [1] = { name = "Wolf", sid = SID[2] } }
+for _, w in ipairs(migrWire) do LB.coopMsg(fields(w.msg)) end
+LB.coopMsg(fields("lb|x|" .. hostId))
+LB.coopTakeover()
+COOP.role, COOP.slot = "host", 0
+M.roster = { [0] = { name = "Wolf", sid = SID[2] } }
+newRun(); LB.poll(); LB.finish("died")
+check(#posts == 0 and LB.show.state == "host" and logged("its first host sent already (before host migration); not sent again"),
+    "a host by migration of a run its first host sent: not sent again")
+
+-- a squad of more than 24 (players came and went): the 24 who did the most, the kills still the run's
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+LB.co, M.roster = nil, { [0] = { name = "Naish", sid = SID[1], code = "f16c" } }
+CFG.leaderboard.pilot = ""
+newRun(); RUN.stats.air = 1000
+for i = 1, 30 do
+    local s = (i - 1) % 23 + 1
+    M.roster[s] = { name = "P" .. i, sid = string.format("765611980%08d", 1000 + i) }
+    players = { { slot = 0, isMe = true }, { slot = s, inLevel = true } }
+    LB.poll()
+    LB.coopTally(s, "air", i)
+end
+LB.finish("died")
+b = lastPost(); cp = coopPart(b) or ""
+local np = 0
+for _ in cp:gmatch('"pilot":') do np = np + 1 end
+check(cp:find('^{"players":24,') and np == 24 and sumIn(cp, "air") == 1000 and b:find('"kills":{"air":1000,', 1, true)
+    and cp:find('"pilot":"Naish","aircraft":"f16c","air":563,', 1, true) and not cp:find('"pilot":"P7"', 1, true),
+    "31 who flew: 24 sent (the 7 who did least dropped, their kills the host's), the sums the run's")
+keep("ok", "a co-op run trimmed to 24", b)
+
+-- the run's pilot cut to 24 ending in a space (LB.pilot's), a joiner's name with symbols
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+LB.co, CFG.leaderboard.pilot = nil, "Abcdefghijklmnopqrstuvw xyz"
+M.roster = { [0] = { name = "Naish", sid = SID[1] }, [1] = { name = "D@rk|Ace!", sid = SID[2] } }
+players = { { slot = 1, inLevel = true } }                  -- (and the host's own plane not read: its line all the same)
+newRun(); LB.poll(); LB.finish("restart")
+b = lastPost(); cp = coopPart(b) or ""
+check(b:find('"pilot":"Abcdefghijklmnopqrstuvw ","difficulty"', 1, true) and cp:find('[{"pilot":"Abcdefghijklmnopqrstuvw ","air"', 1, true)
+    and cp:find('{"pilot":"DrkAce","air":0', 1, true), "the host's line is the run's pilot exactly; a joiner's name sanitized: " .. cp)
+keep("ok", "a co-op run with a 24-letter pilot and a sanitized name", b)
+
+-- the host alone (nobody else flew): a solo record; co-op off: unchanged
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+LB.co, CFG.leaderboard.pilot = nil, ""
+M.roster = { [0] = { name = "Naish", sid = SID[1] } }
+players = { { slot = 0, isMe = true } }
+newRun(); LB.poll(); LB.finish("died")
+b = lastPost()
+check(#posts == 1 and not b:find('"coop"', 1, true) and not b:find(LB.co.id, 1, true) and logged("nobody else flew in it; it goes as a solo run"),
+    "a co-op host nobody joined: sent as a solo run")
+keep("ok", "a co-op host's run nobody else flew in", b)
+COOP.open, COOP.role, COOP.slot, M.linkedPeers, LB.co = false, nil, nil, 0, nil
+newRun(); LB.finish("died")
+b = lastPost()
+check(#posts == 2 and not b:find('"coop"', 1, true) and b:find('"pilot":"Naish"', 1, true) and b:find('"kills":{"air":40,"ground":6}', 1, true),
+    "a solo run: as before, no co-op block")
+keep("ok", "a solo run after co-op", b)
+SV_CoopSend, COOP.players, addrOf = rawCoopSend, rawPlayers, rawAddrOf
+writeAll(WORK .. "/bodies.txt", table.concat(bodies, "\n") .. "\n")
 
 print("leaderboard: " .. (fails > 0 and (fails .. " FAILED") or "all passed"))
 os.exit(fails > 0 and 1 or 0)

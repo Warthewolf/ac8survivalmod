@@ -151,10 +151,240 @@ function SPC.shuttlePadBack()
 end
 end
 
+---------------------------------------------------------------------------------------------------- the specials' clean-up
+-- (0.73.77, plan D4; IMPROVEMENTS.md "Specials and variety" 1: "one clean-up for every special") When a special ends,
+-- everything it spawned is taken down. What it left behind killed players rounds later in the 0.73.76 runs: the Ladons'
+-- VLS launchers hit mobi118 in rounds 39-46 (Ladons in round 10), VALKA's sure-kill railgun part (RailGunCK) dukka in
+-- rounds 26 and 28 (VALKA in round 16), the Alicorn's VLS and AA guns two players in rounds 43 and 46 (round 42); and
+-- VALKA's opener railgun SV_Unit_ValkaEml read "1 of 1 alive" to the end of every run: RE_SV_ValkaEmlRemove's
+-- LiveDestroyUnitExecution kills through damage, which it never takes (setGone made it invincible, SPC.V.mark kept its
+-- target box on: the white square left on the minimap after her fight). So every object SV_Spawn makes for a special's
+-- unit is recorded (spawningUnit, as sv_ladon.lua's LADON_PARTS), and at its end each one still up is finished off the
+-- way ladonPartsDown does (mortal, MinHealth 0, ModifyHealth / ApplyDamage with no attacker: no pay; a plane of it off
+-- the round's list first), else switched off (SetActive false, no box / lock / targeting, hidden, no collision, no tick).
+-- CLEAN_CHECK_S later SV_UnitAlive is asked again: a unit still up is taken off the native list (SV_Recycle(unit, 1),
+-- when the runtime has it) and logged. The Alicorn's parked pools (put away for good: sv_alicorn.lua) are left to that.
+-- A co-op joiner's copies (SPC.clientClean, below): switched off only, never killed there (a copy's kill is the host's),
+-- once the host's special is over ("rnd" field 11, sv_coop.lua: D.hostSpecial).
+do
+local CLEAN_AFTER_S, CLEAN_CHECK_S, CLIENT_AFTER_S, MAX_OBJS = 3, 2, 5, 400
+local POOLED = { "_uavm_ON_", "_rflm_ON_", "_f18f_ON_", "_uavr_" }       -- (the Alicorn's parked pools, sv_alicorn.lua)
+local ALICORN_UNIT, LADON_UNITS = "SV_Unit_Alicorn", { "SV_Unit_LadonKot", "SV_Unit_LadonMishka" }
+local function str(v) return type(v) == "string" and v ~= "" and v or nil end
+-- a special kind's units (each a name its round spawns)
+function SPC.cleanUnitsOf(kind)
+    local c = CFG.specials or {}
+    local function u(t, k) return type(t) == "table" and str(t[k]) or nil end
+    local out = {}
+    local function add(x) if x then out[#out + 1] = x end end
+    if kind == "valka" then add(u(c.valka, "unit")); add(u(c.valka, "eml_unit"))
+    elseif kind == "anomaly" then add(u(c.anomaly, "unit"))
+    elseif kind == "glitch" then add(u(c.glitch, "unit"))
+    elseif kind == "ladon" then for _, x in ipairs(LADON_UNITS) do add(x) end
+    elseif kind == "alicorn" then add(ALICORN_UNIT) end
+    return out
+end
+-- what a unit is called in the log
+function SPC.cleanLabel(unit)
+    local c = CFG.specials or {}
+    if type(c.valka) == "table" and unit == c.valka.eml_unit then return tostring(c.valka.name or "VALKA") .. "'s opener railgun" end
+    for _, k in ipairs({ "valka", "anomaly", "glitch" }) do
+        if type(c[k]) == "table" and unit == c[k].unit then return tostring(c[k].name or k) .. "'s unit (" .. unit .. ")" end
+    end
+    local lk = unit:match("^SV_Unit_Ladon(%a+)$")
+    if lk then return "Ladon " .. tostring((type(c.ladon) == "table" and c.ladon.names or {})[lk] or lk:upper()) .. "'s unit (" .. unit .. ")" end
+    if unit == ALICORN_UNIT then return "the Alicorn's unit (" .. unit .. ")" end
+    return unit
+end
+SPC.CLEAN_OBJ, SPC.cleanQ = {}, {}
+-- (the teardown gate's drop, sv_core.lua levelDrop: the objects kept here forgotten with the level, none touched)
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["specials' clean-up"] = function() SPC.CLEAN_OBJ, SPC.cleanQ, SPC.cl = {}, {}, { up = {}, due = {} } end
+end
+local watched = {}
+for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn" }) do
+    local okU, list = pcall(SPC.cleanUnitsOf, k)
+    for _, x in ipairs(okU and list or {}) do watched[x] = true end
+end
+-- every object made while SV_Spawn spawns a special's unit (the host's, a joiner's copies: sv_coop.lua sets spawningUnit
+-- too); a new spawn of the unit (more than 2 s after the last object) starts its list again
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if not (u and watched[u]) then return end
+    local l = SPC.CLEAN_OBJ[u]
+    if not l or os.clock() - (l.at or 0) > 2 then l = { at = os.clock() }; SPC.CLEAN_OBJ[u] = l end
+    l.at = os.clock()
+    if #l < MAX_OBJS then l[#l + 1] = o end
+end)
+local function pooled(o)
+    local n = nameOf(o)
+    for _, p in ipairs(POOLED) do if n:find(p, 1, true) then return true end end
+    return false
+end
+local function healthOf(o)
+    local ok, h = pcall(function() return o.HealthInternal end)
+    return (ok and type(h) == "number") and h or nil
+end
+-- one object of a finished special: nil when it isn't up (gone, or at 0 health), "killed" (finished off), or "off"
+-- (switched off). mortal: true kills anything (the host's or solo), "parts" all but planes (a joiner: a copy's plane is
+-- the host's to kill, its parts are this game's own, as ladonPartsDown's), false nothing
+local planeCls
+local function takeDown(o, mortal)
+    if not liveObj(o) then return nil end
+    local h = healthOf(o)
+    if h ~= nil and h <= 0 then return nil end
+    local a = addrOf(o)
+    local inList = false
+    for _, p in ipairs(planes or {}) do                -- (a plane of it: off the round's list first, no pay or stats)
+        if not p.down and a and p.addr == a then p.down, p.cleaned, inList = true, true, true end
+    end
+    if mortal == "parts" then
+        planeCls = planeCls or StaticFindObject("/Script/Live.LiveAIPlane")
+        local okP, isPlane = pcall(function() return valid(planeCls) and o:IsA(planeCls) end)
+        if inList or not okP or isPlane then mortal = false end
+    end
+    if mortal and h then
+        pcall(function() o:SetIsInvincible(false) end)
+        pcall(function() o.bIsInvincible = false end)
+        pcall(function() o.MinHealth = 0.0 end)         -- (the field: SetMinHealth keeps whole points only)
+        pcall(function() o:SetMinHealth(0.0) end)
+        pcall(function() o:ModifyHealth(-(h / 10 + 1000), nil, true) end)
+        local h1 = healthOf(o)
+        if h1 and h1 > 0 then
+            local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+            if valid(gs) then pcall(function() gs:ApplyDamage(o, 100000000.0, nil, nil, nil) end) end
+            h1 = healthOf(o)
+        end
+        if h1 and h1 <= 0 then return "killed" end
+    end
+    for f, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }) do
+        pcall(function() o[f] = v end)
+    end
+    pcall(function() o:SetActive(false, false, false) end)   -- (LiveGameObject's own: what LiveSetActiveGameObject calls)
+    pcall(function() o:SetActorHiddenInGame(true) end)
+    pcall(function() o:SetActorEnableCollision(false) end)
+    pcall(function() o:SetActorTickEnabled(false) end)
+    return "off"
+end
+-- Takes down what's left of units `list` (why: the log's reason; mortal: the host's or solo, false on a joiner) and
+-- queues each one's check CLEAN_CHECK_S on. How many objects it took down.
+function SPC.cleanUp(list, why, mortal, now)
+    local total = 0
+    for _, u in ipairs(list or {}) do
+        local l = SPC.CLEAN_OBJ[u] or {}
+        local objs, seen, killed, off, pools = {}, {}, 0, 0, 0
+        for _, o in ipairs(l) do objs[#objs + 1] = o end
+        for _, p in ipairs(planes or {}) do if p.unit == u and not p.down then objs[#objs + 1] = p.obj end end
+        for _, o in ipairs(objs) do
+            local a = liveObj(o) and addrOf(o)
+            if a and not seen[a] then
+                seen[a] = true
+                if pooled(o) then pools = pools + 1
+                else
+                    local okT, r = pcall(takeDown, o, mortal)
+                    if okT and r == "killed" then killed = killed + 1 elseif okT and r == "off" then off = off + 1 end
+                end
+            end
+        end
+        total = total + killed + off
+        local n0 = type(SV_UnitAlive) == "function" and SV_UnitAlive(u) or -5
+        log(string.format("special: %s %s: %d alive, %d of its %d recorded objects still up: %d finished off, %d switched off%s",
+            SPC.cleanLabel(u), tostring(why), n0, killed + off, #l, killed, off,
+            pools > 0 and string.format(" (%d parked pools left to the unit's removal)", pools) or ""))
+        crumb(string.format("special clean-up %s: %d killed, %d off (%s)", u, killed, off, tostring(why)))
+        SPC.cleanQ[#SPC.cleanQ + 1] = { unit = u, at = now + CLEAN_CHECK_S, mortal = mortal }
+    end
+    return total
+end
+-- the checks due: SV_UnitAlive again (a unit still up the host's: SV_Recycle(unit, 1), when the runtime has it)
+function SPC.cleanTick(now)
+    local q = SPC.cleanQ
+    if not q or #q == 0 then return end
+    for i = #q, 1, -1 do
+        local e = q[i]
+        if now >= e.at or now < e.at - 60 then       -- (a new run's clock: due now)
+            table.remove(q, i)
+            local n = type(SV_UnitAlive) == "function" and SV_UnitAlive(e.unit) or -5
+            local rec = ""
+            if n > 0 and e.mortal == true and type(SV_Recycle) == "function" then
+                crumb("special clean-up: SV_Recycle " .. e.unit)
+                local okR, r = pcall(SV_Recycle, e.unit, 1)
+                n = SV_UnitAlive(e.unit)
+                rec = string.format(" (SV_Recycle: %s)", okR and tostring(r) or ("error " .. tostring(r)))
+            elseif n > 0 and e.mortal == true then
+                rec = " (no SV_Recycle in this runtime)"
+            end
+            local where = e.mortal == true and "" or " here (a joiner's copies)"
+            if n > 0 then log(string.format("special: %s%s NOT removed (%d alive)%s", SPC.cleanLabel(e.unit), where, n, rec))
+            else log(string.format("special: %s%s removed%s", SPC.cleanLabel(e.unit), where, rec)) end
+            if n <= 0 then SPC.CLEAN_OBJ[e.unit] = nil end  -- (nothing of it kept past its check)
+        end
+    end
+end
+-- (the host's or solo) the round's special over (its state "done") or its round clear (why): its units cleaned up
+-- once, CLEAN_AFTER_S on (VALKA's after her X-02S's fall, wreck_s: her tick still moves the wreck till then; the
+-- Alicorn's after RE_SV_AlcnRemove, 20 s after it sank, so the hull isn't taken off as it goes down); force (the next
+-- round starting, the special about to be replaced): now
+local AFTER_KIND = { alicorn = 25 }
+function SPC.endTick(now, s, why, force)
+    if not (s and s.kind) or s.cleaned then return end
+    if s.state ~= "done" and not why then return end
+    if not s.cleanAt then
+        local after = AFTER_KIND[s.kind] or CLEAN_AFTER_S
+        if s.kind == "valka" and s.wreckUntil then after = math.max(after, (s.wreckUntil - now) + 1) end
+        s.cleanAt = now + after
+    end
+    if force then s.cleanAt = now end
+    if now < s.cleanAt then return end
+    s.cleaned = true
+    local list = SPC.cleanUnitsOf(s.kind)
+    if #list > 0 then SPC.cleanUp(list, why or ("at the end of its " .. s.kind .. " fight"), true, now) end
+    if s.kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
+end
+-- (a co-op joiner, from sv_coop.lua's clientRounds) the host's special: once it's over there, this game's copies of its
+-- units are switched off CLIENT_AFTER_S on (the host's "dn" first takes its planes down the normal way); VALKA's
+-- opener railgun copy as she shows on the host (its own removal there, eml_remove_s after its shot)
+SPC.cl = { up = {}, due = {} }
+function SPC.clientClean(now)
+    local C = SPC.cl
+    if C.now and now < C.now - 60 then C.up, C.due = {}, {} end      -- (a new run's clock)
+    C.now = now
+    local hs = D and D.hostSpecial
+    if hs and hs.kind and hs.state ~= "done" and hs.state ~= "pending" then C.up[hs.kind] = C.up[hs.kind] or now end
+    for kind in pairs(C.up) do
+        if not (hs and hs.kind == kind and hs.state ~= "done") then
+            C.up[kind] = nil
+            C.due[#C.due + 1] = { at = now + CLIENT_AFTER_S, list = SPC.cleanUnitsOf(kind), why = "the host's " .. kind .. " over" }
+            if kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
+        end
+    end
+    local va = CFG.specials and CFG.specials.valka
+    if hs and hs.kind == "valka" and hs.state == "hunt" and type(va) == "table" and va.eml_unit and not C.emlFor then
+        C.emlFor = C.up.valka
+        C.due[#C.due + 1] = { at = now + (tonumber(va.eml_remove_s) or 4) + 2, list = { va.eml_unit }, why = "her reveal on the host" }
+    end
+    if not (hs and hs.kind == "valka") then C.emlFor = nil end
+    for i = #C.due, 1, -1 do
+        local e = C.due[i]
+        if now >= e.at then
+            table.remove(C.due, i)
+            local n = SPC.cleanUp(e.list, e.why, "parts", now)
+            log(string.format("coop: %s: %d of its copies' objects still up here, taken off (its planes switched off, its parts finished off)",
+                e.why, n))
+        end
+    end
+    SPC.cleanTick(now)
+end
+end
+
 -- Watches a running special: launched (its flag, or the countdown run out with the shuttle still there) or lost (its
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
     SPC.shuttleClockTick(now)
+    local okE, errE = pcall(SPC.endTick, now, D.special)          -- ((0.73.77) D4: a finished special's leftovers)
+    if not okE and tostring(errE) ~= D.cleanErr then D.cleanErr = tostring(errE); log("special: clean-up error " .. D.cleanErr) end
+    local okC, errC = pcall(SPC.cleanTick, now)
+    if not okC and tostring(errC) ~= D.cleanErr then D.cleanErr = tostring(errC); log("special: clean-up error " .. D.cleanErr) end
     -- the shuttle killed and hidden first, RE_SV_ShuttleRemove 3 s later: that event sets SV_ShuttleLaunched back to 0,
     -- and a shuttle destroyed while it's 0 counts as shot down on the pad (failure radio, SV_ShuttleLost)
     if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then
@@ -411,6 +641,8 @@ local function startRound()
         log(string.format("round %d: no %s can come now; a normal round", D.round, special))
         special = nil
     end
+    -- ((0.73.77) D4: the last round's special cleaned up now if its clean-up hadn't come yet, before it's replaced)
+    if D.special and not D.special.cleaned then pcall(SPC.endTick, D.now or 0, D.special, "the next round's start", true) end
     D.special = special and { kind = special, state = "pending" } or nil
     RUN.specialPick = RUN.specialPick or {}                      -- (as it is: a forced one too; specialFor reads it)
     RUN.specialPick[D.round] = special or false
@@ -455,6 +687,14 @@ local function startRound()
         local out, got = pickFlights(units, n, function(u) return taken[u] or (skip and skip(u)) end)
         for _, u in ipairs(out) do taken[u] = true end
         return out, got
+    end
+    -- ((0.73.77, the plan's I8 / I4 / I3) the Spaceport's part of the plan, before any flight is picked (sv_spaceport.lua
+    -- SPORT.planRound): the Ford's deck flights held back from the round's fighters (S13: round 13's fighters took every
+    -- free 2-ship, the deck launched 2 of 8), the fighters withdrawn at a capture recycled or kept out of the picks (S6),
+    -- and a retake that didn't come taking its fleet off (S4))
+    if SPORT and SPORT.planRound then
+        local okSp, errSp = pcall(SPORT.planRound, special, pick)
+        if not okSp then log("special: the Spaceport's round plan error " .. tostring(errSp)) end
     end
     local function raidShare()                      -- a raid's bombers: raid_share of the round, whole 2-ships, max_bombers
         return math.min(math.floor(budget * b.raid_share / 2 + 0.5) * 2, b.max_bombers or budget)
@@ -708,6 +948,60 @@ function ordersTick(now)
 end
 end
 
+-- (0.73.77, plan A7; IMPROVEMENTS.md "End the long tail") The host's (or solo), once a second while a round's fighting:
+-- `alive` aircraft of the round up. With max_left or fewer left and no kill (nor a new flight) for quiet_s, each flight
+-- still up is pinged on the minimap (RE_SV_LastPing_NN on a pool flight, a bomber flight's own RE_SV_RaidPing_NN: Mission
+-- 22's LiveBattleNavigationExecution, forwarded to co-op joiners, whose copies ping too), again every every_s till the
+-- next kill, and (release) any of them held back is let go: a Wolf trap freed onto you (WOLF.free, its LastTGT), a top
+-- cover diving on the nearest player (DIR.release). The 0.73.76 runs waited up to 9 min 11 s on a round's last enemy
+-- (Saint Alessia's round 5); the Spaceport round's last 3 min were one held Wolf trap (S14).
+local function tailTick(now, alive)
+    local c = CFG.waves and CFG.waves.tail
+    if not (type(c) == "table" and c.enabled) then return end
+    local T = D.tail
+    if not T or T.round ~= D.round or alive ~= T.alive then        -- (a kill, or a new flight: its clock again)
+        if T and T.pings and T.round == D.round and alive < T.alive then
+            log(string.format("round %d: a kill %.0f s after the tail's first ping (%d left)", D.round, now - (T.firstAt or now), alive))
+        end
+        D.tail = { round = D.round, alive = alive, since = now }
+        return
+    end
+    if alive < 1 or alive > (tonumber(c.max_left) or 4) then return end
+    if now - T.since < (tonumber(c.quiet_s) or 90) or now < (T.nextAt or 0) then return end
+    T.nextAt = now + math.max(3, tonumber(c.every_s) or 12)
+    T.firstAt = T.firstAt or now
+    local pinged, missed, freed = {}, {}, {}
+    local units = {}
+    for u in pairs(D.up) do units[#units + 1] = u end
+    table.sort(units)
+    for _, u in ipairs(units) do
+        if SV_UnitAlive(u) > 0 then
+            local i, b = poolIndex(u), BOMBER_INDEX and BOMBER_INDEX[u]
+            local ev = (i and string.format("RE_SV_LastPing_%02d", i)) or (b and string.format("RE_SV_RaidPing_%02d", b)) or nil
+            local r = (ev and type(SV_Event) == "function") and SV_Event(ev) or nil
+            if r == 1 then pinged[#pinged + 1] = u
+            else missed[#missed + 1] = u .. (ev and (" (" .. (SV_ERR[r] or tostring(r)) .. ")") or " (no ping event: a special's)") end
+            if c.release then
+                if WOLF and WOLF.holding and WOLF.holding(u) then
+                    local okW, n = pcall(WOLF.free, u, "the round's last enemies", true, nil, now)
+                    if okW and type(n) == "number" and n > 0 then freed[#freed + 1] = u .. " (its Wolf trap, " .. n .. ")" end
+                end
+                if DIR and DIR.holding and DIR.holding(u) then
+                    local okD, did = pcall(DIR.release, u, "the round's last enemies")
+                    if okD and did then freed[#freed + 1] = u .. " (held by the director)" end
+                end
+            end
+        end
+    end
+    T.pings = (T.pings or 0) + 1
+    if (#pinged > 0 or #freed > 0) and (T.pings == 1 or T.pings % 5 == 0 or #freed > 0) then   -- (a boss alone: nothing to say)
+        log(string.format("round: last %d enemies pinged on the minimap (round %d, no kill for %.0f s; ping %d): %s%s%s", alive,
+            D.round, now - T.since, T.pings, #pinged > 0 and table.concat(pinged, ", ") or "none",
+            #missed > 0 and ("; not pinged: " .. table.concat(missed, ", ")) or "",
+            #freed > 0 and ("; let go: " .. table.concat(freed, ", ")) or ""))
+    end
+end
+
 function roundsTick(now)
     if not D then return end
     D.now = now
@@ -856,6 +1150,10 @@ function roundsTick(now)
             if n > 0 then alive, flights = alive + n, flights + 1 else D.up[u] = nil end
         end
         if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
+        if flights > 0 then                                -- ((0.73.77) A7: the round's last enemies on the minimap)
+            local okT, errT = pcall(tailTick, now, alive)
+            if not okT and tostring(errT) ~= D.tailErr then D.tailErr = tostring(errT); log("round: tail error " .. D.tailErr) end
+        end
         if flights == 0 and D.special and (D.special.state == "countdown" or D.special.state == "portal") then
             if not D.special.waitSaid then D.special.waitSaid = true; log(string.format("round %d: enemies down, the %s goes on", D.round,
                 D.special.state == "portal" and "Anomaly's portal" or "shuttle's countdown")) end
@@ -878,6 +1176,7 @@ function roundsTick(now)
                 local okO, errO = pcall(ko.over, now, D.special)
                 if not okO then log("special: " .. tostring(D.special.kind) .. " round end error " .. tostring(errO)) end
             end
+            if D.special then pcall(SPC.endTick, now, D.special, "its round clear") end   -- ((0.73.77) D4: the backstop)
             local gap = SETUP.breakS()                 -- (the menu's BREAK BETWEEN ROUNDS, sv_menu.lua)
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")

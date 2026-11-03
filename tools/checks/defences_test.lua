@@ -128,8 +128,9 @@ end
 tables()
 local GI = { full = "GameInstance", addr = 1 }
 local objects = {}                                -- FindAllOf's answers by class
+local walked = {}                                 -- ((0.73.77) the walks asked, by class)
 function NotifyOnNewObject() end
-function FindAllOf(c) return objects[c] or {} end
+function FindAllOf(c) walked[#walked + 1] = c; return objects[c] or {} end
 function FindFirstOf(c) if c == "BP_LiveGameInstance_C" then return GI end return nil end
 local paths                                       -- (sv_config / sv_rows' table paths, filled once they're loaded)
 function StaticFindObject(p) return paths and paths[p] or nil end
@@ -406,6 +407,37 @@ check(texts.SV_Shop_Airfield == "BUILD CIWS   6000 Z", "the old fourth row, 4th 
 for _, u in ipairs(DEF.ciws.units) do alive[u] = 1 end
 shop()
 check(texts.SV_Shop_Airfield == "BUILD AA GUN   4000 Z", "... every CIWS up: the next kind (" .. tostring(texts.SV_Shop_Airfield) .. ")")
+-- (0.73.77, from claude/coop-fixes 57dce73) the rows on screen are found by their old text (relabel), so a text two items
+-- share is left for the page's next opening: the old fourth row's AA offer and the AA GUN row's both "BUILD AA GUN   4000
+-- Z"; when both moved on, every TextBlock with it became BUILD SAM SITE (co-op run of 2026-11-01). One only a single row
+-- had is rewritten as before.
+do
+    FText = FText or function(s) return { s = s } end
+    local function textBlock(text)
+        local t = { full = "TextBlock /Engine/Transient.GameEngine_0:WBP_Menu_Text_Focus_C_" .. addr() .. ".WidgetTree.TextBlock_0",
+                    addr = addr(), text = text }
+        function t:GetText() local s = self.text; return { ToString = function() return s end } end
+        function t:SetText(v) self.text = type(v) == "table" and v.s or tostring(v) end
+        return t
+    end
+    spawned, alive, RUN.defences = {}, {}, { built = 0, bought = {} }
+    shop()
+    local aaText, ciwsText = texts.SV_Shop_AAGun, texts.SV_Shop_Ciws
+    check(texts.SV_Shop_Airfield == aaText and aaText == "BUILD AA GUN   4000 Z" and ciwsText == "BUILD CIWS   6000 Z",
+          "(the old fourth row and the AA GUN row both: " .. tostring(aaText) .. "; the CIWS row its own)")
+    local tbAA, tbCiws = textBlock(aaText), textBlock(ciwsText)
+    objects.TextBlock = { tbAA, tbCiws }
+    SH.relabelAt, SH.rowTexts = nil, nil
+    for _, u in ipairs(DEF.aa.units) do alive[u] = 1 end
+    for _, u in ipairs(DEF.ciws.units) do alive[u] = 1 end
+    clock = clock + 5
+    shop()
+    check(texts.SV_Shop_AAGun ~= aaText and texts.SV_Shop_Airfield ~= aaText and texts.SV_Shop_AAGun ~= texts.SV_Shop_Airfield,
+          "(both moved on: " .. tostring(texts.SV_Shop_AAGun) .. " / " .. tostring(texts.SV_Shop_Airfield) .. ")")
+    check(tbAA.text == aaText, "the shared text on screen left as it was, not rewritten to either row's new one (" .. tostring(tbAA.text) .. ")")
+    check(tbCiws.text == texts.SV_Shop_Ciws, "a text one row had: rewritten as before (" .. tostring(tbCiws.text) .. ")")
+    objects.TextBlock, SH.rowTexts = nil, nil
+end
 
 ---------------------------------------------------------------------------------------------------- the ALLIES row, losses, repairs, kills
 print("ALLY.tick / hudLine: the CIWS on the ALLIES row; a lost one; repairs; kill credit")
@@ -446,24 +478,36 @@ do
     alive = { SV_Unit_Ciws_A = 1, SV_Unit_Ciws_B = 1 }
     ALLY.run = nil
     local R = ALLY.state()
+    -- ((0.73.77, Workstream B3) the actors are found one class a tick: three ticks for the three classes, the walks
+    -- counted; their health read every 2 s)
+    local walksBefore = #walked
     ALLY.tick(700)
+    check(R.defHp == nil and R.defWalk and R.defWalk.i == 1 and #walked == walksBefore + 1,
+          "(0.73.77) the look for the defences' actors: one class a tick (1 walk the first tick, nothing read yet)")
+    ALLY.tick(700.25); ALLY.tick(700.5)
+    check(#walked == walksBefore + 3 and R.defWalk == nil, "... the third class the third tick: 3 walks in all, the look done")
     check(R.defHp == 75 and #R.defActors == 2, "the row's defences' health: 75% (600 and 300 of 600): " .. tostring(R.defHp))
+    check(line("allies: the airfield defences' actors found one class a tick: 2 for 2 up") ~= nil,
+          "(0.73.77) logged once: the airfield defences' actors found one class a tick")
     d2.gone = true                                   -- (taken down and spawned again: its old actor gone, the count the same)
     local d3 = defence("BP_GR033_ciws_CP_Ally_C", 600)
     objects = { BP_GR033_ciws_CP_Ally_C = { d1, d3 } }
     reads = {}
     R.checkAt = 0
-    ALLY.tick(702)
+    local wb = #walked
+    ALLY.tick(701)
+    check(#walked == wb and not reads[d1], "(0.73.77) a second on: no walk, the health not read again yet (every 2 s)")
+    ALLY.tick(703)
     check(not reads[d2] and #R.defActors == 1 and R.defActorsAt == 0, "an old actor gone: never read, off the list, the list found again next time")
     R.checkAt = 0
-    ALLY.tick(704)
-    check(#R.defActors == 2 and R.defActors[1] ~= d2 and R.defActors[2] ~= d2 and R.defHp == 100, "... found again: the new one in, 100%")
+    ALLY.tick(704); ALLY.tick(704.25); ALLY.tick(704.5)
+    check(#R.defActors == 2 and R.defActors[1] ~= d2 and R.defActors[2] ~= d2 and R.defHp == 100, "... found again (three ticks): the new one in, 100%")
     d1.hp = 0
     R.checkAt = 0
-    ALLY.tick(706)
+    ALLY.tick(707)
     check(#R.defActors == 1 and R.defActors[1] == d3, "one down (health 0): off the list too")
     ALLY.forgetActors()
-    check(R.defActors == nil, "ALLY.forgetActors: the cached list dropped (a joiner's teardown)")
+    check(R.defActors == nil and R.defWalk == nil, "ALLY.forgetActors: the cached list dropped (a joiner's teardown), a look under way too")
     objects, alive = {}, {}
     ALLY.run = nil
 end
@@ -866,6 +910,87 @@ do
     check(cp.HealthInternal == 7400 and cp.PilotRank > 1 and has(line("is the host's: PilotRank", from), "its health the host's"),
           "a co-op joiner: the host's copy's rank set, its health left to the host's (logged once)")
     R.planes, R.up[AW.unit], D, COOP.client = keep.planes, keep.up, keep.D, keep.client
+end
+
+---------------------------------------------------------------------------------------------------- (0.73.77) B3 / B4
+print("(0.73.77) Workstream B3 / B4: the allies' unit counts a share a tick; the STORE's texts at the airfield only")
+do
+    local asks = {}
+    local rawUA = SV_UnitAlive
+    SV_UnitAlive = function(u) asks[#asks + 1] = u; return rawUA(u) end
+    local keepCOOP = COOP
+    COOP = nil
+    D = { round = 3, state = "fighting", now = 300, up = {}, flown = {}, queue = {}, events = {}, orders = {} }
+    ALLY.run = nil
+    alive = { SV_Unit_AAGun_A = 1, SV_Unit_SAM_A = 1 }
+    ALLY.tick(300)                                   -- (the first: the 2 s checks ask what the share hasn't read yet)
+    local most, seen = 0, {}
+    for i = 1, 16 do
+        asks = {}
+        ALLY.tick(300 + i * 0.25)
+        most = math.max(most, #asks)
+        for _, u in ipairs(asks) do seen[u] = (seen[u] or 0) + 1 end
+    end
+    local nUnits, every = 0, true
+    for _, kind in ipairs(DEF_KINDS) do
+        for _, u in ipairs(DEF[kind].units) do
+            nUnits = nUnits + 1
+            if (seen[u] or 0) ~= ((alive[u] or 0) > 0 and 2 or 0) then every = false end
+        end
+    end
+    check(most <= math.ceil(nUnits / 8) and every, string.format("B3: the %d defence units' counts asked %d a tick at most: "
+          .. "the two up once every 2 s (8 ticks), the ones not built every 8 s; the 2 s checks from them", nUnits, most))
+    asks = {}
+    for i = 1, 40 do ALLY.tick(304 + i * 0.25) end
+    local idle = 0
+    for _, u in ipairs(asks) do if u == DEF.ciws.units[4] then idle = idle + 1 end end
+    check(idle >= 1 and idle <= 2, "B3: ... a defence not built asked " .. idle .. " times in 10 s")
+    ALLY.forgetAlive(DEF.aa.units[2])
+    alive[DEF.aa.units[2]] = 1
+    asks = {}
+    ALLY.tick(314.25); ALLY.tick(316)
+    check(ALLY.state().defCount.aa == 2, "B3: one built (ALLY.forgetAlive from the STORE's spawn): counted at the next check")
+    alive[DEF.aa.units[2]] = nil
+    alive.SV_Unit_SAM_A = 0
+    callouts = {}
+    for i = 1, 12 do ALLY.tick(316 + i * 0.25) end
+    check(callouts[1] and has(callouts[1], "LOST"), "B3: a defence lost: still seen within 3 s (" .. tostring(callouts[1]) .. ")")
+    -- B4: the STORE's texts made down at the airfield only; each unit asked once for all the rows' offers; a text sent
+    -- only when it changed
+    RUN.credits, RUN.spent, RUN.bought, RUN.msg, RUN.defences, RUN.offerShown = 100000, 0, {}, {}, nil, nil
+    local sets, labels = 0, 0
+    local rawST = SV_SetText
+    SV_SetText = function(k, v)
+        sets = sets + 1
+        if k:find("^SV_Shop_") and not k:find("_Help$") and not k:find("^SV_Shop_Store") then labels = labels + 1 end
+        return rawST(k, v)
+    end
+    onAirfield = false
+    RUN.dirty, sets = true, 0
+    tick = tick + 1; shopTick(tick)
+    check(sets == 0 and RUN.dirty == true, "B4: in flight: no texts made, they wait (RUN.dirty) for the airfield")
+    onAirfield = true
+    asks = {}
+    tick = tick + 1; shopTick(tick)
+    local distinct = {}
+    for _, u in ipairs(asks) do distinct[u] = (distinct[u] or 0) + 1 end
+    local twice = 0
+    for _, n in pairs(distinct) do if n > 1 then twice = twice + 1 end end
+    check(sets > 0 and not RUN.dirty and #asks > 0 and twice == 0,
+          string.format("B4: down at the airfield: made at once, each unit asked once for all the rows (%d asks, %d texts)", #asks, sets))
+    check(SV_UnitAlive ~= nil and SV_UnitAlive(DEF.aa.units[1]) == alive[DEF.aa.units[1]] and asks[#asks] == DEF.aa.units[1],
+          "B4: ... the native's own SV_UnitAlive back after them")
+    RUN.dirty, sets = true, 0
+    tick = tick + 3; shopTick(tick)
+    check(sets == 0 and not RUN.dirty, "B4: made again with nothing changed: no text sent (each kept by the runtime)")
+    RUN.credits = RUN.credits - 500
+    RUN.dirty, sets, labels = true, 0, 0
+    tick = tick + 3; shopTick(tick)
+    check(sets > 0 and labels == 0, "B4: the zollars changed: the help lines and titles that show them sent (" .. sets
+          .. "), no row label (" .. labels .. ")")
+    check(line("shop: the STORE's texts made down at the airfield only") ~= nil, "B4: logged once")
+    SV_SetText, SV_UnitAlive, COOP = rawST, rawUA, keepCOOP
+    alive, D, ALLY.run = {}, nil, nil
 end
 
 print(fails == 0 and "defences test: all passed" or ("defences test: " .. fails .. " FAILED"))

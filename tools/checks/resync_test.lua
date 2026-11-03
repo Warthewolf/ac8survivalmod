@@ -48,7 +48,7 @@ SPC = {}                                         -- (sv_core's: the specials' fu
 function FindAllOf() return {} end
 function FindFirstOf() return nil end
 local GS = {}
-function GS:ApplyDamage(o, dmg) if not (o.invincible or o.bIsInvincible) then o.HealthInternal = math.max(o.min or 0, o.HealthInternal - dmg) end end
+function GS:ApplyDamage(o, dmg) if not (o.invincible or o.bIsInvincible) then o.HealthInternal = math.max(math.floor((o.MinHealth or 0) * 10), o.HealthInternal - dmg) end end
 function StaticFindObject(p)
     if tostring(p):find("GameplayStatics", 1, true) then return GS end
     return { cls = "LiveAIPlane" }
@@ -89,9 +89,14 @@ local function obj(cls, hp, plane, inv)
     local o = { name = cls .. "_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. cls .. "_C_" .. nextAddr,
                 addr = nextAddr, HealthInternal = hp, min = 0, plane = plane == true, invincible = inv == true }
     function o:IsA() return self.plane end
-    function o:SetMinHealth(v) self.min = v * 10 end
+    -- (as the game's: SetMinHealth keeps whole points only, every hit is clamped at the MinHealth field: 0.73.77's floor
+    -- writes the field, KILLS_HEALTH_DEATH.md 1-2)
+    function o:SetMinHealth(v) self.MinHealth = math.floor(v) end
     function o:SetIsInvincible(b) self.invincible = b end
-    function o:ModifyHealth(d) if self.invincible or self.bIsInvincible then return end; self.HealthInternal = math.max(self.min, self.HealthInternal + d * 10) end
+    function o:ModifyHealth(d)
+        if self.invincible or self.bIsInvincible then return end
+        self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + d * 10)
+    end
     return o
 end
 local UNITS = {

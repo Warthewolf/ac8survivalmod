@@ -565,6 +565,8 @@ function hudTick(now, paused, pc)
         nextS = string.format(t.amphib_row, craft, ashore, AMPH.capture())
     elseif D.special and SPC.kinds[D.special.kind] and SPC.kinds[D.special.kind].row and SPC.kinds[D.special.kind].row(D.special, t) then
         nextS = SPC.kinds[D.special.kind].row(D.special, t)          -- (the Spaceport Assault's: sv_spaceport.lua)
+    elseif SPORT and SPORT.clientRow and SPORT.clientRow(t) then      -- ((0.73.77, I7: S12) a co-op joiner: the host's
+        nextS = SPORT.clientRow(t)                                    -- Spaceport row, from its "spx")
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
         local _, ashore = AMPH.counts()

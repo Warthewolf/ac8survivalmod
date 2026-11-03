@@ -13,3 +13,9 @@ rm -rf "$W" && mkdir -p "$W/Scripts" "$W/config"
 for mode in plain override override_error; do
     "$LUA" leaderboard_test.lua "$HERE/../../mod/UE4SS/AC8SurvivalMode" "$W" $mode
 done
+# (0.73.77, plan H5) every run body the plain run sent, co-op runs too, through the Worker's own checkRun
+if command -v node > /dev/null 2>&1; then
+    node leaderboard_bodies.mjs "$W/bodies.txt"
+else
+    echo "leaderboard bodies: node not found; the Worker's checkRun not run on them"
+fi

@@ -52,18 +52,81 @@ local function sendTo(to, reliable, ...)
     return SV_CoopSend(table.concat(parts, "|"), reliable and 1 or 0, to or -1) > 0
 end
 local function send(reliable, ...) return sendTo(nil, reliable, ...) end
+-- ((0.73.77, the plan's I2: S9) a penalty the host's run takes (the Spaceport Retake's escaped rocket: sv_spaceport.lua
+-- SPORT.debit) off every joiner's zollars too: "db|<n>|<why>" ("cr" carries pay only; the escape's -5,000 came off the
+-- host's money alone while its callout went to everyone). Each game takes what it has of it.
+function COOP.debit(n, why)
+    n = math.floor(tonumber(n) or 0)
+    if not COOP.host() or n <= 0 then return end
+    send(true, "db", n, tostring(why or ""):sub(1, 80))
+    log(string.format("coop: a penalty of %d (%s) sent to every joiner (%d linked)", n, tostring(why), M.linkedPeers or 0))
+end
 -- (0.73.76) VALKA in co-op (user, 2026-11-03: "will the red sky sync in coop?" ... "do it"): her round runs on the host
 -- alone, so the host tells every joiner when her mood (the red sky, her song) starts and ends ("vm|1" / "vm|0") and when
 -- she shows ("vr|<unit>": each game puts her X-02S and paint on its own copy of her); a joiner who links mid-fight gets
 -- both with the host's whole picture.
+-- (0.73.77, plan D1-D2) Also from one place every start and end of hers passes through: M.valkaWatch, each co-op tick on
+-- the host, holds the joiners to her round's state (D.special: kind valka, moodOn), so any way she comes (her round, the
+-- reveal mid-round after her decoys, a forced start) or goes (shot down, the run over, the level left) reaches them. In
+-- gloom's run of 2026-11-02 dukka's game logged no mood at all, and the host logged nothing it sent: each send logs now.
 function COOP.valkaMood(on)
     M.vmood = on == true
     if not on then M.vrev = nil end
-    if COOP.host() then send(true, "vm", on and 1 or 0) end
+    if COOP.host() then
+        send(true, "vm", on and 1 or 0)
+        log(string.format("coop: VALKA's mood %s: sent to every joiner (%d linked)", on and "on (the red sky, her song)" or "off",
+            M.linkedPeers or 0))
+    end
 end
 function COOP.valkaReveal(unit)
     M.vrev = unit
     if COOP.host() then send(true, "vr", unit) end
+end
+-- (0.73.77, plan D2) a joiner's VALKA mood (the host's "vm"), and taken off here when the host's run starts over or a new
+-- host's level comes ("rs"), a new run or level starts here, or this game becomes the host (a migration): never left
+-- red or playing with nobody left to say off. why: "the host's" for the host's own word.
+function M.valkaHere(on, why)
+    local c = CFG.specials and CFG.specials.valka
+    if on then
+        if not (c and D) then
+            log("coop: the host's VALKA mood on: not here (" .. (c and "no run here yet: it comes again with the host's picture"
+                or "no VALKA in this build") .. ")")
+            return
+        end
+        if c.red and c.red.enabled ~= false then pcall(hudRed, true, c.red) end
+        pcall(function() SND.songStart(c.song) end)
+        log("coop: the host's VALKA mood on: the sky red and her song here too" .. (M.vmHere and " (again: the host's picture)" or ""))
+        M.vmHere = true
+        return
+    end
+    local was = M.vmHere
+    M.vmHere, M.vr = nil, nil
+    pcall(hudRed, false)                                     -- (faded by redTick, which drops a sky whose level is gone)
+    if c then pcall(function() SND.songFade(c.song and c.song.out_s or 5) end) end
+    if why == "the host's" then log("coop: the host's VALKA mood off: the sky and her song fading")
+    elseif was then log("coop: VALKA's mood off here (" .. tostring(why) .. "): the sky and her song fading") end
+end
+-- (the host, every co-op tick) the joiners held to VALKA's round here: her mood on from SPC.V.mood (moodOn) until she's
+-- down or her round's gone, her reveal (revealedAt); a special of hers that ended with its mood still on (its round
+-- replaced without her end, or "done" without moodOff: she couldn't spawn after her lurk had turned it on) faded here
+-- too; a joiner that became the host lets go of the old host's mood unless hers is on here
+function M.valkaWatch()
+    if not COOP.host() then return end
+    local s = D and D.special
+    local c = CFG.specials and CFG.specials.valka
+    local on = s ~= nil and s.kind == "valka" and s.moodOn == true and s.state ~= "done"
+    if M.vmHere then
+        if not on then M.valkaHere(false, "this game is the host now") end
+        M.vmHere = nil
+    end
+    local stale = (M.vS and M.vS ~= s and M.vS.moodOn and M.vS) or (s and s.kind == "valka" and s.moodOn and s.state == "done" and s) or nil
+    if stale and SPC and SPC.V and SPC.V.moodOff then
+        log("coop: VALKA's round " .. (stale == s and "is over" or "went") .. " with her mood still on: faded here and on every joiner")
+        pcall(SPC.V.moodOff, c, stale, D and D.now or os.clock())
+    end
+    M.vS = on and s or nil
+    if on ~= (M.vmood == true) then COOP.valkaMood(on) end
+    if on and c and s.revealedAt and M.vrev ~= c.unit then COOP.valkaReveal(c.unit) end
 end
 local function split(s)
     local t = {}
@@ -110,6 +173,10 @@ end
 local function live(o)
     if type(liveAddr) == "function" then return liveAddr(o) end
     return valid(o) and addrOf(o) or nil
+end
+local function myAddr()                                  -- (0.73.77) your plane's address here, or nil
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    return valid(pawn) and addrOf(pawn) or nil
 end
 local function playerName(slot)
     local r = M.roster[slot]
@@ -447,6 +514,57 @@ local function wolfWaitS()
         + (type(w) == "table" and tonumber(w.hold_max_s) or 60) + 120
 end
 
+-- (0.73.77, economy C1) Who shot the host's object e down, named in its "dn" so that every game pays the same player
+-- for it (a joiner had no way to tell: every kill it saw was paid as its own, mobi118 1,473 of them, 2026-11-02):
+-- { slot = s }, the player who did it the most damage (the host's own plane from its DamageHistoryMap, each joiner's
+-- from their hits here, hostHit's e.by); else the host's if it fired at it in its last 15 s (KILL.fired); else
+-- { side = "allies" | "ships" | "defences" }, the side that did the most; else the host's (nothing read: a kill is
+-- yours then, as solo). false for one gone without being shot down (a despawn, a recycle) and for the allies' own.
+-- Worked out once, at its death (hostTick), or when the plane watch pays it first (KILL.by).
+local KILL_SIDE_CODE = { allies = "a", ships = "s", defences = "d" }
+local function hostKiller(e)
+    if e.killer ~= nil then return e.killer end
+    if allyUnit(e.unit) or not live(e.obj) or (health(e.obj) or 1) > 0 then e.killer = false; return false end
+    local me, pa, peerA, dmg, sides = COOP.slot or 0, myAddr(), {}, {}, {}
+    for s, P in pairs(M.peers) do if P.addr then peerA[P.addr] = s end end
+    pcall(function()
+        e.obj.DamageHistoryMap:ForEach(function(k, v)
+            local okK, o = pcall(function() return k:get() end)
+            local okV, x = pcall(function() return v:get() end)
+            if okK and okV and type(x) == "number" and x > 0 and valid(o) then
+                local a = addrOf(o)
+                if a and a == pa then dmg[me] = (dmg[me] or 0) + x
+                elseif not (a and peerA[a]) and KILL and KILL.side then   -- (a joiner's stand-in's: in e.by)
+                    local okS, s = pcall(KILL.side, o, pa)
+                    if okS and KILL_SIDE_CODE[s] then sides[s] = (sides[s] or 0) + x end
+                end
+            end
+        end)
+    end)
+    for s, x in pairs(e.by or {}) do dmg[s] = (dmg[s] or 0) + x end
+    local best, slot = 0, nil
+    for s, x in pairs(dmg) do if x > best then best, slot = x, s end end
+    local t = KILL and KILL.fired and e.addr and KILL.fired[e.addr]
+    if not slot and t and D and D.now and D.now - t <= 15 then slot = me end
+    local bestS, side = 0, nil
+    if not slot then for s, x in pairs(sides) do if x > bestS then bestS, side = x, s end end end
+    e.killer = side and { side = side } or { slot = slot or me }
+    return e.killer
+end
+-- (0.73.77, economy C1) The run's kills by the player each "dn" named, on the host: { [slot] = { air = n, ground = n } }
+-- (planes; ships, vehicles and parts), counted as the host's enemies go down (hostTick); allies' losses, a level going
+-- away and kills of no player (an ally's, a ship's, a defence's) aren't. For the co-op leaderboard's squad (plan H2)
+-- and the sync report's host line; a new level (run) starts it again, and a host by migration starts it at its takeover.
+function COOP.killTally() return M.tally or {} end
+local function tallyKill(e, kl)
+    if not (kl and kl.slot) or (type(levelGoing) == "function" and levelGoing()) then return end
+    M.tally = M.tally or {}
+    local t = M.tally[kl.slot] or { air = 0, ground = 0 }
+    M.tally[kl.slot] = t
+    if e.key then t.ground = t.ground + 1 else t.air = t.air + 1 end
+    if LB and LB.coopKill then pcall(LB.coopKill, kl.slot, e) end   -- ((0.73.77, plan H2) the squad's, by player: sv_leaderboard.lua)
+end
+
 local function hostTick()
     local now = os.clock()
     -- deaths at once, health once a second
@@ -458,7 +576,11 @@ local function hostTick()
             local h = valid(e.obj) and health(e.obj) or 0
             if h <= 0 then
                 e.dead, e.deadAt = true, now
-                send(true, "dn", id)
+                -- ((0.73.77, economy C1) "dn|<id>||<killer>": a player's slot, or a / s / d, or nothing (gone))
+                local okK, kl = pcall(hostKiller, e)
+                if not okK then once("killer", "coop: a kill's player couldn't be worked out: " .. tostring(kl)); kl = nil end
+                send(true, "dn", id, "", kl and (kl.slot and kl.slot or KILL_SIDE_CODE[kl.side]) or "")
+                tallyKill(e, kl)
                 if not e.key and type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
                 local u = M.units[e.unit]
                 if u and e.ord and u.planes[e.ord] then u.planes[e.ord].dead = true end
@@ -523,7 +645,29 @@ local function hostTick()
         if sp and sp.kind == "glitch" and sp.state == "hunt" and type(sp.phase) == "number" then gp = sp.phase end
         local okA, al = pcall(function() return ALLY and ALLY.roomCode and ALLY.roomCode() or "" end)   -- (the room's
         if not okA then once("roomcode", "coop: the allies' summary not sent: " .. tostring(al)); al = "" end   -- allies)
-        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al)
+        -- ((0.73.77, plan D3) the round's special as this game's music has it, specialFor: a joiner's music follows it)
+        local okK, spk = pcall(M.roundSpecial, D.round or 0)
+        spk = (okK and type(spk) == "string") and spk or ""
+        -- ((0.73.77, the specials' clean-up D4 and the Anomaly's field on joiners) the special in play and its state,
+        -- "<kind>:<state>" ("anomaly:hunt", "valka:done"), or "": a joiner's field only while the host's Anomaly hunts
+        -- (ANOM.clientTick), its copies' leftovers taken off once the host's is over (sv_rounds.lua SPC.clientClean)
+        local ss = (sp and type(sp.kind) == "string" and type(sp.state) == "string") and (sp.kind .. ":" .. sp.state) or ""
+        send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al,
+            spk, ss)
+    end
+    -- ((0.73.77, the plan's I7: S12) the Spaceport (sv_spaceport.lua SPORT.coopCode): its NEXT row's numbers for the
+    -- joiners' rows, and a retake due or in play, which each joiner keeps for a host migration ("spx"; as it changes,
+    -- once a second at most, and every 10 s anyway)
+    if D and SPORT and SPORT.coopCode and now >= (M.nextSpx or 0) then
+        M.nextSpx = now + 1
+        local okS, code = pcall(SPORT.coopCode)
+        if okS and type(code) == "string" and (code ~= M.spxSent or (now >= (M.spxAgain or 0) and code ~= "-;-")) then
+            if code ~= M.spxSent and code:match(";(.*)$") ~= (M.spxSent or ""):match(";(.*)$") then
+                log("coop: the Spaceport's state sent to the joiners: " .. code)       -- (the pending retake changed)
+            end
+            M.spxSent, M.spxAgain = code, now + 10
+            send(true, "spx", code)
+        elseif not okS then once("spx", "coop: the Spaceport's state not sent: " .. tostring(code)) end
     end
     if AF and now >= M.nextAf then
         local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down)
@@ -648,6 +792,14 @@ local function hostSync(to)
         local okD, errD = pcall(DOWN.syncTo, to)
         if not okD then log("coop: down list not sent: " .. tostring(errD)) end
     end
+    -- ((0.73.77, plan A9) the run's over here already: that player too. Saint Alessia's run of 2026-11-02: the host's
+    -- "ro" at 16:54:15, scaraboy13's plane in at 16:54:24, and he fought VALKA alone on a run over for everyone else.
+    -- Every player who links, or links back, asks for the picture once its level is up: this is where it ends for them)
+    if M.ro then
+        sendTo(to, true, "ro", M.ro.round)
+        log(string.format("coop: player %d linked after the run-over (round %s, %.0f s ago): sent it again (ro)", to + 1,
+            tostring(M.ro.round), os.clock() - M.ro.at))
+    end
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end
 
@@ -655,6 +807,8 @@ local function hostHit(from, id, dmg)
     local e = M.byId[id]
     if not (e and not e.dead and valid(e.obj) and finite(dmg, math.huge) and dmg > 0) then return end
     dmg = math.min(dmg, HIT_MAX)
+    e.by = e.by or {}                                       -- ((0.73.77, economy C1) each player's hits on it: its killer)
+    e.by[from] = (e.by[from] or 0) + dmg
     local P = M.peers[from]
     -- (a real plane of theirs here is another player's, role 2, and the game refuses its damage outright: hard rule 53.
     -- From COOP2MP T3 every joiner hit was refused that way, so enemies they shot never died here (the co-op run of
@@ -698,6 +852,33 @@ end
 -- co-op run of 2026-10-31: three joiners' teardowns (the host's answer to their own "jn") paid 5-14 kills "by you"
 -- each, 750-2,230 zollars, in the seconds after.
 local TORN_S = 30
+-- (0.73.77, plan A1) A copy's floor: it waits at 1 HP for the host's kill ("dn"). The MinHealth field is written (every
+-- hit is clamped at it: KILLS_HEALTH_DEATH.md 2), as the revive floor and the real planes do; SetMinHealth keeps whole
+-- points only, so 0.73.76's SetMinHealth(0.1) set 0 and a joiner's copies had no floor at all. The logs of 2026-11-02:
+-- dukka's and mobi118's copies went down to the ships' copies there up to 700 s before the host's kill (60 and 116
+-- flights), the host's "hp" then wrote health back onto the wrecks (invisible enemies with target boxes), and their
+-- flights' next spawns were refused. FLOOR_IN: the floor as HealthInternal (health x 10).
+local FLOOR_IN = 10
+local function floorOn(o)
+    local hp = FLOOR_IN / 10
+    local ok = pcall(function() o.MinHealth = hp end)
+    if not ok then ok = pcall(function() o:SetMinHealth(hp) end) end
+    if not M.floorSaid then                              -- (once a level: what the field reads back)
+        M.floorSaid = true
+        local okR, v = pcall(function() return o.MinHealth end)
+        log(string.format("coop: copies held at %.1f HP until the host's kill (%s; MinHealth reads back %s)", hp,
+            ok and "the field written" or "NOT written", okR and tostring(v) or "nothing"))
+    end
+    return ok
+end
+-- (0.73.77, plan A6) copy c's wait at the floor is over (the host's kill, or its health from the host): the minute's
+-- longest kept for the sync report
+local function floorDone(c)
+    if not (c and c.floorAt) then return end
+    local w = os.clock() - c.floorAt
+    c.floorAt = nil
+    if w > (M.cnt.floorMax or 0) then M.cnt.floorMax = w end
+end
 -- force (0.73.73): an invincible copy too (a taxiing ally, the shuttle, the pad's guns and dummies): the host's is gone or
 -- spawning afresh. Without it the testers' joiners couldn't finish them ("a copy here couldn't be finished (health 9300
 -- after)"), they stayed up unbound, flying their own AI ("VOID WATCHER became a space shuttle", MOONCHILD "submersible"),
@@ -718,6 +899,7 @@ local function killCopy(id, o, torn, force)
         pcall(function() o:SetIsInvincible(false) end)
         pcall(function() o.bIsInvincible = false end)
     end
+    pcall(function() o.MinHealth = 0.0 end)              -- ((0.73.77) the floor off first: floorOn wrote the field)
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
     local P0 = M.peers[0]
@@ -751,9 +933,12 @@ local function bindCopy(id, o, unit, ord)
     local a = addrOf(o)
     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
-    pcall(function() o:SetMinHealth(0.1) end)               -- (it goes down when the host's does)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = a, ally = allyUnit(unit),   -- (ally: the host's allies' copy)
-                     unit = unit, ord = ord }               -- (0.73.73: its place in its flight here, "dn")
+    floorOn(o)                                              -- (it goes down when the host's does: (0.73.77) at 1 HP)
+    local was = M.copies[id]                                -- ((0.73.77) bound again: your damage so far, clientTick)
+    local mine = was and was.addr == a and was.mine or nil
+    local h = health(o) or 0
+    M.copies[id] = { obj = o, exp = h, addr = a, ally = allyUnit(unit),   -- (ally: the host's allies' copy)
+                     unit = unit, ord = ord, mine = mine, hp = h }  -- (0.73.73: its place in its flight here, "dn")
 end
 
 -- (0.73.73) every object of each of the host's units spawned here, by address (its name too: an address freed and used
@@ -768,27 +953,37 @@ local function noteObj(unit, o)
     if not reg then reg = {}; M.objsOf[unit] = reg end
     reg[a] = { obj = o, name = nameOf(o) }
 end
+-- ((0.73.77, plan A3) a wreck, at 0 health and still in the world, is kept 120 s: the game may still count it in its
+-- unit (AliveChildAIGameObjects), which refuses the unit's next spawn, and doSpawn's take-down finds it here)
 local function pruneObjs()                               -- (strayTick, every 5 s: what's down or gone dropped)
+    local now = os.clock()
     for unit, reg in pairs(M.objsOf) do
         for a, e in pairs(reg) do
             -- (0.73.73 review) unreadable health counts as up, as takeUnitDown has it: dropping such an object here hid
             -- it from a later refused spawn's take-down, the ghost this registry is for
-            if not live(e.obj) or (health(e.obj) or 1) <= 0 then reg[a] = nil end
+            if not live(e.obj) then reg[a] = nil
+            elseif (health(e.obj) or 1) <= 0 then
+                e.zeroAt = e.zeroAt or now
+                if now - e.zeroAt >= 120 then reg[a] = nil end
+            end
         end
         if next(reg) == nil then M.objsOf[unit] = nil end
     end
 end
 -- whatever of `unit` is still up here (its flight here `cu`, if any, and every object of it spawned here), taken down:
--- torn (not a kill), forced (invincible too). How many.
-local function takeUnitDown(unit, cu)
-    local n, seen, idOf = 0, {}, {}
+-- torn (not a kill), forced (invincible too). How many. wrecks ((0.73.77, plan A3), a spawn the game refused): its
+-- objects at 0 health still in the world too, and its planes the plane watch saw go down (sv_core's `planes`) that are
+-- still there, taken down again (ModifyHealth runs the game's own death check on them); how many of those, second.
+local function takeUnitDown(unit, cu, wrecks)
+    local n, w, seen, idOf = 0, 0, {}, {}
     for id, c in pairs(M.copies) do if c.addr then idOf[c.addr] = id end end
     local function one(o, name)
         local a = live(o)
         if not a or seen[a] or (name and nameOf(o) ~= name) then return end
         seen[a] = true
         local id = idOf[a]
-        if (health(o) or 1) > 0 then killCopy(id or 0, o, true, true); n = n + 1 end
+        if (health(o) or 1) > 0 then killCopy(id or 0, o, true, true); n = n + 1
+        elseif wrecks then killCopy(id or 0, o, true, true); w = w + 1 end
         if id then M.copies[id] = nil end
     end
     if cu then
@@ -798,10 +993,13 @@ local function takeUnitDown(unit, cu)
     local reg = M.objsOf[unit]
     for a, e in pairs(reg or {}) do
         one(e.obj, e.name)                               -- (still up after it: kept, for the next try)
-        if not live(e.obj) or nameOf(e.obj) ~= e.name or (health(e.obj) or 0) <= 0 then reg[a] = nil end
+        if not live(e.obj) or nameOf(e.obj) ~= e.name or (not wrecks and (health(e.obj) or 0) <= 0) then reg[a] = nil end
+    end
+    if wrecks then
+        for _, p in ipairs(planes or {}) do if p.unit == unit and p.obj then one(p.obj) end end
     end
     if ALLY and ALLY.forgetActors then pcall(ALLY.forgetActors) end
-    return n
+    return n, w
 end
 
 -- (a joiner) copy o's health scaled here (sv_ai.lua enemyLate: CFG.late, a Skirmisher's x0.75, as the host scales its
@@ -836,9 +1034,11 @@ end
 -- a ship's, vehicle's or part's copy (groundTick): not moved, held up until the host's goes down, its hits sent
 local function bindGround(id, o, unit, key)
     if M.dead[id] then deadOnArrival(id, o, unit, nil, key); return end
-    pcall(function() o:SetMinHealth(0.1) end)
-    M.copies[id] = { obj = o, exp = health(o) or 0, addr = addrOf(o), ally = allyUnit(unit),  -- (addr: a shot's target, "fx")
-                     unit = unit, key = key }
+    floorOn(o)                                              -- ((0.73.77) at 1 HP: the field, not SetMinHealth(0.1) = 0)
+    local a, h = addrOf(o), health(o) or 0
+    local was = M.copies[id]
+    M.copies[id] = { obj = o, exp = h, addr = a, ally = allyUnit(unit),  -- (addr: a shot's target, "fx")
+                     unit = unit, key = key, mine = was and was.addr == a and was.mine or nil, hp = h }
 end
 clientGround = function(o, unit)
     noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
@@ -894,6 +1094,23 @@ local function killAllCopies(why)
         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
     end
+end
+
+-- ((0.73.77) plan F1b) The level is being torn down (sv_core.lua levelGate: the runtime's teardown gate, SV_LevelGone): every
+-- game object co-op keeps is forgotten, none of them touched (no killCopy, no hide, no health: they go with the level, and a
+-- Lua read of a freed one is the quit crash, UE4SS's property lookup). The next level's start (D ~= M.lastD in COOP.tick)
+-- builds the lists again; a player's real plane is spawned again there, as after any level.
+function COOP.levelDrop(why)
+    local n = 0
+    for _ in pairs(M.copies or {}) do n = n + 1 end
+    M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind = {}, {}, {}, nil, nil, nil
+    M.objsOf = {}
+    local p = 0
+    for _, P in pairs(M.peers or {}) do
+        if type(P) == "table" and P.obj ~= nil then P.obj, P.addr = nil, nil; p = p + 1 end
+    end
+    log(string.format("coop: the level is going (%s): %d copies and %d players' planes forgotten here, none touched",
+        tostring(why), n, p))
 end
 
 -- (0.73.73) The host's answer to this game's own "jn" ("rs|j" ... "rz", hostSync) is a repair, not a teardown. What's here
@@ -1003,8 +1220,12 @@ local function doSpawn(q)
             local why = (had and had.respawn and "a plane of it the host has up wasn't here: spawned again")
                 or (had and had.gen ~= q.gen and ("its last flight here, gen " .. tostring(had.gen)))
                 or (had and "spawned here, nothing of it seen") or "no longer tracked here"
-            log(string.format("coop: %s is up here (%d alive; %s): %d of its objects taken down for the host's (gen %s)",
-                unit, alive, why, takeUnitDown(unit, had), tostring(q.gen)))
+            -- ((0.73.77, plan A3) its wrecks too: one the game still counts in the unit refused its spawns while nothing
+            -- of it was tracked here (dukka 22 refusals over 7 flights, mobi118 26, 2026-11-02))
+            local n, w = takeUnitDown(unit, had, true)
+            q.downN, q.wrecksN = n, w
+            log(string.format("coop: %s is up here (%d alive; %s): %d of its objects taken down for the host's (gen %s)%s",
+                unit, alive, why, n, tostring(q.gen), w > 0 and string.format(", and %d wrecks of it still in the world", w) or ""))
         end
         -- (the Alicorn's last copy can't be shot down here: its parked pools are invincible, so it's taken off whole,
         -- as the host does when one is left from last time, and the host's fresh one comes in its place)
@@ -1016,7 +1237,25 @@ local function doSpawn(q)
         end
         q.tries = (q.tries or 0) + 1
         if q.tries < 6 then q.at = os.clock() + 1.5; return false end
-        log("coop: " .. unit .. "'s last copies are still up; spawning anyway")
+        -- ((0.73.77, plan A3) the last resort, after 6 tries: the runtime takes the unit off the phase's list whatever it
+        -- counts (SV_Recycle(unit, 1): 1 recycled, 0 nothing to do, < 0 an error); [coop] force_recycle = false: off)
+        if type(SV_Recycle) == "function" and cfg().force_recycle ~= false then
+            crumb(string.format("coop: %s still up here (%d alive) after %d tries: SV_Recycle", unit, alive, q.tries))
+            local okR, rr = pcall(SV_Recycle, unit, 1)
+            if okR and rr == 1 then M.cnt.recycled = M.cnt.recycled + 1 end
+            log(string.format("coop: %s unstuck: still %d alive here after %d tries; its last flight taken off the phase's "
+                .. "list anyway (SV_Recycle: %s)", unit, alive, q.tries, not okR and ("error " .. tostring(rr))
+                or (rr == 1 and "recycled") or (rr == 0 and "nothing to do") or (SV_ERR[rr] or tostring(rr))))
+        else
+            log("coop: " .. unit .. "'s last copies are still up; spawning anyway" .. (type(SV_Recycle) ~= "function"
+                and " (no SV_Recycle in this runtime)" or " ([coop] force_recycle off)"))
+        end
+    elseif q.downDone and not q.unstuckSaid and (alive == 0 or alive == -7) then   -- ((0.73.77, plan A3) the take-down
+                                                                                     -- let it spawn: 0 up, or off the list)
+        q.unstuckSaid = true
+        M.cnt.unstuck = M.cnt.unstuck + 1
+        log(string.format("coop: %s unstuck after %d tries: its last copies here taken down (%d up, %d wrecks)", unit,
+            (q.tries or 0) + 1, q.downN or 0, q.wrecksN or 0))
     end
     for _, op in ipairs(q.ops) do
         if not knownRow(op.row) then
@@ -1047,6 +1286,7 @@ local function doSpawn(q)
     M.lastSpawnAt = os.clock()
     if type(r) ~= "number" or r <= 0 then
         local left = {}                                  -- ((0.73.73) what of it here couldn't be taken down)
+        M.cnt.refused = M.cnt.refused + 1                -- ((0.73.77, plan A6) the sync report's flights refused)
         for _, e in pairs(M.objsOf[unit] or {}) do
             if upHere(e.obj) and nameOf(e.obj) == e.name then left[#left + 1] = tostring(e.name):match("([^%.:]+)$") or "?" end
         end
@@ -1134,6 +1374,7 @@ local function clientRounds(now)
         D.wave = r.wave > 0 and r.wave or nil
         D.intLevel = r.level and { round = r.round, level = r.level } or nil   -- (the copies fly it: DIR.level, P4)
         D.glitchPhase = r.glitchPhase                    -- (AB.L..IN's on the host: ANOM.clientGlitch, P7)
+        D.hostSpecial = r.hostSpecial                    -- ((0.73.77) the host's special and its state: ANOM.clientTick, SPC.clientClean)
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
     end
@@ -1176,6 +1417,10 @@ local function clientRounds(now)
         local okG, errG = pcall(ANOM.clientGlitch, now)
         if not okG then once("glitchPods", "coop: AB.L..IN pods error " .. tostring(errG)) end
     end
+    if SPC and SPC.clientClean then                      -- ((0.73.77) D4: a finished special's copies taken off here)
+        local okSc, errSc = pcall(SPC.clientClean, now)
+        if not okSc then once("specialClean", "coop: special clean-up error " .. tostring(errSc)) end
+    end
     for i = #M.spawnQ, 1, -1 do
         local q = M.spawnQ[i]
         if os.clock() >= (q.at or 0) then
@@ -1216,6 +1461,7 @@ local function strayTick(now)
     M.strayAt = now + 5
     pruneObjs()
     for a, t in pairs(M.downAt) do if now - t >= DOWN_KEEP_S then M.downAt[a] = nil end end
+    for a, k in pairs(M.killer or {}) do if now - k.at >= DOWN_KEEP_S then M.killer[a] = nil end end   -- ((0.73.77) C1)
     local bound = {}
     for _, c in pairs(M.copies) do local a = c.addr or live(c.obj); if a then bound[a] = true end end
     local found, inFound = {}, {}
@@ -1296,31 +1542,71 @@ local function clientTick()
     pcall(M.buildTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
     -- here (their own hits come from their game: the stand-ins fly damage-0 rows, COOP.syncSetup; this is the backstop)
-    local ins = nil
+    -- (0.73.77, plan A1) A copy waits at the floor (FLOOR_IN, floorOn) for the host's kill, and the floor clips the hit
+    -- that takes it there, so what's sent then is your own damage from its DamageHistoryMap (every hit is added there in
+    -- full: the whole missile), or, the map unread, all it was expected to have (0.73.76's). A copy taken to the floor by
+    -- something else (the host's allies' copies here, a crash) sends nothing and is put back up to what the host's has
+    -- after your hits; one whose hit sent is lethal waits there for the host's "dn" (A6: the sync report's wait). A copy
+    -- at the floor whose health doesn't move (the clamp: the host said less than the floor) is asked its map each tick.
+    local ins, pa = nil, false
     for id, c in pairs(M.copies) do
         if valid(c.obj) then
             local h = health(c.obj)
             if h and h < c.exp and c.ally then
                 c.exp = h                                  -- (an ally's copy: its fight is the host's, nothing sent)
+                if h > 0 and h <= FLOOR_IN and (c.hp or 0) > FLOOR_IN then   -- ((0.73.77) at the floor: back to the host's)
+                    local v = c.hp
+                    if pcall(function() c.obj.HealthInternal = v end) then c.exp = v end
+                end
             elseif h and h < c.exp then
                 local loss = c.exp - h
                 ins = ins or (M.standInSet and M.standInSet()) or {}
-                if next(ins) and M.standInDamage then
-                    local sd = M.standInDamage(c.obj, ins)
-                    local inc = sd - (c.sdmg or 0)
-                    c.sdmg = sd
-                    if inc > 0 then
-                        local cut = math.min(loss, inc * 10)                   -- (DamageHistoryMap: health, not x 10)
-                        loss = loss - cut
-                        M.backstops = (M.backstops or 0) + 1
-                        if M.backstops <= 5 or M.backstops % 50 == 0 then
-                            log(string.format("coopfire: copy %d lost %.1f, %.1f of it another player's stand-in's here: %s "
-                                .. "(%d times)", id, (loss + cut) / 10, cut / 10, loss > 0 and string.format("%.1f sent", loss / 10)
-                                or "nothing sent", M.backstops))
-                        end
+                if pa == false then pa = myAddr() end
+                local sd, mine = 0, nil                    -- ((0.73.77) its map read only while it's live: kept between ticks)
+                if live(c.obj) then sd, mine = M.historyOf(c.obj, ins, pa) end
+                local inc = sd - (c.sdmg or 0)
+                c.sdmg = sd
+                if inc > 0 then
+                    local cut = math.min(loss, inc * 10)                   -- (DamageHistoryMap: health, not x 10)
+                    loss = loss - cut
+                    M.backstops = (M.backstops or 0) + 1
+                    if M.backstops <= 5 or M.backstops % 50 == 0 then
+                        log(string.format("coopfire: copy %d lost %.1f, %.1f of it another player's stand-in's here: %s "
+                            .. "(%d times)", id, (loss + cut) / 10, cut / 10, loss > 0 and string.format("%.1f sent", loss / 10)
+                            or "nothing sent", M.backstops))
+                    end
+                end
+                local own = nil                            -- ((0.73.77) yours since the last look, x 10; nil: unread,
+                if mine then                               -- or your plane not yet seen in any copy's map this level)
+                    local d = math.max(0, (mine - (c.mine or 0)) * 10)
+                    c.mine = mine
+                    if M.ownSeen then own = d end
+                end
+                local newH = h
+                if h > 0 and h <= FLOOR_IN then            -- (down here, the floor not held: as before, never put back)
+                    if own then loss = own elseif loss > 0 then loss = c.exp end
+                    if loss < c.exp then                   -- (not lethal by what's sent: up to the host's after it)
+                        local v = math.max(FLOOR_IN + 1, c.exp - loss)
+                        if pcall(function() c.obj.HealthInternal = v end) then newH = v end
+                        M.cnt.floorBack = M.cnt.floorBack + 1
+                    elseif not c.floorAt then
+                        c.floorAt = os.clock()             -- (lethal: it waits here for the host's kill)
+                        M.cnt.floored = M.cnt.floored + 1
                     end
                 end
                 if loss > 0 then send(true, "ht", id, string.format("%.1f", loss / 10)) end
+                c.exp = newH
+            elseif h and h > 0 and h <= FLOOR_IN and not c.ally then
+                -- ((0.73.77) at the floor, its health not moving: your hits since, from the map)
+                if pa == false then pa = myAddr() end
+                local mine = nil
+                if live(c.obj) then mine = select(2, M.historyOf(c.obj, nil, pa)) end
+                local own = (mine and M.ownSeen) and (mine - (c.mine or 0)) * 10 or 0
+                if mine then c.mine = mine end
+                if own > 0 then
+                    send(true, "ht", id, string.format("%.1f", own / 10))
+                    if not c.floorAt then c.floorAt = os.clock(); M.cnt.floored = M.cnt.floored + 1 end
+                end
                 c.exp = h
             elseif h and h > c.exp then
                 c.exp = h                                  -- (raised here: CFG.late, a repair)
@@ -1394,6 +1680,9 @@ local function spawnReal(slot, P, code, lo, pt)
     local cls = loadObject(path)
     if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
     local at, yaw = P.at, (P.rot and P.rot[2]) or 0
+    -- ((0.73.77) SV_CoopSpawnPP destroys the plane the runtime keeps in this slot: a set-aside one moved on first, M.nativeFree)
+    local okF, whyF = M.nativeFree(slot)
+    if not okF then return nil, whyF end
     local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot, lo or "",
         cfg().real_paint ~= false and pt or "")
     if type(a) ~= "number" or a <= 0 then return nil, "SV_CoopSpawnPP " .. tostring(a) end
@@ -1401,6 +1690,194 @@ local function spawnReal(slot, P, code, lo, pt)
         if valid(x) and addrOf(x) == a then return x end
     end
     return nil, "spawned (" .. tostring(a) .. ") but not found"
+end
+
+---------------------------------------------------------------------------------------------------- a rejoin in another aircraft
+-- (0.73.77, plan workstream C) A player who left (their link let go: "sys|left" on the host, its "po" on the joiners) or
+-- whose game started a new session ("sys|restart" on the host, its "rj" on the joiners) and is back in another aircraft
+-- (or with other weapons) gets a new plane here. Shake Shack's run of 2026-11-02: liljojofett left in a Su-47 and came
+-- back 18 s later in a Rafale M, and everyone saw the Su-47 to the end of the level ("player 2's loadout changed: their
+-- real plane here keeps the one it was spawned with"). A live player plane is still never destroyed mid-level (0.73.11's
+-- crash, a frame after a replaced real plane was freed): the old one is set aside (M.setAside: unbound, hidden, collision
+-- and tick off, moved up out of the fight, as host migration's) and the new one spawned as a newcomer's. SV_CoopSpawnPP
+-- destroys what the runtime keeps in the slot it's given (coop.c), so a set-aside real plane is moved out of its
+-- player's slot into one no player has (SV_CoopSwapPP; M.parkAt) and on again before a plane is spawned there. An AI
+-- stand-in can't change airframe once up, nor its unit spawn again while it's up: the new one flies a free stand-in unit
+-- (M.standInUnit; M.unitSlot maps it back to its player). A change by a player who never left keeps the rule: their
+-- plane here keeps its weapons until the next level. CFG.coop.rejoin.
+do
+M.left, M.aside, M.parkAt, M.standUnit, M.unitSlot, M.asideUnit = {}, {}, {}, {}, {}, {}
+local function rejoinCfg() return cfg().rejoin or {} end
+-- a slot no player has in the runtime (nor this game, nor a plane kept there), the highest first (the host gives the
+-- lowest free one to a newcomer)
+local function freeNative(but)
+    for t = MAX_SLOT, 0, -1 do
+        if t ~= but and t ~= COOP.slot and not M.roster[t] and not (M.peers[t] and M.peers[t].obj) and not M.parkAt[t] then return t end
+    end
+    return nil
+end
+-- (spawnReal, before SV_CoopSpawnPP for `slot`) a set-aside plane the runtime keeps in that slot moved to a free one.
+-- false, why when it can't be (SV_CoopSpawnPP would destroy it: no real plane spawned, the AI stand-in instead)
+function M.nativeFree(slot)
+    local e = M.parkAt[slot]
+    if not e then return true end
+    if not live(e.obj) then M.parkAt[slot] = nil; return true end         -- (gone with its level: nothing to destroy)
+    local t = type(SV_CoopSwapPP) == "function" and freeNative(slot) or nil
+    if not t then return false, "a set-aside plane is kept in its slot and no other slot is free" end
+    SV_CoopSwapPP(slot, t)
+    M.parkAt[slot], M.parkAt[t], e.slot = nil, e, t
+    log(string.format("coop: a set-aside plane kept in slot %d moved to slot %d (player %d's new plane spawns there)",
+        slot + 1, t + 1, slot + 1))
+    return true
+end
+-- (M.slotFix's SV_CoopSwapPP(a, b): player slots a and b trade planes) the set-aside planes the runtime keeps in either
+-- slot go with the swap, and a rejoin's mark goes with its player
+function M.slotSwapped(a, b)
+    M.parkAt[a], M.parkAt[b] = M.parkAt[b], M.parkAt[a]
+    if M.parkAt[a] then M.parkAt[a].slot = a end
+    if M.parkAt[b] then M.parkAt[b].slot = b end
+    M.left[a], M.left[b] = M.left[b], M.left[a]
+end
+-- player `slot`'s plane here (P) set aside, never destroyed: unbound, hidden, collision and tick off, moved up out of the
+-- fight (aside_alt_km); a real one moved out of its player's slot in the runtime (kept where it is, and moved before
+-- that slot's next real plane spawns, when no other slot is free), an AI stand-in's unit never flown again. M.peers[slot]
+-- is the caller's.
+function M.setAside(slot, P, why)
+    local o = P and P.obj
+    if not (o and live(o)) then return false end
+    if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, 0) end
+    local kept
+    if P.real then
+        local t = type(SV_CoopSwapPP) == "function" and freeNative(slot) or nil
+        if t then
+            SV_CoopSwapPP(slot, t)                       -- (t keeps nothing: freeNative; slot's plane is this one)
+            M.parkAt[t] = { obj = o, slot = t, from = slot }
+            kept = string.format("kept in slot %d", t + 1)
+        else
+            M.parkAt[slot] = { obj = o, slot = slot, from = slot }
+            kept = "kept in its slot (no other free: moved before a new plane spawns there)"
+        end
+    else
+        local u = P.unit or PEER_UNITS[slot]
+        M.asideUnit[u] = true
+        if M.unitSlot[u] then M.unitSlot[u] = nil end
+        if M.standUnit[slot] == u then M.standUnit[slot] = nil end
+        kept = "its unit " .. u .. " not flown again"
+    end
+    pcall(function() o:SetActorHiddenInGame(true) end)
+    pcall(function() o:SetActorEnableCollision(false) end)
+    local okT = pcall(function() o:SetActorTickEnabled(false) end)
+    local alt = tonumber(rejoinCfg().aside_alt_km) or 30
+    local okM = false
+    if alt > 0 then
+        okM = pcall(function()
+            local v = o:K2_GetActorLocation()
+            o:K2_SetActorLocation({ X = v.X, Y = v.Y, Z = alt * 100000 }, false, {}, true)
+        end)
+    end
+    M.aside[#M.aside + 1] = { obj = o, slot = slot, real = P.real, unit = (not P.real) and (P.unit or PEER_UNITS[slot]) or nil }
+    log(string.format("coop: player %d's plane here set aside, hidden (%s): %s, tick %s, %s", slot + 1, why, kept,
+        okT and "off" or "NOT off", okM and string.format("moved %.0f km up", alt) or (alt > 0 and "NOT moved" or "left where it is")))
+    return true
+end
+-- (at a new level here) the set-aside planes gone with their level let go; a restart in the same level keeps them
+function M.asidePrune()
+    local keep = {}
+    for _, e in ipairs(M.aside) do
+        if live(e.obj) then keep[#keep + 1] = e elseif e.unit then M.asideUnit[e.unit] = nil end
+    end
+    M.aside = keep
+    for t, e in pairs(M.parkAt) do if not live(e.obj) then M.parkAt[t] = nil end end
+end
+-- whether stand-in unit u is set aside or flown for a player other than `slot`
+local function unitTaken(u, slot)
+    if M.asideUnit[u] then return true end
+    if M.unitSlot[u] ~= nil and M.unitSlot[u] ~= slot then return true end
+    for t, Q in pairs(M.peers) do
+        if t ~= slot and Q.obj and not Q.real and (Q.unit or PEER_UNITS[t]) == u then return true end
+    end
+    return false
+end
+-- the stand-in unit player `slot`'s AI plane flies here: their own (SV_Unit_CoopPeer<A-X>), else (it's set aside, or
+-- another player's) a free one: this game's own slot's (never flown here), then the highest slots nobody has. nil: none
+function M.standInUnit(slot)
+    local cur = M.standUnit[slot]
+    if cur and not unitTaken(cur, slot) then return cur end
+    M.standUnit[slot] = nil
+    local own = PEER_UNITS[slot]
+    if not unitTaken(own, slot) then return own end
+    local order = {}
+    if COOP.slot and COOP.slot ~= slot then order[1] = COOP.slot end
+    for t = MAX_SLOT, 0, -1 do if t ~= slot and t ~= COOP.slot and not M.roster[t] then order[#order + 1] = t end end
+    for _, t in ipairs(order) do
+        local u = PEER_UNITS[t]
+        if not unitTaken(u, slot) and not (type(SV_UnitAlive) == "function" and (tonumber(SV_UnitAlive(u)) or 0) > 0) then
+            M.standUnit[slot], M.unitSlot[u] = u, slot
+            log(string.format("coop: player %d's stand-in flies %s here (theirs, %s, is set aside or another player's)", slot + 1, u, own))
+            return u
+        end
+    end
+    once("standin" .. slot, string.format("coop: player %d's stand-in: no free stand-in unit here (theirs, %s, is set aside)", slot + 1, own))
+    return nil
+end
+-- (on the host: "sys|left", "sys|restart"; on a joiner: the host's "po" / "rj") player `slot` may come back in another
+-- aircraft: marked until they're back in the mission
+function M.markLeft(slot, why)
+    if not slotOk(slot) or slot == COOP.slot then return end
+    if rejoinCfg().enabled == false then return end
+    M.left[slot] = { at = os.clock(), why = why }
+    local P = M.peers[slot]
+    if P and P.obj then
+        log(string.format("coop: player %d %s: if they're back in another aircraft, their plane here (%s) is set aside and a "
+            .. "new one spawned", slot + 1, why, tostring(P.real and P.code or P.row or "?")))
+    end
+end
+-- (peerTick, a player marked by M.markLeft) -> their P (a new one once the old plane's set aside: spawned below as a
+-- newcomer's) and whether their old plane stays hidden meanwhile (back in the mission, their airframe not heard of yet:
+-- up to wait_s)
+function M.rejoinTick(slot, P, r0, code, lo, fresh)
+    local rj = M.left[slot]
+    if not rj then return P, false end
+    if not (P.obj and live(P.obj)) then M.left[slot] = nil; return P, false end   -- (no plane here: theirs comes as anyone's)
+    if not fresh then rj.freshAt = nil; return P, false end                       -- (not back yet: hidden as ever)
+    rj.freshAt = rj.freshAt or os.clock()
+    local known = r0 ~= nil and (code ~= nil or (type(r0.row) == "string" and r0.row ~= ""))
+    if not known then
+        local wait = tonumber(rejoinCfg().wait_s) or 10
+        if os.clock() - rj.freshAt < wait then return P, true end
+        M.left[slot] = nil
+        log(string.format("coop: player %d is back, no airframe heard from them in %d s: their plane here kept", slot + 1, wait))
+        return P, false
+    end
+    M.left[slot] = nil
+    local wantReal = realOn() and code ~= nil and P.realFailed == nil
+    local old = P.real and (P.code or "?") or (P.row or "?")
+    local differs, new
+    if P.real then
+        differs = not wantReal or code ~= P.code or (lo ~= "" and lo ~= (P.lo or ""))
+        new = wantReal and (code == P.code and (code .. " with other weapons") or code) or standInRow(r0.row)
+    else
+        new = wantReal and code or standInRow(r0.row)
+        differs = wantReal or new ~= P.row
+    end
+    if not differs then
+        log(string.format("coop: player %d is back in the same %s: their plane here kept", slot + 1, old))
+        return P, false
+    end
+    M.setAside(slot, P, "they rejoined in another aircraft")
+    local nP = { at = P.at, rot = P.rot, hp = P.hp, maxHp = P.maxHp, flags = P.flags, age = P.age, hpPct = P.hpPct, down = P.down,
+                 alive = P.alive, onAirfield = P.onAirfield, fresh = P.fresh, freshAt = P.freshAt, sid = r0.sid,
+                 rejoin = { from = old, to = new } }
+    M.peers[slot] = nP
+    return nP, false
+end
+-- (peerTick, their new plane spawned or not) the rejoin's line, once
+function M.rejoinSaid(slot, P, what)
+    local rj = P and P.rejoin
+    if not rj then return end
+    P.rejoin = nil
+    log(string.format("coop: player %d rejoined in %s (was %s): old plane set aside, %s", slot + 1, tostring(rj.to), tostring(rj.from), what))
+end
 end
 
 local function peerTick(slot)
@@ -1438,10 +1915,13 @@ local function peerTick(slot)
     local code = r0 and r0.code ~= "" and r0.code or nil
     if P.realFailed and P.realFailed ~= code then P.realFailed = nil end        -- (another airframe: try again)
     local lo = r0 and r0.lo or ""
+    -- ((0.73.77, plan C) back after leaving, in another aircraft: their old plane set aside, a new P spawned below)
+    local hold = false
+    if M.left[slot] then P, hold = M.rejoinTick(slot, P, r0, code, lo, fresh) end
     -- (new weapons mid-level: their real plane here keeps the loadout it was spawned with. Replacing a live real plane
     -- crashed the game: the user's co-op run of 2026-10-30, 21:37:39, an access violation reading the destroyed plane a
     -- frame on, some game system still holding it; so it's never destroyed mid-level, and the next level's has them)
-    if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and P.loSaid ~= lo then
+    if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and P.loSaid ~= lo and not M.left[slot] then
         P.loSaid = lo
         log(string.format("coop: player %d's loadout changed: their real plane here keeps the one it was spawned with "
             .. "(the next level's has the new one)", slot + 1))
@@ -1463,6 +1943,7 @@ local function peerTick(slot)
             log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
                 .. "stream; %s; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)",
                 (r0 and r0.paint and r0.paint ~= "") and ("their paint " .. r0.paint) or "its default paint (none sent)"))
+            M.rejoinSaid(slot, P, "new one spawned (their real plane)")       -- ((0.73.77) plan C's line)
         else
             P.realFailed = code
             log(string.format("coop: player %d's real plane (%s) not spawned: %s; their AI stand-in instead", slot + 1, code,
@@ -1487,26 +1968,32 @@ local function peerTick(slot)
         and (known or os.clock() - P.freshAt >= waitS) then
         local row = standInRow(r0 and r0.row)
         local fly = M.flyRow and M.flyRow(row) or row        -- (its damage-0 copy, <row>_svcp: the sync's)
+        unit = M.standInUnit(slot) or unit                   -- ((0.73.77) a free unit while theirs is set aside: plan C4)
         rawSetAircraft(unit, fly)
         spawningUnit = unit
         local r = rawSpawn(unit)
         spawningUnit = nil
-        P.spawning, P.row = os.clock(), row
+        P.spawning, P.row, P.unit = os.clock(), row, unit
+        local up = type(r) == "number" and r > 0
         log(string.format("coop: player %d's plane as %s%s: %s", slot + 1, fly,
             known and "" or string.format(" (no %s from them in %d s)", r0 and "airframe" or "hello", waitS),
-            (type(r) == "number" and r > 0) and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+            up and "spawned" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        M.rejoinSaid(slot, P, up and ("new one spawned (an AI stand-in, " .. unit .. ")")
+            or ("the new one NOT spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"))
     elseif P.spawning and os.clock() - P.spawning > 10 then
         P.spawning = nil                                  -- (it never came: again)
     end
     if P.obj then
         -- (hidden while they're DOWN too, sv_down.lua: flown round their airfield out of the fight, nothing to see or hit)
-        local show = (fresh and not P.down) and true or false
+        -- ((0.73.77) and while a rejoin waits for their airframe: their old plane may not be theirs any more, hold)
+        local show = (fresh and not P.down and not hold) and true or false
         if show ~= P.shown then
             P.shown = show
             pcall(function() P.obj:SetActorHiddenInGame(not show) end)
             pcall(function() P.obj:SetActorEnableCollision(show) end)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
             log(string.format("coop: player %d's plane %s", slot + 1, show and "shown"
+                or (hold and "hidden (back after leaving: waiting for their airframe)")
                 or (fresh and "hidden (down)" or "hidden (not in the mission)")))
         end
         if P.real and valid(P.obj) and P.addr and type(SV_PPName) == "function" then
@@ -1574,12 +2061,26 @@ function COOP.me() return localPlayer() end
 -- was rebuilt, a line a minute from sv_audit.lua (COOP.syncReport): on a joiner its copies (bound to the host's ids or
 -- not), the strays taken down, its asks for the whole picture (jn) and the host's answers (rs), the copies it tore down
 -- and its teardowns; on the host the joiners' asks it answered. Counted since the last report.
-M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0, repairs = 0 }
+-- ((0.73.77, plan A6) and the floor: copies that went to it (a lethal hit sent, waiting for the host's kill), the longest
+-- wait there, those put back up (taken there by something not yours); spawns of the host's refused here, flights unstuck
+-- (A3) and by SV_Recycle; the host's health for copies already down here, skipped (A2))
+function M.newCnt()
+    return { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0, repairs = 0,
+             floored = 0, floorMax = 0, floorBack = 0, refused = 0, unstuck = 0, recycled = 0, hpDead = 0 }
+end
+M.cnt = M.newCnt()
 function COOP.syncReport()
     local c = M.cnt
-    M.cnt = { torn = 0, teardowns = 0, strays = 0, jnSent = 0, rsGot = 0, jnGot = 0, repairs = 0 }
+    M.cnt = M.newCnt()
     if COOP.host() then
-        return string.format("host: %d joiners linked, %d asks for the whole picture answered (rs)", M.linkedPeers or 0, c.jnGot)
+        -- ((0.73.77, economy C1) the run's kills by the player the host named: COOP.killTally)
+        local t, parts = COOP.killTally(), {}
+        for s = 0, MAX_SLOT do
+            local k = t[s]
+            if k then parts[#parts + 1] = string.format("player %d %d%s", s + 1, k.air, k.ground > 0 and string.format(" (+%d ground)", k.ground) or "") end
+        end
+        return string.format("host: %d joiners linked, %d asks for the whole picture answered (rs); the run's kills by player: %s",
+            M.linkedPeers or 0, c.jnGot, #parts > 0 and table.concat(parts, ", ") or "none yet")
     end
     local flights, copies, bound = 0, 0, 0
     for _, cu in pairs(M.cunits or {}) do
@@ -1591,13 +2092,31 @@ function COOP.syncReport()
             end
         end
     end
+    local now, atFloor, longest = os.clock(), 0, 0
+    for _, cp in pairs(M.copies) do
+        if cp.floorAt then atFloor = atFloor + 1; longest = math.max(longest, now - cp.floorAt) end
+    end
     return string.format("joiner: %d copies of %d flights (%d bound to the host's ids, %d not), %d strays taken down, %d asks "
-        .. "for the whole picture (jn), %d answers (rs; %d of them repairs, the copies kept), %d copies torn down in %d teardowns",
-        copies, flights, bound, copies - bound, c.strays, c.jnSent, c.rsGot, c.repairs or 0, c.torn, c.teardowns)
+        .. "for the whole picture (jn), %d answers (rs; %d of them repairs, the copies kept), %d copies torn down in %d teardowns; "
+        .. "the floor: %d copies there now waiting for the host's kill (the longest %.1f s), %d went there, their longest wait "
+        .. "%.1f s, %d put back up (not your kill); %d flights refused here, %d unstuck (%d by SV_Recycle); hp for %d dead copies skipped",
+        copies, flights, bound, copies - bound, c.strays, c.jnSent, c.rsGot, c.repairs or 0, c.torn, c.teardowns,
+        atFloor, longest, c.floored, c.floorMax, c.floorBack, c.refused, c.unstuck, c.recycled, c.hpDead)
 end
 -- whether this game tore copies down itself within the last s seconds (and why last): the pay audit's suspect window
 function COOP.tornRecently(s)
     return M.tornLast ~= nil and os.clock() - M.tornLast <= (s or 5), M.tornWhy
+end
+-- ((0.73.77, Workstream B1) the co-op lists kept between ticks, for the perf line's "lists:" (sv_main.lua perfLists):
+-- { name, size } pairs, counted only; a list that grows over a long run shows there)
+function COOP.sizes()
+    if not COOP.open then return {} end
+    local function n(t) local k = 0; if type(t) == "table" then for _ in pairs(t) do k = k + 1 end end; return k end
+    local objs = 0
+    for _, reg in pairs(M.objsOf or {}) do objs = objs + n(reg) end
+    return { { "copies", n(M.copies) }, { "flights here", n(M.cunits) }, { "objects", objs }, { "ids", n(M.byId) },
+             { "flights", n(M.units) }, { "dead ids", n(M.dead) }, { "torn", n(M.torn) }, { "down", n(M.downAt) },
+             { "strays watched", n(M.strayFirst) }, { "players", n(M.peers) } }
 end
 
 function COOP.players()
@@ -1627,7 +2146,13 @@ end
 -- For sv_down.lua (revives, the spectator camera): a reliable message to slot `to` (nil: everyone; a joiner's all go to
 -- the host), a player's name, a slot's check, how many other games are linked, what this game keeps of another player
 -- (peerTick's P), and the other players' planes here to watch (shown, their state fresh, not DOWN), in slot order
-function COOP.msg(to, ...) return sendTo(to, true, ...) end
+function COOP.msg(to, ...)
+    -- ((0.73.77, plan A9) the host's run-over to everyone (sv_down.lua: every player down) is kept for this level: a
+    -- player who links or links back later gets it with the host's picture, hostSync)
+    local kind, a1 = ...
+    if kind == "ro" and to == nil and COOP.host() and not M.ro then M.ro = { round = a1, at = os.clock() } end
+    return sendTo(to, true, ...)
+end
 function COOP.name(slot) return playerName(slot) end
 COOP.slotOk = slotOk
 function COOP.linked() return COOP.open and (M.linkedPeers or 0) or 0 end
@@ -1815,6 +2340,28 @@ function M.standInDamage(o, set)
         end)
     end)
     return sum
+end
+-- (0.73.77, plan A1) one look at copy o's DamageHistoryMap (in health; every hit is added there in full, before the floor
+-- clamps its health): what the stand-ins and allies' copies in `set` (may be nil) have done to it, and what your plane
+-- (address pa) has, nil when the map couldn't be read. The first time your plane shows up in a copy's map, M.ownSeen:
+-- from then on the floor's hits trust it (clientTick)
+function M.historyOf(o, set, pa)
+    local sum, mine = 0, 0
+    local ok = pcall(function()
+        o.DamageHistoryMap:ForEach(function(k, v)
+            local okK, a = pcall(function() return k:get():GetAddress() end)
+            local okV, x = pcall(function() return v:get() end)
+            if okK and okV and type(x) == "number" and x > 0 then
+                if set and set[a] then sum = sum + x
+                elseif pa and a == pa then mine = mine + x end
+            end
+        end)
+    end)
+    if ok and mine > 0 and not M.ownSeen then
+        M.ownSeen = true
+        log("coop: your hits read from the copies' damage maps: a hit the floor clips is sent whole")
+    end
+    return sum, ok and mine or nil
 end
 
 -- your weapon's kind by its class: "m" the standard missile (BP_plwp_msl_*), "s" a special weapon (the stand-ins fire
@@ -2354,7 +2901,8 @@ end
 do
 local PERSONAL = { coop = true, hud = true, sound = true, music = true, leaderboard = true, menu = true, probe = true, ai_watch = true,
                    stats = true, tells = true, profile = true, flares = true,   -- (profile, flares: P6's, each player's own)
-                   log = true }                                                 -- ([log] verbose: each game's log)
+                   log = true,                                                  -- ([log] verbose: each game's log)
+                   recycle = true }                                             -- ((0.73.77) each runtime's own (F2b))
 -- Inside a PERSONAL section, the host's all the same: the run's revives ([coop.revive], sv_down.lua: one price and floor
 -- for the room) but for what's each player's own there (OWN_IN: the next-player key and the spectator camera)
 local SHARED_IN = { { "coop", "revive" } }
@@ -2858,17 +3406,19 @@ function M.onHostAway(f)
         log(string.format("coop: migration: the host's reloading, waited for up to %d s", secs))
     end
 end
--- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level)
+-- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level). (0.73.77) The
+-- rejoin's M.setAside: tick and collision off, moved up, and a real one moved out of its slot in the runtime: kept there,
+-- the next player's real plane in that slot (SV_CoopSpawnPP) destroyed it, the crash this rule keeps away
 function M.retirePeer(s, why)
     local P = M.peers[s]
     M.peers[s] = nil
     if not (P and P.obj and valid(P.obj)) then return end
-    pcall(function() P.obj:SetActorHiddenInGame(true) end)
-    pcall(function() P.obj:SetActorEnableCollision(false) end)
-    if type(SV_CoopPeer) == "function" then SV_CoopPeer(s, 0) end
-    M.retired = M.retired or {}
-    M.retired[#M.retired + 1] = P.obj
-    log(string.format("coop: player %d's plane here set aside, hidden (%s)", s + 1, why))
+    if not M.setAside(s, P, why) then
+        pcall(function() P.obj:SetActorHiddenInGame(true) end)
+        pcall(function() P.obj:SetActorEnableCollision(false) end)
+        if type(SV_CoopPeer) == "function" then SV_CoopPeer(s, 0) end
+        log(string.format("coop: player %d's plane here set aside, hidden (%s)", s + 1, why))
+    end
 end
 -- (every tick, before the planes) each player's real plane in their slot: one in another moves with them (from this
 -- game's own slot too: it was theirs before this game took it), one that's another player's now is set aside; one left
@@ -2883,7 +3433,7 @@ function M.slotFix()
             for t, Q in pairs(M.peers) do
                 if t ~= s and Q.real and Q.sid == sid and Q.obj then
                     M.peers[s], M.peers[t] = Q, P
-                    if type(SV_CoopSwapPP) == "function" then SV_CoopSwapPP(s, t) end
+                    if type(SV_CoopSwapPP) == "function" then SV_CoopSwapPP(s, t); M.slotSwapped(s, t) end   -- ((0.73.77) what's kept per slot too)
                     Q.shown, Q.ownSlotAt = nil, nil
                     if P then P.shown = nil end
                     log(string.format("coop: player %d is back as player %d: their plane here moved with them", t + 1, s + 1))
@@ -2936,6 +3486,7 @@ becomeHost = function(now)
     log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it", mg.i, #mg.list))
     COOP.reopen("host", "host migration", table.concat(partners, ","))
     mg.hosting, mg.expect, mg.hostAt = true, expect, now
+    if LB and LB.coopTakeover then pcall(LB.coopTakeover) end   -- ((0.73.77, plan H2) the co-op run's record goes on here)
     killAllCopies("host migration")
     M.retirePeer(0, "the old host's: you're the host now")
     -- the round: the one in play again (between rounds, the next), break_s on and once everyone's back (joinWaiting).
@@ -3073,6 +3624,7 @@ local function onHostMessage(from, f)
     elseif k == "ao" then onOrder(f, false)              -- a joiner changed the allies' orders
     elseif k == "fx" then M.fxFromJoiner(from, f)       -- a joiner's shots: its plane here fires them, the others told
     elseif (k == "dw" or k == "rv") and DOWN and DOWN.onHost then DOWN.onHost(from, f)   -- (down, a revive: sv_down.lua)
+    elseif k == "lb" and LB and LB.coopMsg then LB.coopMsg(f, from)   -- ((0.73.77, plan H2) a joiner's leaderboard name)
     elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
         local i, c = inNum(f[2], 100), inNum(f[3], 100)
         local now = os.clock()
@@ -3093,21 +3645,31 @@ local function onJoinerMessage(f)
     elseif k == "sq" then M.onSuccession(f)              -- host migration: the next hosts, best link first
     elseif k == "al" then M.onAllies(f)                  -- host migration: the allies and defences up
     elseif k == "hl" then M.onHostAway(f)                -- host migration: the host's reloading (a run's end)
+    elseif k == "lb" and LB and LB.coopMsg then LB.coopMsg(f)   -- ((0.73.77, plan H2) the co-op run's squad: sv_leaderboard.lua)
     elseif k == "hq" then                                -- the host has no hello from you (peerTick): again, once a second
         if os.clock() >= (M.hqAt or 0) then
             M.hqAt = os.clock() + 1
             sendHi()
             once("hq", "coop: the host asked for your hello (it had none from you): sent")
         end
-    elseif (k == "dw" or k == "rb" or k == "rx" or k == "ro" or k == "rc") and DOWN and DOWN.onJoiner then DOWN.onJoiner(f)   -- (sv_down.lua)
+    elseif (k == "dw" or k == "rb" or k == "rx" or k == "ro" or k == "rc") and DOWN and DOWN.onJoiner then
+        -- ((0.73.77, plan A9) the host's run-over while this level still loads: it comes again with the host's picture,
+        -- asked for once this game's plane is in the level)
+        if k == "ro" and not D then log("coop: the host's run is over (round " .. short(f[2], 8) .. "); this level is still loading: it comes again once it's in") end
+        DOWN.onJoiner(f)                                 -- (sv_down.lua)
     elseif k == "rnd" then
         local lv = tonumber(f[8])                         -- (the intensity director's level, P4: a whole 0-3, else none)
         if not (lv and lv == math.floor(lv) and lv >= 0 and lv <= #SPIKE_SUFFIX) then lv = nil end
         local gp = tonumber(f[9])                         -- (AB.L..IN's phase, P7: 1-3, else none)
         if not (gp == 1 or gp == 2 or gp == 3) then gp = nil end
+        local sk = tostring(f[11] or ""):match("^%a+$")    -- ((0.73.77, plan D3) the round's special there: a word, or none)
+        if sk and #sk > 16 then sk = nil end
+        -- ((0.73.77, D4) the special in play there and its state: two words, or none)
+        local hk, hst = tostring(f[12] or ""):match("^(%a+):(%a+)$")
+        local hs = (hk and #hk <= 16 and #hst <= 16) and { kind = hk, state = hst } or nil
         M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
                   waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock(),
-                  allies = roomAlliesOf(f[10]) }
+                  allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs }
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end
@@ -3137,6 +3699,10 @@ local function onJoinerMessage(f)
             callout(string.upper(playerName(s)) .. " LEFT", nil)
             M.roster[s] = nil
         end
+        if slotOk(s) then M.markLeft(s, "left") end       -- ((0.73.77, plan C1) back in another aircraft: a new plane here)
+    elseif k == "rj" then                                -- ((0.73.77) a player's game started over: the same, plan C1)
+        local s = tonumber(f[2])
+        if slotOk(s) then M.markLeft(s, "started their game over") end
     elseif k == "af" and AF then
         local down = f[4] == "1"
         AF.hp, AF.full, RUN.dirty = tonumber(f[2]) or AF.hp, tonumber(f[3]) or AF.full, true
@@ -3236,13 +3802,21 @@ local function onJoinerMessage(f)
         local o = cu.gobjs and cu.gobjs[key]
         if o and live(o) then bindGround(id, o, unit, key) end
     elseif k == "hp" then
+        -- ((0.73.77, plan A2) never onto a copy that's down here: 0.73.76 wrote the host's health back onto wrecks,
+        -- invisible enemies with target boxes no hit could finish; each one skipped is counted for the sync report)
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
             h = tonumber(h)
-            if c and valid(c.obj) and h and h > 0 then
-                local v = math.min(math.max(h, 1), 2147483647)
-                pcall(function() c.obj.HealthInternal = v end)
-                c.exp = v
+            if c and h and h > 0 and live(c.obj) then
+                local own = health(c.obj)
+                if own and own <= 0 then
+                    M.cnt.hpDead = M.cnt.hpDead + 1
+                elseif own then
+                    local v = math.min(math.max(h, 1), 2147483647)
+                    pcall(function() c.obj.HealthInternal = v end)
+                    c.exp, c.hp = v, v                         -- (hp: the host's own, an ally's copy put back to it)
+                    if v > FLOOR_IN then floorDone(c) end      -- (off the floor: the host's has more than you sent)
+                end
             end
         end
     elseif k == "dn" then
@@ -3255,6 +3829,13 @@ local function onJoinerMessage(f)
             if pu then if r.ord then pu.alive[r.ord] = nil else pu.galive[r.key] = nil end end
             local c = M.copies[id]
             if c then
+                -- ((0.73.77, economy C1) who made the kill, named by the host (field 4: a player's slot; a, s, d: the allies,
+                -- the allied ships, the airfield's defences): this game's pay for it goes by it (KILL.by, M.killerOf))
+                if f[3] ~= "r" and c.addr and f[4] and f[4] ~= "" then
+                    M.killer = M.killer or {}
+                    M.killer[c.addr] = { code = short(f[4], 2), at = os.clock() }
+                end
+                floorDone(c)                                   -- ((0.73.77, A6) its wait at the floor, if it had one)
                 -- ((0.73.73) forced: the host's is down, invincible here or not; "dn|<id>|r", a death the host's picture
                 -- repeats, is long since: not this game's kill. Off its flight's planes here: strayTick counted it a stray)
                 killCopy(id, c.obj, f[3] == "r", true)
@@ -3272,19 +3853,18 @@ local function onJoinerMessage(f)
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end
-    elseif k == "vm" and COOP.client() then              -- ((0.73.76) the host's VALKA mood: the red sky and her song here too)
-        local c = CFG.specials.valka
-        if c and D then
-            if f[2] == "1" then
-                if c.red and c.red.enabled ~= false then hudRed(true, c.red) end
-                pcall(SND.songStart, c.song)
-            else
-                hudRed(false)
-                pcall(SND.songFade, c.song and c.song.out_s or 5)
-                M.vr = nil
-            end
-            log("coop: the host's VALKA " .. (f[2] == "1" and "mood on: the sky red and her song here too" or "mood off: the sky and her song fading"))
+    elseif k == "db" and COOP.client() then              -- ((0.73.77, I2: S9) the host's penalty: off your zollars too
+        local n = tonumber(f[2]) or 0
+        if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX and SPORT and SPORT.debit then
+            SPORT.debit(math.floor(n), short(f[3], 80), true)
         end
+    elseif k == "spx" and COOP.client() then             -- ((0.73.77, I7: S12) the host's Spaceport: its row, a retake due)
+        if SPORT and SPORT.fromHost then
+            local okS, errS = pcall(SPORT.fromHost, short(f[2], 400))
+            if not okS then once("spx", "coop: the host's Spaceport state not read: " .. tostring(errS)) end
+        end
+    elseif k == "vm" and COOP.client() then              -- ((0.73.76) the host's VALKA mood: the red sky and her song here too)
+        M.valkaHere(f[2] == "1", "the host's")           -- ((0.73.77) said when it can't be here too: D2)
     elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
         local unit = short(f[2], 96)
         if D and unit == (CFG.specials.valka and CFG.specials.valka.unit) then M.vr = { unit = unit, at = os.clock(), st = {} } end
@@ -3299,6 +3879,8 @@ local function onJoinerMessage(f)
         -- a bare "rs" (before 0.73.73): the host's new run, or its answer to this game's own "jn" of the last 15 s
         local resync = f[2] == "m" or ((f[2] == nil or f[2] == "") and M.jnAt ~= nil and os.clock() - M.jnAt < 15)
         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
+        -- ((0.73.77, plan D2) VALKA's mood off here: the host's picture says it again if she's still up there)
+        if M.vmHere then M.valkaHere(false, resync and (f[2] == "m" and "a new host's level" or "the host's resync") or "the host's run started over") end
         killAllCopies(resync and (f[2] == "m" and "a new host's level" or "the host's resync") or "the host's run started over")
         -- ((0.73.73) only the host's new run brings a player who's DOWN back: Shazzy, A02 11:26:02, "revive: back (the host's
         -- run started over) after 81 s down" on the answer to his own "jn", and A09, A10, A12 the same)
@@ -3322,7 +3904,12 @@ local function onSys(from, what, f)
         if from == 0 then M.hostLostAt = nil end          -- (host migration: the host's back, or a new one)
         sendHi()
         if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
-        if COOP.host() and what == "restart" then M.roster[from] = nil end
+        if COOP.host() and what == "restart" then
+            M.roster[from] = nil
+            -- ((0.73.77, plan C1) their game started over: back in another aircraft, their plane here goes; the joiners too)
+            M.markLeft(from, "started their game over")
+            send(true, "rj", from)
+        end
     elseif what == "slot" then
         COOP.slot = tonumber(f[3])
         log("coop: you are player " .. tostring((COOP.slot or -1) + 1))
@@ -3347,6 +3934,7 @@ local function onSys(from, what, f)
         local P = M.peers[from]
         if P and P.obj then pcall(function() P.obj:SetActorHiddenInGame(true) end); P.shown = false end
         if COOP.host() then send(true, "po", from) end
+        if from ~= 0 then M.markLeft(from, "left") end     -- ((0.73.77, plan C1) a rejoin in another aircraft: a new plane)
     elseif what == "full" then
         callout("CO-OP: THE HOST'S GAME IS FULL", nil)
     elseif what == "badver" then                          -- (joiner, runtime 0.32.6) the host runs another build
@@ -3408,6 +3996,35 @@ bombTick = function(tick)
     if COOP.client() then return end                -- (the host's bombers bomb the host's airfield)
     return mirrored(rawBombTick, tick)
 end
+-- (0.73.77, plan D3) A joiner's special rounds are the host's. Its music (sv_flights.lua musicTick: the round's special
+-- from specialFor) followed this game's own dice (RUN.specialPick, rolled here for rounds the host decided), so the
+-- host's special rounds played a normal round's music here and the other way round, and the log named specials the host
+-- never had. The host sends its round's special in "rnd" (field 11); a joiner's specialFor answers from it (none for a
+-- round the host hasn't said). M.roundSpecial (the host's "rnd"): the round's special as specialFor has it, never
+-- rolling a round's dice before its time (a run started at a later round would have its first round's rolled here).
+do
+local rawSpecialFor = specialFor
+specialFor = function(round)
+    if not COOP.client() then return rawSpecialFor(round) end
+    local r = M.rnd
+    if not (r and r.round == round) then return nil end
+    if M.spSaid ~= round then
+        M.spSaid = round
+        log(string.format("coop: round %d is %s on the host: a %s round's music here", round,
+            r.special and ("its " .. r.special .. " special") or "a normal round", r.special and "special" or "normal"))
+    end
+    return r.special
+end
+function M.roundSpecial(round)
+    local sp = CFG.specials
+    if type(sp) == "table" and sp.enabled and sp.random and type(sp.rotation) == "table" and #sp.rotation > 0 then
+        local pick = RUN and RUN.specialPick
+        local retake = RUN and RUN.sport and RUN.sport.retakeRound == round
+        if not retake and not (pick and pick[round] ~= nil) then return nil end   -- (not picked yet: not rolled here)
+    end
+    return rawSpecialFor(round)
+end
+end
 local rawCallout = hudCallout
 hudCallout = function(text, sub, big)
     rawCallout(text, sub, big)
@@ -3431,6 +4048,7 @@ end
 local rawLogPlane = logPlane
 logPlane = function(o, unit, k)
     local slot = unit and SLOT_OF[unit]
+    if slot and M.unitSlot[unit] then slot = M.unitSlot[unit] end   -- ((0.73.77) a free unit flown for another player: plan C4)
     if slot then
         local ok, err = pcall(COOP.peerPlane, o, slot)
         if not ok then log("coop: player plane error " .. tostring(err)) end
@@ -3458,6 +4076,50 @@ KILL.side = function(o, pawnAddr)
     if a then for _, P in pairs(M.peers) do if P.addr and P.addr == a then return "wingmate" end end end
     return rawSide(o, pawnAddr)
 end
+-- (0.73.77, economy C1) the player (or side) the host named for plane p's kill: the host's own (hostKiller), a joiner's
+-- from its "dn" (M.killer); nil when none was named (a copy lost here on its own, an older host: as before)
+function M.killerOf(p)
+    local a = p and (p.addr or (live(p.obj) and addrOf(p.obj)))
+    if not a then return nil end
+    if COOP.host() then
+        for _, e in pairs(M.byId) do
+            if e.addr == a then local okK, kl = pcall(hostKiller, e); return okK and kl or nil end
+        end
+        return nil
+    end
+    local k = M.killer and M.killer[a]
+    if not k then return nil end
+    local s = tonumber(k.code)
+    if s and slotOk(s) then return { slot = s } end
+    for side, code in pairs(KILL_SIDE_CODE) do if code == k.code then return { side = side } end end
+    return nil
+end
+-- every game pays a kill by the player the host named: its own x1, a teammate's x COOP.teamShare() (sv_main.lua
+-- creditKill: p.killer, the teammate's slot, for its line); a side's (allies, ships, defences) x ally_x as before.
+-- p.hostNamed on a joiner (its kills line says so).
+local rawBy = KILL.by
+KILL.by = function(p)
+    local kl = COOP.open and M.killerOf(p) or nil
+    if kl then
+        p.killer, p.hostNamed = kl.slot, COOP.client() or nil
+        if kl.slot then return kl.slot == (COOP.slot or 0) and "you" or "wingmate" end
+        return kl.side
+    end
+    if rawBy then return rawBy(p) end
+    return "you"
+end
+-- (0.73.77, economy C1, approved 2026-11-03) a teammate's kill pays min(team_x, 1 / (players - 1)) of a kill on every
+-- game, the host's as a joiner's: 0.5 with 2 or 3 players, 0.33 with 4, 0.25 with 5 (CFG.credits.team_x, the host's
+-- setting), so the others' kills add about one more of your own however many fly
+function COOP.teamShare()
+    local cap = tonumber(CFG.credits and CFG.credits.team_x) or 0.5
+    local n = COOP.open and playerCount() or 1
+    return math.min(cap, 1 / math.max(1, n - 1))
+end
+-- ((0.73.77, plan H2) for the co-op run's squad, sv_leaderboard.lua: a slot's roster entry (name, sid, code; read
+-- only) and this game's Steam ID)
+function COOP.roster(slot) return M.roster[slot] end
+function COOP.mySid() return M.mySid and M.mySid() or nil end
 local rawSend = LB.send
 LB.send = function(sh)
     if COOP.open and not cfg().leaderboard then
@@ -3535,7 +4197,8 @@ local function nameTick()
     if type(SV_SetText) ~= "function" then return end
     M.nameSet = M.nameSet or {}
     for s = 0, MAX_SLOT do
-        local n = upperName(playerName(s), 20)
+        -- ((0.73.77) a stand-in unit flown for another player, plan C4: its name key says theirs)
+        local n = upperName(playerName(M.unitSlot[PEER_UNITS[s]] or s), 20)
         if M.nameSet[s] ~= n then
             M.nameSet[s] = n
             pcall(SV_SetText, NAME_KEYS[s], n)
@@ -3746,11 +4409,16 @@ function COOP.tick(tick)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
             -- (whose it is and whether it's their real plane kept too: a host by migration keeps every live plane)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj), sid = P.sid, real = P.real, code = P.code,
-                                                       lo = P.lo, row = P.row } or {}
+                                                       lo = P.lo, row = P.row, unit = P.unit } or {}
         end
+        pcall(M.asidePrune)                                            -- ((0.73.77) set-aside planes gone with a level let go)
+        if M.vmHere then M.valkaHere(false, D and "a new run here" or "the run here is over") end   -- ((0.73.77) D2)
         M.units, M.byId, M.copies, M.cunits, M.spawnQ, M.dead, M.hunts = {}, {}, {}, {}, {}, {}, {}
         M.joinHits, M.pendBind, M.strayFirst, M.rep, M.downAt = nil, nil, nil, nil, {}
         M.replays, groundNew, M.holdQ = {}, {}, nil
+        -- ((0.73.77) a new level: no run-over kept (A9), the kills by player (C1) and the kills' players named start over,
+        -- the floor's line again (A1))
+        M.ro, M.tally, M.killer, M.floorSaid = nil, nil, nil, nil
         -- ((0.73.73) the units' objects kept, a restart in the same level keeps the actors: those of a level gone, or whose
         -- address is another object's now, dropped)
         for unit, reg in pairs(M.objsOf) do
@@ -3773,6 +4441,8 @@ function COOP.tick(tick)
             end
         end
     end
+    local okVw, errVw = pcall(M.valkaWatch)                          -- ((0.73.77) VALKA's mood to every joiner: D1-D2)
+    if not okVw then once("valkaWatch", "coop: VALKA's mood watch error " .. tostring(errVw)) end
     if not D then return end
     -- An online-style pause (user, 2026-10-26: "when the Host Pauses, the game doesn't pause all the enemies for the
     -- other players"): while another player is linked, the pause menu opens but the world keeps running, on the host's

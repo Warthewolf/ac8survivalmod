@@ -54,3 +54,8 @@ everyone, did the settings rows change when pressed, and did the joiners get the
 After playing, EVERYONE sends these three files (from ...\Win64\ue4ss\ and its Mods\AC8SurvivalMode folder), copied
 before starting the game again:
     UE4SS.log, AC8SurvivalMode.log, AC8SurvivalMode_lua.log
+
+After a crash, the player who crashed also sends, before starting the game again: the newest UECC-Windows-... folder
+from %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\ (its UEMinidump.dmp and
+CrashContext.runtime-xml), AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (Mods\AC8SurvivalMode), and a
+line on the round, what they were doing (flying, the STORE, DOWN and spectating, quitting) and who hosted.

@@ -17,7 +17,8 @@
 --     ground with its floor held, native whatever respawn says: the user's co-op run of 2026-10-30);
 --   the refusals: not on the airfield, not down, a second revive, a wrong price, a bad request, another player's "dw";
 --     a joiner's refund on "rx" and with no answer in 10 s; the row's CO-OP ONLY / NOBODY IS DOWN;
---   everyone down: the host's "ro" after 3 s (a player gone from the mission doesn't count), each game's run over
+--   everyone down: the host's "ro" after 3 s (a player gone from the mission doesn't count; (0.73.77, A8) a player
+--     linked and still loading in holds it, up to [coop] join_wait_s), each game's run over
 --     (LB.finish, RE_SV_RunOver); the death check ending nothing in co-op, the run solo as ever;
 --   the host down: its own-plane events not fired here, the rest as ever; the round bonus with down_round_bonus off;
 --   the settings: the host's [coop.revive] for everyone but each player's key and camera;
@@ -793,6 +794,31 @@ tick()
 peer(1, DOWNED)
 ticks(5)
 check(msgs("ro") == "" and #finished == 0, "one still flying: no ro")
+-- ((0.73.77) plan A8: Saint Alessia's run of 2026-11-03, the run ended with scaraboy13's plane 9 s from arriving)
+print("A8: a player still loading in holds the run-over")
+scene("host", 0, { [1] = FLY })                 -- (C, slot 2, linked: on the roster, no plane in the mission yet)
+pawn.HealthInternal = 1
+tick()
+peer(1, DOWNED)
+local from8 = #logs + 1
+ticks(5)
+check(msgs("ro") == "" and line("down: run over held: player C still loading in", from8) ~= nil,
+      "everyone in the mission down, C linked and loading in: held, logged")
+peer(2, FLY)
+ticks(5)
+check(msgs("ro") == "", "C's plane in the mission, flying: no run-over")
+peer(2, DOWNED)
+ticks(4)
+check(msgs("ro") == "-1>ro|5", "C down too: the run's over (3 s)")
+scene("host", 0, { [1] = FLY })
+pawn.HealthInternal = 1
+tick()
+peer(1, DOWNED)
+ticks(80)
+check(msgs("ro") == "", "C loading 80 s: still held")
+ticks(15)
+check(msgs("ro") == "-1>ro|5" and line("down: run over no longer held %(C:", from8) ~= nil,
+      "C never in the mission past [coop] join_wait_s (90 s): the run's over")
 -- the death check
 scene("host", 0, { [1] = FLY })
 RUN.stats.flying = true

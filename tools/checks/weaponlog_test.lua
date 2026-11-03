@@ -23,9 +23,10 @@ os.clock = function() return clock end           -- luacheck: ignore
 VERSION = "0.73.39-weaponlog.test"
 local FNm = { __index = { ToString = function(self) return self.s end }, __tostring = function(self) return self.s end }
 function FName(s) return setmetatable({ s = tostring(s) }, FNm) end
-function NotifyOnNewObject() end
-local FA = {}
-function FindAllOf(c) return FA[c] or {} end
+local notify = {}                                 -- ((0.73.77) the weapons made: the parts' NotifyOnNewObject callbacks)
+function NotifyOnNewObject(c, fn) notify[c] = notify[c] or {}; table.insert(notify[c], fn) end
+local FA, walks = {}, 0
+function FindAllOf(c) if c == "LiveExplosiveWeapon" then walks = walks + 1 end return FA[c] or {} end
 function FindFirstOf() return nil end
 function StaticFindObject() return nil end
 local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
@@ -119,9 +120,14 @@ SPORT = { turrets = { [41] = { obj = vls, unit = "SV_Unit_SpAegisA", cls = "BP_V
                       [42] = { obj = gun, unit = "SV_Unit_SpAegisA", cls = "BP_VE002_aegs_mk45_CP", shots = 0 } } }
 local v1 = msl("BP_wp_vls_a0", 401, vls)
 FA.LiveExplosiveWeapon = { h1, h2, h3, v1 }
+-- ((0.73.77, Workstream B) made now: they come in through NotifyOnNewObject, no walk needed for them)
+for _, w in ipairs({ h1, h2, h3, v1 }) do for _, fn in ipairs(notify["/Script/Live.LiveExplosiveWeapon"] or {}) do fn(w) end end
+check(#WLOG.new == 4, "(0.73.77) four weapons made: queued by NotifyOnNewObject on LiveExplosiveWeapon (" .. #WLOG.new .. ")")
 local t = 80
+local walks0 = walks
 local function tick() t = t + 0.5; WLOG.tick(t) end
 tick()
+check(WLOG.r.pool[301] and WLOG.r.pool[401] and #WLOG.new == 0, "(0.73.77) ... kept by the next look, the queue emptied")
 h1.bHidden, h2.bHidden, h3.bHidden, v1.bHidden = false, false, false, false
 tick()
 h1.x, h2.x, h3.x = 5000, 100000, 200000            -- (h1 50 m off you; h2 1 km; h3 2 km)
@@ -137,6 +143,13 @@ check(o.BP_wp_qaam_a0 and o.BP_wp_qaam_a0.n == 2 and o.BP_wp_qaam_a0.hit == 1 an
 check(o.BP_wp_2aam_a0 and o.BP_wp_2aam_a0.missed == 1 and math.abs(o.BP_wp_2aam_a0.km - 5.0) < 0.01,
     "a 2AAM that never came near: missed, fired from 5 km")
 check(SPORT.turrets[41].shots == 1 and SPORT.turrets[41].atKmN == 1, "the Aegis VLS's missile: its shot counted, your range at fire")
+check(walks - walks0 <= 1, string.format("(0.73.77) the walk over every object for them every 30 s, not every look: %d in %.1f s",
+      walks - walks0, t - 80))
+h3.gone = true
+tick()
+check(WLOG.r.pool[303] == nil and WLOG.r.pool[301] ~= nil, "(0.73.77) a weapon object gone: off the kept pool at once")
+local sz = WLOG.sizes()
+check(sz[1] and sz[1][1] == "weapon objects" and sz[1][2] >= 3, "(0.73.77) WLOG.sizes for the perf line: " .. tostring(sz[1] and sz[1][2]))
 t = t + 61
 WLOG.tick(t)
 local ml = lines("^missiles at you: last ")

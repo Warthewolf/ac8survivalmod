@@ -41,7 +41,15 @@ clang --target=x86_64-pc-windows-msvc -O2 -ffreestanding -fno-builtin -nostdlibi
       -fno-stack-protector -funwind-tables -Wall -Wextra -Werror \
       $DEFS -I"$OUT" -c survival_rt.c -o "$OUT/survival_rt.obj"
 
+# (runtime 0.32.22, plan F1c) a linker map kept per runtime build: main_<RT_VERSION>.map next to main.dll (the latest of
+# that version) and main_<RT_VERSION>_<link timestamp>.map (kept: a crash report's module list gives main.dll's
+# timestamp), so the runtime's addresses in a crash report (main.dll+0x...) can be named:
+# python -X utf8 -I tools/checks/mdmp.py <dump> --map build/runtime/main_<v>_<ts>.map
+VER=$(sed -n 's/^#define RT_VERSION_A *"\([^"]*\)".*/\1/p' survival_rt.c)
+MAP="$OUT/main_${VER:-unknown}.map"
 lld-link /dll /nodefaultlib /entry:DllMain /subsystem:windows \
-         /out:"$OUT/main.dll" /implib:"$OUT/main_exports.lib" \
+         /out:"$OUT/main.dll" /implib:"$OUT/main_exports.lib" /map:"$MAP" \
          "$OUT/survival_rt.obj" "$OUT/kernel32.lib" "$OUT/ue4ss.lib" "$OUT/ucrtheap.lib"
-echo "built $OUT/main.dll"
+TS=$(sed -n 's/^ *Timestamp is \([0-9a-fA-F]*\).*/\1/p' "$MAP" | head -1)
+[ -n "$TS" ] && cp "$MAP" "$OUT/main_${VER:-unknown}_$TS.map"
+echo "built $OUT/main.dll (map: $MAP, kept as main_${VER:-unknown}_$TS.map)"
