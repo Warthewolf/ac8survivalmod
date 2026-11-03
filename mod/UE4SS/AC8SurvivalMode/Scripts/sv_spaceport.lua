@@ -1143,6 +1143,15 @@ end
 function SPORT.debit(n, why, fromHost)
     n = math.floor(tonumber(n) or 0)
     if n <= 0 then return 0 end
+    -- ((0.73.78) split as a special's reward is (economy C3, user 2026-11-03: "you have it right"): each player loses the
+    -- penalty x players ^ -special_split, worked out on the host and sent as it is; solo the whole of it)
+    if not fromHost and COOP and COOP.specialShare then
+        local okS, sh = pcall(COOP.specialShare)
+        if okS and type(sh) == "number" and sh > 0 and sh < 1 then
+            log(string.format("special: the penalty's co-op share x%.2f of %d", sh, n))
+            n = math.floor(n * sh / 10 + 0.5) * 10
+        end
+    end
     local took = math.min(n, math.max(0, math.floor(RUN.credits or 0)))
     if took > 0 then RUN.credits, RUN.dirty, RUN.msg = RUN.credits - took, true, {} end
     log(string.format("credits: -%d (%s%s), now %d", took, tostring(why), fromHost and ", the host's round" or "", RUN.credits or 0))

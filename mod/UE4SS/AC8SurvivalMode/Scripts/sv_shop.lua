@@ -586,7 +586,9 @@ function shopBuildFor(slot, name, price, kind, asked)
     if role == "ally_air" or role == "ally_ship" or role == "ally_awacs" then
         local o = offer(name)
         if not o.unit then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
-        local room = asked and role == "ally_awacs"
+        -- ((0.73.78) every ally's price is the room's, as VOID WATCHER 1's (user, 2026-11-03: "you have it right"): a
+        -- joiner's ask is checked at the host's price and counted here, and the count goes to every joiner ("rnd" f14)
+        local room = asked and true or false
         if room and o.price and (tonumber(price) or 0) < o.price then
             log(string.format("shop: player %s's %s at %d refused: the room's price is %d (bought %d times this run)",
                 slot and tostring(slot + 1) or "?", name, tonumber(price) or 0, o.price, RUN.bought[name] or 0))
@@ -603,9 +605,20 @@ function shopBuildFor(slot, name, price, kind, asked)
     if not kind then return false, "NOT AVAILABLE IN CO-OP." end
     local f = defenceFor(kind)
     if not f then return false, "ALL BUILT." end
+    -- ((0.73.78) a defence's price is the room's too: a joiner's ask below it refused, a built one counted here)
+    RUN.defences = RUN.defences or { built = 0, bought = {} }
+    RUN.defences.bought = RUN.defences.bought or {}
+    local dk = d[kind]
+    local rp = math.floor((tonumber(dk.price) or 0) * (tonumber(dk.raise) or 1) ^ (RUN.defences.bought[kind] or 0) / 10 + 0.5) * 10
+    if asked and (tonumber(price) or 0) < rp then
+        log(string.format("shop: player %s's %s at %d refused: the room's price is %d (built %d times this run)",
+            slot and tostring(slot + 1) or "?", kind, tonumber(price) or 0, rp, RUN.defences.bought[kind] or 0))
+        return false, string.format("THE PRICE IS NOW %d", rp)
+    end
     local r = SV_Spawn(f.unit)
     if ALLY.forgetAlive then ALLY.forgetAlive(f.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
     if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
+    if asked then RUN.defences.bought[kind], RUN.dirty = (RUN.defences.bought[kind] or 0) + 1, true end
     -- (slot nil: a host by migration building the old room's again, its own or a buyer's who's gone)
     log(string.format("shop: %s built for %s (%s, %d paid on their game)", f.def.label, slot and ("player " .. (slot + 1)) or "the room",
         f.unit, price))
