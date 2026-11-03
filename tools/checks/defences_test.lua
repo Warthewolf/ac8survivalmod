@@ -564,6 +564,15 @@ do
     local R = ALLY.state()
     local ship = SHIPCFG.units[1]
     check(ok and spawned[#spawned] == ship and R.up[ship] and R.up[ship].buyer == 2, "host: player 3's AEGIS at sea, theirs (buyer 3)")
+    -- ((0.73.78) every ally's and defence's price is the room's: a joiner's ask (asked) below it refused, a built one counted)
+    local okR, msgR = shopBuildFor(2, "ShipAegis", 1000, nil, true)
+    check(not okR and msgR == "THE PRICE IS NOW 20000", "host: a joiner's AEGIS ask under the room's price refused (" .. tostring(msgR) .. ")")
+    local aa0 = (RUN.defences and RUN.defences.bought and RUN.defences.bought.aa) or 0
+    okR, msgR = shopBuildFor(2, "AAGun", 100, nil, true)
+    check(not okR and has(msgR, "THE PRICE IS NOW "), "host: a joiner's AA gun ask under the room's price refused (" .. tostring(msgR) .. ")")
+    local aaPrice = math.floor(DEF.aa.price * DEF.aa.raise ^ aa0 / 10 + 0.5) * 10
+    okR, msgR = shopBuildFor(2, "AAGun", aaPrice, nil, true)
+    check(okR and RUN.defences.bought.aa == aa0 + 1, "host: ... at it: built and counted in the room's (" .. tostring(msgR) .. ")")
     -- their flight: takes off once they're airborne, whatever the host is doing
     ok, msg = shopBuildFor(2, "Wingmen", 5000, nil)
     local wu

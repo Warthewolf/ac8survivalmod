@@ -1165,7 +1165,11 @@ The decisions of 2026-11-03 (economy C3-C6, plan G4-G6), built by 3 agents (user
   SV_Recycle 2 s on), sold again; raise 1.25 room-wide (a joiner's ask checked at the host's price, "rnd" field 13 the
   count); ESM range 9 km, 15 s every 30 s; one strike flight a round onto it (EngagementOrderOverride TargetFirst), back
   on you after. Survival has no landing an AI plane can fly (the stock landing nodes are the player's).
-- Open: the Spaceport rocket-escape penalty costs every player the whole amount; decoys may target ace flights; MOONCHILD,
-  SNIPER and AEGIS prices count each joiner's own purchases (VOID WATCHER's are room-wide); RE_SV_FlightOff_NN
+- The user's calls of 2026-11-03 ("everything else you have it right"): the Spaceport rocket-escape penalty split as a
+  special's reward (SPORT.debit: penalty x COOP.specialShare() on the host, sent as it is); every ally's and defence's
+  price room-wide (shopBuildFor checks a joiner's ask at the room's price and counts it; "rnd" field 14
+  "<item>:<n>,...;<kind>:<n>,..." = MOONCHILD / SNIPER / AEGIS (M.ROOM_ITEMS) and the defences' counts, VOID WATCHER's
+  staying field 13); a co-op leaderboard run is sent when its host quits (a later migrated part isn't recorded).
+- Open: decoys may target ace flights (a decoy only draws fire, left so); RE_SV_FlightOff_NN
   (LiveSetActiveGameObject by unit) may not switch a flight off (it never switched the shuttle off): the break-off and the
   capture's withdrawal fall back on the next round's recycle; other despawns may reach joiners as "dn" with no killer.

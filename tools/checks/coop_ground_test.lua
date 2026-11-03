@@ -227,7 +227,9 @@ if ROLE == "host" then
     tick(1)
     check(table.concat(sent, "\n", b4 + 1):find("rnd|[^\n]*|m2s1"), "host: the room's allies in rnd (m2s1)")
     local rl = table.concat(sent, "\n", b4 + 1):match("rnd|[^\n]*") or ""
-    check(rl:match("|m2s1|[^|]*|[^|]*|2$") ~= nil, "host: ... and the room's VOID WATCHER 1 purchases last (2: " .. rl .. ")")
+    check(rl:match("|m2s1|[^|]*|[^|]*|2|[^|]*$") ~= nil, "host: ... and the room's VOID WATCHER 1 purchases (2: " .. rl .. ")")
+    -- ((0.73.78) the room's other allies and defences after it, field 14: "<item>:<n>,...;<kind>:<n>,...")
+    check(rl:match("|2|[%w:,]*;[%a%d:,]*$") ~= nil, "host: ... then the room's other allies and defences (f14: " .. rl .. ")")
     RUN.bought.VoidWatcher = vbWas
     ALLY = nil
     -- COVER for a joiner (COOP.coverFor): the allied planes onto the enemies nearest that joiner's real plane, the
@@ -352,6 +354,17 @@ else
     inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1"
     tick()
     check(RUN.bought.VoidWatcher == 3, "join: an rnd without the count (an older host's): left as it is")
+    -- ((0.73.78) the room's other allies and defences, field 14: "<item>:<n>,...;<kind>:<n>,...")
+    RUN.bought.Moonchild, RUN.bought.Wingmen = 0, 5
+    RUN.defences = { built = 0, bought = { aa = 0 } }
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1|||3|Moonchild:2,ShipAegis:1;aa:3,sam:1"
+    tick()
+    check(RUN.bought.Moonchild == 2 and RUN.bought.ShipAegis == 1 and RUN.bought.Wingmen == 0
+          and RUN.defences.bought.aa == 3 and RUN.defences.bought.sam == 1,
+          "join: the room's other allies and defences taken from rnd f14 (an ally not in it: 0)")
+    inbox[#inbox + 1] = "0|rnd|3|fight|0.0|1|2|4|||m2v1s1|||3|bad|data"
+    tick()
+    check(RUN.bought.Moonchild == 2 and RUN.defences.bought.aa == 3, "join: a bad f14: left as it is")
     RUN.bought.VoidWatcher = nil
     tick(6)
     check(COOP.roomAllies() == nil, "join: ... 6 s with no word: none")

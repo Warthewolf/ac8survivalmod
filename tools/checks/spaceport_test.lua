@@ -587,6 +587,19 @@ RUN.credits = 3000
 local took = SPORT.debit(RK.escape_penalty, "rocket A escaped", true)
 check(took == 3000 and RUN.credits == 0 and #debits == 1 and since(1, "credits: %-3000 %(rocket A escaped, the host's round%), now 0") >= 1,
       "a joiner: the host's penalty off its own zollars (what it has of it), never sent on")
+-- ((0.73.78) the penalty split as a special's reward: the host works out each player's share and sends that)
+COOP.host, COOP.client = function() return true end, function() return false end
+COOP.specialShare = function() return 0.5 end
+RUN.credits, debits = 20000, {}
+took = SPORT.debit(RK.escape_penalty, "rocket B escaped")
+local half = math.floor(RK.escape_penalty * 0.5 / 10 + 0.5) * 10
+check(took == half and RUN.credits == 20000 - half and #debits == 1 and debits[1].n == half
+      and since(1, "special: the penalty's co%-op share x0%.50 of " .. RK.escape_penalty) >= 1,
+      "the host: a co-op penalty split as the specials' rewards (" .. half .. " each, sent as it is)")
+COOP.specialShare = function() return 1 end
+RUN.credits, debits = 20000, {}
+took = SPORT.debit(RK.escape_penalty, "rocket B escaped")
+check(took == RK.escape_penalty, "solo / alone: the whole penalty")
 COOP = nil
 
 print("I3: a fleet no retake can follow is taken off (S4)")

@@ -655,8 +655,21 @@ local function hostTick()
         -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases this run, counted here (sv_shop.lua shopBuildFor): each
         -- joiner's STORE prices it from them, so the room's price rises x raise a purchase whoever buys it)
         local vb = math.max(0, math.min(999, math.floor(tonumber(RUN and RUN.bought and RUN.bought.VoidWatcher) or 0)))
+        -- ((0.73.78) the room's purchases of every other ally and defence too (user, 2026-11-03: their prices room-wide):
+        -- "<item>:<n>,...;<kind>:<n>,...", the allies' RUN.bought and the defences' RUN.defences.bought)
+        local rb = {}
+        for _, nm in ipairs(M.ROOM_ITEMS) do
+            local n = math.floor(tonumber(RUN and RUN.bought and RUN.bought[nm]) or 0)
+            if n > 0 then rb[#rb + 1] = nm .. ":" .. math.min(999, n) end
+        end
+        local db = {}
+        for kd, n in pairs(RUN and RUN.defences and RUN.defences.bought or {}) do
+            n = math.floor(tonumber(n) or 0)
+            if type(kd) == "string" and kd:match("^%a+$") and n > 0 then db[#db + 1] = kd .. ":" .. math.min(999, n) end
+        end
+        table.sort(db)
         send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al,
-            spk, ss, string.format("%d", vb))
+            spk, ss, string.format("%d", vb), table.concat(rb, ",") .. ";" .. table.concat(db, ","))
     end
     -- ((0.73.77, the plan's I7: S12) the Spaceport (sv_spaceport.lua SPORT.coopCode): its NEXT row's numbers for the
     -- joiners' rows, and a retake due or in play, which each joiner keeps for a host migration ("spx"; as it changes,
@@ -3689,6 +3702,29 @@ local function onJoinerMessage(f)
             RUN.bought.VoidWatcher, RUN.dirty = vb, true
             log(string.format("coop: VOID WATCHER 1 bought %d times in the room (the host's count): the STORE's price here from it", vb))
         end
+        -- ((0.73.78) the room's other allies and defences (f14, "<item>:<n>,...;<kind>:<n>,..."): this game's STORE
+        -- prices them from the host's counts, as the host checks a joiner's ask (sv_shop.lua shopBuildFor)
+        local fa, fd = tostring(f[14] or ""):match("^([%w:,]*);([%a%d:,]*)$")
+        if fa and RUN and RUN.bought then
+            local seen = {}
+            for nm, n in fa:gmatch("(%a+):(%d+)") do seen[nm] = math.min(999, tonumber(n)) end
+            for _, nm in ipairs(M.ROOM_ITEMS) do
+                local n = seen[nm] or 0
+                if (RUN.bought[nm] or 0) ~= n then
+                    RUN.bought[nm], RUN.dirty = n, true
+                    log(string.format("coop: %s bought %d times in the room (the host's count): the STORE's price here from it", nm, n))
+                end
+            end
+            RUN.defences = RUN.defences or { built = 0, bought = {} }
+            local dseen = {}
+            for kd, n in fd:gmatch("(%a+):(%d+)") do dseen[kd] = math.min(999, tonumber(n)) end
+            for kd, n in pairs(dseen) do
+                if (RUN.defences.bought[kd] or 0) ~= n then
+                    RUN.defences.bought[kd], RUN.dirty = n, true
+                    log(string.format("coop: the airfield's %s built %d times in the room (the host's count): its price here from it", kd, n))
+                end
+            end
+        end
     elseif k == "pi" then
         local s = tonumber(f[2])
         if not slotOk(s) then return end
@@ -4157,6 +4193,9 @@ end
 -- a pay of the host's round logic that is a special's (its reward, or what it pays as it goes: landing craft, the
 -- spaceport's fleet, ballast tanks, rockets ...): every one the joiners are sent ("cr") but the round's bonus
 function M.specialPay(why) return type(why) == "string" and not why:find("^round %d+ cleared") end
+-- ((0.73.78) the allies priced room-wide besides VOID WATCHER 1 (its own count is "rnd" field 13): the host's counts of
+-- them in "rnd" field 14, with the defences')
+M.ROOM_ITEMS = { "Moonchild", "Wingmen", "ShipAegis" }
 -- ((0.73.77, plan H2) for the co-op run's squad, sv_leaderboard.lua: a slot's roster entry (name, sid, code; read
 -- only) and this game's Steam ID)
 function COOP.roster(slot) return M.roster[slot] end
