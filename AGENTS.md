@@ -256,6 +256,13 @@ Copy a working stock pattern before inventing a new one.
     carries 15 laps of their circuit (survival_events.LADON_LAPS), and they looped the airfield 4 passes until shot down
     (0.73.75, the test of 23:31-23:39). Confirmed 2026-11-02.
 
+55. The runtime's formatter (runtime/vfmt.h, Log's and Crumb's) must keep reading its input when the line is full: until
+    0.32.23 its PUT skipped `*s++` / `t[--n]` past the buffer, so a line over 1,023 characters looped for ever holding the
+    log lock. 0.32.22's three new Lua functions made RegisterLua's "Lua bridge: ... registered" line 1,031 characters: UE4SS's
+    Lua start never returned, Survival's Lua never ran (no SURVIVAL MODE on the menu) and every later Log waited (the user's
+    launches of 2026-11-03 23:33 and 23:48; a crumb before each registration found it). Fixed in 0.32.23, confirmed at 23:54
+    (tools/checks/vfmt_test.sh fails on the old macro). A bounded writer must still consume what it's given.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
@@ -1178,3 +1185,7 @@ sh tools/package_release.sh online 0.73.78`): AC8SurvivalMode_COOP2MP_0.73.78_On
 bf52dff8...0ac5c5863 (register on /admin); the user's VALKA dev install's hash 957feea9...bf7e9f822 (registered). The Worker
 with the co-op boards DEPLOYED the same night (pasted in the dashboard; /setup run: slash commands registered, the CO-OP
 message made, pinned by hand: the bot lacks Manage Messages; the live /admin page checked for the new code).
+0.73.78 on runtime 0.32.23 (2026-11-03, after the stall above; hard rule 55): VFmt fixed, a "Lua bridge: registering N
+functions" line and an "all registered" crumb. The first 0.73.78 friends' zip (hash bf52dff8..., runtime 0.32.22) never
+starts Survival: never give it out. Dev install (VALKA) confirmed in game at 23:54, hash eb7b586e...2591e250. The friends' zip
+rebuilt on 0.32.23 (same name, with VALKA and her song, the Spaceport): hash 03e468eb...3ccda9341 (register on /admin).

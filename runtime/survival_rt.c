@@ -24,8 +24,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.22"
-#define RT_VERSION_A         "0.32.22"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.23"
+#define RT_VERSION_A         "0.32.23"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -80,38 +80,7 @@ static volatile int32_t g_logLock;
 static wchar_t          g_modRoot[PATH_CAP];       /* folder that holds dlls\       */
 static wchar_t          g_modsDir[PATH_CAP];       /* ue4ss\Mods                    */
 
-static void VFmt(wchar_t* out, size_t cap, const wchar_t* fmt, va_list ap)
-{
-    wchar_t* p = out; wchar_t* end = out + cap - 1;
-#define PUT(ch) do { if (p < end) *p++ = (wchar_t)(ch); } while (0)
-    for (; *fmt; ++fmt) {
-        if (*fmt != L'%') { PUT(*fmt); continue; }
-        ++fmt;
-        if (!*fmt) break;
-        if (*fmt == L's') {
-            const wchar_t* s = va_arg(ap, const wchar_t*);
-            if (!s) s = L"<null>";
-            while (*s) PUT(*s++);
-        } else if (*fmt == L'd' || *fmt == L'u') {      /* (%u: 0.18.0's sound log used it and crashed: unknown here,
-                                                           it took no argument, so the next %s read a number) */
-            int32_t d = va_arg(ap, int32_t);
-            uint64_t v = *fmt == L'u' ? (uint64_t)(uint32_t)d : d < 0 ? (uint64_t)(-(int64_t)d) : (uint64_t)d;
-            if (*fmt == L'd' && d < 0) PUT(L'-');
-            wchar_t t[24]; int n = 0;
-            do { t[n++] = (wchar_t)(L'0' + v % 10); v /= 10; } while (v);
-            while (n) PUT(t[--n]);
-        } else if (*fmt == L'x' || *fmt == L'p') {
-            uint64_t v = *fmt == L'p' ? (uint64_t)(uintptr_t)va_arg(ap, void*) : va_arg(ap, uint32_t);
-            wchar_t t[16]; int n = 0;
-            do { t[n++] = L"0123456789ABCDEF"[v & 15]; v >>= 4; } while (v);
-            while (n) PUT(t[--n]);
-        } else {
-            PUT(*fmt);
-        }
-    }
-    *p = 0;
-#undef PUT
-}
+#include "vfmt.h"             /* VFmt: Log's and Crumb's formatter (0.32.23: its own header, for tools/checks/vfmt_test) */
 
 static void Log(const wchar_t* fmt, ...)
 {
@@ -3375,6 +3344,8 @@ static void RegisterLua(void* lua)
 #endif
     };
     if (!ResolveUE4SS()) { Log(L"Lua bridge: UE4SS exports missing; Survival's spawner is off"); return; }
+    /* (0.32.23) a line before the loop and a crumb after it: the stall of 2026-11-03 (VFmt, below) was found this way */
+    Log(L"Lua bridge: registering %d functions", (int32_t)(sizeof(kFns) / sizeof(kFns[0])));
     static wchar_t list[1024];                                    /* the names registered, for the log */
     size_t used = 0;
     for (size_t i = 0; i < sizeof(kFns) / sizeof(kFns[0]); ++i) {
@@ -3391,6 +3362,7 @@ static void RegisterLua(void* lua)
     }
     if (used >= 2) used -= 2;                                    /* the last ", " */
     list[used] = 0;
+    Crumb(L"lua bridge: all registered");
     Log(L"Lua bridge: %s registered", list);                     /* the ones that were, not a fixed list */
 }
 
