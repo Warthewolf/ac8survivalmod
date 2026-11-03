@@ -1,0 +1,889 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FGenericCrashContext>
+<RuntimeProperties>
+<CrashVersion>3</CrashVersion>
+<ExecutionGuid>56B7D8FE44F887BCFC3ED18222D9D43B</ExecutionGuid>
+<CrashGUID>UECC-Windows-189AF35C47A96F5A58CC6AA8A6E0C61B_0000</CrashGUID>
+<IsEnsure>false</IsEnsure>
+<IsStall>false</IsStall>
+<IsAssert>false</IsAssert>
+<CrashType>Crash</CrashType>
+<ErrorMessage>Unhandled Exception: EXCEPTION_ACCESS_VIOLATION 0x0000000000000000</ErrorMessage>
+<CrashReporterMessage></CrashReporterMessage>
+<CrashReporterMessage>Attended</CrashReporterMessage>
+<ProcessId>20072</ProcessId>
+<SecondsSinceStart>654</SecondsSinceStart>
+<IsInternalBuild>false</IsInternalBuild>
+<IsPerforceBuild>false</IsPerforceBuild>
+<IsWithDebugInfo>true</IsWithDebugInfo>
+<IsSourceDistribution>false</IsSourceDistribution>
+<GameName>UE-Live</GameName>
+<ExecutableName>AceCombat8</ExecutableName>
+<BuildConfiguration>Shipping</BuildConfiguration>
+<GameSessionID></GameSessionID>
+<PlatformName>Windows</PlatformName>
+<PlatformFullName>Windows</PlatformFullName>
+<PlatformNameIni>Windows</PlatformNameIni>
+<EngineMode>Game</EngineMode>
+<EngineModeEx>Unset</EngineModeEx>
+<DeploymentName></DeploymentName>
+<EngineVersion>5.4.3-0+UE5</EngineVersion>
+<EngineCompatibleVersion>5.4.3-0+UE5</EngineCompatibleVersion>
+<CommandLine> -eac-nop-loaded -nosplash</CommandLine>
+<LanguageLCID>0</LanguageLCID>
+<AppDefaultLocale>en-US</AppDefaultLocale>
+<BuildVersion>UE5-CL-0</BuildVersion>
+<Symbols>UE5-CL-0-Win64-Shipping</Symbols>
+<IsUERelease>true</IsUERelease>
+<IsRequestingExit>false</IsRequestingExit>
+<UserName></UserName>
+<BaseDir>V:/SteamLibrary/steamapps/common/ACE COMBAT 8/Game/Binaries/Win64/</BaseDir>
+<RootDir>V:/SteamLibrary/steamapps/common/ACE COMBAT 8/</RootDir>
+<MachineId>AE19E62A4274E37DCA1457AF517B1A1A</MachineId>
+<LoginId>ae19e62a4274e37dca1457af517b1a1a</LoginId>
+<EpicAccountId>7a365a74ea5c499695dcdf5da237f392</EpicAccountId>
+<SourceContext></SourceContext>
+<UserDescription></UserDescription>
+<UserActivityHint></UserActivityHint>
+<CrashDumpMode>0</CrashDumpMode>
+<GameStateName>LiveGameState</GameStateName>
+<Misc.NumberOfCores>8</Misc.NumberOfCores>
+<Misc.NumberOfCoresIncludingHyperthreads>16</Misc.NumberOfCoresIncludingHyperthreads>
+<Misc.Is64bitOperatingSystem>1</Misc.Is64bitOperatingSystem>
+<Misc.CPUVendor>AuthenticAMD</Misc.CPUVendor>
+<Misc.CPUBrand>AMD Ryzen 7 3700X 8-Core Processor             </Misc.CPUBrand>
+<Misc.PrimaryGPUBrand>NVIDIA GeForce RTX 2070 SUPER</Misc.PrimaryGPUBrand>
+<Misc.OSVersionMajor>Windows 11 (26H2) [10.0.26300.9818]</Misc.OSVersionMajor>
+<Misc.OSVersionMinor></Misc.OSVersionMinor>
+<Misc.AnticheatProvider></Misc.AnticheatProvider>
+<MemoryStats.TotalPhysical>34294325248</MemoryStats.TotalPhysical>
+<MemoryStats.TotalVirtual>134957621248</MemoryStats.TotalVirtual>
+<MemoryStats.PageSize>4096</MemoryStats.PageSize>
+<MemoryStats.TotalPhysicalGB>32</MemoryStats.TotalPhysicalGB>
+<MemoryStats.AvailablePhysical>0</MemoryStats.AvailablePhysical>
+<MemoryStats.AvailableVirtual>0</MemoryStats.AvailableVirtual>
+<MemoryStats.UsedPhysical>0</MemoryStats.UsedPhysical>
+<MemoryStats.PeakUsedPhysical>0</MemoryStats.PeakUsedPhysical>
+<MemoryStats.UsedVirtual>0</MemoryStats.UsedVirtual>
+<MemoryStats.PeakUsedVirtual>0</MemoryStats.PeakUsedVirtual>
+<MemoryStats.bIsOOM>0</MemoryStats.bIsOOM>
+<MemoryStats.OOMAllocationSize>0</MemoryStats.OOMAllocationSize>
+<MemoryStats.OOMAllocationAlignment>0</MemoryStats.OOMAllocationAlignment>
+<NumMinidumpFramesToIgnore>0</NumMinidumpFramesToIgnore>
+<CallStack></CallStack>
+<PCallStack></PCallStack>
+<PCallStackHash></PCallStackHash>
+<Threads><Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b45fb         
+AceCombat8  0x0000000140000000 + 16b68e3         
+AceCombat8  0x0000000140000000 + 4b9bdc0         
+AceCombat8  0x0000000140000000 + 4b9ed64         
+AceCombat8  0x0000000140000000 + 467165d         
+AceCombat8  0x0000000140000000 + 4430aff         
+UE4SS       0x00007ffc38a30000 + 461c45          
+AceCombat8  0x0000000140000000 + 4d2668d         
+AceCombat8  0x0000000140000000 + 4d157bc         
+AceCombat8  0x0000000140000000 + 4d2a13a         
+AceCombat8  0x0000000140000000 + 4d2aacf         
+AceCombat8  0x0000000140000000 + 4d2abab         
+AceCombat8  0x0000000140000000 + a8d1f66         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>20492</ThreadID>
+<ThreadName>GameThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>12784</ThreadID>
+<ThreadName>Foreground Worker #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll         0x00007ffcc0130000 + 166464          
+KERNELBASE    0x00007ffcbd5c0000 + 1427f           
+AceCombat8    0x0000000140000000 + 1879758         
+AceCombat8    0x0000000140000000 + a916727         
+VCRUNTIME140  0x00007ffc97a30000 + 1a9c0           
+ntdll         0x00007ffcc0130000 + 16ab3f          
+ntdll         0x00007ffcc0130000 + c6985           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>5932</ThreadID>
+<ThreadName>Foreground Worker #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>21620</ThreadID>
+<ThreadName>Background Worker #2</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>4976</ThreadID>
+<ThreadName>Background Worker #3</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>6840</ThreadID>
+<ThreadName>Background Worker #4</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>11296</ThreadID>
+<ThreadName>Background Worker #5</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>12072</ThreadID>
+<ThreadName>Background Worker #6</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>2976</ThreadID>
+<ThreadName>Background Worker #7</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll         0x00007ffcc0130000 + 166464          
+KERNELBASE    0x00007ffcbd5c0000 + 1427f           
+AceCombat8    0x0000000140000000 + 1879758         
+AceCombat8    0x0000000140000000 + a916727         
+VCRUNTIME140  0x00007ffc97a30000 + 1a9c0           
+ntdll         0x00007ffcc0130000 + 16ab3f          
+ntdll         0x00007ffcc0130000 + c6985           
+</CallStack>
+<IsCrashed>true</IsCrashed>
+<Registers></Registers>
+<ThreadID>5188</ThreadID>
+<ThreadName>Background Worker #8</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>22956</ThreadID>
+<ThreadName>Background Worker #9</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23844</ThreadID>
+<ThreadName>Background Worker #10</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>18584</ThreadID>
+<ThreadName>Background Worker #11</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23808</ThreadID>
+<ThreadName>Background Worker #12</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b2a19         
+AceCombat8  0x0000000140000000 + 16c8e00         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>17268</ThreadID>
+<ThreadName>Background Worker #13</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>26188</ThreadID>
+<ThreadName>BackgroundThreadPool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>27024</ThreadID>
+<ThreadName>BackgroundThreadPool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166a64          
+ntdll       0x00007ffcc0130000 + d3194           
+KERNELBASE  0x00007ffcbd5c0000 + 8cca1           
+AceCombat8  0x0000000140000000 + 171f52d         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23836</ThreadID>
+<ThreadName>FHeartBeatThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 3e284cc         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>2892</ThreadID>
+<ThreadName>FMediaTicker</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166a64          
+ntdll       0x00007ffcc0130000 + d3194           
+KERNELBASE  0x00007ffcbd5c0000 + 8cca1           
+AceCombat8  0x0000000140000000 + 1f061b3         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>24432</ThreadID>
+<ThreadName>HttpManagerThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 50b9096         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>27208</ThreadID>
+<ThreadName>OnlineAsyncTaskThreadSteam DefaultInstance</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 16a054          
+ntdll       0x00007ffcc0130000 + 88fd3           
+KERNELBASE  0x00007ffcbd5c0000 + ddce8           
+AceCombat8  0x0000000140000000 + 17c142d         
+AceCombat8  0x0000000140000000 + 16b3c45         
+AceCombat8  0x0000000140000000 + 181eb4f         
+AceCombat8  0x0000000140000000 + 171e244         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23880</ThreadID>
+<ThreadName>OutputDeviceRedirector</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>19492</ThreadID>
+<ThreadName>IOThreadPool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>21200</ThreadID>
+<ThreadName>IOThreadPool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>24872</ThreadID>
+<ThreadName>IOThreadPool #2</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>25232</ThreadID>
+<ThreadName>IOThreadPool #3</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 27e7682         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>21044</ThreadID>
+<ThreadName>IoService</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 17947a2         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>24416</ThreadID>
+<ThreadName>IoDispatcher</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b45fb         
+AceCombat8  0x0000000140000000 + 1d3ba79         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>5284</ThreadID>
+<ThreadName>SlateThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 34ebdd5         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>17760</ThreadID>
+<ThreadName>RHIInterruptThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 34ebdd5         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23884</ThreadID>
+<ThreadName>RHISubmissionThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b6b7c         
+AceCombat8  0x0000000140000000 + 17b754a         
+AceCombat8  0x0000000140000000 + 34eee64         
+AceCombat8  0x0000000140000000 + 3508410         
+AceCombat8  0x0000000140000000 + 3508cfd         
+AceCombat8  0x0000000140000000 + 3625d75         
+AceCombat8  0x0000000140000000 + 362739f         
+AceCombat8  0x0000000140000000 + 16cacfa         
+AceCombat8  0x0000000140000000 + 16b461e         
+AceCombat8  0x0000000140000000 + 36e1801         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>21380</ThreadID>
+<ThreadName>RHIThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b6b7c         
+AceCombat8  0x0000000140000000 + 17b754a         
+AceCombat8  0x0000000140000000 + 36b8d5e         
+AceCombat8  0x0000000140000000 + 36be2ef         
+AceCombat8  0x0000000140000000 + 31a36be         
+AceCombat8  0x0000000140000000 + 31b4046         
+AceCombat8  0x0000000140000000 + 36e5994         
+AceCombat8  0x0000000140000000 + 3708792         
+AceCombat8  0x0000000140000000 + 16b461e         
+AceCombat8  0x0000000140000000 + 36e1aa8         
+AceCombat8  0x0000000140000000 + 36e1e89         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>25352</ThreadID>
+<ThreadName>RenderThread 0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166a64          
+ntdll       0x00007ffcc0130000 + d3194           
+KERNELBASE  0x00007ffcbd5c0000 + 8cca1           
+AceCombat8  0x0000000140000000 + 1892f43         
+AceCombat8  0x0000000140000000 + 36e2037         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>4988</ThreadID>
+<ThreadName>RTHeartBeat 0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>16316</ThreadID>
+<ThreadName>PSOPrecompilePool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>24036</ThreadID>
+<ThreadName>PSOPrecompilePool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>26968</ThreadID>
+<ThreadName>PSOPrecompilePool #2</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>23108</ThreadID>
+<ThreadName>PSOPrecompilePool #3</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>20992</ThreadID>
+<ThreadName>PSOPrecompilePool #4</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>15348</ThreadID>
+<ThreadName>PSOPrecompilePool #5</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>21684</ThreadID>
+<ThreadName>PSOPrecompilePool #6</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>12648</ThreadID>
+<ThreadName>PSOPrecompilePool #7</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>18812</ThreadID>
+<ThreadName>PSOPrecompilePool #8</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>18548</ThreadID>
+<ThreadName>PSOPrecompilePool #9</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>6268</ThreadID>
+<ThreadName>PSOPrecompilePool #10</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 1723b2e         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>19884</ThreadID>
+<ThreadName>PSOPrecompilePool #11</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 8fda9e9         
+AceCombat8  0x0000000140000000 + 8ff688d         
+AceCombat8  0x0000000140000000 + 8ff6b13         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>22892</ThreadID>
+<ThreadName>Electra::ExecAsync</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 16b45fb         
+AceCombat8  0x0000000140000000 + 583ce69         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>17616</ThreadID>
+<ThreadName>NiagaraThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893279         
+AceCombat8  0x0000000140000000 + 1955317         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>27400</ThreadID>
+<ThreadName>FAsyncLoadingThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 78b7152         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>1880</ThreadID>
+<ThreadName>LiveSoundBankThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166a64          
+ntdll       0x00007ffcc0130000 + d3194           
+KERNELBASE  0x00007ffcbd5c0000 + 8cca1           
+AceCombat8  0x0000000140000000 + 1892f43         
+AceCombat8  0x0000000140000000 + 4bb7960         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>11928</ThreadID>
+<ThreadName>ScreenSaverInhibitor</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 27016f7         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>7280</ThreadID>
+<ThreadName>AudioMixerNullCallbackThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 2701294         
+AceCombat8  0x0000000140000000 + 2701367         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>15936</ThreadID>
+<ThreadName>AudioMixerRenderThread(1)</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893215         
+AceCombat8  0x0000000140000000 + 61ec74c         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>812</ThreadID>
+<ThreadName>FManaTicker</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll       0x00007ffcc0130000 + 166464          
+KERNELBASE  0x00007ffcbd5c0000 + 1427f           
+AceCombat8  0x0000000140000000 + 1893279         
+AceCombat8  0x0000000140000000 + 19c3402         
+AceCombat8  0x0000000140000000 + 1898256         
+AceCombat8  0x0000000140000000 + 18980ac         
+KERNEL32    0x00007ffcbf780000 + 2dda7           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>1812</ThreadID>
+<ThreadName>FAsyncPurge</ThreadName>
+</Thread>
+</Threads>
+</RuntimeProperties>
+<PlatformProperties>
+<PlatformIsRunningWindows>1</PlatformIsRunningWindows>
+<IsRunningOnBattery>false</IsRunningOnBattery>
+<DriveStats.Project.Name>V:/SteamLibrary/steamapps/common/ACE COMBAT 8/Game/Binaries/Win64/</DriveStats.Project.Name>
+<DriveStats.Project.Type>SSD</DriveStats.Project.Type>
+<DriveStats.Project.FreeSpaceKb>361219368</DriveStats.Project.FreeSpaceKb>
+<DriveStats.PersistentDownload.Name>C:/Users/bryce/AppData/Local/BANDAI NAMCO Entertainment/ACE COMBAT 8/Saved/PersistentDownloadDir</DriveStats.PersistentDownload.Name>
+<DriveStats.PersistentDownload.Type>NVMe</DriveStats.PersistentDownload.Type>
+<DriveStats.PersistentDownload.FreeSpaceKb>69021240</DriveStats.PersistentDownload.FreeSpaceKb>
+<PlatformCallbackResult>0</PlatformCallbackResult>
+<CrashTrigger>0</CrashTrigger>
+</PlatformProperties>
+<EngineData>
+<MatchingDPStatus>WindowsNo errors</MatchingDPStatus>
+<RHI.IntegratedGPU>false</RHI.IntegratedGPU>
+<RHI.DriverDenylisted>false</RHI.DriverDenylisted>
+<RHI.D3DDebug>false</RHI.D3DDebug>
+<RHI.Breadcrumbs>false</RHI.Breadcrumbs>
+<RHI.DRED>false</RHI.DRED>
+<RHI.DREDMarkersOnly>true</RHI.DREDMarkersOnly>
+<RHI.DREDContext>false</RHI.DREDContext>
+<RHI.Aftermath>false</RHI.Aftermath>
+<RHI.RHIName>D3D12</RHI.RHIName>
+<RHI.AdapterName>NVIDIA GeForce RTX 2070 SUPER</RHI.AdapterName>
+<RHI.UserDriverVersion>621.01</RHI.UserDriverVersion>
+<RHI.InternalDriverVersion>32.0.16.2101</RHI.InternalDriverVersion>
+<RHI.DriverDate>10-19-2026</RHI.DriverDate>
+<RHI.FeatureLevel>SM6</RHI.FeatureLevel>
+<RHI.GPUVendor>NVIDIA</RHI.GPUVendor>
+<RHI.DeviceId>1E84</RHI.DeviceId>
+<DeviceProfile.Name>Windows</DeviceProfile.Name>
+<Platform.AppHasFocus>false</Platform.AppHasFocus>
+</EngineData>
+<GameData>
+</GameData>
+</FGenericCrashContext>

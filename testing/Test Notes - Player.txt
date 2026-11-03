@@ -1,0 +1,45 @@
+SURVIVAL MODE - PLAYTEST NOTES
+
+Thanks for testing! Play normally, solo or co-op, and jot down anything that feels wrong.
+When you're done, please send these files from the mod's folder (zip them):
+  AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log, UE4SS.log
+  (and the crash folder if the game crashed)
+Bugs / questions: @voidcallsreaper on Discord.
+
+
+Playing: solo / co-op (how many players?):
+Difficulty:
+Highest round reached:
+
+
+1. Did the game crash or freeze? When (round, what you were doing, e.g. quitting, in the STORE)?
+
+
+
+2. In co-op: did everyone see the same enemies? Any enemies only one person could see?
+
+
+
+3. Special rounds (Ladons, aces, etc.): did anything act strangely (flying off the map, dying at the wrong time)?
+
+
+
+4. The STORE: did everything you bought do what it said (right item, right price, ammo/repairs applied)?
+
+
+
+5. Allies you bought (wingmen, MOONCHILD, VOID WATCHER, ships): did they behave?
+
+
+
+6. Being shot down / revived (co-op): did it work? Could you fire again afterwards?
+
+
+
+7. Too easy / too hard? Which rounds?
+
+
+
+8. Anything else (bugs, ideas, things you liked):
+
+
