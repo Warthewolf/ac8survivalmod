@@ -1173,3 +1173,8 @@ The decisions of 2026-11-03 (economy C3-C6, plan G4-G6), built by 3 agents (user
 - Open: decoys may target ace flights (a decoy only draws fire, left so); RE_SV_FlightOff_NN
   (LiveSetActiveGameObject by unit) may not switch a flight off (it never switched the shuttle off): the break-off and the
   capture's withdrawal fall back on the next round's recycle; other despawns may reach joiners as "dn" with no killer.
+0.73.78 released (2026-11-03): the friends' zip WITH VALKA and her song, the Spaceport in (`BUILD_NAME=COOP2MP COOP=1 SONG=1
+sh tools/package_release.sh online 0.73.78`): AC8SurvivalMode_COOP2MP_0.73.78_Online_COOP.zip (72 MB), hash
+bf52dff8...0ac5c5863 (register on /admin); the user's VALKA dev install's hash 957feea9...bf7e9f822 (registered). The Worker
+with the co-op boards DEPLOYED the same night (pasted in the dashboard; /setup run: slash commands registered, the CO-OP
+message made, pinned by hand: the bot lacks Manage Messages; the live /admin page checked for the new code).
