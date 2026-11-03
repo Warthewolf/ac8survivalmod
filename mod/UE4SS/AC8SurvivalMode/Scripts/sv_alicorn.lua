@@ -179,12 +179,34 @@ function SPC.playerMissileDamage()
     return nil
 end
 
--- Its parts that are up, by class: { actor, ... } (FindAllOf: every 2 s only)
+-- Its parts that are up, by class: { actor, ... }. (0.73.79, Saint Alessia's stutter of 2026-11-03: a FindAllOf per part
+-- class every 2 s, 5-11 walks of ~35 ms each on her game, 270 walks in the fight's first minute, worst tick 1.3 s.)
+-- Now from the objects recorded as SV_Spawn made the Alicorn's unit (SPC.CLEAN_OBJ, sv_rounds.lua; a joiner's copies
+-- too), kept per class once found (parts don't come back); a FindAllOf only for a class the record has none of, at most
+-- every PART_WALK_S. Every kept object checked live (liveObj) before it's handed out.
+local PART_WALK_S = 10
 local function parts(cls)
-    local out = {}
-    for _, o in ipairs(FindAllOf(cls) or {}) do
-        if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = o end
+    local s = D and D.special
+    local cache = s and s.partCache
+    if s and not cache then cache = {}; s.partCache = cache end
+    local e = cache and cache[cls]
+    if not e then e = { list = {}, at = -PART_WALK_S }; if cache then cache[cls] = e end end
+    if #e.list == 0 then
+        local short = cls:gsub("_C$", "") .. "_C_"
+        local rec = SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[UNIT]
+        for _, o in ipairs(rec or {}) do
+            if liveObj(o) and nameOf(o):find(short, 1, true) then e.list[#e.list + 1] = o end
+        end
+        if #e.list == 0 and os.clock() - e.at >= PART_WALK_S then
+            e.at = os.clock()
+            for _, o in ipairs(FindAllOf(cls) or {}) do
+                if valid(o) and not nameOf(o):find("Default__", 1, true) then e.list[#e.list + 1] = o end
+            end
+            if #e.list > 0 then log(string.format("special: the Alicorn's %s: %d found by a search (not in its record)", cls, #e.list)) end
+        end
     end
+    local out = {}
+    for _, o in ipairs(e.list) do if liveObj(o) then out[#out + 1] = o end end
     return out
 end
 local function hp(o)
@@ -192,7 +214,7 @@ local function hp(o)
     return ok and type(h) == "number" and h or nil
 end
 local function partZ(o)                                 -- a part's height (cm), or nil
-    if not (o and valid(o)) then return nil end
+    if not (o and liveObj(o)) then return nil end
     local ok, l = pcall(function() return o:K2_GetActorLocation() end)
     return ok and l and type(l.Z) == "number" and l.Z or nil
 end
@@ -362,7 +384,10 @@ function SPC.alicornTick(now, s)
     -- resurface_tries times); after up_wait_s it counts as up anyway. A part that can't be read: up at once (as before).
     local z = partZ(s.depthPart)
     if not s.dived and z then s.seaZ = z end
-    if not s.dived and now >= s.nextDive then
+    -- (0.73.79, Saint Alessia's test of 2026-11-03: it dived 34 s after its last ballast tank went) no ballast tanks, no
+    -- dive: once the core is open it stays up, and one under water then surfaces at once
+    if s.coreOpen and s.dived and not s.surfaceSent and (s.surfaceAt or 0) > now then s.surfaceAt = now end
+    if not s.dived and not s.coreOpen and now >= s.nextDive then
         s.dived, s.surfaceAt, s.surfaceSent = true, now + c.dive_for_s, nil
         fire("RE_SV_AlcnDive"); hudCallout(t.alicorn_dive, nil); log("special: the Alicorn dives")
         tell("alcn_dive")

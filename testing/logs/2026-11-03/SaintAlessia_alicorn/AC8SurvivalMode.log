@@ -1,0 +1,97 @@
+13:33:54 AC8 Survival Mode runtime 0.32.23
+13:33:54 leaderboard: the game started: build hash eb7b586e126b1556b298537b1e2e16cfe74e0e3624b3ddde3f5e2b8c2591e250 (30 scripts, 12 behaviour scripts, the ini, main.dll and the container: 46 files, 4107 KB, 15 ms)
+13:33:56 UE4SS calls mod slot 3
+13:33:56 UE4SS calls mod slot 15
+13:33:56 UE4SS calls mod slot 13
+13:34:09 UE4SS calls mod slot 2
+13:34:09 UE4SS calls mod slot 4
+13:34:09 UE4SS calls mod slot 6
+13:34:09 UE4SS calls mod slot 8
+13:34:29 game functions (34890 ms): base 147A79A30, main decide 147B3FA10, difficulty decide 147B00A90, next 146EB70A0, goto 147A76CC0, set difficulty 147B817C0, transition 147A76C20, text 14739DFC0
+13:34:29 spawn functions: spawn unit 147E00680, unregister unit 147E0C770, unit check 147E0CAB0, destroy actor 143FD38E0
+13:34:29 ammo functions: node execute 1473F03F0, flare lambda 14740B6C0, weapons lambda 1473F08A0, free restock 1473F2000
+13:34:29 game Lua: GetGameLuaState 144EC9FF0
+13:34:29 music and events: BGM node 1473CB720, remote-event node 1473E4B40, pause list 147B470D0, landing menu decide 147AF2030
+13:34:29 music player: track clock tick 147B182A0, next track 147B2A010
+13:34:29 flight input: BuildFlightInput 147D582D0
+13:34:29 coop: AI plane teleport 147D0DD90, inner 147D0DF60
+13:34:29 coop: player plane: spawn 1471D15E0, world spawn 14464D330, teleport 147D3EFB0, inner 147D3EFF0; remote spawn sites: possess 1471B8674, network object 1471B869B, role 1471B87D8, dummy class 1471B85CD, loadout 1471B8957, loadout bytes 1471B8A03, finish 1471B8FEA
+13:34:29 flight: one-shot fire 147C7F910 (LiveFireOneShotWeapon's Execute 1473D9710), AI takeoff afterburner 147CBEF60, player plane respawn 147D5CD60, remote update 147D5E9E0, surface update 147D224E0, player plane damage 147D49D30
+13:34:29 coop2mp: weapons fired 147D60980, remote plane fire 147D617C0, launch weapon 147F68E50, flares 147F504B0, network manager 147ECE910, select special 147D61740, arm special 147D523B0, gear site 1474C8BD4
+13:34:29 guard: AI unit effect update 147CA23C0, a second unit update 147CA8230, target entry check 14742F9A0; coop2mp: plane electronic update 147D177B0
+13:34:29 text lookup: hooked at 14739DFC0
+13:34:29 pause menu list: hooked at 147B470D0
+13:34:30 landing menu decide: hooked at 147AF2030
+13:34:30 music player clock: hooked at 147B182A0
+13:34:30 music player next track: hooked at 147B2A010
+13:34:30 flight input: hooked at 147D582D0
+13:34:30 remote player plane update: hooked at 147D5E9E0
+13:34:30 guard: GUObjectArray chunks at 14DC4ACE0, count at 14DC4ACF4 (56808 objects), GC flag at 14DC33620 (now 1)
+13:34:30 guard: the engine's purge flags: purge required at 14E41BAE0 (now 0), incremental purge in progress at 14E41BAE8 (now 0), from IncrementalPurgeGarbage 1419C8590: SV_GcBusy
+13:34:30 guard: AI unit effect update: vtable slot 14C509EC8, next 147CA23C0
+13:34:30 guard: second AI unit update (+0x42c0): vtable slot 14C5080C8, next 147CA8230
+13:34:30 guard: the target search's fault catcher in; the world getter 143FB5420
+13:34:30 guard: the event family: 152 vtables share its 3 base slots, 151 of them its +0x50 too, 151 answer an event type (151 distinct): those 151 looked at, 1 not
+13:34:30 guard: 37 target entry classes guarded in 38 vtable slots (the first 1, a weak actor unchecked 3, the world unchecked 13, event objects checked 23; 17 through the fault catcher, 20 called straight on; 151 event vtables, 119 functions, 82 left alone)
+13:34:30 guard: the event types whose objects are checked (type +offsets): 166 +0x18, 167 +0x18, 120 +0x20, 119 +0x28, 118 +0x20, 15 +0x18 +0x20, 52 +0x18, 27 +0x18 +0x20, 22 +0x18, 16 +0x18, 10 +0x18, 175 +0x20, 174 +0x20, 104 +0x18, 100 +0x20 +0x28, 94 +0x20, 70 +0x18 +0x20, 66 +0x20, 63 +0x20, 179 +0x18, 144 +0x18, 143 +0x18, 139 +0x18
+13:34:30 guard: AI path tracking guarded (tick 147DD5120, thunk 147DE3EF0 -> body 147DD53F0; trackers with freed objects left out, faults caught: the fault catcher in)
+13:34:30 minigame AI deactivation: hooked at 1478EB7B0
+13:34:30 minigame AI restore: hooked at 1478EB640
+13:34:31 plane electronic update: hooked at 147D177B0
+13:34:31 player plane surface update: hooked at 147D224E0
+13:34:31 player plane damage: hooked at 147D49D30
+13:34:31 player plane weapons fired: hooked at 147D60980
+13:34:31 launch weapon: hooked at 147F68E50
+13:34:31 fire flares: hooked at 147F504B0
+13:34:31 menu tables: main menu 14C816720, difficulty page 14C7DDDE0
+13:34:31 menu transition: hooked at 147A76C20
+13:34:31 main menu decide: vtable slot 14C816E90, next 147B3FA10
+13:34:31 difficulty decide: vtable slot 14C7DE550, next 147B00A90
+13:34:31 difficulty next menu: vtable slot 14C7DE668, next 146EB70A0
+13:34:31 menu hooks installed (mission 9101, hangar menu F)
+13:34:34 UE4SS calls mod slot 5
+13:34:34 UE4SS calls mod slot 7
+13:34:34 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+13:34:34 Lua bridge: registering 79 functions
+13:34:34 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+13:34:34 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+13:34:34 Lua bridge: registering 79 functions
+13:34:34 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+13:34:35 UE4SS calls mod slot 1
+13:34:55 game Lua: Lua 5.3 API from the game's exports (pcallk 144E5EC60), context slot 14DCF4E20
+13:34:59 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+13:34:59 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+13:34:59 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+13:34:59 main menu: Survival's pages are in the game's page list
+13:37:51 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+13:38:49 main menu: Survival's page row 'SV_Mode_Online': SP Online
+13:39:13 main menu: Survival's page row 'SV_Go_Online': SP Online, opening the difficulty select to start
+13:41:15 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+13:41:16 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+13:41:16 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+13:41:16 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+13:41:16 start: going to the hangar (menu F)
+13:47:11 music layout: game instance +1D8 (class fn 146E2F590), BGM manager +908 (flag +1D5), controller +170, play 1478AB8B0; controller ids +138 / +128, status +148
+13:47:11 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+13:47:11 spawner: LiveUnitSpawner 1275B2C870, global phase 1275B2CBB8, world data 173D2A4C0
+13:47:11 teardown gate: watching world 12E7CBB5A0 (spawner 1275B2C870)
+13:47:13 ammo layout: owner fn 147ECB330, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F51220, flare fn 147F65620
+13:47:15 events layout: event vtable 14CB54008 (type 4F, check slot +48), manager fn 1470BDEF0, dispatch 14740D940, GMalloc 14E410280 (free +48)
+13:47:23 units (round 1 start): 1 on the phase's list
+13:47:23   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+13:47:23 spawn SV_Unit_Alicorn: up, 226 aircraft, at (-27700, -4400) m, 0 m high, heading 0
+13:47:56 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-26094, -4635) m, 1221 m high, heading 351
+13:48:33 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-24925, -4805) m, 1221 m high, heading 351
+13:51:45 spawn SV_Unit_Alicorn: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 1393F8FB70 destroyed 30 s on (1 waiting)
+13:51:45 recycle SV_Unit_Alicorn (SV_Recycle, force 1): taken off the phase's list (1)
+13:51:51 units (round 1 clear): 3 on the phase's list
+13:51:51   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+13:51:51   #1: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+13:51:51   #2: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+13:51:57 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+13:52:09 teardown gate: closed (Survival's level is going: its world 12E7CBB5A0: it was freed): Lua holds its level work and drops its object lists, the runtime touches no level object until the next Survival level (SV_Reset); 1 deferred unit destroys dropped (the level destroys them)
+13:52:09 teardown gate: an address from Lua refused (15FB1C80: not a live object; 1 so far)
+13:52:10 teardown gate: an address from Lua refused (15FB1C80: not a live object; 2 so far)
+13:52:10 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+13:52:10 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+13:52:10 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
