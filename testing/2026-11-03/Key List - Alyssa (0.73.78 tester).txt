@@ -1,0 +1,36 @@
+SURVIVAL MODE 0.73.78 - KEY LIST FOR ALYSSA (TESTER BUILD)
+Build: AC8SurvivalMode_COOP2MP_0.73.78_TESTER_Online_COOP.zip  (test keys in: for you only, please don't pass it on)
+
+TEST KEYS (TESTER build only; press them as HOST during a run, the joiners follow your round)
+Any of them makes that run unranked (it isn't sent to the co-op leaderboard).
+
+  Ctrl+1      next round: the shuttle (COMONA DEFENSE)
+  Ctrl+2      next round: MINDRIPPER (THE ANOMALY)
+  Ctrl+3      next round: the amphibious assault
+  Ctrl+4      next round: the Ladons
+  Ctrl+5      next round: the Alicorn
+  Ctrl+7      next round: AB.L..IN
+  Ctrl+8      next round: VALKA
+  Ctrl+END    next round: Spaceport Assault
+  Ctrl+INS    next round: Spaceport Retake
+  Ctrl+6      a top-tier ace flight right now
+              (if no flight is free, it says "TRY AGAIN WHEN SOME ARE DOWN")
+  Ctrl+F9     +5,000 zollars
+  Ctrl+F11    bomber-raid crash test: the round-3 raid's spawns, 20 times (about a minute);
+              press it again to stop early
+  Ctrl+F8     from the main menu, opens the Survival map directly
+
+  In the break between rounds, a special key starts that special 3 s later.
+  During a fight it becomes the next round.
+
+EVERYDAY KEYS (every build)
+
+  Ctrl+F1     use a bought tactical item: airstrike
+  Ctrl+F2     use a bought tactical item: ECM burst
+  Ctrl+F3     use a bought tactical item: decoy
+  Ctrl+F4     give your allies their next order
+  I           show / hide the info wall (players, allies, items)
+  O           while shot down in co-op: watch the next player
+  Ctrl+F7     save the HUD layout to hud_dump.txt (for bug reports)
+
+  I and O can be changed in config\survival.ini ([hud.info] key, [coop.revive] key).
