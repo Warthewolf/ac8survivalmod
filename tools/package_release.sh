@@ -29,10 +29,17 @@ cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv "$mod"/config/survival_profile.ini*
+# TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
+# zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
+# Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
+if [ "$TESTER" = 1 ]; then
+    echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
+else
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
 # the diagnostic loggers off for friends (tools/quiet_logs.py: the weapons log was half the Lua tick in big rounds; a
 # friend's "choppy", 2026-10-31); the user's dev install (package_dev.sh) keeps them
 python -X utf8 -I tools/quiet_logs.py "$mod"
+fi
 suffix=
 if [ "$NOVALKA" = 1 ]; then
     rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
@@ -86,7 +93,8 @@ print('offline check: no network code in', st)
 " "$st"
 fi
 # BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: tools/re/COOP2MP.md)
-out="build/release/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${ver}_$Ed$suffix.zip"
+tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
+out="build/release/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${tv}_$Ed$suffix.zip"
 python -I -c "
 import os, sys, zipfile
 st, out = sys.argv[1], sys.argv[2]
