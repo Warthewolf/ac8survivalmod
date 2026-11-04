@@ -127,6 +127,7 @@ local function called(text) for _, c in ipairs(callouts) do if c.text == text th
 local function paid(pat) local n = 0; for _, c in ipairs(credits) do if tostring(c.why):find(pat) then n = n + c.n end end; return n end
 local function fresh(round)
     alive, events, spawns, callouts, credits, flights, FLAGS, planes = {}, {}, {}, {}, {}, {}, {}, {}
+    SP.tu160.enabled = false                     -- (the Tu-160s: their own section, at the end)
     RUN = { kills = 0 }
     D = { round = round or 10, state = "fighting", now = 0, at = 0, up = {}, flown = {}, queue = {}, spare = {},
           events = {}, orders = {}, taken = {}, special = { kind = "spaceport", state = "pending" } }
@@ -815,7 +816,7 @@ local okC, errC = pcall(run, s, now + 0.25, now + 1.25)
 SP.capture_per_troop = 10
 check(okC and s.capture == 7 and math.type(s.capture) == "integer" and SPORT.row(s, T):find("CAPTURE: 7%%"),
       "capture_per_troop 7.4: 7 % a vehicle, the row and logs fine (" .. tostring(errC or s.capture) .. ")")
-check(SPORT.coopCode() == "a:27:0:7;-", "the host's share in the assault: " .. SPORT.coopCode())
+check(SPORT.coopCode() == "a:27:0:7:0;-", "the host's share in the assault (no Tu-160 up): " .. SPORT.coopCode())
 s.capture, s.captured = 100, true
 RUN.sport = { retakeRound = 11, troops = 9, lostRound = 10, ships = {} }
 SPORT.roundOver(now, s)
@@ -878,6 +879,137 @@ local nb = #flights
 run(s, now + 0.25, now + SP.deck.every_s + 1)
 check(#flights == nb + 1 and D.spDeck[flights[#flights].unit], "one shot down: a held flight launched again")
 SP.retake.island.enabled = true
+
+---------------------------------------------------------------------------------------------------- the Tu-160s
+print("the Tu-160s at the airfield (CFG.specials.spaceport.tu160; user, 2026-11-04)")
+local heavyRoutes, setAc = {}, {}
+HEAVY = { route = function(u, x, y) heavyRoutes[#heavyRoutes + 1] = { u = u, x = x, y = y } end }   -- (sv_flights.lua's)
+local rawSetAc = SV_SetAircraft
+function SV_SetAircraft(u, ac) setAc[u] = ac; return 1 end
+local function compassOf(x, y) return math.deg(math.atan(x - AIRFIELD.X, -(y - AIRFIELD.Y))) % 360 end
+local function offBy(a, b) local d = math.abs(a - b) % 360; return math.min(d, 360 - d) end
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+local L1 = #logs + 1
+check(SPORT.spawn(0) == true and s.tu and #s.tu.sides == 2, "planned at the assault's start: two flights")
+local side = {}
+for _, sd in ipairs(s.tu.sides) do side[sd.bearing] = sd.unit end
+check(side[0] and side[180] and side[0] ~= side[180] and HEAVY_UNIT[side[0]] and HEAVY_UNIT[side[180]],
+      "the two heavy flights, one from the north (0), one from the south (180): " .. tostring(side[0]) .. ", " .. tostring(side[180]))
+check(since(L1, "^special: the Tu%-160s come 45 s into the assault: EA_Unit_01_Air%d from the NORTH %(bearing 0%), "
+      .. "EA_Unit_01_Air%d from the SOUTH %(bearing 180%)$") == 1, "logged at the assault's start")
+run(s, 0, SP.tu160.after_s - 0.25)
+check(#spawned("^EA_Unit_01_Air[12]$") == 0 and SPORT.busy(s), "none before after_s, and the round can't end while they're to come")
+grounded = true                                  -- (solo, down at the airfield: the Spaceport's clocks wait)
+run(s, now + 0.25, now + 10)
+check(#spawned("^EA_Unit_01_Air[12]$") == 0, "down at the airfield: their clock waits")
+grounded = false
+local L2 = #logs + 1
+run(s, now + 0.25, now + 1)
+local tu = spawned("^EA_Unit_01_Air[12]$")
+check(#tu == 2, "after_s of flying on: both flights sent (" .. table.concat(tu, ",") .. ")")
+local okPos, why = true, ""
+for _, sp in ipairs(spawns) do
+    local want = sp.unit == side[0] and 0 or sp.unit == side[180] and 180 or nil
+    if want then
+        local b, d = compassOf(sp.x, sp.y), math.sqrt((sp.x - AIRFIELD.X) ^ 2 + (sp.y - AIRFIELD.Y) ^ 2) / 100000
+        local yawWant = math.deg(math.atan(AIRFIELD.Y - sp.y, AIRFIELD.X - sp.x)) % 360
+        local alt = sp.z / 100
+        local band = CFG.airfield.bombers.altitude_m
+        if offBy(b, want) > SP.tu160.spread_deg + 0.01 or d < SP.tu160.distance_km[1] - 0.01 or d > SP.tu160.distance_km[2] + 0.01
+            or offBy(sp.yaw, yawWant) > 0.01 or alt < band[1] or alt > band[2] then
+            okPos = false
+        end
+        why = why .. string.format("%s at bearing %.1f, %.1f km, yaw %.1f, %.0f m; ", sp.unit, b, d, sp.yaw, alt)
+    end
+end
+check(okPos, "each from its side within spread_deg, distance_km out, facing the airfield, at the heavies' height: " .. why)
+check(setAc[side[0]] == "t160_common" and setAc[side[180]] == "t160_common", "both on the Tu-160's row")
+check(D.up[side[0]] and D.up[side[180]] and D.heavy[side[0]] and D.heavy[side[180]],
+      "up for the round (it ends only once they're down) and bombing as heavies (D.heavy: bombTick's bomb runs)")
+check(#heavyRoutes == 2 and offBy(compassOf(heavyRoutes[1].x, heavyRoutes[1].y), s.tu.units[heavyRoutes[1].u]) <= SP.tu160.spread_deg + 0.01,
+      "each given the heavies' route in from where it spawned (HEAVY.route)")
+local c1 = called(T.sp_tu160)
+check(c1 and c1.sub == string.format(T.sp_tu160_sub, "NORTH AND SOUTH"), "called out: " .. tostring(c1 and c1.sub))
+check(since(L2, "^special: the Tu%-160s at the airfield: 6 sent %(EA_Unit_01_Air%d: %d from the NORTH; EA_Unit_01_Air%d: %d from the SOUTH%)$") == 1,
+      "logged: 6 sent")
+check(not SPORT.busy(s) or SPORT.shipsUp(s) > 0, "once sent, their flights hold the round (D.up), not the special's busy")
+-- the row: the host's and a joiner's
+planes = { { unit = side[0], obj = { full = "BP_OP0060_t160_a" }, name = "BP_OP0060_t160_a" },
+           { unit = side[180], obj = { full = "BP_OP0060_t160_b" }, name = "BP_OP0060_t160_b" },
+           { unit = side[180], obj = { full = "BP_OP0060_t160_c" }, name = "BP_OP0060_t160_c", down = true } }
+check(SPORT.tuUp(s) == 2 and SPORT.row(s, T):find(string.format(T.sp_row_tu160, 2), 1, true), "the row: " .. SPORT.row(s, T))
+local code2 = SPORT.coopCode()
+check(code2:find("^a:%d+:%d+:%d+:2;") ~= nil, "the host's share carries them: " .. code2)
+COOP = { host = function() return false end, client = function() return true end, players = function() return {} end }
+SPORT.fromHost(code2)
+check(SPORT.clientRow(T) and SPORT.clientRow(T):find(string.format(T.sp_row_tu160, 2), 1, true), "a joiner's row: " .. tostring(SPORT.clientRow(T)))
+SPORT.fromHost("a:5:2:30:99;-")
+check(SPORT.hostRow == nil, "a joiner: a Tu-160 count past 24 dropped")
+COOP = nil
+local L3 = #logs + 1
+SPORT.roundOver(now, s)
+check(since(L3, "^special: the Tu%-160s this assault: 6 sent %(.*%), 2 still up at the round's end$") == 1, "the round's line")
+-- captured before they come: none
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+s.captured = true
+L3 = #logs + 1
+run(s, 0, SP.tu160.after_s + 1)
+check(#spawned("^EA_Unit_01_Air[12]$") == 0 and since(L3, "the Tu%-160s don't come: the spaceport was captured first") == 1,
+      "the spaceport captured before they come: none")
+-- one flight still up from before: the other alone, called out for its side
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+for _, sd in ipairs(s.tu.sides) do side[sd.bearing] = sd.unit end
+alive[side[0]] = 2
+L3 = #logs + 1
+run(s, 0, SP.tu160.after_s + 1)
+tu = spawned("^EA_Unit_01_Air[12]$")
+local c2 = callouts[#callouts]
+check(#tu == 1 and tu[1] == side[180] and since(L3, side[0] .. " still up from before: not sent") == 1
+      and c2.text == T.sp_tu160 and c2.sub == string.format(T.sp_tu160_sub, "SOUTH"), "the north's flight still up: the south's alone, said so")
+-- off: switched off, the airfield off
+fresh(12)
+s = D.special
+SPORT.spawn(0)
+check(s.tu == nil, "enabled = false: none planned")
+SP.tu160.enabled = true
+CFG.airfield.enabled = false
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+check(s.tu == nil, "the airfield off: none planned")
+CFG.airfield.enabled = true
+-- the fighters' next wave isn't held back by the Tu-160s (on top of the round), but the round's end waits for them
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+run(s, 0, SP.tu160.after_s + 1)
+local tuA, tuB = s.tu.sides[1].unit, s.tu.sides[2].unit
+local fighter = "ERA_Unit_02_Dep_Air1"
+D.waves, D.wave = { { tuA }, { fighter } }, 1
+D.state, D.at, D.waveAt, D.waveSeen, D.queue = "wave", 0, now, now, {}
+local okW, errW = pcall(roundsTick, now + 1)
+check(okW and D.wave == 2, "6 Tu-160s up: the fighters' next wave comes all the same (next_at " .. CFG.waves.next_at .. "; "
+      .. tostring(errW) .. ", wave " .. tostring(D.wave) .. ")")
+for u in pairs(alive) do if not (u == tuA or u == tuB) then alive[u] = 0 end end
+D.state, D.at, D.up = "fighting", 0, { [tuA] = true, [tuB] = true }
+okW, errW = pcall(roundsTick, now + 2)
+check(okW and D.state == "fighting" and s.state == "assault", "every ship sunk, the Tu-160s still up: the round goes on (" .. tostring(errW) .. ")")
+alive[tuA], alive[tuB] = 0, 0
+planes = {}
+D.at = 0
+okW, errW = pcall(roundsTick, now + 4)
+check(okW and D.state == "wait" and s.state == "done", "the Tu-160s down too: the round ends (" .. tostring(errW) .. ")")
+SV_SetAircraft, HEAVY = rawSetAc, nil
 
 print(fails == 0 and "spaceport test: all passed" or ("spaceport test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

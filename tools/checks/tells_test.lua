@@ -502,7 +502,7 @@ do
         local b = a and src:find("\nend\r?\n", a + 1)
         return a and src:sub(a, b or #src) or ""
     end
-    local sb = body("sv_spawn.lua", "\nlocal function spawnBomber%(unit%)")
+    local sb = body("sv_spawn.lua", "\nlocal function spawnBomber%(unit, opts%)")
     check(has(sb, 'pcall(TELL.say, "raid", TELL.ALL)') and sb:find("t.raid_sub", 1, true) < sb:find('"raid", TELL.ALL', 1, true),
           "spawnBomber: the raid's call to every player after its callout")
     local sf = body("sv_spawn.lua", "\nfunction spawnFlight%(unit, maxLevel")      -- (, pose: P7's deck launches)

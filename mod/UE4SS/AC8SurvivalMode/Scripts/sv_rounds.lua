@@ -1506,9 +1506,14 @@ function roundsTick(now)
         if playerOnAirfield() and othersFlying() == 0 then D.waveAt = D.waveAt + (now - (D.waveSeen or now)) end
         D.waveSeen = now
         local alive = 0
+        -- (the Spaceport Assault's Tu-160s, sv_spaceport.lua SPORT.tuTick, aren't the fighters' wave: on top of the round,
+        -- they don't hold its next wave back; the round's end waits for them, the "fighting" check below)
+        local tuU = D.special and type(D.special.tu) == "table" and D.special.tu.units or nil
         for u in pairs(D.up) do
             local n = ALIVE.ask(u, now)                -- ((0.73.80) at most ~1 s old: spread over the ticks)
-            if n > 0 then alive = alive + n else D.up[u] = nil end
+            if n > 0 then
+                if not (tuU and tuU[u]) then alive = alive + n end
+            else D.up[u] = nil end
         end
         local w = CFG.waves
         local timedOut = (w.timeout_s or 0) > 0 and now - D.waveAt >= w.timeout_s       -- (0: by kills only)
