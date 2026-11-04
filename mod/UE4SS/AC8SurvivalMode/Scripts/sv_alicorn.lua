@@ -185,24 +185,35 @@ end
 -- too), kept per class once found (parts don't come back); a FindAllOf only for a class the record has none of, at most
 -- every PART_WALK_S. Every kept object checked live (liveObj) before it's handed out.
 local PART_WALK_S = 10
-local function parts(cls)
+-- fresh: a look again (armsLook before a kind counts as down: review of 2026-11-04, F4's): the record and a search now,
+-- what's new merged in by address
+local function parts(cls, fresh)
     local s = D and D.special
     local cache = s and s.partCache
     if s and not cache then cache = {}; s.partCache = cache end
     local e = cache and cache[cls]
     if not e then e = { list = {}, at = -PART_WALK_S }; if cache then cache[cls] = e end end
-    if #e.list == 0 then
+    if #e.list == 0 or fresh then
+        local have = {}
+        for _, o in ipairs(e.list) do local a = addrOf(o); if a then have[a] = true end end
+        local function add(o)
+            local a = addrOf(o)
+            if a and not have[a] then have[a] = true; e.list[#e.list + 1] = o end
+        end
         local short = cls:gsub("_C$", "") .. "_C_"
         local rec = SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[UNIT]
         for _, o in ipairs(rec or {}) do
-            if liveObj(o) and nameOf(o):find(short, 1, true) then e.list[#e.list + 1] = o end
+            if liveObj(o) and nameOf(o):find(short, 1, true) then add(o) end
         end
-        if #e.list == 0 and os.clock() - e.at >= PART_WALK_S then
+        if fresh or (#e.list == 0 and os.clock() - e.at >= PART_WALK_S) then
             e.at = os.clock()
+            local n0 = #e.list
             for _, o in ipairs(FindAllOf(cls) or {}) do
-                if valid(o) and not nameOf(o):find("Default__", 1, true) then e.list[#e.list + 1] = o end
+                if valid(o) and not nameOf(o):find("Default__", 1, true) then add(o) end
             end
-            if #e.list > 0 then log(string.format("special: the Alicorn's %s: %d found by a search (not in its record)", cls, #e.list)) end
+            if #e.list > n0 then
+                log(string.format("special: the Alicorn's %s: %d found by a search (not in its record)", cls, #e.list - n0))
+            end
         end
     end
     local out = {}
@@ -242,11 +253,11 @@ local ARMS = { { key = "rail", what = "railguns", after = "its RAILGUN WARNING o
                  classes = { "BP_BA002_alcn_vlsL1_Base_C", "BP_BA002_alcn_vlsL2_Base_C", "BP_BA002_alcn_vlsR1_Base_C",
                              "BP_BA002_alcn_vlsR2_Base_C", "BP_BA002_alcn_vls_Base_C" } } }
 -- (the parts found now merged into the kind's kept list by address; how many are new)
-local function armsLook(s, a)
+local function armsLook(s, a, fresh)
     s.arms, s.armsKeys = s.arms or {}, s.armsKeys or {}
     local list, keys, more = s.arms[a.key] or {}, s.armsKeys[a.key] or {}, 0
     for _, cls in ipairs(a.classes) do                    -- (vls_Base may list its subclasses' parts too)
-        for _, o in ipairs(parts(cls)) do
+        for _, o in ipairs(parts(cls, fresh)) do
             local key = addrOf(o) or nameOf(o)
             if not keys[key] then keys[key] = true; list[#list + 1] = o; more = more + 1 end
         end
@@ -527,7 +538,7 @@ function SPC.alicornTick(now, s)
         if not s.armsDown[a.key] then
             local n, up = armsUp(s, a)
             local more = 0
-            if up == 0 and s.armsSeen[a.key] then more = armsLook(s, a) end
+            if up == 0 and s.armsSeen[a.key] then more = armsLook(s, a, true) end   -- ((0.73.79) a fresh look: parts())
             if more > 0 then
                 n, up = armsUp(s, a)
                 log(string.format("special: the Alicorn's %s: %d more found (%d in all, %d up)", a.what, more, #s.arms[a.key], up))

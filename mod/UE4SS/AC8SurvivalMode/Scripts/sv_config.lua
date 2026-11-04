@@ -5,7 +5,7 @@
 -- The game's current difficulty (LiveDifficultyManager.CurrentDifficulty: 1 Casual .. 5 Ace).
 local DIFFICULTY = { [0] = "None", "Casual", "Easy", "Normal", "Hard", "Ace", "FreeFlight" }
 function logDifficulty(when)
-    local dm = difficultyManager()                -- ((0.73.79) kept: sv_core.lua)
+    local dm = type(difficultyManager) == "function" and difficultyManager() or nil   -- ((0.73.79) kept: sv_core.lua)
     local ok, d = pcall(function() return dm.CurrentDifficulty end)
     log("difficulty " .. when .. ": " .. ((ok and type(d) == "number") and (DIFFICULTY[d] or tostring(d)) or "unknown"))
 end
@@ -2393,7 +2393,7 @@ presetCache = { at = -100 }
 function presetName()
     local now = os.clock()
     if now - presetCache.at > 30 then           -- kept 30 s (Select Difficulty is hidden in Survival's pause menu)
-        local dm = difficultyManager()          -- ((0.73.79) kept: sv_core.lua; nil while not found, as a held walk was)
+        local dm = type(difficultyManager) == "function" and difficultyManager() or nil   -- ((0.73.79) kept: sv_core.lua; nil while not found, as a held walk was)
         local ok, d = pcall(function() return dm.CurrentDifficulty end)
         if ok and d ~= nil then
             presetCache.at, presetCache.name, presetCache.d = now, CFG.ammo.by_difficulty[d] or "standard", d

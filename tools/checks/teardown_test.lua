@@ -123,8 +123,8 @@ clock = clock + 1
 check(not levelGoing() and LEAVE.seen, "it answers (0): seen, not going")
 alive = -1
 clock = clock + 0.05
-check(not levelGoing(), "asked 10 times a second at most: not asked again 50 ms on")
-clock = clock + 0.1
+check(not levelGoing(), "asked twice a second at most (0.73.79: was 10): not asked again 50 ms on")
+clock = clock + 0.5
 local from = #logs + 1
 check(not levelGoing(), "(0.73.73 review) then -1 once: not going yet (one odd answer as a restart makes its spawner)")
 clock = clock + 1

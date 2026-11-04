@@ -574,11 +574,13 @@ end
 -- spawn (SHUTTLE.pad, sv_spawn.lua): healed from that record, each checked live first)
 local function defencesUp()
     local R, n = ALLY.state(), 0
-    for _, kind in ipairs(DEF_KINDS or {}) do n = n + (R.defCount and R.defCount[kind] or 0) end
+    if type(R.defCount) ~= "table" then return nil end   -- (not counted: [allies] off, or no tick yet)
+    for _, kind in ipairs(DEF_KINDS or {}) do n = n + (R.defCount[kind] or 0) end
     return n
 end
 local function repairDefenceActors()
-    if defencesUp() > 0 then return repairActors(DEF_CLASSES) end
+    local up = defencesUp()
+    if up == nil or up > 0 then return repairActors(DEF_CLASSES) end
     local want, n = {}, 0
     for _, cls in ipairs(DEF_CLASSES) do want[#want + 1] = cls:gsub("_C$", "") .. "_C_" end
     for _, l in pairs(SHUTTLE and SHUTTLE.pad or {}) do

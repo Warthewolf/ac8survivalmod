@@ -1401,8 +1401,9 @@ local function clientRounds(now)
         D.intLevel = r.level and { round = r.round, level = r.level } or nil   -- (the copies fly it: DIR.level, P4)
         D.glitchPhase = r.glitchPhase                    -- (AB.L..IN's on the host: ANOM.clientGlitch, P7)
         D.hostSpecial = r.hostSpecial                    -- ((0.73.77) the host's special and its state: ANOM.clientTick, SPC.clientClean)
-        if type(r.hostSpecial) == "string" and r.hostSpecial:find("^valka") and SND and SND.preloadValka then
-            pcall(SND.preloadValka)                      -- ((0.73.79) her song and sounds loaded before her mood: sv_sound.lua)
+        local hs = r.hostSpecial                         -- ((0.73.79) her song and sounds loaded before her mood: sv_sound.lua)
+        if (r.special == "valka" or (type(hs) == "table" and hs.kind == "valka")) and SND and SND.preloadValka then
+            pcall(SND.preloadValka)
         end
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
