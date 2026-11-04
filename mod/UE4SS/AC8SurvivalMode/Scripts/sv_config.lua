@@ -1249,6 +1249,13 @@ CFG = {
              -- class by its code, loaded first: a game with that add-on installed shows the real plane (their loadout and
              -- paint); one without it, its real_fallback above
              real_paths = { falken = "/Game/Blueprints/Vehicle/Player/Plane/PP9001_falken_L001/BP_PlayerPlane_PP9001_falken_L001.BP_PlayerPlane_PP9001_falken_L001_C" },
+             -- (0.73.80, the user 2026-11-04: "if players have mods installed but someone doesn't, that one person who
+             -- doesn't have the mods sees [the stock version], but if they were to have the mods, they would see the
+             -- changes") A modded plane's own game sends its blueprint's path and its stock base (the stock plane it's
+             -- built on): a game with the add-on shows the real plane, one without it the base, else real_fallback, else
+             -- real_default: a stock plane code ("" = the AI stand-in on `default`), its own weapons and paint. A skin id
+             -- this game hasn't is shown as the plane's default paint (the emblems kept). sv_coop.lua M.realClassFor.
+             real_default = "f16c",
              -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
              -- yet, each at most this long; 0: never
              join_wait_s = 90,
