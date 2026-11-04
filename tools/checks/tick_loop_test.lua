@@ -6,8 +6,10 @@
 --     not again within SETTLE_S of the last one's end; no log, Lua crumb, allocation or call but the clock and the
 --     queueing, on every path (measured with the collector stopped and the call stack warmed, and a call hook); a lost
 --     tick queued again after 10 s, then after 20, 40, each with the runtime's SV_Crumb of a fixed text (its only other
---     call there); the job logs it on the game thread (once, with the count) and the back-off starts over; a job that
---     starts between the async function's reads (inside its clock call) is never taken for none queued, nor for lost;
+--     call there, after the queueing); the job logs it on the game thread (once, with the count) and the back-off starts
+--     over; a job that starts between the async function's reads (inside its clock call) is never taken for none
+--     queued, nor for lost; one starting during the lost path's crumb comes after the queueing; a look inside the job's
+--     own end queues nothing; a job run whole between the first look and the last check (a line hook) is seen there;
 --   the job: the key presses first, then the tick, an error in either logged and the loop going on, no collector step
 --     (the review of 2026-11-04); back-to-back queued jobs (a long load's) run each, and nothing is queued between them;
 --   KEYQ: a bind (with or without modifiers) gives UE4SS a function that only counts (no allocation, the bind's own not
@@ -32,8 +34,12 @@ os.clock = function()                             -- luacheck: ignore
 end
 local function presized(n) local t = {}; for i = 1, n do t[i] = false end; for i = n, 1, -1 do t[i] = nil end; return t end
 -- the runtime's SV_Crumb (captured by the loop at load), its list made big enough now (adding to it makes nothing)
-local svCrumbs = presized(64)
-function SV_Crumb(s) svCrumbs[#svCrumbs + 1] = s; return 1 end
+local svCrumbs, CRUMB_HOOK = presized(64), nil
+function SV_Crumb(s)
+    svCrumbs[#svCrumbs + 1] = s
+    if CRUMB_HOOK then local h = CRUMB_HOOK; CRUMB_HOOK = nil; h() end   -- (a job starting while the crumb is written)
+    return 1
+end
 
 -- UE4SS: LoopAsync keeps its function, ExecuteInGameThread queues (the game thread runs the queue when the test says)
 local loopFn, queue, realBinds = nil, presized(512), {}
@@ -241,6 +247,59 @@ clock = clock + 0.05
 q = async()
 check(q, "... and the loop goes on")
 queue[#queue]()
+
+print("more windows: the crumb, the job's end, a job run whole between the reads")
+do
+    local function lostLogs()
+        local n = 0
+        for _, l in ipairs(logs) do if has(l, "hadn't run the tick") then n = n + 1 end end
+        return n
+    end
+    -- a job starting while the lost path writes its crumb: the queueing came before it, nothing after
+    clock = clock + 0.05
+    loopFn()                                             -- (one waiting)
+    local co = coroutine.create(queue[#queue])
+    TICK_HOOK = coroutine.yield
+    clock = clock + 10.5
+    local nq, atStart = #queue, nil
+    CRUMB_HOOK = function() atStart = #queue; assert(coroutine.resume(co)) end
+    loopFn()
+    check(atStart == nq + 1 and #queue == nq + 1, "a job starting during the lost path's crumb: queued before it, nothing after")
+    TICK_HOOK = nil
+    assert(coroutine.resume(co))
+    clock = clock + 0.05
+    queue[#queue]()                                      -- (the one queued again runs: one more tick)
+    -- a look inside the job's own end (its doneAt clock read): nothing queued
+    clock = clock + 0.05
+    loopFn()
+    local epi = nil
+    TICK_HOOK = function() CLOCK_HOOK = function() local n = #queue; loopFn(); epi = #queue - n end end
+    queue[#queue]()
+    TICK_HOOK = nil
+    check(epi == 0, "a look during the job's end (its last clock read): nothing queued")
+    -- a job run whole while the async function is held between its first look and its last check
+    local line = chunk:find("if lost then lostTicks", 1, true)    -- (the last check is the line before: its text may change)
+    local checkLine = line and select(2, chunk:sub(1, line):gsub("\n", ""))
+    check(checkLine ~= nil, "the async function's last check found (the line before the lost count)")
+    for _, lostBy in ipairs({ 10.5 }) do                -- (only a lost one gets there: under 10 s it returns before)
+        clock = clock + 0.05
+        loopFn()                                         -- (one waiting)
+        local jobFn = queue[#queue]
+        clock = clock + lostBy
+        local fired, before, lost0 = false, #queue, lostLogs()
+        debug.sethook(function(_, l)
+            if l == checkLine and not fired and debug.getinfo(2, "S").source == "=sv_main.lua(loop)" then
+                fired = true; debug.sethook(); jobFn()
+            end
+        end, "l")
+        loopFn()
+        debug.sethook()
+        clock = clock + 0.05
+        loopFn(); queue[#queue]()                        -- (the next tick: it logs a lost tick if one was counted)
+        check(fired and #queue == before + 1 and lostLogs() == lost0, string.format("a job run whole at the last check (%s s "
+            .. "late): nothing queued over it, nothing counted lost", lostBy))
+    end
+end
 
 print("KEYQ")
 local runs, inGame = {}, {}
