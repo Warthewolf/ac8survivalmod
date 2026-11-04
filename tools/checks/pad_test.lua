@@ -7,7 +7,10 @@
 --     those 2 km out too, each once; the 1.5 km sweep still takes anything else close, nothing farther, no aircraft;
 --     the log line's counts;
 --   the next shuttle round: the pad's objects back (its units still up, not spawned again), then hidden again;
---   a new run (the pad's units gone): a fresh record, the old objects left alone.
+--   a new run (the pad's units gone): a fresh record, the old objects left alone;
+--   (0.73.80) the spawner refusing the shuttle (-3, its last one still on its list): SV_Recycle(unit, 1) and spawned
+--     again; refused again: a normal round from the start (sv_rounds.lua SPC.unplan: its strike flights out, as many
+--     fighters' aircraft in, its pick and cooldown given back, the pad hidden again, a normal round's callout).
 -- The objects' places are the world data's (WD_SurvivalMode_global: SV_Unit_PadDummies, AA_Unit_01_Ground0).
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -211,6 +214,64 @@ check(#pad2 == 20 and #SHUTTLE.pad.SV_Unit_PadDummies == 9 and #SHUTTLE.pad.AA_U
 SHUTTLE.obj = SHUTTLE_ACTOR
 SPC.shuttleTakeOff()
 check(count(pad2, gone) == 20, "all 20 hidden after that liftoff")
+
+---------------------------------------------------------------------------------------------------- (0.73.80) refused
+-- (R30_FINDINGS specials 0: rounds 17 and 30 of the test of 2026-11-04, "not spawned (its last flight is still up)", the
+-- strike flown as a plain raid) the spawner refuses a unit whose last spawn is still on its list (-3)
+print("(0.73.80) the shuttle's last one still on the spawner's list: taken off and spawned again; refused twice: a normal round")
+local callouts = {}
+hudCallout = function(text, sub) callouts[#callouts + 1] = tostring(text) .. " / " .. tostring(sub) end
+local rawSpawnStub = SV_Spawn
+local recycled, recycleTakes = {}, true
+SV_Spawn = function(u)
+    if u == "SV_Unit_Shuttle" and (alive[u] or 0) > 0 then spawned[#spawned + 1] = u .. " refused"; return -3 end
+    return rawSpawnStub(u)
+end
+SV_Recycle = function(u, force)
+    recycled[#recycled + 1] = u .. ":" .. tostring(force)
+    if recycleTakes then alive[u] = 0 end
+    return 1
+end
+alive.SV_Unit_Shuttle = 1                       -- (the last one, killed and hidden at its liftoff, still on the list)
+spawned = {}
+round()
+from = #logs + 1
+local r2 = spawnShuttle()
+check(r2 == 1 and recycled[1] == "SV_Unit_Shuttle:1" and spawned[1] == "SV_Unit_Shuttle refused" and spawned[2] == "SV_Unit_Shuttle"
+      and D.special and D.special.state == "countdown",
+      "refused (-3): SV_Recycle(unit, 1), spawned again, on the pad, its countdown on (" .. table.concat(spawned, ", ") .. ")")
+check(since(from, "its last one taken off the spawner's list %(SV_Recycle 1%), spawned again: on the pad") == 1, "logged")
+SHUTTLE.obj = SHUTTLE_ACTOR
+SPC.shuttleTakeOff()
+D.shuttleClock = nil
+-- refused again after the recycle: a normal round from the start
+recycleTakes, recycled, spawned, callouts = false, {}, {}, {}
+alive.SV_Unit_Shuttle = 1
+round()
+local STRIKE = CFG.airfield.bombers.pool[1]
+D.up, D.flown, D.strikeUnits, D.taken = {}, {}, { [STRIKE] = true }, { [STRIKE] = true }
+D.queue = { STRIKE }
+D.waves, D.wave = { D.queue }, 1
+RUN.specialPick, RUN.specialAt = { [2] = "shuttle" }, { shuttle = 2 }
+D.specialAtWas = { kind = "shuttle", at = nil }
+local actorBefore = SHUTTLE_ACTOR
+local hiddenBefore = actorBefore.hidden
+from = #logs + 1
+local r3 = spawnShuttle()
+local strikeLeft, fighters = false, 0
+for _, u in ipairs(D.queue) do if u == STRIKE then strikeLeft = true elseif poolIndex(u) then fighters = fighters + flightSize(u) end end
+check(r3 == -3 and #recycled == 1 and D.special == nil and D.shuttleClock == nil,
+      "refused twice: no shuttle, no countdown (" .. tostring(r3) .. ")")
+check(not strikeLeft and not D.taken[STRIKE] and fighters == flightSize(STRIKE) and next(D.strikeUnits) == nil,
+      "its strike flight out of the round, as many fighters' aircraft in (" .. fighters .. "; it flew on as a plain raid)")
+check(RUN.specialPick[2] == false and RUN.specialAt.shuttle == nil, "its pick and its cooldown given back")
+check(count(pad2, gone) == 20 and actorBefore.hidden == hiddenBefore, "the pad hidden again, nothing else touched")
+check(#callouts == 1 and callouts[1] == string.format(CFG.hud.text.start, 2) .. " / " .. CFG.hud.text.start_sub,
+      "a normal round's callout (" .. tostring(callouts[1]) .. ")")
+check(since(from, "^round 2: no shuttle after all %(its spawn refused: ") == 1
+      and since(from, "its 1 strike flight %(" .. flightSize(STRIKE) .. " aircraft%) out of the round") == 1
+      and since(from, "its cooldown given back") == 1, "logged: " .. tostring(lastLog("no shuttle after all")))
+SV_Spawn, SV_Recycle = rawSpawnStub, nil
 
 logFile:close()
 print(fails == 0 and "pad_test: all passed" or ("pad_test: " .. fails .. " FAILED"))

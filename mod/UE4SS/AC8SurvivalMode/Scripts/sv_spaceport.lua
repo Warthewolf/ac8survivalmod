@@ -35,15 +35,22 @@ local DECK_FLOOR_M = 1100                         -- (the pool's 2-ship units fl
 local function cfg() return CFG.specials.spaceport end
 local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.round and TIER.index(D.round))) end
 local function fire(name) return tostring(type(SV_Event) == "function" and SV_Event(name) or "n/a") end
-local function aliveOf(unit)                      -- (0 for a unit off the list, nil for an error: not counted)
-    local n = SV_UnitAlive(unit)
+-- (0.73.80, R30_FINDINGS perf 2: the once-a-second looks asked SV_UnitAlive for every ship, wave, troop and deck flight
+-- in one tick, ~140 ms a second in the Spaceport round at 5.3 ms a call) aliveOf: the kept answer (sv_spawn.lua ALIVE),
+-- at most maxAge (1 s) old and asked again in turn over the ticks; aliveNow: asked now (a check before a spawn or a
+-- removal, once)
+local function counted(n)                         -- (0 for a unit off the list, nil for an error: not counted)
     if n == -7 then return 0 end
     return n >= 0 and n or nil
 end
+local function aliveOf(unit, now, maxAge) return counted(ALIVE.ask(unit, now, maxAge)) end
+local function aliveNow(unit) return counted(ALIVE.fresh(unit)) end
+local HULL_AGE_S = 3                              -- (a ship whose hull is watched: its unit's count only for its turrets)
 local function spawn(unit)
     spawningUnit = unit
     local r = SV_Spawn(unit)
     spawningUnit = nil
+    ALIVE.spawned(unit, r)                        -- ((0.73.80) its count kept: the looks read it)
     return r
 end
 local function said(r) return r > 0 and (r .. " up") or ("not spawned (" .. ((SV_ERR and SV_ERR[r]) or tostring(r)) .. ")") end
@@ -144,8 +151,10 @@ end
 local function deckFlight(size)
     local opts, held = {}, {}
     for _, u in ipairs(CFG.pool) do
-        if flightSize(u) == size and not (D.up and D.up[u]) and SV_UnitAlive(u) <= 0
-            and not PROBE_OF[u] and poolIndex(u) ~= nil and not ROLE.sitsOut(u) then
+        -- ((0.73.80) the Lua tests first, SV_UnitAlive (kept, ALIVE) last: it was asked for the whole pool at each launch)
+        if flightSize(u) == size and not (D.up and D.up[u]) and not PROBE_OF[u] and poolIndex(u) ~= nil
+            and not ROLE.sitsOut(u) and (D.spDeck and D.spDeck[u] or not (D.taken and D.taken[u]))
+            and ALIVE.ask(u, D.now) <= 0 then
             if D.spDeck and D.spDeck[u] then held[#held + 1] = u
             elseif not (D.taken and D.taken[u]) then opts[#opts + 1] = u end
         end
@@ -174,7 +183,7 @@ local function deck(now, s)
     if s.deckLeft <= 0 or now < s.deckNext then return end
     s.deck = s.deck or {}
     local up = 0
-    for u in pairs(s.deck) do if SV_UnitAlive(u) > 0 then up = up + 1 end end
+    for u in pairs(s.deck) do if ALIVE.ask(u, now) > 0 then up = up + 1 end end
     if up >= (tonumber(dk.max_up) or 2) then s.deckNext = now + 2; return end
     local flying = playerOnAirfield() and othersFlying()
     if flying == 0 then s.deckNext = now + 1; return end
@@ -191,6 +200,7 @@ local function deck(now, s)
     local pose = { x = at.X + math.cos(yaw) * ahead, y = at.Y + math.sin(yaw) * ahead, z = math.max(at.Z, 0) + alt * 100,
                    yaw = math.deg(yaw) % 360, why = "the Ford's deck" }
     local r = spawnFlight(u, nil, pose)
+    ALIVE.spawned(u, r)                              -- ((0.73.80) said again: the up count above reads it)
     if r > 0 then
         s.deck[u], s.deckN = true, (s.deckN or 0) + 1
         s.deckLeft = s.deckLeft - 1
@@ -257,13 +267,15 @@ end
 -- health (or its whole unit's down), paid its price once (it paid price x the parts lost: an Aegis 2,400-12,000, the
 -- fleet ~242,000 in round 13), called out once (CARRIER SUNK came twice for one Ford), and its turrets still up are
 -- finished off with it; a turret shot off while its hull floats pays pay.turret (the landing craft's rate).
-local function shipsTick(s)
+-- ((0.73.80) a ship whose hull is found is watched by its hull, its unit's count (its turrets') asked every HULL_AGE_S;
+-- one counted by its unit as before, every second)
+local function shipsTick(s, now)
     local c, t = cfg(), CFG.hud.text
     local pay = c.pay or {}
     for unit, sh in pairs(s.ships) do
         if afloat(sh) then
             findHull(unit, sh)
-            local a = aliveOf(unit) or sh.alive
+            local a = aliveOf(unit, now, (sh.hull and liveAddr(sh.hull)) and HULL_AGE_S or nil) or sh.alive
             local why = nil
             if a <= 0 then why = "every part down"
             elseif sh.hull then
@@ -361,7 +373,7 @@ function SPORT.spawn(now)
     if not nativeReady() then return false end
     local left = {}                                  -- ((0.73.77) leftovers: taken off, the new fleet waits for them)
     for _, sh in ipairs(SPORT.fleet()) do
-        if (aliveOf(sh.unit) or 0) > 0 then left[#left + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
+        if (aliveNow(sh.unit) or 0) > 0 then left[#left + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
     end
     local s = D.special
     s.clearUntil = nil
@@ -399,7 +411,7 @@ local function withdraw(s)
     for u in pairs(D.up or {}) do
         local k = poolIndex(u)
         if k then
-            n = n + math.max(0, SV_UnitAlive(u))
+            n = n + math.max(0, ALIVE.ask(u))
             fire(string.format("RE_SV_FlightOff_%02d", k))
             gone[u] = true
             gone[#gone + 1] = u
@@ -421,7 +433,7 @@ end
 -- A lane's next free wave: one not out and not still up from before.
 local function freeWave(g, L)
     for _, w in ipairs(WAVES) do
-        if not L.waves[w] and (aliveOf("SV_Unit_SpLcac" .. g .. w) or 1) <= 0 then return w end
+        if not L.waves[w] and (aliveNow("SV_Unit_SpLcac" .. g .. w) or 1) <= 0 then return w end
     end
 end
 
@@ -453,6 +465,7 @@ end
 function SPORT.tick(now, s)
     if s.state ~= "assault" then return end
     if levelGoing() then return end                  -- ((0.73.77) no pay or spawn while the level goes away)
+    ALIVE.tick(now)                                  -- ((0.73.80) roundsTick's own already: the same tick, no second budget)
     local c, t = cfg(), CFG.hud.text
     if #s.queue > 0 and now >= (s.spawnAt or 0) then          -- the fleet, a few ships at a time
         s.spawnAt = now + 0.5
@@ -460,7 +473,7 @@ function SPORT.tick(now, s)
             local sh = s.queue[1]
             if not sh then break end
             -- ((0.73.77, I3) a leftover from before still going after its removal: a moment more, then counted as it is)
-            local old = s.clearUntil and (aliveOf(sh.unit) or 0) or 0
+            local old = s.clearUntil and (aliveOf(sh.unit, now) or 0) or 0
             if old > 0 and now < s.clearUntil then break end
             table.remove(s.queue, 1)
             if old > 0 then
@@ -477,7 +490,7 @@ function SPORT.tick(now, s)
     if now < (s.nextAt or 0) then return end
     s.nextAt = now + 1
     holdClocks(now, s)
-    shipsTick(s)
+    shipsTick(s, now)
     local f = svFlags() or {}
     for _, g in ipairs(GROUPS) do
         local L = s.lanes[g]
@@ -501,7 +514,7 @@ function SPORT.tick(now, s)
             end
         end
         for w, wv in pairs(L.waves) do
-            local alive = wv.removed and 0 or (aliveOf(wv.unit) or wv.alive)
+            local alive = wv.removed and 0 or (aliveOf(wv.unit, now) or wv.alive)
             if alive < wv.alive and not wv.removed then
                 wv.shot, s.stat.shot = (wv.shot or 0) + (wv.alive - alive), s.stat.shot + (wv.alive - alive)
                 -- ((0.73.77, I2: S3) "sunk", not "down (": sv_coop.lua's addCredits doesn't send a pay whose reason has
@@ -520,7 +533,7 @@ function SPORT.tick(now, s)
                     wv.nLanded, s.stat.landed = (wv.nLanded or 0) + 1, s.stat.landed + 1
                     local tu = "SV_Unit_SpTroops" .. key
                     local r = -100
-                    if not s.captured and (aliveOf(tu) or 1) <= 0 then r = spawn(tu) end
+                    if not s.captured and (aliveNow(tu) or 1) <= 0 then r = spawn(tu) end
                     log(string.format("special: %s craft %s on the beach; troops %s: %s", wv.unit, k, tu,
                         r == -100 and (s.captured and "none (captured)" or "still up from before") or said(r)))
                     if r > 0 then
@@ -642,7 +655,7 @@ end
 function SPORT.tidyFleet(why)
     local up = {}
     for _, sh in ipairs(SPORT.fleet()) do
-        if (aliveOf(sh.unit) or 0) > 0 then up[#up + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
+        if (aliveNow(sh.unit) or 0) > 0 then up[#up + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
     end
     if #up > 0 then
         log(string.format("special: %s: %d of the fleet's units still had parts up (%s): taken off (RE_SV_SpFleetRemove %s)", why,
@@ -714,7 +727,7 @@ local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 local function rocketsSpawn(now, s)
     local rc = rcfg()
     if rc.enabled == false then log("special: the retake's rockets are off ([specials.spaceport.retake.rockets] enabled)"); return 0 end
-    if (aliveOf(ROCKETS) or 0) > 0 then fire("RE_SV_SpRocketRemove") end   -- (left up from before: taken off)
+    if (aliveNow(ROCKETS) or 0) > 0 then fire("RE_SV_SpRocketRemove") end   -- (left up from before: taken off)
     local r = spawn(ROCKETS)
     if r <= 0 then log("special: the retake's rockets didn't spawn (" .. said(r) .. ")"); return 0 end
     local deb, counts = {}, {}
@@ -786,11 +799,11 @@ local function debrisTick(now, rk, rc)
     if rk.stageAt and now >= rk.stageAt then
         rk.stageAt = nil
         fire("RE_SV_SpDebriTgt" .. rk.stage)
-        local a = aliveOf(DEBRIS[rk.stage]) or 0
+        local a = aliveOf(DEBRIS[rk.stage], now) or 0
         log(string.format("special: the rocket's debris, stage %d (%s): targets now (%d up)", rk.stage, DEBRIS[rk.stage], a))
     end
     local u = DEBRIS[rk.stage]
-    local a = aliveOf(u) or 0
+    local a = aliveOf(u, now) or 0
     local was = rk.debris[u] or 0                       -- ((0.73.77) its count from its spawn: 0 if it never came)
     if a < was then
         local pay = tierPay(rc.debris_pay or 0) * (was - a)
@@ -887,7 +900,7 @@ local function rocketsTick(now, s)
     if rk.escPending > 0 and now > (rk.escUntil or 0) then rk.escPending = 0 end
     -- the kills: ((0.73.77) from each rocket's object when both were found) else by the unit's count, an escape's
     -- despawn not one
-    local alive = aliveOf(ROCKETS) or rk.alive
+    local alive = aliveOf(ROCKETS, now) or rk.alive
     local down = 0
     if rk.byObj then
         for _, L in ipairs({ "A", "B" }) do
@@ -961,7 +974,7 @@ function SPORT.retakeSpawn(now)
     s.rs = { retakeRound = D.round, troops = rs.troops or 0, lostRound = rs.lostRound or 0 }
     local again = {}
     for unit, sh in pairs(rs.ships or {}) do
-        local a = aliveOf(unit) or 0
+        local a = aliveNow(unit) or 0
         -- ((0.73.77) a host by migration: the old host's ships here were its copies, taken down with them: spawned again)
         if a <= 0 and rs.fromHost and SHIP[unit] then
             local r = spawn(unit)
@@ -979,7 +992,7 @@ function SPORT.retakeSpawn(now)
     local n = 0
     for i = 1, need do
         local u = "SV_Unit_SpGarrison" .. GARRISON[i]
-        local r = (aliveOf(u) or 1) <= 0 and spawn(u) or -100
+        local r = (aliveNow(u) or 1) <= 0 and spawn(u) or -100
         if r > 0 then s.garrison[u] = { alive = r }; n = n + r end
         log(string.format("special: the spaceport's garrison %s: %s", u, r == -100 and "still up from before" or said(r)))
     end
@@ -989,7 +1002,7 @@ function SPORT.retakeSpawn(now)
     s.island = {}
     if ic.enabled ~= false then
         for _, it in ipairs(ISLAND) do
-            local r = (aliveOf(it[1]) or 1) <= 0 and spawn(it[1]) or -100
+            local r = (aliveNow(it[1]) or 1) <= 0 and spawn(it[1]) or -100
             if r > 0 then s.island[it[1]] = { alive = r, kind = it[2] }; ni = ni + r end
             isl[#isl + 1] = it[1]:sub(#"SV_Unit_SpIsl" + 1) .. " " .. (r == -100 and "still up from before" or said(r))
         end
@@ -1006,12 +1019,13 @@ function SPORT.retakeTick(now, s)
     if s.state ~= "retake" or now < (s.nextAt or 0) then return end
     if levelGoing() then return end                  -- ((0.73.77) no pay while the level goes away)
     s.nextAt = now + 1
+    ALIVE.tick(now)                                  -- ((0.73.80) roundsTick's own already: the same tick, no second budget)
     local c = cfg()
     holdClocks(now, s)                               -- ((0.73.77, I6: S10) the rockets' launches wait while you're down)
-    shipsTick(s)
+    shipsTick(s, now)
     for unit, x in pairs(s.garrison) do
         if x.alive > 0 then
-            local a = aliveOf(unit) or x.alive
+            local a = aliveOf(unit, now) or x.alive
             if a < x.alive then
                 addCredits(tierPay(c.retake and c.retake.garrison_pay or 0) * (x.alive - a), "the spaceport's garrison: a vehicle down")
                 LB.stat("ground", x.alive - a)
@@ -1025,7 +1039,7 @@ function SPORT.retakeTick(now, s)
     local ic = c.retake and c.retake.island or {}
     for unit, x in pairs(s.island or {}) do
         if x.alive > 0 then
-            local a = aliveOf(unit) or x.alive
+            local a = aliveOf(unit, now) or x.alive
             if a < x.alive then
                 addCredits(tierPay((x.kind == "ad" and ic.ad_pay or ic.armour_pay) or 0) * (x.alive - a),
                     x.kind == "ad" and "the island's air defences: one down" or "the island's armour: one down")
@@ -1109,7 +1123,7 @@ function SPORT.planRound(special, pick)
     if rs and (tonumber(rs.retakeRound) or 0) <= D.round and special ~= "retake" then
         local up = {}
         for _, sh in ipairs(SPORT.fleet()) do
-            if (aliveOf(sh.unit) or 0) > 0 then up[#up + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
+            if (aliveNow(sh.unit) or 0) > 0 then up[#up + 1] = sh.unit:sub(#"SV_Unit_Sp" + 1) end
         end
         log(string.format("special: the Spaceport Retake due in round %s didn't come (round %d is %s): %s", tostring(rs.retakeRound),
             D.round, special or "a normal round", #up > 0 and string.format("the %d ships left from its assault taken off (%s; "
@@ -1126,7 +1140,7 @@ function SPORT.planRound(special, pick)
         local size = math.floor(tonumber(dk.size) or 2)
         if want > 0 then
             local got = pick(CFG.pool, want * size, function(u)
-                return flightSize(u) ~= size or PROBE_OF[u] or poolIndex(u) == nil or ROLE.sitsOut(u) or SV_UnitAlive(u) > 0
+                return flightSize(u) ~= size or PROBE_OF[u] or poolIndex(u) == nil or ROLE.sitsOut(u) or ALIVE.ask(u) > 0
             end)
             D.spDeck = {}
             for _, u in ipairs(got) do D.spDeck[u] = true end
