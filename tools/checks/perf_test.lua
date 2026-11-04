@@ -492,7 +492,8 @@ do
         return a and mainSrc:sub(a, b or #mainSrc) or ""
     end
     local pt, ptB = body("\nlocal function probeTick%(tick%)"), body("\nlocal function probeTickB%(tick%)")
-    local loop = mainSrc:sub(mainSrc:find("\nLoopAsync%(125") or 1)
+    local loop = body("\nlocal function tickJob%(%)")      -- ((0.73.82) the loop's job: its halves and the rest)
+    check(#loop > 0, "sv_main.lua: the loop's tickJob found")
     for _, n in ipairs({ "shop rows", "setup", "leave check", "restart check", "clock", "music hold", "death check", "rounds",
                          "hud", "music", "airfield", "bombers" }) do
         check(has(pt, '"' .. n .. '"'), "probeTick: \"" .. n .. "\" timed")

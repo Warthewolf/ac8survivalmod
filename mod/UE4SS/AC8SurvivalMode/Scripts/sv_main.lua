@@ -889,70 +889,105 @@ end
 -- its Lua (test M2-8) while this script ran many ExecuteWithDelay timers (one per menu widget) next to two loops; one
 -- loop that queues one game-thread job at a time keeps all Lua work in one place. A tick is 250 ms in two halves 125
 -- ms apart (probeTick, then probeTickB), so no one frame carries all of it (a friend's "choppy", 2026-10-31).
-local tick, rowsStopped, queued, half, tA = 0, false, false, 1, 0
+local tick, rowsStopped, half, tA = 0, false, 1, 0
 -- (0.73.75) a tick queued for the game thread and never run held the loop for good: the user's test of 2026-11-02 23:24:49,
 -- UE4SS "Error: [Lua::Registry::get_function_ref] Ref was not function" 16 ms after a test key's handler queued its own
 -- (both queue game-thread callbacks at once); from then on no tick ran: the round's clock never counted down, the run
 -- never ended at the main menu ("run over" never logged) and SURVIVAL MODE's pages never opened. A tick queued
--- TICK_LOST_S ago and not run is taken as lost and queued again (a long blocking load just runs one extra tick after).
-local queuedAt, lostTicks, TICK_LOST_S = 0, 0, 10   -- (0.73.76: 10 s; 5 s fired during level loads, 2026-11-02 23:30 / 23:31)
-LoopAsync(125, function()
-    if queued then
-        if os.clock() - queuedAt < TICK_LOST_S then return false end
-        lostTicks = lostTicks + 1
-        log(string.format("tick: the game thread hasn't run the tick queued %.1f s ago (lost, or a very long load): queued again (%d so far)",
-            os.clock() - queuedAt, lostTicks))
-        pcall(crumb, "tick lost: queued again")
-    end
-    queued, queuedAt = true, os.clock()
-    ExecuteInGameThread(function()
-        half = 1 - half
-        PLOC.on, PLOC.have, PLOC.v = true, false, nil   -- ((0.73.79) your position read once in this half: playerLocation)
-        if half == 1 then                           -- the second half: probeTickB, the leaderboard's polls, the perf line
-            local t1 = os.clock()
-            local okB, errB = pcall(probeTickB, tick)
-            if not okB then log("round probe: error (second half) " .. tostring(errB)) end
-            if tick % 4 == 3 then timed("speakers", ALLY.speakerTick, D ~= nil) end   -- the run's ally speakers, on and off
-            if tick % 4 == 1 then timed("leaderboard", LB.poll) end                  -- the leaderboard sends' answers
-            if tick % 20 == 7 then timed("leaderboard", LB.queueTick) end            -- runs waiting to be sent
-            local tB = (os.clock() - t1) * 1000
-            if D then pcall(perfLine, tA, tB, tick) end
-            PLOC.on, PLOC.have, PLOC.v = false, false, nil
-            queued = false
-            return
-        end
-        tick = tick + 1
-        local t0 = os.clock()                       -- ((0.73.77) the rows' watch and the info maps in the first half too: B1)
-        -- ((0.73.79, the lag audit's item 3) in a run on Survival's level the main menu's tables and the hangar's maps
-        -- aren't read by the game (they're pinned, read at the main menu and the hangar), so they're watched every 30 s
-        -- (rows) and 60 s (info maps) instead of every 1 s / 2 s: 4-5 ms a tick on a tester's PC, each pass a few
-        -- object scans. Back to the menu's pace at the first sign another level loads (svLevelOn false, LEAVE.why), before
-        -- the main menu builds its page.)
-        local quiet = D ~= nil and svLevelOn ~= false and not LEAVE.why and ready[1] and ready[2]
-        if not rowsStopped and (tick % (quiet and 120 or 4) == 0 or not (ready[1] and ready[2])) then   -- watching for reloads
-            local ok, r = timed("rows watch", watchRows)
-            if not ok then log("rows: error " .. tostring(r)) end
-            if ok and r == false then rowsStopped = true end
-        end
-        if tick % (quiet and 240 or 8) == 2 then
-            local okI, errI = timed("info maps", infoMapsTick)
-            if not okI then log("info maps: error " .. tostring(errI)) end
-        end
-        local ok, err = pcall(probeTick, tick)
-        if not ok then log("round probe: error " .. tostring(err)) end
-        local okM, errM = timed("menu", MENU.tick, tick)   -- Survival's menu pages and the run setups (sv_menu.lua)
-        if not okM then log("menu: error " .. tostring(errM)) end
-        if COOP and COOP.tick and not levelGate() then   -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
-            -- ((0.73.77) F1: held while the level is torn down: its copies and planes are the level's)
-            local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
-            if not okC then log("coop: error " .. tostring(errC)) end
-        end
-        tA = (os.clock() - t0) * 1000
+-- TICK_LOST_S ago and not run is taken as lost and queued again.
+-- ((0.73.82) Saint Alessia's crash on launch of 2026-11-04 20:28 (her 12:28:34): UE4SS 3.0.1 runs LoopAsync's function on
+-- its own async thread, in this mod's one Lua state, with no lock against the game thread, and Lua isn't safe on two
+-- threads at once. The game thread was held 54 s by the main menu's load; the watchdog queued the tick again every 10 s
+-- (four more), each time logging, writing a crumb and making a new function there; when the game thread came back it
+-- ran the five queued ticks one after another, and the watchdog's next "queued again", 10 s after the last, fell inside
+-- them: UE4SS's Lua faulted (lua_getiuservalue on nothing, reading 0xa) 70 ms after the tick's last line. Now the async
+-- function only reads its flags and the clock (all captured here: no global looked up, nothing made) and queues the one
+-- job made below, and only when no job is waiting or running and the last ended SETTLE_S ago (UE4SS lets go of a job's
+-- references just after it returns); a tick taken as lost is queued again once, then after twice as long each time, and
+-- the job logs it on the game thread. Key presses run at the job's start (sv_core.lua KEYQ), and the job ends with one
+-- step of Lua's collector, so the next queueing on the async thread (UE4SS makes a Lua thread there) seldom runs a
+-- collector step there.)
+local waiting, running, queuedAt, doneAt, lostAfter = false, false, 0, 0, 0
+local lostTicks, lostSaid, TICK_LOST_S, SETTLE_S = 0, 0, 10, 0.02   -- (0.73.76: 10 s; 5 s fired during level loads, 2026-11-02 23:30 / 23:31)
+local osClock, inGameThread = os.clock, ExecuteInGameThread
+local function tickJob()
+    half = 1 - half
+    PLOC.on, PLOC.have, PLOC.v = true, false, nil   -- ((0.73.79) your position read once in this half: playerLocation)
+    if half == 1 then                           -- the second half: probeTickB, the leaderboard's polls, the perf line
+        local t1 = os.clock()
+        local okB, errB = pcall(probeTickB, tick)
+        if not okB then log("round probe: error (second half) " .. tostring(errB)) end
+        if tick % 4 == 3 then timed("speakers", ALLY.speakerTick, D ~= nil) end   -- the run's ally speakers, on and off
+        if tick % 4 == 1 then timed("leaderboard", LB.poll) end                  -- the leaderboard sends' answers
+        if tick % 20 == 7 then timed("leaderboard", LB.queueTick) end            -- runs waiting to be sent
+        local tB = (os.clock() - t1) * 1000
+        if D then pcall(perfLine, tA, tB, tick) end
         PLOC.on, PLOC.have, PLOC.v = false, false, nil
-        queued = false
+        return
+    end
+    tick = tick + 1
+    local t0 = os.clock()                       -- ((0.73.77) the rows' watch and the info maps in the first half too: B1)
+    -- ((0.73.79, the lag audit's item 3) in a run on Survival's level the main menu's tables and the hangar's maps
+    -- aren't read by the game (they're pinned, read at the main menu and the hangar), so they're watched every 30 s
+    -- (rows) and 60 s (info maps) instead of every 1 s / 2 s: 4-5 ms a tick on a tester's PC, each pass a few
+    -- object scans. Back to the menu's pace at the first sign another level loads (svLevelOn false, LEAVE.why), before
+    -- the main menu builds its page.)
+    local quiet = D ~= nil and svLevelOn ~= false and not LEAVE.why and ready[1] and ready[2]
+    if not rowsStopped and (tick % (quiet and 120 or 4) == 0 or not (ready[1] and ready[2])) then   -- watching for reloads
+        local ok, r = timed("rows watch", watchRows)
+        if not ok then log("rows: error " .. tostring(r)) end
+        if ok and r == false then rowsStopped = true end
+    end
+    if tick % (quiet and 240 or 8) == 2 then
+        local okI, errI = timed("info maps", infoMapsTick)
+        if not okI then log("info maps: error " .. tostring(errI)) end
+    end
+    local ok, err = pcall(probeTick, tick)
+    if not ok then log("round probe: error " .. tostring(err)) end
+    local okM, errM = timed("menu", MENU.tick, tick)   -- Survival's menu pages and the run setups (sv_menu.lua)
+    if not okM then log("menu: error " .. tostring(errM)) end
+    if COOP and COOP.tick and not levelGate() then   -- Survival COOP (sv_coop.lua): the other game's messages, our plane, mirrors
+        -- ((0.73.77) F1: held while the level is torn down: its copies and planes are the level's)
+        local okC, errC = timed("coop", COOP.tick, tick)   -- (its own row in the perf line, as the HUD's and rounds')
+        if not okC then log("coop: error " .. tostring(errC)) end
+    end
+    tA = (os.clock() - t0) * 1000
+    PLOC.on, PLOC.have, PLOC.v = false, false, nil
+end
+local function job()                                -- (the game thread: one of UE4SS's game-thread actions)
+    waiting, running = false, true
+    if lostTicks ~= lostSaid then
+        log(string.format("tick: the game thread hadn't run the tick queued %d s or more before (lost, or a long load): queued "
+            .. "again %d time%s (%d so far)", TICK_LOST_S, lostTicks - lostSaid, lostTicks - lostSaid == 1 and "" or "s", lostTicks))
+        pcall(crumb, string.format("tick lost: queued again (%d so far)", lostTicks))
+        lostSaid = lostTicks
+    end
+    lostAfter = 0
+    if KEYQ and KEYQ.drain then
+        local okK, errK = pcall(KEYQ.drain)
+        if not okK then log("keys: error " .. tostring(errK)) end
+    end
+    local ok, err = pcall(tickJob)
+    if not ok then log("tick: error " .. tostring(err)) end
+    pcall(collectgarbage, "step", 0)
+    running, doneAt = false, osClock()
+end
+if type(LoopAsync) == "function" and type(inGameThread) == "function" then
+    LoopAsync(125, function()                       -- (UE4SS's async thread: its flags, the clock and the queueing only)
+        if running then return false end
+        local t = osClock()
+        if waiting then
+            if lostAfter == 0 then lostAfter = TICK_LOST_S end
+            if t - queuedAt < lostAfter then return false end
+            lostTicks, lostAfter = lostTicks + 1, lostAfter * 2   -- (queued again: the next after twice as long)
+        elseif t - doneAt < SETTLE_S then
+            return false
+        end
+        waiting, queuedAt = true, t
+        inGameThread(job)
+        return false
     end)
-    return false
-end)
+end
 
 ---------------------------------------------------------------------------------------------------- dev keys
 -- TEST ONLY BEGIN (tools/package_test.sh strips every such block from release / test zips: user, 2026-10-23, "remove

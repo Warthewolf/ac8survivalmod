@@ -662,6 +662,59 @@ function levelGateStep()
     -- TEST ONLY END
 end
 
+-- ((0.73.82) Saint Alessia's crash on launch of 2026-11-04) Key presses run on the game thread. UE4SS 3.0.1 calls a key
+-- bind's function on its own input thread, on the same Lua thread as NotifyOnNewObject's callbacks (which run on the
+-- thread that builds the object, with no lock), and every bind here then called ExecuteInGameThread there, which makes a
+-- new Lua thread, two registry references and a closure: Lua work off the game thread, in this mod's one Lua state,
+-- while the game thread may be running its own (Lua isn't safe on two threads at once; the 0.73.75 "Ref was not
+-- function" that lost the tick was likely two such calls at once). Every RegisterKeyBind from here on is wrapped: UE4SS
+-- gets a function that only counts the press in a slot made at load (no allocation, no call into anything), and the
+-- tick's job (sv_main.lua) runs the binds' own functions for the presses counted since, on the game thread
+-- (KEYQ.drain), with ExecuteInGameThread running its function at once meanwhile (the job is itself one of UE4SS's
+-- game-thread actions, and queuing another from inside one edits the list UE4SS is going through).
+KEYQ = { hits = {}, done = {}, fns = {}, MAX = 4 }
+do
+    local hits, done, fns = KEYQ.hits, KEYQ.done, KEYQ.fns
+    for i = 1, 96 do hits[i], done[i] = 0, 0 end      -- (the slots made now, so a press never grows the table)
+    local realBind = RegisterKeyBind
+    if type(realBind) == "function" then
+        RegisterKeyBind = function(key, a, b)
+            local mods, fn = a, b
+            if b == nil and type(a) == "function" then mods, fn = nil, a end
+            if type(fn) ~= "function" then           -- (not a bind: UE4SS's own error)
+                if b == nil then return realBind(key, a) end
+                return realBind(key, a, b)
+            end
+            local i = #fns + 1
+            fns[i], hits[i], done[i] = fn, 0, 0
+            local function pressed() hits[i] = hits[i] + 1 end   -- (UE4SS's input thread: one count, nothing else)
+            if mods == nil then return realBind(key, pressed) end
+            return realBind(key, mods, pressed)
+        end
+    end
+    local function now(f)                               -- (ExecuteInGameThread while the presses run: we're on it)
+        local ok, err = pcall(f)
+        if not ok then log("keys: error " .. tostring(err)) end
+    end
+    function KEYQ.drain()                               -- (the game thread: the tick's job, sv_main.lua)
+        for i = 1, #fns do
+            local h = hits[i]
+            local k = h - done[i]
+            if k > 0 then
+                done[i] = h
+                if k > KEYQ.MAX then k = KEYQ.MAX end
+                local queue = ExecuteInGameThread
+                ExecuteInGameThread = now
+                for _ = 1, k do
+                    local ok, err = pcall(fns[i])
+                    if not ok then log("keys: error " .. tostring(err)) end
+                end
+                ExecuteInGameThread = queue
+            end
+        end
+    end
+end
+
 -- TEST ONLY BEGIN
 -- Ctrl+F11 in a run (plan F2d): the round 3 bomber raid's crash pattern 20 times, to test the recycle and the path tracker
 -- guard (runtime 0.32.22) solo: each cycle takes the strike flight EA_Unit_01_Air0 and the heavy flight EA_Unit_01_Air1

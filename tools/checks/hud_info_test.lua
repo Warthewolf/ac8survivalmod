@@ -132,7 +132,8 @@ do
           and has(line("hud: info key", n), "the info wall") and has(line("hud: info key", n), "shown when it's pressed")
           and has(line("hud: info key", n), "5.0 s"), "the default: I without Ctrl, the wall shown when it's pressed (logged)")
 end
-local press = binds[1].fn
+local pressKey = binds[1].fn          -- ((0.73.82) a press only counts on UE4SS's thread: the tick's job runs it, KEYQ.drain)
+local function press() pressKey(); KEYQ.drain() end
 part("sv_allies.lua"); part("sv_tactical.lua")
 part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })
 local M = _G.M
@@ -464,7 +465,7 @@ fresh(); now = 500
 RUN.items = { airstrike = 1 }
 tick(20)
 check(H.wallOn == true and not shown("Items"), "the wall open without a press, 20 s on")
-binds[1].fn()
+binds[1].fn(); KEYQ.drain()
 hudTick(now, false, pc)
 check(not H.wallOn and logs[#logs] == "hud: info wall hidden (I)", "the first press shuts it")
 
