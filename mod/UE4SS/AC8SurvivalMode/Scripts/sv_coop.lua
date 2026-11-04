@@ -3310,8 +3310,9 @@ local function halfRtt(slot) return math.floor(((M.rtt and M.rtt[slot]) or 100) 
 -- things); (b) changes the number only. The relay keeps the original: each game picks for its own plane. No
 -- SV_PPWeapons (an older runtime), nothing read, or [coop.sync] standins = false: as sent, as before.
 -- (fireShots, M.standInPay) what this game knows of player slot's real plane's weapons: { addr, at, tbl, n, k = { [0] =
--- ... }, s }; nil when it can't tell. Read on the first shot of each plane, again at most every 2 s when a shot needs it
--- (or when it couldn't be read)
+-- ... }, s }; nil when it can't tell. Read on the first shot of each plane, again at most every 2 s when a shot needs it:
+-- a stand-in, or its own number while that number's kind isn't known here (the runtime learns it from that launch and
+-- then refuses another kind's shots there: the review of 2026-11-04), or when it couldn't be read
 function M.ppKinds(slot, P, now, need)
     if type(SV_PPWeapons) ~= "function" or not P.addr then return nil end
     local c = P.wk
@@ -3366,17 +3367,21 @@ function M.kindWord(k, w, bare)
     end
     return bare and t[1] or t[2]
 end
+-- the kind (0-4) of weapon i on a plane here whose weapons are c (M.ppKinds); nil when it isn't known here (a table
+-- entry's only with standin_table)
+function M.kindAt(c, i)
+    local v = c.k[i]
+    if v == nil or v < 0 then return nil end
+    if v >= 10 then return c.tbl and v - 10 or nil end
+    return v
+end
 -- the number to show a shot of kind k, weapon w on a plane here whose weapons are c (M.ppKinds); ids: { sh = their
--- specials' ids now, cp = the plane's here as it spawned } (nil: not known, or a fallback); fb: a fallback plane;
--- gun: a burst of its gun may stand in. -> x, how: "own" (w as sent), "id", "near", or nil and "gun" / "none"
+-- specials' ids now, cp = the plane's here as it spawned, dflt = it spawned with its default loadout (cp {}) } (nil:
+-- not known, or a fallback); fb: a fallback plane; gun: a burst of its gun may stand in. -> x, how: "own" (w as sent),
+-- "id", "near", or nil and "gun" / "none"
 function M.weaponFor(k, w, c, ids, fb, gun)
     local K, n, lo = c.k, c.n, k == 0 and 1 or 2
-    local function kindAt(i)
-        local v = K[i]
-        if v == nil or v < 0 then return nil end
-        if v >= 10 then return c.tbl and v - 10 or nil end
-        return v
-    end
+    local function kindAt(i) return M.kindAt(c, i) end
     local function usable(i) return i >= lo and i < n and K[i] ~= nil and K[i] ~= -2 end
     if ids and (w == 2 or w == 3) and (ids.sh[w] or 0) > 0 then          -- (b) the same special, at its number here
         for j = 2, 3 do
@@ -3409,8 +3414,12 @@ local function standWhy(k, w, c, ids, fb)
     local v = c.k[w]
     if w >= c.n or v == nil or v == -2 then return string.format("it has no weapon %d", w) end
     if w < (k == 0 and 1 or 2) then return k == 0 and "weapon 0 is the gun" or "a special's number is 2 or more" end
-    local kv = v >= 10 and (c.tbl and v - 10 or nil) or (v >= 0 and v or nil)
+    local kv = M.kindAt(c, w)
     if kv and kv ~= k then return string.format("its weapon %d is %s", w, M.kindWord(kv, w)) end
+    if ids and ids.dflt and (w == 2 or w == 3) then
+        return string.format("their plane here spawned with its own default loadout (theirs hadn't come), their special %d is id %s",
+            w - 1, tostring(ids.sh[w]))
+    end
     if ids and (w == 2 or w == 3) and ids.cp[w] ~= ids.sh[w] then
         return string.format("their special %d is id %s now, the plane here has id %s there (their loadout changed since it spawned)",
             w - 1, tostring(ids.sh[w]), tostring(ids.cp[w]))
@@ -3440,9 +3449,16 @@ function M.standInPay(slot, P, pay, now)
     local sh, cp = M.loIds(r0 and r0.lo), nil
     if not P.fallback then cp = M.loIds(P.lo) end
     local ids = (sh and cp) and { sh = sh, cp = cp } or nil
+    -- (the review of 2026-11-04: a plane here spawned before their loadout came (P.lo "") flies the airframe's default
+    -- specials, so a missile special of theirs not known there isn't trusted either: it could be a laser or ESM here.
+    -- Both unknown: both the default, trusted)
+    if sh and not cp and not P.fallback then ids = { sh = sh, cp = {}, dflt = true } end
     local fb, gun = P.fallback ~= nil, on("guns")
     local x, how = M.weaponFor(k, w, c, ids, fb, gun)
-    if how ~= "own" and now - c.at >= 2 then                   -- (a stand-in: what's been seen launched since, first)
+    -- (a stand-in, or its own number whose kind isn't known here: what's been seen launched since, first. The runtime
+    -- learns a number's kind from its first launch here and refuses another kind's shots there after; without a read
+    -- again those were refused for good, never put on the plane's weapon of their kind: the review of 2026-11-04)
+    if now - c.at >= 2 and (how ~= "own" or not M.kindAt(c, x)) then
         local c2 = M.ppKinds(slot, P, now, true)
         if not c2 then return pay end
         c = c2
