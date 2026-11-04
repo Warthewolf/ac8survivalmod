@@ -445,6 +445,20 @@ check(spawnArgs[2].pt == "-1/255/7,8" and line("coop: player 3's skin 21099001 i
 local said = count("coop: player 3's skin 21099001", from)
 check(M.paintHere(2, "21099001/1/") == "-1/1/" and count("coop: player 3's skin 21099001", from) == said, "... said once a player and skin")
 check(M.paintHere(2, "-1/0/3") == "-1/0/3" and M.paintHere(2, "") == "", "the default (-1) and no paint: untouched")
+-- (review of 0.73.80) a negative skin other than -1 (or one past an int32) is no skin of any game: -1, the emblems kept,
+-- said once a player and skin, whether or not this game's tables can tell
+from = #logs + 1
+join(3, hi(3, "su57_common", "su57", LO1, "-7/255/1,2", "SU-57"))
+check(spawnArgs[3] and spawnArgs[3].pt == "-1/255/1,2" and line("coop: player 4's skin -7 isn't a skin id: their plane's default paint", from) ~= nil,
+      "a negative skin other than -1: -1, the emblems kept, said (" .. tostring(spawnArgs[3] and spawnArgs[3].pt) .. ")")
+check(M.paintHere(3, "-7/0/") == "-1/0/" and count("coop: player 4's skin -7", from) == 1, "... said once a player and skin")
+local okBig, big = pcall(M.paintHere, 3, "-2147483648/255/")
+check(okBig and big == "-1/255/", "-2147483648: -1 (" .. tostring(big) .. ")")
+okBig, big = pcall(M.paintHere, 3, "2147483648/255/4")
+check(okBig and big == "-1/255/4", "past an int32: -1 (" .. tostring(big) .. ")")
+okBig, big = pcall(M.paintHere, 3, "99999999999999999999/255/4")
+check(okBig and big == "-1/255/4", "past 2^63: -1, no error (" .. tostring(big) .. ")")
+leave(3)
 check(M.paintHere(2, "910010008/1/") == "910010008/1/", "an add-on's skin in a row named otherwise: kept (every row's SkinID read)")
 SKIN_ROWS["21002002"] = { SkinID = 21002002 }
 check(M.paintHere(2, "21002002/1/") == "21002002/1/", "a row added since the main menu, named by its id: found by its name")
@@ -489,6 +503,8 @@ join(7, hi(7, "su57_common", "su57", LO1, "21099001/255/7,8", "SU-57"))
 join(9, hi(9, "su57_common", "su57", LO1, "21099002/255/7", "SU-57"))
 check(spawnArgs[7].pt == "21099001/255/7,8" and spawnArgs[9].pt == "21099002/255/7"
       and count("coop: skins aren't checked here", from) == 1, "no source: each paint as sent, one line")
+check(M.paintHere(7, "-5/255/7") == "-1/255/7" and M.paintHere(7, "-1/255/7") == "-1/255/7",
+      "no source: a negative skin other than -1 still -1, the default untouched")
 leave(7); leave(9)
 -- the information manager's SkinDataMap_
 local mapSet = { [5014001] = true, [21002001] = true, [910010007] = true }
