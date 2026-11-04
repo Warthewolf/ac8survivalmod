@@ -1009,6 +1009,63 @@ planes = {}
 D.at = 0
 okW, errW = pcall(roundsTick, now + 4)
 check(okW and D.state == "wait" and s.state == "done", "the Tu-160s down too: the round ends (" .. tostring(errW) .. ")")
+-- (review of 7bcd4c4, findings 0 / 1) the spaceport captured with the Tu-160s up: they fall back with the fighters (off
+-- D.up, D.heavy and D.heavyPath, their planes down and withdrawn, kept for the next round's recycle, nobody's in co-op),
+-- so the round ends and the retake follows; before, they held the round (and bombed on) until all 6 were shot down
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+run(s, 0, SP.tu160.after_s + 1)
+tuA, tuB = s.tu.sides[1].unit, s.tu.sides[2].unit
+check(D.up[tuA] and D.up[tuB] and D.heavy[tuA] and D.heavy[tuB], "captured with them up: both Tu-160 flights sent first")
+D.heavyPath = { [tuA] = { s = "A", k = 0 }, [tuB] = { s = "E", k = 0 } }      -- (HEAVY.route's, stubbed here)
+local ERt = CFG.pool[1]
+D.up[ERt], alive[ERt] = true, 2
+planes = { { unit = tuA, obj = { full = "BP_OP0060_t160_a" }, name = "BP_OP0060_t160_a" },
+           { unit = tuB, obj = { full = "BP_OP0060_t160_b" }, name = "BP_OP0060_t160_b" },
+           { unit = ERt, obj = { full = "p" }, name = "p" } }
+local tookOff = {}
+COOP = { takenOff = function(u) tookOff[u] = true; return 0 end }
+s.capture = 100
+L3 = #logs + 1
+run(s, now + 0.25, now + 1.5)
+COOP = nil
+check(s.captured and not D.up[tuA] and not D.up[tuB] and not D.up[ERt], "captured: the Tu-160s off D.up with the fighters")
+check(not (D.heavy and (D.heavy[tuA] or D.heavy[tuB])) and not (D.heavyPath and (D.heavyPath[tuA] or D.heavyPath[tuB])),
+      "off D.heavy and D.heavyPath: no more bomb runs or loops")
+check(planes[1].down and planes[1].withdrawn and planes[2].down and planes[2].withdrawn and SPORT.tuUp(s) == 0,
+      "their planes marked down and withdrawn (unpaid, bombTick skips them), none up on the row")
+local wKeys = true
+for k in pairs(D.spWithdrawn or {}) do if type(k) ~= "string" then wKeys = false end end
+check(D.spWithdrawn and D.spWithdrawn[tuA] and D.spWithdrawn[tuB] and D.spWithdrawn[ERt] and wKeys,
+      "kept for the next round's recycle (D.spWithdrawn: SPORT.planRound), unit names only")
+check(tookOff[tuA] and tookOff[tuB], "co-op: theirs taken off as nobody's on the host (COOP.takenOff)")
+check(since(L3, "^special: the round's fighters fall back with the capture: %d+ flights %(%d+ aircraft%) taken off: .*"
+      .. "; the Tu%-160s too: EA_Unit_01_Air%d, EA_Unit_01_Air%d %(6 aircraft, no despawn event: recycled at the next round's plan%)$") == 1,
+      "logged with the fighters'")
+check(s.tu.why == "withdrawn at the capture", "their reason kept for the round's line: " .. tostring(s.tu.why))
+for u in pairs(alive) do if u:find("^SV_Unit_Sp") then alive[u] = 0 end end
+D.state, D.at = "fighting", 0
+okW, errW = pcall(roundsTick, now + 2)
+check(okW and D.state == "wait" and s.state == "done", "the Tu-160s still flying but withdrawn: the round ends (" .. tostring(errW)
+      .. "; " .. tostring(D.state) .. ", " .. tostring(s.state) .. ")")
+check(specialFor(D.round + 1) == "retake", "the retake follows")
+check(since(L3, "^special: the Tu%-160s this assault: 6 sent %(.*%), withdrawn at the capture, 0 still up at the round's end$") == 1,
+      "the round's line says they were withdrawn")
+-- (review of 7bcd4c4, finding 2) a Tu-160 flight's spawn raising: its error text in the log, not "error nil"
+fresh(12)
+SP.tu160.enabled = true
+s = D.special
+SPORT.spawn(0)
+local rawFrom = spawnBomberFrom
+spawnBomberFrom = function() error("boom: no spawner") end
+L3 = #logs + 1
+run(s, 0, SP.tu160.after_s + 1)
+spawnBomberFrom = rawFrom
+check(since(L3, "^special: the Tu%-160s at the airfield: 0 sent %(EA_Unit_01_Air%d: error .*boom: no spawner; EA_Unit_01_Air%d: error .*boom: no spawner%)$") == 1,
+      "a spawn that raised: its error text logged")
+check(s.tu.n == 0 and s.tu.why == "none could spawn" and next(s.tu.units) == nil, "none sent, none counted up")
 SV_SetAircraft, HEAVY = rawSetAc, nil
 
 print(fails == 0 and "spaceport test: all passed" or ("spaceport test: " .. fails .. " FAILED"))
