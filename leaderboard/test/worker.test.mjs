@@ -222,7 +222,21 @@ r = await postBuilt(built("b1000000000000000006", { mod: "0.72.1-coop.19" }), BU
 check("the right hash under another version: unknown build", r.status === 422);
 r = await postBuilt(built("b1000000000000000007", { build: OTHER }), BUILD, "3.0.0.3");
 j = await r.json();
-check(`a run the game started on other files than it sends from: refused (${j.error})`, r.status === 422 && j.error === "played on other files");
+// ((0.73.80) a run played on files not registered, sent again from a registered release (the game keeps a run refused
+// as an unknown build and resends it after an update): checked against the build it was played on, so still unknown)
+check(`a run played on unregistered files, sent from a registered release: unknown build, the game keeps it (${j.error})`,
+  r.status === 422 && j.error === "edited or unknown build" && !db.prepare("SELECT 1 FROM runs WHERE run_id = 'b1000000000000000007'").get());
+{ const NEWER = "d".repeat(64);
+  await adminCall("builds/add", { key: env.ADMIN_KEY, mod: MOD, build: NEWER, note: "the next patch" });
+  r = await postBuilt(built("b100000000000000000a"), NEWER, "3.0.0.3");          // (played on BUILD, sent from NEWER)
+  j = await r.json();
+  const row = db.prepare("SELECT build, verified FROM runs WHERE run_id = 'b100000000000000000a'").get();
+  check(`a run played on a registered build, resent after the next registered patch: taken, stored with the build it was played on (${JSON.stringify(j)})`,
+    r.status === 200 && j.ok && row && row.build === BUILD && row.verified === 1);
+  r = await postBuilt(built("b100000000000000000b", { build: NEWER }), "e".repeat(64), "3.0.0.3");   // (sent from unknown files)
+  j = await r.json();
+  check(`... but sent from files that aren't a registered release: unknown build (${j.error})`, r.status === 422 && j.error === "edited or unknown build");
+  await adminCall("builds/remove", { key: env.ADMIN_KEY, mod: MOD, build: NEWER }); }
 r = await postBuilt(built("b1000000000000000008", { edited: ["specials.chance", "tells.enabled"] }), BUILD, "3.0.0.3");
 j = await r.json();
 check(`a run that says it was edited: refused (${j.error})`, r.status === 422 && j.error === "edited run (specials.chance)");

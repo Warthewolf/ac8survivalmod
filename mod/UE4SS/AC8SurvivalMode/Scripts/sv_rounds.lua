@@ -653,6 +653,11 @@ local function roundCalloutAgain(kind)
     local k = kind and SPC.kinds and SPC.kinds[kind]
     if k and not SPC.kindValue(k.disguise) then
         hudCallout(string.format(t.special, D.round), type(k.sub) == "function" and k.sub(t) or t[k.sub])
+    elseif not kind and D.nextTierRound == D.round and D.nextTier then   -- (an ace round instead: its squadron, as announced)
+        local sq = D.nextSquad
+        local tn = (sq and type(CFG.aces[sq]) == "table") and sq or CFG.tiers.list[D.nextTier].name:lower()
+        local c = CFG.aces[tn] or {}
+        hudCallout(string.format(t.start, D.round), string.format(t.aces_round, tostring(c.squadron or tn):upper()))
     else
         hudCallout(string.format(t.start, D.round), t.start_sub)
     end
@@ -954,9 +959,19 @@ local function startRound()
         local okS, why = SPC.canStart(special)
         if not okS then
             local alt = nil
+            local roll = RUN.specialRoll                 -- (its gap before the roll: an ace round below doesn't count)
+            local gapWas = roll and roll.round == D.round and roll.kind == special and roll.gapWas
             if not forced then alt = specialSwap(D.round, special, why, function(k) return (SPC.canStart(k)) end) end
+            -- ((review of 0.73.80) none instead on an ace slot: the ace round it would have been, said so and flown as
+            -- one, not counted in the specials' gap)
+            local ti, sq, st, wy = nil, nil, nil, nil
+            if not alt then ti, sq, st, wy = aceRound(D.round, nil) end
+            if ti then
+                D.nextTier, D.nextTierRound, D.nextSquad, D.nextStandin, D.nextWhy = ti, D.round, sq, st, wy
+                if not forced and gapWas then RUN.specialGap = gapWas end
+            end
             log(string.format("round %d: no %s can come (%s); %s", D.round, special, tostring(why),
-                alt and ("the " .. alt .. " instead") or "a normal round"))
+                alt and ("the " .. alt .. " instead") or (ti and "an ace round") or "a normal round"))
             special = alt
             if D.announced then roundCalloutAgain(alt) end
         end

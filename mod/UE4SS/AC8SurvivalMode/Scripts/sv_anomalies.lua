@@ -1083,7 +1083,55 @@ function SPC.V.roundDefaults(c, mode)
         or mode == "hers" and "for her own railguns (her damage back before she spawns)" or "put back as it was"
     log(string.format("special: VALKA's railgun round %s's class default %s: %s (0.73.80: no walk for its rounds)", nm, what,
         #changed > 0 and table.concat(changed, ", ") or "as it was already"))
+    if mode ~= "off" then pcall(SPC.V.roundHook, c) end
     return #changed > 0
+end
+-- ((review of 0.73.80) her rounds are pooled: one made while the class default was the opener's (damage 0) keeps that
+-- when it's fired again for her. Each round of the class is kept as the game makes it (NotifyOnNewObject on the round's
+-- class, hooked once its class is loaded: roundDefaults), at most RK_MAX, dropped the first time it's gone (liveObj),
+-- and SPC.V.roundsHarm puts her damage (the class default's own) back on each at her charges: 0.73.79's rounds walk
+-- did that for the pool, a FindAllOf each time.)
+SPC.V.RK = { list = {}, hooked = nil, failSaid = nil }
+local RK_MAX = 64
+function SPC.V.roundHook(c)
+    local K = SPC.V.RK
+    local path = c and c.eml_weapon
+    if not path or path == "" or K.hooked == path then return end
+    local nm = path:match("[^/]+$")
+    local okH, err = pcall(NotifyOnNewObject, path .. "." .. nm .. "_C", function(o)
+        local L = SPC.V.RK.list
+        if #L < RK_MAX then L[#L + 1] = o end
+    end)
+    if okH then
+        K.hooked = path
+        log("special: VALKA's railgun rounds (" .. nm .. ") kept as the game makes them (their damage put back at her charges)")
+    elseif not K.failSaid then
+        K.failSaid = true
+        log("special: VALKA's railgun rounds (" .. nm .. ") can't be watched (" .. tostring(err) .. "): a round pooled from her "
+            .. "opener's shot may stay harmless")
+    end
+end
+-- her damage (the class default's own, kept by roundDefaults) on every kept round of hers: how many changed
+function SPC.V.roundsHarm(c)
+    local K, W = SPC.V.RK, SPC.V.RC.was
+    if not (W and W.damage ~= nil) then return 0 end
+    local keep, n = {}, 0
+    for _, r in ipairs(K.list) do
+        if liveObj(r) then
+            keep[#keep + 1] = r
+            local okD, d = pcall(function() return r.damage end)
+            if not (okD and d == W.damage) and pcall(function() r.damage = W.damage end) then n = n + 1 end
+        end
+    end
+    K.list = keep
+    if n > 0 then
+        log(string.format("special: %s's railgun rounds: her damage (%s) back on %d of the %d kept (made for her opener's shot)",
+            tostring(c and c.name or "VALKA"), tostring(W.damage), n, #keep))
+    end
+    return n
+end
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["VALKA's railgun rounds"] = function() SPC.V.RK.list = {} end   -- (the level's objects: forgotten, not touched)
 end
 -- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style. ((0.73.80) not
 -- one radarOff took off with its actor, her removed opener's: a walk found it still in memory and every charge of hers
@@ -1996,9 +2044,10 @@ function SPC.valkaArrive(now, at, yaw)
     if at then x, y, z, heading, pd = at.X, at.Y, at.Z, yaw, at.km end
     local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
     if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
-    -- ((0.73.80) her railgun round's class default: her damage back (her opener's shot made none) before her own
-    -- railguns are made, life and single rounds as the opener's; her railguns' modules kept as they're made)
-    pcall(SPC.V.roundDefaults, c, "hers")
+    -- ((0.73.80) her railgun round's class default: her damage back before her own railguns are made, life and single
+    -- rounds as the opener's; her railguns' modules kept as they're made. (review of 0.73.80) With an opener (at), not
+    -- yet: its round may be made after the railgun's spin-up, past her reveal; valkaTick puts it back at s.harmUntil)
+    if not at then pcall(SPC.V.roundDefaults, c, "hers") end
     SPC.V.modMark(c.unit)
     spawningUnit = c.unit
     local r = SV_Spawn(c.unit, x, y, z, heading)
@@ -2042,6 +2091,10 @@ function SPC.valkaTick(now, s)
     if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
         s.alertOffAt = nil
         if not s.chargeAt then V.event("RE_SV_ValkaAlertOff") end
+    end
+    if s.harmUntil and now >= s.harmUntil then          -- ((review of 0.73.80) the opener's round flown: her damage back
+        s.harmUntil = nil                               -- (not once she's done: "off" ran then, and stays)
+        if s.state ~= "done" then pcall(V.roundDefaults, c, "hers"); pcall(V.roundsHarm, c) end
     end
     if s.passAt and now >= s.passAt then                -- her round passing you (its sound)
         s.passAt = nil
@@ -2137,6 +2190,9 @@ function SPC.valkaTick(now, s)
         log(string.format("special: %s's opener shot from %s km", c.name, d and string.format("%.1f", d) or "?"))
         s.chargeAt, s.shots, s.state = nil, 1, "shot"
         s.shotAt, s.revealAt, s.emlRemoveAt = now, now + c.reveal_s, now + c.eml_remove_s
+        -- ((review of 0.73.80) the opener's no-damage held until its round has been made (the railgun's spin-up, 3 s) and
+        -- has flown its life; her first shot comes railgun_every_s after her reveal, later)
+        s.harmUntil = now + c.reveal_s + 3 + (tonumber(c.eml_life_s) or 8)
         return
     end
     if s.state == "shot" then                           -- reveal_s after the shot she's there, where it came from
@@ -2296,6 +2352,10 @@ function SPC.valkaTick(now, s)
         s.chargeAt = now + c.railgun_charge_s
         V.event("RE_SV_ValkaChargeOn")
         V.event("RE_SV_ValkaAlertOn")
+        -- ((review of 0.73.80) her damage on the class default (if the opener's hold hasn't run out: it can't be left on)
+        -- and on the rounds pooled from the opener's shot, before this one's made)
+        if s.harmUntil then s.harmUntil = nil; pcall(V.roundDefaults, c, "hers") end
+        pcall(V.roundsHarm, c)
         -- ((0.73.80) the kept launchers, no walk; no rounds to put their damage back on: the opener's no-damage was
         -- taken off her round's class default before she spawned)
         V.radar(c)

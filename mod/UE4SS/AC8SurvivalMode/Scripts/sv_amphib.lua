@@ -10,6 +10,9 @@
 -- taken.
 do
 local function amph() RUN.amph = RUN.amph or { count = 0, troops = {}, capture = 0 }; return RUN.amph end
+-- ((review of 0.73.80) co-op: what's taken off without a kill goes down as nobody's on the host, not a kill of the
+-- player who once hit it: sv_coop.lua COOP.takenOff, before each removal event)
+local function takenOff(unit) if COOP and COOP.takenOff then pcall(COOP.takenOff, unit) end end
 
 local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.round and TIER.index(D.round))) end
 
@@ -82,6 +85,7 @@ function AMPH.spawn(now)
         if n >= want then break end
         local unit = "SV_Unit_Lcac" .. l
         if SV_UnitAlive(unit) > 0 then           -- still afloat from last time: off now, it comes again next time
+            takenOff(unit)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft were still up; taken off (%s)", l, tostring(r)))
         else
@@ -141,6 +145,7 @@ function AMPH.tick(now, s)
         end
         if lane.firstLanded and not lane.removed and now - lane.firstLanded >= c.remove_after_s then
             lane.removed = true                        -- (no pay for these: they got away)
+            takenOff("SV_Unit_Lcac" .. l)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft are away; taken off (%s)", l, tostring(r)))
         end
@@ -154,6 +159,7 @@ function AMPH.roundOver(now, s)
     for l, lane in pairs(s.lanes or {}) do
         if not lane.removed and SV_UnitAlive("SV_Unit_Lcac" .. l) > 0 then
             lane.removed = true
+            takenOff("SV_Unit_Lcac" .. l)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft taken off at the round's end (%s)", l, tostring(r)))
         end
@@ -179,6 +185,7 @@ local function free(why, removeLeft)
         for _, tr in ipairs(amph().troops) do
             if tr.alive > 0 then
                 tr.alive, tr.removed = 0, true
+                takenOff(tr.unit)
                 local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
                 log(string.format("special: troops %s taken off (%s)", tr.unit, tostring(r)))
             end
@@ -252,6 +259,7 @@ function AMPH.runTick(now)
             if why then
                 local n = tr.alive
                 tr.alive, tr.removed = 0, true
+                takenOff(tr.unit)
                 local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
                 hudCallout(t.troops_stuck, string.format(t.troops_stuck_sub, n))
                 log(string.format("special: troops %s stuck (%s): taken off (%s)", tr.unit, why, tostring(r)))

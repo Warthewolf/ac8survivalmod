@@ -211,6 +211,23 @@ if ROLE == "host" then
         if to == "-1" or to == "1" then out[#out + 1] = "0|" .. body end
     end
     writeAll(WORK .. "/ground_messages.txt", table.concat(out, "\n"))
+    -- ((review of 0.73.80; after the joiner's messages are saved) lane B's other craft, hit by the joiner, then taken off as it got away (sv_amphib.lua: a
+    -- destroy with no attacker): down everywhere as nobody's, not the joiner's kill, and not in the run's tally
+    local lb2 = k["SV_Unit_LcacB/BP_SH010_lcac_C#2"]
+    inbox[#inbox + 1] = "1|ht|" .. lb2 .. "|80.0"
+    tick()
+    local tallyWas = (COOP.killTally()[1] or {}).ground or 0
+    check(COOP.takenOff("SV_Unit_LcacB") == 1, "host: COOP.takenOff marks lane B's craft still up (1)")
+    world.SV_Unit_LcacB[2].HealthInternal = 0
+    local dnFrom = #sent + 1
+    tick()
+    local dnB = {}
+    for i = dnFrom, #sent do if sent[i]:find("dn|" .. lb2 .. "|", 1, true) then dnB[#dnB + 1] = sent[i] end end
+    local line = table.concat(dnB, " ")
+    check(#dnB > 0 and line:find("dn|" .. lb2 .. "||", 1, true) and not line:find("dn|" .. lb2 .. "||1", 1, true)
+          and not line:find("dn|" .. lb2 .. "||0", 1, true),
+          "host: a craft taken off (it got away) goes down as nobody's, not the joiner who hit it (" .. line .. ")")
+    check(((COOP.killTally()[1] or {}).ground or 0) == tallyWas, "host: ... and isn't in the joiner's tally")
     -- a joiner's ally / defence bought: built here (sv_shop.lua shopBuildFor), answered "ak" / "ax"
     local built = {}
     shopBuildFor = function(slot, name, price, kind)

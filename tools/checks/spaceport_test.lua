@@ -206,7 +206,9 @@ check(evs("^RE_SV_SpTroopsRemoveAVL$") ~= "" and #s.troops == 0, "gone in troop_
 run(s, now + 0.25, tLand + SP.remove_after_s + 1)
 check(evs("^RE_SV_SpLcacRemoveAV$") ~= "" and s.lanes.A.waves.V == nil, "the wave taken off remove_after_s after its first landing")
 alive.SV_Unit_SpLcacCW = 1                       -- a craft of wave C W shot down
-run(s, now + 0.25, now + 1)
+-- ((0.73.80) the craft's unit count read from its kept SV_UnitAlive answer (sv_spawn.lua ALIVE): up to a second old,
+-- asked again in turn, so the pay within 2 s)
+run(s, now + 0.25, now + 2)
 check(paid("landing craft sunk") > 0, "a craft shot down: paid")
 -- ((0.73.77, I2: S3) its reason isn't one sv_coop.lua's addCredits keeps from the joiners: " down (", a plane kill)
 local craftWhy = nil
@@ -257,9 +259,7 @@ check(SPORT.retakeBusy(s2), "busy while the garrison and ships are up")
 for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
 for u in pairs(rs.ships) do alive[u] = 0 end
 alive.SV_Unit_SpFord = 0
--- ((0.73.80) the looks read the units' kept SV_UnitAlive answers (sv_spawn.lua ALIVE), asked again in turn: up to 32 a
--- second, and the assault's own units (asked for until a moment ago) still share the budget here, so a third look)
-for _ = 1, 12 do now = now + 0.25; SPORT.retakeTick(now, s2) end
+for _ = 1, 8 do now = now + 0.25; SPORT.retakeTick(now, s2) end
 check(not SPORT.retakeBusy(s2) and paid("garrison") > 0, "all down: not busy, the garrison paid")
 SPORT.retakeOver(now, s2)
 check(paid("spaceport retaken") > 0 and called(T.sp_retaken) ~= nil, "its end: the reward, SPACEPORT RETAKEN")

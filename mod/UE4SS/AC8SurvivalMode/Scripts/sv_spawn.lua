@@ -182,11 +182,13 @@ local function downsOf(unit, now)
     end
     return T.downs[unit] or 0
 end
-local function native(unit, now, every, forced)
+-- (fromTick: ALIVE.tick's refresh, which keeps the entry's `want`: only a part's ask is "asked for", so a unit nobody
+-- asks about any more is forgotten WATCH_S on, not refreshed for ever)
+local function native(unit, now, every, forced, fromTick)
     local n = SV_UnitAlive(unit)
     local e = C[unit]
     C[unit] = { n = n, at = now, every = math.min((e and e.every) or every, every), everyAt = (e and e.everyAt) or now,
-                want = now, downs = downsOf(unit, now) }
+                want = (fromTick and e and e.want) or now, downs = downsOf(unit, now) }
     if (tonumber(n) or -5) < 0 and n ~= -7 then C[unit] = nil end  -- (an error, not "not up": asked again next time)
     T.left = (T.left or 0) - 1
     S.asks = S.asks + 1
@@ -276,7 +278,7 @@ function ALIVE.tick(now)
     end
     if #due == 0 then return end
     table.sort(due, function(a, b) if a.r ~= b.r then return a.r > b.r end return a.u < b.u end)
-    for i = 1, math.min(#due, T.left) do native(due[i].u, now, C[due[i].u].every or AGE_S, false) end
+    for i = 1, math.min(#due, T.left) do native(due[i].u, now, C[due[i].u].every or AGE_S, false, true) end
 end
 -- The round's line (sv_rounds.lua, at its clear), then its counts start again.
 function ALIVE.report(round)
@@ -1058,9 +1060,17 @@ end
 -- Every roll is logged (`specials: round N's roll: ...`); the early window, never two in a row, the cooldown, the ace
 -- rounds and VALKA's disguise as before.
 -- the rotation's kinds switched on, shuffled: the bag's next fill
+-- (review of 0.73.80) a kind whose own ready() says it can't come now (the Spaceport without its turrets' rows) is
+-- never put in the bag nor drawn: it would be drawn first each time, fail to start, and go back in
+local function kindReady(k)
+    local rk = SPC and SPC.kinds and SPC.kinds[k]
+    if not (rk and rk.ready) then return true end
+    local okR, r = pcall(rk.ready)
+    return not okR or r ~= false and r ~= nil
+end
 local function bagFill(sp)
     local t = {}
-    for _, k in ipairs(sp.rotation or {}) do if specialOn(k) then t[#t + 1] = k end end
+    for _, k in ipairs(sp.rotation or {}) do if specialOn(k) and kindReady(k) then t[#t + 1] = k end end
     for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
     return t
 end
@@ -1098,7 +1108,7 @@ local function specialReady(sp, k, round)
     local last = RUN.specialAt and RUN.specialAt[k]
     local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
     return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
-        and (k ~= RUN.lastSpecial or #sp.rotation == 1)
+        and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k)
 end
 
 -- The special round `round` is (CFG.specials), or nil for a normal round.
@@ -1123,7 +1133,7 @@ function specialFor(round)
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
             local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
-            local roll = nil
+            local roll, from = nil, nil                  -- (from: where the kind came from, "the bag" or not)
             if inEarly then
                 if not pick[round - 1] and can(early.kind) then
                     local chance = math.min(0.9, (early.chance or 0) * sx)
@@ -1141,7 +1151,6 @@ function specialFor(round)
                     local mg = math.floor(tonumber(sp.max_gap) or 0)
                     local sure = mg > 0 and gap >= math.ceil(mg / sx)
                     roll = math.random()
-                    local from = nil
                     if sure or roll < chance then kind, from = bagDraw(sp, can); kind = kind or false end
                     local ace = not kind and aceTakes(round)
                     log(string.format("specials: round %d's roll: %.2f %s chance %.2f (%d round%s since the last special%s)%s; "
@@ -1158,8 +1167,9 @@ function specialFor(round)
             if kind then
                 RUN.lastSpecial = kind
                 -- (what specialSwap needs to undo this pick: the last special before it, the gap, where it came from)
+                -- ((review of 0.73.80) fromBag: only a kind that took a bag slot goes back in if it never comes)
                 RUN.specialRoll = { round = round, kind = kind, lastWas = lastWas, gapWas = gap, early = inEarly or nil,
-                                    tried = { [kind] = true } }
+                                    fromBag = (from == "the bag") or nil, tried = { [kind] = true } }
             end
             pick[round] = kind
             if kind then log(string.format("specials: round %d will be %s", round, kind)) end
@@ -1175,12 +1185,15 @@ end
 -- (0.73.80) The dice's special for `round` (`failed`) can't start (why): another one that can (ready(k): its own checks,
 -- sv_rounds.lua startRound's), or nil (a normal round, the round counted in the gap again). Not for a forced special, the
 -- retake or the early window's (only the early kind comes then), nor with CFG.specials.swap off. The failed kind goes
--- back in the bag at its end, its turn not used; the run's last special is the one before it again.
+-- back in the bag at its end, its turn not used, when it was drawn from the bag (not an outside draw, nor the early
+-- window's); the run's last special is the one before it again.
 function specialSwap(round, failed, why, ready)
     local sp, roll = CFG.specials, RUN.specialRoll
     if not (roll and roll.round == round and roll.kind == failed) then return nil end
     RUN.lastSpecial = roll.lastWas
-    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(failed) then table.insert(RUN.specialBag, failed) end
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(failed) and roll.fromBag then
+        table.insert(RUN.specialBag, failed)
+    end
     local k, from = nil, nil
     if sp.swap ~= false and not roll.early then
         k, from = bagDraw(sp, function(x)
@@ -1195,6 +1208,7 @@ function specialSwap(round, failed, why, ready)
             for i, x in ipairs(RUN.specialBag) do if x == k then table.remove(RUN.specialBag, i); break end end
         end
         RUN.lastSpecial, RUN.specialPick[round], roll.kind = k, k, k
+        roll.fromBag = (from == "the bag") or nil
         log(string.format("specials: round %d: the %s can't start (%s): the %s instead (from %s); the bag: %s", round, failed,
             tostring(why), k, from, bagText()))
     else
@@ -1217,7 +1231,7 @@ function specialUndo(round, kind)
     RUN.specialPick[round] = false
     if not (roll and roll.round == round and roll.kind == kind) then return false end
     RUN.lastSpecial = roll.lastWas
-    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(kind) and not roll.early then
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(kind) and roll.fromBag then
         table.insert(RUN.specialBag, kind)
     end
     if not roll.early then RUN.specialGap = (roll.gapWas or 0) + 1 end

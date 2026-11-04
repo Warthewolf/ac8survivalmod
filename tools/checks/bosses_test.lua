@@ -1726,9 +1726,17 @@ local function valkaNoWalks()                              -- (a function of its
     check(s.state == "shot" and evs("^RE_SV_ValkaEmlShot$") ~= "" and cdo.damage == 0, "charge_s on: the opener's shot (still no damage)")
     for t = 110.5, 110.5, 0.25 do tickV(t) end
     check(s.state == "shot", "... nothing walked for its rounds after it")
+    -- ((review of 0.73.80) the opener's round can be made after the railgun's spin-up (3 s), past her reveal: its
+    -- no-damage held until it has flown (reveal_s + 3 + eml_life_s after the shot), then her damage back; a round made
+    -- (pooled) while it was harmless gets her damage back at her charge)
+    local roundPath = VA.eml_weapon .. "." .. VA.eml_weapon:match("[^/]+$") .. "_C"
+    check(NOTIFY[roundPath] and #NOTIFY[roundPath] == 1, "her round's class watched once it's loaded (NotifyOnNewObject " .. roundPath .. ")")
+    local pooled = { damage = 0 }
+    for _, fn in ipairs(NOTIFY[roundPath] or {}) do fn(pooled) end
     tickV(110.75)
-    check(s.state == "fired" and damageAtHerSpawn == 40 and cdo.damage == 40 and cdo.LifeTime == VA.eml_life_s,
-          "reveal_s on: her round's damage back on its class default BEFORE she spawned (her railguns hurt), its life kept")
+    check(s.state == "fired" and damageAtHerSpawn == 0 and cdo.damage == 0 and cdo.LifeTime == VA.eml_life_s,
+          "reveal_s on: she's there, her opener's round still harmless on the class default (its life kept)")
+    local harmAt = 110.25 + VA.reveal_s + 3 + VA.eml_life_s
     tickV(111)
     check(s.state == "hunt" and body.mesh == assets[VA.model .. ".SK_X02S_Valka"] and body.anim ~= nil,
           "her reveal: the X-02S and its sweep from the break's preload")
@@ -1743,7 +1751,14 @@ local function valkaNoWalks()                              -- (a function of its
           "... " .. tostring(line("special: VALKA's own railgun rounds:", f)))
     alive[VA.unit] = 1
     herL[1].FireControl.TriggerCount = 3                   -- (the game putting a burst back)
-    for t = 111.25, 130, 0.25 do tickV(t) end
+    for t = 111.25, harmAt - 0.25, 0.25 do tickV(t) end
+    check(cdo.damage == 0 and pooled.damage == 0 and count("^RE_SV_ValkaChargeOn$") == 0,
+          "... until it has flown: no damage " .. (harmAt - 0.25 - 110.25) .. " s after the shot (her first charge later)")
+    tickV(harmAt)
+    check(cdo.damage == 40 and pooled.damage == 40 and line("special: VALKA's railgun rounds: her damage (40) back on 1 of the 1 kept", f),
+          "then her damage back on the class default and on the round pooled from the opener's shot: "
+          .. tostring(line("special: VALKA's railgun rounds: her damage", f)))
+    for t = harmAt + 0.25, 130, 0.25 do tickV(t) end
     check(count("^RE_SV_ValkaRailgun$") == 1 and herL[1].FireControl.TriggerCount == 1,
           "her railgun: charged and fired, single-shot again right before it")
     check(emlL.IsDispRadarMap == false and herL[1].IsDispRadarMap == true, "her opener removed: its launcher off the minimap, hers on")

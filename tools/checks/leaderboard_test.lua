@@ -567,10 +567,18 @@ LB.poll()
 check(#LB.kept == 1 and logged("resent: answered -12029: no answer for good (couldn't connect"), "no answer (couldn't connect): kept for the next start")
 LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
 LB.queueTick(); clk = clk + 31; LB.queueTick()
+-- ((review of 0.73.80) an update since it was played: a leaderboard from before 0.73.80 answers "played on other files":
+-- kept, the 0.73.80 one checks the build it was played on)
 results[4], replies[4] = 422, '{"ok":false,"error":"played on other files"}'
 LB.poll()
+check(#posts == 4 and #LB.kept == 1 and logged("resent: answered 422: played on other files than these (an update since): kept"),
+    "(review of 0.73.80) played on other files (an update since): kept for the next start")
+LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+results[5], replies[5] = 400, '{"ok":false,"error":"not JSON"}'
+LB.poll()
 local gone = io.open(KEPT, "r")
-check(#posts == 4 and #LB.kept == 0 and gone == nil and logged("resent: answered 422: refused for another reason (played on other files), dropped from refused_runs.txt"),
+check(#posts == 5 and #LB.kept == 0 and gone == nil and logged("resent: answered 400: refused for another reason (not JSON), dropped from refused_runs.txt"),
     "refused for another reason: dropped, the file gone with the last one")
 if gone then gone:close() end
 -- 22 refused as an unknown build (answered in the order 1 to 22: LB.poll reads its jobs from the last): the newest 20 kept

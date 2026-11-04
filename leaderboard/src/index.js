@@ -578,10 +578,19 @@ async function submit(req, env, ctx) {
   try { run = JSON.parse(body); } catch (e) { return json({ ok: false, error: "not JSON" }, 400); }
   const why = checkRun(run);
   if (why) return json({ ok: false, error: why }, 422);
-  // (the build the game started with against the one it sends from: a run kept from other files, e.g. sent after the
-  // mod's files were put back, isn't taken)
-  if (build && run.build && run.build !== build) return json({ ok: false, error: "played on other files" }, 422);
   await ensureSchema(env);
+  // (the build the game started with against the one it sends from. (0.73.80) A run kept by the game (refused as an
+  // unknown build, refused_runs.txt) and sent again after an update or a patch comes from new files: it's checked
+  // against the build it was played on (run.build), as long as the files it's sent from are a registered release; from
+  // other files (edited, or not registered yet) it's "edited or unknown build" and the game keeps it. Before, any
+  // difference was refused outright and the game dropped the run.)
+  let checked = build;
+  if (build && run.build && run.build !== build) {
+    if (!(await env.DB.prepare("SELECT 1 FROM builds WHERE mod = ? AND build = ?").bind(run.mod, build).first()))
+      return json({ ok: false, error: "edited or unknown build" }, 422);
+    if (!BUILD_RE.test(String(run.build).toLowerCase())) return json({ ok: false, error: "bad build" }, 400);
+    checked = String(run.build).toLowerCase();
+  }
   const ipHash = await ipHashOf(req, env);
   const now = Math.floor(Date.now() / 1000);
   // (a run taken off by a reset and sent again isn't put back on the fresh boards: it comes back with the reset's undo)
@@ -592,13 +601,13 @@ async function submit(req, env, ctx) {
     .bind(ipHash, now - 3600).first();
   if (recent.n >= RATE_PER_HOUR) return json({ ok: false, error: "too many runs this hour, try later" }, 429);
   let verified = 0;
-  if (build) {
-    if (!(await env.DB.prepare("SELECT 1 FROM builds WHERE mod = ? AND build = ?").bind(run.mod, build).first())) {
+  if (checked) {
+    if (!(await env.DB.prepare("SELECT 1 FROM builds WHERE mod = ? AND build = ?").bind(run.mod, checked).first())) {
       // (kept for /admin, so a release that wasn't registered shows up there; the newest 100)
       await env.DB.batch([
         env.DB.prepare(`INSERT INTO builds_seen (mod, build, first, last, n, pilot) VALUES (?, ?, ?, ?, 1, ?)
            ON CONFLICT (mod, build) DO UPDATE SET last = excluded.last, n = n + 1, pilot = excluded.pilot`)
-          .bind(run.mod, build, now, now, run.pilot),
+          .bind(run.mod, checked, now, now, run.pilot),
         env.DB.prepare(`DELETE FROM builds_seen WHERE rowid NOT IN (SELECT rowid FROM builds_seen ORDER BY last DESC LIMIT 100)`),
       ]);
       return json({ ok: false, error: "edited or unknown build" }, 422);
@@ -618,7 +627,7 @@ async function submit(req, env, ctx) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(run.run_id, run.pilot, run.difficulty, run.round, sc, run.kills.air, run.kills.ground, run.zollars.earned,
           run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, opt(run.aircraft), opt(run.how), opt(run.tier),
-          opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured), build || null, verified,
+          opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured), checked || null, verified,
           c ? c.players : null, c ? squadOf(c) : null, c ? crewOf(c) : null)];
   for (const s of run.specials || [])
     batch.push(env.DB.prepare(`INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty, players)

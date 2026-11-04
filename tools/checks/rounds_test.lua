@@ -168,6 +168,18 @@ check(asks == a0 + 2, "asked again in turn 2.75 s on (0.9 of its 3 s)")
 D = { round = 11, now = 50 }                     -- (a new run: nothing kept)
 a0 = asks
 check(ALIVE.ask("A", 50) == 0 and asks == a0 + 1, "a new run (D): nothing kept, asked")
+-- (review of 0.73.80) the tick's own refresh doesn't count as "asked for": a unit nobody asks about is forgotten
+alive.X = 2
+ALIVE.tick(50)
+check(ALIVE.ask("X", 50) == 2, "X asked once")
+a0 = asks
+for i = 1, 24 do ALIVE.tick(50 + i * 0.25) end   -- 6 s of ticks, nobody asking for X
+local refreshed = asks - a0
+a0 = asks
+for i = 25, 40 do ALIVE.tick(50 + i * 0.25) end  -- 4 s more
+check(refreshed >= 2 and refreshed <= 6 and asks == a0,       -- (A and X: each about once a second for its 3 s)
+      "units nobody asks about are refreshed by the tick for WATCH_S, then forgotten (" .. refreshed .. " refreshes, then "
+      .. (asks - a0) .. ")")
 
 ---------------------------------------------------------------------------------------------------- the rounds' check
 print("the fighting check over 20 flights: spread over the ticks")
@@ -278,6 +290,32 @@ check(since(L3, "specials: round 17: the shuttle can't start %(its last shuttle 
       "logged: " .. tostring(lineOf(L3, "can't start")))
 check(#callouts >= 1 and callouts[#callouts].text == string.format(T.special, 17) and callouts[#callouts].sub == T.anomaly_sub,
       "the round called out again as the anomaly's")
+-- (review of 0.73.80) the dice's shuttle on an ace slot, nothing else can come: the ace round, said so, not counted
+do
+    local slot = nil
+    for r = 16, 60 do local okA, ti = pcall(aceRound, r, nil); if okA and ti then slot = r; break end end
+    check(slot ~= nil, "an ace slot found (" .. tostring(slot) .. ")")
+    if slot then
+        fresh(slot - 1, "wait")
+        alive[SH.unit], recycleTakes = 1, false
+        RUN.specialBag = { "shuttle" }
+        RUN.specialAt = { anomaly = slot, ladon = slot, amphibious = slot, alicorn = slot, glitch = slot, valka = slot,
+                          spaceport = slot }
+        math.random = function(a, b) if a == nil then return 0.0 end return b or a end
+        RUN.specialGap = 5
+        D.announced = true
+        L3 = #logs + 1
+        okR, errR = pcall(startRound)
+        math.random = rawRandom
+        check(okR and D.special == nil and D.roundTier ~= nil and RUN.specialGap == 5,
+              "no swap on an ace slot: flown as its ace round, the gap as it was (" .. tostring(errR) .. ", gap "
+              .. tostring(RUN.specialGap) .. ")")
+        check(since(L3, "round " .. slot .. ": no shuttle can come %(.-%); an ace round") == 1, "logged: an ace round")
+        check(#callouts >= 1 and callouts[#callouts].text == string.format(T.start, slot)
+              and callouts[#callouts].sub ~= T.start_sub, "called out again as an ace round (" .. tostring(callouts[#callouts]
+              and callouts[#callouts].sub) .. ")")
+    end
+end
 
 print("a co-op joiner: its shuttle copy off this game's list once the host's removal has run")
 fresh(4, "fighting")
@@ -297,6 +335,7 @@ check(recycled[1] == SH.unit .. ":1" and since(L4, "coop: the host's shuttle tak
 
 ---------------------------------------------------------------------------------------------------- the pacing
 print("specialFor: the pacing")
+ALLY = ALLY or {}; ALLY.fleetReady = true          -- (no sv_allies here: the Spaceport's turrets' rows taken as in)
 local rolls = {}
 math.random = function(a, b)
     if a == nil then return table.remove(rolls, 1) or 0.99 end
@@ -406,6 +445,28 @@ L5 = #logs + 1
 check(specialSwap(3, "shuttle", "test", function() return true end) == nil and since(L5, "in the early window %(only it comes then%)") == 1,
       "the early window: no swap")
 check(specialSwap(4, "anomaly", "test", function() return true end) == nil, "not the dice's pick for that round: no swap")
+-- (review of 0.73.80) a kind drawn from outside the bag that can't start doesn't go in the bag: it had its turn
+newRun()
+RUN.specialBag, RUN.specialAt.ladon = { "ladon" }, 9  -- (the bag's one cooling down)
+rolls = { 0.0 }
+local outside = specialFor(9)
+check(outside == "spaceport" and table.concat(RUN.specialBag, ",") == "ladon", "the bag's one can't: drawn outside it (" .. tostring(outside) .. ")")
+check(specialSwap(9, outside, "test", function() return false end) == nil and table.concat(RUN.specialBag, ",") == "ladon",
+      "an outside draw that can't start: not put in the bag (" .. table.concat(RUN.specialBag, ",") .. ")")
+-- ... and specialUndo the same
+newRun()
+RUN.specialBag, RUN.specialAt.ladon = { "ladon" }, 9
+rolls = { 0.0 }
+outside = specialFor(9)
+check(specialUndo(9, outside) and table.concat(RUN.specialBag, ",") == "ladon", "specialUndo of an outside draw: not put in the bag")
+-- a kind whose own ready() says no (the Spaceport without its turrets' rows) never in the bag, never drawn
+newRun()
+ALLY.fleetReady = false
+local seen = {}
+for r = 9, 60 do rolls = { 0.0 }; local k = specialFor(r); if k then seen[k] = (seen[k] or 0) + 1 end end
+check(not seen.spaceport and not table.concat(RUN.specialBag or {}, ","):find("spaceport"),
+      "a kind that can't come (ready() false): never drawn nor in the bag")
+ALLY.fleetReady = true
 math.random = rawRandom
 
 logFile:close()
