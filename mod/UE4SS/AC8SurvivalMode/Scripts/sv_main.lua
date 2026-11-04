@@ -894,7 +894,11 @@ local tick, rowsStopped, half, tA = 0, false, 1, 0
 -- UE4SS "Error: [Lua::Registry::get_function_ref] Ref was not function" 16 ms after a test key's handler queued its own
 -- (both queue game-thread callbacks at once); from then on no tick ran: the round's clock never counted down, the run
 -- never ended at the main menu ("run over" never logged) and SURVIVAL MODE's pages never opened. A tick queued
--- TICK_LOST_S ago and not run is taken as lost and queued again.
+-- TICK_LOST_S ago and not run is taken as lost and queued again. (0.73.82: that can't bring this case back: UE4SS 3.0.1's
+-- process_event_hook sets its "an action is running" flag before it looks the action's function up, and the lookup's
+-- throw leaves it set, so no game-thread action of any mod runs again. The likely cause, two ExecuteInGameThread calls
+-- at once from two threads, is gone with KEYQ; the re-queue stays for a job dropped any other way, and its crumb shows
+-- the case.)
 -- ((0.73.82) Saint Alessia's crash on launch of 2026-11-04 20:28 (her 12:28:34): UE4SS 3.0.1 runs LoopAsync's function on
 -- its own async thread, in this mod's one Lua state, with no lock against the game thread, and Lua isn't safe on two
 -- threads at once. The game thread was held 54 s by the main menu's load; the watchdog queued the tick again every 10 s
@@ -905,11 +909,13 @@ local tick, rowsStopped, half, tA = 0, false, 1, 0
 -- job made below, and only when no job is waiting or running and the last ended SETTLE_S ago (UE4SS lets go of a job's
 -- references just after it returns); a tick taken as lost is queued again once, then after twice as long each time, with
 -- a crumb there (the runtime's SV_Crumb with a fixed text: no Lua made), and the job logs it on the game thread. A job
--- holds `waiting` until it ends, so one starting between the async function's two reads can't look like none queued.
+-- holds `waiting` until it ends, so one starting between the async function's reads can't look like none queued, and
+-- counts itself in `runs` as it starts: the async function queues only if `running` is still false and no job started
+-- since its first look (a job run whole while that thread was held between its reads, the second review of 2026-11-04).
 -- Key presses run at the job's start (sv_core.lua KEYQ). The review of 2026-11-04 took out a collector step at the
 -- job's end: Lua 5.4's collectgarbage("step", 0) drops the pause after a cycle, so the whole heap was collected every
 -- tick half (1-5 ms more on the game thread, measured) and collector steps elsewhere came more often, not less.)
-local waiting, running, queuedAt, doneAt, lostAfter = false, false, 0, 0, 0
+local waiting, running, queuedAt, doneAt, lostAfter, runs = false, false, 0, 0, 0, 0
 local lostTicks, lostSaid, TICK_LOST_S, SETTLE_S = 0, 0, 10, 0.02   -- (0.73.76: 10 s; 5 s fired during level loads, 2026-11-02 23:30 / 23:31)
 local osClock, inGameThread = os.clock, ExecuteInGameThread
 local svCrumb = type(SV_Crumb) == "function" and SV_Crumb or nil   -- (the runtime registers it before main.lua runs)
@@ -965,6 +971,7 @@ local function lostSay()
     crumb(string.format("tick lost: queued again (%d so far)", lostTicks))
 end
 local function job()                                -- (the game thread: one of UE4SS's game-thread actions)
+    runs = runs + 1
     running = true                                  -- (`waiting` held until the end: the async function reads `running` first)
     if lostTicks ~= lostSaid then pcall(lostSay) end
     lostAfter = 0
@@ -981,19 +988,21 @@ end
 if type(LoopAsync) == "function" and type(inGameThread) == "function" then
     LoopAsync(125, function()                       -- (UE4SS's async thread: its flags, the clock and the queueing only)
         if running then return false end
+        local seen = runs
         local t = osClock()
+        local lost, la = false, lostAfter
         if waiting then
-            if lostAfter == 0 then lostAfter = TICK_LOST_S end
-            if t - queuedAt < lostAfter then return false end
-            if running then return false end        -- (the job started meanwhile: not lost)
-            lostTicks, lostAfter = lostTicks + 1, lostAfter * 2   -- (queued again: the next after twice as long)
-            if svCrumb then svCrumb("tick lost: queued again (seen on UE4SS's async thread)") end
+            if la == 0 then la = TICK_LOST_S; lostAfter = la end
+            if t - queuedAt < la then return false end
+            lost = true
         elseif t - doneAt < SETTLE_S then
             return false
         end
-        if running then return false end
+        if running or runs ~= seen then return false end   -- (a job started since the first look: not lost, not free)
+        if lost then lostTicks, lostAfter = lostTicks + 1, la * 2 end   -- (queued again: the next after twice as long)
         waiting, queuedAt = true, t
         inGameThread(job)
+        if lost and svCrumb then svCrumb("tick lost: queued again (seen on UE4SS's async thread)") end
         return false
     end)
 end

@@ -1367,18 +1367,25 @@ that builds the object, with no lock. All in this mod's one Lua state.
 - sv_main.lua's loop: the async function reads only its flags and the clock (captured at load) and queues the one job
   made at load, only with none waiting or running and SETTLE_S 0.02 after the last ended (UE4SS lets go of a job's
   references just after it returns); a job holds `waiting` until it ends (doneAt, waiting, running in that order) and
-  the async function looks at `running` again before it queues; a tick taken as lost is queued again after 10 s, then
-  20, 40, ... with SV_Crumb's fixed text there (`lua: tick lost: queued again (seen on UE4SS's async thread)`: native,
-  no Lua made); the job logs the count on the game thread (`tick: the game thread hadn't run the tick queued 10 s or
-  more before ...: queued again N times (M so far)`).
+  counts itself in `runs` as it starts, and the async function queues only if `running` is still false and `runs` is
+  what it was at its first look; a tick taken as lost is queued again after 10 s, then 20, 40, ... with SV_Crumb's fixed
+  text after the queueing (`lua: tick lost: queued again (seen on UE4SS's async thread)`: native, no Lua made); the job
+  logs the count on the game thread (`tick: the game thread hadn't run the tick queued 10 s or more before ...: queued
+  again N times (M so far)`). The re-queue can't bring back 0.73.75's stall: UE4SS sets its "an action is running" flag
+  before it looks the action's function up, and that lookup's throw leaves it set (no game-thread action of any mod
+  runs again); the crumbs show it.
 - Keys (sv_core.lua KEYQ): every RegisterKeyBind is wrapped; UE4SS gets a function that only does hits[i] = hits[i] + 1
   (96 slots made at load); the job runs the binds' own functions for the presses since, first thing, on the game thread,
   up to KEYQ.MAX (4) a key, with ExecuteInGameThread running its function at once meanwhile. Keys act up to 1/8 s later.
 - Review of 2026-11-04 (3 lenses, each finding verified twice; 4 kept of 5): a collectgarbage("step", 0) at the job's
   end was taken out: in Lua 5.4 it drops the pause after a cycle, so the whole heap was collected every tick half
-  (1-5 ms more, measured) and collector steps elsewhere came more often, not less. Don't force collector steps.
+  (1-5 ms more, measured) and collector steps elsewhere came more often, not less. Don't force collector steps. A second
+  pass (2 lenses; keys: nothing) kept the test's gaps and led to `runs` (a job run whole between two reads of the async
+  function, refuted as unrealistic but closed anyway).
 - tools/checks/tick_loop_test.sh (the loop and KEYQ as they are: allocation and calls on every async path, the back-off,
-  a job starting inside the async function's clock read, keys before the tick; it fails on the 0.73.75 patterns).
+  a job starting inside the async function's clock read, during the lost path's crumb, a look inside the job's end, a
+  job run whole at the last check (a line hook), keys before the tick; it fails on the 0.73.75 patterns and on each
+  guard taken out, but for the `running` half of the last check, which `runs` covers).
 - Candidate hard rule (once a test confirms it): no Lua work off the game thread. A LoopAsync function reads upvalues and
   the clock and queues a job made at load; a key bind only counts; never ExecuteInGameThread from inside a game-thread
   action; no forced collector steps.
