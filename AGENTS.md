@@ -1351,3 +1351,38 @@ south to target the airfield and bomb it", then "spawn everytime a WASP gets des
 - Patches (2026-11-04, Scripts + default ini over a 0.73.78 COOP2MP install, on runtime 0.32.23):
   testing/builds/AC8SurvivalMode_COOP2MP_0.73.81_TESTER_Patch.zip, AC8SurvivalMode_COOP2MP_0.73.81_Patch.zip,
   CHANGELOG_0.73.81.txt; they replace 0.73.80's (everything in it too). Register their hashes from the game's first log line.
+
+## 0.73.82-coop2mp.83: the crash on launch, Lua kept on the game thread (Lua only, on runtime 0.32.23; 2026-11-04; not yet run in game)
+Saint Alessia's crash on launch of 2026-11-04 (12:28:34, logs in the user's upload "crash_on_launch"): the main menu's load
+held the game thread 54 s; the crumbs show 0.73.75's watchdog ("tick lost: queued again") every 10 s from UE4SS's async
+thread (t28300); the game thread came back, ran the five queued ticks one after another, and the watchdog fired again
+inside them; the dump's fault is on the GameThread in UE4SS.dll+0xc634cd (lua_getiuservalue, reading 0xa), 70 ms after the
+tick's last log line. UE4SS 3.0.1's source (LuaMod.cpp, v3.0.1): LoopAsync's function runs on its async thread with no
+lock (process_delayed_actions; an error from it removes the loop for good); ExecuteInGameThread makes a Lua thread and
+two registry references on the CALLING thread, outside its lock; the game thread runs every queued action in one pass
+under m_thread_actions_mutex (process_event_hook), so queuing one from inside an action edits the list it goes through,
+and a throw in get_function_ref leaves m_is_currently_executing_game_action set (no action of any mod runs again: the
+0.73.75 stall); RegisterKeyBind's functions run on UE4SS's input thread; NotifyOnNewObject's callbacks on the thread
+that builds the object, with no lock. All in this mod's one Lua state.
+- sv_main.lua's loop: the async function reads only its flags and the clock (captured at load) and queues the one job
+  made at load, only with none waiting or running and SETTLE_S 0.02 after the last ended (UE4SS lets go of a job's
+  references just after it returns); a job holds `waiting` until it ends (doneAt, waiting, running in that order) and
+  the async function looks at `running` again before it queues; a tick taken as lost is queued again after 10 s, then
+  20, 40, ... with SV_Crumb's fixed text there (`lua: tick lost: queued again (seen on UE4SS's async thread)`: native,
+  no Lua made); the job logs the count on the game thread (`tick: the game thread hadn't run the tick queued 10 s or
+  more before ...: queued again N times (M so far)`).
+- Keys (sv_core.lua KEYQ): every RegisterKeyBind is wrapped; UE4SS gets a function that only does hits[i] = hits[i] + 1
+  (96 slots made at load); the job runs the binds' own functions for the presses since, first thing, on the game thread,
+  up to KEYQ.MAX (4) a key, with ExecuteInGameThread running its function at once meanwhile. Keys act up to 1/8 s later.
+- Review of 2026-11-04 (3 lenses, each finding verified twice; 4 kept of 5): a collectgarbage("step", 0) at the job's
+  end was taken out: in Lua 5.4 it drops the pause after a cycle, so the whole heap was collected every tick half
+  (1-5 ms more, measured) and collector steps elsewhere came more often, not less. Don't force collector steps.
+- tools/checks/tick_loop_test.sh (the loop and KEYQ as they are: allocation and calls on every async path, the back-off,
+  a job starting inside the async function's clock read, keys before the tick; it fails on the 0.73.75 patterns).
+- Candidate hard rule (once a test confirms it): no Lua work off the game thread. A LoopAsync function reads upvalues and
+  the clock and queues a job made at load; a key bind only counts; never ExecuteInGameThread from inside a game-thread
+  action; no forced collector steps.
+- Still open: Survival's NotifyOnNewObject callbacks (World in sv_config / sv_core, LiveAIGameObject, LiveMissile, ...)
+  run on the constructing thread with no lock, and the async thread's ExecuteInGameThread (8 a second) makes a Lua thread
+  there. Only the native runtime can close it: a game-thread per-frame hook calling the Lua tick and reading the keys
+  (no LoopAsync, no RegisterKeyBind): next full build.
