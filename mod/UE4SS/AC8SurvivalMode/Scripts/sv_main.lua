@@ -406,6 +406,7 @@ local function probeTick(tick)
         ANOM.on, ANOM.pawn, ANOM.fx = false, nil, {}
         SH.store, SH.storeTries, SH.added, SH.decor = nil, 0, false, {}      -- (the store: checked again in this level)
         SH.textSent, SH.rowTexts, SH.textSaid = nil, nil, nil   -- ((0.73.77) its texts sent afresh, its rows found again: B4)
+        HIT.ladonWalked, HIT.ladonWalkStep, HIT.base = nil, nil, nil  -- ((0.73.79) the Ladon missiles' walk once in this level)
         do                                         -- the Anomaly's sounds (Mission 23's) and portal systems, loaded and kept
             local an, got, want = CFG.specials.anomaly, 0, 0
             local function keep(path)
@@ -511,7 +512,7 @@ local function probeTick(tick)
     perfAdd("leave check", tLv)
     local tRc = os.clock()                         -- ((0.73.77) "restart check": the controller, the flags: B1)
     if D then
-        if not liveObj(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere() end   -- once a second at most
+        if not liveObj(survivalPC) and tick % 4 == 0 then survivalPC = playerControllerHere(); playerLocationDirty() end   -- once a second at most
         -- the run is over once Survival's player controller has been gone 8 s (the level was left: before, the run went
         -- on at the main menu and in stock missions, rewriting their ammo panels and paying vanished planes as kills)
         if liveObj(survivalPC) then D.pcSeen, D.pcLost = true, 0
@@ -587,8 +588,14 @@ local function probeTick(tick)
         if tick % 4 == 1 then timed("death check", LB.deathCheck, survivalPC) end   -- shot down: the run's over
         if PPTEST and PPTEST.tick then pcall(PPTEST.tick, os.clock()) end   -- (COOP2MP's test key: nil in releases, stripped)
         bNow, bPaused = now, paused
+        -- ((0.73.79) this tick's pause answer for COOP.tick, which runs right after in the same callback: false only when
+        -- the round clock asked the game this tick (it ran on the game's clock and that clock moved), so co-op needn't
+        -- ask again)
+        CLOCK_TICK, CLOCK_PAUSED = tick, nil
+        if D and D.clock == "game" then CLOCK_PAUSED = paused and true or false end
     else
         bNow, bPaused = nil, nil
+        CLOCK_TICK, CLOCK_PAUSED = nil, nil
     end
 end
 
@@ -799,7 +806,15 @@ local function perfWalks(n)
         if e.max > worst then worst, worstCls = e.max, cls end
     end
     if WALK then WALK.stat = {} end
-    if k == 0 then return "walks: none" end
+    -- ((0.73.79) the StaticFindObject lookups that still scanned every object, and those handed out kept: sv_core.lua)
+    local f = WALK and WALK.fstat
+    local finds = ""
+    if f then
+        finds = string.format("; finds: %d scanned (%.2f a tick), %.1f ms a tick, worst %.0f ms (%s); %d kept answers", f.n,
+            f.n / math.max(1, n), f.ms / math.max(1, n), f.max, tostring(f.maxPath or "-"), f.kept)
+        f.n, f.ms, f.max, f.maxPath, f.kept = 0, 0, 0, nil, 0
+    end
+    if k == 0 then return "walks: none" .. finds end
     table.sort(list, function(a, b) return a[2].ms > b[2].ms end)
     local top = {}
     for i = 1, math.min(6, #list) do
@@ -807,7 +822,7 @@ local function perfWalks(n)
         top[#top + 1] = string.format("%s %dx %.0f ms (%d found)", list[i][1], e.n, e.ms, e.found)
     end
     return string.format("walks: %d (%.2f a tick), %.1f ms a tick, worst %.0f ms (%s); most: %s", k, k / math.max(1, n),
-        ms / math.max(1, n), worst, tostring(worstCls), table.concat(top, ", "))
+        ms / math.max(1, n), worst, tostring(worstCls), table.concat(top, ", ")) .. finds
 end
 local function perfNatives(n)
     local t = {}
@@ -827,6 +842,8 @@ end
 local function perfLine(tA, tB, tick)
     if not D.perf then                             -- ((0.73.77) a new period: the walks and natives counted from here)
         if WALK then WALK.stat = {} end
+        local f = WALK and WALK.fstat
+        if f then f.n, f.ms, f.max, f.maxPath, f.kept = 0, 0, 0, nil, 0 end
         for _, e in pairs(NAT) do e.n, e.ms, e.max = 0, 0, 0 end
     end
     local pf = D.perf or { n = 0, sum = 0, max = 0, maxA = 0, maxB = 0, parts = {}, at = tick }
@@ -887,6 +904,7 @@ LoopAsync(125, function()
     queued, queuedAt = true, os.clock()
     ExecuteInGameThread(function()
         half = 1 - half
+        PLOC.on, PLOC.have, PLOC.v = true, false, nil   -- ((0.73.79) your position read once in this half: playerLocation)
         if half == 1 then                           -- the second half: probeTickB, the leaderboard's polls, the perf line
             local t1 = os.clock()
             local okB, errB = pcall(probeTickB, tick)
@@ -896,17 +914,24 @@ LoopAsync(125, function()
             if tick % 20 == 7 then timed("leaderboard", LB.queueTick) end            -- runs waiting to be sent
             local tB = (os.clock() - t1) * 1000
             if D then pcall(perfLine, tA, tB, tick) end
+            PLOC.on, PLOC.have, PLOC.v = false, false, nil
             queued = false
             return
         end
         tick = tick + 1
         local t0 = os.clock()                       -- ((0.73.77) the rows' watch and the info maps in the first half too: B1)
-        if not rowsStopped and (tick % 4 == 0 or not (ready[1] and ready[2])) then   -- watching for reloads: 1/s
+        -- ((0.73.79, the lag audit's item 3) in a run on Survival's level the main menu's tables and the hangar's maps
+        -- aren't read by the game (they're pinned, read at the main menu and the hangar), so they're watched every 30 s
+        -- (rows) and 60 s (info maps) instead of every 1 s / 2 s: 4-5 ms a tick on a tester's PC, each pass a few
+        -- object scans. Back to the menu's pace at the first sign another level loads (svLevelOn false, LEAVE.why), before
+        -- the main menu builds its page.)
+        local quiet = D ~= nil and svLevelOn ~= false and not LEAVE.why and ready[1] and ready[2]
+        if not rowsStopped and (tick % (quiet and 120 or 4) == 0 or not (ready[1] and ready[2])) then   -- watching for reloads
             local ok, r = timed("rows watch", watchRows)
             if not ok then log("rows: error " .. tostring(r)) end
             if ok and r == false then rowsStopped = true end
         end
-        if tick % 8 == 2 then
+        if tick % (quiet and 240 or 8) == 2 then
             local okI, errI = timed("info maps", infoMapsTick)
             if not okI then log("info maps: error " .. tostring(errI)) end
         end
@@ -920,6 +945,7 @@ LoopAsync(125, function()
             if not okC then log("coop: error " .. tostring(errC)) end
         end
         tA = (os.clock() - t0) * 1000
+        PLOC.on, PLOC.have, PLOC.v = false, false, nil
         queued = false
     end)
     return false

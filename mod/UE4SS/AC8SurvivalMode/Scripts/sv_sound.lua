@@ -201,9 +201,44 @@ function SND.event(list, at, extraDb, ratio)
     return hs
 end
 
+-- ((0.73.79, the lag audit's item 7) VALKA's sounds loaded before her fight: the runtime reads a whole file on the game
+-- thread the first time it's played (the song's 45 MB: ~106 ms at her mood's start, ~98 ms at her opener's shot on a
+-- tester's PC). SND.preloadValka() queues her song and every file of CFG.sound.valka (from the break before her round,
+-- the round's start, or the host's VALKA round on a joiner), and SND.tick loads one a tick: the same ids SND.id keeps
+-- after a first play, nothing played)
+SND.preQ = nil
+function SND.preloadValka()
+    if SND.preDone or SND.preQ or not CFG.sound.enabled or type(SV_SndLoad) ~= "function" then return end
+    local q, seen = {}, {}
+    local function add(f) if type(f) == "string" and not seen[f] and SND.ids[f] == nil then seen[f] = true; q[#q + 1] = f end end
+    local sp = CFG.specials and CFG.specials.valka
+    if type(sp) == "table" and type(sp.song) == "table" and sp.song.enabled ~= false then add(sp.song.file) end
+    local function layers(t)
+        if type(t) ~= "table" then return end
+        if t.file or t.pick then t = { t } end
+        for _, l in ipairs(t) do
+            if type(l) == "table" then
+                add(l.file)
+                for _, p in ipairs(type(l.pick) == "table" and l.pick or {}) do if type(p) == "table" then add(p[1]) end end
+            end
+        end
+    end
+    for _, ev in pairs(type(CFG.sound.valka) == "table" and CFG.sound.valka or {}) do layers(ev) end
+    SND.preQ, SND.preDone = q, true
+    log(string.format("sound: VALKA's %d sound files loading, one a tick, before her fight", #q))
+end
+local function preloadTick()
+    local q = SND.preQ
+    if not q then return end
+    local f = table.remove(q, 1)
+    if f then SND.id(f) end
+    if #q == 0 then SND.preQ = nil end
+end
+
 -- every tick: the playing voices follow their source and you (pan, distance); the finished ones dropped
 function SND.tick()
     if type(SV_SndSet) ~= "function" then return end
+    pcall(preloadTick)                                  -- ((0.73.79) VALKA's files, one a tick, before her fight)
     pcall(songTick)                                     -- (0.73.76) the song's fade
     for h, v in pairs(SND.live) do
         local where = v.at

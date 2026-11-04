@@ -1189,3 +1189,27 @@ message made, pinned by hand: the bot lacks Manage Messages; the live /admin pag
 functions" line and an "all registered" crumb. The first 0.73.78 friends' zip (hash bf52dff8..., runtime 0.32.22) never
 starts Survival: never give it out. Dev install (VALKA) confirmed in game at 23:54, hash eb7b586e...2591e250. The friends' zip
 rebuilt on 0.32.23 (same name, with VALKA and her song, the Spaceport): hash 03e468eb...3ccda9341 (register on /admin).
+
+## 0.73.79-coop2mp.80: the lag audit's Tier 1 and the Alicorn fixes (runtime 0.32.24; 2026-11-04; not built, not yet run in game)
+Saint Alessia's solo tests of 2026-11-03 on 0.73.78 (testing/logs/2026-11-03/SaintAlessia_valka, _alicorn): a 24 ms tick in a
+quiet round 1 (first half 19.8 ms: a dropped frame 4 times a second), 61 ms and a 1.3 s freeze at the Alicorn's spawn, and the
+Alicorn diving with its ballast tanks gone. The lag audit (8 areas, 77 findings, each verified: testing/2026-11-03/PERF_PLAN.md,
+PERF_AUDIT_findings.json) found the root: this UE4SS can't find AC8's FUObjectHashTables (UE4SS.log "object lookups use
+GUObjectArray"), so every StaticFindObject scans every object (~3 ms on her PC) and every FindAllOf costs 35-70 ms. None of it is
+a hard rule until a test confirms it.
+- The Alicorn (sv_alicorn.lua): no dive once its core is open (one under water surfaces at once); its parts from the spawn
+  record (SPC.CLEAN_OBJ) instead of a FindAllOf per class every 2 s, a search only for a class missing there (every 10 s).
+- Tier 1 (gameplay unchanged): /Script/ lookups kept (sv_core.lua's StaticFindObject wrapper; the perf line's `finds:`);
+  the runtime's Log without a disk flush per line (0.32.24) and SV_LogUnits only with [log] verbose; the menu tables' watches
+  every 30-60 s in a run (rows watch, info maps, shop rows), the main menu's pages not looked after in a run; the leave probe
+  twice a second; the Ladon missiles' walk once a level (or on a dropped feed item, 60 s backstop), one class a sweep, the
+  sure kill first, a pool missile written only when its values differ; the player's position read once a tick half (PLOC);
+  the player controller asked of GameplayStatics before a walk; Wolf traps' alive check once a second while held; the
+  defences' repair walk only with a STORE defence up (the shuttle pad's guns healed from their record); the shuttle's
+  take-off one walk; the difficulty manager kept; VALKA's sounds loaded one a tick before her fight; co-op's pause check
+  reusing the round clock's answer. Left out: the boss alive-check shortcut (a boss's end up to 1 s late in an edge case)
+  and the ALLIES row from cached counts (up to 2.5 s old).
+- To check in the next test: `perf:` first half under ~8 ms in solo round 1, `clock` under 0.5, `rows watch` ~0.1; `perf:
+  lists:` no repeated walks of the Alicorn's part classes, PlayerController, the Ladon missiles, LiveAIGroundDummy;
+  `finds:` few scans; `special: the Alicorn's ... found by a search` should not appear; no "the Alicorn dives" after
+  "its core opens"; `sound: VALKA's N sound files loading` before her round.

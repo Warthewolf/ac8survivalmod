@@ -500,6 +500,7 @@ local function loiter(pawn)
     if type(SV_Down) ~= "function" then return "no SV_Down (runtime 0.28.5 or later)" end
     local lo = rc().loiter or {}
     local ok, r = pcall(SV_Down, addrOf(pawn) or 0, AIRFIELD.X, AIRFIELD.Y, num(lo.alt_m, 2500), num(lo.radius_m, 4000))
+    playerLocationDirty()                           -- ((0.73.79) your plane moved: read afresh)
     if not ok then return "error " .. tostring(r) end
     return r == 1 and "on" or (tostring(r) .. " " .. tostring(SV_ERR[r] or ""))
 end
@@ -614,6 +615,7 @@ function DOWN.back(how, respawn)
         local rr = "no SV_Respawn (runtime 0.28.5 or later)"
         if type(SV_Respawn) == "function" then
             local okR, v = pcall(SV_Respawn, addrOf(pawn) or 0, x, yy, RUNWAY.z_cm, 0, RUNWAY.yaw, 0)
+            playerLocationDirty()
             rr = (not okR and ("error " .. tostring(v))) or (v == 1 and "done") or (tostring(v) .. " " .. tostring(SV_ERR[v] or ""))
         end
         placed = string.format("SV_Respawn 4 km out from the runway, 500 m up%s: %s", why, tostring(rr))
@@ -745,6 +747,7 @@ local function edgeGuard(pawn, now)
     local rr = "no SV_Respawn (runtime 0.28.5 or later)"
     if type(SV_Respawn) == "function" then
         local okR, v = pcall(SV_Respawn, addrOf(pawn) or 0, x, yy, z, 0, RUNWAY.yaw, 0)
+        playerLocationDirty()
         rr = (not okR and ("error " .. tostring(v))) or (v == 1 and "done") or (tostring(v) .. " " .. tostring(SV_ERR[v] or ""))
     end
     local _, did = outOfFight(pawn)

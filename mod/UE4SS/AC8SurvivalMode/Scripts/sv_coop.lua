@@ -1399,6 +1399,9 @@ local function clientRounds(now)
         D.intLevel = r.level and { round = r.round, level = r.level } or nil   -- (the copies fly it: DIR.level, P4)
         D.glitchPhase = r.glitchPhase                    -- (AB.L..IN's on the host: ANOM.clientGlitch, P7)
         D.hostSpecial = r.hostSpecial                    -- ((0.73.77) the host's special and its state: ANOM.clientTick, SPC.clientClean)
+        if type(r.hostSpecial) == "string" and r.hostSpecial:find("^valka") and SND and SND.preloadValka then
+            pcall(SND.preloadValka)                      -- ((0.73.79) her song and sounds loaded before her mood: sv_sound.lua)
+        end
         if r.waves > 0 then D.waves = D.waves and #D.waves == r.waves and D.waves or {}; for i = #D.waves + 1, r.waves do D.waves[i] = {} end
         else D.waves = nil end
     end
@@ -4527,7 +4530,9 @@ function COOP.tick(tick)
     -- An online-style pause (user, 2026-10-26: "when the Host Pauses, the game doesn't pause all the enemies for the
     -- other players"): while another player is linked, the pause menu opens but the world keeps running, on the host's
     -- game (its enemies, which every game copies) and on a joiner's (its plane). Alone, the game pauses as ever.
-    if (M.linkedPeers or 0) > 0 and valid(survivalPC) and gamePaused(survivalPC) then
+    -- ((0.73.79) the round clock's answer this tick, when it asked the game: not paused, so nothing to undo)
+    local clockSaysRunning = CLOCK_TICK == tick and CLOCK_PAUSED == false
+    if (M.linkedPeers or 0) > 0 and not clockSaysRunning and valid(survivalPC) and gamePaused(survivalPC) then
         local gs = cdo("/Script/Engine.Default__GameplayStatics")
         local ok = gs and pcall(function() gs:SetGamePaused(survivalPC, false) end)
         M.unpauses = (M.unpauses or 0) + 1

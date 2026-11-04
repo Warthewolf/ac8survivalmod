@@ -270,7 +270,10 @@ function levelGoing()
     -- (the runtime asked only once a plane of this level is up: before its spawner is found each ask searches every
     -- object for it, the walk this guards against; nothing to pay for before then anyway)
     elseif type(SV_UnitAlive) == "function" and levelTick and levelTick >= 0 and type(planes) == "table" and (#planes > 0 or LEAVE.why) then
-        local every = LEAVE.why and 1 or 0.1              -- (10 times a second at most; once a second while latched)
+        -- (twice a second at most, once a second while latched. (0.73.79, the lag audit's item 5) It was 10 times a
+        -- second, so every tick half asked: 0.75 ms each on a tester's PC. This is only the soft backstop: the runtime's
+        -- teardown gate (levelGate) and svLevelOn close first in every quit logged since 0.73.77)
+        local every = LEAVE.why and 1 or 0.5
         if not LEAVE.probeAt or now - LEAVE.probeAt >= every then
             LEAVE.probeAt = now
             local u = CFG and type(CFG.pool) == "table" and CFG.pool[1] or nil
@@ -379,6 +382,39 @@ do
         function FindFirstOf(cls) if held("FindFirstOf", cls) then return nil end return timedWalk(rawFirst, "first " .. tostring(cls), cls) end
     end
 end
+-- (0.73.79, the lag audit of 2026-11-04, testing/2026-11-03/PERF_PLAN.md item 1) This UE4SS can't find AC8's
+-- FUObjectHashTables (UE4SS.log: "FUObjectHashTables unavailable, object lookups use GUObjectArray"), so every
+-- StaticFindObject scans every object the game holds: ~3 ms each on Saint Alessia's PC, and the round clock alone asked
+-- for GameplayStatics twice a tick (the perf line's "clock", 6.3 ms of her 24 ms tick). A native object ("/Script/...":
+-- a C++ class, its default object, a function library) is made at start and never freed, so the first find of one is
+-- kept and handed out again while it's still a live object (liveObj: GUObjectArray). /Game/ assets can unload: never
+-- kept. A miss is never kept (loadObject looks, loads, then looks again). The finds that still scan are counted for the
+-- perf line's "finds:" (WALK.fstat).
+do
+    local rawFind = StaticFindObject
+    local SCRIPT = {}
+    WALK.fstat = { n = 0, ms = 0, max = 0, kept = 0 }
+    if type(rawFind) == "function" then
+        function StaticFindObject(p, ...)
+            local script = type(p) == "string" and select("#", ...) == 0 and p:sub(1, 8) == "/Script/"
+            if script then
+                local o = SCRIPT[p]
+                if o ~= nil then
+                    if liveObj(o) then WALK.fstat.kept = WALK.fstat.kept + 1; return o end
+                    SCRIPT[p] = nil
+                end
+            end
+            local t0 = os.clock()
+            local o = rawFind(p, ...)
+            local dt = (os.clock() - t0) * 1000
+            local f = WALK.fstat
+            f.n, f.ms = f.n + 1, f.ms + dt
+            if dt > f.max then f.max, f.maxPath = dt, tostring(p) end
+            if script and o ~= nil and valid(o) then SCRIPT[p] = o end
+            return o
+        end
+    end
+end
 -- (a main level made: the hold above. Not Survival's own, whose sublevels load blocking the game thread anyway, nor the
 -- transition map made as it loads; the transition map out of a run, or from the main menu, yes)
 pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
@@ -404,6 +440,20 @@ end)
 -- the halves run as after any run's end (no D). Without SV_LevelGone (an older main.dll): never closed, as before.
 GATE = { closed = false, at = nil, held = 0, waitSet = nil }
 LEVEL_DROPS = {}               -- name -> function(why): that part's kept level objects forgotten, none of them touched
+-- ((0.73.79, the lag audit's item 7) the game's LiveDifficultyManager, found once and kept while it's a live object
+-- (liveObj), dropped with the level; looked for at most every 5 s while it isn't found. It was a FindFirstOf (8-14 ms on a
+-- tester's PC) each time the difficulty was read: every 30 s (presetName), on each new aircraft (the attackers: line))
+local DIFFMGR = { obj = nil, at = -1e9 }
+function difficultyManager()
+    if DIFFMGR.obj ~= nil and liveObj(DIFFMGR.obj) then return DIFFMGR.obj end
+    DIFFMGR.obj = nil
+    if os.clock() - DIFFMGR.at < 5 then return nil end
+    DIFFMGR.at = os.clock()
+    local m = FindFirstOf("LiveDifficultyManager")
+    if m ~= nil and valid(m) then DIFFMGR.obj = m end
+    return DIFFMGR.obj
+end
+LEVEL_DROPS.difficulty = function() DIFFMGR.obj, DIFFMGR.at = nil, -1e9 end
 local GATE_HOLD_S = 10
 function levelTorn() return LEAVE.gone == true end
 function levelDrop(why)
@@ -971,13 +1021,25 @@ end
 survivalPC = nil             -- the player controller in Survival's level (found by probeTick, then reused)
 
 -- Where the player is (cm), or nil.
+-- ((0.73.79, the lag audit's item 7) read once a tick half: ~50 callers asked each time (the controller checked live,
+-- its pawn, a ProcessEvent). PLOC.on only while the tick loop's game-thread callback runs (sv_main.lua), so a key or a
+-- menu hook reads fresh; numbers only, a copy handed out; playerLocationDirty() after Survival moves your plane in a
+-- half (SV_Respawn, SV_Down) or finds the player controller again)
+PLOC = { on = false, have = false, v = nil }
+function playerLocationDirty() PLOC.have, PLOC.v = false, nil end
 function playerLocation()
+    if PLOC.on and PLOC.have then
+        local v = PLOC.v
+        return v and { X = v.X, Y = v.Y, Z = v.Z } or nil
+    end
     local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")      -- (0.73.73: liveObj, kept)
     local ok, l = pcall(function()
         local v = pc.Pawn:K2_GetActorLocation()
         return { X = v.X, Y = v.Y, Z = v.Z }
     end)
-    return ok and l or nil
+    l = ok and l or nil
+    if PLOC.on then PLOC.have, PLOC.v = true, l and { X = l.X, Y = l.Y, Z = l.Z } or nil end
+    return l
 end
 
 function km(a, b)

@@ -68,7 +68,10 @@ end
 -- and not ticking. The pad's objects come back as they were at the next shuttle round (spawnShuttle: their units are
 -- still up, so they aren't spawned again).
 do
-local GROUND = { "LiveAIGroundDummy", "LiveAIGroundVehicleObject", "LiveAIGameObject" }
+-- ((0.73.79, the lag audit's item 7) LiveAIGameObject only: the ground dummies and ground vehicles are its subclasses
+-- (the clean-up's LiveAIGameObject feed records both: the shuttle pad's dummies, the Alicorn's turret parts), so the
+-- other two walks (35-70 ms each on a tester's PC) only found the same objects again)
+local GROUND = { "LiveAIGameObject" }
 local FLAGS = { "bShowHUDBox", "bIsNotLockonTarget", "bIsNotFCSTargets", "bIsInvincible" }
 local GONE = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
 local function hide(o, keep)
@@ -118,12 +121,16 @@ function SPC.shuttleTakeOff()
         for _, cls in ipairs(GROUND) do
             for _, o in ipairs(FindAllOf(cls) or {}) do
                 local a = valid(o) and addrOf(o)
-                if a and not seen[a] and not nameOf(o):find("Default__", 1, true) then
+                if a and not seen[a] then
                     seen[a] = true
-                    local okP, isPlane = pcall(function() return valid(planeCls) and o:IsA(planeCls) end)
+                    -- ((0.73.79) where it is first: the name and class read only for what's near the pad)
                     local okL, l = pcall(function() local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y } end)
-                    if not (okP and isPlane) and okL and l and math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2) <= 150000 then
-                        if hide(o, true) then hidden = hidden + 1 else failed = failed + 1 end
+                    if okL and l and math.sqrt((l.X - at.X) ^ 2 + (l.Y - at.Y) ^ 2) <= 150000
+                        and not nameOf(o):find("Default__", 1, true) then
+                        local okP, isPlane = pcall(function() return valid(planeCls) and o:IsA(planeCls) end)
+                        if not (okP and isPlane) then
+                            if hide(o, true) then hidden = hidden + 1 else failed = failed + 1 end
+                        end
                     end
                 end
             end
@@ -813,6 +820,7 @@ local function startRound()
     local b = CFG.airfield.bombers
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
+    if special == "valka" and SND and SND.preloadValka then pcall(SND.preloadValka) end   -- ((0.73.79) at the latest: sv_sound.lua)
     if special == "amphibious" and not AMPH.ready() then          -- no lane can come: a normal round
         log(string.format("round %d: no landing craft can come; a normal round", D.round))
         special = nil
@@ -1065,7 +1073,8 @@ local function startRound()
     end
     local okP, errP = pcall(roundPressure, special) -- (the game's attack throttle for the round: CFG.late.pressure)
     if not okP then log("pressure: error " .. tostring(errP)) end
-    if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
+    -- ((0.73.79, the lag audit's item 2) the game's whole unit list, a native log line each: [log] verbose only)
+    if logVerbose() and type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " start") end
     D.state, D.at, D.lastAlive, D.waveAt = "spawning", D.now, nil, D.now
     -- ((0.73.78, plan G4) an ace round's clock to its break-off, CFG.aces.break_off: aceBreakTick)
     local bo = CFG.aces.break_off
@@ -1256,6 +1265,7 @@ function roundsTick(now)
             D.announced = true
             local t = CFG.hud.text
             local nextSpecial = D.forceSpecial or specialFor(D.round + 1)
+            if nextSpecial == "valka" and SND and SND.preloadValka then pcall(SND.preloadValka) end   -- ((0.73.79) her sounds now, not mid-fight)
             -- (once: it picks the tier; (0.73.78) and the squadron, CFG.aces.rotation)
             local nextAce, nextSq, nextStandin, nextWhy = aceRound(D.round + 1, nextSpecial)
             local nk = nextSpecial and SPC.kinds[nextSpecial]
@@ -1411,7 +1421,7 @@ function roundsTick(now)
             local gap = SETUP.breakS()                 -- (the menu's BREAK BETWEEN ROUNDS, sv_menu.lua)
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
-            if type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
+            if logVerbose() and type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
             D.state, D.at, D.announced = "wait", now + gap, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
                        string.format(CFG.hud.text.complete_sub, gap))
