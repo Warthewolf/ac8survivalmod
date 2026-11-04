@@ -307,7 +307,10 @@ local function shipsTick(s, now)
                 log(string.format("special: spaceport fleet: %s %s sunk (%s; +%d once%s)", sh.kind, unit, why, p,
                     (fin + left > 0) and string.format("; %d of its turrets still up finished off%s", fin,
                         left > 0 and string.format(", %d NOT (still up)", left) or "") or ""))
-                if sh.kind == "wasp" then hudCallout(t.sp_wasp_down, t.sp_wasp_down_sub)
+                if sh.kind == "wasp" then
+                    hudCallout(t.sp_wasp_down, t.sp_wasp_down_sub)
+                    local okW, errW = pcall(SPORT.tuWasp, now, s, unit)   -- (its Tu-160s at the airfield)
+                    if not okW then log("special: the Tu-160s' error " .. tostring(errW)) end
                 elseif sh.kind == "ford" then hudCallout(t.sp_ford_down, t.sp_ford_down_sub) end
                 sh.alive = 0
             else
@@ -382,43 +385,75 @@ end
 
 ---------------------------------------------------------------------------------------------------- the Tu-160s
 -- (user, 2026-11-04: "in the spaceport assault round, can you please add TU-160's that come from both the North and the
--- south to target the airfield and bomb it"; CFG.specials.spaceport.tu160) The two heavy bomber flights
--- (CFG.airfield.bombers.heavy_units, built with the large-aircraft behaviour and a route in from every compass sector:
--- tools/survival_events.py HEAVY_*) come after_s into the assault on `aircraft`, one from each of `bearings` (which flight
--- takes which by chance), through the bombers' own spawn (spawnBomberFrom, sv_spawn.lua): their route over the runway,
--- the bomb runs, the minimap pings, a heavy's pay, the round held until they're down (D.up), the co-op copies. The host's
--- (or solo): D.special is the host's alone. s.tu = { at, sides = { { unit, bearing } }, done, n (aircraft up), said,
--- units (unit -> bearing), why }.
--- the plan (SPORT.spawn), or nil: off, the airfield off, no heavy flight
+-- south to target the airfield and bomb it", then "spawn everytime a WASP gets destroyed, have 4 bombers each";
+-- CFG.specials.spaceport.tu160) Each Wasp sunk in the assault sends a group of `group` Tu-160s (on `aircraft`) at the
+-- airfield delay_s later, the groups' sides taking `bearings` in turn (north, south, ...; the first by chance). A group is
+-- the heavy bomber flights (CFG.airfield.bombers.heavy_units: built with the large-aircraft behaviour and a route in from
+-- every compass sector, tools/survival_events.py HEAVY_*) whose sizes add up to `group` (the build has a 2-ship and a
+-- 4-ship: a group of 4 is the 4-ship), sent through the bombers' own spawn (spawnBomberFrom, sv_spawn.lua): their route
+-- over the runway, the bomb runs, the minimap pings, a heavy's pay, the round held until they're down (D.up), the co-op
+-- copies. A flight can't spawn again while its last one is up (hard rule 16), so a group whose flights are still up from
+-- the last group waits for them (and holds the round meanwhile: their flights are in it anyway). None after a capture
+-- (a waiting group dropped) or in the retake; the host's (or solo): D.special is the host's alone.
+-- s.tu = { units = { unit -> bearing } (every flight sent this assault: the row, the capture's withdrawal, the waves'
+-- count), n (aircraft sent), queue = { { at, why, k (its group number) } }, k (groups asked for), side, said = { ... } }
+-- the heavy flights and their sizes
+local function tuFlights()
+    local out = {}
+    for _, u in ipairs(CFG.airfield.bombers.heavy_units or {}) do
+        if BOMBER_UNIT and BOMBER_UNIT[u] then out[#out + 1] = { unit = u, size = math.max(0, tonumber(flightSize(u)) or 0) } end
+    end
+    return out
+end
+-- the ways to make a group of n from the heavy flights, fewest flights first: those adding up to n, else the biggest
+-- under it (none: the smallest flight alone)
+local function tuOptions(fl, n)
+    local exact, under, best = {}, {}, 0
+    for mask = 1, (1 << #fl) - 1 do
+        local set, sum = {}, 0
+        for i = 1, #fl do if mask & (1 << (i - 1)) ~= 0 then set[#set + 1] = fl[i]; sum = sum + fl[i].size end end
+        if sum == n then exact[#exact + 1] = set
+        elseif sum < n and sum > 0 then
+            if sum > best then best, under = sum, { set } elseif sum == best then under[#under + 1] = set end
+        end
+    end
+    local opts = #exact > 0 and exact or under
+    if #opts == 0 and #fl > 0 then
+        local small = fl[1]
+        for _, f in ipairs(fl) do if f.size < small.size then small = f end end
+        opts = { { small } }
+    end
+    table.sort(opts, function(x, y) return #x < #y end)
+    return opts
+end
+-- the plan (SPORT.spawn), or nil: off, the airfield off, no heavy flight, no bearing
 function SPORT.tuPlan(now)
     local c = cfg().tu160
     if not (type(c) == "table" and c.enabled ~= false and CFG.airfield.enabled) then return nil end
-    local units = {}
-    for _, u in ipairs(CFG.airfield.bombers.heavy_units or {}) do
-        if BOMBER_UNIT and BOMBER_UNIT[u] then units[#units + 1] = u end
-    end
+    local fl = tuFlights()
     local br = {}
     for _, b in ipairs(type(c.bearings) == "table" and c.bearings or {}) do
         b = tonumber(b)
         if b then br[#br + 1] = b % 360 end
     end
-    if #units == 0 or #br == 0 then
-        log(string.format("special: no Tu-160s this assault (%s)", #units == 0 and "no heavy bomber flight" or "no bearings"))
+    if #fl == 0 or #br == 0 then
+        log(string.format("special: no Tu-160s this assault (%s)", #fl == 0 and "no heavy bomber flight" or "no bearings"))
         return nil
     end
-    for i = #units, 2, -1 do local j = math.random(i); units[i], units[j] = units[j], units[i] end
-    local sides = {}
-    for i, u in ipairs(units) do sides[#sides + 1] = { unit = u, bearing = br[(i - 1) % #br + 1] } end
-    local tu = { at = now + math.max(0, tonumber(c.after_s) or 45), sides = sides, units = {}, n = 0 }
-    local plan = {}
-    for _, sd in ipairs(sides) do
-        tu.units[sd.unit] = sd.bearing
-        plan[#plan + 1] = string.format("%s from the %s (bearing %d)", sd.unit, compassName(sd.bearing), math.floor(sd.bearing))
-    end
-    log(string.format("special: the Tu-160s come %d s into the assault: %s", math.floor(tu.at - now + 0.5), table.concat(plan, ", ")))
+    local n = math.max(1, math.floor(tonumber(c.group) or 4))
+    local opt = tuOptions(fl, n)[1]
+    local names, sum = {}, 0
+    for _, f in ipairs(opt or {}) do names[#names + 1] = string.format("%s (%d)", f.unit, f.size); sum = sum + f.size end
+    local tu = { units = {}, n = 0, queue = {}, k = 0, side = math.random(#br), bearings = br, group = n, said = {} }
+    log(string.format("special: the Tu-160s: a group of %d for each Wasp sunk, %d s after it, from the %s in turn (a group: %s%s)",
+        n, math.floor(math.max(0, tonumber(c.delay_s) or 6)), (function()
+            local t = {}
+            for i = 1, #br do t[#t + 1] = compassName(br[(tu.side + i - 2) % #br + 1]) end
+            return table.concat(t, ", then ")
+        end)(), table.concat(names, " + "), sum ~= n and string.format("; the heavy flights can't make %d: %d", n, sum) or ""))
     return tu
 end
--- the Tu-160s up now (this game's planes of their flights, not down)
+-- the Tu-160s up now (this game's planes of the flights sent this assault, not down)
 function SPORT.tuUp(s)
     local tu = s and s.tu
     if not (tu and tu.n and tu.n > 0) then return 0 end
@@ -428,47 +463,80 @@ function SPORT.tuUp(s)
     end
     return n
 end
--- (from SPORT.tick, once a second) after_s on: each flight sent from its side, once; none after a capture
+-- a Wasp sunk (shipsTick, the assault only): its group asked for, delay_s on
+function SPORT.tuWasp(now, s, unit)
+    local tu = s and s.tu
+    if not tu or s.kind ~= "spaceport" or s.state ~= "assault" then return end
+    if s.captured then log("special: " .. tostring(unit) .. " sunk after the capture: no Tu-160s"); return end
+    tu.k = tu.k + 1
+    local c = cfg().tu160
+    tu.queue[#tu.queue + 1] = { at = now + math.max(0, tonumber(c.delay_s) or 6), why = tostring(unit) .. " sunk", k = tu.k }
+    log(string.format("special: %s sunk: Tu-160 group %d asked for (%d waiting)", tostring(unit), tu.k, #tu.queue))
+end
+-- (from SPORT.tick) the first group waiting, once it's due: its flights sent if they're free, else it waits for them
 function SPORT.tuTick(now, s)
     local tu = s.tu
-    if not tu or tu.done or now < tu.at then return end
-    tu.done = true
+    if not tu or #tu.queue == 0 then return end
+    local g = tu.queue[1]
+    if now < g.at then return end
     if s.captured then
-        tu.why = "the spaceport was captured first"
-        log("special: the Tu-160s don't come: the spaceport was captured first")
+        log(string.format("special: the spaceport captured: %d Tu-160 group%s waiting dropped", #tu.queue, #tu.queue == 1 and "" or "s"))
+        tu.queue = {}
         return
     end
     local c, t = cfg().tu160, CFG.hud.text
-    local names, seen, parts = {}, {}, {}
-    for _, sd in ipairs(tu.sides) do
-        local u = sd.unit
-        local up = tonumber(ALIVE.fresh(u, now)) or 0
-        if up > 0 then
-            parts[#parts + 1] = string.format("%s still up from before: not sent", u)
-            tu.units[u] = nil
-        else
-            local okS, res = pcall(spawnBomberFrom, u, { ac = c.aircraft, bearing = sd.bearing, spread = c.spread_deg,
-                                                         distance_km = c.distance_km })
-            local r = okS and tonumber(res) or nil           -- ((review of 7bcd4c4) res kept: an error's text, logged)
-            if r and r > 0 then
-                tu.n = tu.n + r
-                parts[#parts + 1] = string.format("%s: %d from the %s", u, r, compassName(sd.bearing))
-                local nm = compassName(sd.bearing)
-                if not seen[nm] then seen[nm] = true; names[#names + 1] = nm end
-            else
-                parts[#parts + 1] = string.format("%s: %s", u, okS and ("not spawned (" .. ((SV_ERR and r and SV_ERR[r]) or tostring(res)) .. ")")
-                    or ("error " .. tostring(res)))
-                tu.units[u] = nil
+    local fl = tuFlights()
+    local opts = tuOptions(fl, tu.group)
+    local free, busyOf = nil, nil
+    for _, set in ipairs(opts) do
+        local ok = true
+        for _, f in ipairs(set) do
+            if (tonumber(ALIVE.ask(f.unit, now)) or 0) > 0 then ok = false; busyOf = busyOf or set end
+        end
+        if ok then free = set; break end
+    end
+    if not free then
+        -- (its flights still up: in this round (D.up), it waits for them, holding the round; up but not this round's
+        -- (a stale one), the group is dropped: it could hold the round for ever)
+        local inRound = false
+        for _, f in ipairs(busyOf or {}) do if D.up and D.up[f.unit] then inRound = true end end
+        if inRound or #opts == 0 then
+            if not g.waitSaid then
+                g.waitSaid = true
+                log(string.format("special: Tu-160 group %d (%s) waits: its flights are still up from the last group", g.k, g.why))
             end
+            if #opts > 0 then return end
+        end
+        table.remove(tu.queue, 1)
+        tu.said[#tu.said + 1] = string.format("group %d: not sent (%s)", g.k, #opts == 0 and "no heavy flight" or "its flights up, not this round's")
+        log(string.format("special: Tu-160 group %d (%s) dropped: %s", g.k, g.why, #opts == 0 and "no heavy bomber flight"
+            or "its flights read up but aren't this round's"))
+        return
+    end
+    table.remove(tu.queue, 1)
+    local bearing = tu.bearings[(tu.side - 1) % #tu.bearings + 1]
+    tu.side = tu.side + 1
+    local parts, sent = {}, 0
+    for _, f in ipairs(free) do
+        local okS, res = pcall(spawnBomberFrom, f.unit, { ac = c.aircraft, bearing = bearing, spread = c.spread_deg,
+                                                          distance_km = c.distance_km })
+        local r = okS and tonumber(res) or nil           -- ((review of 7bcd4c4) res kept: an error's text, logged)
+        if r and r > 0 then
+            sent = sent + r
+            tu.units[f.unit] = bearing
+            parts[#parts + 1] = string.format("%s: %d", f.unit, r)
+        else
+            parts[#parts + 1] = string.format("%s: %s", f.unit, okS and ("not spawned (" .. ((SV_ERR and r and SV_ERR[r]) or tostring(res)) .. ")")
+                or ("error " .. tostring(res)))
         end
     end
-    tu.said = table.concat(parts, "; ")
-    log(string.format("special: the Tu-160s at the airfield: %d sent (%s)", tu.n, tu.said))
-    if tu.n > 0 then
-        hudCallout(t.sp_tu160, string.format(t.sp_tu160_sub, table.concat(names, " AND ")))
+    tu.n = tu.n + sent
+    tu.said[#tu.said + 1] = string.format("group %d: %d from the %s", g.k, sent, compassName(bearing))
+    log(string.format("special: Tu-160 group %d (%s): %d from the %s (bearing %d; %s)", g.k, g.why, sent, compassName(bearing),
+        math.floor(bearing), table.concat(parts, "; ")))
+    if sent > 0 then
+        hudCallout(t.sp_tu160, string.format(t.sp_tu160_sub, compassName(bearing)))
         if TELL then pcall(TELL.say, "raid", TELL.ALL) end      -- (its radio call, every player: P3's tells)
-    else
-        tu.why = "none could spawn"
     end
 end
 
@@ -542,6 +610,10 @@ local function withdraw(s)
     for _, u in ipairs(tuGone) do D.up[u] = nil end
     for _, u in ipairs(gone) do D.up[u] = nil end
     if #tuGone > 0 then tu.why = "withdrawn at the capture" end
+    if tu and #tu.queue > 0 then                          -- (groups still to come: none now)
+        log(string.format("special: the spaceport captured: %d Tu-160 group%s waiting dropped", #tu.queue, #tu.queue == 1 and "" or "s"))
+        tu.queue = {}
+    end
     -- ((0.73.77, I4: S6) a despawned flight still reads up, so the native recycle refused it every round after ("still
     -- up") and it stayed first in line: SPORT.planRound recycles it when the next round is planned, or keeps it out)
     D.spWithdrawn = D.spWithdrawn or {}
@@ -580,7 +652,7 @@ local function holdClocks(now, s)
         if rk and rk.launch then
             for k, at in pairs(rk.launch) do if not rk.launched[k] then rk.launch[k] = at + dt end end
         end
-        if s.tu and not s.tu.done then s.tu.at = s.tu.at + dt end   -- (the Tu-160s' too)
+        for _, g in ipairs(s.tu and s.tu.queue or {}) do g.at = g.at + dt end   -- (the Tu-160 groups' too)
         s.heldS = (s.heldS or 0) + dt
     end
     if held ~= (s.clocksHeld or false) then
@@ -724,9 +796,9 @@ function SPORT.tick(now, s)
     end
     local okD, errD = pcall(deck, now, s)
     if not okD and tostring(errD) ~= s.deckErr then s.deckErr = tostring(errD); log("special: the Ford's deck error " .. s.deckErr) end
-    if s.tu and not s.tu.done then
+    if s.tu and #s.tu.queue > 0 then
         local okT, errT = pcall(SPORT.tuTick, now, s)
-        if not okT then s.tu.done = true; log("special: the Tu-160s' error " .. tostring(errT)) end
+        if not okT then table.remove(s.tu.queue, 1); log("special: the Tu-160s' error " .. tostring(errT)) end
     end
 end
 
@@ -734,7 +806,7 @@ end
 -- (captured, the ships carry over into the retake).
 function SPORT.busy(s)
     if s.state ~= "assault" or s.captured then return false end
-    if s.tu and not s.tu.done then return true end           -- (the Tu-160s still to come: their flights hold the round once up)
+    if s.tu and #s.tu.queue > 0 then return true end         -- (a Tu-160 group still to come: its flights hold the round once up)
     if SPORT.shipsUp(s) > 0 or SPORT.craftIn(s) > 0 then return true end
     for _, tr in ipairs(s.troops) do if not tr.reached then return true end end
     return false
@@ -751,11 +823,10 @@ function SPORT.roundOver(now, s)
     s.troops, s.state = {}, "done"
     if s.tu then
         local tu = s.tu
-        log(string.format("special: the Tu-160s this assault: %s", not tu.done and "never sent (the round ended first)"
-            or (tu.n or 0) == 0 and ("none sent (" .. tostring(tu.why or "none could spawn") .. ")")
-            or string.format("%d sent (%s)%s, %d still up at the round's end", tu.n, tu.said or "?", tu.why and (", " .. tu.why) or "",
-                SPORT.tuUp(s))))
-        tu.done = true
+        log(string.format("special: the Tu-160s this assault: %d group%s asked for (a Wasp sunk each), %d aircraft sent%s%s; %d "
+            .. "still up at the round's end%s", tu.k, tu.k == 1 and "" or "s", tu.n, #tu.said > 0 and (" (" .. table.concat(tu.said, ", ") .. ")") or "",
+            tu.why and (", " .. tu.why) or "", SPORT.tuUp(s), #tu.queue > 0 and string.format("; %d never came", #tu.queue) or ""))
+        tu.queue = {}
     end
     local st = s.stat
     if st then
