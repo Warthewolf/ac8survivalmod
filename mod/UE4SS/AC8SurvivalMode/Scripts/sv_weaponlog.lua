@@ -23,9 +23,10 @@
 --     followed while it flies: its nearest pass and whether its target turned to a flare; when it's gone, a hit (it
 --     passed within hit_m and your health dropped within a second of its going), decoyed (it went after a flare) or
 --     missed; every summary_s `missiles at you: ...` by weapon, with the range it was fired from, and the run's;
---   the Spaceport fleet's turrets (sv_spaceport.lua SPORT.turrets): every turret_s while one's up, which fired (their
---     missiles, from the launches above; their guns, any of their LiveBullets shown) and which stayed silent with you
---     inside their reach (CFG.specials.spaceport.fcs.search_m); every summary_s `fleet: ...` by turret class.
+--   the Spaceport fleet's turrets (sv_spaceport.lua SPORT.turrets): every turret_s while one's up and a Spaceport round
+--     is in play ((0.73.80) turretTick), which fired (their missiles, from the launches above; their guns, any of their
+--     LiveBullets shown) and which stayed silent with you inside their reach (CFG.specials.spaceport.fcs.search_m); every
+--     summary_s `fleet: ...` by turret class.
 -- Only addresses and text are kept between looks (never a game object: the lesson of 0.73.24 / 0.73.29), but for the
 -- weapon objects themselves since 0.73.77, each checked live (liveAddr) before it's read and dropped the first time it's
 -- gone (below).
@@ -170,21 +171,56 @@ local function outcomes(tab)
     return table.concat(t, ", ")
 end
 
--- the fleet's turrets, every turret_s while any is up: in reach of you, their guns seen firing
+-- the fleet's turrets, every turret_s while any is up: in reach of you, their guns seen firing.
+-- ((0.73.80, the 31-round co-op test of 2026-11-04: perf5) Only while a Spaceport round is in play: SPORT.turrets is
+-- never emptied (sv_spaceport.lua) and a sunk hull's turrets stay live objects, so this watch's LiveBullet walk (~40 ms
+-- on the host's PC) ran every turret_s for the 48 minutes after round 21 (581 walks, ~2 ms a tick) and its `fleet:`
+-- lines went on to the run's end. In play: the round's special (D.special on the host or solo; on a joiner the host's
+-- word, D.hostSpecial) is a Spaceport Assault in its assault or a Retake in its retake. A turret at 0 health is skipped
+-- (read again each look), no walk when none is up; `fleet: the turret watch stops ...` once each time it stops, and the
+-- `fleet:` line only for a window the watch ran in.)
 local TURRET_GUN_BASE = "LiveBullet"
+local function fleetOn(s)
+    return type(s) == "table" and ((s.kind == "spaceport" and s.state == "assault") or (s.kind == "retake" and s.state == "retake"))
+end
+local function fleetInPlay() return D ~= nil and (fleetOn(D.special) or fleetOn(D.hostSpecial)) end
 local function turretTick(R, now, you)
     if not (SPORT and SPORT.turrets and next(SPORT.turrets)) then return end
+    if not fleetInPlay() then
+        if R.fleetOn then
+            R.fleetOn = false
+            local n, down = 0, 0
+            for _, tr in pairs(SPORT.turrets) do n = n + 1; if tr.down then down = down + 1 end end
+            log(string.format("fleet: no Spaceport round in play now: the turret watch stops (%d turrets kept, %d of them down at the last "
+                .. "look; no more %s looks till the next one)", n, down, TURRET_GUN_BASE))
+        end
+        return
+    end
     local reach = (CFG.specials.spaceport and CFG.specials.spaceport.fcs and CFG.specials.spaceport.fcs.search_m or 25000)
+    local up, down = 0, 0
     for a, tr in pairs(SPORT.turrets) do
         if not liveAddr(tr.obj) then SPORT.turrets[a] = nil
         else
-            local p = you and at(tr.obj)
-            if p then
-                tr.lastM = dist(p, you)
-                if tr.lastM <= reach then tr.inReach = true end
+            local okH, h = pcall(function() return tr.obj.HealthInternal end)
+            tr.down = okH and type(h) == "number" and h <= 0 or false
+            if tr.down then
+                down, tr.downSeen = down + 1, true
+            else
+                up, tr.upSeen = up + 1, true
+                local p = you and at(tr.obj)
+                if p then
+                    tr.lastM = dist(p, you)
+                    if tr.lastM <= reach then tr.inReach = true end
+                end
             end
         end
     end
+    if not R.fleetOn then
+        R.fleetOn = true
+        log(string.format("fleet: a Spaceport round in play: the turret watch on (%d turrets up, %d down)", up, down))
+    end
+    R.fleetWin = true
+    if up == 0 then return end                            -- (every turret kept is down: no gun of theirs to see)
     local okB, list = pcall(FindAllOf, TURRET_GUN_BASE)
     for _, b in ipairs(okB and list or {}) do
         if liveAddr(b) then
@@ -197,25 +233,28 @@ local function turretTick(R, now, you)
         end
     end
 end
-local function turretReport(secs)
+local function turretReport(R, secs)
     if not (SPORT and SPORT.turrets and next(SPORT.turrets)) then return end
+    if not R.fleetWin then return end                     -- ((0.73.80) a window the watch didn't run in: no line)
+    R.fleetWin = false
     local reach = (CFG.specials.spaceport and CFG.specials.spaceport.fcs and CFG.specials.spaceport.fcs.search_m or 25000)
     local by = {}
     for _, tr in pairs(SPORT.turrets) do
-        local g = by[tr.cls] or { n = 0, fired = 0, shots = 0, guns = 0, km = 0, kmN = 0, idle = 0 }
+        local g = by[tr.cls] or { n = 0, fired = 0, shots = 0, guns = 0, km = 0, kmN = 0, idle = 0, down = 0 }
         by[tr.cls] = g
-        g.n = g.n + 1
+        -- ((0.73.80) one down at every look of this window that did nothing in it: counted apart, not as one of n)
+        if tr.downSeen and not tr.upSeen and (tr.shots or 0) == 0 and not tr.gun then g.down = g.down + 1 else g.n = g.n + 1 end
         if (tr.shots or 0) > 0 then g.fired, g.shots = g.fired + 1, g.shots + tr.shots end
         if tr.gun then g.guns = g.guns + 1 end
         if tr.atKmN and tr.atKmN > 0 then g.km, g.kmN = g.km + tr.atKm, g.kmN + tr.atKmN end
         if tr.inReach and (tr.shots or 0) == 0 and not tr.gun then g.idle = g.idle + 1 end
-        tr.shots, tr.gun, tr.inReach, tr.atKm, tr.atKmN = 0, false, false, 0, 0
+        tr.shots, tr.gun, tr.inReach, tr.atKm, tr.atKmN, tr.upSeen, tr.downSeen = 0, false, false, 0, 0, false, false
     end
     local t = {}
     for cls, g in pairs(by) do
-        t[#t + 1] = string.format("%s: %d of %d fired (%d missiles%s), %d guns seen firing, %d idle with you inside %d km",
+        t[#t + 1] = string.format("%s: %d of %d fired (%d missiles%s), %d guns seen firing, %d idle with you inside %d km%s",
             cls, g.fired, g.n, g.shots, g.kmN > 0 and string.format(", you %.1f km off at fire on average", g.km / g.kmN) or "",
-            g.guns, g.idle, math.floor(reach / 1000))
+            g.guns, g.idle, math.floor(reach / 1000), g.down > 0 and string.format(", %d down", g.down) or "")
     end
     table.sort(t)
     log(string.format("fleet: last %d s: %s", secs, table.concat(t, "; ")))
@@ -384,7 +423,7 @@ function WLOG.tick(now)
             log(string.format("missiles at you: last %d s: %s; this run: %s", math.floor(now - R.winAt + 0.5), outcomes(R.out),
                 outcomes(R.outRun)))
         end
-        local okF, errF = pcall(turretReport, math.floor(now - R.winAt + 0.5))
+        local okF, errF = pcall(turretReport, R, math.floor(now - R.winAt + 0.5))
         if not okF and not R.turRepErr then R.turRepErr = true; log("fleet: report error " .. tostring(errF)) end
         R.win, R.winAt, R.out = {}, now, {}
     end

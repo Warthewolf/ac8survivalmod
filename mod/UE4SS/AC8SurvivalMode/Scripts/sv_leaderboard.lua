@@ -7,7 +7,8 @@
 -- ground, aces (ace squadron aircraft down), allies (allies bought), af_down (times the airfield went down), captured
 -- (times it was captured), specials = { { kind, round, seconds, won } } }. LB.show: the finished run on screen.
 -- ONLINE ONLY BEGIN
--- LB.queue: the runs not yet answered for good (pending_runs.txt); LB.jobs: the sends in flight.
+-- LB.queue: the runs not yet answered for good (pending_runs.txt); LB.jobs: the sends in flight; LB.kept ((0.73.80)):
+-- the runs refused only as an unknown build, sent again at later game starts (refused_runs.txt, keepRefused below).
 -- ONLINE ONLY END
 do
 local function stats()
@@ -162,6 +163,82 @@ local function saveQueue()
     if not f then return end
     for _, body in ipairs(LB.queue) do f:write(body, "\n") end
     f:close()
+end
+
+-- (0.73.80, the 31-round co-op test of 2026-11-04: errors0) A run the server refused ONLY as an unknown build (its
+-- build hash not registered yet on /admin: the host's clean 31-round run went 422 "edited or unknown build" and was
+-- deleted with pending_runs.txt) is kept in refused_runs.txt instead, KEEP_MAX at most (the oldest dropped), one line a
+-- run: "<first refused, os.time()>\t<times resent>\t<body>". Each one is sent again once a game start, from the main
+-- menu (never in a run), KEEP_FIRST_S after the first look and KEEP_GAP_S apart (LB.queueTick -> keptTick), for
+-- KEEP_DAYS from its first refusal: once its build is registered the Worker takes it (its run_id de-duplicates). It
+-- comes off the file once the server takes it, refuses it for any other reason, or it's KEEP_DAYS old; the file goes
+-- when it's empty (as pending_runs.txt). A run edited by the player (LB.edited) is never sent, so never kept.
+local KEEP_FILE, KEEP_MAX, KEEP_DAYS, KEEP_FIRST_S, KEEP_GAP_S = "refused_runs.txt", 20, 14, 30, 60
+local function unknownBuild(st, err) return st == 422 and type(err) == "string" and err:find("unknown build", 1, true) ~= nil end
+local function runTag(body)                       -- "run 1a2b3c4d, round 31, pilot Naish" (the body's first pilot: the run's)
+    return string.format("run %s, round %s, pilot %s", tostring(body:match('"run_id":"(%x+)"') or "?"):sub(1, 8),
+        body:match('"round":(%d+)') or "?", body:match('"pilot":"([^"]*)"') or "?")
+end
+local function daysAgo(at) return math.max(0, math.floor((os.time() - at) / 86400)) end
+local function saveKept()
+    while #LB.kept > KEEP_MAX do
+        local k = table.remove(LB.kept, 1)
+        log(string.format("leaderboard: refused_runs.txt keeps %d runs at most: the oldest (%s, refused as an unknown build %d days ago) dropped",
+            KEEP_MAX, runTag(k.body), daysAgo(k.at)))
+    end
+    local path = configDir() .. KEEP_FILE
+    if #LB.kept == 0 then os.remove(path); return end
+    local f = io.open(path, "w")
+    if not f then return end
+    for _, k in ipairs(LB.kept) do f:write(string.format("%d\t%d\t%s\n", k.at, k.tries, k.body)) end
+    f:close()
+end
+-- (once a game start) the kept runs, each due to be sent again this start; those KEEP_DAYS old dropped
+local function loadKept()
+    if LB.kept then return LB.kept end
+    LB.kept = {}
+    local f = io.open(configDir() .. KEEP_FILE, "r")
+    if not f then return LB.kept end
+    local now, old, n = os.time(), 0, 0
+    for line in f:lines() do
+        local at, tries, body = line:match("^(%d+)\t(%d+)\t({.*})%s*$")
+        at, tries = tonumber(at), tonumber(tries)
+        if at and tries and body then
+            n = n + 1
+            at = math.min(at, now)                        -- (a clock set back: counted from now)
+            if now - at > KEEP_DAYS * 86400 then
+                old = old + 1
+                log(string.format("leaderboard: a run refused as an unknown build %d days ago (%s) dropped: kept %d days at most",
+                    daysAgo(at), runTag(body), KEEP_DAYS))
+            else
+                LB.kept[#LB.kept + 1] = { at = at, tries = tries, body = body, due = true }
+            end
+        end
+    end
+    f:close()
+    table.sort(LB.kept, function(a, b) return a.at < b.at end)
+    if old > 0 or #LB.kept ~= n or #LB.kept > KEEP_MAX then saveKept() end
+    if #LB.kept > 0 then
+        log(string.format("leaderboard: %d run(s) refused as an unknown build kept to resend from the main menu (the oldest refused %d days ago; "
+            .. "each kept %d days)", #LB.kept, daysAgo(LB.kept[1].at), KEEP_DAYS))
+    end
+    return LB.kept
+end
+-- (LB.poll) a run just refused as an unknown build: kept (once; a run already kept keeps its first date)
+local function keepRefused(body)
+    if not body:find('"edited":[]', 1, true) then return end         -- (an edited run: never sent, never kept)
+    local kept, id = loadKept(), body:match('"run_id":"(%x+)"')
+    for _, k in ipairs(kept) do
+        if k.body == body or (id and k.body:match('"run_id":"(%x+)"') == id) then
+            log(string.format("leaderboard: a run refused as an unknown build is kept already (%s, first refused %d days ago)",
+                runTag(body), daysAgo(k.at)))
+            return
+        end
+    end
+    kept[#kept + 1] = { at = os.time(), tries = 0, body = body, due = false }
+    saveKept()
+    log(string.format("leaderboard: a run refused as an unknown build kept to resend at later game starts, from the main menu, for %d days "
+        .. "(%s; %d kept in %s; register this build's hash on /admin and it's taken)", KEEP_DAYS, runTag(body), #LB.kept, KEEP_FILE))
 end
 -- ONLINE ONLY END
 local function money(n) return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "") end
@@ -602,9 +679,10 @@ end
 local function unqueue(body)
     for i, b in ipairs(LB.queue) do if b == body then table.remove(LB.queue, i); saveQueue(); return end end
 end
-local function post(body, sh)
+-- (kept: a run of refused_runs.txt sent again, its entry: (0.73.80) its answer is keptAnswer's)
+local function post(body, sh, kept)
     local id = type(SV_Post) == "function" and SV_Post(body) or -5
-    if id > 0 then LB.jobs[#LB.jobs + 1] = { id = id, body = body, sh = sh } end
+    if id > 0 then LB.jobs[#LB.jobs + 1] = { id = id, body = body, sh = sh, kept = kept } end
     return id
 end
 
@@ -658,6 +736,29 @@ local WHY = { [-12007] = "the server's name didn't resolve (DNS, or the address 
               [-12002] = "timed out", [-12175] = "the secure connection failed (TLS)",
               [-12038] = "the certificate's name didn't match (a proxy in the way?)" }
 
+-- ((0.73.80) errors0) a kept run's answer: taken (off the file), an unknown build still (kept for the next game start),
+-- refused for any other reason (dropped), or no answer for good (a 429, a 5xx, no connection: kept for the next start)
+local function keptAnswer(k, st, reply, err)
+    local idx = nil
+    for i, x in ipairs(LB.kept or {}) do if x == k then idx = i; break end end
+    local what
+    if st == 200 then
+        what = "taken" .. (reply:find('"duplicate":true', 1, true) and " (it was on the board already)" or "") .. ", off " .. KEEP_FILE
+        if idx then table.remove(LB.kept, idx) end
+    elseif unknownBuild(st, err) then
+        what = string.format("still an unknown build (register its hash on /admin), kept: sent again at the next game start (%d days left)",
+            math.max(0, KEEP_DAYS - daysAgo(k.at)))
+    elseif st > 0 and st < 500 and st ~= 429 then
+        what = "refused for another reason (" .. tostring(err or ("status " .. st)) .. "), dropped from " .. KEEP_FILE
+        if idx then table.remove(LB.kept, idx) end
+    else
+        what = "no answer for good" .. (WHY[st] and (" (" .. WHY[st] .. ")") or "") .. ", kept for the next game start"
+    end
+    if LB.kept then saveKept() end
+    log(string.format("leaderboard: a kept run (%s; refused as an unknown build %d days ago, resent %d times) resent: answered %d: %s: %s",
+        runTag(k.body), daysAgo(k.at), k.tries, st, what, reply:sub(1, 200)))
+end
+
 -- Once a second, at the main menu and in runs: the sends' answers (reading a job's result frees its native slot), and a
 -- co-op run's squad ((0.73.77) LB.coopTick)
 function LB.poll()
@@ -666,19 +767,29 @@ function LB.poll()
     for i = #LB.jobs, 1, -1 do
         local j = LB.jobs[i]
         local st = SV_PostResult(j.id)
-        if st ~= 0 then
+        if st ~= 0 and j.kept then                      -- ((0.73.80) a run of refused_runs.txt sent again)
+            table.remove(LB.jobs, i)
+            local reply = SV_PostReply(j.id) or ""
+            local okK, errK = pcall(keptAnswer, j.kept, st, reply, reply:match('"error":"([^"]+)"'))
+            if not okK then log("leaderboard: a kept run's answer (" .. st .. ") couldn't be handled: " .. tostring(errK)) end
+        elseif st ~= 0 then
             table.remove(LB.jobs, i)
             local reply = SV_PostReply(j.id) or ""
             local final = st > 0 and st < 500 and st ~= 429
-            if final then unqueue(j.body) else LB.qwait = os.clock() + (st == 429 and 600 or 120) end
             local sh = j.sh
+            log(string.format("leaderboard: %s: the server answered %d%s: %s", sh and "the run" or "a waiting run", st,
+                WHY[st] and (" (" .. WHY[st] .. ")") or "", reply:sub(1, 200)))
+            -- ((0.73.80) errors0: refused only as an unknown build, kept in refused_runs.txt to send again, not lost)
+            if final and unknownBuild(st, reply:match('"error":"([^"]+)"')) then
+                local okK, errK = pcall(keepRefused, j.body)
+                if not okK then log("leaderboard: the refused run couldn't be kept: " .. tostring(errK)) end
+            end
+            if final then unqueue(j.body) else LB.qwait = os.clock() + (st == 429 and 600 or 120) end
             if sh then
                 if st == 200 then sh.state, sh.score = "sent", reply:match('"score":(%d+)')
                 elseif not final then sh.state = "queued"
                 else sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st) end
             end
-            log(string.format("leaderboard: %s: the server answered %d%s: %s", sh and "the run" or "a waiting run", st,
-                WHY[st] and (" (" .. WHY[st] .. ")") or "", reply:sub(1, 200)))
         end
     end
 end
@@ -725,6 +836,32 @@ function LB.hud(now)
 end
 
 -- ONLINE ONLY BEGIN (tools/edition.py: the Offline edition has none of this)
+-- ((0.73.80) errors0) the kept runs refused as an unknown build: each sent again once this game start, from the main
+-- menu only (no run, not Survival's level), the first KEEP_FIRST_S after the first look there, then KEEP_GAP_S apart
+local function keptTick()
+    if D or svLevelOn == true then return end
+    local kept, now = loadKept(), os.clock()
+    if #kept == 0 then return end
+    if not LB.keptAt then LB.keptAt = now + KEEP_FIRST_S end
+    if now < LB.keptAt then return end
+    for _, k in ipairs(kept) do
+        if k.due then
+            k.due, LB.keptAt = false, now + KEEP_GAP_S
+            local id = post(k.body, nil, k)
+            if id > 0 then
+                k.tries = k.tries + 1
+                saveKept()
+                log(string.format("leaderboard: resending a run refused as an unknown build %d days ago (%s; resent %d times) (job %d)",
+                    daysAgo(k.at), runTag(k.body), k.tries, id))
+            else
+                log(string.format("leaderboard: a run refused as an unknown build (%s) not resent now (%s): kept for the next game start",
+                    runTag(k.body), tostring(id == -8 and "this build has no leaderboard address" or id)))
+                if id == -8 then LB.keptAt = math.huge end
+            end
+            return
+        end
+    end
+end
 -- The runs not yet answered for good: read at the start, sent one at a time (at the main menu or in a run).
 function LB.queueTick()
     -- (once: this build's hash when the runtime has it, and settings that make every run unranked, so the log says so
@@ -749,10 +886,19 @@ function LB.queueTick()
             if #LB.queue == 0 then saveQueue() end              -- (an empty file from an older version: deleted)
             if #LB.queue > 0 then log("leaderboard: " .. #LB.queue .. " run(s) waiting to be sent") end
         end
+        local okK, errK = pcall(loadKept)                 -- ((0.73.80) the runs refused as an unknown build, kept)
+        if not okK then LB.kept = LB.kept or {}; log("leaderboard: " .. KEEP_FILE .. " couldn't be read: " .. tostring(errK)) end
     end
-    -- one at a time, none while a send is in flight (the run just ended is in the queue too)
-    if #LB.queue == 0 or #LB.jobs > 0 or type(SV_Post) ~= "function" or os.clock() < (LB.qwait or 0) then return end
-    if post(LB.queue[1], nil) == -8 then LB.qwait = math.huge end
+    -- one at a time, none while a send is in flight (the run just ended is in the queue too); the kept runs only once
+    -- none is waiting
+    if #LB.jobs > 0 or type(SV_Post) ~= "function" then return end
+    if #LB.queue > 0 then
+        if os.clock() < (LB.qwait or 0) then return end
+        if post(LB.queue[1], nil) == -8 then LB.qwait = math.huge end
+        return
+    end
+    local okK, errK = pcall(keptTick)
+    if not okK and not LB.keptErrSaid then LB.keptErrSaid = true; log("leaderboard: kept runs error " .. tostring(errK)) end
 end
 -- ONLINE ONLY END
 --OFFLINE: function LB.queueTick() end
