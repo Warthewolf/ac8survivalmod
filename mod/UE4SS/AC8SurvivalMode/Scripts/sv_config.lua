@@ -1245,6 +1245,10 @@ CFG = {
              -- replayed where it has the weapon); a code not listed: the AI stand-in, as before. The Falken add-on is
              -- built on the ADFX-02.
              real_fallback = { falken = "adfx02" },
+             -- real_paths (0.73.80, the user: "try the Falken's own blueprint first"): a modded plane's own blueprint
+             -- class by its code, loaded first: a game with that add-on installed shows the real plane (their loadout and
+             -- paint); one without it, its real_fallback above
+             real_paths = { falken = "/Game/Blueprints/Vehicle/Player/Plane/PP9001_falken_L001/BP_PlayerPlane_PP9001_falken_L001.BP_PlayerPlane_PP9001_falken_L001_C" },
              -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
              -- yet, each at most this long; 0: never
              join_wait_s = 90,
