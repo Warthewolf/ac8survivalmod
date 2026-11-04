@@ -535,8 +535,13 @@ end
 local function sendRoster(to)
     for s = 0, MAX_SLOT do
         local r = M.roster[s]
-        if r then sendTo(to, true, "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "", r.ac or "",
-                         r.sid or "") end   -- (sid: their Steam ID, host migration)
+        if r then
+            local f = { "pi", s, r.row or "", r.ver or "", r.name or "", r.code or "", r.lo or "", r.paint or "", r.ac or "",
+                        r.sid or "" }   -- (sid: their Steam ID, host migration)
+            -- ((0.73.80) a plane with no stock code: its class path and stock base after the Steam ID (M.modFields))
+            if M.modFields then M.modFields(f, r.code, r.cls, r.base) end
+            sendTo(to, true, table.unpack(f))
+        end
     end
 end
 
@@ -1878,7 +1883,8 @@ function COOP.realOn() return COOP.open and realOn() end
 -- real_fallback] (falken = adfx02: the add-on is built on the ADFX-02), not an AI stand-in: the joiners flew an AI F-16C
 -- for her, an ally's blue box and none of her launches replayed. It gets a player's green box and T4b's replays (flight.c
 -- FwWeaponOk drops a weapon number it hasn't). Its own default weapons and paint: their loadout and paint are another
--- airframe's (a modded plane's weapon ids may not exist in this game at all). A code with no fallback: the AI stand-in.
+-- airframe's (a modded plane's weapon ids may not exist in this game at all). ((0.73.80) Their own game's stock base for
+-- it comes first, [coop] real_default after: M.fallbackFor; the AI stand-in last.)
 function M.realFallback(code)
     local t = cfg().real_fallback
     if type(t) ~= "table" or type(code) ~= "string" then return nil end
@@ -1889,84 +1895,478 @@ function M.realFallback(code)
 end
 -- (0.73.80, the user 2026-11-04: "try the Falken's own blueprint first") A modded plane's own blueprint by its code
 -- ([coop.real_paths]: falken = the Falken add-on's BP_PlayerPlane_PP9001_falken_L001, from Saint Alessia's log of the
--- 31-round test), tried before [coop.real_fallback]: a game with that add-on installed shows the real thing, with their
--- loadout and paint; one without it, the fallback. Only /Game/ paths; nil when none is listed.
+-- 31-round test), tried after the path the player's own game sends (M.realClassFor): a game with that add-on installed
+-- shows the real thing, with their loadout and paint; one without it, a stock fallback. Only a player plane class's path
+-- under /Game/ (M.clsOk); nil when none is listed.
 function M.modClassPath(code)
     local t = cfg().real_paths
     if type(t) ~= "table" or type(code) ~= "string" then return nil end
     local p = t[code]
     if p == nil then for k, v in pairs(t) do if type(k) == "string" and k:lower() == code:lower() then p = v end end end
-    if type(p) ~= "string" or p:sub(1, 6) ~= "/Game/" then return nil end
+    if not M.clsOk(p) then return nil end
     return p
 end
 M.modMiss = {}                                           -- (a path that didn't load: not asked again this session)
+
+---------------------------------------------------------------------------------------------------- modded planes and skins
+-- (0.73.80, the user 2026-11-04: "Can we do this for all future modded stuff ... if players have mods installed but
+-- someone doesn't, that one person who doesn't have the mods sees [the stock version], but if they were to have the mods,
+-- they would see the changes"; "planes and skins first") Each game says what it really flies, and every other game shows
+-- it where it's installed there, a stock plane where it isn't: never invisible, never a crash.
+--   sender: a plane with no stock code (the Falken's falken) adds two last fields to its "hi" (and the host's "pi" relays
+--     them, after the Steam ID): its blueprint class's path (/Game/... only) and its stock BASE, the stock player plane it's
+--     built on, for games without it: a parent of its class that is a stock player plane's, else its DT_LiveAircraft row's
+--     OriginalPlaneStringID (the Falken's PP0038_adfx02_L001: adfx02), else this game's [coop.real_fallback]. A stock plane
+--     sends neither (its code says it all): its messages are as before.
+--   receiver (spawnReal -> M.realClassFor): a code with no stock blueprint here: their path, then [coop.real_paths],
+--     loaded only when it's a player plane class's path (M.clsOk) and kept only when the class loaded is one (IsChildOf
+--     LivePlayerPlane, else by its name), with their loadout and paint; else their base, else [coop.real_fallback], else
+--     [coop] real_default (f16c), each with its own default weapons and paint; the AI stand-in last.
+--   skins (M.paintHere): a paint's skin id this game hasn't (DT_Skin's rows, or the game's information manager's
+--     SkinDataMap_) is given as -1, the plane's default paint, the emblems kept; when neither can be read, as sent (as
+--     before). The tables are looked for at the main menu (M.tablesPrep), never in a fight.
+do
+local CLS_MAX = 200                                      -- (a class path's length at most)
+local MSG_ROOM = 1080                                    -- (coop.c CO_MAX_LUA 1100: a longer message is cut short)
+local KNOWN_SKINS = { 5014001, 21002001, 8014001, 11014001 }   -- (stock skins players flew: a source's check)
+local TABLES = {                                         -- (looked for by these paths first, then by name)
+    skin = { name = "DT_Skin", paths = { "/Game/Datatables/Information/DT_Skin.DT_Skin", "/Game/Datatables/Skin/DT_Skin.DT_Skin" } },
+    aircraft = { name = "DT_LiveAircraft", paths = { "/Game/Datatables/Information/DT_LiveAircraft.DT_LiveAircraft",
+                                                     "/Game/Datatables/Aircraft/DT_LiveAircraft.DT_LiveAircraft" } },
+}
+M.tbl = { path = {}, walks = 0, at = 0, said = {} }
+M.skin = { ans = {}, said = {}, n = nil, keyed = nil, ids = nil, dtOk = nil, mapOk = nil }
+M.baseOf = {}
+local function fstr(v)                                   -- (an FName, an FString or a Lua string, as text)
+    if type(v) == "string" then return v end
+    if v == nil then return nil end
+    local ok, s = pcall(function() return v:ToString() end)
+    if ok and type(s) == "string" then return s end
+    return tostring(v)
+end
+local function shortName(o)
+    local ok, n = pcall(function() return o:GetFName():ToString() end)
+    if ok and type(n) == "string" and n ~= "" then return n end
+    return (nameOf(o):match("([^%.:/%s]+)$"))
+end
+
+-- a player plane blueprint class's path: under /Game/, [%w_/.] only, a package and its class (/Game/.../X.X_C, X a
+-- BP_PlayerPlane_...), <= 200 characters; with code, the class's own code (BP_PlayerPlane_PPnnnn_<code>) must be it
+function M.clsOk(p, code)
+    if type(p) ~= "string" or #p > CLS_MAX or p:sub(1, 6) ~= "/Game/" or p:find("//", 1, true) then return false end
+    if not p:match("^[%w_/%.]+$") or select(2, p:gsub("%.", "")) ~= 1 then return false end   -- (one dot: no "..")
+    local pkg, obj = p:match("/([%w_]+)%.([%w_]+)$")
+    if not (pkg and obj == pkg .. "_C" and obj:match("^BP_PlayerPlane_")) then return false end
+    if code ~= nil then
+        local c = obj:match(AF_CODE)
+        if not (c and type(code) == "string" and c:lower() == code:lower()) then return false end
+    end
+    return true
+end
+function M.baseOk(b) return type(b) == "string" and #b <= 16 and b:match("^%w+$") ~= nil end
+
+-- the new last fields of "hi" / "pi" (f, the message's fields so far): a plane with no stock code's class path and stock
+-- base; the path left out when the message would be cut (CO_MAX_LUA), nothing for a stock plane
+function M.modFields(f, code, cls, base)
+    if type(code) ~= "string" or code == "" or COOP.planeClassPath(code) then return f end
+    cls = M.clsOk(cls, code) and cls or ""
+    base = M.baseOk(base) and base or ""
+    if cls == "" and base == "" then return f end
+    local n = 0
+    for i = 1, #f do n = n + #tostring(f[i]) + 1 end
+    if n + #cls + #base + 2 > MSG_ROOM then
+        once("modfieldslong", string.format("coop: a message with your plane's class path would be %d characters: sent without it "
+            .. "(players with its add-on see its stock base %s)", n + #cls + #base + 2, base ~= "" and base or "or their own fallback"))
+        cls = ""
+    end
+    f[#f + 1], f[#f + 2] = cls, base
+    return f
+end
+
+-- the tables the plane and skin checks read, looked for once a session where no fight is (COOP.tick with no run: the
+-- main menu, the hangar): by a few likely paths, then one walk over the DataTables loaded (3 at most, 10 s apart)
+function M.tablesPrep()
+    local T = M.tbl
+    local now = os.clock()
+    if now < (T.at or 0) then return end
+    T.at = now + 10
+    local want = false
+    for k, d in pairs(TABLES) do
+        if T[k] and not liveObj(T[k]) then T[k] = nil end
+        if not T[k] and not T.tried then
+            for _, p in ipairs(d.paths) do
+                local ok, o = pcall(StaticFindObject, p)
+                if ok and o ~= nil and valid(o) then T[k], T.path[k] = o, p; break end
+            end
+        end
+        if not T[k] then want = true end
+    end
+    T.tried = true
+    if want and T.walks < 3 and not (type(walkBusy) == "function" and walkBusy()) then
+        T.walks = T.walks + 1
+        local ok, list = pcall(FindAllOf, "DataTable")
+        for _, o in ipairs((ok and type(list) == "table") and list or {}) do
+            local n = valid(o) and shortName(o)
+            for k, d in pairs(TABLES) do
+                if n == d.name and not T[k] then T[k], T.path[k] = o, (nameOf(o):match("(/Game/%S+)$") or n) end
+            end
+        end
+    end
+    for k, d in pairs(TABLES) do
+        local s = T[k] and ("found: " .. tostring(T.path[k])) or (T.walks >= 3 and "not found (its plane / skin checks without it)" or nil)
+        if s and T.said[k] ~= s then T.said[k] = s; log("coop: the game's " .. d.name .. " " .. s) end
+    end
+    local okS, errS = pcall(M.skinPrep)
+    if not okS then once("skinPrep", "coop: skins: DT_Skin error " .. tostring(errS)) end
+end
+
+---------------------------------------------------------------------------------------------------- your plane: what's sent
+-- the stock base of a plane with no stock code (nil, how when none): (i) a parent of its class that is a stock player
+-- plane's, (ii) its DT_LiveAircraft row's OriginalPlaneStringID, (iii) this game's [coop.real_fallback]
+function M.aircraftOrigin(pawn, cls)
+    local dt = M.tbl.aircraft
+    if not (dt and liveObj(dt)) then return nil end
+    local id, sid = nil, (cls ~= nil and shortName(cls) or ""):match("^BP_PlayerPlane_(.+)_C$")
+    pcall(function() id = pawn.PlaneTypeID end)
+    if type(id) ~= "number" then id = nil end
+    local function mine(r)
+        local okP, pid = pcall(function() return r.PlaneID end)
+        if okP and id and pid == id then return true end
+        local okS, ps = pcall(function() return fstr(r.PlaneStringID) end)
+        return okS and sid ~= nil and ps == sid
+    end
+    local keys, row = {}, nil
+    if id then keys[#keys + 1] = tostring(math.floor(id)) end
+    if sid then keys[#keys + 1] = sid end
+    for _, k in ipairs(keys) do
+        local ok, r = dtCall(dt, "FindRow", k)
+        if ok and r ~= nil and mine(r) then row = r; break end
+    end
+    if row == nil then
+        local names = rowList(dt) or {}
+        for i = 1, math.min(#names, 600) do
+            local ok, r = dtCall(dt, "FindRow", names[i])
+            if ok and r ~= nil and mine(r) then row = r; break end
+        end
+    end
+    if row == nil then return nil end
+    local okO, o = pcall(function() return fstr(row.OriginalPlaneStringID) end)   -- (an FName: never Reference, rule 29)
+    return (okO and type(o) == "string" and o ~= "" and o ~= "None") and o or nil
+end
+function M.baseFor(code, cls, pawn)
+    if type(code) ~= "string" then return nil, "no plane code" end
+    if COOP.planeClassPath(code) then return code, "stock" end
+    local c = cls
+    for _ = 1, 12 do                                     -- (i)
+        if c == nil then break end
+        local okS, sup = pcall(function() return c:GetSuperStruct() end)
+        if not (okS and sup ~= nil and valid(sup)) then break end
+        local n = shortName(sup) or ""
+        local bc = n:match("^" .. AF_CODE)
+        if bc and COOP.planeClassPath(bc:lower()) then return bc:lower(), "its blueprint's parent " .. n end
+        if n == "LivePlayerPlane" then break end
+        c = sup
+    end
+    local okA, ob = pcall(M.aircraftOrigin, pawn, cls)   -- (ii)
+    local oc = okA and type(ob) == "string" and ob:match("^PP%d+_(%w+)")
+    if oc and oc:lower() ~= code and COOP.planeClassPath(oc:lower()) then
+        return oc:lower(), "its aircraft row's OriginalPlaneStringID " .. ob
+    end
+    local fb = M.realFallback(code)                      -- (iii)
+    if fb then return fb, "[coop.real_fallback]" end
+    return nil, "none found (its class's parents, its aircraft row, [coop.real_fallback])"
+end
+-- your plane's class path ("" when it can't be read or sent) and stock base (""): once a plane (by its address and code),
+-- the base once a class (M.baseOf), logged once
+function M.myPlane(pawn, code)
+    pawn = pawn or (survivalPC and valid(survivalPC) and survivalPC.Pawn)
+    if not valid(pawn) then return "", "" end
+    local a = addrOf(pawn)
+    local mp = M.myPlaneAt
+    if mp and mp.addr == a and mp.code == code then return mp.cls, mp.base end
+    local cls, path = nil, ""
+    pcall(function() cls = pawn:GetClass() end)
+    if cls ~= nil and valid(cls) then
+        local full = nameOf(cls)
+        local p = full:match("^%S+%s+(/Game/%S+)$") or full:match("^(/Game/%S+)$")
+        if p and M.clsOk(p, code) then path = p end
+    else
+        cls = nil
+    end
+    local key = path ~= "" and path or ("code:" .. tostring(code))
+    local b = M.baseOf[key]
+    if not b then
+        local okB, base, how = pcall(M.baseFor, code, cls, pawn)
+        if not okB then base, how = nil, "error " .. tostring(base) end
+        b = { base = base or "", how = how }
+        M.baseOf[key] = b
+        if type(code) == "string" then
+            log(string.format("coop: your plane %s (%s): its stock base for players without it: %s (%s)", code,
+                path ~= "" and path or "its class path unknown", base or "none", tostring(how)))
+        end
+    end
+    M.myPlaneAt = { addr = a, code = code, cls = path, base = b.base }
+    return path, b.base
+end
+
+---------------------------------------------------------------------------------------------------- another player's plane here
+-- a class path loaded and checked a player plane's (nil, why when not; a path that failed isn't asked again: M.modMiss)
+function M.isPlayerPlaneClass(c)
+    if not (M.ppRoot and valid(M.ppRoot)) then
+        local ok, r = pcall(StaticFindObject, "/Script/Live.LivePlayerPlane")
+        M.ppRoot = (ok and r ~= nil and valid(r)) and r or nil
+    end
+    if M.ppRoot then
+        local ok, r = pcall(function() return c:IsChildOf(M.ppRoot) end)
+        if ok and type(r) == "boolean" then return r, r and "a LivePlayerPlane" or "not a LivePlayerPlane" end
+    end
+    local n = shortName(c) or "?"
+    return n:match("^BP_PlayerPlane_[%w_]+_C$") ~= nil, "by its name " .. n
+end
+function M.tryClass(p)
+    if M.modMiss[p] then return nil, "not installed here (known)" end
+    local okL, c = pcall(loadObject, p)
+    if not (okL and c ~= nil and valid(c)) then M.modMiss[p] = true; return nil, "not installed here" end
+    local isPP, by = M.isPlayerPlaneClass(c)
+    if not isPP then M.modMiss[p] = true; return nil, "not a player plane (" .. tostring(by) .. ")" end
+    return c
+end
+-- the stock plane shown for a code with no blueprint here: their game's base, this game's [coop.real_fallback], its
+-- [coop] real_default (nil: the AI stand-in)
+function M.fallbackFor(code, base)
+    local b = type(base) == "string" and base:lower() or nil
+    if M.baseOk(b) and b ~= code and COOP.planeClassPath(b) then return b, "their game's base" end
+    local fb = M.realFallback(code)
+    if fb then return fb, "[coop.real_fallback]" end
+    local d = cfg().real_default
+    if type(d) == "string" and d ~= "" then
+        d = d:lower()
+        if COOP.planeClassPath(d) and d ~= code then return d, "[coop] real_default" end
+        once("realdefault", "coop: [coop] real_default " .. d .. " isn't a stock plane code: a plane with no blueprint here is an AI stand-in")
+    end
+    return nil
+end
+-- (spawnReal) the class to spawn for player slot's code: cls (nil if it didn't load), its path, the fallback's code (nil:
+-- theirs), how; or false, why when there's none (the AI stand-in)
+function M.realClassFor(slot, code, r0)
+    local stock = COOP.planeClassPath(code)
+    if stock then return loadObject(stock), stock, nil, "stock" end
+    local cands = {}
+    if r0 and M.clsOk(r0.cls, code) then cands[1] = { p = r0.cls, src = "the path their game sent" } end
+    local rp = M.modClassPath(code)
+    if rp and not (cands[1] and cands[1].p == rp) then cands[#cands + 1] = { p = rp, src = "[coop.real_paths]" } end
+    local missed = {}
+    for _, cd in ipairs(cands) do
+        local known = M.modMiss[cd.p]
+        local c, why = M.tryClass(cd.p)
+        if c then
+            log(string.format("coop: player %d's %s: its own blueprint is installed here (%s): the real thing (%s)", slot + 1,
+                code, cd.p, cd.src))
+            return c, cd.p, nil, cd.src
+        end
+        if not known then cd.why = why; missed[#missed + 1] = cd end
+    end
+    local fb, how = M.fallbackFor(code, r0 and r0.base)
+    for _, cd in ipairs(missed) do
+        log(string.format("coop: player %d's %s: its own blueprint %s (%s): %s instead (its path from %s)", slot + 1, code,
+            cd.why == "not installed here" and "isn't installed here" or ("was rejected, " .. tostring(cd.why)), cd.p,
+            fb and (how == "[coop.real_fallback]" and how or ("a real " .. fb .. " (" .. how .. ")")) or "the AI stand-in", cd.src))
+    end
+    if not fb then
+        local d = cfg().real_default
+        return false, string.format("no player plane blueprint for %s (no base from their game, no [coop.real_fallback] for it, "
+            .. "[coop] real_default %s)", tostring(code), (type(d) == "string" and d ~= "") and d or "off")
+    end
+    local fp = COOP.planeClassPath(fb)
+    return loadObject(fp), fp, fb, how
+end
+
+---------------------------------------------------------------------------------------------------- skins
+-- the skin checks' sources, worked out where no fight is (M.tablesPrep: DT_Skin's keying and ids, again when its row
+-- count changes) or on first use (the information manager's SkinDataMap_, one lookup a skin); each kept only when it
+-- lists a stock skin (yours, or one players flew: KNOWN_SKINS)
+local function mySkin()
+    local p = type(M.myPaint) == "function" and M.myPaint() or ""
+    local s = tonumber((tostring(p):match("^(%-?%d+)/")))
+    return (s and s >= 0) and s or nil
+end
+local function knowsStock(has)
+    local list = { mySkin() }
+    for _, id in ipairs(KNOWN_SKINS) do list[#list + 1] = id end
+    for _, id in ipairs(list) do if has(id) == true then return true end end
+    return false
+end
+local function skinMap()
+    local ok, m = pcall(function()
+        local gi = type(gameInstance) == "function" and gameInstance() or nil
+        if gi == nil then return nil end
+        local im = gi.InformationManager_
+        if not (im ~= nil and valid(im)) then return nil end
+        return im.SkinDataMap_
+    end)
+    return ok and m or nil
+end
+local function mapHas(id)
+    local ok, r = pcall(function() return skinMap():Contains(id) end)
+    if ok and type(r) == "boolean" then return r end      -- (false is an answer: not `and r or nil`)
+    return nil
+end
+local function dtHas(id)
+    local S, dt = M.skin, M.tbl.skin
+    if not (dt and S.dtOk and liveObj(dt)) then return nil end
+    if S.ids and S.ids[id] then return true end          -- (every row's SkinID, read at the main menu)
+    if S.keyed == "name" then                            -- (a row added since, named by its id as the others)
+        local ok, r = dtCall(dt, "FindRow", tostring(id))
+        if not ok then return nil end
+        if r == nil then return false end
+        local okI, v = pcall(function() return r.SkinID end)
+        return not (okI and type(v) == "number") or v == id
+    end
+    if S.ids then return false end
+    return nil
+end
+function M.skinPrep()
+    local S, dt = M.skin, M.tbl.skin
+    if not (dt and liveObj(dt)) then return end
+    local names = rowList(dt)
+    if not names then if not S.said.rows then S.said.rows = true; log("coop: skins: DT_Skin's rows can't be read") end; return end
+    if S.n == #names then return end                     -- (no new rows since: a skin add-on registers at the main menu)
+    S.n, S.ans = #names, {}
+    local byName, read = true, 0
+    for i = 1, math.min(#names, 8) do
+        local ok, r = dtCall(dt, "FindRow", names[i])
+        local okI, id = false, nil
+        if ok and r ~= nil then okI, id = pcall(function() return r.SkinID end) end   -- (the int only: never DecalMaterialRef)
+        if okI and type(id) == "number" then
+            read = read + 1
+            if tostring(math.floor(id)) ~= names[i] then byName = false end
+        end
+    end
+    if read == 0 then
+        S.keyed, S.ids, S.dtOk = nil, nil, false
+    else
+        -- (every row's SkinID kept either way: an add-on's rows may be named otherwise than the game's)
+        S.keyed, S.ids = byName and "name" or "field", {}
+        for _, nm in ipairs(names) do
+            local ok, r = dtCall(dt, "FindRow", nm)
+            local okI, id = false, nil
+            if ok and r ~= nil then okI, id = pcall(function() return r.SkinID end) end
+            if okI and type(id) == "number" then S.ids[math.floor(id)] = true end
+        end
+    end
+    if read > 0 then S.dtOk = true; S.dtOk = knowsStock(dtHas) end
+    local s = string.format("coop: skins: DT_Skin %s, %d rows%s", tostring(M.tbl.path.skin), #names,
+        read == 0 and ": their SkinID can't be read, not used"
+        or (S.dtOk and (", keyed by " .. (S.keyed == "name" and "the skin id" or "their SkinID") .. ": other players' skins are checked against it")
+        or ": none of the stock skins in it, not used"))
+    if S.said.dt ~= s then S.said.dt = s; log(s) end
+end
+-- true / false: skin id is / isn't in this game; nil: it can't be told (no source); cached for the session
+function M.skinHere(id)
+    local S = M.skin
+    if S.ans[id] ~= nil then return S.ans[id] end
+    if S.mapOk == nil and skinMap() ~= nil then
+        S.mapOk = knowsStock(mapHas)
+        log("coop: skins: the game's information manager's SkinDataMap_ " .. (S.mapOk and "lists the stock skins: other players' "
+            .. "skins are checked against it" or "doesn't list the stock skins here: not used"))
+    end
+    local said, yes = false, false
+    if S.mapOk then
+        local r = mapHas(id)
+        if r ~= nil then said, yes = true, r end
+    end
+    if not yes then
+        local r = dtHas(id)
+        if r ~= nil then said = true; yes = yes or r end
+    end
+    if not said then return nil end
+    S.ans[id] = yes
+    return yes
+end
+-- the paint ("skin/flags/e1,e2,...") given to player slot's plane here: its skin -1 (the plane's default) when this game
+-- hasn't it, the emblems kept; as sent when it can't be told
+function M.paintHere(slot, pt)
+    if type(pt) ~= "string" or pt == "" then return pt end
+    local skin, rest = pt:match("^(%-?%d+)(/.*)$")
+    local id = tonumber(skin)
+    if not id or id < 0 then return pt end
+    local okH, have = pcall(M.skinHere, id)
+    if not okH then once("skinerr", "coop: skins: check error " .. tostring(have)); have = nil end
+    if have == nil then
+        once("skinsunchecked", "coop: skins aren't checked here (no DT_Skin found, the game's SkinDataMap_ not readable): "
+            .. "each player's paint given as sent")
+        return pt
+    end
+    if have then return pt end
+    local k = slot .. ":" .. id
+    if not M.skin.said[k] then
+        M.skin.said[k] = true
+        log(string.format("coop: player %d's skin %d isn't installed here: their plane's default paint", slot + 1, id))
+    end
+    return "-1" .. rest
+end
+
+---------------------------------------------------------------------------------------------------- what the others see
 -- (0.73.80, finding coop7) What the others see your plane as, by this game's settings (each game decides by its own
--- [coop]; the shipped ones agree): nil when it's your own airframe, else its name and how ("a real <x>" / "an AI
--- stand-in on <row>"). The host's own Falken was an F-16C to everyone and only its log said so ("isn't in [coop]
--- airframes"); now each player sees it on screen once a level (M.seenAsTick), and the log has it.
-function M.seenAs(code)
+-- [coop]; the shipped ones agree): nil when it's your own airframe, else its name, how, and true when those with its
+-- add-on see the real thing (your class path is sent, or [coop.real_paths] lists it). The host's own Falken was an F-16C
+-- to everyone and only its log said so ("isn't in [coop] airframes"); now each player sees it on screen once a level
+-- (M.seenAsTick), and the log has it.
+function M.seenAs(code, cls, base)
     if type(code) ~= "string" then return nil end
     local c = cfg()
+    local row = tostring(type(c.airframes) == "table" and c.airframes[code] or c.default)
+    local ai = (row:match("^(%w+)_") or row):upper()
     if c.real_planes == true then
         if COOP.planeClassPath(code) then return nil end
-        local fb = M.realFallback(code)
-        -- ((0.73.80) your plane's own blueprint listed: those with its add-on see it, the others its fallback)
-        if fb and M.modClassPath(code) then
-            return string.upper(fb) .. " WITHOUT THE ADD-ON", "itself where its add-on is installed, else a real " .. fb
-                .. " ([coop.real_paths], [coop.real_fallback])"
+        local fb, how = M.fallbackFor(code, base)
+        if how == "their game's base" then how = "its stock base" end
+        local own = M.clsOk(cls, code) or M.modClassPath(code) ~= nil
+        if fb and own then
+            return string.upper(fb), "itself where its add-on is installed, else a real " .. fb .. " (" .. how .. ")", true
         end
-        if fb then return string.upper(fb), "a real " .. fb .. " ([coop.real_fallback])" end
+        if fb then return string.upper(fb), "a real " .. fb .. " (" .. how .. ")" end
+        if own then return "AN AI " .. ai, "itself where its add-on is installed, else an AI stand-in on " .. row, true end
     elseif type(c.airframes) == "table" and c.airframes[code] then
         return nil
     end
-    local row = tostring(type(c.airframes) == "table" and c.airframes[code] or c.default)
-    return (row:match("^(%w+)_") or row):upper() .. " (AI)", "an AI stand-in on " .. row
+    return ai .. " (AI)", "an AI stand-in on " .. row
 end
 function M.seenAsTick(code)
     if not (D and code) or (M.seenAsD == D and M.seenAsCode == code) then return end
     M.seenAsD, M.seenAsCode = D, code
-    local as, how = M.seenAs(code)
+    local cls, base = M.myPlane(nil, code)
+    local as, how, withMod = M.seenAs(code, cls, base)
     if not as then return end
     local mine = M.myAircraft and M.myAircraft() or ""
     mine = (mine ~= "" and mine or code):upper()
     log(string.format("coop: the other players see your %s (%s) as %s, by this game's settings (theirs decide there)", mine, code, how))
-    callout("OTHERS SEE YOUR " .. mine .. " AS " .. as, nil)
+    callout(withMod and ("OTHERS SEE YOUR " .. mine .. " (" .. as .. " WITHOUT THE ADD-ON)") or ("OTHERS SEE YOUR " .. mine .. " AS " .. as), nil)
 end
-local function spawnReal(slot, P, code, lo, pt)
+end
+
+local function spawnReal(slot, P, code, lo, pt, r0)
     if walkHold and walkHold() then return nil, "the walks are held (a level going away)" end   -- (0.73.73: a held search could orphan it)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil, "you have no plane here yet" end
-    local path, fb, cls = COOP.planeClassPath(code), nil, nil
-    if not path then                                     -- ((0.73.80) a code with no stock blueprint: its own, if installed here
-        local mp = M.modClassPath(code)
-        if mp and not M.modMiss[mp] then
-            local okL, c = pcall(loadObject, mp)
-            if okL and c ~= nil and valid(c) then
-                cls, path = c, mp
-                log(string.format("coop: player %d's %s: its own blueprint is installed here (%s): the real thing", slot + 1, code, mp))
-            else
-                M.modMiss[mp] = true
-                log(string.format("coop: player %d's %s: its own blueprint isn't installed here (%s): [coop.real_fallback] instead",
-                    slot + 1, code, mp))
-            end
-        end
-    end
-    if not path then                                     -- ((0.73.80) else its fallback's)
-        fb = M.realFallback(code)
-        if not fb then return nil, "no player plane blueprint for " .. tostring(code) .. " (and no [coop.real_fallback] for it)" end
-        path, lo, pt = COOP.planeClassPath(fb), "", ""
-    end
-    cls = cls or loadObject(path)
-    if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
+    -- ((0.73.80) its stock blueprint; else their own (the path their game sent, [coop.real_paths]) if installed here; else
+    -- a stock fallback with its own weapons and paint: M.realClassFor)
+    local okC, cls, path, fb, how = pcall(M.realClassFor, slot, code, r0)
+    if not okC then return nil, "its class: error " .. tostring(cls) end
+    if cls == false then return nil, path end            -- (no blueprint here and no fallback: path is why)
+    if not (cls ~= nil and valid(cls)) then return nil, "its class didn't load (" .. tostring(path) .. ")" end
+    if fb then lo, pt = "", "" end
+    pt = cfg().real_paint ~= false and pt or ""
+    if pt ~= "" then pt = M.paintHere(slot, pt) end      -- ((0.73.80) a skin this game hasn't: the plane's default)
+    P.paintGiven = pt
     local at, yaw = P.at, (P.rot and P.rot[2]) or 0
     -- ((0.73.77) SV_CoopSpawnPP destroys the plane the runtime keeps in this slot: a set-aside one moved on first, M.nativeFree)
     local okF, whyF = M.nativeFree(slot)
     if not okF then return nil, whyF end
-    local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot, lo or "",
-        cfg().real_paint ~= false and pt or "")
+    local a = SV_CoopSpawnPP(addrOf(pawn), at.X, at.Y, at.Z, yaw, addrOf(cls), slot, lo or "", pt)
     if type(a) ~= "number" or a <= 0 then return nil, "SV_CoopSpawnPP " .. tostring(a) end
     for _, x in ipairs(FindAllOf("LivePlayerPlane") or {}) do
-        if valid(x) and addrOf(x) == a then return x, nil, fb end
+        if valid(x) and addrOf(x) == a then return x, nil, fb, how end
     end
     return nil, "spawned (" .. tostring(a) .. ") but not found"
 end
@@ -2208,7 +2608,7 @@ local function peerTick(slot)
             .. "(the next level's has the new one)", slot + 1))
     end
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
-        local o, why, fb = spawnReal(slot, P, code, lo, r0 and r0.paint or "")
+        local o, why, fb, how = spawnReal(slot, P, code, lo, r0 and r0.paint or "", r0)
         if o then
             P.obj, P.addr, P.real, P.code, P.shown, P.lo, P.hpShown = o, addrOf(o), true, code, nil, lo, nil
             P.fallback = fb                                  -- ((0.73.80) another airframe shown for theirs, or nil)
@@ -2224,12 +2624,18 @@ local function peerTick(slot)
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
             if fb then
                 log(string.format("coop: player %d's plane is their %s shown as a real %s (a player plane, %X; no blueprint for %s "
-                    .. "here: [coop.real_fallback]): flown by its own update from their stream; its own default loadout and paint "
-                    .. "(theirs are another airframe's)", slot + 1, code, fb, P.addr or 0, code))
+                    .. "here: %s): flown by its own update from their stream; its own default loadout and paint "
+                    .. "(theirs are another airframe's)", slot + 1, code, fb, P.addr or 0, code, tostring(how)))
             else
-                log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
-                    .. "stream; %s; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)",
-                    (r0 and r0.paint and r0.paint ~= "") and ("their paint " .. r0.paint) or "its default paint (none sent)"))
+                -- ((0.73.80) the paint given: theirs, or with skin -1 when this game hasn't their skin (M.paintHere))
+                local pg = P.paintGiven or ""
+                local pa = (r0 and r0.paint) or ""
+                log(string.format("coop: player %d's plane is their real %s (a player plane, %X%s): flown by its own update from their "
+                    .. "stream; %s; %s", slot + 1, code, P.addr or 0, (how and how ~= "stock") and (", " .. how) or "",
+                    lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)",
+                    pa == "" and "its default paint (none sent)" or (pg == pa and ("their paint " .. pa))
+                    or (pg ~= "" and ("their paint " .. pa .. " given as " .. pg .. " (their skin isn't installed here)"))
+                    or "its default paint ([coop] real_paint off)"))
             end
             M.rejoinSaid(slot, P, "new one spawned (their real plane)")       -- ((0.73.77) plan C's line)
         else
@@ -3219,16 +3625,21 @@ local function sendHi()
     -- co-op run of 2026-10-30: a player who'd been in the level before linking never sent theirs, shown as the default)
     -- The airframe's code (COOP2MP T3: the player plane the others spawn for you; the ADFX-02 has no AI row) goes last.
     M.myRow, M.myCode, M.myLo, M.myPt, M.myAc = row, code, M.myLoadout(), M.myPaint(), M.myAircraft()
-    send(true, "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "", M.myName or "", code or "", M.myLo,
-        M.myPt, M.myAc)
+    -- ((0.73.80) a plane with no stock code: its class path and stock base last, for the games with and without it)
+    local okP, mc, mb = pcall(M.myPlane, nil, code)
+    M.myCls, M.myBase = okP and mc or "", okP and mb or ""
+    send(true, table.unpack(M.modFields({ "hi", VERSION, type(SV_Version) == "function" and SV_Version() or "?", row or "",
+        M.myName or "", code or "", M.myLo, M.myPt, M.myAc }, code, M.myCls, M.myBase)))
 end
 
 -- the host's own roster entry, and everyone told
 local function hostRosterSelf()
     local row, code = myAirframe()
     M.myRow, M.myCode, M.myLo, M.myPt, M.myAc = row, code, M.myLoadout(), M.myPaint(), M.myAircraft()
+    local okP, mc, mb = pcall(M.myPlane, nil, code)        -- ((0.73.80) relayed in "pi" for a plane with no stock code)
+    M.myCls, M.myBase = okP and mc or "", okP and mb or ""
     M.roster[0] = { row = row or "", ver = VERSION, name = M.myName or "", code = code or "", lo = M.myLo, paint = M.myPt,
-                    ac = M.myAc, sid = M.mySid and M.mySid() or nil }
+                    ac = M.myAc, sid = M.mySid and M.mySid() or nil, cls = M.myCls, base = M.myBase }
     sendRoster(nil)
 end
 
@@ -3932,11 +4343,14 @@ local function onHostMessage(from, f)
         local lo = loadoutOk(f[7]) and f[7] or ""                  -- (their loadout: COOP2MP T4b)
         local pt = paintOk(f[8]) and f[8] or ""                    -- (their paint: T5)
         local ac = acClean(f[9])                                    -- (their aircraft's name)
+        -- ((0.73.80) a plane with no stock code: its blueprint class's path (a player plane's, /Game/ only) and stock base)
+        local cls = M.clsOk(f[10], code) and f[10] or ""
+        local base = M.baseOk(f[11]) and f[11]:lower() or ""
         if not name or name == "" then name = (M.linkNames and M.linkNames[from]) or ("PLAYER " .. (from + 1)) end
         local first, was = not M.roster[from], M.roster[from] and M.roster[from].row
         local q = M.linkQuality and M.linkQuality()[from]                -- (their Steam ID, from their link: host migration)
         M.roster[from] = { row = row or "", ver = ver, name = name, code = code, lo = lo, paint = pt, ac = ac,
-                           sid = q and q.sid ~= "0" and q.sid or nil }
+                           sid = q and q.sid ~= "0" and q.sid or nil, cls = cls, base = base }
         if first then
             log(string.format("coop: player %d is %s, Survival %s, runtime %s, flies %s", from + 1, tostring(name), tostring(ver),
                 tostring(rt), (row and row ~= "") and row or "(not yet: no plane)"))
@@ -4049,9 +4463,12 @@ local function onJoinerMessage(f)
         f[3], f[4], f[5] = short(f[3], 64), short(f[4], 32), short(f[5], 32)
         local first, was = not M.roster[s], M.roster[s] and M.roster[s].row
         local sid = tostring(f[10] or ""):match("^%d+$")
-        M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = short(f[6], 16):match("^%w+$") or "",
+        local code = short(f[6], 16):match("^%w+$") or ""
+        M.roster[s] = { row = f[3], ver = f[4], name = f[5], code = code,
                         lo = loadoutOk(f[7]) and f[7] or "", paint = paintOk(f[8]) and f[8] or "", ac = acClean(f[9]),
-                        sid = (sid and #sid >= 15 and #sid <= 20) and sid or nil }
+                        sid = (sid and #sid >= 15 and #sid <= 20) and sid or nil,
+                        -- ((0.73.80) after the Steam ID: a plane with no stock code's class path and stock base)
+                        cls = M.clsOk(f[11], code) and f[11] or "", base = M.baseOk(f[12]) and f[12]:lower() or "" }
         if not first and s ~= COOP.slot and f[3] and f[3] ~= "" and f[3] ~= was then
             local P = M.peers[s]
             log(string.format("coop: player %d flies %s%s", s + 1, f[3], (P and P.obj and P.row and P.row ~= standInRow(f[3]))
@@ -4859,7 +5276,13 @@ function COOP.tick(tick)
     end
     local okVw, errVw = pcall(M.valkaWatch)                          -- ((0.73.77) VALKA's mood to every joiner: D1-D2)
     if not okVw then once("valkaWatch", "coop: VALKA's mood watch error " .. tostring(errVw)) end
-    if not D then return end
+    if not D then
+        -- ((0.73.80) no run (the main menu, the hangar): the tables the other players' planes and skins are checked
+        -- against looked for here, never in a fight (M.tablesPrep)
+        local okTp, errTp = pcall(M.tablesPrep)
+        if not okTp then once("tablesPrep", "coop: the plane and skin tables: error " .. tostring(errTp)) end
+        return
+    end
     -- An online-style pause (user, 2026-10-26: "when the Host Pauses, the game doesn't pause all the enemies for the
     -- other players"): while another player is linked, the pause menu opens but the world keeps running, on the host's
     -- game (its enemies, which every game copies) and on a joiner's (its plane). Alone, the game pauses as ever.
@@ -4935,8 +5358,10 @@ function COOP.tick(tick)
         local lo = M.myLoadout()                              -- (new weapons picked at the airfield: COOP2MP T4b)
         local pt = M.myPaint()                                -- (and paint: T5)
         local acn = M.myAircraft()                            -- (and the aircraft's name)
+        local okMp, mcls = pcall(M.myPlane, pawn, code)       -- ((0.73.80) and its class path: a modded plane's, sent)
+        if not okMp then once("myPlane", "coop: your plane's class: error " .. tostring(mcls)); mcls = M.myCls end
         if (row and row ~= M.myRow) or (code and code ~= M.myCode) or (lo ~= "" and lo ~= M.myLo) or (pt ~= "" and pt ~= M.myPt)
-            or (acn ~= "" and acn ~= M.myAc) then
+            or (acn ~= "" and acn ~= M.myAc) or (mcls ~= nil and mcls ~= "" and mcls ~= M.myCls) then
             M.myRow, M.myCode = row, code
             if COOP.host() then hostRosterSelf() else sendHi() end
         end
