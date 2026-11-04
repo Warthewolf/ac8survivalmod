@@ -2284,12 +2284,22 @@ function M.skinHere(id)
     return yes
 end
 -- the paint ("skin/flags/e1,e2,...") given to player slot's plane here: its skin -1 (the plane's default) when this game
--- hasn't it, the emblems kept; as sent when it can't be told
+-- hasn't it, the emblems kept; as sent when it can't be told. (Review of 0.73.80) A negative id other than -1, or one past
+-- an int32, is no game's skin (-1 is the only one the skin loader is known to take as "the default"): -1 whatever the
+-- tables say, so no unknown skin reaches SV_CoopSpawnPP from a broken or hostile game.
 function M.paintHere(slot, pt)
     if type(pt) ~= "string" or pt == "" then return pt end
     local skin, rest = pt:match("^(%-?%d+)(/.*)$")
     local id = tonumber(skin)
-    if not id or id < 0 then return pt end
+    if not id or id == -1 then return pt end
+    if id < 0 or id > 2147483647 then
+        local k = slot .. ":" .. skin
+        if not M.skin.said[k] then
+            M.skin.said[k] = true
+            log(string.format("coop: player %d's skin %s isn't a skin id: their plane's default paint", slot + 1, skin:sub(1, 24)))
+        end
+        return "-1" .. rest
+    end
     local okH, have = pcall(M.skinHere, id)
     if not okH then once("skinerr", "coop: skins: check error " .. tostring(have)); have = nil end
     if have == nil then
@@ -2298,10 +2308,10 @@ function M.paintHere(slot, pt)
         return pt
     end
     if have then return pt end
-    local k = slot .. ":" .. id
+    local k = slot .. ":" .. skin
     if not M.skin.said[k] then
         M.skin.said[k] = true
-        log(string.format("coop: player %d's skin %d isn't installed here: their plane's default paint", slot + 1, id))
+        log(string.format("coop: player %d's skin %s isn't installed here: their plane's default paint", slot + 1, skin))
     end
     return "-1" .. rest
 end
