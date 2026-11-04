@@ -1239,9 +1239,23 @@ CFG = {
              real_planes = true,
              -- real_damage: their damage shown on their real plane (its health as their game says, never under 1 HP)
              real_damage = true,
+             -- real_fallback (0.73.80, the 31-round test: Alyssa's modded Falken flew as an AI F-16C on every joiner, a
+             -- blue ally box, none of her launches replayed): a plane code this game has no player plane blueprint for is
+             -- shown as a real player plane of this one (its own default weapons and paint: a green box, their launches
+             -- replayed where it has the weapon); a code not listed: the AI stand-in, as before. The Falken add-on is
+             -- built on the ADFX-02.
+             real_fallback = { falken = "adfx02" },
              -- join_wait_s: the host's round waits (no round start, no spawns) while a linked player isn't in the mission
              -- yet, each at most this long; 0: never
              join_wait_s = 90,
+             -- hold_lost_s (0.73.80, the 31-round test: the host held its spawns 50-80 s for players who had quit): a
+             -- player whose link is lost while they're in the mission (a quit, a crash) holds the round this long after
+             -- their last state at most; one lost while loading in still up to join_wait_s. -1: as join_wait_s (0.73.79)
+             hold_lost_s = 15,
+             -- kill_callout (0.73.80): a joiner's kill (the host's, named for them) also shows Survival's own DESTROYED
+             -- callout; off while it isn't known whether the game's own DESTROYED shows now (each kill is taken down with
+             -- your plane as its cause). Each player's own.
+             kill_callout = false,
              -- store_keep_world (0.73.72, the STORE freeze: tools/re/STORE_FREEZE.md): while players are linked, a STORE
              -- opening (the airfield's minigame) doesn't stop the world's AI for everyone (runtime SV_StoreKeepAI skips the
              -- game's DeactivateForMinigame); false: the stock freeze. Solo the stock freeze always stays.

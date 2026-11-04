@@ -43,8 +43,9 @@ function roundsTick() end
 function airfieldTick() end
 function bombTick() end
 function logPlane() end
-function hudCallout() end
-function addCredits() end
+local callouts, pays = {}, 0
+function hudCallout(t) callouts[#callouts + 1] = tostring(t) end
+function addCredits() pays = pays + 1 end
 function poolIndex() return nil end
 SPC = {}
 function FindAllOf() return {} end
@@ -97,7 +98,10 @@ local function obj(cls, hp, plane)
     function o:GetAddress() return self.addr end
     function o:SetMinHealth(v) self.MinHealth = math.floor(v) end
     function o:SetIsInvincible(b) self.invincible = b end
-    function o:ModifyHealth(d)
+    function o:ModifyHealth(d, causer)
+        self.causers = self.causers or {}
+        self.causers[#self.causers + 1] = causer or "none"           -- ((0.73.80) the kill's cause, in order)
+        if causer ~= nil and causer == self.refuse then return end   -- (the game refusing that cause)
         if self.invincible then return end
         if self.wreck and not self.stubborn then self.wreck = false end
         self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + d * 10)
@@ -285,10 +289,18 @@ else
     check(line("coop: your hits read from the copies' damage maps", from) ~= nil, "join: your plane seen in a copy's map: logged")
     -- the host's kill, 0.3 s on: down here, its player named
     tick(0.3)
+    from = #logs + 1
+    local c0, p0 = #callouts, pays
     inbox[#inbox + 1] = "0|dn|12||1"
     tick()
     check(a2.HealthInternal <= 0 and M.copies[12] == nil and M.killer[a2.addr] and M.killer[a2.addr].code == "1",
           "join: the host's dn|12||1: down here, the floor off first, its player kept")
+    -- ((0.73.80, finding coop6) named for this game's player (slot 1): taken down with your plane as its cause (the game's
+    -- DESTROYED); nothing paid here by it (the pay is the plane watch's, by the player named), no callout by default
+    check(a2.causers and a2.causers[#a2.causers] == pawn, "join: ... with your plane as its cause (0.73.79: none)")
+    check(has(line("coop: the host's kill of copy 12 (yours): taken down here with your plane as its cause", from), "DESTROYED"),
+          "join: ... logged once")
+    check(pays == p0 and #callouts == c0, "join: ... nothing paid by it, no DESTROYED callout ([coop] kill_callout off)")
     local pa2 = { addr = a2.addr, obj = a2 }
     check(KILL.by(pa2) == "you" and pa2.killer == 1 and pa2.hostNamed == true, "join: KILL.by: your kill (player 2 named)")
     -- a crash into the floor, now your plane is known in the maps: nothing sent, back up
@@ -318,10 +330,13 @@ else
     check(b1.HealthInternal == 0, "join: hp|21:3000 onto a copy at 0 here: not written (0.73.76: the wreck back up, an invisible enemy)")
 
     print("join: C1, the host's player named on each kill")
+    from = #logs + 1
     inbox[#inbox + 1] = "0|dn|11||0"
     tick()
     local pa1 = { addr = a1.addr, obj = a1 }
     check(KILL.by(pa1) == "wingmate" and pa1.killer == 0, "join: dn|11||0: the host's kill, a teammate's here (p.killer 0)")
+    check(a1.causers and a1.causers[#a1.causers] == "none" and has(line("coop: the host's kill of copy 11 (named 0)", from), "no cause"),
+          "join: ... another player's kill: no cause, as before (the host flies no stand-in here), logged")
     inbox[#inbox + 1] = "0|dn|22||s"
     tick()
     check(KILL.by({ addr = b2.addr, obj = b2 }) == "ships", "join: dn|22||s: the allied ships' kill")
@@ -428,6 +443,20 @@ else
     inbox[#inbox + 1] = "0|dn|41||1"
     tick()
     check(M.copies[41] == nil and c3 ~= nil, "join: (41 down by the host's dn)")
+    -- ((0.73.80) [coop] kill_callout: Survival's own DESTROYED on each kill of yours; the game refusing your plane as the
+    -- cause: none then, logged)
+    CFG.coop.kill_callout = true
+    c2.refuse = pawn
+    from = #logs + 1
+    local cc = #callouts
+    inbox[#inbox + 1] = "0|dn|42||1"
+    tick()
+    check(c2.HealthInternal <= 0 and c2.causers[#c2.causers - 1] == pawn and c2.causers[#c2.causers] == "none",
+          "join: your plane refused as the cause: with none (down all the same)")
+    check(has(line("coop: the host's kill of copy 42 (yours): taken down here with your plane as its cause REFUSED", from), "with none"),
+          "join: ... logged")
+    check(#callouts == cc + 1 and callouts[#callouts] == "DESTROYED", "join: [coop] kill_callout on: Survival's DESTROYED callout")
+    CFG.coop.kill_callout = false
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs

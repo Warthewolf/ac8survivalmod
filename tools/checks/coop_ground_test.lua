@@ -81,6 +81,9 @@ end
 local UNITS = {
     SV_Unit_LcacA = { { "BP_SH010_lcac", 5000 }, { "BP_SH010_lcac", 5000 } },
     SV_Unit_AAGun_A = { { "BP_GR002_gepa_CP", 6000 } },                 -- (an airfield defence: the host's ally)
+    -- ((0.73.80) spawned with no unit named by their callers: the amphibious assault's lane, the shuttle's pad)
+    SV_Unit_LcacB = { { "BP_SH010_lcac", 5000 }, { "BP_SH010_lcac", 5000 } },
+    SV_Unit_PadDummies = { { "BP_GR099_paddummy", 3000 }, { "BP_GR099_paddummy", 3000 } },
     SV_Unit_Alicorn = { { "BP_BA002_alcn", 90000 }, { "BP_BA002_alcn_btankfl_Base", 18750 }, { "BP_BA002_alcn_btankfr_Base", 18750 },
                         { "BP_BA002_alcn_btankrl_Base", 18750 }, { "BP_BA002_alcn_btankrr_Base", 18750 },
                         { "BP_MP028_dummy_emlmcore_Base", 31250 }, { "BP_FG037_uavm_ON_pool", 100, true } },
@@ -121,9 +124,25 @@ if ROLE == "host" then
     D = { round = 8, state = "fight" }
     tick()
     spawn("SV_Unit_LcacA"); spawn("SV_Unit_Alicorn"); spawn("SV_Unit_AAGun_A")
+    -- ((0.73.80, the 31-round test's findings coop4 / coop5) spawns whose callers name no unit: sv_amphib.lua's lanes,
+    -- sv_shop.lua's defences, sv_spawn.lua's shuttle pad; their objects never had co-op ids)
+    local from0 = #logs + 1
+    SV_Spawn("SV_Unit_LcacB"); SV_Spawn("SV_Unit_PadDummies")
+    check(spawningUnit == nil, "host: a spawn whose caller named no unit: named for the call only (none after it)")
+    spawningUnit = "SV_Unit_Mine"
+    SV_Spawn("SV_Unit_Empty")
+    check(spawningUnit == "SV_Unit_Mine", "host: a caller's own spawningUnit left as it is")
+    spawningUnit = nil
     tick(0.1); check(#msgs("gd") == 0, "host: no ids before the objects are half a second old")
     tick(1)
     local k = byKey()
+    check(k["SV_Unit_LcacB/BP_SH010_lcac_C#1"] and k["SV_Unit_LcacB/BP_SH010_lcac_C#2"]
+          and k["SV_Unit_PadDummies/BP_GR099_paddummy_C#1"] and k["SV_Unit_PadDummies/BP_GR099_paddummy_C#2"],
+          "host: the bare spawns' landing craft and the pad's dummies linked (gd: 0.73.79 gave them no ids)")
+    local function said(part) for i = from0, #logs do if logs[i]:find(part, 1, true) then return true end end return false end
+    check(said("coop: SV_Unit_LcacB spawned with no unit named by its caller: named for the call")
+          and said("coop: SV_Unit_LcacB: 2 ground objects given ids (gen") and said("coop: SV_Unit_PadDummies: 2 ground objects given ids")
+          and not said("coop: SV_Unit_LcacA spawned with no unit named"), "host: ... logged (the named once, the ids a spawn)")
     check(k["SV_Unit_LcacA/BP_SH010_lcac_C#1"] and k["SV_Unit_LcacA/BP_SH010_lcac_C#2"], "host: both landing craft linked (gd)")
     check(k["SV_Unit_Alicorn/BP_BA002_alcn_C#1"] and k["SV_Unit_Alicorn/BP_BA002_alcn_btankfl_Base_C#1"]
           and k["SV_Unit_Alicorn/BP_MP028_dummy_emlmcore_Base_C#1"], "host: the Alicorn's hull, tanks and core linked")
@@ -137,6 +156,15 @@ if ROLE == "host" then
     tick()
     local lc1 = k["SV_Unit_LcacA/BP_SH010_lcac_C#1"]
     check(table.concat(msgs("dn"), " "):find("dn|" .. lc1, 1, true), "host: the sunk craft goes down everywhere (dn " .. tostring(lc1) .. ")")
+    -- ((0.73.80) lane B's craft and a pad dummy down here: down everywhere; the craft the host's kill (its player named),
+    -- the pad's nobody's (the host's fight: an ally's)
+    world.SV_Unit_LcacB[1].HealthInternal = 0
+    world.SV_Unit_PadDummies[1].HealthInternal = 0
+    tick()
+    local lb1, pd1 = k["SV_Unit_LcacB/BP_SH010_lcac_C#1"], k["SV_Unit_PadDummies/BP_GR099_paddummy_C#1"]
+    local dns = table.concat(msgs("dn"), " ")
+    check(dns:find("dn|" .. lb1 .. "||0", 1, true) and dns:find("dn|" .. pd1 .. "||", 1, true) and not dns:find("dn|" .. pd1 .. "||0", 1, true),
+          "host: lane B's sunk craft down everywhere, the host's kill (dn|" .. lb1 .. "||0); the pad dummy too, nobody's (" .. dns .. ")")
     -- a joiner's hit on the other craft
     local lc2 = k["SV_Unit_LcacA/BP_SH010_lcac_C#2"]
     inbox[#inbox + 1] = "1|ht|" .. lc2 .. "|120.0"
@@ -289,6 +317,25 @@ else
     check(al and al[6].HealthInternal > 0, "join: its core still up")
     local ev = table.concat(events, " ")
     check(ev:find("RE_SV_AlcnOpenCore", 1, true) and ev:find("RE_SV_AlcnDive", 1, true), "join: the host's Alicorn state played here")
+    -- ((0.73.80) the host's bare spawns: bound here now, held up until the host's go down; the pad's the host's fight)
+    local lb, pd = world.SV_Unit_LcacB, world.SV_Unit_PadDummies
+    check(lb and #lb == 2 and pd and #pd == 2, "join: the host's lane B craft and pad dummies spawned here")
+    check(lb[1].HealthInternal <= 0 and pd[1].HealthInternal <= 0, "join: the craft and the dummy the host lost down here too (its dn)")
+    check((lb[2].MinHealth or 0) >= 1 and lb[2].HealthInternal > 0 and (pd[2].MinHealth or 0) >= 1 and pd[2].HealthInternal > 0,
+          "join: the others held at 1 HP until the host's go down (0.73.79: unbound, each game sank its own)")
+    local function copyOf(o) for _, c in pairs(M.copies) do if c.obj == o then return c end end end
+    check(copyOf(lb[2]) and not copyOf(lb[2]).ally and copyOf(pd[2]) and copyOf(pd[2]).ally,
+          "join: lane B's craft an enemy copy (its hits sent), the pad's dummy the host's fight (an ally's: nothing sent)")
+    local bp = #sent
+    pd[2].HealthInternal = pd[2].HealthInternal - 400                -- (the enemies' copies' bombs here)
+    tick()
+    check(not table.concat(sent, "\n", bp + 1):find("ht|", 1, true), "join: the pad dummy's losses here not sent as your hits")
+    local fromB = #logs + 1
+    tick(21)
+    local function saidB(part) for i = fromB, #logs do if logs[i]:find(part, 1, true) then return logs[i] end end end
+    check(saidB("coop: the host's SV_Unit_LcacB here: 2 of 2 ground objects bound to the host's ids (2 ids from the host)")
+          and saidB("coop: the host's SV_Unit_PadDummies here: 2 of 2 ground objects bound"),
+          "join: 20 s on, each spawn's ground objects bound logged (" .. tostring(saidB("SV_Unit_LcacB here")) .. ")")
     -- a hit here goes to the host
     local before = #sent
     lc[2].HealthInternal = lc[2].HealthInternal - 500
