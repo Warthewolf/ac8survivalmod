@@ -87,7 +87,9 @@ function SV_CoopTrack() return 1 end
 function SV_CoopBind() return 1 end
 function SV_CoopPeer(s, a) seq[#seq + 1] = "peer " .. s .. "=" .. tostring(a); return 1 end
 function SV_CoopSwapPP(a, b) native[a], native[b] = native[b], native[a]; seq[#seq + 1] = "swap " .. a .. "<>" .. b; return 1 end
+local spawnArgs = {}                              -- ((0.73.80) each spawn's loadout and paint, by slot)
 function SV_CoopSpawnPP(pawnA, x, y, z, yaw, clsA, slot, lo, pt)
+    spawnArgs[slot] = { lo = lo, pt = pt }
     local old = native[slot]
     if old and not old.gone then old.destroyedBySpawn, old.gone = true, true end   -- (coop.c: "a second call removes that slot's")
     local d = (classes[clsA] or ""):match("Plane/([^/]+)/") or "PP0000_x"
@@ -486,6 +488,66 @@ M.nextRnd = 0
 tick()
 r1 = sentOf("rnd", s9 + 1)[1]
 check(field11(r1) == "" and RUN.specialPick[13] == nil, "a round not picked yet: an empty field, its dice not rolled (" .. tostring(r1) .. ")")
+
+---------------------------------------------------------------------------------------------------- 0.73.80: real_fallback
+print("0.73.80: a plane with no blueprint here as its [coop.real_fallback]; what the others see you as")
+-- (the 31-round test, finding coop7: Alyssa's modded Falken flew as an AI F-16C on every joiner, a blue ally box, none
+-- of her launches replayed)
+do
+    local fromF, n0f = #logs + 1, #seq
+    inbox[#inbox + 1] = "5|sys|joined"
+    inbox[#inbox + 1] = hi(5, "f16c_common", "falken", LO1, "FALKEN")
+    peerState[5] = FRESH
+    tick(); tick(1)
+    local fk = native[5]
+    check(fk and has(fk.full, "PP0038_adfx02_L001") and M.peers[5].obj == fk and M.peers[5].real and M.peers[5].code == "falken"
+          and M.peers[5].fallback == "adfx02" and not has(seqSince(n0f), "spawn SV_Unit_CoopPeer"),
+          "a Falken (no blueprint here): a real ADFX-02 player plane in its slot, not an AI stand-in (" .. tostring(fk and fk.full) .. ")")
+    check(spawnArgs[5] and spawnArgs[5].lo == "" and spawnArgs[5].pt == "", "... with its own default weapons and paint (theirs are another airframe's)")
+    check(line("coop: player 6's plane is their falken shown as a real adfx02 (a player plane", fromF) ~= nil, "... logged")
+    -- a code with no fallback: the AI stand-in, as before
+    n0f = #seq
+    inbox[#inbox + 1] = "6|sys|joined"
+    inbox[#inbox + 1] = hi(6, "f16c_common", "mystery", LO1, "MYSTERY")
+    peerState[6] = FRESH
+    tick(); tick(1)
+    check(native[6] == nil and line("coop: player 7's real plane (mystery) not spawned: no player plane blueprint for mystery "
+          .. "(and no [coop.real_fallback] for it); their AI stand-in instead", fromF) ~= nil and has(seqSince(n0f), "spawn SV_Unit_CoopPeerG"),
+          "a code with no fallback: the AI stand-in (" .. seqSince(n0f) .. ")")
+    -- the setting off for it: the stand-in too; a fallback that's no player plane: ignored
+    CFG.coop.real_fallback.falken = "nope"
+    check(M.realFallback("falken") == nil and M.realFallback("FALKEN") == nil, "a fallback with no blueprint: none")
+    CFG.coop.real_fallback.falken = "adfx02"
+    check(M.realFallback("FALKEN") == "adfx02" and M.realFallback("f16c") == nil, "the code any case; a stock code has none")
+    inbox[#inbox + 1] = "5|sys|left"; inbox[#inbox + 1] = "6|sys|left"
+    peerState[5], peerState[6] = "", ""
+    tick()
+    -- your own plane: "OTHERS SEE YOUR <X> AS <Y>" once a level when it isn't your own airframe on their games
+    local was = pawn.full
+    local c0 = #callouts
+    tick()
+    check(#callouts == c0, "your stock F-16C: nothing to say")
+    pawn.full = "BP_PlayerPlane_PP9001_falken_L001_C_0"
+    tick(); tick()
+    check(#callouts == c0 + 1 and callouts[#callouts] == "OTHERS SEE YOUR FALKEN AS ADFX02 / nil"
+          and line("coop: the other players see your FALKEN (falken) as a real adfx02 ([coop.real_fallback])", fromF) ~= nil,
+          "your Falken: OTHERS SEE YOUR FALKEN AS ADFX02, once, logged (" .. tostring(callouts[#callouts]) .. ")")
+    pawn.full = "BP_PlayerPlane_PP9002_mystery_C_0"
+    tick()
+    check(callouts[#callouts] == "OTHERS SEE YOUR MYSTERY AS F16C (AI) / nil"
+          and line("coop: the other players see your MYSTERY (mystery) as an AI stand-in on f16c_common", fromF) ~= nil,
+          "a plane with no fallback: OTHERS SEE YOUR MYSTERY AS F16C (AI) (" .. tostring(callouts[#callouts]) .. ")")
+    local c1 = #callouts
+    tick()
+    check(#callouts == c1, "... once a level")
+    CFG.coop.real_planes = false
+    pawn.full = "BP_PlayerPlane_PP0038_adfx02_L001_C_0"
+    tick()
+    check(callouts[#callouts] == "OTHERS SEE YOUR ADFX02 AS F16C (AI) / nil", "real planes off: an ADFX-02 (no AI row) seen as the default's F-16C")
+    CFG.coop.real_planes = true
+    pawn.full = was
+    tick()
+end
 
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")

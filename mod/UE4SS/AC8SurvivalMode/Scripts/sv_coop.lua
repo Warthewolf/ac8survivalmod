@@ -38,6 +38,7 @@ local M = {
     spawnQ = {}, hunts = {}, mirror = 0,       -- joiner's spawns waiting, host's hunt orders waiting, inside the rounds
     peers = {}, roster = {}, hiFrom = {},      -- the other players' planes here by slot; the roster (host: kept, joiner: told)
     lastD = nil, said = {}, nextRnd = 0, nextHp = 0, nextAf = 0, nextInfo = 0, nextHi = 0,
+    stateAt = {}, freshAt = {}, lostAt = {}, holding = {},   -- (0.73.80, the host's round hold: COOP.joinWaiting, M.noteLost)
 }
 local function cfg() return CFG.coop end
 function COOP.host() return COOP.open and COOP.role == "host" end
@@ -290,9 +291,32 @@ if rawSetLevel then
     end
 end
 if rawSpawn then
+    -- (0.73.80, the 31-round co-op test's findings coop4 / coop5) A host spawn whose caller named no unit (the amphibious
+    -- assault's landing craft, sv_amphib.lua; the STORE's defences, sv_shop.lua; the shuttle's pad, sv_spawn.lua) is
+    -- named for the call: the new-object feed below gives a unit's ships, vehicles and parts their co-op ids only while
+    -- spawningUnit names it, so these never had any. On the joiners their copies were never bound (no floor, no host
+    -- health, no "dn", none of their hits sent): each game sank its own landing craft and lost its own guns (round 24's
+    -- craft; the defences lost host 7 / Shazzy 12 / cressendo 9 / dukka 11), and the others' replayed missiles at them
+    -- flew unguided (target id 0). Every other reader of spawningUnit picks its own units (the troops, the specials'
+    -- clean-up, the Ladons, the Spaceport, the Alicorn) and sv_core's plane feed never sees these (no planes in them).
+    -- A caller's own spawningUnit is left as it is.
+    local function spawnRaw(unit, x, y, z, yaw)
+        if x ~= nil then return rawSpawn(unit, x, y, z, yaw) end
+        return rawSpawn(unit)
+    end
     SV_Spawn = function(unit, x, y, z, yaw)
         local r
-        if x ~= nil then r = rawSpawn(unit, x, y, z, yaw) else r = rawSpawn(unit) end
+        if spawningUnit == nil and type(unit) == "string" and COOP.host() and not SLOT_OF[unit] then
+            spawningUnit = unit
+            local okR, v = pcall(spawnRaw, unit, x, y, z, yaw)
+            spawningUnit = nil                               -- (as it was, whatever the spawn did)
+            if not okR then error(v, 0) end
+            r = v
+            once("named" .. unit, string.format("coop: %s spawned with no unit named by its caller: named for the call, "
+                .. "its ships, vehicles and parts get co-op ids (0.73.80)", unit))
+        else
+            r = spawnRaw(unit, x, y, z, yaw)
+        end
         crumb(string.format("spawn %s%s: %s", tostring(unit), x ~= nil and " at a pose" or "", tostring(r)))
         if COOP.host() and type(unit) == "string" and not SLOT_OF[unit] then
             local ops, lvl = acOps[unit], levels[unit]
@@ -411,6 +435,9 @@ local groundNew = {}
 -- the allies' units (MOONCHILD's / the WINGMEN's flights, the ships) and the airfield's defences (AA guns, SAM sites,
 -- CIWS): the host's, mirrored like its enemies; on a joiner's game their copies fight the enemies' copies there, so
 -- neither what they deal nor what they take is sent to the host (it's the host's own allies' fight, dealt there)
+-- ((0.73.80) and the shuttle's pad, its dummies and its guns (CFG.specials.shuttle dummies / pad): ids of their own since
+-- 0.73.80 (the SV_Spawn wrapper above), the enemies' copies' bombs on them here aren't a joiner's hits, and one down on
+-- the host is nobody's kill (hostKiller))
 local allySet
 local function allyUnit(u)
     if not allySet then
@@ -419,6 +446,10 @@ local function allyUnit(u)
         local d = CFG.shop and CFG.shop.items and CFG.shop.items.Airfield and CFG.shop.items.Airfield.defences
         for _, def in pairs(d or {}) do
             if type(def) == "table" and type(def.units) == "table" then for _, x in ipairs(def.units) do allySet[x] = true end end
+        end
+        local sh = CFG.specials and CFG.specials.shuttle
+        if type(sh) == "table" then
+            for _, k in ipairs({ "dummies", "pad" }) do if type(sh[k]) == "string" and sh[k] ~= "" then allySet[sh[k]] = true end end
         end
     end
     return u ~= nil and allySet[u] == true
@@ -442,16 +473,24 @@ end
 local hostGround, clientGround                               -- (below: the host's and the joiner's)
 local function groundTick()
     if #groundNew == 0 then return end
-    local now, keep = os.clock(), {}
+    local now, keep, given = os.clock(), {}, nil
     for _, g in ipairs(groundNew) do
         if now - g.at < 0.5 then
             keep[#keep + 1] = g                              -- (a moment to be placed and named)
-        elseif valid(g.obj) and inSurvival(g.obj) and not isPlane(g.obj) then
+        elseif live(g.obj) and inSurvival(g.obj) and not isPlane(g.obj) then   -- ((0.73.80) live: kept half a second)
             local ok, err = pcall(COOP.host() and hostGround or clientGround, g.obj, g.unit)
-            if not ok then once("ground", "coop: ship / vehicle error " .. tostring(err)) end
+            if not ok then once("ground", "coop: ship / vehicle error " .. tostring(err))
+            elseif err == true then given = given or {}; given[g.unit] = (given[g.unit] or 0) + 1 end
         end
     end
     groundNew = keep
+    -- ((0.73.80) the host: each unit's ground objects given ids this pass, a line a spawn (the joiners' "N of M bound" in
+    -- strayTick): the amphibious assault's craft, the defences and the shuttle's pad never got any before)
+    for unit, n in pairs(given or {}) do
+        local u = M.units[unit]
+        log(string.format("coop: %s: %d ground objects given ids (gen %s, %d in all)", unit, n, tostring(u and u.gen),
+            u and u.gn or n))
+    end
 end
 
 local function anyJoinerPlane()
@@ -486,8 +525,10 @@ hostGround = function(o, unit)
     M.nextId = M.nextId % 65535 + 1
     local id = M.nextId
     u.ground[key] = { id = id }
+    u.gn = (u.gn or 0) + 1                                   -- ((0.73.80) for groundTick's line)
     M.byId[id] = { obj = o, unit = unit, key = key, addr = addrOf(o) }
     send(true, "gd", unit, u.gen, key, id)
+    return true
 end
 
 -- the roster: who's in which slot, their airframe and version, to every joiner (on a change)
@@ -900,7 +941,12 @@ end
 -- spawning afresh. Without it the testers' joiners couldn't finish them ("a copy here couldn't be finished (health 9300
 -- after)"), they stayed up unbound, flying their own AI ("VOID WATCHER became a space shuttle", MOONCHILD "submersible"),
 -- and the host's next spawn of the unit was refused.
-local function killCopy(id, o, torn, force)
+-- by ((0.73.80, the 31-round test's finding coop6): your plane, when the host's "dn" names this game's player): the kill
+-- with your plane as its cause, so the game shows it as yours (its DESTROYED, not only the hit markers: the floor clips
+-- every lethal hit of yours here, and the kill came with the host's plane or none as its cause). Refused with it: none.
+-- What it answers: "yours", "yours refused" (then none), "host" (the host's AI stand-in), "none"; nil for a copy gone.
+-- The pay is untouched: a joiner pays the player the host named (KILL.by, M.killerOf), never the game's cause.
+local function killCopy(id, o, torn, force, by)
     if type(SV_CoopBind) == "function" and type(id) == "number" and id > 0 then SV_CoopBind(id, 0) end
     local a = live(o)
     if not a then return end
@@ -920,11 +966,17 @@ local function killCopy(id, o, torn, force)
     pcall(function() o:SetMinHealth(0.0) end)
     local h = health(o) or 0
     local P0 = M.peers[0]
-    local causer = not (P0 and P0.real) and hostPuppet() or nil
+    local causer, how = nil, "none"
+    if by ~= nil and valid(by) then causer, how = by, "yours"
+    else
+        causer = not (P0 and P0.real) and hostPuppet() or nil
+        if causer then how = "host" end
+    end
     local ok = pcall(function() o:ModifyHealth(-(h / 10 + 100), causer, true) end)
     if not ok then pcall(function() o.HealthInternal = 0 end) end
     if (health(o) or 0) > 0 and causer then                  -- (refused with the host's plane named: with none)
         pcall(function() o:ModifyHealth(-(h / 10 + 100), nil, true) end)
+        how = how .. " refused"
     end
     if (health(o) or 0) > 0 then
         local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
@@ -933,6 +985,37 @@ local function killCopy(id, o, torn, force)
             once("killfail", "coop: a copy here couldn't be finished (health " .. tostring(health(o)) .. " after)")
         end
     end
+    return how
+end
+-- (0.73.80, finding coop6) The host's "dn" for copy c (id): taken down here, with your plane as its cause when field 4
+-- names this game's player (its slot), else as before (the host's AI stand-in, or none). The 31-round test's joiners saw
+-- only hit markers, never the game's DESTROYED: their lethal hits stop at the floor (floorOn) and the kill came from here
+-- with the host's plane or none as its cause. Each way it went logged once; [coop] kill_callout (off by default: whether
+-- the game's own DESTROYED shows this way isn't known yet) adds Survival's own callout for each kill of yours.
+do
+local KILL_HOW = { yours = "your plane as its cause (the game's DESTROYED should show)",
+                   ["yours refused"] = "your plane as its cause REFUSED by the game: with none",
+                   host = "the host's plane (an AI stand-in here) as its cause", ["host refused"] = "the host's stand-in refused: with none",
+                   none = "no cause (the host flies a real plane here)" }
+function M.dnKill(id, c, f)
+    local torn = f[3] == "r"
+    local mine = not torn and COOP.slot ~= nil and f[4] ~= nil and f[4] ~= "" and tonumber(f[4]) == COOP.slot
+    local by = nil
+    if mine then
+        local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+        if valid(pawn) then by = pawn end
+    end
+    local how = killCopy(id, c.obj, torn, true, by)
+    if how and not torn then
+        once("dnhow" .. how .. (mine and "m" or ""), string.format("coop: the host's kill of copy %d (%s): taken down here with %s",
+            id, mine and "yours" or (f[4] and f[4] ~= "" and ("named " .. short(f[4], 2)) or "no player named"),
+            (mine and not by) and "no plane of yours here: " .. (KILL_HOW[how] or how) or (KILL_HOW[how] or how)))
+    end
+    if mine and how and cfg().kill_callout == true and type(hudCallout) == "function" then
+        M.noMirror = true; pcall(hudCallout, "DESTROYED", nil); M.noMirror = false   -- (whatever [coop] callouts says)
+    end
+    return how
+end
 end
 
 -- (0.73.73) a copy whose host id is already down: taken down as not a kill (torn) and off its flight's planes here. The
@@ -1050,6 +1133,8 @@ end
 
 -- a ship's, vehicle's or part's copy (groundTick): not moved, held up until the host's goes down, its hits sent
 local function bindGround(id, o, unit, key)
+    local cu = M.cunits[unit]                                -- ((0.73.80) for strayTick's "N of M bound" line: linked to
+    if cu and key then cu.gb = cu.gb or {}; cu.gb[key] = true end   -- the host's id, down on arrival or not)
     if M.dead[id] then deadOnArrival(id, o, unit, nil, key); return end
     floorOn(o)                                              -- ((0.73.77) at 1 HP: the field, not SetMinHealth(0.1) = 0)
     local a, h = addrOf(o), health(o) or 0
@@ -1540,6 +1625,17 @@ local function strayTick(now)
                     bl and string.format("%d for gen %s", bl.n, tostring(bl.gen)) or "none"))
             end
         end
+        -- ((0.73.80) and its ships, vehicles and parts, once a spawn: the amphibious assault's craft, the defences and the
+        -- shuttle's pad had no ids before 0.73.80, and their copies here fought on their own)
+        if cu.at and not cu.gbindSaid and now - cu.at >= 20 and next(cu.gcount or {}) ~= nil then
+            cu.gbindSaid = true
+            local seen, nb, ids = 0, 0, 0
+            for _, k in pairs(cu.gcount) do seen = seen + k end
+            for _ in pairs(cu.gb or {}) do nb = nb + 1 end
+            for _ in pairs(cu.gbinds or {}) do ids = ids + 1 end
+            log(string.format("coop: the host's %s here: %d of %d ground objects bound to the host's ids (%d ids from the host)%s",
+                unit, nb, seen, ids, nb < seen and "; the rest fight on their own here" or ""))
+        end
     end
     if #found == 0 or not COOP.client() then return end
     local rp = M.rep
@@ -1777,12 +1873,57 @@ end
 -- ("pi"); without one (an older build), or if the spawn fails, the AI stand-in as before.
 local function realOn() return cfg().real_planes == true and type(SV_CoopSpawnPP) == "function" end
 function COOP.realOn() return COOP.open and realOn() end
+-- (0.73.80, the 31-round test's finding coop7) A plane code this game has no player plane blueprint for (a modded plane
+-- only its player has: Alyssa's Falken, falken-us4ss, PP9001_falken_L001) is shown as a stock player plane of [coop.
+-- real_fallback] (falken = adfx02: the add-on is built on the ADFX-02), not an AI stand-in: the joiners flew an AI F-16C
+-- for her, an ally's blue box and none of her launches replayed. It gets a player's green box and T4b's replays (flight.c
+-- FwWeaponOk drops a weapon number it hasn't). Its own default weapons and paint: their loadout and paint are another
+-- airframe's (a modded plane's weapon ids may not exist in this game at all). A code with no fallback: the AI stand-in.
+function M.realFallback(code)
+    local t = cfg().real_fallback
+    if type(t) ~= "table" or type(code) ~= "string" then return nil end
+    local fb = t[code]
+    if fb == nil then for k, v in pairs(t) do if type(k) == "string" and k:lower() == code:lower() then fb = v end end end
+    if type(fb) ~= "string" or fb == "" or fb == code or not COOP.planeClassPath(fb) then return nil end
+    return fb
+end
+-- (0.73.80, finding coop7) What the others see your plane as, by this game's settings (each game decides by its own
+-- [coop]; the shipped ones agree): nil when it's your own airframe, else its name and how ("a real <x>" / "an AI
+-- stand-in on <row>"). The host's own Falken was an F-16C to everyone and only its log said so ("isn't in [coop]
+-- airframes"); now each player sees it on screen once a level (M.seenAsTick), and the log has it.
+function M.seenAs(code)
+    if type(code) ~= "string" then return nil end
+    local c = cfg()
+    if c.real_planes == true then
+        if COOP.planeClassPath(code) then return nil end
+        local fb = M.realFallback(code)
+        if fb then return string.upper(fb), "a real " .. fb .. " ([coop.real_fallback])" end
+    elseif type(c.airframes) == "table" and c.airframes[code] then
+        return nil
+    end
+    local row = tostring(type(c.airframes) == "table" and c.airframes[code] or c.default)
+    return (row:match("^(%w+)_") or row):upper() .. " (AI)", "an AI stand-in on " .. row
+end
+function M.seenAsTick(code)
+    if not (D and code) or (M.seenAsD == D and M.seenAsCode == code) then return end
+    M.seenAsD, M.seenAsCode = D, code
+    local as, how = M.seenAs(code)
+    if not as then return end
+    local mine = M.myAircraft and M.myAircraft() or ""
+    mine = (mine ~= "" and mine or code):upper()
+    log(string.format("coop: the other players see your %s (%s) as %s, by this game's settings (theirs decide there)", mine, code, how))
+    callout("OTHERS SEE YOUR " .. mine .. " AS " .. as, nil)
+end
 local function spawnReal(slot, P, code, lo, pt)
     if walkHold and walkHold() then return nil, "the walks are held (a level going away)" end   -- (0.73.73: a held search could orphan it)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil, "you have no plane here yet" end
-    local path = COOP.planeClassPath(code)
-    if not path then return nil, "no player plane blueprint for " .. tostring(code) end
+    local path, fb = COOP.planeClassPath(code), nil
+    if not path then                                     -- ((0.73.80) a code with no blueprint here: its fallback's)
+        fb = M.realFallback(code)
+        if not fb then return nil, "no player plane blueprint for " .. tostring(code) .. " (and no [coop.real_fallback] for it)" end
+        path, lo, pt = COOP.planeClassPath(fb), "", ""
+    end
     local cls = loadObject(path)
     if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
     local at, yaw = P.at, (P.rot and P.rot[2]) or 0
@@ -1793,7 +1934,7 @@ local function spawnReal(slot, P, code, lo, pt)
         cfg().real_paint ~= false and pt or "")
     if type(a) ~= "number" or a <= 0 then return nil, "SV_CoopSpawnPP " .. tostring(a) end
     for _, x in ipairs(FindAllOf("LivePlayerPlane") or {}) do
-        if valid(x) and addrOf(x) == a then return x end
+        if valid(x) and addrOf(x) == a then return x, nil, fb end
     end
     return nil, "spawned (" .. tostring(a) .. ") but not found"
 end
@@ -2003,9 +2144,11 @@ local function peerTick(slot)
         P.hpPct = (finite(f[7], 1e12) and finite(f[8], 1e9) and f[8] > 0) and math.max(0, math.min(100, f[7] / 10 / f[8] * 100)) or nil
         P.down = fl % 16 >= 8
         P.alive, P.onAirfield, P.fresh = fl % 4 >= 2 and not P.down, fl % 8 >= 4, fl % 2 == 1 and f[10] < 1000
+        if f[10] >= 0 then M.stateAt[slot] = os.clock() - f[10] / 1000 end   -- ((0.73.80) their last state, when: M.noteLost)
     else
         P.at, P.fresh, P.down = nil, false, nil
     end
+    if P.fresh then M.freshAt[slot] = os.clock() end                         -- ((0.73.80) last seen in the mission)
     if not D then return end
     if P.obj and not valid(P.obj) then P.obj, P.addr, P.real = nil, nil, nil end
     local unit = PEER_UNITS[slot]
@@ -2033,9 +2176,10 @@ local function peerTick(slot)
             .. "(the next level's has the new one)", slot + 1))
     end
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
-        local o, why = spawnReal(slot, P, code, lo, r0 and r0.paint or "")
+        local o, why, fb = spawnReal(slot, P, code, lo, r0 and r0.paint or "")
         if o then
             P.obj, P.addr, P.real, P.code, P.shown, P.lo, P.hpShown = o, addrOf(o), true, code, nil, lo, nil
+            P.fallback = fb                                  -- ((0.73.80) another airframe shown for theirs, or nil)
             -- (their name under ALLY in its target box: the callsign line, runtime 0.32.2; the AI stand-ins' own way,
             -- SV_CoopName_<A-X>, doesn't reach a player plane)
             if type(SV_PPName) == "function" and P.addr then
@@ -2046,9 +2190,15 @@ local function peerTick(slot)
                     (okN and rn == 1) and (playerName(slot) .. " (" .. acn .. ")") or ("NOT set (" .. tostring(rn) .. ")")))
             end
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
-            log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
-                .. "stream; %s; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)",
-                (r0 and r0.paint and r0.paint ~= "") and ("their paint " .. r0.paint) or "its default paint (none sent)"))
+            if fb then
+                log(string.format("coop: player %d's plane is their %s shown as a real %s (a player plane, %X; no blueprint for %s "
+                    .. "here: [coop.real_fallback]): flown by its own update from their stream; its own default loadout and paint "
+                    .. "(theirs are another airframe's)", slot + 1, code, fb, P.addr or 0, code))
+            else
+                log(string.format("coop: player %d's plane is their real %s (a player plane, %X): flown by its own update from their "
+                    .. "stream; %s; %s", slot + 1, code, P.addr or 0, lo ~= "" and ("their loadout " .. lo) or "its default loadout (none sent)",
+                    (r0 and r0.paint and r0.paint ~= "") and ("their paint " .. r0.paint) or "its default paint (none sent)"))
+            end
             M.rejoinSaid(slot, P, "new one spawned (their real plane)")       -- ((0.73.77) plan C's line)
         else
             P.realFailed = code
@@ -2282,24 +2432,72 @@ COOP.realTarget = realTarget
 -- [coop] join_wait_s from when it was first seen out: their names, or nil. The user, 2026-10-30: "is there a way that
 -- we can effectively pause enemy spawns while people are joining the lobby?" (a joiner still loading when the round's
 -- flights came got only 1 of 4 binds: the desync)
+-- (0.73.80, the 31-round test's finding errors2) A player whose link was lost while they were in the mission (a quit, a
+-- crash, a game closed: their last state in the mission within LOST_FRESH_S of their last packet) holds the round only
+-- [coop] hold_lost_s after that last state: the host held its spawns 50-80 s for players who had gone (Amia 19:44:50 to
+-- 19:45:40, Shazzy 20:38:31 to 20:39:51, dukka until the host left; only the native drop's sys|left, 90 s after their
+-- last packet, ended it), since nothing comes from a game that quits or closes. A link lost while they weren't in the
+-- mission (loading in: Amia's was lost 26-27 s twice while she loaded) keeps the hold up to join_wait_s, as before. Each
+-- player's hold logged as it starts and as it ends, with how long and why.
+do
+local LOST_FRESH_S = 5
+local function lostS() return tonumber(cfg().hold_lost_s) or 15 end
+function M.noteLost(s)                                   -- (the host, on sys|lost from s)
+    local now = os.clock()
+    local sa, fa = M.stateAt[s], M.freshAt[s]
+    local inMission = sa ~= nil and fa ~= nil and fa >= sa - LOST_FRESH_S
+    M.lostAt[s] = { at = now, from = sa or now, inMission = inMission }
+    log(string.format("coop: player %d's link lost %s", s + 1, inMission
+        and string.format("in the mission (their last state %.0f s ago): they hold the round %s", now - (sa or now), lostS() >= 0
+            and string.format("%d s after it at most ([coop] hold_lost_s)", lostS()) or "up to [coop] join_wait_s (hold_lost_s -1)")
+        or string.format("while not in the mission (%s): they hold the round up to [coop] join_wait_s", fa
+            and string.format("last in it %.0f s ago", now - fa) or "not seen in it here")))
+end
+local function holdEnd(s, why)
+    local h = M.holding[s]
+    if not h then return end
+    M.holding[s] = nil
+    log(string.format("coop: %s no longer holds the round: %s (held %.0f s; %s)", h.name, why, os.clock() - h.at, h.why))
+end
 function COOP.joinWaiting(now)
     if not (COOP.open and COOP.host and COOP.host()) then return nil end
     local cap = tonumber(cfg().join_wait_s) or 90
     if cap <= 0 then return nil end
     M.outSince = M.outSince or {}
-    local names = nil
-    for s in pairs(M.roster or {}) do
+    local names, ls, roster = nil, lostS(), M.roster or {}
+    for s in pairs(roster) do
         if s ~= COOP.slot then
             local P = M.peers[s]
+            local li = M.lostAt[s]
             if P and P.fresh then
                 M.outSince[s] = nil
+                holdEnd(s, "in the mission")
             else
                 M.outSince[s] = M.outSince[s] or now
-                if now - M.outSince[s] < cap then names = names or {}; names[#names + 1] = playerName(s) end
+                if li and li.inMission and ls >= 0 and os.clock() - li.from >= ls then
+                    holdEnd(s, string.format("their link was lost in the mission, nothing from them for %.0f s ([coop] hold_lost_s %d)",
+                        os.clock() - li.from, ls))
+                elseif now - M.outSince[s] < cap then
+                    names = names or {}; names[#names + 1] = playerName(s)
+                    local why = li and (li.inMission and "their link lost in the mission" or "their link lost while not in the mission")
+                        or "not in the mission yet"
+                    local h = M.holding[s]
+                    if not h then
+                        M.holding[s] = { at = os.clock(), name = playerName(s), why = why }
+                        log(string.format("coop: the round waits for %s (%s), %s", playerName(s), why, (li and li.inMission and ls >= 0)
+                            and string.format("up to %d s after their last state", ls) or string.format("up to %d s", cap)))
+                    else
+                        h.why = why
+                    end
+                else
+                    holdEnd(s, string.format("[coop] join_wait_s %d s out of the mission", cap))
+                end
             end
         end
     end
-    for s in pairs(M.outSince) do if not (M.roster or {})[s] then M.outSince[s] = nil end end
+    for s in pairs(M.outSince) do if not roster[s] then M.outSince[s] = nil end end
+    for s in pairs(M.holding) do if not roster[s] then holdEnd(s, "gone from the room") end end
+    for s in pairs(M.lostAt) do if not roster[s] then M.lostAt[s] = nil end end
     -- (a host by migration: the old room's players not back yet, by their Steam IDs, for up to [coop.migration] wait_s)
     local mg, mc = M.mig, cfg().migration or {}
     if mg and mg.hosting and mg.expect and os.clock() - (mg.hostAt or 0) < (tonumber(mc.wait_s) or 60) then
@@ -2310,6 +2508,7 @@ function COOP.joinWaiting(now)
         end
     end
     return names
+end
 end
 function COOP.anyReal()
     for s = 0, MAX_SLOT do if realTarget(s) then return true end end
@@ -3993,7 +4192,8 @@ local function onJoinerMessage(f)
                 floorDone(c)                                   -- ((0.73.77, A6) its wait at the floor, if it had one)
                 -- ((0.73.73) forced: the host's is down, invincible here or not; "dn|<id>|r", a death the host's picture
                 -- repeats, is long since: not this game's kill. Off its flight's planes here: strayTick counted it a stray)
-                killCopy(id, c.obj, f[3] == "r", true)
+                -- ((0.73.80) yours (the host named this game's player): with your plane as its cause, M.dnKill)
+                M.dnKill(id, c, f)
                 M.copies[id] = nil
                 local cu = c.unit and M.cunits[c.unit]
                 if cu and c.ord and cu.planes[c.ord] and addrOf(cu.planes[c.ord]) == c.addr then cu.planes[c.ord] = nil end
@@ -4053,6 +4253,9 @@ local function onJoinerMessage(f)
 end
 
 local function onSys(from, what, f)
+    if what == "joined" or what == "paired" or what == "restart" or what == "up" or what == "left" then
+        M.lostAt[from] = nil                              -- ((0.73.80) linked again, or gone: no lost link held for them)
+    end
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
@@ -4073,6 +4276,7 @@ local function onSys(from, what, f)
         M.wasLost[from] = true
         callout("CO-OP LINK LOST", string.upper(playerName(from)))
         if from == 0 and COOP.client() then M.hostLostAt = M.hostLostAt or os.clock() end   -- (host migration's clock)
+        if COOP.host() and from ~= COOP.slot then M.noteLost(from) end   -- ((0.73.80) in the mission or loading: the round's hold)
     elseif what == "up" then
         if from == 0 then M.hostLostAt = nil end
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
@@ -4694,6 +4898,8 @@ function COOP.tick(tick)
         if okB then flags = flags + bits else once("syncBits", "coopfire: state bits error " .. tostring(bits)) end
         SV_CoopMe(addrOf(pawn) or 0, flags)
         local row, code = myAirframe()
+        local okSa, errSa = pcall(M.seenAsTick, code)        -- ((0.73.80) "OTHERS SEE YOUR <X> AS <Y>", once a level)
+        if not okSa then once("seenAs", "coop: seen-as error " .. tostring(errSa)) end
         local lo = M.myLoadout()                              -- (new weapons picked at the airfield: COOP2MP T4b)
         local pt = M.myPaint()                                -- (and paint: T5)
         local acn = M.myAircraft()                            -- (and the aircraft's name)

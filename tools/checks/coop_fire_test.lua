@@ -802,6 +802,50 @@ check(COOP.joinWaiting(clock) ~= nil, "out again (a restart, a lost link): waite
 CFG.coop.join_wait_s = 0
 check(COOP.joinWaiting(clock) == nil, "join_wait_s 0: never")
 CFG.coop.join_wait_s = 90
+-- ((0.73.80, the 31-round test's finding errors2) a player lost in the mission (they quit or crashed: nothing more comes
+-- from their game) holds the round [coop] hold_lost_s after their last state, not join_wait_s; one lost while loading in
+-- still up to join_wait_s; each hold logged as it starts and ends)
+peerState[3] = "100000,0,300000,0,0,0,800,100,3,100"
+from = #logs + 1
+tick()
+check(COOP.joinWaiting(clock) == nil and line("^coop: LATE no longer holds the round: in the mission %(held", from) ~= nil,
+      "in the mission again: not held, the last hold's end logged (" .. tostring(line("no longer holds", from)) .. ")")
+from = #logs + 1
+peerState[3] = nil                                           -- (they quit: their stream stops)
+tick(2)
+check(COOP.joinWaiting(clock) ~= nil and line("^coop: the round waits for LATE %(not in the mission yet%), up to 90 s", from) ~= nil,
+      "their stream stopped: held as one not in the mission, logged")
+inbox[#inbox + 1] = "3|sys|lost"
+tick(4)
+check(line("^coop: player 4's link lost in the mission %(their last state 6 s ago%): they hold the round 15 s after it at most", from) ~= nil,
+      "their link lost (6 s on): in the mission, logged (" .. tostring(line("link lost", from)) .. ")")
+check(COOP.joinWaiting(clock) ~= nil, "... still held 6 s after their last state")
+clock = clock + 10
+check(COOP.joinWaiting(clock) == nil and line("^coop: LATE no longer holds the round: their link was lost in the mission, nothing from them for 16 s %(%[coop%] hold_lost_s 15%) %(held 14 s; their link lost in the mission%)", from) ~= nil,
+      "16 s after their last state: no longer held (0.73.79: 90 s), logged with how long and why (" .. tostring(line("no longer holds", from)) .. ")")
+check(joinHold(clock) == false, "... the round goes on")
+-- one linked but never in the mission here, their link lost (loading in: Amia's was lost 26-27 s twice): held to join_wait_s
+M.roster[4] = { row = "f16c_common", ver = VERSION, name = "SLOW" }
+peerState[4] = nil
+tick()
+inbox[#inbox + 1] = "4|sys|lost"
+tick(); tick(20)
+local w2 = COOP.joinWaiting(clock)
+check(w2 and #w2 == 1 and w2[1]:upper():find("SLOW") ~= nil and line("^coop: player 5's link lost while not in the mission %(not seen in it here%)", from) ~= nil,
+      "a link lost while loading in: still held 21 s on (up to join_wait_s), logged")
+CFG.coop.hold_lost_s = -1
+w2 = COOP.joinWaiting(clock)
+check(w2 and #w2 == 2, "[coop] hold_lost_s -1: the one lost in the mission held up to join_wait_s too (as 0.73.79)")
+CFG.coop.hold_lost_s = 15
+-- their link back (sys|up) and in the mission: no lost link held for them
+inbox[#inbox + 1] = "3|sys|up"
+peerState[3] = "100000,0,300000,0,0,0,800,100,3,100"
+tick()
+check(M.lostAt[3] == nil and #COOP.joinWaiting(clock) == 1, "player 4 back (sys|up) in the mission: their lost link forgotten, not held")
+M.roster[4], peerState[4] = nil, nil
+from = #logs + 1
+COOP.joinWaiting(clock)
+check(line("^coop: SLOW no longer holds the round: gone from the room", from) ~= nil, "one gone from the room: their hold's end logged")
 M.roster[3], peerState[3] = nil, nil
 
 ---------------------------------------------------------------------------------------------------- sync off
