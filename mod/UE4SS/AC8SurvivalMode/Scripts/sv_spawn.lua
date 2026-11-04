@@ -315,28 +315,34 @@ HEAVY_UNIT = {}
 for _, u in ipairs(CFG.airfield.bombers.heavy_units) do HEAVY_UNIT[u] = true end
 
 -- A bomber flight (CFG.airfield.bombers): its event-package orders send it at the airfield only.
-local function spawnBomber(unit)
+-- opts (optional; spawnBomberFrom: the Spaceport Assault's Tu-160s, CFG.specials.spaceport.tu160): { ac = its NPC row,
+-- bearing = the compass bearing from the airfield it comes from, spread = within that many degrees of it, distance_km =
+-- { lo, hi } }; no callout of its own then (the caller's)
+local function spawnBomber(unit, opts)
     local b = CFG.airfield.bombers
     local heavy = HEAVY_UNIT[unit]
     local list = heavy and b.heavy or b.aircraft
-    local ac = list[math.random(#list)]
+    local ac = (opts and type(opts.ac) == "string" and opts.ac ~= "") and opts.ac or list[math.random(#list)]
     -- strike aircraft spawn on their Survival row (search range + Survival's missile fire control); their behaviour
     -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
     if not heavy then ac = searchAircraft(ac, levelFor(D.round)) end   -- (the spike's, or the intensity director's)
     local set = SV_SetAircraft(unit, ac)
     -- a raid's bombers from one direction (CFG.airfield.bombers.one_bearing; D.raidBearing, picked in startRound)
     local raid = D.raidBearing and D.raidUnits and D.raidUnits[unit]
-    local x, y, dist, bearing = spawnPoint(b.distance_km, raid and D.raidBearing or nil, b.spread_deg)
+    local compass = (opts and tonumber(opts.bearing)) or (raid and D.raidBearing) or nil
+    local range = (opts and type(opts.distance_km) == "table" and #opts.distance_km == 2) and opts.distance_km or b.distance_km
+    local x, y, dist, bearing, onBearing = spawnPoint(range, compass, (opts and tonumber(opts.spread)) or b.spread_deg)
     -- SV_Spawn's yaw: towards the airfield (spawnPoint's own bearing is a maths angle, a raid's a compass one)
-    local yaw = raid and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
+    local yaw = (raid or opts) and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
     local band = heavy and b.altitude_m or b.strike_altitude_m
     local alt = band[1] + math.random() * (band[2] - band[1])
     spawningUnit, spawningIdx = unit, 0                    -- (each plane's index in the flight: sv_core.lua p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
     ALIVE.spawned(unit, r)
-    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
-        unit, ac, tostring(set), dist, bearing, alt / 1000,
+    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round,
+        unit, ac, tostring(set), dist, bearing, (compass and not onBearing) and string.format(" (not the %s: the zone's edge)",
+            compassName(compass)) or "", alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     D.heavy = D.heavy or {}
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
@@ -356,6 +362,9 @@ local function spawnBomber(unit)
     end
     return r
 end
+
+-- (the Spaceport Assault's Tu-160s, sv_spaceport.lua: a bomber flight from a bearing as another row; its spawn's count)
+function spawnBomberFrom(unit, opts) return spawnBomber(unit, opts) end
 
 BOMBER_UNIT, BOMBER_INDEX = {}, {}           -- BOMBER_INDEX: the flight's RE_SV_BombRun_NN
 for i, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u], BOMBER_INDEX[u] = true, i end

@@ -1808,6 +1808,16 @@ CFG = {
                       -- 13's fighters took every free 2-ship and the deck launched 2 of 8)
                       deck = { enabled = true, first_s = 20, every_s = 25, size = 2, max_up = 4, flights = 5,
                                flights_per_round = 0.3, max_flights = 14, ahead_m = 600, alt_m = 1100, reserve = 4 },
+                      -- (user, 2026-11-04: "in the spaceport assault round, can you please add TU-160's that come from both
+                      -- the North and the south to target the airfield and bomb it") tu160: the two heavy bomber flights
+                      -- (CFG.airfield.bombers.heavy_units: a 2-ship and a 4-ship) on `aircraft`, after_s into the assault,
+                      -- one from each of `bearings` (compass from the airfield: 0 north, 180 south; which flight takes which
+                      -- by chance), within spread_deg of it, distance_km out. They fly the heavies' route in over the runway
+                      -- and bomb it as a raid's heavies do (CFG.airfield.bombers drop_km, bomb_damage), they're paid as
+                      -- heavies, and the round ends only once they're down too. None after a capture, nor with the airfield
+                      -- off (CFG.airfield.enabled); the clock waits while you're down at the airfield, as the waves' do.
+                      tu160 = { enabled = true, aircraft = "t160_common", after_s = 45, bearings = { 0, 180 }, spread_deg = 10,
+                                distance_km = { 28, 34 } },
                       -- the retake, the round after a captured spaceport: the garrison (a unit of 4 targetable vehicles
                       -- for every per_unit troop vehicles that got in, 3 at most) and the ships still afloat; reward +
                       -- reward_per_round x the round when they're all down, garrison_pay a vehicle; fighter_share of the
@@ -2163,6 +2173,9 @@ CFG = {
             sp_go        = "SPACEPORT ASSAULT",
             sp_go_sub    = "SINK THE FLEET BEFORE ITS TROOPS TAKE THE SPACEPORT",
             sp_row       = "FLEET: %d SHIPS  LANDING CRAFT: %d  SPACEPORT CAPTURE: %d%%",
+            sp_row_tu160 = "  TU-160S: %d",
+            sp_tu160     = "TU-160S INBOUND",
+            sp_tu160_sub = "FROM THE %s: PROTECT THE AIRFIELD",
             sp_landing   = "LANDING CRAFT LAUNCHED",
             sp_landing_sub = "THE WASPS ARE SENDING THEM IN",
             sp_ashore    = "TROOPS ASHORE",
