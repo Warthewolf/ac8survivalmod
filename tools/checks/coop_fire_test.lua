@@ -18,6 +18,9 @@
 --     rising edge and every second held; nothing from a state gone stale;
 --   the stand-ins' damage-0 rows (COOP.syncSetup) and flying them (M.flyRow) in a level loaded after;
 --   the joiner's backstop: a stand-in's damage on a copy taken out of what goes to the host ("ht");
+--   (0.73.80) the weapon stand-ins: a launch whose weapon another player's real plane here hasn't, or has as another
+--     kind, shown as the nearest weapon of its kind it has (M.weaponFor, M.standInPay; SV_PPWeapons stubbed), never a
+--     number it hasn't, the relay as sent, standins = false as before;
 --   sync off: nothing sent or shown, the airframes' own rows;
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
@@ -672,6 +675,207 @@ check(M.roster[1] and M.roster[1].ac == "F-16C Fighting Falcon", "a joiner's air
 check(M.acClean("X|Y" .. string.char(1) .. "Z" .. string.char(10)) == "XYZ", "a | and control characters stripped")
 check(#M.acClean(string.rep("A", 50)) == 32, "32 characters at most")
 pawn.GetObjName = nil
+
+---------------------------------------------------------------------------------------------------- (0.73.80) weapon stand-ins
+-- (the user, 2026-11-04: "Then do the weapon stand-ins next") a launch whose weapon their real plane here hasn't, or has
+-- as another kind, shown as the nearest weapon of the same kind it has (sv_coop.lua M.weaponFor, M.standInPay); the
+-- runtime's SV_PPWeapons stubbed: each number -2 not usable, -1 not known, 0-4 seen launched, 10-14 the table's
+print("(0.73.80) weapon stand-ins: another player's weapons their plane here hasn't")
+local ppw, ppwCalls, ppfx, outOfRange, ppwGiven = {}, {}, {}, {}, {}
+function SV_PPWeapons(a, t) ppwCalls[#ppwCalls + 1] = string.format("%d/%d", a, t); ppwGiven[a] = ppw[a] or ""; return ppw[a] or "" end
+function SV_CoopPPFx(a, kind, v) ppfx[#ppfx + 1] = string.format("%d/%d/%d", a, kind, v); return 1 end
+function SV_CoopPPShot(a, t, pay)               -- (and every number sent checked against the plane's weapons as last read)
+    ppShots[#ppShots + 1] = string.format("%d/%d/%s", a, t, pay)
+    local w = tonumber(pay:match("^%d+,(%d+),"))
+    local k = {}
+    for v in (ppwGiven[a] or ""):gmatch("[^,]+") do k[#k + 1] = tonumber(v) end
+    if type(SV_PPWeapons) == "function" and #k > 0 and CFG.coop.sync.standins ~= false and (w >= #k or k[w + 1] == -2) then
+        outOfRange[#outOfRange + 1] = pay
+    end
+    return 1
+end
+local function shot(k, w, s, u, lock) return string.format("%d,%d,%d,%d,96,%d,10,-5,0,-15,1800,0,100,-20,0", k, w, s or 0, u or 0, lock or 0) end
+local function realRoom(kinds, lo, spawnLo, fb)  -- the host, player 2 on their real plane here (P1), player 3 too
+    fresh("host", 0)
+    M.byId[5] = { obj = E5, unit = "ERA_Unit_01_Dep_Air0", ord = 1, addr = 505 }
+    COOP.peerPlane(P1, 1); COOP.peerPlane(P2, 2)
+    peer(1, 3); peer(2, 3)
+    tick()
+    local P = M.peers[1]
+    P.real, P.code, P.lo, P.fallback, P.wk, P.burstUntil, P.gunOn = true, "f22a", spawnLo or lo or "", fb, nil, nil, nil
+    M.roster[1].lo = lo or ""
+    ppw[1001] = kinds
+    tick(1.1)                                     -- (a new second: no launches-a-second guard left over)
+    ppShots, ppfx, ppwCalls, sent, M.said, ppwGiven = {}, {}, {}, {}, {}, {}
+    return P
+end
+local function fire1(pay) inbox[#inbox + 1] = "1|fx|p:5:0:" .. pay; tick() end
+local function lastShot() return ppShots[#ppShots] and ppShots[#ppShots]:match("^%d+/%d+/(.*)$") end
+local from
+
+-- a player whose weapons all exist here: every launch exactly as sent, the plane's weapons read once and logged
+realRoom("-1,0,0,1,3", "1,2//21,33")
+from = #logs + 1
+fire1(shot(0, 1, 2, 1, 2)); fire1(shot(0, 2, 3, 0, 1)); fire1(shot(1, 3)); fire1(shot(3, 4))
+check(table.concat(ppShots, " ") == table.concat({ "1001/505/" .. shot(0, 1, 2, 1, 2), "1001/505/" .. shot(0, 2, 3, 0, 1),
+      "1001/505/" .. shot(1, 3), "1001/505/" .. shot(3, 4) }, " "),
+      "their weapons all here and of their kinds: each launch as sent (" .. table.concat(ppShots, " ") .. ")")
+check(#ppwCalls == 1 and ppwCalls[1] == "1001/0", "the plane's weapons read once (standin_table off: 0) (" .. table.concat(ppwCalls, " ") .. ")")
+check(line("^coopfire: player 2's real plane here %(f22a%): its weapons 0 the gun, 1 the standard missile, 2 a missile special, 3 a laser, 4 an ESM / ECM %(SV_PPWeapons %-1,0,0,1,3%)", from) ~= nil,
+      "what it has logged once (" .. tostring(line("its weapons", from)) .. ")")
+check(M.fxS.n.standIn == nil and since(from, "shown on their real plane here as") == 0, "no stand-in counted or logged")
+
+-- Amia's F-22A (the 31-round test): her weapon 3 (a missile special her plane here hasn't: weapons 0-2) shown as the
+-- standard missile while its special isn't known here; as its special once that's been seen launched (2 s on); the
+-- relay to player 3 keeps her weapon 3
+realRoom("-1,-1,-1", "1,2//21,0")
+from = #logs + 1
+fire1(shot(0, 3, 2, 1, 2))
+check(lastShot() == shot(0, 1, 0, 0, 1), "her weapon 3: their plane's weapon 1, spawn slot 0, byte 0, lock-ons 1 (" .. tostring(lastShot()) .. ")")
+check(fx("2") == "2>fx|1|p:5:20:" .. shot(0, 3, 2, 1, 2), "relayed to player 3 as she sent it (weapon 3) (" .. fx("2") .. ")")
+check(line("^coopfire: player 2's missile special %(weapon 3%) shown on their real plane here as its weapon 1 %(the standard missile%): it has no weapon 3", from) ~= nil,
+      "logged once (" .. tostring(line("shown on their real plane", from)) .. ")")
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 1) and since(from, "shown on their real plane here as") == 1, "again: the same, not logged again")
+ppw[1001] = "-1,0,0"                              -- (its weapon 2 seen launched: an explosive weapon)
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 1) and #ppwCalls == 1, "under 2 s: what was read kept")
+clock = clock + 2.1
+fire1(shot(0, 3, 4, 0, 3))
+check(lastShot() == shot(0, 2, 0, 0, 1) and #ppwCalls == 2, "2 s on: read again, her weapon 3 as its missile special 2 (" .. tostring(lastShot()) .. ")")
+check(line("^coopfire: player 2's missile special %(weapon 3%) shown on their real plane here as its weapon 2 %(a missile special%): it has no weapon 3", from) ~= nil,
+      "the new stand-in logged")
+check(M.fxS.n.standIn == 4, "4 stand-ins counted (" .. tostring(M.fxS.n.standIn) .. ")")
+fire1(shot(0, 2, 1, 0, 1)); fire1(shot(0, 1, 0, 0, 2))
+check(ppShots[#ppShots - 1]:find(shot(0, 2, 1, 0, 1), 1, true) and lastShot() == shot(0, 1, 0, 0, 2), "her weapons 2 and 1: as sent")
+
+-- a laser where she has a missile special: never the remote fire onto it; a missile onto a known laser neither
+realRoom("-1,0,1", "1,2//21,0")
+fire1(shot(0, 3)); fire1(shot(0, 2))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 1) .. " 1001/505/" .. shot(0, 1),
+      "weapons 3 (none) and 2 (a laser here): both the standard missile (" .. table.concat(ppShots, " ") .. ")")
+realRoom("-1,0,0,1", "1,2//21,33")
+fire1(shot(1, 2))
+check(lastShot() == shot(1, 3), "a laser as weapon 2, where weapon 2 is a missile special: their laser 3 (" .. tostring(lastShot()) .. ")")
+-- a laser on a plane with none: not shown, logged and counted
+realRoom("-1,0,0", "1,2//21,0")
+from = #logs + 1
+local none0 = M.fxS.n.standNone or 0
+fire1(shot(1, 3)); fire1(shot(1, 2))
+check(#ppShots == 0 and (M.fxS.n.standNone or 0) - none0 == 2, "a laser with no laser there (3: none, 2: a missile special): not shown, counted")
+check(line("^coopfire: player 2's laser %(weapon 3%) NOT shown: it has no weapon 3, and their real plane here has no laser %(its weapons: %-1,0,0%)", from) ~= nil
+      and line("^coopfire: player 2's laser %(weapon 2%) NOT shown: its weapon 2 is a missile special", from) ~= nil, "each logged once, with why")
+-- an ESM / ECM: one of its kind
+realRoom("-1,0,3", "1,2//21,0")
+fire1(shot(3, 3))
+check(lastShot() == shot(3, 2), "an ESM as weapon 3: their plane's ESM 2 (" .. tostring(lastShot()) .. ")")
+-- a bullet special with none of its kind: a burst of the plane's gun, standin_gun_s long
+realRoom("-1,0,0", "1,2//21,0")
+from = #logs + 1
+fire1(shot(2, 3))
+check(#ppShots == 0 and table.concat(ppfx, " ") == "1001/1/1", "a bullet special with none there: the gun's trigger on (" .. table.concat(ppfx, " ") .. ")")
+check(line("^coopfire: player 2's bullet special %(weapon 3%) shown as their real plane's gun here", from) ~= nil and (M.fxS.n.standGun or 0) >= 1,
+      "logged, counted")
+tick(0.25)
+check(table.concat(ppfx, " ") == "1001/1/1", "0.25 s on: still firing")
+tick(0.3)
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0", "0.55 s on: off (" .. table.concat(ppfx, " ") .. ")")
+realRoom("-1,0,2", "1,2//21,0")
+fire1(shot(2, 3))
+check(lastShot() == shot(2, 2) and #ppfx == 0, "a bullet special where it has one: that one, no gun (" .. tostring(lastShot()) .. ")")
+-- their loadout changed since their plane here spawned (it keeps its loadout): the same special where it sits here
+realRoom("-1,-1,-1,-1", "1,2//21,7", "1,2//7,21")
+fire1(shot(0, 3, 2, 1, 4)); fire1(shot(0, 2, 1, 0, 2))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 2, 2, 1, 4) .. " 1001/505/" .. shot(0, 3, 1, 0, 2),
+      "specials 7 and 21 swapped: each shown as the same special, slot and lock-ons kept (" .. table.concat(ppShots, " ") .. ")")
+realRoom("-1,-1,-1", "1,2//33,0", "1,2//21,0")
+fire1(shot(0, 2)); fire1(shot(1, 2))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 1) .. " 1001/505/" .. shot(1, 2),
+      "a new special (33) its plane here hasn't, its 21 not known: a missile as the standard missile, a laser tried as sent (" .. table.concat(ppShots, " ") .. ")")
+-- nothing known of the plane but how many weapons it has
+realRoom("-1,-1,-1", "1,2//21,0")
+fire1(shot(0, 2)); fire1(shot(0, 3)); fire1(shot(1, 2)); fire1(shot(1, 3))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 2) .. " 1001/505/" .. shot(0, 1) .. " 1001/505/" .. shot(1, 2),
+      "kinds not known: weapons 2 as sent, 3 as the standard missile, a laser 2 as sent, a laser 3 not shown (" .. table.concat(ppShots, " ") .. ")")
+-- a special's number is 2 or more: a laser as weapon 1 (AC8WeaponSwap) only as a laser of the plane's
+realRoom("-1,-1,1", "1,2//21,0")
+fire1(shot(1, 1)); fire1(shot(3, 0))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(1, 2), "a laser as weapon 1: their laser 2; an ESM as weapon 0: not shown (" .. table.concat(ppShots, " ") .. ")")
+-- a number the runtime can't use (-2): never sent
+realRoom("-1,0,-2,0", "1,2//21,33")
+fire1(shot(0, 2))
+check(lastShot() == shot(0, 3), "weapon 2 not usable there: the nearest special, 3 (" .. tostring(lastShot()) .. ")")
+-- a modded plane on its stock fallback (0.73.80 modsync: its own default loadout, another airframe's numbers)
+realRoom("-1,-1,-1,-1", "1,2//21,0", nil, "adfx02")
+from = #logs + 1
+fire1(shot(0, 2)); fire1(shot(1, 2)); fire1(shot(0, 1))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 1) .. " 1001/505/" .. shot(1, 2) .. " 1001/505/" .. shot(0, 1),
+      "a fallback: a missile special not known there as the standard missile, a laser tried as sent, the standard missile as sent ("
+      .. table.concat(ppShots, " ") .. ")")
+check(line("^coopfire: player 2's missile special %(weapon 2%) shown on their real plane here as its weapon 1 %(the standard missile%): its weapon 2 isn't known yet and it's another airframe", from) ~= nil,
+      "logged with why (" .. tostring(line("shown on their real plane", from)) .. ")")
+check(line("^coopfire: player 2's real plane here %(f22a, shown as a adfx02%)", from) ~= nil, "its weapons' line names the fallback")
+ppw[1001] = "-1,0,1,0"                            -- (seen launched: 2 a laser, 3 a missile special)
+clock = clock + 2.1
+fire1(shot(0, 3)); fire1(shot(0, 2)); fire1(shot(1, 3))
+check(table.concat(ppShots, " ", 4) == "1001/505/" .. shot(0, 3) .. " 1001/505/" .. shot(0, 3) .. " 1001/505/" .. shot(1, 2),
+      "its weapons seen: a missile as 3 as sent, as 2 (a laser there) its special 3, a laser as 3 its laser 2 (" .. table.concat(ppShots, " ", 4) .. ")")
+-- the table's kinds: used only with standin_table, and then asked for (SV_PPWeapons' second argument)
+realRoom("-1,10,11,10", "1,2//21,33")
+fire1(shot(1, 3)); fire1(shot(0, 2))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(1, 3) .. " 1001/505/" .. shot(0, 2) and ppwCalls[1] == "1001/0",
+      "standin_table off: the table's kinds not used, each as sent (" .. table.concat(ppShots, " ") .. ")")
+CFG.coop.sync.standin_table = true
+realRoom("-1,10,11,10", "1,2//21,33")
+fire1(shot(1, 3)); fire1(shot(0, 2)); fire1(shot(1, 2))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(1, 2) .. " 1001/505/" .. shot(0, 3) .. " 1001/505/" .. shot(1, 2) and ppwCalls[1] == "1001/1",
+      "standin_table on: a laser as 3 (a missile special there) its laser 2, a missile as 2 its special 3 (" .. table.concat(ppShots, " ") .. ")")
+CFG.coop.sync.standin_table = false
+-- the minute's line: the stand-ins by player
+from = #logs + 1
+for _ = 1, 62 do tick(1) end
+local tallySI = line("^coopfire: 60 s:", from)
+check(has(tallySI, "; weapon stand-ins: ") and has(tallySI, "by player: 2: "), "the minute's line counts the stand-ins by player (" .. tostring(tallySI) .. ")")
+-- nothing read of the plane, or no SV_PPWeapons (a Lua patch on an older runtime), or standins off: as sent, as before
+realRoom("", "1,2//21,0")
+from = #logs + 1
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 3) and line("^coopfire: player 2's real plane here: its weapons can't be read", from) ~= nil,
+      "SV_PPWeapons gave nothing: as sent (the runtime's own check refuses it), logged")
+ppw[1001] = "-1,-1,-1"
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 3) and #ppwCalls == 1, "under 2 s: not asked again")
+clock = clock + 2.1
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 1) and #ppwCalls == 2, "2 s on: asked again, read, the stand-in (" .. tostring(lastShot()) .. ")")
+realRoom("-1,-1,-1", "1,2//21,0")
+local savedPPW = SV_PPWeapons
+SV_PPWeapons = nil
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 3), "no SV_PPWeapons (runtime 0.32.23): as sent")
+SV_PPWeapons = savedPPW
+CFG.coop.sync.standins = false
+realRoom("-1,-1,-1", "1,2//21,0")
+fire1(shot(0, 3)); fire1(shot(1, 3)); fire1(shot(2, 3))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 3) .. " 1001/505/" .. shot(1, 3) .. " 1001/505/" .. shot(2, 3)
+      and #ppwCalls == 0 and #ppfx == 0, "standins = false: every launch as sent, nothing read, no gun burst (as before)")
+CFG.coop.sync.standins = true
+-- an AI stand-in (not a real plane): nothing of this
+realRoom("-1,-1,-1", "1,2//21,0")
+M.peers[1].real = nil
+fire1(shot(0, 3))
+check(#ppShots == 0 and #ppwCalls == 0, "an AI stand-in: p not replayed, its weapons not read")
+check(#outOfRange == 0, "never a number the plane here hasn't (or can't use) sent once its weapons are known ("
+      .. table.concat(outOfRange, " ") .. ")")
+-- the rule alone (M.weaponFor), on a plane of 6 weapons
+local c6 = { n = 6, k = { [0] = -1, 0, 0, 1, 0, 3 } }
+local function wf(k, w) local x, how = M.weaponFor(k, w, c6, nil, false, true); return tostring(x) .. "/" .. how end
+check(wf(0, 2) == "2/own" and wf(0, 6) == "4/near" and wf(0, 9) == "4/near" and wf(0, 3) == "2/near" and wf(1, 2) == "3/near"
+      and wf(3, 7) == "5/near" and wf(2, 3) == "nil/gun" and wf(0, 0) == "1/near",
+      "M.weaponFor: own, the nearest of its kind (ties to the lower), the gun for a bullet special (" .. table.concat({ wf(0, 2), wf(0, 6),
+      wf(0, 9), wf(0, 3), wf(1, 2), wf(3, 7), wf(2, 3), wf(0, 0) }, " ") .. ")")
+SV_PPWeapons, SV_CoopPPFx = nil, nil
+function SV_CoopPPShot(a, t, pay) ppShots[#ppShots + 1] = string.format("%d/%d/%s", a, t, pay); return ppR end
 
 ---------------------------------------------------------------------------------------------------- the host's hunt on real planes
 print("the hunt onto real planes: never a player at their airfield or down")

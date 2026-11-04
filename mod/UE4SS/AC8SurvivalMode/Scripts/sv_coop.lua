@@ -2643,6 +2643,7 @@ local function peerTick(slot)
                     (okN and rn == 1) and (playerName(slot) .. " (" .. acn .. ")") or ("NOT set (" .. tostring(rn) .. ")")))
             end
             P.gear, P.flare, P.gunNext, P.flareNext, P.gunOn = nil, nil, nil, nil, nil
+            P.wk, P.wkSaid, P.burstUntil = nil, nil, nil             -- ((0.73.80) its weapons read again: M.ppKinds)
             if fb then
                 log(string.format("coop: player %d's plane is their %s shown as a real %s (a player plane, %X; no blueprint for %s "
                     .. "here: %s): flown by its own update from their stream; its own default loadout and paint "
@@ -3285,6 +3286,201 @@ local function coopFire(slot, fcs, target)
     return r
 end
 local function halfRtt(slot) return math.floor(((M.rtt and M.rtt[slot]) or 100) / 2) end
+
+-- (0.73.80) Weapon stand-ins (the user, 2026-11-04: "Then do the weapon stand-ins next"). A launch whose weapon number
+-- their real plane here hasn't, or has as another kind of weapon, is shown as the nearest weapon of the same kind it has
+-- instead of being dropped. A player on a weapon mod (SPWeaponCustomizer's extra special slots, AC8WeaponSwap) or in a
+-- modded plane shown here on a stock fallback (its own default loadout) fires numbers the plane here hasn't: the runtime
+-- refused those ("not a weapon of their plane here", 57-74 a game in the 31-round test of 2026-11-04: Amia's F-22A
+-- firing weapon 3, its plane here with weapons 0-2). What the plane here has comes from SV_PPWeapons (runtime 0.32.24):
+-- each number -2 not usable, -1 not known yet, 0-4 its kind as seen launched here (0 explosive: missiles and bombs, 1
+-- the laser, 2 a bullet special, 3 an electronic one: ESM / ECM, 4 another), 10-14 its launcher table entry's (not
+-- verified in the exe: used only with standin_table). M.weaponFor picks, for a shot of kind k and weapon w:
+--   (b) a special whose id (their loadout now) sits at the plane's other special number (its loadout as it spawned:
+--       theirs changed since) -> that number, the same weapon;
+--   (a) w itself when the plane has it and it's of that kind or not known; but a missile special not known on a fallback
+--       plane (another airframe's numbers) or where their loadout has another special now isn't trusted: the remote
+--       fire treats whatever it launches as a missile, a laser or ESM there too;
+--   (c) the nearest number of the same kind, ties to the lower: a missile special the nearest missile special, else
+--       the standard missile (weapon 1: every player plane's, known or not); the standard missile weapon 1, else the
+--       nearest special; a laser or ESM / ECM only one of its kind, else not shown; a bullet special one of its kind,
+--       else a burst of the plane's gun (standin_gun_s).
+-- Only numbers the plane here has are sent once it's known. A stand-in launch (c) keeps the shot's seed, start, rotation,
+-- velocity and target, its spawn slot 0, the +0x26 byte 0 and its lock-ons at most 1 (another weapon's mean other
+-- things); (b) changes the number only. The relay keeps the original: each game picks for its own plane. No
+-- SV_PPWeapons (an older runtime), nothing read, or [coop.sync] standins = false: as sent, as before.
+-- (fireShots, M.standInPay) what this game knows of player slot's real plane's weapons: { addr, at, tbl, n, k = { [0] =
+-- ... }, s }; nil when it can't tell. Read on the first shot of each plane, again at most every 2 s when a shot needs it
+-- (or when it couldn't be read)
+function M.ppKinds(slot, P, now, need)
+    if type(SV_PPWeapons) ~= "function" or not P.addr then return nil end
+    local c = P.wk
+    if c and c.addr == P.addr and (now - c.at < 2 or (c.n and not need)) then return c.n and c or nil end
+    c = { addr = P.addr, at = now, tbl = sc().standin_table == true }
+    P.wk = c
+    local okW, s = pcall(SV_PPWeapons, P.addr, c.tbl and 1 or 0)
+    if not (okW and type(s) == "string" and s ~= "") then
+        once("ppw" .. slot .. "/" .. tostring(P.addr), string.format("coopfire: player %d's real plane here: its weapons can't "
+            .. "be read (SV_PPWeapons: %s): their launches go as sent", slot + 1, okW and tostring(s) or ("error " .. tostring(s))))
+        return nil
+    end
+    local k, n, usable, words = {}, 0, 0, {}
+    for v in s:gmatch("[^,]+") do
+        local x = M.intOf(v) or -1
+        k[n] = x
+        if x ~= -2 then usable = usable + 1 end
+        words[#words + 1] = string.format("%d %s%s", n, (n == 0 and x == -1) and "the gun" or M.kindWord(x >= 10 and x - 10 or x, n),
+            x >= 10 and " (its table's)" or "")
+        n = n + 1
+    end
+    if n == 0 or n > 64 or usable == 0 then
+        once("ppw0" .. slot .. "/" .. tostring(P.addr), string.format("coopfire: player %d's real plane here: no weapon of it usable "
+            .. "(SV_PPWeapons %s): their launches go as sent", slot + 1, s))
+        return nil
+    end
+    c.n, c.k, c.s = n, k, s
+    if P.wkSaid ~= tostring(P.addr) .. s then                  -- (once a plane, again when what's known changes)
+        P.wkSaid = tostring(P.addr) .. s
+        log(string.format("coopfire: player %d's real plane here (%s%s): its weapons %s (SV_PPWeapons %s)", slot + 1,
+            tostring(P.code or "?"), P.fallback and (", shown as a " .. tostring(P.fallback)) or "", table.concat(words, ", "), s))
+    end
+    return c
+end
+-- v as a whole number, else nil
+function M.intOf(v)
+    local x = tonumber(v)
+    if not x or x ~= math.floor(x) or x ~= x then return nil end
+    return math.floor(x)
+end
+-- a weapon kind in words (k: 0-4, -1 not known, -2 not usable; w its number: 0 the gun, 1 the standard missile, 2 and
+-- up the specials); bare: without "a" / "the"
+function M.kindWord(k, w, bare)
+    local t
+    if k == 0 then
+        t = w == 1 and { "standard missile", "the standard missile" } or w == 0 and { "explosive weapon", "an explosive weapon" }
+            or { "missile special", "a missile special" }
+    else
+        t = ({ [1] = { "laser", "a laser" }, [2] = { "bullet special", "a bullet special" }, [3] = { "ESM / ECM", "an ESM / ECM" },
+               [4] = { "weapon of another kind", "a weapon of another kind" }, [-1] = { "not known yet", "not known yet" },
+               [-2] = { "not usable", "not usable" } })[k] or { "?", "?" }
+    end
+    return bare and t[1] or t[2]
+end
+-- the number to show a shot of kind k, weapon w on a plane here whose weapons are c (M.ppKinds); ids: { sh = their
+-- specials' ids now, cp = the plane's here as it spawned } (nil: not known, or a fallback); fb: a fallback plane;
+-- gun: a burst of its gun may stand in. -> x, how: "own" (w as sent), "id", "near", or nil and "gun" / "none"
+function M.weaponFor(k, w, c, ids, fb, gun)
+    local K, n, lo = c.k, c.n, k == 0 and 1 or 2
+    local function kindAt(i)
+        local v = K[i]
+        if v == nil or v < 0 then return nil end
+        if v >= 10 then return c.tbl and v - 10 or nil end
+        return v
+    end
+    local function usable(i) return i >= lo and i < n and K[i] ~= nil and K[i] ~= -2 end
+    if ids and (w == 2 or w == 3) and (ids.sh[w] or 0) > 0 then          -- (b) the same special, at its number here
+        for j = 2, 3 do
+            local kj = kindAt(j)
+            if ids.cp[j] == ids.sh[w] and usable(j) and (kj == nil or kj == k) then return j, j == w and "own" or "id" end
+        end
+    end
+    if usable(w) then                                                 -- (a) its own number
+        local kw = kindAt(w)
+        if kw == k then return w, "own" end
+        local other = ids and (w == 2 or w == 3) and ids.cp[w] ~= ids.sh[w]
+        if kw == nil and (k ~= 0 or w == 1 or not (fb or other)) then return w, "own" end
+    end
+    local best, bestD                                                 -- (c) the nearest of its kind (ties: the lower)
+    local function consider(i)
+        local ki = kindAt(i)
+        if usable(i) and (ki == k or (k == 0 and i == 1 and ki == nil)) and (not best or math.abs(i - w) < bestD) then
+            best, bestD = i, math.abs(i - w)
+        end
+    end
+    if k == 0 and w <= 1 then consider(1) end                         -- (the standard missile: weapon 1 first)
+    if not best then for i = 2, n - 1 do consider(i) end end          -- (a special: the specials first)
+    if k == 0 and not best then consider(1) end
+    if best then return best, "near" end
+    if k == 2 and gun then return nil, "gun" end
+    return nil, "none"
+end
+-- why a shot of kind k, weapon w isn't shown as itself on that plane (the log's words)
+local function standWhy(k, w, c, ids, fb)
+    local v = c.k[w]
+    if w >= c.n or v == nil or v == -2 then return string.format("it has no weapon %d", w) end
+    if w < (k == 0 and 1 or 2) then return k == 0 and "weapon 0 is the gun" or "a special's number is 2 or more" end
+    local kv = v >= 10 and (c.tbl and v - 10 or nil) or (v >= 0 and v or nil)
+    if kv and kv ~= k then return string.format("its weapon %d is %s", w, M.kindWord(kv, w)) end
+    if ids and (w == 2 or w == 3) and ids.cp[w] ~= ids.sh[w] then
+        return string.format("their special %d is id %s now, the plane here has id %s there (their loadout changed since it spawned)",
+            w - 1, tostring(ids.sh[w]), tostring(ids.cp[w]))
+    end
+    if fb then return string.format("its weapon %d isn't known yet and it's another airframe (a fallback: its numbers aren't theirs)", w) end
+    return string.format("its weapon %d isn't known yet", w)
+end
+-- a loadout's two special ids ("a,b/c/x,y" -> { [2] = x, [3] = y }: weapons 2 and 3), nil if it has none
+function M.loIds(lo)
+    if type(lo) ~= "string" then return nil end
+    local x, y = lo:match("/(%d+),(%d+)$")
+    if not x then return nil end
+    return { [2] = tonumber(x), [3] = tonumber(y) }
+end
+-- (fireShots) the shot to ask of player slot's real plane here for one of their launches (pay: "k,w,s,u,seed,lock,..."):
+-- pay itself (its own weapon, or nothing known of the plane), another weapon's (a stand-in), or nil and why ("gun": a
+-- burst of its gun instead, "none": not shown)
+function M.standInPay(slot, P, pay, now)
+    if sc().standins == false then return pay end
+    local f = {}
+    for v in pay:gmatch("[^,]+") do f[#f + 1] = v end
+    local k, w = M.intOf(f[1]), M.intOf(f[2])
+    if #f ~= 15 or not k or not w or k < 0 or k > 3 or w < 0 or w > 255 then return pay end   -- (the runtime refuses it)
+    local c = M.ppKinds(slot, P, now, false)
+    if not c then return pay end
+    local r0 = M.roster[slot]
+    local sh, cp = M.loIds(r0 and r0.lo), nil
+    if not P.fallback then cp = M.loIds(P.lo) end
+    local ids = (sh and cp) and { sh = sh, cp = cp } or nil
+    local fb, gun = P.fallback ~= nil, on("guns")
+    local x, how = M.weaponFor(k, w, c, ids, fb, gun)
+    if how ~= "own" and now - c.at >= 2 then                   -- (a stand-in: what's been seen launched since, first)
+        local c2 = M.ppKinds(slot, P, now, true)
+        if not c2 then return pay end
+        c = c2
+        x, how = M.weaponFor(k, w, c, ids, fb, gun)
+    end
+    if how == "own" then return pay end
+    local n = S.n
+    n.standBy = n.standBy or {}
+    local by = n.standBy[slot] or {}
+    n.standBy[slot] = by
+    local mk = string.format("%s%d->%s", k == 0 and "" or (M.kindWord(k, w, true) .. " "), w, x and tostring(x) or how)
+    by[mk] = (by[mk] or 0) + 1
+    local what = M.kindWord(k, w, true)
+    local key = string.format("si%d/%d/%d>%s/%s", slot, k, w, tostring(x or how), tostring(P.addr))
+    if how == "id" or how == "near" then
+        n.standIn = (n.standIn or 0) + 1
+        once(key, string.format("coopfire: player %d's %s (weapon %d) shown on their real plane here as its weapon %d (%s): %s",
+            slot + 1, what, w, x, M.kindWord(k, x), how == "id" and string.format("the same special sits there (id %s; their "
+            .. "loadout changed since it spawned)", tostring(ids and ids.sh[w])) or standWhy(k, w, c, ids, fb)))
+        f[2] = tostring(x)
+        if how == "near" then
+            f[3], f[4] = "0", "0"
+            f[6] = tostring(math.min(M.intOf(f[6]) or 0, 1))
+        end
+        return table.concat(f, ",")
+    end
+    if how == "gun" then
+        n.standGun = (n.standGun or 0) + 1
+        P.burstUntil = now + (tonumber(sc().standin_gun_s) or 0.5)
+        once(key, string.format("coopfire: player %d's bullet special (weapon %d) shown as their real plane's gun here: %s, and "
+            .. "it has no bullet special (its weapons: %s)", slot + 1, w, standWhy(k, w, c, ids, fb), c.s))
+        return nil, how
+    end
+    n.standNone = (n.standNone or 0) + 1
+    once(key, string.format("coopfire: player %d's %s (weapon %d) NOT shown: %s, and their real plane here has no %s (its weapons: "
+        .. "%s)", slot + 1, what, w, standWhy(k, w, c, ids, fb), k == 0 and "missile" or what, c.s))
+    return nil, how
+end
 -- player slot's shots (entries "k:id:age"; extraMs: this leg's half round trip): each one that passes the guards fired
 -- from their plane here; those entries (their ages grown) for the host to relay
 local function fireShots(slot, body, extraMs)
@@ -3314,11 +3510,20 @@ local function fireShots(slot, body, extraMs)
                 passed[#passed + 1] = string.format("p:%d:%d:%s", pid, page, pay)
                 if P and P.real and P.addr and valid(P.obj) and on("missiles") and type(SV_CoopPPShot) == "function"
                     and not inStore() then
-                    local okS, r = pcall(SV_CoopPPShot, P.addr, addrOfId(pid) or 0, pay)
-                    if not okS then r = tostring(r) end
-                    if r == 1 then S.n.pOk = (S.n.pOk or 0) + 1 else S.n.pBad = (S.n.pBad or 0) + 1 end
-                    once("pfirst" .. slot, string.format("coopfire: player %d's first launch on their real plane here: %s", slot + 1,
-                        r == 1 and "queued" or ("refused (" .. tostring(r) .. ")")))
+                    -- ((0.73.80) a weapon their plane here hasn't: the nearest of its kind it has, M.standInPay; the
+                    -- relay above keeps theirs)
+                    local okP, pay2 = pcall(M.standInPay, slot, P, pay, now)
+                    if not okP then
+                        once("sipay", "coopfire: the weapon stand-in failed (" .. tostring(pay2) .. "): their launches go as sent")
+                        pay2 = pay
+                    end
+                    if pay2 then
+                        local okS, r = pcall(SV_CoopPPShot, P.addr, addrOfId(pid) or 0, pay2)
+                        if not okS then r = tostring(r) end
+                        if r == 1 then S.n.pOk = (S.n.pOk or 0) + 1 else S.n.pBad = (S.n.pBad or 0) + 1 end
+                        once("pfirst" .. slot, string.format("coopfire: player %d's first launch on their real plane here: %s", slot + 1,
+                            r == 1 and "queued" or ("refused (" .. tostring(r) .. ")")))
+                    end
                 end
             end
         else
@@ -3398,7 +3603,8 @@ local function peersTick(now)
                 end
             end
             if P.real then                                    -- (a real plane: its own gun's trigger and flares, COOP2MP T4)
-                local gun = on("guns") and bit(fl, BIT_GUN) or false
+                -- ((0.73.80) or a bullet special their plane here hasn't, shown as a burst of its gun: M.standInPay)
+                local gun = on("guns") and (bit(fl, BIT_GUN) or now < (P.burstUntil or 0)) or false
                 if gun ~= (P.gunOn or false) and type(SV_CoopPPFx) == "function" then
                     P.gunOn = gun
                     SV_CoopPPFx(P.addr, 1, gun and 1 or 0)
@@ -3479,13 +3685,28 @@ function M.syncTick(now, pawn)
     ammoAfter()
     if now >= (S.statAt or now + 60) then                   -- (a minute's tally, when anything happened)
         local n = S.n
-        if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) + (n.pOk or 0) + (n.pBad or 0) > 0 then
+        if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) + (n.pOk or 0) + (n.pBad or 0)
+            + (n.standIn or 0) + (n.standGun or 0) + (n.standNone or 0) > 0 then
+            -- ((0.73.80) the weapon stand-ins, when any: how many, and each player's numbers as sent -> shown here)
+            local si = ""
+            if (n.standIn or 0) + (n.standGun or 0) + (n.standNone or 0) > 0 then
+                local per = {}
+                for s, by in pairs(n.standBy or {}) do
+                    local maps = {}
+                    for mk, c in pairs(by) do maps[#maps + 1] = string.format("%s x%d", mk, c) end
+                    table.sort(maps)
+                    per[#per + 1] = string.format("%d: %s", s + 1, table.concat(maps, ", "))
+                end
+                table.sort(per)
+                si = string.format("; weapon stand-ins: %d on another weapon of the same kind, %d as the gun, %d not shown (no "
+                    .. "weapon of that kind there); by player: %s", n.standIn or 0, n.standGun or 0, n.standNone or 0, table.concat(per, "; "))
+            end
             log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
                 .. "their target not here, %d with no plane here, %d not shown: you were in the STORE), your gun %d bursts, "
                 .. "your flares %d, your gear flips %d, afterburner flips %d, throttle up to %.3f (ab_throttle %s); real planes' "
-                .. "launches (T4b) %d queued, %d refused", n.sent,
+                .. "launches (T4b) %d queued, %d refused%s", n.sent,
                 n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0, n.inStore or 0, n.bursts or 0,
-                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle), n.pOk or 0, n.pBad or 0))
+                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle), n.pOk or 0, n.pBad or 0, si))
         end
         S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
         S.statAt = now + 60
@@ -5271,7 +5492,8 @@ function COOP.tick(tick)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
             -- (whose it is and whether it's their real plane kept too: a host by migration keeps every live plane)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj), sid = P.sid, real = P.real, code = P.code,
-                                                       lo = P.lo, row = P.row, unit = P.unit } or {}
+                                                       lo = P.lo, row = P.row, unit = P.unit,
+                                                       fallback = P.fallback } or {}   -- ((0.73.80) M.standInPay)
         end
         pcall(M.asidePrune)                                            -- ((0.73.77) set-aside planes gone with a level let go)
         if M.vmHere then M.valkaHere(false, D and "a new run here" or "the run here is over") end   -- ((0.73.77) D2)
