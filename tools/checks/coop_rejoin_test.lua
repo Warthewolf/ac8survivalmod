@@ -54,7 +54,12 @@ function playerOnAirfield() return false end
 function gamePaused() return false end
 function NotifyOnNewObject() end
 local classes = {}
-function loadObject(path) local o = { addr = 7000 + #classes, path = path }; classes[o.addr] = path; classes[#classes + 1] = o; return o end
+-- (0.73.80) a class path listed in notInstalled doesn't load (an add-on this game hasn't: the Falken's own blueprint)
+local notInstalled = {}
+function loadObject(path)
+    if notInstalled[path] then return nil end
+    local o = { addr = 7000 + #classes, path = path }; classes[o.addr] = path; classes[#classes + 1] = o; return o
+end
 SV_ERR = {}
 
 local nextAddr = 1000
@@ -494,6 +499,8 @@ print("0.73.80: a plane with no blueprint here as its [coop.real_fallback]; what
 -- (the 31-round test, finding coop7: Alyssa's modded Falken flew as an AI F-16C on every joiner, a blue ally box, none
 -- of her launches replayed)
 do
+    local FALKEN_BP = CFG.coop.real_paths.falken
+    notInstalled[FALKEN_BP] = true                        -- (this game hasn't the Falken add-on: its fallback)
     local fromF, n0f = #logs + 1, #seq
     inbox[#inbox + 1] = "5|sys|joined"
     inbox[#inbox + 1] = hi(5, "f16c_common", "falken", LO1, "FALKEN")
@@ -505,6 +512,8 @@ do
           "a Falken (no blueprint here): a real ADFX-02 player plane in its slot, not an AI stand-in (" .. tostring(fk and fk.full) .. ")")
     check(spawnArgs[5] and spawnArgs[5].lo == "" and spawnArgs[5].pt == "", "... with its own default weapons and paint (theirs are another airframe's)")
     check(line("coop: player 6's plane is their falken shown as a real adfx02 (a player plane", fromF) ~= nil, "... logged")
+    check(line("coop: player 6's falken: its own blueprint isn't installed here (" .. FALKEN_BP .. "): [coop.real_fallback] instead", fromF) ~= nil
+          and M.modMiss[FALKEN_BP] == true, "(0.73.80) its own blueprint tried first, not installed: logged, not asked again")
     -- a code with no fallback: the AI stand-in, as before
     n0f = #seq
     inbox[#inbox + 1] = "6|sys|joined"
@@ -529,9 +538,10 @@ do
     check(#callouts == c0, "your stock F-16C: nothing to say")
     pawn.full = "BP_PlayerPlane_PP9001_falken_L001_C_0"
     tick(); tick()
-    check(#callouts == c0 + 1 and callouts[#callouts] == "OTHERS SEE YOUR FALKEN AS ADFX02 / nil"
-          and line("coop: the other players see your FALKEN (falken) as a real adfx02 ([coop.real_fallback])", fromF) ~= nil,
-          "your Falken: OTHERS SEE YOUR FALKEN AS ADFX02, once, logged (" .. tostring(callouts[#callouts]) .. ")")
+    check(#callouts == c0 + 1 and callouts[#callouts] == "OTHERS SEE YOUR FALKEN AS ADFX02 WITHOUT THE ADD-ON / nil"
+          and line("coop: the other players see your FALKEN (falken) as itself where its add-on is installed, else a real adfx02 "
+          .. "([coop.real_paths], [coop.real_fallback])", fromF) ~= nil,
+          "your Falken: OTHERS SEE YOUR FALKEN AS ADFX02 WITHOUT THE ADD-ON, once, logged (" .. tostring(callouts[#callouts]) .. ")")
     pawn.full = "BP_PlayerPlane_PP9002_mystery_C_0"
     tick()
     check(callouts[#callouts] == "OTHERS SEE YOUR MYSTERY AS F16C (AI) / nil"
@@ -546,6 +556,32 @@ do
     check(callouts[#callouts] == "OTHERS SEE YOUR ADFX02 AS F16C (AI) / nil", "real planes off: an ADFX-02 (no AI row) seen as the default's F-16C")
     CFG.coop.real_planes = true
     pawn.full = was
+    tick()
+end
+
+---------------------------------------------------------------------------------------------------- 0.73.80: real_paths
+print("0.73.80: a modded plane's own blueprint, where its add-on is installed here ([coop.real_paths])")
+do
+    local FALKEN_BP = CFG.coop.real_paths.falken
+    notInstalled[FALKEN_BP], M.modMiss = nil, {}          -- (this game has the Falken add-on)
+    local fromK, n0k = #logs + 1, #seq
+    inbox[#inbox + 1] = "7|sys|joined"
+    inbox[#inbox + 1] = hi(7, "f16c_common", "falken", LO1, "FALKEN")
+    peerState[7] = FRESH
+    tick(); tick(1)
+    local fk = native[7]
+    check(fk and has(fk.full, "PP9001_falken_L001") and M.peers[7].obj == fk and M.peers[7].real and M.peers[7].code == "falken"
+          and M.peers[7].fallback == nil and not has(seqSince(n0k), "spawn SV_Unit_CoopPeer"),
+          "a Falken with its add-on installed here: its own real plane, no fallback (" .. tostring(fk and fk.full) .. ")")
+    check(spawnArgs[7] and spawnArgs[7].lo == LO1, "... with their loadout (their own airframe's)")
+    check(line("coop: player 8's falken: its own blueprint is installed here (" .. FALKEN_BP .. "): the real thing", fromK) ~= nil
+          and line("coop: player 8's plane is their real falken (a player plane", fromK) ~= nil, "... logged")
+    -- a path that isn't /Game/: never loaded
+    CFG.coop.real_paths.mystery = "C:/evil.uasset"
+    check(M.modClassPath("mystery") == nil and M.modClassPath("FALKEN") == FALKEN_BP, "only /Game/ paths; the code any case")
+    CFG.coop.real_paths.mystery = nil
+    inbox[#inbox + 1] = "7|sys|left"
+    peerState[7] = ""
     tick()
 end
 

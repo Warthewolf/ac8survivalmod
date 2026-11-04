@@ -1887,6 +1887,19 @@ function M.realFallback(code)
     if type(fb) ~= "string" or fb == "" or fb == code or not COOP.planeClassPath(fb) then return nil end
     return fb
 end
+-- (0.73.80, the user 2026-11-04: "try the Falken's own blueprint first") A modded plane's own blueprint by its code
+-- ([coop.real_paths]: falken = the Falken add-on's BP_PlayerPlane_PP9001_falken_L001, from Saint Alessia's log of the
+-- 31-round test), tried before [coop.real_fallback]: a game with that add-on installed shows the real thing, with their
+-- loadout and paint; one without it, the fallback. Only /Game/ paths; nil when none is listed.
+function M.modClassPath(code)
+    local t = cfg().real_paths
+    if type(t) ~= "table" or type(code) ~= "string" then return nil end
+    local p = t[code]
+    if p == nil then for k, v in pairs(t) do if type(k) == "string" and k:lower() == code:lower() then p = v end end end
+    if type(p) ~= "string" or p:sub(1, 6) ~= "/Game/" then return nil end
+    return p
+end
+M.modMiss = {}                                           -- (a path that didn't load: not asked again this session)
 -- (0.73.80, finding coop7) What the others see your plane as, by this game's settings (each game decides by its own
 -- [coop]; the shipped ones agree): nil when it's your own airframe, else its name and how ("a real <x>" / "an AI
 -- stand-in on <row>"). The host's own Falken was an F-16C to everyone and only its log said so ("isn't in [coop]
@@ -1897,6 +1910,11 @@ function M.seenAs(code)
     if c.real_planes == true then
         if COOP.planeClassPath(code) then return nil end
         local fb = M.realFallback(code)
+        -- ((0.73.80) your plane's own blueprint listed: those with its add-on see it, the others its fallback)
+        if fb and M.modClassPath(code) then
+            return string.upper(fb) .. " WITHOUT THE ADD-ON", "itself where its add-on is installed, else a real " .. fb
+                .. " ([coop.real_paths], [coop.real_fallback])"
+        end
         if fb then return string.upper(fb), "a real " .. fb .. " ([coop.real_fallback])" end
     elseif type(c.airframes) == "table" and c.airframes[code] then
         return nil
@@ -1918,13 +1936,27 @@ local function spawnReal(slot, P, code, lo, pt)
     if walkHold and walkHold() then return nil, "the walks are held (a level going away)" end   -- (0.73.73: a held search could orphan it)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return nil, "you have no plane here yet" end
-    local path, fb = COOP.planeClassPath(code), nil
-    if not path then                                     -- ((0.73.80) a code with no blueprint here: its fallback's)
+    local path, fb, cls = COOP.planeClassPath(code), nil, nil
+    if not path then                                     -- ((0.73.80) a code with no stock blueprint: its own, if installed here
+        local mp = M.modClassPath(code)
+        if mp and not M.modMiss[mp] then
+            local okL, c = pcall(loadObject, mp)
+            if okL and c ~= nil and valid(c) then
+                cls, path = c, mp
+                log(string.format("coop: player %d's %s: its own blueprint is installed here (%s): the real thing", slot + 1, code, mp))
+            else
+                M.modMiss[mp] = true
+                log(string.format("coop: player %d's %s: its own blueprint isn't installed here (%s): [coop.real_fallback] instead",
+                    slot + 1, code, mp))
+            end
+        end
+    end
+    if not path then                                     -- ((0.73.80) else its fallback's)
         fb = M.realFallback(code)
         if not fb then return nil, "no player plane blueprint for " .. tostring(code) .. " (and no [coop.real_fallback] for it)" end
         path, lo, pt = COOP.planeClassPath(fb), "", ""
     end
-    local cls = loadObject(path)
+    cls = cls or loadObject(path)
     if not valid(cls) then return nil, "its class didn't load (" .. path .. ")" end
     local at, yaw = P.at, (P.rot and P.rot[2]) or 0
     -- ((0.73.77) SV_CoopSpawnPP destroys the plane the runtime keeps in this slot: a set-aside one moved on first, M.nativeFree)
