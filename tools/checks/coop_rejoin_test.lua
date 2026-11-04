@@ -15,7 +15,11 @@
 --     host's new run, a new run here, this game becoming the host;
 --   D3, a joiner's special-round music: the host's "rnd" field 11, its specialFor never rolling dice of its own; the
 --     host's field from its pick, never rolling a round not picked yet;
---   rejoin off; the migration's set-aside the same way.
+--   rejoin off; the migration's set-aside the same way;
+--   (0.73.83) the radar ("people who leave and rejoin, their plane disappears correctly but not their radar blip"): a plane
+--     hidden here is deactivated (bIsActivated false) and put back as it was when shown (left, rejoined in the same
+--     aircraft, DOWN, a stand-in); a set-aside one also moved aside_far_km off the map and kept there and deactivated
+--     (asideTick puts it back once, said once); radar_off = false leaves the flag; a new run keeps what to put back.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -66,7 +70,7 @@ SV_ERR = {}
 local nextAddr = 1000
 local function plane(full)
     nextAddr = nextAddr + 1
-    local o = { full = full, addr = nextAddr, X = 1000, Y = 2000, Z = 300000, HealthInternal = 1000 }
+    local o = { full = full, addr = nextAddr, X = 1000, Y = 2000, Z = 300000, HealthInternal = 1000, bIsActivated = true }
     function o:SetActorHiddenInGame(v) self.hidden = v end
     function o:SetActorEnableCollision(v) self.coll = v end
     function o:SetActorTickEnabled(v) self.tick = v end
@@ -74,6 +78,7 @@ local function plane(full)
     function o:K2_SetActorLocation(v) self.X, self.Y, self.Z = v.X, v.Y, v.Z; return true end
     function o:K2_DestroyActor() self.destroyed = true end
     function o:SetIsInvincible() end
+    function o:GetAddress() return self.addr end
     return o
 end
 local pawn = plane("BP_PlayerPlane_PP0022_f16c_C_0")
@@ -164,6 +169,8 @@ peerState[1] = ""
 tick()
 check(M.left[1] ~= nil and su47.hidden == true and line("coop: player 2 left: if they're back in another aircraft", from),
       "left: their plane hidden, a rejoin marked (" .. tostring(line("coop: player 2 left", from)) .. ")")
+check(su47.bIsActivated == false and line("coop: player 2's plane hidden (left): off the radar (deactivated)", from) ~= nil,
+      "(0.73.83) left: off the radar too (deactivated), said so")
 -- back 18 s later in a Rafale M (liljojofett, Shake Shack's run of 2026-11-02)
 clock = clock + 18
 from, n0 = #logs + 1, #seq
@@ -183,8 +190,25 @@ check(not su47.gone and not su47.destroyedBySpawn and not su47.destroyed and nat
       "the Su-47 never destroyed: kept in slot 24 in the runtime")
 check(su47.hidden == true and su47.coll == false and su47.tick == false and su47.Z == 3000000,
       "the Su-47 hidden, collision and tick off, 30 km up (" .. tostring(su47.Z) .. ")")
-check(line("coop: player 2's plane here set aside, hidden (they rejoined in another aircraft): kept in slot 24, tick off, moved 30 km up", from) ~= nil,
+check(su47.X == 100000000 and su47.Y == 2000000 and su47.bIsActivated == false,
+      "(0.73.83) ... and 1000 km off the map, deactivated: off the radar (" .. tostring(su47.X) .. ", " .. tostring(su47.Y) .. ")")
+check(line("coop: player 2's plane here set aside, hidden (they rejoined in another aircraft): kept in slot 24, tick off, moved 30 km up "
+           .. "and 1000 km off the map; off the radar already", from) ~= nil,
       "the set-aside's line (" .. tostring(line("set aside", from)) .. ")")
+check(rflm.bIsActivated == true, "the new Rafale M on the radar (never deactivated)")
+-- (0.73.83) the game puts the set-aside plane back (a restart in the same level): asideTick puts it off the radar again, once said
+do
+    local f0 = #logs + 1
+    su47.bIsActivated, su47.X = true, 5000
+    tick(5.1)
+    check(su47.bIsActivated == false and su47.X == 100000000 and line("set-aside plane was activated again (by the game): deactivated again", f0) ~= nil
+          and line("set-aside plane was moved back (by the game", f0) ~= nil, "(0.73.83) put back by the game: off the radar and the map again, said so")
+    su47.bIsActivated = true
+    tick(5.1)
+    local n = 0
+    for i = f0, #logs do if has(logs[i], "activated again (by the game)") then n = n + 1 end end
+    check(su47.bIsActivated == false and n == 1, "... again: put back, said once")
+end
 tick()
 check(M.peers[1].shown == true and has(seq[#seq] or "", "peer 1=" .. rflm.addr) or line("coop: player 2's plane shown", from) ~= nil,
       "the new one shown and bound to their stream")
@@ -196,6 +220,38 @@ tick()
 check(native[1] == rflm and M.peers[1].obj == rflm and not has(seqSince(n0), "spawnPP") and not has(seqSince(n0), "swap")
       and line("coop: player 2 is back in the same rflm: their plane here kept", from) ~= nil and rflm.hidden == false,
       "back in the same Rafale M with the same weapons: kept and shown")
+check(rflm.bIsActivated == true and line("coop: player 2's plane shown; on the radar again (activated)", from) ~= nil,
+      "(0.73.83) ... and on the radar again (" .. tostring(line("player 2's plane shown", from)) .. ")")
+-- (0.73.83) DOWN: hidden and off the radar, back on it when they're up again
+do
+    local DOWNST = "500000,0,300000,0,90,0,1000,100,9,100"   -- (their stream's flags: in the mission, DOWN)
+    local f0 = #logs + 1
+    peerState[1] = DOWNST; tick()
+    check(rflm.hidden == true and rflm.bIsActivated == false and line("coop: player 2's plane hidden (down); off the radar (deactivated)", f0) ~= nil,
+          "(0.73.83) DOWN: hidden and off the radar")
+    -- a new run here (a restart in the same level: the players' tables made again, the planes kept) keeps what to put back
+    local Dkeep, Pold = D, M.peers[1]
+    D = { round = 1, state = "break", now = clock, startRound = 1, up = {}, flown = {} }
+    tick()
+    check(M.peers[1] ~= Pold and M.peers[1].obj == rflm and rflm.hidden == true and rflm.bIsActivated == false,
+          "(0.73.83) a new run here: player 2's table made again, their plane kept (still DOWN: hidden, off the radar)")
+    peerState[1] = FRESH; tick()
+    check(rflm.hidden == false and rflm.bIsActivated == true, "(0.73.83) up again after the new run: shown, on the radar (kept by its address)")
+    D = Dkeep; tick()
+    -- a plane the game had deactivated itself stays so
+    rflm.bIsActivated = false
+    peerState[1] = DOWNST; tick()
+    peerState[1] = FRESH; tick()
+    check(rflm.hidden == false and rflm.bIsActivated == false, "(0.73.83) a plane that was deactivated before it was hidden: left so when shown")
+    rflm.bIsActivated = true
+    -- radar_off = false: the flag left alone
+    CFG.coop.rejoin.radar_off = false
+    peerState[1] = DOWNST; tick()
+    check(rflm.hidden == true and rflm.bIsActivated == true, "(0.73.83) [coop.rejoin] radar_off = false: hidden, the flag left alone")
+    peerState[1] = FRESH; tick()
+    CFG.coop.rejoin.radar_off = true
+    check(rflm.hidden == false and rflm.bIsActivated == true, "... shown again")
+end
 -- back with no airframe heard yet: the old plane stays hidden, then replaced
 inbox[#inbox + 1] = "1|sys|left"; peerState[1] = ""; tick()
 from, n0 = #logs + 1, #seq
@@ -307,6 +363,7 @@ tick()
 order = seqSince(n0)
 check(sb.hidden == true and sb.coll == false and sb.tick == false and not sb.destroyed and M.asideUnit.SV_Unit_CoopPeerB == true,
       "the Su-47 stand-in set aside: hidden, collision and tick off, its unit B never flown again")
+check(sb.bIsActivated == false and sb.X == 100000000, "(0.73.83) ... off the radar (deactivated) and 1000 km off the map")
 check(has(order, "peer 1=0") and has(order, "spawn SV_Unit_CoopPeerA") and not has(order, "spawn SV_Unit_CoopPeerB"),
       "the new one on a free unit: this game's own slot's, A (" .. order .. ")")
 check(line("coop: player 2 rejoined in rflm_common (was su47_common): old plane set aside, new one spawned (an AI stand-in, SV_Unit_CoopPeerA)", from) ~= nil,

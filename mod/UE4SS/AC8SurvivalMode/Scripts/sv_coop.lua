@@ -2421,7 +2421,48 @@ end
 -- plane here keeps its weapons until the next level. CFG.coop.rejoin.
 do
 M.left, M.aside, M.parkAt, M.standUnit, M.unitSlot, M.asideUnit = {}, {}, {}, {}, {}, {}
+M.radarSt = {}                                       -- ((0.73.83) planes taken off the radar here, by address: { obj, was })
 local function rejoinCfg() return cfg().rejoin or {} end
+-- ((0.73.83) the user, 2026-11-04: "people who leave and rejoin, their plane disappears correctly but not their radar
+-- blip") SetActorHiddenInGame hides a plane's meshes, not its minimap icon: the radar draws the game's objects hidden or
+-- not, at their map position, and a set-aside plane moved straight up kept its blip where it was (Saint Alessia's 0.73.81
+-- run: player 2's F-22A set aside at 12:57:23). A plane hidden here (left, out of the mission, DOWN, waiting for a
+-- rejoin's airframe, set aside) is taken off the radar too: deactivated (LiveGameObject.bIsActivated, the game's own
+-- active flag, false while it's hidden, put back as it was when it's shown), and a set-aside one, never shown again, also
+-- moved aside_far_km off the map. Which of the two the radar heeds isn't known yet: the log says what each did.
+-- [coop.rejoin] radar_off = false leaves the flag alone. What to put back is kept by the plane's address (M.radarSt),
+-- not on the player's table: that's made again on a new run, a slot move and a joiner's rebuild, and a plane whose state
+-- was lost would stay off the radar once shown.
+-- (UE4SS may give two Lua objects for one game object: an entry is this plane's while the object it was made for is still
+-- live at that address; one left from a freed plane whose address came round again is dropped)
+local function radarKey(o) return addrOf(o) or o end
+function M.radarOff(P)
+    local o = P and P.obj
+    if not (o and live(o)) then return "no plane" end
+    local a = radarKey(o)
+    local st = M.radarSt[a]
+    if st and live(st.obj) then return "off the radar already" end
+    if rejoinCfg().radar_off == false then return nil end
+    local was, now
+    pcall(function() was = o.bIsActivated end)
+    local okW = pcall(function() o.bIsActivated = false end)
+    pcall(function() now = o.bIsActivated end)
+    M.radarSt[a] = { obj = o, was = was }
+    if okW and now == false then return "off the radar (deactivated)" end
+    return "NOT deactivated (bIsActivated " .. tostring(now) .. ")"
+end
+function M.radarOn(P)
+    local o = P and P.obj
+    if not o then return nil end
+    local a = radarKey(o)
+    local st = M.radarSt[a]
+    if not st then return nil end
+    M.radarSt[a] = nil
+    if not (live(st.obj) and live(o)) then return nil end
+    if st.was == false then return "on the radar as it was (it was deactivated before)" end
+    local okW = pcall(function() o.bIsActivated = true end)
+    return okW and "on the radar again (activated)" or "NOT activated again"
+end
 -- a slot no player has in the runtime (nor this game, nor a plane kept there), the highest first (the host gives the
 -- lowest free one to a newcomer)
 local function freeNative(but)
@@ -2482,18 +2523,65 @@ function M.setAside(slot, P, why)
     pcall(function() o:SetActorHiddenInGame(true) end)
     pcall(function() o:SetActorEnableCollision(false) end)
     local okT = pcall(function() o:SetActorTickEnabled(false) end)
+    local radar = M.radarOff(P)
     local alt = tonumber(rejoinCfg().aside_alt_km) or 30
-    local okM = false
-    if alt > 0 then
+    local far = tonumber(rejoinCfg().aside_far_km) or 1000
+    local okM, at = false, nil
+    if alt > 0 or far > 0 then
         okM = pcall(function()
             local v = o:K2_GetActorLocation()
-            o:K2_SetActorLocation({ X = v.X, Y = v.Y, Z = alt * 100000 }, false, {}, true)
+            local to = { X = v.X, Y = v.Y, Z = alt > 0 and alt * 100000 or v.Z }
+            if far > 0 then to.X, to.Y = far * 100000, (#M.aside + 1) * 2000000 end   -- (off the map, 20 km apart)
+            o:K2_SetActorLocation(to, false, {}, true)
+            at = to
         end)
     end
-    M.aside[#M.aside + 1] = { obj = o, slot = slot, real = P.real, unit = (not P.real) and (P.unit or PEER_UNITS[slot]) or nil }
-    log(string.format("coop: player %d's plane here set aside, hidden (%s): %s, tick %s, %s", slot + 1, why, kept,
-        okT and "off" or "NOT off", okM and string.format("moved %.0f km up", alt) or (alt > 0 and "NOT moved" or "left where it is")))
+    M.aside[#M.aside + 1] = { obj = o, slot = slot, real = P.real, unit = (not P.real) and (P.unit or PEER_UNITS[slot]) or nil,
+                              at = okM and at or nil, radar = radar ~= nil and radar ~= "no plane" }
+    local where = "left where it is"
+    if okM then
+        where = alt > 0 and string.format("moved %.0f km up", alt) or "moved"
+        if far > 0 then where = where .. string.format(" and %.0f km off the map", far) end
+    elseif alt > 0 or far > 0 then
+        where = "NOT moved"
+    end
+    log(string.format("coop: player %d's plane here set aside, hidden (%s): %s, tick %s, %s%s", slot + 1, why, kept,
+        okT and "off" or "NOT off", where, radar and ("; " .. radar) or ""))
     return true
+end
+-- (COOP.tick, every 5 s) each set-aside plane kept off the radar: deactivated again and moved back off the map when the
+-- game (a restart in the same level, a checkpoint) has put it back; said once a plane
+function M.asideTick(now)
+    if #M.aside == 0 or now < (M.asideAt or 0) then return end
+    M.asideAt = now + 5
+    for _, e in ipairs(M.aside) do
+        local o = e.obj
+        if o and live(o) then
+            if e.radar then
+                local act
+                pcall(function() act = o.bIsActivated end)
+                if act == true then
+                    pcall(function() o.bIsActivated = false end)
+                    e.reAct = (e.reAct or 0) + 1
+                    if e.reAct == 1 then
+                        log(string.format("coop: player %d's set-aside plane was activated again (by the game): deactivated again", e.slot + 1))
+                    end
+                end
+            end
+            if e.at then
+                local v
+                pcall(function() v = o:K2_GetActorLocation() end)
+                if v and (math.abs(v.X - e.at.X) > 100000 or math.abs(v.Y - e.at.Y) > 100000 or math.abs(v.Z - e.at.Z) > 100000) then
+                    pcall(function() o:K2_SetActorLocation(e.at, false, {}, true) end)
+                    e.reMove = (e.reMove or 0) + 1
+                    if e.reMove == 1 then
+                        log(string.format("coop: player %d's set-aside plane was moved back (by the game, %.0f km from its spot): moved off the map again",
+                            e.slot + 1, math.sqrt((v.X - e.at.X) ^ 2 + (v.Y - e.at.Y) ^ 2) / 100000))
+                    end
+                end
+            end
+        end
+    end
 end
 -- (at a new level here) the set-aside planes gone with their level let go; a restart in the same level keeps them
 function M.asidePrune()
@@ -2503,6 +2591,7 @@ function M.asidePrune()
     end
     M.aside = keep
     for t, e in pairs(M.parkAt) do if not live(e.obj) then M.parkAt[t] = nil end end
+    for a, st in pairs(M.radarSt) do if not live(st.obj) then M.radarSt[a] = nil end end   -- ((0.73.83) gone with their level)
 end
 -- whether stand-in unit u is set aside or flown for a player other than `slot`
 local function unitTaken(u, slot)
@@ -2720,12 +2809,15 @@ local function peerTick(slot)
         local show = (fresh and not P.down and not hold) and true or false
         if show ~= P.shown then
             P.shown = show
+            local radar                                  -- ((0.73.83) off the radar while hidden: M.radarOff)
+            if show then radar = M.radarOn(P) end
             pcall(function() P.obj:SetActorHiddenInGame(not show) end)
             pcall(function() P.obj:SetActorEnableCollision(show) end)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
-            log(string.format("coop: player %d's plane %s", slot + 1, show and "shown"
+            if not show then radar = M.radarOff(P) end
+            log(string.format("coop: player %d's plane %s%s", slot + 1, show and "shown"
                 or (hold and "hidden (back after leaving: waiting for their airframe)")
-                or (fresh and "hidden (down)" or "hidden (not in the mission)")))
+                or (fresh and "hidden (down)" or "hidden (not in the mission)"), radar and ("; " .. radar) or ""))
         end
         if P.real and valid(P.obj) and P.addr and type(SV_PPName) == "function" then
             local r1 = M.roster[slot]
@@ -4463,7 +4555,8 @@ function M.retirePeer(s, why)
         pcall(function() P.obj:SetActorHiddenInGame(true) end)
         pcall(function() P.obj:SetActorEnableCollision(false) end)
         if type(SV_CoopPeer) == "function" then SV_CoopPeer(s, 0) end
-        log(string.format("coop: player %d's plane here set aside, hidden (%s)", s + 1, why))
+        local radar = M.radarOff(P)
+        log(string.format("coop: player %d's plane here set aside, hidden (%s)%s", s + 1, why, radar and ("; " .. radar) or ""))
     end
 end
 -- (every tick, before the planes) each player's real plane in their slot: one in another moves with them (from this
@@ -4495,6 +4588,7 @@ function M.slotFix()
         if not P.ownSlotAt then
             P.ownSlotAt = os.clock()
             pcall(function() P.obj:SetActorHiddenInGame(true) end)
+            pcall(M.radarOff, P)                         -- ((0.73.83) its blip too)
         elseif os.clock() - P.ownSlotAt >= 10 then
             M.retirePeer(me, "it was in this game's slot, and its player isn't back")
         end
@@ -5040,7 +5134,11 @@ local function onSys(from, what, f)
         callout(string.upper(playerName(from)) .. " LEFT", nil)
         M.roster[from] = nil
         local P = M.peers[from]
-        if P and P.obj then pcall(function() P.obj:SetActorHiddenInGame(true) end); P.shown = false end
+        if P and P.obj then
+            pcall(function() P.obj:SetActorHiddenInGame(true) end); P.shown = false
+            local radar = M.radarOff(P)                  -- ((0.73.83) its blip too)
+            if radar then log(string.format("coop: player %d's plane hidden (left): %s", from + 1, radar)) end
+        end
         if COOP.host() then send(true, "po", from) end
         if from ~= 0 then M.markLeft(from, "left") end     -- ((0.73.77, plan C1) a rejoin in another aircraft: a new plane)
     elseif what == "full" then
@@ -5497,6 +5595,7 @@ function COOP.tick(tick)
     end
     if not COOP.open then return end
     pcall(nameTick)
+    pcall(M.asideTick, os.clock())                     -- ((0.73.83) set-aside planes kept off the radar)
     -- the other games' messages
     for _ = 1, 600 do
         local m = SV_CoopRecv()
