@@ -98,7 +98,7 @@ function ATK.tick(now)
             waits = string.format("chasers %.1f-%.1f s, others %.1f-%.1f s", r1.min, r1.max, r2.min, r2.max)
         end)
         pcall(function()
-            local row = FindFirstOf("LiveDifficultyManager").CurrentDifficultyDataTableRow
+            local row = difficultyManager().CurrentDifficultyDataTableRow          -- ((0.73.79) kept: sv_core.lua)
             waits = waits .. string.format(" (the difficulty's x%.0f%% / x%.0f%%)", row.CooldownPursuitAttackTimeModifier,
                 row.CooldownNonpursuitAttackTimeModifier)
         end)

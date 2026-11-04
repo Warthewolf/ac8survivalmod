@@ -551,15 +551,46 @@ end
 -- BP_GR033_ciws_CP_Ally, its DT_NPC_Model row GR033_ciws_Ally's blueprint), once a round.
 local SHIP_CLASSES = { "BP_VE002_aegs_CP_C", "BP_VE002_aegs_mk15_01_CP_C", "BP_VE002_aegs_mk41_CP_C", "BP_VE002_aegs_mk45_CP_C" }
 local DEF_CLASSES = { "BP_GR002_gepa_CP_C", "BP_GR005_avng_CP_C", "BP_GR033_ciws_CP_Ally_C" }
+local function healOne(o)
+    local ok, done = pcall(function()
+        local h, mh = o.HealthInternal, o.MaxHealth
+        if h > 0 and mh > 0 and h < math.floor(mh * 10) then o.HealthInternal = math.floor(mh * 10); return true end
+        return false
+    end)
+    return ok and done == true
+end
 local function repairActors(classes)
     local n = 0
     for _, cls in ipairs(classes) do
         for _, o in ipairs(FindAllOf(cls) or {}) do
-            if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) then
-                pcall(function()
-                    local h, mh = o.HealthInternal, o.MaxHealth
-                    if h > 0 and mh > 0 and h < math.floor(mh * 10) then o.HealthInternal = math.floor(mh * 10); n = n + 1 end
-                end)
+            if valid(o) and inSurvival(o) and not nameOf(o):find("Default__", 1, true) and healOne(o) then n = n + 1 end
+        end
+    end
+    return n
+end
+-- ((0.73.79, the lag audit's item 7) The defences' repair walked DEF_CLASSES (three walks over every object, 105-150 ms
+-- on a tester's PC) at every round clear even with none bought. With none of the STORE's defences up (R.defCount, from
+-- their units) only the shuttle pad's objects of those classes are left in the level, and they're recorded as they
+-- spawn (SHUTTLE.pad, sv_spawn.lua): healed from that record, each checked live first)
+local function defencesUp()
+    local R, n = ALLY.state(), 0
+    for _, kind in ipairs(DEF_KINDS or {}) do n = n + (R.defCount and R.defCount[kind] or 0) end
+    return n
+end
+local function repairDefenceActors()
+    if defencesUp() > 0 then return repairActors(DEF_CLASSES) end
+    local want, n = {}, 0
+    for _, cls in ipairs(DEF_CLASSES) do want[#want + 1] = cls:gsub("_C$", "") .. "_C_" end
+    for _, l in pairs(SHUTTLE and SHUTTLE.pad or {}) do
+        for _, o in ipairs(l) do
+            if liveAddr(o) then
+                local nm = nameOf(o)
+                for _, k in ipairs(want) do
+                    if nm:find(k, 1, true) then
+                        if healOne(o) then n = n + 1 end
+                        break
+                    end
+                end
             end
         end
     end
@@ -672,7 +703,7 @@ local function aliveShare(R, now)
 end
 
 function ALLY.repairDefences()
-    local n = repairActors(DEF_CLASSES)
+    local n = repairDefenceActors()
     if n > 0 then log(string.format("allies: %d airfield defences repaired with the airfield", n)) end
     return n
 end
@@ -689,7 +720,7 @@ function ALLY.repairAll()
         end
     end
     local ships = next(ALLY.shipsAtSea()) and repairActors(SHIP_CLASSES) or 0
-    local defs = repairActors(DEF_CLASSES)
+    local defs = repairDefenceActors()
     local n = planesN + ships + defs
     if n > 0 then
         local t = CFG.allies.text

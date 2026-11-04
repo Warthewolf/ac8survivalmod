@@ -35,10 +35,21 @@ local PLANE_CLS = { full = "/Script/Live.LiveAIPlane" }
 local damaged = 0
 local GS = { full = "Default__GameplayStatics" }
 function GS:ApplyDamage(o) damaged = damaged + 1; o.dead = true end
+-- (0.73.79) a class's walk finds its subclasses' objects too, as UE4SS's FindAllOf does: the take-off walks
+-- LiveAIGameObject only now (the ground dummies, ground vehicles and planes are LiveAIGameObjects)
+local SUPER = { LiveAIGroundDummy = "LiveAIGameObject", LiveAIGroundVehicleObject = "LiveAIGameObject", LiveAIPlane = "LiveAIGameObject" }
+WALKS = {}
 function FindAllOf(cls)
     if cls == "LiveEventContainer" then return {} end
+    WALKS[#WALKS + 1] = cls
     local t = {}
-    for _, o in ipairs(world) do if o.cls == cls then t[#t + 1] = o end end
+    for _, o in ipairs(world) do
+        local c = o.cls
+        while c do
+            if c == cls then t[#t + 1] = o; break end
+            c = SUPER[c]
+        end
+    end
     return t
 end
 function FindFirstOf(c) if c == "BP_LiveGameInstance_C" then return GI end return nil end
@@ -158,7 +169,9 @@ local jet = make("BP_OP1022_f16c_CP_C_9002", "LiveAIGameObject", -13.25, 0.6, tr
 SHUTTLE.obj = SHUTTLE_ACTOR
 SHUTTLE.padAt = { X = -13.249 * 100000, Y = 0.597 * 100000 }
 local from = #logs + 1
+WALKS = {}
 SPC.shuttleTakeOff()
+check(#WALKS == 1 and WALKS[1] == "LiveAIGameObject", "(0.73.79) one walk, LiveAIGameObject's (" .. table.concat(WALKS, ", ") .. ")")
 check(count(pad, gone) == 20, "all 20 of the pad's objects hidden (" .. count(pad, gone) .. ")")
 local far5 = {}
 for _, o in ipairs(pad) do

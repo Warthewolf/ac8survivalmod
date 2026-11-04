@@ -381,9 +381,26 @@ function ammoTick(tick, pc)
     end
 end
 
+-- ((0.73.79, the lag audit's item 7) asked of the game first (GameplayStatics.GetPlayerController on the game instance:
+-- the world's first player controller, nil while there's no world); a walk over every object (35-95 ms on a tester's PC,
+-- at each level start and restart) only after 3 misses in a row, as before)
+local PCH = { miss = 0 }
+local function pcFromGame()
+    local gs, gi = StaticFindObject("/Script/Engine.Default__GameplayStatics"), gameInstance()
+    if not (gs and valid(gs) and gi) then return nil end
+    local ok, pc = pcall(function() return gs:GetPlayerController(gi, 0) end)
+    if not (ok and pc ~= nil and valid(pc) and liveObj(pc) and inSurvival(pc)) then return nil end
+    local okL, isLocal = pcall(function() return pc:IsLocalController() end)
+    if okL and isLocal == false then return nil end
+    return pc
+end
 function playerControllerHere()
-    for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
-        if valid(pc) and inSurvival(pc) then return pc end
+    local okG, pc = pcall(pcFromGame)
+    if okG and pc then PCH.miss = 0; return pc end
+    PCH.miss = PCH.miss + 1
+    if PCH.miss < 3 then return nil end
+    for _, p in ipairs(FindAllOf("PlayerController") or {}) do
+        if valid(p) and inSurvival(p) then PCH.miss = 0; return p end
     end
     return nil
 end
@@ -471,7 +488,11 @@ local function shopWarn(key, msg)
 end
 
 function shopRowsTick(tick)
-    if not CFG.shop.enabled or tick % 16 ~= 1 or containerState ~= true then return end
+    -- ((0.73.79, the lag audit's item 3) once the rows are in on Survival's level, a look every 30 s, not 4 s: each look
+    -- scans for the table and reads the player controller's name; back to every 4 s when another level loads, so the
+    -- rows come out before a stock mission's landing menu)
+    local every = (SH.added and D and svLevelOn == true and not LEAVE.why) and 120 or 16
+    if not CFG.shop.enabled or tick % every ~= 1 or containerState ~= true then return end
     local pc = liveObj(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
     if pc and valid(pc) and inSurvival(pc) then
         -- without the native landing-menu hook a shop row would reach the stock decide, which reads it as a page number

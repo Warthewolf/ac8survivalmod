@@ -562,9 +562,18 @@ end
 
 ---------------------------------------------------------------------------------------------------- the tick
 function MENU.tick(tick)
+    -- ((0.73.79, the lag audit's item 4) the main menu's pages are looked after only at the menus, not in a run: the
+    -- level's own menu manager was read entry by entry each second for a minute, and every page's texts rebuilt every 2 s
+    -- with a diff of the whole CFG. In a run the managers seen are only let go of after 60 s, as pagesTick does: no
+    -- object touched)
     if tick % 4 == 0 then
-        local ok, err = pcall(MENU.pagesTick)
-        if not ok then say("err", "error " .. tostring(err)) end
+        if D then
+            local now = os.clock()
+            for i = #PG.fresh, 1, -1 do if now - PG.fresh[i].at > 60 then table.remove(PG.fresh, i) end end
+        else
+            local ok, err = pcall(MENU.pagesTick)
+            if not ok then say("err", "error " .. tostring(err)) end
+        end
     end
     -- the mode picked (SV_MenuChoice), before any setting pressed on its pages
     local raw = type(SV_MenuChoice) == "function" and SV_MenuChoice() or nil
@@ -585,10 +594,13 @@ function MENU.tick(tick)
             if not okS then log("menu: " .. tostring(errS)) end
         end
     end
-    if tick % 8 == 3 then MENU.texts(not D, "lobby") end         -- (the lobby row while you host)
+    -- (the lobby row while you host; not in a run: 0.73.79. The first pass after a run sends what changed with no
+    -- relabel walk: no Survival page is on screen yet)
+    if tick % 8 == 3 and not D then MENU.texts(not MENU.afterRun, "lobby"); MENU.afterRun = nil end
     -- a run started: its mode is QUICK START's from now on
     if D ~= MENU.lastD then
         MENU.lastD = D
+        if not D then MENU.afterRun = true end
         if D then
             RELABEL = {}                                               -- (0.73.73: the main menu's waiting labels: gone with it)
             local m = MENU.mode or "solo"

@@ -741,7 +741,14 @@ function WOLF.tick(now)
     local c = cfg()
     local flags
     for unit, w in pairs(W) do
-        if SV_UnitAlive(unit) <= 0 then
+        -- ((0.73.79, the lag audit's item 7) the runtime asked whether it's up every tick only while its hold is pending
+        -- (0.75 ms an ask on a tester's PC, every Wolf flight every tick); once a second while held, as its own checks
+        -- run; a free trap (nothing held, for good: a re-hold needs one held) dropped, as nothing reads it)
+        local ask = w.state == "pending" or now >= (w.aliveAt or 0)
+        if ask then w.aliveAt = now + 1 end
+        if w.state == "free" then
+            W[unit] = nil
+        elseif ask and SV_UnitAlive(unit) <= 0 then
             W[unit] = nil                                   -- (down, or its spawn didn't come: it's recycled next time)
         elseif w.state == "pending" then
             if not w.upAt then

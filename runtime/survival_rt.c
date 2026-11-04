@@ -24,8 +24,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.23"
-#define RT_VERSION_A         "0.32.23"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.24"
+#define RT_VERSION_A         "0.32.24"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -107,8 +107,11 @@ static void Log(const wchar_t* fmt, ...)
         n += m;
         utf8[n++] = '\r'; utf8[n++] = '\n';
         DWORD put = 0;
+        /* (0.32.24, the lag audit of 2026-11-04: testing/2026-11-03/PERF_PLAN.md item 2) no FlushFileBuffers per line: it
+         * waited for the disk on the game thread, ~2 ms a line on a tester's SSD (10-30 ms on a hard disk), 50-110 ms at
+         * each round start and clear. WriteFile hands the line to Windows' file cache, which keeps it through a crash of
+         * the game; only a crash of Windows itself (or a power cut) can lose the last lines. Crumb never flushed. */
         WriteFile(g_log, utf8, (DWORD)n, &put, NULL);
-        FlushFileBuffers(g_log);
     }
     __sync_lock_release(&g_logLock);
 }

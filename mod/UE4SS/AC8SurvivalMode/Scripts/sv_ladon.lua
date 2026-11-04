@@ -378,7 +378,11 @@ end
 -- a gun, the Ladons' pulse cannons, a SAM's blast or a collision. The Ladons' VLS missiles are toned down here as they
 -- appear (CFG.specials.ladon.missile_*): from their class default, so a missile seen twice isn't cut twice.
 HIT = { new = {}, msl = {} }
-pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o) if #HIT.new < 200 then HIT.new[#HIT.new + 1] = o end end)
+-- ((0.73.79) hookSeen: this feed works (the Ladons' missile walk then runs once a level, not every 10 s); newDropped: one
+-- was dropped past the 200 kept a tick, so the walk runs again to find it)
+pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o)
+    if #HIT.new < 200 then HIT.new[#HIT.new + 1] = o; HIT.hookSeen = true else HIT.newDropped = true end
+end)
 do
 local LADON_MSL = "BP_wp_vls_ladon"
 local LADON_CDO = "/Game/Blueprints/Weapons/MSL/NPC/Vls/Ladon/BP_wp_vls_ladon.Default__BP_wp_vls_ladon_C"
@@ -484,6 +488,7 @@ function HIT.reset()
     HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil
     HIT.ladonUntil, HIT.ladonSweepAt = nil, nil
     HIT.ladonPool, HIT.ladonWalkAt = {}, nil                -- ((0.73.77) B5: the Ladon missiles kept, below)
+    HIT.ladonWalked, HIT.ladonWalkStep, HIT.base, HIT.ladonSweeps = nil, nil, nil, 0   -- ((0.73.79) below)
 end
 
 -- (0.73.77, Workstream B5) Every Ladon missile the game has made, by address: HIT.ladonPool[a] = { obj, name, certain }.
@@ -492,7 +497,49 @@ end
 -- (twice every 0.5 s while a Ladon is up, every tick of a volley): gloom's Ladon round of 2026-11-02, the hits part 7.5 ms
 -- a tick (27 % of the tick); the testers' of 2026-11-01, 13-27 ms. A walk every LADON_WALK_S still, for one HIT.new
 -- dropped (it keeps 200 a tick); each kept one checked live, and its name, before it's touched (an address used again).
-local LADON_WALK_S = 10
+-- ((0.73.79, the lag audit's item 6) The walk, one class a sweep (~35 ms each on a tester's PC, two at once were a 70 ms
+-- hitch every 10 s of a Ladon round), runs once a level, again when the feed dropped one (HIT.newDropped) and every
+-- LADON_WALK_S as a backstop; every LADON_BLIND_S while the feed has never delivered a missile (HIT.hookSeen: its
+-- registration failed). Each sweep reads a kept missile's four toned values and writes them only when they differ from
+-- what they should be (HIT.base: its class default's, read once a level): a relaunch resets them, as the game does
+-- (`caught at damage 750`), and is toned again the same sweep. A kept address that holds another Ladon missile now is
+-- kept as that one.)
+local LADON_WALK_S, LADON_BLIND_S = 60, 10
+-- (the sure kill first: a missed one is the deadly one, toned the first sweep)
+local WALK_CLS = { { LADON_CERTAIN .. "_C", true }, { LADON_MSL .. "_C", false } }
+-- the class default's values the toning starts from, once a level (nil when it can't be read: the old path then)
+local function ladonBase()
+    if HIT.base then return HIT.base end
+    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    if not valid(HIT.cdo) then return nil end
+    local ok, b = pcall(function()
+        local r = { d = HIT.cdo.damage, homing = HIT.cdo.MaxHomingAngle, rot = HIT.cdo.MaxRotationAngle, rotNC = nil }
+        pcall(function() r.rotNC = HIT.cdo.MaxRotationAngleNotCaptured end)
+        return r
+    end)
+    if ok and type(b) == "table" and type(b.d) == "number" and type(b.homing) == "number" and type(b.rot) == "number" then
+        HIT.base = b
+    end
+    return HIT.base
+end
+-- true when a kept missile already holds its toned values (read in one go; any read failing: false, so it's toned)
+local function toned(o, isCertain)
+    local b = ladonBase()
+    if not b then return false end
+    local c = CFG.specials.ladon
+    local tx = tonumber(c.missile_turn_x) or 1
+    local ok, same = pcall(function()
+        local d, h, r = o.damage, o.MaxHomingAngle, o.MaxRotationAngle
+        local wantD = tonumber(c.missile_damage) or (isCertain and 10 or b.d)
+        local wantH = b.homing * (c.missile_homing_x or 1)
+        if math.abs(d - wantD) > 0.01 or math.abs(r - b.rot * tx) > 0.01 then return false end
+        if isCertain then if h > wantH + 0.01 then return false end      -- (certain(): the smaller of its own and the toned)
+        elseif math.abs(h - wantH) > 0.01 then return false end
+        if type(b.rotNC) == "number" and b.rotNC > 0 and math.abs(o.MaxRotationAngleNotCaptured - b.rotNC * tx) > 0.01 then return false end
+        return true
+    end)
+    return ok and same == true
+end
 -- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the missiles kept here forgotten, none of them touched)
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS.hits = function() HIT.reset() end end
 local function ladonKeep(o, isCertain)
@@ -528,29 +575,55 @@ function HIT.tick(pc, now)
     if volleyOn or ladonOn then
         if ladonOn then HIT.ladonSweepAt = now + 0.5 end
         local tS = os.clock()
-        -- ((0.73.77, B5) from the kept pool, ladonKeep; the walk for the two classes every LADON_WALK_S only)
-        if now >= (HIT.ladonWalkAt or 0) then
-            HIT.ladonWalkAt = now + LADON_WALK_S
-            local added = 0
-            for cls, isCertain in pairs({ [LADON_MSL .. "_C"] = false, [LADON_CERTAIN .. "_C"] = true }) do
-                for _, o in ipairs(FindAllOf(cls) or {}) do
+        -- ((0.73.77, B5) from the kept pool, ladonKeep; (0.73.79) the walk one class a sweep, when due: above)
+        local step = HIT.ladonWalkStep
+        if not step and (not HIT.ladonWalked or HIT.newDropped or now >= (HIT.ladonWalkAt or 0)) then step = 1 end
+        if step then
+            local cls, isCertain = WALK_CLS[step][1], WALK_CLS[step][2]
+            local list = FindAllOf(cls)
+            if type(list) == "table" then                  -- (nil: held, sv_core.lua walkHold: tried again next sweep)
+                if step == 1 then HIT.newDropped, HIT.ladonWalkAdded = nil, 0 end
+                local added = 0
+                for _, o in ipairs(list) do
                     if valid(o) and not short(o):find("^Default__") and ladonKeep(o, isCertain) then added = added + 1 end
                 end
-            end
-            HIT.ladonWalks = (HIT.ladonWalks or 0) + 1
-            if HIT.ladonWalks == 2 and not HIT.poolSaid then
-                HIT.poolSaid = true
-                local k = 0
-                for _ in pairs(HIT.ladonPool or {}) do k = k + 1 end
-                log(string.format("hits: the Ladons' missiles toned from their pool as it's kept (%d now; a walk every %d s for "
-                    .. "any missed: %d more this time; 0.73.77)", k, LADON_WALK_S, added))
+                HIT.ladonWalkAdded = (HIT.ladonWalkAdded or 0) + added
+                if step == 1 then HIT.ladonWalkStep = 2
+                else
+                    HIT.ladonWalkStep, HIT.ladonWalked = nil, true
+                    HIT.ladonWalkAt = now + (HIT.hookSeen and LADON_WALK_S or LADON_BLIND_S)
+                    HIT.ladonWalks = (HIT.ladonWalks or 0) + 1
+                    if (HIT.ladonWalks >= 2 and HIT.ladonWalkAdded > 0) or (HIT.ladonWalks == 2 and not HIT.poolSaid) then
+                        HIT.poolSaid = true
+                        local k = 0
+                        for _ in pairs(HIT.ladonPool or {}) do k = k + 1 end
+                        log(string.format("hits: the Ladons' missiles toned from their pool as it's kept (%d now; a walk %s for "
+                            .. "any missed: %d more this time; 0.73.79)", k, HIT.hookSeen and ("once a level, on a dropped one and every "
+                            .. LADON_WALK_S .. " s") or ("every " .. LADON_BLIND_S .. " s: no missile from the feed yet"), HIT.ladonWalkAdded))
+                    end
+                end
             end
         end
+        HIT.ladonSweeps = (HIT.ladonSweeps or 0) + 1
+        local nameCheck = HIT.ladonSweeps % 20 == 0          -- (every 20th sweep the names anyway: an address used again)
         local n = 0
         for a, e in pairs(HIT.ladonPool or {}) do
             local o = e.obj
-            if liveAddr(o) ~= a or nameOf(o) ~= e.name then
+            local drop = liveAddr(o) ~= a
+            local same = not drop and not nameCheck and toned(o, e.certain)
+            if not drop and not same then                  -- (not as it should be: whose is it now, before it's touched)
+                local nm = nameOf(o)
+                if nm ~= e.name then
+                    local sh = short(o)
+                    if sh == LADON_MSL or sh == LADON_CERTAIN then e.name, e.certain = nm, sh == LADON_CERTAIN
+                    else drop = true end
+                end
+                if not drop and nameCheck and toned(o, e.certain) then same = true end
+            end
+            if drop then
                 HIT.ladonPool[a] = nil                    -- (gone, or its address another object's now)
+            elseif same then
+                n = n + 1                                 -- (toned already: nothing written)
             else
                 if e.certain then
                     local okD, d = pcall(function() return o.damage end)
