@@ -1258,3 +1258,16 @@ copy_floor_test.lua (its five new checks fail on 0.73.78's sv_coop.lua):
   0.73.78 COOP2MP install: only Scripts/*.lua changed since 294712f. VERSION 0.73.79-coop2mp.80 (everyone in a session
   needs one of them), on runtime 0.32.23 (no new native function; 0.32.24's log flush comes with the next full build).
   Both load in lua_load_test. Their build hashes come from the game's first log line: register them before ranked runs.
+- 0.73.79 in game (2026-11-04, 31 rounds, 1:58:44, 6 players: Saint Alessia hosting on the TESTER patch, Amia, Shazzy, dukka,
+  cressendo, gloom; logs testing/logs/2026-11-04, the four areas' verified findings R30_FINDINGS.json; report and plan: Claude
+  Docs "AC8 Survival Mode: 0.73.79 Co-op Test Report & Plan, 4 Nov 2026"): no crash or Lua error in 2 h; the joiner kill fix
+  worked (every joiner's kills paid by the host, all logs agree); Tier 1's lookups 0.3-0.6 ms; VALKA's sounds preloaded. The
+  host's tick grew 16 -> 59 ms (r21-30; 117 ms in a 5.6-min STORE stay) and its fps 37 -> 20, which drove the joiners'
+  desync (enemy moves past their newest state 1.4% -> 5.5%, r -0.85 with host fps; link lateness flat): SV_UnitAlive costs
+  ~75 us per unit ever spawned (0.3 -> 6.6 ms a call, 84 units), asked for every flight once a second; the co-op airfield
+  music hold walks the landing windows ~3.5x a second (41 ms each). Bugs: the shuttle's unit never recycled (rounds 17 and 30
+  fell back to bombers), the amphibious LCACs / STORE defences / shuttle pad spawned without spawningUnit (no co-op ids:
+  each game fights its own), joiners never see DESTROYED (the floor + a Lua kill with no joiner causer), the Falken flies as
+  an AI stand-in on joiners, a quitter holds spawns 50-80 s, the host's run refused 422 (TESTER hash unregistered) and deleted
+  on the client. Hashes: TESTER patch 6844d4f8a6ae156a216850ca027b29fc7ffe456a96661e3c2332ae4cb1421f87, players' patch
+  a1c699475041d986e00fb0b52c20fde71f080557b637802b373950088d39aaa6.
