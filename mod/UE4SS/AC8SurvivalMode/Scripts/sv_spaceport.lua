@@ -447,17 +447,17 @@ function SPORT.tuTick(now, s)
             parts[#parts + 1] = string.format("%s still up from before: not sent", u)
             tu.units[u] = nil
         else
-            local okS, r = pcall(spawnBomberFrom, u, { ac = c.aircraft, bearing = sd.bearing, spread = c.spread_deg,
-                                                       distance_km = c.distance_km })
-            r = okS and tonumber(r) or nil
+            local okS, res = pcall(spawnBomberFrom, u, { ac = c.aircraft, bearing = sd.bearing, spread = c.spread_deg,
+                                                         distance_km = c.distance_km })
+            local r = okS and tonumber(res) or nil           -- ((review of 7bcd4c4) res kept: an error's text, logged)
             if r and r > 0 then
                 tu.n = tu.n + r
                 parts[#parts + 1] = string.format("%s: %d from the %s", u, r, compassName(sd.bearing))
                 local nm = compassName(sd.bearing)
                 if not seen[nm] then seen[nm] = true; names[#names + 1] = nm end
             else
-                parts[#parts + 1] = string.format("%s: %s", u, okS and ("not spawned (" .. ((SV_ERR and r and SV_ERR[r]) or tostring(r)) .. ")")
-                    or ("error " .. tostring(r)))
+                parts[#parts + 1] = string.format("%s: %s", u, okS and ("not spawned (" .. ((SV_ERR and r and SV_ERR[r]) or tostring(res)) .. ")")
+                    or ("error " .. tostring(res)))
                 tu.units[u] = nil
             end
         end
@@ -510,8 +510,16 @@ end
 -- flight up is despawned (RE_SV_FlightOff_NN, Mission 22's own despawn) and off the round's list (D.up: a despawned
 -- unit can still read alive), its planes marked down (no pay), the round's queue and later waves dropped, no more deck
 -- launches. The round then ends as any does, and the retake comes after its break.
+-- ((review of 7bcd4c4) The Tu-160s already sent (SPORT.tuTick: bomber flights, no pool index and no despawn event of their
+-- own) fall back too: off the round's list (D.up), D.heavy and D.heavyPath, their planes marked down and withdrawn (bombTick
+-- bombs with any heavy plane not down; the sweep neither pays nor counts them), on the host nobody's (COOP.takenOff: a
+-- later shot or the recycle pays no player), recycled in the break as the fighters (D.spWithdrawn: SPORT.planRound). They
+-- fly on until then, harmless. Before, they held the round (and bombed on) until all were shot down. Not yet sent:
+-- tuTick says so (s.captured).)
 local function withdraw(s)
     local gone, n = {}, 0
+    local tu, tuGone, nTu = s.tu, {}, 0
+    local tuUnits = (tu and (tu.n or 0) > 0 and tu.units) or {}
     D.queue, D.spare = {}, {}
     if D.waves then D.wave = #D.waves end
     if D.state == "spawning" or D.state == "wave" then D.state = "fighting" end
@@ -522,19 +530,32 @@ local function withdraw(s)
             fire(string.format("RE_SV_FlightOff_%02d", k))
             gone[u] = true
             gone[#gone + 1] = u
+        elseif tuUnits[u] then
+            nTu = nTu + math.max(0, ALIVE.ask(u))
+            if COOP and COOP.takenOff then pcall(COOP.takenOff, u) end
+            if D.heavy then D.heavy[u] = nil end
+            if D.heavyPath then D.heavyPath[u] = nil end
+            gone[u] = true
+            tuGone[#tuGone + 1] = u
         end
     end
+    for _, u in ipairs(tuGone) do D.up[u] = nil end
     for _, u in ipairs(gone) do D.up[u] = nil end
+    if #tuGone > 0 then tu.why = "withdrawn at the capture" end
     -- ((0.73.77, I4: S6) a despawned flight still reads up, so the native recycle refused it every round after ("still
     -- up") and it stayed first in line: SPORT.planRound recycles it when the next round is planned, or keeps it out)
     D.spWithdrawn = D.spWithdrawn or {}
     for _, u in ipairs(gone) do D.spWithdrawn[u] = true end
+    for _, u in ipairs(tuGone) do D.spWithdrawn[u] = true end
     for _, p in ipairs(planes or {}) do
         if p.unit and gone[p.unit] and not p.down then p.down, p.withdrawn = true, true end
     end
     s.deckLeft = 0
-    log(string.format("special: the round's fighters fall back with the capture: %d flights (%d aircraft) taken off%s", #gone, n,
-        #gone > 0 and (": " .. table.concat(gone, ", ")) or ""))
+    table.sort(tuGone)
+    log(string.format("special: the round's fighters fall back with the capture: %d flights (%d aircraft) taken off%s%s", #gone, n,
+        #gone > 0 and (": " .. table.concat(gone, ", ")) or "",
+        #tuGone > 0 and string.format("; the Tu-160s too: %s (%d aircraft, no despawn event: recycled at the next round's plan)",
+            table.concat(tuGone, ", "), nTu) or ""))
 end
 
 -- A lane's next free wave: one not out and not still up from before.
@@ -732,7 +753,8 @@ function SPORT.roundOver(now, s)
         local tu = s.tu
         log(string.format("special: the Tu-160s this assault: %s", not tu.done and "never sent (the round ended first)"
             or (tu.n or 0) == 0 and ("none sent (" .. tostring(tu.why or "none could spawn") .. ")")
-            or string.format("%d sent (%s), %d still up at the round's end", tu.n, tu.said or "?", SPORT.tuUp(s))))
+            or string.format("%d sent (%s)%s, %d still up at the round's end", tu.n, tu.said or "?", tu.why and (", " .. tu.why) or "",
+                SPORT.tuUp(s))))
         tu.done = true
     end
     local st = s.stat
