@@ -1213,3 +1213,29 @@ a hard rule until a test confirms it.
   lists:` no repeated walks of the Alicorn's part classes, PlayerController, the Ladon missiles, LiveAIGroundDummy;
   `finds:` few scans; `special: the Alicorn's ... found by a search` should not appear; no "the Alicorn dives" after
   "its core opens"; `sound: VALKA's N sound files loading` before her round.
+
+## 0.73.79-coop2mp.80 (same build): joiners couldn't finish enemies (2026-11-04; Lua only, on runtime 0.32.24; not yet run in game)
+The 0.73.78 co-op run of 2026-11-03 (Saint Alessia hosting, Shazzy, cressendo, Nada; logs in the user's uploads
+"CO-OP_Desync_Invincible_Enemies", "SaintAlessia-logs", "0.73.78_Shazzylog"): the host played normally, every joiner
+"dumping into enemies and unable to kill them after 6+ missiles" (Shazzy: "could not damage a single" one). The run's
+tally: host 36, Nada 14, cressendo 5, Shazzy 1. Two faults in sv_coop.lua's joiner side, both fixed and covered by
+copy_floor_test.lua (its five new checks fail on 0.73.78's sv_coop.lua):
+- The floor (plan A1) trusted the copy's DamageHistoryMap alone once your plane had shown up in any map (M.ownSeen):
+  a hit that took a copy to 1 HP with nothing new under your plane there was "not yours", so the copy was put back up
+  and nothing was sent. Your missiles aren't found under your plane in that map (Nada: two missiles from 0.3 km,
+  "damage: you 0"; your gun is, a little): every missile that would have finished a copy was undone here and never
+  reached the host. Now each missile's target (FiredExplosiveWeapons' TargetToHome, at launch: M.shotMark; when it's
+  gone: M.shotEnd) and the gun's (SV_PlayerTarget while it fires: M.gunMark) are kept by the copy they went for, and
+  M.floorLoss sends a floor hit whole when your missile went for that copy in the last 25 s (or the gun is on it, or the
+  map has it). A copy already at the floor (its health can't move) whose missile from you is gone sends the host's last
+  health as your hit, once a missile, at most every 2 s. A crash or an ally's copy into the floor still sends nothing.
+- The "hp" race: the host's health written over a copy between a hit and clientTick's next look set what's expected
+  to match, so that hit was never sent at all. "hp" now keeps a hit not yet sent on the copy, and for 1.5 s after a hit
+  is sent ignores host health no higher than the copy had before it (the copy flickered back to full on every hit).
+- Log lines: `coop: a copy taken to the floor by your missile (its map has ... of yours): sent whole to the host`,
+  `coop: copy N held at the floor, your missile at it gone, no kill from the host yet: its last health sent again`;
+  the joiner's sync report adds "N your missiles' (0.73.79), N sent again" and "N held after your hit".
+- To check in game: a joiner's missile kills go down on every screen and show "by player N" on the host; the host's
+  `leaderboard: co-op run ... over` line has the joiners' kills near the host's.
+- Lesson (not a hard rule until a test confirms it): don't decide "not this player's hit" from DamageHistoryMap under
+  the player's plane alone; a missile's damage isn't keyed there.

@@ -875,6 +875,7 @@ local TORN_S = 30
 -- flights), the host's "hp" then wrote health back onto the wrecks (invisible enemies with target boxes), and their
 -- flights' next spawns were refused. FLOOR_IN: the floor as HealthInternal (health x 10).
 local FLOOR_IN = 10
+local HP_HOLD_S = 1.5                                       -- ((0.73.79) the "hp" handler's hold after a hit is sent)
 local function floorOn(o)
     local hp = FLOOR_IN / 10
     local ok = pcall(function() o.MinHealth = hp end)
@@ -1121,6 +1122,7 @@ function COOP.levelDrop(why)
     for _ in pairs(M.copies or {}) do n = n + 1 end
     M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind = {}, {}, {}, nil, nil, nil
     M.objsOf = {}
+    M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}   -- ((0.73.79) your shots by the copy they went for)
     local p = 0
     for _, P in pairs(M.peers or {}) do
         if type(P) == "table" and P.obj ~= nil then P.obj, P.addr = nil, nil; p = p + 1 end
@@ -1564,8 +1566,63 @@ local function strayTick(now)
         table.concat(names, ", ")))
 end
 
+-- (0.73.79) Which of a copy's hits at the floor were yours. 0.73.77-78 went by the copy's DamageHistoryMap alone once
+-- your plane had shown up in any map (M.ownSeen), and a hit it didn't find under your plane was "not yours": the copy
+-- was put back up and nothing sent. Your missiles aren't found there (2026-11-03, 0.73.78, four players: Nada's two
+-- missiles from 0.3 km "damage: you 0"; Shazzy "could not damage a single" enemy, the host "everyone else dumping into
+-- enemies ... 6+ missiles"): every missile that would have finished a copy was undone here and never reached the host,
+-- whose own planes never go through the floor (its game was normal). Now your missiles and gun aim are kept here, by
+-- the copy they went for: the missile's target (FiredExplosiveWeapons' TargetToHome, as each is launched and when it's
+-- gone) and the gun's (SV_PlayerTarget while it fires).
+M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}
+local FIRED_MSL_S, FIRED_GUN_S, MSL_END_S, FLOOR_RESEND_S = 25, 1.5, 2, 2
+function M.shotMark(a, ta) M.mslAt[ta] = os.clock(); M.shotTgt[a] = ta end
+function M.shotEnd(a)
+    local ta = M.shotTgt[a]
+    M.shotTgt[a] = nil
+    if ta then M.mslEnd[ta] = os.clock() end
+end
+function M.gunMark(t) M.gunAtT[t] = os.clock() end
+-- "msl" one of your missiles went for addr in the last FIRED_MSL_S, "gun" your gun is firing at it, or nil
+function M.firedAt(addr, now)
+    if not addr then return nil end
+    local m, g = M.mslAt[addr], M.gunAtT[addr]
+    if m and now - m <= FIRED_MSL_S then return "msl" end
+    if g and now - g <= FIRED_GUN_S then return "gun" end
+    return nil
+end
+local function shotsPrune(now)
+    if now < (M.shotPruneAt or 0) then return end
+    M.shotPruneAt = now + 10
+    for _, t in ipairs({ M.mslAt, M.mslEnd, M.gunAtT }) do
+        for k, at in pairs(t) do if now - at > 60 then t[k] = nil end end
+    end
+    local n = 0
+    for _ in pairs(M.shotTgt) do n = n + 1 end
+    if n > 200 then M.shotTgt = {} end                     -- (missiles seen launched but never gone: a level change)
+end
+-- what the hit that took copy c to the floor is sent to the host as (x 10): own is your damage on it since the last look
+-- from its map (nil: unread, or your plane not in any map yet), loss what it lost here (less the stand-ins' share)
+function M.floorLoss(c, own, loss, now)
+    if own and own >= c.exp then return own end           -- (the map has your whole hit)
+    local f = M.firedAt(c.addr, now)
+    if f == "msl" then                                     -- (your missile went for it: the hit is yours, whole)
+        M.cnt.floorMsl = (M.cnt.floorMsl or 0) + 1
+        if not (own and own > 0) then
+            once("floormsl", string.format("coop: a copy taken to the floor by your missile (its map has %s of yours): sent "
+                .. "whole to the host (%.1f)", own and string.format("%.1f", own / 10) or "nothing read", c.exp / 10))
+        end
+        return c.exp
+    end
+    if own and own > 0 then return own end                 -- (your gun's, from the map)
+    if own == nil and loss > 0 then return c.exp end       -- (as 0.73.76: unread, it's yours)
+    if f == "gun" then return c.exp end                    -- (your gun on it this second)
+    return 0                                               -- (not yours: an ally's copy, a ship's, a crash)
+end
+
 local function clientTick()
     pcall(strayTick, os.clock())
+    pcall(shotsPrune, os.clock())
     pcall(M.buildTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
     -- here (their own hits come from their game: the stand-ins fly damage-0 rows, COOP.syncSetup; this is the backstop)
@@ -1611,17 +1668,21 @@ local function clientTick()
                 end
                 local newH = h
                 if h > 0 and h <= FLOOR_IN then            -- (down here, the floor not held: as before, never put back)
-                    if own then loss = own elseif loss > 0 then loss = c.exp end
+                    loss = M.floorLoss(c, own, loss, os.clock())   -- ((0.73.79) your missiles too, not the map alone)
                     if loss < c.exp then                   -- (not lethal by what's sent: up to the host's after it)
                         local v = math.max(FLOOR_IN + 1, c.exp - loss)
                         if pcall(function() c.obj.HealthInternal = v end) then newH = v end
                         M.cnt.floorBack = M.cnt.floorBack + 1
                     elseif not c.floorAt then
                         c.floorAt = os.clock()             -- (lethal: it waits here for the host's kill)
+                        c.preFloor = c.exp                 -- ((0.73.79) what it had: sent again if it waits on, below)
                         M.cnt.floored = M.cnt.floored + 1
                     end
                 end
-                if loss > 0 then send(true, "ht", id, string.format("%.1f", loss / 10)) end
+                if loss > 0 then
+                    send(true, "ht", id, string.format("%.1f", loss / 10))
+                    c.sentAt, c.sentFrom = os.clock(), c.exp   -- ((0.73.79) the host's "hp" from before it lands is held off)
+                end
                 c.exp = newH
             elseif h and h > 0 and h <= FLOOR_IN and not c.ally then
                 -- ((0.73.77) at the floor, its health not moving: your hits since, from the map)
@@ -1630,9 +1691,26 @@ local function clientTick()
                 if live(c.obj) then mine = select(2, M.historyOf(c.obj, nil, pa)) end
                 local own = (mine and M.ownSeen) and (mine - (c.mine or 0)) * 10 or 0
                 if mine then c.mine = mine end
+                local now = os.clock()
                 if own > 0 then
                     send(true, "ht", id, string.format("%.1f", own / 10))
-                    if not c.floorAt then c.floorAt = os.clock(); M.cnt.floored = M.cnt.floored + 1 end
+                    c.sentAt, c.sentFrom = now, math.max(c.hp or 0, FLOOR_IN)
+                    if not c.floorAt then c.floorAt = now; M.cnt.floored = M.cnt.floored + 1 end
+                else
+                    -- ((0.73.79) a missile of yours that went for it is gone (it hit, or missed) and the host's kill
+                    -- hasn't come: what the host last had is sent as a hit, at most every FLOOR_RESEND_S. Its health
+                    -- doesn't move at the floor, so this is the only sign of a missile hit here; a miss that ends near
+                    -- a copy already held at 1 HP is the price)
+                    local e = M.mslEnd[c.addr]
+                    if e and now - e <= MSL_END_S and e > (c.resendAt or 0) and now - (c.resendAt or 0) >= FLOOR_RESEND_S then
+                        local v = math.max(c.hp or 0, c.preFloor or 0, FLOOR_IN)
+                        c.resendAt, c.sentAt, c.sentFrom = now, now, v
+                        send(true, "ht", id, string.format("%.1f", v / 10))
+                        M.cnt.floorResend = (M.cnt.floorResend or 0) + 1
+                        once("floorresend", string.format("coop: copy %d held at the floor, your missile at it gone, no kill "
+                            .. "from the host yet: its last health sent again as your hit (%.1f)", id, v / 10))
+                        if not c.floorAt then c.floorAt = now; M.cnt.floored = M.cnt.floored + 1 end
+                    end
                 end
                 c.exp = h
             elseif h and h > c.exp then
@@ -2126,9 +2204,11 @@ function COOP.syncReport()
     return string.format("joiner: %d copies of %d flights (%d bound to the host's ids, %d not), %d strays taken down, %d asks "
         .. "for the whole picture (jn), %d answers (rs; %d of them repairs, the copies kept), %d copies torn down in %d teardowns; "
         .. "the floor: %d copies there now waiting for the host's kill (the longest %.1f s), %d went there, their longest wait "
-        .. "%.1f s, %d put back up (not your kill); %d flights refused here, %d unstuck (%d by SV_Recycle); hp for %d dead copies skipped",
+        .. "%.1f s, %d put back up (not your kill), %d your missiles' (0.73.79), %d sent again; %d flights refused here, %d "
+        .. "unstuck (%d by SV_Recycle); hp for %d dead copies skipped, %d held after your hit",
         copies, flights, bound, copies - bound, c.strays, c.jnSent, c.rsGot, c.repairs or 0, c.torn, c.teardowns,
-        atFloor, longest, c.floored, c.floorMax, c.floorBack, c.refused, c.unstuck, c.recycled, c.hpDead)
+        atFloor, longest, c.floored, c.floorMax, c.floorBack, c.floorMsl or 0, c.floorResend or 0, c.refused, c.unstuck,
+        c.recycled, c.hpDead, c.hpHeld or 0)
 end
 -- whether this game tore copies down itself within the last s seconds (and why last): the pay audit's suspect window
 function COOP.tornRecently(s)
@@ -2425,11 +2505,13 @@ local function watchShots(pawn, out)
                     local okT, t = pcall(function() return w.TargetToHome end)
                     local ta = okT and t and liveAddr(t)
                     out[#out + 1] = string.format("%s:%d:0", k, ta and idOfAddr(ta) or 0)
+                    if ta then M.shotMark(a, ta) end       -- ((0.73.79) a copy's hit at the floor: M.floorLoss)
                     if k == "s" then S.spShotAt = os.clock() end     -- (a special weapon in flight: not electronic)
                 end
             end
         end
     end
+    for a in pairs(S.seen) do if not cur[a] then M.shotEnd(a) end end   -- ((0.73.79) gone: it hit, or missed)
     S.seen, S.primed = cur, true
 end
 
@@ -2696,6 +2778,7 @@ function M.syncTick(now, pawn)
         if gun and type(SV_PlayerTarget) == "function" and pa then
             local okT, t = pcall(SV_PlayerTarget, pa)
             local id = (okT and type(t) == "number" and t > 0) and idOfAddr(t) or 0
+            if okT and type(t) == "number" and t > 0 then M.gunMark(t) end   -- ((0.73.79) M.floorLoss)
             if id ~= S.gunTarget or not S.gunOn then out[#out + 1] = string.format("g:%d:0", id); S.gunTarget = id end
         end
         S.gunOn = gun
@@ -3871,9 +3954,22 @@ local function onJoinerMessage(f)
                     M.cnt.hpDead = M.cnt.hpDead + 1
                 elseif own then
                     local v = math.min(math.max(h, 1), 2147483647)
-                    pcall(function() c.obj.HealthInternal = v end)
-                    c.exp, c.hp = v, v                         -- (hp: the host's own, an ally's copy put back to it)
-                    if v > FLOOR_IN then floorDone(c) end      -- (off the floor: the host's has more than you sent)
+                    -- ((0.73.79) a hit here not yet sent (it landed since clientTick's last look) stays on it: 0.73.78
+                    -- wrote the host's health over it and set what's expected to match, so clientTick never saw the
+                    -- loss and it was never sent. And for a moment after a hit was sent, the host's health from before
+                    -- it landed doesn't put the copy back up (it flickered back to full on every hit)
+                    local pend = (not c.ally and c.exp and own < c.exp) and (c.exp - own) or 0
+                    if pend == 0 and v > own and c.sentAt and c.sentFrom and v <= c.sentFrom   -- (no more than it had
+                        and os.clock() - c.sentAt < HP_HOLD_S then                               -- before: from before it)
+                        c.hp = v                               -- (held: the host's next "hp" has your hit in it)
+                        M.cnt.hpHeld = (M.cnt.hpHeld or 0) + 1
+                    else
+                        local w = v - pend
+                        if pend > 0 and w < FLOOR_IN then w = FLOOR_IN end
+                        pcall(function() c.obj.HealthInternal = w end)
+                        c.exp, c.hp = v, v                     -- (hp: the host's own, an ally's copy put back to it)
+                        if w > FLOOR_IN then floorDone(c) end  -- (off the floor: the host's has more than you sent)
+                    end
                 end
             end
         end

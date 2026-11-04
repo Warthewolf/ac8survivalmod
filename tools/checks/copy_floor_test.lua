@@ -119,6 +119,7 @@ local UNITS = {
     ERA_Unit_04_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
     ERA_Unit_05_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
     ERA_Unit_06_Dep_Air0 = { { "BP_OP1027_m21b_CP", 5000, true } },
+    ERA_Unit_07_Dep_Air0 = { { "BP_OP1002_f02a_CP", 5000, true }, { "BP_OP1002_f02a_CP", 5000, true } },
 }
 local world, pendingPlanes = {}, {}
 local function up(o) return not o.gone and (o.wreck or o.HealthInternal > 0) end
@@ -376,6 +377,57 @@ else
           and has(rep, "2 flights refused here") and has(rep, "1 unstuck (1 by SV_Recycle)") and has(rep, "hp for 1 dead copies skipped"),
           "join: " .. rep)
     check(has(rep, "their longest wait 0.") or has(rep, "their longest wait 1."), "join: ... the longest wait at the floor (the host's dn 0.55 s on)")
+
+    print("join: 0.73.79, your missiles at the floor (0.73.78's invincible enemies) and the hp race")
+    local U7 = "ERA_Unit_07_Dep_Air0"
+    for _, m in ipairs({ "sp|" .. U7 .. "|-|-|-1|40", "bd|" .. U7 .. "|40|1|41", "bd|" .. U7 .. "|40|2|42" }) do
+        inbox[#inbox + 1] = "0|" .. m
+    end
+    run(1)
+    local c1, c2 = world[U7][1], world[U7][2]
+    check(M.copies[41] and M.copies[42] and c1.HealthInternal == 5000, "join: two fresh copies bound (41, 42)")
+    -- your 100 on it lands and the host's hp from before it comes in the same tick: the hit still goes out
+    hit(c1, pawn, 100)
+    inbox[#inbox + 1] = "0|hp|41:5000"
+    s0 = #sent; tick()
+    check(table.concat(msgs("ht", s0 + 1), " ") == "-1>ht|41|100.0" and c1.HealthInternal == 4000,
+          "join: a hit not yet sent when the host's older hp lands: kept on the copy and sent ("
+          .. table.concat(msgs("ht", s0 + 1), " ") .. ", health " .. c1.HealthInternal .. ")")
+    inbox[#inbox + 1] = "0|hp|41:5000"
+    tick()
+    check(c1.HealthInternal == 4000, "join: the host's hp from before your hit, just after it went: not put back to full (flicker)")
+    tick(2)
+    inbox[#inbox + 1] = "0|hp|41:4000"
+    tick()
+    check(c1.HealthInternal == 4000 and M.copies[41].exp == 4000, "join: ... the host's hp with your hit in it: taken")
+    -- your missile (its own key in the map, not your plane's) takes it to the floor: sent whole, it waits there
+    local msl = obj("BP_plwp_msl_a0", 1)
+    M.shotMark(msl.addr, c1.addr)
+    from = #logs + 1
+    hit(c1, msl, 800)
+    s0 = #sent; tick()
+    check(table.concat(msgs("ht", s0 + 1), " ") == "-1>ht|41|400.0" and c1.HealthInternal == 10 and M.copies[41].floorAt ~= nil,
+          "join: your missile at the floor, not in the map under your plane: sent whole, waits at 1 HP (0.73.78: undone, nothing sent) ("
+          .. table.concat(msgs("ht", s0 + 1), " ") .. ", health " .. c1.HealthInternal .. ")")
+    check(has(line("coop: a copy taken to the floor by your missile", from), "sent whole"), "join: ... logged once")
+    -- the host says less than the floor; your missile at it is gone (its hit clamped: health doesn't move): sent again
+    inbox[#inbox + 1] = "0|hp|42:5"
+    tick()
+    local msl2 = obj("BP_plwp_msl_a0", 1)
+    M.shotMark(msl2.addr, c2.addr)
+    hit(c2, msl2, 300)
+    tick()
+    M.shotEnd(msl2.addr)
+    s0 = #sent; tick()
+    check(table.concat(msgs("ht", s0 + 1), " ") == "-1>ht|42|1.0", "join: at the floor, your missile at it gone: the host's last health sent as your hit ("
+          .. table.concat(msgs("ht", s0 + 1), " ") .. ")")
+    s0 = #sent; tick(); tick(2)
+    check(#msgs("ht", s0 + 1) == 0, "join: ... once a missile")
+    -- a missile of yours at another copy: a crash into the floor here is still not yours
+    local c3 = M.copies[41]
+    inbox[#inbox + 1] = "0|dn|41||1"
+    tick()
+    check(M.copies[41] == nil and c3 ~= nil, "join: (41 down by the host's dn)")
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs
