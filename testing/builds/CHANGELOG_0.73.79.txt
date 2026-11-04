@@ -1,0 +1,28 @@
+AC8 Survival Mode COOP2MP 0.73.79 (0.73.79-coop2mp.80) - change log
+====================================================================
+Since 0.73.78. Patch over a 0.73.78 COOP2MP install; everyone in a co-op session needs 0.73.79.
+
+LESS LAG AND STUTTER (no gameplay changes)
+- Survival no longer searches the game's whole object list over and over. Lookups it needs all the time are now kept,
+  which cuts the steady cost behind the slight choppiness during play.
+- The Alicorn: no more big freeze when it appears, and no more stutter every 2 seconds during its fight.
+- The Ladons: their missiles are checked once per level instead of every 10 seconds (a small hitch every 10 s is gone).
+- VALKA: her song and railgun sounds now load in the break before her round, not mid-fight (two short freezes gone).
+- Round clears: no slow airfield-defence search when you haven't bought any defences.
+- Shuttle round: one search at take-off instead of three.
+- Menus: Survival's menu checks run much less often during a run, and the main menu's code rests while you fly.
+- Smaller savings: your position, the level-exit check, Wolf traps, the difficulty setting and co-op's pause check all
+  cost less each update.
+
+FIXES
+- The Alicorn no longer dives once all four ballast tanks are destroyed (if it's under water then, it surfaces).
+- Co-op: joiners can finish enemies with their missiles again (before, enemies sat at 1 HP until the host killed them).
+- Co-op: hits are no longer lost when the host's health update arrives at the same moment, and enemies no longer flicker
+  back to full health on a joiner's screen after each hit.
+
+NOTES
+- Version 0.73.79-coop2mp.80: a player still on 0.73.78 can't join (or host for) a 0.73.79 player.
+- Leaderboard: runs show NOT ACCEPTED until the new build is registered.
+- Coming with the next full build: one more stutter fix in the native runtime (its log no longer waits for the disk on
+  every line, which caused short freezes at round starts and clears).
+- Testers: the TESTER patch keeps the same test keys as 0.73.78.
