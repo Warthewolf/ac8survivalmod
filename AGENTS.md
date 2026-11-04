@@ -1271,3 +1271,55 @@ copy_floor_test.lua (its five new checks fail on 0.73.78's sv_coop.lua):
   an AI stand-in on joiners, a quitter holds spawns 50-80 s, the host's run refused 422 (TESTER hash unregistered) and deleted
   on the client. Hashes: TESTER patch 6844d4f8a6ae156a216850ca027b29fc7ffe456a96661e3c2332ae4cb1421f87, players' patch
   a1c699475041d986e00fb0b52c20fde71f080557b637802b373950088d39aaa6.
+
+## 0.73.80-coop2mp.81: the 0.73.79 report's Phase 1, modded planes / skins / weapons in co-op (runtime 0.32.24; 2026-11-04; not yet run in game)
+From the 31-round co-op test of 0.73.79 (testing/logs/2026-11-04/R30_FINDINGS.json; Claude Docs "AC8 Survival Mode:
+0.73.79 Co-op Test Report & Plan, 4 Nov 2026", Phase 1). Built by agents on separate branches, merged, each part
+reviewed, then a second independent review of the whole (7 findings kept of 9, each verified by refuters). None of it is
+a hard rule until a test confirms it. Every Lua test, fwkind_test, the Worker's test and the native build (online and
+offline, clang 18 here) pass.
+- Alive checks (perf 1/2): sv_spawn.lua ALIVE keeps each unit's SV_UnitAlive answer (at most ~1 s old) and asks again in
+  turn, 8-32 asks a second; a spawn / recycle / a plane seen down asks at once; a unit nobody asks about is forgotten
+  after WATCH_S (the tick's own refresh keeps its `want`). `alive: round N: ...` a round. Its reads: the rounds' checks,
+  orders, Wolf holds, the ace break-off, the shuttle, the Spaceport's looks (ships by hull every 3 s).
+- The shuttle (specials 0): its unit recycled after it's taken off and as its next round is planned (SPC.canStart);
+  spawnShuttle retries on -3, then SPC.unplan makes the round a normal one from the start.
+- Specials pacing (specials 1; CFG.specials chance_step 0.15, max_gap 4, bag, swap): the chance grows per round without
+  one (ace rounds not counted), one sure after max_gap, a shuffle bag (only a kind drawn from it goes back in; a kind
+  whose ready() says no is never in it: kindReady), a pick that can't start swapped (specialSwap) or, on an ace slot
+  with none to swap, that ace round (called out as one). Every roll logged. Trade-off: ~7.6 ace rounds in 46, not 8.4.
+- The landing menu's windows (perf 4): sv_core.lua LANDW keeps them, looked at once a tick, walked for only on landing,
+  a page closing, a press on a page not kept, every_s 2 with none shown, a 30-s backstop ([hud.landing]); the STORE
+  gates of co-op (inStore: the hold AND a window shown at the last look) and SHOP.decorTick (liveObj) read them.
+- VALKA (specials 2 / perf 6): her railgun modules kept as made (NotifyOnNewObject), her round's settings on its class
+  default (SPC.V.roundDefaults: "opener" no damage held until s.harmUntil = shot + reveal_s + 3 + eml_life_s, "hers",
+  "off"), her rounds kept as made (SPC.V.roundHook) and her damage put back on pooled ones at her charges (roundsHarm),
+  her assets loaded one a tick in the break.
+- Co-op: the SV_Spawn wrapper names the unit for a host spawn whose caller didn't (the LCAC lanes, the STORE defences,
+  the shuttle pad: ids on every game); a dn naming you takes the copy down with your plane as cause ([coop]
+  kill_callout); a player lost in the mission leaves the hold after hold_lost_s 15 (state cleared on a new run and a
+  rejoin); COOP.takenOff marks what the host takes off without a kill (craft, troops, the fleet, rockets, debris, the
+  garrison, the island; only objects still up) as nobody's.
+- Modded planes and skins: a plane with no stock code sends its class path and stock base (hi 10-11, pi 11-12); each game
+  spawns their class where it has it ([coop.real_paths]: the Falken's), else the base / [coop.real_fallback] / [coop]
+  real_default (f16c), the AI stand-in last; a skin this game hasn't (DT_Skin / SkinDataMap_) or a bad id is -1, the
+  emblems kept. Any plane code in those two sections from survival.ini (loadIni's open maps). modsync_test.
+- Weapon stand-ins (tools/re/COOP2MP.md "Weapon stand-ins"): a launch whose weapon number their real plane here hasn't,
+  or has as another kind, goes to the nearest weapon of its kind (M.weaponFor / M.standInPay: the same special where a
+  changed loadout put it, its own number when known or trusted, else the nearest missile special or the standard missile,
+  a laser / ESM only as one of its kind, a bullet special as one or a gun burst, M.gunOff lets the burst go). Needs
+  runtime 0.32.24's SV_PPWeapons (the kinds seen launched, FwLearn, keyed on the plane's address, index, name, class and
+  table: runtime/fwkind.h) and its FnFlush gate (a shot onto a weapon known to be another kind refused); on 0.32.23 the
+  launches go as sent, as before. [coop.sync] standins, standin_gun_s, standin_table (off: the table kinds, FwkScan,
+  observed only). fwkind_test.sh, coop_fire_test.
+- Leaderboard: a run refused only as an unknown build is kept in config/refused_runs.txt and resent at later game starts
+  for 14 days (one answered "played on other files" kept too). The Worker checks a resent run's own build (run.build,
+  under run.mod) when the files it's sent from are a registered release of any version: REDEPLOY the Worker
+  (leaderboard/src/index.js) before this matters.
+- The fleet watch only in a Spaceport round; the default ini's [specials] comment names the ace trade-off.
+- Open, check in the next test: a joiner's bombs and unguided rockets on the now-linked landing craft (the floor sends a
+  hit only for a missile / the gun / the map: COOP2MP.md's floorLoss); stand-ins in game (runtime 0.32.24 only).
+- Given out as patches (2026-11-04, Scripts/*.lua + config/survival.default.ini over a 0.73.78 COOP2MP install, staged as
+  package_release.sh does; on runtime 0.32.23, no SV_PPWeapons): testing/builds/AC8SurvivalMode_COOP2MP_0.73.80_TESTER_Patch.zip
+  (Saint Alessia: test keys and loggers kept) and AC8SurvivalMode_COOP2MP_0.73.80_Patch.zip (stripped, quiet logs);
+  CHANGELOG_0.73.80.txt. Both load in lua_load_test. Their build hashes come from the game's first log line: register them.

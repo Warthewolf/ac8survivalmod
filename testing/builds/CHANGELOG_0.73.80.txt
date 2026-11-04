@@ -1,0 +1,47 @@
+AC8 Survival Mode COOP2MP 0.73.80 (0.73.80-coop2mp.81) - change log
+====================================================================
+Since 0.73.79. Patch over a 0.73.78 COOP2MP install (with or without the 0.73.79 patch); everyone in a co-op session
+needs 0.73.80. Most of it comes from the 31-round co-op test of 4 Nov 2026.
+
+LESS LAG
+- The host's lag late in a run: checking whether each enemy flight was still alive got slower with every flight ever
+  spawned (by round 30 a check took 6.6 ms, and every flight was checked once a second). The answers are now kept and
+  asked again a few at a time.
+- Co-op: the airfield's landing menu is no longer searched for several times a second while you're down there.
+- VALKA: no more hitches at her first shot and when she appears (her parts load in the break before her round).
+
+SPECIALS
+- The shuttle launch works every time again (it fell back to a bomber raid the second time in a run).
+- A special that can't start is swapped for another one, or the round is a normal round from the start.
+- Specials come more evenly: the chance grows each round without one, one comes for sure after 4 such rounds, and
+  every special comes once before any comes again. Ace rounds only come in rounds without a special, so there are a
+  few fewer of them (about 7.6 instead of 8.4 in a 46-round run).
+
+CO-OP
+- The landing craft, the STORE's defences and the shuttle pad are now the same objects on every game (before, each
+  game fought its own copy).
+- Your kills are your own plane's on your game too.
+- A player who quits or crashes mid-round holds the next spawns for 15 s at most (it was 50-80 s).
+- Modded planes: you see another player's real modded plane if you have the same mod; if you don't, the stock plane
+  it's built on (the Falken as an ADFX-02) instead of an AI F-16C. A modded paint you don't have shows as that plane's
+  default paint, emblems kept.
+- Landing craft, troops, ships and rocket debris taken off because they got away no longer count as someone's kill.
+- Other players' launches show the moment you close your STORE.
+- A gun burst on another player's plane can't get stuck firing.
+
+LEADERBOARD
+- A run refused because its build wasn't registered yet is kept and sent again at later game starts (for 14 days)
+  instead of being deleted, also after you update.
+
+VALKA
+- Her first long-range shot can't hurt you even when it fires late; her own shots hurt as before.
+
+NEW SETTINGS (survival.ini; added to yours, switched off, at the next start)
+- [specials] chance_step, max_gap, bag, swap; [coop] hold_lost_s, kill_callout, real_default;
+  [coop.real_fallback] and [coop.real_paths] (any modded plane code); [coop.sync] standins, standin_gun_s,
+  standin_table; [hud.landing] every_s, backstop_s.
+
+COMING WITH THE NEXT FULL BUILD (runtime 0.32.24)
+- The native log's lag fix.
+- Another player's weapons that your copy of their plane hasn't (a weapon mod, a changed loadout) shown as the
+  nearest weapon of the same kind. Until then those launches aren't shown, as in 0.73.79.
