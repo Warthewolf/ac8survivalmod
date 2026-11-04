@@ -1322,9 +1322,16 @@ CFG = {
              -- fired", "their gear doesn't deploy on my screen, nor do I see their afterburners"): your missiles, gun,
              -- flares, gear and afterburner go to the others, theirs show here. ab_throttle: the throttle input (0-1)
              -- from which you're on afterburner. The stand-ins fly damage-0 copies of their airframes' rows (<row>_svcp),
-             -- so what they fire only shows; enabled = false: none of it, and their airframes' own rows as before
+             -- so what they fire only shows; enabled = false: none of it, and their airframes' own rows as before.
+             -- (0.73.80, the user 2026-11-04: "Then do the weapon stand-ins next") standins: a launch whose weapon their
+             -- real plane here hasn't (a weapon mod's extra special, a modded plane on a stock fallback) shown as the
+             -- nearest weapon of the same kind it has (sv_coop.lua M.weaponFor: a missile special as another missile
+             -- special or the standard missile, a laser / ESM / ECM as one of its kind, a bullet special as one or a burst
+             -- of its gun, standin_gun_s long); false: such a launch isn't shown, as before. standin_table: also trust
+             -- the kinds the runtime reads from the plane's weapon table (runtime 0.32.24; not yet verified in game: its
+             -- log's "weapon kinds" lines say whether they agree with the launches seen), not only those seen launched
              sync = { enabled = true, missiles = true, guns = true, flares = true, gear = true, afterburner = true,
-                      ab_throttle = 0.9 },
+                      ab_throttle = 0.9, standins = true, standin_gun_s = 0.5, standin_table = false },
              -- revives (Scripts/sv_down.lua, tools/re/COOP.md 9; user, 2026-10-29: "if you die, HOST or JOINER, someone
              -- could land at the airfield and buy you back ... you get put into a spectator camera and you can switch
              -- between the players currently active"). Co-op only: your plane is held at floor_hp; there you're DOWN,

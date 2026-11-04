@@ -763,18 +763,31 @@ typedef struct { void* p; int32_t n, m; } FwArr;
  * the weapon number with no bounds check, then reads that entry's slot list (+0x78, its count +0x80). A number past the
  * table's end read garbage and crashed the game (the user's co-op run of 2026-10-31, 09:22:24: another player's
  * replayed launch, an access violation reading -1 at 0x147f7c340). So every replayed weapon is checked here first. */
-static int FwWeaponOk(uint8_t* w, uint8_t weapon, int32_t* count)
+/* (runtime 0.32.24: FwWeaponOk's first half, for SV_PPWeapons too) weapon system w's launcher table: its entries and
+ * their count (1-64), 1; 0 when it can't be read (*count -1 when not even its header could, else what it says) */
+static int FwTableOf(uint8_t* w, uint8_t** tab, int32_t* count)
 {
-    if (count) *count = -1;
+    *tab = NULL; *count = -1;
     if (!w || !Readable(w + 0x2e0, 8)) return 0;
     uint8_t* ws = *(uint8_t**)(w + 0x2e0);
     if (!ws || !Readable(ws + 0xb0, 8)) return 0;
     uint8_t* ld = *(uint8_t**)(ws + 0xb0);
     if (!ld || !Readable(ld + 0x28, 0x10)) return 0;
-    uint8_t* tab = *(uint8_t**)(ld + 0x28);
+    uint8_t* t = *(uint8_t**)(ld + 0x28);
     int32_t num = *(int32_t*)(ld + 0x30), max = *(int32_t*)(ld + 0x34);
+    *count = num;
+    if (!t || num <= 0 || num > 64 || max < num) return 0;
+    *tab = t;
+    return 1;
+}
+
+static int FwWeaponOk(uint8_t* w, uint8_t weapon, int32_t* count)
+{
+    uint8_t* tab = NULL;
+    int32_t num = -1;
+    int ok = FwTableOf(w, &tab, &num);
     if (count) *count = num;
-    if (!tab || num <= 0 || num > 64 || max < num || (int32_t)weapon >= num) return 0;
+    if (!ok || (int32_t)weapon >= num) return 0;
     uint8_t* e = tab + (size_t)weapon * 0xa0;
     if (!Readable(e, 0xa0)) return 0;
     /* (what 0x147f7c300 does with the entry, whatever the counts: its spawn slot clamped to the slot array's count
@@ -817,18 +830,45 @@ static int FwLaunchDirect(uint8_t* copy, uint8_t weapon, uint8_t* target, uint8_
     return (uint8_t)r == 1 ? 1 : 0;
 }
 
-static int FwIsA(uint8_t* proj, int32_t at)              /* IsA the class PlaneWeaponsFired asks for at that call */
+/* class pc derives from the class PlaneWeaponsFired asks for at that call (runtime 0.32.24: FwIsA's test on a class) */
+static int FwIsAClass(uint8_t* pc, int32_t at)
 {
+    if (!g_fPlaneFired) return 0;                         /* (0.32.24: SV_PPWeapons and FnFlush ask it too) */
     uint8_t* site = g_fPlaneFired + at;                   /* call <its StaticClass> */
     if (site[0] != 0xE8) return 0;
     uint8_t* sc = site + 5 + *(int32_t*)(site + 1);
     if (!InGame(sc)) return 0;
-    uint8_t* cls = ((StaticClassFn)sc)(), *pc = *(uint8_t**)(proj + 0x10);
+    uint8_t* cls = ((StaticClassFn)sc)();
     if (!cls || !pc || !Readable(cls + 0x30, 0x10) || !Readable(pc + 0x30, 0x10)) return 0;
     int32_t d = *(int32_t*)(cls + 0x38);
     if (d < 0 || d > *(int32_t*)(pc + 0x38)) return 0;
     uint8_t** chain = *(uint8_t***)(pc + 0x30);
     return Readable(chain + d, 8) && chain[d] == cls + 0x30;
+}
+
+static int FwIsA(uint8_t* proj, int32_t at)              /* IsA the class PlaneWeaponsFired asks for at that call */
+{
+    return FwIsAClass(*(uint8_t**)(proj + 0x10), at);
+}
+
+/* ---- (runtime 0.32.24) the other players' weapons by kind: their stand-in weapons (sv_coop.lua M.weaponFor) ---------
+ * runtime/fwkind.h keeps what's known of each other player's real plane's weapons (seen launched; its table entries'
+ * classes, observed); FnFlush refuses a shot onto one of another kind, SV_PPWeapons tells Lua. Here: a class's kind. */
+/* the kind of weapon class pc: 0 explosive, 1 the laser, 2 a bullet special, 3 electronic (FnCapture's order), 4 none of them */
+static int FwKindOfClass(uint8_t* pc)
+{
+    return FwIsAClass(pc, FW_EXPLOSIVE) ? 0 : FwIsAClass(pc, FW_INSTANT) ? 1 : FwIsAClass(pc, FW_BULLET) ? 2 :
+           FwIsAClass(pc, FW_ELECTRONIC) ? 3 : 4;
+}
+#include "fwkind.h"                                         /* (FwObjKind, FwSeenOf, FwkScan, FwTabKind, FwNoteKind) */
+
+/* a launch from player slot's real plane here: weapon `weapon` launched proj, so that's its kind (FwNoteKind) */
+static void FwLearn(int slot, uint8_t* plane, uint8_t* tab, int32_t num, uint8_t weapon, uint8_t* proj)
+{
+    if (!proj || weapon >= FW_SEEN || !LiveObject(proj) || !Readable(proj + 0x10, 8)) return;
+    uint8_t* pc = *(uint8_t**)(proj + 0x10);
+    if (!pc || !Readable(pc + 0x30, 0x10)) return;
+    FwNoteKind(slot, plane, tab, num, weapon, FwKindOfClass(pc));
 }
 
 static void FwCapture(uint8_t* src, CoArr* projs)
@@ -1070,7 +1110,7 @@ typedef struct { CoRef plane, target; FnShot s; } FnIn;
 #define FN_IN 32
 static FnIn g_fnIn[FN_IN];
 static int g_fnInN;
-static struct { uint32_t got, refused, launched, failed, specials, stale, gone, noNm, badWeapon; int said, saidBad; double logAt; } FN;
+static struct { uint32_t got, refused, launched, failed, specials, stale, gone, noNm, badWeapon, badKind; int said, saidBad, saidKind; double logAt; } FN;
 
 /* SV_CoopPPShot(plane, target, "k,w,s,u,seed,lock,rx,ry,rz,pitch,yaw,roll,vx,vy,vz") -> 1 queued; < 0: -1 bad args or
  * not another player's real plane (role 2, not yours, not the test copy's source), -4 the queue full (32) */
@@ -1139,6 +1179,25 @@ static void FnFlush(uint8_t* plane, int slot)
             }
             continue;
         }
+        /* (0.32.24) a weapon known here to be of another kind (seen launched; its table entry's with [coop.sync]
+         * standin_table) isn't replayed: the remote fire would treat a laser or ESM as a missile, a laser launch another
+         * weapon; nor a laser, bullet or electronic shot below weapon 2 (the specials). Lua's stand-in picks one that is. */
+        uint8_t* ktab = NULL;
+        int32_t knum = -1;
+        FwTableOf(w, &ktab, &knum);
+        int8_t* kseen = FwSeenOf(slot, plane, ktab);
+        int known = (kseen && s->weapon < FW_SEEN) ? kseen[s->weapon] : -1;
+        if (known < 0 && g_fwk.use) known = FwTabKind(ktab, knum, s->weapon);
+        if ((s->kind != 0 && s->weapon < 2) || (known >= 0 && known != s->kind)) {
+            ++FN.badKind;
+            if (FN.saidKind < 6) {
+                ++FN.saidKind;
+                Log(L"coop2mp: T4b: player %d's %s (weapon %d) NOT replayed on their real plane %p here: %s%s", slot + 1,
+                    s->kind ? kFwKind[s->kind] : L"shot", (int32_t)s->weapon, plane,
+                    known >= 0 ? L"that weapon there is " : L"a special's number is 2 or more", known >= 0 ? kFwKindName[known] : L"");
+            }
+            continue;
+        }
         if (s->kind != 0) {
             if (!g_fSelectSpecial || !g_fArmSpecial) { ++FN.failed; continue; }
             ((SelectSpecialFn)g_fSelectSpecial)(plane, s->weapon);
@@ -1147,6 +1206,7 @@ static void FnFlush(uint8_t* plane, int slot)
             uint8_t* lp = NULL;
             if (s->kind == 2) ((ArmSpecialFn)g_fArmSpecial)(plane, 0);
             else lr = FwLaunchDirect(plane, s->weapon, tg, &lp);
+            if (lr == 1 && lp) FwLearn(slot, plane, ktab, knum, s->weapon, lp);    /* (0.32.24: its kind, seen) */
             ++FN.specials;
             if (FN.said < 8) {
                 ++FN.said;
@@ -1184,6 +1244,7 @@ static void FnFlush(uint8_t* plane, int slot)
         FW.in = 0;
         int ok = (uint8_t)FW.ret == 1 && FW.proj;
         if (ok) ++FN.launched; else ++FN.failed;
+        if (ok) FwLearn(slot, plane, ktab, knum, s->weapon, FW.proj);           /* (0.32.24: its kind, seen) */
         if (FN.said < 8) {
             ++FN.said;
             Log(L"coop2mp: T4b: player %d's shot (weapon %d, slot %d, lock-ons %d) on their real plane %p here: %s (%p), target %p",
@@ -1201,11 +1262,45 @@ static void FnLog(void)
     FN.logAt = now;
     if (!(FN.got || FN.refused || g_fnOutTaken || g_fnOutDropped)) return;
     Log(L"coop2mp: T4b this minute: your launches sent %u (%u dropped); theirs %u queued here, %u refused, %u launched, %u "
-        L"not, %u specials, %u stale, %u with their plane gone, %u with no network manager, %u not a weapon of their plane here",
+        L"not, %u specials, %u stale, %u with their plane gone, %u with no network manager, %u not a weapon of their plane here, "
+        L"%u another kind of weapon there (weapon kinds: table entries' %s, %u agreeing with a launch, %u not)",
         g_fnOutTaken, g_fnOutDropped, FN.got, FN.refused, FN.launched, FN.failed, FN.specials, FN.stale, FN.gone, FN.noNm,
-        FN.badWeapon);
+        FN.badWeapon, FN.badKind, g_fwk.bad ? L"off (one disagreed)" : g_fwk.found == 1 ? (g_fwk.use ? L"used" : L"observed only")
+        : g_fwk.found < 0 ? L"not found" : L"not found yet", g_fwk.agree, g_fwk.disagree);
     g_fnOutTaken = g_fnOutDropped = 0;
-    FN.got = FN.refused = FN.launched = FN.failed = FN.specials = FN.stale = FN.gone = FN.noNm = FN.badWeapon = 0;
+    FN.got = FN.refused = FN.launched = FN.failed = FN.specials = FN.stale = FN.gone = FN.noNm = FN.badWeapon = FN.badKind = 0;
+}
+
+/* SV_PPWeapons(plane, table) -> another player's real plane's weapons by number (runtime 0.32.24; sv_coop.lua
+ * M.weaponFor), "k0,k1,...": -2 not usable (FwWeaponOk refuses it: never replayed), -1 its kind not known, 0-4 its kind
+ * as seen launched here (0 an explosive weapon, 1 the laser, 2 a bullet special, 3 an electronic one: ESM / ECM, 4 none
+ * of those), 10-14 the kind its table entry's class gives (not yet seen launched); "" when its weapons can't be read or
+ * it isn't another player's real plane. table: 1 the native gate uses the table's kinds too (0 observed only) */
+static int L_PPWeapons(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    double use = 0;
+    ArgNumber(lua, &use);
+    if (!plane || !LiveObject(plane) || CoKind(plane) != 2 || plane == CO.me.obj || (FD.src.obj && plane == FD.src.obj) ||
+        !Readable(plane + FW_W, 8)) { U.luaSetString(lua, "", 0); return 1; }
+    g_fwk.use = use != 0;
+    uint8_t* w = *(uint8_t**)(plane + FW_W);
+    uint8_t* tab = NULL;
+    int32_t num = -1;
+    if (!w || !FwTableOf(w, &tab, &num)) { U.luaSetString(lua, "", 0); return 1; }
+    FwkScan(tab, num);
+    int8_t* seen = FwSeenOf(FlNetSlot(plane), plane, tab);
+    char s[512];
+    CoBuf b = { s, s + sizeof(s) - 1 };
+    for (int32_t i = 0; i < num; ++i) {
+        int k = !FwWeaponOk(w, (uint8_t)i, NULL) ? -2 : (seen && i < FW_SEEN && seen[i] >= 0) ? seen[i] : -1;
+        if (k == -1) { int t = FwTabKind(tab, num, i); if (t >= 0) k = 10 + t; }
+        if (i) CoPutS(&b, ",");
+        CoPutI(&b, k);
+    }
+    *b.p = 0;
+    U.luaSetString(lua, s, (size_t)(b.p - s));
+    return 1;
 }
 
 /* SV_CoopLoadout() -> your plane's loadout, "a,b,c/d,e/x,y" (the loadout object's two lists and the two loadout bytes,

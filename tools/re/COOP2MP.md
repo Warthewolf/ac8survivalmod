@@ -604,3 +604,45 @@ handler that, for an access violation with the frame armed, copies the captured 
 target") and leaves every other exception alone. TgtInstall guards those classes as a third kind (flight.c
 TcWorldUnchecked, the world getter by sigs.h kSigWorldOf); the weak-pointer test stays on the 3 classes that hold a weak
 pointer at +0x20 (the world classes hold a raw one there). Not yet run in game; watch for `caught a fault` lines.
+
+## Weapon stand-ins (0.73.80, runtime 0.32.24; not yet run in game)
+The user, 2026-11-04 (after the modded planes and skins): "Then do the weapon stand-ins next". Another player's launch
+whose weapon number their real plane here hasn't, or has as another kind of weapon, was dropped ("not a weapon of their
+plane here": 57-74 a game in the 31-round test of 2026-11-04, every per-shot line Amia's F-22A firing an explosive weapon
+3 with only 0-2 on its plane here; the cause: a special-slot mod, or her loadout changed since it spawned). It's now shown
+as the nearest weapon of the same kind that plane has.
+- Weapon numbers are the plane's launcher table ([[weapons +0x2e0] +0xb0] +0x28, 0xa0-byte entries): 0 the gun, 1 the
+  standard missile, 2 / 3 the specials (the loadout's two bytes), 4 and up only from weapon mods. The kind of each launch
+  comes with it (FnCapture: 0 explosive, 1 the laser, 2 a bullet special, 3 ESM / ECM).
+- Native (flight.c, runtime/fwkind.h): SV_PPWeapons(plane, table) -> "k0,k1,..." per number: -2 not usable (FwWeaponOk
+  refuses it), -1 not known, 0-4 seen launched from it here (every replay: the remote fire's projectile, FwLaunchDirect's;
+  FwLearn -> FwNoteKind, per player slot and plane), 10-14 its table entry's class (FwkScan finds where an entry keeps it,
+  as a class or an object of one: entry 1 an explosive weapon, every other entry empty or a live class, none sharing entry
+  1's; not verified in the exe, so observed only unless [coop.sync] standin_table; a launch that disagrees turns them off
+  for the session). FnFlush refuses a shot onto a weapon known to be of another kind (the remote fire treats whatever it
+  launches as an explosive weapon: +0x6b4 / +0x6e8, vf+0x8a0) and a laser, bullet or electronic shot below weapon 2.
+- Lua (sv_coop.lua M.ppKinds, M.weaponFor, M.standInPay, from fireShots): (b) a special whose id (their loadout now, "hi"
+  / "pi") sits at the plane's other special number (its loadout as spawned) -> that number; (a) its own number when the
+  plane has it and it's of that kind or not known (a missile special not known isn't trusted on a fallback plane or where
+  their loadout has another special now); (c) the nearest number of its kind, ties to the lower: a missile special the
+  nearest missile special, else the standard missile (weapon 1, known or not); a laser / ESM / ECM only one of its kind; a
+  bullet special one of its kind, else a burst of the plane's gun (standin_gun_s, peersTick). A stand-in launch (c) keeps
+  the seed, start, rotation, velocity and target, spawn slot 0, byte +0x26 0, lock-ons at most 1. The relay keeps the
+  original. No SV_PPWeapons (runtime 0.32.23), nothing read, or standins = false: as sent.
+- Log lines: Lua `coopfire: player N's real plane here (<code>[, shown as a <fallback>]): its weapons 0 the gun, 1 the
+  standard missile, 2 ..., (SV_PPWeapons ...)` (once a plane and change), `coopfire: player N's <kind> (weapon W) shown on
+  their real plane here as its weapon X (<kind>): <why>`, `... shown as their real plane's gun here`, `... NOT shown: <why>,
+  and their real plane here has no <kind>` (once a player, weapon and plane), the 60 s line's `; weapon stand-ins: A on
+  another weapon of the same kind, B as the gun, C not shown ...; by player: N: 3->1 x2, ...`; native `coop2mp: weapon kinds:
+  a weapon table entry's weapon class at +0x..` (or `no weapon class found ... (try 1 of 8 ...)` / `in 8 tries`), `coop2mp:
+  weapon kinds: player N's real plane <p> here: its weapon W is <kind> (seen launched[; its table entry said <kind>])`,
+  `... launched <kind>, its table entry said <kind>: the table's kinds OFF`, `coop2mp: T4b: player N's <kind> (weapon W) NOT
+  replayed on their real plane <p> here: that weapon there is <kind>` and the T4b minute line's `N another kind of weapon
+  there (weapon kinds: table entries' <used / observed only / not found / off>, A agreeing with a launch, B not)`.
+- Tests: tools/checks/coop_fire_test.sh's "(0.73.80) weapon stand-ins" (the Lua, SV_PPWeapons stubbed),
+  tools/checks/fwkind_test.sh (fwkind.h on made-up tables, no Windows headers needed).
+- In game: a player on a special-slot mod (or with a loadout changed mid-level) fires the extra special: the others see it
+  as one of their plane's specials or its standard missile, with a `shown on their real plane here as` line; a fallback
+  plane (the Falken as an ADFX-02) has its specials mapped by kind once seen; stock players: no stand-in or `another kind`
+  lines; the `weapon kinds` lines: where the class was found and whether its kinds agree with the launches (then
+  standin_table = true can be tried).
