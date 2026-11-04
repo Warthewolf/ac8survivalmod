@@ -22,7 +22,8 @@ end
 -- aren't attacking the base, they fly around nearby and do nothing": over the runway they circled 6-8 km out and never
 -- came within drop_km): a heavy flight's lead flies the route in from the compass sector it spawned in, over the runway,
 -- then a figure-8 crossing it twice a lap (RE_SV_HeavyRoute_<NN><S>, queued route_delay_s after its appearance's
--- orders); shot down, the next of its flight takes the loop (RE_SV_HeavyLoop_<NN><L><S>). D.heavyPath[unit] = { s, k }.
+-- orders); shot down, the next of its flight takes the loop (RE_SV_HeavyLoop_<NN><L><S>). D.heavyPath[unit] = { s, k, at,
+-- seen } (at: the round clock at its spawn; seen: one of that spawn's planes logged since).
 HEAVY = {}
 HEAVY_SECTORS = "ABCDEFGH"                           -- (compass 0, 45 ... 315 from the airfield: survival_events)
 function HEAVY.route(unit, x, y)
@@ -32,16 +33,22 @@ function HEAVY.route(unit, x, y)
     local i = math.floor((bearing + 22.5) / 45) % 8 + 1
     local s = HEAVY_SECTORS:sub(i, i)
     D.heavyPath = D.heavyPath or {}
-    D.heavyPath[unit] = { s = s, k = 0 }
+    D.heavyPath[unit] = { s = s, k = 0, at = D.now or 0 }   -- (its planes reach `planes` ~2 ticks on: heavyNext)
     queueEvent((D.now or 0) + (b.route_delay_s or 3), string.format("RE_SV_HeavyRoute_%02d%s", BOMBER_INDEX[unit], s),
         string.format("%s's route in from bearing %.0f", unit, bearing))
 end
 -- (every second, from bombTick) a flight whose lead on the path is down: its next aircraft up takes the loop
+-- ((review of 27097b9, finding 0) Only this spawn's planes count (born at or after its entry: a plane of the flight's last
+-- spawn the sweep hasn't marked down yet isn't taken for its lead), and the entry is dropped only once one of them has
+-- been seen and none is left (or 5 s on with none ever seen): a spawn's planes reach `planes` ~2 ticks after it
+-- (sv_main.lua's pending), and bombTick could run first, dropping the entry, so no handover followed its lead's loss and
+-- the rest of the flight circled out of drop_km, never bombing. The Spaceport's Tu-160 groups spawn up to 4 times a round.)
 local function heavyNext()
     for unit, h in pairs(D.heavyPath or {}) do
         local lead, nk = false, nil
         for _, p in ipairs(planes) do
-            if p.unit == unit and not p.down and valid(p.obj) then
+            if p.unit == unit and not p.down and valid(p.obj) and (p.born or 0) >= (h.at or 0) then
+                h.seen = true                                                    -- (this spawn's planes are in `planes` now)
                 if p.k == h.k then lead = true elseif p.k and (not nk or p.k < nk) then nk = p.k end
             end
         end
@@ -51,7 +58,7 @@ local function heavyNext()
             local r = SV_Event(ev)
             log(string.format("bombers: %s's lead down: object %d takes the loop (%s %s)", unit, nk, ev,
                 r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
-        elseif not lead and not nk then
+        elseif not lead and not nk and (h.seen or (D.now or 0) - (h.at or 0) > 5) then
             D.heavyPath[unit] = nil                                              -- (the whole flight down)
         end
     end
