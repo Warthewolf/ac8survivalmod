@@ -1,0 +1,205 @@
+06:19:23 AC8 Survival Mode runtime 0.32.23
+06:19:23 leaderboard: the game started: build hash 03e468ebbf8343b9967359d9621bfaeac181f41c92ff9bbe70ab2fc3ccda9341 (30 scripts, 12 behaviour scripts, the ini, main.dll and the container: 46 files, 4083 KB, 250 ms)
+06:19:24 UE4SS calls mod slot 3
+06:19:24 UE4SS calls mod slot 15
+06:19:24 UE4SS calls mod slot 13
+06:19:41 UE4SS calls mod slot 2
+06:19:41 UE4SS calls mod slot 4
+06:19:41 UE4SS calls mod slot 5
+06:19:41 UE4SS calls mod slot 7
+06:19:41 UE4SS calls mod slot 6
+06:19:41 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+06:19:41 Lua bridge: registering 79 functions
+06:19:41 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+06:19:41 UE4SS calls mod slot 8
+06:19:41 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+06:19:41 Lua bridge: registering 79 functions
+06:19:41 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+06:19:41 UE4SS calls mod slot 1
+06:19:41 game functions (18688 ms): base 147A79A30, main decide 147B3FA10, difficulty decide 147B00A90, next 146EB70A0, goto 147A76CC0, set difficulty 147B817C0, transition 147A76C20, text 14739DFC0
+06:19:41 spawn functions: spawn unit 147E00680, unregister unit 147E0C770, unit check 147E0CAB0, destroy actor 143FD38E0
+06:19:41 ammo functions: node execute 1473F03F0, flare lambda 14740B6C0, weapons lambda 1473F08A0, free restock 1473F2000
+06:19:41 game Lua: GetGameLuaState 144EC9FF0
+06:19:41 music and events: BGM node 1473CB720, remote-event node 1473E4B40, pause list 147B470D0, landing menu decide 147AF2030
+06:19:41 music player: track clock tick 147B182A0, next track 147B2A010
+06:19:41 flight input: BuildFlightInput 147D582D0
+06:19:41 coop: AI plane teleport 147D0DD90, inner 147D0DF60
+06:19:41 coop: player plane: spawn 1471D15E0, world spawn 14464D330, teleport 147D3EFB0, inner 147D3EFF0; remote spawn sites: possess 1471B8674, network object 1471B869B, role 1471B87D8, dummy class 1471B85CD, loadout 1471B8957, loadout bytes 1471B8A03, finish 1471B8FEA
+06:19:41 flight: one-shot fire 147C7F910 (LiveFireOneShotWeapon's Execute 1473D9710), AI takeoff afterburner 147CBEF60, player plane respawn 147D5CD60, remote update 147D5E9E0, surface update 147D224E0, player plane damage 147D49D30
+06:19:41 coop2mp: weapons fired 147D60980, remote plane fire 147D617C0, launch weapon 147F68E50, flares 147F504B0, network manager 147ECE910, select special 147D61740, arm special 147D523B0, gear site 1474C8BD4
+06:19:41 guard: AI unit effect update 147CA23C0, a second unit update 147CA8230, target entry check 14742F9A0; coop2mp: plane electronic update 147D177B0
+06:19:42 text lookup: hooked at 14739DFC0
+06:19:42 pause menu list: hooked at 147B470D0
+06:19:42 landing menu decide: hooked at 147AF2030
+06:19:42 music player clock: hooked at 147B182A0
+06:19:42 music player next track: hooked at 147B2A010
+06:19:42 flight input: hooked at 147D582D0
+06:19:42 remote player plane update: hooked at 147D5E9E0
+06:19:42 guard: GUObjectArray chunks at 14DC4ACE0, count at 14DC4ACF4 (47066 objects), GC flag at 14DC33620 (now 2)
+06:19:42 guard: the engine's purge flags: purge required at 14E41BAE0 (now 0), incremental purge in progress at 14E41BAE8 (now 0), from IncrementalPurgeGarbage 1419C8590: SV_GcBusy
+06:19:42 guard: AI unit effect update: vtable slot 14C509EC8, next 147CA23C0
+06:19:42 guard: second AI unit update (+0x42c0): vtable slot 14C5080C8, next 147CA8230
+06:19:42 guard: the target search's fault catcher in; the world getter 143FB5420
+06:19:42 guard: the event family: 152 vtables share its 3 base slots, 151 of them its +0x50 too, 151 answer an event type (151 distinct): those 151 looked at, 1 not
+06:19:42 guard: 37 target entry classes guarded in 38 vtable slots (the first 1, a weak actor unchecked 3, the world unchecked 13, event objects checked 23; 17 through the fault catcher, 20 called straight on; 151 event vtables, 119 functions, 82 left alone)
+06:19:42 guard: the event types whose objects are checked (type +offsets): 166 +0x18, 167 +0x18, 120 +0x20, 119 +0x28, 118 +0x20, 15 +0x18 +0x20, 52 +0x18, 27 +0x18 +0x20, 22 +0x18, 16 +0x18, 10 +0x18, 175 +0x20, 174 +0x20, 104 +0x18, 100 +0x20 +0x28, 94 +0x20, 70 +0x18 +0x20, 66 +0x20, 63 +0x20, 179 +0x18, 144 +0x18, 143 +0x18, 139 +0x18
+06:19:42 guard: AI path tracking guarded (tick 147DD5120, thunk 147DE3EF0 -> body 147DD53F0; trackers with freed objects left out, faults caught: the fault catcher in)
+06:19:42 minigame AI deactivation: hooked at 1478EB7B0
+06:19:42 minigame AI restore: hooked at 1478EB640
+06:19:42 plane electronic update: hooked at 147D177B0
+06:19:42 player plane surface update: hooked at 147D224E0
+06:19:42 player plane damage: hooked at 147D49D30
+06:19:42 player plane weapons fired: hooked at 147D60980
+06:19:42 launch weapon: hooked at 147F68E50
+06:19:42 fire flares: hooked at 147F504B0
+06:19:43 menu tables: main menu 14C816720, difficulty page 14C7DDDE0
+06:19:43 menu transition: hooked at 147A76C20
+06:19:43 main menu decide: vtable slot 14C816E90, next 147B3FA10
+06:19:43 difficulty decide: vtable slot 14C7DE550, next 147B00A90
+06:19:43 difficulty next menu: vtable slot 14C7DE668, next 146EB70A0
+06:19:43 menu hooks installed (mission 9101, hangar menu F)
+06:19:48 game Lua: Lua 5.3 API from the game's exports (pcallk 144E5EC60), context slot 14DCF4E20
+06:20:19 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+06:20:19 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+06:20:19 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+06:20:19 main menu: Survival's pages are in the game's page list
+06:22:48 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+06:22:52 main menu: Survival's page row 'SV_Mode_Offline': SP Offline
+06:22:54 main menu: Survival's page row 'SV_Go_Offline': SP Offline, opening the difficulty select to start
+06:22:57 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+06:22:58 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+06:22:58 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+06:22:58 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+06:22:58 start: going to the hangar (menu F)
+06:23:46 music layout: game instance +1D8 (class fn 146E2F590), BGM manager +908 (flag +1D5), controller +170, play 1478AB8B0; controller ids +138 / +128, status +148
+06:23:46 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+06:23:46 spawner: LiveUnitSpawner 251972E040, global phase 251972E388, world data 2739FD1F00
+06:23:46 teardown gate: watching world 188EAB00 (spawner 251972E040)
+06:23:47 events layout: event vtable 14CB54008 (type 4F, check slot +48), manager fn 1470BDEF0, dispatch 14740D940, GMalloc 14E410280 (free +48)
+06:23:48 ammo layout: owner fn 147ECB330, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F51220, flare fn 147F65620
+06:23:54 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+06:24:05 units (round 1 start): 1 on the phase's list
+06:24:05   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:24:05 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-5869, -4804) m, 4078 m high, heading 1
+06:24:08 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (10094, -24323) m, 4367 m high, heading 73
+06:24:44 units (round 1 clear): 1 on the phase's list
+06:24:44   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:24:45 spawner: LiveUnitSpawner 251972E040, global phase 251972E388, world data 2739FD1F00
+06:24:45 teardown gate: watching world 188EAB00 (spawner 251972E040)
+06:25:00 units (round 1 start): 1 on the phase's list
+06:25:00   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:25:01 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (23667, -23487) m, 4701 m high, heading 111
+06:25:04 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-4453, 9800) m, 3408 m high, heading 325
+06:26:25 units (round 1 clear): 3 on the phase's list
+06:26:25   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:26:25   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:26:25   #2: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:26:45 units (round 2 start): 3 on the phase's list
+06:26:45   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:26:45   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:26:45   #2: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:26:45 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 277B5632B0 destroyed 30 s on (1 waiting)
+06:26:45 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (2510, -21513) m, 5066 m high, heading 51
+06:26:48 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (1966, -21171) m, 3489 m high, heading 49
+06:26:51 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 251882F250 destroyed 30 s on (2 waiting)
+06:26:51 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-6556, -10847) m, 4456 m high, heading 15
+06:27:15 recycle ERA_Unit_04_Dep_Air0: its old unit actor 277B5632B0 destroyed, 30 s after it was taken off the phase's list (1 so far, 0 gone before, 1 waiting)
+06:27:22 recycle ERA_Unit_02_Dep_Air0: its old unit actor 251882F250 destroyed, 30 s after it was taken off the phase's list (2 so far, 0 gone before, 0 waiting)
+06:28:37 units (round 2 clear): 4 on the phase's list
+06:28:37   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:28:37   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:28:37   #2: ERA_Unit_05_Dep_Air0 (id A5A3BC36), 0 of 2 aircraft alive
+06:28:37   #3: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:28:45 guard: the guarded event checks, the last 5 minutes: about 31928512 calls (106428 a second; the busiest class 17, event type 27, about 26206720, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+06:28:45 guard: AI path tracking, the last 5 minutes: about 1795456 tracker updates (5984 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+06:28:57 units (round 3 start): 4 on the phase's list
+06:28:57   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:28:57   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:28:57   #2: ERA_Unit_05_Dep_Air0 (id A5A3BC36), 0 of 2 aircraft alive
+06:28:57   #3: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:28:58 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7D5A0080 destroyed 30 s on (1 waiting)
+06:28:58 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (16370, -23185) m, 4206 m high, heading 90
+06:29:17 minigame: type 8 deactivated the world's AI: 10 objects; lists 2 / hidden 0 / 4
+06:29:17 minigame:   deactivated[0] 240E306AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+06:29:17 minigame:   deactivated[1] 11F656AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+06:29:21 landing menu: decide on 297DB8A8B0, row '23'
+06:29:26 landing menu: decide on 29B06C09F0, row '21'
+06:29:28 recycle ERA_Unit_02_Dep_Air0: its old unit actor 7D5A0080 destroyed, 30 s after it was taken off the phase's list (3 so far, 0 gone before, 0 waiting)
+06:29:31 landing menu: decide on 2982314970, row '22'
+06:29:45 landing menu: decide on 297DB2F810, row '24'
+06:29:50 landing menu: decide on 29B05098D0, row '21'
+06:29:53 landing menu: decide on 250D1CC080, row '25'
+06:29:59 landing menu: decide on 29AE26A0C0, row '-1'
+06:30:02 minigame: type 7 ends: restore of 10 AI objects; lists were 2 / hidden 0 / 4 (co-op keep 0)
+06:30:02 minigame:   listed[0] 240E306AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+06:30:02 minigame:   listed[1] 11F656AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+06:30:28 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 28F54A1BE0 destroyed 30 s on (1 waiting)
+06:30:28 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (-6581, -8566) m, 4398 m high, heading 10
+06:30:31 spawn EA_Unit_01_Air0: up, 2 aircraft, at (3047, -31078) m, 763 m high, heading 63
+06:30:34 spawn EA_Unit_01_Air1: up, 8 aircraft, at (15621, -32980) m, 1537 m high, heading 89
+06:30:58 recycle ERA_Unit_05_Dep_Air0: its old unit actor 28F54A1BE0 destroyed, 30 s after it was taken off the phase's list (4 so far, 0 gone before, 0 waiting)
+06:32:43 units (round 3 clear): 6 on the phase's list
+06:32:43   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:32:43   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:32:43   #2: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:32:43   #3: ERA_Unit_05_Dep_Air0 (id A5A3BC36), 0 of 2 aircraft alive
+06:32:43   #4: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+06:32:43   #5: EA_Unit_01_Air1 (id 69CD07C6), 0 of 8 aircraft alive
+06:33:03 units (round 4 start): 6 on the phase's list
+06:33:03   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+06:33:03   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+06:33:03   #2: ERA_Unit_02_Dep_Air0 (id 913FB8F), 0 of 2 aircraft alive
+06:33:03   #3: ERA_Unit_05_Dep_Air0 (id A5A3BC36), 0 of 2 aircraft alive
+06:33:03   #4: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+06:33:03   #5: EA_Unit_01_Air1 (id 69CD07C6), 0 of 8 aircraft alive
+06:33:14 minigame: type 8 deactivated the world's AI: 20 objects; lists 0 / hidden 0 / 4
+06:33:19 landing menu: decide on 2982123990, row '20'
+06:33:34 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:34 shop: SV_Buy_Missiles picked on the landing menu
+06:33:36 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:36 shop: SV_Buy_Missiles picked on the landing menu
+06:33:38 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:38 shop: SV_Buy_Missiles picked on the landing menu
+06:33:38 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:38 shop: SV_Buy_Missiles picked on the landing menu
+06:33:41 landing menu: decide on 2982307910, row 'SV_Buy_Special'
+06:33:41 shop: SV_Buy_Special picked on the landing menu
+06:33:42 landing menu: decide on 2982307910, row 'SV_Buy_Special'
+06:33:42 shop: SV_Buy_Special picked on the landing menu
+06:33:43 landing menu: decide on 2982307910, row 'SV_Buy_Special'
+06:33:43 shop: SV_Buy_Special picked on the landing menu
+06:33:45 landing menu: decide on 2982307910, row 'SV_Buy_Special'
+06:33:45 shop: SV_Buy_Special picked on the landing menu
+06:33:45 guard: the guarded event checks, the last 5 minutes: about 26369280 calls (87897 a second; the busiest class 17, event type 27, about 21763200, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+06:33:45 guard: AI path tracking, the last 5 minutes: about 1583616 tracker updates (5278 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+06:33:46 landing menu: decide on 2982307910, row 'SV_Buy_Special'
+06:33:46 shop: SV_Buy_Special picked on the landing menu
+06:33:47 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:47 shop: SV_Buy_Missiles picked on the landing menu
+06:33:47 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:47 shop: SV_Buy_Missiles picked on the landing menu
+06:33:47 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:47 shop: SV_Buy_Missiles picked on the landing menu
+06:33:48 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:48 shop: SV_Buy_Missiles picked on the landing menu
+06:33:48 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:48 shop: SV_Buy_Missiles picked on the landing menu
+06:33:48 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:48 shop: SV_Buy_Missiles picked on the landing menu
+06:33:48 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:48 shop: SV_Buy_Missiles picked on the landing menu
+06:33:48 landing menu: decide on 2982307910, row 'SV_Buy_Missiles'
+06:33:48 shop: SV_Buy_Missiles picked on the landing menu
+06:33:52 landing menu: decide on 2982307910, row '23'
+06:33:59 landing menu: decide on 29824C6930, row '23'
+06:34:12 landing menu: decide on 29ADFA7910, row '-1'
+06:34:16 minigame: type 7 ends: restore of 20 AI objects; lists were 0 / hidden 0 / 4 (co-op keep 0)
+06:35:26 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-971, -13032) m, 2537 m high, heading 26
+06:35:29 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 28071F6050 destroyed 30 s on (1 waiting)
+06:35:29 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (11425, -24493) m, 2821 m high, heading 76
+06:35:32 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-3364, 4065) m, 4323 m high, heading 336
+06:35:35 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7D4209A0 destroyed 30 s on (2 waiting)
+06:35:35 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-3360, 396) m, 2612 m high, heading 346
+06:35:39 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (4208, 10139) m, 3882 m high, heading 309
+06:35:59 recycle ERA_Unit_05_Dep_Air0: its old unit actor 28071F6050 destroyed, 30 s after it was taken off the phase's list (5 so far, 0 gone before, 1 waiting)
+06:36:06 recycle ERA_Unit_02_Dep_Air0: its old unit actor 7D4209A0 destroyed, 30 s after it was taken off the phase's list (6 so far, 0 gone before, 0 waiting)

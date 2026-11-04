@@ -1,0 +1,1 @@
+Was not gaining score for most of the run until a desync occurred, but was able to only gain score from LCACs on the beach landing obj. Weapons would never register "destroyed" only "hit" even if I got the final blow. still stuttering late into the run, first ~20 rounds were solid. 
