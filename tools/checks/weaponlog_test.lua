@@ -7,7 +7,10 @@
 --     launch too; the first launch of each weapon by each airframe logged once;
 --   the summary every summary_s: what was launched, by whom, and what's carried but never fired; off: nothing;
 --   missiles at you followed to their end (a hit, decoyed by a flare, missed) and the summary's `missiles at you`;
---   the Spaceport fleet's turrets: a turret's missile counted with your range, a mount silent in your reach idle.
+--   the Spaceport fleet's turrets: a turret's missile counted with your range, a mount silent in your reach idle;
+--     (0.73.80, perf5) watched only while a Spaceport round is in play (the host's D.special, a joiner's D.hostSpecial),
+--     a turret at 0 health skipped and counted down, no LiveBullet walk with none up, the stop logged once, no `fleet:`
+--     line for a window it didn't run in.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -25,8 +28,12 @@ local FNm = { __index = { ToString = function(self) return self.s end }, __tostr
 function FName(s) return setmetatable({ s = tostring(s) }, FNm) end
 local notify = {}                                 -- ((0.73.77) the weapons made: the parts' NotifyOnNewObject callbacks)
 function NotifyOnNewObject(c, fn) notify[c] = notify[c] or {}; table.insert(notify[c], fn) end
-local FA, walks = {}, 0
-function FindAllOf(c) if c == "LiveExplosiveWeapon" then walks = walks + 1 end return FA[c] or {} end
+local FA, walks, bwalks = {}, 0, 0
+function FindAllOf(c)
+    if c == "LiveExplosiveWeapon" then walks = walks + 1 end
+    if c == "LiveBullet" then bwalks = bwalks + 1 end    -- ((0.73.80) the fleet watch's guns)
+    return FA[c] or {}
+end
 function FindFirstOf() return nil end
 function StaticFindObject() return nil end
 local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
@@ -118,6 +125,7 @@ local gun = { full = "BP_VE002_aegs_mk45_CP_C_8", addr = 42 }
 function gun:K2_GetActorLocation() return { X = 900000, Y = 0, Z = 0 } end
 SPORT = { turrets = { [41] = { obj = vls, unit = "SV_Unit_SpAegisA", cls = "BP_VE002_aegs_mk41_CP", shots = 0 },
                       [42] = { obj = gun, unit = "SV_Unit_SpAegisA", cls = "BP_VE002_aegs_mk45_CP", shots = 0 } } }
+D.special = { kind = "spaceport", state = "assault" }   -- ((0.73.80) the watch runs only while a Spaceport round is in play)
 local v1 = msl("BP_wp_vls_a0", 401, vls)
 FA.LiveExplosiveWeapon = { h1, h2, h3, v1 }
 -- ((0.73.77, Workstream B) made now: they come in through NotifyOnNewObject, no walk needed for them)
@@ -159,6 +167,44 @@ check(#fl >= 1 and fl[#fl]:find("BP_VE002_aegs_mk41_CP: 1 of 1 fired (1 missiles
     and fl[#fl]:find(string.format("BP_VE002_aegs_mk45_CP: 0 of 1 fired (0 missiles), 0 guns seen firing, 1 idle with you inside %d km",
         math.floor(CFG.specials.spaceport.fcs.search_m / 1000)), 1, true),
     "the fleet: the VLS fired, the gun mount idle with you in its reach: " .. tostring(fl[#fl]))
+
+-- ((0.73.80, the 31-round test's perf5: the watch's LiveBullet walk ran every 5 s for 48 minutes after the round) only
+-- while a Spaceport round is in play; a turret at 0 health skipped; the stop logged once; no line for a window it's off)
+check(#lines("^fleet: a Spaceport round in play: the turret watch on %(2 turrets up, 0 down%)$") == 1, "(0.73.80) the watch on, logged once")
+local function looks(n) for _ = 1, n do t = t + 0.5; WLOG.tick(t) end end      -- (n looks 0.5 s apart; turret_s 5)
+gun.HealthInternal, vls.HealthInternal = 0, 500
+local b0 = bwalks
+looks(11)
+check(bwalks > b0 and SPORT.turrets[42].down == true and SPORT.turrets[41].down == false,
+    "(0.73.80) the gun mount at 0 health: down, skipped; the guns still looked for (the VLS up)")
+t = t + 61
+WLOG.tick(t)
+fl = lines("^fleet: last ")
+check(fl[#fl]:find(string.format("BP_VE002_aegs_mk45_CP: 0 of 0 fired (0 missiles), 0 guns seen firing, 0 idle with you inside %d km, 1 down",
+        math.floor(CFG.specials.spaceport.fcs.search_m / 1000)), 1, true) and fl[#fl]:find("BP_VE002_aegs_mk41_CP: 0 of 1 fired", 1, true),
+    "(0.73.80) the report: the mount down all window counted apart, not idle: " .. tostring(fl[#fl]))
+vls.HealthInternal = 0
+local b1 = bwalks
+looks(22)
+check(bwalks == b1, "(0.73.80) every turret down: no LiveBullet walk (" .. (bwalks - b1) .. ")")
+vls.HealthInternal = 500
+D.special.state = "done"                                  -- (the round over: SPORT.turrets as sv_spaceport.lua leaves it)
+local b2 = bwalks
+looks(30)
+local stops = lines("^fleet: no Spaceport round in play now: the turret watch stops")
+check(bwalks == b2 and #stops == 1 and stops[1]:find("(2 turrets kept, 2 of them down at the last look; no more LiveBullet looks", 1, true),
+    "(0.73.80) the round over: the watch stops, logged once, no walk: " .. tostring(stops[1]))
+local nf = #lines("^fleet: last ")
+for _ = 1, 3 do t = t + 61; WLOG.tick(t) end
+check(#lines("^fleet: last ") == nf + 1 and bwalks == b2 and #lines("turret watch stops") == 1,
+    "(0.73.80) one last fleet: line for the window it stopped in, none after, still no walk")
+D.special, D.hostSpecial = nil, { kind = "retake", state = "retake" }    -- (a joiner: the host's word)
+looks(11)
+check(bwalks > b2 and #lines("^fleet: a Spaceport round in play: the turret watch on") == 2, "(0.73.80) a joiner: the host's Retake in play: the watch on again")
+D.hostSpecial.state = "done"
+looks(11)
+check(#lines("turret watch stops") == 2, "(0.73.80) ... and stops with it")
+D.hostSpecial = nil
 SPORT = nil
 
 print("off")

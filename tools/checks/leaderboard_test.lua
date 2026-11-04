@@ -9,6 +9,9 @@
 --   - a co-op run: the room's rules count (the host's setup, [coop]'s rules), each player's key and camera don't;
 --   - a test key pressed in a run, and at the main menu (the next run's); a head start; SP ONLINE's START RUN label;
 --   - the Worker's answers: taken, refused (unqueued); no build hash from the runtime;
+--   - (0.73.80, errors0) a run refused only as an unknown build kept in refused_runs.txt (not for any other refusal,
+--     a 429 or an edited body), sent again at a later game start from the main menu only, spaced out, once a start,
+--     for 14 days: taken (off the file), still unknown (kept), refused otherwise (dropped), no answer (kept), 20 at most;
 --   - (0.73.77, plan H2 / H5) a co-op run: the host's one record with its squad (names sanitized and unique ignoring
 --     case, the host first as the run's pilot, the kills adding up, one who left with their kills, a part not counted),
 --     a joiner keeping the host's word and sending nothing, a host by migration sending it under the same run id (and
@@ -28,6 +31,7 @@ end
 writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
 os.remove(WORK .. "/config/survival.ini")
 os.remove(WORK .. "/config/pending_runs.txt")
+os.remove(WORK .. "/config/refused_runs.txt")                    -- ((0.73.80) the runs refused as an unknown build, kept)
 package.path = WORK .. "/Scripts/?.lua;" .. package.path      -- (as UE4SS: Scripts on require's path)
 if MODE == "override" then writeAll(WORK .. "/Scripts/survival_config.lua", "return { intermission_s = 25 }\n")
 elseif MODE == "override_error" then writeAll(WORK .. "/Scripts/survival_config.lua", "error('broken on purpose')\n")
@@ -271,6 +275,49 @@ results[1], replies[1] = 422, '{"ok":false,"error":"edited or unknown build"}'
 LB.poll()
 check(LB.show.state == "refused" and summaryLine(LB.show) == "NOT ACCEPTED: EDITED OR UNKNOWN BUILD" and #LB.queue == 0,
     "refused as an unknown build: " .. summaryLine(LB.show) .. ", unqueued")
+-- ((0.73.80, errors0: the host's clean 31-round run, 422 for a build hash not yet registered, was deleted with
+-- pending_runs.txt) kept in refused_runs.txt to send again at later game starts, with the date it was first refused
+local KEPT = WORK .. "/config/refused_runs.txt"
+local function keptLines()
+    local f = io.open(KEPT, "r")
+    if not f then return nil end
+    local t = {}
+    for line in f:lines() do t[#t + 1] = line end
+    f:close()
+    return t
+end
+local refusedBody = posts[1] or ""
+local kl = keptLines()
+check(kl and #kl == 1 and kl[1] == string.format("%d\t0\t%s", tonumber(kl[1]:match("^(%d+)")) or -1, refusedBody)
+    and math.abs(os.time() - tonumber(kl[1]:match("^(%d+)"))) <= 5 and logged("leaderboard: a run refused as an unknown build kept to resend at later game starts"),
+    "(0.73.80) ... kept in refused_runs.txt (its first refusal's date, 0 resends, its body), logged: " .. tostring(kl and kl[1]:sub(1, 30)))
+local pf = io.open(WORK .. "/config/pending_runs.txt", "r")
+check(pf == nil, "(0.73.80) ... and off pending_runs.txt (gone with the last waiting run)")
+if pf then pf:close() end
+-- refused for any other reason: unqueued, not kept (as before)
+for _, ans in ipairs({ { 422, '{"ok":false,"error":"played on other files"}' }, { 400, '{"ok":false,"error":"not JSON"}' },
+                       { 422, '{"ok":false,"error":"no build check: update or reinstall survival mode"}' } }) do
+    newRun(); LB.finish("died")
+    results[#posts], replies[#posts] = ans[1], ans[2]
+    LB.poll()
+    local k2 = keptLines()
+    check(#LB.queue == 0 and k2 and #k2 == 1 and LB.show.state == "refused",
+        "(0.73.80) refused for another reason (" .. ans[1] .. " " .. ans[2]:match('"error":"([^"]+)"') .. "): unqueued, not kept")
+end
+newRun(); LB.finish("died")
+results[#posts], replies[#posts] = 429, '{"ok":false,"error":"too many runs this hour, try later"}'
+LB.poll()
+check(#LB.queue == 1 and #keptLines() == 1 and LB.show.state == "queued", "(0.73.80) a 429: waiting in pending_runs.txt as before, not kept")
+LB.queue, LB.qwait = {}, nil
+os.remove(WORK .. "/config/pending_runs.txt")
+-- a body that says it was edited (never sent: a guard) isn't kept either; the same run refused again is kept once
+LB.jobs[#LB.jobs + 1] = { id = 900, body = '{"v":1,"run_id":"' .. string.rep("e", 32) .. '","pilot":"Naish","round":3,"edited":["x"]}' }
+LB.jobs[#LB.jobs + 1] = { id = 901, body = refusedBody }
+results[900], replies[900] = 422, '{"ok":false,"error":"edited or unknown build"}'
+results[901], replies[901] = 422, '{"ok":false,"error":"edited or unknown build"}'
+LB.poll()
+check(#keptLines() == 1 and keptLines()[1]:find(refusedBody, 1, true) and logged("is kept already"),
+    "(0.73.80) an edited body never kept; the same run refused again kept once, its first date kept")
 buildHash = ""
 posts, results, replies = {}, {}, {}
 newRun(); LB.finish("died")
@@ -466,6 +513,78 @@ check(#posts == 2 and not b:find('"coop"', 1, true) and b:find('"pilot":"Naish"'
 keep("ok", "a solo run after co-op", b)
 SV_CoopSend, COOP.players, addrOf = rawCoopSend, rawPlayers, rawAddrOf
 writeAll(WORK .. "/bodies.txt", table.concat(bodies, "\n") .. "\n")
+
+-- ---------------------------------------------------------------------------------------- kept runs, a later start (0.73.80)
+-- (errors0) the run refused above as an unknown build, kept, sent again at a later game start from the main menu
+print("runs refused as an unknown build, at a later game start (0.73.80)")
+local rawClock = os.clock
+local clk = 10000
+os.clock = function() return clk end                          -- luacheck: ignore
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+local kl0 = keptLines() or {}
+local old3 = string.format('{"v":1,"run_id":"%s","pilot":"Naish","round":12,"edited":[]}', string.rep("3", 32))
+local old15 = string.format('{"v":1,"run_id":"%s","pilot":"Naish","round":9,"edited":[]}', string.rep("f", 32))
+writeAll(KEPT, string.format("%d\t2\t%s\n%d\t0\t%s\n%s\n", os.time() - 15 * 86400, old15, os.time() - 3 * 86400, old3, kl0[1] or ""))
+os.remove(WORK .. "/config/pending_runs.txt")               -- (the co-op runs above, never answered: none waiting here)
+LB.kept, LB.loaded, LB.keptAt, LB.queue, LB.qwait = nil, nil, nil, {}, nil      -- (a new game start)
+D, RUN = nil, { stats = nil }
+LB.queueTick()
+check(#kl0 == 1 and LB.kept and #LB.kept == 2 and logged("15 days ago (run ffffffff, round 9, pilot Naish) dropped: kept 14 days at most")
+    and logged("leaderboard: 2 run(s) refused as an unknown build kept to resend from the main menu (the oldest refused 3 days ago"),
+    "a later game start: two kept runs read, the one 15 days old dropped and logged")
+check(#(keptLines() or {}) == 2 and not (keptLines()[1] or ""):find(old15, 1, true), "... and the old one off the file")
+check(#posts == 0, "none sent at the first look (30 s on)")
+newRun(); clk = clk + 40; LB.queueTick()
+check(#posts == 0, "never in a run")
+D = nil; svLevelOn = true; LB.queueTick()
+check(#posts == 0, "nor while Survival's level is loaded")
+svLevelOn = nil; LB.queueTick()
+check(#posts == 1 and posts[1] == old3 and logged("leaderboard: resending a run refused as an unknown build 3 days ago (run 33333333, round 12, pilot Naish; resent 1 times)"),
+    "at the main menu: the oldest kept run sent again, logged")
+check((keptLines()[1] or ""):find("^%d+\t1\t"), "its resend counted in the file")
+clk = clk + 10; LB.queueTick()
+check(#posts == 1, "one at a time: none while its answer is out")
+results[1], replies[1] = 200, '{"ok":true,"score":12000}'
+LB.poll()
+check(#LB.kept == 1 and #keptLines() == 1 and logged("resent: answered 200: taken, off refused_runs.txt"),
+    "taken: off refused_runs.txt (\"... resent: answered 200: taken\")")
+LB.queueTick()
+check(#posts == 1, "the next one waits 60 s after the last send")
+clk = clk + 61; LB.queueTick()
+check(#posts == 2 and posts[2] == kl0[1]:match("\t({.*})$"), "the next sent 60 s on")
+results[2], replies[2] = 422, '{"ok":false,"error":"edited or unknown build"}'
+LB.poll()
+check(#LB.kept == 1 and logged("resent: answered 422: still an unknown build (register its hash on /admin), kept: sent again at the next game start (14 days left)")
+    and (keptLines()[1] or ""):find("^%d+\t1\t"), "still an unknown build: kept for the next game start")
+clk = clk + 600; LB.queueTick()
+check(#posts == 2, "once a game start: not sent again in this one")
+-- the next start: no connection (kept), then the one after: refused for another reason (dropped, the file gone)
+LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+check(#posts == 3, "the next game start: sent again")
+results[3], replies[3] = -12029, ""
+LB.poll()
+check(#LB.kept == 1 and logged("resent: answered -12029: no answer for good (couldn't connect"), "no answer (couldn't connect): kept for the next start")
+LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+results[4], replies[4] = 422, '{"ok":false,"error":"played on other files"}'
+LB.poll()
+local gone = io.open(KEPT, "r")
+check(#posts == 4 and #LB.kept == 0 and gone == nil and logged("resent: answered 422: refused for another reason (played on other files), dropped from refused_runs.txt"),
+    "refused for another reason: dropped, the file gone with the last one")
+if gone then gone:close() end
+-- 22 refused as an unknown build (answered in the order 1 to 22: LB.poll reads its jobs from the last): the newest 20 kept
+for i = 22, 1, -1 do
+    LB.jobs[#LB.jobs + 1] = { id = 1000 + i, body = string.format('{"v":1,"run_id":"%032x","pilot":"Naish","round":%d,"edited":[]}', i, i) }
+    results[1000 + i], replies[1000 + i] = 422, '{"ok":false,"error":"edited or unknown build"}'
+end
+LB.poll()
+local all = table.concat(keptLines() or {}, "\n")
+check(#LB.kept == 20 and #keptLines() == 20 and not all:find(string.format("%032x", 1), 1, true) and not all:find(string.format("%032x", 2), 1, true)
+    and all:find(string.format("%032x", 3), 1, true) and all:find(string.format("%032x", 22), 1, true)
+    and logged("leaderboard: refused_runs.txt keeps 20 runs at most: the oldest"), "20 kept at most: the oldest dropped, logged")
+os.clock = rawClock                                           -- luacheck: ignore
+os.remove(KEPT)
 
 print("leaderboard: " .. (fails > 0 and (fails .. " FAILED") or "all passed"))
 os.exit(fails > 0 and 1 or 0)
