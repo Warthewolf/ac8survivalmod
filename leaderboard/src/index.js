@@ -581,12 +581,13 @@ async function submit(req, env, ctx) {
   await ensureSchema(env);
   // (the build the game started with against the one it sends from. (0.73.80) A run kept by the game (refused as an
   // unknown build, refused_runs.txt) and sent again after an update or a patch comes from new files: it's checked
-  // against the build it was played on (run.build), as long as the files it's sent from are a registered release; from
-  // other files (edited, or not registered yet) it's "edited or unknown build" and the game keeps it. Before, any
-  // difference was refused outright and the game dropped the run.)
+  // against the build it was played on (run.build), as long as the files it's sent from are a registered release of
+  // any version (an update changes the version too, and the kept run keeps its own: run.mod; the build it was played
+  // on is still checked under run.mod below); from other files (edited, or not registered yet) it's "edited or unknown
+  // build" and the game keeps it. Before, any difference was refused outright and the game dropped the run.)
   let checked = build;
   if (build && run.build && run.build !== build) {
-    if (!(await env.DB.prepare("SELECT 1 FROM builds WHERE mod = ? AND build = ?").bind(run.mod, build).first()))
+    if (!(await env.DB.prepare("SELECT 1 FROM builds WHERE build = ?").bind(build).first()))
       return json({ ok: false, error: "edited or unknown build" }, 422);
     if (!BUILD_RE.test(String(run.build).toLowerCase())) return json({ ok: false, error: "bad build" }, 400);
     checked = String(run.build).toLowerCase();

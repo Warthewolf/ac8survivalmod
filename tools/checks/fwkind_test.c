@@ -5,7 +5,8 @@
  *     entry 1 (the standard missile) isn't an explosive weapon, one every entry shares, one holding something that isn't
  *     a live class (a freed one, a plain object, ammo counts, a wild pointer); at most 8 tries 5 s apart, then given up;
  *   the table's kinds: each entry's; none when this table's entry 1 isn't read as an explosive weapon;
- *   the kinds seen launched: kept per player slot, forgotten for another plane (address, class or table), checked
+ *   the kinds seen launched: kept per player slot, forgotten for another plane (address, object index or name, class
+ *     or table: a new plane made where a freed one was, as coop.c CoRef), checked
  *     against the table's (agreeing counted, one that disagrees turns the table's kinds off for the session);
  *   nothing read that isn't checked first (Readable: only the made-up memory below is readable).
  * Log is counted, its format strings kept (not written). No Windows headers: it runs on the build machine and anywhere
@@ -188,6 +189,16 @@ int main(void)
     check(FwSeenOf(4, planeB, t)[2] == -1, "another class at the same address: forgotten");
     FwNoteKind(4, planeB, t, 4, 2, 0);
     check(FwSeenOf(4, planeB, t)[2] == 0 && FwSeenOf(4, planeB, t2)[2] == -1, "another table: forgotten");
+    FwNoteKind(4, planeB, t, 4, 2, 0);
+    check(FwSeenOf(4, planeB, t)[2] == 0, "seen again on its own table: kept");
+    *(int32_t*)(planeB + 0xC) += 1000;                   /* (freed, another plane made at that address: same class, same table) */
+    check(FwSeenOf(4, planeB, t)[2] == -1, "another object at the same address, class and table: forgotten");
+    *(int32_t*)(planeB + 0xC) -= 1000;
+    FwNoteKind(4, planeB, t, 4, 2, 0);
+    check(FwSeenOf(4, planeB, t)[2] == 0, "its own index again, seen again: kept");
+    *(uint64_t*)(planeB + 0x18) = 77;
+    check(FwSeenOf(4, planeB, t)[2] == -1, "another name at the same address, index, class and table: forgotten");
+    *(uint64_t*)(planeB + 0x18) = 0;
     check(FwSeenOf(-1, planeB, t) == NULL && FwSeenOf(24, planeB, t) == NULL, "no slot: nothing kept");
     FwNoteKind(5, planeA, t, 4, 3, 0);                   /* (its table says a laser) */
     check(g_fwk.bad == 1 && g_fwk.disagree == 1 && FwTabKind(t, 4, 1) == -1, "a launch the table got wrong: its kinds off for the session");

@@ -707,6 +707,15 @@ end
 -- split, and their debris stayed 500 m down, "targets" for debris_timeout_s. Each debris unit's count from its spawn
 -- (one that failed paid 2 pieces).
 local ROCKETS, DEBRIS = "SV_Unit_SpRockets", { "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }
+-- ((review of 0.73.80) RE_SV_SpRocketRemove (the rockets and their debris: a destroy with no attacker, as the landing
+-- craft's) as offFire: what's still up goes down as nobody's on the host (COOP.takenOff), never a kill of a player who
+-- once hit it, or the host's; one shot down this tick keeps its killer)
+local function rocketsOff()
+    if COOP and COOP.takenOff then
+        for _, u in ipairs({ ROCKETS, DEBRIS[1], DEBRIS[2], DEBRIS[3] }) do pcall(COOP.takenOff, u) end
+    end
+    return fire("RE_SV_SpRocketRemove")
+end
 -- the rockets' and their debris's objects as SV_Spawn makes them: SPORT.rkObjs[unit] = { at = <clock>, obj, ... }
 SPORT.rkObjs = {}
 local RK_UNIT = { [ROCKETS] = true, [DEBRIS[1]] = true, [DEBRIS[2]] = true, [DEBRIS[3]] = true }
@@ -739,7 +748,7 @@ local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 local function rocketsSpawn(now, s)
     local rc = rcfg()
     if rc.enabled == false then log("special: the retake's rockets are off ([specials.spaceport.retake.rockets] enabled)"); return 0 end
-    if (aliveNow(ROCKETS) or 0) > 0 then fire("RE_SV_SpRocketRemove") end   -- (left up from before: taken off)
+    if (aliveNow(ROCKETS) or 0) > 0 then rocketsOff() end   -- (left up from before: taken off)
     local r = spawn(ROCKETS)
     if r <= 0 then log("special: the retake's rockets didn't spawn (" .. said(r) .. ")"); return 0 end
     local deb, counts = {}, {}
@@ -830,13 +839,13 @@ local function debrisTick(now, rk, rc)
             rk.stageAt = now + (tonumber(rc.debris_next_s) or 2.8)
         else
             rk.done = true
-            fire("RE_SV_SpRocketRemove")
+            rocketsOff()
             hudCallout(t.sp_debris_down, t.sp_debris_down_sub)
             log("special: the rocket's debris: every stage down")
         end
     elseif now - (rk.changeAt or now) >= (tonumber(rc.debris_timeout_s) or 120) then
         rk.done = true
-        fire("RE_SV_SpRocketRemove")
+        rocketsOff()
         log(string.format("special: the rocket's debris: nothing changed for %.0f s (stage %d, %s %d up): taken off, counted down",
             now - rk.changeAt, rk.stage, u, a))
     end
@@ -945,7 +954,7 @@ local function rocketsTick(now, s)
             rk.splitWait = now + (tonumber(rc.split_wait_s) or 10)   -- ((0.73.77, I5: S8) its debris looked for first)
         else
             rk.done = true
-            fire("RE_SV_SpRocketRemove")
+            rocketsOff()
             log(string.format("special: the rockets are done: %d shot down, %d escaped, %d taken off", rk.kills, rocketsEscaped(rk),
                 rocketsLost(rk)))
         end
@@ -963,7 +972,7 @@ local function rocketsTick(now, s)
                 up and "its debris seen coming up" or "its split was on", tostring(rc.debris_tgt_s or 3)))
         elseif up == nil or now >= rk.splitWait then
             rk.splitWait, rk.done = nil, true
-            fire("RE_SV_SpRocketRemove")
+            rocketsOff()
             log(string.format("special: the last rocket went down without breaking up (%s): no debris; the rockets are done: %d shot "
                 .. "down, %d escaped, %d taken off", up == nil and "its split wasn't on yet: they went down together"
                 or string.format("no debris came up in %s s", tostring(rc.split_wait_s or 10)), rk.kills, rocketsEscaped(rk), rocketsLost(rk)))
@@ -1076,9 +1085,15 @@ end
 function SPORT.retakeOver(now, s)
     local c, t = cfg(), CFG.hud.text
     s.state = "done"
+    if COOP and COOP.takenOff then                        -- ((review of 0.73.80) taken off: nobody's, as offFire)
+        for _, g in ipairs(GARRISON) do pcall(COOP.takenOff, "SV_Unit_SpGarrison" .. g) end
+    end
     fire("RE_SV_SpGarrisonRemove")                        -- (none should be left: tidy)
-    if s.rk then fire("RE_SV_SpRocketRemove") end
-    if s.island and next(s.island) then fire("RE_SV_SpIslandRemove") end
+    if s.rk then rocketsOff() end
+    if s.island and next(s.island) then
+        if COOP and COOP.takenOff then for _, it in ipairs(ISLAND) do pcall(COOP.takenOff, it[1]) end end
+        fire("RE_SV_SpIslandRemove")
+    end
     if next(s.ships or {}) then SPORT.tidyFleet("the spaceport retaken") end   -- ((0.73.77) a sunk ship's parts left)
     local pay = math.floor((c.retake and c.retake.reward or 0) + (c.retake and c.retake.reward_per_round or 0) * D.round)
     local esc = s.rk and rocketsEscaped(s.rk) or 0

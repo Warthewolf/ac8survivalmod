@@ -605,11 +605,15 @@ function COOP.killTally() return M.tally or {} end
 -- ((review of 0.73.80) The host is about to take unit's objects off without a kill (landing craft or troops that got
 -- away, recalled or left at the round's end: a destroy with no attacker, health 0): each of its objects still up goes
 -- down as nobody's (killer false: "dn" with no player, no tally), not as the player who once hit it. How many.
+-- ((review of 0.73.80) Only objects still up: one already shot down this tick (a kill in the game between hostTick and
+-- the next probe, which runs the specials first), not yet seen by hostTick, keeps its killer: hostKiller names it.)
 function COOP.takenOff(unit)
     if not (COOP.host() and type(unit) == "string") then return 0 end
     local n = 0
     for _, e in pairs(M.byId) do
-        if e.unit == unit and e.killer == nil then e.killer, n = false, n + 1 end
+        if e.unit == unit and e.killer == nil and not e.dead and live(e.obj) and (health(e.obj) or 1) > 0 then
+            e.killer, n = false, n + 1
+        end
     end
     return n
 end
@@ -2445,6 +2449,7 @@ end
 function M.setAside(slot, P, why)
     local o = P and P.obj
     if not (o and live(o)) then return false end
+    M.gunOff(P)                                          -- ((review of 0.73.80) its gun's trigger let go: nothing drives it from here on)
     if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, 0) end
     local kept
     if P.real then
@@ -3311,8 +3316,10 @@ local function halfRtt(slot) return math.floor(((M.rtt and M.rtt[slot]) or 100) 
 -- SV_PPWeapons (an older runtime), nothing read, or [coop.sync] standins = false: as sent, as before.
 -- (fireShots, M.standInPay) what this game knows of player slot's real plane's weapons: { addr, at, tbl, n, k = { [0] =
 -- ... }, s }; nil when it can't tell. Read on the first shot of each plane, again at most every 2 s when a shot needs it:
--- a stand-in, or its own number while that number's kind isn't known here (the runtime learns it from that launch and
--- then refuses another kind's shots there: the review of 2026-11-04), or when it couldn't be read
+-- a stand-in, or its own number while that number's kind isn't known here or is known only from its table entry
+-- (standin_table: the runtime may turn the table off after a launch that disagrees; the review of 0.73.80) (the runtime
+-- learns it from that launch and then refuses another kind's shots there: the review of 2026-11-04), or when it couldn't
+-- be read
 function M.ppKinds(slot, P, now, need)
     if type(SV_PPWeapons) ~= "function" or not P.addr then return nil end
     local c = P.wk
@@ -3457,8 +3464,10 @@ function M.standInPay(slot, P, pay, now)
     local x, how = M.weaponFor(k, w, c, ids, fb, gun)
     -- (a stand-in, or its own number whose kind isn't known here: what's been seen launched since, first. The runtime
     -- learns a number's kind from its first launch here and refuses another kind's shots there after; without a read
-    -- again those were refused for good, never put on the plane's weapon of their kind: the review of 2026-11-04)
-    if now - c.at >= 2 and (how ~= "own" or not M.kindAt(c, x)) then
+    -- again those were refused for good, never put on the plane's weapon of their kind: the review of 2026-11-04.
+    -- (review of 0.73.80) A kind known only from its table entry (standin_table: 10-14) isn't confirmed either: a launch
+    -- that disagrees turns the table off in the runtime, and the seen kind then wins there)
+    if now - c.at >= 2 and (how ~= "own" or not M.kindAt(c, x) or (c.k[x] or -1) >= 10) then
         local c2 = M.ppKinds(slot, P, now, true)
         if not c2 then return pay end
         c = c2
@@ -3592,9 +3601,18 @@ function M.fxFromHost(f)
     fireShots(tonumber(f[2]), f[3], halfRtt(0))
 end
 
+-- ((review of 0.73.80) a real plane's gun trigger (weapons +0x311) stays set until it's written back: let go wherever
+-- the sync stops driving it (hidden, stale, set aside, a new level's P), so their plane here never fires on for good)
+function M.gunOff(P)
+    if P and P.real and P.gunOn and P.addr and P.obj and live(P.obj) and type(SV_CoopPPFx) == "function" then
+        pcall(SV_CoopPPFx, P.addr, 1, 0)
+    end
+    if P then P.gunOn, P.burstUntil = false, nil end
+end
 -- the other players' state bits on their planes here: gear flips, gun bursts, flares
 local function peersTick(now)
     for s, P in pairs(M.peers) do
+        if P.gunOn and not (s ~= COOP.slot and P.obj and P.shown and P.fresh and valid(P.obj)) then M.gunOff(P) end
         if s ~= COOP.slot and P.obj and P.shown and P.fresh and valid(P.obj) and type(P.flags) == "number" then
             local fl = P.flags
             if on("gear") then
@@ -5506,6 +5524,7 @@ function COOP.tick(tick)
         if type(SV_CoopReset) == "function" then SV_CoopReset() end
         if COOP.client() then killAllCopies("a new run here") end      -- (a restart in the same level keeps the actors)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
+            M.gunOff(P)                                                -- ((review of 0.73.80) its trigger let go: gunOn isn't kept)
             -- (whose it is and whether it's their real plane kept too: a host by migration keeps every live plane)
             M.peers[s] = (P.obj and valid(P.obj)) and { obj = P.obj, addr = addrOf(P.obj), sid = P.sid, real = P.real, code = P.code,
                                                        lo = P.lo, row = P.row, unit = P.unit,
