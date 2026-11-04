@@ -1,0 +1,18 @@
+AC8 Survival Mode COOP2MP 0.73.82 (0.73.82-coop2mp.83) - change log
+====================================================================
+Since 0.73.81 (CHANGELOG_0.73.81.txt). Patch over a 0.73.78 COOP2MP install (with or without the 0.73.79 - 0.73.81
+patches); everyone in a co-op session needs 0.73.82.
+
+- Crash on launch fixed (Saint Alessia, 2026-11-04): when the main menu took a long time to load (54 s on her PC),
+  Survival's tick watchdog (added in 0.73.75) wrote to its logs and queued extra ticks from UE4SS's background thread
+  while the game thread was busy running the ticks it had missed. The script engine can't run on two threads at once,
+  and the game crashed. That background function now only reads two flags and the clock and queues the next tick;
+  anything to report is logged by the tick itself, on the game thread. It queues nothing while a tick waits or runs,
+  and during a long load it queues one more tick after 10 s, then after 20 s, 40 s and so on (it used to add one every
+  10 s).
+- Key presses run on the game thread too. UE4SS runs key binds on its own input thread, and every Survival key then did
+  work there. Now a press only adds 1 to a counter on that thread, and the next tick (within 1/8 s) runs the key's
+  action. Every key works as before, just up to 1/8 s later. A key pressed more than 4 times between two ticks runs 4
+  times.
+
+Still waiting on the next full build (runtime 0.32.24): the native log's lag fix and other players' weapon stand-ins.
