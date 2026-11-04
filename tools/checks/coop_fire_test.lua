@@ -20,7 +20,8 @@
 --   the joiner's backstop: a stand-in's damage on a copy taken out of what goes to the host ("ht");
 --   (0.73.80) the weapon stand-ins: a launch whose weapon another player's real plane here hasn't, or has as another
 --     kind, shown as the nearest weapon of its kind it has (M.weaponFor, M.standInPay; SV_PPWeapons stubbed), never a
---     number it hasn't, the relay as sent, standins = false as before;
+--     number it hasn't, the relay as sent, standins = false as before; the review's (2026-11-04): read again after a
+--     shot went as its own number of a kind not known here, a plane spawned with its default loadout not trusted;
 --   sync off: nothing sent or shown, the airframes' own rows;
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
@@ -836,6 +837,58 @@ from = #logs + 1
 for _ = 1, 62 do tick(1) end
 local tallySI = line("^coopfire: 60 s:", from)
 check(has(tallySI, "; weapon stand-ins: ") and has(tallySI, "by player: 2: "), "the minute's line counts the stand-ins by player (" .. tostring(tallySI) .. ")")
+-- (the review of 2026-11-04, finding 0) a shot sent as its own number while its kind isn't known here: the runtime learns
+-- that number's kind from the launch and refuses another kind's shots there after, so the plane's weapons are read
+-- again (2 s on) and the next goes to its weapon of that kind. A fallback: her laser at 3, nothing known -> as sent;
+-- then the runtime has seen 2 a laser and 3 an explosive weapon
+realRoom("-1,-1,-1,-1", "1,2//21,0", nil, "adfx02")
+from = #logs + 1
+fire1(shot(1, 3))
+check(lastShot() == shot(1, 3) and #ppwCalls == 1, "a laser at 3, nothing known: as sent, read once (" .. tostring(lastShot()) .. ")")
+ppw[1001] = "-1,0,1,0"
+fire1(shot(1, 3))
+check(lastShot() == shot(1, 3) and #ppwCalls == 1, "under 2 s: not read again")
+clock = clock + 2.1
+fire1(shot(1, 3))
+check(lastShot() == shot(1, 2) and #ppwCalls == 2, "2 s on: read again (its weapon 3 seen an explosive weapon), the laser on its laser 2 ("
+      .. tostring(lastShot()) .. ", reads " .. #ppwCalls .. ")")
+check(line("^coopfire: player 2's laser %(weapon 3%) shown on their real plane here as its weapon 2 %(a laser%): its weapon 3 is a missile special", from) ~= nil,
+      "logged with why (" .. tostring(line("shown on their real plane", from)) .. ")")
+for _ = 1, 3 do clock = clock + 10; fire1(shot(1, 3)) end
+check(lastShot() == shot(1, 2), "later lasers at 3: still its laser 2 (" .. tostring(lastShot()) .. ")")
+local readsK = #ppwCalls
+clock = clock + 10
+fire1(shot(1, 2)); fire1(shot(0, 3))
+check(table.concat(ppShots, " ", #ppShots - 1) == "1001/505/" .. shot(1, 2) .. " 1001/505/" .. shot(0, 3) and #ppwCalls == readsK,
+      "its own numbers of known kinds: as sent, not read again (" .. table.concat(ppShots, " ", #ppShots - 1) .. ", reads " .. #ppwCalls .. ")")
+-- a stock player (not a fallback): a missile special at 2 not known -> as sent; the runtime then has 2 a laser (another
+-- weapon in its slot here): read again, the missile on the standard missile, not refused for good
+realRoom("-1,-1,-1,-1", "1,2//21,33")
+fire1(shot(0, 2, 1, 0, 2))
+check(lastShot() == shot(0, 2, 1, 0, 2), "a missile special at 2, nothing known: as sent")
+ppw[1001] = "-1,0,1,-1"
+clock = clock + 2.1
+fire1(shot(0, 2, 1, 0, 2))
+check(lastShot() == shot(0, 1, 0, 0, 1) and #ppwCalls == 2, "2 s on: read again (2 a laser here), the standard missile (" .. tostring(lastShot()) .. ")")
+-- (finding 1) their real plane here spawned before their loadout came (P.lo ""): it flies the airframe's default
+-- specials, so a missile special not known there isn't trusted (it could be a laser or ESM); a laser still tried as
+-- sent; both loadouts unknown (both the default): trusted as before
+realRoom("-1,-1,-1,-1", "1,2//21,33", "")
+from = #logs + 1
+fire1(shot(0, 2, 1, 0, 2)); fire1(shot(0, 3)); fire1(shot(1, 3))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 1, 0, 0, 1) .. " 1001/505/" .. shot(0, 1) .. " 1001/505/" .. shot(1, 3),
+      "spawned with its default loadout: missile specials 2 and 3 as the standard missile, a laser as sent (" .. table.concat(ppShots, " ") .. ")")
+check(line("^coopfire: player 2's missile special %(weapon 2%) shown on their real plane here as its weapon 1 %(the standard missile%): their plane here spawned with its own default loadout %(theirs hadn't come%), their special 1 is id 21", from) ~= nil,
+      "logged with why (" .. tostring(line("shown on their real plane", from)) .. ")")
+ppw[1001] = "-1,0,0,1"                            -- (seen launched: 2 a missile special)
+clock = clock + 2.1
+fire1(shot(0, 2)); fire1(shot(0, 3))
+check(table.concat(ppShots, " ", 4) == "1001/505/" .. shot(0, 2) .. " 1001/505/" .. shot(0, 2),
+      "its weapons seen: a missile at 2 as sent, at 3 (a laser here) its special 2 (" .. table.concat(ppShots, " ", 4) .. ")")
+realRoom("-1,-1,-1,-1", "", "")
+fire1(shot(0, 2)); fire1(shot(0, 3))
+check(table.concat(ppShots, " ") == "1001/505/" .. shot(0, 2) .. " 1001/505/" .. shot(0, 3),
+      "no loadout known on either side (both the default): missile specials as sent (" .. table.concat(ppShots, " ") .. ")")
 -- nothing read of the plane, or no SV_PPWeapons (a Lua patch on an older runtime), or standins off: as sent, as before
 realRoom("", "1,2//21,0")
 from = #logs + 1

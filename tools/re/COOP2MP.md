@@ -629,6 +629,14 @@ as the nearest weapon of the same kind that plane has.
   bullet special one of its kind, else a burst of the plane's gun (standin_gun_s, peersTick). A stand-in launch (c) keeps
   the seed, start, rotation, velocity and target, spawn slot 0, byte +0x26 0, lock-ons at most 1. The relay keeps the
   original. No SV_PPWeapons (runtime 0.32.23), nothing read, or standins = false: as sent.
+- The review of 2026-11-04 (Lua only): (1) the plane's weapons are read again (at most every 2 s) also when a shot goes as
+  its own number while that number's kind isn't known here: the runtime learns the kind from that launch (FwLearn) and
+  refuses another kind's shots there after, so without the read a laser on a fallback's explosive weapon 3 was refused
+  for good instead of going to its laser 2. (2) A real plane spawned before their loadout came (P.lo "": `its default
+  loadout (none sent)`) flies the airframe's default specials: while their loadout is known (the roster's), a missile
+  special not known there isn't trusted (as a fallback's or a changed loadout's: the standard missile until it's seen),
+  why `their plane here spawned with its own default loadout (theirs hadn't come), their special N is id X`; both
+  unknown (both the default): trusted as before.
 - Log lines: Lua `coopfire: player N's real plane here (<code>[, shown as a <fallback>]): its weapons 0 the gun, 1 the
   standard missile, 2 ..., (SV_PPWeapons ...)` (once a plane and change), `coopfire: player N's <kind> (weapon W) shown on
   their real plane here as its weapon X (<kind>): <why>`, `... shown as their real plane's gun here`, `... NOT shown: <why>,
