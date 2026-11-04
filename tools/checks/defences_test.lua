@@ -442,6 +442,53 @@ do
     objects.TextBlock, SH.rowTexts = nil, nil
 end
 
+-- (0.73.80, findings perf4 / specials8 of 2026-11-04) a STORE press: its page among the landing menu's kept windows (one on
+-- screen lists the row pressed): no walk; a page not among them (opened over the one kept): its windows walked for again
+-- at once (SHOP.pressPage -> sv_core.lua landingWindowsRefresh), so the labels the press changes reach that page. The
+-- relabel's key (SHOP.windowsKey) and the icons read the kept ones, no walk of their own.
+do
+    local CLS = "WBP_Menu_IngameHangar_Common_000_C"
+    local function page(name, rows)
+        local cd = {}
+        for k, r in ipairs(rows) do cd[k] = { StringArgs = { ToString = function() return r end } } end
+        local w = { addr = addr(), vis = true, full = CLS .. " /Engine/Transient.GameEngine_0:LiveGameInstance_0.WBP_Menu_"
+                    .. "IngameHangar_" .. name .. "_C_" .. nextAddr .. ".WidgetTree.WBP_Menu_IngameHangar_Common_000",
+                    WBP_Menu_Pause_List_000 = { addr = addr(), full = "WBP_Menu_Pause_List_000", CommandDatas = cd } }
+        function w:IsVisible() return self.vis end
+        return w
+    end
+    local function walksOf() local n = 0; for _, c in ipairs(walked) do if c == CLS then n = n + 1 end end; return n end
+    local supplies = page("Store", { "SV_Buy_TestA", "SV_Buy_TestB", "21" })
+    objects[CLS] = { supplies }
+    onAirfield = true
+    landingWindowsForget()
+    SH.pressPageSaid = nil                           -- (the presses above had no landing menu at all: logged then)
+    local w0 = walksOf()
+    landingWindows(tick)
+    check(walksOf() == w0 + 1 and landingVisible(supplies), "the visit's first look: walked for on landing, the page found")
+    clock = clock + 1
+    local from = #logs + 1
+    shop("TestA")
+    check(walksOf() == w0 + 1, "a press on a row of the page kept on screen: no walk (" .. (walksOf() - w0 - 1) .. ")")
+    check(line("shop: unknown item TestA", from) ~= nil, "(the press reached the shop: " .. tostring(line("shop: unknown item", from)) .. ")")
+    local key = SHOP.windowsKey(tick)
+    check(walksOf() == w0 + 1 and key == tostring(supplies.addr), "the labels' key: the kept window, no walk (" .. key .. ")")
+    local docks = page("StoreDocks", { "SV_Buy_TestC", "SV_Buy_TestD", "20" })
+    objects[CLS] = { supplies, docks }               -- (opened over it, the first still on screen)
+    clock = clock + 1
+    shop("TestC")
+    check(walksOf() == w0 + 2 and landingVisible(docks), "a press on a page not among them: walked for at once, the page found ("
+          .. (walksOf() - w0 - 1) .. ")")
+    check(line("shop: SV_Buy_TestC pressed on a landing menu page not among the windows kept: walked for them again (2 now",
+          from) ~= nil, "logged: " .. tostring(line("pressed on a landing menu page not among", from)))
+    check(SHOP.windowsKey(tick) ~= key and walksOf() == w0 + 2, "... the labels' key changed with it (the rows found again)")
+    clock = clock + 1
+    shop("TestD")
+    check(walksOf() == w0 + 2, "the next press on it: no walk")
+    landingWindowsForget()
+    objects[CLS] = nil
+end
+
 ---------------------------------------------------------------------------------------------------- the ALLIES row, losses, repairs, kills
 print("ALLY.tick / hudLine: the CIWS on the ALLIES row; a lost one; repairs; kill credit")
 alive = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1, SV_Unit_Ciws_B = 1 }

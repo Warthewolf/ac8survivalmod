@@ -1971,6 +1971,12 @@ CFG = {
         -- the title title_dy under its top, the first row `top` under it, the footer `bottom` above its foot
         wall             = { y_mid = 1000, w = 2200, w2 = 3000, col_dx = 740, cols_from = 9, top = 130, bottom = 100,
                              title_dy = 40 },
+        -- (0.73.80, findings perf4 / specials8 of 2026-11-04) the airfield's landing menu (the STORE's pages): its windows
+        -- are kept once found (sv_core.lua landingWindows) and every object walked for them again only on landing, when a
+        -- page closes, after a STORE press on a page not found yet, every every_s while none is on screen (the menu not up
+        -- yet) and every backstop_s while one is (0: never). Lower finds the menu sooner as it opens (its row icons, co-op's
+        -- music hold); each walk is a 25-40 ms hitch late in a run. Each game's own (hud: never synced).
+        landing          = { every_s = 2.0, backstop_s = 30.0 },
         text = {
             round        = "ROUND: %d",
             next_round   = "NEXT ROUND: %s",
