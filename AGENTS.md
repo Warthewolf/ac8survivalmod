@@ -1246,3 +1246,8 @@ copy_floor_test.lua (its five new checks fail on 0.73.78's sv_coop.lua):
   `leaderboard: co-op run ... over` line has the joiners' kills near the host's.
 - Lesson (not a hard rule until a test confirms it): don't decide "not this player's hit" from DamageHistoryMap under
   the player's plane alone; a missile's damage isn't keyed there.
+- Given out as a patch for the 0.73.78 friends' zip (2026-11-04): testing/builds/AC8SurvivalMode_COOP2MP_0.73.78_KillFix_Patch.zip
+  replaces only Scripts/sv_coop.lua (this kill fix on 0.73.78's file, test-only code stripped; no Tier 1 lag fixes), the
+  version left at 0.73.78-coop2mp.79 so patched and unpatched players still link (a joiner needs it for their own kills).
+  It changes the build hash: register the patched hash on /admin (the log's first "leaderboard: the game started: build
+  hash" line). Its sv_coop.lua is e3571c3's minus Tier 1's two co-op lines and the TEST ONLY block: all of it is in 0.73.79.
