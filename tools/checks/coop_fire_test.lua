@@ -781,6 +781,41 @@ tick(0.25)
 check(table.concat(ppfx, " ") == "1001/1/1", "0.25 s on: still firing")
 tick(0.3)
 check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0", "0.55 s on: off (" .. table.concat(ppfx, " ") .. ")")
+-- ((review of 0.73.80, finding 1) the trigger stays set until it's written back: let go wherever the sync stops driving
+-- it, never left firing on: a burst whose plane goes stale (or DOWN: hidden) inside it, a burst across a new level (a
+-- restart in the same level keeps the plane), the stream's gun bit dropped as the new level comes, a plane set aside)
+realRoom("-1,0,0", "1,2//21,0")
+fire1(shot(2, 3))
+peer(1, 3, 2000)                                  -- (their stream 2 s old: not fresh)
+tick(0.1)
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0" and not M.peers[1].gunOn,
+      "a burst whose plane goes stale inside it: the trigger let go at once (" .. table.concat(ppfx, " ") .. ")")
+realRoom("-1,0,0", "1,2//21,0")
+fire1(shot(2, 3))
+local Dn = {}; for k, v in pairs(D) do Dn[k] = v end
+D = Dn                                            -- (a new run in the same level: the plane kept, its P made again)
+tick(0.1)
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0", "a burst across a new level's P: the trigger let go (" .. table.concat(ppfx, " ") .. ")")
+for _ = 1, 4 do tick(0.25) end
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0", "and never on again with nothing driving it (" .. table.concat(ppfx, " ") .. ")")
+realRoom("-1,0,0", "1,2//21,0")
+peer(1, 3 + 64)                                   -- (their gun bit on)
+tick(0.1)
+check(table.concat(ppfx, " ") == "1001/1/1", "their gun bit: the trigger on (" .. table.concat(ppfx, " ") .. ")")
+peer(1, 3)
+Dn = {}; for k, v in pairs(D) do Dn[k] = v end
+D = Dn                                            -- (the bit dropped as the new level's P comes)
+tick(0.1)
+for _ = 1, 4 do tick(0.25) end
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0", "the gun bit dropped across a new level's P: let go, once (" .. table.concat(ppfx, " ") .. ")")
+realRoom("-1,0,0", "1,2//21,0")
+peer(1, 3 + 64)
+tick(0.1)
+local asideWas, parkWas = M.aside, M.parkAt
+M.aside, M.parkAt = {}, {}
+M.setAside(1, M.peers[1], "test")
+check(table.concat(ppfx, " ") == "1001/1/1 1001/1/0" and not M.peers[1].gunOn, "a real plane set aside while its gun fires: let go (" .. table.concat(ppfx, " ") .. ")")
+M.aside, M.parkAt = asideWas, parkWas
 realRoom("-1,0,2", "1,2//21,0")
 fire1(shot(2, 3))
 check(lastShot() == shot(2, 2) and #ppfx == 0, "a bullet special where it has one: that one, no gun (" .. tostring(lastShot()) .. ")")
@@ -831,6 +866,16 @@ realRoom("-1,10,11,10", "1,2//21,33")
 fire1(shot(1, 3)); fire1(shot(0, 2)); fire1(shot(1, 2))
 check(table.concat(ppShots, " ") == "1001/505/" .. shot(1, 2) .. " 1001/505/" .. shot(0, 3) .. " 1001/505/" .. shot(1, 2) and ppwCalls[1] == "1001/1",
       "standin_table on: a laser as 3 (a missile special there) its laser 2, a missile as 2 its special 3 (" .. table.concat(ppShots, " ") .. ")")
+-- ((review of 0.73.80, finding 2) a kind known only from the table isn't confirmed: the launch at 3 shows it's a laser
+-- there, the runtime turns the table off and refuses another kind's shots at 3; read again 2 s on, the next missile at
+-- 3 goes to the standard missile, not refused for good)
+realRoom("-1,10,10,10", "1,2//21,0", nil, "adfx02")
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 3) and #ppwCalls == 1, "standin_table on, the table says 3 is explosive: a missile at 3 as sent, read once (" .. tostring(lastShot()) .. ")")
+ppw[1001] = "-1,-1,-1,1"                          -- (the runtime: 3 seen launched a laser, the table turned off)
+clock = clock + 2.1
+fire1(shot(0, 3))
+check(lastShot() == shot(0, 1) and #ppwCalls == 2, "2 s on: read again (3 a laser here), the standard missile (" .. tostring(lastShot()) .. ", reads " .. #ppwCalls .. ")")
 CFG.coop.sync.standin_table = false
 -- the minute's line: the stand-ins by player
 from = #logs + 1

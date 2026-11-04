@@ -21,7 +21,7 @@
 static const wchar_t* const kFwKindName[] = { L"an explosive weapon", L"a laser", L"a bullet special", L"an electronic weapon (ESM / ECM)",
                                                L"another weapon (none of the four kinds)" };
 #define FW_SEEN     16                                      /* (weapon numbers whose kinds are kept: 0-15) */
-static struct { uint8_t* plane; uint8_t* cls; uint8_t* tab; int8_t k[FW_SEEN]; } g_fwSeen[CO_MAX_PLAYERS];
+static struct { uint8_t* plane; uint8_t* cls; uint8_t* tab; uint32_t idx; uint64_t name; int8_t k[FW_SEEN]; } g_fwSeen[CO_MAX_PLAYERS];
 /* (found: 0 not yet, 1 at off, -1 given up; inst: the field holds an object of the weapon's class, not the class) */
 static struct { int32_t off, tries; int found, inst, use, bad, said; double at; uint32_t agree, disagree; } g_fwk;
 
@@ -45,14 +45,19 @@ static int FwObjKind(uint8_t* q, int inst)
     return FwIsStruct(q) ? FwKindOfClass(q) : -1;
 }
 
-/* the kinds seen launched from player slot's real plane (tab: its table), forgotten for another plane (its address, class
- * or table); NULL for no slot */
+/* the kinds seen launched from player slot's real plane (tab: its table), forgotten for another plane: its address, its
+ * object's index (+0xC) or name (+0x18), as coop.c CoRef (a new plane made where a freed one was, its table too), its
+ * class, or its table; NULL for no slot */
 static int8_t* FwSeenOf(int slot, uint8_t* plane, uint8_t* tab)
 {
-    if (slot < 0 || slot >= CO_MAX_PLAYERS || !plane || !Readable(plane + 0x10, 8)) return NULL;
+    if (slot < 0 || slot >= CO_MAX_PLAYERS || !plane || !Readable(plane, 0x20)) return NULL;
     uint8_t* cls = *(uint8_t**)(plane + 0x10);
-    if (g_fwSeen[slot].plane != plane || g_fwSeen[slot].cls != cls || g_fwSeen[slot].tab != tab) {
+    uint32_t idx = *(uint32_t*)(plane + 0xC);
+    uint64_t name = *(uint64_t*)(plane + 0x18);
+    if (g_fwSeen[slot].plane != plane || g_fwSeen[slot].cls != cls || g_fwSeen[slot].tab != tab ||
+        g_fwSeen[slot].idx != idx || g_fwSeen[slot].name != name) {
         g_fwSeen[slot].plane = plane; g_fwSeen[slot].cls = cls; g_fwSeen[slot].tab = tab;
+        g_fwSeen[slot].idx = idx; g_fwSeen[slot].name = name;
         memset(g_fwSeen[slot].k, -1, sizeof(g_fwSeen[slot].k));
     }
     return g_fwSeen[slot].k;

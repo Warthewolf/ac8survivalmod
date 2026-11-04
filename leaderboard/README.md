@@ -160,7 +160,12 @@ address, so it's in no history or log. Five wrong keys from one address lock tha
 `tools/package_release.sh online ...` prints `build hash: <64 hex characters>` and writes it next to the zip as
 `<zip>.buildhash.txt` (its `mod` and `build` lines). On the admin page, paste that file's text into **Register a build**
 (a note such as the zip's name is optional) and press **Register build**. Do it for every zip you give out, before
-players send runs from it: a run counts only from a registered build, and a refused run isn't kept (the game drops it).
+players send runs from it: a run counts only from a registered build. From 0.73.80 a run refused only as an unknown
+build is kept by the game (`config/refused_runs.txt`) and sent again from the main menu at each game start for 14 days:
+registering its build within that time gets it taken, even when the player has updated since and it's sent from a later
+registered release (any version; the build it was played on is checked under its own version). That needs the Worker
+of 0.73.80's review deployed: redeploy it (paste `src/index.js`) before relying on it. Before 0.73.80 a refused run
+wasn't kept (the game dropped it).
 A build is its exact files: rebuilding or re-packaging gives a new hash to register.
 
 ## Build verification

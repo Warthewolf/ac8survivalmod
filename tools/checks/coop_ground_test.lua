@@ -228,6 +228,21 @@ if ROLE == "host" then
           and not line:find("dn|" .. lb2 .. "||0", 1, true),
           "host: a craft taken off (it got away) goes down as nobody's, not the joiner who hit it (" .. line .. ")")
     check(((COOP.killTally()[1] or {}).ground or 0) == tallyWas, "host: ... and isn't in the joiner's tally")
+    -- ((review of 0.73.80, finding 4) the other lane A craft, hit by the joiner (most of its damage), shot down in the game
+    -- between hostTick and the next probe, whose specials take its unit off first: COOP.takenOff leaves it (already down,
+    -- not yet seen by hostTick), so hostTick still names its killer and it's in the joiner's tally)
+    world.SV_Unit_LcacA[2].HealthInternal = 0
+    local tallyA = (COOP.killTally()[1] or {}).ground or 0
+    check(COOP.takenOff("SV_Unit_LcacA") == 0, "host: COOP.takenOff leaves a craft already shot down this tick (0 marked)")
+    local dnFromA = #sent + 1
+    tick()
+    local dnA = {}
+    for i = dnFromA, #sent do if sent[i]:find("dn|" .. lc2 .. "|", 1, true) then dnA[#dnA + 1] = sent[i] end end
+    local lineA = table.concat(dnA, " ")
+    check(#dnA > 0 and lineA:find("dn|" .. lc2 .. "||1", 1, true),
+          "host: ... its dn names the joiner who did most of its damage (" .. lineA .. ")")
+    check(((COOP.killTally()[1] or {}).ground or 0) == tallyA + 1, "host: ... and it's in the joiner's tally ("
+          .. tostring(tallyA) .. " -> " .. tostring((COOP.killTally()[1] or {}).ground) .. ")")
     -- a joiner's ally / defence bought: built here (sv_shop.lua shopBuildFor), answered "ak" / "ax"
     local built = {}
     shopBuildFor = function(slot, name, price, kind)

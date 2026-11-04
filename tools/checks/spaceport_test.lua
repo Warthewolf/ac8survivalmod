@@ -606,6 +606,54 @@ took = SPORT.debit(RK.escape_penalty, "rocket B escaped")
 check(took == RK.escape_penalty, "solo / alone: the whole penalty")
 COOP = nil
 
+print("(review of 0.73.80, finding 6) co-op: the rockets, their debris, the garrison and the island taken off as nobody's")
+-- (on the host, COOP.takenOff for each unit a removal event takes off, before it: a destroy with no attacker isn't the
+-- kill of a player who once hit a piece, nor the host's)
+COOP = { host = function() return true end, client = function() return false end, players = function() return {} end,
+         debit = function() end, takenOff = function(u) events[#events + 1] = "takenOff:" .. u; return 0 end }
+local RK_UNITS = { "SV_Unit_SpRockets", "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }
+local function offFirst(ev, units)                -- each of units' takenOff before the first ev
+    local at
+    for i, e in ipairs(events) do if e == ev then at = i; break end end
+    if not at then return false end
+    for _, u in ipairs(units) do
+        local ok = false
+        for i = 1, at - 1 do if events[i] == "takenOff:" .. u then ok = true end end
+        if not ok then return false end
+    end
+    return true
+end
+local sC = retakeWithRockets()                   -- A and B shot down, B breaks up, its debris never changes: the timeout
+rtick(sC, 0, RK.launch_a_s + RK.boost_s + 0.5)
+alive.SV_Unit_SpRockets = 1
+rtick(sC, RK.launch_a_s + RK.boost_s + 1, RK.launch_b_s + 0.5)
+alive.SV_Unit_SpRockets = 0
+rtick(sC, RK.launch_b_s + 1, RK.launch_b_s + 1 + RK.debris_tgt_s + 1)
+check(sC.rk.stage == 1 and evs("^RE_SV_SpRocketRemove$") == "", "B shot down: it breaks up, nothing taken off yet")
+rtick(sC, now + 0.5, now + RK.debris_timeout_s + 1)
+check(sC.rk.done and offFirst("RE_SV_SpRocketRemove", RK_UNITS),
+      "debris taken off at the timeout: the rockets and every debris unit through COOP.takenOff first (" .. table.concat(events, ",", math.max(1, #events - 6)) .. ")")
+local sN = retakeWithRockets()                   -- both down at once: no split, the debris under the sea taken off
+rtick(sN, 0, RK.launch_b_s + 1)
+alive.SV_Unit_SpRockets = 0
+rtick(sN, RK.launch_b_s + 1.5, RK.launch_b_s + 2)
+check(sN.rk.done and not sN.rk.stage and offFirst("RE_SV_SpRocketRemove", RK_UNITS), "no split: taken off through COOP.takenOff first")
+local sX = retakeWithRockets()                   -- nothing ends them: each taken off at its timeout, through it too
+rtick(sX, 0, RK.launch_b_s + RK.timeout_s + 1)
+check(sX.rk.done and offFirst("RE_SV_SpRocketRemove", RK_UNITS), "rockets lost at their timeout: through COOP.takenOff first")
+SP.retake.island.enabled = true
+local sG = retakeWithRockets()                   -- the round's end with the garrison, the island and the rockets up
+alive.SV_Unit_SpGarrisonA = 4
+SPORT.retakeOver(now, sG)
+local isl = {}
+for _, u in ipairs({ "SV_Unit_SpIslExsam", "SV_Unit_SpIslFlak", "SV_Unit_SpIslSam", "SV_Unit_SpIslAA", "SV_Unit_SpIslTankA",
+                     "SV_Unit_SpIslTankB", "SV_Unit_SpIslApc" }) do isl[#isl + 1] = u end
+check(offFirst("RE_SV_SpGarrisonRemove", { "SV_Unit_SpGarrisonA", "SV_Unit_SpGarrisonB", "SV_Unit_SpGarrisonC" })
+      and offFirst("RE_SV_SpIslandRemove", isl) and offFirst("RE_SV_SpRocketRemove", RK_UNITS),
+      "the retake's end: the garrison, the island's units and the rockets through COOP.takenOff before their removals")
+SP.retake.island.enabled = false
+COOP = nil
+
 print("I3: a fleet no retake can follow is taken off (S4)")
 fresh(10)
 s = D.special
