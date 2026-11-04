@@ -1323,3 +1323,31 @@ offline, clang 18 here) pass.
   package_release.sh does; on runtime 0.32.23, no SV_PPWeapons): testing/builds/AC8SurvivalMode_COOP2MP_0.73.80_TESTER_Patch.zip
   (Saint Alessia: test keys and loggers kept) and AC8SurvivalMode_COOP2MP_0.73.80_Patch.zip (stripped, quiet logs);
   CHANGELOG_0.73.80.txt. Both load in lua_load_test. Their build hashes come from the game's first log line: register them.
+
+## 0.73.81-coop2mp.82: the Spaceport Assault's Tu-160s (runtime 0.32.24; 2026-11-04; not yet run in game)
+The user, 2026-11-04: "In the spaceport assault round, can you please add TU-160's that come from both the North and the
+south to target the airfield and bomb it", then "spawn everytime a WASP gets destroyed, have 4 bombers each". Lua only
+(no build data), two independent reviews (2 of 2 and 4 of 4 findings kept, each verified and fixed with a failing test).
+- sv_spaceport.lua (SPORT.tuPlan / tuWasp / tuTick / tuUp; CFG.specials.spaceport.tu160 / [specials.spaceport.tu160]:
+  enabled, aircraft t160_common, group 4, delay_s 6, bearings 0, 180, spread_deg 10, distance_km 28, 34): each Wasp sunk
+  in the assault (shipsTick) asks for a group of `group` sent delay_s later, the groups taking `bearings` in turn (the
+  first by chance), through sv_spawn.lua spawnBomberFrom (spawnBomber with a bearing, a row and a range): the heavies'
+  route over the runway, bomb runs, minimap pings, a heavy's pay, D.up. A group is the heavy flights adding up to `group`
+  (tuOptions): the build has only a 2-ship (EA_Unit_01_Air1) and a 4-ship (EA_Unit_01_Air2), so a group of 4 is the
+  4-ship and the next waits until it's down (hard rule 16), holding the round (SPORT.busy); a flight up but not this
+  round's drops its group. Not in the retake or after a capture; a capture drops groups waiting and withdraws those up
+  with the fighters (off D.up / D.heavy / D.heavyPath, planes down and withdrawn, recycled at the next round's plan,
+  COOP.takenOff, and "wd" so joiners mark their copies withdrawn: COOP.withdrawn). A group due waits while you're solo at
+  the airfield; the Tu-160s don't count in the fighters' wave (sv_rounds.lua); the HUD row and "spx" (5th field) carry
+  how many are up. Log lines: `special: the Tu-160s: a group of N for each Wasp sunk ...`, `special: <Wasp> sunk: Tu-160
+  group N asked for`, `special: Tu-160 group N (...): 4 from the NORTH (bearing B; EA_Unit_01_Air2: 4 (12 objects))`,
+  `... waits: its flights are still up from the last group`, `special: the Tu-160s this assault: ...` at its end.
+- sv_flights.lua HEAVY.route / heavyNext (any heavy raid): a fresh spawn's route entry is kept until its planes are seen
+  (bombTick dropped it before they reached the plane list in 2 of 4 tick phases, so a lead shot down first left its
+  wingmen without the loop: they never bombed; seen in the r30 host log) and only planes born since count.
+- 4 Tu-160s for every Wasp at once needs more heavy 4-ships in the world data (survival_events.HEAVY_BOMBERS /
+  HEAVY_TRACKS, BOMBERS, the routes' object names from copy_unit rather than the stock package): a full build. Lua uses
+  whatever CFG.airfield.bombers.heavy_units lists.
+- Patches (2026-11-04, Scripts + default ini over a 0.73.78 COOP2MP install, on runtime 0.32.23):
+  testing/builds/AC8SurvivalMode_COOP2MP_0.73.81_TESTER_Patch.zip, AC8SurvivalMode_COOP2MP_0.73.81_Patch.zip,
+  CHANGELOG_0.73.81.txt; they replace 0.73.80's (everything in it too). Register their hashes from the game's first log line.
