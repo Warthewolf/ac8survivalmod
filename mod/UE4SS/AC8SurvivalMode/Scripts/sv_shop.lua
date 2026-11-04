@@ -99,7 +99,7 @@ function SHOP.decorTick(tick)
         for a, d in pairs(SH.decor) do if not liveObj(d.img) then SH.decor[a] = nil end end
     end
     for _, win in ipairs(landingWindows(tick)) do
-        if valid(win) then
+        if liveObj(win) then        -- ((review of 0.73.80) the kept list may hold a page freed since its look: hotfix 2's lesson)
             local list = child(win, "WBP_Menu_Pause_List_000")
             for k = 1, 6 do
                 local row = list and child(list, string.format("WBP_Menu_Text_Focus_000_%02d", k))

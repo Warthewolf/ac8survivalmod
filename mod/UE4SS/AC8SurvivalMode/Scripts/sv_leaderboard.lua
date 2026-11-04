@@ -748,6 +748,11 @@ local function keptAnswer(k, st, reply, err)
     elseif unknownBuild(st, err) then
         what = string.format("still an unknown build (register its hash on /admin), kept: sent again at the next game start (%d days left)",
             math.max(0, KEEP_DAYS - daysAgo(k.at)))
+    elseif st == 422 and err == "played on other files" then
+        -- ((review of 0.73.80) the files changed since it was played (an update or a patch): a leaderboard from before
+        -- 0.73.80 refuses that outright, the 0.73.80 one checks the build it was played on: kept for it)
+        what = string.format("played on other files than these (an update since): kept, sent again at the next game start (%d days "
+            .. "left; the leaderboard of 0.73.80 checks the build it was played on)", math.max(0, KEEP_DAYS - daysAgo(k.at)))
     elseif st > 0 and st < 500 and st ~= 429 then
         what = "refused for another reason (" .. tostring(err or ("status " .. st)) .. "), dropped from " .. KEEP_FILE
         if idx then table.remove(LB.kept, idx) end

@@ -35,6 +35,18 @@ local DECK_FLOOR_M = 1100                         -- (the pool's 2-ship units fl
 local function cfg() return CFG.specials.spaceport end
 local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.round and TIER.index(D.round))) end
 local function fire(name) return tostring(type(SV_Event) == "function" and SV_Event(name) or "n/a") end
+-- ((review of 0.73.80) co-op: what's taken off without a kill goes down as nobody's on the host (sv_coop.lua
+-- COOP.takenOff), not as a kill of the player who once hit it; then the removal event
+local function offFire(unit, name)
+    if COOP and COOP.takenOff then pcall(COOP.takenOff, unit) end
+    return fire(name)
+end
+local function fleetFire()                         -- (the fleet's ships still up, each unit's: RE_SV_SpFleetRemove)
+    if COOP and COOP.takenOff and SPORT.fleet then
+        for _, sh in ipairs(SPORT.fleet()) do pcall(COOP.takenOff, sh.unit) end
+    end
+    return fire("RE_SV_SpFleetRemove")
+end
 -- (0.73.80, R30_FINDINGS perf 2: the once-a-second looks asked SV_UnitAlive for every ship, wave, troop and deck flight
 -- in one tick, ~140 ms a second in the Spaceport round at 5.3 ms a call) aliveOf: the kept answer (sv_spawn.lua ALIVE),
 -- at most maxAge (1 s) old and asked again in turn over the ticks; aliveNow: asked now (a check before a spawn or a
@@ -380,7 +392,7 @@ function SPORT.spawn(now)
     if #left > 0 then
         s.clearUntil = now + CLEAR_S
         log(string.format("special: %d ships of the spaceport's fleet were still up from before (%s): taken off (RE_SV_SpFleetRemove %s); "
-            .. "the new fleet waits up to %d s for them", #left, table.concat(left, ", "), fire("RE_SV_SpFleetRemove"), CLEAR_S))
+            .. "the new fleet waits up to %d s for them", #left, table.concat(left, ", "), fleetFire(), CLEAR_S))
     end
     s.state, s.at, s.ships, s.queue, s.lanes, s.troops, s.capture = "assault", now, {}, {}, {}, {}, 0
     -- (the wave report, the user's loggers of 2026-10-31: each wave's line as it's done, the round's at its end)
@@ -545,7 +557,7 @@ function SPORT.tick(now, s)
             end
             if not wv.removed and wv.firstLanded and now - wv.firstLanded >= (tonumber(c.remove_after_s) or 60) then
                 wv.removed = true                         -- (no pay for these: they got away)
-                log(string.format("special: %s are away; taken off (%s)", wv.unit, fire("RE_SV_SpLcacRemove" .. g .. w)))
+                log(string.format("special: %s are away; taken off (%s)", wv.unit, offFire(wv.unit, "RE_SV_SpLcacRemove" .. g .. w)))
             end
             if wv.removed or alive <= 0 then                     -- (free again once it's off the list: freeWave)
                 log(string.format("special: wave %s: %d craft, %d shot down, %d landed, %d troop vehicles ashore (%s after it left)",
@@ -574,7 +586,7 @@ function SPORT.tick(now, s)
             or (not tr.reached and now - tr.at >= (tonumber(c.troop_timeout_s) or 420) and "never got there")
         if why then
             if not tr.reached and s.stat then s.stat.stuck = s.stat.stuck + 1 end
-            log(string.format("special: troops %s %s; taken off (%s)", tr.unit, why, fire("RE_SV_SpTroopsRemove" .. tr.key)))
+            log(string.format("special: troops %s %s; taken off (%s)", tr.unit, why, offFire(tr.unit, "RE_SV_SpTroopsRemove" .. tr.key)))
             table.remove(s.troops, i)
         end
     end
@@ -587,7 +599,7 @@ function SPORT.tick(now, s)
             D.round, s.inside or 0, D.round + 1))
         for g, L in pairs(s.lanes) do                         -- (no more landings: the craft still out go back)
             for w, wv in pairs(L.waves) do
-                if not wv.removed then wv.removed = true; log(string.format("special: %s recalled (%s)", wv.unit, fire("RE_SV_SpLcacRemove" .. g .. w))) end
+                if not wv.removed then wv.removed = true; log(string.format("special: %s recalled (%s)", wv.unit, offFire(wv.unit, "RE_SV_SpLcacRemove" .. g .. w))) end
             end
         end
         local okW, errW = pcall(withdraw, s)
@@ -610,10 +622,10 @@ function SPORT.roundOver(now, s)
     local c, t = cfg(), CFG.hud.text
     for g, L in pairs(s.lanes or {}) do
         for w, wv in pairs(L.waves) do
-            if not wv.removed then wv.removed = true; log(string.format("special: %s taken off at the round's end (%s)", wv.unit, fire("RE_SV_SpLcacRemove" .. g .. w))) end
+            if not wv.removed then wv.removed = true; log(string.format("special: %s taken off at the round's end (%s)", wv.unit, offFire(wv.unit, "RE_SV_SpLcacRemove" .. g .. w))) end
         end
     end
-    for _, tr in ipairs(s.troops or {}) do fire("RE_SV_SpTroopsRemove" .. tr.key) end
+    for _, tr in ipairs(s.troops or {}) do offFire(tr.unit, "RE_SV_SpTroopsRemove" .. tr.key) end
     s.troops, s.state = {}, "done"
     local st = s.stat
     if st then
@@ -633,7 +645,7 @@ function SPORT.roundOver(now, s)
         if c.enabled == false or (c.retake and c.retake.enabled == false) then
             hudCallout(t.sp_lost, nil)
             log(string.format("special: round %d, the spaceport was lost; no retake follows ([specials.spaceport.retake] enabled): "
-                .. "the %d ships still afloat taken off (RE_SV_SpFleetRemove %s)", D.round, left, fire("RE_SV_SpFleetRemove")))
+                .. "the %d ships still afloat taken off (RE_SV_SpFleetRemove %s)", D.round, left, fleetFire()))
             RUN.sport = nil
         else
             hudCallout(t.sp_lost, string.format(t.sp_lost_sub, left))
@@ -659,7 +671,7 @@ function SPORT.tidyFleet(why)
     end
     if #up > 0 then
         log(string.format("special: %s: %d of the fleet's units still had parts up (%s): taken off (RE_SV_SpFleetRemove %s)", why,
-            #up, table.concat(up, ", "), fire("RE_SV_SpFleetRemove")))
+            #up, table.concat(up, ", "), fleetFire()))
     end
     return #up
 end
@@ -1127,7 +1139,7 @@ function SPORT.planRound(special, pick)
         end
         log(string.format("special: the Spaceport Retake due in round %s didn't come (round %d is %s): %s", tostring(rs.retakeRound),
             D.round, special or "a normal round", #up > 0 and string.format("the %d ships left from its assault taken off (%s; "
-                .. "RE_SV_SpFleetRemove %s)", #up, table.concat(up, ", "), fire("RE_SV_SpFleetRemove")) or "no ship left from its assault"))
+                .. "RE_SV_SpFleetRemove %s)", #up, table.concat(up, ", "), fleetFire()) or "no ship left from its assault"))
         RUN.sport = nil
     end
     local dk = cfg().deck

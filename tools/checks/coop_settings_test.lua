@@ -65,6 +65,9 @@ else
     set("coop", "name", "Cress")
     set("attackers", "plane_missiles", "1")            -- (gone too: the host's room, the shipped 4)
 end
+-- ((review of 0.73.80) a plane code not shipped in the open maps: taken (each player's own section)
+ini = ini:gsub("\n%[coop%.real_fallback%]\n", "\n[coop.real_fallback]\nF99X = f22a\n", 1)
+ini = ini:gsub("\n%[coop%.real_paths%]\n", "\n[coop.real_paths]\nmymod_jet = /Game/Mods/X/BP_X.BP_X_C\nbad key = x\n", 1)
 writeAll(WORK .. "/" .. ROLE .. "/config/survival.ini", ini)
 
 -- load the real parts (sv_coop with its M exposed)
@@ -75,6 +78,9 @@ assert(load(src, "=sv_coop.lua"))()
 local M = _G.M
 check(type(M) == "table" and type(M.sendSettings) == "function", "sv_coop.lua loaded, M exposed")
 check(type(CFG_DEFAULTS) == "table" and CFG_DEFAULTS ~= CFG, "CFG_DEFAULTS snapshot")
+check(CFG.coop.real_fallback.f99x == "f22a" and CFG.coop.real_fallback.falken == "adfx02"
+      and CFG.coop.real_paths.mymod_jet == "/Game/Mods/X/BP_X.BP_X_C" and CFG.coop.real_paths["bad key"] == nil,
+      "survival.ini: any plane code in [coop.real_fallback] / [coop.real_paths] (lower case), a bad key not")
 
 -- a deterministic dump of a value (sorted keys) for comparisons
 local function dump(v)

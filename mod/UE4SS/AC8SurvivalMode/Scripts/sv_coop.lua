@@ -602,6 +602,17 @@ end
 -- away and kills of no player (an ally's, a ship's, a defence's) aren't. For the co-op leaderboard's squad (plan H2)
 -- and the sync report's host line; a new level (run) starts it again, and a host by migration starts it at its takeover.
 function COOP.killTally() return M.tally or {} end
+-- ((review of 0.73.80) The host is about to take unit's objects off without a kill (landing craft or troops that got
+-- away, recalled or left at the round's end: a destroy with no attacker, health 0): each of its objects still up goes
+-- down as nobody's (killer false: "dn" with no player, no tally), not as the player who once hit it. How many.
+function COOP.takenOff(unit)
+    if not (COOP.host() and type(unit) == "string") then return 0 end
+    local n = 0
+    for _, e in pairs(M.byId) do
+        if e.unit == unit and e.killer == nil then e.killer, n = false, n + 1 end
+    end
+    return n
+end
 local function tallyKill(e, kl)
     if not (kl and kl.slot) or (type(levelGoing) == "function" and levelGoing()) then return end
     M.tally = M.tally or {}
@@ -3241,10 +3252,16 @@ local function standInAddr(slot)
     return P and P.obj and P.shown and valid(P.obj) and P.addr or nil
 end
 local FCS_NAME = { [0] = "flares", "gun", "missiles", "ECM pod" }
+-- ((review of 0.73.80) your landing STORE open: the music hold's 1 while a landing menu window was on screen at the last
+-- look (sv_core.lua LANDW); the hold itself lets go ~2.5 s after it closes (two looks: a late page), the launches here
+-- at once (as 0.73.79's hold did)
+local function inStore()
+    return D and D.musicHold == 1 and not (LANDW and LANDW.wasShown == false)
+end
 local function coopFire(slot, fcs, target)
     -- (your landing STORE open: the game holds the other planes inactive there and refuses their fire; the co-op run of
     -- 2026-10-30: 1,093 of its 1,094 refused shots came while that game's player was in the STORE)
-    if D and D.musicHold == 1 then S.n.inStore = (S.n.inStore or 0) + 1; return nil end
+    if inStore() then S.n.inStore = (S.n.inStore or 0) + 1; return nil end
     local a = standInAddr(slot)
     if not a then S.n.noPlane = (S.n.noPlane or 0) + 1; return nil end
     if M.peers[slot] and M.peers[slot].real then                 -- (a real plane: its launches come as "p", T4b)
@@ -3296,7 +3313,7 @@ local function fireShots(slot, body, extraMs)
                 R.np = (R.np or 0) + 1
                 passed[#passed + 1] = string.format("p:%d:%d:%s", pid, page, pay)
                 if P and P.real and P.addr and valid(P.obj) and on("missiles") and type(SV_CoopPPShot) == "function"
-                    and not (D and D.musicHold == 1) then
+                    and not inStore() then
                     local okS, r = pcall(SV_CoopPPShot, P.addr, addrOfId(pid) or 0, pay)
                     if not okS then r = tostring(r) end
                     if r == 1 then S.n.pOk = (S.n.pOk or 0) + 1 else S.n.pBad = (S.n.pBad or 0) + 1 end
@@ -4714,6 +4731,8 @@ end
 local function onSys(from, what, f)
     if what == "joined" or what == "paired" or what == "restart" or what == "up" or what == "left" then
         M.lostAt[from] = nil                              -- ((0.73.80) linked again, or gone: no lost link held for them)
+        -- ((review of 0.73.80) a rejoin or a game started over: their last states are from before it)
+        if what ~= "up" then M.stateAt[from], M.freshAt[from] = nil, nil end
     end
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
@@ -5262,6 +5281,9 @@ function COOP.tick(tick)
         -- ((0.73.77) a new level: no run-over kept (A9), the kills by player (C1) and the kills' players named start over,
         -- the floor's line again (A1))
         M.ro, M.tally, M.killer, M.floorSaid = nil, nil, nil, nil
+        -- ((review of 0.73.80) the round hold's state from before (a player loading the new level whose link is lost
+        -- isn't "lost in the mission" by their last run's states): each player held up to join_wait_s again
+        M.stateAt, M.freshAt, M.lostAt, M.holding, M.outSince = {}, {}, {}, {}, {}
         -- ((0.73.73) the units' objects kept, a restart in the same level keeps the actors: those of a level gone, or whose
         -- address is another object's now, dropped)
         for unit, reg in pairs(M.objsOf) do

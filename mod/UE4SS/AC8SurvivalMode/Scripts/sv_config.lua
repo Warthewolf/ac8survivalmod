@@ -2358,9 +2358,14 @@ local function loadIni()
                 else
                     local field = nil
                     for k in pairs(t) do if type(k) == "string" and k:lower() == key:lower() then field = k end end
+                    -- ((review of 0.73.80) open maps: any plane code, not only the shipped ones (a modded plane's
+                    -- stock fallback or its own blueprint's path), by its code in lower case)
+                    local openMap = CFG.coop and (t == CFG.coop.real_fallback or t == CFG.coop.real_paths)
                     if field then
                         local v; v, ok = iniValue(t[field], val)
                         if ok then t[field] = v end
+                    elseif openMap and val ~= "" and #val <= 512 and key:match("^[%w_%-]+$") then
+                        t[key:lower()], ok = val, true
                     end
                 end
                 if ok then set = set + 1 else bad[#bad + 1] = string.format("line %d: [%s] %s = %s not used", n, section, key, val) end
