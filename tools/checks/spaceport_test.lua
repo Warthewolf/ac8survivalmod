@@ -257,7 +257,9 @@ check(SPORT.retakeBusy(s2), "busy while the garrison and ships are up")
 for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
 for u in pairs(rs.ships) do alive[u] = 0 end
 alive.SV_Unit_SpFord = 0
-for _ = 1, 8 do now = now + 0.25; SPORT.retakeTick(now, s2) end
+-- ((0.73.80) the looks read the units' kept SV_UnitAlive answers (sv_spawn.lua ALIVE), asked again in turn: up to 32 a
+-- second, and the assault's own units (asked for until a moment ago) still share the budget here, so a third look)
+for _ = 1, 12 do now = now + 0.25; SPORT.retakeTick(now, s2) end
 check(not SPORT.retakeBusy(s2) and paid("garrison") > 0, "all down: not busy, the garrison paid")
 SPORT.retakeOver(now, s2)
 check(paid("spaceport retaken") > 0 and called(T.sp_retaken) ~= nil, "its end: the reward, SPACEPORT RETAKEN")
@@ -533,7 +535,9 @@ check(sI.ships.SV_Unit_SpAegisA.hull == objs.SV_Unit_SpAegisA[1] and sI.ships.SV
       and sI.ships.SV_Unit_SpWaspA.hull == objs.SV_Unit_SpWaspA[1], "the hull: the one object that isn't a turret (a Wasp's only one)")
 credits, callouts = {}, {}
 objs.SV_Unit_SpAegisA[3].HealthInternal = 0      -- (its mk41 shot off)
-run(sI, now + 0.25, now + 1.25)
+-- ((0.73.80) a ship watched by its hull: its unit's count (its turrets') asked again every 3 s, not every second: the
+-- turret's pay within 3 s; its hull's own end still at the next look, below)
+run(sI, now + 0.25, now + 3.25)
 check(paid("turret shot off") == tp(SP.pay.turret) and paid("aegis sunk") == 0 and SPORT.shipsUp(sI) == 27,
       "a turret shot off alone: pay.turret (" .. paid("turret shot off") .. "), not sunk, still afloat")
 L0 = #logs

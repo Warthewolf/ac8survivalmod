@@ -129,6 +129,186 @@ function compassName(b)
     return names[math.floor(((b or 0) % 360) / 45 + 0.5) % 8 + 1]
 end
 
+---------------------------------------------------------------------------------------------------- units alive, spread
+-- (0.73.80, the 31-round co-op test of 0.73.79: testing/logs/2026-11-04/R30_FINDINGS.json perf 1 / 2) SV_UnitAlive walks
+-- the spawner's whole unit list with a memory check on each entry, and that list keeps every unit spawned in the level:
+-- 0.3 ms a call at the host's start, 6.6 ms late in its run (16-17 ms its worst). The rounds' once-a-second loops asked it
+-- for every flight up in one tick (45-65 ms in one tick half late in the run; ~140 ms with the Spaceport's 27 ships), so
+-- ALIVE keeps each unit's last answer and spreads the native asks over the ticks:
+--   ALIVE.ask(unit, now, maxAge)  the unit's planes (objects) alive, as SV_UnitAlive answers: the kept answer while it's
+--                                 younger than maxAge (AGE_S, 1 s, when nil), else asked now while the tick's budget
+--                                 lasts (past it an answer up to HARD_S old is used, its age counted in the round's
+--                                 line); a unit with no answer kept (never asked, spawned or recycled since, not asked
+--                                 for in WATCH_S) and one with a plane seen down by the sweep since its answer (`planes`)
+--                                 are asked at once, budget or not: a kill is never read late
+--   ALIVE.fresh(unit, now)        asked now whatever's kept (a check before a spawn, a recycle or a removal)
+--   ALIVE.spawned(unit, r)        a spawn's answer: r > 0 kept as its count, else forgotten (SV_Spawn, wrapped below, and
+--                                 every spawn in sv_spawn / sv_spaceport says it too: a test's stub spawns unwrapped)
+--   ALIVE.forget(unit)            forgotten (SV_Recycle, wrapped below)
+--   ALIVE.tick(now)               once a tick, first thing in roundsTick (and the Spaceport's ticks, the same `now`: no
+--                                 second budget): the tick's budget, spent first on the answers oldest for their maxAge
+--                                 (from REFRESH_X of it), so each watched unit is asked about once a maxAge
+--   ALIVE.report(round)           the round's line at its clear: asks, kept answers used, the budget, the oldest used
+-- The budget: as many asks a second as the units asked for in the last WATCH_S need (one a maxAge each), RATE_MIN to
+-- RATE_MAX, a tick's share each tick (RATE x the time since the last tick, 0.25 to 1 s: 2 to 8 asks at 4 ticks a second).
+-- The round clock (D.now, roundsTick's `now`) is the cache's: it stops while the game's paused, as the world does.
+ALIVE = {}
+do
+local AGE_S, HARD_S, WATCH_S, REFRESH_X = 1.0, 3.0, 3.0, 0.9
+local RATE_MIN, RATE_MAX = 8, 32
+-- unit -> { n, at (its answer's), every (the shortest maxAge asked for lately, everyAt), want (asked for), downs }
+local C = {}
+local T = { D = nil, at = nil, left = 0, budget = 0, rate = RATE_MIN, downs = nil, downsAt = nil }
+local S = {}                                     -- the round's counts (ALIVE.report)
+local function resetStats()
+    S = { asks = 0, forced = 0, kept = 0, past = 0, worst = 0, worstUnit = nil, rate = 0, budget = 0, watched = 0 }
+end
+resetStats()
+local function clockOf(now) return tonumber(now) or (D and tonumber(D.now)) or 0 end
+local function forgetAll()                       -- (a new run, D, or the level gone: nothing kept is the game's now)
+    C, T.D, T.at, T.left, T.downs, T.downsAt, T.downsOf = {}, D, nil, 0, nil, nil, nil
+    resetStats()
+end
+-- planes of `unit` the sweep has seen down (sv_main.lua sets p.down, in the tick's other half), counted once a tick from
+-- `planes` (again for a new list: a round's start prunes it into a new one)
+local function downsOf(unit, now)
+    local pl = type(planes) == "table" and planes or {}
+    if T.downsAt ~= now or T.downsOf ~= pl or not T.downs then
+        local d = {}
+        for _, p in ipairs(pl) do
+            if p.down and p.unit then d[p.unit] = (d[p.unit] or 0) + 1 end
+        end
+        T.downs, T.downsAt, T.downsOf = d, now, pl
+    end
+    return T.downs[unit] or 0
+end
+local function native(unit, now, every, forced)
+    local n = SV_UnitAlive(unit)
+    local e = C[unit]
+    C[unit] = { n = n, at = now, every = math.min((e and e.every) or every, every), everyAt = (e and e.everyAt) or now,
+                want = now, downs = downsOf(unit, now) }
+    if (tonumber(n) or -5) < 0 and n ~= -7 then C[unit] = nil end  -- (an error, not "not up": asked again next time)
+    T.left = (T.left or 0) - 1
+    S.asks = S.asks + 1
+    if forced then S.forced = S.forced + 1 end
+    return n
+end
+local function used(unit, e, age)                -- a kept answer used: its age for the round's line
+    S.kept = S.kept + 1
+    if age > S.worst then S.worst, S.worstUnit = age, unit end
+    return e.n
+end
+function ALIVE.ask(unit, now, maxAge)
+    if T.D ~= D then forgetAll() end
+    now = clockOf(now)
+    maxAge = tonumber(maxAge) or AGE_S
+    local e = C[unit]
+    if e then
+        e.want = now
+        -- (its refresh: the shortest maxAge asked for lately; a longer one once nobody's asked for the shorter in its time:
+        -- a Spaceport ship's 1 s until its hull is found, HULL_AGE_S after)
+        if maxAge <= (e.every or math.huge) or now - (e.everyAt or now) > (e.every or AGE_S) + 0.5 then
+            e.every, e.everyAt = maxAge, now
+        end
+        local age = now - e.at
+        if age >= 0 then
+            local dn = downsOf(unit, now)
+            if dn < (e.downs or 0) then e.downs = dn end            -- (down planes pruned off the list since)
+            if not ((tonumber(e.n) or 0) > 0 and dn > (e.downs or 0)) then
+                if age < maxAge then return used(unit, e, age) end
+                if T.at == now and (T.left or 0) <= 0 and age < HARD_S then
+                    S.past = S.past + 1
+                    return used(unit, e, age)
+                end
+            else
+                return native(unit, now, maxAge, true)                 -- (a plane of it went down: asked at once)
+            end
+        end
+    end
+    return native(unit, now, maxAge, false)
+end
+function ALIVE.fresh(unit, now)
+    if T.D ~= D then forgetAll() end
+    return native(unit, clockOf(now), AGE_S, false)
+end
+function ALIVE.spawned(unit, r)
+    if type(unit) ~= "string" then return end
+    if T.D ~= D then forgetAll() end
+    r = tonumber(r)
+    if r and r > 0 then
+        local now, e = clockOf(nil), C[unit]
+        C[unit] = { n = r, at = now, every = (e and e.every) or AGE_S, everyAt = (e and e.everyAt) or now, want = now,
+                    downs = downsOf(unit, now) }
+    else
+        C[unit] = nil
+    end
+end
+function ALIVE.forget(unit) if type(unit) == "string" then C[unit] = nil end end
+function ALIVE.tick(now)
+    if T.D ~= D then forgetAll() end
+    now = clockOf(now)
+    if T.at == now then return end                               -- (once a tick: the Spaceport's ticks run inside it)
+    if T.at and now < T.at then forgetAll() end                     -- (the clock went back: a run of its own)
+    if D and T.saidFor ~= D then                                 -- (once a run)
+        T.saidFor = D
+        log(string.format("alive: (0.73.80) the units' SV_UnitAlive answers kept and asked again in turn: %d to %d asks a "
+            .. "second by the units watched (%d to %d a tick), each answer under %.0f s old within the budget (up to %.0f s past "
+            .. "it), a flight with a plane seen down asked at once", RATE_MIN, RATE_MAX, math.ceil(RATE_MIN / 4),
+            math.ceil(RATE_MAX / 4), AGE_S, HARD_S))
+    end
+    local dt = T.at and (now - T.at) or 0.25
+    T.at = now
+    local need, n = 0, 0
+    for u, e in pairs(C) do                                      -- (not asked for in WATCH_S: forgotten)
+        if now - (e.want or e.at) > WATCH_S then C[u] = nil
+        else n = n + 1; need = need + 1 / math.max(0.25, e.every or AGE_S) end
+    end
+    T.rate = math.max(RATE_MIN, math.min(RATE_MAX, math.ceil(need - 1e-9)))
+    T.budget = math.max(1, math.ceil(T.rate * math.max(0.25, math.min(1, dt)) - 1e-9))
+    T.left = T.budget
+    if T.rate > S.rate then S.rate = T.rate end
+    if T.budget > S.budget then S.budget = T.budget end
+    if n > S.watched then S.watched = n end
+    local due = {}
+    for u, e in pairs(C) do
+        local r = (now - e.at) / math.max(0.25, e.every or AGE_S)
+        if r >= REFRESH_X then due[#due + 1] = { u = u, r = r } end
+    end
+    if #due == 0 then return end
+    table.sort(due, function(a, b) if a.r ~= b.r then return a.r > b.r end return a.u < b.u end)
+    for i = 1, math.min(#due, T.left) do native(due[i].u, now, C[due[i].u].every or AGE_S, false) end
+end
+-- The round's line (sv_rounds.lua, at its clear), then its counts start again.
+function ALIVE.report(round)
+    log(string.format("alive: round %s: %d native SV_UnitAlive asks (%d at once: a plane of the flight seen down), %d kept "
+        .. "answers used (%d past the tick's budget); the budget up to %d asks a second (%d a tick) for %d units watched; the "
+        .. "oldest answer used %.2f s old%s", tostring(round), S.asks, S.forced, S.kept, S.past, S.rate, S.budget, S.watched,
+        S.worst, S.worstUnit and (" (" .. S.worstUnit .. ")") or ""))
+    resetStats()
+end
+-- (the teardown gate's drop, sv_core.lua levelDrop: the answers forgotten with the level)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["units alive"] = function() forgetAll(); T.D = nil end end
+-- SV_Spawn and SV_Recycle say what they did (registered by dlls/main.dll before this script ran; sv_coop.lua's wraps and
+-- sv_main.lua's counters come after and call through these)
+do
+    local rawSpawn, rawRecycle = SV_Spawn, SV_Recycle
+    if type(rawSpawn) == "function" then
+        SV_Spawn = function(unit, ...)
+            local r = rawSpawn(unit, ...)
+            ALIVE.spawned(unit, r)
+            return r
+        end
+    end
+    if type(rawRecycle) == "function" then
+        SV_Recycle = function(unit, ...)
+            local r = rawRecycle(unit, ...)
+            ALIVE.forget(unit)
+            return r
+        end
+    end
+end
+end
+
 HEAVY_UNIT = {}
 for _, u in ipairs(CFG.airfield.bombers.heavy_units) do HEAVY_UNIT[u] = true end
 
@@ -152,6 +332,7 @@ local function spawnBomber(unit)
     spawningUnit, spawningIdx = unit, 0                    -- (each plane's index in the flight: sv_core.lua p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
+    ALIVE.spawned(unit, r)
     log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
         unit, ac, tostring(set), dist, bearing, alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
@@ -193,7 +374,7 @@ function ACE.flight(unit, tk, level)
     local k = opts[math.random(#opts)]
     local f, id = { wing = searchAircraft(ACE.row(tk, k, "w"), level), tier = tk, key = k }, tk .. "_" .. k
     for u, a in pairs(D.aceOf) do
-        if a == id and (SV_UnitAlive(u) or 0) > 0 then return f end   -- that ace is up: wingmen only
+        if a == id and (ALIVE.ask(u) or 0) > 0 then return f end      -- that ace is up: wingmen only
     end
     if SR.usable[ACE.row(tk, k, "l")] then
         f.lead, f.id, D.aceOf[unit] = searchAircraft(ACE.row(tk, k, "l"), level), id, id
@@ -339,6 +520,7 @@ function spawnFlight(unit, maxLevel, pose)
     spawningUnit, spawningIdx = unit, 0                                       -- (each plane's index in the flight: p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
+    ALIVE.spawned(unit, r)                             -- ((0.73.80) its answer kept: the rounds' loops read it)
     log(string.format("round %d: %s%s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round, unit,
         role and (" [" .. role .. "]") or "", D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
         jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side")
@@ -748,7 +930,7 @@ function WOLF.tick(now)
         if ask then w.aliveAt = now + 1 end
         if w.state == "free" then
             W[unit] = nil
-        elseif ask and SV_UnitAlive(unit) <= 0 then
+        elseif ask and ALIVE.ask(unit, now) <= 0 then
             W[unit] = nil                                   -- (down, or its spawn didn't come: it's recycled next time)
         elseif w.state == "pending" then
             if not w.upAt then
@@ -865,6 +1047,60 @@ function specialOn(kind)
     return SPC.kinds[kind] ~= nil and not (type(c) == "table" and c.enabled == false)
 end
 
+-- (0.73.80, the 31-round test of 0.73.79: R30_FINDINGS specials 1; rounds 7-13 rolled no special, 4 of the 8 kinds never
+-- came, two failed shuttles went unseen) The random specials' pacing, CFG.specials:
+--   * the chance grows by chance_step for each round rolled with no special since the last one (RUN.specialGap; an ace
+--     round, which takes a round with no special, and a round nothing could come in count as neither), and after max_gap
+--     of them (/ the menu's SPECIAL ROUNDS x) the next round rolled is one for sure;
+--   * the kind comes from a shuffle bag over the rotation's kinds switched on (RUN.specialBag, `bag`): each once before
+--     any comes again; when none of the bag's can come now (cooling down, its from_round), any that can;
+--   * a pick that can't start (specialSwap: sv_rounds.lua startRound's checks) swaps to another that can (`swap`).
+-- Every roll is logged (`specials: round N's roll: ...`); the early window, never two in a row, the cooldown, the ace
+-- rounds and VALKA's disguise as before.
+-- the rotation's kinds switched on, shuffled: the bag's next fill
+local function bagFill(sp)
+    local t = {}
+    for _, k in ipairs(sp.rotation or {}) do if specialOn(k) then t[#t + 1] = k end end
+    for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
+    return t
+end
+-- a kind for the round from the bag (RUN.specialBag) among those can(k) allows: the kind and where it came from
+local function bagDraw(sp, can)
+    if sp.bag == false then                          -- (no bag: an even draw, as before 0.73.80)
+        local choices = {}
+        for _, k in ipairs(sp.rotation) do if can(k) then choices[#choices + 1] = k end end
+        if #choices == 0 then return nil end
+        return choices[math.random(#choices)], "an even draw"
+    end
+    RUN.specialBag = type(RUN.specialBag) == "table" and RUN.specialBag or {}
+    if #RUN.specialBag == 0 then RUN.specialBag = bagFill(sp) end
+    for i, k in ipairs(RUN.specialBag) do
+        if can(k) then table.remove(RUN.specialBag, i); return k, "the bag" end
+    end
+    local choices = {}                               -- (none of the bag's can come now: any that can, the bag kept)
+    for _, k in ipairs(sp.rotation) do if can(k) then choices[#choices + 1] = k end end
+    if #choices == 0 then return nil end
+    return choices[math.random(#choices)], "outside the bag (none of its can come now)"
+end
+local function bagText()
+    local b = type(RUN.specialBag) == "table" and RUN.specialBag or {}
+    return #b > 0 and table.concat(b, ", ") or "empty"
+end
+-- whether `round` would be an ace round with no special (sv_config.lua aceRound): it doesn't count in the gap
+local function aceTakes(round)
+    if type(aceRound) ~= "function" then return false end
+    local okA, ti = pcall(aceRound, round, nil)
+    return okA and ti ~= nil
+end
+-- can special k come in `round` (switched on, its from_round, its cooldown: CFG.specials cooldown_rounds), not the last
+-- one again (unless it's the rotation's only one)
+local function specialReady(sp, k, round)
+    local last = RUN.specialAt and RUN.specialAt[k]
+    local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
+    return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
+        and (k ~= RUN.lastSpecial or #sp.rotation == 1)
+end
+
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 function specialFor(round)
     local sp = CFG.specials
@@ -880,30 +1116,50 @@ function specialFor(round)
         local pick = RUN.specialPick
         if pick[round] == nil then
             local kind, early = false, sp.early
+            local lastWas, gap = RUN.lastSpecial, math.max(0, math.floor(tonumber(RUN.specialGap) or 0))
             -- each special at most once in cooldown_rounds (user, 2026-10-23: "Each Special Round can only Spawn Once
             -- Every 10 rounds"): one that started in round r can't come again before r + cooldown_rounds
-            local function ready(k)
-                local last = RUN.specialAt and RUN.specialAt[k]
-                local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
-                return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
-            end
+            local function can(k) return specialReady(sp, k, round) end
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
             local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
+            local roll = nil
             if inEarly then
-                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and ready(early.kind) and math.random() < math.min(0.9, (early.chance or 0) * sx) then
-                    kind = early.kind
-                    RUN.lastSpecial = kind
+                if not pick[round - 1] and can(early.kind) then
+                    local chance = math.min(0.9, (early.chance or 0) * sx)
+                    roll = math.random()
+                    if roll < chance then kind = early.kind end
+                    log(string.format("specials: round %d's roll (the early window: the %s only): %.2f %s chance %.2f", round,
+                        tostring(early.kind), roll, kind and "<" or ">=", chance))
                 end
-            elseif round >= sp.first and not pick[round - 1] and math.random() < math.min(0.9, sp.chance * sx) then
-                local choices = {}
-                for _, k in ipairs(sp.rotation) do
-                    if (k ~= RUN.lastSpecial or #sp.rotation == 1) and ready(k) then choices[#choices + 1] = k end
+            elseif round >= sp.first and not pick[round - 1] then
+                local any = false
+                for _, k in ipairs(sp.rotation) do if can(k) then any = true end end
+                if any then
+                    local step = math.max(0, tonumber(sp.chance_step) or 0)
+                    local chance = math.min(0.9, ((tonumber(sp.chance) or 0) + step * gap) * sx)
+                    local mg = math.floor(tonumber(sp.max_gap) or 0)
+                    local sure = mg > 0 and gap >= math.ceil(mg / sx)
+                    roll = math.random()
+                    local from = nil
+                    if sure or roll < chance then kind, from = bagDraw(sp, can); kind = kind or false end
+                    local ace = not kind and aceTakes(round)
+                    log(string.format("specials: round %d's roll: %.2f %s chance %.2f (%d round%s since the last special%s)%s; "
+                        .. "the bag: %s", round, roll, roll < chance and "<" or ">=", chance, gap, gap == 1 and "" or "s",
+                        sure and string.format(", %d or more: one for sure", math.ceil(mg / sx)) or "",
+                        kind and string.format(": the %s, from %s", kind, from)
+                            or (ace and ": no special (an ace round takes it, not counted)" or ": no special"), bagText()))
+                    if kind then RUN.specialGap = 0 elseif not ace then RUN.specialGap = gap + 1 end
+                else
+                    log(string.format("specials: round %d: no special can come (each cooling down or not yet in), not counted",
+                        round))
                 end
-                if #choices > 0 then                       -- (every one cooling down: a normal round)
-                    kind = choices[math.random(#choices)]
-                    RUN.lastSpecial = kind
-                end
+            end
+            if kind then
+                RUN.lastSpecial = kind
+                -- (what specialSwap needs to undo this pick: the last special before it, the gap, where it came from)
+                RUN.specialRoll = { round = round, kind = kind, lastWas = lastWas, gapWas = gap, early = inEarly or nil,
+                                    tried = { [kind] = true } }
             end
             pick[round] = kind
             if kind then log(string.format("specials: round %d will be %s", round, kind)) end
@@ -914,6 +1170,59 @@ function specialFor(round)
     if not sp.enabled or #sp.rotation == 0 or round < sp.first or (round - sp.first) % every ~= 0 then return nil end
     local kind = sp.rotation[((round - sp.first) // every) % #sp.rotation + 1]
     return specialOn(kind) and kind or nil
+end
+
+-- (0.73.80) The dice's special for `round` (`failed`) can't start (why): another one that can (ready(k): its own checks,
+-- sv_rounds.lua startRound's), or nil (a normal round, the round counted in the gap again). Not for a forced special, the
+-- retake or the early window's (only the early kind comes then), nor with CFG.specials.swap off. The failed kind goes
+-- back in the bag at its end, its turn not used; the run's last special is the one before it again.
+function specialSwap(round, failed, why, ready)
+    local sp, roll = CFG.specials, RUN.specialRoll
+    if not (roll and roll.round == round and roll.kind == failed) then return nil end
+    RUN.lastSpecial = roll.lastWas
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(failed) then table.insert(RUN.specialBag, failed) end
+    local k, from = nil, nil
+    if sp.swap ~= false and not roll.early then
+        k, from = bagDraw(sp, function(x)
+            if roll.tried[x] or not specialReady(sp, x, round) then return false end
+            roll.tried[x] = true                        -- (asked once: one that can't start isn't drawn again)
+            return ready == nil or ready(x) == true
+        end)
+    end
+    RUN.specialPick = RUN.specialPick or {}
+    if k then
+        if sp.bag ~= false and type(RUN.specialBag) == "table" then   -- (an outside draw left the bag as it was)
+            for i, x in ipairs(RUN.specialBag) do if x == k then table.remove(RUN.specialBag, i); break end end
+        end
+        RUN.lastSpecial, RUN.specialPick[round], roll.kind = k, k, k
+        log(string.format("specials: round %d: the %s can't start (%s): the %s instead (from %s); the bag: %s", round, failed,
+            tostring(why), k, from, bagText()))
+    else
+        RUN.specialPick[round] = false
+        RUN.specialGap = (roll.gapWas or 0) + 1
+        RUN.specialRoll = nil
+        log(string.format("specials: round %d: the %s can't start (%s)%s: a normal round (%d round%s since the last special); "
+            .. "the bag: %s", round, failed, tostring(why), (sp.swap == false and " and [specials] swap is off")
+                or (roll.early and " in the early window (only it comes then)") or " and no other special can",
+            RUN.specialGap, RUN.specialGap == 1 and "" or "s", bagText()))
+    end
+    return k
+end
+-- (0.73.80) The round's special didn't come after all (sv_rounds.lua SPC.unplan: the shuttle's spawn refused twice):
+-- the dice's bookkeeping undone (back in the bag at its end, the run's last special, the gap); the cooldown is
+-- sv_rounds.lua's.
+function specialUndo(round, kind)
+    local sp, roll = CFG.specials, RUN.specialRoll
+    RUN.specialPick = RUN.specialPick or {}
+    RUN.specialPick[round] = false
+    if not (roll and roll.round == round and roll.kind == kind) then return false end
+    RUN.lastSpecial = roll.lastWas
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(kind) and not roll.early then
+        table.insert(RUN.specialBag, kind)
+    end
+    if not roll.early then RUN.specialGap = (roll.gapWas or 0) + 1 end
+    RUN.specialRoll = nil
+    return true
 end
 
 -- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and its RE_SV_*_NN events), or nil.
@@ -955,8 +1264,31 @@ function spawnShuttle()
     spawningUnit = c.unit
     local r = SV_Spawn(c.unit)
     spawningUnit = nil
+    ALIVE.spawned(c.unit, r)
     log("special: shuttle " .. c.unit .. ": " .. (r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r <= 0 then D.special = nil; return r end            -- a normal round, then
+    -- ((0.73.80, R30_FINDINGS specials 0) -3, its last one still on the spawner's list (the round's plan takes it off,
+    -- sv_rounds.lua SPC.canStart; something kept it up since): taken off it (SV_Recycle(unit, 1)) and spawned once more)
+    if r == -3 and type(SV_Recycle) == "function" then
+        crumb("special: shuttle SV_Recycle " .. c.unit .. " (its spawn refused)")
+        local okR, x = pcall(SV_Recycle, c.unit, 1)
+        spawningUnit = c.unit
+        r = SV_Spawn(c.unit)
+        spawningUnit = nil
+        ALIVE.spawned(c.unit, r)
+        log(string.format("special: shuttle %s: its last one taken off the spawner's list (SV_Recycle %s), spawned again: %s", c.unit,
+            okR and tostring(x) or ("error " .. tostring(x)), r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    end
+    -- (still none: a normal round from the start, its strike flights replaced by fighters, its pick and cooldown given
+    -- back, the pad hidden again: sv_rounds.lua SPC.unplan; before 0.73.80 its strike flew on as a plain bomber raid)
+    if r <= 0 then
+        local okU, errU = true, nil
+        if SPC.unplan then okU, errU = pcall(SPC.unplan, "shuttle", D.now, "its spawn refused: " .. (SV_ERR[r] or tostring(r))) end
+        if not (SPC.unplan and okU) then
+            if not okU then log("special: unplan error " .. tostring(errU)) end
+            D.special = nil
+        end
+        return r
+    end
     D.special.state, D.special.at = "countdown", D.now
     D.shuttleClock = { cd = 0, fired = 0, at = D.now, s = D.special }
     return r

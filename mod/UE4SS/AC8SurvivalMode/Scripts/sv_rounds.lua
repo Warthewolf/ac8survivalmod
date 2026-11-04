@@ -88,10 +88,12 @@ local function hide(o, keep)
     if keep then SHUTTLE.gone[#SHUTTLE.gone + 1] = was end
     return n == 3
 end
-function SPC.shuttleTakeOff()
+-- ((0.73.80) padOnly: the pad alone, the shuttle not looked for: a shuttle round whose shuttle never came, SPC.unplan)
+function SPC.shuttleTakeOff(padOnly)
     SHUTTLE.gone = SHUTTLE.gone or {}
     local sh, killed, hidden, failed = SHUTTLE.obj, "no shuttle actor", 0, 0
-    if not valid(sh) then shuttleHealth(); sh = SHUTTLE.obj end
+    if padOnly then sh, killed = nil, "never came (the pad only)"
+    elseif not valid(sh) then shuttleHealth(); sh = SHUTTLE.obj end
     local f = svFlags() or {}
     if valid(sh) and (f.SV_ShuttleLaunched or 0) < 1 then    -- (a kill now would count as shot down on the pad)
         killed = "not killed (SV_ShuttleLaunched is 0)"
@@ -175,6 +177,7 @@ end
 -- once the host's special is over ("rnd" field 11, sv_coop.lua: D.hostSpecial).
 do
 local CLEAN_AFTER_S, CLEAN_CHECK_S, CLIENT_AFTER_S, MAX_OBJS = 3, 2, 5, 400
+local SHUTTLE_CLIENT_S = 15                      -- ((0.73.80) a joiner's shuttle copy: after the host's own removal ran here)
 local POOLED = { "_uavm_ON_", "_rflm_ON_", "_f18f_ON_", "_uavr_" }       -- (the Alicorn's parked pools, sv_alicorn.lua)
 local ALICORN_UNIT, LADON_UNITS = "SV_Unit_Alicorn", { "SV_Unit_LadonKot", "SV_Unit_LadonMishka" }
 local function str(v) return type(v) == "string" and v ~= "" and v or nil end
@@ -363,6 +366,15 @@ function SPC.clientClean(now)
             C.up[kind] = nil
             C.due[#C.due + 1] = { at = now + CLIENT_AFTER_S, list = SPC.cleanUnitsOf(kind), why = "the host's " .. kind .. " over" }
             if kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
+            -- ((0.73.80, R30_FINDINGS specials 0) the shuttle's copy here off this game's spawner list once the host's
+            -- RE_SV_ShuttleRemove has run here too (remove_s after its liftoff, 30 s after its loss, + SHUTTLE_CLIENT_S): the
+            -- joiners' round-4 copies were never taken off, so the host's next shuttle was refused here until [coop]
+            -- force_recycle stepped in)
+            local sc = CFG.specials and CFG.specials.shuttle
+            if kind == "shuttle" and type(sc) == "table" and sc.unit then
+                C.due[#C.due + 1] = { at = now + math.max(tonumber(sc.remove_s) or 180, 30) + SHUTTLE_CLIENT_S,
+                                      recycle = sc.unit, why = "the host's shuttle taken off" }
+            end
         end
     end
     local va = CFG.specials and CFG.specials.valka
@@ -373,7 +385,20 @@ function SPC.clientClean(now)
     if not (hs and hs.kind == "valka") then C.emlFor = nil end
     for i = #C.due, 1, -1 do
         local e = C.due[i]
-        if now >= e.at then
+        if now >= e.at and e.recycle then
+            table.remove(C.due, i)
+            local n0 = SV_UnitAlive(e.recycle)
+            local rec = "nothing to take off"
+            if n0 > 0 and type(SV_Recycle) == "function" then
+                crumb("coop: shuttle copy SV_Recycle " .. e.recycle)
+                local okR, r = pcall(SV_Recycle, e.recycle, 1)
+                rec = string.format("taken off this game's spawner list (SV_Recycle %s): %d alive after", okR and tostring(r)
+                    or ("error " .. tostring(r)), SV_UnitAlive(e.recycle))
+            elseif n0 > 0 then
+                rec = "no SV_Recycle in this runtime"
+            end
+            log(string.format("coop: %s: its copy here %s %d alive: %s", e.why, e.recycle, n0, rec))
+        elseif now >= e.at then
             table.remove(C.due, i)
             local n = SPC.cleanUp(e.list, e.why, "parts", now)
             log(string.format("coop: %s: %d of its copies' objects still up here, taken off (its planes switched off, its parts finished off)",
@@ -407,16 +432,30 @@ local function specialTick(now)
         -- its strike flights still up back onto the airfield (they were ordered onto the shuttle alone)
         local back = {}
         for u in pairs(D.up) do
-            if BOMBER_UNIT[u] and SV_UnitAlive(u) > 0 and type(SV_Event) == "function" then
+            if BOMBER_UNIT[u] and ALIVE.ask(u, now) > 0 and type(SV_Event) == "function" then
                 back[#back + 1] = u .. " " .. tostring(SV_Event(string.format("RE_SV_BomberRetask_%02d", BOMBER_INDEX[u])))
             end
         end
         if #back > 0 then log("special: strike flights back onto the airfield: " .. table.concat(back, ", ")) end
     end
-    if D.shuttleCheckAt and now >= D.shuttleCheckAt then           -- did the kill take its unit down?
+    -- did the kill take its unit down? ((0.73.80, R30_FINDINGS specials 0) it never does: the unit stayed on the spawner's
+    -- list ("1 alive 5 s after"), and the next shuttle round's spawn was refused, "its last flight is still up" (rounds 17
+    -- and 30 of the test of 2026-11-04, their strike flown as a plain raid): a unit still up is taken off it,
+    -- SV_Recycle(unit, 1), as SPC.cleanTick does)
+    if D.shuttleCheckAt and now >= D.shuttleCheckAt then
         D.shuttleCheckAt = nil
         local u = CFG.specials.shuttle.unit
-        log(string.format("special: shuttle unit %s: %d alive 5 s after it was taken off (0: a fresh one next time)", u, SV_UnitAlive(u)))
+        local n0 = SV_UnitAlive(u)
+        local rec = ""
+        if n0 > 0 and type(SV_Recycle) == "function" then
+            crumb("special: shuttle SV_Recycle " .. u)
+            local okR, r = pcall(SV_Recycle, u, 1)
+            rec = string.format("; taken off the spawner's list (SV_Recycle %s): %d alive after", okR and tostring(r)
+                or ("error " .. tostring(r)), SV_UnitAlive(u))
+        elseif n0 > 0 then
+            rec = "; no SV_Recycle in this runtime: the next shuttle round's plan tries again"
+        end
+        log(string.format("special: shuttle unit %s: %d alive 5 s after it was taken off (0: a fresh one next time)%s", u, n0, rec))
     end
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
@@ -431,7 +470,7 @@ local function specialTick(now)
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}
-    local alive = SV_UnitAlive(c.unit)
+    local alive = ALIVE.ask(c.unit, now)          -- ((0.73.80) every tick of the countdown: kept, at most ~1 s old)
     local cd = D.shuttleClock and D.shuttleClock.cd or (now - s.at)
     local over = cd >= c.countdown_s + 3
     local launched = (f.SV_ShuttleLaunched or 0) >= 1
@@ -607,6 +646,93 @@ local function pressureNoBoss(kind)
     if not okP then log("pressure: error " .. tostring(errP)) end
 end
 
+-- (0.73.80) The round's callout again once its special changed after the announce (a swap, or none after all): the
+-- special's own, or a normal round's (a disguised one's too: VALKA's)
+local function roundCalloutAgain(kind)
+    local t = CFG.hud.text
+    local k = kind and SPC.kinds and SPC.kinds[kind]
+    if k and not SPC.kindValue(k.disguise) then
+        hudCallout(string.format(t.special, D.round), type(k.sub) == "function" and k.sub(t) or t[k.sub])
+    else
+        hudCallout(string.format(t.start, D.round), t.start_sub)
+    end
+end
+
+-- (0.73.80, R30_FINDINGS specials 0 / 1) Whether special `kind` can start this round, and why not: a landing craft lane
+-- (AMPH.ready), its own ready() (the Spaceport's turrets' rows), and the shuttle's last one off the spawner's list: the
+-- one before it, killed and hidden at its liftoff, stayed on it, and the next shuttle round's spawn was refused, "its last
+-- flight is still up" (rounds 17 and 30 of the test of 2026-11-04): taken off here (SV_Recycle(unit, 1)) as the round is
+-- planned, its strike flights not yet picked.
+function SPC.canStart(kind)
+    if kind == "amphibious" and not AMPH.ready() then return false, "no landing craft can come" end
+    local rk = SPC.kinds and SPC.kinds[kind]
+    if rk and rk.ready and not rk.ready() then return false, "it can't come now" end
+    if kind == "shuttle" then
+        local u = CFG.specials.shuttle.unit
+        local n = ALIVE.fresh(u)
+        if n > 0 then
+            local rec = "no SV_Recycle in this runtime"
+            if type(SV_Recycle) == "function" then
+                crumb("special: shuttle SV_Recycle " .. u .. " (its round planned)")
+                local okR, r = pcall(SV_Recycle, u, 1)
+                rec = "SV_Recycle " .. (okR and tostring(r) or ("error " .. tostring(r)))
+                n = ALIVE.fresh(u)
+            end
+            log(string.format("special: shuttle unit %s still up as round %d is planned: taken off the spawner's list (%s): %s", u,
+                D.round, rec, n > 0 and (n .. " still up") or "gone"))
+            if n > 0 then return false, "its last shuttle is still on the spawner's list" end
+        end
+    end
+    return true
+end
+
+-- (0.73.80, R30_FINDINGS specials 0) The round's special didn't come after the round was planned for it (its spawn
+-- refused: spawnShuttle's after a recycle and a second try, or a kind's spawn(now) false, roundsTick): a normal round from
+-- the start, not half of one. Its strike flights (D.strikeUnits: the shuttle's, picked from the bombers and ordered at
+-- it) come out of the round's waves and as many fighters' aircraft go in (rounds 17 and 30's flew on as a plain raid at
+-- the airfield, called out BOMBERS INBOUND); its pick and cooldown are given back (RUN.specialAt, specialUndo: the bag,
+-- the run's last special, the gap); the round's callout is a normal one's (not a disguised special's: it had one); the
+-- shuttle's pad (brought back for it) is hidden again. How many aircraft were replaced.
+function SPC.unplan(kind, now, why)
+    local k = SPC.kinds and SPC.kinds[kind]
+    local disguised = k and SPC.kindValue(k.disguise)
+    D.special = nil
+    RUN.specialPick = RUN.specialPick or {}
+    RUN.specialPick[D.round] = false
+    RUN.specialAt = RUN.specialAt or {}
+    local w = D.specialAtWas
+    if w and w.kind == kind and RUN.specialAt[kind] == D.round then RUN.specialAt[kind] = w.at end
+    D.specialAtWas = nil
+    local undone = type(specialUndo) == "function" and specialUndo(D.round, kind)
+    pressureNoBoss(kind)
+    local out, n, cut = {}, 0, 0
+    for u in pairs(D.strikeUnits or {}) do out[u] = true end
+    local function strip(list)                      -- (in place: D.queue is the wave's own list)
+        for i = #(list or {}), 1, -1 do
+            if out[list[i]] then n = n + flightSize(list[i]); cut = cut + 1; table.remove(list, i) end
+        end
+    end
+    strip(D.queue)
+    for i = (D.wave or 1), #(D.waves or {}) do if D.waves[i] ~= D.queue then strip(D.waves[i]) end end
+    for u in pairs(out) do if D.taken then D.taken[u] = nil end end
+    D.strikeUnits = {}
+    local f, got = {}, 0
+    if n > 0 then
+        f, got = pickFlights(CFG.pool, n, function(q) return (D.taken and D.taken[q]) or PROBE_OF[q] or ROLE.sitsOut(q) end)
+        for _, q in ipairs(f) do D.queue[#D.queue + 1] = q; if D.taken then D.taken[q] = true end end
+    end
+    if kind == "shuttle" then
+        local okT, errT = pcall(SPC.shuttleTakeOff, true)
+        if not okT then log("special: the pad hidden again: error " .. tostring(errT)) end
+    end
+    if not disguised then roundCalloutAgain(nil) end
+    log(string.format("round %d: no %s after all (%s): a normal round; %s%s%s", D.round, kind, tostring(why),
+        cut > 0 and string.format("its %d strike flight%s (%d aircraft) out of the round, %d fighters in %d flights instead%s",
+            cut, cut == 1 and "" or "s", n, got, #f, #f > 0 and (" (" .. table.concat(f, ", ") .. ")") or "") or "no strike flights to replace",
+        undone and "; its pick given back to the dice" or "", (w and w.kind == kind) and "; its cooldown given back" or ""))
+    return n
+end
+
 -- The intensity director's ease changed (P4, sv_director.lua easeTick): the round's preset again, eased or back
 -- (DIR.pressure), when it isn't the one in force. Not while an Anomaly / VALKA fight's own throttle is up: its
 -- pressureAfterBoss fires the band's (eased as it is then) once the boss is down. The host's (or solo's) only.
@@ -679,7 +805,7 @@ function aceGoneRecycle()
     if not (g and next(g)) then return end
     local done, kept, gone = {}, {}, 0
     for u in pairs(g) do
-        if SV_UnitAlive(u) <= 0 then
+        if ALIVE.ask(u, D.now) <= 0 then
             g[u], gone = nil, gone + 1
         else
             local r = nil
@@ -708,7 +834,7 @@ local function breakOff(now, B)
     local units, n = {}, 0
     for u in pairs(D.up or {}) do
         if D.aceSquad and D.aceSquad[u] and poolIndex(u) then
-            local a = SV_UnitAlive(u)
+            local a = ALIVE.ask(u, now)
             if a > 0 then units[#units + 1] = u; n = n + a end
         end
     end
@@ -818,26 +944,34 @@ local function startRound()
     -- (CFG.setup's "% of each round's and each wave's aircraft")
     local budget = TIER.roundBudget(D.round, levelFor(D.round))
     local b = CFG.airfield.bombers
+    local forced = D.forceSpecial
     local special = D.forceSpecial or specialFor(D.round)          -- (Ctrl+1 .. Ctrl+5: a special next, for testing)
     D.forceSpecial = nil
+    -- ((0.73.80) one that can't start (SPC.canStart: no landing craft lane, the Spaceport's rows, the shuttle's last one
+    -- still on the spawner's list) swaps to another the dice can give that can (specialSwap, sv_spawn.lua), else a normal
+    -- round; a forced one (a test key) or the retake: a normal round)
+    if special then
+        local okS, why = SPC.canStart(special)
+        if not okS then
+            local alt = nil
+            if not forced then alt = specialSwap(D.round, special, why, function(k) return (SPC.canStart(k)) end) end
+            log(string.format("round %d: no %s can come (%s); %s", D.round, special, tostring(why),
+                alt and ("the " .. alt .. " instead") or "a normal round"))
+            special = alt
+            if D.announced then roundCalloutAgain(alt) end
+        end
+    end
     if special == "valka" and SND and SND.preloadValka then pcall(SND.preloadValka) end   -- ((0.73.79) at the latest: sv_sound.lua)
-    if special == "amphibious" and not AMPH.ready() then          -- no lane can come: a normal round
-        log(string.format("round %d: no landing craft can come; a normal round", D.round))
-        special = nil
-    end
-    local rk = special and SPC.kinds[special]
-    if rk and rk.ready and not rk.ready() then                     -- (the Spaceport Assault: its fleet still up)
-        log(string.format("round %d: no %s can come now; a normal round", D.round, special))
-        special = nil
-    end
     -- ((0.73.77) D4: the last round's special cleaned up now if its clean-up hadn't come yet, before it's replaced)
     if D.special and not D.special.cleaned then pcall(SPC.endTick, D.now or 0, D.special, "the next round's start", true) end
     D.special = special and { kind = special, state = "pending" } or nil
     RUN.specialPick = RUN.specialPick or {}                      -- (as it is: a forced one too; specialFor reads it)
     RUN.specialPick[D.round] = special or false
+    D.specialAtWas = nil
     if special then
         RUN.lastSpecial = special
         RUN.specialAt = RUN.specialAt or {}
+        D.specialAtWas = { kind = special, at = RUN.specialAt[special] }   -- ((0.73.80) given back if it never comes: SPC.unplan)
         RUN.specialAt[special] = D.round                    -- (its cooldown: specialFor)
     end
     if special == "amphibious" then                  -- a harder round: more escort (user: "make it difficult")
@@ -1146,7 +1280,7 @@ function ordersTick(now)
             local i, t = poolIndex(u), svFlags()
             local down = t and playerOnAirfield()
             local flying = down and othersFlying() or 0
-            if not i or SV_UnitAlive(u) <= 0 then
+            if not i or ALIVE.ask(u, now) <= 0 then
                 D.orders[u] = nil
             elseif not t or (down and flying == 0) then  -- grounded: the landing menu may be up
                 o.at = now + 1
@@ -1208,7 +1342,7 @@ local function tailTick(now, alive)
     for u in pairs(D.up) do units[#units + 1] = u end
     table.sort(units)
     for _, u in ipairs(units) do
-        if SV_UnitAlive(u) > 0 then
+        if ALIVE.ask(u, now) > 0 then
             local i, b = poolIndex(u), BOMBER_INDEX and BOMBER_INDEX[u]
             local ev = (i and string.format("RE_SV_LastPing_%02d", i)) or (b and string.format("RE_SV_RaidPing_%02d", b)) or nil
             local r = (ev and type(SV_Event) == "function") and SV_Event(ev) or nil
@@ -1242,6 +1376,9 @@ function roundsTick(now)
         if not D.warned then log("rounds: the native spawner (dlls\\main.dll 0.6.0) did not register SV_Spawn: no enemies"); D.warned = true end
         return
     end
+    -- ((0.73.80) the tick's SV_UnitAlive budget, its oldest answers asked again first: ALIVE, sv_spawn.lua)
+    local okAl, errAl = pcall(ALIVE.tick, now)
+    if not okAl and tostring(errAl) ~= D.aliveErr then D.aliveErr = tostring(errAl); log("alive: error " .. D.aliveErr) end
     D.orders = D.orders or {}
     ordersTick(now)
     eventsTick(now)
@@ -1318,8 +1455,9 @@ function roundsTick(now)
         if sk then
             if not sk.spawn(now) then                -- it can't come: a normal round (its fighters, if it flies alone)
                 local alone = SPC.kindValue(sk.alone)
-                D.special, RUN.specialPick[D.round] = nil, false
-                pressureNoBoss(u:sub(2))
+                -- ((0.73.80) its pick and cooldown given back, strike flights replaced, the callout: SPC.unplan)
+                local okU, errU = pcall(SPC.unplan, u:sub(2), now, "its spawn refused")
+                if not okU then log("special: unplan error " .. tostring(errU)); D.special, RUN.specialPick[D.round] = nil, false end
                 local f = alone and pickFlights(CFG.pool, D.budget or CFG.aircraft_round1, function(q) return PROBE_OF[q] or ROLE.sitsOut(q) end) or {}
                 for _, q in ipairs(f) do D.queue[#D.queue + 1] = q end
                 log(string.format("round %d: no %s; %d fighter flights instead", D.round, u:sub(2), #f))
@@ -1354,7 +1492,7 @@ function roundsTick(now)
         D.waveSeen = now
         local alive = 0
         for u in pairs(D.up) do
-            local n = SV_UnitAlive(u)
+            local n = ALIVE.ask(u, now)                -- ((0.73.80) at most ~1 s old: spread over the ticks)
             if n > 0 then alive = alive + n else D.up[u] = nil end
         end
         local w = CFG.waves
@@ -1387,7 +1525,7 @@ function roundsTick(now)
         D.at = now + 1
         local alive, flights = 0, 0
         for u in pairs(D.up) do
-            local n = SV_UnitAlive(u)
+            local n = ALIVE.ask(u, now)                -- ((0.73.80) at most ~1 s old; a kill seen by the sweep: asked at once)
             if n > 0 then alive, flights = alive + n, flights + 1 else D.up[u] = nil end
         end
         if alive ~= D.lastAlive then log(string.format("round %d: %d aircraft in %d flights left", D.round, alive, flights)); D.lastAlive = alive end
@@ -1422,6 +1560,7 @@ function roundsTick(now)
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if logVerbose() and type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end
+            pcall(ALIVE.report, D.round)              -- ((0.73.80) the round's SV_UnitAlive asks and the oldest answer used)
             D.state, D.at, D.announced = "wait", now + gap, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
                        string.format(CFG.hud.text.complete_sub, gap))

@@ -1334,7 +1334,8 @@ CFG = {
                         -- airfield (the world runs on while players are linked: store_keep_world); false: off
                         parked_safe = true } },
     -- Special rounds (Milestone 6): from round `first`, every `every` rounds, the next special of `rotation` instead of a
-    -- normal round (a special that can't start falls back to one). "shuttle" = Comona Defense
+    -- normal round (a special that can't start falls back to one; (0.73.80) a random one swaps to another first: swap).
+    -- "shuttle" = Comona Defense
     -- (tools/survival_events.py SHUTTLE_*): the shuttle `name` on Mission 22's pad, its AA guns, SAMs and tower around
     -- it, lifts off countdown_s after it appears. The round's fighters come for the player; strike_share of its aircraft
     -- are strike flights (no heavies) sent at the shuttle. Launched: `reward` zollars. Lost: the shop is closed for the
@@ -1395,6 +1396,14 @@ CFG = {
         -- each special comes at most once in this many rounds (user, 2026-10-23): Comona Defense in round 2 can come
         -- again from round 12; the others keep their chance meanwhile. 0: no cooldown.
         cooldown_rounds = 10,
+        -- the random specials' pacing (0.73.80; the 31-round test of 0.73.79: rounds 7-13 had none, 4 of the 8 kinds never
+        -- came): each round rolled with no special since the last one adds chance_step to `chance` (at most 0.9; an ace
+        -- round or a round no special could come in doesn't count), and after max_gap of them the next one rolled is a
+        -- special for sure (0: never sure; both x / the menu's SPECIAL ROUNDS); bag: the kinds come from a shuffle bag of
+        -- the rotation's, each once before any comes again (false: an even draw each time); swap: a special that can't
+        -- start (no landing craft lane, its fleet's rows, the shuttle's last one still up) is swapped for another that can
+        -- (false: a normal round, as before)
+        chance_step = 0.15, max_gap = 4, bag = true, swap = true,
         -- specials scale with the round (economy review of 2026-10-25: "all five were beaten easily, in 2.8-4.4 minutes.
         -- A special late in the run should bring escorts and more health, like the normal rounds around it"): from
         -- escort_from, the specials named in escort_kinds (which fly alone) bring escort_share of the round's aircraft
