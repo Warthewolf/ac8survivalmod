@@ -42,6 +42,12 @@
 --     MINDRIPPER's field on a joiner only while the host's hunts and only on a live copy ("rnd" field 12); A10 (no
 --     scrambling while you're DOWN); D5 (flash_size_x); A7 (tailTick's pings and releases); G2 (UP.healthGuard in
 --     HIT.tick: the airfield's reset never a hit);
+--   (0.73.80, R30_FINDINGS specials 2 / perf 6) VALKA without walks: her railgun modules kept as the game makes them
+--     (NotifyOnNewObject; class defaults and archetypes dropped, one walk only with no hook or none of a spawn's seen, once
+--     a tick), her round's class default (life, single rounds, no damage for the opener, her damage back before she
+--     spawns, put back at her end or a run's), her assets loaded in the break (SND.preloadValka / SND.tick, her lurk
+--     without them), no walk of her module or round classes, no /Game/ find and no load from her round's start to her
+--     death; radarOff from the kept launchers, her removed opener's left off the minimap at her charges;
 --   the hooks by their place in the source.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -67,7 +73,10 @@ VERSION = "0.71.5-bosses.test"
 local FNm = { __index = { ToString = function(self) return self.s end }, __tostring = function(self) return self.s end }
 function FName(s) return setmetatable({ s = tostring(s) }, FNm) end
 local GI = { full = "GameInstance", addr = 1 }
-function NotifyOnNewObject() end
+-- ((0.73.80) the parts' NotifyOnNewObject hooks kept by class, so a test can make an object as the game would: made)
+local NOTIFY = {}
+function NotifyOnNewObject(cls, fn) NOTIFY[cls] = NOTIFY[cls] or {}; NOTIFY[cls][#NOTIFY[cls] + 1] = fn end
+local function made(cls, o) for _, fn in ipairs(NOTIFY[cls] or {}) do fn(o) end end
 local FA = {}                                    -- FindAllOf by class
 function FindAllOf(c) return FA[c] or {} end
 function FindFirstOf(c) if c == "BP_LiveGameInstance_C" then return GI end return nil end
@@ -132,6 +141,18 @@ local cfgLine = nil
 for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l end end
 part("sv_rows.lua"); part("sv_ai.lua")
 hudCallout = function(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
+-- ((0.73.80) Survival's sounds, stubbed: sv_anomalies.lua puts VALKA's asset preload into SND.preloadValka / SND.tick)
+local sndCalls = { pre = 0, tick = 0 }
+SND = { ids = {}, live = {} }
+function SND.preloadValka() sndCalls.pre = sndCalls.pre + 1 end
+function SND.tick() sndCalls.tick = sndCalls.tick + 1 end
+function SND.event() return {} end
+function SND.play() return nil end
+function SND.set() end
+function SND.stop() end
+function SND.songStart() end
+function SND.songFade() end
+function SND.songStop() end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" },
                              { "\nlocal function tailTick%(", "\nfunction tailTick(" } })
@@ -1374,11 +1395,29 @@ do
     local fcsA, fcsB = { full = "FCS_A", addr = 883, GetOuter = function() return actorA end }, { full = "FCS_B", addr = 884, GetOuter = function() return actorB end }
     local mA = { full = "ModA", addr = 885, IsDispRadarMap = true, ForceAlertDisp = true, GetOuter = function() return fcsA end }
     local mB = { full = "ModB", addr = 886, IsDispRadarMap = true, ForceAlertDisp = true, GetOuter = function() return fcsB end }
-    FA.LiveFCSModule_LauncherTripleRailCannon = { mA, mB }
+    -- ((0.73.80) the launchers come in as the game makes them (NotifyOnNewObject), not by a walk: R30 specials 2)
+    local LAUNCHER = "/Script/Live.LiveFCSModule_LauncherTripleRailCannon"
+    SPC.V.MOD.L = {}
+    made(LAUNCHER, mA); made(LAUNCHER, mB)
+    local rawFA, nWalk = FindAllOf, 0
+    FindAllOf = function(c) if c == "LiveFCSModule_LauncherTripleRailCannon" then nWalk = nWalk + 1 end return rawFA(c) end
     check(SPC.V.radarOff(actorA.addr) == 1 and mA.IsDispRadarMap == false and mB.IsDispRadarMap == true,
           "radarOff(her opener): its launcher's display off, hers left on")
     check(SPC.V.radarOff() == 2 and mB.ForceAlertDisp == false, "radarOff(): every launcher's (her death)")
+    check(nWalk == 0, "... both from the launchers kept as they were made: no walk (" .. nWalk .. ")")
+    mA.gone, mB.gone = true, true
+    mA.IsDispRadarMap, mB.IsDispRadarMap = true, true
+    check(SPC.V.radarOff() == 0 and nWalk == 0 and #SPC.V.MOD.L == 0, "gone ones dropped, none left: still no walk (the hook's in)")
+    mA.gone, mB.gone = nil, nil
+    -- no hook (NotifyOnNewObject refused the class): the walk, as before
+    SPC.V.MOD.hookL = false
+    FA.LiveFCSModule_LauncherTripleRailCannon = { mA, mB }
+    D.now = 77
+    check(SPC.V.radarOff() == 2 and nWalk == 1 and mA.IsDispRadarMap == false, "no hook: radarOff walks for them as before (once)")
+    SPC.V.MOD.hookL = true
+    FindAllOf = rawFA
     FA.LiveFCSModule_LauncherTripleRailCannon = nil
+    SPC.V.MOD.L = {}
     -- a joiner (SPC.clientClean): the host's special over -> its copies' leftovers 5 s on; VALKA's opener's at her reveal
     run(20)
     SPC.cl, SPC.cleanQ = { up = {}, due = {} }, {}
@@ -1499,6 +1538,272 @@ do
     SPC.V.flareStop(s)
     SPC.V.billboard, loadObject, OBJ[KML] = keepBB, keepLoad, nil
 end
+
+print("VALKA without walks (0.73.80, R30 specials 2 / perf 6: her railgun modules kept as made, her round's class default, her assets in the break)")
+local function valkaNoWalks()                              -- (a function of its own: its locals off the main chunk's 200)
+    local VA = SP.valka
+    local keepVA = { invert_chance = VA.invert_chance, disguise = VA.disguise }
+    VA.invert_chance, VA.disguise = 0, true
+    local LAUNCHER = "/Script/Live.LiveFCSModule_LauncherTripleRailCannon"
+    local PCOMMON, PMULTI = "/Script/Live.LiveFCSModule_ProjectileCommon", "/Script/Live.LiveFCSModule_ProjectileMulti"
+    local KML, KRL = "/Script/Engine.Default__KismetMaterialLibrary", "/Script/Engine.Default__KismetRenderingLibrary"
+    local NFL = "/Script/Niagara.Default__NiagaraFunctionLibrary"
+    SPC.V.assets, SPC.V.MOD.L, SPC.V.MOD.P, SPC.V.MOD.rec = {}, {}, {}, {}
+    SPC.V.PRE.q, SPC.V.PRE.at = nil, nil
+    SPC.V.RC.path, SPC.V.RC.cls, SPC.V.RC.cdo, SPC.V.RC.was, SPC.V.RC.mode = nil, nil, nil, nil, nil
+    local function o(full, t) nextAddr = nextAddr + 1; t = t or {}; t.full, t.addr = full, nextAddr; return t end
+    local function fn(s) return function() return FName(s) end end
+    -- her round's class and its class default (the land battleship's round: its stock values)
+    local nmCls = o("BP_wp_eml_Nightmare_BaseClass_C", { GetFName = fn("BP_wp_eml_Nightmare_BaseClass_C") })
+    local cdo = o("Default__BP_wp_eml_ldbs01_C", { LifeTime = 10.0, EffectiveTime = 0, damage = 40, bBurstShot = false,
+        BurstShotCount = 0, bFireAllInOneShot = false, bDonutsShot = false, bMultipleLockOn = false })
+    local cls = o("BP_wp_eml_ldbs01_C", { GetCDO = function() return cdo end, GetFName = fn("BP_wp_eml_ldbs01_C") })
+    -- every asset her preload names, there to be found as the game loads it
+    local list = SPC.V.preloadList(VA)
+    local names, assets, nGame = {}, {}, 0
+    for _, a in ipairs(list) do
+        local full = a.path .. "." .. (a.obj or a.path:match("[^/]+$"))
+        assets[full] = a.obj == "BP_wp_eml_ldbs01_C" and cls or o(full, { GetPlayLength = function() return 1.0 end })
+        OBJ[full] = assets[full]
+        names[#names + 1] = a.obj or a.path:match("[^/]+$")
+        if a.path:sub(1, 6) == "/Game/" then nGame = nGame + 1 end
+    end
+    local nameList = " " .. table.concat(names, " ") .. " "
+    check(has(nameList, " SK_X02S_Valka ") and has(nameList, " A_X02S_Valka_Sweep ") and has(nameList, " MI_PP0016_x40a_Gear ")
+          and has(nameList, " T_X02S_Valka_C ") and not has(nameList, "T_X02S_Valka_NO") and has(nameList, " BP_wp_eml_ldbs01_C ")
+          and has(nameList, " MI_SV_ValkaFlare_Glare ") and has(nameList, " NS_ms23FarFlash ") and has(nameList, " NS_BailoutSmoke001 ")
+          and not has(nameList, "rt:") and #list == 12,
+          "her preload: the X-02S, its sweep, paint 16's parent and her colour map (its flat normal: no normal map), the "
+          .. "round class, the flare's four, the shot's flash, the blink smoke (12, no render target): " .. nameList)
+    check(#SPC.V.preloadList(VA, true) == 5, "a co-op joiner's: her X-02S, its sweep and paint only (5; the rest is the host's)")
+    -- the game's counters: walks of her module / round classes, /Game/ finds, loads
+    local WATCH = { LiveFCSModule_LauncherTripleRailCannon = true, LiveFCSModule_ProjectileCommon = true,
+                    LiveFCSModule_ProjectileMulti = true, LiveFCSModule_ProjectileWeapon = true, BP_wp_eml_ldbs01_C = true }
+    local walks, finds, loads = {}, {}, {}
+    local rawFA, rawSFO, rawLoad, rawSpawn, rawBB = FindAllOf, StaticFindObject, loadObject, SV_Spawn, SPC.V.billboard
+    FindAllOf = function(c) if WATCH[c] then walks[#walks + 1] = c end return rawFA(c) end
+    StaticFindObject = function(p, ...)
+        if type(p) == "string" and p:sub(1, 6) == "/Game/" then finds[#finds + 1] = p end
+        return rawSFO(p, ...)
+    end
+    loadObject = function(p) loads[#loads + 1] = p; return rawLoad(p) end
+    GI.ReferencedObjects = { GetArrayNum = function(self) return #self end, GetArrayMax = function(self) return #self end }
+
+    -- the break: SND.preloadValka (the NEXT announcement) queues them, SND.tick loads one a tick, each kept loaded
+    check(SPC.V.PRE.wrapped == true, "SND.preloadValka / SND.tick carry her asset preload (sv_sound.lua, the part before)")
+    local f = #logs + 1
+    local pre0, tick0 = sndCalls.pre, sndCalls.tick
+    SND.preloadValka()
+    check(sndCalls.pre == pre0 + 1 and SPC.V.PRE.q ~= nil and #SPC.V.PRE.q == #list and #loads == 0
+          and has(line("special: VALKA's X-02S, paint, railgun round, flare and flash:", f), #list .. " assets loading, one a tick"),
+          "the NEXT announcement: her sounds' preload as before, and her " .. #list .. " assets queued, none loaded yet")
+    SND.tick()
+    check(#loads == 1 and sndCalls.tick == tick0 + 1 and #SPC.V.PRE.q == #list - 1, "SND.tick: one asset a tick, the sounds' tick as before")
+    for _ = 2, #list do SND.tick() end
+    check(SPC.V.PRE.q == nil and #loads == #list and #GI.ReferencedObjects == nGame
+          and has(line("special: VALKA's assets loaded before her fight:", f), #list .. " of " .. #list),
+          "all " .. #list .. " in " .. #list .. " ticks, each /Game/ one kept loaded (pinned: " .. #GI.ReferencedObjects .. " of "
+          .. nGame .. "): " .. tostring(line("special: VALKA's assets loaded", f)))
+    clock = clock + 20
+    SND.preloadValka()
+    check(SPC.V.PRE.q == nil and #loads == #list, "asked again with every asset kept (\"rnd\" on a joiner, her round's start): nothing queued")
+    -- no sound part to carry it: her lurk loads them, one a tick
+    do
+        local k = list[1].path .. "." .. list[1].path:match("[^/]+$")
+        SPC.V.assets[k] = nil
+        SPC.V.PRE.wrapped = false
+        clock = clock + 20
+        run(14)
+        D.special = { kind = "valka", state = "lurk", at = 0 }
+        D.state = "wait"
+        check(SPC.V.preload() == true and #SPC.V.PRE.q == 1, "... one not kept any more: queued again")
+        SPC.valkaTick(1, D.special)
+        check(SPC.V.PRE.q == nil and SPC.V.assets[k] == assets[k], "... with no SND.tick to carry it, her lurk loads it")
+        SPC.V.PRE.wrapped = true
+    end
+
+    -- the game's side of her fight: her opener's railgun turret and her own three, each fire control's modules made as
+    -- SV_Spawn makes the unit (one of the opener's a moment after: within MOD_REC_S)
+    local emlActor = mkObj("BP_OP1016_x40a_RG_CP_C_eml", KM(-14, 0), { X = 1, Y = 0, Z = 0 }, 8000)
+    local function fcsOf(actor) return o("LiveFireControlSystem", { GetOuter = function() return actor end }) end
+    local function launcherOf(fcs, full)
+        return o(full or "LiveFCSModule_LauncherTripleRailCannon", { FireControl = { TriggerCount = 3 }, Performance = { MagazineCapacity = 3 },
+                 IsDispRadarMap = false, ForceAlertDisp = false, HUDControl = 0, GetOuter = function() return fcs end })
+    end
+    local function projOf(fcs) return o("LiveFCSModule_ProjectileCommon", { WeaponClass = nmCls, GetOuter = function() return fcs end }) end
+    local emlFcs, gunFcs = fcsOf(emlActor), fcsOf(emlActor)
+    local emlL, emlP, gunP = launcherOf(emlFcs), projOf(emlFcs), projOf(gunFcs)
+    local defL = launcherOf(fcsOf(emlActor), "Default__LiveFCSModule_LauncherTripleRailCannon")
+    local tplL = launcherOf(fcsOf(emlActor))                -- (an archetype: RF_ArchetypeObject, as a class loads)
+    tplL.HasAnyFlags = function(_, f) return f == 0x30 end
+    local her = mkObj("BP_OP1016_x40a_Valka_C_1", KM(3, 0), { X = -1, Y = 0, Z = 0 }, 20000)
+    local mats = { [0] = o("MI_X02S_Valka_Body"), [1] = o("MI_X02S_Valka_Canopy") }
+    local body = o("SkeletalMeshComponent_1", { mat = mats,
+        IsA = function() return true end, GetClass = function() return { GetFName = fn("SkeletalMeshComponent") } end,
+        SetSkeletalMeshAsset = function(self, m) self.mesh = m end, GetNumMaterials = function() return 2 end,
+        GetMaterial = function(self, i) return self.mat[i] end, SetMaterial = function(self, i, m) self.mat[i] = m end,
+        SetAnimationMode = function() end, SetAnimation = function(self, a) self.anim = a end, SetPlayRate = function() end,
+        Play = function() end, SetPosition = function() end, GetPosition = function() return 0 end,
+        IsPlaying = function() return false end, IsVisible = function() return false end, SetVisibility = function() end })
+    her.PlaneBodySkelMeshComponent = body
+    local herL, herP = {}, {}
+    for i = 1, 3 do
+        local fcs = fcsOf(mkObj("BP_OP1016_x40a_RG" .. i, KM(3, 0), nil, 800))
+        herL[i], herP[i] = launcherOf(fcs), projOf(fcs)
+        herP[i].full = "LiveFCSModule_ProjectileMulti"
+    end
+    local strayP = projOf(fcsOf(mkObj("BP_SomeoneElse", KM(9, 9), nil, 800)))
+    local damageAtHerSpawn
+    SV_Spawn = function(unit, x, y, z, yaw)
+        if unit == VA.eml_unit then
+            made(LAUNCHER, emlL); made(LAUNCHER, defL); made(LAUNCHER, tplL); made(PCOMMON, gunP)
+            SPC.V.emlActor = emlActor                          -- (sv_amphib.lua's LiveAIGameObject hook)
+            return 1
+        elseif unit == VA.unit then
+            damageAtHerSpawn = cdo.damage
+            for i = 1, 3 do made(LAUNCHER, herL[i]); made(PMULTI, herP[i]) end
+            planes[#planes + 1] = { unit = VA.unit, obj = her, name = "VALKA" }
+            return 5
+        end
+        return rawSpawn(unit, x, y, z, yaw)
+    end
+    local mids = {}
+    for _, k in ipairs({ KML, KRL, NFL }) do                -- (sv_core keeps /Script/ finds: an earlier test's stub let go)
+        local old = StaticFindObject(k)
+        if type(old) == "table" then old.gone = true end
+    end
+    OBJ[KML] = { full = "KML", CreateDynamicMaterialInstance = function()
+        local m = o("MID", { tex = {} })
+        function m:SetTextureParameterValue(n, t) self.tex[n:ToString()] = t end
+        function m:SetScalarParameterValue() end
+        function m:K2_GetScalarParameterValue() return 1 end
+        mids[#mids + 1] = m
+        return m
+    end }
+    OBJ[KRL] = { full = "KRL", CreateRenderTarget2D = function() return o("RT_flat") end, ClearRenderTarget2D = function() end }
+    OBJ[NFL] = { full = "NFL", SpawnSystemAtLocation = function(_, _, sys)
+        return { sys = sys, IsValid = function() return true end, Deactivate = function() end, K2_DestroyComponent = function() end }
+    end }
+    SPC.V.billboard = function() return o("FlareActor", { K2_DestroyActor = function() end }), { AddElement = function() end } end
+
+    -- her round: from its start no walk of her module or round classes, no /Game/ find, no load
+    run(14)
+    D.up, D.flightTier = {}, {}
+    SR.usable[ACE.row("valka", "x40a", "l")] = true
+    D.special = { kind = "valka" }
+    local s = D.special
+    planes, pending, alive[VA.unit], alive[VA.eml_unit] = {}, {}, 0, 0
+    you, events, callouts = KM(0, 0), {}, {}
+    walks, finds, loads = {}, {}, {}
+    local function tickV(t) D.now = t; SPC.valkaTick(t, s) end
+    f = #logs + 1
+    check(SPC.valkaSpawn(100) == true and s.state == "lurk" and #loads == 0, "her round starts (lurk), nothing to load")
+    tickV(100); tickV(104)
+    check(s.state == "opener" and SPC.V.MOD.rec[VA.eml_unit] == 3, "lurk_s on: her opener spawned, its launchers recorded as SV_Spawn made them")
+    made(PCOMMON, emlP)                                     -- (made a moment after its SV_Spawn: kept, MOD_REC_S)
+    clock = clock + SPC.V.MOD_REC_S + 1
+    made(PMULTI, strayP)                                    -- (another's, later: not kept)
+    check(#SPC.V.MOD.P == 2 and SPC.V.MOD.P[2].obj == emlP, "projectile modules: the opener's made during SV_Spawn and one made "
+          .. "just after kept, another's made later not (" .. #SPC.V.MOD.P .. ")")
+    tickV(104.25)
+    check(emlL.FireControl.TriggerCount == 1 and emlL.Performance.MagazineCapacity == 1 and defL.FireControl.TriggerCount == 3
+          and tplL.FireControl.TriggerCount == 3 and tplL.IsDispRadarMap == false and #SPC.V.MOD.L == 1,
+          "the opener: its launcher single-shot; a class default's and an archetype's fed in left alone and dropped (the campaign's x40a)")
+    check(emlP.WeaponClass == cls and emlP.WeaponCDO == cdo and gunP.WeaponClass == nmCls and strayP.WeaponClass == nmCls,
+          "... its projectile module beside it on her round's class and class default, the others left")
+    check(emlL.IsDispRadarMap == true and emlL.HUDControl == (VA.radar_hud or 1), "... on the minimap")
+    check(cdo.LifeTime == VA.eml_life_s and cdo.damage == 0 and cdo.BurstShotCount == 1 and cdo.bBurstShot == false,
+          "her round's class default for the opener: life eml_life_s, no damage, single rounds")
+    check(has(line("special: VALKA's railgun modules:", f), "3 launcher(s) made as her opener's spawned (1 of them kept, 1 up in all), 2 projectile modules kept (NotifyOnNewObject; no walk)"),
+          "logged: " .. tostring(line("special: VALKA's railgun modules:", f)))
+    check(has(line("special: VALKA's railgun rounds:", f), "1 launchers, 1 projectile modules beside them (kept, kept); was BP_wp_eml_Nightmare_BaseClass_C"),
+          "... and the rounds' line: " .. tostring(line("special: VALKA's railgun rounds:", f)))
+    check(has(line("special: VALKA's railgun round BP_wp_eml_ldbs01's class default for her opener's shot", f), "damage 40 -> 0")
+          and has(line("special: VALKA's round BP_wp_eml_ldbs01 (class default):", f), "BurstShotCount 0"),
+          "... the class default's line: " .. tostring(line("special: VALKA's railgun round BP_wp_eml_ldbs01's class default", f)))
+    for t = 104.5, 110, 0.25 do tickV(t) end
+    tickV(110.25)
+    check(s.state == "shot" and evs("^RE_SV_ValkaEmlShot$") ~= "" and cdo.damage == 0, "charge_s on: the opener's shot (still no damage)")
+    for t = 110.5, 110.5, 0.25 do tickV(t) end
+    check(s.state == "shot", "... nothing walked for its rounds after it")
+    tickV(110.75)
+    check(s.state == "fired" and damageAtHerSpawn == 40 and cdo.damage == 40 and cdo.LifeTime == VA.eml_life_s,
+          "reveal_s on: her round's damage back on its class default BEFORE she spawned (her railguns hurt), its life kept")
+    tickV(111)
+    check(s.state == "hunt" and body.mesh == assets[VA.model .. ".SK_X02S_Valka"] and body.anim ~= nil,
+          "her reveal: the X-02S and its sweep from the break's preload")
+    check(#mids >= 1 and body.mat[0] == mids[#mids] and mids[#mids].tex.Basecolor == assets["/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_C.T_X02S_Valka_C"],
+          "... her paint made at her reveal from the kept parent and colour map")
+    local all1 = true
+    for i = 1, 3 do all1 = all1 and herL[i].FireControl.TriggerCount == 1 and herL[i].IsDispRadarMap == true and herP[i].WeaponClass == cls end
+    check(all1, "her own railguns: single-shot, on the minimap, on her round's class")
+    check(has(line("special: VALKA's railgun modules:", f), "3 launcher(s) made as her spawned (3 of them kept, 4 up in all)"),
+          "logged: " .. tostring(line("special: VALKA's railgun modules:", f)))
+    check(has(line("special: VALKA's own railgun rounds:", f), "4 launchers, 4 projectile modules beside them (kept, kept)"),
+          "... " .. tostring(line("special: VALKA's own railgun rounds:", f)))
+    alive[VA.unit] = 1
+    herL[1].FireControl.TriggerCount = 3                   -- (the game putting a burst back)
+    for t = 111.25, 130, 0.25 do tickV(t) end
+    check(count("^RE_SV_ValkaRailgun$") == 1 and herL[1].FireControl.TriggerCount == 1,
+          "her railgun: charged and fired, single-shot again right before it")
+    check(emlL.IsDispRadarMap == false and herL[1].IsDispRadarMap == true, "her opener removed: its launcher off the minimap, hers on")
+    alive[VA.unit] = 0
+    tickV(131)
+    check(s.state == "done" and herL[2].IsDispRadarMap == false, "her death: her railguns off the minimap")
+    check(cdo.LifeTime == 10.0 and cdo.damage == 40 and cdo.BurstShotCount == 0 and SPC.V.RC.mode == nil,
+          "... her round's class default put back as it was")
+    check(#walks == 0, "her whole fight: no walk of her module or round classes (" .. table.concat(walks, ", ") .. ")")
+    check(has(line("special: VALKA's railgun modules this round:", f), "0 walks for them"),
+          "... logged at her death: " .. tostring(line("special: VALKA's railgun modules this round:", f)))
+    check(#finds == 0 and #loads == 0, "... no /Game/ find and no load: all from the break (" .. table.concat(finds, ", ") .. ")")
+    check(line("special: VALKA's railgun rounds: ", f) == nil or not has(line("special: VALKA's railgun rounds: ", f), "in flight"),
+          "... and no rounds walk's line")
+    -- a run left mid-fight: the class default put back with her clean-up
+    pcall(SPC.V.roundDefaults, VA, "hers")
+    check(SPC.V.RC.mode == "hers" and cdo.LifeTime == VA.eml_life_s, "(set for a fight again)")
+    SPC.V.cleanup(s)
+    check(SPC.V.RC.mode == nil and cdo.LifeTime == 10.0 and cdo.BurstShotCount == 0, "a run over mid-fight (SPC.V.cleanup): put back as it was")
+    -- the hook in, but none of this spawn's launchers seen (made some way it doesn't see): one walk for them, then kept
+    do
+        SPC.V.modMark(VA.unit)
+        local lateL = launcherOf(fcsOf(mkObj("BP_OP1016_x40a_RG_late", KM(3, 0), nil, 800)))
+        FA.LiveFCSModule_LauncherTripleRailCannon = { lateL, emlL }
+        walks, f = {}, #logs + 1
+        D.now = 450
+        SPC.V.modSaid(VA, VA.unit, "her")
+        check(has(line("special: VALKA's railgun modules:", f), "(NotifyOnNewObject: none of this spawn's, one walk for them)"),
+              "none of her spawn's launchers seen with the hook in: said, " .. tostring(line("special: VALKA's railgun modules:", f)))
+        SPC.V.singleShot(VA)
+        check(#walks == 1 and lateL.FireControl.TriggerCount == 1, "... the next ask walks for them once: hers single-shot")
+        D.now = 450.25
+        SPC.V.singleShot(VA); SPC.V.radar(VA)
+        check(#walks == 1 and lateL.IsDispRadarMap == true, "... kept from then on: no second walk")
+        FA.LiveFCSModule_LauncherTripleRailCannon = nil
+    end
+    -- no hook for her launchers: walked for, once a tick however many ask
+    SPC.V.MOD.hookL = false
+    FA.LiveFCSModule_LauncherTripleRailCannon = { emlL, herL[1] }
+    walks = {}
+    D.now = 500
+    SPC.V.singleShot(VA); SPC.V.radar(VA); SPC.V.emlWeapon(VA)
+    check(#walks == 1 and walks[1] == "LiveFCSModule_LauncherTripleRailCannon", "no hook: one walk for three asks in a tick (" .. #walks .. ")")
+    D.now = 500.25
+    SPC.V.singleShot(VA)
+    check(#walks == 2, "... the next tick another")
+    SPC.V.MOD.hookL = true
+    FA.LiveFCSModule_LauncherTripleRailCannon = nil
+
+    FindAllOf, StaticFindObject, loadObject, SV_Spawn, SPC.V.billboard = rawFA, rawSFO, rawLoad, rawSpawn, rawBB
+    for full in pairs(assets) do OBJ[full] = nil end
+    OBJ[KML], OBJ[KRL], OBJ[NFL] = nil, nil, nil
+    GI.ReferencedObjects = nil
+    VA.invert_chance, VA.disguise = keepVA.invert_chance, keepVA.disguise
+    SPC.V.assets, SPC.V.MOD.L, SPC.V.MOD.P = {}, {}, {}
+    planes, pending, D.special = {}, {}, nil
+    alive[VA.unit], alive[VA.eml_unit] = nil, nil
+    ANOM.fx = {}
+end
+valkaNoWalks()
 
 print("A7: the round's last enemies pinged on the minimap (tailTick)")
 do

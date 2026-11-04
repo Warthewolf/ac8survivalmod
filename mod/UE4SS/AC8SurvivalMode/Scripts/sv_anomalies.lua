@@ -161,7 +161,7 @@ local function portalFx(list, o, offset, scale, life)
     local n, sc = 0, scale or pc.scale
     for _, path in ipairs(list) do
         local name = path:match("[^/]+$")
-        local sys = loadObject(path .. "." .. name)
+        local sys = SPC.V.asset(path)                   -- ((0.73.80) kept once loaded: no /Game/ find a call)
         local ok, err = pcall(function()
             local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), offset or { X = 0, Y = 0, Z = 0 },
                 { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
@@ -189,9 +189,8 @@ local function fxAt(list, at, scale, life)
     if not (valid(lib) and valid(survivalPC) and at) then return 0 end
     local n = 0
     for _, path in ipairs(list) do
-        local name = path:match("[^/]+$")
-        local sys = loadObject(path .. "." .. name)
-        if sys and pcall(function()
+        local sys = SPC.V.asset(path)                   -- ((0.73.80) kept once loaded: VALKA's flash at her opener's shot
+        if sys and pcall(function()                     -- scanned every object 4 times (its layers), her smoke each blink)
             local comp = lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
                 { X = scale, Y = scale, Z = scale }, true, true, 0, true)
             keepFx(comp, life or CFG.specials.anomaly.portal.death_fx_s)
@@ -782,12 +781,175 @@ function SPC.V.blinkSpot(c, s, you)
         end
     end
 end
+-- ((0.73.80) the 31-round co-op run of 2026-11-03, testing/logs/2026-11-04/R30_FINDINGS.json specials 2 / perf 6: on the
+-- host ~0.74 s at her opener, ~0.7 s at her reveal, and 30 walks for her rounds that found none. singleShot, emlWeapon and
+-- radar each walked every object for her railguns' modules (35-50 ms a walk, 6-7 in one tick at her opener, its shot and
+-- her reveal), and SPC.V.rounds walked for her rounds every tick for 3-3.5 s after each shot: "BP_wp_eml_ldbs01_C 30x
+-- 1155 ms (0 found)".) Her railguns' modules are kept as the game makes them, not walked for: every
+-- LiveFCSModule_LauncherTripleRailCannon (only hers and her opener's are in Survival: what the walk found), and the
+-- projectile modules made while SV_Spawn spawns her or her opener (spawningUnit) or within MOD_REC_S of it, by
+-- NotifyOnNewObject (the callbacks only keep the object: it's still being built). Each is checked live (liveObj) before
+-- it's read and dropped the first time it's gone. A walk only when the hook couldn't be registered, or when none is kept
+-- by the time she needs them (once a tick at most, logged); radarOff never walks for them with the hook in.
+SPC.V.EML_MODULES = { "LiveFCSModule_ProjectileCommon", "LiveFCSModule_ProjectileMulti", "LiveFCSModule_ProjectileWeapon" }
+SPC.V.MOD_REC_S = 3
+SPC.V.MOD = { L = {}, P = {}, rec = {}, recUntil = nil, hookL = false, hookP = 0, walkKey = nil, walkL = nil,
+              walkPKey = nil, walkP = nil, pWalked = {}, walks = 0, offBy = {}, seq = 0, mark = {}, forceWalk = false }
+do
+    local V = SPC.V
+    local MAX_L, MAX_P = 64, 256
+    local function hers(u)
+        local c = CFG and CFG.specials and CFG.specials.valka
+        return u ~= nil and type(c) == "table" and (u == c.unit or u == c.eml_unit)
+    end
+    if type(NotifyOnNewObject) == "function" then
+        local okL = pcall(NotifyOnNewObject, "/Script/Live.LiveFCSModule_LauncherTripleRailCannon", function(o)
+            local M = V.MOD
+            M.seq = M.seq + 1
+            if #M.L < MAX_L then M.L[#M.L + 1] = { obj = o, seq = M.seq } end
+            local u = spawningUnit
+            if hers(u) then M.rec[u] = (M.rec[u] or 0) + 1 end
+        end)
+        V.MOD.hookL = okL == true
+        for _, cn in ipairs(V.EML_MODULES) do
+            local okP = pcall(NotifyOnNewObject, "/Script/Live." .. cn, function(o)
+                local M = V.MOD
+                if #M.P < MAX_P and (hers(spawningUnit) or (M.recUntil ~= nil and os.clock() < M.recUntil)) then
+                    M.P[#M.P + 1] = { obj = o }
+                end
+            end)
+            if okP then V.MOD.hookP = V.MOD.hookP + 1 end
+        end
+    end
+    log(string.format("special: VALKA's railgun modules kept as the game makes them (NotifyOnNewObject: launchers %s, "
+        .. "projectile modules %d of %d); a walk only without", V.MOD.hookL and "yes" or "NO", V.MOD.hookP, #V.EML_MODULES))
+    -- (the teardown gate's drop, sv_core.lua levelDrop: the modules kept forgotten with the level, none of them touched)
+    if type(LEVEL_DROPS) == "table" then
+        LEVEL_DROPS["VALKA's railgun modules"] = function()
+            local M = V.MOD
+            M.L, M.P, M.rec, M.recUntil, M.pWalked, M.offBy, M.mark, M.forceWalk = {}, {}, {}, nil, {}, {}, {}, false
+            M.walkKey, M.walkL, M.walkPKey, M.walkP = nil, nil, nil, nil
+        end
+    end
+end
+-- (a tick's key, for "once a tick": the round clock, a joiner's too)
+local function tickKey() return (D and D.now) or os.clock() end
+-- her round's start: the projectile modules and counts of the last one forgotten, the dead launchers dropped
+function SPC.V.modReset()
+    local M = SPC.V.MOD
+    M.P, M.rec, M.recUntil, M.pWalked, M.offBy, M.mark, M.forceWalk = {}, {}, nil, {}, {}, {}, false
+    M.walkKey, M.walkL, M.walkPKey, M.walkP, M.walks = nil, nil, nil, nil, 0
+    SPC.V.keptLaunchers()
+end
+-- just before her (or her opener's) SV_Spawn: the launchers kept from here on are that unit's (modMark), and once it's
+-- done projectile modules made in the next MOD_REC_S are kept too (made late: modRecord)
+function SPC.V.modMark(unit)
+    SPC.V.MOD.mark[unit] = SPC.V.MOD.seq
+end
+function SPC.V.modRecord()
+    SPC.V.MOD.recUntil = os.clock() + SPC.V.MOD_REC_S
+end
+-- what was kept as `unit` spawned, for the log. None kept since it spawned with the hook in (the game made its launchers
+-- some way NotifyOnNewObject doesn't see: her opener's walked for would otherwise stand in for hers): the next ask walks
+-- for them, once.
+function SPC.V.modSaid(c, unit, who)
+    local M = SPC.V.MOD
+    local list = SPC.V.keptLaunchers()
+    local fresh = 0
+    for _, e in ipairs(M.L) do if (e.seq or 0) > (M.mark[unit] or 0) then fresh = fresh + 1 end end
+    if M.hookL and fresh == 0 then M.forceWalk = true end
+    log(string.format("special: %s's railgun modules: %d launcher(s) made as %s spawned (%d of them kept, %d up in all), %d "
+        .. "projectile modules kept (NotifyOnNewObject%s)", c.name, M.rec[unit] or 0, who, fresh, #list, #M.P,
+        not M.hookL and ": NOT registered, walks instead" or fresh == 0 and ": none of this spawn's, one walk for them" or "; no walk"))
+end
+-- the launcher modules kept that are still up (live instances); the gone ones dropped, and the templates the hook sees as
+-- a class loads (a class default's or an archetype's: RF_ClassDefaultObject | RF_ArchetypeObject, 0x30, or a name
+-- under Default__), which the walk never found and which must never be changed (the campaign's x40a). No walk.
+local function template(o)
+    local okF, f = pcall(function() return o:HasAnyFlags(0x30) end)
+    if okF and f == true then return true end
+    local n = nameOf(o)
+    return n:find("Default__", 1, true) ~= nil or n:find("_GEN_VARIABLE", 1, true) ~= nil
+end
+function SPC.V.keptLaunchers()
+    local M, out, keep = SPC.V.MOD, {}, {}
+    for _, e in ipairs(M.L) do
+        if liveObj(e.obj) then
+            if e.tpl == nil then e.tpl = template(e.obj) end
+            if not e.tpl then keep[#keep + 1] = e; out[#out + 1] = e.obj end
+        end
+    end
+    M.L = keep
+    return out
+end
+-- her railguns' launcher modules up now. need: walk for them when none is kept (or with no hook), once a tick at most;
+-- else (radarOff) only with no hook. Returns them and how ("kept", "walked", "held").
+function SPC.V.launchers(need)
+    local M = SPC.V.MOD
+    local out = SPC.V.keptLaunchers()
+    if M.hookL and not (need and M.forceWalk) and (#out > 0 or not need) then return out, "kept" end
+    if walkHold and walkHold() then return out, "held" end      -- (no object walk while a level comes or goes)
+    local key = tickKey()
+    if M.walkKey ~= key then
+        M.walkKey, M.walkL = key, {}
+        M.walks = (M.walks or 0) + 1
+        local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
+        local have = {}
+        for _, e in ipairs(M.L) do local a = addrOf(e.obj); if a then have[a] = true end end
+        for _, m in ipairs(ok and list or {}) do
+            M.walkL[#M.walkL + 1] = m
+            local a = addrOf(m)
+            if M.hookL and #M.L < 64 and not (a and have[a]) then M.L[#M.L + 1] = { obj = m } end   -- (kept from now on)
+        end
+        log(string.format("special: VALKA's railgun launcher modules: %s; one walk instead: %d found",
+            M.hookL and "none kept as the game made them" or "no NotifyOnNewObject for them", #M.walkL))
+    end
+    M.forceWalk = false                                 -- (this tick's walk answers it)
+    return M.walkL or {}, "walked"
+end
+-- the projectile modules beside the launchers whose outers are `outers` ({ [address] = true }): the kept ones, and for a
+-- launcher with none kept beside it one walk of the three classes (once a tick; each outer once until her next round)
+function SPC.V.projBeside(outers)
+    local M, out, seen, have, keep = SPC.V.MOD, {}, {}, {}, {}
+    local function take(p, kept)
+        local a = addrOf(p)
+        local okO, o = pcall(function() return p:GetOuter() end)
+        local oa = okO and liveObj(o) and addrOf(o)
+        if a and oa and outers[oa] and not seen[a] then
+            seen[a], have[oa] = true, true
+            out[#out + 1] = p
+            if not kept and #M.P < 256 then M.P[#M.P + 1] = { obj = p } end
+        end
+    end
+    for _, e in ipairs(M.P) do
+        if liveObj(e.obj) then keep[#keep + 1] = e; take(e.obj, true) end
+    end
+    M.P = keep
+    local missing = 0
+    for oa in pairs(outers) do if not have[oa] and not M.pWalked[oa] then missing = missing + 1 end end
+    if missing == 0 and M.hookP > 0 then return out, "kept" end
+    if walkHold and walkHold() then return out, "held" end
+    for oa in pairs(outers) do if not have[oa] then M.pWalked[oa] = true end end
+    local key = tickKey()
+    if M.walkPKey ~= key then
+        M.walkPKey, M.walkP = key, {}
+        M.walks = (M.walks or 0) + 1
+        for _, cn in ipairs(SPC.V.EML_MODULES) do
+            local okP, ps = pcall(FindAllOf, cn)
+            for _, p in ipairs(okP and ps or {}) do M.walkP[#M.walkP + 1] = p end
+        end
+        log(string.format("special: VALKA's railgun projectile modules: %d launcher(s) with none kept beside them%s; one walk "
+            .. "of the %d classes instead: %d modules", missing, M.hookP > 0 and "" or " (no NotifyOnNewObject for them)",
+            #SPC.V.EML_MODULES, #M.walkP))
+    end
+    for _, p in ipairs(M.walkP or {}) do if liveObj(p) then take(p, false) end end
+    return out, "walked"
+end
 -- her railgun parts fire one round a shot (user, 2026-10-24: "I only want single shot"; Mission 26's fire 3): the x40a
 -- railguns' launcher modules (only hers are in Survival) get TriggerCount / MagazineCapacity single_shot. Returns how many.
 function SPC.V.singleShot(c)
     local n, why = 0, nil
-    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(ok and list or {}) do
+    for _, m in ipairs((SPC.V.launchers(true))) do
         local okS, err = pcall(function()
             m.FireControl.TriggerCount = c.single_shot
             m.Performance.MagazineCapacity = c.single_shot
@@ -796,85 +958,141 @@ function SPC.V.singleShot(c)
     end
     return n, why
 end
+-- ((0.73.80) her railgun's round class and its class default, kept once found (liveObj): one find a level, not two
+-- StaticFindObject scans of /Game/ paths a call ("finds: worst 42 ms (.../Default__BP_wp_eml_ldbs01_C)"). Class, CDO
+-- (nil if it can't be found), or nil and why.
+SPC.V.RC = { path = nil, cls = nil, cdo = nil, was = nil, wasAddr = nil, mode = nil }
+function SPC.V.roundClass(c)
+    local R = SPC.V.RC
+    local path = c.eml_weapon
+    if not path or path == "" then return nil, nil, "off" end
+    if R.path == path and R.cls ~= nil and liveObj(R.cls) and (R.cdo == nil or liveObj(R.cdo)) then return R.cls, R.cdo end
+    local nm = path:match("[^/]+$")
+    local cls, why = SPC.V.asset(path, nm .. "_C")
+    if not cls then R.path, R.cls, R.cdo = nil, nil, nil; return nil, nil, why end
+    local cdo = nil
+    local okC, d = pcall(function() return cls:GetCDO() end)
+    if okC and d ~= nil and liveObj(d) then cdo = d
+    else
+        d = StaticFindObject(path .. ".Default__" .. nm .. "_C")
+        if d ~= nil and liveObj(d) then cdo = d end
+    end
+    R.path, R.cls, R.cdo = path, cls, cdo
+    return cls, cdo
+end
 -- her railguns fire the land battleship's round (c.eml_weapon; user, 2026-10-24: "try putting a land battleship
 -- railgun weapon on her EML"): each projectile module that sits beside an x40a railgun's launcher module (the same
 -- outer) gets its class and class default. Instances only (her railguns and the opener's, the only ones in Survival):
 -- the stock x40a and the land battleship keep theirs. Returns how many changed, and a note.
-SPC.V.EML_MODULES = { "LiveFCSModule_ProjectileCommon", "LiveFCSModule_ProjectileMulti", "LiveFCSModule_ProjectileWeapon" }
 function SPC.V.emlWeapon(c)
     if not c.eml_weapon or c.eml_weapon == "" then return 0, "off" end
     local nm = c.eml_weapon:match("[^/]+$")
-    local cls, why = loadObject(c.eml_weapon .. "." .. nm .. "_C")
-    if not valid(cls) then return 0, nm .. " not loaded (" .. tostring(why) .. ")" end
-    local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
+    local cls, cdo, why = SPC.V.roundClass(c)
+    if not cls then return 0, nm .. " not loaded (" .. tostring(why) .. ")" end
     local outers, nL = {}, 0
-    local okL, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(okL and list or {}) do
+    local list, howL = SPC.V.launchers(true)
+    for _, m in ipairs(list) do
         local okO, out = pcall(function() return m:GetOuter() end)
-        if okO and valid(out) then outers[addrOf(out)] = true; nL = nL + 1 end
+        local oa = okO and liveObj(out) and addrOf(out)
+        if oa then outers[oa] = true; nL = nL + 1 end
     end
-    local n, nP, was, seen = 0, 0, {}, {}
-    for _, cn in ipairs(SPC.V.EML_MODULES) do
-        local okP, ps = pcall(FindAllOf, cn)
-        for _, p in ipairs(okP and ps or {}) do
-            local a = addrOf(p)
-            local okO, out = pcall(function() return p:GetOuter() end)
-            if a and not seen[a] and okO and valid(out) and outers[addrOf(out)] then
-                seen[a], nP = true, nP + 1
-                local okW, w = pcall(function() return p.WeaponClass:GetFName():ToString() end)
-                if okW and w == nm .. "_C" then n = n + 1
-                elseif pcall(function() p.WeaponClass = cls; if valid(cdo) then p.WeaponCDO = cdo end end) then
-                    n = n + 1
-                    was[#was + 1] = okW and w or "?"
-                end
-            end
+    local mods, howP = SPC.V.projBeside(outers)
+    local n, nP, was = 0, 0, {}
+    for _, p in ipairs(mods) do
+        nP = nP + 1
+        local okW, w = pcall(function() return p.WeaponClass:GetFName():ToString() end)
+        if okW and w == nm .. "_C" then n = n + 1
+        elseif pcall(function() p.WeaponClass = cls; if cdo then p.WeaponCDO = cdo end end) then
+            n = n + 1
+            was[#was + 1] = okW and w or "?"
         end
     end
     local okT, life = pcall(function() return cdo.LifeTime end)
-    return n, string.format("%d launchers, %d projectile modules beside them; was %s; %s life %s s", nL, nP,
-        #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
+    return n, string.format("%d launchers, %d projectile modules beside them (%s, %s); was %s; %s life %s s", nL, nP, howL,
+        howP, #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
 end
--- her railgun's rounds now in the level (c.eml_weapon's): one at a time (ROUND_ONE: no burst, no donut spread; the
--- land battleship's fires a ring of them), each lives at least eml_life_s (its class default's or
--- longer), and does no damage while `harmless` (the opener's shot) or its class default's otherwise. Instances only:
--- the rounds are pooled, so this runs around every shot. Returns how many, and their life.
+-- Her railgun's rounds (c.eml_weapon's): one at a time (ROUND_ONE: no burst, no donut spread; the land battleship's fires
+-- a ring of them), each living eml_life_s, and none doing damage from her opener's charge until she spawns (the
+-- opener's shot). ((0.73.80) on the round class's default, not on rounds: a walk for them every tick found none in the
+-- 31-round run (30 walks, 0 found), so none of it reached a round; a round takes these as it's made, and only hers are
+-- made of this class in Survival.) mode: "opener" (the opener's: life, bursts off, damage 0), "hers" (the same, her
+-- damage back: called just before she spawns, so rounds made for her own railguns hurt) or "off" (everything as it
+-- was: her end, a run over). The class default's own values are kept the first time (per class default), so "off" puts
+-- back the stock ones. True if it changed it.
 SPC.V.ROUND_ONE = { { "bBurstShot", false }, { "BurstShotCount", 1 }, { "bFireAllInOneShot", false },
                     { "bDonutsShot", false }, { "bMultipleLockOn", false } }
-function SPC.V.rounds(c, harmless)
-    if not c.eml_weapon or c.eml_weapon == "" then return 0 end
+SPC.V.ROUND_KEEP = { "LifeTime", "EffectiveTime", "damage", "bBurstShot", "BurstShotCount", "bFireAllInOneShot",
+                     "bDonutsShot", "bMultipleLockOn" }
+function SPC.V.roundDefaults(c, mode)
+    local R = SPC.V.RC
+    if not c or not c.eml_weapon or c.eml_weapon == "" then return false end
     local nm = c.eml_weapon:match("[^/]+$")
-    local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
-    local okD, d0 = pcall(function() return cdo.damage end)
-    local okL, l0 = pcall(function() return cdo.LifeTime end)
-    local life = tonumber(c.eml_life_s) or ((okL and type(l0) == "number") and l0 or 10)   -- ((0.73.76) eml_life_s itself: they lived too long)
-    if not SPC.V.roundSaid and valid(cdo) then         -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
-        SPC.V.roundSaid = true
+    local cdo
+    if mode == "off" then
+        if not R.mode then return false end
+        -- (never loaded or looked for at the end: the one kept, if it's still live (liveObj: GUObjectArray). Put back even
+        -- as the level goes: a class default isn't the level's (its package is the round's, kept loaded by the preload),
+        -- and left as hers the land battleship's railgun in a campaign mission after a quit would fire her rounds)
+        cdo = R.cdo ~= nil and liveObj(R.cdo) and R.cdo or nil
+        if not cdo then R.mode = nil; return false end
+    else
+        local _, d, why = SPC.V.roundClass(c)
+        if not d then
+            if not R.noCdoSaid then
+                R.noCdoSaid = true
+                log(string.format("special: VALKA's round %s: no class default (%s); her rounds as they come", nm, tostring(why or "not found")))
+            end
+            return false
+        end
+        cdo = d
+    end
+    local a = addrOf(cdo)
+    if R.wasAddr ~= a or not R.was then              -- (its own values, once a class default: what "off" puts back)
+        R.was, R.wasAddr = {}, a
+        for _, f in ipairs(SPC.V.ROUND_KEEP) do
+            local okF, v = pcall(function() return cdo[f] end)
+            if okF and v ~= nil then R.was[f] = v end
+        end
         local said = {}
-        for _, f in ipairs(SPC.V.ROUND_ONE) do
-            local okF, v = pcall(function() return cdo[f[1]] end)
-            said[#said + 1] = f[1] .. " " .. (okF and tostring(v) or "?")
-        end
-        log("special: VALKA's round " .. nm .. " (class default): " .. table.concat(said, ", "))
+        for _, f in ipairs(SPC.V.ROUND_ONE) do said[#said + 1] = f[1] .. " " .. tostring(R.was[f[1]] == nil and "?" or R.was[f[1]]) end
+        log("special: VALKA's round " .. nm .. " (class default): " .. table.concat(said, ", "))   -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
     end
-    local n = 0
-    local ok, list = pcall(FindAllOf, nm .. "_C")
-    for _, r in ipairs(ok and list or {}) do
-        if valid(r) and not nameOf(r):find("Default__", 1, true) then
-            n = n + 1
-            for _, f in ipairs(SPC.V.ROUND_ONE) do pcall(function() r[f[1]] = f[2] end) end
-            pcall(function() r.LifeTime = life end)
-            pcall(function() if (r.EffectiveTime or 0) > 0 then r.EffectiveTime = math.min(r.EffectiveTime, life) end end)
-            pcall(function() r.damage = harmless and 0 or (okD and d0 or r.damage) end)
+    local W = R.was
+    local want = {}
+    if mode == "off" then
+        for f, v in pairs(W) do want[f] = v end
+    else
+        local life = tonumber(c.eml_life_s) or (type(W.LifeTime) == "number" and W.LifeTime) or 10   -- ((0.73.76) eml_life_s itself)
+        for _, f in ipairs(SPC.V.ROUND_ONE) do want[f[1]] = f[2] end
+        want.LifeTime = life
+        if type(W.EffectiveTime) == "number" and W.EffectiveTime > 0 then want.EffectiveTime = math.min(W.EffectiveTime, life) end
+        if W.damage ~= nil then want.damage = (mode == "opener") and 0 or W.damage end
+    end
+    local changed = {}
+    for _, f in ipairs(SPC.V.ROUND_KEEP) do
+        local v = want[f]
+        if v ~= nil then
+            local okR, cur = pcall(function() return cdo[f] end)
+            if not (okR and cur == v) and pcall(function() cdo[f] = v end) then
+                changed[#changed + 1] = string.format("%s %s -> %s", f, okR and tostring(cur) or "?", tostring(v))
+            end
         end
     end
-    return n, life
+    R.mode = mode ~= "off" and mode or nil
+    local what = mode == "opener" and "for her opener's shot (no damage until she spawns)"
+        or mode == "hers" and "for her own railguns (her damage back before she spawns)" or "put back as it was"
+    log(string.format("special: VALKA's railgun round %s's class default %s: %s (0.73.80: no walk for its rounds)", nm, what,
+        #changed > 0 and table.concat(changed, ", ") or "as it was already"))
+    return #changed > 0
 end
--- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style
+-- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style. ((0.73.80) not
+-- one radarOff took off with its actor, her removed opener's: a walk found it still in memory and every charge of hers
+-- put it back on the minimap, where D4 had taken it off)
 function SPC.V.radar(c)
-    local n = 0
-    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(ok and list or {}) do
-        if pcall(function()
+    local n, off = 0, SPC.V.MOD.offBy
+    for _, m in ipairs((SPC.V.launchers(true))) do
+        local a = addrOf(m)
+        if not (a and off[a]) and pcall(function()
             m.IsDispRadarMap = true
             m.ForceAlertDisp = true
             m.HUDControl = c.radar_hud or 1
@@ -887,8 +1105,7 @@ end
 function SPC.V.radarOff(owner)
     if walkHold and walkHold() then return 0 end           -- (no object walk while a level comes or goes)
     local n = 0
-    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(ok and list or {}) do
+    for _, m in ipairs((SPC.V.launchers(false))) do        -- ((0.73.80) the kept ones: a walk only with no hook)
         local mine = owner == nil
         if not mine and liveObj(m) then
             local o = m
@@ -899,7 +1116,11 @@ function SPC.V.radarOff(owner)
                 o = out
             end
         end
-        if mine and pcall(function() m.IsDispRadarMap = false; m.ForceAlertDisp = false end) then n = n + 1 end
+        if mine and pcall(function() m.IsDispRadarMap = false; m.ForceAlertDisp = false end) then
+            n = n + 1
+            local a = owner and addrOf(m)
+            if a then SPC.V.MOD.offBy[a] = true end         -- ((0.73.80) left off: SPC.V.radar)
+        end
     end
     log(string.format("special: VALKA's railgun minimap display off on %d launchers%s", n, owner and " (her opener's)" or ""))
     return n
@@ -945,7 +1166,7 @@ function SPC.V.flareStart(c, s, at, now)
     if not (kx > 0 and kx <= 4) then kx = 1 end
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
-        local mi, why = loadObject(p .. "." .. p:match("[^/]+$"))
+        local mi, why = SPC.V.asset(p)                  -- ((0.73.80) kept from the break's preload: no load, no find here)
         local size = e[2] * kx
         local okM, mid = false, nil                     -- (not `valid(mi) and pcall(...)`: `and` keeps only pcall's first value)
         if valid(mi) then okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end) end
@@ -1013,6 +1234,7 @@ function SPC.V.cleanup(s)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
     s.passAt = nil
+    if SPC.V.RC.mode then pcall(SPC.V.roundDefaults, CFG.specials.valka, "off") end   -- ((0.73.80) her round's class default back)
 end
 function SPC.V.sndShot(s, at, now)
     local cs = CFG.sound.valka
@@ -1227,9 +1449,109 @@ SPC.V.PAINT_OWN = { Basecolor = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_V
 SPC.V.PAINT_SAY = { "WeatheringWeight", "Wet_Darkness", "Wet_Range", "AO_amoumt", "MetallicMapWeight",
     "Metallic_Remap_Target_Low", "Metallic_Remap_Target_High", "Roughness_Remap", "Roughness_Contrast", "Ctrl_B_Smoke",
     "Ctrl_G_OilDirt", "Ctrl_R_ColorUnevenness", "B_Color_Weight", "G_Color_Weight", "R_ColorFade_Weight", "NormalIntencity" }
+-- ((0.73.80) R30_FINDINGS specials 2 / perf 6: her reveal took ~0.7 s on the host, the X-02S, its sweep and her paint's
+-- materials and textures loaded on that tick (LoadAsset_Blocking, after a StaticFindObject scan of every /Game/ path),
+-- her opener ~0.74 s with her round's class and her flare's materials) Her assets, kept once loaded: SPC.V.asset(path
+-- [, object]) answers the one kept while it's a live object (liveObj), else loads it (loadObject) and keeps it. Nil and
+-- why if it can't be loaded. Her paint is still made on her body at her reveal (fresh dynamic instances from these:
+-- an instance made in the break could be collected before she shows, and one kept loaded would keep the level's player
+-- controller, its outer, alive), so she looks the same.
+SPC.V.assets = {}
+function SPC.V.asset(path, obj)
+    local full = path .. "." .. (obj or path:match("[^/]+$"))
+    local o = SPC.V.assets[full]
+    if o ~= nil and liveObj(o) then return o end
+    SPC.V.assets[full] = nil
+    local why
+    o, why = loadObject(full)
+    if o ~= nil and valid(o) then SPC.V.assets[full] = o; return o end
+    return nil, why
+end
+-- what she loads at her opener and her reveal: { path, object }, each once (her X-02S and its sweep, her paint variant's
+-- materials and textures, her railgun's round class, her opener's lens flash, its shot's flash, her blinks' smoke);
+-- on a co-op joiner (client) only her X-02S and paint: the rest is the host's (COOP.valkaTick puts the model on its copy)
+function SPC.V.preloadList(c, client)
+    local V, out, seen = SPC.V, {}, {}
+    local function add(path, obj)
+        if type(path) ~= "string" or path == "" or path:sub(1, 3) == "rt:" then return end
+        local full = path .. "." .. (obj or path:match("[^/]+$"))
+        if not seen[full] then seen[full] = true; out[#out + 1] = { path = path, obj = obj } end
+    end
+    if c.model and c.model ~= "" then
+        add(c.model)
+        add(c.sweep_anim)
+        local pv = V.PAINTS[(((tonumber(c.paint) or 2) - 1) % #V.PAINTS) + 1]
+        if pv.parent then
+            add(pv.parent)
+            for slot, p in pairs(V.PAINT_OWN) do if not (pv.flat_normal and slot == "Normalmap") then add(p) end end
+            for _, p in pairs(pv.tex or {}) do add(p) end
+        elseif pv.material then add(pv.material)
+        elseif pv.stock then add(V.PAINT_STOCK) end
+        for _, k in ipairs({ "dirt", "livemap", "basecolor", "normal" }) do if pv[k] then add(V.PAINT_TEX[pv[k]]) end end
+    end
+    if client then return out end
+    if c.eml_weapon and c.eml_weapon ~= "" then add(c.eml_weapon, c.eml_weapon:match("[^/]+$") .. "_C") end
+    add(c.flash); add(c.smoke)                          -- (her opener shot's flash, her blinks' smoke: fxAt)
+    local f = c.flare
+    if type(f) == "table" and f.enabled and type(f.path) == "string" then
+        for _, e in ipairs(f.elements or {}) do add(f.path .. e[1]) end
+    end
+    return out
+end
+-- Loaded in the break before her round, one a tick, as her sounds are (SND.preloadValka's moments, below: the NEXT
+-- announcement, her round's start, the host's VALKA round on a joiner; her lurk drains it too). Each /Game/ asset is
+-- kept loaded (pin: GameInstance.ReferencedObjects, as the Anomaly's sounds; an asset's outer is its package, never a
+-- level's object). Again any time it's asked (at most every 10 s) for what isn't kept any more.
+SPC.V.PRE = { q = nil, at = nil, n = 0, total = 0, ms = 0, worst = 0, worstWhat = nil, failed = 0, wrapped = false }
+function SPC.V.preload()
+    local c = CFG.specials and CFG.specials.valka
+    if type(c) ~= "table" or c.enabled == false then return false end
+    local P = SPC.V.PRE
+    if P.q then return false end                                  -- (loading)
+    local now = os.clock()
+    if P.at and now >= P.at and now - P.at < 10 then return false end   -- (asked lately: "rnd" asks often on a joiner)
+    P.at = now
+    local q = {}
+    local okC, client = pcall(function() return COOP ~= nil and COOP.client ~= nil and COOP.client() == true end)
+    for _, a in ipairs(SPC.V.preloadList(c, okC and client)) do
+        local o = SPC.V.assets[a.path .. "." .. (a.obj or a.path:match("[^/]+$"))]
+        if not (o ~= nil and liveObj(o)) then q[#q + 1] = a end
+    end
+    if #q == 0 then return false end
+    P.q, P.n, P.total, P.ms, P.worst, P.worstWhat, P.failed = q, 0, #q, 0, 0, nil, 0
+    log(string.format("special: VALKA's X-02S, paint, railgun round, flare and flash: %d assets loading, one a tick, before her fight", #q))
+    return true
+end
+function SPC.V.preTick()
+    local P = SPC.V.PRE
+    local q = P.q
+    if not q then return end
+    if (levelTorn and levelTorn()) or (walkHold and walkHold()) then return end   -- (not while a level comes or goes)
+    local a = table.remove(q, 1)
+    if a then
+        local what = a.obj or a.path:match("[^/]+$")
+        local t0 = os.clock()
+        local o, why = SPC.V.asset(a.path, a.obj)
+        local ms = (os.clock() - t0) * 1000
+        P.ms = P.ms + ms
+        if ms > P.worst then P.worst, P.worstWhat = ms, what end
+        if o then
+            P.n = P.n + 1
+            if a.path:sub(1, 6) == "/Game/" and type(pin) == "function" then pcall(pin, o, "VALKA's " .. what) end
+        else
+            P.failed = P.failed + 1
+            log(string.format("special: VALKA's %s not loaded before her fight (%s): loaded when she needs it", what, tostring(why)))
+        end
+    end
+    if #q == 0 then
+        P.q = nil
+        log(string.format("special: VALKA's assets loaded before her fight: %d of %d, %.0f ms in all, worst %.0f ms (%s)",
+            P.n, P.total, P.ms, P.worst, tostring(P.worstWhat)))
+    end
+end
 local function paintTex(k)
     local p = SPC.V.PAINT_TEX[k]
-    return p and loadObject(p .. "." .. p:match("[^/]+$"))
+    return p and SPC.V.asset(p)                         -- ((0.73.80) kept: SPC.V.asset)
 end
 -- (0.73.76) a flat colour as a texture, "rt:R,G,B" (0-1, linear): a 4x4 render target cleared to it, made once a
 -- colour (the user's screenshot of 00:22: black blotches on her body; AC8's T_Livemap isn't flat, 111 of its 256 DXT1
@@ -1238,7 +1560,7 @@ end
 SPC.V.flatTex = {}
 local function flatTexture(spec)
     local t = SPC.V.flatTex[spec]
-    if t and valid(t) then return t end
+    if t ~= nil and liveObj(t) then return t end        -- ((0.73.80) liveObj: kept between her rounds, valid() reads a freed one)
     local r, g, b = spec:match("^rt:([%d%.]+),([%d%.]+),([%d%.]+)$")
     if not r then return nil end
     local krl = StaticFindObject("/Script/Engine.Default__KismetRenderingLibrary")
@@ -1303,7 +1625,7 @@ function SPC.V.paint(c, s, body, k)
     end
     if pv.parent then                                   -- another AC8 master, her textures on it
         local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
-        local parent, why = loadObject(pv.parent .. "." .. pv.parent:match("[^/]+$"))
+        local parent, why = V.asset(pv.parent)          -- ((0.73.80) kept from the break's preload, as every load below)
         local okM, mid = false, nil                     -- (not `valid(parent) and pcall(...)`: `and` keeps one value)
         if valid(parent) and valid(kml) then
             okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
@@ -1316,7 +1638,7 @@ function SPC.V.paint(c, s, body, k)
         local set = {}
         for slot, path in pairs(V.PAINT_OWN) do
             if not (pv.flat_normal and slot == "Normalmap") then
-                local t = loadObject(path .. "." .. path:match("[^/]+$"))
+                local t = V.asset(path)
                 local ok = valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end)
                 set[#set + 1] = slot .. (ok and "" or " NOT set")
             end
@@ -1325,7 +1647,7 @@ function SPC.V.paint(c, s, body, k)
         local live = pv.livemap and paintTex(pv.livemap)
         if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
         for slot, path in pairs(pv.tex or {}) do        -- (0.73.76) more textures by path (the gear variants), or a flat "rt:R,G,B"
-            local t = path:sub(1, 3) == "rt:" and flatTexture(path) or loadObject(path .. "." .. path:match("[^/]+$"))
+            local t = path:sub(1, 3) == "rt:" and flatTexture(path) or V.asset(path)
             local ok = false
             if valid(t) then ok = pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) end
             set[#set + 1] = slot .. " " .. path:match("[^/]+$") .. (ok and "" or " NOT set")
@@ -1343,7 +1665,7 @@ function SPC.V.paint(c, s, body, k)
         return pv.name
     end
     if pv.material then
-        local m, why = loadObject(pv.material .. "." .. pv.material:match("[^/]+$"))
+        local m, why = V.asset(pv.material)
         local n = 0
         for i = 0, (s.paintN or 0) - 1 do
             if valid(m) and pcall(function() body:SetMaterial(i, m) end) then n = n + 1 end
@@ -1354,7 +1676,7 @@ function SPC.V.paint(c, s, body, k)
     end
     local sc, ve, nStock = {}, {}, 0
     if pv.stock then
-        local stock, why = loadObject(V.PAINT_STOCK .. "." .. V.PAINT_STOCK:match("[^/]+$"))
+        local stock, why = V.asset(V.PAINT_STOCK)
         if valid(stock) then sc, ve = paintValues(stock) else
             log(string.format("special: %s's paint: %s not loaded (%s)", c.name, V.PAINT_STOCK, tostring(why)))
         end
@@ -1432,7 +1754,7 @@ function SPC.V.addBody(c, o)
 end
 function SPC.V.model(c, s, o)
     if not c.model or c.model == "" or s.modelComp then return s.modelComp ~= nil end
-    local function load(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
+    local function load(path) return SPC.V.asset(path) end    -- ((0.73.80) kept from the break's preload: SPC.V.preload)
     local sk, why = load(c.model)
     local anim, whyAnim = nil, "no sweep_anim"
     if c.sweep_anim and c.sweep_anim ~= "" then anim, whyAnim = load(c.sweep_anim) end
@@ -1623,9 +1945,11 @@ function SPC.V.emlSpawn(c)
     local at = { X = you.X + f.X * d, Y = you.Y + f.Y * d, Z = math.max(you.Z, c.opener_min_alt_m * 100) }
     local yaw = (h + 180) % 360
     SPC.V.emlActor = nil
+    SPC.V.modMark(c.eml_unit)
     spawningUnit = c.eml_unit
     local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z, yaw)
     spawningUnit = nil
+    SPC.V.modRecord()                                   -- ((0.73.80) its modules kept as they're made, not walked for)
     at.km = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000
     log(string.format("special: %s's railgun %s %.1f km out on the horizon (%s, world yaw %.0f, %.1f km up, you closing at %.0f km/h)",
         c.name, r > 0 and "up" or ("NOT up (" .. (SV_ERR[r] or tostring(r)) .. ")"), at.km,
@@ -1644,6 +1968,8 @@ function SPC.valkaSpawn(now)
         return false
     end
     D.special.state, D.special.at = "lurk", now
+    SPC.V.modReset()                                    -- ((0.73.80) this round's railgun modules kept afresh)
+    pcall(SPC.V.preload)                                -- ((0.73.80) her assets, if the break didn't load them: her lurk does)
     -- the WARNING from her round's start until she's down (user, 2026-10-24: "the warning stays on for that entire
     -- round until VALKA is killed"; her attack's events set it again, SV_ValkaDown / RE_SV_ValkaEnd switch it off)
     SPC.V.event("RE_SV_ValkaWarnOn")
@@ -1670,9 +1996,14 @@ function SPC.valkaArrive(now, at, yaw)
     if at then x, y, z, heading, pd = at.X, at.Y, at.Z, yaw, at.km end
     local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
     if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
+    -- ((0.73.80) her railgun round's class default: her damage back (her opener's shot made none) before her own
+    -- railguns are made, life and single rounds as the opener's; her railguns' modules kept as they're made)
+    pcall(SPC.V.roundDefaults, c, "hers")
+    SPC.V.modMark(c.unit)
     spawningUnit = c.unit
     local r = SV_Spawn(c.unit, x, y, z, heading)
     spawningUnit = nil
+    SPC.V.modRecord()
     log(string.format("special: VALKA as %s (%s set), %s, heading %.0f, %.1f km up: %s", row, tostring(set),
         pd and string.format("%.1f km from you", pd) or "at a spawn point", heading or -1, z / 100000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
@@ -1706,15 +2037,8 @@ end
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
     V.flareTick(c, s, now)
-    if s.roundsUntil then                               -- after a shot: its rounds live long (the opener's harmless)
-        local harmless = s.harmUntil and now < s.harmUntil
-        local n, life = SPC.V.rounds(c, harmless)
-        if n > 0 and not s.roundsSaid then
-            s.roundsSaid = true
-            log(string.format("special: %s's railgun rounds: %d in flight, life %s s%s", c.name, n, tostring(life), harmless and ", harmless" or ""))
-        end
-        if now >= s.roundsUntil then s.roundsUntil, s.harmUntil = nil, nil; SPC.V.rounds(c, false) end
-    end
+    -- ((0.73.80) no walk for her rounds after a shot any more (every tick for 3-3.5 s, none ever found in the 31-round
+    -- run): their life, single rounds and the opener's no-damage are on the round's class default, SPC.V.roundDefaults)
     if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
         s.alertOffAt = nil
         if not s.chargeAt then V.event("RE_SV_ValkaAlertOff") end
@@ -1737,6 +2061,7 @@ function SPC.valkaTick(now, s)
         V.emlActor = nil
     end
     if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, the opener
+        if not V.PRE.wrapped then pcall(V.preTick) end  -- ((0.73.80) her assets, one a tick, if SND.tick doesn't load them)
         if D.state ~= "fighting" then return end
         if c.disguise then
             for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
@@ -1751,6 +2076,7 @@ function SPC.valkaTick(now, s)
             if not SPC.valkaArrive(now) then
                 s.state = "done"
                 V.event("RE_SV_ValkaEnd")               -- (the WARNING off)
+                pcall(V.roundDefaults, c, "off")         -- ((0.73.80) her round class as it was)
                 log(string.format("special: %s couldn't spawn; the round ends", c.name))
             end
             return
@@ -1770,8 +2096,10 @@ function SPC.valkaTick(now, s)
                 setGone(e, true)
                 SPC.V.mark(c, e)
             end
+            V.modSaid(c, c.eml_unit, "her opener's")   -- ((0.73.80) kept as the game made them: no walk)
             local n, why = V.singleShot(c)
             log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
+            pcall(V.roundDefaults, c, "opener")          -- ((0.73.80) her round's life, single rounds, no damage: its class default)
             local nW, whyW = V.emlWeapon(c)
             log(string.format("special: %s's railgun rounds: %d on %s (%s)", c.name, nW, tostring(c.eml_weapon), whyW))
             log(string.format("special: %s's railguns on the minimap: %d launchers (style %d)", c.name, V.radar(c), c.radar_hud or 1))
@@ -1793,14 +2121,12 @@ function SPC.valkaTick(now, s)
         if valid(e) then setGone(e, true); SPC.V.mark(c, e) end
         V.sndRise(s, now, c.charge_s)
         if now < s.chargeAt then return end
-        V.singleShot(c)                                 -- (in case its module came late)
+        V.singleShot(c)                                 -- (in case its module came late; (0.73.80) the kept ones: no walk)
         V.emlWeapon(c)
         V.radar(c)
-        V.rounds(c, true)
         V.event("RE_SV_ValkaEmlShot")
         V.event("RE_SV_ValkaEmlChargeOff")
         V.sndShot(s, s.emlAt, now)
-        s.harmUntil, s.roundsUntil = now + c.reveal_s + 3, now + c.reveal_s + 3     -- its rounds: long, harmless
         s.alertOffAt = now + (c.alert_off_s or 3)
         do
             local flashes = {}
@@ -1818,6 +2144,7 @@ function SPC.valkaTick(now, s)
         if not SPC.valkaArrive(now, s.emlAt, s.emlYaw) then
             s.state = "done"
             V.event("RE_SV_ValkaEnd")                   -- (the WARNING off)
+            pcall(V.roundDefaults, c, "off")             -- ((0.73.80) her round class as it was)
             log(string.format("special: %s couldn't spawn after her shot; the round ends", c.name))
         end
         return
@@ -1837,6 +2164,7 @@ function SPC.valkaTick(now, s)
         local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
         V.model(c, s, o)                                                     -- her X-02S
         if COOP and COOP.valkaReveal then pcall(COOP.valkaReveal, c.unit) end   -- (0.73.76) on every joiner's copy too
+        V.modSaid(c, c.unit, "her")                     -- ((0.73.80) her railguns' modules kept as the game made them)
         s.singleN = V.singleShot(c)                     -- her own railguns ((0.73.76) always: the opener's set it to 1 first,
         log(string.format("special: %s's own railguns single-shot: %d launcher modules", c.name, s.singleN or 0))  -- so hers kept their bursts)
         V.radar(c)
@@ -1882,6 +2210,9 @@ function SPC.valkaTick(now, s)
         -- hit dukka two VALKA rounds on) and of her opener's taken down at once, not after the wreck's fall; the round's
         -- clean-up (sv_rounds.lua SPC.endTick) looks again then)
         pcall(V.radarOff)
+        pcall(V.roundDefaults, c, "off")                 -- ((0.73.80) her railgun round's class default as it was)
+        log(string.format("special: %s's railgun modules this round: %d walks for them (0.73.80: 0 when the game's making of "
+            .. "them was kept), %d launchers kept", c.name, V.MOD.walks or 0, #V.keptLaunchers()))
         if SPC.cleanUp then
             local okC, nC = pcall(SPC.cleanUp, { c.unit, c.eml_unit }, "her death", true, now)
             log(string.format("special: %s down: %s of her unit's objects still up, taken off", c.name,
@@ -1957,7 +2288,6 @@ function SPC.valkaTick(now, s)
         V.event("RE_SV_ValkaChargeOff")
         V.sndShot(s, at, now)
         s.chargeAt, s.shots, s.railAt = nil, (s.shots or 0) + 1, now + c.railgun_every_s
-        s.roundsUntil, s.harmUntil = now + 3, nil
         s.alertOffAt = now + (c.alert_off_s or 3)
         log(string.format("special: %s railgun shot %d, %.1f km from you, %.0f deg off her nose", c.name, s.shots,
             s.dist or -1, offNose or -1))
@@ -1966,8 +2296,9 @@ function SPC.valkaTick(now, s)
         s.chargeAt = now + c.railgun_charge_s
         V.event("RE_SV_ValkaChargeOn")
         V.event("RE_SV_ValkaAlertOn")
+        -- ((0.73.80) the kept launchers, no walk; no rounds to put their damage back on: the opener's no-damage was
+        -- taken off her round's class default before she spawned)
         V.radar(c)
-        V.rounds(c, false)                              -- (pooled rounds from the opener: their damage back)
         V.sndCharge(s, function() return valid(o) and where(o) or nil end, now)
         hudCallout(t.valka_charge, t.valka_charge_sub)
     end
@@ -1990,6 +2321,24 @@ function SPC.valkaTick(now, s)
         local moves = c.post_stall_moves or {}
         if #moves > 0 then V.event("RE_SV_Valka" .. moves[math.random(#moves)]) end
     end
+end
+
+-- ((0.73.80) her assets loaded with her sounds (sv_sound.lua, a part before this one): SND.preloadValka, asked in the
+-- break before her round (the NEXT announcement, her round's start; a joiner on the host's VALKA round), queues them too,
+-- and SND.tick, every tick, loads one; her lurk does when this couldn't be put in)
+if type(SND) == "table" and type(SND.preloadValka) == "function" and type(SND.tick) == "function" then
+    local sndPreload, sndTick = SND.preloadValka, SND.tick
+    function SND.preloadValka(...)
+        local okV, errV = pcall(SPC.V.preload)
+        if not okV then logOnce("valka preload", "special: VALKA's preload error " .. tostring(errV)) end
+        return sndPreload(...)
+    end
+    function SND.tick(...)
+        local okV, errV = pcall(SPC.V.preTick)
+        if not okV then logOnce("valka preload tick", "special: VALKA's preload error " .. tostring(errV)) end
+        return sndTick(...)
+    end
+    SPC.V.PRE.wrapped = true
 end
 
 -- The special rounds by kind (CFG.specials.rotation; code review of 2026-10-23: each new one meant a branch in eight
