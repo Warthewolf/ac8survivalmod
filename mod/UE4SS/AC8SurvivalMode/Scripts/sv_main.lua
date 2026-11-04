@@ -903,13 +903,16 @@ local tick, rowsStopped, half, tA = 0, false, 1, 0
 -- them: UE4SS's Lua faulted (lua_getiuservalue on nothing, reading 0xa) 70 ms after the tick's last line. Now the async
 -- function only reads its flags and the clock (all captured here: no global looked up, nothing made) and queues the one
 -- job made below, and only when no job is waiting or running and the last ended SETTLE_S ago (UE4SS lets go of a job's
--- references just after it returns); a tick taken as lost is queued again once, then after twice as long each time, and
--- the job logs it on the game thread. Key presses run at the job's start (sv_core.lua KEYQ), and the job ends with one
--- step of Lua's collector, so the next queueing on the async thread (UE4SS makes a Lua thread there) seldom runs a
--- collector step there.)
+-- references just after it returns); a tick taken as lost is queued again once, then after twice as long each time, with
+-- a crumb there (the runtime's SV_Crumb with a fixed text: no Lua made), and the job logs it on the game thread. A job
+-- holds `waiting` until it ends, so one starting between the async function's two reads can't look like none queued.
+-- Key presses run at the job's start (sv_core.lua KEYQ). The review of 2026-11-04 took out a collector step at the
+-- job's end: Lua 5.4's collectgarbage("step", 0) drops the pause after a cycle, so the whole heap was collected every
+-- tick half (1-5 ms more on the game thread, measured) and collector steps elsewhere came more often, not less.)
 local waiting, running, queuedAt, doneAt, lostAfter = false, false, 0, 0, 0
 local lostTicks, lostSaid, TICK_LOST_S, SETTLE_S = 0, 0, 10, 0.02   -- (0.73.76: 10 s; 5 s fired during level loads, 2026-11-02 23:30 / 23:31)
 local osClock, inGameThread = os.clock, ExecuteInGameThread
+local svCrumb = type(SV_Crumb) == "function" and SV_Crumb or nil   -- (the runtime registers it before main.lua runs)
 local function tickJob()
     half = 1 - half
     PLOC.on, PLOC.have, PLOC.v = true, false, nil   -- ((0.73.79) your position read once in this half: playerLocation)
@@ -954,23 +957,26 @@ local function tickJob()
     tA = (os.clock() - t0) * 1000
     PLOC.on, PLOC.have, PLOC.v = false, false, nil
 end
+local function lostSay()
+    local n = lostTicks - lostSaid
+    lostSaid = lostTicks
+    log(string.format("tick: the game thread hadn't run the tick queued %d s or more before (lost, or a long load): queued "
+        .. "again %d time%s (%d so far)", TICK_LOST_S, n, n == 1 and "" or "s", lostTicks))
+    crumb(string.format("tick lost: queued again (%d so far)", lostTicks))
+end
 local function job()                                -- (the game thread: one of UE4SS's game-thread actions)
-    waiting, running = false, true
-    if lostTicks ~= lostSaid then
-        log(string.format("tick: the game thread hadn't run the tick queued %d s or more before (lost, or a long load): queued "
-            .. "again %d time%s (%d so far)", TICK_LOST_S, lostTicks - lostSaid, lostTicks - lostSaid == 1 and "" or "s", lostTicks))
-        pcall(crumb, string.format("tick lost: queued again (%d so far)", lostTicks))
-        lostSaid = lostTicks
-    end
+    running = true                                  -- (`waiting` held until the end: the async function reads `running` first)
+    if lostTicks ~= lostSaid then pcall(lostSay) end
     lostAfter = 0
     if KEYQ and KEYQ.drain then
         local okK, errK = pcall(KEYQ.drain)
-        if not okK then log("keys: error " .. tostring(errK)) end
+        if not okK then pcall(log, "keys: error " .. tostring(errK)) end
     end
     local ok, err = pcall(tickJob)
-    if not ok then log("tick: error " .. tostring(err)) end
-    pcall(collectgarbage, "step", 0)
-    running, doneAt = false, osClock()
+    if not ok then pcall(log, "tick: error " .. tostring(err)) end
+    doneAt = osClock()                              -- (in this order: a look between these sees the settle, or a job running)
+    waiting = false
+    running = false
 end
 if type(LoopAsync) == "function" and type(inGameThread) == "function" then
     LoopAsync(125, function()                       -- (UE4SS's async thread: its flags, the clock and the queueing only)
@@ -979,10 +985,13 @@ if type(LoopAsync) == "function" and type(inGameThread) == "function" then
         if waiting then
             if lostAfter == 0 then lostAfter = TICK_LOST_S end
             if t - queuedAt < lostAfter then return false end
+            if running then return false end        -- (the job started meanwhile: not lost)
             lostTicks, lostAfter = lostTicks + 1, lostAfter * 2   -- (queued again: the next after twice as long)
+            if svCrumb then svCrumb("tick lost: queued again (seen on UE4SS's async thread)") end
         elseif t - doneAt < SETTLE_S then
             return false
         end
+        if running then return false end
         waiting, queuedAt = true, t
         inGameThread(job)
         return false

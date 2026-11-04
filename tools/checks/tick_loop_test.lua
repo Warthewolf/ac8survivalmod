@@ -3,11 +3,13 @@
 -- a callback on UE4SS's async thread as the game thread ran the ticks queued during a 54 s load). The loop's code is
 -- sv_main.lua's as it is (from its state to its LoopAsync, the tick itself stubbed), KEYQ sv_core.lua's as it is:
 --   the async function: one job queued when none waits or runs; nothing while one waits (under TICK_LOST_S) or runs;
---     not again within SETTLE_S of the last one's end; no log, crumb, allocation or call but the clock and the queueing
---     (measured with the collector stopped, and a call hook); a lost tick queued again after 10 s, then after 20, 40;
---     the job logs it on the game thread (once, with the count) and the back-off starts over;
---   the job: the key presses first, the tick, an error in either logged and the loop going on, a collector step at its
---     end; back-to-back queued jobs (a long load's) run each, and nothing is queued between them;
+--     not again within SETTLE_S of the last one's end; no log, Lua crumb, allocation or call but the clock and the
+--     queueing, on every path (measured with the collector stopped and the call stack warmed, and a call hook); a lost
+--     tick queued again after 10 s, then after 20, 40, each with the runtime's SV_Crumb of a fixed text (its only other
+--     call there); the job logs it on the game thread (once, with the count) and the back-off starts over; a job that
+--     starts between the async function's reads (inside its clock call) is never taken for none queued, nor for lost;
+--   the job: the key presses first, then the tick, an error in either logged and the loop going on, no collector step
+--     (the review of 2026-11-04); back-to-back queued jobs (a long load's) run each, and nothing is queued between them;
 --   KEYQ: a bind (with or without modifiers) gives UE4SS a function that only counts (no allocation, the bind's own not
 --     called); KEYQ.drain runs each bind's function once a press (up to KEYQ.MAX), on the game thread, with
 --     ExecuteInGameThread running its function at once and put back after; an error logged, the other keys still run;
@@ -23,10 +25,18 @@ local IN_ASYNC, IN_KEY = false, false
 local logs, crumbs, offThread = {}, {}, {}
 function log(s) if IN_ASYNC or IN_KEY then offThread[#offThread + 1] = "log: " .. s end; logs[#logs + 1] = s end
 function crumb(s) if IN_ASYNC or IN_KEY then offThread[#offThread + 1] = "crumb: " .. s end; crumbs[#crumbs + 1] = s end
-os.clock = function() return clock end            -- luacheck: ignore
+local CLOCK_HOOK = nil                             -- (run once inside the next clock read: a job starting right then)
+os.clock = function()                             -- luacheck: ignore
+    if CLOCK_HOOK then local h = CLOCK_HOOK; CLOCK_HOOK = nil; h() end
+    return clock
+end
+local function presized(n) local t = {}; for i = 1, n do t[i] = false end; for i = n, 1, -1 do t[i] = nil end; return t end
+-- the runtime's SV_Crumb (captured by the loop at load), its list made big enough now (adding to it makes nothing)
+local svCrumbs = presized(64)
+function SV_Crumb(s) svCrumbs[#svCrumbs + 1] = s; return 1 end
 
 -- UE4SS: LoopAsync keeps its function, ExecuteInGameThread queues (the game thread runs the queue when the test says)
-local loopFn, queue, realBinds = nil, {}, {}
+local loopFn, queue, realBinds = nil, presized(512), {}
 function LoopAsync(ms, fn) loopFn = fn; return 0 end
 local function realQueue(fn) queue[#queue + 1] = fn end
 ExecuteInGameThread = realQueue
@@ -58,20 +68,23 @@ local j = mainSrc:find("\nlocal function job()", 1, true)
 local z = j and mainSrc:find("\n%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-%-[%-]+ dev keys", j)
 check(a and t1 and j and z and a < t1 and t1 < j, "sv_main.lua: the loop's state, tickJob and job found")
 TICKS, TICK_HOOK = 0, nil
+local _, tEnd = mainSrc:find("\nend\r?\n", t1 + 1)   -- (tickJob's end: everything after it up to the dev keys, as it is)
 local chunk = mainSrc:sub(a, t1) .. "local function tickJob() TICKS = TICKS + 1; if TICK_HOOK then TICK_HOOK() end end\n"
-    .. mainSrc:sub(j, z)
+    .. mainSrc:sub(tEnd + 1, z)
 assert(load(chunk, "=sv_main.lua(loop)"))()
 check(type(loopFn) == "function", "LoopAsync(125, ...) given its function")
 local job = nil
 
 -- the async function, watched: no log / crumb, no allocation (the collector stopped, no hook then), and with a counting
--- call hook (it makes nothing) the calls it makes: the clock and, when it queues, ExecuteInGameThread (+2: its own and debug.sethook's
--- own call that ends the watch)
+-- call hook (it makes nothing) the calls it makes: the clock and, when it queues, ExecuteInGameThread (less 2: its own
+-- call and debug.sethook's, which ends the watch)
 local nCalls = 0
 local function counter() nCalls = nCalls + 1 end
+local function warm(n) if n > 0 then return 1 + warm(n - 1) end return 0 end   -- (Lua's call records made beforehand)
 local function async()
     local before = #queue
     collectgarbage("stop")
+    warm(16)
     local kb = collectgarbage("count")
     IN_ASYNC = true
     local r = loopFn()
@@ -96,10 +109,9 @@ local function callsOf()                                 -- (one more async call
 end
 for _ = 1, 3 do debug.sethook(counter, "c"); (function() end)(); debug.sethook() end   -- (warm up the hook)
 print("the async function")
-local c0, cq, r = callsOf()
-check(c0 == 2 and cq and r == false and #queue == 1, "nothing waiting: one job queued (the clock and ExecuteInGameThread called, "
-      .. "nothing else), LoopAsync kept (false)")
-local q, grew
+local q, r, grew = async()
+check(q and r == false and grew == 0 and #queue == 1 and #svCrumbs == 0,
+      "nothing waiting: one job queued, nothing made, no crumb, LoopAsync kept (false)")
 q, r, grew = async()
 local cw = callsOf()
 check(not q and grew == 0 and cw == 1, "a job waiting (0 s): nothing queued, nothing made, nothing called but the clock")
@@ -108,11 +120,15 @@ q, r, grew = async()
 check(not q and grew == 0, "... 9.9 s on: still nothing")
 
 print("the job")
-local ranKeys = 0
+local ranKeys, order = 0, {}
 local realDrain = KEYQ.drain
-KEYQ.drain = function() ranKeys = ranKeys + 1; return realDrain() end
+KEYQ.drain = function() ranKeys = ranKeys + 1; order[#order + 1] = "keys"; return realDrain() end
 local duringRun = {}
+local gcSteps = 0
+local realGc = collectgarbage
 TICK_HOOK = function()
+    order[#order + 1] = "tick"
+    collectgarbage = function(what, ...) if what == "step" then gcSteps = gcSteps + 1 end return realGc(what, ...) end
     local q2, _, g2 = async()
     local c2 = callsOf()
     duringRun[#duringRun + 1] = { q = q2, g = g2, c = c2 }
@@ -120,34 +136,74 @@ end
 clock = clock + 0.05
 local qn = #queue
 queue[qn]()                                              -- the game thread runs it
-check(TICKS == 1 and ranKeys == 1, "the job ran the keys, then the tick")
+collectgarbage = realGc
+check(TICKS == 1 and ranKeys == 1 and order[1] == "keys" and order[2] == "tick", "the job ran the keys, then the tick")
+check(gcSteps == 0 and not mainSrc:sub(j, z):find('collectgarbage%(?%s*"step"') and not mainSrc:sub(j, z):find("collectgarbage, \"step\"", 1, true),
+      "no collector step in the job (the review of 2026-11-04)")
 check(#duringRun == 1 and not duringRun[1].q and duringRun[1].g == 0 and duringRun[1].c == 0,
       "while the job runs: the async function queues nothing, makes nothing, calls nothing")
 TICK_HOOK = nil
 q = async()
 check(not q, "right after the job ends: nothing queued (within SETTLE_S)")
 clock = clock + 0.03
-q = async()
-check(q, "30 ms on: the next queued")
+local cn, qn2 = callsOf()
+check(qn2 and cn == 2 and #svCrumbs == 0, "30 ms on: the next queued (the clock and ExecuteInGameThread called, nothing else, no crumb)")
 check(#offThread == 0, "nothing logged or crumbed off the game thread so far")
+
+print("a job starting between the async function's reads")
+do
+    local co = coroutine.create(queue[#queue])
+    TICK_HOOK = coroutine.yield
+    clock = clock + 0.2                                  -- (the game thread held a little: the job still waiting)
+    local nq = #queue
+    CLOCK_HOOK = function() assert(coroutine.resume(co)) end   -- (the job starts inside the clock read, and runs on)
+    loopFn()
+    check(#queue == nq, "not lost yet: nothing queued while it runs (`waiting` held by the job)")
+    TICK_HOOK = nil
+    assert(coroutine.resume(co))
+    check(coroutine.status(co) == "dead", "... the job ends")
+    clock = clock + 0.05
+    loopFn()                                             -- (the next one queued)
+    co = coroutine.create(queue[#queue])
+    TICK_HOOK = coroutine.yield
+    clock = clock + 10.5                                 -- (and held past TICK_LOST_S)
+    nq = #queue
+    local nc, lostBefore = #svCrumbs, nil
+    CLOCK_HOOK = function() assert(coroutine.resume(co)) end
+    loopFn()
+    check(#queue == nq and #svCrumbs == nc, "past the lost deadline: nothing queued, no crumb (the job had started)")
+    TICK_HOOK = nil
+    assert(coroutine.resume(co))
+    local lostLogs = 0
+    for _, l in ipairs(logs) do if has(l, "hadn't run the tick") then lostLogs = lostLogs + 1 end end
+    check(lostLogs == 0, "... and nothing counted lost")
+    clock = clock + 0.05
+    loopFn()
+    queue[#queue]()
+    TICKS = TICKS - 3                                    -- (these three ticks aren't the counts below)
+    clock = clock + 0.05
+    loopFn()                                             -- (one left waiting for the next part)
+end
 
 print("a lost tick, and a long load's queued ticks")
 local base = #queue
-clock = clock + 10
-q, r, grew = async()
-check(q and #queue == base + 1 and #offThread == 0, "10 s waiting: queued again, nothing logged there")
-clock = clock + 10
-q = async()
-check(not q, "... 10 s after that: not again (the next after twice as long)")
 clock = clock + 10.01
+q, r, grew = async()
+check(q and grew == 0 and #queue == base + 1 and #offThread == 0 and #svCrumbs == 1 and has(svCrumbs[1], "tick lost"),
+      "10 s waiting: queued again, nothing made, nothing logged there, the runtime's crumb (a fixed text)")
+clock = clock + 10
 q = async()
-check(q and #queue == base + 2, "... 20 s after it: queued again")
+check(not q and #svCrumbs == 1, "... 10 s after that: not again (the next after twice as long)")
+clock = clock + 10.01
+local cl, ql = callsOf()
+check(ql and cl == 3 and #queue == base + 2 and #svCrumbs == 2 and svCrumbs[2] == svCrumbs[1],
+      "... 20 s after it: queued again (the clock, SV_Crumb and ExecuteInGameThread called, nothing else)")
 clock = clock + 39
 q = async()
 check(not q, "... 39 s after that: not again (40)")
 clock = clock + 1.1
-q = async()
-check(q and #queue == base + 3, "... 40 s after it: queued again")
+q, r, grew = async()
+check(q and grew == 0 and #queue == base + 3 and #svCrumbs == 3, "... 40 s after it: queued again, nothing made")
 check(#offThread == 0 and #logs == 0, "still nothing logged anywhere (the job says it)")
 -- the game thread comes back: every queued job runs one after another; nothing queued in between
 local pending = {}
@@ -200,6 +256,7 @@ check(#realBinds == before + 5 and realBinds[before + 1].key == 10 and type(real
 check(realBinds[before + 5].a == "not a function", "anything not a bind passed on as it is")
 local pA, pB = realBinds[before + 1].b, realBinds[before + 2].a
 collectgarbage("stop")
+warm(16)
 local kb = collectgarbage("count")
 IN_KEY = true
 pA(); pA(); pB()
@@ -224,7 +281,6 @@ local errs = 0
 for i = nl + 1, #logs do if has(logs[i], "keys: error") then errs = errs + 1 end end
 check(errs == 2 and ExecuteInGameThread == realQueue, "a key's error and its inner function's error logged, the others ran, ExecuteInGameThread put back")
 pA()
-queue[#queue + 1] = nil
 clock = clock + 0.05
 q = async()
 local r0 = #runs
