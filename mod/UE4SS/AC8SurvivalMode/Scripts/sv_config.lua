@@ -1288,7 +1288,7 @@ CFG = {
              -- plane: 0.73.11's crash): hidden, collision and tick off, moved aside_alt_km up (0: left where it is).
              -- wait_s: back in the mission, how long their old plane stays hidden waiting for their airframe. A change by
              -- a player who never left still waits for the next level. enabled = false: their plane here is kept.
-             rejoin = { enabled = true, wait_s = 10, aside_alt_km = 30 },
+             rejoin = { enabled = true, wait_s = 10, aside_alt_km = 30, aside_far_km = 1000, radar_off = true },
              -- real_paint: their paint (skin and emblems) on their real plane; false: the airframe's default
              real_paint = true,
              -- a bigger room, more enemies: each player past the first adds aircraft_per_player of a round's aircraft
