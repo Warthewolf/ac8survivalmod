@@ -68,6 +68,27 @@ local function argsOf(list, k)
     local ok, a = pcall(function() return list.CommandDatas[k].StringArgs:ToString() end)
     return ok and a or nil
 end
+-- ((0.73.80, findings perf4 / specials8) a press on a STORE row ("SV_Buy_<item>", SV_ShopRequest's): its page is among the
+-- landing menu's kept windows when one on screen lists that row; else they're walked for again at once (sv_core.lua
+-- landingWindowsRefresh), so the labels changed by the press go onto that page's rows (relabel's SHOP.windowsKey) and its
+-- icons on. Logged the first time it walks; each visit's line counts them. true: found among them.)
+function SHOP.pressPage(args)
+    local tick = SH.tick or 0
+    for _, win in ipairs(landingWindows(tick)) do
+        if landingVisible(win) and liveObj(win) then
+            local list = child(win, "WBP_Menu_Pause_List_000")
+            for k = 1, 6 do if list and argsOf(list, k) == args then return true end end
+        end
+    end
+    landingWindowsRefresh("press")
+    local n = #landingWindows(tick)
+    if not SH.pressPageSaid then
+        SH.pressPageSaid = true
+        log(string.format("shop: %s pressed on a landing menu page not among the windows kept: walked for them again (%d "
+            .. "now; 0.73.80)", tostring(args), n))
+    end
+    return false
+end
 function SHOP.decorTick(tick)
     if not CFG.shop.enabled or tick % 2 ~= 0 or not playerOnAirfield() then return end
     local imgClass = StaticFindObject("/Script/UMG.Image")
@@ -410,14 +431,19 @@ end
 -- of the co-op run of 2026-10-30, "shop" up to 195 ms a tick). None found that way: every TextBlock, as before, logged.
 local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
 -- ((0.73.77, Workstream B4) the landing menu's windows now, as one key: their addresses (a STORE page opened or closed
--- changes it). From the icons' walk of this tick or the last two (landingWindows' maxAge): no walk of its own.)
--- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the STORE's kept widgets forgotten, none of them touched)
+-- changes it). ((0.73.80) The kept ones every part shares (sv_core.lua landingWindows): no walk of its own; a new page's
+-- window comes in when the last one closes, or after a press on it, SHOP.pressPage.)
+-- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the STORE's kept widgets forgotten, none of them touched;
+-- (0.73.80) the landing menu's kept windows too)
 if type(LEVEL_DROPS) == "table" then
-    LEVEL_DROPS.store = function() SH.rowTexts, SH.panels, SH.slotCache, SH.tbNames, SH.decor = nil, nil, nil, nil, {} end
+    LEVEL_DROPS.store = function()
+        SH.rowTexts, SH.panels, SH.slotCache, SH.tbNames, SH.decor = nil, nil, nil, nil, {}
+        if type(landingWindowsForget) == "function" then landingWindowsForget() end
+    end
 end
 function SHOP.windowsKey(tick)
     local t = {}
-    for _, w in ipairs(landingWindows(tick or SH.tick or 0, 2)) do t[#t + 1] = tostring(addrOf(w)) end
+    for _, w in ipairs(landingWindows(tick or SH.tick or 0)) do t[#t + 1] = tostring(addrOf(w)) end
     table.sort(t)
     return table.concat(t, ",")
 end
@@ -788,9 +814,10 @@ function shopTick(tick)
         -- per tick and updating the texts once a second left ~1 s with no change on screen, so purchases seemed not to
         -- register and players pressed again (user, 2026-10-22: "a good few presses to get it to register")
         local seen = {}
-        for _ = 1, 8 do
+        for i = 1, 8 do
             local r = SV_ShopRequest()
             if not r or r == "" then break end
+            if i == 1 then pcall(SHOP.pressPage, r) end      -- ((0.73.80) its page among the kept windows, else walked for)
             local item = r:gsub("^SV_Buy_", "")
             local it = CFG.shop.items[item]
             local last = SH.upAt and SH.upAt[item]

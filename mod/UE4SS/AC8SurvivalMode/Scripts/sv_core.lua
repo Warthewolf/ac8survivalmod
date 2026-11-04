@@ -100,25 +100,169 @@ function liveWidget(w)
     return liveObj(w) and nameOf(w):find("/Engine/Transient", 1, true) ~= nil    -- (0.73.73: liveObj, kept ones too)
 end
 
--- The landing menu's live windows (WBP_Menu_IngameHangar_Common_000_C), found once a tick for everyone who asks: the
--- STORE's row icons and co-op's music hold each walked every object for them every other tick down at the airfield
--- (the perf lines of the co-op run of 2026-10-30: "icons" up to 6.2 ms a tick on average, "shop" up to 195 ms)
-local LW = {}
-function landingWindows(tick, maxAge)
-    if LW.tick == tick and LW.list then return LW.list end
-    -- ((0.73.77, Workstream B4) maxAge: a walk up to that many ticks old will do, its windows still live: the ammo panel's
-    -- and the STORE labels' checks for a new page, on the ticks between the icons' walks)
-    if maxAge and LW.list and LW.tick and tick > LW.tick and tick - LW.tick <= maxAge then
-        local out = {}
-        for _, w in ipairs(LW.list) do if liveObj(w) then out[#out + 1] = w end end
-        return out
+-- The landing menu's live windows (WBP_Menu_IngameHangar_Common_000_C), one list for everyone who asks: the STORE's row
+-- icons (sv_shop.lua SHOP.decorTick), its labels' and the ammo panel's checks for a new page (SHOP.windowsKey), a STORE
+-- press (SHOP.pressPage) and co-op's music hold (sv_main.lua, landingShown).
+-- (0.73.80, the 31-round co-op run of 2026-11-04, findings perf4 / specials8; PERF_PLAN.md Tier 2 item 8) They were walked
+-- for on each new tick they were asked for (0.73.77's maxAge kept a walk two ticks for the labels): down at the airfield in
+-- co-op the music hold asked every tick, every other one before it held, so every object the game holds was walked up to
+-- four times a second, 25-41 ms each on this UE4SS (no hash tables): the host 2,416 walks (98 s) over the run, 1,176 in
+-- one 5.6-minute STORE stay (round 28's 117 ms tick), 70-77 % of each joiner's walk time. Now the windows found are kept
+-- (with the name each had: an address another object took since is not it) and looked at once a tick at most (again
+-- after a press), live (liveObj) and on screen (IsVisible) or not. Every object is walked again only
+--   * on landing: the first look of a visit to the airfield (nobody asked for LANDW_GAP_S: they ask only down there);
+--   * when the one on screen goes off it (a page closed: each STORE page opens as a new page object with a window of its
+--     own; the host's log of that run: STORE page 23 opened twice in one visit was two pages), at once (LANDW_MIN_S after
+--     the last walk at the soonest);
+--   * after a STORE press on a row no window on screen has (SHOP.pressPage: its page not found yet);
+--   * while none is on screen, every [hud.landing] every_s (the menu not up yet, or a page that came a moment late);
+--   * while one is, every backstop_s (a page that opened over another without closing it; 0: never).
+-- A walk held (walkHold) waits for the next look, the kept ones answering meanwhile. Each visit's walks are logged as it
+-- ends (`shop: the landing menu's windows over this airfield visit ...`); the perf line's "walks:" counts them by class.
+LANDW = { list = {}, out = {}, vis = {}, n = 0, total = 0, passes = 0, passWalks = 0 }
+do
+local CLASS, LANDW_GAP_S, LANDW_MIN_S = "WBP_Menu_IngameHangar_Common_000_C", 3, 0.5
+local WHY = { "landing", "closed", "none", "press", "backstop" }
+local WHY_TEXT = { landing = "on landing", closed = "a page closed", none = "none on screen", press = "a STORE press",
+                   backstop = "backstop" }
+local function cfg()
+    local h = type(CFG) == "table" and type(CFG.hud) == "table" and CFG.hud.landing or nil
+    return type(h) == "table" and h or {}
+end
+local function onScreen(w)
+    local ok, v = pcall(function() return w:IsVisible() end)
+    return ok and v == true
+end
+-- the kept ones still the same live objects, which of them on screen (L.vis by address); true when one is
+local function look(L)
+    local keep, out, vis, shown = {}, {}, {}, false
+    for _, e in ipairs(L.list) do
+        if liveObj(e.w) and nameOf(e.w) == e.name then
+            keep[#keep + 1], out[#out + 1] = e, e.w
+            if onScreen(e.w) then shown = true; vis[e.a] = true end
+        end
     end
-    local out = {}
-    for _, w in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
-        if liveWidget(w) then out[#out + 1] = w end
+    L.list, L.out, L.vis = keep, out, vis
+    return shown
+end
+-- one walk for them: what it found kept, true when one is on screen; nil when the walk was held after all (FindAllOf's
+-- own walkHold: nothing found, the kept ones left as they were)
+local function walk(L, why)
+    local found = FindAllOf(CLASS)
+    if found == nil and WALK.heldWhy then return nil end
+    local list = {}
+    for _, w in ipairs(found or {}) do
+        local nm = liveObj(w) and nameOf(w) or ""
+        if nm:find("/Engine/Transient", 1, true) then list[#list + 1] = { w = w, a = addrOf(w) or nm, name = nm } end
     end
-    LW.tick, LW.list = tick, out
-    return out
+    L.list = list
+    L.n, L.total = L.n + 1, L.total + 1
+    local v = L.visit
+    if v then v.walks = v.walks + 1; v.why[why] = (v.why[why] or 0) + 1; v.most = math.max(v.most, #list) end
+    local shown = look(L)
+    if not L.said then
+        L.said = true
+        local c = cfg()
+        local back = tonumber(c.backstop_s) or 30
+        log(string.format("shop: the landing menu's windows kept between ticks, looked at once a tick and walked for again "
+            .. "only on landing, when a page closes, after a STORE press on a page not among them, every %.1f s while none "
+            .. "is on screen and every %s while one is (0.73.80; this first walk: %s, %d found, %s on screen)",
+            math.max(0.5, tonumber(c.every_s) or 2), back > 0 and string.format("%.0f s", back) or "never",
+            WHY_TEXT[why] or tostring(why), #list, shown and "one" or "none"))
+    end
+    if why == "closed" then
+        logOnce("landing windows closed", string.format("shop: a landing menu page closed: its windows walked for again at "
+            .. "once (%d found, %s on screen)", #list, shown and "one" or "none yet"))
+    end
+    return shown
+end
+-- a visit to the airfield over: its walks logged when the landing menu was up in it, else counted as a pass
+local function visitEnd(L, now)
+    local v = L.visit
+    L.visit = nil
+    if not v then return end
+    if not v.seen then L.passes, L.passWalks = L.passes + 1, L.passWalks + v.walks; return end
+    local parts = {}
+    for _, k in ipairs(WHY) do parts[#parts + 1] = string.format("%s %d", WHY_TEXT[k], v.why[k] or 0) end
+    log(string.format("shop: the landing menu's windows over this airfield visit (%.0f s): %d walk%s of %s (%s; a walk "
+        .. "held back on %d looks), %d kept at most, %d looks; before it %d pass%s with no landing menu (%d walks); %d walks "
+        .. "this session (0.73.80: they were walked for every tick in co-op)", now - v.at, v.walks, v.walks == 1 and "" or "s",
+        CLASS, table.concat(parts, ", "), v.held, v.most, v.looks, L.passes, L.passes == 1 and "" or "es", L.passWalks, L.total))
+    L.passes, L.passWalks = 0, 0
+end
+-- The landing menu's live windows (the kept ones; walked for again as above). (A second argument, 0.73.77's maxAge, is
+-- no longer used: every caller shares the kept ones.)
+function landingWindows(tick)
+    local L = LANDW
+    if L.tick == tick and not L.again then return L.out end
+    L.again, L.tick = nil, tick
+    local now = os.clock()
+    local c = cfg()
+    local every, back = math.max(0.5, tonumber(c.every_s) or 2), tonumber(c.backstop_s) or 30
+    local why = nil
+    if not L.askAt or now - L.askAt > LANDW_GAP_S then          -- a visit to the airfield starts: walked for at once
+        visitEnd(L, now)
+        L.visit = { at = now, walks = 0, why = {}, held = 0, most = 0, looks = 0, seen = false }
+        L.wasShown, L.force, L.need, why = false, nil, L.n + 1, "landing"
+    end
+    L.askAt = now
+    local v = L.visit
+    v.looks = v.looks + 1
+    local shown = look(L)
+    if L.wasShown and not shown then                             -- the window on screen went off it: a page closed
+        L.force = L.force or "closed"
+        L.need = L.n + 2       -- ("none on screen" believed after the walk at once and the next: a page that came late)
+    end
+    L.wasShown = shown
+    if not why then
+        if L.force and (not L.walkAt or now - L.walkAt >= LANDW_MIN_S) then why = L.force
+        elseif not shown and not L.force and (not L.walkAt or now - L.walkAt >= every) then why = "none"
+        elseif shown and back > 0 and L.walkAt and now - L.walkAt >= back then why = "backstop" end
+    end
+    if why and walkHold() then                                   -- (a held walk finds nothing: it waits, not a walk)
+        v.held = v.held + 1
+        if why ~= "none" and why ~= "backstop" then L.force = why end
+        why = nil
+    end
+    if why then
+        local got = walk(L, why)
+        if got == nil then                                       -- (held inside FindAllOf: as above)
+            v.held = v.held + 1
+            if why ~= "none" and why ~= "backstop" then L.force = why end
+        else
+            L.force, L.walkAt, shown = nil, now, got
+            L.wasShown = shown
+        end
+    end
+    if shown then v.seen = true end
+    return L.out
+end
+-- One of the landing menu's windows on screen: true; none, a walk having looked again since it went off: false; not
+-- known yet (a page just closed, its next looked for; a walk held): nil, the caller keeps what it had.
+function landingShown(tick)
+    landingWindows(tick)
+    local L = LANDW
+    if L.wasShown then return true end
+    if L.n >= (L.need or 0) then return false end
+    return nil
+end
+-- w (a window landingWindows gave) on screen at the last look
+function landingVisible(w) local a = addrOf(w); return a ~= nil and LANDW.vis[a] == true end
+-- walk for them again at the next look (why: "press", a STORE press on a page not among them)
+function landingWindowsRefresh(why) LANDW.force, LANDW.again = LANDW.force or why or "press", true end
+-- the player left the airfield (sv_main.lua's music hold): the visit's walks logged, the next look a landing
+function landingLeft()
+    local L = LANDW
+    if not L.visit then return end
+    visitEnd(L, os.clock())
+    L.askAt, L.wasShown, L.force = nil, false, nil
+end
+-- the level torn down (sv_shop.lua's LEVEL_DROPS.store): the kept windows forgotten, none of them touched
+function landingWindowsForget()
+    local L = LANDW
+    if L.visit then visitEnd(L, os.clock()) end
+    L.list, L.out, L.vis, L.tick, L.askAt, L.wasShown, L.force, L.again = {}, {}, {}, nil, nil, false, nil, nil
+end
 end
 
 -- calls a data table method; false when this UE4SS build cannot do it

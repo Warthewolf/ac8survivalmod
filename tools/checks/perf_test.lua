@@ -10,6 +10,11 @@
 --   B1 the perf line: every part named, the shares within a part ("allies/...") apart and not counted twice, the untimed
 --     rest; its second line: the lists' sizes (planes, held, allies, missiles, the co-op ones through COOP.sizes), the
 --     walks by class (sv_core.lua WALK.stat), the natives (SV_UnitAlive ... counted and timed), the Lua heap;
+--   (0.73.80, findings perf4 / specials8 of 2026-11-04) the landing menu's windows kept between ticks (sv_core.lua
+--     landingWindows): sv_main.lua's music hold block run as it is through a co-op airfield visit (no menu yet, the menu,
+--     five STORE pages, a page that comes late, a 340-s stay, an address used again, a walk hold, takeoff, leaving): the
+--     walks of WBP_Menu_IngameHangar_Common_000_C a handful a visit, the hold on and off within every_s and never let go
+--     across a page change; the visit's log line, a low pass with no menu, the teardown gate's drop;
 --   the source: every call the tick halves make is timed (by name), the native wrappers pass every value through.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
@@ -266,6 +271,216 @@ do
     from = #logs + 1
     for _ = 1, 1199 do tick = tick + 1; perfLine(1, 1, tick) end
     check(line("^perf: tick avg", from) == nil, "then every 5 minutes (none within 1199 ticks)")
+end
+
+---------------------------------------------------------------------------------------------------- 0.73.80: the landing windows
+-- (findings perf4 / specials8 of the 31-round co-op run, 2026-11-04) the landing menu's windows kept between ticks: the
+-- co-op music hold (sv_main.lua's block, run here as it is) looked at every tick, the icons and the ammo panel's key on
+-- the halves between; every object walked for them again only on landing, when a page closes, after a STORE press on a
+-- page not among them, every [hud.landing] every_s while none is on screen and every backstop_s while one is
+print("0.73.80: the landing menu's windows, kept between ticks")
+do
+    local CLS = "WBP_Menu_IngameHangar_Common_000_C"
+    local function win(page)
+        nextAddr = nextAddr + 0x10
+        local w = { addr = nextAddr, vis = true, full = CLS .. " /Engine/Transient.GameEngine_0:LiveGameInstance_0."
+                    .. "WBP_Menu_IngameHangar_" .. page .. "_C_" .. nextAddr .. ".WidgetTree.WBP_Menu_IngameHangar_Common_000" }
+        function w:IsVisible() return self.vis end
+        return w
+    end
+    -- (a blueprint's own copy in its WidgetTree, never on screen: FindAllOf finds it too, never kept)
+    local arch = { addr = 7, vis = true, full = CLS .. " /Game/Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_"
+                   .. "Confirmation_000.WBP_Menu_IngameHangar_Confirmation_000_C:WidgetTree.WBP_Menu_IngameHangar_Common_000" }
+    function arch:IsVisible() return true end
+    local function walks() local n = 0; for _, c in ipairs(walked) do if c == CLS then n = n + 1 end end; return n end
+    local function has1(list, w) for _, x in ipairs(list) do if x == w then return true end end return false end
+    check(CFG.hud.landing and CFG.hud.landing.every_s == 2.0 and CFG.hud.landing.backstop_s == 30.0,
+          "CFG.hud.landing: every_s 2, backstop_s 30 ([hud.landing])")
+    -- sv_main.lua's music hold block, as it is (its tick and paused from probeTick)
+    local _, hA = mainSrc:find("\n%s*local tMh = os%.clock%(%)[^\n]*")
+    local hB = mainSrc:find("\n%s*perfAdd%(\"music hold\", tMh%)")
+    check(hA and hB and hA < hB, "sv_main.lua: the music hold block found")
+    local block = mainSrc:sub(hA + 1, hB)
+    check(not has(block, "FindAllOf") and not has(block, "tick % 2 == 0") and has(block, "landingShown(tick)")
+          and has(block, "landingLeft()"), "the music hold walks nothing itself: landingShown / landingLeft (sv_core.lua)")
+    local musicHold = assert(load("return function(tick, paused)\n" .. block .. "\nend", "=music hold"))()
+    local holds = {}
+    local rawHold = SV_MusicHold
+    function SV_MusicHold(h) holds[#holds + 1] = { h = h, at = clock } end
+    local onAir = true
+    local rawOnAir = playerOnAirfield
+    function playerOnAirfield() return onAir end
+    local rawCoop = COOP
+    COOP = { open = true }
+    D = { round = 28, now = 0, up = {}, musicHold = 0 }
+    local tick = 50000
+    local function step(n)                          -- n ticks: the hold every tick, the icons / the ammo panel's key between
+        for _ = 1, n do
+            tick, clock = tick + 1, clock + 0.25
+            musicHold(tick, false)
+            if onAir then landingWindows(tick) end  -- (they ask only down there)
+        end
+    end
+    local from = #logs + 1
+    found[CLS] = { arch }
+    local w0 = walks()
+    step(40)                                        -- 10 s on the airfield, the landing menu not up yet
+    local wApproach = walks() - w0
+    check(wApproach >= 5 and wApproach <= 7, "10 s down there with no menu: walked on landing and every 2 s ("
+          .. wApproach .. "; it was every other tick: 20)")
+    check(landingShown(tick) == false and #holds == 0, "... none on screen: the hold stays off")
+    check(#landingWindows(tick) == 0, "... the blueprint's own copy never kept (not /Engine/Transient)")
+    -- the menu opens
+    local w1 = win("Confirmation_000")
+    found[CLS] = { arch, w1 }
+    local opened = clock
+    w0 = walks()
+    for _ = 1, 12 do step(1); if #holds > 0 then break end end
+    check(#holds == 1 and holds[1].h == 1 and holds[1].at - opened <= 2.5,
+          string.format("the menu up: the hold on %.2f s later (every_s 2 at most), one walk (%d)", (holds[1] or { at = 0 }).at - opened,
+          walks() - w0))
+    check(has(line("^shop: the landing menu's windows kept between ticks", from) or "", "every 2.0 s while none is on screen and every 30 s"),
+          "logged once: " .. tostring(line("^shop: the landing menu's windows kept between ticks", from)))
+    step(8)
+    -- five STORE pages, each a new window, the last one's closing in the same frame
+    local cur, all = w1, { arch, w1 }
+    w0 = walks()
+    for p = 1, 5 do
+        local nw = win("Store" .. p)
+        cur.vis = false
+        all[#all + 1] = nw
+        found[CLS] = all
+        step(1)
+        check(landingVisible(nw) and has1(landingWindows(tick), nw), "page " .. p .. ": its window found the tick its last one closed")
+        step(7)
+        cur = nw
+    end
+    check(walks() - w0 == 5, "five pages: one walk each (" .. (walks() - w0) .. ")")
+    check(#holds == 1, "... the hold never let go (" .. #holds .. " changes)")
+    check(line("^shop: a landing menu page closed: its windows walked for again at once", from) ~= nil,
+          "the first page closed logged: " .. tostring(line("^shop: a landing menu page closed", from)))
+    -- a page that comes a moment late (its class loading): none on screen at the walk at once, the next a walk later
+    do
+        local late = win("StoreLate")
+        cur.vis = false
+        step(3)
+        check(#holds == 1 and landingShown(tick) == nil, "a page late: not known yet, the hold kept as it was")
+        all[#all + 1] = late
+        found[CLS] = all
+        local t0 = clock
+        for _ = 1, 12 do step(1); if landingVisible(late) then break end end
+        check(landingVisible(late) and clock - t0 <= 2.5 and #holds == 1,
+              string.format("... found by the next walk %.2f s on; the hold never let go", clock - t0))
+        cur = late
+    end
+    -- a 340-s stay on one page (the host's round-28 STORE visit: 1,176 walks), the closed ones collected half way
+    w0 = walks()
+    for i = 1, 1360 do
+        step(1)
+        if i == 680 then for _, w in ipairs(all) do if w ~= cur and w ~= arch then w.gone = true end end end
+    end
+    local wStay = walks() - w0
+    check(wStay >= 10 and wStay <= 12, "340 s on one page: " .. wStay .. " walks (the 30-s backstop alone; it was every tick: 1,360)")
+    check(#holds == 1 and landingShown(tick) == true, "... held all along")
+    local kept = landingWindows(tick)
+    check(#kept == 1 and kept[1] == cur, "... the collected ones dropped, never read (" .. #kept .. " kept)")
+    -- an address another object took: not the window it was
+    do
+        local w2 = win("StoreReuse")
+        all[#all + 1] = w2
+        found[CLS] = all
+        landingWindowsRefresh("press")
+        step(1)
+        check(has1(landingWindows(tick), w2), "a press on a page not among them: walked for at once")
+        w2.full = "TextBlock /Engine/Transient.GameEngine_0:Other_C_1.WidgetTree.TextBlock_3"
+        all[#all] = nil                             -- (not of the window class: no walk of it finds it)
+        found[CLS] = all
+        step(1)
+        check(not has1(landingWindows(tick), w2), "... its address another object's now: not kept")
+    end
+    -- a walk hold (a level being made) while a page closes: no walk then, the hold kept; walked for once it's over
+    do
+        local nw = win("StoreHeld")
+        cur.vis = false
+        all[#all + 1] = nw
+        found[CLS] = all
+        WALK.worldAt = clock
+        w0 = walks()
+        step(4)
+        check(walks() == w0 and landingShown(tick) == nil and #holds == 1, "a walk hold: no walk, not known, the hold kept")
+        step(10)
+        check(landingVisible(nw) and #holds == 1, "... over: walked for, the new page found")
+        WALK.worldAt = nil
+        cur = nw
+    end
+    -- a hold that starts between the look's check and its walk (FindAllOf's own walkHold): the kept ones left as they were
+    do
+        local nw = win("StoreRace")
+        cur.vis = false
+        all[#all + 1] = nw
+        found[CLS] = all
+        local rawHoldFn, asks = walkHold, 0
+        walkHold = function() asks = asks + 1; if asks == 1 then return nil end return "a level is loading (race)" end
+        local before = #LANDW.list
+        w0 = walks()
+        step(1)
+        walkHold = rawHoldFn
+        check(walks() == w0 and #LANDW.list == before and LANDW.force == "closed" and #holds == 1,
+              "a walk held inside FindAllOf: nothing taken as found, the kept ones kept (" .. #LANDW.list .. "), the walk still owed")
+        step(1)
+        check(landingVisible(nw) and walks() == w0 + 1, "... walked for at the next look, the new page found")
+        cur = nw
+    end
+    -- takeoff: the menu closes; let go once a walk looked again (at most every_s on)
+    local closed = clock
+    cur.vis = false
+    for _ = 1, 16 do step(1); if #holds > 1 then break end end
+    check(#holds == 2 and holds[2].h == 0 and holds[2].at - closed <= 2.75,
+          string.format("the menu closed: the hold off %.2f s later", (holds[2] or { at = 0 }).at - closed))
+    -- off the airfield: the visit's line
+    onAir = false
+    step(1)
+    local V = line("^shop: the landing menu's windows over this airfield visit", from)
+    check(V and V:find("on landing 1, a page closed 9, none on screen 7, a STORE press 1, backstop 11; a walk held back on %d+ looks") ~= nil,
+          "the visit's walks logged as it ends: " .. tostring(V))
+    local vw = V and tonumber(V:match("%): (%d+) walks? of"))
+    check(vw and vw <= 30, "... " .. tostring(vw) .. " walks over the whole visit (~7 minutes; every tick before: ~1,700)")
+    w0 = walks()
+    step(20)
+    check(walks() == w0, "off the airfield: nothing asked, nothing walked")
+    -- a low pass with no menu: counted as a pass, told with the next visit that had one
+    from = #logs + 1
+    onAir = true
+    found[CLS] = { arch }
+    step(12)
+    onAir = false
+    step(1)
+    check(line("^shop: the landing menu's windows over this airfield visit", from) == nil, "a pass with no landing menu: no line")
+    onAir = true
+    local w9 = win("Confirmation_000")
+    found[CLS] = { arch, w9 }
+    w0 = walks()
+    step(1)
+    check(walks() == w0 + 1 and landingVisible(w9), "a new visit: walked for at once (on landing)")
+    -- the asks stop with no landingLeft (an older runtime: no music hold): 3 s on, the next look a new visit
+    step(4)
+    clock = clock + 4
+    w0 = walks()
+    step(1)
+    check(walks() == w0 + 1, "no look for 4 s: the next is a landing (walked for at once)")
+    w9.vis = false
+    step(12)
+    onAir = false
+    step(1)
+    V = nil
+    for i = from, #logs do if has(logs[i], "before it 1 pass with no landing menu (") then V = logs[i] end end
+    check(V and V:find("^shop: the landing menu's windows over this airfield visit") ~= nil,
+          "... the pass told with the next visit's line: " .. tostring(V))
+    -- the teardown gate's drop
+    landingWindowsForget()
+    check(#LANDW.list == 0 and #LANDW.out == 0 and LANDW.visit == nil, "landingWindowsForget: the kept ones forgotten")
+    SV_MusicHold, playerOnAirfield, COOP = rawHold, rawOnAir, rawCoop
+    found[CLS] = nil
 end
 
 ---------------------------------------------------------------------------------------------------- the source

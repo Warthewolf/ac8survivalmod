@@ -564,14 +564,17 @@ local function probeTick(tick)
                 if playerOnAirfield() then
                     if paused then
                         hold = 1
-                    elseif COOP and COOP.open and (tick % 2 == 0 or D.musicHold == 1) then
-                        for _, w in ipairs(landingWindows(tick)) do                       -- (sv_core.lua: once a tick)
-                            local okV, vis = pcall(function() return w:IsVisible() end)   -- (a closed one may linger
-                            if valid(w) and okV and vis == true then hold = 1; break end  -- until it's collected)
-                        end
                     elseif COOP and COOP.open then
-                        hold = D.musicHold or 0                     -- (looked at every other tick)
+                        -- ((0.73.80, findings perf4 / specials8) the landing menu's kept windows, looked at every tick, no
+                        -- walk of its own (sv_core.lua landingShown): one on screen holds it (a closed one may linger until
+                        -- it's collected: IsVisible); none lets go once a walk has looked again; not known yet (a page just
+                        -- closed, the next one looked for) keeps it as it was. It walked every object every tick while
+                        -- held: 1,176 walks in the host's 5.6-minute STORE stay of 2026-11-04)
+                        local shown = landingShown(tick)
+                        if shown == nil then hold = D.musicHold or 0 else hold = shown and 1 or 0 end
                     end
+                else
+                    landingLeft()                          -- (this airfield visit's walks logged: sv_core.lua)
                 end
                 if hold ~= D.musicHold then
                     D.musicHold = hold
