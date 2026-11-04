@@ -4,7 +4,8 @@
 --   B2 a long run (40 rounds of 30 aircraft, a co-op joiner's and the host's): `planes` loses its downed planes 10 s on
 --     (prunePlanes, every 2 s), stays bounded, never while a Ladon round keeps its index (s.planeFrom); the first logged;
 --   B5 the Ladon missiles: kept as they're made (HIT.new -> HIT.ladonPool), the toning sweep over them, the walk for the
---     two classes every 10 s instead of twice each sweep; a gone one off the pool; the pool bounded over the run;
+--     two classes once a level (0.73.79; every 10 s in 0.73.77) instead of twice each sweep; a gone one off the pool;
+--     the pool bounded over the run;
 --     a far missile's position read every other tick, a near one's every tick;
 --   B1 the perf line: every part named, the shares within a part ("allies/...") apart and not counted twice, the untimed
 --     rest; its second line: the lists' sizes (planes, held, allies, missiles, the co-op ones through COOP.sizes), the
@@ -182,7 +183,7 @@ for i = 1, 80 do                                   -- 20 s of a Ladon up: the sw
 end
 local walks = 0
 for i = w0 + 1, #walked do if walked[i] == "BP_wp_vls_ladon_C" then walks = walks + 1 end end
-check(walks <= 3, string.format("20 s of a Ladon up: the walk for its missiles %d times (every 10 s; it was twice every 0.5 s: 40)", walks))
+check(walks <= 3, string.format("20 s of a Ladon up: the walk for its missiles %d times (once a level and every 60 s since 0.73.79; it was twice every 0.5 s: 40)", walks))
 check(vls[1].damage <= 10.5 and vls[13].damage <= 10.5 and sure.damage <= 10.5, "... and every one launched again toned down again")
 check(wFirst <= 2, "the first sweep: one walk a class at most (" .. wFirst .. ")")
 check(line("^hits: the Ladons' missiles toned from their pool") ~= nil, "logged once: " .. tostring(line("^hits: the Ladons' missiles toned")))
@@ -190,7 +191,8 @@ vls[5].gone = true
 now = now + 0.5
 HIT.tick(pc, now)
 check(HIT.ladonPool[vls[5].addr] == nil, "a missile gone: off the pool at once, never touched again")
-HIT.ladonPool[vls[6].addr].name = "something else"   -- (its address another object's now)
+-- (its address another object's now: (0.73.79) another class's, so not a Ladon missile kept under its new name)
+vls[6].full = "BP_wp_msl_a0_C " .. lvl .. "BP_wp_msl_a0_C_" .. vls[6].addr
 now = now + 0.5
 HIT.tick(pc, now)
 check(HIT.ladonPool[vls[6].addr] == nil, "an address used again (its name not the missile's): off the pool")

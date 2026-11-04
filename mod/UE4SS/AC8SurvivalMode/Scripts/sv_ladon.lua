@@ -580,8 +580,11 @@ function HIT.tick(pc, now)
         if not step and (not HIT.ladonWalked or HIT.newDropped or now >= (HIT.ladonWalkAt or 0)) then step = 1 end
         if step then
             local cls, isCertain = WALK_CLS[step][1], WALK_CLS[step][2]
+            -- (UE4SS answers nil for none found too: only a held walk (sv_core.lua held(): WALK.heldWhy) is tried again
+            -- next sweep; review of 2026-11-04: before any Ladon missile existed it walked every sweep)
             local list = FindAllOf(cls)
-            if type(list) == "table" then                  -- (nil: held, sv_core.lua walkHold: tried again next sweep)
+            if list == nil and not (WALK and WALK.heldWhy) then list = {} end
+            if type(list) == "table" then
                 if step == 1 then HIT.newDropped, HIT.ladonWalkAdded = nil, 0 end
                 local added = 0
                 for _, o in ipairs(list) do
@@ -593,7 +596,7 @@ function HIT.tick(pc, now)
                     HIT.ladonWalkStep, HIT.ladonWalked = nil, true
                     HIT.ladonWalkAt = now + (HIT.hookSeen and LADON_WALK_S or LADON_BLIND_S)
                     HIT.ladonWalks = (HIT.ladonWalks or 0) + 1
-                    if (HIT.ladonWalks >= 2 and HIT.ladonWalkAdded > 0) or (HIT.ladonWalks == 2 and not HIT.poolSaid) then
+                    if (HIT.ladonWalks >= 2 and HIT.ladonWalkAdded > 0) or (HIT.ladonWalks == 1 and not HIT.poolSaid) then
                         HIT.poolSaid = true
                         local k = 0
                         for _ in pairs(HIT.ladonPool or {}) do k = k + 1 end

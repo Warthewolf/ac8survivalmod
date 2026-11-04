@@ -373,7 +373,7 @@ check(evs("^RE_SV_WolfHold") == HOLD and D.wolf[W].state == "held"
       and has(line("roles: " .. W .. " (wolf) trap ", from), "after its orders, you down at the airfield (1 other player flying): held B, D"),
       "... at hold_after_s: held with you down (" .. tostring(line("roles: " .. W .. " (wolf) trap ", from)) .. ")")
 wolfTicks(100 + hAfter + 0.25, 100 + hAfter + hMax + 1)
-check(D.wolf[W].state == "free" and not WOLF.holding(W) and evs("^RE_SV_WolfFree") ~= ""
+check((D.wolf[W] == nil or D.wolf[W].state == "free") and not WOLF.holding(W) and evs("^RE_SV_WolfFree") ~= ""
       and has(line("roles: " .. W .. " (wolf) trap freed", from), "held " .. hMax .. " s"),
       "... hold_max_s on, you still down: let go (its co-op hunt then goes on)")
 grounded = false

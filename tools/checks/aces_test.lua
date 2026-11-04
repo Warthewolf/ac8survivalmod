@@ -518,8 +518,9 @@ check(WOLF.holding(U) and D.wolf[U].state == "held" and evs("^RE_SV_WolfHold") =
       and evs("^RE_SV_WolfFree") == "" and since(from_, "trap freed") == 0,
       "held 87 s without meeting anyone (past roles.wolf's 60 s): still held")
 for _, x in ipairs(planes) do move(x, KM(3.8 + x.k * 0.05, 0)) end
+local wu = D.wolf[U]                               -- ((0.73.79) a sprung trap's entry is dropped a tick on: kept here)
 wolfTo(190.25, 200)
-check(noTell() and evs("^RE_SV_RadioEnLure") ~= "" and D.wolf[U].untilContact == nil and D.wolf[U].maxFrom == 190.5
+check(noTell() and evs("^RE_SV_RadioEnLure") ~= "" and wu.untilContact == nil and wu.maxFrom == 190.5
       and evs("^RE_SV_Wolf[FT]") == "RE_SV_WolfFree_15B;RE_SV_WolfTurn_15B;RE_SV_WolfFree_15D;RE_SV_WolfTurn_15D;RE_SV_WolfFree_15F;RE_SV_WolfTurn_15F"
       and has(line("roles: " .. U .. " (wolf) trap freed (Valkyrie's trap springs)", from_), "turned onto the player"),
       "met at last (190 s): its lure line, its trap springs on you then (" .. evs("^RE_SV_Wolf[FT]") .. ")")

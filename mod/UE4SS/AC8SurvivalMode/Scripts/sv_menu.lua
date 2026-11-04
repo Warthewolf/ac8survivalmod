@@ -596,11 +596,11 @@ function MENU.tick(tick)
     end
     -- (the lobby row while you host; not in a run: 0.73.79. The first pass after a run sends what changed with no
     -- relabel walk: no Survival page is on screen yet)
+    if not D and MENU.lastD then MENU.afterRun = true end      -- (the run just ended: its first pass, below)
     if tick % 8 == 3 and not D then MENU.texts(not MENU.afterRun, "lobby"); MENU.afterRun = nil end
     -- a run started: its mode is QUICK START's from now on
     if D ~= MENU.lastD then
         MENU.lastD = D
-        if not D then MENU.afterRun = true end
         if D then
             RELABEL = {}                                               -- (0.73.73: the main menu's waiting labels: gone with it)
             local m = MENU.mode or "solo"

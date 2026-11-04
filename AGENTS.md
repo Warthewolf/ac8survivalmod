@@ -1213,6 +1213,13 @@ a hard rule until a test confirms it.
   lists:` no repeated walks of the Alicorn's part classes, PlayerController, the Ladon missiles, LiveAIGroundDummy;
   `finds:` few scans; `special: the Alicorn's ... found by a search` should not appear; no "the Alicorn dives" after
   "its core opens"; `sound: VALKA's N sound files loading` before her round.
+- Review of 2026-11-04 (3 reviewers, each finding verified): fixed a Ladon walk that never finished when none existed yet
+  (UE4SS answers nil for none found as for a held walk: only WALK.heldWhy means held), the Alicorn's railgun / VLS
+  "looked for again" reusing the kept list (parts(cls, fresh)), bought defences unrepaired with [allies] off (the count
+  unknown: the walk), a joiner's VALKA preload (the host's special is a table), the menu's first pass after a run; tests
+  brought to the new timings. Every Lua test in tools/checks passes (run through lupa's Lua 5.4: `pip install lupa`, and
+  build/checks/lua.exe a wrapper running a script with it, when lua.org can't be reached); the C tests need Windows
+  headers, the build-side checks build/'s scriptobjs.pkl.
 
 ## 0.73.79-coop2mp.80 (same build): joiners couldn't finish enemies (2026-11-04; Lua only, on runtime 0.32.24; not yet run in game)
 The 0.73.78 co-op run of 2026-11-03 (Saint Alessia hosting, Shazzy, cressendo, Nada; logs in the user's uploads
