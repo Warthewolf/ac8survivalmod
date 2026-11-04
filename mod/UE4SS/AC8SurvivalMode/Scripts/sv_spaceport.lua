@@ -484,6 +484,11 @@ function SPORT.tuTick(now, s)
         tu.queue = {}
         return
     end
+    -- ((review of 27097b9, finding 1) solo down at the airfield (nobody else flying), as the deck and the round's spawns: a
+    -- group due, even one that waited for its flights (holdClocks moves its time on with the clock: still due), waits
+    -- until you're up, then comes at once; before, one whose last group the airfield's guns finished off came while you
+    -- were in the STORE)
+    if playerOnAirfield() and othersFlying() == 0 then return end
     local c, t = cfg().tu160, CFG.hud.text
     local fl = tuFlights()
     local opts = tuOptions(fl, tu.group)
@@ -522,9 +527,12 @@ function SPORT.tuTick(now, s)
                                                           distance_km = c.distance_km })
         local r = okS and tonumber(res) or nil           -- ((review of 7bcd4c4) res kept: an error's text, logged)
         if r and r > 0 then
-            sent = sent + r
+            -- ((review of 27097b9, finding 2) SV_Spawn answers the unit's ChildAIGameObjects: a Tu-160 brings its wing
+            -- objects, 12 for the 4-ship; the aircraft are the flight's size)
+            local ac = (f.size and f.size > 0) and f.size or r
+            sent = sent + ac
             tu.units[f.unit] = bearing
-            parts[#parts + 1] = string.format("%s: %d", f.unit, r)
+            parts[#parts + 1] = string.format("%s: %d (%d objects)", f.unit, ac, r)
         else
             parts[#parts + 1] = string.format("%s: %s", f.unit, okS and ("not spawned (" .. ((SV_ERR and r and SV_ERR[r]) or tostring(res)) .. ")")
                 or ("error " .. tostring(res)))
@@ -580,8 +588,9 @@ end
 -- launches. The round then ends as any does, and the retake comes after its break.
 -- ((review of 7bcd4c4) The Tu-160s already sent (SPORT.tuTick: bomber flights, no pool index and no despawn event of their
 -- own) fall back too: off the round's list (D.up), D.heavy and D.heavyPath, their planes marked down and withdrawn (bombTick
--- bombs with any heavy plane not down; the sweep neither pays nor counts them), on the host nobody's (COOP.takenOff: a
--- later shot or the recycle pays no player), recycled in the break as the fighters (D.spWithdrawn: SPORT.planRound). They
+-- bombs with any heavy plane not down; the sweep neither pays nor counts them), nobody's on the host (COOP.takenOff: a
+-- later shot or the recycle pays no player) and on every joiner (COOP.withdrawn: "wd", their copies marked as here; review
+-- of 27097b9), recycled in the break as the fighters (D.spWithdrawn: SPORT.planRound). They
 -- fly on until then, harmless. Before, they held the round (and bombed on) until all were shot down. Not yet sent:
 -- tuTick says so (s.captured).)
 local function withdraw(s)
@@ -599,8 +608,11 @@ local function withdraw(s)
             gone[u] = true
             gone[#gone + 1] = u
         elseif tuUnits[u] then
-            nTu = nTu + math.max(0, ALIVE.ask(u))
+            for _, p in ipairs(planes or {}) do                -- (aircraft: a Tu-160's spawn counts its wings too)
+                if p.unit == u and not p.down then nTu = nTu + 1 end
+            end
             if COOP and COOP.takenOff then pcall(COOP.takenOff, u) end
+            if COOP and COOP.withdrawn then pcall(COOP.withdrawn, u) end   -- ((review of 27097b9, finding 3) the joiners' copies off, unpaid)
             if D.heavy then D.heavy[u] = nil end
             if D.heavyPath then D.heavyPath[u] = nil end
             gone[u] = true

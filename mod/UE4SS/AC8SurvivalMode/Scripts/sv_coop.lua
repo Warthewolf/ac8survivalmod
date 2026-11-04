@@ -617,6 +617,16 @@ function COOP.takenOff(unit)
     end
     return n
 end
+-- ((review of 27097b9, finding 3) A flight the host took off with no despawn event a joiner sees (the Spaceport's Tu-160s
+-- at a capture: bomber flights, no RE_SV_FlightOff_NN): "wd|<unit>". Each joiner marks its copies down and withdrawn
+-- (sv_rounds.lua flightWithdrawn), as hostEvent does for RE_SV_FlightOff_NN, so the host's later "dn" with no player (a
+-- shot, the recycle) pays nobody there either; before, a joiner's sweep paid each by the raw rule ("you" for a copy nobody
+-- hit there). The host's alone; whether it was sent.
+function COOP.withdrawn(unit)
+    if not (COOP.host() and type(unit) == "string" and unit ~= "") then return false end
+    send(true, "wd", unit)
+    return true
+end
 local function tallyKill(e, kl)
     if not (kl and kl.slot) or (type(levelGoing) == "function" and levelGoing()) then return end
     M.tally = M.tally or {}
@@ -4938,6 +4948,12 @@ local function onJoinerMessage(f)
             if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock(), unit = unit } end
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
+        end
+    elseif k == "wd" and COOP.client() then              -- ((review of 27097b9, finding 3) a flight the host took off: COOP.withdrawn
+        local unit = short(f[2], 96)
+        if unit ~= "" and flightWithdrawn then
+            log(string.format("coop: the host took %s off (withdrawn, no despawn event): %d of its copies here off, unpaid",
+                unit, flightWithdrawn(unit)))
         end
     elseif k == "db" and COOP.client() then              -- ((0.73.77, I2: S9) the host's penalty: off your zollars too
         local n = tonumber(f[2]) or 0

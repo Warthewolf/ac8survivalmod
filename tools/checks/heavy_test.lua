@@ -62,7 +62,7 @@ local function fresh()
 end
 local function plane(unit, k, model)
     local p = { unit = unit, k = k, name = "BP_OP0011_" .. (model or "tu95") .. "_CP_C_" .. (100 + k),
-                obj = { full = "x" }, at = { X = 0, Y = 0, Z = 200000 } }
+                obj = { full = "x" }, at = { X = 0, Y = 0, Z = 200000 }, born = D.now }   -- (born: sv_core.lua logPlane's)
     function p.obj:K2_GetActorLocation() return { X = AIRFIELD.X + 2000000, Y = AIRFIELD.Y, Z = 200000 } end
     planes[#planes + 1] = p
     return p
@@ -110,6 +110,52 @@ check(evs("HeavyLoop") == string.format("RE_SV_HeavyLoop_%02dBG", n2), "and only
 b.down, c.down = true, true
 bombTick(14)
 check(not D.heavyPath[H2] and evs("HeavyLoop") == string.format("RE_SV_HeavyLoop_%02dBG", n2), "the whole flight down: nothing more")
+
+-- ((review of 27097b9, finding 0) a fresh spawn's planes reach `planes` ~2 ticks after it (sv_main.lua's pending, then
+-- logPlane), and bombTick can run first: its entry is kept until one of them is seen (5 s at most), and a plane of the
+-- flight's last spawn the sweep hasn't marked down yet isn't taken for this one's (born before it)
+print("bombTick: a fresh spawn's route kept until its planes are seen")
+fresh()
+D.heavy[H2] = true
+HEAVY.route(H2, at(270, 30))                      -- (D.now 100; its planes still pending)
+bombTick(2)
+check(D.heavyPath[H2] and D.heavyPath[H2].k == 0 and evs("HeavyLoop") == "",
+      "its planes not yet seen: the entry kept (0.73.80: dropped, so no handover when its lead went down)")
+D.now = 100.5
+local f1, f2 = plane(H2, 0, "t160"), plane(H2, 1, "t160")
+plane(H2, 2, "t160")
+bombTick(6)
+check(evs("HeavyLoop") == "" and D.heavyPath[H2], "its planes seen, the lead up: nothing")
+f1.down = true
+from = #logs + 1
+bombTick(10)
+check(evs("HeavyLoop") == string.format("RE_SV_HeavyLoop_%02dBG", n2) and D.heavyPath[H2].k == 1
+      and since(from, "lead down: object 1 takes the loop") == 1, "then its lead down: object 1 (B) on the loop")
+fresh()
+D.heavy[H2] = true
+D.now = 90
+local old = plane(H2, 3, "t160")                  -- (the last spawn's object 3: down, not yet seen so by the sweep)
+D.now = 100
+HEAVY.route(H2, at(0, 30))
+bombTick(2)
+check(evs("HeavyLoop") == "" and D.heavyPath[H2] and D.heavyPath[H2].k == 0,
+      "the last spawn's plane not yet swept down: not this spawn's, no handover to its object 3 (" .. evs("HeavyLoop") .. ")")
+old.down = true
+D.now = 100.5
+local g1, g2 = plane(H2, 0, "t160"), plane(H2, 1, "t160")
+g1.down = true
+bombTick(6)
+check(evs("HeavyLoop") == string.format("RE_SV_HeavyLoop_%02dBA", n2) and D.heavyPath[H2].k == 1 and not g2.down,
+      "this spawn's lead down: its object 1 (B) on the loop (" .. evs("HeavyLoop") .. ")")
+fresh()
+D.heavy[H2] = true
+HEAVY.route(H2, at(90, 30))
+D.now = 104
+bombTick(2)
+check(D.heavyPath[H2], "no plane seen 4 s on: still kept")
+D.now = 106
+bombTick(6)
+check(not D.heavyPath[H2] and evs("HeavyLoop") == "", "none ever seen, 6 s on: dropped")
 
 ---------------------------------------------------------------------------------------------------- the jammer's pod
 print("JAM.tick: the jammer's ECM pod")

@@ -146,6 +146,13 @@ function SV_UnitAlive(unit)
 end
 function SV_Recycle(unit, force) recycled[#recycled + 1] = unit .. "/" .. tostring(force); world[unit] = nil; return 1 end
 
+-- (sv_rounds.lua's flightWithdrawn, the real one: a joiner's copies of a flight the host took off, marked down and
+-- withdrawn: the sweep neither pays nor counts them)
+do
+    local fw = readAll(MOD .. "/Scripts/sv_rounds.lua"):match("\nfunction flightWithdrawn%(unit%).-\nend\n")
+    assert(fw, "sv_rounds.lua: flightWithdrawn not found")
+    assert(load(fw, "=sv_rounds.lua flightWithdrawn"))()
+end
 local downs = {}
 DOWN = { reset = function() end, me = function() return false end, onJoiner = function(f) downs[#downs + 1] = table.concat(f, "|") end,
          syncTo = function() end }
@@ -227,6 +234,12 @@ if ROLE == "host" then
     CFG.credits.team_x = 0.3
     check(share(3) == 0.3 and share(2) == 0.3, "host: ... at most [zollars] team_x")
     CFG.credits.team_x = 0.5
+
+    print("host: (review of 27097b9, finding 3) a flight taken off with no despawn event a joiner sees: wd")
+    s0 = #sent
+    local okWd, rWd = pcall(function() return COOP.withdrawn("EA_Unit_01_Air2") end)
+    check(okWd and rWd == true and table.concat(msgs("wd", s0 + 1), " ") == "-1>wd|EA_Unit_01_Air2",
+          "host: COOP.withdrawn(unit): \"wd|<unit>\" to every joiner (" .. tostring(okWd and rWd or rWd) .. ")")
 
     print("host: A9, the run-over for a player who links after it")
     s0 = #sent
@@ -457,6 +470,23 @@ else
           "join: ... logged")
     check(#callouts == cc + 1 and callouts[#callouts] == "DESTROYED", "join: [coop] kill_callout on: Survival's DESTROYED callout")
     CFG.coop.kill_callout = false
+
+    print("join: (review of 27097b9, finding 3) the host's Tu-160s withdrawn at a capture: wd")
+    local tuC, otherC = obj("BP_OP0060_t160_CP", 5000, true), obj("BP_OP1022_f16c_CP", 5000, true)
+    local keepP = planes
+    planes = { { obj = tuC, unit = "EA_Unit_01_Air2", k = 0, name = "BP_OP0060_t160_CP_C_1" },
+               { obj = otherC, unit = "ERA_Unit_01_Dep_Air0", k = 0, name = "BP_OP1022_f16c_CP_C_1" } }
+    local tuP, otherP = planes[1], planes[2]
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|wd|EA_Unit_01_Air2"
+    tick()
+    check(tuP.down and tuP.withdrawn and not otherP.down, "join: the host's wd|EA_Unit_01_Air2: its copy here down and withdrawn (the sweep "
+          .. "pays and counts no plane down: 0.73.80 paid it as \"you\" at the host's dn with no player), nothing else")
+    check(has(line("coop: the host took EA_Unit_01_Air2 off (withdrawn, no despawn event)", from), "1 of its copies here off, unpaid"),
+          "join: ... logged")
+    s0 = #sent
+    check(COOP.withdrawn("EA_Unit_01_Air2") == false and #msgs("wd", s0 + 1) == 0, "join: COOP.withdrawn: the host's alone")
+    planes = keepP
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs

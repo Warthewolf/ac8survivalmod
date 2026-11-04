@@ -69,6 +69,9 @@ local SIZE = function(u)
     if u == "SV_Unit_SpIslExsam" or u == "SV_Unit_SpIslAA" then return 5 end
     if u:find("^SV_Unit_SpIsl") then return 4 end
     if u:find("^SV_Unit_Sp") then return 1 end
+    -- (a heavy bomber's own objects come with it: SV_Spawn answers the unit's ChildAIGameObjects, 12 for the Tu-160
+    -- 4-ship with their wings (the testers' logs); review of 27097b9, finding 2)
+    if HEAVY_UNIT and HEAVY_UNIT[u] then return 3 * flightSize(u) end
     return flightSize(u)
 end
 function SV_Spawn(unit, x, y, z, yaw)
@@ -933,7 +936,8 @@ end
 check(okPos, "from its side within spread_deg, distance_km out, facing the airfield, at the heavies' height: " .. why)
 check(setAc[TU2] == "t160_common" and D.up[TU2] and D.heavy[TU2] and #heavyRoutes == 1, "on the Tu-160's row, up for the round, bombing as heavies, on the heavies' route")
 check(c1 and c1.text == T.sp_tu160 and c1.sub == string.format(T.sp_tu160_sub, compassName(first)), "called out: " .. tostring(c1 and c1.sub))
-check(since(L2, "^special: Tu%-160 group 1 %(SV_Unit_SpWaspA sunk%): 4 from the %u+ %(bearing %d+; EA_Unit_01_Air2: 4%)$") == 1, "logged")
+check(since(L2, "^special: Tu%-160 group 1 %(SV_Unit_SpWaspA sunk%): 4 from the %u+ %(bearing %d+; EA_Unit_01_Air2: 4 %(12 objects%)%)$") == 1,
+      "logged: 4 aircraft, the spawn's 12 objects (review of 27097b9, finding 2: 12 from the ...)")
 -- a second Wasp while those 4 are up: its group waits for them
 L2 = #logs + 1
 sink("C")
@@ -951,15 +955,25 @@ check(SPORT.clientRow(T) and SPORT.clientRow(T):find(string.format(T.sp_row_tu16
 SPORT.fromHost("a:5:2:30:99;-")
 check(SPORT.hostRow == nil, "a joiner: a Tu-160 count past 24 dropped")
 COOP = nil
+-- ((review of 27097b9, finding 1) solo, down at the airfield: the 4 shot down by the airfield's guns meanwhile; group 2,
+-- due already (it waited for them), waits until you're up, then comes at once (its delay long run: nothing added)
+grounded = true
+run(s, now + 0.25, now + 2)
+alive[TU2] = 0
+for _, p in ipairs(planes) do p.down = true end
+run(s, now + 0.25, now + 6)
+check(#tuSpawns() == 1 and #s.tu.queue == 1 and s.clocksHeld, "down at the airfield, the 4 shot down: group 2 (due) waits until you're up ("
+      .. #tuSpawns() .. " sent)")
+grounded = false
 alive[TU2] = 0                                   -- (all 4 shot down)
 for _, p in ipairs(planes) do p.down = true end
 L2 = #logs + 1
-run(s, now + 0.25, now + 2)
+run(s, now + 0.25, now + 1.25)
 ts = tuSpawns()
 local c2 = callouts[#callouts]
 local second = s.tu.bearings[(s.tu.side - 2) % #s.tu.bearings + 1]
 check(#ts == 2 and ts[2].unit == TU2 and #s.tu.queue == 0 and second ~= first and offBy(compassOf(ts[2].x, ts[2].y), second) <= SP.tu160.spread_deg + 0.01,
-      "the 4 shot down: group 2 sent at once, from the other side (" .. compassName(first) .. " then " .. compassName(second) .. ")")
+      "up again: group 2 sent within a second, from the other side (" .. compassName(first) .. " then " .. compassName(second) .. ")")
 check(c2 and c2.sub == string.format(T.sp_tu160_sub, compassName(second)), "called out for its side: " .. tostring(c2 and c2.sub))
 check(not SPORT.busy(s) or SPORT.shipsUp(s) > 0, "nothing waiting: the special's busy is the ships'")
 -- the fighters' next wave isn't held back by them; the round's end is
@@ -980,7 +994,7 @@ for g = 3, 4 do                                  -- (each group shot down: the n
     run(s, now + 0.25, now + SP.tu160.delay_s + 1)   -- (its delay from its Wasp's sinking, then the 4 seen down)
     D.at = 0
     okW, errW = pcall(roundsTick, now + 1)
-    check(okW and D.state == "fighting" and #tuSpawns() == g and alive[TU2] == 4, "group " .. (g - 1) .. " down: group " .. g .. " sent, the round goes on ("
+    check(okW and D.state == "fighting" and #tuSpawns() == g and alive[TU2] == 12, "group " .. (g - 1) .. " down: group " .. g .. " sent, the round goes on ("
         .. tostring(errW) .. ", " .. #tuSpawns() .. " sent)")
 end
 alive[TU2] = 0
@@ -1031,8 +1045,8 @@ D.heavyPath = { [TU2] = { s = "A", k = 0 } }
 local ERt = CFG.pool[1]
 D.up[ERt], alive[ERt] = true, 2
 planes = { { unit = TU2, obj = { full = "BP_OP0060_t160_a" }, name = "BP_OP0060_t160_a" }, { unit = ERt, obj = { full = "p" }, name = "p" } }
-local tookOff = {}
-COOP = { takenOff = function(u) tookOff[u] = true; return 0 end }
+local tookOff, told = {}, {}
+COOP = { takenOff = function(u) tookOff[u] = true; return 0 end, withdrawn = function(u) told[u] = true; return true end }
 s.capture = 100
 L2 = #logs + 1
 run(s, now + 0.25, now + 1.5)
@@ -1043,6 +1057,8 @@ check(not D.up[TU2] and not D.up[ERt] and not (D.heavy and D.heavy[TU2]) and not
       "the Tu-160s off D.up, D.heavy and D.heavyPath with the fighters")
 check(planes[1].down and planes[1].withdrawn and SPORT.tuUp(s) == 0 and D.spWithdrawn and D.spWithdrawn[TU2] and tookOff[TU2],
       "their planes down and withdrawn, kept for the next round's recycle, nobody's in co-op")
+check(told[TU2] and not told[ERt], "co-op: the joiners told (COOP.withdrawn: \"wd\"), their copies off unpaid there too; the fighters by their "
+      .. "RE_SV_FlightOff_NN (review of 27097b9, finding 3)")
 check(since(L2, "; the Tu%-160s too: EA_Unit_01_Air2 %(%d+ aircraft, no despawn event: recycled at the next round's plan%)$") == 1, "logged with the fighters'")
 for u in pairs(alive) do if u:find("^SV_Unit_Sp") then alive[u] = 0 end end
 D.state, D.at = "fighting", 0
