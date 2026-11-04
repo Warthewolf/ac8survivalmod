@@ -1251,3 +1251,10 @@ copy_floor_test.lua (its five new checks fail on 0.73.78's sv_coop.lua):
   version left at 0.73.78-coop2mp.79 so patched and unpatched players still link (a joiner needs it for their own kills).
   It changes the build hash: register the patched hash on /admin (the log's first "leaderboard: the game started: build
   hash" line). Its sv_coop.lua is e3571c3's minus Tier 1's two co-op lines and the TEST ONLY block: all of it is in 0.73.79.
+- 0.73.79 patches (2026-11-04, made in the cloud session: no full build there, the containers and main.dll need the user's
+  PC): testing/builds/AC8SurvivalMode_COOP2MP_0.73.79_TESTER_Patch.zip (Saint Alessia: test keys and loggers kept) and
+  AC8SurvivalMode_COOP2MP_0.73.79_Patch.zip (her joiners: stripped, quiet logs), each the 29 Scripts/*.lua only, staged as
+  package_release.sh does (coop_edition.py, edition.py online; the players' strip_test_only.py + quiet_logs.py), over a
+  0.73.78 COOP2MP install: only Scripts/*.lua changed since 294712f. VERSION 0.73.79-coop2mp.80 (everyone in a session
+  needs one of them), on runtime 0.32.23 (no new native function; 0.32.24's log flush comes with the next full build).
+  Both load in lua_load_test. Their build hashes come from the game's first log line: register them before ranked runs.
