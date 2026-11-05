@@ -910,6 +910,7 @@ local function awacsService(R, s, now, f)
         end
         if why then
             s.removeAt, s.goneWhy = now, why
+            if COOP and COOP.removeNow then pcall(COOP.removeNow, u) end   -- ((0.73.83) the joiners' copies down first)
             local r = type(SV_Event) == "function" and SV_Event(hm.remove) or -5
             log(string.format("allies: %s taken off (%s): %s %s", aw.name, why, hm.remove,
                 r == 1 and "fired" or ("NOT fired: " .. (SV_ERR[r] or tostring(r)))))

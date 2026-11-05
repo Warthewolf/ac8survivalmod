@@ -630,6 +630,27 @@ function COOP.takenOff(unit)
     end
     return n
 end
+-- ((0.73.83) the 0.73.79 co-op run of 2026-11-04, verified twice: each time the host took VOID WATCHER 1 off, the
+-- forwarded RE_SV_AwacsRemove switched the joiners' copy off before the host's "dn" (22-58 s later, at its health's 0)
+-- could finish it: its stream held at its last state (Rapt0r's 1,324 held moves) and a ghost copy up 6-14 minutes,
+-- until the next purchase. (The host's) Its copies down on every game first, unpaid ("dn|<id>|r"), then the event.
+function COOP.removeNow(unit)
+    if not (COOP.host() and type(unit) == "string") then return 0 end
+    local n, now = 0, os.clock()
+    for id, e in pairs(M.byId) do
+        if e.unit == unit and not e.dead then
+            e.dead, e.deadAt, e.killer = true, now, false
+            send(true, "dn", id, "r", "")
+            if not e.key and type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
+            local u = M.units[e.unit]
+            if u and e.ord and u.planes[e.ord] then u.planes[e.ord].dead = true end
+            if u and e.key and u.ground[e.key] then u.ground[e.key].dead = true end
+            n = n + 1
+        end
+    end
+    if n > 0 then log(string.format("coop: %s taken off here: its %d copies on the joiners taken down first (unpaid)", unit, n)) end
+    return n
+end
 -- ((review of 27097b9, finding 3) A flight the host took off with no despawn event a joiner sees (the Spaceport's Tu-160s
 -- at a capture: bomber flights, no RE_SV_FlightOff_NN): "wd|<unit>". Each joiner marks its copies down and withdrawn
 -- (sv_rounds.lua flightWithdrawn), as hostEvent does for RE_SV_FlightOff_NN, so the host's later "dn" with no player (a
@@ -1510,6 +1531,24 @@ local function hostEvent(name)                          -- (a joiner) one of the
     -- ((0.73.78, plan G4) a flight the host despawned (an ace break-off, the Spaceport's withdrawal): its copies here off,
     -- unpaid (sv_rounds.lua flightWithdrawn), fired here or not (the host's "dn" finishes them then); before, this game's
     -- sweep paid the vanished copies as its own kills a second on)
+    -- ((0.73.83) the host took VOID WATCHER 1 off: any copy of it still here unbound and taken down (unpaid), its unit off
+    -- this game's spawner list 2 s on (the host's recycles it then too); before, its stream held and its ghost flew on)
+    local aw = CFG.allies and CFG.allies.awacs
+    if type(aw) == "table" and type(aw.home) == "table" and aw.home.remove == name and aw.unit then
+        local n = 0
+        for id, c in pairs(M.copies) do
+            if c.unit == aw.unit then
+                killCopy(id, c.obj, true, true)
+                M.copies[id] = nil
+                n = n + 1
+            end
+        end
+        local cu = M.cunits[aw.unit]
+        if cu then cu.planes = {} end
+        M.recycleDue = M.recycleDue or {}
+        M.recycleDue[#M.recycleDue + 1] = { unit = aw.unit, at = os.clock() + 2, why = name }
+        log(string.format("coop: the host took %s off (%s): %d copies here taken down (unpaid), its unit off the list 2 s on", aw.unit, name, n))
+    end
     local fo = tonumber(tostring(name):match("^RE_SV_FlightOff_(%d%d)$"))
     local fu = fo and poolUnit and poolUnit(fo)
     if fu and flightWithdrawn then
@@ -5645,6 +5684,22 @@ function COOP.tick(tick)
     if not COOP.open then return end
     pcall(nameTick)
     pcall(M.asideTick, os.clock())                     -- ((0.73.83) set-aside planes kept off the radar)
+    if M.recycleDue and #M.recycleDue > 0 then         -- ((0.73.83) a unit the host took off, off this game's list too
+        local now0 = os.clock()
+        for i = #M.recycleDue, 1, -1 do
+            local e = M.recycleDue[i]
+            if now0 >= e.at then
+                table.remove(M.recycleDue, i)
+                local n = type(SV_UnitAlive) == "function" and SV_UnitAlive(e.unit) or -5
+                if n >= 0 and n ~= -7 and type(SV_Recycle) == "function" then
+                    crumb("coop: SV_Recycle " .. e.unit .. " (the host's " .. tostring(e.why) .. ")")
+                    local okR, r = pcall(SV_Recycle, e.unit, n > 0 and 1 or 0)
+                    log(string.format("coop: %s off this game's spawner list (the host's %s; %d alive here): SV_Recycle %s",
+                        e.unit, tostring(e.why), n, okR and tostring(r) or ("error " .. tostring(r))))
+                end
+            end
+        end
+    end
     -- the other games' messages
     for _ = 1, 600 do
         local m = SV_CoopRecv()
