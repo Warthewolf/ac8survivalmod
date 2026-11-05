@@ -1435,3 +1435,31 @@ journal), and the user's radar report. None of it is a hard rule until a test co
   FLARE PODS re-apply off), SECOND CHANCE's floor in solo after an airfield stop (INS.tick reads MinHealth back only with
   co-op's floor), a restart's fake 'round 1 clear', enemies aiming at a departed player's hidden plane, VOID WATCHER's ESM
   field list growing, the between-rounds repair walks, the Alicorn's VLS never matched in its spawn record.
+
+## 0.73.84-coop2mp.85: the crash on quit (Lua only, on runtime 0.32.23; 2026-11-05; not yet run in game)
+Shazzy's crash on quit of 2026-11-04 19:49:19 (0.73.82, co-op host, round 24, GUN tier 2; logs and dump in
+testing/logs/2026-11-04b/r24_host_Shazzy_0.73.82_quitcrash): UE4SS.dll+0x2ab5bd on the GameThread, reading obj+0x10 (its
+class) of a freed, unmapped object, 0.1 s after `level gate: closed` and the run's leaderboard lines, before the main
+menu's World. The stack held the key "damage" (UE4SS's FName lookup of a Lua property). runLeft's TAC.reset wrote the
+gun's stock damage back into the class default UP.apply kept (BP_plwp_gun_x1_C's: the player plane's weapon blueprint,
+loaded with the level), after the level's purge had freed it; most quits got there first (Saint Alessia's r14, r30, r32
+with the upgrade: a race). The 0.73.77 gate forgot every part's kept objects (LEVEL_DROPS) but this one. The F1 crashes
+on quit of 0.73.76 were at the same address; the 2026-11-01 s4 quit crash read "Pawn" (another cause, fixed in 0.73.73).
+None of it is a hard rule until a test confirms it.
+- sv_tactical.lua: gunLive(g) = liveObj(cdo) and the same full name (SV_ObjChain checks the memory readable, then the
+  GUObjectArray slot, not unreachable or garbage: the purge in progress won't free it); TAC.reset writes only then, else
+  `upgrades: N gun class default(s) gone with the level: forgotten, not touched`; UP.gunStock[class name] keeps each gun
+  class's stock damage for the session (never an upgraded value read as stock); UP.apply takes a class default again
+  when the kept one isn't live.
+- Same family, found by the reviews (each verified): VALKA's sky (sv_hud.lua: hudRed's at-once path only with its actor
+  live and the level not torn down, skyApply's components liveObj, LEVEL_DROPS "VALKA's sky"); the Ladon missile's class
+  default (sv_ladon.lua HIT.cdo: liveObj, forgotten in HIT.reset); VALKA's flare (liveObj); the shuttle pad (sv_rounds.lua:
+  SHUTTLE.gone / pad / obj outlived a quit and the next run's first shuttle round read the old level's actors with
+  valid() and wrote their flags: LEVEL_DROPS "the shuttle pad", each hidden object kept with its name and brought back
+  only live under it, the take-off and shuttleHealth liveObj / liveAddr; a restart keeps its pad); VALKA's song (sv_sound.lua:
+  a quit during it lost AKE_System_BGM_Mute_Off, which the runtime refuses while the gate is closed; SND.unmuteDue posts it
+  again from the next level's sound tick, every 2 s, 15 tries).
+- tools/checks/quit_cdo_test.sh (each guard mutation-checked; its valid() stub counts a freed read as the crash).
+- Lesson (candidate hard rule once a test confirms it): a game object kept between ticks, a /Game/ class default
+  included, is read only through liveObj / liveAddr (never valid(), which reads it), and every part that keeps one
+  registers a LEVEL_DROPS entry; a cleanup at the run's end checks liveObj before it puts anything back.
