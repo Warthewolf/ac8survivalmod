@@ -1335,6 +1335,16 @@ do
     SPC.cleanTick(302)
     check(recycled == VA.eml_unit .. "/1" and line("special: VALKA's opener railgun removed (SV_Recycle: 1)", f) ~= nil,
           "... with SV_Recycle: SV_Recycle(unit, 1), removed")
+    -- ((0.73.83) a unit with nothing of it up but still on the spawner's list (SV_UnitAlive 0): taken off it too, force 0,
+    -- from the queue at the next tick (the 0.73.79 run: the specials' units piled up on the list SV_UnitAlive walks)
+    recycled, SPC.recycleQ, SPC.recycleAt = nil, {}, nil  -- (the steps above' own entries dropped: this one alone)
+    alive[VA.eml_unit] = 0
+    SPC.cleanUp({ VA.eml_unit }, "a test", true, 310)
+    SPC.cleanTick(312)
+    check(recycled == nil and #SPC.recycleQ == 1, "(0.73.83) 2 s on, 0 alive: queued to come off the spawner's list (not forced)")
+    SPC.cleanTick(312.6)
+    check(recycled == VA.eml_unit .. "/0" and #SPC.recycleQ == 0 and line("special: VALKA's opener railgun taken off the spawner's list (its special over, nothing of it up", f) ~= nil,
+          "(0.73.83) ... then SV_Recycle(unit, 0), logged")
     -- her own unit at her death: her plane off the round's list (no pay) and finished off, her parts too, a pool left
     local body = obj("BP_OP1016_x40a_Valka_C_3", 2000)
     body.plane = true
@@ -1352,7 +1362,7 @@ do
     local cBody, cCk = obj("BP_OP1016_x40a_Valka_C_6", 2000), obj("BP_OP1016_x40a_RailGunCK_C_7", 800)
     cBody.plane = true
     SPC.CLEAN_OBJ[VA.unit] = { at = os.clock(), cBody, cCk }
-    planes, recycled, SPC.cleanQ = {}, nil, {}
+    planes, recycled, SPC.cleanQ, SPC.recycleQ = {}, nil, {}, {}
     alive[VA.unit] = 2
     SPC.cleanUp({ VA.unit }, "the host's valka over", "parts", 500)
     check(cBody.HealthInternal == 2000 and cBody.active == false and cBody.bShowHUDBox == false and cBody.hidden == true,

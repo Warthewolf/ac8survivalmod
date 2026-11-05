@@ -326,6 +326,7 @@ if rawSpawn then
             r = spawnRaw(unit, x, y, z, yaw)
         end
         crumb(string.format("spawn %s%s: %s", tostring(unit), x ~= nil and " at a pose" or "", tostring(r)))
+        if type(r) == "number" and r > 0 and SPC and SPC.sawSpawn then SPC.sawSpawn(unit) end   -- ((0.73.83) SPC.recycleLater's)
         if COOP.host() and type(unit) == "string" and not SLOT_OF[unit] then
             local ops, lvl = acOps[unit], levels[unit]
             acOps[unit], levels[unit] = nil, nil
@@ -682,7 +683,7 @@ local function hostTick()
     -- a flight with nothing left alive is forgotten (it's spawned again as a new one); one with nothing linked is
     -- forgotten once the spawner has none of it up (coop.11 sent a joiner who started over long-gone landing craft)
     local checkUp = now >= (M.nextUp or 0)
-    if checkUp then M.nextUp = now + 2 end
+    if checkUp then M.nextUp = now + 10 end              -- ((0.73.83) every 10 s, was 2: a native ask for each unlinked unit)
     for unit, u in pairs(M.units) do
         local alive, linked = false, u.n > 0
         for _, pl in pairs(u.planes) do if not pl.dead then alive = true end end
@@ -1431,6 +1432,7 @@ local function doSpawn(q)
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
     spawningUnit, spawningIdx = nil, nil
+    if type(r) == "number" and r > 0 and SPC and SPC.sawSpawn then SPC.sawSpawn(unit) end   -- ((0.73.83) this game's copies' units: SPC.recycleLater's)
     if r == -6 or r == -1 then                           -- (this game's level isn't ready: again in a second)
         q.tries = (q.tries or 0) + 1
         if q.tries < 30 then q.at = os.clock() + 1; M.cunits[unit] = old; return false end

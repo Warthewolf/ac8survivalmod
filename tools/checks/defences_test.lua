@@ -500,11 +500,11 @@ check(R.defCount.aa == 1 and R.defCount.sam == 0 and R.defCount.ciws == 2 and AL
       "the ALLIES row: " .. tostring(ALLY.hudLine()))
 alive.SV_Unit_Ciws_B = 0
 callouts = {}
-ALLY.tick(203)
+ALLY.tick(205)                                       -- ((0.73.83) its count kept up to 4.5 s: seen at the first check past it)
 check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub and line("allies: CIWS (SV_Unit_Ciws_B) lost in round 3", from)
       and has(ALLY.hudLine(), "CIWS 1"), "a CIWS lost: CIWS LOST, logged, the row counts 1")
 alive = { SV_Unit_AAGun_A = 1 }
-ALLY.tick(206)
+ALLY.tick(210)
 check(ALLY.hudLine():find("AA 1  SAM 0", 1, true) and not has(ALLY.hudLine(), "CIWS"), "none up: no CIWS on the row (" .. ALLY.hudLine() .. ")")
 local lvl = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel."
 local c1 = { full = "BP_GR033_ciws_CP_Ally_C " .. lvl .. "BP_GR033_ciws_CP_Ally_C_1", addr = addr(), HealthInternal = 200, MaxHealth = 60 }
@@ -1180,11 +1180,12 @@ do
     for _, kind in ipairs(DEF_KINDS) do
         for _, u in ipairs(DEF[kind].units) do
             nUnits = nUnits + 1
-            if (seen[u] or 0) ~= ((alive[u] or 0) > 0 and 2 or 0) then every = false end
+            if (seen[u] or 0) ~= ((alive[u] or 0) > 0 and 1 or 0) then every = false end
         end
     end
-    check(most <= math.ceil(nUnits / 8) and every, string.format("B3: the %d defence units' counts asked %d a tick at most: "
-          .. "the two up once every 2 s (8 ticks), the ones not built every 8 s; the 2 s checks from them", nUnits, most))
+    -- ((0.73.83) a share a tick of 16, each unit every 4 s: the 0.73.79 run's 12-14 ms a tick of these asks late)
+    check(most <= math.ceil(nUnits / 16) and every, string.format("B3: the %d defence units' counts asked %d a tick at most: "
+          .. "the two up once every 4 s (16 ticks), the ones not built every 8 s; the 2 s checks from them", nUnits, most))
     asks = {}
     for i = 1, 40 do ALLY.tick(304 + i * 0.25) end
     local idle = 0

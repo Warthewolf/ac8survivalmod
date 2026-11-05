@@ -234,8 +234,8 @@ if ROLE == "host" then
           "host: 12 s on, the Alicorn's core open and dive sent to that joiner")
     -- a unit with nothing linked and nothing up is forgotten (coop.11 sent long-gone craft to a joiner who started over)
     M.units.SV_Unit_Ghost = { gen = 99, n = 0, planes = {}, ground = {}, at = clock - 20 }
-    tick(2.5)
-    check(M.units.SV_Unit_Ghost == nil, "host: a unit the spawner has none of is forgotten")
+    tick(10.5)                                         -- ((0.73.83) looked at every 10 s, was 2)
+    check(M.units.SV_Unit_Ghost == nil, "host: a unit the spawner has none of is forgotten (within 10 s)")
     local out = {}
     for _, m in ipairs(sent) do
         local to, body = m:match("^(%-?%d+)>(.*)$")

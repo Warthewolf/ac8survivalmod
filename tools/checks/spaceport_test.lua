@@ -386,6 +386,41 @@ check(not SPORT.busy(s), "every ship sunk, nothing coming in: not busy")
 SPORT.roundOver(7, s)
 check(paid("spaceport held") == SP.reward + SP.reward_per_round * 10 and RUN.sport == nil and called(T.sp_held) ~= nil,
     "held: reward + reward_per_round x the round, RUN.sport nil, SPACEPORT HELD")
+-- ((0.73.83) the 0.73.79 co-op run of 2026-11-04: the sunk fleet and its waves stayed on the spawner's list SV_UnitAlive
+-- walks (17 -> 49 units, each ask 1.85 -> 6 ms, never back): once the round's over, each unit spawned in it with nothing
+-- of it alive comes off the list (SV_Recycle(unit, 0)), one every 0.5 s from 15 s on; a ship carried into the retake not
+do
+    local rec = {}
+    SV_Recycle = function(u, force) rec[#rec + 1] = { u = u, f = force, t = now }; alive[u] = -7; return 1 end
+    SPC.recycleQ, SPC.recycleAt, SPC.seenUnits = {}, nil, {}
+    for _, sh in ipairs(SPORT.fleet()) do SPC.sawSpawn(sh.unit) end     -- (as the spawns record them: sv_coop.lua's wrapper)
+    SPC.sawSpawn("SV_Unit_SpLcacAV")
+    alive.SV_Unit_SpLcacAV = 0
+    RUN.sport = { ships = { SV_Unit_SpAegisA = { kind = "aegis", group = "A" } } }   -- (afloat, carried into a retake)
+    s.state, s.cleaned, s.cleanAt = "done", nil, nil
+    local L0 = #logs + 1
+    now = 7; D.now = 7
+    SPC.endTick(7, s, nil, true)
+    local queued = #SPC.recycleQ
+    check(queued == 27, "(0.73.83) over: the 26 ships not carried into the retake and the wave spawned queued, no unit never spawned ("
+          .. queued .. ")")
+    for t = 7.25, 21.75, 0.25 do now = t; D.now = t; SPC.cleanTick(t) end
+    check(#rec == 0, "(0.73.83) ... none taken off before 15 s on")
+    for t = 22, 60, 0.25 do now = t; D.now = t; SPC.cleanTick(t) end
+    local all0, gap, aegisA, ford = true, math.huge, false, false
+    for i, r in ipairs(rec) do
+        if r.f ~= 0 then all0 = false end
+        if r.u == "SV_Unit_SpAegisA" then aegisA = true end
+        if r.u == "SV_Unit_SpFord" then ford = true end
+        if i > 1 then gap = math.min(gap, r.t - rec[i - 1].t) end
+    end
+    check(#rec == 27 and all0 and ford and not aegisA and gap >= 0.49,
+          string.format("(0.73.83) ... then each off the list once (SV_Recycle(unit, 0)), at least 0.5 s apart (%.2f), the carried "
+          .. "Aegis never (%d)", gap, #rec))
+    check(since(L0, "units to be taken off the spawner's list") == 1 and since(L0, "taken off the spawner's list %(its spaceport round over") == 27,
+          "(0.73.83) ... the queue logged once, each unit taken off logged")
+    SV_Recycle, RUN.sport = nil, nil
+end
 
 print("the Ford's deck")
 fresh(10)

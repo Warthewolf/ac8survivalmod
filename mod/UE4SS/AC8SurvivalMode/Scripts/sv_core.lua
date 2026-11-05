@@ -417,7 +417,9 @@ function levelGoing()
         -- (twice a second at most, once a second while latched. (0.73.79, the lag audit's item 5) It was 10 times a
         -- second, so every tick half asked: 0.75 ms each on a tester's PC. This is only the soft backstop: the runtime's
         -- teardown gate (levelGate) and svLevelOn close first in every quit logged since 0.73.77)
-        local every = LEAVE.why and 1 or 0.5
+        -- ((0.73.83) every 5 s: at ~7 ms an ask late in a long run it was 4 ms a tick, and the teardown gate closed first
+        -- in every quit of the 0.73.79 and 0.73.81 runs of 2026-11-04)
+        local every = LEAVE.why and 1 or 5
         if not LEAVE.probeAt or now - LEAVE.probeAt >= every then
             LEAVE.probeAt = now
             local u = CFG and type(CFG.pool) == "table" and CFG.pool[1] or nil
