@@ -1425,6 +1425,12 @@ journal), and the user's radar report. None of it is a hard rule until a test co
 - Shazzy's 0.73.82 run wasn't sent ('edited: coop.aircraft_per_player = 0.25', the host page's CO-OP ENEMIES): the row's
   help and the host's START RUN now say a co-op run off the room's default rules isn't ranked.
 - 0.73.82 in game (Shazzy hosting cressendo, 7 rounds): no error, no lost tick, the tick 4-6 ms; key presses not yet seen.
+- Review of the whole diff before shipping (2026-11-05, 3 lenses, each finding verified twice): 2 low findings, both
+  refuted (the recycle pace against the 64 deferred destroys: a real Spaceport leaves ~31-33 units, the logs never showed
+  more than 10 waiting; a joiner's kills callout a sweep early: the host's own has the same timing, display only).
+- Given out as patches (2026-11-05, Scripts + default ini over a 0.73.78 COOP2MP install, on runtime 0.32.23):
+  testing/builds/AC8SurvivalMode_COOP2MP_0.73.83_TESTER_Patch.zip and AC8SurvivalMode_COOP2MP_0.73.83_Patch.zip,
+  CHANGELOG_0.73.83.txt; they replace 0.73.82's. Register their hashes from the game's first log line; redeploy the Worker.
 - Left for later (found, not yet fixed): ammo unreadable on Casual (SV_Ammo -1 all run: caps, STORE ammo, WEAPON BAYS,
   FLARE PODS re-apply off), SECOND CHANCE's floor in solo after an airfield stop (INS.tick reads MinHealth back only with
   co-op's floor), a restart's fake 'round 1 clear', enemies aiming at a departed player's hidden plane, VOID WATCHER's ESM
