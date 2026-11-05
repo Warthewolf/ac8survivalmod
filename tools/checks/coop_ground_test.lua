@@ -31,7 +31,8 @@ function roundsTick() end
 function airfieldTick() end
 function bombTick() end
 function logPlane() end
-function hudCallout() end
+CALLOUTS = {}
+function hudCallout(t, sub) CALLOUTS[#CALLOUTS + 1] = tostring(t) .. " / " .. tostring(sub) end
 function addCredits() end
 function FindAllOf() return {} end
 function FindFirstOf() return nil end
@@ -167,6 +168,15 @@ if ROLE == "host" then
         logPlane(pp, "SV_Unit_Alicorn", 0)
         check((M.units.SV_Unit_Alicorn and M.units.SV_Unit_Alicorn.n or 0) == nA, "host: ... the Alicorn's own parked pool still left out")
         SPC = spcWas
+    end
+    -- ((0.73.83) the round's kills are each game's own: the host's callout isn't sent to the joiners, an ordinary one is)
+    do
+        local co0, c0 = #msgs("co"), #CALLOUTS
+        M.mirror = M.mirror > 0 and M.mirror or 1
+        COOP.localCallout("ROUND 6 KILLS", "YOU 9   ALLIES 1   SHIPS 0   DEFENCES 0")
+        check(#CALLOUTS == c0 + 1 and #msgs("co") == co0, "host: (0.73.83) the round's kills shown here, not sent to the joiners")
+        hudCallout("ROUND 6", "HOSTILES INBOUND")
+        check(#msgs("co") == co0 + 1, "host: ... an ordinary callout still is")
     end
     -- the host's health to every game, and the Alicorn's tank health lowered here
     world.SV_Unit_Alicorn[2].HealthInternal = 3456
@@ -516,6 +526,30 @@ else
     tick(16); tick(5)
     local l4 = table.concat(logs, " | ", b4 + 1)
     check(pool.HealthInternal == 100 and not l4:find("131 stray", 1, true), "join: 20 s on, the pool's not taken down as a stray")
+    -- ((0.73.83) the round's kills from this game's own count when the host's round ends (Rapt0r, 2026-11-04: the host's
+    -- were shown, wrong in 8 of 9 rounds)
+    do
+        inbox[#inbox + 1] = "0|rnd|6|fighting|0.0|1|1|0"
+        tick()
+        RUN.roundKills = { you = 3, allies = 2, ships = 0, defences = 0, airstrike = 1 }
+        local c0, l0 = #CALLOUTS, #logs
+        inbox[#inbox + 1] = "0|rnd|6|wait|20.0|0|1|0"
+        tick()
+        local got
+        for i = c0 + 1, #CALLOUTS do if CALLOUTS[i]:find("ROUND 6 KILLS", 1, true) then got = CALLOUTS[i] end end
+        local said = false
+        for i = l0 + 1, #logs do if logs[i]:find("kills: round 6: you 3, allied aircraft 2", 1, true) then said = true end end
+        check(got ~= nil and got:find("YOU 4", 1, true) and got:find("ALLIES 2", 1, true) and said,
+              "join: (0.73.83) the host's round ends: its kills shown from this game's own count (" .. tostring(got) .. ")")
+        RUN.roundKills = { you = 5, allies = 0, ships = 0, defences = 0, airstrike = 0 }
+        inbox[#inbox + 1] = "0|rnd|7|fighting|0.0|1|1|0"; tick()
+        RUN.roundKills.you = 5
+        local c1 = #CALLOUTS
+        inbox[#inbox + 1] = "0|rnd|7|wait|20.0|0|1|0"; tick()
+        local none = true
+        for i = c1 + 1, #CALLOUTS do if CALLOUTS[i]:find("KILLS", 1, true) then none = false end end
+        check(none, "join: ... none when only you shot anything down (as the host's)")
+    end
     -- ((0.73.83) another unit's plane at a pool's address (the address come round again): a copy here, bound by its ordinal
     inbox[#inbox + 1] = "0|sp|ERA_Unit_02_Dep_Air1|-|-|-1|779"
     for _ = 1, 4 do tick(0.5) end

@@ -1593,7 +1593,9 @@ function roundsTick(now)
                     D.round, k.you, k.allies, k.ships, k.defences, k.airstrike))
                 if k.allies + k.ships + k.defences > 0 then
                     local t = CFG.hud.text
-                    hudCallout(string.format(t.kills, D.round), string.format(t.kills_sub, k.you + k.airstrike, k.allies, k.ships, k.defences))
+                    -- ((0.73.83) this game's own: each joiner shows its own count, not the host's)
+                    local show = (COOP and COOP.localCallout) or hudCallout
+                    show(string.format(t.kills, D.round), string.format(t.kills_sub, k.you + k.airstrike, k.allies, k.ships, k.defences))
                 end
             end
             pcall(STATS.roundEnd, now)                -- (its "stats:" line a few seconds on: sv_stats.lua)

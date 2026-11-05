@@ -27,7 +27,8 @@ const DIFF_NAME = { casual: "Casual", standard: "Standard", ace: "Ace" };
 const DIFF_X = { casual: 0.75, standard: 1.0, ace: 1.5 };        // score multiplier
 const SPECIALS = { shuttle: "Comona Defense", anomaly: "The Anomaly", amphibious: "Amphibious Assault",
                    ladon: "The Ladons", alicorn: "The Alicorn", glitch: "AB.L..IN",
-                   spaceport: "Spaceport Assault", retake: "Spaceport Retake" };
+                   spaceport: "Spaceport Assault", retake: "Spaceport Retake",
+                   valka: "VALKA" };      // (0.73.83: her wins were dropped before the score, 3,000 x the difficulty short)
 // The player's aircraft (its blueprint's code, e.g. su57 from BP_PlayerPlane_PP0021_su57) by its in-game name
 const AIRCRAFT = { a10c: "A-10C Thunderbolt II", f02a: "F-2A", f04e: "F-4E Phantom II", f15c: "F-15C Eagle",
   f22a: "F-22A Raptor", f35c: "F-35C Lightning II", f18c: "F/A-18C Hornet", j39e: "Gripen E", su34: "Su-34 Fullback",

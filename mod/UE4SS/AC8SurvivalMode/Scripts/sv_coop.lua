@@ -165,6 +165,14 @@ end
 local function callout(text, sub)
     if cfg().callouts and type(hudCallout) == "function" then M.noMirror = true; pcall(hudCallout, text, sub); M.noMirror = false end
 end
+-- ((0.73.83) Rapt0r's "not gaining score" (the 0.73.79 run of 2026-11-04): a callout of this game's own that isn't sent to
+-- the joiners, whatever [coop] callouts says (the round's kills: each game shows its own)
+function COOP.localCallout(text, sub, big)
+    if type(hudCallout) ~= "function" then return end
+    M.noMirror = true
+    pcall(hudCallout, text, sub, big)
+    M.noMirror = false
+end
 local function health(o)
     local ok, h = pcall(function() return o.HealthInternal end)
     return ok and type(h) == "number" and h or nil
@@ -1521,6 +1529,20 @@ local function clientRounds(now)
             if STATS and r.round >= 1 and r.state ~= "wait" then pcall(STATS.roundStart, now) end
         end
         if STATS and r.state == "wait" and D.state ~= "wait" then pcall(STATS.roundEnd, now) end
+        -- ((0.73.83) the round's kills from this game's own count, as the host shows its own: the host's callout was
+        -- sent to every joiner, wrong for Rapt0r in 8 of 9 rounds (0.73.79, 2026-11-04))
+        if r.state == "wait" and D.state ~= "wait" and D.round == r.round then
+            local k = RUN.roundKills
+            if k then
+                log(string.format("kills: round %d: you %d, allied aircraft %d, ships %d, airfield defences %d, airstrikes %d (this game's)",
+                    D.round, k.you or 0, k.allies or 0, k.ships or 0, k.defences or 0, k.airstrike or 0))
+                if (k.allies or 0) + (k.ships or 0) + (k.defences or 0) > 0 then
+                    local t = CFG.hud.text
+                    COOP.localCallout(string.format(t.kills, D.round), string.format(t.kills_sub, (k.you or 0) + (k.airstrike or 0),
+                        k.allies or 0, k.ships or 0, k.defences or 0))
+                end
+            end
+        end
         D.state = r.state
         if r.state == "wait" then D.at = now + r.secs - (os.clock() - r.got) else D.at = now end
         D.wave = r.wave > 0 and r.wave or nil
