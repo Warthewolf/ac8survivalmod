@@ -1393,3 +1393,39 @@ that builds the object, with no lock. All in this mod's one Lua state.
   run on the constructing thread with no lock, and the async thread's ExecuteInGameThread (8 a second) makes a Lua thread
   there. Only the native runtime can close it: a game-thread per-frame hook calling the Lua tick and reading the keys
   (no LoopAsync, no RegisterKeyBind): next full build.
+
+## 0.73.83-coop2mp.84: the logs of 2026-11-04 (Lua only, on runtime 0.32.23; 2026-11-05; not yet run in game)
+From the second 0.73.79 co-op run (Saint Alessia hosting dukka, OdyDio, Rapt0r, Aquila, 32 rounds; Rapt0r's own log and
+notes), her 0.73.81 run (14 rounds), Nada's 0.73.78 solo Casual run to round 44, a short 0.73.78 solo session and
+Shazzy's 0.73.82 host log (testing/logs/2026-11-04b). Four analysts, each finding verified twice (the workflow's
+journal), and the user's radar report. None of it is a hard rule until a test confirms it.
+- The radar (user: "people who leave and rejoin, their plane disappears correctly but not their radar blip"): every
+  co-op plane hidden here (left, out of the mission, DOWN, a rejoin waiting for its airframe, set aside) deactivated
+  (LiveGameObject.bIsActivated false, put back as it was when shown; kept by address with the object's name, M.radarSt,
+  so a rebuilt player table or a reused address can't lose it or hit another object); a set-aside plane also moved
+  [coop.rejoin] aside_far_km (1000) off the map, kept off it and deactivated (asideTick every 5 s, said once), forgotten
+  with its level (COOP.levelDrop). radar_off = false leaves the flag. Which of the two the minimap heeds isn't known.
+  Reviewed (3 of 4 kept). coop_rejoin_test.
+- The Alicorn's pools (A1 / B1, Rapt0r's "desync"): SPC.alcnPool kept its 131 parked pools' addresses after its unit
+  was gone and hostPlane / clientPlane skipped any later plane at one of them (no co-op id: 18 of 41 hunts on partly bound
+  flights, 86 strays torn down on one joiner, a resync wave every ~3 min). Only SV_Unit_Alicorn's planes are skipped now;
+  the set goes with its unit, its level and a joiner's fresh copy. coop_ground_test.
+- The late-run lag (A2-A4, B5): SV_UnitAlive walks every unit on the spawner's list (~7 ms an ask late in the 0.73.79
+  run). airUp reads the allies' kept counts, the allies' share asks each unit every 4 s, the leave probe every 5 s,
+  co-op's unlinked check every 10 s, the director through ALIVE; and a special's units come off the list once its round
+  is over (sv_rounds.lua SPC.recycleLater / recycleTick / recycleUnitsOf: SV_Recycle(unit, 0), only one with nothing alive,
+  only units spawned in this level (SPC.seenUnits), one every 0.5 s from 15 s on: the runtime holds 64 deferred destroys;
+  the Spaceport's fleet but a ship carried into the retake, its waves and troops, the retake's, the amphibious round's,
+  a boss unit left at 0; host and joiners). The native per-unit walk stays (the next full build: a desc -> unit cache).
+- VOID WATCHER 1 going home (B7, R30's ghost): the host sends its copies' 'dn|<id>|r' (unpaid) before RE_SV_AwacsRemove
+  (COOP.removeNow); a joiner with a copy left at the event takes it down and recycles the unit 2 s on.
+- B4: 'ROUND N KILLS' is each game's own (COOP.localCallout; a joiner's from its RUN.roundKills at the host's "wait").
+- A8: the Worker's SPECIALS gains valka (her wins were dropped before the score): REDEPLOY the Worker.
+- A9: the pay audit (TESTER logger) logs RUN.earned's change, after co-op's split.
+- Shazzy's 0.73.82 run wasn't sent ('edited: coop.aircraft_per_player = 0.25', the host page's CO-OP ENEMIES): the row's
+  help and the host's START RUN now say a co-op run off the room's default rules isn't ranked.
+- 0.73.82 in game (Shazzy hosting cressendo, 7 rounds): no error, no lost tick, the tick 4-6 ms; key presses not yet seen.
+- Left for later (found, not yet fixed): ammo unreadable on Casual (SV_Ammo -1 all run: caps, STORE ammo, WEAPON BAYS,
+  FLARE PODS re-apply off), SECOND CHANCE's floor in solo after an airfield stop (INS.tick reads MinHealth back only with
+  co-op's floor), a restart's fake 'round 1 clear', enemies aiming at a departed player's hidden plane, VOID WATCHER's ESM
+  field list growing, the between-rounds repair walks, the Alicorn's VLS never matched in its spawn record.
