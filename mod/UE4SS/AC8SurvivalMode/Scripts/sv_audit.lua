@@ -127,12 +127,19 @@ function AUDIT.pay(n, why)
         end
     end
 end
+-- ((0.73.83) what was paid, not what was asked: co-op's wrapper (sv_coop.lua, under this one) splits a special's pay by
+-- the players and holds a round bonus back while you're DOWN, so the asked amount overstated a host's specials about
+-- twice (the 0.73.79 run of 2026-11-04: 168,720 Z audited against 82,576 paid). RUN.earned's change is the pay.)
 do
     local rawAdd = addCredits
     if type(rawAdd) == "function" then
         addCredits = function(n, why)
-            pcall(AUDIT.pay, n, why)
-            return rawAdd(n, why)
+            local before = RUN and tonumber(RUN.earned) or nil
+            local r = rawAdd(n, why)
+            local after = RUN and tonumber(RUN.earned) or nil
+            local paid = (before and after) and (after - before) or n
+            if paid ~= 0 then pcall(AUDIT.pay, paid, why) end
+            return r
         end
     end
 end

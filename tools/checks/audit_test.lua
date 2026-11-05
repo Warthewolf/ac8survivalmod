@@ -35,7 +35,11 @@ function liveAddr(o) return valid(o) and (addrOf(o) or 1) or nil end   -- (sv_co
 svLevelOn = true                                                         -- (sv_config: Survival's level loaded)
 part("sv_config.lua")
 local paid = {}
-function addCredits(n, why) paid[#paid + 1] = { n = n, why = why } end
+-- (as sv_ai.lua's and co-op's wrapper under it: RUN.earned grows by what's paid, a co-op special's share of it: SPLIT)
+function addCredits(n, why)
+    paid[#paid + 1] = { n = n, why = why }
+    if RUN and RUN.earned then RUN.earned = RUN.earned + math.floor(n * (SPLIT or 1)) end
+end
 function aiBlackboard(p) return p.bb end
 ALLY = ALLY or {}
 local ally = { full = "BP_OP1005_f22a_CP_C_1", addr = 70 }
@@ -95,6 +99,22 @@ local pl = lines("^pay audit: last ")
 check(#pl == 1 and pl[1]:find("+2180 Z in 4 pays", 1, true) and pl[1]:find("kills 2 (+430)", 1, true)
     and pl[1]:find("round bonuses 1 (+1600)", 1, true) and pl[1]:find("specials 1 (+150)", 1, true)
     and pl[1]:find("1 kill pays (+140) right after a teardown here", 1, true), "the pay line by kind: " .. tostring(pl[1]))
+
+-- ((0.73.83) what was paid, not what was asked: a co-op special split by the players (the 0.73.79 run of 2026-11-04: the
+-- audit's specials about twice what was paid)
+do
+    RUN = RUN or {}
+    RUN.earned = 0
+    SPLIT = 0.5
+    addCredits(11900, "MINDRIPPER down")
+    SPLIT = nil
+    addCredits(300, "f16c down (fighter)")
+    AUDIT.tick(186)
+    local ql = lines("^pay audit: last ")
+    check(#ql >= 2 and ql[#ql]:find("specials 1 (+5950)", 1, true) and ql[#ql]:find("kills 1 (+300)", 1, true),
+          "(0.73.83) a co-op special's share audited as paid (+5950 of 11900), a kill as paid: " .. tostring(ql[#ql]))
+    RUN.earned = nil
+end
 
 print("off")
 logs = {}
