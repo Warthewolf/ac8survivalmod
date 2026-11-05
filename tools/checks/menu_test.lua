@@ -150,6 +150,28 @@ press("Zollars"); press("Room")
 check(CFG.setup.host.zollars == 1000 and SETUP.zollars() == 1000, "the host's STARTING ZOLLARS 1000")
 check(CFG.coop.max_players == 2, "CO-OP ROOM 24 -> 2")
 check(texts.SV_Pg_Host_Lobby and texts.SV_Pg_Host_Lobby:find("^LOBBY: 1 OF 2 PLAYERS"), "the lobby row (" .. tostring(texts.SV_Pg_Host_Lobby) .. ")")
+-- ((0.73.83) Shazzy's 0.73.82 run of 2026-11-04: CO-OP ENEMIES set to +25%, the run not sent and nothing said so) off its
+-- default, the row and the host's START RUN say the co-op run isn't ranked; back on it, nothing
+do
+    local keepEdited = LB.edited
+    LB.edited = function(coopRun)
+        local def = CFG_DEFAULTS.coop.aircraft_per_player
+        if coopRun and math.abs(CFG.coop.aircraft_per_player - def) > 1e-6 then return { "coop.aircraft_per_player" } end
+        return {}
+    end
+    press("CoopEnemies")
+    local h, go = texts.SV_Pg_Host_CoopEnemies_Help or "", texts.SV_Pg_Host_Go
+    check(CFG.coop.aircraft_per_player == 0.25 and h:find("Not the default (+15% each): a co-op run with it isn't ranked.", 1, true)
+          and go == "START RUN: UNRANKED" and (texts.SV_Pg_Host_Go_Help or ""):find("this co-op run isn't ranked", 1, true),
+          "(0.73.83) CO-OP ENEMIES +25%: its row and START RUN say the co-op run isn't ranked (" .. tostring(go) .. ")")
+    check(#(texts.SV_Pg_Host_Go_Help or "") <= 255 and #h <= 255, "(0.73.83) ... both helps fit the runtime's slots ("
+          .. #(texts.SV_Pg_Host_Go_Help or "") .. ", " .. #h .. ")")
+    press("CoopEnemies", 4)
+    h, go = texts.SV_Pg_Host_CoopEnemies_Help or "", texts.SV_Pg_Host_Go
+    check(math.abs(CFG.coop.aircraft_per_player - 0.15) < 1e-6 and not h:find("isn't ranked", 1, true) and go == "START RUN",
+          "(0.73.83) ... back on its default (+15%): nothing said (" .. tostring(go) .. ")")
+    LB.edited = keepEdited
+end
 pick(6)
 check(COOP.open and COOP.role == "host" and closes == 0 and MENU.mode == "host", "SURVIVAL MODE's page opened again: still hosting")
 pick(2)

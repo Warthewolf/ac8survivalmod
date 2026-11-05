@@ -192,7 +192,13 @@ local SET = {
             if v <= 0 then return "CO-OP ENEMIES: AS MANY AS ALONE" end
             return string.format("CO-OP ENEMIES: +%d%% EACH", math.floor(v * 100 + 0.5))
         end,
-        help = function() return "Each player past the first brings this many more enemies. Press to change." end },
+        help = function(v)
+            -- ((0.73.83) Shazzy's 0.73.82 run of 2026-11-04: +25% here, the run not sent ("edited"), and nothing said so)
+            local def = CFG_DEFAULTS and CFG_DEFAULTS.coop and tonumber(CFG_DEFAULTS.coop.aircraft_per_player)
+            local note = (def and tonumber(v) and math.abs(tonumber(v) - def) > 1e-6)
+                and string.format(" Not the default (+%d%% each): a co-op run with it isn't ranked.", math.floor(def * 100 + 0.5)) or ""
+            return "Each player past the first brings this many more enemies." .. note .. " Press to change."
+        end },
 }
 
 -- Survival's pages and their rows, in order (tools/build_survival.py MENU_PAGES: the same names; each row's texts are
@@ -284,11 +290,20 @@ local function allTexts()
                 local editedKey = okE and type(edited) == "table" and edited[1] or nil
                 local custom = mode == "online" and not rankedProfile(ownProfile(mode))
                 local ranked = mode == "online" and not custom and not editedKey
-                label = mode == "online" and (ranked and "START RUN: RANKED" or "START RUN: UNRANKED") or "START RUN"
+                -- ((0.73.83) a co-op host's edited room rules say so too: the run isn't sent to the co-op boards)
+                local coopEdited = nil
+                if mode == "host" and LB and LB.edited and not (CFG.coop and CFG.coop.leaderboard == false) then
+                    local okC, ce = pcall(LB.edited, true)
+                    coopEdited = okC and type(ce) == "table" and ce[1] or nil
+                end
+                label = mode == "online" and (ranked and "START RUN: RANKED" or "START RUN: UNRANKED")
+                    or (coopEdited and "START RUN: UNRANKED" or "START RUN")
                 help = "Next: the difficulty, then the hangar. " .. summary(mode) ..
                     (mode == "online" and (ranked and " This run goes to the leaderboard."
                         or custom and " Custom rules: this run isn't sent (RESET TO DEFAULTS in MORE RULES)."
-                        or (" Edited settings (" .. tostring(editedKey):sub(1, 40) .. "): this run isn't ranked.")) or "")
+                        or (" Edited settings (" .. tostring(editedKey):sub(1, 40) .. "): this run isn't ranked.")) or "") ..
+                    (coopEdited and (" Edited (" .. tostring(coopEdited):sub(1, 32) .. "): this co-op run isn't ranked.") or "")
+                help = help:sub(1, 255)                        -- (the runtime's text slot)
             elseif r == "Lobby" then label, help = lobby()
             elseif r == "Rules" then label, help = "MORE RULES", "Start round, break between rounds, special rounds, airfield health, zollar income, enemy skill."
             elseif r == "Reset" then label, help = "RESET TO DEFAULTS", "Puts every " .. (MODE_NAME[mode] or "") .. " setting back to the defaults."
