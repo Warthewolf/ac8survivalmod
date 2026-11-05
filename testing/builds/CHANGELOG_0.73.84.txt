@@ -1,0 +1,12 @@
+AC8 Survival Mode COOP2MP 0.73.84 (0.73.84-coop2mp.85) - change log
+====================================================================
+Since 0.73.83 (CHANGELOG_0.73.83.txt). Patch over a 0.73.78 COOP2MP install (with or without the 0.73.79 - 0.73.83
+patches); everyone in a co-op session needs 0.73.84.
+
+- Crash on quit fixed (Shazzy, 2026-11-04, round 24): with the GUN upgrade bought, quitting the mission could crash the
+  game. Survival kept the gun's settings object to raise its damage, and on the way out it put the stock damage back
+  into it, but by then the game had sometimes already freed that object with the level, and the write crashed. Most
+  quits got there first, which is why it only crashed sometimes. Survival now only touches it while the game still
+  holds it, and remembers the gun's stock damage for the whole session, so an upgrade never carries into the next run.
+- The same guard for two other things kept between levels: VALKA's red sky (put back at the end of her fight) and the
+  Ladon missile's settings (its damage and turn rate are toned down from them).

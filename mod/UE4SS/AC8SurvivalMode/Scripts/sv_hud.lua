@@ -402,6 +402,9 @@ end
 -- kept and written back exactly (the sky asset is shared: never left red). hudRed(true / false[, cfg, now]); redTick
 -- (hudTick, 4 times a second) runs the blend: strength over in_s, back over out_s.
 RED = { want = false, cfg = nil, at = nil, k = 0, b = nil }
+-- ((0.73.84) the sky's objects are the level's: forgotten untouched as the level's torn down, sv_core.lua levelGate, as the
+-- gun's class default that crashed Shazzy's quit of 2026-11-04 should have been)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["VALKA's sky"] = function() RED.b, RED.k = nil, 0 end end
 local function srgbLin(c)
     c = (tonumber(c) or 0) / 255
     if c <= 0.04045 then return c / 12.92 end
@@ -441,15 +444,15 @@ local function skyApply(b, k, rc)
     -- params' sun 1 1 1, so the 255s of the first try blew it white): set colours on that scale, red up, green and blue
     -- down, a faint red haze
     local function mix(o, t) return { lerp(o[1], t[1], k), lerp(o[2], t[2], k), lerp(o[3], t[3], k) } end
-    if b.sunCol and valid(b.sun) then
+    if b.sunCol and liveObj(b.sun) then              -- ((0.73.84) liveObj: kept between ticks, valid() reads it)
         local c = mix(b.sunCol, rc.sun or { 1, 0.25, 0.15 })
         pcall(function() b.sun:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }, true) end)
     end
-    if b.skyCol and valid(b.skyl) then
+    if b.skyCol and liveObj(b.skyl) then
         local c = mix(b.skyCol, rc.light or { 1, 0.3, 0.2 })
         pcall(function() b.skyl:SetLightColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
-    if b.fogCol and valid(b.fog) then
+    if b.fogCol and liveObj(b.fog) then
         local c = mix(b.fogCol, rc.fog or { 0.1, 0.012, 0.006 })
         pcall(function() b.fog:SetFogInscatteringColor({ R = c[1], G = c[2], B = c[3], A = 1 }) end)
     end
@@ -476,6 +479,12 @@ function hudRed(on, cfg, now)
         log("hud: the sky " .. (on and "turning red" or "going back from red"))
     end
     if not on and now and RED.b then                 -- (at once: a cleanup, no tick may follow)
+        -- ((0.73.84) not while the level's torn down, nor once its sky actor is gone: nothing left to put back)
+        if (levelTorn and levelTorn()) or not liveObj(RED.b.actor) then
+            RED.b, RED.k = nil, 0
+            log("hud: the sky's level is gone: nothing put back")
+            return
+        end
         skyApply(RED.b, 0, RED.cfg or {})
         RED.b, RED.k = nil, 0
         log("hud: the sky put back as it was (at once)")

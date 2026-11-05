@@ -1253,7 +1253,7 @@ function SPC.V.flareStop(s)
     if s.flare then
         local a = s.flare.actor
         -- ((0.73.77, plan F1b) not while the level is torn down, levelTorn: it goes with the level, and valid() reads it)
-        if not (levelTorn and levelTorn()) and valid(a) then pcall(function() a:K2_DestroyActor() end) end
+        if not (levelTorn and levelTorn()) and liveObj(a) then pcall(function() a:K2_DestroyActor() end) end   -- ((0.73.84) liveObj)
         s.flare = nil
     end
 end
