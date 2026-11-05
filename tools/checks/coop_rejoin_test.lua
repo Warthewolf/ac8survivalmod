@@ -19,7 +19,9 @@
 --   (0.73.83) the radar ("people who leave and rejoin, their plane disappears correctly but not their radar blip"): a plane
 --     hidden here is deactivated (bIsActivated false) and put back as it was when shown (left, rejoined in the same
 --     aircraft, DOWN, a stand-in); a set-aside one also moved aside_far_km off the map and kept there and deactivated
---     (asideTick puts it back once, said once); radar_off = false leaves the flag; a new run keeps what to put back.
+--     (asideTick puts it back once, said once); radar_off = false leaves the flag; a new run keeps what to put back;
+--     its review: a reused address never touched (the name checked), off again when the game put a hidden plane back on,
+--     the level going forgets them all.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -661,6 +663,44 @@ do
     inbox[#inbox + 1] = "7|sys|left"
     peerState[7] = ""
     tick()
+end
+
+---------------------------------------------------------------------------------------------------- 0.73.83: its review
+print("0.73.83: the radar's records, their review (a reused address, the game putting a plane back on, the level going)")
+do
+    -- a set-aside plane whose address is another object's now (freed, the address come round again): never touched, dropped
+    local px = plane("BP_OP0001_f16c_C_77")
+    check(M.setAside(23, { obj = px, real = false, unit = "SV_Unit_CoopPeerX" }, "test") == true and px.bIsActivated == false
+          and M.asideUnit.SV_Unit_CoopPeerX == true, "a test plane set aside (deactivated, its unit kept off)")
+    local n = #M.aside
+    px.full = "BP_PlayerPlane_PP0022_f16c_C_9"                  -- (another object at its address now)
+    px.bIsActivated, px.X, px.Y, px.Z = true, 1234, 5678, 9000
+    tick(5.1)
+    check(px.bIsActivated == true and px.X == 1234 and px.Z == 9000 and #M.aside == n - 1 and not M.asideUnit.SV_Unit_CoopPeerX,
+          "its address another object's now: never deactivated or moved, dropped (its unit free again)")
+    -- the radar's record: off again when the game put a hidden plane back on, its first state kept
+    local py = plane("BP_OP0001_f16c_C_78")
+    local P = { obj = py }
+    check(M.radarOff(P) == "off the radar (deactivated)" and py.bIsActivated == false, "a plane hidden: off the radar")
+    check(M.radarOff(P) == "off the radar already" and py.bIsActivated == false, "hidden again: off already")
+    py.bIsActivated = true
+    check(M.radarOff(P) == "off the radar again (the game had put it back on)" and py.bIsActivated == false,
+          "the game put it back on, hidden again: off again")
+    check(M.radarOn(P) == "on the radar again (activated)" and py.bIsActivated == true, "... its first state kept: on again when shown")
+    -- a record whose address is another object's now: dropped, the new one taken off from its own state
+    local pz = plane("BP_OP0001_f16c_C_79")
+    local Q = { obj = pz }
+    M.radarOff(Q)
+    pz.full, pz.bIsActivated = "BP_OP0003_mig29_C_5", true
+    check(M.radarOff(Q) == "off the radar (deactivated)" and pz.bIsActivated == false, "a record for another object at that address: dropped, a fresh one")
+    -- the level going: the set-aside planes and the records forgotten, none touched
+    local pw = plane("BP_OP0001_f16c_C_80")
+    M.setAside(22, { obj = pw, real = false, unit = "SV_Unit_CoopPeerW" }, "test")
+    pw.bIsActivated = true
+    COOP.levelDrop("a test")
+    check(#M.aside == 0 and next(M.radarSt) == nil and next(M.parkAt) == nil and not M.asideUnit.SV_Unit_CoopPeerW
+          and pw.bIsActivated == true and line("set aside forgotten here, none touched") ~= nil,
+          "the level going: the set-aside planes and the radar's records forgotten, none touched")
 end
 
 ---------------------------------------------------------------------------------------------------- the hooks
