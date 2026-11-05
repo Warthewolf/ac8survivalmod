@@ -147,6 +147,27 @@ if ROLE == "host" then
     check(k["SV_Unit_Alicorn/BP_BA002_alcn_C#1"] and k["SV_Unit_Alicorn/BP_BA002_alcn_btankfl_Base_C#1"]
           and k["SV_Unit_Alicorn/BP_MP028_dummy_emlmcore_Base_C#1"], "host: the Alicorn's hull, tanks and core linked")
     check(not k["SV_Unit_Alicorn/BP_FG037_uavm_ON_pool_C#1"], "host: its pooled plane left out (a plane)")
+    -- ((0.73.83) the 0.73.79 run of 2026-11-04: the Alicorn's pool addresses were kept after its unit was gone, and a later
+    -- enemy plane at one of them got no id: partly bound flights, strays and a resync every ~3 minutes) only the Alicorn's
+    -- own planes are skipped as its pools
+    do
+        local spcWas = SPC
+        SPC = { alcnPool = { set = {}, n = 0 }, alicornUnit = "SV_Unit_Alicorn" }
+        spawn("ERA_Unit_02_Dep_Air1")
+        local pa = obj("BP_OP1022_f16c", 500, true)
+        SPC.alcnPool.set[pa.addr] = true                      -- (a pool's freed address, taken by this enemy plane)
+        logPlane(pa, "ERA_Unit_02_Dep_Air1", 0)
+        local u = M.units.ERA_Unit_02_Dep_Air1
+        local idOf
+        for id, e in pairs(M.byId) do if e.obj == pa then idOf = id end end
+        check(u and u.n == 1 and idOf ~= nil, "host: (0.73.83) another unit's plane at a pool's old address: its ordinal and co-op id")
+        local pp = obj("BP_FG037_uavm_ON_pool", 100, true)
+        SPC.alcnPool.set[pp.addr] = true
+        local nA = M.units.SV_Unit_Alicorn and M.units.SV_Unit_Alicorn.n or 0
+        logPlane(pp, "SV_Unit_Alicorn", 0)
+        check((M.units.SV_Unit_Alicorn and M.units.SV_Unit_Alicorn.n or 0) == nA, "host: ... the Alicorn's own parked pool still left out")
+        SPC = spcWas
+    end
     -- the host's health to every game, and the Alicorn's tank health lowered here
     world.SV_Unit_Alicorn[2].HealthInternal = 3456
     tick(1.1)
@@ -482,6 +503,8 @@ else
           "join: the host's fresh Alicorn while its last copy's still up here: that one taken off whole (RE_SV_AlcnRemove), once")
     check(alive.SV_Unit_Alicorn == 7 and M.cunits.SV_Unit_Alicorn and M.cunits.SV_Unit_Alicorn.gen == gen,
           "join: ... and the host's spawned in its place (" .. tostring(alive.SV_Unit_Alicorn) .. ")")
+    check(SPC.alcnPool == nil, "join: (0.73.83) the host's fresh Alicorn here: the last copy's pool addresses forgotten (its own come with it)")
+    SPC.alcnPool = SPC.alcnPool or { set = {}, n = 0 }     -- (this copy's pools, as sv_alicorn.lua's alicornPooled makes them)
     local pool = obj("BP_FG037_uavm_ON_pool", 100, true)
     SPC.alcnPool.set[pool.addr] = true
     local plane = obj("BP_OP1022_f16c", 500, true)
@@ -493,6 +516,14 @@ else
     tick(16); tick(5)
     local l4 = table.concat(logs, " | ", b4 + 1)
     check(pool.HealthInternal == 100 and not l4:find("131 stray", 1, true), "join: 20 s on, the pool's not taken down as a stray")
+    -- ((0.73.83) another unit's plane at a pool's address (the address come round again): a copy here, bound by its ordinal
+    inbox[#inbox + 1] = "0|sp|ERA_Unit_02_Dep_Air1|-|-|-1|779"
+    for _ = 1, 4 do tick(0.5) end
+    local reuse = obj("BP_OP1022_f16c", 500, true)
+    reuse.addr = pool.addr
+    logPlane(reuse, "ERA_Unit_02_Dep_Air1", 0)
+    check(M.cunits.ERA_Unit_02_Dep_Air1 and M.cunits.ERA_Unit_02_Dep_Air1.n == 1 and M.cunits.ERA_Unit_02_Dep_Air1.planes[1] == reuse,
+          "join: (0.73.83) another unit's plane at a parked pool's address: a copy here (ordinal 1), never a stray")
     EV_HOOK, SPC = nil, nil
 end
 print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))

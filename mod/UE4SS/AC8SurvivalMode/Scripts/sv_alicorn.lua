@@ -8,6 +8,8 @@
 do
 local UNIT = "SV_Unit_Alicorn"
 SPC.alicornUnit = UNIT                 -- (sv_coop.lua: a joiner's copy of it taken off whole before the host's fresh one)
+-- ((0.73.83) its parked pools' addresses go with the level: kept, a later plane at one of them got no co-op id)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the Alicorn's pools"] = function() SPC.alcnPool = nil end end
 
 -- At the main menu: the Alicorn's Online Mode rows into the campaign tables (NPC, model, durability), before the
 -- level loads (the spawner caches them then: hard rule 20). AddRow only; a model row's soft class is never read
