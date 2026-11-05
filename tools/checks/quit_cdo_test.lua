@@ -71,7 +71,8 @@ function valid(o)
     return true
 end
 local function line(pat, from) for i = #logs, from or 1, -1 do if logs[i]:find(pat) then return logs[i] end end return nil end
-part("sv_config.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_tactical.lua")
+part("sv_config.lua"); part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_sound.lua"); part("sv_spawn.lua")
+part("sv_anomalies.lua"); part("sv_rounds.lua"); part("sv_tactical.lua")
 D = { round = 24 }
 RUN = { ups = { gun = 2 } }
 CFG.upgrades.enabled, CFG.upgrades.gun_experimental = true, true
@@ -183,6 +184,103 @@ LIVE[0x8100] = nil                               -- (a component freed before it
 crashes, sets = 0, 0
 hudRed(false, nil, true)
 check(crashes == 0 and sets == 0, "a kept sky component gone, its actor not: that one not touched (liveObj, not valid)")
+
+---------------------------------------------------------------------------------------------------- the shuttle pad
+print("the shuttle pad (SHUTTLE.gone / pad / obj: the review of the fix)")
+function svFlags() return {} end
+local function padObj(addr, name)
+    local o = obj(addr, name, { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false })
+    local p = rawget(o, "props")
+    p.calls = 0
+    for _, m in ipairs({ "SetActorHiddenInGame", "SetActorEnableCollision", "SetActorTickEnabled" }) do
+        p[m] = function() p.calls = p.calls + 1 end
+    end
+    return o
+end
+local pa = padObj(0xA000, "BP_SAM_C /Game/Maps/Survival/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.SAM_1")
+local pb = padObj(0xA100, "BP_Dummy_C /Game/Maps/Survival/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.Dummy_2")
+SHUTTLE.pad, SHUTTLE.gone, SHUTTLE.padAt = { SV_Unit_PadDummies = { pa, pb } }, {}, nil
+SPC.shuttleTakeOff(true)                         -- (round 12's take-off: the pad hidden, kept)
+check(#SHUTTLE.gone == 2 and rawget(pa, "props").bIsInvincible == true and rawget(pa, "props").calls == 3
+      and SHUTTLE.gone[1].name == rawget(pa, "full"), "the pad hidden and kept with each object's name")
+-- the quit: the gate's drop, then the level's purge frees them
+local droppedPad = 0
+for name, fn in pairs(LEVEL_DROPS) do if name == "the shuttle pad" then fn("test"); droppedPad = droppedPad + 1 end end
+check(droppedPad == 1 and #SHUTTLE.gone == 0 and SHUTTLE.pad == nil and SHUTTLE.obj == nil,
+      "LEVEL_DROPS[\"the shuttle pad\"] forgets SHUTTLE.gone, SHUTTLE.pad and SHUTTLE.obj")
+LIVE[0xA000], LIVE[0xA100] = nil, nil
+crashes = 0
+SPC.shuttlePadBack()                             -- (the next run's first shuttle round, spawnShuttle's first call)
+check(crashes == 0, "the next run's shuttlePadBack: nothing of the old level touched")
+-- without the drop (as 0.73.83 kept them): freed, or an address another object took, is not touched
+LIVE[0xA000], LIVE[0xA100] = true, true
+rawget(pa, "props").calls, rawget(pb, "props").calls = 0, 0
+SHUTTLE.pad, SHUTTLE.gone = { SV_Unit_PadDummies = { pa, pb } }, {}
+SPC.shuttleTakeOff(true)
+LIVE[0xA000] = nil
+rawset(pb, "full", "Another /Game/Other.Other:PersistentLevel.X")
+crashes, rawget(pb, "props").calls = 0, 0
+SPC.shuttlePadBack()
+check(crashes == 0 and rawget(pb, "props").calls == 0 and rawget(pb, "props").bIsInvincible == true,
+      "kept ones freed or another object's now: neither touched (liveObj and the name, not valid())")
+-- a restart keeps the level (no drop): the hidden pad comes back as it was
+rawset(pb, "full", "BP_Dummy_C /Game/Maps/Survival/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.Dummy_2")
+LIVE[0xA000] = true
+rawget(pa, "props").calls, rawget(pb, "props").calls = 0, 0
+for k, v in pairs({ bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }) do rawget(pa, "props")[k] = v end
+SHUTTLE.pad, SHUTTLE.gone = { SV_Unit_PadDummies = { pa, pb } }, {}
+SPC.shuttleTakeOff(true)
+rawget(pa, "props").calls = 0
+SPC.shuttlePadBack()
+check(rawget(pa, "props").calls == 3 and rawget(pa, "props").bIsInvincible == false and rawget(pa, "props").bShowHUDBox == true,
+      "live under its name (a restart): shown, collision and tick back, its flags as they were")
+-- the take-off's own read of a kept pad list: liveAddr, not valid()
+LIVE[0xA100] = nil
+SHUTTLE.pad, SHUTTLE.gone = { SV_Unit_PadDummies = { pb } }, {}
+crashes = 0
+SPC.shuttleTakeOff(true)
+check(crashes == 0 and #SHUTTLE.gone == 0, "shuttleTakeOff: a freed object of SHUTTLE.pad not read")
+LIVE[0xA100] = true
+local srcR = readAll(MOD .. "/Scripts/sv_rounds.lua") .. readAll(MOD .. "/Scripts/sv_spawn.lua")
+check(not has(srcR, "valid(SHUTTLE.obj)") and not has(srcR, "valid(sh)"), "SHUTTLE.obj / sh read with liveObj, never valid()")
+
+---------------------------------------------------------------------------------------------------- VALKA's song's mute
+print("VALKA's song's mute (a quit during it: the review of the fix)")
+local bgmR, posts = -6, {}
+function SV_PlayBGM(n) posts[#posts + 1] = n; return bgmR end
+function SV_SndStop() return 1 end
+function SV_SndSet() return 1 end
+SND.song = { h = 7, muted = true, v = 0.9, top = 0.9 }
+from = #logs + 1
+SND.stopAll()                                    -- (runLeft's, the gate closed: the runtime refuses the post)
+check(SND.song == nil and SND.unmuteDue == true and posts[#posts] == "AKE_System_BGM_Mute_Off"
+      and has(line("^sound: the game's music back after the song", from), "refused: posted again in the next level"),
+      "the unmute refused as the level goes: due, logged")
+clock = clock + 5
+D = { round = 1 }
+bgmR = -1
+SND.tick()
+check(SND.unmuteDue == true, "the next level's sound tick: refused once more, still due")
+SND.tick()
+check(#posts == 2, "not asked again within 2 s (" .. #posts .. " posts)")
+clock = clock + 2.5
+bgmR = 4242
+from = #logs + 1
+SND.tick()
+check(SND.unmuteDue == nil and line("^sound: the game's music unmuted", from) ~= nil, "posted once the runtime takes it: unmuted, logged")
+SND.unmuteDue, SND.unmuteTries, SND.unmuteAt = true, 0, nil
+SND.song = { h = 8, muted = true }
+SND.tick()
+check(SND.unmuteDue == nil, "a song of the new level holding the mute: left to its own end")
+SND.song = nil
+SND.unmuteDue, SND.unmuteTries, SND.unmuteAt = true, 0, nil
+bgmR = -6
+for _ = 1, 16 do clock = clock + 2.1; SND.tick() end
+check(SND.unmuteDue == nil and line("^sound: the game's music NOT unmuted after 15 tries") ~= nil, "15 refusals: given up, logged")
+SND.song = { h = 9, muted = true, v = 1, top = 1 }
+bgmR = 77
+SND.songStop(true)
+check(SND.unmuteDue == nil, "a song's end posted while the level lives: nothing due")
 
 ---------------------------------------------------------------------------------------------------- the Ladon, the flare
 print("the Ladon missile's class default, VALKA's flare")

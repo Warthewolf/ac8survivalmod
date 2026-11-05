@@ -123,9 +123,18 @@ end
 -- looped unless loop = false; SND.songFade(s) fades it out over s seconds, then it stops. With game_music = "stop" the
 -- game's mission track is stopped while it plays (its BGM controller's <track>_Stop) and posted again after.
 SND.song = nil
+-- ((0.73.84, the review of the crash-on-quit fix) a quit during her song stops it as the level's torn down, when the runtime
+-- refuses every BGM post (its BGM controller is reached through the spawner, and the teardown gate holds it): the
+-- AKE_System_BGM_Mute_Off was lost and the game's music stayed muted. Refused, it's due (SND.unmuteDue) and posted
+-- again from the next level's sound tick (unmuteTick: every 2 s, 15 tries), unless a song of that level mutes it first.)
+SND.unmuteDue = nil
 local function songMusicBack(sg)
     if sg and sg.muted and type(SV_PlayBGM) == "function" then
-        log("sound: the game's music back after the song (AKE_System_BGM_Mute_Off: " .. tostring(SV_PlayBGM("AKE_System_BGM_Mute_Off")) .. ")")
+        local r = SV_PlayBGM("AKE_System_BGM_Mute_Off")
+        local ok = type(r) == "number" and r > 0
+        if not ok then SND.unmuteDue, SND.unmuteAt, SND.unmuteTries = true, nil, 0 end
+        log("sound: the game's music back after the song (AKE_System_BGM_Mute_Off: " .. tostring(r) .. ")"
+            .. (ok and "" or "; refused: posted again in the next level"))
     end
     if sg and sg.track and type(SV_PlayBGM) == "function" then
         local r = SV_PlayBGM(sg.track)
@@ -146,6 +155,7 @@ function SND.songStart(sc)
         -- the _Stop of the controller's last track, which was the hangar's: tools/re/MUSIC_RADIO_CAMERA.md)
         local r = SV_PlayBGM("AKE_System_BGM_Mute_On")
         SND.song.muted = true
+        SND.unmuteDue = nil                         -- ((0.73.84) this song's end unmutes)
         said = "; the game's music muted (AKE_System_BGM_Mute_On: " .. tostring(r) .. ")"
     elseif sc.game_music == "stop" and type(SV_BGMNames) == "function" and type(SV_PlayBGM) == "function" then
         local track = (SV_BGMNames() or ""):match("^([^|]*)") or ""
@@ -236,8 +246,24 @@ local function preloadTick()
 end
 
 -- every tick: the playing voices follow their source and you (pan, distance); the finished ones dropped
+local function unmuteTick()
+    if not SND.unmuteDue or type(SV_PlayBGM) ~= "function" then return end
+    if SND.song and SND.song.muted then SND.unmuteDue = nil; return end
+    local now = os.clock()
+    if now < (SND.unmuteAt or 0) then return end
+    SND.unmuteAt, SND.unmuteTries = now + 2, (SND.unmuteTries or 0) + 1
+    local r = SV_PlayBGM("AKE_System_BGM_Mute_Off")
+    if type(r) == "number" and r > 0 then
+        SND.unmuteDue = nil
+        log("sound: the game's music unmuted (VALKA's song was stopped as the last level went: AKE_System_BGM_Mute_Off " .. r .. ")")
+    elseif SND.unmuteTries >= 15 then
+        SND.unmuteDue = nil
+        log("sound: the game's music NOT unmuted after 15 tries (AKE_System_BGM_Mute_Off: " .. tostring(r) .. ")")
+    end
+end
 function SND.tick()
     if type(SV_SndSet) ~= "function" then return end
+    pcall(unmuteTick)                                  -- ((0.73.84) a mute left by a quit during VALKA's song)
     pcall(preloadTick)                                  -- ((0.73.79) VALKA's files, one a tick, before her fight)
     pcall(songTick)                                     -- (0.73.76) the song's fade
     for h, v in pairs(SND.live) do

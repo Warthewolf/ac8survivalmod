@@ -10,3 +10,8 @@ patches); everyone in a co-op session needs 0.73.84.
   holds it, and remembers the gun's stock damage for the whole session, so an upgrade never carries into the next run.
 - The same guard for two other things kept between levels: VALKA's red sky (put back at the end of her fight) and the
   Ladon missile's settings (its damage and turn rate are toned down from them).
+- The Comona Defense shuttle pad: after a shuttle round, quitting and starting a new run could crash the next run's first
+  shuttle round (it tried to bring back the old level's hidden pad). The old pad is now forgotten with its level; a
+  restart still brings it back as before.
+- Quitting during VALKA's song could leave the game's music muted (the unmute couldn't be sent while the level was
+  closing). It's now sent again as soon as the next Survival level starts.
