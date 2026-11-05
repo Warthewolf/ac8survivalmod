@@ -1458,8 +1458,15 @@ None of it is a hard rule until a test confirms it.
   valid() and wrote their flags: LEVEL_DROPS "the shuttle pad", each hidden object kept with its name and brought back
   only live under it, the take-off and shuttleHealth liveObj / liveAddr; a restart keeps its pad); VALKA's song (sv_sound.lua:
   a quit during it lost AKE_System_BGM_Mute_Off, which the runtime refuses while the gate is closed; SND.unmuteDue posts it
-  again from the next level's sound tick, every 2 s, 15 tries).
+  again from the next level's sound tick, every 2 s, 15 tries). Only there: the runtime's BgmController reaches the
+  game instance through Survival's spawner (SpawnerReady: the gate and g_spawnerLost, cleared by SV_Reset), so the
+  main menu, the hangar and other modes may stay muted until the next Survival run (second review, kept low). Next
+  full build: BgmController keeps the game instance from its last good lookup and posts through it (UObjLive) when
+  the spawner isn't ready, and the retry runs from every tick.
 - tools/checks/quit_cdo_test.sh (each guard mutation-checked; its valid() stub counts a freed read as the crash).
 - Lesson (candidate hard rule once a test confirms it): a game object kept between ticks, a /Game/ class default
   included, is read only through liveObj / liveAddr (never valid(), which reads it), and every part that keeps one
   registers a LEVEL_DROPS entry; a cleanup at the run's end checks liveObj before it puts anything back.
+- Given out as patches (2026-11-05, Scripts + default ini over a 0.73.78 COOP2MP install, on runtime 0.32.23):
+  testing/builds/AC8SurvivalMode_COOP2MP_0.73.84_TESTER_Patch.zip and AC8SurvivalMode_COOP2MP_0.73.84_Patch.zip,
+  CHANGELOG_0.73.84.txt; they replace 0.73.83's. Register their hashes from the game's first log line.
