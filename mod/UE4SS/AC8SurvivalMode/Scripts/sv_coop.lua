@@ -1242,8 +1242,14 @@ function COOP.levelDrop(why)
     for _, P in pairs(M.peers or {}) do
         if type(P) == "table" and P.obj ~= nil then P.obj, P.addr = nil, nil; p = p + 1 end
     end
-    log(string.format("coop: the level is going (%s): %d copies and %d players' planes forgotten here, none touched",
-        tostring(why), n, p))
+    -- ((0.73.83, its review) the set-aside planes and the radar's records go with their level: kept, a freed plane's
+    -- address taken by a new object would have asideTick deactivate and move that one. A restart in the same level never
+    -- closes the gate, so those planes stay kept then)
+    local a = #(M.aside or {})
+    for _, e in ipairs(M.aside or {}) do if e.unit and M.asideUnit then M.asideUnit[e.unit] = nil end end
+    M.aside, M.parkAt, M.radarSt, M.asideAt = {}, {}, {}, nil
+    log(string.format("coop: the level is going (%s): %d copies, %d players' planes and %d set aside forgotten here, none touched",
+        tostring(why), n, p, a))
 end
 
 -- (0.73.73) The host's answer to this game's own "jn" ("rs|j" ... "rz", hostSync) is a repair, not a teardown. What's here
@@ -2433,21 +2439,29 @@ local function rejoinCfg() return cfg().rejoin or {} end
 -- [coop.rejoin] radar_off = false leaves the flag alone. What to put back is kept by the plane's address (M.radarSt),
 -- not on the player's table: that's made again on a new run, a slot move and a joiner's rebuild, and a plane whose state
 -- was lost would stay off the radar once shown.
--- (UE4SS may give two Lua objects for one game object: an entry is this plane's while the object it was made for is still
--- live at that address; one left from a freed plane whose address came round again is dropped)
+-- (UE4SS may give two Lua objects for one game object, and a freed plane's address can come round again for another
+-- object: an entry is this plane's while the object at its address is live and still has the name it was made with, as
+-- M.objsOf's prune checks; one that isn't is dropped)
 local function radarKey(o) return addrOf(o) or o end
+local function sameObj(e, o) return o ~= nil and live(o) and e.name ~= nil and nameOf(o) == e.name end
+M.sameObj = sameObj
 function M.radarOff(P)
     local o = P and P.obj
     if not (o and live(o)) then return "no plane" end
     local a = radarKey(o)
     local st = M.radarSt[a]
-    if st and live(st.obj) then return "off the radar already" end
-    if rejoinCfg().radar_off == false then return nil end
+    if st and not sameObj(st, o) then M.radarSt[a], st = nil, nil end
+    if rejoinCfg().radar_off == false and not st then return nil end
     local was, now
     pcall(function() was = o.bIsActivated end)
+    if st then                                       -- (off already: off again if the game put it back on, its first state kept)
+        if was == false then return "off the radar already" end
+        pcall(function() o.bIsActivated = false end)
+        return "off the radar again (the game had put it back on)"
+    end
     local okW = pcall(function() o.bIsActivated = false end)
     pcall(function() now = o.bIsActivated end)
-    M.radarSt[a] = { obj = o, was = was }
+    M.radarSt[a] = { obj = o, was = was, name = nameOf(o) }
     if okW and now == false then return "off the radar (deactivated)" end
     return "NOT deactivated (bIsActivated " .. tostring(now) .. ")"
 end
@@ -2458,7 +2472,7 @@ function M.radarOn(P)
     local st = M.radarSt[a]
     if not st then return nil end
     M.radarSt[a] = nil
-    if not (live(st.obj) and live(o)) then return nil end
+    if not sameObj(st, o) then return nil end
     if st.was == false then return "on the radar as it was (it was deactivated before)" end
     local okW = pcall(function() o.bIsActivated = true end)
     return okW and "on the radar again (activated)" or "NOT activated again"
@@ -2537,7 +2551,7 @@ function M.setAside(slot, P, why)
         end)
     end
     M.aside[#M.aside + 1] = { obj = o, slot = slot, real = P.real, unit = (not P.real) and (P.unit or PEER_UNITS[slot]) or nil,
-                              at = okM and at or nil, radar = radar ~= nil and radar ~= "no plane" }
+                              at = okM and at or nil, radar = radar ~= nil and radar ~= "no plane", name = nameOf(o) }
     local where = "left where it is"
     if okM then
         where = alt > 0 and string.format("moved %.0f km up", alt) or "moved"
@@ -2554,9 +2568,11 @@ end
 function M.asideTick(now)
     if #M.aside == 0 or now < (M.asideAt or 0) then return end
     M.asideAt = now + 5
+    local keep = {}
     for _, e in ipairs(M.aside) do
         local o = e.obj
-        if o and live(o) then
+        if sameObj(e, o) then keep[#keep + 1] = e end   -- (a plane gone, or its address another object's now: dropped, never touched)
+        if keep[#keep] == e then
             if e.radar then
                 local act
                 pcall(function() act = o.bIsActivated end)
@@ -2576,22 +2592,26 @@ function M.asideTick(now)
                     e.reMove = (e.reMove or 0) + 1
                     if e.reMove == 1 then
                         log(string.format("coop: player %d's set-aside plane was moved back (by the game, %.0f km from its spot): moved off the map again",
-                            e.slot + 1, math.sqrt((v.X - e.at.X) ^ 2 + (v.Y - e.at.Y) ^ 2) / 100000))
+                            e.slot + 1, math.sqrt((v.X - e.at.X) ^ 2 + (v.Y - e.at.Y) ^ 2 + (v.Z - e.at.Z) ^ 2) / 100000))
                     end
                 end
             end
+        elseif e.unit and M.asideUnit then
+            M.asideUnit[e.unit] = nil
         end
     end
+    M.aside = keep
 end
 -- (at a new level here) the set-aside planes gone with their level let go; a restart in the same level keeps them
 function M.asidePrune()
     local keep = {}
     for _, e in ipairs(M.aside) do
-        if live(e.obj) then keep[#keep + 1] = e elseif e.unit then M.asideUnit[e.unit] = nil end
+        if (e.name and sameObj(e, e.obj)) or (not e.name and live(e.obj)) then keep[#keep + 1] = e
+        elseif e.unit then M.asideUnit[e.unit] = nil end
     end
     M.aside = keep
     for t, e in pairs(M.parkAt) do if not live(e.obj) then M.parkAt[t] = nil end end
-    for a, st in pairs(M.radarSt) do if not live(st.obj) then M.radarSt[a] = nil end end   -- ((0.73.83) gone with their level)
+    for a, st in pairs(M.radarSt) do if not sameObj(st, st.obj) then M.radarSt[a] = nil end end   -- ((0.73.83) gone with their level)
 end
 -- whether stand-in unit u is set aside or flown for a player other than `slot`
 local function unitTaken(u, slot)
