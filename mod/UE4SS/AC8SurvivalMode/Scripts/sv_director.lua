@@ -48,8 +48,9 @@ local function tacticOn(name) return on() and tc(name).enabled ~= false end
 local function client() return (COOP and COOP.client and COOP.client()) and true or false end
 local function letter(k) return string.char(65 + k) end
 local function num(v, d) return tonumber(v) or d end
-local function alive(u)
-    local ok, n = pcall(SV_UnitAlive, u)
+local function alive(u)                              -- ((0.73.83) through ALIVE's kept answers: sv_spawn.lua)
+    local ok, n
+    if ALIVE and ALIVE.ask and D then ok, n = pcall(ALIVE.ask, u) else ok, n = pcall(SV_UnitAlive, u) end
     return (ok and type(n) == "number") and n or 0
 end
 local function angle(ax, ay, az, bx, by, bz)          -- between two vectors, degrees (180 when one has no length)

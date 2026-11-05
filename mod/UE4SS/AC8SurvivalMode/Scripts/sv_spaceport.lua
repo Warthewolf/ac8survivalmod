@@ -957,6 +957,8 @@ end
 local ISLAND = { { "SV_Unit_SpIslExsam", "ad" }, { "SV_Unit_SpIslFlak", "ad" }, { "SV_Unit_SpIslSam", "ad" },
                  { "SV_Unit_SpIslAA", "ad" }, { "SV_Unit_SpIslTankA", "armour" }, { "SV_Unit_SpIslTankB", "armour" },
                  { "SV_Unit_SpIslApc", "armour" } }
+SPORT.ISLAND_UNITS = {}                           -- ((0.73.83) sv_rounds.lua SPC.recycleUnitsOf: off the list after the retake)
+for _, it in ipairs(ISLAND) do SPORT.ISLAND_UNITS[#SPORT.ISLAND_UNITS + 1] = it[1] end
 local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 
 -- The rockets and their debris on the pads (from retakeSpawn); s.rk the round's rockets, or nothing when they're off

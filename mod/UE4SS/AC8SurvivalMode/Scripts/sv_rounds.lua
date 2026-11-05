@@ -220,6 +220,7 @@ end
 -- too); a new spawn of the unit (more than 2 s after the last object) starts its list again
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     local u = spawningUnit
+    if u and SPC.seenUnits then SPC.seenUnits[u] = true end   -- ((0.73.83) spawned in this level: SPC.recycleLater)
     if not (u and watched[u]) then return end
     local l = SPC.CLEAN_OBJ[u]
     if not l or os.clock() - (l.at or 0) > 2 then l = { at = os.clock() }; SPC.CLEAN_OBJ[u] = l end
@@ -308,6 +309,7 @@ function SPC.cleanUp(list, why, mortal, now)
 end
 -- the checks due: SV_UnitAlive again (a unit still up the host's: SV_Recycle(unit, 1), when the runtime has it)
 function SPC.cleanTick(now)
+    pcall(SPC.recycleTick, now)                          -- ((0.73.83) the queue of units to take off the list)
     local q = SPC.cleanQ
     if not q or #q == 0 then return end
     for i = #q, 1, -1 do
@@ -328,9 +330,102 @@ function SPC.cleanTick(now)
             if n > 0 then log(string.format("special: %s%s NOT removed (%d alive)%s", SPC.cleanLabel(e.unit), where, n, rec))
             else log(string.format("special: %s%s removed%s", SPC.cleanLabel(e.unit), where, rec)) end
             if n <= 0 then SPC.CLEAN_OBJ[e.unit] = nil end  -- (nothing of it kept past its check)
+            -- ((0.73.83) still on the spawner's list with nothing of it up (not just recycled here): off the list too
+            if n == 0 and rec == "" then SPC.recycleLater({ e.unit }, "its special over, nothing of it up", 0, true) end
             if n <= 0 and e.unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) its pools' addresses with it)
         end
     end
+end
+-- ((0.73.83) the 0.73.79 co-op run of 2026-11-04, verified twice: a special's units stayed on the spawner's list once
+-- everything of them was down (SV_Spawn takes a unit off only when it spawns it again), and SV_UnitAlive walks that
+-- whole list on every ask: the Spaceport's 27 ships and 5 landing-craft waves took it from 17 units to 49 and each ask
+-- from 1.85 to 6 ms, never back, on the host and every joiner. A special's units are taken off the list (SV_Recycle(unit,
+-- 0): only one with nothing of it alive, its unit actor destroyed [recycle] destroy_after_s later) RECYCLE_AFTER_S after
+-- its end, one every RECYCLE_GAP_S (the runtime holds 64 deferred destroys: a burst past that destroys at once, the
+-- bomber-raid crash's pattern); one still up is looked at again RECYCLE_AGAIN_S on, RECYCLE_TRIES times.
+local RECYCLE_AFTER_S, RECYCLE_GAP_S, RECYCLE_AGAIN_S, RECYCLE_TRIES = 15, 0.5, 10, 6
+SPC.recycleQ, SPC.recycled, SPC.seenUnits = {}, 0, {}   -- (seenUnits: each unit spawned in this level, on this game)
+function SPC.sawSpawn(unit) if type(unit) == "string" then SPC.seenUnits[unit] = true end end
+-- the units of a special kind to take off the list at its end (what its round spawns; ships carried into the retake
+-- left out of the Spaceport's)
+function SPC.recycleUnitsOf(kind)
+    local out = {}
+    local function add(u) if type(u) == "string" and u ~= "" then out[#out + 1] = u end end
+    if kind == "spaceport" or kind == "retake" then
+        local kept = (kind == "spaceport" and type(RUN) == "table" and type(RUN.sport) == "table" and type(RUN.sport.ships) == "table")
+            and RUN.sport.ships or {}
+        if SPORT and SPORT.fleet then
+            local okF, fl = pcall(SPORT.fleet)
+            for _, sh in ipairs(okF and fl or {}) do if not kept[sh.unit] then add(sh.unit) end end
+        end
+        local G, W, C = SPORT and SPORT.GROUPS or {}, SPORT and SPORT.WAVES or {}, SPORT and SPORT.CRAFT or {}
+        for _, g in ipairs(G) do
+            for _, w in ipairs(W) do
+                add("SV_Unit_SpLcac" .. g .. w)
+                for _, c in ipairs(C) do add("SV_Unit_SpTroops" .. g .. w .. c) end
+            end
+        end
+        if kind == "retake" then
+            for _, g in ipairs(SPORT and SPORT.GARRISON or {}) do add("SV_Unit_SpGarrison" .. g) end
+            for _, u in ipairs(SPORT and SPORT.ISLAND_UNITS or {}) do add(u) end
+            for _, u in ipairs({ "SV_Unit_SpRockets", "SV_Unit_SpDebriA", "SV_Unit_SpDebriB", "SV_Unit_SpDebriC" }) do add(u) end
+        end
+    elseif kind == "amphibious" then
+        local c = CFG.specials and CFG.specials.amphibious or {}
+        for _, l in ipairs(c.lanes or {}) do
+            add("SV_Unit_Lcac" .. l)
+            for _, k in ipairs(c.craft or {}) do add("SV_Unit_LcacTroops" .. l .. k) end
+        end
+    end
+    return out
+end
+-- queue units to take off the list (after: seconds on; why: the log's); only units spawned in this level (a kind's list
+-- names every wave and troop unit it could have, most never spawned in a round), but for `known` ones (a special's own,
+-- from its clean-up's check)
+function SPC.recycleLater(units, why, after, known)
+    local q, now = SPC.recycleQ, (D and tonumber(D.now)) or 0
+    local seen = {}
+    for _, e in ipairs(q) do seen[e.unit] = true end
+    local n = 0
+    for _, u in ipairs(units or {}) do
+        if not seen[u] and (known or SPC.seenUnits[u]) then
+            seen[u] = true
+            q[#q + 1] = { unit = u, at = now + (tonumber(after) or RECYCLE_AFTER_S), tries = 0, why = why }
+            n = n + 1
+        end
+    end
+    return n
+end
+-- (the round clock, every tick on every game: specialTick's and clientClean's cleanTick) one unit a RECYCLE_GAP_S
+function SPC.recycleTick(now)
+    local q = SPC.recycleQ
+    if #q == 0 or type(SV_Recycle) ~= "function" or type(SV_UnitAlive) ~= "function" then return end
+    if SPC.recycleAt and now >= SPC.recycleAt - 60 and now < SPC.recycleAt then return end
+    for i, e in ipairs(q) do
+        if now >= e.at or now < e.at - 120 then        -- (a new run's clock: due now)
+            table.remove(q, i)
+            SPC.recycleAt = now + RECYCLE_GAP_S
+            local n = SV_UnitAlive(e.unit)
+            if n == 0 then
+                crumb("special recycle: SV_Recycle " .. e.unit .. " 0")
+                local okR, r = pcall(SV_Recycle, e.unit, 0)
+                if okR and r == 1 then
+                    SPC.recycled = SPC.recycled + 1
+                    SPC.seenUnits[e.unit] = nil
+                    if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, e.unit, -7) end
+                end
+                log(string.format("special: %s taken off the spawner's list (%s; nothing of it alive): SV_Recycle %s (%d so far)",
+                    SPC.cleanLabel(e.unit), tostring(e.why), okR and tostring(r) or ("error " .. tostring(r)), SPC.recycled))
+            elseif n > 0 and e.tries + 1 < RECYCLE_TRIES then
+                e.tries, e.at = e.tries + 1, now + RECYCLE_AGAIN_S
+                q[#q + 1] = e
+            end
+            return                                        -- (one a RECYCLE_GAP_S)
+        end
+    end
+end
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["specials' recycle"] = function() SPC.recycleQ, SPC.recycleAt, SPC.seenUnits = {}, nil, {} end
 end
 -- (the host's or solo) the round's special over (its state "done") or its round clear (why): its units cleaned up
 -- once, CLEAN_AFTER_S on (VALKA's after her X-02S's fall, wreck_s: her tick still moves the wreck till then; the
@@ -350,6 +445,12 @@ function SPC.endTick(now, s, why, force)
     s.cleaned = true
     local list = SPC.cleanUnitsOf(s.kind)
     if #list > 0 then SPC.cleanUp(list, why or ("at the end of its " .. s.kind .. " fight"), true, now) end
+    local rl = SPC.recycleUnitsOf(s.kind)                 -- ((0.73.83) the Spaceport's, the retake's, the amphibious round's)
+    if #rl > 0 then
+        local nq = SPC.recycleLater(rl, "its " .. s.kind .. " round over")
+        log(string.format("special: %d of the %s round's units to be taken off the spawner's list (those with nothing alive, one each %.1f s from %d s on)",
+            nq, s.kind, RECYCLE_GAP_S, RECYCLE_AFTER_S))
+    end
     if s.kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
 end
 -- (a co-op joiner, from sv_coop.lua's clientRounds) the host's special: once it's over there, this game's copies of its
@@ -366,6 +467,7 @@ function SPC.clientClean(now)
         if not (hs and hs.kind == kind and hs.state ~= "done") then
             C.up[kind] = nil
             C.due[#C.due + 1] = { at = now + CLIENT_AFTER_S, list = SPC.cleanUnitsOf(kind), why = "the host's " .. kind .. " over" }
+            SPC.recycleLater(SPC.recycleUnitsOf(kind), "the host's " .. kind .. " over")   -- ((0.73.83) this game's copies' units too)
             if kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
             -- ((0.73.80, R30_FINDINGS specials 0) the shuttle's copy here off this game's spawner list once the host's
             -- RE_SV_ShuttleRemove has run here too (remove_s after its liftoff, 30 s after its loss, + SHUTTLE_CLIENT_S): the

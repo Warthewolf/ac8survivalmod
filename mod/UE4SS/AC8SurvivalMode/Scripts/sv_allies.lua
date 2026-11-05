@@ -670,8 +670,11 @@ end
 -- bought ally and all ten defence units in one tick every 2 s. ALLY.alive(u, now): the count read for it in the last
 -- 2.5 s of the round clock (now, else D.now), else asked now; one that has none up (a defence not built, a flight
 -- not bought) is good for ALIVE_IDLE_S (a spawn here forgets its count: ALLY.forgetAlive). Visited: R.up's units and
--- every defence unit, unit i on the tick where i % 8 is the slot, one with none up every 4th visit.
-local ALIVE_FRESH_S, ALIVE_IDLE_S = 2.5, 8.5
+-- every defence unit, unit i on the tick where i % SHARE is the slot, one with none up every other visit.
+-- ((0.73.83) the 0.73.79 run of 2026-11-04, verified twice: at ~7 ms an ask late in a long run, the share and airUp's
+-- asks were 12-14 ms a tick of 'allies'. Each unit is asked every 4 s now (SHARE 16, a loss seen up to 4 s later), and
+-- airUp reads these counts.)
+local ALIVE_FRESH_S, ALIVE_IDLE_S, SHARE = 4.5, 8.5, 16
 function ALLY.alive(u, now)
     now = now or (D and D.now) or 0
     local R = ALLY.run
@@ -687,7 +690,7 @@ function ALLY.forgetAlive(u)                          -- (a unit just spawned: i
 end
 local function aliveShare(R, now)
     R.alive = R.alive or {}
-    R.aliveSlot = ((R.aliveSlot or -1) + 1) % 8
+    R.aliveSlot = ((R.aliveSlot or -1) + 1) % SHARE
     local units, i = {}, 0
     for u in pairs(R.up) do units[#units + 1] = u end
     table.sort(units)                                     -- (pairs' order changes: the same unit, the same slot)
@@ -698,7 +701,7 @@ local function aliveShare(R, now)
     for _, u in ipairs(units) do
         i = i + 1
         local e = R.alive[u]
-        if i % 8 == R.aliveSlot and not (e and (e.n or 0) <= 0 and now >= e.at and now - e.at < ALIVE_IDLE_S - 0.5) then
+        if i % SHARE == R.aliveSlot and not (e and (e.n or 0) <= 0 and now >= e.at and now - e.at < ALIVE_IDLE_S - 0.5) then
             R.alive[u] = { n = SV_UnitAlive(u), at = now }
         end
     end
@@ -760,7 +763,8 @@ local function airUp(R)
         -- ((0.73.78, G5) VOID WATCHER 1 going home isn't counted: not in the room's code, hudLine names it so)
         if s.kind == "air" and not s.home then
             local n = airName(s)
-            air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, SV_UnitAlive(u)))
+            -- ((0.73.83) the share's count: twice a second from the room's code and the HUD, it asked the native each time)
+            air[n] = (air[n] or 0) + ((s.queued or not nativeReady()) and 0 or math.max(0, ALLY.alive(u)))
         end
     end
     return air

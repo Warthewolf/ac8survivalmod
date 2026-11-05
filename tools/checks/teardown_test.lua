@@ -112,46 +112,46 @@ end
 print("levelGoing: the level going away")
 newLevel()
 planes, asked = {}, 0
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(not levelGoing() and asked == 0, "no plane of the level up yet: the runtime not asked (each ask then searches every object)")
 planes = { plane("f18e") }
 alive = -1
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(not levelGoing(), "the spawner not ready before it ever answered (the level starting): not going")
 alive = 0
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(not levelGoing() and LEAVE.seen, "it answers (0): seen, not going")
 alive = -1
 clock = clock + 0.05
-check(not levelGoing(), "asked twice a second at most (0.73.79: was 10): not asked again 50 ms on")
-clock = clock + 0.5
+check(not levelGoing(), "asked every 5 s at most (0.73.83; 0.73.79: twice a second, before it 10): not asked again 50 ms on")
+clock = clock + 5
 local from = #logs + 1
 check(not levelGoing(), "(0.73.73 review) then -1 once: not going yet (one odd answer as a restart makes its spawner)")
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 local going, why = levelGoing()
 check(going and why == "its unit spawner is gone: SV_UnitAlive -1", "-1 still a second on: going (" .. tostring(why) .. ")")
 check(has(line("^level: Survival's level is going away", from), "its unit spawner is gone: SV_UnitAlive -1"), "logged: " .. tostring(line("^level:", from)))
 alive = 0
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(not levelGoing() and has(line("^level: its unit spawner answers again", from), "NOT going away"),
       "(0.73.73 review) the spawner answers again: not going any more, logged")
 alive = -1
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 levelGoing()
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(levelGoing(), "gone again a second: going again")
 svLevelOn = false
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(levelGoing() and LEAVE.why == "another level is loading" and levelLeaving(), "then another level loading: hard")
 svLevelOn, alive = true, 0
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(levelGoing(), "a hard sign is sticky: an answer after it changes nothing")
 newLevel()
 check(not levelGoing(), "LEAVE.reset (a new level): not going")
 alive = -6
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 levelGoing()
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 check(levelGoing() and has(LEAVE.why, "SV_UnitAlive -6") and not levelLeaving(), "-6 (no world) a second: going (a soft sign)")
 newLevel()
 svLevelOn = false
@@ -169,9 +169,9 @@ found.X = { "x" }
 check(FindAllOf("X")[1] == "x" and #walked == 1, "a run on: FindAllOf walks")
 from = #logs + 1
 alive = -1
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 levelGoing()
-clock = clock + 1
+clock = clock + 5                                 -- ((0.73.83) the probe: every 5 s, every 1 s once latched)
 levelGoing()
 walked = {}
 check(FindAllOf("X") == nil and FindFirstOf("Y") == nil and #walked == 0, "the level going away: FindAllOf and FindFirstOf hold (nil), nothing walked")
@@ -270,8 +270,8 @@ check(LEAVE.unpaid == 5, "5 counted unpaid (" .. tostring(LEAVE.unpaid) .. ")")
 ---------------------------------------------------------------------------------------------------- the run's end
 print("the run's end: at once when the level goes for sure; a restart ends nothing")
 newLevel()
-alive = 0; clock = clock + 1; levelGoing()
-alive = -1; clock = clock + 1; levelGoing(); clock = clock + 1
+alive = 0; clock = clock + 5; levelGoing()                       -- ((0.73.83) the probe every 5 s)
+alive = -1; clock = clock + 5; levelGoing(); clock = clock + 5
 check(not leaveNow() and levelGoing(), "the spawner gone, your plane still there (a restart keeps both): the run goes on")
 pawn.gone = true
 check(not leaveNow(), "(0.73.73 review) your plane gone at one look: not yet (a restart swaps the pawn)")
