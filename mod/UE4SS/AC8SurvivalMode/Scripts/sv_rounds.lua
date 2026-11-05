@@ -14,8 +14,8 @@ local function flyingText(n) return n == 1 and "1 other player flying" or (n .. 
 -- 2026-10-23: "Make the shuttle invulnerable while the countdown is held"; LiveGameObject.SetIsInvincible): running
 -- again (your takeoff, or another player flying while you're still down), it can be hit again.
 function SPC.shuttleInvincible(on)
-    if not valid(SHUTTLE.obj) then shuttleHealth() end           -- (finds the shuttle's actor)
-    if not valid(SHUTTLE.obj) then return false end
+    if not liveObj(SHUTTLE.obj) then shuttleHealth() end         -- (finds the shuttle's actor) ((0.73.84) liveObj: kept)
+    if not liveObj(SHUTTLE.obj) then return false end
     local ok = pcall(function() SHUTTLE.obj:SetIsInvincible(on) end)
     log(string.format("special: shuttle %s%s", on and "invulnerable while the countdown is held" or "can be hit again",
         ok and "" or " (SetIsInvincible failed)"))
@@ -75,7 +75,9 @@ local GROUND = { "LiveAIGameObject" }
 local FLAGS = { "bShowHUDBox", "bIsNotLockonTarget", "bIsNotFCSTargets", "bIsInvincible" }
 local GONE = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
 local function hide(o, keep)
-    local was = { obj = o }
+    -- ((0.73.84) with its full name: shuttlePadBack touches it again only while it's live under that name)
+    local nm = nameOf(o)
+    local was = { obj = o, name = nm ~= "?" and nm or nil }
     for _, f in ipairs(FLAGS) do
         pcall(function() was[f] = o[f] end)
         pcall(function() o[f] = GONE[f] end)
@@ -93,12 +95,12 @@ function SPC.shuttleTakeOff(padOnly)
     SHUTTLE.gone = SHUTTLE.gone or {}
     local sh, killed, hidden, failed = SHUTTLE.obj, "no shuttle actor", 0, 0
     if padOnly then sh, killed = nil, "never came (the pad only)"
-    elseif not valid(sh) then shuttleHealth(); sh = SHUTTLE.obj end
+    elseif not liveObj(sh) then shuttleHealth(); sh = SHUTTLE.obj end   -- ((0.73.84) liveObj: kept between ticks)
     local f = svFlags() or {}
-    if valid(sh) and (f.SV_ShuttleLaunched or 0) < 1 then    -- (a kill now would count as shot down on the pad)
+    if liveObj(sh) and (f.SV_ShuttleLaunched or 0) < 1 then  -- (a kill now would count as shot down on the pad)
         killed = "not killed (SV_ShuttleLaunched is 0)"
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
-    elseif valid(sh) then
+    elseif liveObj(sh) then
         pcall(function() sh:SetIsInvincible(false) end)
         pcall(function() sh:SetMinHealth(0.0) end)
         local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
@@ -110,7 +112,7 @@ function SPC.shuttleTakeOff(padOnly)
     local seen, rec = {}, 0
     for _, l in pairs(SHUTTLE.pad or {}) do
         for _, o in ipairs(l) do
-            local a = valid(o) and addrOf(o)
+            local a = liveAddr(o)                       -- ((0.73.84) kept since its spawn: liveAddr, not valid())
             if a and not seen[a] then
                 seen[a], rec = true, rec + 1
                 if hide(o, true) then hidden = hidden + 1 else failed = failed + 1 end
@@ -147,7 +149,9 @@ function SPC.shuttlePadBack()
     local n = 0
     for _, w in ipairs(SHUTTLE.gone or {}) do
         local o = w.obj
-        if valid(o) then
+        -- ((0.73.84, the review of the crash-on-quit fix) kept since its take-off: touched only while live under the name
+        -- it had (valid() reads a freed one; the level's teardown forgets the list: LEVEL_DROPS below)
+        if liveObj(o) and (w.name == nil or nameOf(o) == w.name) then
             pcall(function() o:SetActorHiddenInGame(false) end)
             pcall(function() o:SetActorEnableCollision(true) end)
             pcall(function() o:SetActorTickEnabled(true) end)
@@ -157,6 +161,16 @@ function SPC.shuttlePadBack()
     end
     if SHUTTLE.gone and #SHUTTLE.gone > 0 then log(string.format("special: the pad's %d objects back", n)) end
     SHUTTLE.gone = {}
+end
+-- ((0.73.84, the review of the crash-on-quit fix) the pad's objects hidden (SHUTTLE.gone), the pad as spawned (SHUTTLE.pad)
+-- and the shuttle (SHUTTLE.obj) are the level's: forgotten untouched as it's torn down (sv_core.lua levelGate). They were
+-- kept across a quit, and the next run's first shuttle round (spawnShuttle -> shuttlePadBack) read the old level's freed
+-- actors with valid() and wrote their flags back (Shazzy's run of 2026-11-04 hid 20 of them in round 12 before quitting).
+-- A restart keeps its level and never closes the gate: its hidden pad still comes back.
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["the shuttle pad"] = function()
+        SHUTTLE.gone, SHUTTLE.pad, SHUTTLE.obj, SHUTTLE.padSpawning = {}, nil, nil, nil
+    end
 end
 end
 

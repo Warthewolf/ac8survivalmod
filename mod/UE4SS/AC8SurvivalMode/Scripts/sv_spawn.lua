@@ -1319,7 +1319,7 @@ end
 
 -- The shuttle's health in % (its actor's HealthInternal is health x 10), or nil when it can't be read.
 function shuttleHealth()                  -- the local declared with SHUTTLE
-    if not valid(SHUTTLE.obj) then
+    if not liveObj(SHUTTLE.obj) then            -- ((0.73.84) liveObj: kept between ticks)
         SHUTTLE.obj = nil
         if D and D.special and D.now and (SHUTTLE.lookAt or -100) + 2 <= D.now then
             SHUTTLE.lookAt = D.now
