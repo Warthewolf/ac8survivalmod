@@ -169,6 +169,25 @@ if ROLE == "host" then
         check((M.units.SV_Unit_Alicorn and M.units.SV_Unit_Alicorn.n or 0) == nA, "host: ... the Alicorn's own parked pool still left out")
         SPC = spcWas
     end
+    -- ((0.73.83) VOID WATCHER 1 taken off: its copies on the joiners down first, unpaid ("dn|<id>|r"), never later at 0 HP)
+    do
+        local spcWas = SPC
+        SPC = { alicornUnit = "SV_Unit_Alicorn" }
+        spawn("SV_Unit_VoidWatcher")
+        local aw = obj("BP_OP0005_e767_CP_Ally", 7400, true)
+        logPlane(aw, "SV_Unit_VoidWatcher", 0)
+        local idAw
+        for id, e in pairs(M.byId) do if e.obj == aw then idAw = id end end
+        local dn0 = #msgs("dn")
+        local n = COOP.removeNow("SV_Unit_VoidWatcher")
+        local dn = msgs("dn")
+        check(idAw and n == 1 and #dn == dn0 + 1 and dn[#dn]:find("dn|" .. idAw .. "|r|", 1, true) and M.byId[idAw].dead,
+              "host: (0.73.83) VOID WATCHER taken off: its copy's dn sent at once, unpaid (" .. tostring(dn[#dn]) .. ")")
+        aw.HealthInternal = 0
+        tick(1.1)
+        check(#msgs("dn") == dn0 + 1, "host: ... not again when its health reaches 0")
+        SPC = spcWas
+    end
     -- ((0.73.83) the round's kills are each game's own: the host's callout isn't sent to the joiners, an ordinary one is)
     do
         local co0, c0 = #msgs("co"), #CALLOUTS
@@ -526,6 +545,28 @@ else
     tick(16); tick(5)
     local l4 = table.concat(logs, " | ", b4 + 1)
     check(pool.HealthInternal == 100 and not l4:find("131 stray", 1, true), "join: 20 s on, the pool's not taken down as a stray")
+    -- ((0.73.83) the host's VOID WATCHER removal: a copy of it still here unbound and taken down (unpaid), its unit off this
+    -- game's spawner list 2 s on)
+    do
+        local recs = {}
+        local keepRec = SV_Recycle
+        SV_Recycle = function(u, f) recs[#recs + 1] = u .. ":" .. tostring(f); return 1 end
+        inbox[#inbox + 1] = "0|sp|SV_Unit_VoidWatcher|-|-|-1|880"
+        for _ = 1, 4 do tick(0.5) end
+        local cw = obj("BP_OP0005_e767_CP_Ally", 7400, true)
+        logPlane(cw, "SV_Unit_VoidWatcher", 0)
+        inbox[#inbox + 1] = "0|bd|SV_Unit_VoidWatcher|880|1|4321"
+        tick()
+        check(M.copies[4321] and M.copies[4321].obj == cw, "join: (0.73.83) a VOID WATCHER copy bound (id 4321)")
+        alive.SV_Unit_VoidWatcher = 1
+        inbox[#inbox + 1] = "0|ev|RE_SV_AwacsRemove"
+        tick()
+        check(M.copies[4321] == nil and cw.HealthInternal <= 0 and #recs == 0,
+              "join: (0.73.83) the host's RE_SV_AwacsRemove: its copy here taken down and forgotten, no recycle yet")
+        tick(2.1)
+        check(recs[#recs] == "SV_Unit_VoidWatcher:1", "join: (0.73.83) ... its unit off this game's list 2 s on (" .. tostring(recs[#recs]) .. ")")
+        SV_Recycle = keepRec
+    end
     -- ((0.73.83) the round's kills from this game's own count when the host's round ends (Rapt0r, 2026-11-04: the host's
     -- were shown, wrong in 8 of 9 rounds)
     do
