@@ -418,8 +418,8 @@ end
 
 local function nerf(o)
     local c = CFG.specials.ladon
-    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
-    local base = valid(HIT.cdo) and HIT.cdo or o
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    local base = liveObj(HIT.cdo) and HIT.cdo or o
     local ok, err = pcall(function()
         local d0, a0 = base.damage, base.MaxHomingAngle
         o.damage = tonumber(c.missile_damage) or d0
@@ -441,13 +441,13 @@ end
 -- counted in flight and on the missile alert, and the game crashed (the ECM burst, 2026-10-25).
 local function certain(o)
     local c = CFG.specials.ladon
-    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
     local ok, err = pcall(function()
         local d0, a0 = o.damage, o.MaxHomingAngle
         local d1 = tonumber(c.missile_damage) or 10
-        local a1 = valid(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
+        local a1 = liveObj(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
         o.damage, o.MaxHomingAngle = d1, math.min(a0, a1)
-        local turn = slower(o, valid(HIT.cdo) and HIT.cdo or o)
+        local turn = slower(o, liveObj(HIT.cdo) and HIT.cdo or o)
         if not HIT.certainSaid then
             HIT.certainSaid = true
             log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg, turn %s",
@@ -489,6 +489,8 @@ function HIT.reset()
     HIT.ladonUntil, HIT.ladonSweepAt = nil, nil
     HIT.ladonPool, HIT.ladonWalkAt = {}, nil                -- ((0.73.77) B5: the Ladon missiles kept, below)
     HIT.ladonWalked, HIT.ladonWalkStep, HIT.base, HIT.ladonSweeps = nil, nil, nil, 0   -- ((0.73.79) below)
+    HIT.cdo = nil                  -- ((0.73.84) the Ladon missile's class default goes with its level: looked for again, and
+                                   -- liveObj, not valid(), on the one kept (valid() reads a freed one: the gun's of TAC.reset)
 end
 
 -- (0.73.77, Workstream B5) Every Ladon missile the game has made, by address: HIT.ladonPool[a] = { obj, name, certain }.
@@ -510,8 +512,8 @@ local WALK_CLS = { { LADON_CERTAIN .. "_C", true }, { LADON_MSL .. "_C", false }
 -- the class default's values the toning starts from, once a level (nil when it can't be read: the old path then)
 local function ladonBase()
     if HIT.base then return HIT.base end
-    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
-    if not valid(HIT.cdo) then return nil end
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    if not liveObj(HIT.cdo) then return nil end
     local ok, b = pcall(function()
         local r = { d = HIT.cdo.damage, homing = HIT.cdo.MaxHomingAngle, rot = HIT.cdo.MaxRotationAngle, rotNC = nil }
         pcall(function() r.rotNC = HIT.cdo.MaxRotationAngleNotCaptured end)

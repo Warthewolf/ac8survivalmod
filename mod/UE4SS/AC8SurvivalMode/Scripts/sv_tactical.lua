@@ -6,6 +6,9 @@
 -- (airframe / bays / gun / flares, CFG.shop.items Up*); RUN.insured: a SECOND CHANCE held (CFG.insurance).
 TAC = { ecmUntil = nil, strike = nil }
 UP = { base = {}, gunBase = {} }
+-- ((0.73.84) each gun class's stock damage by its full name, for the whole session: an upgraded value never read as the
+-- next run's stock, whatever TAC.reset could or couldn't put back)
+UP.gunStock = {}
 
 ---------------------------------------------------------------------------------------------------- tactical items
 do
@@ -409,9 +412,12 @@ function UP.apply(pawn)
             local cls = act.MachineGunClass
             local name = nameOf(cls)
             local g = UP.gunBase[name]
+            if g and not gunLive(g) then UP.gunBase[name], g = nil, nil end   -- ((0.73.84) its class loaded again)
             if not g then
                 local cdo = cls:GetCDO()
-                g = { cdo = cdo, damage = cdo.damage, name = name }
+                if UP.gunStock[name] == nil then UP.gunStock[name] = cdo.damage end
+                local full = nameOf(cdo)
+                g = { cdo = cdo, damage = UP.gunStock[name], name = name, full = full ~= "?" and full or nil }
                 UP.gunBase[name] = g
             end
             local want = g.damage * (1 + step("gun") * tier("gun"))
@@ -424,9 +430,28 @@ function UP.apply(pawn)
     end
 end
 
--- Back to stock (a new run, or the run's over): the gun classes' default damage
+-- ((0.73.84) Shazzy's crash on quit of 2026-11-04 19:49:19, 0.73.82, round 24 with GUN tier 2: UE4SS.dll+0x2ab5bd, its Lua
+-- property lookup ("damage", the stack's strings) on a freed object, 0.1 s after the teardown gate closed and the run's
+-- end logged its leaderboard lines. The gun's class default (BP_plwp_gun_x1_C, the player plane's weapon blueprint) is
+-- loaded with the level and goes with it; UP.gunBase kept it between ticks and runLeft's TAC.reset wrote the stock
+-- damage back into it after the level's purge had freed it (a pcall doesn't catch that). Most quits got there first
+-- (Saint Alessia's r14, r30 and r32 with the upgrade bought): a race. The F1 crashes on quit of 0.73.76 were at the same
+-- address.) A kept class default is touched only while it's still the engine's live object (liveObj: its memory
+-- readable and its GUObjectArray slot it, not unreachable or garbage, so the purge in progress won't free it) under the
+-- same full name (an address another object took since is not it).
+function gunLive(g)
+    return g ~= nil and liveObj(g.cdo) and (g.full == nil or nameOf(g.cdo) == g.full)
+end
+-- Back to stock (a new run, or the run's over): the gun classes' default damage. One that's gone (unloaded with its level)
+-- is forgotten untouched: its class loads again from its package with the stock value.
 function TAC.reset()
-    for _, g in pairs(UP.gunBase) do pcall(function() g.cdo.damage = g.damage end) end
+    local gone = 0
+    for _, g in pairs(UP.gunBase) do
+        if gunLive(g) then pcall(function() g.cdo.damage = g.damage end) else gone = gone + 1 end
+    end
+    if gone > 0 then
+        log(string.format("upgrades: %d gun class default%s gone with the level: forgotten, not touched", gone, gone == 1 and "" or "s"))
+    end
     UP.gunBase, UP.base, UP.pawn, UP.act, UP.actPawn, UP.guarded = {}, {}, nil, nil, nil, nil
     TAC.ecmUntil, TAC.strike, TAC.autoAt = nil, nil, nil
     INS.min, INS.pawn, INS.safeUntil = nil, nil, nil     -- (its fields only: INS.tick lives on the table)
