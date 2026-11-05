@@ -328,6 +328,7 @@ function SPC.cleanTick(now)
             if n > 0 then log(string.format("special: %s%s NOT removed (%d alive)%s", SPC.cleanLabel(e.unit), where, n, rec))
             else log(string.format("special: %s%s removed%s", SPC.cleanLabel(e.unit), where, rec)) end
             if n <= 0 then SPC.CLEAN_OBJ[e.unit] = nil end  -- (nothing of it kept past its check)
+            if n <= 0 and e.unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) its pools' addresses with it)
         end
     end
 end

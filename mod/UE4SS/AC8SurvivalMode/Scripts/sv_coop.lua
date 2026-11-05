@@ -502,7 +502,11 @@ local function hostPlane(o, unit)
     local u = M.units[unit]
     if not u then return end
     local a = addrOf(o)
-    if SPC.alcnPool and a and SPC.alcnPool.set[a] then return end      -- (the Alicorn's parked pools: not mirrored)
+    -- (the Alicorn's parked pools: not mirrored. (0.73.83) Only its own unit's planes: its set of their addresses was kept
+    -- after its unit was gone, and every later plane the game put at one of those addresses got no co-op id (the 0.73.79
+    -- run of 2026-11-04: after the Alicorn round 18 of 41 hunts went after partly bound flights, a joiner tore 86 copies
+    -- down as strays and every joiner asked for the whole picture every ~3 minutes to the end of the run))
+    if unit == SPC.alicornUnit and SPC.alcnPool and a and SPC.alcnPool.set[a] then return end
     u.n = u.n + 1
     M.nextId = M.nextId % 65535 + 1
     local id = M.nextId
@@ -1151,7 +1155,7 @@ local function clientPlane(o, unit)
     -- the Alicorn's tanks and core down here and its fresh copy was refused, "its last flight is still up": the co-op
     -- run of 2026-10-31, two joiners couldn't target the Alicorn at all)
     local a = addrOf(o)
-    if SPC and SPC.alcnPool and a and SPC.alcnPool.set[a] then return end
+    if SPC and unit == SPC.alicornUnit and SPC.alcnPool and a and SPC.alcnPool.set[a] then return end   -- ((0.73.83) its own planes only: hostPlane)
     noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
     local cu = M.cunits[unit]
     if not cu then return end
@@ -1414,6 +1418,7 @@ local function doSpawn(q)
         M.pendBind[unit] = nil
     end
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
+    if SPC and unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) this copy's pools, not the last one's: as the host's alicornSpawn)
     crumb(string.format("coop: the host's %s spawned here (gen %s)", tostring(unit), tostring(q.gen)))
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
