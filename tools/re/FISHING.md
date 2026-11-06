@@ -204,3 +204,72 @@ sun<->moon swaps only at the darkest point of a break.
 3. The sky: the five steps of section 5.
 4. One path-flown cruise missile 15 km north at 2 km up, to the runway: distance and height each second; box and TGT,
    lock-on, one missile kills it, how low it gets, its path's end. The siren posted at an airfield actor, stopped 20 s on.
+
+## 8. Build names (built 2026-11-06 on feature/fishing; nothing run in game)
+What tools/build_survival.py and tools/survival_events.py build for the build contract of 2026-11-06 (the data:
+survival_events.py's "GONE FISHIN' and THE FESTIVAL" section). Lua spawns every unit (none at the level's start). Each
+object sits at its unit's height (offset z 0), so `SV_Spawn(unit, x, y, z, yaw)` puts them all at z, turned by yaw less
+the unit's world-data yaw. The build reads everything back from the saved packages (build_survival.py
+`check_fishing_build`) and fails on any difference.
+
+### Rows
+| Row | Table | What |
+|---|---|---|
+| `sv_shoal` -> `SV_Shoal` | DT_SV_NpcMission (Mission 22's `dummy_common`) | the shoals' mission row |
+| `SV_Shoal` | DT_SV_NpcRows: **Lua adds it to DT_NPC at the main menu** | GR000_dummy + WeaponDurabilityId `NPC_WPDur_000`, ExplosionDurabilityId `test_NPC_ExpDur_000`, GameObjectDisplayName02 `SV_Shoal_Name`, ModelId `SV_Model_Shoal`, BaseScore 0 |
+| `SV_Model_Shoal` | DT_SV_ModelRows: **Lua adds it to DT_NPC_Model at the main menu** | the campaign's GR000_dummy model (BP_GR000_dummy_CP), MaxHealth 10, GameObjectDisplayName01 `SV_Shoal_Name` |
+| `sv_fish_boat` -> `VE027_boat2_01` | DT_SV_NpcMission (shaped as `aegs_common`) | SAL's boat, MinHealth 1.0; the stock DT_NPC row (nothing to add) |
+| `sv_fest_cm` -> `OP0039_slcmp_01` | DT_SV_NpcMission (Mission 30's `slcmp_ms30` whole) | the cruise missiles (stock DT_NPC row) |
+| `sv_fest_light` -> `GR053_seli_01`, `sv_fest_beam` -> `GR053_seli_light_01` | DT_SV_NpcMission (C_011's rows whole) | the searchlight vehicle and its light |
+| `GR053_seli_01`, `GR053_seli_light_01`; `GR053_seli`, `GR053_seli_light`; `NWDID_GroundNPC` | DT_SV_AlcnNpc; DT_SV_AlcnModel; DT_SV_AlcnWpDur | the searchlight's Online Mode rows (NEDID_00 was in already). `SPC.alicornSetup` adds every row of these tables to the campaign's at the main menu (hard rule 38's way): no Lua change |
+| `t160_common` | (Mission 4's, in already) | the festival's Tu-160s |
+
+Text keys Lua sets with SV_SetText: `SV_Shoal_Name` (the shoals' boxes: SHOAL) and `SV_SalBoat` (the boat's callsign: SAL).
+
+### Units
+| Unit (SV_Spawn's name) | Objects (as event args name them) | Row | Side, flags | Where (world data, cm) |
+|---|---|---|---|---|
+| `SV_Unit_FishA` / `B` / `C` | `SV_Obj_FishA_0` .. `_7` (B, C alike) | sv_shoal | enemy (Mission 13's E_Unit02_02_Score0), box + TGT, bIsLanding off | the unit's origin on its ground at z 700: A North Shoal (1803753, -1160858), B Lighthouse Bank (1866154, 268355), C The Deep Hole (929908, -753378); its 8 shoals 0.12-0.76 km round it, 352 / 409 / 359 m apart at least (fish_offsets: a fixed seed a ground) |
+| `SV_Unit_SalBoat` | `SV_Obj_SalBoat` | sv_fish_boat | ally (Mission 28's AUnit01_Sea_0: box, callsign `SV_SalBoat` shown for an ally, attack-target exception), not invincible, invincible from AI and wingmen | (1687842, -1191916, 300), yaw 157 |
+| `SV_Unit_FestN` / `W` / `S` | `SV_Obj_FestN_0` .. `_3` | t160_common | enemy (copy of the heavy flight EA_Unit_01_Air2: box, no TGT), unit area 80 km, 500-6000 m | the lead at its entry, 5 km inside the zone's edge on its bearing, 2.3 km up, facing the runway: N (1610476, -3761895) yaw 90, W (-4207336, -436142) yaw 0, S (1610476, 3238105) yaw -90; `_1` 300 m beside it (outside the racetrack), `_2` / `_3` 300 m behind |
+| `SV_Unit_FestCM_<g><k>` (g N W S, k 1 2 3) | `SV_Obj_FestCM_<g><k>_0` .. `_3` | sv_fest_cm | enemy, box + TGT | its group's launch point, z 200000 (N (1610476, -2936142), W (-889524, -436142), S (1610476, 2063858)), yaw towards the runway (N 90, W 0, S -90), the four side by side 60 m apart across their way |
+| `SV_Unit_FestLight_1` .. `_4` | `SV_Obj_FestLightA` .. `D`, each with its light `SV_Obj_FestLight<X>_SearchLight` (sv_fest_beam) | sv_fest_light | ally (C_011's B_Ground_0 searchlight desc: faction 3 -> 1, its rank-S flag cleared, invincible from AI as C_011 has it), unit area 3 km | z 500, yaw -23: 1 (1581839, -465256) north side by the middle; 2 (1532709, -345543) past the WSW end, south; 3 (1689452, -523971) past the ENE end, north; 4 (1677811, -423430) the ENE half, south |
+
+The searchlight spots: 36-112 m from every building or prop box, 23-25 m from every plant, 324-433 m from Mission 22's
+airport objects and the STORE's CIWS spots, 380-530 m off the runway's axis (tools/checks/festival_lights_check.py, run by
+the build; its data festival_lights_data.json comes from the stock level packages: `--scan`). The light's class
+(/Game/OnlineMode/.../BP_SystemObject_SearchLight_Tank) is imported from C_011's world data (retag_parts).
+
+The festival and missile units' names end in a digit (the contract's). The build stores each as the engine turns the
+string into an FName: `SV_Unit_FestLight_1` = ('SV_Unit_FestLight', 2), as stock stores B_Unit_00_MainMissile_PathMove0_0,
+while `SV_Unit_FestCM_N1` stays whole (its tail isn't a number). So SV_Spawn("SV_Unit_FestLight_1") finds it (port_unit
+`unit_digits`).
+
+### Paths (smooth, ControlType 1, no tube data; shaped on Mission 16's Ladon path)
+- `SV_Path_Fest_N` / `W` / `S` (the unit, `_0` and `_2`): the run in from the entry along the bearing to 22 km from the
+  runway, then 15 racetrack laps in the one path (hard rule 54). Each lap: the inner turn (radius 4.5 km, apex 17.5 km
+  out), the outbound leg 9 km aside (22 -> 29 km), the outer turn (out to 33.5 km), the inbound leg 29 -> 22 km on the
+  bearing through the launch point (25 km, a path point each lap: 16 passes in all). 2.3 km up, 700 km/h, ~3.6 minutes a
+  lap. Never nearer the runway than 18.1 km (15 km asserted), inside Scripts/sv_ai.lua ZONE (the zone less 3 km).
+  367 / 375 / 368 points. N's racetrack lies west of its inbound line, W's south, S's west.
+- `SV_Path_Fest_NR` / `WR` / `SR` (`_1` and `_3`): the same lane 300 m outside it (nearest 17.8 km).
+- `SV_Path_FestCM_<g>A` .. `D`: one per missile of a salvo (object i on lane i), from its spawn point 2 km up down to 100 m
+  by 9.5 km (2000, 1850, 1400, 800, 300, 120 m at 0, 1.5, 3.5, 5.5, 7.5, 9.5 km), then 100 m over the ground on to the
+  runway's centre (25 km) and 1.5 km past it; the four 60 m apart (90 m at most off the runway's centre). Their ways are
+  flat (sea 3.5 m, land 5 m: height_100m.json); the tallest things near them are ~40 m trees and the airport's buildings.
+
+### Records (EP_SurvivalMode_global; survival_events.build_festival)
+| Event | Fired by | Does |
+|---|---|---|
+| `SV_FestUp<g>` (g N W S) | the formation's appearance (Mission 22's reinforcement-appeared trigger on SV_Unit_Fest<g>) | 0.5 s: gear up on each Tu-160, engagement None on the unit (Mission 22's RE_Wave6_AllyFly order); 1 s, only while `SV_FestRun<g>` is 0: the unit and `_0` / `_2` onto SV_Path_Fest_<g>, `_1` / `_3` onto SV_Path_Fest_<g>R, 700 km/h (Mission 22's RE_Wave2_AreaB_PathSet unit record, Mission 16's Ladon record per aircraft); `SV_FestRun<g>` 1 at 1.5 s, 0 again at 10 s |
+| `RE_SV_FestUp_<g>` | Lua, right after its SV_Spawn (a unit that appears in the landing menu fires no appearance trigger) | the same records: the path once, whichever comes first; a second within 10 s gives gear and orders only, one later starts the path again from the entry |
+| `RE_SV_FestCM_<g><k>` | Lua, right after it spawns SV_Unit_FestCM_<g><k> at the launch point | 0.3 s, on each missile i: Mission 30's LiveAIPathExecution (lane i, 600 km/h, its other settings), LiveAIEngagementOrder None, LiveSetLookAheadTimeSec 0. (Mission 30's LiveReinforcementExecution is Lua's SV_Spawn; its two counters are left out.) |
+| `RE_SV_FestCMHit_<g><k>_<i>` (i 0-3) | Lua, on the host, when missile i is within 400 m of the runway | Mission 22's LiveDestroyUnitExecution on SV_Obj_FestCM_<g><k>_<i> |
+
+Int flags: `SV_FestRun<g>`. No records for the shoals, the boat or the searchlights (the light sweeps by itself, as in
+C_011). 51 triggers, 216 execs.
+
+### Stock packages the build reads (in build/stock; not on build_all.sh's get_stock list, as Mission 19's and 28's)
+Maps/Ingame/Mission030/WD_ and EP_Mission030_global, Datatables/AI/NPC/Mission/DT_NPC_Mission030,
+OnlineMode/Maps/CompetitiveCoop/C_011/WD_C_011_03, OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON,
+Maps/Ingame/Mission028/WD_Mission028_global; for `festival_lights_check.py --scan`, Map17's level packages.
