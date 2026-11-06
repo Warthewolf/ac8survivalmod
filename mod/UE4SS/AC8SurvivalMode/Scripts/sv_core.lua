@@ -757,7 +757,28 @@ function RECYCLE_TEST.tick()
         T.step, T.at = 0, now + 7
     end
 end
+-- (0.74.0) The later parts' test keys (sv_sky.lua Ctrl+F6, sv_fishing.lua Ctrl+F10, sv_festival.lua Ctrl+F12) go through
+-- testKey(name, who, fn): Ctrl+<name>, a key bound twice logged (`test: Ctrl+<key> is bound twice`: TEST_KEYS, which
+-- sv_main.lua's own test keys share), the run made unranked (LB.testKey), fn run on the game thread (KEYQ) with its error
+-- logged. TEST_TICKS: their steps, { name, fn(clock) } each, run in a run from sv_main.lua's probeTickB on os.clock().
+TEST_KEYS, TEST_TICKS = {}, {}
+function testKey(name, who, fn)
+    if type(RegisterKeyBind) ~= "function" or not Key or Key[name] == nil then return false end
+    local key = Key[name]
+    if TEST_KEYS[key] then log(string.format("test: Ctrl+%s is bound twice: both run on a press (%s, %s)", name, tostring(TEST_KEYS[key]), who)) end
+    TEST_KEYS[key] = who
+    local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
+    local ok = pcall(RegisterKeyBind, key, mods, function()
+        ExecuteInGameThread(function()
+            if LB and LB.testKey then pcall(LB.testKey, key) end
+            local okF, err = pcall(fn)
+            if not okF then log("test: Ctrl+" .. name .. " error " .. tostring(err)) end
+        end)
+    end)
+    return ok
+end
 if type(RegisterKeyBind) == "function" and Key and Key.F11 then
+    TEST_KEYS[Key.F11] = "sv_core.lua's recycle test"
     local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
     pcall(RegisterKeyBind, Key.F11, mods, function()
         ExecuteInGameThread(function()
