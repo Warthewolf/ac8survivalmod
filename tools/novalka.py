@@ -18,12 +18,14 @@ def main(mod):
     p = os.path.join(mod, 'Scripts', 'sv_config.lua')
     s = open(p, encoding='utf-8', newline='').read()
     s = sub(s, 'valka    = { enabled = true,', 'valka    = { enabled = false,', 'sv_config valka')
-    s = sub(s, '"glitch", "valka", "spaceport" }', '"glitch", "spaceport" }', 'sv_config rotation')
+    # (the rotation's literal grows with new specials (2026-11-06: escort): "valka" taken out wherever it sits)
+    s, n = re.subn(r'(rotation\s*=\s*\{[^}]*?), "valka"', r'\1', s)
+    assert n == 1, f'sv_config: {n} rotations with valka'
     open(p, 'w', encoding='utf-8', newline='').write(s)
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, valka, spaceport',
-            ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, spaceport', 'ini rotation')
+    s, n = re.subn(r'(;rotation = [^\n]*?), valka\b', r'\1', s)
+    assert n == 1, f'ini: {n} rotations with valka'
     s = sub(s, ' glitch (AB.L..IN), valka (VALKA), spaceport', ' glitch (AB.L..IN), spaceport', 'ini note')
     m = re.search(r'\[specials\.valka\][^\[]*', s)
     assert m, 'ini: no [specials.valka]'
@@ -38,7 +40,7 @@ def main(mod):
                 bad.append(os.path.join(d, f))
     assert not bad, f'VALKA files still staged: {bad}'
     lua = open(os.path.join(mod, 'Scripts', 'sv_config.lua'), encoding='utf-8').read()
-    assert 'rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "spaceport" }' in lua
+    assert not re.search(r'rotation\s*=\s*\{[^}]*"valka"', lua), 'sv_config: valka still in the rotation'
     print(f'novalka: VALKA switched off and out of the rotation in {mod}; no X-02S container or AC7 sounds staged')
 
 
