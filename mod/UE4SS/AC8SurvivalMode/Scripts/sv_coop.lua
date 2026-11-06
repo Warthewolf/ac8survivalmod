@@ -819,6 +819,9 @@ local function hostTick()
                 -- the hunt's unit-wide order would free it while it's still held, here and not on the joiners' copies)
                 h.at, h.since = now + 2, h.since or now
                 M.hunts[#M.hunts + 1] = h
+            elseif D and D.up and D.up[h.unit] and ESC and ESC.holds and ESC.holds(h.unit) then
+                -- ((2026-11-06) a flight sent after CHARLENE, THE ESCORT's: kept on her, sv_escort.lua)
+                log("coop: " .. h.unit .. " is after CHARLENE (the escort): it doesn't go after the joiners")
             elseif D and D.up and D.up[h.unit] and COOP.realOn() and COOP.anyReal() then
                 local ok, s, n = COOP.huntReal(h.unit)
                 log("coop: " .. h.unit .. (ok and string.format(" goes after player %d's real plane (%d planes ordered onto it)", s + 1, n)
@@ -4533,7 +4536,8 @@ end
 -- the next after link_s. Planes keep their owner (P.sid): one back in another slot has its plane moved with them
 -- (SV_CoopSwapPP), a slot that's someone else's has the old plane set aside, hidden (never destroyed mid-level).
 do
-local ITEM_OK = { AAGun = true, SAM = true, Ciws = true, Wingmen = true, Moonchild = true, ShipAegis = true, VoidWatcher = true }
+local ITEM_OK = { AAGun = true, SAM = true, Ciws = true, Wingmen = true, Moonchild = true, ShipAegis = true, VoidWatcher = true,
+                  ZfaCarrier = true }
 local function mig() return cfg().migration or {} end
 local function sidOk(v) return type(v) == "string" and v:match("^%d+$") ~= nil and #v >= 15 and #v <= 20 end
 function M.mySid()
@@ -4562,6 +4566,14 @@ local function allyList()
         local b = a.buyer and M.roster[a.buyer] and M.roster[a.buyer].sid or "0"
         -- ((0.73.78, plan G5) not VOID WATCHER 1 once its service is over: a new host doesn't bring a retired one back)
         if ITEM_OK[item] and not a.home then out[#out + 1] = item .. ":" .. b end
+    end
+    -- ((2026-11-06) the ZFA-44 carriers out: sv_escort.lua, rebuilt by a new host as the allies are)
+    if ESC and ESC.carrierList then
+        local okE, list = pcall(ESC.carrierList)
+        for _, buyer in ipairs(okE and list or {}) do
+            local b = buyer and M.roster[buyer] and M.roster[buyer].sid or "0"
+            out[#out + 1] = "ZfaCarrier:" .. b
+        end
     end
     local dc = R.defCount or {}
     for kind, item in pairs({ aa = "AAGun", sam = "SAM", ciws = "Ciws" }) do
@@ -5147,6 +5159,11 @@ local function onJoinerMessage(f)
             local okS, errS = pcall(SPORT.fromHost, short(f[2], 400))
             if not okS then once("spx", "coop: the host's Spaceport state not read: " .. tostring(errS)) end
         end
+    elseif k == "es" and COOP.client() then              -- ((2026-11-06) THE ESCORT's state, the ZFA-44 carriers: sv_escort.lua
+        if ESC and ESC.onHost then
+            local okE, errE = pcall(ESC.onHost, f)
+            if not okE then once("es", "coop: the host's escort state not read: " .. tostring(errE)) end
+        end
     elseif k == "vm" and COOP.client() then              -- ((0.73.76) the host's VALKA mood: the red sky and her song here too)
         M.valkaHere(f[2] == "1", "the host's")           -- ((0.73.77) said when it can't be here too: D2)
     elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
@@ -5434,7 +5451,7 @@ end
 function M.specialPay(why) return type(why) == "string" and not why:find("^round %d+ cleared") end
 -- ((0.73.78) the allies priced room-wide besides VOID WATCHER 1 (its own count is "rnd" field 13): the host's counts of
 -- them in "rnd" field 14, with the defences')
-M.ROOM_ITEMS = { "Moonchild", "Wingmen", "ShipAegis" }
+M.ROOM_ITEMS = { "Moonchild", "Wingmen", "ShipAegis", "ZfaCarrier" }   -- ((2026-11-06) the ZFA-44 carriers: sv_escort.lua)
 -- ((0.73.77, plan H2) for the co-op run's squad, sv_leaderboard.lua: a slot's roster entry (name, sid, code; read
 -- only) and this game's Steam ID)
 function COOP.roster(slot) return M.roster[slot] end

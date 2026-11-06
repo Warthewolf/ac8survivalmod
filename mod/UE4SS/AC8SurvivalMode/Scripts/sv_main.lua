@@ -624,6 +624,10 @@ local function probeTickB(tick)
             if not okS then log("shop: error " .. tostring(errS)) end
             local okAl, errAl = timed("allies", ALLY.tick, now)
             if not okAl then log("allies: error " .. tostring(errAl)) end
+            if ESC and ESC.tick then                  -- THE ESCORT's test, the ZFA-44 carriers and their dressing (sv_escort.lua)
+                local okEs, errEs = timed("escort", ESC.tick, now)
+                if not okEs and not D.escErr then D.escErr = true; log("escort: tick error " .. tostring(errEs)) end
+            end
             local okI, errI = timed("icons", SHOP.decorTick, tick)
             if not okI and not SH.decorErr then SH.decorErr = true; log("shop: row icons error " .. tostring(errI)) end
             local okA2, errA2 = timed("ammo panel", hangarAmmoTick, tick)
@@ -1097,7 +1101,9 @@ if type(RegisterKeyBind) == "function" and Key then
                             { "FIVE", "alicorn", "THE ALICORN" }, { "SEVEN", "glitch", "AB.L..IN" },
                             { "EIGHT", "valka", "VALKA" },   -- (0.73.76: back for the user's own VALKA build; a build without her logs it)
                             -- (the Spaceport Assault and its retake, sv_spaceport.lua: Ctrl+END / Ctrl+INS)
-                            { "END", "spaceport", "SPACEPORT ASSAULT" }, { "INS", "retake", "SPACEPORT RETAKE" } }
+                            { "END", "spaceport", "SPACEPORT ASSAULT" }, { "INS", "retake", "SPACEPORT RETAKE" },
+                            -- (THE ESCORT, sv_escort.lua: Ctrl+0; a build without its units logs it and flies a normal round)
+                            { "ZERO", "escort", "THE ESCORT" } }
     for i, ts in ipairs(TEST_SPECIALS) do
         local key, kind, label = Key[ts[1]], ts[2], ts[3]
         if key then
@@ -1152,6 +1158,21 @@ if type(RegisterKeyBind) == "function" and Key then
                 if not ok then log("zfa44: T0: Ctrl+9 error " .. tostring(err)) end
             end)
         end)
+    end
+    -- Ctrl+F6 in a run: THE ESCORT's landing test T0 (sv_escort.lua ESC.testT0, tools/re/ESCORT.md): CHARLENE alone at the
+    -- approach fix, her final, rollout, taxi and stop logged every 0.5 s; Ctrl+F10: the ZFA-44 carriers unlocked and one
+    -- sent now (ESC.testCarrier)
+    for _, tk in ipairs({ { "F6", "testT0" }, { "F10", "testCarrier" } }) do
+        if Key[tk[1]] then
+            pcall(RegisterKeyBind, Key[tk[1]], mods, function()
+                ExecuteInGameThread(function()
+                    local ok, err = pcall(function()
+                        if ESC and ESC[tk[2]] then ESC[tk[2]]() else log("test: Ctrl+" .. tk[1] .. ": no escort (sv_escort.lua)") end
+                    end)
+                    if not ok then log("escort: test Ctrl+" .. tk[1] .. " error " .. tostring(err)) end
+                end)
+            end)
+        end
     end
     end                            -- (the test keys' do: their RegisterKeyBind wrapper)
     -- TEST ONLY END

@@ -831,6 +831,11 @@ CFG = {
             -- AEGIS's: each purchase in the run x1.25 dearer, a co-op room's counted together, a joiner's checked by the
             -- host at the host's price: sv_shop.lua shopBuildFor)
             VoidWatcher = { role = "ally_awacs", label = "VOID WATCHER 1: E-767 AWACS", price = 12000, raise = 1.25 },
+            -- the ZFA-44 CARRIER (CFG.allies.carrier, Scripts/sv_escort.lua): only once THE ESCORT is won; at most two out;
+            -- a co-op room's purchases counted together, a joiner's built by the host. No row of its own on the STORE's
+            -- pages yet: it shares CFG.allies.carrier.store_row (row_label on that row)
+            ZfaCarrier = { role = "ally_carrier", label = "ZFA-44 CARRIER", row_label = "CALL A ZFA-44 CARRIER", price = 15000,
+                           raise = 1.0 },
             -- the allied aircraft's orders (CFG.allies.orders), free: each press the next one
             Orders     = { role = "orders", label = "ALLY ORDERS" },
             -- (defences' raise 1.12, was 1.25: "the sixth AA gun cost 12,210, three times the first")
@@ -985,6 +990,45 @@ CFG = {
                          orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 10, check_s = 10, again_s = 60 },
                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
                                    health_max_x = 6.0 } },
+        -- The ZFA-44 carriers (Scripts/sv_escort.lua, tools/re/ESCORT.md; user, 2026-11-06), the escort's reward: once
+        -- CHARLENE and her escorts are down (the room's in co-op, for the rest of the run), the STORE (CFG.shop.items.
+        -- ZfaCarrier) sends one of Mission 17's cargo ships (allied: units, one per spot at sea off the airfield), at most
+        -- max_up at once, each serving service.rounds rounds (a round counted as it clears with the ship up min_s or more
+        -- of it, VOID WATCHER 1's way), then leaving (taken off). Each launches a flight of ZFA-44s first_s after it's on
+        -- station and again relaunch_s after that flight is down. launch "container": from its own container launchers
+        -- as Mission 17's drones (launchers: each ship's launcher arms in turn, { record = its fire record, unit = the
+        -- world-data unit that arm launches }; a unit launched before is taken off the spawner's list first, hard rule
+        -- 16); a ship whose launch record fired but no plane of it came within launch_wait_s launches by "pose" from then
+        -- on: its pose_units flight spawned ahead_m off its bow, alt_m up (as the ALICORN's deck). A plane is the ship's
+        -- when it appears within capture_km of it. zfa: the ZFA-44's look on every plane of those flights, on every game
+        -- (Scripts/sv_zfa44.lua ZFA.dress: the user's dev builds with SurvivalMode_ZFA44_P; without it the host airframe
+        -- flies as it is), paint its variant (3: the gear instance with a flat normal, the Falken's and VALKA's paint 16,
+        -- the route proven to draw), hide_s how often the host's own meshes are hidden again. store_row: a STORE row it
+        -- shares while it's unlocked and that row has nothing to sell ("Revive": the AIRFIELD page's revive row when
+        -- nobody's down; "none": only a ZfaCarrier row of its own). remove_records: each ship taken off by its own
+        -- RE_SV_Cargo<n>Remove too (not in the build yet). spots: where each ship is when its hull isn't found (cm).
+        carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2,
+                         units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" },
+                         launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 10, capture_km = 4,
+                         launchers = {
+                             { { record = "RE_SV_CargoLaunch_1_1", unit = "E_Unit_01_drone_1_0" },
+                               { record = "RE_SV_CargoLaunch_1_2", unit = "E_Unit_01_drone_1_1" } },
+                             { { record = "RE_SV_CargoLaunch_2_1", unit = "E_Unit_01_drone_2_0" },
+                               { record = "RE_SV_CargoLaunch_2_2", unit = "E_Unit_01_drone_2_1" } },
+                         },
+                         pose_units = { "SV_Unit_ZfaA", "SV_Unit_ZfaB" },
+                         pose = { ahead_m = 300, alt_m = 1100 },
+                         spots = { { 1610476, 249000 }, { 1610476, -1186000 } },
+                         service = { rounds = 3, min_s = 60 },
+                         store_row = "Revive", remove_records = false,
+                         zfa = { name = "ZFA-44", name_key = "SV_Zfa44", dress = true, paint = 3, hide_s = 3 },
+                         text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
+                                  launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
+                                  leaving = "%s LEAVING", leaving_sub = "%d ROUNDS SERVED: THE STORE CAN CALL ANOTHER",
+                                  sunk = "%s SUNK", sunk_sub = "THE STORE CAN CALL ANOTHER",
+                                  locked = "ESCORT CHARLENE HOME TO UNLOCK IT.", full = "BOTH CARRIERS ARE OUT (%d).",
+                                  busy = "NO CARRIER FREE TO SEND YET.",
+                                  help = "A cargo vessel off the airfield that launches a flight of ZFA-44s, again each time it's shot down; it serves %d rounds, then leaves (%d of %d out)." } },
         ships        = {
             -- search_m: its turrets' AI module (a copy of NPC_AIModule_Turret000, 6000 m, made NPC_AIModule_SV_<key>),
             -- the farthest they see anything, and no losing targets in cloud. missile: its homing missiles' own weapon
@@ -1404,8 +1448,9 @@ CFG = {
         first    = 4,
         every    = 5,
         -- ("spaceport", the Spaceport Assault, in the rotation from 0.73.73 (user, 2026-11-02: "install spaceport into the
-        -- new patch"); from its own from_round; its retake comes the round after a lost one)
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka", "spaceport" },
+        -- new patch"); from its own from_round; its retake comes the round after a lost one) ("escort", THE ESCORT,
+        -- 2026-11-06: once a run, from its own from_round, and only when its units are in the build: sv_escort.lua)
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka", "spaceport", "escort" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
@@ -1845,6 +1890,91 @@ CFG = {
                                              escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
                                              debris_pay = 400, debris_timeout_s = 120,
                                              timeout_s = 240, escape_min_m = 15000, split_wait_s = 10 } } },
+        -- "escort" = THE ESCORT (Scripts/sv_escort.lua, tools/re/ESCORT.md; user, 2026-11-06): the allied B-1B CHARLENE
+        -- and her four escorts (YORKE and ROCK, Su-57s; ALI, a Su-33; DANIELLE, a Su-35) fly in from the map's south-west
+        -- corner (start, 3 km up) to Comona airfield under the round's waves and land: her route (RE_SV_CharGo), then by
+        -- distance her final (RE_SV_CharFinal, gear down), rollout, taxi and stop; the escorts hold an orbit over the
+        -- airfield once she's on final and come in one at a time after her (release_gap_s apart, each once the runway is
+        -- clear). The round ends only once everyone left has landed or she's lost. Her loss fails the special (no reward,
+        -- no unlock; the run goes on). All landed (an escort shot down is out, not waited for): reward + reward_per_round
+        -- x the round, her subtitle and the ZFA-44 carriers unlocked in the STORE for the rest of the run (the room's in
+        -- co-op: CFG.allies.carrier). Once a run (once), from from_round, in the rotation's bag; a build without its units
+        -- in the world data never picks it (SV_UnitAlive answers "no such unit"). Unit, record and name-key names: the build
+        -- contract of 2026-11-06 (tools/build_survival.py, tools/survival_events.py).
+        escort = { enabled = true, from_round = 9, once = true, name = "CHARLENE", airframe = "B-1B",
+                   unit = "SV_Unit_Charlene", name_key = "SV_Charlene", rec = "RE_SV_Char",
+                   -- her health x health_x once she's up (the B-1B's 130 is two missiles' worth); the escorts are scaled as
+                   -- the STORE's allied aircraft (CFG.allies.aircraft.scale)
+                   health_x = 4.0,
+                   -- (each escort: its unit, name key and record prefix <rec><Go|Orbit|Final|Roll|Taxi|Stop>; side / back: its
+                   -- start beside her, side_m x side to her right (-1 left), back_m x back behind; stop_t / stop_s: where it
+                   -- parks, metres along runway 07 from its west threshold and to the right of it, south: its taxi path's end)
+                   escorts = {
+                       { name = "YORKE", airframe = "SU-57", unit = "SV_Unit_EscYorke", name_key = "SV_Yorke",
+                         rec = "RE_SV_EscYorke", side = -1, back = 1, stop_t = 1335, stop_s = 60 },
+                       { name = "ROCK", airframe = "SU-57", unit = "SV_Unit_EscRock", name_key = "SV_Rock",
+                         rec = "RE_SV_EscRock", side = 1, back = 1, stop_t = 1235, stop_s = 60 },
+                       { name = "ALI", airframe = "SU-33", unit = "SV_Unit_EscAli", name_key = "SV_Ali",
+                         rec = "RE_SV_EscAli", side = -1, back = 2, stop_t = 1135, stop_s = 60 },
+                       { name = "DANIELLE", airframe = "SU-35", unit = "SV_Unit_EscDanielle", name_key = "SV_Danielle",
+                         rec = "RE_SV_EscDanielle", side = 1, back = 2, stop_t = 1035, stop_s = 60 },
+                   },
+                   -- where they appear: (x, y) cm, z cm, heading (compass) towards the approach fix; the escorts side_m
+                   -- beside and back_m behind her; each one's route record go_delay_s after its spawn
+                   start = { x = -4110000, y = 3140000, z = 300000, heading = 55, side_m = 250, back_m = 250, go_delay_s = 1.0 },
+                   reward = 8000, reward_per_round = 300,
+                   -- the round's enemy aircraft x budget_x
+                   budget_x = 1.0,
+                   -- enemy flights sent after her: of the round's fighter flights (not an ace squadron's, a bomber, the
+                   -- jammer's or a raid escort) up after_s, `share` of them (at most `max` at once) get each plane's
+                   -- EngagementOrderOverride onto her (Normal, TargetFirst), again every again_s, kept out of the squad
+                   -- director's and co-op's hunts; back on you once she's on the ground or lost
+                   attack = { enabled = true, share = 0.6, max = 4, after_s = 4, again_s = 10 },
+                   -- the round's flights spawned ahead of her (share of them, km ahead along her heading, within side_km of it)
+                   ahead = { enabled = true, share = 0.5, km = 15, side_km = 6 },
+                   -- more enemies while she flies: every every_s, when fewer than `below` enemy aircraft are up, a free pool
+                   -- flight of `size` ahead of her (ahead_km, side_km, alt_m), at most `max` a round; each goes after her
+                   reinforce = { enabled = true, every_s = 40, below = 6, size = 2, max = 8, ahead_km = 14, side_km = 6,
+                                 alt_m = { 2500, 4000 } },
+                   -- the escorts on her attackers: every every_s each escort's planes onto an enemy near her (within km of her)
+                   guard = { enabled = true, every_s = 4, km = 8 },
+                   -- the landing, by distance (metres) and speed (km/h): final_at_m from the approach fix her final; the
+                   -- rollout within roll_at_m of the touchdown point (or past it and under 20 m); the taxi within taxi_at_m of
+                   -- the rollout's end (or under taxi_kmh near it); the stop within stop_at_m of its parking spot (or taxi_max_s
+                   -- on); landed under landed_kmh for landed_hold_s (or stop_max_s on). An escort released for its final takes
+                   -- it once the approach fix is within ahead_deg of its nose (or inbound_max_s on), release_gap_s at least
+                   -- between two, each once the runway is clear. Safety: one not landed land_timeout_s after its final is
+                   -- counted as landed (taken off if it's still flying); route_max_s on her route, then her final anyway;
+                   -- the whole escort max_s (then everyone up counted landed). Times count only while the world runs (not
+                   -- while you're down at the airfield with nobody else flying). avoid_off_km: within that of the touchdown
+                   -- her obstacle avoidance off (EnableAvoidObstacle false; 0: never); close_airfield: landing closed to the
+                   -- players from her final until everyone's down (RE_SV_AirfieldClose / Open)
+                   landing = { final_at_m = 2000, roll_at_m = 350, taxi_at_m = 150, taxi_kmh = 70, stop_at_m = 60,
+                               landed_kmh = 5, landed_hold_s = 2, roll_max_s = 90, taxi_max_s = 90, stop_max_s = 20,
+                               land_timeout_s = 360, route_max_s = 900, max_s = 1500, release_gap_s = 45, inbound_max_s = 120,
+                               ahead_deg = 60, avoid_off_km = 3, invincible_on_ground = true, close_airfield = true },
+                   -- the route's points (cm; tools/re/ESCORT.md 5, build/research/escort/route.json): the approach fix
+                   -- (IAF), touchdown, rollout end, her parking spot, runway 07's thresholds
+                   geo = { iaf = { 96255, 206608, 84602 }, touchdown = { 1569055, -418560, 750 },
+                           roll_end = { 1668467, -460758, 750 }, hold = { 1675992, -457108, 750 },
+                           west = { 1541439, -406838 }, east = { 1679514, -465447 }, runway_z = 750 },
+                   -- remove_records: at the round's end each one is taken off by its own <rec>Remove record too (not in the
+                   -- build yet); without them each is switched off (hidden, no collision) and its unit taken off the list
+                   remove_records = false,
+                   -- her line once everyone's down (the user's exact text), shown as callouts of at most subtitle_chars
+                   subtitle = "Thank You Pilot, I've sent word to HQ and they've sent two Cargo Vessels into the Area with the Special ZFA-44 Airframes, you can call for their support from the STORE",
+                   subtitle_chars = 90,
+                   -- the landing test T0 (Ctrl+F6, test builds only): its log every log_s, taken off end_s after she's down
+                   test = { log_s = 0.5, end_s = 30 },
+                   text = { sub = "ESCORT CHARLENE TO THE AIRFIELD", go = "CHARLENE INBOUND",
+                            go_sub = "B-1B AND FOUR ESCORTS FROM THE SOUTH-WEST: GET HER HOME",
+                            row = "CHARLENE %d%%  %.1f KM  LANDED %d/%d", row_landing = "CHARLENE LANDING  LANDED %d/%d",
+                            row_done = "ESCORT: LANDED %d/%d",
+                            final = "CHARLENE ON FINAL", final_sub = "KEEP THE APPROACH CLEAR",
+                            landed = "CHARLENE HAS LANDED", landed_sub = "%d ESCORTS TO BRING IN",
+                            escort_down = "%s IS DOWN", escort_down_sub = "%d ESCORTS LEFT",
+                            lost = "CHARLENE IS DOWN", lost_sub = "THE ESCORT FAILED",
+                            won = "ESCORT COMPLETE", won_sub = "+%d ZOLLARS: ZFA-44 CARRIERS IN THE STORE" } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
