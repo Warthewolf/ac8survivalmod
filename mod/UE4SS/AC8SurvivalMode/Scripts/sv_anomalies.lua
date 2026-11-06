@@ -1442,7 +1442,7 @@ SPC.V.BODY_PROPS = { "PlaneBodySkelMeshComponent", "PlaneBodyMeshComponent", "Pl
 -- Normalmap / Livemap on AC8's MP_PP0032_f18e_Decal, the rest stays at the parent's defaults, which every stock skin
 -- overrides (weathering, wet, dirt, smoke, paint regions...), and its Livemap (AC8's _MRX: metallic / roughness / ?)
 -- is all black. At her reveal her MI_X02S_Valka slots get dynamic instances; a variant (CFG.specials.valka.paint, or
--- cycled by the test key Ctrl+9) sets on them:
+-- its old test key, since gone: Ctrl+9 is the ZFA-44 test T0 now) sets on them:
 --   1 raw     as built (what 0.66.2 showed)
 --   2 stock   the stock F/A-18E skin's scalar / vector values (MI_PP0032_f18e_001_Decal) and no dirt mask (black)
 --   3 stock + white Livemap   4 stock + the parent's own dirt mask   5 stock + white Livemap and the parent's dirt

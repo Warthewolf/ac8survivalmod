@@ -1678,7 +1678,7 @@ CFG = {
                      -- her paint (SPC.V.PAINTS): 1 as built, 2 the stock F/A-18E skin's values, no dirt mask, 3 that
                      -- and a white Livemap, 4 / 5 as 2 / 3 with the parent's dirt mask, 6-8 tests (the F/A-18E's Livemap,
                      -- its textures, the engine grid), 9-11 AC8's general masters with ordinary textures (Live base, Live base
-                     -- WPO, character base); test key Ctrl+9 cycles them
+                     -- WPO, character base); (their old test key is gone: Ctrl+9 is the ZFA-44 test T0)
                      -- (0.73.76) the screen fades to red as she shows and back after she dies (sv_hud.lua hudRed)
                      -- (the sky, not the screen: sv_hud.lua hudRed; user, 2026-11-03 "red sky instead of red screen",
                      -- "turn the sky more red"): strength how far towards these (0-1), in_s / out_s; the level's sun light
