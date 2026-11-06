@@ -48,6 +48,8 @@ function DECOY.spear(s) return tostring(cfg().spear_prefix or "SV_Unit_DecoySpea
 local function evLaserOn(k) return string.format("RE_SV_DecoyLaserOn_%02d", k) end
 local function evLaserOff(k) return string.format("RE_SV_DecoyLaserOff_%02d", k) end
 local function evSpear(s) return "RE_SV_DecoySpear_" .. tostring(s) end
+-- (the build's fallback for a mark that neither attaches nor moves: Mission 22's teleport onto this game's player)
+local function evMarkOnMe(k) return string.format("RE_SV_DecoyMarkOnMe_%02d", k) end
 -- (bait_ping and bait_laser_off aren't in the build contract of 2026-11-06: tools/re/DECOY.md "names Lua asks for";
 -- a build without them answers "no such unit" and the round goes on without the ping)
 DECOY.EV = { bait_laser = "RE_SV_DecoyBaitLaser", bait_laser_off = "RE_SV_DecoyBaitLaserOff",
@@ -345,19 +347,53 @@ end
 ---------------------------------------------------------------------------------------------------- the marks
 -- (every game) the mark kept on the plane it marks: K2_AttachToActor first; if it didn't hold (the mark more than
 -- 150 m off the plane at the next look) every mark is moved onto its plane each tick instead (DECOY.markMode, once a
--- level, logged which works)
+-- level, logged which works); if a move doesn't hold either (the mark 150 m or more from where it was put, a look on),
+-- a mark on this game's own plane is put there by the build's teleport each tick (RE_SV_DecoyMarkOnMe_<nn>, Mission
+-- 22's onto "Player": each game's own, kept local in co-op), one on another player's plane still moved
 local function detach(g)
     if g.mode == "attach" and g.mark and liveObj(g.mark) then
         pcall(function() g.mark:K2_DetachFromActor(1, 1, 1) end)
     end
 end
-local function moveMark(mark, plane)
+local function moveMark(g, plane)
     local at = locOf(plane)
-    if not (at and liveObj(mark)) then return false end
-    return (pcall(function() mark:K2_SetActorLocation(at, false, {}, true) end))
+    if not (at and g.mark and liveObj(g.mark)) then return false end
+    local ok = pcall(function() g.mark:K2_SetActorLocation(at, false, {}, true) end)
+    g.movedTo = ok and at or nil
+    return ok
+end
+local function teleportMark(g)
+    local r = fire(evMarkOnMe(g.k))
+    if not g.tpSaid then
+        g.tpSaid = true
+        log(string.format("decoy: UAV %d's mark onto your plane by the build's teleport (%s %s), each tick", g.k, evMarkOnMe(g.k), errText(r)))
+    end
+    return r == 1
+end
+-- (DECOY.markMode "move", until a move is known to hold) a look on from a move: the mark where it was put, or the game
+-- put it back
+local function checkMove(g)
+    if DECOY.moveHeld or DECOY.markMode ~= "move" or not g.movedTo then return end
+    local a = locOf(g.mark)
+    if not a then return end
+    local off = dist3(a, g.movedTo) / 100
+    if off < 150 then
+        DECOY.moveHeld = true
+        log(string.format("decoy: marks moved onto their planes each tick hold (%.0f m from where one was put, a look on)", off))
+    else
+        DECOY.markMode = "teleport"
+        log(string.format("decoy: a mark moved onto its plane didn't hold either (%.0f m from where it was put, a look on): marks "
+            .. "on your plane by the build's teleport (RE_SV_DecoyMarkOnMe_<nn>) from now on, other players' still moved", off))
+    end
 end
 local function placeMark(g, mark, plane)
     g.mark, g.plane, g.planeAddr = mark, plane, addrOf(plane)
+    if DECOY.markMode == "teleport" then             -- (neither holds: moved, and the build's teleport for your own)
+        g.mode = "move"
+        moveMark(g, plane)
+        if g.slot == mySlot() then teleportMark(g) end
+        return
+    end
     if DECOY.markMode == nil then                   -- (not known yet: the mark put 1 km over the plane first, so an attach
         local at = locOf(plane)                     -- that doesn't hold shows at the check, wherever the mark came)
         if at then pcall(function() mark:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z + 100000 }, false, {}, true) end) end
@@ -371,7 +407,7 @@ local function placeMark(g, mark, plane)
         end
     end
     g.mode = "move"
-    moveMark(mark, plane)
+    moveMark(g, plane)
 end
 local function followMark(g, players)
     if not (g.mark and liveObj(g.mark)) then return end
@@ -383,11 +419,15 @@ local function followMark(g, players)
         placeMark(g, g.mark, plane)
         return
     end
-    if g.mode == "attach" and DECOY.markMode == "move" then      -- (another mark found the attach doesn't hold)
-        detach(g)
+    if g.mode == "attach" and (DECOY.markMode == "move" or DECOY.markMode == "teleport") then   -- (another mark found the
+        detach(g)                                                                                -- attach doesn't hold)
         g.mode = "move"
     end
-    if g.mode == "move" then moveMark(g.mark, plane); return end
+    if g.mode == "move" then
+        checkMove(g)
+        if DECOY.markMode == "teleport" and g.slot == mySlot() then teleportMark(g) else moveMark(g, plane) end
+        return
+    end
     if os.clock() < (g.checkAt or 0) then return end
     g.checkAt = os.clock() + 2
     local a, b = locOf(g.mark), locOf(plane)
@@ -401,7 +441,7 @@ local function followMark(g, players)
             log(string.format("decoy: marks follow their planes by a move each tick (K2_AttachToActor didn't hold: %.0f m off)", off))
             detach(g)
             g.mode = "move"
-            moveMark(g.mark, plane)
+            moveMark(g, plane)
             return
         end
     end
@@ -737,11 +777,43 @@ function DECOY.unitsHere()
     end
     return DECOY.have
 end
+-- (the main menu, sv_main.lua's setup pass; every game) the trap UAVs' DT_NPC row (dt_npc, DT_SV_NpcRows' weaponless
+-- Marker UAV) into the game's DT_NPC before the level loads (hard rule 20; a unit whose row the game hasn't doesn't
+-- spawn), as the shoal's (sv_fishing.lua FISH.setup). DECOY.rowOk: in (else no DECOY round)
+function DECOY.setup()
+    if DECOY.setupDone or not gameInstance() then return end
+    local c = cfg()
+    if type(c.dt_npc) ~= "string" then DECOY.setupDone, DECOY.rowOk = true, true; return end
+    DECOY.setupTries = (DECOY.setupTries or 0) + 1
+    local npc, mine = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
+    if not (npc and mine) then
+        if DECOY.setupTries >= 20 then
+            DECOY.setupDone, DECOY.rowOk = true, false
+            log("decoy: the row tables didn't load: no DECOY round this session")
+        end
+        return
+    end
+    DECOY.setupDone = true
+    for _, t in ipairs({ npc, mine }) do pin(t, nameOf(t)) end
+    local _, have = dtCall(npc, "FindRow", c.dt_npc)
+    if have == nil then
+        local _, r = dtCall(mine, "FindRow", c.dt_npc)
+        if r ~= nil then dtCall(npc, "AddRow", c.dt_npc, r); _, have = dtCall(npc, "FindRow", c.dt_npc) end
+    end
+    DECOY.rowOk = have ~= nil
+    log(string.format("decoy: the trap UAVs' row %s %s", c.dt_npc, DECOY.rowOk and "in DT_NPC" or "NOT added: no DECOY round this session"))
+end
 -- whether THE DECOY can come now (SPC.kinds.decoy.ready: the specials' bag and draw, SPC.canStart): switched on, its
--- units here, and once a run (RUN.specialAt.decoy: set as its round starts; the test key's force goes past it)
+-- units here and its UAVs' row in DT_NPC, and once a run (RUN.specialAt.decoy: set as its round starts; the test key's
+-- force goes past it)
 function DECOY.ready()
     local c = cfg()
     if c.enabled == false then said("off", "special: no DECOY round: switched off ([specials.decoy] enabled)"); return false end
+    if type(c.dt_npc) == "string" and DECOY.rowOk ~= true then
+        said("row", string.format("special: no DECOY round: its UAVs' DT_NPC row %s isn't in (%s)", c.dt_npc,
+            DECOY.rowOk == false and "not added at the main menu" or "the main menu's setup hasn't run"))
+        return false
+    end
     if c.once_per_run ~= false and not DECOY.forced and RUN and type(RUN.specialAt) == "table" and RUN.specialAt.decoy then
         return false
     end
@@ -1164,6 +1236,7 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the decoy"] = function()
         DECOY.G, DECOY.R, DECOY.W, DECOY.rq, DECOY.rods, DECOY.rodNew = {}, {}, {}, {}, {}, {}
         DECOY.cs, DECOY.jb, DECOY.have, DECOY.markMode, DECOY.runD, DECOY.rqAt, DECOY.test = nil, nil, nil, nil, nil, nil, nil
+        DECOY.moveHeld = nil
         DECOY.spearI = nil
     end
 end
@@ -1188,11 +1261,13 @@ end
 
 -- TEST ONLY BEGIN
 -- The research's two tests and the round, by key (each makes its run unranked: LB.testKey):
---   Ctrl+PAGE_UP    the Spear alone: launcher 1 (spawned first when it isn't up), RE_SV_DecoySpear_1 at you; each rod's
---                   place every tick, the impact flag, your health before and after (`test: the Spear's rod ...`)
---   Ctrl+PAGE_DOWN  one lock: UAV 1 spawned 3 km ahead of you at your height, its mark on you, its laser on you, then
+--   Ctrl+=          the Spear alone (Key.OEM_PLUS): launcher 1 (spawned first when it isn't up), RE_SV_DecoySpear_1 at
+--                   you; each rod's place every tick, the impact flag, your health before and after (`test: the Spear's
+--                   rod ...`)
+--   Ctrl+BACKSPACE  one lock: UAV 1 spawned 3 km ahead of you at your height, its mark on you, its laser on you, then
 --                   the 8 s: shoot it down for `strike cancelled`, or leave it for `the Spear called on you`
---   Ctrl+HOME       THE DECOY next round (in the break: in 3 s), once a run or not
+--   Ctrl+-          THE DECOY next round (Key.OEM_MINUS; in the break: in 3 s), once a run or not
+-- (were Ctrl+PAGE_UP / PAGE_DOWN / HOME, which GONE FISHIN', THE FESTIVAL and the day-night arc took on 2026-11-07)
 local function testStart(kind)
     if not (D and D.now) then log("test: THE DECOY's key outside a Survival run"); return end
     local now = D.now
@@ -1207,12 +1282,12 @@ local function testStart(kind)
     if kind == 1 then
         DECOY.test = { kind = 1, at = now + wait }
         hudCallout("TEST: THE SPEAR", "CALLED ON YOU")
-        log("test: Ctrl+PAGE_UP, the Spear at you from launcher 1" .. (wait > 0 and " in 1.5 s" or ""))
+        log("test: Ctrl+=, the Spear at you from launcher 1" .. (wait > 0 and " in 1.5 s" or ""))
         return
     end
     local pawn = myPawn()
     local you = playerLocation()
-    if not (pawn and you) then log("test: Ctrl+PAGE_DOWN: no plane of yours"); return end
+    if not (pawn and you) then log("test: Ctrl+BACKSPACE: no plane of yours"); return end
     local okF, fw = pcall(function() local v = pawn:GetActorForwardVector(); return { X = v.X, Y = v.Y } end)
     if not okF then fw = { X = 1, Y = 0 } end
     local l = math.sqrt(fw.X ^ 2 + fw.Y ^ 2)
@@ -1225,7 +1300,7 @@ local function testStart(kind)
     DECOY.testSeq = (DECOY.testSeq or 1000) + 1
     DECOY.test = { kind = 2, at = now + math.max(2, wait), seq = DECOY.testSeq }
     hudCallout("TEST: ONE SPEAR UAV", r > 0 and "3 KM AHEAD: IT LOCKS YOU IN 2 S" or "COULD NOT SPAWN")
-    log(string.format("test: Ctrl+PAGE_DOWN, one Spear UAV 3 km ahead of you (%s: %s, its mark %s: %s); its lock in 2 s",
+    log(string.format("test: Ctrl+BACKSPACE, one Spear UAV 3 km ahead of you (%s: %s, its mark %s: %s); its lock in 2 s",
         DECOY.uav(1), tostring(r), DECOY.mark(1), tostring(rm)))
 end
 function DECOY.testTick(now)
@@ -1239,31 +1314,17 @@ function DECOY.testTick(now)
         log("test: UAV 1's lock on you starts now (its laser once it and its mark are here)")
     end
 end
-if type(RegisterKeyBind) == "function" and Key then
-    local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
-    for _, kb in ipairs({ { "PAGE_UP", 1 }, { "PAGE_DOWN", 2 }, { "HOME", 3 } }) do
-        local key = Key[kb[1]]
-        if key then
-            pcall(RegisterKeyBind, key, mods, function()
-                ExecuteInGameThread(function()
-                    local ok, err = pcall(function()
-                        if LB and LB.testKey then pcall(LB.testKey, key) end
-                        if kb[2] == 3 then
-                            if not (D and D.now) then log("test: Ctrl+HOME outside a Survival run"); return end
-                            D.forceSpecial, DECOY.forced = "decoy", true
-                            local soon = D.state == "wait"
-                            if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
-                            hudCallout("TEST: THE DECOY", soon and "STARTING NOW" or "NEXT ROUND")
-                            log(string.format("test: Ctrl+HOME, round %d is THE DECOY (%s)", D.round + 1, soon and "starting in 3 s" or "after this round"))
-                        else
-                            testStart(kb[2])
-                        end
-                    end)
-                    if not ok then log("test: Ctrl+" .. kb[1] .. " error " .. tostring(err)) end
-                end)
-            end)
-        end
-    end
+if type(testKey) == "function" then
+    testKey("OEM_PLUS", "sv_decoy.lua's Spear test", function() testStart(1) end)
+    testKey("BACKSPACE", "sv_decoy.lua's one-lock test", function() testStart(2) end)
+    testKey("OEM_MINUS", "sv_decoy.lua's THE DECOY next", function()
+        if not (D and D.now) then log("test: Ctrl+- outside a Survival run"); return end
+        D.forceSpecial, DECOY.forced = "decoy", true
+        local soon = D.state == "wait"
+        if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        hudCallout("TEST: THE DECOY", soon and "STARTING NOW" or "NEXT ROUND")
+        log(string.format("test: Ctrl+-, round %d is THE DECOY (%s)", D.round + 1, soon and "starting in 3 s" or "after this round"))
+    end)
 end
 -- TEST ONLY END
 end

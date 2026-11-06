@@ -277,6 +277,9 @@ if type(RegisterKeyBind) == "function" and Key and CFG.tactical.keys then
     local mods = (ModifierKey and ModifierKey.CONTROL) and { ModifierKey.CONTROL } or {}
     for key, kind in pairs({ F1 = "airstrike", F2 = "ecm", F3 = "decoy" }) do
         if Key[key] then
+            -- TEST ONLY BEGIN ((2026-11-07) in TEST_KEYS too: a test key bound on it later is logged as bound twice)
+            if type(TEST_KEYS) == "table" then TEST_KEYS[Key[key]] = "sv_tactical.lua's " .. kind .. " key" end
+            -- TEST ONLY END
             pcall(RegisterKeyBind, Key[key], mods, function()
                 ExecuteInGameThread(function()
                     local ok, err = pcall(TAC.use, kind, "key")
@@ -286,6 +289,9 @@ if type(RegisterKeyBind) == "function" and Key and CFG.tactical.keys then
         end
     end
     if Key.F4 and CFG.allies.orders.key then
+        -- TEST ONLY BEGIN
+        if type(TEST_KEYS) == "table" then TEST_KEYS[Key.F4] = "sv_tactical.lua's allies' order key" end
+        -- TEST ONLY END
         pcall(RegisterKeyBind, Key.F4, mods, function()
             ExecuteInGameThread(function()
                 local ok, err = pcall(function() if D then ALLY.nextOrder("key") end end)

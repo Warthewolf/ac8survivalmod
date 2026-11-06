@@ -1006,19 +1006,35 @@ CFG = {
         -- the route proven to draw), hide_s how often the host's own meshes are hidden again. store_row: a STORE row it
         -- shares while it's unlocked and that row has nothing to sell ("Revive": the AIRFIELD page's revive row when
         -- nobody's down; "none": only a ZfaCarrier row of its own). remove_records: each ship taken off by its own
-        -- RE_SV_Cargo<n>Remove too (not in the build yet). spots: where each ship is when its hull isn't found (cm).
+        -- RE_SV_CargoRemove_<n> too (Mission 22's despawn). ship_at: where each ship is when its hull isn't found (cm: its
+        -- world-data spot, tools/survival_events.py CARGO_SHIPS: 7.4 km NW and 7.5 km SE of the runway; not "spots", which
+        -- tools/survival_events.py build_valka reads as VALKA's).
+        -- (2026-11-07, the build's names: tools/re/ESCORT.md "Build names") launchers: ship 1 fires only its launcher
+        -- BP_VE021_ctslf_cntus_01_CP, ship 2 only its _03, arm n (WN_WEAPON_n) by RE_SV_CargoLaunch_<s>_<n>, which spawns
+        -- the world-data unit that arm names (2 ZFA-44s on sv_zfa_ally; an arm fired again only once its unit is off the
+        -- spawner's list: hard rule 16); pose_go: each pose flight's orders after its SV_Spawn (gear up, Normal, air
+        -- search: its appearance's, which a spawn in the landing menu never fires). dt_npc: the ZFA-44 host's DT_NPC row
+        -- (DT_SV_NpcRows' Su-47 copy, added at the main menu by ESC.setup): without it no carrier is sold
         carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2,
-                         units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" },
+                         units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally",
                          launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 10, capture_km = 4,
                          launchers = {
-                             { { record = "RE_SV_CargoLaunch_1_1", unit = "E_Unit_01_drone_1_0" },
-                               { record = "RE_SV_CargoLaunch_1_2", unit = "E_Unit_01_drone_1_1" } },
-                             { { record = "RE_SV_CargoLaunch_2_1", unit = "E_Unit_01_drone_2_0" },
-                               { record = "RE_SV_CargoLaunch_2_2", unit = "E_Unit_01_drone_2_1" } },
+                             { { record = "RE_SV_CargoLaunch_1_1", unit = "E_Unit_01_drone_5_0" },
+                               { record = "RE_SV_CargoLaunch_1_2", unit = "E_Unit_01_drone_4_0" },
+                               { record = "RE_SV_CargoLaunch_1_3", unit = "E_Unit_01_drone_0_0" },
+                               { record = "RE_SV_CargoLaunch_1_4", unit = "E_Unit_01_drone_1_0" },
+                               { record = "RE_SV_CargoLaunch_1_5", unit = "E_Unit_01_drone_7_0" },
+                               { record = "RE_SV_CargoLaunch_1_6", unit = "E_Unit_01_drone_8_0" } },
+                             { { record = "RE_SV_CargoLaunch_2_1", unit = "E_Unit_01_drone_3_1" },
+                               { record = "RE_SV_CargoLaunch_2_2", unit = "E_Unit_01_drone_4_1" },
+                               { record = "RE_SV_CargoLaunch_2_3", unit = "E_Unit_01_drone_1_1" },
+                               { record = "RE_SV_CargoLaunch_2_4", unit = "E_Unit_01_drone_2_1" },
+                               { record = "RE_SV_CargoLaunch_2_5", unit = "E_Unit_01_drone_6_1" },
+                               { record = "RE_SV_CargoLaunch_2_6", unit = "E_Unit_01_drone_7_1" } },
                          },
-                         pose_units = { "SV_Unit_ZfaA", "SV_Unit_ZfaB" },
+                         pose_units = { "SV_Unit_ZfaA", "SV_Unit_ZfaB" }, pose_go = { "RE_SV_ZfaGoA", "RE_SV_ZfaGoB" },
                          pose = { ahead_m = 300, alt_m = 1100 },
-                         spots = { { 1610476, 249000 }, { 1610476, -1186000 } },
+                         ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
                          store_row = "Revive", remove_records = false,
                          zfa = { name = "ZFA-44", name_key = "SV_Zfa44", dress = true, paint = 3, hide_s = 3 },
@@ -1906,7 +1922,10 @@ CFG = {
         -- UAV and the reward (+ *_per_round x the round; a co-op special's pay: [zollars] special_split). fighter_share of
         -- the round's aircraft fly as fighters too (0: the decoy alone). From from_round; once a run (once_per_run).
         -- Units and records: the build's (tools/survival_events.py), named below; a build without them never rolls it.
+        -- dt_npc: the trap UAVs' DT_NPC row (DT_SV_NpcRows' weaponless Marker UAV), added at the main menu (DECOY.setup:
+        -- before the level loads, hard rule 20); without it no DECOY round (the bait's and the Spear's rows are stock)
         decoy    = { enabled = true, from_round = 10, once_per_run = true, name = "THE DECOY", fighter_share = 0.3,
+                     dt_npc = "SV_DecoyUav",
                      bait_unit = "SV_Unit_DecoyBait", bait_mark = "SV_Unit_DecoyBaitMark", bait_timeout_s = 240,
                      ping_every_s = 12, uav_prefix = "SV_Unit_DecoyUav_", mark_prefix = "SV_Unit_DecoyMark_", uavs = 35,
                      spear_prefix = "SV_Unit_DecoySpear_", spears = 4,
@@ -1929,9 +1948,11 @@ CFG = {
         -- "escort" = THE ESCORT (Scripts/sv_escort.lua, tools/re/ESCORT.md; user, 2026-11-06): the allied B-1B CHARLENE
         -- and her four escorts (YORKE and ROCK, Su-57s; ALI, a Su-33; DANIELLE, a Su-35) fly in from the map's south-west
         -- corner (start, 3 km up) to Comona airfield under the round's waves and land: her route (RE_SV_CharGo), then by
-        -- distance her final (RE_SV_CharFinal, gear down), rollout, taxi and stop; the escorts hold an orbit over the
-        -- airfield once she's on final and come in one at a time after her (release_gap_s apart, each once the runway is
-        -- clear). The round ends only once everyone left has landed or she's lost. Her loss fails the special (no reward,
+        -- distance her final (RE_SV_CharFinal, gear down), rollout, taxi and stop; the escorts hold their wait orbits
+        -- (SV_Path_EscOrbit_<Name>: a 6 km circle north of the extended centre line, touching it 4 km before the approach
+        -- fix) once she's on final and come in one at a time after her, each released onto its final as it passes the
+        -- circle's touching point heading the runway's way (release_gap_s apart, each once the runway is clear). The
+        -- round ends only once everyone left has landed or she's lost. Her loss fails the special (no reward,
         -- no unlock; the run goes on). All landed (an escort shot down is out, not waited for): reward + reward_per_round
         -- x the round, her subtitle and the ZFA-44 carriers unlocked in the STORE for the rest of the run (the room's in
         -- co-op: CFG.allies.carrier). Once a run (once), from from_round, in the rotation's bag; a build without its units
@@ -1939,21 +1960,26 @@ CFG = {
         -- contract of 2026-11-06 (tools/build_survival.py, tools/survival_events.py).
         escort = { enabled = true, from_round = 9, once = true, name = "CHARLENE", airframe = "B-1B",
                    unit = "SV_Unit_Charlene", name_key = "SV_Charlene", rec = "RE_SV_Char",
+                   -- the escorts' DT_NPC rows (DT_SV_NpcRows' copies of the plain Su-57 / Su-33 / Su-35 on their allied
+                   -- models), added at the main menu (ESC.setup: before the level loads, hard rule 20); without them no
+                   -- ESCORT round (her row is the stock OP0008_b01b_Ally_01)
+                   dt_npc = { "SV_Esc_Su57", "SV_Esc_Su33", "SV_Esc_Su35" },
                    -- her health x health_x once she's up (the B-1B's 130 is two missiles' worth); the escorts are scaled as
                    -- the STORE's allied aircraft (CFG.allies.aircraft.scale)
                    health_x = 4.0,
-                   -- (each escort: its unit, name key and record prefix <rec><Go|Orbit|Final|Roll|Taxi|Stop>; side / back: its
-                   -- start beside her, side_m x side to her right (-1 left), back_m x back behind; stop_t / stop_s: where it
-                   -- parks, metres along runway 07 from its west threshold and to the right of it, south: its taxi path's end)
+                   -- (each escort: its unit, name key and record prefix <rec><Go|Orbit|Final|Roll|Taxi|Stop|...>, whose tail
+                   -- names its leg and slot flags, SV_EscLeg<Name> / SV_TaxiSlot<Name>; side / back: its start beside her,
+                   -- side_m x side to her right (-1 left), back_m x back behind. Where each parks is the build's: the next
+                   -- free slot in landing order, geo.slots)
                    escorts = {
                        { name = "YORKE", airframe = "SU-57", unit = "SV_Unit_EscYorke", name_key = "SV_Yorke",
-                         rec = "RE_SV_EscYorke", side = -1, back = 1, stop_t = 1335, stop_s = 60 },
+                         rec = "RE_SV_EscYorke", side = -1, back = 1 },
                        { name = "ROCK", airframe = "SU-57", unit = "SV_Unit_EscRock", name_key = "SV_Rock",
-                         rec = "RE_SV_EscRock", side = 1, back = 1, stop_t = 1235, stop_s = 60 },
+                         rec = "RE_SV_EscRock", side = 1, back = 1 },
                        { name = "ALI", airframe = "SU-33", unit = "SV_Unit_EscAli", name_key = "SV_Ali",
-                         rec = "RE_SV_EscAli", side = -1, back = 2, stop_t = 1135, stop_s = 60 },
+                         rec = "RE_SV_EscAli", side = -1, back = 2 },
                        { name = "DANIELLE", airframe = "SU-35", unit = "SV_Unit_EscDanielle", name_key = "SV_Danielle",
-                         rec = "RE_SV_EscDanielle", side = 1, back = 2, stop_t = 1035, stop_s = 60 },
+                         rec = "RE_SV_EscDanielle", side = 1, back = 2 },
                    },
                    -- where they appear: (x, y) cm, z cm, heading (compass) towards the approach fix; the escorts side_m
                    -- beside and back_m behind her; each one's route record go_delay_s after its spawn
@@ -1972,14 +1998,24 @@ CFG = {
                    -- flight of `size` ahead of her (ahead_km, side_km, alt_m), at most `max` a round; each goes after her
                    reinforce = { enabled = true, every_s = 40, below = 6, size = 2, max = 8, ahead_km = 14, side_km = 6,
                                  alt_m = { 2500, 4000 } },
-                   -- the escorts on her attackers: every every_s each escort's planes onto an enemy near her (within km of her)
-                   guard = { enabled = true, every_s = 4, km = 8 },
+                   -- the escorts on her attackers: every every_s each escort's planes onto an enemy near her (within km of her).
+                   -- records: from the first enemy within km of her on, each escort on its route also flies the build's
+                   -- cover (<rec>Guard, Mission 14's way of keeping units on its C-130: off its route, Normal, air search,
+                   -- its unit area onto her at 3 km), given again every record_every_s (its area follows her) until her
+                   -- final, when they go to their wait orbits; false: they stay on their routes (the orders alone)
+                   guard = { enabled = true, every_s = 4, km = 8, records = true, record_every_s = 6 },
                    -- the landing, by distance (metres) and speed (km/h): final_at_m from the approach fix her final; the
                    -- rollout within roll_at_m of the touchdown point (or past it and under 20 m); the taxi within taxi_at_m of
                    -- the rollout's end (or under taxi_kmh near it); the stop within stop_at_m of its parking spot (or taxi_max_s
-                   -- on); landed under landed_kmh for landed_hold_s (or stop_max_s on). An escort released for its final takes
-                   -- it once the approach fix is within ahead_deg of its nose (or inbound_max_s on), release_gap_s at least
-                   -- between two, each once the runway is clear. Safety: one not landed land_timeout_s after its final is
+                   -- on); landed under landed_kmh for landed_hold_s (or stop_max_s on). With the runway clear and
+                   -- release_gap_s since the last, the first escort on its wait orbit within touch_m of the circle's touching
+                   -- point (geo.orbit_touch) heading within touch_deg of the runway's (geo.heading) takes its final there (its
+                   -- start, the approach fix, 4 km ahead: hard rule 2); none by in orbit_max_s (a lap is ~4.5 min): one is
+                   -- released anyway and takes its final once the approach fix is within ahead_deg of its nose (or
+                   -- inbound_max_s on). Speeds (the build's records, the path given again: Mission 14's way): her route at
+                   -- 450 km/h from cruise_slow_km of the touchdown (RE_SV_CharCruiseSlow, her escorts' too), each final
+                   -- at 280 from final_slow_km and 260 from final_short_km (<rec>FinalSlow / FinalShort; 0: never).
+                   -- Safety: one not landed land_timeout_s after its final is
                    -- counted as landed (taken off if it's still flying); route_max_s on her route, then her final anyway;
                    -- the whole escort max_s (then everyone up counted landed). Times count only while the world runs (not
                    -- while you're down at the airfield with nobody else flying). avoid_off_km: within that of the touchdown
@@ -1988,20 +2024,30 @@ CFG = {
                    landing = { final_at_m = 2000, roll_at_m = 350, taxi_at_m = 150, taxi_kmh = 70, stop_at_m = 60,
                                landed_kmh = 5, landed_hold_s = 2, roll_max_s = 90, taxi_max_s = 90, stop_max_s = 20,
                                land_timeout_s = 360, route_max_s = 900, max_s = 1500, release_gap_s = 45, inbound_max_s = 120,
-                               ahead_deg = 60, avoid_off_km = 3, invincible_on_ground = true, close_airfield = true },
-                   -- the route's points (cm; tools/re/ESCORT.md 5, build/research/escort/route.json): the approach fix
-                   -- (IAF), touchdown, rollout end, her parking spot, runway 07's thresholds
+                               ahead_deg = 60, touch_m = 2500, touch_deg = 35, orbit_max_s = 330,
+                               cruise_slow_km = 25, final_slow_km = 6, final_short_km = 2,
+                               avoid_off_km = 3, invincible_on_ground = true, close_airfield = true },
+                   -- the build's points (cm; tools/survival_events.py ESC_*, tools/re/ESCORT.md "Build names"): the approach
+                   -- fix (IAF: SV_Path_CharFinal's start), touchdown, the rollout's end, runway 07's thresholds and heading;
+                   -- orbit_touch: where the escorts' wait circles touch the extended centre line (1.2 km up, 4 km before the
+                   -- IAF); slots: the five parking slots A-E on the parallel taxiway (metres along runway 07 from its west
+                   -- threshold and to the right of it, south: the ends of SV_Path_TaxiSlotA-E), taken in landing order (the
+                   -- Taxi records pick them, SV_TaxiSlot<Who> 1-5: read back where it can be, else counted here)
                    geo = { iaf = { 96255, 206608, 84602 }, touchdown = { 1569055, -418560, 750 },
-                           roll_end = { 1668467, -460758, 750 }, hold = { 1675992, -457108, 750 },
+                           roll_end = { 1668467, -460758, 750 }, heading = 67,
+                           orbit_touch = { -271946, 362900, 120000 },
+                           slots = { { 832, 62.5 }, { 912, 62.5 }, { 992, 62.5 }, { 1072, 62.5 }, { 1152, 62.5 } },
                            west = { 1541439, -406838 }, east = { 1679514, -465447 }, runway_z = 750 },
-                   -- remove_records: at the round's end each one is taken off by its own <rec>Remove record too (not in the
-                   -- build yet); without them each is switched off (hidden, no collision) and its unit taken off the list
+                   -- remove_records: at the round's end each one is also taken off by its own <rec>Remove record (Mission
+                   -- 22's despawn); without them each is switched off (hidden, no collision) and its unit taken off the list
                    remove_records = false,
                    -- her line once everyone's down (the user's exact text), shown as callouts of at most subtitle_chars
                    subtitle = "Thank You Pilot, I've sent word to HQ and they've sent two Cargo Vessels into the Area with the Special ZFA-44 Airframes, you can call for their support from the STORE",
                    subtitle_chars = 90,
-                   -- the landing test T0 (Ctrl+F6, test builds only): its log every log_s, taken off end_s after she's down
-                   test = { log_s = 0.5, end_s = 30 },
+                   -- the landing test T0 (Ctrl+F5, test builds only): she appears before_m short of the approach fix on the
+                   -- runway's heading (her final's start a little ahead of her: hard rule 2), its log every log_s, taken off
+                   -- end_s after she's down
+                   test = { log_s = 0.5, end_s = 30, before_m = 1500 },
                    text = { sub = "ESCORT CHARLENE TO THE AIRFIELD", go = "CHARLENE INBOUND",
                             go_sub = "B-1B AND FOUR ESCORTS FROM THE SOUTH-WEST: GET HER HOME",
                             row = "CHARLENE %d%%  %.1f KM  LANDED %d/%d", row_landing = "CHARLENE LANDING  LANDED %d/%d",

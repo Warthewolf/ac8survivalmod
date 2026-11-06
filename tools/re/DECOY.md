@@ -127,11 +127,12 @@ RE_SV_RaidPing_NN) and `RE_SV_DecoyBaitLaserOff` (the bait's laser off when it's
 
 | Key | What |
 |---|---|
-| Ctrl+PAGE_UP | test 1, the Spear alone: launcher 1 spawned if it isn't up, `RE_SV_DecoySpear_1` at you; each rod's place every tick, the impact flag, your health before and after |
-| Ctrl+PAGE_DOWN | test 2, one lock: UAV 1 spawned 3 km ahead of you at your height (its mark on you), its lock 2 s on, then the 8 s: shoot it down (`strike cancelled`) or leave it (`the Spear called on you`, the impact, your health) |
-| Ctrl+HOME | THE DECOY next round (in the break: in 3 s), once a run or not |
+| Ctrl+= (`OEM_PLUS`) | test 1, the Spear alone: launcher 1 spawned if it isn't up, `RE_SV_DecoySpear_1` at you; each rod's place every tick, the impact flag, your health before and after |
+| Ctrl+BACKSPACE | test 2, one lock: UAV 1 spawned 3 km ahead of you at your height (its mark on you), its lock 2 s on, then the 8 s: shoot it down (`strike cancelled`) or leave it (`the Spear called on you`, the impact, your health) |
+| Ctrl+- (`OEM_MINUS`) | THE DECOY next round (in the break: in 3 s), once a run or not |
 
-(Ctrl+F6, Ctrl+9, Ctrl+F10 and Ctrl+F12 are other work's.)
+(Through sv_core.lua testKey since 2026-11-07; were Ctrl+PAGE_UP / PAGE_DOWN / HOME, which GONE FISHIN', THE FESTIVAL and
+the day-night arc take on feature/fishing-lua. Every Ctrl key: tools/README.md "Ctrl keys".)
 
 ## 5. Log lines
 
@@ -156,18 +157,18 @@ RE_SV_RaidPing_NN) and `RE_SV_DecoyBaitLaserOff` (the bait's laser off when it's
 - `decoy: <label> off the spawner's list (<why>; n alive): SV_Recycle 1 (k so far)`
 - `special: THE DECOY's trap over (<all down|safe|time>) N s in: ...; +Z` and `decoy: this game's locks this run: ...`
 - co-op: `decoy: the host's DECOY round: <state> (...)`, `decoy: the host's UAV k locks you (lock n)`, `coop: THE DECOY's <state> sent to player N (k locks on)`
-- tests: `test: Ctrl+PAGE_UP, the Spear at you from launcher 1`, `test: the Spear's rod ... at (x, y) km, alt z km, d km from you`, `test: Ctrl+PAGE_DOWN, one Spear UAV 3 km ahead of you ...`, `test: Ctrl+HOME, round N is THE DECOY (...)`
+- tests: `test: Ctrl+=, the Spear at you from launcher 1`, `test: the Spear's rod ... at (x, y) km, alt z km, d km from you`, `test: Ctrl+BACKSPACE, one Spear UAV 3 km ahead of you ...`, `test: Ctrl+-, round N is THE DECOY (...)`
 
 ## 6. Test checklist (in game)
 
-1. **Ctrl+PAGE_UP** flying straight, then circling slowly: the rod falls (its trace lines), the impact flag rises (the
+1. **Ctrl+=** flying straight, then circling slowly: the rod falls (its trace lines), the impact flag rises (the
    MeteoriteImpact trigger fires on a meteor at Player), your health drops (the blast catches a plane in the air), the
    Tonitrus sounds play. With the lead on, does it land ahead of you (`aimed N m ahead`) and hit? No impact line: the
    shooter refuses "Player" (the fallback: designate with arg 9 = the shooter).
-2. **Ctrl+PAGE_DOWN** twice: the beam reaches you from the UAV and stays on you through turns and from behind; the marks'
+2. **Ctrl+BACKSPACE** twice: the beam reaches you from the UAV and stays on you through turns and from behind; the marks'
    line says attached or moved; the pod's phase line; kill the UAV inside the 8 s (`strike cancelled`, no rod), then leave
    it (`the Spear called on you`, the impact, your health). The Ms30 laser sound plays or not.
-3. **Ctrl+HOME**, a whole round: the bait far north with its beam on the airfield and its minimap ping; the trap's
+3. **Ctrl+-**, a whole round: the bait far north with its beam on the airfield and its minimap ping; the trap's
    callout and brief; UAVs 2.5-5 km round you, never within 5 km of the runway; several locks at once; the radio's lock,
    imminent, incoming, hit with gaps; the round's end by each way (all down; back to the airfield; 5 minutes); the pay
    lines; no `NOT removed` lines from the clean-up; the perf line's `decoy` part.
@@ -230,3 +231,19 @@ Int flag: `SV_DecoySpearHit` (starts at 0; Lua reads its rises). 155 triggers, 2
 - Add `SV_DecoyUav` (DT_SV_NpcRows) to DT_NPC at the main menu: without it the trap UAVs don't spawn.
 - `RE_SV_DecoySpear_*`, `RE_SV_DecoyKill` and `RE_SV_DecoyMarkOnMe_*` act on this game's player: KEEP_EVENTS, never forwarded.
 - Count a UAV down by its body: its pod is invincible (as Mission 30's) and may keep the unit "alive" (the Ladons' parts).
+
+## Lua wired to the build (2026-11-07, branch feature/decoy; nothing run in game)
+- **The row at the main menu** (DECOY.setup, sv_main.lua's setup pass; every game): `SV_DecoyUav` (CFG.specials.decoy.dt_npc)
+  from DT_SV_NpcRows into DT_NPC (`decoy: the trap UAVs' row SV_DecoyUav in DT_NPC`); without it no DECOY round (`special:
+  no DECOY round: its UAVs' DT_NPC row SV_DecoyUav isn't in (...)`).
+- **The marks' last fallback**: attached (K2_AttachToActor), else moved each tick (K2_SetActorLocation); a move checked a
+  look on (`decoy: marks moved onto their planes each tick hold ...`), and when the mark is 150 m or more from where it was
+  put, a mark on this game's own plane is put there each tick by the build's `RE_SV_DecoyMarkOnMe_<nn>` (Mission 22's
+  teleport onto "Player", kept local by KEEP_EVENTS ^RE_SV_Decoy: `decoy: a mark moved onto its plane didn't hold either
+  ...`, `decoy: UAV k's mark onto your plane by the build's teleport (...)`); a mark on another player's plane is still
+  moved (the teleport only knows this game's player). DECOY.markMode "teleport", forgotten with the level.
+- Dead UAVs are counted by their body (the first object of the unit that isn't its laser pod; the pod is invincible and
+  only keeps the unit "alive", so a recycle with it up is force 1), as before.
+- Every unit, record and radio name it uses (`RE_SV_DecoyBaitLaser` / `Off` / `Ping`, `RE_SV_DecoyKill`, `_LaserOn_` /
+  `_LaserOff_` / `_MarkOnMe_<nn>`, `RE_SV_DecoySpear_<s>`, `RE_SV_DecoyRadio_*`, the 35 UAVs and marks, the 4 launchers) was
+  checked against the saved packages of `ZFA=1 sh tools/build_all.sh` (2026-11-07): all there.

@@ -1031,6 +1031,20 @@ end
 -- to esm.range_m for esm.life_s, new (ALLY.esmNew, from the game's NotifyOnNewObject: the field's actor) or launched
 -- again (R.esmFields: they're pooled). ((0.73.78, G5) its rounds of service, going home and the strike flight after it:
 -- awacsService, awacsStrike; while it's going home no ESM, no backstop)
+-- ((2026-11-07) THE ESCORT, sv_escort.lua ESC.runwayBusy) a take-off held while CHARLENE and her escorts land: they taxi
+-- past the hold spot every allied take-off starts from (said once a hold)
+function ALLY.escortHold(name)
+    local okE, busy = pcall(function() return ESC ~= nil and ESC.runwayBusy ~= nil and ESC.runwayBusy() == true end)
+    busy = okE and busy == true
+    if busy and not ALLY.escHoldSaid then
+        ALLY.escHoldSaid = true
+        log(string.format("allies: %s's take-off held: THE ESCORT is landing (its taxi passes the hold spot)", tostring(name)))
+    elseif not busy and ALLY.escHoldSaid then
+        ALLY.escHoldSaid = nil
+        log("allies: the runway's clear of THE ESCORT: the take-offs go on")
+    end
+    return busy
+end
 function ALLY.awacsTick(R, now)
     local aw, t = CFG.allies.awacs, CFG.allies.text
     if not aw.enabled then return end
@@ -1040,6 +1054,7 @@ function ALLY.awacsTick(R, now)
         local ready
         if s.buyer then ready = (COOP and COOP.airborne and COOP.airborne(s.buyer)) or now - (s.at or now) >= 90
         else ready = not playerOnAirfield() end
+        if ready and ALLY.escortHold(aw.name) then ready = false end
         if ready then
             if type(SV_SetLevel) == "function" then SV_SetLevel(u, ALLY.level(s).ai * 100) end
             spawningUnit = u
@@ -1195,6 +1210,7 @@ function ALLY.tick(now)
         else
             ready = not playerOnAirfield()
         end
+        if s and s.queued and now >= R.nextTakeoff and ready and ALLY.escortHold(airName(s)) then ready = false end
         if s and s.queued and now >= R.nextTakeoff and ready then
             -- its airframe (the unit's AI objects take the row's aircraft: hard rule 15), WINGMEN's F-16C or MOONCHILD's F-22
             local w = c.wingmen

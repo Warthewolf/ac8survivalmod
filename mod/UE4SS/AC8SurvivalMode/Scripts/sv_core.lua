@@ -761,9 +761,12 @@ end
 -- testKey(name, who, fn): Ctrl+<name>, a key bound twice logged (`test: Ctrl+<key> is bound twice`: TEST_KEYS, which
 -- sv_main.lua's own test keys share), the run made unranked (LB.testKey), fn run on the game thread (KEYQ) with its error
 -- logged. TEST_TICKS: their steps, { name, fn(clock) } each, run in a run from sv_main.lua's probeTickB on os.clock().
+-- (2026-11-07) A key name UE4SS's Key table hasn't is logged, not bound. Every Ctrl key the parts bind: tools/README.md
+-- "Ctrl keys".
 TEST_KEYS, TEST_TICKS = {}, {}
 function testKey(name, who, fn)
-    if type(RegisterKeyBind) ~= "function" or not Key or Key[name] == nil then return false end
+    if type(RegisterKeyBind) ~= "function" or not Key then return false end
+    if Key[name] == nil then log(string.format("test: Ctrl+%s not bound (%s): UE4SS's Key table has no %s", name, who, name)); return false end
     local key = Key[name]
     if TEST_KEYS[key] then log(string.format("test: Ctrl+%s is bound twice: both run on a press (%s, %s)", name, tostring(TEST_KEYS[key]), who)) end
     TEST_KEYS[key] = who
