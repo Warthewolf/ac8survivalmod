@@ -578,6 +578,8 @@ function hudTick(now, paused, pc)
         nextS = SPORT.clientRow(t)                                    -- Spaceport row, from its "spx")
     elseif DECOY and DECOY.clientRow and DECOY.clientRow(t) then      -- (a co-op joiner: the host's DECOY row, its "dk")
         nextS = DECOY.clientRow(t)
+    elseif ESC and ESC.clientRow and ESC.clientRow(t) then            -- ((2026-11-06) a co-op joiner: the host's escort's
+        nextS = ESC.clientRow(t)                                      -- row, from its "es": sv_escort.lua)
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
         local _, ashore = AMPH.counts()

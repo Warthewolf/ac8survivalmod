@@ -50,6 +50,13 @@ if [ -f build/x02s/out/SurvivalMode_Valka_P.utoc ]; then
 else
     echo "no VALKA X-02S container (tools/x02s/build.sh): she flies the x40a"
 fi
+# the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
+# only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
+if [ "$ZFA" = 1 ]; then
+    [ -f build/zfa44/out/SurvivalMode_ZFA44_P.utoc ] || { echo "ZFA=1: no ZFA-44 container (sh tools/zfa44/build.sh)"; exit 1; }
+    cp build/zfa44/out/SurvivalMode_ZFA44_P.utoc build/zfa44/out/SurvivalMode_ZFA44_P.ucas build/install/SurvivalMode/
+    echo "staged the ZFA-44 (build/zfa44/out/SurvivalMode_ZFA44_P; dev only)"
+fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
 # what the build found of the stock main-menu page (build_survival.py; Scripts/sv_menu.lua reads it): only with pages

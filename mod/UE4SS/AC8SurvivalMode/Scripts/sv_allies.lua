@@ -966,6 +966,7 @@ local function strikeOk(R, u, now, after)
     if ROLE and ((ROLE.ownSet and ROLE.ownSet(u)) or (ROLE.flight and ROLE.flight(u) == "wolf")) then return false end
     if (WOLF and WOLF.holding and WOLF.holding(u)) or (DIR and DIR.holding and DIR.holding(u))
         or (TAC and TAC.decoyed and TAC.decoyed(u, now)) or now < ((D.aceMoveAt and D.aceMoveAt[u]) or 0) then return false end
+    if ESC and ESC.holds and ESC.holds(u) then return false end   -- ((2026-11-06) after CHARLENE: THE ESCORT's, sv_escort.lua)
     return true
 end
 local function awacsStrike(R, s, now, f)
@@ -1310,7 +1311,8 @@ function ALLY.tick(now)
                 -- (not a Wolf flight while its trap is held, CFG.roles.wolf, nor one the squad director holds back,
                 -- CFG.director: the hunt's order would free it)
                 if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
-                    and not (WOLF and WOLF.holding(u)) and not (DIR and DIR.holding and DIR.holding(u)) then
+                    and not (WOLF and WOLF.holding(u)) and not (DIR and DIR.holding and DIR.holding(u))
+                    and not (ESC and ESC.holds and ESC.holds(u)) then   -- ((2026-11-06) after CHARLENE: sv_escort.lua)
                     R.hunted[u] = true
                     if math.random() < c.hunt_share or (R.hunters or 0) < (c.hunters or 0) then
                         R.hunters = (R.hunters or 0) + 1

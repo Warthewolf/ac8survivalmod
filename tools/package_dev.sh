@@ -27,6 +27,17 @@ else
 # (her round's song, the user's own track: build/valka_music, git-ignored, never in a friends' zip)
 if ls build/valka_music/*.wav > /dev/null 2>&1; then mkdir -p "$mod/Sounds/valka" && cp build/valka_music/*.wav "$mod/Sounds/valka/"; fi
 fi
+# ZFA=1 keeps the ZFA-44 (tools/zfa44: the user's own model; test T0's Ctrl+9, Scripts/sv_zfa44.lua), from build/install
+# or else build/zfa44/out; without it, none. The user's builds only: package_release.sh drops it whatever is set.
+if [ "$ZFA" = 1 ]; then
+    if [ ! -f "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.utoc" ]; then
+        [ -f build/zfa44/out/SurvivalMode_ZFA44_P.utoc ] || { echo "ZFA=1: no ZFA-44 container (sh tools/zfa44/build.sh)"; exit 1; }
+        cp build/zfa44/out/SurvivalMode_ZFA44_P.utoc build/zfa44/out/SurvivalMode_ZFA44_P.ucas "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/"
+    fi
+    echo "ZFA=1: the ZFA-44's container staged (Ctrl+9 in a run: test T0)"
+else
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.*
+fi
 # NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
 if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi
 cp release/README.txt "$st/README.txt"
