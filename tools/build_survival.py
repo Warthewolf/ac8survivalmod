@@ -394,7 +394,7 @@ def vec(x, y, zz, kind='Vector'):
 
 
 def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False, rows=None,
-              keep_rotation=False, digit_ok=False, clone_first=False):
+              keep_rotation=False, digit_ok=False, clone_first=False, unit_digits=False):
     """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
     (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
     the other mission's), our world data's name, new UniqueIDs; tgt: a target box and a TGT mark on each (user,
@@ -402,10 +402,15 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     keep_rotation: the source objects' rotation (Mission 19's rockets stand on their tails); digit_ok: an obj_name
     ending in a digit with no underscore before it (FName splits a tail only after one: Mission 19's debris names, which
     its rocket's blueprint looks up exactly); clone_first: every object a copy of the source's first (a unit of mixed
-    vehicles: Mission 7's T-90 is one of three kinds). Returns the objects' names as event args write them."""
+    vehicles: Mission 7's T-90 is one of three kinds); unit_digits: a unit name ending in a digit (the build contract's
+    SV_Unit_FestLight_1 / SV_Unit_FestCM_N1), stored as the engine turns the string into an FName (survival_events.fname:
+    'X_1' = ('X', 2), as stock stores B_Unit_00_MainMissile_PathMove0_0; hard rule 17), so SV_Spawn's name finds it.
+    Returns the objects' names as event args write them."""
     new = copy.deepcopy(src)
-    assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
-    assert not new_unit[-1].isdigit() and (digit_ok or not obj_name[-1].isdigit()) and obj_name not in top_number, obj_name
+    uname = survival_events.fname(new_unit) if unit_digits else ('name', new_unit, 0)
+    assert uname[1:] not in {tuple([p for p in u[2] if p[1] == 'Name'][0][3][1:3]) for u in units}, new_unit
+    assert (unit_digits or not new_unit[-1].isdigit()) and (digit_ok or not obj_name[-1].isdigit()) \
+        and obj_name not in top_number, obj_name
     assert not digit_ok or obj_name.rpartition('_')[2][:1].isalpha(), obj_name    # (its tail is a word, not _<digits>)
     assert rows is None or len(rows) == len(points), (new_unit, rows)
     wd = ('name', 'WD_SurvivalMode_global', 0)
@@ -433,7 +438,7 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     top_number[obj_name] = len(points)
     uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
     cx, cy = sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)
-    repl = {'Name': ('name', new_unit, 0), 'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(cx, cy, 0.0),
+    repl = {'Name': uname, 'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(cx, cy, 0.0),
             'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd, 'Tags': ('arr', [])}
     new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in new[2]]
     # never at the level's start (the source may say so: Mission 16's Ladons and EB_002's Alicorn did, and build_wd_global's
@@ -442,7 +447,7 @@ def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw,
     new[2][:] = sorted([q for q in new[2] if q[1] != 'bIsSpawnFromStart'] + [(sp_idx, 'bIsSpawnFromStart', True, None)],
                        key=lambda q: q[0])
     assert npc_row in NPC_ROWS and all(r in NPC_ROWS for r in rows or []), (npc_row, rows)
-    for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global'] + list(rows or []): z.nb.add(n)
+    for n in names_in(new) + [uname[1], obj_name, npc_row, 'WD_SurvivalMode_global'] + list(rows or []): z.nb.add(n)
     units.append(new)
     return names
 
@@ -813,7 +818,8 @@ def build_alicorn_rows():
     zn, dn = load(ALCN_TABLES[0][0], ALCN_TABLES[0][1])
     npc = {key(k): (k, row) for k, row in dn['rows']}
     # (and the Arsenal Bird's pulse cannon pod, on the Ladons' CIWS slots: survival_events.LADON_PULSE_NPC)
-    want, seen, refs = [survival_events.ALCN_ROW, survival_events.LADON_PULSE_NPC], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
+    # (and THE FESTIVAL's searchlight, C_011's GR053_seli_01 and its light: survival_events.FEST_LIGHT_NPC)
+    want, seen, refs = [survival_events.ALCN_ROW, survival_events.LADON_PULSE_NPC, survival_events.FEST_LIGHT_NPC], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
     while want:
         r = want.pop(0)
         if r in seen or r in ('None', ''): continue
@@ -1174,6 +1180,176 @@ def split_units(units, used_ids, z, top_number):
     print(f'  glitch: {gl[0]} in {survival_events.GLITCH_UNIT}')
 
 
+# ---------------------------------------------------------------- GONE FISHIN' and THE FESTIVAL (2026-11-06)
+def unit_named(units, name):
+    """Unit desc `name`, the string SV_Spawn names it by (a digit tail split as the engine splits it: survival_events.fname)."""
+    want = survival_events.fname(name)[1:]
+    hit = [u for u in units if tuple([p for p in u[2] if p[1] == 'Name'][0][3][1:3]) == want]
+    assert len(hit) == 1, (name, len(hit))
+    return hit[0]
+
+
+def objects_of(u):
+    return [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]
+
+
+def put(props, schema, name, value):
+    """Property `name` of a desc (struct `schema`) set to `value`: replaced where it's there (None too: an explicit zero) or
+    added at its schema index (unversioned properties are written in index order)."""
+    idx = [k for k, (n, t) in uprop.U.schema(schema).items() if n == name]
+    assert len(idx) == 1, (schema, name)
+    props[:] = sorted([q for q in props if q[1] != name] + [(idx[0], name, False, value)], key=lambda q: q[0])
+
+
+def place(u, point, yaw, obj_points=None):
+    """Unit desc `u` at `point` facing `yaw`, and its AI objects at obj_points facing yaw: every SpawnPoint and Rotation
+    written, also where the source has none (Mission 30's missile unit: spawned by its mission at a moved unit). SV_Spawn's
+    SetPose (runtime/survival_rt.c) keeps each object's offset from the unit point, z too, and turns it by the yaw given
+    less the unit's: so the objects' z here is the unit's (offset z 0), and the unit's yaw the one Lua spawns it with."""
+    put(u[2], 'LiveUnitDesc', 'SpawnPoint', vec(*point))
+    put(u[2], 'LiveUnitDesc', 'Rotation', vec(0.0, yaw, 0.0, 'Rotator'))
+    if obj_points is not None:
+        objs = objects_of(u)
+        assert len(obj_points) == len(objs), (len(obj_points), len(objs))
+        for ob, pt in zip(objs, obj_points):
+            put(ob[2], 'LiveAIObjectDesc', 'SpawnPoint', vec(*pt))
+            put(ob[2], 'LiveAIObjectDesc', 'Rotation', vec(0.0, yaw, 0.0, 'Rotator'))
+
+
+def spot_of(d):
+    return struct.unpack('<3d', [q for q in d[2] if q[1] == 'SpawnPoint'][0][3][2])
+
+
+def field_of(d, name):
+    q = [q for q in d[2] if q[1] == name]
+    return q[0][3] if q else None
+
+
+def fishing_units(units, used_ids, z, top_number):
+    """GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*): three units of FISH_PER_GROUND shoals, one a fishing ground,
+    from Mission 13's scored dummy unit (faction 2, a box and the TGT mark: hard rules 31, 32), each unit's origin on its
+    ground 7 m up and its shoals round it at that height (bIsLanding cleared: placed, not set down on the sea), on
+    sv_shoal; and SAL's boat, Mission 28's allied Wasp desc on the stock fishing boat, its callsign as VOID WATCHER's."""
+    se = survival_events
+    src = desc_named(stock_wd(se.FISH_SOURCE[0]), 'UnitDescList', se.FISH_SOURCE[1])
+    assert [field_of(ob, 'MissionNpcID')[1] for ob in objects_of(src)] == ['Dummy_btr9_common'], 'Mission 13 score unit changed'
+    assert field_of(src, 'Faction') == ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x02')), field_of(src, 'Faction')
+    for key, unit, obj, (gx, gy), pts in se.fish_units():
+        names = port_unit(units, used_ids, z, src, unit, obj, se.FISH_ROW, pts, 0.0, top_number, tgt=True)
+        assert names == [f'{obj}_{k}' for k in range(se.FISH_PER_GROUND)], names
+        u = unit_named(units, unit)
+        clear_flags(u, ('bIsLanding',))
+        place(u, (gx, gy, se.FISH_Z_CM), 0.0)
+        at = [spot_of(ob) for ob in objects_of(u)]
+        assert all(abs(p[2] - se.FISH_Z_CM) < 0.5 and math.hypot(p[0] - gx, p[1] - gy) <= se.FISH_SPREAD_M * 100.0 for p in at), at
+        gap = min(math.dist(a[:2], b[:2]) for i, a in enumerate(at) for b in at[i + 1:])
+        assert gap >= se.FISH_GAP_M * 100.0, (unit, gap)
+        assert all(field_of(ob, 'TargetMarkType') and field_of(ob, 'bShowHUDBox') == ('raw', 'Bool', b'\x01')
+                   and not field_of(ob, 'bIsLanding') for ob in objects_of(u)), unit
+        far = max(math.hypot(p[0] - gx, p[1] - gy) for p in at) / 100.0
+        print(f'  fishing: {unit} ({len(names)} {obj}_N on {se.FISH_ROW}) at ({gx:.0f}, {gy:.0f}, {se.FISH_Z_CM:.0f}), '
+              f'out to {far:.0f} m, {gap / 100.0:.0f} m apart at least')
+    ww = stock_wd(se.SP_WASP_SOURCE[0])
+    src = desc_named(ww, 'UnitDescList', se.SP_WASP_SOURCE[1])
+    assert field_of(src, 'Faction') == ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x01')), 'Mission 28 Wasp not allied'
+    names = port_unit(units, used_ids, z, src, se.SAL_BOAT_UNIT, se.SAL_BOAT_OBJ, se.SAL_BOAT_ROW, [se.SAL_BOAT_SPOT],
+                      se.SAL_BOAT_YAW, top_number)
+    assert names == [se.SAL_BOAT_OBJ], names
+    u = unit_named(units, se.SAL_BOAT_UNIT)
+    clear_flags(u, ('bIsInvincible',))
+    set_bools(u, ('bIsInvincibleFromAI', 'bIsInvincibleFromWingman', 'bShowHUDBox', 'bShowCallSignForAlly'))
+    ob = objects_of(u)[0]
+    put(ob[2], 'LiveAIObjectDesc', 'GameObjectDisplayNameID02', ('name', se.SAL_BOAT_NAME_KEY, 0))
+    z.nb.add(se.SAL_BOAT_NAME_KEY)
+    place(u, se.SAL_BOAT_SPOT, se.SAL_BOAT_YAW)
+    kids = (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]
+    assert spot_of(ob) == se.SAL_BOAT_SPOT and not field_of(ob, 'bIsInvincible') and not kids, se.SAL_BOAT_UNIT
+    print(f'  fishing: SAL\'s boat {se.SAL_BOAT_UNIT} ({se.SAL_BOAT_OBJ} on {se.SAL_BOAT_ROW} -> {se.SAL_BOAT_NPC}, callsign '
+          f'{se.SAL_BOAT_NAME_KEY}, allied, invincible from AI and wingmen) at {se.SAL_BOAT_SPOT}')
+
+
+def festival_units(units, used_ids, z, top_number, v):
+    """THE FESTIVAL (survival_events.FEST_*): three 4-ship Tu-160 formations (copies of Survival's heavy flight), each at
+    its entry facing the runway, a lane per aircraft (its path and one outside it) of its run in and FEST_LAPS racetrack
+    laps (smooth aircraft paths: hard rules 35, 54); the salvo units of Mission 30's path-flown cruise missile at their
+    launch points, side by side, a box and the TGT mark each, and their lanes to the runway; and the four searchlights,
+    C_011's searchlight vehicle with its light (its class imported from C_011's world data), allied, by the runway."""
+    se = survival_events
+    tpl = desc_named(stock_wd(M16 + 'WD_Mission016_global'), 'AIPathDescList', se.LADON_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    (zx, zy), half = se.FEST_ZONE
+    lim = half - se.FEST_ZONE_MARGIN_KM * 1e5
+    for F in se.fest_bombers():
+        names = copy_unit(units, used_ids, z, se.FEST_SOURCE_UNIT, F['unit'], se.FEST_BOMBERS_N, top_number, F['obj'],
+                          se.FEST_BOMBER_ROW)
+        assert names == F['objs'], names
+        u = unit_named(units, F['unit'])
+        assert field_of(u, 'Faction') == ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x02')), F['unit']
+        assert field_of(objects_of(u)[0], 'bGroupLead') == ('raw', 'Bool', b'\x01'), F['unit']
+        place(u, F['entry'], F['yaw'], F['points'])
+        unit_area(u, se.FEST_AREA_M, se.FEST_ALT_M)
+        launch = se.fest_launch(F['g'])
+        for name, side in ((F['path'], 0.0), (F['side_path'], se.FEST_FORMATION_CM / 1e5)):
+            pts, after = se.fest_track(F['g'], side)
+            near = min(math.hypot(p[0] - se.FISH_RWY[0], p[1] - se.FISH_RWY[1]) for p in pts) / 1e5
+            assert near >= se.FEST_NEAR_KM, (name, near)
+            assert all(abs(p[0] - zx) <= lim and abs(p[1] - zy) <= lim for p in pts), (name, 'outside the zone')
+            if not side:
+                passes = sum(1 for p in pts if math.hypot(p[0] - launch[0], p[1] - launch[1]) < 1.0)
+                assert passes == se.FEST_LAPS + 1, (name, passes)
+                assert math.dist(pts[0], F['points'][0]) < 1.0, name
+            else:
+                assert math.dist(pts[0], F['points'][1]) < 1.0, name
+            paths.append(make_path(z, used_ids, tpl, name, pts, smooth=True, after=after))
+            print(f'  festival: {name}: {len(pts)} points, {se.FEST_LAPS} laps, nearest the runway {near:.1f} km')
+    m30 = stock_wd(se.FEST_CM_SOURCE[0])
+    src = desc_named(m30, 'UnitDescList', se.FEST_CM_SOURCE[1])
+    sob = objects_of(src)
+    assert len(sob) == 1 and field_of(sob[0], 'MissionNpcID')[1] == se.FEST_CM_SOURCE_ROW, 'Mission 30 missile unit changed'
+    assert not (field_of(sob[0], 'ChildAIObjectDescs') or ('arr', []))[1], 'Mission 30 missile has parts (hard rule 31)'
+    lanes = {}
+    for M in se.fest_missiles():
+        names = port_unit(units, used_ids, z, src, M['unit'], M['obj'], se.FEST_CM_ROW, M['points'], M['yaw'], top_number,
+                          tgt=True, digit_ok=True, unit_digits=True)
+        assert names == M['objs'], names
+        u = unit_named(units, M['unit'])
+        place(u, M['launch'], M['yaw'], M['points'])
+        assert all(abs(spot_of(ob)[2] - M['launch'][2]) < 0.5 for ob in objects_of(u)), M['unit']
+        for lane, pts in M['lanes']: lanes[lane] = pts
+    for lane, pts in lanes.items():
+        end = min(math.hypot(p[0] - se.FISH_RWY[0], p[1] - se.FISH_RWY[1]) for p in pts)
+        assert end < 15000.0, (lane, end)                 # (the lane crosses the runway, its last point 1.5 km past it)
+        paths.append(make_path(z, used_ids, tpl, lane, pts, smooth=True))
+    print(f'  festival: {len(se.fest_missiles())} cruise missile salvo units of {se.FEST_CM_PER} ({se.FEST_CM_ROW}), '
+          f'{len(lanes)} lanes ({", ".join(sorted(lanes))})')
+    lz = ZenPkg(stock(se.FEST_LIGHT_SOURCE[0]))
+    lw, _ = props_of(lz, lz.export_index(se.FEST_LIGHT_SOURCE[0].rsplit('/', 1)[1]), 'LiveWorldData')
+    src = copy.deepcopy(desc_named(lw, 'UnitDescList', se.FEST_LIGHT_SOURCE[1]))
+    seli = [ob for ob in objects_of(src) if field_of(ob, 'MissionNpcID')[1] == se.FEST_LIGHT_SOURCE[2]]
+    assert seli, 'C_011 searchlight not found'
+    objects_of(src)[:] = seli[:1]
+    import festival_lights_check as fl
+    bad = fl.failures(se.fest_lights())
+    assert not bad, 'festival searchlight spots: ' + '; '.join(bad)
+    for unit, obj, pt, yaw in se.fest_lights():
+        names = port_unit(units, used_ids, z, src, unit, obj, se.FEST_LIGHT_ROW, [pt], yaw, top_number, unit_digits=True)
+        assert names == [obj], names
+        u = unit_named(units, unit)
+        u[2][:] = [(q[0], q[1], False, ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x01'))) if q[1] == 'Faction' else
+                   (q[0], q[1], True, None) if q[1] == 'bRequireRankS' else q for q in u[2]]
+        place(u, pt, yaw)
+        kids = field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1]
+        assert retag_parts(kids, obj, used_ids, z, lz) == 1, unit
+        data = [p for p in kids[0][2] if p[1] == 'Data'][0][3][2]
+        assert [q for q in data if q[1] == 'ComponentFieldName'][0][3][1] == se.FEST_LIGHT_PART
+        assert [q for q in data if q[1] == 'MissionNpcID'][0][3][1] == se.FEST_LIGHT_ROWS[1][1]
+        data[:] = [(q[0], q[1], False, ('name', se.FEST_BEAM_ROW, 0)) if q[1] == 'MissionNpcID' else q for q in data]
+        assert se.FEST_BEAM_ROW in NPC_ROWS
+        z.nb.add(se.FEST_BEAM_ROW)
+    print(f'  festival: {len(se.FEST_LIGHTS)} searchlights ({se.FEST_LIGHT_ROW} + its {se.FEST_LIGHT_PART} on '
+          f'{se.FEST_BEAM_ROW}), allied: ' + ', '.join(f'{u} ({p[0]:.0f}, {p[1]:.0f})' for u, _, p, _ in se.fest_lights()))
+
+
 def build_wd_global():
     """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
     itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
@@ -1264,6 +1440,8 @@ def build_wd_global():
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)
     valka_eml_unit(units, used_ids, z, top_number)
+    fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
+    festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -2077,6 +2255,20 @@ def build_npc_rows():
                                                   for c, k in zip(comps, q[3][1])])) if q[1] == 'ChildNPCId' else q for q in row[2]]
         assert sum(1 for k in [q for q in row[2] if q[1] == 'ChildNPCId'][0][3][1] if k == pulse) == len(survival_events.LADON_CIWS)
         out.append(((L['npc'], 0), row))
+    # GONE FISHIN's shoal (survival_events.FISH_*): the stock invisible turret pawn GR000_dummy (BP_GR000_dummy_CP: no mesh,
+    # no wreck, no children) with the boats' durability rows (the stock row has none: no damage table to take a hit by),
+    # Survival's name key and its own model row (FISH_MODEL: MaxHealth FISH_HEALTH), no score
+    se = survival_events
+    f = se.fname(se.FISH_NPC_SOURCE)
+    row = copy.deepcopy(rows[(f[1], f[2])])
+    have = dict((q[1], q) for q in row[2])
+    assert not any(q[1].startswith('NpcFCSId') and q[3] for q in row[2]) and not have['ChildNPCId'][3][1], 'GR000_dummy changed'
+    assert have['BaseScore'][3] is None and have['ModelId'][3] == ('name', se.FISH_MODEL_SOURCE, 0), (have['BaseScore'], have['ModelId'])
+    for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
+                        ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
+                        ('GameObjectDisplayName02', s(se.FISH_NAME_KEY)), ('ModelId', ('name', se.FISH_MODEL, 0))):
+        set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
+    out.append(((se.FISH_NPC, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -2124,6 +2316,15 @@ def build_model_rows():
     assert names['GameObjectDisplayName01'] == s('ContainerAllyCallsign_Name_Magnolia'), names['GameObjectDisplayName01']
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.AWACS_MODEL_NAME))
     out.append(((survival_events.AWACS_MODEL, 0), row))
+    # GONE FISHIN's shoal (survival_events.FISH_MODEL): the campaign's GR000_dummy model row (its blueprint, 100 HP) with
+    # FISH_HEALTH and Survival's name key
+    f = survival_events.fname(survival_events.FISH_MODEL_SOURCE)
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    names = dict((q[1], q[3]) for q in row[2])
+    assert names['BlueprintClass'][2][1] == 'BP_GR000_dummy_CP_C', names['BlueprintClass']
+    set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.FISH_HEALTH)))
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.FISH_NAME_KEY))
+    out.append(((survival_events.FISH_MODEL, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -2206,6 +2407,92 @@ def check_no_certain_kill():
           f'the Lua names (G1)')
 
 
+def check_fishing_build():
+    """(2026-11-06) GONE FISHIN' and THE FESTIVAL read back from the packages this build saved: every unit the build
+    contract names, by the name SV_Spawn gives (a digit tail split as the engine splits it), with its objects, rows, side
+    and spots (each object at its unit's height: SV_Spawn keeps the offsets); every path the records name; every record
+    Lua fires, each exec's objects / units / paths in the world data; the rows Lua adds at the main menu."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    zw = load(MI + 'WD_SurvivalMode_global')
+    w, _ = props_of(zw, zw.export_index('WD_SurvivalMode_global'), 'LiveWorldData')
+    units = {plain([q for q in u[2] if q[1] == 'Name'][0][3]): u for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]}
+    paths = {plain([q for q in el[2] if q[1] == 'Name'][0][3]): el for el in [p for p in w[2] if p[1] == 'AIPathDescList'][0][3][1]}
+    objs = {}
+    def walk(ob, unit):
+        objs[plain([q for q in ob[2] if q[1] == 'Name'][0][3])] = unit
+        for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]:
+            walk(ch, unit)
+    for un, u in units.items():
+        for ob in objects_of(u): walk(ob, un)
+    faction = lambda u: field_of(u, 'Faction')[2][2][0]
+    want = []                                  # (unit, [objects], row, faction)
+    for key, unit, obj, (gx, gy), pts in se.fish_units():
+        want.append((unit, [f'{obj}_{k}' for k in range(se.FISH_PER_GROUND)], se.FISH_ROW, 2))
+    want.append((se.SAL_BOAT_UNIT, [se.SAL_BOAT_OBJ], se.SAL_BOAT_ROW, 1))
+    want += [(F['unit'], F['objs'], se.FEST_BOMBER_ROW, 2) for F in se.fest_bombers()]
+    want += [(M['unit'], M['objs'], se.FEST_CM_ROW, 2) for M in se.fest_missiles()]
+    want += [(unit, [obj], se.FEST_LIGHT_ROW, 1) for unit, obj, _, _ in se.fest_lights()]
+    for unit, names, row, side in want:
+        assert unit in units, f'{unit} not in the world data'
+        u = units[unit]
+        assert survival_events.fname(unit) == [q for q in u[2] if q[1] == 'Name'][0][3], unit
+        got = [plain(field_of(ob, 'Name')) for ob in objects_of(u)]
+        assert got == names, (unit, got)
+        assert all(field_of(ob, 'MissionNpcID') == ('name', row, 0) for ob in objects_of(u)), unit
+        assert faction(u) == side and not field_of(u, 'bIsSpawnFromStart'), unit
+        uz = spot_of(u)[2]
+        assert all(abs(spot_of(ob)[2] - uz) < 0.5 for ob in objects_of(u)), (unit, 'an object off its unit height')
+    beams = [ch for unit, obj, _, _ in se.fest_lights() for ch in field_of(objects_of(units[unit])[0], 'ChildAIObjectDescs')[1]]
+    assert len(beams) == len(se.FEST_LIGHTS) and all(
+        field_of(field_of(ch, 'Data'), 'MissionNpcID') == ('name', se.FEST_BEAM_ROW, 0) for ch in beams), 'searchlight parts'
+    lanes = {lane for M in se.fest_missiles() for lane, _ in M['lanes']}
+    for name in [F[k] for F in se.fest_bombers() for k in ('path', 'side_path')] + sorted(lanes):
+        assert name in paths and field_of(paths[name], 'ControlType')[2][2] == b'', name     # (hard rule 35)
+    # the records
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [show(ep_dump.fields(t)['EventName']) for t in T]
+    events = [ev for F in se.fest_bombers() for ev in (F['ev'], F['up'])] + [ev for M in se.fest_missiles() for ev in [M['ev']] + M['hits']]
+    for ev in events:
+        assert trig.count(ev) == 1, (ev, trig.count(ev))
+    n_ex = 0
+    for e in E:
+        f = ep_dump.fields(e)
+        ev = show(f['ConnectionEventName'])
+        if ev not in events: continue
+        n_ex += 1
+        args = [show(ep_dump.fields(a)['Value']) for a in f['ArgsInfo'][1]]
+        cls = show(f['ExecutionClass'])
+        if cls in ('LiveAIPathExecution',):
+            assert args[2] in paths and (args[0] in objs or args[1] in units), (ev, args[:3])
+        elif cls in ('LiveEnableLandingGear', 'LiveAIEngagementOrder', 'LiveSetLookAheadTimeSec', 'LiveDestroyUnitExecution'):
+            assert any(a in objs or a in units for a in args[:3]), (ev, cls, args[:3])
+        else:
+            assert cls == 'LiveFlagOperation_IntExecution', (ev, cls)
+    # the rows (DT_SV_NpcMission, DT_SV_NpcRows, DT_SV_ModelRows, DT_SV_AlcnNpc / Model)
+    def table(path, st):
+        z = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
+    for row, npc in ((se.FISH_ROW, se.FISH_NPC), (se.SAL_BOAT_ROW, se.SAL_BOAT_NPC), (se.FEST_CM_ROW, 'OP0039_slcmp_01'),
+                     (se.FEST_LIGHT_ROW, se.FEST_LIGHT_NPC), (se.FEST_BEAM_ROW, 'GR053_seli_light_01'), (se.FEST_BOMBER_ROW, 'OP0012_t160_01')):
+        assert plain(mission[row]['NpcId']) == npc, (row, mission[row]['NpcId'])
+    assert struct.unpack('<f', mission[se.SAL_BOAT_ROW]['MinHealth'][2])[0] == se.SAL_BOAT_MIN_HEALTH
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')[se.FISH_NPC]
+    assert (plain(npc['ModelId']), plain(npc['WeaponDurabilityId']), plain(npc['ExplosionDurabilityId']), npc['GameObjectDisplayName02'])         == (se.FISH_MODEL,) + se.FISH_DURABILITY + (s(se.FISH_NAME_KEY),), npc
+    model = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')[se.FISH_MODEL]
+    assert struct.unpack('<f', model['MaxHealth'][2])[0] == se.FISH_HEALTH, model['MaxHealth']
+    alc = table(DATA + 'DT_SV_AlcnNpc', 'LiveNpcDataTable')
+    alm = table(DATA + 'DT_SV_AlcnModel', 'LiveModelDataTable')
+    assert se.FEST_LIGHT_NPC in alc and 'GR053_seli_light_01' in alc and {'GR053_seli', 'GR053_seli_light'} <= set(alm), 'searchlight rows'
+    print(f'  fishing / festival: {len(want)} units, {len(events)} events ({n_ex} execs) and their rows read back from the '
+          f'packages: all there')
+
+
 # ---------------------------------------------------------------- NPC mission table
 # The spawner caches the aircraft of every row of the world data's NPC table once, when the level starts, and a
 # spawn only looks there (tools/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
@@ -2228,13 +2515,19 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
               # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)] + list(
-              survival_events.SP_ISLAND_ROWS.items())   # (the retake's island enemies: Mission 6's and 7's rows)
+              survival_events.SP_ISLAND_ROWS.items()) + [   # (the retake's island enemies: Mission 6's and 7's rows)
+              # THE FESTIVAL's cruise missile (survival_events.FEST_CM_*): Mission 30's path-flown SLCM, under Survival's name
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission030', [(survival_events.FEST_CM_ROW, survival_events.FEST_CM_SOURCE_ROW)]),
+              # its searchlights (survival_events.FEST_LIGHT_*): Online Mode C_011's vehicle and its light, under Survival's
+              # names (their DT_NPC_ON rows ride in the Alicorn's tables: build_alicorn_rows)
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON', survival_events.FEST_LIGHT_ROWS)]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
     (survival_events.SHUTTLE_NPC_ROW, 'sstb_common', survival_events.SHUTTLE_NPC),   # Comona Defense's shuttle (its name)
     (survival_events.VALKA_EML_ROW, 'gepa_common', survival_events.VALKA_EML_NPC),   # VALKA's opener railgun (a turret row)
+    (survival_events.FISH_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.FISH_NPC),   # GONE FISHIN's shoals
 ] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
     (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
@@ -2368,8 +2661,9 @@ def build_npc_table():
         print(f'  {mrow}: {was} -> {plain} (no scripted sure kill: G1)')
     NPC_SOURCE.clear()
     extra = list(NPC_EXTRA)
-    # (the Spaceport Assault's enemy ships, survival_events.SP_NPC_ROWS: shaped as an Aegis hull or turret row)
-    for new_row, src, npc in POOL_EXTRA + survival_events.SP_NPC_ROWS:
+    # (the Spaceport Assault's enemy ships, survival_events.SP_NPC_ROWS: shaped as an Aegis hull or turret row; SAL's boat,
+    # survival_events.FISH_NPC_ROWS, the same way: the stock boat row's name ends in digits)
+    for new_row, src, npc in POOL_EXTRA + survival_events.SP_NPC_ROWS + survival_events.FISH_NPC_ROWS:
         assert (new_row, 0) not in rows, new_row
         row = copy.deepcopy(rows[(src, 0)])
         nid = survival_events.fname(npc)                                    # (its numeric tail: hard rule 17)
@@ -2377,6 +2671,10 @@ def build_npc_table():
         for n in (new_row, nid[1]): z.nb.add(n)
         rows[(new_row, 0)] = row
         dt['rows'].append(((new_row, 0), row))
+    # SAL's boat afloat: MinHealth 1 on its mission row, as the stock allied ships carry it (Mission 24's wasp_Ally)
+    mh_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'MinHealth'][0]
+    set_prop(rows[(survival_events.SAL_BOAT_ROW, 0)][2], mh_idx, 'MinHealth',
+             ('raw', 'Float', struct.pack('<f', survival_events.SAL_BOAT_MIN_HEALTH)))
     for src in SEARCH_AIRCRAFT:
         npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]          # ('name', base, number)
         base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
@@ -2517,4 +2815,5 @@ if __name__ == '__main__':
     build_ep('global', ef=True)
     build_ep('phase01')
     build_ep('phase02')
+    check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)
