@@ -91,6 +91,10 @@ function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
 part("sv_amphib.lua"); part("sv_spaceport.lua"); part("sv_stats.lua"); part("sv_tells.lua")
+-- ((code review of 2026-11-07) 0.74.0's specials aren't loaded here (sv_fishing, sv_escort, sv_decoy): GONE FISHIN', in the
+-- rotation from 0.74.0, never ready in this test, and THE ESCORT / THE DECOY have no kind here; the pacing below is the
+-- eight kinds of 0.73.80's rotation)
+FISH = { ready = function() return false end }
 function playerOnAirfield() return grounded end
 function addCredits() end
 LB.stat, LB.special = function() end, function() end

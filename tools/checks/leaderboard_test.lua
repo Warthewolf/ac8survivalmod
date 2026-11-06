@@ -30,6 +30,18 @@ do                                    -- (the runtime's paths are Windows ones: 
 end
 writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
 os.remove(WORK .. "/config/survival.ini")
+-- ((code review of 2026-11-07, finding 14) rotation: a survival.ini with the shipped [specials] rotation line uncommented
+-- as it is: the same list as CFG's, so nothing edited)
+local rotLine = nil
+if MODE == "rotation" then
+    local ini = readAll(MOD .. "/config/survival.default.ini")
+    local a = ini:find("\n%[specials%]")
+    local b = a and ini:find("\n;rotation = ", a, true)
+    local e = b and ini:find("\n", b + 1, true)
+    assert(b and e and not ini:sub(a + 1, b):find("\n%["), "the [specials] section's ;rotation line not found")
+    rotLine = ini:sub(b + 2, e - 1):gsub("\r$", "")
+    writeAll(WORK .. "/config/survival.ini", ini:sub(1, b) .. rotLine .. ini:sub(e))
+end
 os.remove(WORK .. "/config/pending_runs.txt")
 os.remove(WORK .. "/config/refused_runs.txt")                    -- ((0.73.80) the runs refused as an unknown build, kept)
 package.path = WORK .. "/Scripts/?.lua;" .. package.path      -- (as UE4SS: Scripts on require's path)
@@ -114,6 +126,22 @@ local function summaryLine(sh)
         or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper())) or sh.state
 end
 
+if MODE == "rotation" then
+    -- the shipped rotation line, uncommented as it is
+    local cur, def = table.concat(CFG.specials.rotation, ","), table.concat(CFG_DEFAULTS.specials.rotation, ",")
+    check(cur == def and #CFG.specials.rotation >= 11 and CFG.specials.rotation[#CFG.specials.rotation] == "decoy",
+          "rotation: the [specials] rotation line uncommented as shipped (" .. tostring(rotLine) .. ") reads as CFG's own (" .. cur .. ")")
+    local out = edited(false)
+    check(#out == 0, "rotation: nothing edited" .. (#out > 0 and (" (" .. table.concat(out, ", ") .. ")") or ""))
+    local d = {}
+    COOP.cfgDiff(CFG, CFG_DEFAULTS, {}, d)
+    local diffs = {}
+    for _, x in ipairs(d) do diffs[#diffs + 1] = table.concat(x[1], ".") end
+    check(#diffs == 0, "rotation: COOP.cfgDiff finds nothing against the shipped defaults"
+          .. (#diffs > 0 and (" (" .. table.concat(diffs, ", ") .. ")") or ""))
+    print(MODE .. ": " .. (fails > 0 and (fails .. " FAILED") or "all passed"))
+    os.exit(fails > 0 and 1 or 0)
+end
 if MODE ~= "plain" then
     -- ------------------------------------------------------------------------------------ a survival_config.lua
     check(CFG_USER_FILE == "survival_config.lua", MODE .. ": survival_config.lua found by require: CFG_USER_FILE set")

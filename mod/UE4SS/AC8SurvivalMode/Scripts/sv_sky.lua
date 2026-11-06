@@ -24,10 +24,12 @@
 --       v.exposure = { min =, max =, bias = }     every post-process volume whose override for it is on
 --       v.skylight = { x =, rgb = { r, g, b } }    the sky light: x times its original intensity
 --       v.mpc = { emissive =, vfx_ev =, vfx_amb = }
---   SKY.restore(why)     every value Survival changed put back: how many, how many read back as they were
+--   SKY.restore(why)     every value Survival changed put back: how many, how many read back as they were; one that
+--                        couldn't be put back is kept and tried again (SKY.retryTick) until it is or the level goes
 --   SKY.read(V)          every value it can see: { keys = { key, ... }, val = { [key] = value }, ro = { [key] = true } }
---   SKY.view()           the level's sky objects, found afresh; SKY.viewCached(now, s) the last one while each of its
---                        objects is live (liveObj) and it's under s old
+--   SKY.view()           the level's sky objects, found afresh; SKY.viewCached(now [, s]) the last one while each of its
+--                        objects is live (liveObj) (and it's under s old, when s is given); one with no sky actor looked
+--                        for again at most every 10 s
 -- VALKA's red sky (sv_hud.lua hudRed / RED) is hers: the sky test waits while it's on, the arc leaves the colours to it.
 -- The day-night arc (SKY.arc*, below) GONE FISHIN' starts: its round F kept in RUN.arcF on every game.
 SKY = { orig = {}, order = {}, pending = nil, idleAt = 0, idleTries = 0 }
@@ -449,17 +451,19 @@ local function pendingFrom()
     return p
 end
 
-function SKY.restore(why)
+-- opts (the retry's): V a view to use (else found afresh), quiet (logged only when something was put back)
+function SKY.restore(why, opts)
     why = tostring(why or "?")
-    if #SKY.order == 0 then return 0, 0 end
+    opts = opts or {}
+    if #SKY.order == 0 then SKY.retry = nil; return 0, 0 end
     if levelTorn and levelTorn() then
         SKY.pending = pendingFrom()
         log(string.format("sky: %s: the level's torn down: its %d changed values go with it, none put back%s", why, #SKY.order,
             SKY.pending and " (the custom sun's put back in the next level)" or ""))
-        SKY.orig, SKY.order = {}, {}
+        SKY.orig, SKY.order, SKY.retry = {}, {}, nil
         return 0, 0
     end
-    local V = SKY.view()
+    local V = opts.V or SKY.view()
     local put, same, lost, keys, text = 0, 0, {}, {}, {}
     -- the custom sun first (it moves the copies and the light), then each value in the order it was first changed
     local order = {}
@@ -478,15 +482,54 @@ function SKY.restore(why)
             lost[#lost + 1] = k
         end
     end
-    SKY.logGroups("sky: " .. why .. ": put back", keys, function(k) return text[k] end)
-    local pend = nil
-    for _, k in ipairs(lost) do if k:find("^custom|") then pend = pend or {}; pend[k] = SKY.orig[k] end end
-    SKY.pending = pend
-    log(string.format("sky: %s: put back %d of %d changed values, %d read back as they were%s%s", why, put, #order, same,
-        #lost > 0 and string.format("; %d NOT (their objects not found%s): %s", #lost, V.held and (", walks held: " .. V.held) or "",
-            table.concat(lost, ", ")) or "", pend and "; the custom sun put back in the next level" or ""))
-    SKY.orig, SKY.order = {}, {}
+    local loud = not (opts.quiet and put == 0)
+    if loud then SKY.logGroups("sky: " .. why .. ": put back", keys, function(k) return text[k] end) end
+    -- ((code review of 2026-11-07, finding 12) a value whose object wasn't found is kept, its original with it, and tried
+    -- again every tick (SKY.retryTick) until it's put back or the level goes (LEVEL_DROPS forgets it then); before, it was
+    -- forgotten here and stayed as the arc had left it. The custom sun's flags as before: put back by SKY.idleTick)
+    local pend, keepO, keepK = nil, {}, {}
+    for _, k in ipairs(lost) do
+        if k:find("^custom|") then pend = pend or {}; pend[k] = SKY.orig[k]
+        else keepO[k] = SKY.orig[k]; keepK[#keepK + 1] = k end
+    end
+    if pend or not opts.quiet then SKY.pending = pend end
+    if loud then
+        log(string.format("sky: %s: put back %d of %d changed values, %d read back as they were%s%s%s", why, put, #order, same,
+            #lost > 0 and string.format("; %d NOT (their objects not found%s): %s", #lost, V.held and (", walks held: " .. V.held) or "",
+                table.concat(lost, ", ")) or "", pend and "; the custom sun put back in the next level" or "",
+            #keepK > 0 and string.format("; %d kept to be tried again every tick", #keepK) or ""))
+    end
+    SKY.orig, SKY.order = keepO, keepK
+    if #keepK > 0 then
+        SKY.retry = SKY.retry or { why = why, tries = 0, freshAt = os.clock() + 10 }
+    else
+        if SKY.retry and SKY.retry.tries > 0 then
+            log(string.format("sky: %s: every kept value put back now (%d tries)", SKY.retry.why, SKY.retry.tries))
+        end
+        SKY.retry = nil
+    end
     return put, same
+end
+-- (sv_main.lua probeTick, every tick while SKY.retry) the values SKY.restore couldn't put back tried again on the kept
+-- view, and on a fresh one (an object that wasn't found then may be now) 10 s on, then 20, 40, ... at most every 5
+-- minutes (an object gone for good costs a walk that often, no more); not while the arc writes the sky (it puts
+-- everything back at its end), nor while walks are held or the level's going (LEVEL_DROPS forgets them untouched)
+function SKY.retryTick()
+    local R = SKY.retry
+    if not R then return end
+    if #SKY.order == 0 then SKY.retry = nil; return end
+    if (levelTorn and levelTorn()) or (walkHold and walkHold()) or (ARC and ARC.on) then return end
+    local now = os.clock()
+    R.tries = R.tries + 1
+    local V
+    if now >= (R.freshAt or 0) then
+        R.freshEvery = math.min(300, (R.freshEvery or 5) * 2)
+        R.freshAt = now + R.freshEvery
+        V = SKY.view()
+    else
+        V = SKY.viewCached(now)
+    end
+    SKY.restore(R.why, { V = V, quiet = true })
 end
 
 -- (sv_main.lua probeTick, while SKY.pending) a custom sun or moon a torn-down level left changed: put back as it was in
@@ -516,7 +559,7 @@ end
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the sky"] = function()
         if #SKY.order > 0 then SKY.pending = pendingFrom() end
-        SKY.orig, SKY.order = {}, {}
+        SKY.orig, SKY.order, SKY.retry = {}, {}, nil
     end
 end
 end
@@ -536,11 +579,26 @@ local function viewLive(V)
     end
     return true
 end
+-- ((code review of 2026-11-07, finding 4) kept while every object of it is live, however old (maxAge: only a caller that
+-- wants one no older), found afresh the moment one is gone; a view with no sky actor (not loaded yet, walks held) is
+-- looked for again at most every NO_ACTOR_S. Before, the arc walked again (3-5 FindAllOf, ~100-350 ms) every 30 s with
+-- everything live, and every tick half while the actor was missing)
+local NO_ACTOR_S = 10
+SKY.NO_ACTOR_S = NO_ACTOR_S
 function SKY.viewCached(now, maxAge)
-    if VC.V and now - VC.at < (maxAge or 30) and now >= VC.at and viewLive(VC.V) then return VC.V end
+    local V = VC.V
+    if V and now >= VC.at then
+        if V.actor then
+            if (maxAge == nil or now - VC.at < maxAge) and viewLive(V) then return V end
+        elseif now - VC.at < NO_ACTOR_S then
+            return V
+        end
+    end
     VC.V, VC.at = SKY.view(), now
+    VC.walks = (VC.walks or 0) + 1
     return VC.V
 end
+function SKY.viewWalks() return VC.walks or 0 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the sky's view"] = function() VC.V, VC.at = nil, -1e9 end end
 end
 
@@ -868,7 +926,7 @@ function SKY.arcTick(now)
         ARC.nextApply = 0
     end
     if not ARC.base then
-        local V = SKY.viewCached(now, 30)
+        local V = SKY.viewCached(now)
         if not V.actor then
             if not ARC.noActorSaid then ARC.noActorSaid = true; log("sky: arc: no sky actor found yet: waiting") end
             return
@@ -909,7 +967,7 @@ function SKY.arcTick(now)
     end
     if now < (ARC.nextApply or 0) then return end
     ARC.nextApply = now + math.max(0.25, n(c.apply_s, 2))
-    local V = SKY.viewCached(now, 30)
+    local V = SKY.viewCached(now)
     if not V.actor then return end
     local red = RED and (RED.want or (tonumber(RED.k) or 0) > 0) or false
     local shadows = not (ARC.shEl and math.abs(ARC.shEl - s.el) < 0.05 and math.abs(((ARC.shAz - s.az + 180) % 360) - 180) < 0.05)

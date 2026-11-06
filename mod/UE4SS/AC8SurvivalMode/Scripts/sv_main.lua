@@ -410,6 +410,7 @@ local bNow, bPaused
 local function probeTick(tick)
     if levelGate() then if D then runLeft(LEAVE.why) end return end   -- ((0.73.77) F1: the level torn down: sv_core.lua levelGate)
     if SKY and SKY.pending then pcall(SKY.idleTick) end   -- ((0.74.0) a custom sun a torn-down level left on: sv_sky.lua)
+    if SKY and SKY.retry then pcall(SKY.retryTick) end   -- ((code review of 2026-11-07, finding 12) sky values not put back yet)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode (" .. memText() .. ")")
@@ -440,6 +441,14 @@ local function probeTick(tick)
         pcall(SND.stopAll)
         if SKY and SKY.arcReset then pcall(SKY.arcReset, "the run starts over") end   -- ((0.74.0) the day-night arc put back)
         if SUB and SUB.clear then pcall(SUB.clear, "the run starts over") end
+        -- ((code review of 2026-11-07, finding 3) what the new specials hold that a restart's mission reload doesn't take:
+        -- THE FESTIVAL's siren (our own actor: it looped all the next run) and searchlights, SAL's boat, the weigh-in's
+        -- card, THE ESCORT's aircraft and the ZFA-44 carriers (sv_escort.lua ESC.restart). THE DECOY lets its locks go
+        -- itself with the old D (sv_decoy.lua DECOY.tick: resetRun)
+        if FEST and FEST.restart then pcall(FEST.restart, "the run starts over") end
+        if FISH and FISH.boatOff then pcall(FISH.boatOff, "the run starts over") end
+        if SUB and SUB.cardOff then pcall(SUB.cardOff) end
+        if ESC and ESC.restart then pcall(ESC.restart, "the run starts over") end
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end

@@ -395,3 +395,14 @@ is untried). Without SK_ZFA44 nothing is dressed (`zfa44: NOT dressed: ... the Z
 tried again after missing_again_s). T0 (Ctrl+9, ZFA.press / ZFA.t0Dress / ZFA.tick) is unchanged and stays in the test block.
 Packaging still cuts the file to its first line in every zip (no ZFA-44 container there), which takes the production
 dressing out with it: a zip that ships the container needs package_release.sh to strip only the test block instead.
+
+
+## 10. Code review of 2026-11-07 (branch feature/decoy; nothing run in game)
+- **Co-op** (finding 1): a joiner's copy of a carrier launches ZFA-44s of its own from the host's forwarded launch
+  records; they're kept for the look and their fight is nobody's: sv_escort.lua ESC.localZfa() puts them in sv_coop.lua's
+  stand-in set (their hits on an enemy copy never sent as that player's), each forwarded launch takes its arm's unit off
+  the joiner's list first, and a carrier the host no longer has ("es" field 10) takes them off there. tools/re/ESCORT.md's
+  "Code review of 2026-11-07" has the log lines.
+- **Packaging** (finding 16): tools/package_test.sh now has package_release.sh's ZFA block (without ZFA=1 the container
+  out and Scripts/sv_zfa44.lua cut to its first line; ZFA=1 keeps both and names the zip ..._ZFA44), strips the default
+  ini's test-only sections with the Scripts, and leaves out flights_*.csv.

@@ -289,6 +289,8 @@ specialPay = function(x) return x end
 LB = { special = function(k, won) lbs[#lbs + 1] = { k = k, won = won } end }
 ALIVE = { spawned = function() end }
 COOP.removeObj = function(o) removedObj[#removedObj + 1] = o; return true end
+local holds = {}                                   -- ((code review of 2026-11-07, finding 11) COOP.payHold's calls: obj -> on)
+COOP.payHold = function(o, on) holds[o] = on and true or false; return true end
 CFG.airfield.enabled = true
 AF = { bomb = 0, down = false }
 RUN = { arcF = 7, fishKg = 712 }
@@ -344,19 +346,39 @@ local mp = nil
 for _, p in ipairs(planes) do if p.obj == m2.obj then mp = p end end
 check(events[1] == "RE_SV_FestCMHit_N1_1" and mp.down and mp.cleaned and removedObj[1] == m2.obj, "on the runway: its impact record, off the list, down unpaid on every game")
 check(AF.bomb == C.impact_damage, "the airfield takes impact_damage (" .. AF.bomb .. ")")
+-- ((code review of 2026-11-07, finding 11) the impacting missile finished off here at once; the salvo's others held unpaid
+-- 1.5 s (off the sweep, their co-op kill a removal), so one the record takes in its place isn't paid as a kill
+local function entry(o) for _, p in ipairs(planes) do if p.obj == o then return p end end return nil end
+check(m2.obj.MinHealth == 0.0, "the impacting missile finished off here at once (its floor off, ModifyHealth)")
+local heldP = {}
+for _, i in ipairs({ 1, 3, 4 }) do
+    local m, p = sl.ms[i], entry(sl.ms[i].obj)
+    heldP[i] = p
+    check(m.holdUntil and p and p.down and p.cleaned and p.festHeld and holds[m.obj] == true,
+          string.format("missile %d of the salvo held unpaid %.1f s (off the sweep, COOP.payHold)", m.i, FEST.IMPACT_HOLD_S))
+end
 m2.obj.HealthInternal = 0
--- missile 1 shot down: the first one's line
+-- the record named missile 0 (its i not the spawner's order): it goes down in the hold: the record's, not counted or paid
 sl.ms[1].obj.HealthInternal = 0
+ftick(0.5)
+check(s.missilesDown == 0 and sl.ms[1].over and heldP[1].down and heldP[1].cleaned
+      and found("went down within 1.5 s of its salvo's impact record"), "a missile down in the hold: the record's, not counted, its sweep entry left down (unpaid)")
+-- the hold over: the others back on the sweep, their kills paid again
+ftick(0.5); ftick(0.5); ftick(0.5)
+check(not heldP[3].down and not heldP[3].cleaned and not heldP[4].down and holds[sl.ms[3].obj] == false and not sl.ms[4].holdUntil,
+      "1.5 s on: the salvo's others still up let go (back on the sweep, COOP.payHold off)")
+-- missile 2 shot down after the hold: the first one's line
+sl.ms[3].obj.HealthInternal = 0
 ftick(0.5)
 check(s.missilesDown == 1, "one shot down counted")
 local shotLine = false
 for _, l in ipairs(SUB.q) do if l.text:find("grill is safe", 1, true) then shotLine = true end end
 if SUB.cur and SUB.cur.text:find("grill is safe", 1, true) then shotLine = true end
 check(shotLine, "SAL cheers the first one")
-check(s.bombers == 12 and s.inAir == 3, "the row's numbers: 12 bombers, 3 missiles still counted (one going down) (" .. tostring(s.bombers) .. ", " .. tostring(s.inAir) .. ")")
-check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  MISSILES IN THE AIR: 3", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
--- the other two down: the salvo over, recycled 3 s on, its unit free again
-sl.ms[3].obj.HealthInternal, sl.ms[4].obj.HealthInternal = 0, 0
+check(s.bombers == 12 and s.inAir == 1, "the row's numbers: 12 bombers, 1 missile still up (" .. tostring(s.bombers) .. ", " .. tostring(s.inAir) .. ")")
+check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  MISSILES IN THE AIR: 1", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
+-- the last one down: the salvo over, recycled 3 s on, its unit free again
+sl.ms[4].obj.HealthInternal = 0
 recycled = {}
 ftick(0.5); ftick(0.5)
 check(sl.over and not sl.freed, "the salvo's over: its recycle 3 s on")
@@ -406,6 +428,31 @@ check(s.state == "done" and found("the raid over (900 s: the time limit)") ~= ni
 check(#removed >= 12 and removed[1] == "SV_Unit_FestN", "the host takes the joiners' copies down first (COOP.removeNow)")
 check(lbs[#lbs].won == false, "not won")
 COOP.host = function() return false end
+
+-- ((code review of 2026-11-07, finding 3) a pause-menu restart mid-raid: the siren (our own actor, never the mission's)
+-- and the searchlights off, from sv_main.lua's level-load block before the new run's D
+print("the round: a restart mid-raid")
+alive, planes, spawns = {}, {}, {}
+D = { now = 9200, round = 13, state = "spawning", up = {}, special = { kind = "festival", state = "pending" } }
+clock = 9200
+s = D.special
+FEST.roundSpawn(9200)
+ftick(s.talkEnd - clock + 0.1)
+check(s.state == "raid" and FEST.sirenActor ~= nil, "(the raid on, its siren up)")
+local nS0 = #stops
+lights.SV_Unit_FestLight_1[1].off = nil
+FEST.restart("the run starts over")
+check(FEST.sirenActor == nil and #stops > nS0 and lights.SV_Unit_FestLight_1[1].off == true
+      and found("festival: the run starts over: the siren off"), "FEST.restart: the siren stopped and its actor gone, the searchlights off, logged")
+do
+    local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
+    local a = mainSrc:find("if levelTick == -1 then", 1, true)
+    local b = a and mainSrc:find("local first = SETUP.startRound()", a, true)
+    local blk = (a and b) and mainSrc:sub(a, b) or ""
+    check(blk:find("FEST.restart", 1, true) and blk:find("FISH.boatOff", 1, true) and blk:find("SUB.cardOff", 1, true)
+          and blk:find("ESC.restart", 1, true), "sv_main.lua's level-load block (a restart's): FEST.restart, FISH.boatOff, SUB.cardOff, ESC.restart")
+end
+D.special = nil
 
 print("the round: a joiner")
 COOP.client = function() return true end

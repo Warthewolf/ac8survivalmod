@@ -247,3 +247,11 @@ Int flag: `SV_DecoySpearHit` (starts at 0; Lua reads its rises). 155 triggers, 2
 - Every unit, record and radio name it uses (`RE_SV_DecoyBaitLaser` / `Off` / `Ping`, `RE_SV_DecoyKill`, `_LaserOn_` /
   `_LaserOff_` / `_MarkOnMe_<nn>`, `RE_SV_DecoySpear_<s>`, `RE_SV_DecoyRadio_*`, the 35 UAVs and marks, the 4 launchers) was
   checked against the saved packages of `ZFA=1 sh tools/build_all.sh` (2026-11-07): all there.
+
+
+## Code review of 2026-11-07 (branch feature/decoy; nothing run in game)
+- A pause-menu restart (finding 3): THE DECOY needs nothing more. DECOY.tick sees the new run's D and lets every lock and
+  runner go (resetRun: detach); its units go with the mission's reload or the next round's clean-up. (THE FESTIVAL's
+  siren, SAL's boat, the card and THE ESCORT now have their own: tools/re/FISHING.md 10, ESCORT.md.)
+- The rotation's commented ini line lists decoy last, as CFG's append puts it (finding 14), and the leaderboard Worker
+  knows "decoy" (finding 15: redeploy it). tools/re/ESCORT.md's "Code review of 2026-11-07" has both.

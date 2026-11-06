@@ -59,6 +59,13 @@ check("score: (12000 + 14000 + 600 + 3000) x 1.5 = 44400", score(run) === 44400)
   const v = { ...run, specials: [...run.specials, { kind: "valka", round: 11, seconds: 22, won: true }] };
   check("a VALKA win counts: kept by the checks, 44400 + 3000 x 1.5 = 48900", checkRun(v) === null && v.specials.length === 3 && score(v) === 48900);
 }
+{ // (0.74.0, code review of 2026-11-07) THE ESCORT, THE DECOY, GONE FISHIN' and THE FESTIVAL kept as every special
+  const kinds = ["escort", "decoy", "fishing", "festival"];
+  const v = { ...run, round: 20, specials: [...run.specials, ...kinds.map((kind, i) => ({ kind, round: 11 + i, seconds: 120, won: true }))] };
+  check(`the 0.74.0 specials count: kept by the checks, score ${score(v)}`,
+        checkRun(v) === null && v.specials.length === 6 && kinds.every((k) => v.specials.some((s) => s.kind === k))
+        && score(v) === score({ ...v, specials: run.specials }) + 4 * 3000 * 1.5);
+}
 check("a sane run passes", checkRun(run) === null);
 { const newer = { ...run, specials: [...run.specials, { kind: "wormhole", round: 11, seconds: 90, won: true }] };
   check("a special this Worker doesn't know is left out, not the run", checkRun(newer) === null && newer.specials.length === 2); }
@@ -106,7 +113,7 @@ db.prepare(`INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills
 const e = await boardEmbeds(env);
 const ace = e[0].fields.find((f) => f.name.toLowerCase().includes("ace")).value;
 check(`'Naish' and 'naish' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
-check(`the boards: ${e.length} embeds (round, score, specials: ${e[2] && e[2].fields.length} of them)`, e.length === 3 && e[2].fields.length === 9);   // (the Spaceport Assault and Retake since 0.73.38, VALKA since 0.73.83)
+check(`the boards: ${e.length} embeds (round, score, specials: ${e[2] && e[2].fields.length} of them)`, e.length === 3 && e[2].fields.length === 13);   // (the Spaceport Assault and Retake since 0.73.38, VALKA since 0.73.83, the escort, the decoy, fishing and the festival since 0.74.0)
 const x = await extraEmbeds(env, null, null, Math.floor(Date.now() / 1000));
 check(`the second message: ${x.map((m) => m.title.split(" —")[0]).join(", ")}`, x.length === 3 && x[0].fields.length === 5);
 check(`records: most ace squadron kills ${JSON.stringify(x[0].fields[3].value)}`, x[0].fields[3].value.includes("— 28 "));   // (the 30th of these was rate limited)

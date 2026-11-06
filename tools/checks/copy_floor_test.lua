@@ -80,7 +80,8 @@ function SV_CoopBind() return 1 end
 function SV_MenuSetting() return "" end
 local menu = 0
 function SV_MenuChoice() return menu end
-function SV_Event() return 1 end
+local evOrder = {}                               -- ((code review of 2026-11-07) the events fired here, in order
+function SV_Event(name) evOrder[#evOrder + 1] = "fired " .. tostring(name); return 1 end
 function SV_SetAircraft() return 1 end
 function SV_SetLevel() return 1 end
 local recycled = {}
@@ -159,6 +160,11 @@ DOWN = { reset = function() end, me = function() return false end, onJoiner = fu
          syncTo = function() end }
 STATS = { hostReset = function() end, roundEnd = function() end, roundStart = function() end }
 function newRunHere() end
+-- ((code review of 2026-11-07, findings 1 and 6) sv_fishing.lua's boat and sv_escort.lua's ZFA-44s as sv_coop.lua asks them
+FISH = { isBoat = function(u) return u == "SV_Unit_SalBoat" end }
+local zfaHere = {}                               -- (this game's own ZFA-44s, by address: ESC.localZfa)
+ESC = { localZfa = function() return zfaHere end,
+        beforeHostEvent = function(name) evOrder[#evOrder + 1] = "before " .. tostring(name) end }
 
 dofile(MOD .. "/Scripts/sv_config.lua")
 local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
@@ -241,6 +247,25 @@ if ROLE == "host" then
     local okWd, rWd = pcall(function() return COOP.withdrawn("EA_Unit_01_Air2") end)
     check(okWd and rWd == true and table.concat(msgs("wd", s0 + 1), " ") == "-1>wd|EA_Unit_01_Air2",
           "host: COOP.withdrawn(unit): \"wd|<unit>\" to every joiner (" .. tostring(okWd and rWd or rWd) .. ")")
+
+    print("host: (code review of 2026-11-07, findings 6 and 11) SAL's boat out of the hp batch; a kill held unpaid")
+    local boatH = obj("VE028_boat2_CP", 2000)
+    local cmH, cm2 = obj("BP_OP0039_slcmp_CP", 2500, true), obj("BP_OP0039_slcmp_CP", 2500, true)
+    M.byId[901] = { obj = boatH, unit = "SV_Unit_SalBoat", key = "VE028_boat2_CP#1", addr = boatH.addr }
+    M.byId[902] = { obj = cmH, unit = "SV_Unit_FestCM_N1", ord = 1, addr = cmH.addr }
+    M.byId[903] = { obj = cm2, unit = "SV_Unit_FestCM_N1", ord = 2, addr = cm2.addr }
+    run(1.5)
+    boatH.HealthInternal, cmH.HealthInternal = 1500, 2400
+    s0 = #sent
+    run(1.5)
+    local hpText = table.concat(msgs("hp", s0 + 1), " ")
+    check(has(hpText, "902:2400") and not has(hpText, "901:"), "host: the hp batch: a missile's health, not SAL's boat's (" .. hpText .. ")")
+    check(COOP.payHold(cmH, true) == true, "host: COOP.payHold: the missile held unpaid")
+    cmH.HealthInternal, cm2.HealthInternal = 0, 0
+    s0 = #sent; tick()
+    local dnText = table.concat(msgs("dn", s0 + 1), " ")
+    check(has(dnText, "dn|902|r|") and not has(dnText, "dn|903|r"),
+          "host: a held one down: a removal on every game (dn|902|r), the other one a kill as before (" .. dnText .. ")")
 
     print("host: A9, the run-over for a player who links after it")
     s0 = #sent
@@ -488,6 +513,57 @@ else
     s0 = #sent
     check(COOP.withdrawn("EA_Unit_01_Air2") == false and #msgs("wd", s0 + 1) == 0, "join: COOP.withdrawn: the host's alone")
     planes = keepP
+
+    print("join: (code review of 2026-11-07, finding 1) this game's own ZFA-44s' hits on a copy: nobody's")
+    UNITS.ERA_Unit_08_Dep_Air0 = { { "BP_OP1022_f16c_CP", 5000, true }, { "BP_OP1022_f16c_CP", 5000, true } }
+    local U8 = "ERA_Unit_08_Dep_Air0"
+    for _, m in ipairs({ "sp|" .. U8 .. "|-|-|-1|50", "bd|" .. U8 .. "|50|1|51", "bd|" .. U8 .. "|50|2|52" }) do
+        inbox[#inbox + 1] = "0|" .. m
+    end
+    run(1)
+    local z1, z2 = world[U8] and world[U8][1], world[U8] and world[U8][2]
+    check(z1 and z2 and M.copies[51] and M.copies[52], "join: two fresh copies bound (51, 52)")
+    local zfa = obj("BP_OP1024_su47_CP", 3000, true)   -- (a ZFA-44 its copy of the carrier launched here: no co-op id)
+    zfaHere[zfa.addr] = true
+    check(M.standInSet()[zfa.addr] == -1, "join: this game's own ZFA-44 in the stand-in set as the host's allies' (-1)")
+    hit(z1, zfa, 100)
+    s0 = #sent; tick()
+    check(#msgs("ht", s0 + 1) == 0 and M.copies[51].exp == 4000,
+          "join: its 100 on a copy: nothing sent as your hit (" .. table.concat(msgs("ht", s0 + 1), " ") .. ")")
+    -- its lethal hit with your plane not yet seen in any copy's map: not sent whole as yours either
+    local seen = M.ownSeen
+    M.ownSeen = nil
+    hit(z2, zfa, 800)
+    s0 = #sent; tick()
+    check(#msgs("ht", s0 + 1) == 0 and z2.HealthInternal > 10 and not M.copies[52].floorAt,
+          "join: its lethal hit at the floor (your plane not yet in the maps): not sent whole as yours, put back up ("
+          .. table.concat(msgs("ht", s0 + 1), " ") .. ", health " .. z2.HealthInternal .. ")")
+    M.ownSeen = seen
+    zfaHere[zfa.addr] = nil
+    -- the host's carrier launch forwarded: the arm's check here first, then the event
+    evOrder = {}
+    inbox[#inbox + 1] = "0|ev|RE_SV_CargoLaunch_1_3"
+    tick()
+    check(evOrder[1] == "before RE_SV_CargoLaunch_1_3" and evOrder[2] == "fired RE_SV_CargoLaunch_1_3",
+          "join: the host's RE_SV_CargoLaunch_1_3: ESC.beforeHostEvent before it fires here (" .. table.concat(evOrder, ", ") .. ")")
+
+    print("join: (code review of 2026-11-07, findings 6 and 13) SAL's boat's copy and an ally taken off")
+    local boat = obj("VE028_boat2_CP", 2000)
+    function boat:SetActorHiddenInGame(b) self.hidden = b end
+    M.copies[95] = { obj = boat, exp = 2000, addr = boat.addr, ally = true, unit = "SV_Unit_SalBoat", key = "VE028_boat2_CP#1", hp = 2000 }
+    inbox[#inbox + 1] = "0|hp|95:1500"
+    tick()
+    check(boat.HealthInternal == 2000 and M.copies[95].hp == 2000,
+          "join: the host's hp for SAL's boat: never written onto its copy here (it moves with your own hits alone)")
+    from = #logs + 1
+    inbox[#inbox + 1] = "0|dn|95|r"
+    tick()
+    check(boat.HealthInternal == 2000 and boat.hidden == true and boat.bIsInvincible == true and boat.bShowHUDBox == false
+          and M.copies[95] == nil, "join: dn|95|r for an ally's copy: switched off here (hidden, invincible, no box), not finished off")
+    local due = false
+    for _, e in ipairs(M.recycleDue or {}) do if e.unit == "SV_Unit_SalBoat" then due = true end end
+    check(due and has(line("coop: the host took an ally off (copy 95", from), "switched off here"),
+          "join: ... its unit off this game's list 2 s on (no copy of it left), logged")
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs

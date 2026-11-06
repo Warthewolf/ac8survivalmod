@@ -359,13 +359,24 @@ local function spawnAc(S, A, pose)
         pose.y / 100000, pose.z / 100000, pose.yaw, (type(r) == "number" and r > 0) and (r .. " aircraft") or ("NOT spawned (" .. ERR(r) .. ")")))
     return type(r) == "number" and r > 0, r
 end
-local function startPose(side, back)
-    local st = ec().start
-    local h = math.rad(num(st.heading, 55))
-    local fx, fy, rx, ry = math.sin(h), -math.cos(h), math.cos(h), math.sin(h)
-    local sm, bm = num(st.side_m, 250) * 100 * side, num(st.back_m, 250) * 100 * back
-    return { x = st.x + rx * sm - fx * bm, y = st.y + ry * sm - fy * bm, z = st.z, yaw = num(st.heading, 55) - 90 }
+-- CHARLENE's start (rightM 0, upM 0) or an escort's: rightM to her right across her way and upM above her, as the build's
+-- routes start (tools/survival_events.py esc_route_pts: right_km to the right of the start -> IAF line, up_km above it;
+-- none behind). The way is the exact one from the start to geo.iaf (the build's), else the start's heading. (Code review
+-- of 2026-11-07: the old side / back signs and 250 m steps put every escort on the wrong side and behind her: at Go each
+-- crossed her track at the route's 600 km/h to reach its own route.)
+local function startPose(rightM, upM)
+    local st, g = ec().start, ec().geo or {}
+    local hdg = num(st.heading, 55)
+    local way = hdg
+    if type(g.iaf) == "table" and tonumber(g.iaf[1]) and tonumber(g.iaf[2]) then
+        way = bearing({ X = st.x, Y = st.y }, { X = g.iaf[1], Y = g.iaf[2] })
+    end
+    local h = math.rad(way)
+    local rx, ry = math.cos(h), math.sin(h)                -- (her right: compass heading + 90, north being -Y)
+    local rm = num(rightM, 0) * 100
+    return { x = st.x + rx * rm, y = st.y + ry * rm, z = st.z + num(upM, 0) * 100, yaw = hdg - 90 }
 end
+ESC.startPose = startPose
 
 -- the enemy flights after her: chosen, ordered onto her, again now and then, let go
 local function release(S, why)
@@ -956,7 +967,7 @@ function ESC.spawn(now)
         return false
     end
     for _, A in ipairs(S.ac) do
-        if A.escort then spawnAc(S, A, startPose(num(A.escort.side, 1), num(A.escort.back, 1))) end
+        if A.escort then spawnAc(S, A, startPose(num(A.escort.right_m, 0), num(A.escort.up_m, 0))) end
     end
     S.state = "route"
     ESC.S = S
@@ -1213,6 +1224,31 @@ local function flightOff(F, why)
     ESC.recycleQ[#ESC.recycleQ + 1] = { unit = F.unit, at = os.clock() + 2, why = why }
     return n
 end
+-- ((code review of 2026-11-07, finding 7) a carrier's hull down: why (its hull at 0 health, or gone since it was seen
+-- live), or nil. Its unit's alive count holds its launchers and Stinger mount too, so a ship whose hull sank stayed "up"
+-- while they lived: its slot and the STORE's count held, and it served on)
+local function hullSunk(C)
+    local h = ESC.hulls[C.unit]
+    if not h then return nil end
+    if liveAddr(h.obj) == h.addr then
+        C.hullSeen = true
+        local v = hp(h.obj)
+        if v and v <= 0 then return "its hull at 0 health" end
+        return nil
+    end
+    if C.hullSeen then return "its hull gone" end
+    return nil
+end
+-- an object of ours finished off here (an allied ship's part: unpaid on every game, no killer): whether it went
+local function finishObj(o)
+    if not liveObj(o) then return false end
+    local h = hp(o)
+    if not (h and h > 0) then return false end
+    pcall(function() o.bIsInvincible = false end)
+    pcall(function() o.MinHealth = 0.0 end)
+    pcall(function() o:ModifyHealth(-(h / 10 + 1000), nil, true) end)
+    return true
+end
 local function carrierTick(C, now)
     local c, t = cc(), cc().text
     local R = run()
@@ -1225,14 +1261,37 @@ local function carrierTick(C, now)
                 rec = "SV_Recycle " .. (okR and tostring(r) or ("error " .. tostring(r)))
             end
             R.carriers[C.idx], RUN.dirty = nil, true
+            -- ((code review of 2026-11-07) its hull and objects forgotten with its slot: the next ship of this unit's
+            -- are recorded afresh, never this one's switched-off or sunk hull read in their place)
+            ESC.hulls[C.unit] = nil
+            if ESC.shipObjs then ESC.shipObjs[C.unit] = nil end
             log(string.format("carrier: %s gone (%s): off the spawner's list (%s); the STORE can call another", C.name, tostring(C.why), rec))
         end
         return
     end
     if now >= (C.checkAt or 0) then
         C.checkAt = now + 2
+        local hs = hullSunk(C)
+        if hs then
+            -- (its hull down: sunk, whatever its launchers and Stinger mount still count; what's left of it finished off
+            -- here, unpaid, and its slot held until its unit is off the spawner's list, as a ship leaving: a ship bought
+            -- meanwhile can't be taken off by this one's recycle)
+            local nP = 0
+            for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do
+                if liveAddr(e.obj) == e.addr and finishObj(e.obj) then nP = nP + 1 end
+            end
+            C.state, C.removeAt, C.why = "leaving", os.clock() + 1, "sunk: " .. hs
+            RUN.dirty = true
+            hudCallout(string.format(t.sunk, C.name), t.sunk_sub)
+            log(string.format("carrier: %s sunk %.0f s after it came (%s; %d rounds served): %d of its parts still up finished off, "
+                .. "its unit off the list 3 s on%s", C.name, now - C.at, hs, C.served, nP,
+                C.flight and ("; its flight " .. C.flight.unit .. " flies on") or ""))
+            return
+        end
         if noneUp(aliveOf(C.unit)) and now - C.at > 5 then
             R.carriers[C.idx], RUN.dirty = nil, true
+            ESC.hulls[C.unit] = nil
+            if ESC.shipObjs then ESC.shipObjs[C.unit] = nil end
             hudCallout(string.format(t.sunk, C.name), t.sunk_sub)
             log(string.format("carrier: %s sunk %.0f s after it came (%d rounds served)%s", C.name, now - C.at, C.served,
                 C.flight and ("; its flight " .. C.flight.unit .. " flies on") or ""))
@@ -1294,8 +1353,95 @@ local function carrierTick(C, now)
 end
 
 ---------------------------------------------------------------------------------------------------- co-op
--- (the host) "es|<state>|<landed>|<of>|<her health %>|<km>|<unlocked>|<carriers out>|<landing closed>", on a change
--- (once a second at most) and every 5 s
+-- ((code review of 2026-11-07, finding 1) The host's carrier launches (RE_SV_CargoLaunch_<s>_<n>) are forwarded, so each
+-- joiner's copy of the ship launches ZFA-44s of its own from its own launchers: planes of no co-op id, never bound as
+-- copies (the launcher spawns them, not a mirrored SV_Spawn). They stay for the look, and their fight isn't anyone's:
+-- sv_coop.lua takes them as the host's allies' copies (M.standInSet: their damage on an enemy copy never sent as this
+-- player's hit), each launch here takes the arm's unit off this game's list first (hard rule 16: from a ship's 7th
+-- launch its arm spawned nothing here) and the last flight of that ship off, and a carrier the host no longer has
+-- (left or sunk: "es" field 10, the ships up as bits) takes this game's own ZFA-44s of it off.
+local function bitOn(m, i) return math.floor((tonumber(m) or 0) / 2 ^ (i - 1)) % 2 == 1 end
+local function carrierMask()
+    local m = 0
+    if client() then return m end
+    for i, C in pairs(run().carriers) do if C.state == "up" then m = m + math.floor(2 ^ (i - 1)) end end
+    return m
+end
+ESC.carrierMask = carrierMask
+-- every plane of the carriers' ZFA-44 flights here, by address (the stand-in set's: their hits are nobody's on a joiner)
+function ESC.localZfa()
+    local set = {}
+    for u in pairs(ESC.planes) do
+        if KIND[u] == "zfa" then for _, e in ipairs(planesOf(u)) do set[e.addr] = true end end
+    end
+    local R = ALLY and ALLY.run
+    for _, p in ipairs((R and R.planes) or {}) do
+        if p.unit and KIND[p.unit] == "zfa" then
+            local a = liveAddr(p.obj)
+            if a then set[a] = true end
+        end
+    end
+    return set
+end
+-- (a joiner) this game's own ZFA-44s of ship i switched off (not a bound copy of the host's pose flight: those go with
+-- the host's "dn"); captured before `before` (nil: all); how many
+local function ownZfaOff(i, before)
+    local n = 0
+    for u, l in pairs(ESC.planes) do
+        if KIND[u] == "zfa" and ZFA_I[u] == i then
+            for k = #l, 1, -1 do
+                local e = l[k]
+                if entryLive(e) and (before == nil or (e.at or 0) < before)
+                    and not (COOP and COOP.copyAt and COOP.copyAt(e.addr)) then
+                    if offObj(e.obj) then n = n + 1 end
+                    table.remove(l, k)
+                end
+            end
+        end
+    end
+    return n
+end
+-- (a joiner) a carrier of the host's gone (left or sunk): this game's own ZFA-44s of it off, its arms' units off this
+-- game's spawner list 2 s on (one at a time: recycleTick)
+function ESC.localOff(i, why)
+    if not client() then return 0 end
+    local n = ownZfaOff(i, nil)
+    local q = 0
+    for _, arm in ipairs((cc().launchers or {})[i] or {}) do
+        if type(arm.unit) == "string" and aliveOf(arm.unit) >= 0 then
+            ESC.recycleQ[#ESC.recycleQ + 1] = { unit = arm.unit, at = os.clock() + 2, why = tostring(why) }
+            q = q + 1
+        end
+    end
+    if n > 0 or q > 0 then
+        log(string.format("carrier: the host's %s %d is gone (%s): %d of this game's own ZFA-44s of it switched off, %d of its arms' units off the list 2 s on",
+            cc().name, i, tostring(why), n, q))
+    end
+    return n
+end
+-- (a joiner, sv_coop.lua hostEvent: before one of the host's events fires here) a carrier launch: the arm's unit off this
+-- game's spawner list first (force: its planes here may still count), and this ship's last flight here switched off
+-- (the host launches only once its last flight is down there)
+function ESC.beforeHostEvent(name)
+    if not client() then return nil end
+    local s, a = tostring(name):match("^RE_SV_CargoLaunch_(%d+)_(%d+)$")
+    s, a = tonumber(s), tonumber(a)
+    local arms = s and (cc().launchers or {})[s]
+    local arm = arms and arms[a]
+    if not (arm and type(arm.unit) == "string" and arm.record == name) then return nil end
+    local nOff = ownZfaOff(s, now0() + 0.001)
+    local n0, rec = aliveOf(arm.unit), "not on the list"
+    if n0 >= 0 and type(SV_Recycle) == "function" then
+        crumb("carrier (joiner) SV_Recycle " .. arm.unit)
+        local okR, r = pcall(SV_Recycle, arm.unit, 1)
+        rec = string.format("%d alive, SV_Recycle %s", n0, okR and tostring(r) or ("error " .. tostring(r)))
+    end
+    log(string.format("carrier: the host's %s here: %s first (%s); %d of this game's ZFA-44s of ship %d before it switched off",
+        name, arm.unit, rec, nOff, s))
+    return arm.unit
+end
+-- (the host) "es|<state>|<landed>|<of>|<her health %>|<km>|<unlocked>|<carriers out>|<landing closed>|<ships up, bits>",
+-- on a change (once a second at most) and every 5 s
 local function sendState(now)
     if not (COOP and COOP.host and COOP.host() and COOP.msg) then return end
     if now < (ESC.esAt or 0) then return end
@@ -1310,22 +1456,34 @@ local function sendState(now)
         dist = her(S).r and d2(her(S).r.at, AIRFIELD) / 1000 or 0
         cl = S.closed and 1 or 0
     end
-    local key = table.concat({ st, l, n, ESC.unlocked() and 1 or 0, ESC.carriersUp(), cl }, "|")
+    local mask = carrierMask()
+    local key = table.concat({ st, l, n, ESC.unlocked() and 1 or 0, ESC.carriersUp(), cl, mask }, "|")
     if key == ESC.esKey and now < (ESC.esAgain or 0) then return end
     if key ~= ESC.esKey then log("escort: the escort's state sent to the joiners: " .. key) end
     ESC.esKey, ESC.esAgain = key, now + 5
     COOP.msg(nil, "es", st, string.format("%d", l), string.format("%d", n), string.format("%d", h), string.format("%.1f", dist),
-        ESC.unlocked() and "1" or "0", string.format("%d", ESC.carriersUp()), string.format("%d", cl))
+        ESC.unlocked() and "1" or "0", string.format("%d", ESC.carriersUp()), string.format("%d", cl), string.format("%d", mask))
 end
 -- (a joiner, sv_coop.lua onJoinerMessage) the host's "es": kept for the NEXT row and the STORE; the unlock is the room's
 function ESC.onHost(f)
     local st = tostring(f[2] or ""):match("^%a*$") or ""
     local function n(i, lo, hi) local v = tonumber(f[i]); if not v or v ~= v then return nil end return math.max(lo, math.min(hi, v)) end
     local function w(i, lo, hi, d) return math.floor(n(i, lo, hi) or d) end   -- (whole: the rows format them with %d)
+    local mk = n(10, 0, 255)                              -- (the ships up, bit i - 1 ship i; nil from an older host)
     local h = { state = #st <= 16 and st or "", landed = w(3, 0, 99, 0), total = w(4, 0, 99, 0), hp = w(5, -1, 100, -1),
-                km = n(6, 0, 999) or 0, unlocked = f[7] == "1", carriers = w(8, 0, 9, 0), close = f[9] == "1", got = os.clock() }
+                km = n(6, 0, 999) or 0, unlocked = f[7] == "1", carriers = w(8, 0, 9, 0), close = f[9] == "1", got = os.clock(),
+                mask = mk and math.floor(mk) or nil }
     local was = ESC.host
     ESC.host = h
+    -- ((code review of 2026-11-07, finding 1) a carrier the host had and has no more: this game's own ZFA-44s of it off)
+    local ships = #(cc().units or {})
+    if was and was.mask and h.mask then
+        for i = 1, ships do
+            if bitOn(was.mask, i) and not bitOn(h.mask, i) then ESC.localOff(i, "left or sunk on the host's game") end
+        end
+    elseif was and not h.mask and was.carriers > 0 and h.carriers == 0 then   -- (an older host: none out any more)
+        for i = 1, ships do ESC.localOff(i, "the host has no carrier out") end
+    end
     if h.unlocked and not ESC.unlocked() then
         RUN.zfa = { unlocked = true, room = true }
         RUN.dirty = true
@@ -1484,6 +1642,45 @@ function ESC.tick(now)
     end
     local okS, errS = pcall(sendState, now)
     if not okS then logOnce("escort es", "escort: state send error " .. tostring(errS)) end
+end
+-- ((code review of 2026-11-07, finding 3) a pause-menu restart (sv_main.lua's level-load block, before the new run's D):
+-- the run's escort and carriers were dropped untouched with the old D (ESC.tick, run()), so a landing left the players'
+-- landing closed and CHARLENE's flight, the ships and their ZFA-44s up with nobody minding them (a ship up also kept
+-- the STORE's slot: freeShip). Now everything of the old run's taken off as its own ends do (switched off, a joiner's
+-- copies down first, unpaid, each unit off the spawner's list 2 s on); a joiner's own ZFA-44s off
+function ESC.restart(why)
+    why = tostring(why or "the run starts over")
+    local S, nA, nC = ESC.S, 0, 0
+    if S then
+        reopen(S, why)
+        takeOff(S, why)
+        nA = #S.ac
+    end
+    ESC.S = nil
+    local R = ESC.R
+    if R and not client() then
+        for _, C in pairs(R.carriers) do
+            if C.state ~= "leaving" then
+                if C.flight then flightOff(C.flight, why) end
+                if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
+                for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr then offObj(e.obj) end end
+            end
+            ESC.recycleQ[#ESC.recycleQ + 1] = { unit = C.unit, at = os.clock() + 2, why = why }
+            ESC.hulls[C.unit] = nil
+            if ESC.shipObjs then ESC.shipObjs[C.unit] = nil end
+            nC = nC + 1
+        end
+    end
+    ESC.R = nil
+    local nZ = 0
+    if client() then
+        for i = 1, #(cc().units or {}) do nZ = nZ + ESC.localOff(i, why) end
+        if ESC.clientClosed and not (AF and (AF.closed or AF.down)) then airfield(false, why) end
+        ESC.clientClosed, ESC.host = false, nil
+    end
+    if nA > 0 or nC > 0 or nZ > 0 then
+        log(string.format("escort: %s: %d of the escort's aircraft and %d carriers taken off, %d of this game's own ZFA-44s off", why, nA, nC, nZ))
+    end
 end
 -- the level's objects forgotten with it, none of them touched (sv_core.lua levelDrop)
 if type(LEVEL_DROPS) == "table" then
