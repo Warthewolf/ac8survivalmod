@@ -34,10 +34,12 @@ local MODULES = {
     "sv_spweapons",                -- the enemies' special weapons fired (CFG.special.fire)
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
+    "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (tools/re/ESCORT.md; before sv_coop: its logPlane wrap)
     "sv_menu",
     "sv_coop",
     "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
+    "sv_zfa44",                    -- the ZFA-44's test T0 (tools/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
 }
 

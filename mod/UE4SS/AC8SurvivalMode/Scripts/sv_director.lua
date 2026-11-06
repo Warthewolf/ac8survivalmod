@@ -221,7 +221,10 @@ local function poolPlane(p)
 end
 local function decoyed(u, now) return (TAC and TAC.decoyed and TAC.decoyed(u, now)) and true or false end
 local function heldTrap(u, k) local w = D.wolf and D.wolf[u]; return w ~= nil and k ~= nil and w.held[k] == true end
-local function busy(s, u, now) return s.held[u] ~= nil or s.aims[u] ~= nil or decoyed(u, now) end
+-- ((2026-11-06) and a flight THE ESCORT sent after CHARLENE: kept on her, never covered, held, aimed or fired from:
+-- sv_escort.lua ESC.holds)
+local function escortsOn(u) return (ESC and ESC.holds and ESC.holds(u)) and true or false end
+local function busy(s, u, now) return s.held[u] ~= nil or s.aims[u] ~= nil or decoyed(u, now) or escortsOn(u) end
 -- its position and heading now (a fresh read, at most rb.n a tick; one read this tick is shared: p.pose, which the
 -- tail watch, sv_stats.lua, uses too)
 local function pose(p, now, rb)
