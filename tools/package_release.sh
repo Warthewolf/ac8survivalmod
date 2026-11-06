@@ -53,7 +53,8 @@ fi
 if [ "$TESTER" = 1 ]; then
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
 else
-python -I tools/strip_test_only.py "$mod"/Scripts/*.lua
+# (the default ini too: its test-only sections, the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
+python -I tools/strip_test_only.py "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini
 # the diagnostic loggers off for friends (tools/quiet_logs.py: the weapons log was half the Lua tick in big rounds; a
 # friend's "choppy", 2026-10-31); the user's dev install (package_dev.sh) keeps them
 python -X utf8 -I tools/quiet_logs.py "$mod"
