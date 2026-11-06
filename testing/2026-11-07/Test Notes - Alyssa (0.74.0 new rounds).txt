@@ -26,7 +26,7 @@ ue4ss\UE4SS.log, plus any crash folder. A note of the time something odd happene
      to shoot down. Does it end when the bombers are down? Is it too hard / too easy?
    - Ctrl+PAGE_DOWN a few times: night (can you still see the HUD, the airfield, targets?), then sunrise, midday.
    - Ctrl+0 THE ESCORT: CHARLENE and her escorts from the far south-west, enemies after her. Do they all land? Does
-     the round end? Then the STORE's AIRFIELD page: CALL A ZFA-44 CARRIER. Do ZFA-44s come out of the ship's
+     the round end? Then the STORE's AIRFIELD page: VAMPIRES. Do ZFA-44s come out of the ship's
      containers (or appear above it)? Do they fight?
    - Ctrl+- THE DECOY: the bait UAV up north, then the trap: UAVs lock you, 8 s to kill each.
    - Ctrl+. IFF FATAL ERROR: the A-10, its storm blacking out your HUD near it.

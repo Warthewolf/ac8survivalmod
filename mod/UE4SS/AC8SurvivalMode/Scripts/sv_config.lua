@@ -831,10 +831,10 @@ CFG = {
             -- AEGIS's: each purchase in the run x1.25 dearer, a co-op room's counted together, a joiner's checked by the
             -- host at the host's price: sv_shop.lua shopBuildFor)
             VoidWatcher = { role = "ally_awacs", label = "VOID WATCHER 1: E-767 AWACS", price = 12000, raise = 1.25 },
-            -- the ZFA-44 CARRIER (CFG.allies.carrier, Scripts/sv_escort.lua): only once THE ESCORT is won; at most two out;
+            -- VAMPIRES, the ZFA-44 carriers (CFG.allies.carrier, Scripts/sv_escort.lua; named by the user, 2026-11-07): only once THE ESCORT is won; at most two out;
             -- a co-op room's purchases counted together, a joiner's built by the host. No row of its own on the STORE's
             -- pages yet: it shares CFG.allies.carrier.store_row (row_label on that row)
-            ZfaCarrier = { role = "ally_carrier", label = "ZFA-44 CARRIER", row_label = "CALL A ZFA-44 CARRIER", price = 15000,
+            ZfaCarrier = { role = "ally_carrier", label = "VAMPIRES", row_label = "VAMPIRES", price = 15000,
                            raise = 1.0 },
             -- the allied aircraft's orders (CFG.allies.orders), free: each press the next one
             Orders     = { role = "orders", label = "ALLY ORDERS" },
@@ -2062,7 +2062,7 @@ CFG = {
                             landed = "CHARLENE HAS LANDED", landed_sub = "%d ESCORTS TO BRING IN",
                             escort_down = "%s IS DOWN", escort_down_sub = "%d ESCORTS LEFT",
                             lost = "CHARLENE IS DOWN", lost_sub = "THE ESCORT FAILED",
-                            won = "ESCORT COMPLETE", won_sub = "+%d ZOLLARS: ZFA-44 CARRIERS IN THE STORE" } },
+                            won = "ESCORT COMPLETE", won_sub = "+%d ZOLLARS: VAMPIRES IN THE STORE" } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown

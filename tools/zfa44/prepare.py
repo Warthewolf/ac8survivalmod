@@ -24,8 +24,11 @@ time crashed AC8's renderer, SOLG test T0; the skeletal one drew, T0b; hard rule
     T_ZFA44_N          AC7's fa44_00_N (UE imports it as BC5; ue_import.py caps it at 2048)
     T_ZFA44_LM         AC8's Livemap as a constant 4 x 4 (R 0, G 191, B 255: the Falken add-on's; FALKEN_MATERIALS.md)
     T_ZFA44_LM_MREC    a Livemap from the user's fa44_00xMREC: R metallic, G roughness, B 255 (ZFA44.md 4.3; [I])
-    T_ZFA44_Pod_C / _N        AC7's w_tls_x1_D / _N (2048)
+    T_ZFA44_Pod_C / _N        AC7's w_tls_x1_D / _N (2048): the TLS pod's colour and normals
+    T_ZFA44_Pod_LM_MREC       a Livemap from AC7's w_tls_x1_MREC, as T_ZFA44_LM_MREC (2048; user, 2026-11-07: "make sure
+                              that the textures for the TLS on the ZFA-44 were ported over from ACE7 too")
     T_ZFA44_Fair_C / _N       AC7's mrgn_00_D / _N cropped to the fairing's box (512)
+    T_ZFA44_Fair_LM_MREC      a Livemap from AC7's mrgn_00_MREC, the same crop
   layout.json             scale, slots, bones (UE cm, for ue_import.py's check and the Lua's notes)
 
 Axes: UModel's glTF holds UE's (X, Y, Z) as (X, Z, Y) (the stock fa44's L_Nozzle_01 at glTF z -0.123: UE Y -12.3), and
@@ -258,17 +261,28 @@ def textures():
     made.append(png(Image.open(os.path.join(tex, 'mod', 'fa44_00_D.png')).convert('RGB'), 'T_ZFA44_C'))
     made.append(png(Image.open(os.path.join(tex, 'stock', 'fa44_00_N.png')).convert('RGB'), 'T_ZFA44_N'))
     made.append(png(Image.new('RGB', (4, 4), (0, 191, 255)), 'T_ZFA44_LM'))
-    m = np.asarray(Image.open(os.path.join(tex, 'mod', 'fa44_00xMREC.png')))   # (RGBA: read raw, never resized with alpha)
-    lm = np.empty(m.shape[:2] + (3,), np.uint8)
-    lm[..., 0], lm[..., 1], lm[..., 2] = m[..., 0], m[..., 1], 255
-    made.append(png(Image.fromarray(lm, 'RGB'), 'T_ZFA44_LM_MREC'))
-    made.append(png(Image.open(os.path.join(tex, 'stock', 'w_tls_x1_D.png')).convert('RGB'), 'T_ZFA44_Pod_C'))
-    made.append(png(Image.open(os.path.join(tex, 'stock', 'w_tls_x1_N.png')).convert('RGB'), 'T_ZFA44_Pod_N'))
-    for src, dst in (('mrgn_00_D.png', 'T_ZFA44_Fair_C'), ('mrgn_00_N.png', 'T_ZFA44_Fair_N')):
-        im = Image.open(os.path.join(tex, 'stock', src)).convert('RGB')
+
+    def livemap(im):
+        # AC8's Livemap from an AC7 MREC: R metallic, G roughness, B 255 (ZFA44.md 4.3; [I]); RGB or RGBA read raw,
+        # never resized with alpha
+        m = np.asarray(im)
+        lm = np.empty(m.shape[:2] + (3,), np.uint8)
+        lm[..., 0], lm[..., 1], lm[..., 2] = m[..., 0], m[..., 1], 255
+        return Image.fromarray(lm, 'RGB')
+
+    def fairing(im):
         w, h = im.size
         u0, v0, u1, v1 = FAIRING_BOX
-        made.append(png(im.crop((round(u0 * w), round(v0 * h), round(u1 * w), round(v1 * h))), dst))
+        return im.crop((round(u0 * w), round(v0 * h), round(u1 * w), round(v1 * h)))
+
+    made.append(png(livemap(Image.open(os.path.join(tex, 'mod', 'fa44_00xMREC.png'))), 'T_ZFA44_LM_MREC'))
+    # the TLS pod (the Morgan's dorsal pod, section 4): AC7's w_tls_x1 colour, normals and MREC
+    made.append(png(Image.open(os.path.join(tex, 'stock', 'w_tls_x1_D.png')).convert('RGB'), 'T_ZFA44_Pod_C'))
+    made.append(png(Image.open(os.path.join(tex, 'stock', 'w_tls_x1_N.png')).convert('RGB'), 'T_ZFA44_Pod_N'))
+    made.append(png(livemap(Image.open(os.path.join(tex, 'stock', 'w_tls_x1_MREC.png'))), 'T_ZFA44_Pod_LM_MREC'))
+    for src, dst in (('mrgn_00_D.png', 'T_ZFA44_Fair_C'), ('mrgn_00_N.png', 'T_ZFA44_Fair_N')):
+        made.append(png(fairing(Image.open(os.path.join(tex, 'stock', src)).convert('RGB')), dst))
+    made.append(png(livemap(fairing(Image.open(os.path.join(tex, 'stock', 'mrgn_00_MREC.png')))), 'T_ZFA44_Fair_LM_MREC'))
     return made
 
 

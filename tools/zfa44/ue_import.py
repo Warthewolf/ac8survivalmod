@@ -2,8 +2,9 @@
 
 Builds the ZFA-44EL (tools/re/ZFA44.md; the user's own model, AGENTS.md's exception of 2026-11-06) under
 /Game/Mods/SurvivalMode/ZFA44 from build/zfa44/prep (tools/zfa44/prepare.py):
-  Textures/T_ZFA44_C, _N, _LM, _LM_MREC, _Pod_C, _Pod_N, _Fair_C, _Fair_N   ordinary textures (never virtual: hard
-                               rule 44); colour sRGB, normals BC5, the Livemaps linear
+  Textures/T_ZFA44_C, _N, _LM, _LM_MREC, _Pod_C, _Pod_N, _Pod_LM_MREC, _Fair_C, _Fair_N, _Fair_LM_MREC   ordinary
+                               textures (never virtual: hard rule 44); colour sRGB, normals BC5, the Livemaps linear (the
+                               _LM_MREC ones from AC7's MRECs, for the run-time paint variant that uses them)
   Materials/MI_ZFA44_Body, _Pod, _Fairing   instances of the x40a's GEAR instance MI_PP0016_x40a_Gear (-> MP_Gear ->
                                M_Live_Vehicle_Base: ordinary samplers and GPU-skin shaders; tools/re/FALKEN_MATERIALS.md,
                                the route VALKA's paint 16 and SOLG T0b drew with). No static switch is set, so each draws
@@ -264,8 +265,10 @@ def main():
     T['T_ZFA44_LM_MREC'] = texture('T_ZFA44_LM_MREC', False, TCS.TC_MASKS, max_size=2048)
     T['T_ZFA44_Pod_C'] = texture('T_ZFA44_Pod_C', True, TCS.TC_DEFAULT)
     T['T_ZFA44_Pod_N'] = texture('T_ZFA44_Pod_N', False, TCS.TC_NORMALMAP)
+    T['T_ZFA44_Pod_LM_MREC'] = texture('T_ZFA44_Pod_LM_MREC', False, TCS.TC_MASKS)
     T['T_ZFA44_Fair_C'] = texture('T_ZFA44_Fair_C', True, TCS.TC_DEFAULT)
     T['T_ZFA44_Fair_N'] = texture('T_ZFA44_Fair_N', False, TCS.TC_NORMALMAP)
+    T['T_ZFA44_Fair_LM_MREC'] = texture('T_ZFA44_Fair_LM_MREC', False, TCS.TC_MASKS)
     dn = unreal.load_asset(DEFAULT_NORMAL)
     assert dn is not None, DEFAULT_NORMAL
     mats = {'Canopy': canopy}
