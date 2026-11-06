@@ -15,7 +15,8 @@
 --            planes to each other). split_share of the host's fighter flights take the stock allied-hunt order: they
 --            go for the joiners' planes too.
 -- Messages are "kind|field|field...", reliable unless said: rnd (unreliable), af, co, cr, sp, bd, hp, dn, rs, pi, po,
--- ev, tl, dv, rb, rx, ro, rc (host), hi, jn, ht, in, rv (joiner; in unreliable), fx and dw (either: a player's shots,
+-- ev, tl, dv, rb, rx, ro, rc, dk (host; dk: THE DECOY's round and locks, sv_decoy.lua), hi, jn, ht, in, rv (joiner; in
+-- unreliable), fx and dw (either: a player's shots,
 -- a player down; the host relays them; sv_down.lua has the revives').
 -- SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil }
@@ -358,6 +359,10 @@ local KEEP_EVENTS = {
     "^RE_SV_AnomalyPack",      -- PHANTASM's pack (P7): sprung on the host's field, its LastTGT onto the host (puppets there)
     "^RE_SV_WraithBlink",      -- an ace squadron lead's blink (P9): a spot round "Player", the host here (the stream shows it)
     "^RE_SV_RunOver$",         -- a co-op run's end (sv_down.lua): each game fires its own on the host's "ro"
+    -- THE DECOY (sv_decoy.lua; "^RE_SV_Decoy" above keeps them all too, written out so a narrower rule for the STORE's
+    -- decoy can't let them through): the Spear and its sure kill at "Player" (only the locked player's game calls them),
+    -- each game's own lasers on its own marks, its bait's ping and its radio lines (the host's locks come as "dk")
+    "^RE_SV_DecoySpear_", "^RE_SV_DecoyKill$", "^RE_SV_DecoyLaser", "^RE_SV_DecoyBait", "^RE_SV_DecoyRadio_",
 }                              -- (holds and frees, RE_SV_WolfHold / WolfFree and RE_SV_DirHold / DirFree, are forwarded:
                                -- a joiner's copies hold too; so is a Ladon's rage, RE_SV_LadonRage<Key>, P7: harmless,
                                -- the copies are moved by the stream. AB.L..IN's LastTGT, RE_SV_GlitchTurn, is the host's
@@ -376,7 +381,8 @@ end
 -- and AB.L..IN's LastTGT, the aces' turns and kulbits, the blinks round it (Wraith's, AB.L..IN's, VALKA's), MINDRIPPER's
 -- pack, AB.L..IN's gun; what's forwarded still goes to the joiners. SV_ERR[-20] says so.
 local HOST_DOWN_SKIPS = { "^RE_SV_Salvo_", "^RE_SV_WolfTurn", "^RE_SV_AceTurn_", "^RE_SV_AceKulbit_", "^RE_SV_WraithBlink",
-                          "^RE_SV_GlitchBlink", "^RE_SV_GlitchTurn", "^RE_SV_GlitchGun", "^RE_SV_ValkaTp_", "^RE_SV_AnomalyPackSpring" }
+                          "^RE_SV_GlitchBlink", "^RE_SV_GlitchTurn", "^RE_SV_GlitchGun", "^RE_SV_ValkaTp_", "^RE_SV_AnomalyPackSpring",
+                          "^RE_SV_DecoySpear_", "^RE_SV_DecoyKill$" }        -- (THE DECOY's Spear: sv_decoy.lua)
 local function hostDownSkips(name)
     if not (COOP.host() and DOWN and DOWN.me and DOWN.me()) then return false end
     name = tostring(name)
@@ -912,6 +918,10 @@ local function hostSync(to)
     if DOWN and DOWN.syncTo then                    -- (who's down now and the room's revives: sv_down.lua)
         local okD, errD = pcall(DOWN.syncTo, to)
         if not okD then log("coop: down list not sent: " .. tostring(errD)) end
+    end
+    if DECOY and DECOY.syncTo then                  -- (THE DECOY's round and its locks on: sv_decoy.lua, "dk")
+        local okDk, errDk = pcall(DECOY.syncTo, to)
+        if not okDk then log("coop: THE DECOY's state not sent: " .. tostring(errDk)) end
     end
     -- ((0.73.77, plan A9) the run's over here already: that player too. Saint Alessia's run of 2026-11-02: the host's
     -- "ro" at 16:54:15, scaraboy13's plane in at 16:54:24, and he fought VALKA alone on a run over for everyone else.
@@ -3070,6 +3080,16 @@ function COOP.name(slot) return playerName(slot) end
 COOP.slotOk = slotOk
 function COOP.linked() return COOP.open and (M.linkedPeers or 0) or 0 end
 function COOP.peerInfo(slot) return M.peers[slot] end
+-- (a joiner; THE DECOY, sv_decoy.lua) the copy at addr here is down for this game: a hit of yours that kills it was sent
+-- (it waits at the floor for the host's "dn": clientTick's floorAt), or the host's kill came. A lock on you whose UAV
+-- you just shot down is cancelled then, not struck at 7.9 s while the host's kill is on its way.
+function COOP.killSent(addr)
+    if not addr then return false end
+    for id, c in pairs(M.copies) do
+        if c.addr == addr then return c.floorAt ~= nil or M.dead[id] == true end
+    end
+    return false
+end
 -- (the host, COOP2MP T3) a flight onto one player's real plane: Normal, that plane, TargetFirst (theirs alone; hard rule
 -- 53: Survival's orders name "Player", your plane, and the stock hunt only finds AI planes), the stock order's fire
 -- bits, on each of its planes up. slot's plane if it's shown here, else the shown real plane the fewest flights are on.
@@ -5141,6 +5161,11 @@ local function onJoinerMessage(f)
         local n = tonumber(f[2]) or 0
         if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX and SPORT and SPORT.debit then
             SPORT.debit(math.floor(n), short(f[3], 80), true)
+        end
+    elseif k == "dk" and COOP.client() then              -- (THE DECOY: its round, each UAV's lock and cancel: sv_decoy.lua)
+        if DECOY and DECOY.fromHost then
+            local okDk, errDk = pcall(DECOY.fromHost, f)
+            if not okDk then once("dk", "coop: the host's DECOY message not read: " .. tostring(errDk)) end
         end
     elseif k == "spx" and COOP.client() then             -- ((0.73.77, I7: S12) the host's Spaceport: its row, a retake due)
         if SPORT and SPORT.fromHost then

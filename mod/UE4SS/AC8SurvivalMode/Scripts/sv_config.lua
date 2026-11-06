@@ -1845,6 +1845,42 @@ CFG = {
                                              escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
                                              debris_pay = 400, debris_timeout_s = 120,
                                              timeout_s = 240, escape_min_m = 15000, split_wait_s = 10 } } },
+        -- "decoy" = THE DECOY (Scripts/sv_decoy.lua, tools/re/DECOY.md; user, 2026-11-06): a Marker UAV far north (the
+        -- bait: its Tonitrus Spear guidance laser painting the airfield, pinged on the minimap) the players must shoot down;
+        -- then the trap: up to max_total UAVs come round the players (spawn_km from one, any bearing, alt_m of their
+        -- height, never inside safe_km of the runway, gap_km from another, at most per_player_max within near_km of a
+        -- player and max_up at once, one a player every spawn_every_s), each locking its closest player (lock_after_s
+        -- after it shows; its laser searches lock_delay_s, then that player has lock_s to shoot it down before the Spear
+        -- is called onto them; relock_s after the call it locks its closest player again). The Spear (Mission 19's rod: a
+        -- ~3 s fall from 58 km, 200 damage direct, 30 a graze, a blast growing 200 -> 900 m) aimed at the player, led by
+        -- their velocity (lead: the rod's PredictionTime, fall_s), never at a player inside safe_km or DOWN; sure_kill:
+        -- the stock sure kill (Mission 26's LiveDestroyPlayerPlaneExecution) once the rod lands (off: the rod's own
+        -- damage). The bait springs the trap when it's down, or anyway bait_timeout_s after it shows (0: never; its clock
+        -- stops while everyone's down at the airfield). The trap ends with all max_total down, every living player inside
+        -- safe_km for safe_hold_s (from safe_after_s into it; its reward x reward_safe_x), or trap_s. Pays the bait, each
+        -- UAV and the reward (+ *_per_round x the round; a co-op special's pay: [zollars] special_split). fighter_share of
+        -- the round's aircraft fly as fighters too (0: the decoy alone). From from_round; once a run (once_per_run).
+        -- Units and records: the build's (tools/survival_events.py), named below; a build without them never rolls it.
+        decoy    = { enabled = true, from_round = 10, once_per_run = true, name = "THE DECOY", fighter_share = 0.3,
+                     bait_unit = "SV_Unit_DecoyBait", bait_mark = "SV_Unit_DecoyBaitMark", bait_timeout_s = 240,
+                     ping_every_s = 12, uav_prefix = "SV_Unit_DecoyUav_", mark_prefix = "SV_Unit_DecoyMark_", uavs = 35,
+                     spear_prefix = "SV_Unit_DecoySpear_", spears = 4,
+                     max_total = 35, max_up = 12, per_player_max = 4, near_km = 8.0, spawn_every_s = 4.0,
+                     spawn_km = { 2.5, 5.0 }, alt_m = 1000, min_alt_m = 600, max_alt_m = 9000, gap_km = 1.5,
+                     safe_at = { 1610476, -436142 }, safe_km = 5.0, edge_km = 2.0,
+                     lock_after_s = 2.0, lock_delay_s = 1.5, lock_s = 8.0, relock_s = 6.0, imminent_s = 3.0,
+                     designate_s = 40.0, arm_wait_s = 10.0,
+                     trap_s = 300, safe_hold_s = 5.0, safe_after_s = 30,
+                     sure_kill = false, impact_wait_s = 8.0,
+                     lead = { enabled = true, fall_s = 3.0 },
+                     pay = { bait = 2000, bait_per_round = 50, uav = 300, uav_per_round = 10 },
+                     reward = 6000, reward_per_round = 200, reward_safe_x = 0.5,
+                     recycle_after_s = 4.0, recycle_gap_s = 1.0,
+                     -- radio (the build's clones of the stock lines into DT_SV_Radio): `lock` "laser targeting!" as a lock
+                     -- on you starts, `imminent` "strike imminent!" imminent_s before the soonest strike, `incoming` "Tonitrus
+                     -- Spear incoming!" as one's called, `hit` "took a direct Spear hit!" when it hurt you, `brief` "projectiles
+                     -- will hit locations marked by the laser" as the trap springs; gap_s between any two, each its cooldown
+                     radio = { enabled = true, gap_s = 2.5, lock_s = 10, imminent_s = 6, incoming_s = 6, hit_s = 10 } },
         -- reward_per_round: added to `reward` x the round (2026-10-23: a late special paid less than a normal round)
         shuttle  = { name = "EMBDIR Shuttle - CORRIS", countdown_s = 150, reward = 6000, reward_per_round = 200, strike_share = 0.4,
                      -- pad_allies: Mission 22's pad guns, SAMs and tower around the shuttle during the countdown
@@ -2211,11 +2247,29 @@ CFG = {
             sp_retaken   = "SPACEPORT RETAKEN",
             sp_retaken_sub = "+%d ZOLLARS",
             shop_captured = "SHOP CLOSED: THE AIRFIELD IS CAPTURED.",
+            -- THE DECOY (sv_decoy.lua; its round's callout, its NEXT row, its bait and trap)
+            dc_sub       = "MARKER UAV IN THE FAR NORTH",
+            dc_go        = "THE DECOY",
+            dc_go_sub    = "SHOOT DOWN THE MARKER UAV IN THE NORTH",
+            dc_row_bait  = "MARKER UAV: %.1f KM",
+            dc_row       = "SPEAR UAVS: %d UP  %d DOWN  %d TO COME",
+            dc_bait_down = "MARKER UAV DOWN",
+            dc_bait_down_sub = "+%d ZOLLARS",
+            dc_trap      = "IT WAS A TRAP",
+            dc_trap_sub  = "SPEAR UAVS: SHOOT DOWN EACH ONE THAT LOCKS YOU",
+            dc_done      = "THE TRAP IS BROKEN",
+            dc_done_safe = "SAFE AT THE AIRFIELD",
+            dc_done_time = "THE SPEAR UAVS WITHDRAW",
+            dc_done_sub  = "+%d ZOLLARS",
             ace_sub      = "%s SQUADRON (%s)",
         },
     },
 }
 for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
+-- (THE DECOY, sv_decoy.lua: in the rotation from its first build; added after the table, before CFG_DEFAULTS and the ini,
+-- so it's a shipped default like the rest, and the packaging's string edits of the rotation's literal (tools/novalka.py,
+-- tools/nospaceport.py) still find it as they expect)
+CFG.specials.rotation[#CFG.specials.rotation + 1] = "decoy"
 function deepCopy(v)
     if type(v) ~= "table" then return v end
     local t = {}
