@@ -611,6 +611,12 @@ local function probeTickB(tick)
     local tLv = os.clock()                         -- ((0.73.77) "leave check", both halves: B1)
     if leaveNow() then runLeft(LEAVE.why) end      -- (0.73.73: the level going away since the first half)
     perfAdd("leave check", tLv)
+    -- TEST ONLY BEGIN (the ZFA-44's test T0, sv_zfa44.lua: its host's meshes kept hidden, its follow-up lines)
+    if ZFA and ZFA.cur then
+        local okZ, errZ = timed("zfa44", ZFA.tick)
+        if not okZ then log("zfa44: T0 tick error " .. tostring(errZ)) end
+    end
+    -- TEST ONLY END
     if D then
         local now, paused = bNow, bPaused
         if now then
@@ -1131,6 +1137,19 @@ if type(RegisterKeyBind) == "function" and Key then
                     log(string.format("test: Ctrl+6, a %s flight (%s): %s", tn, unit, tostring(r)))
                 end)
                 if not ok then log("test: Ctrl+6 error " .. tostring(err)) end
+            end)
+        end)
+    end
+    -- Ctrl+9 in a run: the ZFA-44's test T0 (sv_zfa44.lua, tools/re/ZFA44.md "T0 build"): VALKA's x40a when she's up,
+    -- else the nearest live enemy aircraft, dressed as the ZFA-44 (its container SurvivalMode_ZFA44_P: the user's dev
+    -- builds with ZFA=1 only), each dressing on the next paint variant; pressed again: undone
+    if Key.NINE then
+        pcall(RegisterKeyBind, Key.NINE, mods, function()
+            ExecuteInGameThread(function()
+                local ok, err = pcall(function()
+                    if ZFA and ZFA.press then ZFA.press() else log("test: Ctrl+9: no ZFA-44 test (sv_zfa44.lua)") end
+                end)
+                if not ok then log("zfa44: T0: Ctrl+9 error " .. tostring(err)) end
             end)
         end)
     end

@@ -285,3 +285,101 @@ the host's afterburner moves to burner_01 / _02. Log: `zfa44: T0 ...` lines with
 - The Mihaly behaviour trees were dumped (json/stock/Blueprint/AI/Maneuver) but not decoded; AC8 can't run them, so
   only their roles are mapped (section 6.1).
 - The damage meshes are exported but are the old drone's; no ZFA-44 wreck exists in the mod.
+
+## 8. T0 build (2026-11-06, branch feature/zfa44, worktree `E:\ACE8 SM zfa44`; built, not yet run in game)
+Test T0 of section 6.3: the ZFA-44 cooked for AC8 and put on a live enemy aircraft by a test key. Nothing of the mod or
+AC7 is committed: only `tools/zfa44/` (the scripts) and `Scripts/sv_zfa44.lua`.
+
+### 8.1 What was made
+`sh tools/zfa44/build.sh` (UE 5.4 at `E:/UE_5.4`, this tree's own `ue/Live` project as tools/solg used it, `py -3.12`
+with numpy and Pillow). Its outputs are git-ignored, in `build/zfa44/` (the main tree's, through the junction): `prep/`
+(SK_ZFA44.gltf / .bin, the textures as PNG, layout.json), `ue_import.log`, `ue_import_stdout.log`, `cook.log`,
+`cook_check.log`, `build.log`, `stage/`, and **`out/SurvivalMode_ZFA44_P.utoc / .ucas / .pak`** (29.5 MB, 14 packages,
+22 chunks, padded: 468 blocks checked, hard rule 8). The editor's first run wrote AndroidFileServer settings into the
+tracked `ue/Live/Config/DefaultEngine.ini`: reverted, not committed.
+
+| step | what |
+|---|---|
+| `prepare.py` | UModel's glTF of uavs_SM (metres = units / 100, UE's (X, Z, Y)) x10: **24.04 m long, 14.58 m span, 3.89 m tall**. One skinned mesh: bone Root -> Body (every vertex) -> 58 leaf bones. 10 sections on 4 slots: **0 Body** (sections 0, 2, 3, 7, 8, 9), **1 Canopy** (1 and the pod's lens 5), **2 Pod** (4), **3 Fairing** (6). Sections 0 and 7: 91 + 20 UVs folded (u -> -u), their tangents turned. The fairing's UVs onto a 512 px crop of mrgn_00_D / _N (u 0.25-0.375, v 0.875-1.0). COLOR_0 white, TEXCOORD_1 = TEXCOORD_0 |
+| bones | the edited mesh's gun / TEMP_muzzleFlash (1007.8, 82.2, 40.8) cm, ws1-3, vapor01 (-263.9, -724.5, -28.8) / vapor02 (-263.9, 716.0, -28.8); **burner_01 / _02 (-510.0, -/+123.5, -27.0)**, X axis aft (yaw 180, as the stock burner_03 / _04); burner_03 / _04; laser (309.2, 0, 168.6) (the TLS lens); the stock body sockets cam_nose (1652.5, 0, -21.6), cam_pilot, cam_tailL / R, cam_thrusters, pitchup_body_01 / 02, pitchup_frtFlap_01 / 02, VFX_Dmg_Body / WingL / WingR / Engine, GUNHIT01-20; and VALKA's x40a aliases core01 / cone01 / fakeLight01 / SOC_EF_Burner_01 (= burner_01), core02 / cone02 / fakeLight02 / SOC_EF_Burner_02 / SOC_R_EF_Burner (= burner_02), ShoulderVaporL / R, WingOverVaporL / R. UE's reference pose matches prepare.py's places to 0.00 cm (ue_import.log) |
+| textures (ordinary, hard rule 44) | **T_ZFA44_C** 4096 DXT1 sRGB (the user's fa44_00_D, alpha dropped); **T_ZFA44_N** 2048 BC5 (stock fa44_00_N, capped at 2048); **T_ZFA44_LM** 4 x 4 B8G8R8A8 (0 / 191 / 255: the Falken's constant; no mips, never streamed); **T_ZFA44_LM_MREC** 2048 DXT1 linear (the user's fa44_00xMREC: R metallic, G roughness, B 255); **T_ZFA44_Pod_C / _N** 2048 DXT1 / BC5 (w_tls_x1); **T_ZFA44_Fair_C / _N** 512 DXT1 / BC5 (the mrgn_00 crop) |
+| `ue_import.py` | **MI_ZFA44_Body / _Pod / _Fairing**: instances of `MI_PP0016_x40a_Gear` (FALKEN_MATERIALS.md's route), no static parameter; Basecolor / Normalmap / Livemap (T_ZFA44_LM) ours, Detail_Normal and Blend_Dameged_Normalmap `/Engine/EngineMaterials/DefaultNormal`, Ctrl_All_Emissive, Turbine_speed, DNormal_Strength, DamegedNormal_Intencity, PlayerPlane_Damage 0, NormalIntencity left at the parent's (ours is a real normal map). Stubs, never packed: `MP_Gear` (a Material with those parameters, normal samplers for the normals), `MI_PP0016_x40a_Gear` (an instance of it), `M_NPC_Canopy`. **SK_ZFA44** (+ SKEL_ZFA44, PA_ZFA44, the importer's), slots as above, the canopy on AC8's `M_NPC_Canopy` (as VALKA's). Bounds origin (450.5, 0, 50.0) cm, extent (1202, 729, 194), sphere 1419 |
+| cook | Windows, **versioned** (hard rule 42): every package UE4 522 / UE5 1012; `Success - 0 error(s), 0 warning(s)`. `cook_check.log`: every texture `virtual False`, the three instances "neither a texture nor a material with a shader map" and importing only MI_PP0016_x40a_Gear, our textures and DefaultNormal; SK_ZFA44 imports MI_ZFA44_* and M_NPC_Canopy by path (the game's own) |
+| container | `retoc to-zen` of `/Game/Mods/SurvivalMode/ZFA44` only, `tools/x02s/pad.py` |
+
+### 8.2 Packaging (the user's dev builds only)
+- `ZFA=1 sh tools/build_all.sh` stages the container into `build/install/SurvivalMode` (without ZFA=1 it isn't staged).
+- `ZFA=1 sh tools/package_dev.sh <name>` keeps it (from build/install, else from build/zfa44/out); without ZFA=1 it's
+  taken out. E.g. `ZFA=1 VALKA=1 sh tools/package_dev.sh zfa44t0` after a build_all, for the user's VALKA install.
+- `tools/package_release.sh` always takes it out and cuts `Scripts/sv_zfa44.lua` to its first line (a comment: main.lua
+  still loads the part), TESTER zips included. The friends' zips never carry the ZFA-44.
+
+### 8.3 The key (`Scripts/sv_zfa44.lua`, test code only)
+**Ctrl+9** in a run (free since VALKA's paint cycle went; `Key.NINE` is in strip_test_only.py's leftover list, so a
+release with it left fails). Bound with sv_main.lua's test keys (a clash logs `test: Ctrl+9 is bound twice`; a press
+makes the run unranked); the part is in MODULES before sv_main and is one TEST ONLY block.
+- First press: **VALKA's x40a** when her round is up (Ctrl+8 forces it), else **the nearest live enemy aircraft** (the
+  core's `planes`; not the Ladons, the Alicorn, co-op stand-ins, VALKA's opener railgun or the SOLG). It's dressed as
+  SPC.V.model dresses VALKA: a SkeletalMeshComponent added (collision off, `bComponentUseFixedSkelBounds` so it culls
+  by the mesh's own bounds), SK_ZFA44 (loaded the hard-rule-9 way) on it, placed on the host's PlaneBody* mesh, painted,
+  every other mesh of the host hidden (again every 2 s). On VALKA her X-02S is hidden and her state points at ours while
+  it's on (her model tick keeps ours shown, no sweep on it).
+- Second press: undone (the component destroyed, the host's meshes shown again; VALKA gets her X-02S back).
+- **Each dressing takes the next paint variant**: 1 COOKED (MI_ZFA44_* as built), 2 GEAR, ITS NORMALS (run-time
+  instances of the game's MI_PP0016_x40a_Gear with our textures: VALKA's paint 15 / SOLG T0b's way), 3 GEAR, FLAT NORMAL
+  (DefaultNormal, NormalIntencity 0: the Falken's, VALKA's 16), 4 GEAR, MREC LIVEMAP, CANOPY TINTED (T_ZFA44_LM_MREC, the
+  canopy a dark tinted gear instance instead of M_NPC_Canopy). The HUD says which (`TEST: ZFA-44 T0`, `PAINT n: ...`).
+- Every step is a crash breadcrumb first (`zfa44: T0 loading SK_ZFA44`, `... adding a SkeletalMeshComponent to <host>`,
+  `... setting SK_ZFA44 on it`, `... placing it`, `... painting it: <variant>`, `... hiding the host's meshes`, `... dressed`,
+  `... undoing on <host>` in AC8SurvivalMode_crumbs.log).
+
+### 8.4 Log lines (AC8SurvivalMode_lua.log)
+- `zfa44: T0: <host> (<VALKA's x40a | the nearest live enemy aircraft, N km off, <unit>>) dressed as the ZFA-44: a
+  SkeletalMeshComponent added (collision off, fixed bounds on), <mesh path> on it, placed on PlaneBody... (its rotation
+  against the actor p / y / r deg; ...); paint n <variant>: <what it set>; N of its meshes hidden (<names>)`
+- `zfa44: T0: 4 slots: 0 Body: MI_ZFA44_Body (parent /Game/Vehicles/Aircraft/PP/PP0016_x40a/.../MI_PP0016_x40a_Gear...);
+  1 Canopy: M_NPC_Canopy (...); 2 Pod: ...; 3 Fairing: ...` (paint 1: the parent must be the game's gear instance, not
+  "none"; paints 2-4: MaterialInstanceDynamic on it), again at +2 s
+- `zfa44: T0 at once / +2 s / +10 s / +30 s / at its death: on <host> at N km/h, the ZFA-44 visible, sphere 14.2 m, box
+  24.0 x 14.6 x 3.9 m (the host's body ... sphere / box); nose (f, r, u) m, left wing tip (...) m`
+- `zfa44: T0 ...: burner_01 (f, r, u) m vs the host's <burner_01 | SOC_EF_Burner_01 | core01> (...) m on <its mesh>: N m
+  apart; burner_02 ...; the host's nozzle sockets <names | none found>; its effects <Niagara / particle component>@<socket>
+  (f, r, u) m, ...` (metres in the host's frame: forward, right, up; where the host's flames really are)
+- `zfa44: T0: N of <host>'s meshes came back on and were hidden again (+N s)`, `zfa44: T0: <host> is down: its ZFA-44
+  left on it ...`, `zfa44: T0: <host> is gone N s after it was dressed`, `zfa44: T0: undone on <host> (Ctrl+9 again)
+  after N s: the ZFA-44 destroyed, N of its meshes shown again`
+- Failures: `zfa44: T0: /Game/Mods/SurvivalMode/ZFA44/Model/SK_ZFA44 not loaded (...): is SurvivalMode_ZFA44_P installed`
+  (HUD `TEST: ZFA-44 NOT INSTALLED`), `zfa44: T0: Ctrl+9: no live enemy aircraft to dress`, `zfa44: T0: AddComponentByClass
+  ...`, `zfa44: T0 tick error ...`, `zfa44: T0: Ctrl+9 error ...`.
+
+### 8.5 What T0 should show
+1. No crash on Ctrl+9 (else the crumbs' last `zfa44: T0 ...` step says where: SOLG T0's static mesh crashed the
+   renderer, a skeletal one has drawn twice).
+2. Painted, not black or white: the user's black / dark grey with red-and-white fins and red roundels. Paint 1 tests the
+   cooked instances (never tried before: the stub-at-an-instance's-path route, FALKEN_MATERIALS.md 5.2.ii); if it's
+   wrong, Ctrl+9 twice moves to the next variant on the same or the next nearest plane.
+3. The right way round and size: nose ahead, 24 m long, a third longer than an F/A-18E (18.3 m); the TLS pod on the
+   spine with the Morgan's grey fairing; canopy glass.
+4. The afterburner: the host's flames stay at the host's nozzles (they hang on its own mesh's sockets, not on ours);
+   the `burner_01 ... N m apart` and effects lines measure how far that is from the ZFA-44's nozzles (the next step
+   moves our component or the effects).
+5. Undo: the host looks as before. VALKA (Ctrl+8, then Ctrl+9 when she's up): the ZFA-44 on her, then her X-02S back.
+
+### 8.6 Risks for the look
+- The cooked instances' parent: our MI_ZFA44_* import `MI_PP0016_x40a_Gear` by path from a stub instance of a stub
+  material. If the game doesn't resolve it (the slots line shows parent "none") the mesh draws with the default
+  material; paints 2-4 build the same at run time from the game's own instance (proven by VALKA 15 / 16, SOLG T0b).
+- The canopy: AC8's `M_NPC_Canopy` (an instance, 779 bytes) on a skinned mesh: whether its shaders cover the GPU-skin
+  vertex factory isn't known (VALKA's canopy used it, never checked); paint 4 replaces it with a tinted gear instance.
+- The normal map: AC7's fa44_00_N (BC5) in the gear's normal sampler, with the folded pieces' tangents turned: bumps
+  could read inverted (paint 3 is flat). The MREC Livemap's channels (R metal, G roughness, B occlusion) are inferred
+  (paint 4).
+- Placement: on the host's body mesh's pivot; AC7's mesh origin is 4.5 m behind its middle (X -75..165 units), so the
+  ZFA-44 may sit forward of the host's centre and its spheres (hits come from the host's own spheres). ZFA.C.yaw /
+  offset_cm / scale in sv_zfa44.lua move it (no rebuild).
+- The host's afterburner, vapour and damage effects stay on its own (hidden) mesh's sockets, so they won't line up with
+  the ZFA-44's nozzles and wing tips (item 4 measures it).
+- No wreck: the ZFA-44 stays whole on a shot-down host (hard rule 41: the host's own wreck meshes don't draw while it's
+  alive); its fall shows the ZFA-44 falling.
+- Mipmaps are generated from the source (the user's paint had 1 mip), 4096 colour; streaming from our container as the
+  Falken's cockpit and VALKA's textures do.

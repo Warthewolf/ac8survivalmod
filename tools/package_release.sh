@@ -29,6 +29,12 @@ cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
 rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv "$mod"/config/survival_profile.ini*
+# the ZFA-44 (tools/zfa44, the user's own model): the user's dev builds only (package_dev.sh ZFA=1), never a zip, TESTER
+# ones too: its container out, its test part (Scripts/sv_zfa44.lua) cut to its first line (main.lua still loads it)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.*
+if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
+    head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
+fi
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
