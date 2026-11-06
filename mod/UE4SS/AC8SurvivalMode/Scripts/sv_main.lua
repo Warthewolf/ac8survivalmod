@@ -369,6 +369,7 @@ local function runLeft(why)
     if D.special then pcall(SPC.V.cleanup, D.special) end
     pcall(SND.stopAll)
     pcall(hudRed, false, nil, true)        -- ((0.73.76) VALKA's red sky put back at once, a joiner's too: no tick may follow)
+    if SKY then pcall(SKY.restore, "the level was left") end   -- ((0.74.0) the sky's values Survival changed: sv_sky.lua)
     pcall(TAC.reset)                       -- (the gun's class default back to stock)
     if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
     local held = D.vanished and #D.vanished or 0
@@ -398,6 +399,7 @@ end
 local bNow, bPaused
 local function probeTick(tick)
     if levelGate() then if D then runLeft(LEAVE.why) end return end   -- ((0.73.77) F1: the level torn down: sv_core.lua levelGate)
+    if SKY and SKY.pending then pcall(SKY.idleTick) end   -- ((0.74.0) a custom sun a torn-down level left on: sv_sky.lua)
     if levelTick == -1 then
         levelTick = tick
         log("level loaded: PL_SurvivalMode (" .. memText() .. ")")
@@ -497,6 +499,10 @@ local function probeTick(tick)
         if not okSp then log("special: setup error " .. tostring(errSp)); SPS.done = true end
         local okAs, errAs = pcall(ALLY.setup)
         if not okAs then log("allies: setup error " .. tostring(errAs)); ALLY.setupDone = true end
+        if FISH and FISH.setup then                      -- ((0.74.0) the shoal's rows and names: sv_fishing.lua)
+            local okFs, errFs = pcall(FISH.setup)
+            if not okFs then log("fishing: setup error " .. tostring(errFs)); FISH.setupDone = true end
+        end
         if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
             local okCs, errCs = pcall(COOP.syncSetup)
             if not okCs then log("coopfire: setup error " .. tostring(errCs)) end
@@ -649,6 +655,12 @@ local function probeTickB(tick)
                 if not okDn and D and not D.downErr then D.downErr = true; log("down: error " .. tostring(errDn)) end
             end
         end
+        -- TEST ONLY BEGIN (the test keys' steps: sv_sky.lua, sv_fishing.lua, sv_festival.lua; testKey, sv_core.lua)
+        for _, t in ipairs(TEST_TICKS or {}) do
+            local okX, errX = timed(t.name, t.fn, os.clock())
+            if not okX then logOnce("test tick " .. t.name, "test: " .. t.name .. " error " .. tostring(errX) .. " (its first: not logged again)") end
+        end
+        -- TEST ONLY END
         if tick % 40 == 9 and type(SV_Event) == "function" then timed("beat", SV_Event, "RE_SV_Beat") end   -- (restart detection)
         if ACE.squadTick then                   -- the ace squadrons' openers and blinks (P9, sv_ai.lua; before the reversals)
             local okSq, errSq = timed("squads", ACE.squadTick, now, D, paused)
@@ -1047,7 +1059,7 @@ if type(RegisterKeyBind) == "function" and Key then
     -- TEST ONLY BEGIN
     do
     -- (every test key below, pressed, makes its run unranked: LB.testKey, sv_leaderboard.lua)
-    local boundKeys = {}                -- (a key bound twice here: logged, both would run on a press)
+    local boundKeys = TEST_KEYS or {}   -- (a key bound twice here or by testKey, sv_core.lua: logged, both would run on a press)
     local RegisterKeyBind = function(key, m, fn)
         if key ~= nil and boundKeys[key] then
             local kn = tostring(key)

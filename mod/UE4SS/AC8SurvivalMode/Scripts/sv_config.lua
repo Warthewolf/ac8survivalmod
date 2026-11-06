@@ -1950,7 +1950,56 @@ CFG = {
                                 burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
                                           "/Game/VFX/Mission/Mission023/NS_ms23FarFlash",
                                           "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma" } } },
+        -- "fishing" = GONE FISHIN' (FISHING_ROUND_PLAN.md; tools/re/FISHING.md 1-4; the build data's names: the contract of
+        -- 2026-11-06). Not a round yet: only its test key (Ctrl+F10, sv_fishing.lua) spawns it, for the first in-game test.
+        -- A shoal is a copy of the stock invisible turret pawn (DT_NPC row shoal_row on model row shoal_model, both added at
+        -- the main menu); `units` hold 8 each, one a fishing ground (ground_a / _b / _c: UE cm), each spawned shoal_z cm up
+        -- (the sea's collision is at 3.5 m) with a hit sphere of sphere_m on collision profile sphere_profile (sphere =
+        -- false: none). SAL's boat (boat_unit, an allied boat) at boat_at, boat_z, held at boat_min_health HP by its
+        -- MinHealth field. A shoal's death plays `splash` (x splash_scale) at sea_z. The test takes everything off test_s
+        -- after it spawned.
+        fishing = { enabled = true,
+                    units = { "SV_Unit_FishA", "SV_Unit_FishB", "SV_Unit_FishC" },
+                    ground_a = { 1803753, -1160858 }, ground_b = { 1866154, 268355 }, ground_c = { 929908, -753378 },
+                    shoal_z = 700, sea_z = 350,
+                    shoal_row = "SV_Shoal", shoal_model = "SV_Model_Shoal", shoal_name_key = "SV_Shoal_Name", shoal_name = "SHOAL",
+                    boat_unit = "SV_Unit_SalBoat", boat_at = { 1687842, -1191916 }, boat_z = 300, boat_min_health = 1.0,
+                    boat_name_key = "SV_SalBoat", boat_name = "SAL'S BOAT",
+                    sphere = true, sphere_m = 8.0, sphere_profile = "EnemyPawn",
+                    splash = "/Game/VFX/Environment/Common/Explosion/GroundExplosion/groundExplosionA001/NS_groundExplosionASmallSea003",
+                    splash_scale = 1.0, test_s = 300 },
+        -- "festival" = THE FESTIVAL (round F+6 of the day-night arc: FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6). Not
+        -- a round yet: only its test key (Ctrl+F12, sv_festival.lua). Tu-160 formations stand off to the north, west and
+        -- south and launch Mission 30's path-flown cruise missiles from launch_n / _w / _s (UE cm, launch_z cm up),
+        -- `missiles` a unit (SV_Unit_FestCM_<N|W|S><1-3>, each fired by its record RE_SV_FestCM_<g><k>), which fly to the
+        -- runway (rwy, rwy_z) at 600 km/h; one within impact_m of it hits there (its impact record, fired by the host).
+        -- The air raid siren (`siren`, a Wwise event of the game's SE bank) is posted on an actor siren_up_m over the
+        -- runway and stopped siren_s later. The test takes what's left off test_s after its launch.
+        festival = { enabled = true,
+                     rwy = { 1610476, -436142 }, rwy_z = 500,
+                     launch_n = { 1610476, -2936142 }, launch_w = { -889524, -436142 }, launch_s = { 1610476, 2063858 },
+                     launch_z = 200000, missiles = 4, impact_m = 400,
+                     siren = "AKE_GEN_ENV_OBJ_AirRaid_Map17_Comona_Play", siren_s = 20, siren_up_m = 10,
+                     test_s = 300 },
     },
+    -- The sky (Scripts/sv_sky.lua; tools/re/FISHING.md 5): the day-night arc's owner (the arc itself comes later). It never
+    -- writes the stock sky asset (Mission 4's CSP_ms04...), only the renderer's working copies of its params, the sun
+    -- light, the sky light, the post-process volumes' exposure, two material parameter collections (mpc_env, mpc_vfx) and
+    -- Cloudly's custom sun, each value's original kept and put back (at a run's end; a level torn down drops them).
+    -- readback_s: the test key's (Ctrl+F6) read-back after each step. test_sun: step 2's custom sun (elevation, azimuth: a
+    -- compass bearing, east 90); test_copies: step 3's, through the copies and the light alone; night: step 4's (the
+    -- stock night's way, Mission 9's: the light at the moon's spot, dim and bluish, a moon-sized sun disc, the moon on,
+    -- its exposure (min, max, bias), the sky light x skylight_x and blue, the city's glow (emissive) up, the effects' EV
+    -- down), with the stars at the stock maximum (stars: Mission 22's dawn).
+    sky = { enabled = true, readback_s = 5,
+            mpc_env = "/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control",
+            mpc_vfx = "/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control",
+            test_sun = { -2.0, -105.0 }, test_copies = { 4.0, -120.0 },
+            night = { sun_el = 35.0, sun_az = -130.0, factor = 0.5, rgb = { 0.89, 0.96, 1.0 }, sun_disc = 0.57,
+                      moon_el = 35.0, moon_az = -130.0, exposure = { 0.5, 9.0, 0.5 },
+                      skylight_x = 0.1, skylight_rgb = { 0.55, 0.65, 1.0 }, emissive = 10000.0, vfx_ev = -2.0 },
+            stars = { intensity = 7.0, background = 22.0, radius = 2.5, fraction = 0.73, rotation = { 2.578, 0.0, 0.0 },
+                      mask_start = 0.263 } },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
     -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
@@ -2235,6 +2284,7 @@ local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bomber
                     ["skill.difficulty"] = "tiers.rank_add", enemy_missiles = "missiles", enemy_guns = "guns",
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
                     ["ammo.ace"] = "ammo.presets.ace",
+                    fishing = "specials.fishing", festival = "specials.festival",      -- (0.74.0: sv_fishing / sv_festival)
                     -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
                     ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }
 -- sections of things since taken out, still in older survival.ini files: skipped without a warning
