@@ -1,0 +1,1047 @@
+14:33:18.575 t18688 lua bridge: all registered
+14:33:18.577 t18688 lua bridge: all registered
+14:37:33.246 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:37:36.306 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+14:38:39.671 t44024 lua: spawn SV_Unit_PadDummies: 9
+14:38:39.677 t44024 lua: spawn AA_Unit_01_Ground0: 11
+14:38:39.678 t44024 lua: spawn SV_Unit_Shuttle: 1
+14:38:42.723 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+14:38:45.757 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 14F47BE4A0 (0 alive), its destroy deferred
+14:38:45.758 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:38:45.763 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:38:48.835 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+14:39:15.807 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 14F47BE4A0 (deferred 30 s)
+14:39:15.807 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:42:33.901 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1985B14980 (0 alive), its destroy deferred
+14:42:33.901 t44024 recycle ERA_Unit_04_Dep_Air0: done
+14:42:33.917 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+14:42:36.966 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1588D9CDD0 (0 alive), its destroy deferred
+14:42:36.966 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:42:36.979 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:42:40.017 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 14F47BD260 (0 alive), its destroy deferred
+14:42:40.017 t44024 recycle EA_Unit_01_Air0: done
+14:42:40.032 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+14:42:43.074 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+14:43:03.913 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1985B14980 (deferred 30 s)
+14:43:03.914 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+14:43:07.086 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1588D9CDD0 (deferred 30 s)
+14:43:07.086 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:43:10.119 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 14F47BD260 (deferred 30 s)
+14:43:10.119 t44024 recycle EA_Unit_01_Air0: destroyed
+14:45:16.828 t44024 lua: event RE_SV_ShuttleRemove: 1
+14:45:18.865 t44024 lua: special: shuttle SV_Recycle SV_Unit_Shuttle
+14:45:18.865 t44024 recycle SV_Unit_Shuttle: unregistering its unit actor 175A799280 (1 alive), its destroy deferred
+14:45:18.865 t44024 recycle SV_Unit_Shuttle: done
+14:45:42.764 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 173007F250 (0 alive), its destroy deferred
+14:45:42.764 t44024 recycle ERA_Unit_04_Dep_Air0: done
+14:45:42.779 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+14:45:45.810 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+14:45:48.851 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 56546050 (0 alive), its destroy deferred
+14:45:48.851 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:45:48.864 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:45:48.866 t44024 recycle SV_Unit_Shuttle: destroying its old unit actor 175A799280 (deferred 30 s)
+14:45:48.866 t44024 recycle SV_Unit_Shuttle: destroyed
+14:45:51.923 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 198BFAE010 (0 alive), its destroy deferred
+14:45:51.923 t44024 recycle ERA_Unit_06_Dep_Air0: done
+14:45:51.938 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+14:46:12.816 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 173007F250 (deferred 30 s)
+14:46:12.816 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+14:46:18.916 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 56546050 (deferred 30 s)
+14:46:18.916 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:46:21.973 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 198BFAE010 (deferred 30 s)
+14:46:21.973 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+14:47:59.682 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 78BD84D0 (0 alive), its destroy deferred
+14:47:59.682 t44024 recycle ERA_Unit_06_Dep_Air0: done
+14:47:59.697 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+14:48:02.756 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1758F2B700 (0 alive), its destroy deferred
+14:48:02.757 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:48:02.771 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:48:05.799 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 14EBF20E30 (0 alive), its destroy deferred
+14:48:05.799 t44024 recycle ERA_Unit_01_Dep_Air1: done
+14:48:05.816 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+14:48:08.862 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+14:48:11.896 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1A185FCDD0 (0 alive), its destroy deferred
+14:48:11.896 t44024 recycle ERA_Unit_04_Dep_Air0: done
+14:48:11.901 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+14:48:29.693 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 78BD84D0 (deferred 30 s)
+14:48:29.693 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+14:48:32.747 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1758F2B700 (deferred 30 s)
+14:48:32.747 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:48:35.794 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 14EBF20E30 (deferred 30 s)
+14:48:35.794 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+14:48:41.920 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1A185FCDD0 (deferred 30 s)
+14:48:41.920 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+14:50:46.450 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 763252A0 (0 alive), its destroy deferred
+14:50:46.450 t44024 recycle ERA_Unit_07_Dep_Air0: done
+14:50:46.464 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+14:50:49.490 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 51ED4980 (0 alive), its destroy deferred
+14:50:49.491 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:50:49.506 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:50:53.175 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 75FFE4A0 (0 alive), its destroy deferred
+14:50:53.175 t44024 recycle ERA_Unit_06_Dep_Air0: done
+14:50:53.191 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+14:50:56.218 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 1A906BC940 (0 alive), its destroy deferred
+14:50:56.218 t44024 recycle EA_Unit_01_Air1: done
+14:50:56.231 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+14:50:59.294 t44024 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+14:51:02.361 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 1755BF3BD0 (0 alive), its destroy deferred
+14:51:02.362 t44024 recycle EA_Unit_01_Air0: done
+14:51:02.376 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+14:51:16.513 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 763252A0 (deferred 30 s)
+14:51:16.513 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+14:51:19.558 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 51ED4980 (deferred 30 s)
+14:51:19.558 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:51:23.268 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 75FFE4A0 (deferred 30 s)
+14:51:23.268 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+14:51:26.305 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 1A906BC940 (deferred 30 s)
+14:51:26.305 t44024 recycle EA_Unit_01_Air1: destroyed
+14:51:32.389 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 1755BF3BD0 (deferred 30 s)
+14:51:32.389 t44024 recycle EA_Unit_01_Air0: destroyed
+14:53:07.416 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 564E1BE0 (0 alive), its destroy deferred
+14:53:07.416 t44024 recycle ERA_Unit_01_Dep_Air1: done
+14:53:07.427 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+14:53:10.488 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 16EB4E10 (0 alive), its destroy deferred
+14:53:10.489 t44024 recycle ERA_Unit_01_Dep_Air0: done
+14:53:10.495 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+14:53:37.419 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 564E1BE0 (deferred 30 s)
+14:53:37.419 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+14:53:40.511 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 16EB4E10 (deferred 30 s)
+14:53:40.511 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+14:53:52.635 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 1575603BD0 (0 alive), its destroy deferred
+14:53:52.636 t44024 recycle ERA_Unit_06_Dep_Air0: done
+14:53:52.649 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+14:53:55.689 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+14:53:58.757 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 7836CDD0 (0 alive), its destroy deferred
+14:53:58.757 t44024 recycle ERA_Unit_04_Dep_Air0: done
+14:53:58.771 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+14:54:01.807 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 76E66050 (0 alive), its destroy deferred
+14:54:01.807 t44024 recycle ERA_Unit_07_Dep_Air0: done
+14:54:01.822 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+14:54:04.884 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+14:54:22.729 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 1575603BD0 (deferred 30 s)
+14:54:22.729 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+14:54:28.745 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 7836CDD0 (deferred 30 s)
+14:54:28.745 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+14:54:31.813 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 76E66050 (deferred 30 s)
+14:54:31.813 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+14:58:25.487 t44024 lua: spawn SV_Unit_Alicorn: 226
+14:58:51.270 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 1A9120EDC0 (0 alive), its destroy deferred
+14:58:51.270 t44024 recycle ERA_Unit_08_Dep_Air0: done
+14:58:51.284 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+14:59:21.360 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 1A9120EDC0 (deferred 30 s)
+14:59:21.360 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+14:59:26.969 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 79B02990 (0 alive), its destroy deferred
+14:59:26.969 t44024 recycle ERA_Unit_07_Dep_Air0: done
+14:59:26.983 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+14:59:57.083 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 79B02990 (deferred 30 s)
+14:59:57.083 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:00:02.968 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 5245E010 (0 alive), its destroy deferred
+15:00:02.968 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:00:02.974 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:00:33.052 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 5245E010 (deferred 30 s)
+15:00:33.052 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:06:16.917 t44024 lua: event RE_SV_AlcnRemove: 1
+15:06:16.926 t44024 lua: special clean-up SV_Unit_Alicorn: 0 killed, 23 off (the next round's start)
+15:06:17.180 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1A26970 (0 alive), its destroy deferred
+15:06:17.180 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:06:17.194 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:06:18.946 t44024 lua: special clean-up: SV_Recycle SV_Unit_Alicorn
+15:06:18.947 t44024 recycle SV_Unit_Alicorn: unregistering its unit actor 1A264E0 (204 alive), its destroy deferred
+15:06:18.967 t44024 recycle SV_Unit_Alicorn: done
+15:06:20.242 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 1537303740 (0 alive), its destroy deferred
+15:06:20.242 t44024 recycle ERA_Unit_01_Dep_Air1: done
+15:06:20.257 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+15:06:23.303 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 524532B0 (0 alive), its destroy deferred
+15:06:23.303 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:06:23.310 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:06:26.372 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 1563084060 (0 alive), its destroy deferred
+15:06:26.372 t44024 recycle ERA_Unit_05_Dep_Air0: done
+15:06:26.379 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+15:06:29.433 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 1A71BCB270 (0 alive), its destroy deferred
+15:06:29.434 t44024 recycle EA_Unit_01_Air0: done
+15:06:29.439 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:06:47.267 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1A26970 (deferred 30 s)
+15:06:47.267 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:06:49.069 t44024 recycle SV_Unit_Alicorn: destroying its old unit actor 1A264E0 (deferred 30 s)
+15:06:49.069 t44024 recycle SV_Unit_Alicorn: destroyed
+15:06:50.347 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 1537303740 (deferred 30 s)
+15:06:50.347 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+15:06:53.393 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 524532B0 (deferred 30 s)
+15:06:53.393 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:06:56.470 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 1563084060 (deferred 30 s)
+15:06:56.470 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+15:06:59.519 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 1A71BCB270 (deferred 30 s)
+15:06:59.519 t44024 recycle EA_Unit_01_Air0: destroyed
+15:07:31.198 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 175B5E2500 (0 alive), its destroy deferred
+15:07:31.198 t44024 recycle EA_Unit_01_Air1: done
+15:07:31.212 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+15:07:34.269 t44024 recycle ERB_Unit_01_Air2: unregistering its unit actor 19D14484D0 (0 alive), its destroy deferred
+15:07:34.271 t44024 recycle ERB_Unit_01_Air2: done
+15:07:34.288 t44024 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+15:07:37.341 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 16
+15:08:01.263 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 175B5E2500 (deferred 30 s)
+15:08:01.263 t44024 recycle EA_Unit_01_Air1: destroyed
+15:08:04.335 t44024 recycle ERB_Unit_01_Air2: destroying its old unit actor 19D14484D0 (deferred 30 s)
+15:08:04.335 t44024 recycle ERB_Unit_01_Air2: destroyed
+15:13:08.182 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 1A27BB0 (0 alive), its destroy deferred
+15:13:08.182 t44024 recycle ERA_Unit_01_Dep_Air1: done
+15:13:08.199 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+15:13:11.236 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 79B01BE0 (0 alive), its destroy deferred
+15:13:11.236 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:13:11.241 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:13:14.320 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+15:13:17.365 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 19C8DA6970 (0 alive), its destroy deferred
+15:13:17.365 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:13:17.380 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:13:20.438 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 51ED6970 (0 alive), its destroy deferred
+15:13:20.438 t44024 recycle ERA_Unit_05_Dep_Air0: done
+15:13:20.453 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+15:13:23.500 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:13:26.565 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+15:13:29.608 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 56549BA0 (0 alive), its destroy deferred
+15:13:29.609 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:13:29.623 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:13:32.660 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 762F9280 (0 alive), its destroy deferred
+15:13:32.661 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:13:32.674 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:13:38.300 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 1A27BB0 (deferred 30 s)
+15:13:38.300 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+15:13:41.303 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 79B01BE0 (deferred 30 s)
+15:13:41.303 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:13:47.444 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 19C8DA6970 (deferred 30 s)
+15:13:47.444 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:13:50.514 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 51ED6970 (deferred 30 s)
+15:13:50.514 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+15:13:59.665 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 56549BA0 (deferred 30 s)
+15:13:59.665 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:14:02.730 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 762F9280 (deferred 30 s)
+15:14:02.730 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:16:47.788 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1774C74060 (0 alive), its destroy deferred
+15:16:47.788 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:16:47.803 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:17:17.835 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1774C74060 (deferred 30 s)
+15:17:17.835 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:19:24.480 t44024 lua: spawn SV_Unit_Glitch at a pose: 1
+15:22:27.636 t44024 lua: special clean-up SV_Unit_Glitch: 0 killed, 0 off (at the end of its glitch fight)
+15:22:45.473 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 19CC53C4B0 (0 alive), its destroy deferred
+15:22:45.473 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:22:45.488 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:22:52.970 t44024 teardown gate closed: world 75D8CAE0 it is being destroyed; 1 deferred destroys dropped
+15:22:52.971 t44024 lua: level gate closed: objects dropped
+15:24:37.882 t44024 teardown gate open (SV_Reset)
+15:24:59.122 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:25:06.013 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:25:34.296 t44024 teardown gate closed: world 15A4A0EAC0 it was freed; 0 deferred destroys dropped
+15:25:34.297 t44024 lua: level gate closed: objects dropped
+15:26:29.953 t44024 teardown gate open (SV_Reset)
+15:26:50.024 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:26:53.064 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:27:47.125 t44024 lua: spawn SV_Unit_PadDummies: 9
+15:27:47.132 t44024 lua: spawn AA_Unit_01_Ground0: 11
+15:27:47.134 t44024 lua: spawn SV_Unit_Shuttle: 1
+15:27:50.186 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 19C88252A0 (0 alive), its destroy deferred
+15:27:50.187 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:27:50.199 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:28:01.936 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1758F2F6E0 (0 alive), its destroy deferred
+15:28:01.936 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:28:01.953 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:28:05.012 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:28:20.194 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 19C88252A0 (deferred 30 s)
+15:28:20.194 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:28:32.030 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1758F2F6E0 (deferred 30 s)
+15:28:32.030 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:30:46.934 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:30:49.956 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 1831FAC020 (0 alive), its destroy deferred
+15:30:49.956 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:30:49.968 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:30:53.014 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 1A906BD260 (0 alive), its destroy deferred
+15:30:53.014 t44024 recycle EA_Unit_01_Air0: done
+15:30:53.021 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:30:56.102 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 8
+15:31:20.048 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 1831FAC020 (deferred 30 s)
+15:31:20.048 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:31:23.120 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 1A906BD260 (deferred 30 s)
+15:31:23.120 t44024 recycle EA_Unit_01_Air0: destroyed
+15:32:03.127 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 198D942500 (0 alive), its destroy deferred
+15:32:03.127 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:32:03.140 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:32:06.211 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 7604E010 (0 alive), its destroy deferred
+15:32:06.211 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:32:06.216 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:32:09.261 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:32:12.333 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:32:15.358 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 15383E1750 (0 alive), its destroy deferred
+15:32:15.359 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:32:15.373 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:32:33.124 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 198D942500 (deferred 30 s)
+15:32:33.124 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:32:36.320 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 7604E010 (deferred 30 s)
+15:32:36.320 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:32:45.357 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 15383E1750 (deferred 30 s)
+15:32:45.357 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:33:10.982 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 18598A1BE0 (0 alive), its destroy deferred
+15:33:10.982 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:33:10.988 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:33:14.040 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 5654B700 (0 alive), its destroy deferred
+15:33:14.041 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:33:14.054 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:33:17.113 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1831FDD260 (0 alive), its destroy deferred
+15:33:17.113 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:33:17.126 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:33:20.163 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1A36F9D260 (0 alive), its destroy deferred
+15:33:20.163 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:33:20.170 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:33:23.213 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 51EE84D0 (0 alive), its destroy deferred
+15:33:23.213 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:33:23.227 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:33:26.302 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:33:29.858 t44024 lua: event RE_SV_ShuttleRemove: 1
+15:33:31.920 t44024 lua: special: shuttle SV_Recycle SV_Unit_Shuttle
+15:33:31.920 t44024 recycle SV_Unit_Shuttle: unregistering its unit actor 196E353740 (1 alive), its destroy deferred
+15:33:31.922 t44024 recycle SV_Unit_Shuttle: done
+15:33:41.088 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 18598A1BE0 (deferred 30 s)
+15:33:41.088 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:33:44.138 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 5654B700 (deferred 30 s)
+15:33:44.138 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:33:47.215 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1831FDD260 (deferred 30 s)
+15:33:47.215 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:33:50.256 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1A36F9D260 (deferred 30 s)
+15:33:50.256 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:33:53.308 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 51EE84D0 (deferred 30 s)
+15:33:53.308 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:34:01.996 t44024 recycle SV_Unit_Shuttle: destroying its old unit actor 196E353740 (deferred 30 s)
+15:34:01.996 t44024 recycle SV_Unit_Shuttle: destroyed
+15:35:02.866 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 175B5E2500 (0 alive), its destroy deferred
+15:35:02.866 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:35:02.881 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:35:05.930 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 16F31AB270 (0 alive), its destroy deferred
+15:35:05.932 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:35:05.945 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:35:08.984 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 19D3DC2500 (0 alive), its destroy deferred
+15:35:08.984 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:35:08.998 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:35:12.049 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 5631A4C0 (0 alive), its destroy deferred
+15:35:12.050 t44024 recycle EA_Unit_01_Air1: done
+15:35:12.056 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+15:35:15.119 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 6BD54E10 (0 alive), its destroy deferred
+15:35:15.119 t44024 recycle EA_Unit_01_Air0: done
+15:35:15.132 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:35:18.194 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 16
+15:35:32.987 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 175B5E2500 (deferred 30 s)
+15:35:32.987 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:35:36.049 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 16F31AB270 (deferred 30 s)
+15:35:36.049 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:35:39.131 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 19D3DC2500 (deferred 30 s)
+15:35:39.131 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:35:42.048 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 5631A4C0 (deferred 30 s)
+15:35:42.048 t44024 recycle EA_Unit_01_Air1: destroyed
+15:35:45.243 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 6BD54E10 (deferred 30 s)
+15:35:45.243 t44024 recycle EA_Unit_01_Air0: destroyed
+15:36:32.572 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 1500D2F250 (0 alive), its destroy deferred
+15:36:32.572 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:36:32.580 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:36:35.648 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 158C27B700 (0 alive), its destroy deferred
+15:36:35.648 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:36:35.662 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:36:38.723 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 19D14484D0 (0 alive), its destroy deferred
+15:36:38.724 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:36:38.738 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:36:41.794 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 1754785730 (0 alive), its destroy deferred
+15:36:41.794 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:36:41.808 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:36:44.875 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+15:36:47.929 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+15:36:50.974 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1935464E10 (0 alive), its destroy deferred
+15:36:50.974 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:36:50.988 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:37:02.586 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 1500D2F250 (deferred 30 s)
+15:37:02.586 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:37:05.654 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 158C27B700 (deferred 30 s)
+15:37:05.654 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:37:08.826 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 19D14484D0 (deferred 30 s)
+15:37:08.826 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:37:11.893 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 1754785730 (deferred 30 s)
+15:37:11.893 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:37:21.044 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1935464E10 (deferred 30 s)
+15:37:21.044 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:37:35.311 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 7836D6F0 (0 alive), its destroy deferred
+15:37:35.311 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:37:35.324 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:37:38.373 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1758F22990 (0 alive), its destroy deferred
+15:37:38.373 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:37:38.387 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:37:41.437 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 7D74CDD0 (0 alive), its destroy deferred
+15:37:41.438 t44024 recycle ERA_Unit_01_Dep_Air1: done
+15:37:41.454 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+15:37:44.480 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 1A706D4980 (0 alive), its destroy deferred
+15:37:44.480 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:37:44.496 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:37:47.557 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 14EE81C940 (0 alive), its destroy deferred
+15:37:47.557 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:37:47.570 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:37:50.629 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 196D75B700 (0 alive), its destroy deferred
+15:37:50.630 t44024 recycle ERA_Unit_05_Dep_Air0: done
+15:37:50.646 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+15:37:53.700 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 19A20AE4A0 (0 alive), its destroy deferred
+15:37:53.700 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:37:53.714 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:37:56.746 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 6B53E010 (0 alive), its destroy deferred
+15:37:56.746 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:37:56.760 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:37:59.818 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 175B5E8960 (0 alive), its destroy deferred
+15:37:59.818 t44024 recycle EA_Unit_01_Air0: done
+15:37:59.825 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:38:05.426 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 7836D6F0 (deferred 30 s)
+15:38:05.426 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:38:08.482 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1758F22990 (deferred 30 s)
+15:38:08.482 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:38:11.556 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 7D74CDD0 (deferred 30 s)
+15:38:11.556 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+15:38:14.594 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 1A706D4980 (deferred 30 s)
+15:38:14.594 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:38:17.653 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 14EE81C940 (deferred 30 s)
+15:38:17.653 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:38:20.696 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 196D75B700 (deferred 30 s)
+15:38:20.696 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+15:38:23.918 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 19A20AE4A0 (deferred 30 s)
+15:38:23.919 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:38:26.854 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 6B53E010 (deferred 30 s)
+15:38:26.854 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:38:30.016 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 175B5E8960 (deferred 30 s)
+15:38:30.016 t44024 recycle EA_Unit_01_Air0: destroyed
+15:39:00.875 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 52017BB0 (0 alive), its destroy deferred
+15:39:00.875 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:39:00.889 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:39:03.939 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 56318040 (0 alive), its destroy deferred
+15:39:03.939 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:39:03.955 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:39:06.990 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 7D74D260 (0 alive), its destroy deferred
+15:39:06.990 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:39:07.005 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:39:30.986 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 52017BB0 (deferred 30 s)
+15:39:30.986 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:39:34.037 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 56318040 (deferred 30 s)
+15:39:34.037 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:39:37.214 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 7D74D260 (deferred 30 s)
+15:39:37.214 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:39:38.876 t44024 lua: spawn SV_Unit_ValkaEml at a pose: 1
+15:39:49.866 t44024 lua: spawn SV_Unit_Valka at a pose: 5
+15:39:53.408 t44024 lua: event RE_SV_ValkaEmlRemove: 1
+15:39:53.410 t44024 lua: special clean-up SV_Unit_ValkaEml: 1 killed, 0 off (4 s after its shot)
+15:42:36.909 t44024 lua: special clean-up SV_Unit_Valka: 0 killed, 0 off (her death)
+15:42:36.909 t44024 lua: special clean-up SV_Unit_ValkaEml: 0 killed, 0 off (her death)
+15:42:52.926 t44024 lua: special clean-up SV_Unit_Valka: 0 killed, 0 off (at the end of its valka fight)
+15:42:52.929 t44024 lua: special clean-up SV_Unit_ValkaEml: 0 killed, 0 off (at the end of its valka fight)
+15:42:58.036 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 56310E30 (0 alive), its destroy deferred
+15:42:58.036 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:42:58.051 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:43:01.116 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+15:43:08.775 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+15:43:11.802 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 14D8C2B270 (0 alive), its destroy deferred
+15:43:11.803 t44024 recycle ERA_Unit_01_Dep_Air1: done
+15:43:11.811 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+15:43:14.869 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 19C89F4060 (0 alive), its destroy deferred
+15:43:14.869 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:43:14.883 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:43:17.916 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 75FF7BB0 (0 alive), its destroy deferred
+15:43:17.916 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:43:17.930 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:43:21.048 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 1749072070 (0 alive), its destroy deferred
+15:43:21.049 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:43:21.071 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:43:28.117 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 56310E30 (deferred 30 s)
+15:43:28.117 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:43:41.886 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 14D8C2B270 (deferred 30 s)
+15:43:41.886 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+15:43:44.939 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 19C89F4060 (deferred 30 s)
+15:43:44.939 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:43:45.721 t44024 lua: spawn ERA_Unit_07_Dep_Air1 at a pose: 4
+15:43:48.000 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 75FF7BB0 (deferred 30 s)
+15:43:48.000 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:43:51.067 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 1749072070 (deferred 30 s)
+15:43:51.067 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:45:14.772 t44024 lua: spawn SV_Unit_Alicorn: 226
+15:45:39.790 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 74164E0 (0 alive), its destroy deferred
+15:45:39.790 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:45:39.804 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:46:09.853 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 74164E0 (deferred 30 s)
+15:46:09.853 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:46:15.717 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1796442E20 (0 alive), its destroy deferred
+15:46:15.717 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:46:15.736 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:46:45.980 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1796442E20 (deferred 30 s)
+15:46:45.980 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:46:51.473 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 1959E29710 (0 alive), its destroy deferred
+15:46:51.473 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:46:51.486 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:47:21.553 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 1959E29710 (deferred 30 s)
+15:47:21.553 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:50:47.937 t44024 lua: event RE_SV_AlcnRemove: 1
+15:50:47.949 t44024 lua: special clean-up SV_Unit_Alicorn: 0 killed, 23 off (the next round's start)
+15:50:48.186 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 152902BB90 (0 alive), its destroy deferred
+15:50:48.188 t44024 recycle ERA_Unit_03_Dep_Air1: done
+15:50:48.208 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+15:50:49.957 t44024 lua: special clean-up: SV_Recycle SV_Unit_Alicorn
+15:50:49.958 t44024 recycle SV_Unit_Alicorn: unregistering its unit actor 14FD363BD0 (204 alive), its destroy deferred
+15:50:49.978 t44024 recycle SV_Unit_Alicorn: done
+15:50:51.228 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1938A212C0 (0 alive), its destroy deferred
+15:50:51.228 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:50:51.238 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:50:54.253 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 1719455730 (0 alive), its destroy deferred
+15:50:54.253 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:50:54.268 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:50:57.331 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 152102B700 (0 alive), its destroy deferred
+15:50:57.331 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:50:57.345 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:51:00.372 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 1831FD8040 (0 alive), its destroy deferred
+15:51:00.372 t44024 recycle EA_Unit_01_Air1: done
+15:51:00.387 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 8
+15:51:03.431 t44024 recycle EA_Unit_01_Air2: unregistering its unit actor 15498F7290 (0 alive), its destroy deferred
+15:51:03.432 t44024 recycle EA_Unit_01_Air2: done
+15:51:03.441 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 16
+15:51:06.512 t44024 lua: spawn EB_Unit_01_Air0 at a pose: 6
+15:51:18.242 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 152902BB90 (deferred 30 s)
+15:51:18.242 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+15:51:20.040 t44024 recycle SV_Unit_Alicorn: destroying its old unit actor 14FD363BD0 (deferred 30 s)
+15:51:20.040 t44024 recycle SV_Unit_Alicorn: destroyed
+15:51:21.316 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1938A212C0 (deferred 30 s)
+15:51:21.316 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:51:24.256 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 1719455730 (deferred 30 s)
+15:51:24.256 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:51:27.450 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 152102B700 (deferred 30 s)
+15:51:27.450 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:51:30.495 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 1831FD8040 (deferred 30 s)
+15:51:30.496 t44024 recycle EA_Unit_01_Air1: destroyed
+15:51:33.539 t44024 recycle EA_Unit_01_Air2: destroying its old unit actor 15498F7290 (deferred 30 s)
+15:51:33.539 t44024 recycle EA_Unit_01_Air2: destroyed
+15:52:00.822 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 152102A950 (0 alive), its destroy deferred
+15:52:00.823 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:52:00.830 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:52:03.885 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 196D75BB90 (0 alive), its destroy deferred
+15:52:03.885 t44024 recycle ERA_Unit_05_Dep_Air0: done
+15:52:03.900 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+15:52:06.959 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 15CDD312C0 (0 alive), its destroy deferred
+15:52:06.959 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:52:06.972 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:52:30.979 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 152102A950 (deferred 30 s)
+15:52:30.979 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:52:34.033 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 196D75BB90 (deferred 30 s)
+15:52:34.033 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+15:52:37.094 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 15CDD312C0 (deferred 30 s)
+15:52:37.094 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:53:03.211 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 564FC4B0 (0 alive), its destroy deferred
+15:53:03.211 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:53:03.226 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:53:06.294 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 19A1B4BB90 (0 alive), its destroy deferred
+15:53:06.294 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:53:06.301 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+15:53:09.353 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+15:53:12.407 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 75A8E010 (0 alive), its destroy deferred
+15:53:12.408 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:53:12.421 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:53:15.461 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 78366970 (0 alive), its destroy deferred
+15:53:15.461 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:53:15.474 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:53:18.535 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 1987E832B0 (0 alive), its destroy deferred
+15:53:18.537 t44024 recycle ERA_Unit_05_Dep_Air1: done
+15:53:18.545 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+15:53:21.606 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 1A71853BD0 (0 alive), its destroy deferred
+15:53:21.606 t44024 recycle ERA_Unit_03_Dep_Air1: done
+15:53:21.625 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+15:53:24.663 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 762F3740 (0 alive), its destroy deferred
+15:53:24.664 t44024 recycle EA_Unit_01_Air0: done
+15:53:24.678 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+15:53:33.229 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 564FC4B0 (deferred 30 s)
+15:53:33.229 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:53:36.426 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 19A1B4BB90 (deferred 30 s)
+15:53:36.426 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+15:53:42.423 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 75A8E010 (deferred 30 s)
+15:53:42.423 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:53:45.468 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 78366970 (deferred 30 s)
+15:53:45.468 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:53:48.771 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 1987E832B0 (deferred 30 s)
+15:53:48.771 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+15:53:51.703 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 1A71853BD0 (deferred 30 s)
+15:53:51.703 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+15:53:54.665 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 762F3740 (deferred 30 s)
+15:53:54.665 t44024 recycle EA_Unit_01_Air0: destroyed
+15:54:00.680 t44024 lua: spawn ERA_Unit_02_Dep_Air2 at a pose: 6
+15:54:03.731 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 17583F4060 (0 alive), its destroy deferred
+15:54:03.732 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:54:03.748 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:54:06.782 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 15558E5730 (0 alive), its destroy deferred
+15:54:06.782 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:54:06.798 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:54:33.794 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 17583F4060 (deferred 30 s)
+15:54:33.794 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:54:36.861 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 15558E5730 (deferred 30 s)
+15:54:36.861 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:55:16.406 t44024 lua: spawn SV_Unit_LcacC: 4
+15:55:16.413 t44024 lua: spawn SV_Unit_LcacB: 4
+15:55:16.419 t44024 lua: spawn SV_Unit_LcacD: 4
+15:55:16.425 t44024 lua: spawn SV_Unit_LcacA: 4
+15:55:19.446 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1347BB0 (0 alive), its destroy deferred
+15:55:19.448 t44024 recycle ERA_Unit_07_Dep_Air0: done
+15:55:19.462 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+15:55:22.510 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1E380E930 (0 alive), its destroy deferred
+15:55:22.510 t44024 recycle ERA_Unit_01_Dep_Air0: done
+15:55:22.521 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+15:55:25.552 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 14FD3652A0 (0 alive), its destroy deferred
+15:55:25.552 t44024 recycle ERA_Unit_04_Dep_Air0: done
+15:55:25.569 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+15:55:28.613 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 14FD363BD0 (0 alive), its destroy deferred
+15:55:28.613 t44024 recycle ERA_Unit_03_Dep_Air1: done
+15:55:28.633 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+15:55:31.674 t44024 recycle ERA_Unit_07_Dep_Air1: unregistering its unit actor 1A706D4980 (0 alive), its destroy deferred
+15:55:31.674 t44024 recycle ERA_Unit_07_Dep_Air1: done
+15:55:31.690 t44024 lua: spawn ERA_Unit_07_Dep_Air1 at a pose: 4
+15:55:34.729 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 14FD360E30 (0 alive), its destroy deferred
+15:55:34.730 t44024 recycle ERA_Unit_03_Dep_Air0: done
+15:55:34.738 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+15:55:37.792 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 14FD364060 (0 alive), its destroy deferred
+15:55:37.792 t44024 recycle ERA_Unit_05_Dep_Air1: done
+15:55:37.810 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+15:55:40.829 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 14FD360080 (0 alive), its destroy deferred
+15:55:40.829 t44024 recycle ERA_Unit_02_Dep_Air0: done
+15:55:40.845 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+15:55:49.475 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1347BB0 (deferred 30 s)
+15:55:49.475 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+15:55:52.551 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1E380E930 (deferred 30 s)
+15:55:52.551 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+15:55:55.618 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 14FD3652A0 (deferred 30 s)
+15:55:55.618 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+15:55:58.691 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 14FD363BD0 (deferred 30 s)
+15:55:58.691 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+15:56:01.752 t44024 recycle ERA_Unit_07_Dep_Air1: destroying its old unit actor 1A706D4980 (deferred 30 s)
+15:56:01.752 t44024 recycle ERA_Unit_07_Dep_Air1: destroyed
+15:56:04.848 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 14FD360E30 (deferred 30 s)
+15:56:04.848 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+15:56:07.918 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 14FD364060 (deferred 30 s)
+15:56:07.918 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+15:56:10.851 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 14FD360080 (deferred 30 s)
+15:56:10.851 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+15:56:30.147 t44024 recycle ERA_Unit_02_Dep_Air2: unregistering its unit actor 1E3801BE0 (0 alive), its destroy deferred
+15:56:30.149 t44024 recycle ERA_Unit_02_Dep_Air2: done
+15:56:30.159 t44024 lua: spawn ERA_Unit_02_Dep_Air2 at a pose: 6
+15:56:33.201 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 7413BD0 (0 alive), its destroy deferred
+15:56:33.201 t44024 recycle ERA_Unit_06_Dep_Air0: done
+15:56:33.215 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+15:57:00.226 t44024 recycle ERA_Unit_02_Dep_Air2: destroying its old unit actor 1E3801BE0 (deferred 30 s)
+15:57:00.226 t44024 recycle ERA_Unit_02_Dep_Air2: destroyed
+15:57:03.408 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 7413BD0 (deferred 30 s)
+15:57:03.408 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+15:59:57.835 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 134ADE0 (0 alive), its destroy deferred
+15:59:57.835 t44024 recycle ERA_Unit_08_Dep_Air0: done
+15:59:57.846 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+16:00:00.896 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 18982A2500 (0 alive), its destroy deferred
+16:00:00.897 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:00:00.911 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:00:03.980 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 741A030 (0 alive), its destroy deferred
+16:00:03.980 t44024 recycle ERA_Unit_03_Dep_Air1: done
+16:00:03.999 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+16:00:07.046 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1349BA0 (0 alive), its destroy deferred
+16:00:07.047 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:00:07.062 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:00:10.112 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 17774E10 (0 alive), its destroy deferred
+16:00:10.112 t44024 recycle EA_Unit_01_Air1: done
+16:00:10.119 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+16:00:13.173 t44024 recycle EA_Unit_01_Air2: unregistering its unit actor 19156A9710 (0 alive), its destroy deferred
+16:00:13.174 t44024 recycle EA_Unit_01_Air2: done
+16:00:13.192 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 16
+16:00:16.215 t44024 recycle EB_Unit_01_Air0: unregistering its unit actor 7416E00 (0 alive), its destroy deferred
+16:00:16.217 t44024 recycle EB_Unit_01_Air0: done
+16:00:16.239 t44024 lua: spawn EB_Unit_01_Air0 at a pose: 6
+16:00:27.823 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 134ADE0 (deferred 30 s)
+16:00:27.823 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+16:00:30.997 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 18982A2500 (deferred 30 s)
+16:00:30.997 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:00:34.071 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 741A030 (deferred 30 s)
+16:00:34.071 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+16:00:37.142 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1349BA0 (deferred 30 s)
+16:00:37.142 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:00:40.205 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 17774E10 (deferred 30 s)
+16:00:40.205 t44024 recycle EA_Unit_01_Air1: destroyed
+16:00:42.770 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 19355BA950 (0 alive), its destroy deferred
+16:00:42.770 t44024 recycle ERA_Unit_06_Dep_Air0: done
+16:00:42.777 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+16:00:43.262 t44024 recycle EA_Unit_01_Air2: destroying its old unit actor 19156A9710 (deferred 30 s)
+16:00:43.262 t44024 recycle EA_Unit_01_Air2: destroyed
+16:00:45.843 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 1938A252A0 (0 alive), its destroy deferred
+16:00:45.843 t44024 recycle ERA_Unit_01_Dep_Air1: done
+16:00:45.860 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+16:00:46.705 t44024 recycle EB_Unit_01_Air0: destroying its old unit actor 7416E00 (deferred 30 s)
+16:00:46.705 t44024 recycle EB_Unit_01_Air0: destroyed
+16:00:48.880 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 78368040 (0 alive), its destroy deferred
+16:00:48.880 t44024 recycle ERA_Unit_05_Dep_Air0: done
+16:00:48.895 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+16:01:12.921 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 19355BA950 (deferred 30 s)
+16:01:12.921 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+16:01:15.858 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 1938A252A0 (deferred 30 s)
+16:01:15.859 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+16:01:19.046 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 78368040 (deferred 30 s)
+16:01:19.046 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+16:01:51.768 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 19A1B4BB90 (0 alive), its destroy deferred
+16:01:51.768 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:01:51.786 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:01:55.867 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 1987E809A0 (0 alive), its destroy deferred
+16:01:55.868 t44024 recycle ERA_Unit_03_Dep_Air1: done
+16:01:55.884 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+16:02:21.867 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 19A1B4BB90 (deferred 30 s)
+16:02:21.868 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:02:24.443 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 1A7218A030 (0 alive), its destroy deferred
+16:02:24.443 t44024 recycle ERA_Unit_03_Dep_Air0: done
+16:02:24.458 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+16:02:25.941 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 1987E809A0 (deferred 30 s)
+16:02:25.941 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+16:02:28.500 t44024 lua: spawn ERA_Unit_04_Dep_Air1 at a pose: 4
+16:02:54.518 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 1A7218A030 (deferred 30 s)
+16:02:54.518 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+16:03:24.109 t44024 lua: spawn SV_Unit_Anomaly at a pose: 1
+16:03:24.120 t44024 lua: spawn SV_Unit_AnomalyGuards at a pose: 4
+16:06:11.640 t44024 lua: special clean-up SV_Unit_Anomaly: 0 killed, 0 off (at the end of its anomaly fight)
+16:06:51.903 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1876322E20 (0 alive), its destroy deferred
+16:06:51.904 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:06:51.918 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:06:54.950 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 12358040 (0 alive), its destroy deferred
+16:06:54.950 t44024 recycle ERA_Unit_03_Dep_Air0: done
+16:06:54.957 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+16:06:58.010 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1959E26970 (0 alive), its destroy deferred
+16:06:58.010 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:06:58.026 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:07:01.079 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 175B24F250 (0 alive), its destroy deferred
+16:07:01.079 t44024 recycle ERA_Unit_02_Dep_Air0: done
+16:07:01.095 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+16:07:04.151 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 1987DEC940 (0 alive), its destroy deferred
+16:07:04.153 t44024 recycle ERA_Unit_06_Dep_Air0: done
+16:07:04.168 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+16:07:07.211 t44024 recycle EA_Unit_01_Air2: unregistering its unit actor 15498FDB80 (0 alive), its destroy deferred
+16:07:07.212 t44024 recycle EA_Unit_01_Air2: done
+16:07:07.222 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 16
+16:07:10.293 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 19A1B49280 (0 alive), its destroy deferred
+16:07:10.293 t44024 recycle EA_Unit_01_Air1: done
+16:07:10.308 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+16:07:13.347 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 1831FDC940 (0 alive), its destroy deferred
+16:07:13.347 t44024 recycle EA_Unit_01_Air0: done
+16:07:13.361 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+16:07:16.424 t44024 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+16:07:21.972 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1876322E20 (deferred 30 s)
+16:07:21.972 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:07:25.039 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 12358040 (deferred 30 s)
+16:07:25.039 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+16:07:28.117 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1959E26970 (deferred 30 s)
+16:07:28.117 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:07:31.174 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 175B24F250 (deferred 30 s)
+16:07:31.174 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+16:07:34.231 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 1987DEC940 (deferred 30 s)
+16:07:34.231 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+16:07:37.284 t44024 recycle EA_Unit_01_Air2: destroying its old unit actor 15498FDB80 (deferred 30 s)
+16:07:37.284 t44024 recycle EA_Unit_01_Air2: destroyed
+16:07:40.320 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 19A1B49280 (deferred 30 s)
+16:07:40.320 t44024 recycle EA_Unit_01_Air1: destroyed
+16:07:43.394 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 1831FDC940 (deferred 30 s)
+16:07:43.394 t44024 recycle EA_Unit_01_Air0: destroyed
+16:07:45.185 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 19156A2500 (0 alive), its destroy deferred
+16:07:45.187 t44024 recycle ERA_Unit_05_Dep_Air1: done
+16:07:45.205 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+16:07:48.247 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1687E6E00 (0 alive), its destroy deferred
+16:07:48.247 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:07:48.254 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:07:51.320 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 1A20E9B270 (0 alive), its destroy deferred
+16:07:51.320 t44024 recycle ERA_Unit_08_Dep_Air0: done
+16:07:51.335 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+16:08:15.237 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 19156A2500 (deferred 30 s)
+16:08:15.237 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+16:08:18.315 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1687E6E00 (deferred 30 s)
+16:08:18.315 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:08:21.354 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 1A20E9B270 (deferred 30 s)
+16:08:21.354 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+16:09:03.431 t44024 recycle ERA_Unit_02_Dep_Air2: unregistering its unit actor 14D8C2B270 (0 alive), its destroy deferred
+16:09:03.431 t44024 recycle ERA_Unit_02_Dep_Air2: done
+16:09:03.461 t44024 lua: spawn ERA_Unit_02_Dep_Air2 at a pose: 6
+16:09:33.631 t44024 recycle ERA_Unit_02_Dep_Air2: destroying its old unit actor 14D8C2B270 (deferred 30 s)
+16:09:33.631 t44024 recycle ERA_Unit_02_Dep_Air2: destroyed
+16:09:39.880 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1A20FDCDD0 (0 alive), its destroy deferred
+16:09:39.880 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:09:39.886 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:09:51.344 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 155C708040 (0 alive), its destroy deferred
+16:09:51.345 t44024 recycle ERA_Unit_01_Dep_Air1: done
+16:09:51.367 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+16:10:09.980 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1A20FDCDD0 (deferred 30 s)
+16:10:09.980 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:10:20.188 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 1521029BA0 (0 alive), its destroy deferred
+16:10:20.189 t44024 recycle ERA_Unit_02_Dep_Air0: done
+16:10:20.204 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+16:10:21.454 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 155C708040 (deferred 30 s)
+16:10:21.454 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+16:10:50.363 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 1521029BA0 (deferred 30 s)
+16:10:50.363 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+16:11:07.048 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 1A729AC4B0 (0 alive), its destroy deferred
+16:11:07.048 t44024 recycle ERA_Unit_05_Dep_Air0: done
+16:11:07.064 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+16:11:10.118 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 6BD54E10 (0 alive), its destroy deferred
+16:11:10.119 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:11:10.133 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:11:13.199 t44024 recycle ERA_Unit_02_Dep_Air2: unregistering its unit actor 7417720 (0 alive), its destroy deferred
+16:11:13.199 t44024 recycle ERA_Unit_02_Dep_Air2: done
+16:11:13.221 t44024 lua: spawn ERA_Unit_02_Dep_Air2 at a pose: 6
+16:11:16.246 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 17583FEDC0 (0 alive), its destroy deferred
+16:11:16.247 t44024 recycle ERA_Unit_05_Dep_Air1: done
+16:11:16.265 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+16:11:19.327 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 19156A9280 (0 alive), its destroy deferred
+16:11:19.327 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:11:19.343 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:11:22.380 t44024 recycle ERA_Unit_07_Dep_Air1: unregistering its unit actor 172AA684D0 (0 alive), its destroy deferred
+16:11:22.380 t44024 recycle ERA_Unit_07_Dep_Air1: done
+16:11:22.399 t44024 lua: spawn ERA_Unit_07_Dep_Air1 at a pose: 4
+16:11:25.430 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 19826FADE0 (0 alive), its destroy deferred
+16:11:25.430 t44024 recycle ERA_Unit_03_Dep_Air0: done
+16:11:25.447 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+16:11:37.154 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 1A729AC4B0 (deferred 30 s)
+16:11:37.154 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+16:11:40.206 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 6BD54E10 (deferred 30 s)
+16:11:40.206 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:11:43.290 t44024 recycle ERA_Unit_02_Dep_Air2: destroying its old unit actor 7417720 (deferred 30 s)
+16:11:43.290 t44024 recycle ERA_Unit_02_Dep_Air2: destroyed
+16:11:46.333 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 17583FEDC0 (deferred 30 s)
+16:11:46.333 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+16:11:49.397 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 19156A9280 (deferred 30 s)
+16:11:49.397 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:11:52.459 t44024 recycle ERA_Unit_07_Dep_Air1: destroying its old unit actor 172AA684D0 (deferred 30 s)
+16:11:52.459 t44024 recycle ERA_Unit_07_Dep_Air1: destroyed
+16:11:55.541 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 19826FADE0 (deferred 30 s)
+16:11:55.541 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+16:12:04.749 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 1570154060 (0 alive), its destroy deferred
+16:12:04.749 t44024 recycle ERA_Unit_02_Dep_Air0: done
+16:12:04.766 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+16:12:07.767 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 1987DED260 (0 alive), its destroy deferred
+16:12:07.777 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:12:07.783 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:12:10.830 t44024 recycle ERA_Unit_04_Dep_Air1: unregistering its unit actor 1A7145FB70 (0 alive), its destroy deferred
+16:12:10.830 t44024 recycle ERA_Unit_04_Dep_Air1: done
+16:12:10.848 t44024 lua: spawn ERA_Unit_04_Dep_Air1 at a pose: 4
+16:12:34.781 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 1570154060 (deferred 30 s)
+16:12:34.781 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+16:12:37.837 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 1987DED260 (deferred 30 s)
+16:12:37.837 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:12:40.894 t44024 recycle ERA_Unit_04_Dep_Air1: destroying its old unit actor 1A7145FB70 (deferred 30 s)
+16:12:40.894 t44024 recycle ERA_Unit_04_Dep_Air1: destroyed
+16:12:57.695 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 1546A3C020 (0 alive), its destroy deferred
+16:12:57.696 t44024 recycle ERA_Unit_03_Dep_Air0: done
+16:12:57.704 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+16:13:00.777 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1A18504060 (0 alive), its destroy deferred
+16:13:00.777 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:13:00.792 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:13:03.820 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 2934E10 (0 alive), its destroy deferred
+16:13:03.820 t44024 recycle ERA_Unit_02_Dep_Air0: done
+16:13:03.835 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+16:13:06.894 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 17583F6050 (0 alive), its destroy deferred
+16:13:06.894 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:13:06.908 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:13:09.941 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 1A20FDCDD0 (0 alive), its destroy deferred
+16:13:09.941 t44024 recycle ERA_Unit_05_Dep_Air0: done
+16:13:09.948 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+16:13:13.020 t44024 recycle EB_Unit_01_Air0: unregistering its unit actor 1755BF4060 (0 alive), its destroy deferred
+16:13:13.020 t44024 recycle EB_Unit_01_Air0: done
+16:13:13.047 t44024 lua: spawn EB_Unit_01_Air0 at a pose: 6
+16:13:16.089 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 18A6DC09A0 (0 alive), its destroy deferred
+16:13:16.090 t44024 recycle EA_Unit_01_Air0: done
+16:13:16.105 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+16:13:27.810 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 1546A3C020 (deferred 30 s)
+16:13:27.810 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+16:13:30.998 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1A18504060 (deferred 30 s)
+16:13:30.998 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:13:33.955 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 2934E10 (deferred 30 s)
+16:13:33.955 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+16:13:36.987 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 17583F6050 (deferred 30 s)
+16:13:36.987 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:13:40.043 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 1A20FDCDD0 (deferred 30 s)
+16:13:40.043 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+16:13:43.077 t44024 recycle EB_Unit_01_Air0: destroying its old unit actor 1755BF4060 (deferred 30 s)
+16:13:43.077 t44024 recycle EB_Unit_01_Air0: destroyed
+16:13:44.528 t44024 lua: spawn SV_Unit_Ciws_A: 1
+16:13:44.929 t44024 lua: spawn SV_Unit_Ciws_B: 1
+16:13:45.324 t44024 lua: spawn SV_Unit_Ciws_C: 1
+16:13:45.686 t44024 lua: spawn SV_Unit_SAM_A: 1
+16:13:46.077 t44024 lua: spawn SV_Unit_SAM_B: 1
+16:13:46.089 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 18A6DC09A0 (deferred 30 s)
+16:13:46.089 t44024 recycle EA_Unit_01_Air0: destroyed
+16:13:46.707 t44024 lua: spawn SV_Unit_AAGun_A: 1
+16:13:47.068 t44024 lua: spawn SV_Unit_AAGun_B: 1
+16:13:47.335 t44024 lua: spawn SV_Unit_AAGun_C: 1
+16:13:48.238 t44024 lua: spawn SV_Unit_Ciws_D: 1
+16:13:50.773 t44024 lua: spawn SV_Unit_AAGun_D: 1
+16:13:51.180 t44024 lua: spawn SV_Unit_AAGun_E: 1
+16:14:36.244 t44024 lua: spawn SV_Unit_VoidWatcher: 3
+16:14:36.870 t44024 recycle ERB_Unit_01_Air2: unregistering its unit actor 1876324060 (0 alive), its destroy deferred
+16:14:36.871 t44024 recycle ERB_Unit_01_Air2: done
+16:14:36.892 t44024 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+16:15:06.917 t44024 recycle ERB_Unit_01_Air2: destroying its old unit actor 1876324060 (deferred 30 s)
+16:15:06.917 t44024 recycle ERB_Unit_01_Air2: destroyed
+16:15:26.520 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 13529C940 (0 alive), its destroy deferred
+16:15:26.521 t44024 recycle ERA_Unit_05_Dep_Air1: done
+16:15:26.530 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+16:15:29.628 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 152902A950 (0 alive), its destroy deferred
+16:15:29.628 t44024 recycle ERA_Unit_08_Dep_Air0: done
+16:15:29.647 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+16:15:32.643 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 1796442500 (0 alive), its destroy deferred
+16:15:32.643 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:15:32.660 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:15:56.600 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 13529C940 (deferred 30 s)
+16:15:56.600 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+16:15:59.666 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 152902A950 (deferred 30 s)
+16:15:59.666 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+16:16:02.726 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 1796442500 (deferred 30 s)
+16:16:02.726 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:16:26.684 t44024 recycle ERA_Unit_02_Dep_Air2: unregistering its unit actor 19D14484D0 (0 alive), its destroy deferred
+16:16:26.685 t44024 recycle ERA_Unit_02_Dep_Air2: done
+16:16:26.706 t44024 lua: spawn ERA_Unit_02_Dep_Air2 at a pose: 6
+16:16:48.157 t44024 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 19826F09A0 (0 alive), its destroy deferred
+16:16:48.157 t44024 recycle ERA_Unit_02_Dep_Air0: done
+16:16:48.173 t44024 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+16:16:52.244 t44024 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+16:16:56.681 t44024 recycle ERA_Unit_02_Dep_Air2: destroying its old unit actor 19D14484D0 (deferred 30 s)
+16:16:56.681 t44024 recycle ERA_Unit_02_Dep_Air2: destroyed
+16:17:18.236 t44024 recycle ERA_Unit_02_Dep_Air0: destroying its old unit actor 19826F09A0 (deferred 30 s)
+16:17:18.236 t44024 recycle ERA_Unit_02_Dep_Air0: destroyed
+16:17:34.053 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 1687E6E00 (0 alive), its destroy deferred
+16:17:34.053 t44024 recycle ERA_Unit_01_Dep_Air1: done
+16:17:34.071 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+16:18:04.116 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 1687E6E00 (deferred 30 s)
+16:18:04.116 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+16:18:32.587 t44024 recycle ERA_Unit_07_Dep_Air1: unregistering its unit actor 154D5A7290 (0 alive), its destroy deferred
+16:18:32.588 t44024 recycle ERA_Unit_07_Dep_Air1: done
+16:18:32.606 t44024 lua: spawn ERA_Unit_07_Dep_Air1 at a pose: 4
+16:18:35.673 t44024 recycle ERA_Unit_03_Dep_Air1: unregistering its unit actor 155C7009A0 (0 alive), its destroy deferred
+16:18:35.673 t44024 recycle ERA_Unit_03_Dep_Air1: done
+16:18:35.681 t44024 lua: spawn ERA_Unit_03_Dep_Air1 at a pose: 4
+16:18:38.726 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 13529C4B0 (0 alive), its destroy deferred
+16:18:38.726 t44024 recycle ERA_Unit_06_Dep_Air0: done
+16:18:38.741 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+16:18:41.795 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 18982AE010 (0 alive), its destroy deferred
+16:18:41.795 t44024 recycle ERA_Unit_05_Dep_Air0: done
+16:18:41.813 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+16:18:44.862 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 18A8001BE0 (0 alive), its destroy deferred
+16:18:44.862 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:18:44.878 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:18:47.927 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 198271ADE0 (0 alive), its destroy deferred
+16:18:47.927 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:18:47.934 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:18:51.006 t44024 recycle ERA_Unit_02_Dep_Air1: unregistering its unit actor 1938A23BD0 (0 alive), its destroy deferred
+16:18:51.006 t44024 recycle ERA_Unit_02_Dep_Air1: done
+16:18:51.023 t44024 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+16:18:54.062 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 6B53C4B0 (0 alive), its destroy deferred
+16:18:54.062 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:18:54.078 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:19:02.616 t44024 recycle ERA_Unit_07_Dep_Air1: destroying its old unit actor 154D5A7290 (deferred 30 s)
+16:19:02.616 t44024 recycle ERA_Unit_07_Dep_Air1: destroyed
+16:19:05.665 t44024 recycle ERA_Unit_03_Dep_Air1: destroying its old unit actor 155C7009A0 (deferred 30 s)
+16:19:05.665 t44024 recycle ERA_Unit_03_Dep_Air1: destroyed
+16:19:08.714 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 13529C4B0 (deferred 30 s)
+16:19:08.714 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+16:19:11.907 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 18982AE010 (deferred 30 s)
+16:19:11.907 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+16:19:14.965 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 18A8001BE0 (deferred 30 s)
+16:19:14.965 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:19:18.037 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 198271ADE0 (deferred 30 s)
+16:19:18.037 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:19:21.072 t44024 recycle ERA_Unit_02_Dep_Air1: destroying its old unit actor 1938A23BD0 (deferred 30 s)
+16:19:21.072 t44024 recycle ERA_Unit_02_Dep_Air1: destroyed
+16:19:24.143 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 6B53C4B0 (deferred 30 s)
+16:19:24.143 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:19:43.239 t44024 recycle ERA_Unit_01_Dep_Air1: unregistering its unit actor 1E38009A0 (0 alive), its destroy deferred
+16:19:43.240 t44024 recycle ERA_Unit_01_Dep_Air1: done
+16:19:43.257 t44024 lua: spawn ERA_Unit_01_Dep_Air1 at a pose: 4
+16:19:46.281 t44024 recycle ERA_Unit_05_Dep_Air1: unregistering its unit actor 1986C71750 (0 alive), its destroy deferred
+16:19:46.281 t44024 recycle ERA_Unit_05_Dep_Air1: done
+16:19:46.300 t44024 lua: spawn ERA_Unit_05_Dep_Air1 at a pose: 4
+16:20:13.300 t44024 recycle ERA_Unit_01_Dep_Air1: destroying its old unit actor 1E38009A0 (deferred 30 s)
+16:20:13.300 t44024 recycle ERA_Unit_01_Dep_Air1: destroyed
+16:20:16.383 t44024 recycle ERA_Unit_05_Dep_Air1: destroying its old unit actor 1986C71750 (deferred 30 s)
+16:20:16.383 t44024 recycle ERA_Unit_05_Dep_Air1: destroyed
+16:20:39.787 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 19A1B41750 (0 alive), its destroy deferred
+16:20:39.788 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:20:39.795 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:20:42.813 t44024 recycle ERA_Unit_08_Dep_Air0: unregistering its unit actor 171ACA52A0 (0 alive), its destroy deferred
+16:20:42.813 t44024 recycle ERA_Unit_08_Dep_Air0: done
+16:20:42.829 t44024 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+16:20:45.892 t44024 recycle ERA_Unit_02_Dep_Air1: unregistering its unit actor 18A8001750 (0 alive), its destroy deferred
+16:20:45.892 t44024 recycle ERA_Unit_02_Dep_Air1: done
+16:20:45.911 t44024 lua: spawn ERA_Unit_02_Dep_Air1 at a pose: 4
+16:20:48.910 t44024 recycle ERA_Unit_03_Dep_Air0: unregistering its unit actor 14FD369BA0 (0 alive), its destroy deferred
+16:20:48.910 t44024 recycle ERA_Unit_03_Dep_Air0: done
+16:20:48.927 t44024 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+16:20:51.961 t44024 recycle EA_Unit_01_Air1: unregistering its unit actor 135294980 (0 alive), its destroy deferred
+16:20:51.962 t44024 recycle EA_Unit_01_Air1: done
+16:20:51.970 t44024 lua: spawn EA_Unit_01_Air1 at a pose: 6
+16:20:55.005 t44024 recycle EA_Unit_01_Air2: unregistering its unit actor 18982A6050 (0 alive), its destroy deferred
+16:20:55.006 t44024 recycle EA_Unit_01_Air2: done
+16:20:55.023 t44024 lua: spawn EA_Unit_01_Air2 at a pose: 12
+16:20:58.092 t44024 recycle EA_Unit_01_Air0: unregistering its unit actor 154D5A9710 (0 alive), its destroy deferred
+16:20:58.092 t44024 recycle EA_Unit_01_Air0: done
+16:20:58.108 t44024 lua: spawn EA_Unit_01_Air0 at a pose: 2
+16:21:01.147 t44024 recycle ERB_Unit_01_Air2: unregistering its unit actor 18A6DCD6F0 (0 alive), its destroy deferred
+16:21:01.147 t44024 recycle ERB_Unit_01_Air2: done
+16:21:01.168 t44024 lua: spawn ERB_Unit_01_Air2 at a pose: 4
+16:21:09.797 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 19A1B41750 (deferred 30 s)
+16:21:09.797 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:21:12.846 t44024 recycle ERA_Unit_08_Dep_Air0: destroying its old unit actor 171ACA52A0 (deferred 30 s)
+16:21:12.846 t44024 recycle ERA_Unit_08_Dep_Air0: destroyed
+16:21:15.899 t44024 recycle ERA_Unit_02_Dep_Air1: destroying its old unit actor 18A8001750 (deferred 30 s)
+16:21:15.899 t44024 recycle ERA_Unit_02_Dep_Air1: destroyed
+16:21:18.972 t44024 recycle ERA_Unit_03_Dep_Air0: destroying its old unit actor 14FD369BA0 (deferred 30 s)
+16:21:18.972 t44024 recycle ERA_Unit_03_Dep_Air0: destroyed
+16:21:22.031 t44024 recycle EA_Unit_01_Air1: destroying its old unit actor 135294980 (deferred 30 s)
+16:21:22.031 t44024 recycle EA_Unit_01_Air1: destroyed
+16:21:25.077 t44024 recycle EA_Unit_01_Air2: destroying its old unit actor 18982A6050 (deferred 30 s)
+16:21:25.077 t44024 recycle EA_Unit_01_Air2: destroyed
+16:21:28.152 t44024 recycle EA_Unit_01_Air0: destroying its old unit actor 154D5A9710 (deferred 30 s)
+16:21:28.152 t44024 recycle EA_Unit_01_Air0: destroyed
+16:21:31.204 t44024 recycle ERB_Unit_01_Air2: destroying its old unit actor 18A6DCD6F0 (deferred 30 s)
+16:21:31.204 t44024 recycle ERB_Unit_01_Air2: destroyed
+16:22:05.859 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 18A8007720 (0 alive), its destroy deferred
+16:22:05.859 t44024 recycle ERA_Unit_06_Dep_Air0: done
+16:22:05.875 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+16:22:08.896 t44024 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 75A83BD0 (0 alive), its destroy deferred
+16:22:08.896 t44024 recycle ERA_Unit_05_Dep_Air0: done
+16:22:08.912 t44024 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+16:22:11.954 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 18A80009A0 (0 alive), its destroy deferred
+16:22:11.955 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:22:11.970 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:22:14.997 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1774B34E10 (0 alive), its destroy deferred
+16:22:14.998 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:22:15.016 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:22:35.895 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 18A8007720 (deferred 30 s)
+16:22:35.895 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+16:22:38.959 t44024 recycle ERA_Unit_05_Dep_Air0: destroying its old unit actor 75A83BD0 (deferred 30 s)
+16:22:38.959 t44024 recycle ERA_Unit_05_Dep_Air0: destroyed
+16:22:42.039 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 18A80009A0 (deferred 30 s)
+16:22:42.039 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:22:45.094 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1774B34E10 (deferred 30 s)
+16:22:45.094 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:23:25.195 t44024 lua: spawn SV_Unit_Glitch at a pose: 1
+16:23:28.239 t44024 recycle ERA_Unit_06_Dep_Air0: unregistering its unit actor 19A1B40E30 (0 alive), its destroy deferred
+16:23:28.239 t44024 recycle ERA_Unit_06_Dep_Air0: done
+16:23:28.255 t44024 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+16:23:31.306 t44024 recycle ERA_Unit_04_Dep_Air0: unregistering its unit actor 15CDD364E0 (0 alive), its destroy deferred
+16:23:31.306 t44024 recycle ERA_Unit_04_Dep_Air0: done
+16:23:31.322 t44024 lua: spawn ERA_Unit_04_Dep_Air0 at a pose: 2
+16:23:34.354 t44024 recycle ERA_Unit_07_Dep_Air0: unregistering its unit actor 1537A12500 (0 alive), its destroy deferred
+16:23:34.354 t44024 recycle ERA_Unit_07_Dep_Air0: done
+16:23:34.370 t44024 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+16:23:37.382 t44024 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 172AA64980 (0 alive), its destroy deferred
+16:23:37.383 t44024 recycle ERA_Unit_01_Dep_Air0: done
+16:23:37.398 t44024 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+16:23:38.156 t44024 lua: special clean-up SV_Unit_Glitch: 0 killed, 0 off (at the end of its glitch fight)
+16:23:58.239 t44024 recycle ERA_Unit_06_Dep_Air0: destroying its old unit actor 19A1B40E30 (deferred 30 s)
+16:23:58.239 t44024 recycle ERA_Unit_06_Dep_Air0: destroyed
+16:24:01.311 t44024 recycle ERA_Unit_04_Dep_Air0: destroying its old unit actor 15CDD364E0 (deferred 30 s)
+16:24:01.311 t44024 recycle ERA_Unit_04_Dep_Air0: destroyed
+16:24:04.504 t44024 recycle ERA_Unit_07_Dep_Air0: destroying its old unit actor 1537A12500 (deferred 30 s)
+16:24:04.504 t44024 recycle ERA_Unit_07_Dep_Air0: destroyed
+16:24:07.585 t44024 recycle ERA_Unit_01_Dep_Air0: destroying its old unit actor 172AA64980 (deferred 30 s)
+16:24:07.585 t44024 recycle ERA_Unit_01_Dep_Air0: destroyed
+16:24:41.761 t44024 lua: event RE_SV_AwacsRemove: 1
+16:24:43.808 t44024 recycle SV_Unit_VoidWatcher: unregistering its unit actor 1A21676E00 (3 alive), its destroy deferred
+16:24:43.808 t44024 recycle SV_Unit_VoidWatcher: done
+16:25:13.863 t44024 recycle SV_Unit_VoidWatcher: destroying its old unit actor 1A21676E00 (deferred 30 s)
+16:25:13.863 t44024 recycle SV_Unit_VoidWatcher: destroyed
