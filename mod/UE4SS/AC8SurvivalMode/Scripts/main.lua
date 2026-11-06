@@ -21,6 +21,7 @@ local MODULES = {
     "sv_alicorn",
     "sv_amphib",
     "sv_spaceport",                -- the Spaceport Assault and its retake (tools/re/SPACEPORT_ASSAULT.md)
+    "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (tools/re/DECOY.md)
     "sv_flights",
     "sv_shop",
     "sv_allies",

@@ -129,6 +129,7 @@ end
 -- for the measurements (STATS.down); nil for a Ladon.
 local function creditKill(p)
     if p.unit and p.unit:find("^SV_Unit_Ladon") then return end   -- (a Ladon pays its own reward: SPC.ladonTick)
+    if DECOY and DECOY.isUnit and DECOY.isUnit(p.unit) then return end   -- (THE DECOY's UAVs too: sv_decoy.lua)
     local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
     local kind = "fighter"
     if p.unit and BOMBER_UNIT[p.unit] then
@@ -290,7 +291,8 @@ local function planeSweep(slot)
                 p.dist = (p.at and you) and km(p.at, you) or nil                   -- (ACE.hunt's tell reads it)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
                 pcall(planeUnit, p)
-                local own = p.unit and p.unit:find("^SV_Unit_Ladon")              -- (the Ladons: their own tuning)
+                local own = p.unit and (p.unit:find("^SV_Unit_Ladon")             -- (the Ladons: their own tuning;
+                    or (DECOY and DECOY.isUnit and DECOY.isUnit(p.unit)))          -- THE DECOY's UAVs: their orbit)
                 if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
                 local an = CFG.specials.anomaly
                 local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
@@ -636,6 +638,10 @@ local function probeTickB(tick)
             if not okAt and not D.atkErr then D.atkErr = true; log("attackers: error " .. tostring(errAt)) end
             local okSw, errSw = timed("specials", SPW.tick, now)              -- (sv_spweapons.lua)
             if not okSw and not D.spwErr then D.spwErr = true; log("specials: error " .. tostring(errSw)) end
+            if DECOY and DECOY.tick then                                       -- (THE DECOY's locks and Spear here: sv_decoy.lua)
+                local okDc, errDc = timed("decoy", DECOY.tick, now)
+                if not okDc and D and not D.decoyErr then D.decoyErr = true; log("decoy: error " .. tostring(errDc)) end
+            end
             local okAu, errAu = timed("audit", AUDIT.tick, now)               -- (sv_audit.lua)
             if not okAu and not D.auditErr then D.auditErr = true; log("audit: error " .. tostring(errAu)) end
             if CFG.allies.kills then timed("kill marks", KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)

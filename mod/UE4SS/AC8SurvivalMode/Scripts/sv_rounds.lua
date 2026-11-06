@@ -205,7 +205,8 @@ function SPC.cleanUnitsOf(kind)
     elseif kind == "anomaly" then add(u(c.anomaly, "unit"))
     elseif kind == "glitch" then add(u(c.glitch, "unit"))
     elseif kind == "ladon" then for _, x in ipairs(LADON_UNITS) do add(x) end
-    elseif kind == "alicorn" then add(ALICORN_UNIT) end
+    elseif kind == "alicorn" then add(ALICORN_UNIT)
+    elseif kind == "decoy" and DECOY and DECOY.cleanUnits then for _, x in ipairs(DECOY.cleanUnits()) do add(x) end end
     return out
 end
 -- what a unit is called in the log
@@ -218,6 +219,8 @@ function SPC.cleanLabel(unit)
     local lk = unit:match("^SV_Unit_Ladon(%a+)$")
     if lk then return "Ladon " .. tostring((type(c.ladon) == "table" and c.ladon.names or {})[lk] or lk:upper()) .. "'s unit (" .. unit .. ")" end
     if unit == ALICORN_UNIT then return "the Alicorn's unit (" .. unit .. ")" end
+    local dl = DECOY and DECOY.label and DECOY.label(unit)      -- (THE DECOY's: sv_decoy.lua)
+    if dl then return dl end
     return unit
 end
 SPC.CLEAN_OBJ, SPC.cleanQ = {}, {}
@@ -230,6 +233,7 @@ for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn" }) do
     local okU, list = pcall(SPC.cleanUnitsOf, k)
     for _, x in ipairs(okU and list or {}) do watched[x] = true end
 end
+SPC.cleanWatch = watched           -- (a later part's units recorded too: THE DECOY's, sv_decoy.lua)
 -- every object made while SV_Spawn spawns a special's unit (the host's, a joiner's copies: sv_coop.lua sets spawningUnit
 -- too); a new spawn of the unit (more than 2 s after the last object) starts its list again
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
