@@ -14,6 +14,9 @@ if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the Alicorn's pools"] = functi
 -- At the main menu: the Alicorn's Online Mode rows into the campaign tables (NPC, model, durability), before the
 -- level loads (the spawner caches them then: hard rule 20). AddRow only; a model row's soft class is never read
 -- (hard rule 29).
+-- ((0.74.0) THE FESTIVAL's searchlights ride in the same tables (CFG.specials.festival.rows): they're added with them but
+-- judged apart, so a row of theirs that won't go in never turns the Alicorn round off (SPC.alicornReady: the Alicorn's
+-- own rows), only the searchlights (SPC.festRows: { want, have, lost }, sv_festival.lua FEST.lightsReady))
 function SPC.alicornSetup()
     if SPC.alicornDone or not gameInstance() then return end
     local c = CFG.specials.alicorn
@@ -30,22 +33,37 @@ function SPC.alicornSetup()
     end
     SPC.alicornDone = true
     local added, total, lost = 0, 0, {}
+    local fc = CFG.specials and CFG.specials.festival
+    local festRow, fr = {}, { want = 0, have = 0, lost = {} }
+    for _, r in ipairs(type(fc) == "table" and type(fc.rows) == "table" and fc.rows or {}) do festRow[tostring(r)] = true end
     for _, p in ipairs(pairs_) do
         local from, to = p[1], p[2]
         pin(from, nameOf(from)); pin(to, nameOf(to))
         for _, row in ipairs(rowList(from) or {}) do
-            total = total + 1
-            local _, have = dtCall(to, "FindRow", row)
-            if have == nil then
-                local _, r = dtCall(from, "FindRow", row)
-                if r ~= nil then dtCall(to, "AddRow", row, r); _, have = dtCall(to, "FindRow", row) end
-            end
-            if have ~= nil then added = added + 1 else lost[#lost + 1] = row end
+            local fest = festRow[tostring(row)] == true
+            if fest then fr.want = fr.want + 1 else total = total + 1 end
+            local okF, have = pcall(function()
+                local _, h = dtCall(to, "FindRow", row)
+                if h == nil then
+                    local _, r = dtCall(from, "FindRow", row)
+                    if r ~= nil then dtCall(to, "AddRow", row, r); _, h = dtCall(to, "FindRow", row) end
+                end
+                return h
+            end)
+            if not okF then have = nil end
+            if fest then
+                if have ~= nil then fr.have = fr.have + 1 else fr.lost[#fr.lost + 1] = tostring(row) end
+            elseif have ~= nil then added = added + 1 else lost[#lost + 1] = row end
         end
     end
     SPC.alicornReady = total > 0 and #lost == 0
+    SPC.festRows = fr
     log(string.format("special: the Alicorn's rows: %d of %d in the campaign tables%s", added, total,
         #lost > 0 and (" (missing: " .. table.concat(lost, ", ") .. ")") or ""))
+    if fr.want > 0 or next(festRow) then
+        log(string.format("special: THE FESTIVAL's searchlight rows (in the Alicorn's tables): %d of %d in%s", fr.have, fr.want,
+            #fr.lost > 0 and (" (missing: " .. table.concat(fr.lost, ", ") .. ": no searchlights)") or ""))
+    end
 end
 
 function SPC.alicornSpawn(now)

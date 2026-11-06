@@ -273,3 +273,113 @@ C_011). 51 triggers, 216 execs.
 Maps/Ingame/Mission030/WD_ and EP_Mission030_global, Datatables/AI/NPC/Mission/DT_NPC_Mission030,
 OnlineMode/Maps/CompetitiveCoop/C_011/WD_C_011_03, OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON,
 Maps/Ingame/Mission028/WD_Mission028_global; for `festival_lights_check.py --scan`, Map17's level packages.
+
+## 9. The rounds (0.74.0 Lua, feature/fishing-lua; nothing run in game)
+The real GONE FISHIN', the day-night arc and THE FESTIVAL on the build data of section 8. Every mechanism is [T] until a
+test confirms it.
+
+### Parts and where they hook in
+- `Scripts/sv_subs.lua` (new): the subtitle strip and the results card, `SUB.say(speaker, text, secs)` (a queue, one line
+  at a time; on a co-op host inside the rounds' logic sent as `sb` to every joiner, as a callout's `co`),
+  `SUB.sayHere` (this game only), `SUB.clear`, `SUB.busy`, `SUB.left`, `SUB.card(title, lines, secs)`; built by
+  sv_hud.lua's hudBuild (SUB.build), shown by its hudTick (SUB.hudTick). The strip is up only while a line is.
+  CFG.hud.subs / CFG.hud.card, ini [hud.subs] / [hud.card].
+- `Scripts/sv_fishing.lua` "the round": SPC.kinds.fishing (sv_anomalies.lua: ready / spawn / tick / busy / over / row).
+  CFG.specials.fishing (its lines in `.text`, "S|" SAL, "C|" COMONA CONTROL: a CFG `text` table, free to edit for the
+  leaderboard), ini [fishing], [fishing.catch], [fishing.kg].
+- `Scripts/sv_sky.lua` "the day-night arc": SKY.arc* (SKY.arcTick from sv_main.lua probeTickB, every game), ARC; SKY.apply
+  takes `{ V, quiet, shadows }` now and SKY.viewCached keeps the level's sky objects (liveObj each) between its writes.
+  CFG.sky.arc, ini [sky.arc].
+- `Scripts/sv_festival.lua` "the round": SPC.kinds.festival; FEST.roundIs (sv_spawn.lua specialFor: never drawn, F + 6);
+  FEST.killPay (sv_main.lua creditKill); the Spaceport not ready the round before it (its retake would land on it).
+  CFG.specials.festival, ini [festival].
+- sv_rounds.lua: SPC.canStart(kind, forced) (ready(round, forced)), cleanUnitsOf / recycleUnitsOf / the watched units for
+  both kinds (the boat and the searchlights watched, never finished off). sv_spawn.lua: kindReady(k, round).
+- sv_alicorn.lua: SPC.alicornReady judges the Alicorn's own rows; THE FESTIVAL's searchlight rows (CFG.specials.festival
+  .rows) go to SPC.festRows (FEST.lightsReady). A searchlight row that won't go in never turns the Alicorn round off.
+- sv_coop.lua: allyUnit has SAL's boat and the searchlights; "rnd" field 15 = F (a joiner keeps it in RUN.arcF, so a
+  migration keeps it); `sb`, `fh|slot|catch|kg|x|y`, `fsx|kind|state|a|b|c` (unreliable, once a second), `fw|slot|kg|hits|
+  empty|best|bestKg|bigone`, `fwe|players|teamKg|allyKg|round|shoals`; COOP.payOwn (this game's own pay, never split, never
+  `cr`), COOP.removeObj (one object down unpaid on every game: `dn|<id>|r`), COOP.slots.
+- sv_main.lua: SKY.arcTick / FISH.clientTick / FEST.clientTick in probeTickB; SKY.arcReset and SUB.clear at a restart;
+  the siren off and SUB.clear at runLeft; the festival's missiles kept stock (no tier, spike or late health).
+
+### GONE FISHIN' (once a run, from round 7, in the random rotation)
+intro (SAL's boat spawned, F = this round, ~28 s of lines) -> fishing (the three grounds spawned with spheres, 3:00,
+warnings at 2:00 / 1:00 / 0:30 / 0:10) -> weigh (shoals left taken off: COOP.removeNow, SPC.cleanUp, SV_Recycle 3 s on;
+SAL weighs; each player's own haul graded and paid; the card) -> done (the boat switched off; the round clears).
+- The deck: the weights apportioned to the shoals (24: 7 empty, 2 junk, 5 sardines, 4 mackerel, 3 tuna, 2 swordfish,
+  The Big One), shuffled; a shoal down draws the next. Killer: KILL.by (co-op: the host's attribution, "wingmate" with
+  p.killer = the joiner's slot); an ally's catch is the player's solo, shared out among the players at the co-op weigh-in.
+- Pay: kg x 6 + the grade's bonus (S 2,500, A 1,000, B 400, C 100), + 500 with The Big One, x (1 + 0.04 per round past 7).
+  Round 7: A at 770 kg with The Big One 6,120 Z (700 kg without it 5,200), S at 1,000 kg 9,000 Z; round 17 x1.4. Co-op:
+  each threshold x players ^ -1 (the share of the grounds), each player paid their own (no special split).
+- SAL's boat: a health drop on this game's own copy is this game's player's hit: -25 kg (once a 4 s), "THAT IS MY BOAT!"
+  on this game only; never a co-op message. Its MinHealth field kept at 1 on the host.
+
+### The arc (every game the same sky from the round, its state, its seconds and F)
+k = round - F: 0 stock; 1-5 14/160, 12/180, 10/-160, 7/-140, 4/-120 (exposure to 11/14/-0.5, stars at max); 6 sunset 1
+sinking to -3 / -105 (sky light x0.5, glow 100, EV 8, exposure 9.5/14/-1); 7 night (the light at the moon 35/-130, 0.5,
+bluish, the moon on, sky light x0.1 blue, glow 10000, EV -2, exposure 0.5/9/0.5); 8 dawn -4/105 (exposure 4/14/-2, sky
+light x0.3, glow 10000, EV 5); 9-11 rising; 12 on midday 52.9/180 held. A fight drifts 0.75 of the step over 240 s (0.45
+for a swap step), the break finishes it (a swap step: the darkest point, the light at 0.25, in the break's middle).
+VALKA: not from F to F+11 (her test key forces her). Written every 2 s on the kept view, the MPCs every tick.
+
+### THE FESTIVAL (round F + 6, at sunset)
+talk (~28 s, GONE FISHIN''s haul named) -> raid: the siren over the runway (every game), the searchlights (their rows
+in), the formations N / W / S (SV_Spawn(unit) alone, RE_SV_FestUp_<g> 2 s on). A formation within 3 km of its launch
+point (or at first 43 / 168 / 60 s, then every 216 + 30 s) launches the next free unit's salvo (SV_Unit_FestCM_<g><k> at
+the point, 2 km up, yaw N 90 / W 0 / S -90; RE_SV_FestCM_<g><k> 0.5 s on), 120 s apart at least. A missile within 400 m of
+the runway (5 s after its launch at least): off the list, COOP.removeObj, RE_SV_FestCMHit_<g><k>_<i>, -8 airfield; still
+up 1.5 s on: finished off here (logged: the record's i may not be the spawner's order). A salvo all down: SV_Recycle(unit,
+1) 3 s on. Missiles 150 Z, Tu-160s 400 Z (x the round's kill multipliers); every bomber down and nothing in the air:
+4,000 + 150 x the round (a special's: split in co-op); 900 s: what's left taken off.
+
+### TEST ONLY keys (all stripped from a release)
+| Key | Part | Does |
+|---|---|---|
+| Ctrl+F6 | sv_sky.lua | the sky test's five steps (section 5) |
+| Ctrl+F10 | sv_fishing.lua | the shoals and the boat (section 7, tests 1-2) |
+| Ctrl+F12 | sv_festival.lua | one salvo and the siren (section 7, test 4) |
+| Ctrl+HOME | sv_fishing.lua | GONE FISHIN' now (in the break: 3 s; in a fight: the next round), whatever once / from_round |
+| Ctrl+PAGE_UP | sv_festival.lua | THE FESTIVAL next (F set so that round is F + 6: the sky blends to sunset) |
+| Ctrl+PAGE_DOWN | sv_sky.lua | the arc one round on (F one less; none: from this round, F + 1), blended in |
+(Ctrl+9 is the ZFA-44's, on its own branch.)
+
+### Log lines
+- `fishing: round N, GONE FISHIN': SAL on the radio (...)`, `fishing: round N: 24 shoals on the grounds: ...; the deck: ...`,
+  `fishing: shoal <unit> #i down at +N s by <side> (player N): <catch> N kg; ...`, `fishing: N s left (N shoals up)`,
+  `fishing: SAL's boat hit here (a -> b): -25 kg off your haul (...)`, `fishing: round N: the weigh-in (...)`,
+  `fishing: the weigh-in here: N kg (...), grade X, paid N Z (...)`, `fishing: round N over (...)`,
+  `fishing: SAL's boat switched off here (...)`, `fishing: a shoal's copy here got no sphere: ...`.
+- `sky: arc: GONE FISHIN' at round F (...)`, `sky: arc: the stock sky from ...; written through ...`,
+  `sky: arc: round N (F+k): k, u (the fight | the break[, darkening | lightening]): sun el / az, factor, exposure, ...; N values
+  written` (on a step's change, else once a minute), `sky: arc: round N: the sun swapped for the moon at the break's darkest
+  point`, `sky: arc: over (...)`.
+- `festival: round N, THE FESTIVAL at sunset: ...`, `festival: the air raid siren ...`, `festival: the raid: Tu-160s ...;
+  searchlights ...`, `festival: the <g> formation's salvo N (<unit>, <why>): ...`, `festival: RE_SV_FestCM_<g><k>: fired`,
+  `festival: missile i of <unit> within N m of the runway ...: RE_SV_FestCMHit_... fired, -8 airfield`, `festival: missile i of
+  <unit> shot down ...`, `festival: <unit> off the spawner's list ...`, `festival: the <g> formation is down`,
+  `festival: round N: the raid over (...)`, `festival: the host's raid: the air raid siren here: ...`.
+- `special: THE FESTIVAL's searchlight rows (in the Alicorn's tables): N of 5 in`, `subs: <speaker>: <line> (N s)`,
+  `subs: card <title>: ...`, `coop: the host's run has no GONE FISHIN' (rnd field 15): the arc off here`.
+
+### In-game checklist (one build; solo first, then co-op)
+1. Ctrl+HOME in a break: the intro on the strip (readable, clear of the minimap; SAL amber, CONTROL blue), the boat up.
+2. The shoals: boxes on all three grounds; a missile, a gun burst and a bomb each kill one; the catch callout, the splash,
+   SAL's word; the NEXT row counts down with your haul.
+3. Hit SAL's boat with the gun: -25 kg (the log line), "THAT IS MY BOAT!".
+4. Let the time run out: the weigh-in lines, the card (shoals, best fish, total, grade, the boat, payment), the pay in the
+   log; the round clears, the boat gone. Whether the card collides with the round's callouts.
+5. The sky over the next rounds: the sun lower each round (the `sky: arc:` lines), no jump mid-fight; the festival's round
+   at sunset; the night's swap in the break's middle; stars; the city's lights; the HUD readable at night; dawn in the
+   east; midday by F+12. Whether the renderer's copies hold (else path = custom), and the MPCs stay as written.
+6. Ctrl+PAGE_UP: the talk, then the siren, the searchlights sweeping (do they track you?), the three formations; a
+   salvo as each passes its point (or on its clock); the missiles boxed and shootable; one let through: the impact line,
+   the airfield's damage, whether RE_SV_FestCMHit_..._<i> took that missile (else the log's "finished off here" line).
+7. Every bomber down: THE FESTIVAL IS SAVED, the reward, the siren stops, the searchlights off.
+8. Co-op (2 players): the strip and the callouts on the joiner; a joiner's shoal kill credited to them (`fh`), each
+   player's own card and pay, the team total; the joiner's own boat penalty only on their card; the sky the same on both
+   (and a late joiner blending in); the siren on both; VALKA never drawn from GONE FISHIN' to F+11.
+9. Quit and restart mid-arc: the sky back to stock (`sky: ... put back`), nothing left playing.
+10. The Alicorn round still comes with the searchlights' rows missing (pull one from the build to try).

@@ -2448,7 +2448,13 @@ SPC.kinds = {
     glitch     = { sub = "glitch_sub", alone = true, aircraft = 1, spawn = function(now) return ANOM.glitchSpawn(now) end,
                    tick = function(now, s) return ANOM.glitchTick(now, s) end },
     -- (disguise: a normal round's callout and budget(budget) decoy fighters, VALKA after them: CFG.specials.valka)
+    -- ((0.74.0) not from GONE FISHIN' until the festival's over and the arc's sky is back at midday: sv_sky.lua
+    -- SKY.arcHoldsValka; the host's decision; her test key still forces her)
     valka      = { sub = "valka_sub", disguise = function() return CFG.specials.valka.disguise end,
+                   ready = function(round, forced)
+                       if forced or not (SKY and SKY.arcHoldsValka) then return true end
+                       return not SKY.arcHoldsValka(round)
+                   end,
                    alone = function() return not CFG.specials.valka.disguise end,
                    budget = function(budget)
                        local c = CFG.specials.valka
@@ -2458,6 +2464,17 @@ SPC.kinds = {
                    end,
                    spawn = function(now) return SPC.valkaSpawn(now) end,
                    tick = function(now, s) return SPC.valkaTick(now, s) end },
+    -- ((0.74.0) GONE FISHIN' and THE FESTIVAL, sv_fishing.lua / sv_festival.lua: no fighters of their own)
+    fishing    = { sub = "fishing_sub", alone = true, aircraft = 0,
+                   ready = function(round, forced) return FISH.ready(round, forced) end,
+                   spawn = function(now) return FISH.roundSpawn(now) end, tick = function(now, s) return FISH.roundTick(now, s) end,
+                   busy = function(s) return FISH.busy(s) end, over = function(now, s) return FISH.roundOver(now, s) end,
+                   row = function(s, t) return FISH.row(s, t) end },
+    festival   = { sub = "festival_sub", alone = true, aircraft = 12,
+                   ready = function(round, forced) return FEST.ready(round, forced) end,
+                   spawn = function(now) return FEST.roundSpawn(now) end, tick = function(now, s) return FEST.roundTick(now, s) end,
+                   busy = function(s) return FEST.busy(s) end, over = function(now, s) return FEST.roundOver(now, s) end,
+                   row = function(s, t) return FEST.row(s, t) end },
 }
 -- a kind's field that may be a function (alone, aircraft, sub)
 function SPC.kindValue(v, ...) if type(v) == "function" then return v(...) end return v end

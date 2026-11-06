@@ -1,8 +1,8 @@
 -- sv_festival.lua: THE FESTIVAL (CFG.specials.festival; FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6): the cruise
 -- missiles and the air raid siren. Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another
 -- part uses is a global of this mod's Lua state, its own helpers stay local.
--- The round itself comes later: for now its geometry, what each spawn makes (FEST.actors), the siren and the first
--- in-game test's key (Ctrl+F12, test only).
+-- Its geometry, what each spawn makes (FEST.actors), the siren, the round itself (below: "the round") and the test keys
+-- (Ctrl+F12 one salvo and the siren, Ctrl+PAGE_UP the festival now; test only).
 -- The build data (tools/build_survival.py / survival_events.py, the contract of 2026-11-06): the missiles are Mission 30's
 -- path-flown kind (DT_NPC OP0039_slcmp_01, an ordinary AI plane; mission row sv_fest_cm), units SV_Unit_FestCM_<g><k>
 -- (g N / W / S, k 1-3) of 4 side by side 60 m apart, boxed and TGT; RE_SV_FestCM_<g><k> flies them from the launch point
@@ -44,10 +44,12 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     local l = u and FEST.actors[u]
     if l and l.open then l[#l + 1] = o end
 end)
+-- (no x: where the world data puts it, SV_Spawn(unit) alone: the formations, the searchlights)
 function FEST.spawn(unit, x, y, z, yaw)
     FEST.actors[unit] = { open = true }
     spawningUnit = unit
-    local ok, r = pcall(SV_Spawn, unit, x, y, z, yaw)
+    local ok, r
+    if x == nil then ok, r = pcall(SV_Spawn, unit) else ok, r = pcall(SV_Spawn, unit, x, y, z, yaw) end
     spawningUnit = nil
     FEST.actors[unit].open = false
     if not ok then log("festival: SV_Spawn " .. unit .. " error " .. tostring(r)); return -5 end
@@ -123,6 +125,415 @@ end
 
 -- (the teardown gate's drop, sv_core.lua levelDrop: the level's objects forgotten untouched)
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the festival"] = function() FEST.actors, FEST.sirenActor = {}, nil end end
+end
+
+---------------------------------------------------------------------------------------------------- the round
+-- THE FESTIVAL (0.74.0; FISHING_ROUND_PLAN.md 0; SPC.kinds.festival, sv_anomalies.lua): never drawn, it's round
+-- F + round_after of the day-night arc (sv_spawn.lua specialFor: FEST.roundIs), at sunset. The host's (or solo):
+--   talk     SAL and COMONA CONTROL thank the pilots (text.talk; GONE FISHIN''s team haul in it), ~30 s
+--   raid     the air raid siren at the airfield (every game), the four searchlights (their rows in: FEST.lightsReady),
+--            the three Tu-160 formations (SV_Spawn with no pose, RE_SV_FestUp_<g> up_after_s on): each launches a salvo
+--            as it passes its launch point (within launch_r_km; at the latest its first_launch_<g>, then lap_s, late_s on),
+--            the next of its missile units free (hard rule 16: one whose last salvo is off the spawner's list), spawned
+--            at the launch point and flown by RE_SV_FestCM_<g><k>; a missile within impact_m of the runway hits it
+--            (RE_SV_FestCMHit_<g><k>_<i>, impact_damage off the airfield, unpaid on every game), one shot down pays
+--            (sv_main.lua creditKill: FEST.killPay); a salvo all down recycled recycle_after_s on; every bomber down and
+--            nothing in the air: the reward; time_limit_s: what's left taken off
+--   done     the siren stops, the searchlights go
+-- A joiner's (FEST.clientTick): the siren while the host's raid is on (its "rnd" special state), the searchlights'
+-- copies switched off at its end, the host's row ("fsx"). Log lines: `festival: ...`.
+do
+local function cfg() return CFG.specials.festival end
+local function tx() return cfg().text or {} end
+local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local GROUPS = FEST.GROUPS
+local function formation(g) return "SV_Unit_Fest" .. g end
+FEST.formation = formation
+local IS_FORMATION, IS_MISSILE = {}, {}
+for _, g in ipairs(GROUPS) do
+    IS_FORMATION[formation(g)] = g
+    for k = 1, 3 do IS_MISSILE[FEST.unit(g, k)] = g end
+end
+local function host() return not (COOP and COOP.client and COOP.client()) end
+local function fire(ev)
+    local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+    return r == 1, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))
+end
+local function say(line, vals)
+    local who, text = FISH.line(line, vals)
+    return SUB.say(who, text)
+end
+local function sayList(key, vals)
+    local l = tx()[key]
+    if type(l) == "string" then l = { l } end
+    for _, x in ipairs(type(l) == "table" and l or {}) do say(x, vals) end
+end
+local function dirOf(g) return ((tx().dirs or {})[g]) or g end
+
+-- the round THE FESTIVAL is (F + round_after), when the run has a GONE FISHIN'
+function FEST.roundIs(round)
+    local F = SKY and SKY.arcF and SKY.arcF()
+    return F ~= nil and tonumber(round) == F + math.floor(n(cfg().round_after, 6))
+end
+-- the searchlights' rows in the campaign tables (SPC.alicornSetup: SPC.festRows)
+function FEST.lightsReady()
+    local fr = SPC and SPC.festRows
+    if type(fr) ~= "table" then return false end
+    return #fr.lost == 0 and fr.have >= #(cfg().rows or {})
+end
+function FEST.ready(round, forced)
+    local c = cfg()
+    if c.enabled == false or not nativeReady() then return false end
+    if c.lights_required and not FEST.lightsReady() then return false end
+    return true
+end
+-- (sv_main.lua creditKill) a festival plane's pay: its kind and base, or nil
+function FEST.killPay(unit)
+    if not unit then return nil end
+    if IS_FORMATION[unit] then return "heavy", n(cfg().pay_bomber, 400) end
+    if IS_MISSILE[unit] then return "cruise missile", n(cfg().pay_missile, 150) end
+    return nil
+end
+-- (the Spaceport can't come the round before THE FESTIVAL: its retake would fall on it)
+do
+    local sk = SPC and SPC.kinds and SPC.kinds.spaceport
+    if sk and sk.ready then
+        local raw = sk.ready
+        sk.ready = function(round, ...)
+            if round and FEST.roundIs(round + 1) then return false end
+            return raw(round, ...)
+        end
+    end
+end
+
+-- the planes of a unit up now (the core's list, its sweep's p.at), and the nearest of them to (x, y) (km)
+local function upPlanes(unit)
+    local out = {}
+    for _, p in ipairs(planes or {}) do if p.unit == unit and not p.down and liveObj(p.obj) then out[#out + 1] = p end end
+    return out
+end
+local function planeOf(addr)
+    for _, p in ipairs(planes or {}) do if addr and p.addr == addr then return p end end
+    return nil
+end
+
+function FEST.roundSpawn(now)
+    local s, c = D.special, cfg()
+    if not FEST.ready(D.round, true) then log("festival: no festival (" .. (c.enabled == false and "off" or "no native spawner") .. ")"); return false end
+    s.state, s.at, s.groups, s.salvos, s.missilesDown, s.impacts, s.said = "talk", now, {}, {}, 0, 0, {}
+    local kg = RUN and RUN.fishKg
+    for _, line in ipairs(tx().talk or {}) do
+        if line:find("{kg}", 1, true) and not (kg and kg > 0) then say(tx().talk_nokg or line, { kg = 0 })
+        else say(line, { kg = kg and FEST.money(kg) or 0 }) end
+    end
+    s.talkEnd = now + math.max(5, SUB.left(now))
+    log(string.format("festival: round %d, THE FESTIVAL at sunset: the pilots thanked (%.0f s; GONE FISHIN''s haul %s kg)",
+        D.round, s.talkEnd - now, tostring(kg or "?")))
+    return true
+end
+function FEST.money(x) return (tostring(math.floor(x)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) end
+
+local function raidStart(now, s)
+    local c, t = cfg(), tx()
+    s.state, s.raidAt = "raid", now
+    local r0 = c.rwy or {}
+    local a, what = FEST.sirenOn({ X = n(r0[1], 0), Y = n(r0[2], 0), Z = n(c.rwy_z, 500) + n(c.siren_up_m, 10) * 100 })
+    log("festival: the air raid siren " .. tostring(c.siren) .. ": " .. (a and what or ("NOT on: " .. tostring(what))))
+    local lights = {}
+    if FEST.lightsReady() then
+        for _, u in ipairs(c.lights or {}) do
+            if FISH and FISH.clearUnit then FISH.clearUnit(u, "a searchlight") end
+            local r = FEST.spawn(u)
+            if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, u, r) end
+            lights[#lights + 1] = u:match("(%d+)$") .. " " .. (r > 0 and "up" or ("NOT (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"))
+        end
+    else
+        lights[1] = "none (their rows aren't in)"
+    end
+    local said = {}
+    for _, g in ipairs(GROUPS) do
+        local unit = formation(g)
+        local r = FEST.spawn(unit)
+        if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, unit, r) end
+        s.groups[g] = { unit = unit, n = math.max(0, r), up = r > 0, k = 0, launches = 0,
+                        due = now + n(c["first_launch_" .. g:lower()], 60), last = nil, downSaid = false }
+        if r > 0 and type(queueEvent) == "function" then queueEvent(now + n(c.up_after_s, 2), "RE_SV_FestUp_" .. g, "the festival's " .. g .. " formation") end
+        said[#said + 1] = string.format("%s %s", g, r > 0 and (r .. " up") or ("NOT spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"))
+    end
+    hudCallout(t.raid_go or "AIR RAID", t.raid_go_sub)
+    log(string.format("festival: the raid: Tu-160s %s; searchlights %s", table.concat(said, ", "), table.concat(lights, ", ")))
+end
+
+-- a salvo from group g's next free missile unit; whether it went
+local function launch(now, s, G, g, why)
+    local c = cfg()
+    local free = nil
+    for j = 1, 3 do
+        local k = (G.k + j - 1) % 3 + 1
+        local busy = false
+        for _, sl in ipairs(s.salvos) do if sl.g == g and sl.k == k and not sl.freed then busy = true end end
+        if not busy and (type(SV_UnitAlive) ~= "function" or SV_UnitAlive(FEST.unit(g, k)) <= 0) then free = k; break end
+    end
+    if not free then
+        log(string.format("festival: the %s formation passes its launch point (%s): no missile unit free (all three still up): no salvo", g, why))
+        return false
+    end
+    local unit = FEST.unit(g, free)
+    local x, y, z = FEST.launchPoint(g)
+    local r = FEST.spawn(unit, x, y, z, FEST.launchYaw(g))
+    if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, unit, r) end
+    G.k, G.launches, G.last = free, G.launches + 1, now
+    if r <= 0 then
+        log(string.format("festival: the %s formation's salvo %s NOT spawned (%s)", g, unit, tostring(SV_ERR and SV_ERR[r] or r)))
+        return false
+    end
+    local sl = { g = g, k = free, unit = unit, at = now, fireAt = now + 0.5, ms = {} }
+    for i, o in ipairs(FEST.actors[unit] or {}) do
+        if liveObj(o) then sl.ms[#sl.ms + 1] = { obj = o, addr = addrOf(o), i = i - 1 } end
+    end
+    s.salvos[#s.salvos + 1] = sl
+    local t = tx()
+    if G.launches == 1 then say(t.launch or "C|Missile launch from the {dir}!", { dir = dirOf(g) })
+    else say(t.launch_again or "C|Another salvo from the {dir}!", { dir = dirOf(g) }) end
+    hudCallout(t.launch_callout or "CRUISE MISSILES", string.format(t.launch_callout_sub or "FROM THE %s", dirOf(g):upper()))
+    log(string.format("festival: the %s formation's salvo %d (%s, %s): %s, %d missiles seen", g, G.launches, unit, why, r .. " up", #sl.ms))
+    return true
+end
+
+-- one missile on the runway: off the round's list and down on every game unpaid, its impact record, the airfield's damage
+local function impact(now, s, sl, m, dist, hgt)
+    local c = cfg()
+    m.hitAt = now
+    local p = planeOf(m.addr)
+    if p and not p.down then p.down, p.cleaned = true, true end
+    if COOP and COOP.removeObj then pcall(COOP.removeObj, m.obj) end
+    local ok, said = fire(FEST.hitEvent(sl.g, sl.k, m.i))
+    local dmg = math.floor(n(c.impact_damage, 8))
+    if CFG.airfield.enabled and AF and not AF.down and AF.bomb then AF.bomb = AF.bomb + dmg end
+    s.impacts = s.impacts + 1
+    if now - (s.impactSaidAt or -1e9) >= 20 then
+        s.impactSaidAt = now
+        local l = tx().impact or {}
+        if #l > 0 then say(l[(s.impacts - 1) % #l + 1]) end
+    end
+    log(string.format("festival: missile %d of %s within %.0f m of the runway (%.0f m up) %.0f s after its launch: %s %s, -%d airfield",
+        m.i, sl.unit, dist, hgt, now - sl.at, FEST.hitEvent(sl.g, sl.k, m.i), said, dmg))
+end
+-- a missile finished off here (its record took another, or it's up too long): no pay
+local function finish(m)
+    local p = planeOf(m.addr)
+    if p and not p.down then p.down, p.cleaned = true, true end
+    if COOP and COOP.removeObj then pcall(COOP.removeObj, m.obj) end
+    if not liveObj(m.obj) then return end
+    pcall(function() m.obj.MinHealth = 0.0 end)
+    pcall(function() m.obj:ModifyHealth(-1000, nil, true) end)
+end
+
+local function salvosTick(now, s)
+    local c = cfg()
+    local inAir = 0
+    for _, sl in ipairs(s.salvos) do
+        if sl.fireAt and now >= sl.fireAt then
+            sl.fireAt = nil
+            local _, said = fire(FEST.launchEvent(sl.g, sl.k))
+            log(string.format("festival: %s: %s", FEST.launchEvent(sl.g, sl.k), said))
+        end
+        if not sl.over then
+            local left = 0
+            for _, m in ipairs(sl.ms) do
+                if not m.over then
+                    local up, h = liveObj(m.obj), nil
+                    if up then pcall(function() h = m.obj.HealthInternal end) end
+                    if m.hitAt then
+                        if now - m.hitAt >= 1.5 then
+                            m.over = true
+                            if up and not (type(h) == "number" and h <= 0) then
+                                finish(m)
+                                log(string.format("festival: %s's impact record left missile %d up: finished off here (the record's i may not be "
+                                    .. "the spawner's order)", sl.unit, m.i))
+                            end
+                        else left = left + 1 end
+                    elseif not up or (type(h) == "number" and h <= 0) then
+                        m.over = true
+                        s.missilesDown = s.missilesDown + 1
+                        if not s.said.shot then s.said.shot = true; say(tx().shot_first or "S|You shot it!") end
+                        log(string.format("festival: missile %d of %s shot down %.0f s after its launch", m.i, sl.unit, now - sl.at))
+                    elseif now - sl.at >= n(c.missile_s, 200) then
+                        m.over = true
+                        finish(m)
+                        log(string.format("festival: missile %d of %s up %d s: taken off", m.i, sl.unit, math.floor(n(c.missile_s, 200))))
+                    else
+                        local okL, l = pcall(function() local v = m.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+                        if okL and l then
+                            local dist, hgt = FEST.toRunway(l)
+                            if host() and dist <= n(c.impact_m, 400) and now - sl.at >= 5 then impact(now, s, sl, m, dist, hgt) end
+                        end
+                        left = left + 1
+                    end
+                end
+            end
+            if left == 0 and not sl.fireAt then sl.over, sl.recycleAt = true, now + n(c.recycle_after_s, 3) end
+            inAir = inAir + left
+        end
+        if sl.over and not sl.freed and now >= (sl.recycleAt or now) then
+            sl.freed = true
+            local n0 = type(SV_UnitAlive) == "function" and SV_UnitAlive(sl.unit) or -5
+            local okR, r = false, "no SV_Recycle"
+            if type(SV_Recycle) == "function" then crumb("festival: SV_Recycle " .. sl.unit); okR, r = pcall(SV_Recycle, sl.unit, 1) end
+            FEST.actors[sl.unit] = nil
+            log(string.format("festival: %s off the spawner's list (%d alive): SV_Recycle %s", sl.unit, n0, okR and tostring(r) or ("error " .. tostring(r))))
+        end
+    end
+    local keep = {}
+    for _, sl in ipairs(s.salvos) do if not sl.freed then keep[#keep + 1] = sl end end
+    s.salvos = keep
+    s.inAir = inAir
+    return inAir
+end
+
+-- the raid's end: the siren off, the searchlights off, what's left taken off (`why`)
+local function raidEnd(now, s, why, saved)
+    local c, t = cfg(), tx()
+    s.state = "done"
+    local nS, wS = FEST.sirenOff(why)
+    local lightsOff = FEST.lightsOff(why)
+    if saved then
+        local pay = math.floor(n(c.reward, 0) + n(c.reward_per_round, 0) * (D.round or 0))
+        if pay > 0 then addCredits(pay, "the festival saved") end
+        sayList("all_down")
+        hudCallout(t.saved or "THE FESTIVAL IS SAVED", string.format(t.saved_sub or "+%d ZOLLARS", specialPay and specialPay(pay) or pay))
+    else
+        sayList("timeout")
+        hudCallout(t.over or "THE RAID IS OVER", nil)
+    end
+    if LB and LB.special then pcall(LB.special, "festival", saved == true, now - (s.at or now)) end
+    log(string.format("festival: round %d: the raid over (%s) %.0f s in: %d missiles shot down, %d on the runway; the siren off (%s, %d); %d searchlights off",
+        D.round, why, now - (s.raidAt or now), s.missilesDown or 0, s.impacts or 0, tostring(wS), nS or 0, lightsOff))
+end
+-- the searchlights here switched off (TurnOff, hidden: allies, never finished off)
+function FEST.lightsOff(why)
+    local nOff = 0
+    for _, u in ipairs(cfg().lights or {}) do
+        for _, o in ipairs((SPC and SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[u]) or {}) do
+            if liveObj(o) then
+                pcall(function() o:TurnOff() end)
+                if FISH and FISH.hide then FISH.hide(o) end
+                nOff = nOff + 1
+            end
+        end
+    end
+    return nOff
+end
+
+function FEST.roundTick(now, s)
+    if levelGoing() then return end
+    local c = cfg()
+    if s.state == "talk" then
+        if now >= (s.talkEnd or now) then raidStart(now, s) end
+    elseif s.state == "raid" and now >= (s.checkAt or 0) then
+        s.checkAt = now + 0.5
+        s.groups, s.salvos = s.groups or {}, s.salvos or {}
+        local bombers = 0
+        for _, g in ipairs(GROUPS) do
+            local G = s.groups[g]
+            if G and G.up then
+                local ps = upPlanes(G.unit)
+                local alive = type(SV_UnitAlive) == "function" and SV_UnitAlive(G.unit) or #ps
+                if alive < 0 then alive = #ps end
+                G.alive = alive
+                bombers = bombers + math.max(0, alive)
+                if alive <= 0 and now - s.raidAt >= 5 then
+                    if not G.downSaid then
+                        G.downSaid = true
+                        say(tx().formation_down or "C|The {dir} formation is down.", { dir = dirOf(g) })
+                        log(string.format("festival: the %s formation is down (%d salvos)", g, G.launches))
+                    end
+                else
+                    local lx, ly = FEST.launchPoint(g)
+                    local near = false
+                    for _, p in ipairs(ps) do
+                        if p.at and lx then
+                            local dx, dy = p.at.X - lx, p.at.Y - ly
+                            if math.sqrt(dx * dx + dy * dy) / 100000 <= n(c.launch_r_km, 3) then near = true end
+                        end
+                    end
+                    local gap = n(c.launch_gap_s, 120)
+                    if near and now - (G.last or -1e9) >= gap then
+                        launch(now, s, G, g, "over its launch point")
+                        G.due = now + n(c.lap_s, 216) + n(c.late_s, 30)
+                    elseif now >= G.due and now - (G.last or -1e9) >= gap then
+                        launch(now, s, G, g, "its clock (its pass not seen)")
+                        G.due = now + n(c.lap_s, 216)
+                    end
+                end
+            end
+        end
+        s.bombers = bombers
+        local inAir = salvosTick(now, s)
+        local started = false
+        for _, g in ipairs(GROUPS) do if s.groups[g] and s.groups[g].up then started = true end end
+        if (bombers == 0 and inAir == 0 and now - s.raidAt >= 5) or not started then
+            raidEnd(now, s, started and "every bomber down" or "no bomber came", started)
+        elseif now - s.raidAt >= n(c.time_limit_s, 900) then
+            local list = {}
+            for _, g in ipairs(GROUPS) do
+                list[#list + 1] = formation(g)
+                for k = 1, 3 do list[#list + 1] = FEST.unit(g, k) end
+            end
+            for _, u in ipairs(list) do if COOP and COOP.host and COOP.host() and COOP.removeNow then pcall(COOP.removeNow, u) end end
+            SPC.cleanUp(list, "the festival's raid timed out", true, now)
+            raidEnd(now, s, string.format("%d s: the time limit", math.floor(n(c.time_limit_s, 900))), false)
+        end
+    end
+    if COOP and COOP.specialRow and now >= (s.rowAt or 0) then
+        s.rowAt = now + 1
+        COOP.specialRow("festival", s.state, s.bombers or 0, s.inAir or 0, 0)
+    end
+end
+function FEST.busy(s) return s.state ~= "done" end
+function FEST.roundOver(now, s)
+    if s.state ~= "done" then raidEnd(now, s, "the round ended", false) end
+end
+function FEST.row(s, t)
+    local x = tx()
+    if s.state == "talk" then return x.row_talk end
+    if s.state ~= "raid" then return nil end
+    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d", s.bombers or 0, s.inAir or 0)
+end
+
+-- A co-op joiner's: the siren with the host's raid, the searchlights' copies off at its end, the host's row
+local CL = { siren = false, on = false }
+function FEST.clientTick(now)
+    if not (COOP and COOP.client and COOP.client() and D) then return end
+    local hs = D.hostSpecial
+    local raid = hs and hs.kind == "festival" and hs.state == "raid"
+    if raid and not CL.siren then
+        CL.siren = true
+        local c, r0 = cfg(), cfg().rwy or {}
+        local a, what = FEST.sirenOn({ X = n(r0[1], 0), Y = n(r0[2], 0), Z = n(c.rwy_z, 500) + n(c.siren_up_m, 10) * 100 })
+        log("festival: the host's raid: the air raid siren here: " .. (a and what or ("NOT on: " .. tostring(what))))
+    elseif not raid and CL.siren then
+        CL.siren = false
+        local nS, wS = FEST.sirenOff("the host's raid is over")
+        log("festival: the host's raid is over: the siren off here (" .. tostring(wS) .. ", " .. tostring(nS) .. ")")
+    end
+    local on = hs and hs.kind == "festival" and hs.state ~= "done"
+    if on then CL.on = true
+    elseif CL.on then
+        CL.on = false
+        log(string.format("festival: the host's festival is over: %d searchlight copies off here", FEST.lightsOff("the host's festival is over")))
+    end
+end
+function FEST.clientRow(t)
+    if not (COOP and COOP.client and COOP.client() and D and FISH and FISH.cl) then return nil end
+    local hs, r = D.hostSpecial, FISH.cl.rows.festival
+    if not (hs and hs.kind == "festival" and hs.state ~= "done" and r and os.clock() - r.at < 5) then return nil end
+    local x = tx()
+    if r.state == "talk" then return x.row_talk end
+    if r.state ~= "raid" then return nil end
+    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d", math.floor(r.a), math.floor(r.b))
+end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the festival round"] = function() CL.siren, CL.on = false, false end end
 end
 
 -- TEST ONLY BEGIN
@@ -301,4 +712,23 @@ end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "festival test", fn = tick }
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the festival test"] = function() reset() end end
 end
+-- TEST ONLY END
+
+-- TEST ONLY BEGIN
+-- Ctrl+PAGE_UP in a run (the host's or solo): THE FESTIVAL next (in the break: it starts in 3 s), the arc's F set so that
+-- round is F + round_after (the sky blends to the sunset's; GONE FISHIN' counted as done this run)
+testKey("PAGE_UP", "sv_festival.lua's THE FESTIVAL now", function()
+    if not (D and D.now) or not nativeReady() then log("test: Ctrl+PAGE_UP outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("test: Ctrl+PAGE_UP: the host starts the rounds (you're a joiner)"); return end
+    local target = D.round + 1
+    local F = target - math.floor(tonumber(CFG.specials.festival.round_after) or 6)
+    RUN.fished = RUN.fished or F
+    if SKY and SKY.arcSet then SKY.arcSet(math.max(1, F), "test key Ctrl+PAGE_UP") end
+    D.forceSpecial = "festival"
+    local soon = D.state == "wait"
+    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+    hudCallout("TEST: THE FESTIVAL", soon and "STARTING NOW" or "NEXT ROUND")
+    log(string.format("test: Ctrl+PAGE_UP, round %d is THE FESTIVAL (the arc's F %d; %s)", target, math.max(1, F),
+        soon and "starting in 3 s" or "after this round"))
+end)
 -- TEST ONLY END

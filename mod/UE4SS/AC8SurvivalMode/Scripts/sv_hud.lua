@@ -163,6 +163,11 @@ local function hudBuild(pc)
         info.open = hc.info.start_open == true
     end
 
+    -- (0.74.0) the subtitle strip and the results card (sv_subs.lua SUB.build), under the banner
+    if SUB and SUB.build then
+        local okS, errS = pcall(SUB.build, canvas, { text = newText, bar = newBar })
+        if not okS then hudLog("subs", "the subtitle strip not built: " .. tostring(errS)) end
+    end
     -- callout banner: a box of 4 px bars around centred text, centred at (1920, banner_y), width set per message
     local banner = newWidget("CanvasPanel", "Banner")
     H.bannerSlot = slotIn(canvas, banner, { 0, 0 }, { 0, 0 }, { DESIGN_W / 2, hc.banner_y, 390, 69 }, { 0.5, 0.5 }, false)
@@ -532,6 +537,10 @@ function hudTick(now, paused, pc)
     pcall(function() local hud = pc:GetHUD(); if valid(hud) then gameHud = hud.bShowHUD end end)
     local show = ((not paused) and pawnOk and gameHud) or (LB.show ~= nil)    -- (the run's summary stays up)
     pcall(LB.hud, now)
+    if SUB and SUB.hudTick then                    -- ((0.74.0) the subtitle strip and the card: sv_subs.lua)
+        local okSb, errSb = pcall(SUB.hudTick, now, show, CFG.hud.info.enabled and info.open)
+        if not okSb then hudLog("subtick", "subtitles error " .. tostring(errSb)) end
+    end
     if show ~= H.shown then
         H.widget:SetVisibility(show and VIS.HitTestInvisible or VIS.Collapsed)
         H.shown = show
@@ -576,6 +585,10 @@ function hudTick(now, paused, pc)
         nextS = SPC.kinds[D.special.kind].row(D.special, t)          -- (the Spaceport Assault's: sv_spaceport.lua)
     elseif SPORT and SPORT.clientRow and SPORT.clientRow(t) then      -- ((0.73.77, I7: S12) a co-op joiner: the host's
         nextS = SPORT.clientRow(t)                                    -- Spaceport row, from its "spx")
+    elseif FISH and FISH.clientRow and FISH.clientRow(t) then         -- ((0.74.0) a co-op joiner: the host's GONE FISHIN'
+        nextS = FISH.clientRow(t)                                     -- and THE FESTIVAL ("fsx"; sv_fishing / sv_festival)
+    elseif FEST and FEST.clientRow and FEST.clientRow(t) then
+        nextS = FEST.clientRow(t)
     elseif RUN.captured then
         local left = math.max(0, RUN.captured.untilRound - D.round)
         local _, ashore = AMPH.counts()

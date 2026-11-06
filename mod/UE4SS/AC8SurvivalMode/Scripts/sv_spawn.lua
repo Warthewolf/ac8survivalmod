@@ -1071,10 +1071,12 @@ end
 -- the rotation's kinds switched on, shuffled: the bag's next fill
 -- (review of 0.73.80) a kind whose own ready() says it can't come now (the Spaceport without its turrets' rows) is
 -- never put in the bag nor drawn: it would be drawn first each time, fail to start, and go back in
-local function kindReady(k)
+-- ((0.74.0) round: the round it's asked for, when it's known (VALKA's gate through the day-night arc, GONE FISHIN' once a
+-- run); the bag's fill asks with none)
+local function kindReady(k, round)
     local rk = SPC and SPC.kinds and SPC.kinds[k]
     if not (rk and rk.ready) then return true end
-    local okR, r = pcall(rk.ready)
+    local okR, r = pcall(rk.ready, round)
     return not okR or r ~= false and r ~= nil
 end
 local function bagFill(sp)
@@ -1117,7 +1119,7 @@ local function specialReady(sp, k, round)
     local last = RUN.specialAt and RUN.specialAt[k]
     local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
     return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
-        and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k)
+        and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k, round)
 end
 
 -- The special round `round` is (CFG.specials), or nil for a normal round.
@@ -1128,6 +1130,9 @@ function specialFor(round)
     if RUN.sport and RUN.sport.retakeRound == round and not (spr and (spr.enabled == false or (spr.retake and spr.retake.enabled == false))) then
         return "retake"
     end
+    -- ((0.74.0) THE FESTIVAL: never drawn, it's the round its day-night arc puts round_after rounds after GONE FISHIN'
+    -- (sv_festival.lua FEST.roundIs); the Spaceport can't come the round before it, so no retake falls on it)
+    if FEST and FEST.roundIs and FEST.roundIs(round) and specialOn("festival") then return "festival" end
     local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
     if sx <= 0 then return nil end
     if sp.enabled and sp.random and #sp.rotation > 0 then
