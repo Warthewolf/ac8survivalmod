@@ -12,6 +12,7 @@ local MODULES = {
     "sv_rows",
     "sv_ai",
     "sv_hud",
+    "sv_subs",                     -- the subtitle strip and the results card: SUB.say (GONE FISHIN', THE FESTIVAL)
     "sv_sky",                      -- the sky Survival changes, the day-night arc's owner (tools/re/FISHING.md 5)
     "sv_sound",
     "sv_spawn",

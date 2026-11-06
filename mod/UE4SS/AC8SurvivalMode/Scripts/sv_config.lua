@@ -1466,7 +1466,9 @@ CFG = {
         -- ("spaceport", the Spaceport Assault, in the rotation from 0.73.73 (user, 2026-11-02: "install spaceport into the
         -- new patch"); from its own from_round; its retake comes the round after a lost one) ("escort", THE ESCORT,
         -- 2026-11-06: once a run, from its own from_round, and only when its units are in the build: sv_escort.lua)
-        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka", "spaceport", "escort" },
+        -- ("fishing", GONE FISHIN', from 0.74.0: once a run, from its own from_round; THE FESTIVAL is never drawn: it's the
+        -- round its arc puts six rounds after it, sv_spawn.lua specialFor; "decoy" is added just after this table)
+        rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch", "valka", "spaceport", "escort", "fishing" },
         -- an early special (user, 2026-10-23: "buff the chances of the shuttle spawning between rounds 2 and 6"): in
         -- rounds from .. to, each round is `kind` with `chance` (before `first` too), under the same rules (never two
         -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
@@ -2162,47 +2164,192 @@ CFG = {
                                 burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
                                           "/Game/VFX/Mission/Mission023/NS_ms23FarFlash",
                                           "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma" } } },
-        -- "fishing" = GONE FISHIN' (FISHING_ROUND_PLAN.md; tools/re/FISHING.md 1-4; the build data's names: the contract of
-        -- 2026-11-06). Not a round yet: only its test key (Ctrl+F10, sv_fishing.lua) spawns it, for the first in-game test.
-        -- A shoal is a copy of the stock invisible turret pawn (DT_NPC row shoal_row on model row shoal_model, both added at
-        -- the main menu); `units` hold 8 each, one a fishing ground (ground_a / _b / _c: UE cm), each spawned shoal_z cm up
-        -- (the sea's collision is at 3.5 m) with a hit sphere of sphere_m on collision profile sphere_profile (sphere =
-        -- false: none). SAL's boat (boat_unit, an allied boat) at boat_at, boat_z, held at boat_min_health HP by its
-        -- MinHealth field. A shoal's death plays `splash` (x splash_scale) at sea_z. The test takes everything off test_s
-        -- after it spawned.
-        fishing = { enabled = true,
+        -- "fishing" = GONE FISHIN' (FISHING_ROUND_PLAN.md; tools/re/FISHING.md; Scripts/sv_fishing.lua): SAL, a Comona
+        -- fisherman, needs fish for the island's festival and enlists the air force. Once a run (`once`), from from_round,
+        -- in the random rotation; no enemies, nothing attacks the airfield. SAL and COMONA CONTROL talk it in on the
+        -- subtitle strip (text.intro), then the shoals spawn and a time_s countdown runs (warnings at warn_s left). A shoal
+        -- is a copy of the stock invisible turret pawn (DT_NPC row shoal_row on model row shoal_model, both added at the main
+        -- menu); `units` hold 8 each, one a fishing ground (ground_a / _b / _c: UE cm), each spawned shoal_z cm up (the sea's
+        -- collision is at 3.5 m) with a hit sphere of sphere_m on collision profile sphere_profile (sphere = false: none).
+        -- SAL's boat (boat_unit, an allied boat) at boat_at, boat_z, held at boat_min_health HP by its MinHealth field; a
+        -- hit on it (this game's own copy) costs this game's player boat_penalty_kg (once every boat_hit_gap_s). A shoal's
+        -- death plays `splash` (x splash_scale, The Big One x splash_big_x) at sea_z and draws the next catch of the round's
+        -- one shuffled deck: `catch` the weights (apportioned to the shoals; The Big One at most bigone_max), `kg` each
+        -- fish's range; credited to whoever destroyed it (co-op: the host's kill attribution, each player's own haul; the
+        -- allies' catches shared out). The weigh-in: each player's kg x credits_per_kg + the grade's bonus (grade_s .. c
+        -- the thresholds, kg; bonus_s .. d), + bigone_bonus with The Big One, x (1 + pay_per_round per round past
+        -- from_round). In co-op each threshold is x players ^ -coop_grade_x (each player's share of the grounds). The card
+        -- stays card_s; the round ends weigh_s after the time's up at most. check_s: how often the shoals are looked at;
+        -- quiet_s: SAL's nudge after that long with no catch; empties_line: that many empties in a row draws his
+        -- complaint. test_s: the test key's spawn is taken off that long after it.
+        -- Pay (round 7, solo): an A (650-899 kg, ~770 with The Big One) about 6,000 Z, an S (~1,000 kg) about 9,000 Z.
+        fishing = { enabled = true, name = "GONE FISHIN'", from_round = 7, once = true,
                     units = { "SV_Unit_FishA", "SV_Unit_FishB", "SV_Unit_FishC" },
                     ground_a = { 1803753, -1160858 }, ground_b = { 1866154, 268355 }, ground_c = { 929908, -753378 },
                     shoal_z = 700, sea_z = 350,
                     shoal_row = "SV_Shoal", shoal_model = "SV_Model_Shoal", shoal_name_key = "SV_Shoal_Name", shoal_name = "SHOAL",
-                    boat_unit = "SV_Unit_SalBoat", boat_at = { 1687842, -1191916 }, boat_z = 300, boat_min_health = 1.0,
-                    boat_name_key = "SV_SalBoat", boat_name = "SAL'S BOAT",
+                    boat_unit = "SV_Unit_SalBoat", boat_at = { 1687842, -1191916 }, boat_z = 300, boat_yaw = 157, boat_min_health = 1.0,
+                    boat_name_key = "SV_SalBoat", boat_name = "SAL'S BOAT", boat_penalty_kg = 25, boat_hit_gap_s = 4,
                     sphere = true, sphere_m = 8.0, sphere_profile = "EnemyPawn",
                     splash = "/Game/VFX/Environment/Common/Explosion/GroundExplosion/groundExplosionA001/NS_groundExplosionASmallSea003",
-                    splash_scale = 1.0, test_s = 300 },
-        -- "festival" = THE FESTIVAL (round F+6 of the day-night arc: FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6). Not
-        -- a round yet: only its test key (Ctrl+F12, sv_festival.lua). Tu-160 formations stand off to the north, west and
-        -- south and launch Mission 30's path-flown cruise missiles from launch_n / _w / _s (UE cm, launch_z cm up),
-        -- `missiles` a unit (SV_Unit_FestCM_<N|W|S><1-3>, each fired by its record RE_SV_FestCM_<g><k>), which fly to the
-        -- runway (rwy, rwy_z) at 600 km/h; one within impact_m of it hits there (its impact record, fired by the host).
-        -- The air raid siren (`siren`, a Wwise event of the game's SE bank) is posted on an actor siren_up_m over the
-        -- runway and stopped siren_s later. The test takes what's left off test_s after its launch.
-        festival = { enabled = true,
+                    splash_scale = 1.0, splash_big_x = 2.5, test_s = 300,
+                    time_s = 180, warn_s = { 120, 60, 30, 10 }, check_s = 0.5, quiet_s = 30, empties_line = 3,
+                    catch = { none = 30, junk = 8, sardine = 22, mackerel = 18, tuna = 13, swordfish = 7, bigone = 2 },
+                    bigone_max = 1,
+                    kg = { sardine = { 15, 30 }, mackerel = { 25, 45 }, tuna = { 40, 90 }, swordfish = { 80, 140 },
+                           bigone = { 250, 400 } },
+                    credits_per_kg = 6, pay_per_round = 0.04, bigone_bonus = 500, coop_grade_x = 1.0,
+                    grade_s = 900, grade_a = 650, grade_b = 400, grade_c = 150,
+                    bonus_s = 2500, bonus_a = 1000, bonus_b = 400, bonus_c = 100, bonus_d = 0,
+                    card_s = 14, weigh_s = 26,
+                    -- (what SAL and COMONA CONTROL say: "S|" SAL, "C|" CONTROL; {kg}, {fish}, {grade}, {pay} filled in;
+                    -- one of each list at random, never the same twice running. The HUD's texts after them.)
+                    text = { sal = "SAL", control = "COMONA CONTROL",
+                             intro = { "C|All aircraft, we have an... unusual request on an open channel.",
+                                       "S|Hello? Air force? It's Sal. The festival is in six days!",
+                                       "S|The whole island comes to eat, and I have no fish. None!",
+                                       "C|Sir, this is a military frequency.",
+                                       "S|The fish are hiding. I marked them. You go boom, I collect.",
+                                       "C|...Command approved it. For morale. You have three minutes.",
+                                       "S|Three minutes! Go, go! The festival waits for no one!" },
+                             start = { "C|Shoals are on your HUD. The fishing grounds are hot.",
+                                       "S|Every kilo feeds Comona. I pay in money. Also in soup." },
+                             none = { "S|Nothing! You blew up water. The festival can't eat water.",
+                                      "S|Empty. The fish laugh at us now.",
+                                      "S|That was a rock, I think. A dead rock now.",
+                                      "S|My cousin swore the fish were there. My cousin lies.",
+                                      "C|Confirmed kill on... the ocean." },
+                             junk = { "S|A boot! Only one. Who loses one boot?",
+                                      "S|A shopping cart? Out here? Comona, what are you doing?",
+                                      "S|My old net! Six years I look for that net.",
+                                      "S|A tire. The festival can use it for the ring toss." },
+                             sardine = { "S|Sardines! Small, but many. Like my family.",
+                                         "S|Little ones! Good for the festival grill.",
+                                         "S|{kg} kilos of sardines. Already in a tin, almost." },
+                             mackerel = { "S|Mackerel! Now we are fishing!",
+                                          "S|Beautiful mackerel. Pre-cooked, even. Thank you.",
+                                          "S|{kg} kilos! My wife will stop asking where I was." },
+                             tuna = { "S|TUNA! Oh, you are good. You are very good.",
+                                      "S|Yellowfin! I am crying a little. It's the salt.",
+                                      "S|{kg} kilos of tuna! The festival will name a dish after you.",
+                                      "C|Sir, please stop cheering on this frequency." },
+                             swordfish = { "S|A swordfish! He wanted to fight. You won.",
+                                           "S|Look at the size of him! The mayor will want a photo.",
+                                           "S|Swordfish! He will be the centrepiece of the festival." },
+                             bigone = { "S|THE BIG ONE. Forty years I chase him. FORTY YEARS.",
+                                        "S|{kg} kilos! The whole festival eats from one fish!",
+                                        "C|...Okay, that was impressive." },
+                             bigone_first = "S|...",
+                             first = { "S|BOOM! Yes! That is how my grandfather fished. Smaller boom." },
+                             empties = { "S|Maybe aim where the fish are? Just a suggestion.",
+                                         "C|He has a point, and I hate that he has a point." },
+                             gun = { "S|With the little gun! Like a spear fisherman. Respect." },
+                             ally = { "S|Your friend is good too! Tell him the fish are over there." },
+                             quiet = { "S|Hello? Are you fishing or sightseeing?",
+                                       "S|The fish will not explode themselves, my friend." },
+                             landed = { "S|You stop for coffee? The festival doesn't stop for coffee!" },
+                             cleared = { "S|You took all of them? The whole sea is at the festival now!",
+                                         "C|Great. Now there's an environmental report to file." },
+                             boat = { "S|THAT IS MY BOAT!", "S|Not the boat! The boat is not a fish!",
+                                      "S|Hey! I am IN this boat!" },
+                             warn = { "C|Two minutes left on the... fishing operation.",
+                                      "S|One minute! Hurry, the gulls are coming!",
+                                      "S|Thirty seconds! Anything that swims!",
+                                      "C|Ten seconds. Wrap it up." },
+                             time_up = "S|Stop, stop! My boat is full! Let me weigh!",
+                             weigh = { "S|Okay, okay. Let me see what the festival gets...",
+                                       "S|{kg} kilos total. Hm. Hmm." },
+                             grade_s = { "S|Legend of the sea! The festival will sing about you.",
+                                         "S|The whole island eats tonight. Free fish for the pilots!" },
+                             grade_a = { "S|A fine catch! Come to the festival. Front table.",
+                                         "S|Good work. Not my grandfather's work, but good." },
+                             grade_b = { "S|Honest work. Honest fish. The festival will manage.",
+                                         "S|Not bad. Not good. A Tuesday kind of catch." },
+                             grade_c = { "S|Soup for the festival. Small soup.",
+                                         "S|Well... the festival cats are happy." },
+                             grade_d = { "S|The gulls eat better than this. Next time I call the navy.",
+                                         "S|You blew up more water than fish. The festival weeps." },
+                             signoff = { "S|The money is in your accounts. Most of it.",
+                                         "C|Fishing operation complete. Resume normal hostilities.",
+                                         "S|See you at the festival! ...Hello? Hello?" },
+                             names = { none = "NOTHING", junk = "JUNK", sardine = "SARDINES", mackerel = "MACKEREL",
+                                       tuna = "YELLOWFIN TUNA", swordfish = "SWORDFISH", bigone = "THE BIG ONE" },
+                             catch_kg = "+%d KG %s", time_callout = "GONE FISHIN'", time_callout_sub = "%s ON THE CLOCK",
+                             row_intro = "GONE FISHIN': SAL ON THE RADIO", row = "GONE FISHIN' %s  SHOALS %d  HAUL %d KG",
+                             row_team = "  (TEAM %d)", row_weigh = "GONE FISHIN': THE WEIGH-IN",
+                             card_title = "GONE FISHIN'  -  WEIGH-IN", card_hits = "SHOALS HIT  %d / %d      EMPTY  %d",
+                             card_best = "BEST FISH  %s %d KG", card_best_none = "BEST FISH  NONE",
+                             card_total = "TOTAL HAUL  %d KG      GRADE  %s", card_boat = "SAL'S BOAT  -%d KG",
+                             card_pay = "PAYMENT  +%s Z", card_team = "TEAM HAUL  %s KG FROM %d PILOTS",
+                             card_player = "%s  %d KG  %s" } },
+        -- "festival" = THE FESTIVAL (FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6; Scripts/sv_festival.lua): never drawn,
+        -- it's round F + round_after of the day-night arc (F: GONE FISHIN''s round), at sunset, at the airfield. Lines
+        -- thanking the pilots (text.talk), then the air raid siren loops at the airfield (`siren`, a Wwise event of the game's
+        -- SE bank, siren_up_m over the runway, every game), the four searchlights (`lights`, allied; their rows ride in the
+        -- Alicorn's tables: `rows`, lights_required true makes them the round's condition, else it goes without them) and
+        -- three Tu-160 formations (SV_Unit_Fest<N|W|S>, ordered up_after_s after their spawn). As a formation passes its
+        -- launch point (launch_n / _w / _s, within launch_r_km of it; at the latest first_launch_<g> s after its spawn, then
+        -- every lap_s, late_s on) it launches a salvo: the next of its three missile units (SV_Unit_FestCM_<g><1-3>, never
+        -- one whose last salvo isn't off the spawner's list: hard rule 16) at the launch point, launch_z up, flown to the
+        -- runway (rwy, rwy_z) at 600 km/h. One within impact_m of the runway (flat) hits it (the host fires its impact
+        -- record): impact_damage off the airfield, as a bomb; one up missile_s is taken off. A missile shot down pays
+        -- pay_missile, a bomber pay_bomber (each x the round's kill multipliers). All 12 bombers down and nothing in the air:
+        -- `reward` + reward_per_round x the round (a special's: split in co-op); time_limit_s: the raid's backstop.
+        festival = { enabled = true, name = "THE FESTIVAL", round_after = 6,
                      rwy = { 1610476, -436142 }, rwy_z = 500,
                      launch_n = { 1610476, -2936142 }, launch_w = { -889524, -436142 }, launch_s = { 1610476, 2063858 },
                      launch_z = 200000, missiles = 4, impact_m = 400,
                      siren = "AKE_GEN_ENV_OBJ_AirRaid_Map17_Comona_Play", siren_s = 20, siren_up_m = 10,
-                     test_s = 300 },
+                     test_s = 300,
+                     lights = { "SV_Unit_FestLight_1", "SV_Unit_FestLight_2", "SV_Unit_FestLight_3", "SV_Unit_FestLight_4" },
+                     rows = { "GR053_seli_01", "GR053_seli_light_01", "GR053_seli", "GR053_seli_light", "NWDID_GroundNPC" },
+                     lights_required = false, up_after_s = 2, launch_r_km = 3.0, launch_gap_s = 120,
+                     first_launch_n = 43, first_launch_w = 168, first_launch_s = 60, lap_s = 216, late_s = 30,
+                     missile_s = 200, recycle_after_s = 3, impact_damage = 8,
+                     pay_missile = 150, pay_bomber = 400, reward = 4000, reward_per_round = 150, time_limit_s = 900,
+                     text = { sal = "SAL", control = "COMONA CONTROL",
+                              talk = { "C|All aircraft, the festival at Comona Airport has begun.",
+                                       "S|Pilots! The whole island is here! Look at all this fish!",
+                                       "S|{kg} kilos you caught for us. They named a soup after you.",
+                                       "C|On behalf of the island: thank you, pilots.",
+                                       "S|Come down! Eat! Dance! The sun is setting, it's perfect.",
+                                       "C|...Wait. Radar contacts. North, west and south.",
+                                       "C|Tu-160s! Air raid! All aircraft, defend the festival!" },
+                              talk_nokg = "S|Every kilo you caught is on a plate tonight.",
+                              launch = "C|Missile launch from the {dir}! Cruise missiles inbound!",
+                              launch_again = "C|Another salvo from the {dir}!",
+                              shot_first = "S|You shot it! The grill is safe!",
+                              impact = { "C|Impact on the airfield!", "S|My table! They hit my table!",
+                                         "S|Not the dessert tent!" },
+                              formation_down = "C|The {dir} formation is down.",
+                              all_down = { "C|All bombers down. The skies are clear.", "S|The festival goes on! Music! MUSIC!" },
+                              timeout = { "C|The bombers are turning for home. Let them go." },
+                              dirs = { N = "north", W = "west", S = "south" },
+                              raid_go = "AIR RAID", raid_go_sub = "TU-160S FROM THE NORTH, WEST AND SOUTH",
+                              launch_callout = "CRUISE MISSILES", launch_callout_sub = "FROM THE %s: SHOOT THEM DOWN",
+                              saved = "THE FESTIVAL IS SAVED", saved_sub = "+%d ZOLLARS", over = "THE RAID IS OVER",
+                              row_talk = "THE FESTIVAL", row = "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d" } },
     },
-    -- The sky (Scripts/sv_sky.lua; tools/re/FISHING.md 5): the day-night arc's owner (the arc itself comes later). It never
-    -- writes the stock sky asset (Mission 4's CSP_ms04...), only the renderer's working copies of its params, the sun
-    -- light, the sky light, the post-process volumes' exposure, two material parameter collections (mpc_env, mpc_vfx) and
-    -- Cloudly's custom sun, each value's original kept and put back (at a run's end; a level torn down drops them).
+    -- The sky (Scripts/sv_sky.lua; tools/re/FISHING.md 5): the day-night arc's owner. It never writes the stock sky asset
+    -- (Mission 4's CSP_ms04...), only the renderer's working copies of its params, the sun light, the sky light, the
+    -- post-process volumes' exposure, two material parameter collections (mpc_env, mpc_vfx) and Cloudly's custom sun, each
+    -- value's original kept and put back (at a run's end; a level torn down drops them).
     -- readback_s: the test key's (Ctrl+F6) read-back after each step. test_sun: step 2's custom sun (elevation, azimuth: a
-    -- compass bearing, east 90); test_copies: step 3's, through the copies and the light alone; night: step 4's (the
-    -- stock night's way, Mission 9's: the light at the moon's spot, dim and bluish, a moon-sized sun disc, the moon on,
-    -- its exposure (min, max, bias), the sky light x skylight_x and blue, the city's glow (emissive) up, the effects' EV
-    -- down), with the stars at the stock maximum (stars: Mission 22's dawn).
+    -- compass bearing, east 90); test_copies: step 3's, through the copies and the light alone; night: the night's sky (the
+    -- arc's round F+7, the test's step 4; the stock night's way, Mission 9's: the light at the moon's spot, dim and bluish,
+    -- a moon-sized sun disc, the moon on, its exposure (min, max, bias), the sky light x skylight_x and blue, the city's glow
+    -- (emissive) up, the effects' EV down), with the stars at the stock maximum (stars: Mission 22's dawn).
+    -- arc: the day-night arc GONE FISHIN' starts (FISHING_ROUND_PLAN.md 0; F its round): the sun sinks a step a round over
+    -- F+1 .. F+5 (sink_el / sink_az, exposure to dusk_exposure), sets at F+6 (sunset: from sunset_el to set_el, sky light x
+    -- sunset_skylight, city glow sunset_emissive, effects' EV sunset_vfx_ev, sunset_exposure), night at F+7 (`night`), then
+    -- rises in the east over sunrise_rounds rounds from dawn (dawn_el / dawn_az, dawn_exposure, dawn_skylight,
+    -- dawn_emissive, dawn_vfx_ev) to midday (midday_el / midday_az, day_exposure), held for the rest of the run. Each round
+    -- drifts toward the next round's sky (within_x of the step over round_s of the fight; swap_within_x for a step that
+    -- swaps the sun for the moon, so the swap is at the break's darkest point: the light at dark_factor), finished in the
+    -- break; brightness (the light's factor, the city's glow) in log space. apply_s: how often it's written (the MPCs every
+    -- tick); blend_s: a late joiner's (or a new level's) blend in. path: "copies" (the renderer's copies + the light's
+    -- rotation) or "custom" (Cloudly's custom sun API as well). stock: Mission 4's sky, when the level's can't be read.
+    -- valka_gate: VALKA doesn't come from GONE FISHIN' to the arc's midday (the user, 2026-11-06).
     sky = { enabled = true, readback_s = 5,
             mpc_env = "/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control",
             mpc_vfx = "/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control",
@@ -2211,7 +2358,18 @@ CFG = {
                       moon_el = 35.0, moon_az = -130.0, exposure = { 0.5, 9.0, 0.5 },
                       skylight_x = 0.1, skylight_rgb = { 0.55, 0.65, 1.0 }, emissive = 10000.0, vfx_ev = -2.0 },
             stars = { intensity = 7.0, background = 22.0, radius = 2.5, fraction = 0.73, rotation = { 2.578, 0.0, 0.0 },
-                      mask_start = 0.263 } },
+                      mask_start = 0.263 },
+            arc = { enabled = true, path = "copies", apply_s = 2.0, blend_s = 5.0, round_s = 240, within_x = 0.75,
+                    swap_within_x = 0.45, dark_factor = 0.25, sunrise_rounds = 4, valka_gate = true,
+                    sink_el = { 14.0, 12.0, 10.0, 7.0, 4.0 }, sink_az = { 160.0, 180.0, -160.0, -140.0, -120.0 },
+                    dusk_exposure = { 11.0, 14.0, -0.5 },
+                    sunset_el = 1.0, set_el = -3.0, sunset_az = -105.0, sunset_exposure = { 9.5, 14.0, -1.0 },
+                    sunset_skylight = 0.5, sunset_emissive = 100.0, sunset_vfx_ev = 8.0,
+                    dawn_el = -4.0, dawn_az = 105.0, dawn_exposure = { 4.0, 14.0, -2.0 }, dawn_skylight = 0.3,
+                    dawn_emissive = 10000.0, dawn_vfx_ev = 5.0,
+                    midday_el = 52.9, midday_az = 180.0, day_exposure = { 13.0, 14.0, 0.0 },
+                    stock = { el = 15.0, az = 142.0, factor = 120000.0, emissive = 1.0, vfx_ev = 11.0, disc = 0.5,
+                              exposure = { 13.0, 14.0, 0.0 } } } },
     -- Music (dlls/main.dll 0.9.0 SV_PlayBGM: the game's own BGM controller, which fades the old track out). Round 1
     -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
     -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
@@ -2260,6 +2418,17 @@ CFG = {
         -- the end-of-run summary's panel (user, 2026-10-23: "a dark green background with light green edges so that we
         -- can see the text better"): its box on the 3840 x 2160 layout, its fill (r, g, b, a) and edge colour / width
         summary          = { w = 1700, y = 520, h = 690, fill = { 0.02, 0.16, 0.05, 0.82 }, edge = { 0.6, 1.0, 0.65 }, edge_px = 4 },
+        -- (0.74.0) the subtitle strip (Scripts/sv_subs.lua SUB.say: GONE FISHIN', THE FESTIVAL): a panel w x h at y (its
+        -- top, centred; clear of the minimap and the plane's panel), the speaker's name (colors by name, else color) over
+        -- the line in text_color, each line line_s on screen unless said otherwise, at most max_queue waiting; blip: a Wwise
+        -- event of the game's SE bank played as each line comes up ("": none). Shown only while a line is up.
+        subs             = { enabled = true, y = 1700, w = 1560, h = 150, speaker_dy = 12, text_dy = 58, line_s = 4.0,
+                             max_queue = 16, fill = { 0.02, 0.10, 0.04, 0.70 }, edge = { 0.6, 1.0, 0.65 }, edge_px = 3,
+                             color = { 0.26, 1.0, 0.33 }, text_color = { 1.0, 1.0, 1.0 }, blip = "",
+                             colors = { SAL = { 1.0, 0.78, 0.32 }, ["COMONA CONTROL"] = { 0.45, 0.85, 1.0 } } },
+        -- (0.74.0) the results card (SUB.card: GONE FISHIN''s weigh-in): w wide from y, a title and `rows` lines (top: the
+        -- first line's offset; bottom: the space under the last), on the summary's fill and edge
+        card             = { y = 270, w = 1500, rows = 10, top = 110, bottom = 40 },
         opacity          = 0.9,
         glow_size        = 2,                   -- outline width; 0 = none
         glow_alpha       = 0.25,
@@ -2433,6 +2602,8 @@ CFG = {
             repelled     = "LANDING REPELLED",
             repelled_sub = "+%d ZOLLARS",
             spaceport_sub = "ENEMY FLEET WEST OF THE SPACEPORT",
+            fishing_sub  = "SAL NEEDS FISH FOR THE FESTIVAL",          -- (0.74.0: GONE FISHIN', sv_fishing.lua)
+            festival_sub = "COMONA CELEBRATES AT SUNSET",              -- (0.74.0: THE FESTIVAL, sv_festival.lua)
             retake_sub   = "RETAKE THE SPACEPORT",
             sp_go        = "SPACEPORT ASSAULT",
             sp_go_sub    = "SINK THE FLEET BEFORE ITS TROOPS TAKE THE SPACEPORT",
@@ -2515,6 +2686,7 @@ local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bomber
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
                     ["ammo.ace"] = "ammo.presets.ace",
                     fishing = "specials.fishing", festival = "specials.festival",      -- (0.74.0: sv_fishing / sv_festival)
+                    ["fishing.catch"] = "specials.fishing.catch", ["fishing.kg"] = "specials.fishing.kg",
                     -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
                     ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }
 -- sections of things since taken out, still in older survival.ini files: skipped without a warning
