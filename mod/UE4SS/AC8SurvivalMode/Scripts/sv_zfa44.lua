@@ -1,35 +1,36 @@
--- sv_zfa44.lua : test code of the user's dev builds only (tools/re/ZFA44.md); empty in every zip.
--- TEST ONLY BEGIN (the whole part: the ZFA-44's test T0)
--- The ZFA-44EL's test T0 (tools/re/ZFA44.md, "T0 build"). The ZFA-44EL is the user's own edited CFA-44
--- from their AC7 mod Alicorn Special Raid IV (AGENTS.md's exception of 2026-11-06), cooked for AC8 by tools/zfa44 into
--- its own container SurvivalMode_ZFA44_P, which only the user's dev builds carry (ZFA=1 sh tools/package_dev.sh).
--- All of this part is test code: tools/strip_test_only.py takes it out of every zip but a TESTER=1 one. Its key is bound
--- with sv_main.lua's test keys (Ctrl+9), so a clash is logged at load and a press makes the run unranked.
+-- sv_zfa44.lua : the ZFA-44's look on an AI plane (ZFA.dress / ZFA.undress: the escort's carriers' flights, sv_escort.lua) and its test T0 (Ctrl+9, test code); cut to this line in every zip (no ZFA-44 container there: the carriers' planes fly as their host airframe).
+-- The ZFA-44EL is the user's own edited CFA-44 from their AC7 mod Alicorn Special Raid IV (AGENTS.md's exception of
+-- 2026-11-06), cooked for AC8 by tools/zfa44 into its own container SurvivalMode_ZFA44_P, which only the user's dev
+-- builds carry (ZFA=1 sh tools/package_dev.sh). tools/re/ZFA44.md "T0 build"; tools/re/ESCORT.md for the carriers.
 --
--- Ctrl+9 in a run: VALKA's x40a when she's up, else the nearest live enemy aircraft, dressed as the ZFA-44 the way
--- SPC.V.model dresses VALKA (hard rule 46): a SkeletalMeshComponent added to it (no collision, fixed bounds), SK_ZFA44
--- on it, placed on the host's body mesh, painted, the host's own meshes hidden (again every hide_s: VALKA's came back
--- on). Pressed again: undone (the component destroyed, what was hidden shown; VALKA gets her X-02S back). Each dressing
--- takes the next paint variant (ZFA.PAINTS: the cooked MI_ZFA44_* as built, then run-time instances of the x40a's gear
--- material with its normals, flat (the Falken's), and the MREC Livemap with a tinted canopy).
--- Log lines `zfa44: T0 ...`: what was dressed and how, the component and mesh, each slot's material and its parent, the
--- bounds against the host's body, the ZFA-44's burner_01 / _02 against the host's nozzle sockets and effects (metres in
--- the host's frame: forward, right, up), then the same at +2 / +10 / +30 s and at the host's death. Every step is a
--- crash breadcrumb first (crumb: AC8SurvivalMode_crumbs.log), as SOLG T0 did.
+-- The dressing (production, outside the test block; every game dresses its own planes and copies): ZFA.dress(plane,
+-- { paint = k, label = text }) puts the ZFA-44 on an AI plane the way SPC.V.model dresses VALKA (hard rule 46): a
+-- SkeletalMeshComponent added to it (no collision, fixed bounds), SK_ZFA44 on it, placed on the host's body mesh,
+-- painted (ZFA.PAINTS[k]), the host's own meshes hidden (again every ZFA.C.hide_s, one plane a tick: ZFA.prodTick).
+-- ZFA.undress(plane) takes it off again. Without SK_ZFA44 (a build without the container) nothing is dressed, once a
+-- minute tried again, said once a level. Log lines `zfa44: dressed ...`, `zfa44: NOT dressed ...`, `zfa44: undressed ...`.
+--
+-- T0 (test code, the test block below; Ctrl+9 in a run): VALKA's x40a when she's up, else the nearest live enemy
+-- aircraft, dressed on the next paint variant; pressed again: undone. Log lines `zfa44: T0 ...`: what was dressed and how,
+-- the component and mesh, each slot's material and its parent, the bounds against the host's body, the ZFA-44's
+-- burner_01 / _02 against the host's nozzle sockets and effects (metres in the host's frame: forward, right, up), then
+-- the same at +2 / +10 / +30 s and at the host's death. Every step is a crash breadcrumb first (crumb:
+-- AC8SurvivalMode_crumbs.log), as SOLG T0 did.
 
-ZFA = { cur = nil, paintNext = nil, assets = {}, flat = {} }
+ZFA = { cur = nil, paintNext = nil, assets = {}, flat = {}, dressed = {}, H = {} }
 ZFA.C = {
     mesh = "/Game/Mods/SurvivalMode/ZFA44/Model/SK_ZFA44",
     tex = "/Game/Mods/SurvivalMode/ZFA44/Textures/",
     gear = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",   -- (FALKEN_MATERIALS.md)
     default_normal = "/Engine/EngineMaterials/DefaultNormal",
-    paint = 1,                              -- the first dressing's variant (ZFA.PAINTS); each later one the next
+    paint = 1,                              -- T0's first dressing's variant (ZFA.PAINTS); each later one the next
     yaw = 0,                                -- turned this much more than the host's body mesh (degrees)
     offset_cm = { X = 0, Y = 0, Z = 0 },    -- moved this far in the host's frame (forward, right, up)
     scale = 1.0,                            -- 1: life size, 24.0 m long, 14.6 m span (tools/zfa44/prepare.py)
-    hide_s = 2.0,                           -- the host's meshes hidden again this often
-    checks_s = { 2, 10, 30 },               -- the follow-up lines, this long after the dressing
-    skip = { "^SV_Unit_Ladon", "Alicorn", "^SV_Unit_Coop", "Eml", "SOLG" },   -- never a host (big ones, stand-ins, dummies)
+    hide_s = 2.0,                           -- the host's meshes hidden again this often (T0; the dressing's: CFG)
+    checks_s = { 2, 10, 30 },               -- T0's follow-up lines, this long after the dressing
+    missing_again_s = 60,                   -- no SK_ZFA44: tried again this long after
+    skip = { "^SV_Unit_Ladon", "Alicorn", "^SV_Unit_Coop", "Eml", "SOLG" },   -- never a T0 host (big ones, stand-ins, dummies)
 }
 -- each slot's textures by the cooked material it holds (tools/zfa44/ue_import.py PAINT); the canopy keeps AC8's
 -- M_NPC_Canopy unless a variant tints it
@@ -37,6 +38,8 @@ ZFA.SLOT_TEX = { Body = { "T_ZFA44_C", "T_ZFA44_N" }, Pod = { "T_ZFA44_Pod_C", "
                  Fairing = { "T_ZFA44_Fair_C", "T_ZFA44_Fair_N" } }
 ZFA.SCALARS = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
                 PlayerPlane_Damage = 0 }
+-- (3, the gear instance with a flat normal, is the route proven to draw: the Falken's exactly, VALKA's paint 16, SOLG
+-- T0b's; 1, the cooked instances, was never tried: tools/re/ZFA44.md 8.6)
 ZFA.PAINTS = {
     { name = "COOKED" },                                        -- MI_ZFA44_* as built, on the game's own gear instance
     { name = "GEAR, ITS NORMALS", mids = true },                -- the same at run time (VALKA's paint 15, SOLG T0b's way)
@@ -79,59 +82,6 @@ do
         pcall(function() krl:ClearRenderTarget2D(survivalPC, rt, col) end)
         ZFA.flat[spec] = rt
         return rt
-    end
-
-    -- the host's frame: where it is and its axes; a world point in it, metres (forward, right, up)
-    local function frame(o)
-        local ok, f = pcall(function()
-            return { at = v3(o:K2_GetActorLocation()), f = v3(o:GetActorForwardVector()), r = v3(o:GetActorRightVector()),
-                     u = v3(o:GetActorUpVector()) }
-        end)
-        return ok and f or nil
-    end
-    local function inFrame(F, p)
-        local d = { X = p.X - F.at.X, Y = p.Y - F.at.Y, Z = p.Z - F.at.Z }
-        local function dot(a) return (d.X * a.X + d.Y * a.Y + d.Z * a.Z) / 100 end
-        return { dot(F.f), dot(F.r), dot(F.u) }
-    end
-    local function fmt(q) return q and string.format("(%.1f, %.1f, %.1f)", q[1], q[2], q[3]) or "?" end
-    local function apart(a, b)
-        if not (a and b) then return nil end
-        return math.sqrt((a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2)
-    end
-
-    local function skipped(unit)
-        for _, pat in ipairs(ZFA.C.skip) do if unit and tostring(unit):find(pat) then return true end end
-        return false
-    end
-    -- VALKA's x40a and her round's state, when she's up
-    local function valkaUp()
-        local s = D and D.special
-        local c = CFG.specials and CFG.specials.valka
-        if not (s and s.kind == "valka" and s.state ~= "done" and type(c) == "table") then return nil end
-        for _, list in ipairs({ planes, pending }) do
-            for _, q in ipairs(list) do
-                if q.unit == c.unit and liveObj(q.obj) then return q.obj, s end
-            end
-        end
-        return nil
-    end
-    -- the nearest live enemy aircraft (the core's `planes`: no allies, wingmen or the shuttle), its record, its km
-    local function nearest()
-        local you = playerLocation()
-        if not you then return nil end
-        local best, bp, bd = nil, nil, nil
-        for _, p in ipairs(planes) do
-            if not p.down and not skipped(p.unit) and liveObj(p.obj) then
-                local okH, h = pcall(function() return p.obj.HealthInternal end)
-                local okL, l = pcall(function() return v3(p.obj:K2_GetActorLocation()) end)
-                if okH and type(h) == "number" and h > 0 and okL and l then
-                    local d = km(l, you)
-                    if not bd or d < bd then best, bp, bd = p.obj, p, d end
-                end
-            end
-        end
-        return best, bp, bd
     end
 
     -- the host's body mesh (a PlaneBody* property, as SPC.V.addBody places VALKA's), else nil (its root then)
@@ -197,21 +147,6 @@ do
         end
         return out, n
     end
-    -- what each slot holds now: its material and that material's parent
-    local function slotsSay(s)
-        local out = {}
-        for i = 0, (s.nSlots or 0) - 1 do
-            local ok, m = pcall(function() return s.comp:GetMaterial(i) end)
-            local par = "?"
-            if ok and m and liveObj(m) then
-                local okP, p = pcall(function() return m.Parent end)
-                par = (okP and p and liveObj(p)) and nameOf(p):match("([^%s]+)$") or "none"
-            end
-            out[#out + 1] = string.format("%d %s: %s (parent %s)", i, tostring(s.slots[i] and s.slots[i].kind or "?"),
-                ok and m and short(m) or "nothing", par)
-        end
-        return table.concat(out, "; ")
-    end
     -- paint variant k on the ZFA-44 (fresh run-time instances each time); what it did
     local function paint(s, k)
         local C, pv = ZFA.C, ZFA.PAINTS[k]
@@ -264,6 +199,210 @@ do
         return string.format("instances of %s on %s%s, Normalmap %s, Livemap %s", short(gear),
             #said > 0 and table.concat(said, ", ") or "no slot", #bad > 0 and (", NOT on " .. table.concat(bad, ", ")) or "",
             pv.flat and "DefaultNormal (NormalIntencity 0)" or "its own", pv.livemap or "T_ZFA44_LM (flat 0 / 0.75 / 1)")
+    end
+    local function paintIndex(k) k = math.floor(tonumber(k) or 1); return ((k - 1) % #ZFA.PAINTS) + 1 end
+
+    -- The ZFA-44 built on plane o with paint variant k: the component added, the mesh set, placed and painted (the
+    -- host's meshes not hidden yet). Its record { host, comp, slots, ref, ... }, or nil and why. A crumb before each step.
+    function ZFA.build(o, k, tag)
+        local C = ZFA.C
+        tag = tag or ""
+        step(tag .. "loading SK_ZFA44")
+        local sk, why = asset(C.mesh)
+        if not sk then return nil, string.format("%s not loaded (%s): is SurvivalMode_ZFA44_P installed?", C.mesh, tostring(why)), true end
+        local cls = StaticFindObject(SKC)
+        if not valid(cls) then return nil, "no SkeletalMeshComponent class" end
+        step(tag .. "adding a SkeletalMeshComponent to " .. short(o))
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okC, comp = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
+        if not (okC and comp and valid(comp)) then
+            return nil, "AddComponentByClass on " .. short(o) .. " " .. (okC and "gave nothing" or tostring(comp))
+        end
+        pcall(function() comp:SetCollisionEnabled(0) end)                 -- (ECollisionEnabled NoCollision: its spheres hit)
+        local fixed = pcall(function() comp.bComponentUseFixedSkelBounds = true end)   -- (the mesh's bounds, not the PA's)
+        step(tag .. "setting SK_ZFA44 on it")
+        local okM = pcall(function() comp:SetSkeletalMeshAsset(sk) end) or pcall(function() comp:SetSkeletalMesh(sk, true) end)
+        if not okM then
+            pcall(function() comp:K2_DestroyComponent(comp) end)
+            return nil, "SK_ZFA44 not set on the component (taken off again)"
+        end
+        k = paintIndex(k)
+        local s = { host = o, hostAddr = addrOf(o), hostName = short(o), at = os.clock(), comp = comp, hidden = {}, hideAt = 0,
+                    done = {}, back = 0, paintK = k, sk = sk, fixed = fixed }
+        s.slots, s.nSlots = slotsOf(comp)
+        s.ref, s.refBy = bodyRef(o, addrOf(comp))
+        step(tag .. "placing it")
+        s.placed = place(s)
+        step(tag .. "painting it: " .. ZFA.PAINTS[k].name)
+        s.painted = paint(s, k)
+        return s
+    end
+    -- the record's component taken off its host (destroyed, else hidden) and the host's hidden meshes shown again
+    -- (skipShow: VALKA's T0 handles hers); whether it was destroyed and how many meshes came back
+    function ZFA.strip(s, skipShow)
+        local shown = 0
+        if not skipShow and liveObj(s.host) then
+            for _, h in pairs(s.hidden) do
+                if liveObj(h.obj) and pcall(function() h.obj:SetVisibility(true, false) end) then shown = shown + 1 end
+            end
+        end
+        local gone = false
+        if liveObj(s.comp) then
+            gone = pcall(function() s.comp:K2_DestroyComponent(s.comp) end)
+            if not gone then pcall(function() s.comp:SetVisibility(false, false) end) end
+        end
+        return gone, shown
+    end
+
+    -- (production) the ZFA-44 on AI plane o (opts.paint: its variant; opts.label: the log's name for it): true and what
+    -- was done, or false and why. Each plane once (by its address, ZFA.dressed); its meshes hidden again by ZFA.prodTick.
+    function ZFA.dress(o, opts)
+        opts = opts or {}
+        local a = liveAddr(o)
+        if not a then return false, "not a live object" end
+        if ZFA.dressed[a] and liveObj(ZFA.dressed[a].host) and ZFA.dressed[a].hostAddr == a then return true, "already dressed" end
+        ZFA.dressed[a] = nil
+        if ZFA.missingAt and os.clock() - ZFA.missingAt < (ZFA.C.missing_again_s or 60) then return false, ZFA.missingWhy end
+        local s, why, missing = ZFA.build(o, opts.paint or 3, "dress: ")
+        if not s then
+            if missing then
+                ZFA.missingAt, ZFA.missingWhy = os.clock(), why
+                if not ZFA.missingSaid then
+                    ZFA.missingSaid = true
+                    log("zfa44: NOT dressed: " .. tostring(why) .. "; the ZFA-44s fly as their host airframe (tried again every "
+                        .. tostring(ZFA.C.missing_again_s or 60) .. " s)")
+                end
+            else
+                log(string.format("zfa44: %s (%s) NOT dressed: %s", short(o), tostring(opts.label or "?"), tostring(why)))
+            end
+            return false, why
+        end
+        s.prod, s.label, s.hideS = true, opts.label, tonumber(opts.hide_s) or ZFA.C.hide_s
+        local n = hide(s)
+        s.hideAt = os.clock() + s.hideS
+        ZFA.dressed[a] = s
+        ZFA.dressedN = (ZFA.dressedN or 0) + 1
+        local pv = ZFA.PAINTS[s.paintK]
+        if ZFA.dressedN <= 4 or ZFA.dressedN % 20 == 0 then
+            log(string.format("zfa44: dressed %s (%s) as the ZFA-44 (%d so far): placed on %s%s, paint %d %s: %s; %d of its meshes hidden",
+                s.hostName, tostring(opts.label or "?"), ZFA.dressedN, s.refBy, s.placed and "" or " (NOT placed)", s.paintK, pv.name,
+                tostring(s.painted), n))
+        end
+        return true, string.format("paint %d %s, %d meshes hidden", s.paintK, pv.name, n)
+    end
+    -- (production) the ZFA-44 off plane o again: true when it had one
+    function ZFA.undress(o)
+        local a = addrOf(o)
+        local s = a and ZFA.dressed[a]
+        if not s then return false end
+        ZFA.dressed[a] = nil
+        if not (liveObj(s.host) and addrOf(s.host) == s.hostAddr) then return false end
+        local gone, shown = ZFA.strip(s)
+        log(string.format("zfa44: undressed %s (%s): the ZFA-44 %s, %d of its meshes shown again", s.hostName, tostring(s.label or "?"),
+            gone and "destroyed" or "hidden", shown))
+        return true
+    end
+    -- (production, every tick on every game: sv_escort.lua ESC.tick) at most two dressed planes a call get their own
+    -- meshes hidden again (VALKA's came back on); a gone one is dropped, never read again; one at 0 health left as it is
+    function ZFA.prodTick()
+        local now, n = os.clock(), 0
+        for a, s in pairs(ZFA.dressed) do
+            if liveAddr(s.host) ~= a then
+                ZFA.dressed[a] = nil
+            elseif n < 2 and now >= (s.hideAt or 0) then
+                n = n + 1
+                s.hideAt = now + (s.hideS or ZFA.C.hide_s)
+                local okH, h = pcall(function() return s.host.HealthInternal end)
+                if not (okH and type(h) == "number" and h <= 0) and liveObj(s.comp) then
+                    local back = hide(s)
+                    if back > 0 and not s.backSaid then
+                        s.backSaid = true
+                        log(string.format("zfa44: %d of %s's meshes came back on and were hidden again", back, s.hostName))
+                    end
+                end
+            end
+        end
+    end
+    function ZFA.dressedCount() local k = 0; for _ in pairs(ZFA.dressed) do k = k + 1 end; return k end
+    -- (for the test block below)
+    ZFA.H = { SKC = SKC, step = step, short = short, v3 = v3, hide = hide, paint = paint, slotsOf = slotsOf, paintIndex = paintIndex }
+end
+if type(LEVEL_DROPS) == "table" then                         -- (the level's objects: forgotten, none of them touched)
+    LEVEL_DROPS["the ZFA-44 dressings"] = function() ZFA.dressed, ZFA.flat, ZFA.missingAt, ZFA.missingSaid = {}, {}, nil, nil end
+end
+
+-- TEST ONLY BEGIN (the ZFA-44's test T0: Ctrl+9, sv_main.lua's test keys; its tick, probeTickB)
+do
+    local H = ZFA.H
+    local SKC, step, short, v3 = H.SKC, H.step, H.short, H.v3
+
+    -- the host's frame: where it is and its axes; a world point in it, metres (forward, right, up)
+    local function frame(o)
+        local ok, f = pcall(function()
+            return { at = v3(o:K2_GetActorLocation()), f = v3(o:GetActorForwardVector()), r = v3(o:GetActorRightVector()),
+                     u = v3(o:GetActorUpVector()) }
+        end)
+        return ok and f or nil
+    end
+    local function inFrame(F, p)
+        local d = { X = p.X - F.at.X, Y = p.Y - F.at.Y, Z = p.Z - F.at.Z }
+        local function dot(a) return (d.X * a.X + d.Y * a.Y + d.Z * a.Z) / 100 end
+        return { dot(F.f), dot(F.r), dot(F.u) }
+    end
+    local function fmt(q) return q and string.format("(%.1f, %.1f, %.1f)", q[1], q[2], q[3]) or "?" end
+    local function apart(a, b)
+        if not (a and b) then return nil end
+        return math.sqrt((a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2)
+    end
+
+    local function skipped(unit)
+        for _, pat in ipairs(ZFA.C.skip) do if unit and tostring(unit):find(pat) then return true end end
+        return false
+    end
+    -- VALKA's x40a and her round's state, when she's up
+    local function valkaUp()
+        local s = D and D.special
+        local c = CFG.specials and CFG.specials.valka
+        if not (s and s.kind == "valka" and s.state ~= "done" and type(c) == "table") then return nil end
+        for _, list in ipairs({ planes, pending }) do
+            for _, q in ipairs(list) do
+                if q.unit == c.unit and liveObj(q.obj) then return q.obj, s end
+            end
+        end
+        return nil
+    end
+    -- the nearest live enemy aircraft (the core's `planes`: no allies, wingmen or the shuttle), its record, its km
+    local function nearest()
+        local you = playerLocation()
+        if not you then return nil end
+        local best, bp, bd = nil, nil, nil
+        for _, p in ipairs(planes) do
+            if not p.down and not skipped(p.unit) and liveObj(p.obj) then
+                local okH, h = pcall(function() return p.obj.HealthInternal end)
+                local okL, l = pcall(function() return v3(p.obj:K2_GetActorLocation()) end)
+                if okH and type(h) == "number" and h > 0 and okL and l then
+                    local d = km(l, you)
+                    if not bd or d < bd then best, bp, bd = p.obj, p, d end
+                end
+            end
+        end
+        return best, bp, bd
+    end
+
+    -- what each slot holds now: its material and that material's parent
+    local function slotsSay(s)
+        local out = {}
+        for i = 0, (s.nSlots or 0) - 1 do
+            local ok, m = pcall(function() return s.comp:GetMaterial(i) end)
+            local par = "?"
+            if ok and m and liveObj(m) then
+                local okP, p = pcall(function() return m.Parent end)
+                par = (okP and p and liveObj(p)) and nameOf(p):match("([^%s]+)$") or "none"
+            end
+            out[#out + 1] = string.format("%d %s: %s (parent %s)", i, tostring(s.slots[i] and s.slots[i].kind or "?"),
+                ok and m and short(m) or "nothing", par)
+        end
+        return table.concat(out, "; ")
     end
 
     -- the ZFA-44's burners and size against the host's nozzles, effects and body, in the host's frame (metres)
@@ -332,53 +471,27 @@ do
             #found > 0 and table.concat(found, " ") or "none found", #fx > 0 and table.concat(fx, ", ") or "none found"))
     end
 
-    function ZFA.dress(o, how, vs)
+    function ZFA.t0Dress(o, how, vs)
         local C = ZFA.C
-        local k = ZFA.paintNext or C.paint
-        k = ((k - 1) % #ZFA.PAINTS) + 1
+        local k = H.paintIndex(ZFA.paintNext or C.paint)
         ZFA.paintNext = (k % #ZFA.PAINTS) + 1
         local pv = ZFA.PAINTS[k]
-        step("T0 loading SK_ZFA44")
-        local sk, why = asset(C.mesh)
-        if not sk then
-            log(string.format("zfa44: T0: %s not loaded (%s): is SurvivalMode_ZFA44_P installed (ZFA=1 sh tools/package_dev.sh)?",
-                C.mesh, tostring(why)))
-            if type(hudCallout) == "function" then hudCallout("TEST: ZFA-44 NOT INSTALLED", "SurvivalMode_ZFA44_P") end
+        local s, why, missing = ZFA.build(o, k, "T0 ")
+        if not s then
+            log("zfa44: T0: " .. tostring(why))
+            if type(hudCallout) == "function" then
+                hudCallout(missing and "TEST: ZFA-44 NOT INSTALLED" or "TEST: ZFA-44 NOT DRESSED", missing and "SurvivalMode_ZFA44_P" or nil)
+            end
             return false
         end
-        local cls = StaticFindObject(SKC)
-        if not valid(cls) then log("zfa44: T0: no SkeletalMeshComponent class"); return false end
-        step("T0 adding a SkeletalMeshComponent to " .. short(o))
-        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
-        local okC, comp = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
-        if not (okC and comp and valid(comp)) then
-            log("zfa44: T0: AddComponentByClass on " .. short(o) .. " " .. (okC and "gave nothing" or tostring(comp)))
-            return false
-        end
-        pcall(function() comp:SetCollisionEnabled(0) end)                 -- (ECollisionEnabled NoCollision: its spheres hit)
-        local fixed = pcall(function() comp.bComponentUseFixedSkelBounds = true end)   -- (the mesh's bounds, not the PA's)
-        step("T0 setting SK_ZFA44 on it")
-        local okM = pcall(function() comp:SetSkeletalMeshAsset(sk) end) or pcall(function() comp:SetSkeletalMesh(sk, true) end)
-        if not okM then
-            log("zfa44: T0: SK_ZFA44 not set on the component; taken off again")
-            pcall(function() comp:K2_DestroyComponent(comp) end)
-            return false
-        end
-        local s = { host = o, hostName = short(o), how = how, at = os.clock(), comp = comp, hidden = {}, hideAt = 0,
-                    done = {}, back = 0, paintK = k }
-        s.slots, s.nSlots = slotsOf(comp)
-        s.ref, s.refBy = bodyRef(o, addrOf(comp))
+        s.how = how
         ZFA.cur = s
-        step("T0 placing it")
-        local placed = place(s)
-        step("T0 painting it: " .. pv.name)
-        local painted = paint(s, k)
         if vs then                                           -- VALKA: her X-02S hidden with the x40a's meshes while we're on
             s.valka, s.valkaComp, s.valkaSweep = vs, vs.modelComp, vs.sweepLen
-            vs.modelComp, vs.sweepLen = comp, nil            -- (her modelTick keeps ours shown, hers hidden, no sweep on ours)
+            vs.modelComp, vs.sweepLen = s.comp, nil          -- (her modelTick keeps ours shown, hers hidden, no sweep on ours)
         end
         step("T0 hiding the host's meshes")
-        local n = hide(s)
+        local n = H.hide(s)
         s.hideAt = os.clock() + C.hide_s
         step("T0 dressed")
         local okRel, rel = pcall(function()
@@ -390,9 +503,9 @@ do
         table.sort(names)
         log(string.format("zfa44: T0: %s (%s) dressed as the ZFA-44: a %s added (collision off, fixed bounds %s), %s on it, "
             .. "placed on %s%s (its rotation against the actor %s deg; yaw +%g, offset %g / %g / %g cm, scale %g); paint %d %s: %s; "
-            .. "%d of its meshes hidden (%s)%s", s.hostName, how, comp:GetClass():GetFName():ToString(), fixed and "on" or "NOT set",
-            nameOf(sk):match("([^%s]+)$") or C.mesh, s.refBy, placed and "" or " (NOT placed)", okRel and rel or "?",
-            C.yaw, C.offset_cm.X, C.offset_cm.Y, C.offset_cm.Z, C.scale, k, pv.name, painted, n, table.concat(names, ", "),
+            .. "%d of its meshes hidden (%s)%s", s.hostName, how, s.comp:GetClass():GetFName():ToString(), s.fixed and "on" or "NOT set",
+            nameOf(s.sk):match("([^%s]+)$") or C.mesh, s.refBy, s.placed and "" or " (NOT placed)", okRel and rel or "?",
+            C.yaw, C.offset_cm.X, C.offset_cm.Y, C.offset_cm.Z, C.scale, k, pv.name, tostring(s.painted), n, table.concat(names, ", "),
             vs and "; VALKA's X-02S hidden while it's on" or ""))
         log(string.format("zfa44: T0: %d slots: %s", s.nSlots or 0, slotsSay(s)))
         report(s, "at once")
@@ -410,16 +523,9 @@ do
             local vs = s.valka
             if vs.modelComp == s.comp then vs.modelComp, vs.sweepLen = s.valkaComp, s.valkaSweep end
             if s.valkaComp and liveObj(s.valkaComp) and pcall(function() s.valkaComp:SetVisibility(true, false) end) then shown = 1 end
-        elseif liveObj(s.host) then
-            for _, h in pairs(s.hidden) do
-                if liveObj(h.obj) and pcall(function() h.obj:SetVisibility(true, false) end) then shown = shown + 1 end
-            end
         end
-        local gone = false
-        if liveObj(s.comp) then
-            gone = pcall(function() s.comp:K2_DestroyComponent(s.comp) end)
-            if not gone then pcall(function() s.comp:SetVisibility(false, false) end) end
-        end
+        local gone, back = ZFA.strip(s, s.valka ~= nil or not liveObj(s.host))
+        shown = shown + back
         log(string.format("zfa44: T0: undone on %s (%s) after %.0f s: the ZFA-44 %s, %d of its meshes shown again%s", s.hostName,
             why, os.clock() - s.at, gone and "destroyed" or "hidden (not destroyed)", shown,
             s.valka and " (VALKA's X-02S)" or ""))
@@ -444,7 +550,7 @@ do
             end
             how = string.format("the nearest live enemy aircraft, %.1f km off, %s", d or -1, tostring(p and p.unit))
         end
-        ZFA.dress(o, how, vs)
+        ZFA.t0Dress(o, how, vs)
     end
 
     -- each tick half (sv_main.lua probeTickB): the host's meshes hidden again, the follow-up lines, its end
@@ -470,7 +576,7 @@ do
         end
         if now >= s.hideAt and not s.downSaid then
             s.hideAt = now + ZFA.C.hide_s
-            local n = hide(s)
+            local n = H.hide(s)
             if n > 0 then
                 s.back = s.back + n
                 if not s.backSaid then
@@ -489,6 +595,6 @@ do
     end
 end
 if type(LEVEL_DROPS) == "table" then                         -- (the level's objects: forgotten, none of them touched)
-    LEVEL_DROPS["the ZFA-44 test"] = function() ZFA.cur, ZFA.flat = nil, {} end
+    LEVEL_DROPS["the ZFA-44 test"] = function() ZFA.cur = nil end
 end
 -- TEST ONLY END

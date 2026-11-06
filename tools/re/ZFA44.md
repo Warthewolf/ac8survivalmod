@@ -383,3 +383,15 @@ makes the run unranked); the part is in MODULES before sv_main and is one TEST O
   alive); its fall shows the ZFA-44 falling.
 - Mipmaps are generated from the source (the user's paint had 1 mip), 4096 colour; streaming from our container as the
   Falken's cockpit and VALKA's textures do.
+
+## 9. The production dressing (2026-11-06, branch feature/zfa44; not yet run in game)
+`Scripts/sv_zfa44.lua` now has the dressing outside its test block, for the escort's carriers (tools/re/ESCORT.md):
+`ZFA.dress(plane, { paint = k, label = text, hide_s = s })` (true and what it did, or false and why; each plane once, by
+its address), `ZFA.undress(plane)`, `ZFA.prodTick()` (from sv_escort.lua's tick: at most two dressed planes a tick get the
+host's meshes hidden again every hide_s; a gone one dropped), `ZFA.build` / `ZFA.strip` (the component, mesh, place and
+paint; shared with T0). The carriers' flights are dressed with CFG.allies.carrier.zfa.paint, default **3, GEAR, FLAT
+NORMAL** (the Falken's exactly, VALKA's paint 16: the only variant here proven to draw; T0 hasn't been run, so 1 COOKED
+is untried). Without SK_ZFA44 nothing is dressed (`zfa44: NOT dressed: ... the ZFA-44s fly as their host airframe`, once;
+tried again after missing_again_s). T0 (Ctrl+9, ZFA.press / ZFA.t0Dress / ZFA.tick) is unchanged and stays in the test block.
+Packaging still cuts the file to its first line in every zip (no ZFA-44 container there), which takes the production
+dressing out with it: a zip that ships the container needs package_release.sh to strip only the test block instead.
