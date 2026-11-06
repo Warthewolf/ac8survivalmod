@@ -45,7 +45,7 @@ function NotifyOnNewObject(cls, fn) notifies[cls] = notifies[cls] or {}; table.i
 function StaticFindObject(p) return statics[p] end
 function FindAllOf(cls) return all[cls] end
 function FindFirstOf(cls) local l = all[cls]; return l and l[1] end
-Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12" }
+Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12", HOME = "HOME", PAGE_UP = "PAGE_UP", PAGE_DOWN = "PAGE_DOWN" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -86,7 +86,7 @@ print("the main menu")
 FISH.setup()
 check(npc.rows[C.shoal_row] ~= nil and mt.rows[C.shoal_model] ~= nil, "SV_Shoal in DT_NPC, SV_Model_Shoal in DT_NPC_Model")
 check(adds[1] == "DT_NPC_Model:" .. C.shoal_model and adds[2] == "DT_NPC:" .. C.shoal_row, "the model row first (" .. table.concat(adds, ", ") .. ")")
-check(FISH.ready == true, "FISH.ready")
+check(FISH.rowsReady == true, "FISH.rowsReady")
 check(texts.SV_Shoal_Name == "SHOAL" and texts.SV_SalBoat == "SAL'S BOAT", "the names set: SHOAL, SAL'S BOAT")
 check(logs[#logs]:find("fishing: the shoal's rows: SV_Shoal in DT_NPC, SV_Model_Shoal in DT_NPC_Model", 1, true) ~= nil, "logged: " .. logs[#logs])
 
@@ -273,6 +273,285 @@ local n0 = #logs
 tick(1)
 check(#logs == n0, "nothing read after it")
 
+print("the round: the deck, the kg, the grades and the pay")
+part(MOD, "sv_subs.lua")
+part(MOD, "sv_sky.lua")
+levelGoing = function() return false end
+local onAirfield = false
+function playerOnAirfield() return onAirfield end
+local lbs, later = {}, {}
+LB = { special = function(k, won) lbs[#lbs + 1] = { k = k, won = won } end }
+ALIVE = { spawned = function() end }
+SPC.recycleLater = function(list) for _, u in ipairs(list) do later[#later + 1] = u end; return #list end
+local geomWpn = "msl"
+KILL.geom = function() return { wpn = geomWpn, used = {} } end
+local paid = {}
+RUN = { credits = 0 }
+function addCredits(n2, why) paid[#paid + 1] = { n = n2, why = why }; RUN.credits = RUN.credits + n2 end
+local deck = FISH.deck(24)
+local cnt = {}
+for _, x in ipairs(deck) do cnt[x] = (cnt[x] or 0) + 1 end
+check(#deck == 24 and cnt.none == 7 and cnt.junk == 2 and cnt.sardine == 5 and cnt.mackerel == 4 and cnt.tuna == 3
+    and cnt.swordfish == 2 and cnt.bigone == 1, "24 shoals: 7 empty, 2 junk, 5 sardines, 4 mackerel, 3 tuna, 2 swordfish, The Big One")
+local d2 = FISH.deck(30, { bigone = 50, none = 50 }, 1)
+local big = 0
+for _, x in ipairs(d2) do if x == "bigone" then big = big + 1 end end
+check(#d2 == 30 and big == 1, "The Big One at most once, whatever its weight (" .. big .. ")")
+local shuffledOnce = false
+for _ = 1, 5 do local a, b = FISH.deck(24), FISH.deck(24); if table.concat(a, ",") ~= table.concat(b, ",") then shuffledOnce = true end end
+check(shuffledOnce, "the deck shuffled")
+local kgOk = true
+for _ = 1, 200 do
+    local t = FISH.kgOf("tuna")
+    local b1 = FISH.kgOf("bigone")
+    if t < 40 or t > 90 or b1 < 250 or b1 > 400 or FISH.kgOf("none") ~= 0 or FISH.kgOf("junk") ~= 0 then kgOk = false end
+end
+check(kgOk, "each fish's kg in its range, nothing and junk 0")
+check(FISH.grade(900, 1) == "S" and FISH.grade(899, 1) == "A" and FISH.grade(650, 1) == "A" and FISH.grade(649, 1) == "B"
+    and FISH.grade(400, 1) == "B" and FISH.grade(150, 1) == "C" and FISH.grade(149, 1) == "D", "the grades' thresholds")
+check(FISH.grade(225, 4) == "S" and FISH.grade(224, 4) == "A" and FISH.grade(450, 2) == "S", "co-op: each threshold x players ^ -1")
+local pA = FISH.payFor(770, 1, 7, true)
+local pS = FISH.payFor(1000, 1, 7, true)
+local pA2 = FISH.payFor(700, 1, 7, false)
+check(pA == 6120 and pS == 9000 and pA2 == 5200, string.format("round 7: an A (770 kg, The Big One) %d, an S (1,000 kg) %d, an A without it %d", pA, pS, pA2))
+local p17 = FISH.payFor(1000, 1, 17, true)
+check(p17 == 12600, "round 17: x1.4 (" .. p17 .. ")")
+check(FISH.payFor(0, 1, 7, false) == 0, "nothing caught: nothing paid")
+
+print("the round: once a run, its start")
+RUN = { credits = 0 }
+check(FISH.ready(7) == true and FISH.ready(7, true) == true, "ready from the start of a run")
+RUN.fished = 7
+check(FISH.ready(20) == false and FISH.ready(20, true) == true, "once a run (a test key's forced one still comes)")
+RUN = { credits = 0 }
+spawns, all = {}, {}
+FISH.actors = {}
+D = { now = 2000, round = 7, state = "spawning", up = {}, special = { kind = "fishing", state = "pending" } }
+clock = 2000
+local s = D.special
+check(FISH.roundSpawn(2000) == true, "GONE FISHIN' spawns")
+check(s.state == "intro" and RUN.fished == 7 and RUN.arcF == 7, "intro; once a run marked; the arc's F is round 7")
+check(#spawns == 1 and spawns[1].unit == "SV_Unit_SalBoat" and spawns[1].yaw == 157, "SAL's boat at its spot (yaw 157)")
+check(#SUB.q == #CFG.specials.fishing.text.intro and SUB.q[1].who == "COMONA CONTROL" and SUB.q[2].who == "SAL",
+    "the intro on the strip (" .. #SUB.q .. " lines, CONTROL then SAL)")
+check(s.introEnd >= 2000 + 7 * 4 - 0.01, "the shoals after the intro (" .. (s.introEnd - 2000) .. " s)")
+local longest = 0
+for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone", "first", "empties",
+                     "gun", "ally", "quiet", "landed", "cleared", "boat", "warn", "weigh", "grade_s", "grade_a", "grade_b",
+                     "grade_c", "grade_d", "signoff" }) do
+    local l = CFG.specials.fishing.text[k]
+    for _, x in ipairs(type(l) == "table" and l or { l }) do
+        local _, t = FISH.line(x, { kg = "999", fish = "X" })
+        longest = math.max(longest, #t)
+    end
+end
+check(longest <= 70, "SAL's lines under 70 characters (the longest " .. longest .. ")")
+
+-- a tick of the round on the round clock, the strip's queue moving as the HUD would
+local function rtick(dt)
+    clock = clock + dt
+    D.now = clock
+    FISH.roundTick(clock, s)
+    SUB.hudTick(clock, true, false)
+end
+rtick(s.introEnd - clock + 0.1)
+check(s.state == "fishing" and #spawns == 4, "the time starts: the three grounds spawned")
+check(spawns[2].unit == "SV_Unit_FishA" and spawns[3].unit == "SV_Unit_FishB" and spawns[4].unit == "SV_Unit_FishC"
+    and spawns[3].x == 1866154 and spawns[4].z == 700, "each ground at its spot, 700 cm up")
+check(s.total == 24 and #s.deck == 24, "24 shoals, a 24-catch deck")
+local sphered = 0
+for _, sh in ipairs(s.shoals) do if sh.obj.sphere then sphered = sphered + 1 end end
+check(sphered == 24, "a hit sphere on each shoal (" .. sphered .. ")")
+check(found("GONE FISHIN' / 3:00 ON THE CLOCK") or callouts[#callouts]:find("3:00 ON THE CLOCK", 1, true), "the clock's callout: " .. tostring(callouts[#callouts]))
+
+-- a fixed deck from here
+s.deck = { "tuna", "none", "junk", "none", "sardine", "bigone" }
+for i = 7, 24 do s.deck[i] = "mackerel" end
+local sh1 = s.shoals[1]
+sh1.obj.hits = { { pawn, 100 } }
+sh1.obj.HealthInternal = 0
+local nSplash = #splashes
+rtick(0.5)
+check(sh1.down and s.haul[0] and s.haul[0].hits == 1 and s.haul[0].best == "tuna" and s.haul[0].kg >= 40, "your tuna: credited to you")
+check(callouts[#callouts]:match("^%+%d+ KG YELLOWFIN TUNA / nil$") ~= nil, "its callout: " .. callouts[#callouts])
+check(#splashes == nSplash + 1 and splashes[#splashes].at.Z == 350, "its splash at the sea's height")
+local firstLine = false
+for _, l in ipairs(SUB.q) do if l.text:find("grandfather", 1, true) then firstLine = true end end
+check(firstLine or (SUB.cur and SUB.cur.text:find("grandfather", 1, true)), "SAL's first-catch line")
+-- three empties (none, junk, none): his complaint
+for i = 2, 4 do s.shoals[i].obj.hits = { { pawn, 100 } }; s.shoals[i].obj.HealthInternal = 0 end
+SUB.clear("test")
+rtick(0.5)
+local said = {}
+for _, l in ipairs(SUB.q) do said[#said + 1] = l.text end
+check(table.concat(said, " | "):find("aim where the fish are", 1, true) ~= nil, "three empties in a row: SAL's complaint (" .. table.concat(said, " | ") .. ")")
+check(s.haul[0].empty == 2 and s.haul[0].junk == 1 and s.haul[0].hits == 4, "the empties and the junk counted")
+check(callouts[#callouts - 2]:find("^NOTHING") and callouts[#callouts - 1]:find("^JUNK"), "NOTHING / JUNK callouts")
+-- a gun kill (yours, once)
+geomWpn = "gun"
+s.shoals[5].obj.hits = { { pawn, 100 } }; s.shoals[5].obj.HealthInternal = 0
+SUB.clear("test")
+rtick(0.5)
+local function strip() local o = {}; if SUB.cur then o[1] = SUB.cur.text end; for _, l in ipairs(SUB.q) do o[#o + 1] = l.text end; return o end
+check(strip()[1] and strip()[1]:find("little gun", 1, true), "a gun kill: SAL's spear fisherman line")
+geomWpn = "msl"
+-- an ally's kill (solo: still yours) with The Big One
+s.shoals[6].obj.hits = { { obj("BP_Ally"), 100 } }; s.shoals[6].obj.HealthInternal = 0
+SUB.clear("test")
+rtick(0.5)
+check(s.haul[0].bigone == true and s.haul[0].hits == 6, "solo: an ally's catch is yours (The Big One)")
+check(strip()[1] == "..." and strip()[2] ~= nil, "The Big One: '...' and its line (" .. table.concat(strip(), " | ") .. ")")
+check(splashes[#splashes].sc.X == CFG.specials.fishing.splash_scale * CFG.specials.fishing.splash_big_x, "The Big One's bigger splash")
+-- quiet: no catch for quiet_s
+SUB.clear("test")
+for _ = 1, 62 do rtick(0.5) end
+local quiet = false
+for _, l in ipairs(SUB.q) do if l.text:find("sightseeing", 1, true) or l.text:find("explode themselves", 1, true) then quiet = true end end
+if SUB.cur and (SUB.cur.text:find("sightseeing", 1, true) or SUB.cur.text:find("explode", 1, true)) then quiet = true end
+check(quiet, "30 s with no catch: SAL's nudge")
+-- you land: his coffee line, once
+onAirfield = true
+SUB.clear("test")
+rtick(0.5); rtick(0.5)
+local coffee = 0
+for _, l in ipairs(SUB.q) do if l.text:find("coffee", 1, true) then coffee = coffee + 1 end end
+if SUB.cur and SUB.cur.text:find("coffee", 1, true) then coffee = coffee + 1 end
+check(coffee == 1, "you landed: the coffee line once (" .. coffee .. ")")
+onAirfield = false
+-- the boat: a hit here costs you 25 kg (not twice in boat_hit_gap_s)
+local boatObj = all.VE028_boat2_CP_C[1]
+rtick(0.5)
+boatObj.HealthInternal = 150
+rtick(0.5)
+boatObj.HealthInternal = 140
+rtick(0.5)
+check(FISH.boat.kg == 25 and FISH.boat.hits == 1, "the boat hit: -25 kg once in its gap (" .. FISH.boat.kg .. ")")
+boatObj.MinHealth = 0
+rtick(0.5)
+check(boatObj.MinHealth == 1.0 and setMin == 0, "the boat's MinHealth field kept at 1, never SetMinHealth")
+-- the warnings
+local warned = 0
+while clock < s.endAt - 0.6 do rtick(0.5) end
+for _, l in ipairs(logs) do if l:find("^fishing: %d+ s left") then warned = warned + 1 end end
+check(warned == 4, "the four warnings (" .. warned .. ")")
+local cleanBefore = #cleaned
+rtick(1)
+check(s.state == "weigh", "the time's up: the weigh-in")
+check(#cleaned == cleanBefore + 1 and #cleaned[#cleaned].list == 3 and cleaned[#cleaned].n == 18, "the 18 shoals left taken off ("
+    .. tostring(cleaned[#cleaned] and cleaned[#cleaned].n) .. ")")
+check(#later >= 3 and later[1] == "SV_Unit_FishA", "their units off the spawner's list after")
+local kgBefore = s.haul[0].kg
+while not s.carded do rtick(0.5) end
+local last = paid[#paid]
+local want = FISH.payFor(kgBefore - 25, 1, 7, true)
+check(last and last.n == want and last.why:find("GONE FISHIN' weigh-in", 1, true) and last.why:find("-25 kg the boat", 1, true),
+    string.format("paid %s (%s), want %d", tostring(last and last.n), tostring(last and last.why), want))
+check(SUB.cardUp and SUB.cardUp.title:find("WEIGH%-IN") and SUB.cardUp.lines[1]:find("6 / 24", 1, true)
+    and SUB.cardUp.lines[2]:find("THE BIG ONE", 1, true) and SUB.cardUp.lines[4]:find("-25 KG", 1, true),
+    "the card: " .. (SUB.cardUp and table.concat(SUB.cardUp.lines, " | ") or "none"))
+check(RUN.fishKg == kgBefore - 25, "the haul kept for THE FESTIVAL's thanks (" .. tostring(RUN.fishKg) .. ")")
+for _ = 1, 80 do if s.state ~= "done" then rtick(0.5) end end
+check(s.state == "done" and FISH.busy(s) == false, "done once SAL's said it all")
+check(lbs[#lbs] and lbs[#lbs].k == "fishing" and lbs[#lbs].won == true, "the leaderboard's special: fishing, won")
+check(found("fishing: SAL's boat switched off here (GONE FISHIN' over)") ~= nil and boatObj.bIsInvincible == true
+    and boatObj.bShowHUDBox == false, "the boat switched off (no box, invincible)")
+
+print("the round: co-op (the host)")
+RUN = { credits = 0 }
+paid = {}
+spawns, all, FISH.actors = {}, {}, {}
+local sent = { fh = {}, fw = {}, fwe = {}, row = {} }
+local own = {}
+COOP = { open = true, slot = 0, host = function() return true end, client = function() return false end,
+         removeNow = function(u) removed[#removed + 1] = u; return 0 end,
+         slots = function() return { 0, 2 } end, name = function(sl) return ({ [0] = "Host", [2] = "dukka" })[sl] end,
+         fishCatch = function(sl, c, k) sent.fh[#sent.fh + 1] = { sl, c, k } end,
+         fishWeigh = function(sl, k) sent.fw[#sent.fw + 1] = { sl, k } end,
+         fishWeighEnd = function(p, t) sent.fwe[#sent.fwe + 1] = { p, t } end,
+         specialRow = function(...) sent.row[#sent.row + 1] = { ... } end,
+         payOwn = function(n2, why) own[#own + 1] = { n = n2, why = why } end }
+local byJoiner = nil
+local rawBy = KILL.by
+KILL.by = function(p)
+    if byJoiner and p.obj == byJoiner then p.killer = 2; return "wingmate" end
+    return rawBy(p)
+end
+D = { now = 5000, round = 9, state = "spawning", up = {}, special = { kind = "fishing", state = "pending" } }
+clock, s = 5000, nil
+s = D.special
+FISH.roundSpawn(5000)
+rtick(s.introEnd - clock + 0.1)
+s.deck = { "swordfish", "tuna" }
+for i = 3, 24 do s.deck[i] = "sardine" end
+byJoiner = s.shoals[1].obj
+s.shoals[1].obj.HealthInternal = 0
+rtick(0.5)
+check(s.haul[2] and s.haul[2].best == "swordfish" and not s.haul[0], "a joiner's kill: their swordfish, not the host's")
+check(sent.fh[1] and sent.fh[1][1] == 2 and sent.fh[1][2] == "swordfish", "the catch sent to everyone (fh)")
+check(callouts[#callouts]:find("SWORDFISH / DUKKA", 1, true), "its callout names them: " .. callouts[#callouts])
+s.shoals[2].obj.hits = { { pawn, 100 } }; s.shoals[2].obj.HealthInternal = 0
+rtick(0.5)
+check(s.haul[0] and s.haul[0].best == "tuna", "the host's own tuna")
+s.shoals[3].obj.hits = { { obj("BP_Ally2"), 100 } }; s.shoals[3].obj.HealthInternal = 0
+rtick(0.5)
+check(s.allyKg > 0 and sent.fh[3][1] == -1, "an ally's catch in co-op: the allies' (shared out), sent as -1")
+check(#sent.row >= 1 and sent.row[#sent.row][1] == "fishing", "the row's numbers sent once a second (fsx)")
+while s.state == "fishing" do rtick(1) end
+while not s.carded do rtick(0.5) end
+check(#sent.fw == 2 and #sent.fwe == 1 and sent.fwe[1][1] == 2, "each player's weigh-in sent (fw x2, fwe: 2 players)")
+local hostKg = s.haul[0].kg + math.floor(s.allyKg / 2 + 0.5)
+check(own[1] and own[1].n == FISH.payFor(hostKg, 2, 9, false) and not paid[1], string.format("the host's own pay through COOP.payOwn (%s for %d kg)",
+    tostring(own[1] and own[1].n), hostKg))
+check(SUB.cardUp and SUB.cardUp.lines[5] == "" and SUB.cardUp.lines[6]:find("FROM 2 PILOTS", 1, true) and SUB.cardUp.lines[7] ~= nil,
+    "the card's team total and each player: " .. (SUB.cardUp and table.concat(SUB.cardUp.lines, " | ") or ""))
+KILL.by = rawBy
+
+print("the round: co-op (a joiner)")
+RUN = { credits = 0 }
+own = {}
+COOP.host = function() return false end
+COOP.client = function() return true end
+COOP.slot = 2
+D = { now = 6000, round = 9, state = "fighting", up = {}, hostSpecial = { kind = "fishing", state = "fishing" } }
+clock = 6000
+FISH.clientTick(6000)
+FISH.fromHost("fsx", { "fsx", "fishing", "fishing", "95", "17", "321" })
+local row = FISH.clientRow(CFG.hud.text)
+check(row and row:find("1:35", 1, true) and row:find("SHOALS 17", 1, true) and row:find("HAUL 0 KG", 1, true) and row:find("TEAM 321", 1, true),
+    "the joiner's row: " .. tostring(row))
+FISH.fromHost("fh", { "fh", "2", "tuna", "60", "1803000", "-1160000" })
+FISH.fromHost("fh", { "fh", "2", "shark", "60" })
+FISH.fromHost("fh", { "fh", "40", "tuna", "60" })
+check(FISH.cl.haul[2] and FISH.cl.haul[2].kg == 60 and FISH.cl.haul[2].hits == 1, "a catch of theirs counted; a bad catch or slot dropped")
+row = FISH.clientRow(CFG.hud.text)
+check(row:find("HAUL 60 KG", 1, true), "their own haul in the row")
+FISH.fromHost("fw", { "fw", "0", "300", "9", "3", "swordfish", "120", "0" })
+FISH.fromHost("fw", { "fw", "2", "60", "1", "0", "tuna", "60", "0" })
+FISH.fromHost("fwe", { "fwe", "2", "400", "40", "9", "24" })
+local wantJ = FISH.payFor(60 + 20, 2, 9, false)
+check(#own == 1 and own[1].n == wantJ, string.format("the joiner paid its own haul through COOP.payOwn (%s, want %d)", tostring(own[1] and own[1].n), wantJ))
+check(SUB.cardUp and SUB.cardUp.lines[6]:find("400 KG FROM 2 PILOTS", 1, true), "its card: " .. table.concat(SUB.cardUp.lines, " | "))
+FISH.fromHost("fwe", { "fwe", "2", "400", "40", "9", "24" })
+check(#own == 1, "a second fwe for the round: not paid twice")
+D.hostSpecial = { kind = "fishing", state = "done" }
+FISH.clientTick(6001)
+check(found("SAL's boat switched off here (the host's GONE FISHIN' is over)") ~= nil, "the host's round over: the boat's copy off here")
+COOP = { host = function() return false end, client = function() return false end, removeNow = function(u) removed[#removed + 1] = u; return 0 end }
+
+print("the test key: GONE FISHIN' now (Ctrl+HOME)")
+check(binds.HOME ~= nil and TEST_KEYS.HOME ~= nil, "Ctrl+HOME bound through testKey")
+D = { now = 100, round = 4, state = "wait", at = 130, up = {}, announced = true }
+press("HOME")
+check(D.forceSpecial == "fishing" and D.at == 103 and D.announced == false, "in the break: GONE FISHIN' in 3 s")
+D = { now = 100, round = 4, state = "fighting", up = {} }
+press("HOME")
+check(D.forceSpecial == "fishing" and found("round 5 is GONE FISHIN' (after this round)") ~= nil, "in a fight: the next round")
+COOP.client = function() return true end
+D = { now = 100, round = 4, state = "wait", at = 130, up = {} }
+press("HOME")
+check(D.forceSpecial == nil, "a joiner: nothing (the host starts the rounds)")
+COOP.client = function() return false end
+
 print("a release's copy")
 FISH, testKey, TEST_TICKS, TEST_KEYS = nil, nil, nil, nil
 local src = readAll(STRIPPED .. "/Scripts/sv_fishing.lua")
@@ -280,7 +559,7 @@ check(not src:find("TEST ONLY", 1, true) and not src:find("testKey", 1, true) an
 npc.rows, mt.rows, adds = {}, {}, {}
 part(STRIPPED, "sv_fishing.lua")
 FISH.setup()
-check(FISH.test == nil and FISH.ready == true and npc.rows[C.shoal_row] ~= nil, "it loads and still adds the rows at the main menu")
+check(FISH.test == nil and FISH.rowsReady == true and npc.rows[C.shoal_row] ~= nil, "it loads and still adds the rows at the main menu")
 
 print(fails == 0 and "fishing test: all passed" or ("fishing test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

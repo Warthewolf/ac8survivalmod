@@ -337,9 +337,9 @@ if ROLE == "host" then
     tick(1)
     check(table.concat(sent, "\n", b4 + 1):find("rnd|[^\n]*|m2s1"), "host: the room's allies in rnd (m2s1)")
     local rl = table.concat(sent, "\n", b4 + 1):match("rnd|[^\n]*") or ""
-    check(rl:match("|m2s1|[^|]*|[^|]*|2|[^|]*$") ~= nil, "host: ... and the room's VOID WATCHER 1 purchases (2: " .. rl .. ")")
+    check(rl:match("|m2s1|[^|]*|[^|]*|2|[^|]*|%d+$") ~= nil, "host: ... and the room's VOID WATCHER 1 purchases (2: " .. rl .. ")")
     -- ((0.73.78) the room's other allies and defences after it, field 14: "<item>:<n>,...;<kind>:<n>,...")
-    check(rl:match("|2|[%w:,]*;[%a%d:,]*$") ~= nil, "host: ... then the room's other allies and defences (f14: " .. rl .. ")")
+    check(rl:match("|2|[%w:,]*;[%a%d:,]*|%d+$") ~= nil, "host: ... then the room's other allies and defences (f14: " .. rl .. ")")
     RUN.bought.VoidWatcher = vbWas
     ALLY = nil
     -- COVER for a joiner (COOP.coverFor): the allied planes onto the enemies nearest that joiner's real plane, the

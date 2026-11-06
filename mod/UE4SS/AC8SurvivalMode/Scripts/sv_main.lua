@@ -132,7 +132,11 @@ local function creditKill(p)
     if DECOY and DECOY.isUnit and DECOY.isUnit(p.unit) then return end   -- (THE DECOY's UAVs too: sv_decoy.lua)
     local model = p.name:match("BP_OP%d+_(%w+)_") or "?"
     local kind = "fighter"
-    if p.unit and BOMBER_UNIT[p.unit] then
+    -- ((0.74.0) THE FESTIVAL's Tu-160s and cruise missiles: their own pay, CFG.specials.festival pay_bomber / pay_missile)
+    local fk, fbase = nil, nil
+    if FEST and FEST.killPay then fk, fbase = FEST.killPay(p.unit) end
+    if fk then kind = fk
+    elseif p.unit and BOMBER_UNIT[p.unit] then
         kind = "bomber"
         for _, h in ipairs(CFG.airfield.bombers.heavy) do if (h:match("^(%w+)_") or h) == model then kind = "heavy" end end
     elseif p.unit == false then
@@ -160,7 +164,7 @@ local function creditKill(p)
     local dp, dt, dx = CFG.late.director_pay, p.dirTag, 1
     if by == "you" and type(dt) == "table" and type(dp) == "table" and dp.enabled and D and D.now
         and D.now - (tonumber(dt.at) or -math.huge) <= (dp.tag_s or 20) then dx = tonumber(dp.x) or 1 end
-    local pay, x = TIER.pay((c[kind] or 0) * TIER.specialX() * rx * byX * jx * dx, ti)
+    local pay, x = TIER.pay((fbase or c[kind] or 0) * TIER.specialX() * rx * byX * jx * dx, ti)
     addCredits(pay, string.format("%s down (%s%s%s%s%s%s%s)", model, kind, ti and (", " .. list[ti].name .. " x" .. x) or "",
         TIER.specialX() ~= 1 and (", special x" .. TIER.specialX()) or "", rx ~= 1 and string.format(", round x%.2f", rx) or "",
         by ~= "you" and string.format(", by %s x%.2f", byText, byX) or "", jx ~= 1 and string.format(", the jammer x%g", jx) or "",
@@ -292,14 +296,15 @@ local function planeSweep(slot)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
                 pcall(planeUnit, p)
                 local own = p.unit and (p.unit:find("^SV_Unit_Ladon")             -- (the Ladons: their own tuning;
-                    or (DECOY and DECOY.isUnit and DECOY.isUnit(p.unit)))          -- THE DECOY's UAVs: their orbit)
+                    or (DECOY and DECOY.isUnit and DECOY.isUnit(p.unit))           -- THE DECOY's UAVs: their orbit;
+                    or p.unit:find("^SV_Unit_FestCM_"))                           -- (0.74.0) THE FESTIVAL's cruise missiles: stock)
                 if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
                 local an = CFG.specials.anomaly
                 local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
                 if not own then pcall(enemySpike, p, D and D.round, tierFor) end
-                if D then pcall(enemyLate, p, D.round) end                         -- (CFG.late: late rounds' health)
+                if D and not (p.unit and p.unit:find("^SV_Unit_FestCM_")) then pcall(enemyLate, p, D.round) end   -- (CFG.late)
                 pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
@@ -369,9 +374,12 @@ local function runLeft(why)
     if not okL then log("leaderboard: error " .. tostring(errL)) end
     if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
     if D.special then pcall(SPC.V.cleanup, D.special) end
+    if FEST and FEST.sirenOff then pcall(FEST.sirenOff, "the level was left") end   -- ((0.74.0) THE FESTIVAL's siren)
+    if SUB and SUB.clear then pcall(SUB.clear, "the level was left") end
     pcall(SND.stopAll)
     pcall(hudRed, false, nil, true)        -- ((0.73.76) VALKA's red sky put back at once, a joiner's too: no tick may follow)
     if SKY then pcall(SKY.restore, "the level was left") end   -- ((0.74.0) the sky's values Survival changed: sv_sky.lua)
+    if SKY and SKY.arcReset then pcall(SKY.arcReset, "the level was left") end
     pcall(TAC.reset)                       -- (the gun's class default back to stock)
     if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
     local held = D.vanished and #D.vanished or 0
@@ -430,6 +438,8 @@ local function probeTick(tick)
             pcall(SPC.V.cleanup, D.special); pcall(SPC.alicornCleanup, D.special)   -- the Alicorn's RAILGUN WARNING)
         end
         pcall(SND.stopAll)
+        if SKY and SKY.arcReset then pcall(SKY.arcReset, "the run starts over") end   -- ((0.74.0) the day-night arc put back)
+        if SUB and SUB.clear then pcall(SUB.clear, "the run starts over") end
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
@@ -678,6 +688,18 @@ local function probeTickB(tick)
                 local okDn, errDn = timed("down", DOWN.tick)
                 if not okDn and D and not D.downErr then D.downErr = true; log("down: error " .. tostring(errDn)) end
             end
+        end
+        if now and SKY and SKY.arcTick then                -- ((0.74.0) the day-night arc, every game: sv_sky.lua)
+            local okSk, errSk = timed("sky arc", SKY.arcTick, now)
+            if not okSk then logOnce("sky arc tick", "sky: arc error " .. tostring(errSk) .. " (its first: not logged again)") end
+        end
+        if now and FISH and FISH.clientTick then          -- ((0.74.0) a co-op joiner's GONE FISHIN' and THE FESTIVAL:
+            local okFc, errFc = timed("fishing", FISH.clientTick, now)   -- the boat, the host's state; sv_fishing / festival)
+            if not okFc then logOnce("fishing client", "fishing: client error " .. tostring(errFc)) end
+        end
+        if now and FEST and FEST.clientTick then
+            local okXc, errXc = timed("festival", FEST.clientTick, now)
+            if not okXc then logOnce("festival client", "festival: client error " .. tostring(errXc)) end
         end
         -- TEST ONLY BEGIN (the test keys' steps: sv_sky.lua, sv_fishing.lua, sv_festival.lua; testKey, sv_core.lua)
         for _, t in ipairs(TEST_TICKS or {}) do

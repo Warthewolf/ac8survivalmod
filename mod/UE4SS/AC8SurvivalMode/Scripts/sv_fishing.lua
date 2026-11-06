@@ -1,13 +1,13 @@
 -- sv_fishing.lua: GONE FISHIN' (CFG.specials.fishing; FISHING_ROUND_PLAN.md; tools/re/FISHING.md 1-4): the shoals and
 -- SAL's boat. Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a
 -- global of this mod's Lua state, its own helpers stay local.
--- The round itself comes later: for now the rows at the main menu (FISH.setup), what each spawn makes (FISH.actors), the
--- splash and the first in-game test's key (Ctrl+F10, test only).
+-- The rows at the main menu (FISH.setup), what each spawn makes (FISH.actors), the splash, the hit sphere, the round
+-- itself (below: "the round") and the test keys (Ctrl+F10 the shoals and the boat, Ctrl+HOME the round now; test only).
 -- The build data (tools/build_survival.py, the contract of 2026-11-06): a shoal is DT_SV_NpcRows' SV_Shoal (a copy of the
 -- stock invisible turret pawn GR000_dummy with the vessels' durability ids) on DT_SV_ModelRows' SV_Model_Shoal (MaxHealth
 -- 10), mission row sv_shoal; units SV_Unit_FishA / B / C of 8 shoals each (boxed, TGT, within 800 m of the unit's origin,
 -- offset z 0); SAL's boat SV_Unit_SalBoat (the stock VE027_boat2_01, allied, MinHealth 1, invincible from AI and wingmen).
-FISH = { actors = {}, ready = nil, setupDone = false, tries = 0 }
+FISH = { actors = {}, rowsReady = nil, setupDone = false, tries = 0 }
 do
 local function cfg() return CFG.specials.fishing end
 local function isFishUnit(u)
@@ -42,7 +42,7 @@ function FISH.setup()
     end
     local model = addRow(mt, mr, c.shoal_model)               -- (the model first: the row names it)
     local row = addRow(npc, mine, c.shoal_row)
-    FISH.ready = model and row
+    FISH.rowsReady = model and row
     local names = {}
     if type(SV_SetText) == "function" then
         names[#names + 1] = c.shoal_name_key .. " " .. (SV_SetText(c.shoal_name_key, c.shoal_name) == 1 and "set" or "NOT set")
@@ -76,6 +76,18 @@ end
 function FISH.objs(unit)
     local out = {}
     for _, o in ipairs(FISH.actors[unit] or {}) do if liveObj(o) then out[#out + 1] = o end end
+    return out
+end
+-- (a spawn whose objects the new-object feed didn't catch) the live objects of class `cls` within 2 km of (x, y): a walk
+FISH.SHOAL_CLASS, FISH.BOAT_CLASS = "BP_GR000_dummy_CP_C", "VE028_boat2_CP_C"   -- (the stock blueprints the rows name)
+function FISH.findNear(cls, x, y)
+    local out = {}
+    for _, o in ipairs(FindAllOf(cls) or {}) do
+        if liveObj(o) and inSurvival(o) then
+            local okL, l = pcall(function() return o:K2_GetActorLocation() end)
+            if okL and l and math.abs(l.X - x) < 200000 and math.abs(l.Y - y) < 200000 then out[#out + 1] = o end
+        end
+    end
     return out
 end
 
@@ -156,6 +168,594 @@ end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["fishing"] = function() FISH.actors = {}; SPLASH.sys = nil end end
 end
 
+---------------------------------------------------------------------------------------------------- the round
+-- GONE FISHIN' (0.74.0; FISHING_ROUND_PLAN.md, the user's decisions of 2026-11-06; SPC.kinds.fishing, sv_anomalies.lua).
+-- The host's (or solo) round, D.special = { kind = "fishing", state = "intro" | "fishing" | "weigh" | "done", ... }:
+--   intro    SAL and COMONA CONTROL talk it in on the strip (text.intro), SAL's boat at its spot; the arc's F set
+--   fishing  the shoals spawned on the three grounds (each with its hit sphere), time_s on the clock; every check_s each
+--            shoal looked at: one down draws the deck's next catch for whoever destroyed it (KILL.by; co-op: the host's
+--            kill attribution, "fh" to everyone), its callout (`+38 KG YELLOWFIN TUNA` / `NOTHING`), its splash, SAL's
+--            word; the timer's warnings, SAL's nudges (the first catch, empties in a row, a gun kill, an ally's, quiet_s
+--            with no catch, you landed); every shoal down or the time up: the weigh-in
+--   weigh    what's left of the shoals taken off; SAL weighs it; each player's own haul graded and paid (the team's total
+--            on the card in co-op, "fw" / "fwe"), the card; the boat switched off
+--   done     the round ends (sv_rounds.lua: busy() false)
+-- SAL's boat on every game: a hit that shows on this game's own copy costs this game's player boat_penalty_kg (no co-op
+-- message: each game takes it off its own line). A joiner's own part: FISH.clientTick / FISH.fromHost / FISH.clientRow.
+-- Log lines: `fishing: ...` (round start, each catch, the warnings, the weigh-in and each pay).
+do
+local function cfg() return CFG.specials.fishing end
+local function tx() return cfg().text or {} end
+local CATCHES = { "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone" }
+FISH.CATCHES = CATCHES
+local CATCH_OK = {}
+for _, c in ipairs(CATCHES) do CATCH_OK[c] = true end
+local BIG_FISH = { tuna = true, swordfish = true, bigone = true }
+local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local function mmss(sec) sec = math.max(0, math.floor(sec + 0.5)); return string.format("%d:%02d", sec // 60, sec % 60) end
+local function money(x) return (tostring(math.floor(x)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) end
+local function coopOn() return COOP ~= nil and COOP.open == true end
+local function mySlot() return (coopOn() and COOP.slot) or 0 end
+local function nameOfSlot(slot)
+    if slot == -1 then return "ALLIES" end
+    if coopOn() and COOP.name then local ok, nm = pcall(COOP.name, slot); if ok and nm then return tostring(nm):upper() end end
+    return "PILOT " .. tostring((slot or 0) + 1)
+end
+
+-- a line "S|text" / "C|text": its speaker and its text with {kg}, {fish}, {grade}, {pay} filled in
+function FISH.line(line, vals)
+    local t = tx()
+    local code, text = tostring(line or ""):match("^(%a)|(.*)$")
+    if not code then code, text = "S", tostring(line or "") end
+    local who = (code == "C" and (t.control or "COMONA CONTROL")) or (t.sal or "SAL")
+    text = text:gsub("{(%w+)}", function(k) local v = vals and vals[k]; if v == nil then return "{" .. k .. "}" end return tostring(v) end)
+    return who, text
+end
+-- one of text[key]'s lines (a list or a string) said, never the one said last for that key; here: this game only
+local lastPick = {}
+function FISH.say(key, vals, here, secs)
+    local l = tx()[key]
+    if type(l) == "string" then l = { l } end
+    if type(l) ~= "table" or #l == 0 then return false end
+    local i = math.random(#l)
+    if #l > 1 and lastPick[key] == i then i = i % #l + 1 end
+    lastPick[key] = i
+    local who, text = FISH.line(l[i], vals)
+    if here then return SUB.sayHere(who, text, secs) end
+    return SUB.say(who, text, secs)
+end
+-- every line of text[key], in order
+function FISH.sayAll(key, vals, here)
+    local l = tx()[key]
+    if type(l) == "string" then l = { l } end
+    for _, x in ipairs(type(l) == "table" and l or {}) do
+        local who, text = FISH.line(x, vals)
+        if here then SUB.sayHere(who, text) else SUB.say(who, text) end
+    end
+end
+
+-- The round's catch deck: `count` catches apportioned from the weights (largest remainder; The Big One at most bigone_max,
+-- its share left out past that), shuffled
+function FISH.deck(count, weights, bigMax, rnd)
+    rnd = rnd or math.random
+    weights = weights or cfg().catch or {}
+    bigMax = math.floor(n(bigMax, n(cfg().bigone_max, 1)))
+    local sum = 0
+    for _, c in ipairs(CATCHES) do sum = sum + math.max(0, n(weights[c], 0)) end
+    local deck = {}
+    if sum <= 0 or count <= 0 then for _ = 1, math.max(0, count) do deck[#deck + 1] = "none" end; return deck end
+    local got, rem, used = {}, {}, 0
+    for _, c in ipairs(CATCHES) do
+        local q = count * math.max(0, n(weights[c], 0)) / sum
+        got[c] = math.floor(q)
+        rem[#rem + 1] = { c = c, r = q - got[c] }
+        used = used + got[c]
+    end
+    table.sort(rem, function(a, b) if a.r ~= b.r then return a.r > b.r end return a.c < b.c end)
+    local i = 1
+    while used < count and i <= #rem * 2 do
+        local e = rem[(i - 1) % #rem + 1]
+        if e.c ~= "bigone" or got.bigone < bigMax then got[e.c] = got[e.c] + 1; used = used + 1 end
+        i = i + 1
+    end
+    if got.bigone > bigMax then got.none, got.bigone = got.none + got.bigone - bigMax, bigMax end
+    while used < count do got.none = got.none + 1; used = used + 1 end
+    for _, c in ipairs(CATCHES) do for _ = 1, got[c] do deck[#deck + 1] = c end end
+    for j = #deck, 2, -1 do local k = rnd(j); deck[j], deck[k] = deck[k], deck[j] end
+    return deck
+end
+-- a catch's kg: a whole number in its kg range (0: nothing, junk)
+function FISH.kgOf(catch, rnd)
+    local r = (cfg().kg or {})[catch]
+    if type(r) ~= "table" then return 0 end
+    local lo, hi = math.floor(n(r[1], 0)), math.floor(n(r[2], n(r[1], 0)))
+    if hi < lo then lo, hi = hi, lo end
+    return (rnd or math.random)(lo, hi)
+end
+-- a haul's grade and its bonus: thresholds (grade_s .. grade_c, kg) x players ^ -coop_grade_x
+function FISH.grade(kg, players)
+    local c = cfg()
+    local x = (players or 1) > 1 and (players ^ -math.max(0, n(c.coop_grade_x, 1))) or 1
+    for _, g in ipairs({ "s", "a", "b", "c" }) do
+        if kg >= n(c["grade_" .. g], 0) * x then return g:upper(), n(c["bonus_" .. g], 0) end
+    end
+    return "D", n(c.bonus_d, 0)
+end
+-- a haul's pay: kg x credits_per_kg + its grade's bonus (+ bigone_bonus), x (1 + pay_per_round per round past from_round)
+function FISH.payFor(kg, players, round, bigone)
+    local c = cfg()
+    local g, bonus = FISH.grade(kg, players)
+    local x = 1 + n(c.pay_per_round, 0) * math.max(0, (round or 0) - n(c.from_round, 7))
+    local pay = math.floor((kg * n(c.credits_per_kg, 0) + bonus + (bigone and n(c.bigone_bonus, 0) or 0)) * x + 0.5)
+    return pay, g, x
+end
+
+-- whether a GONE FISHIN' round can come (SPC.kinds.fishing.ready): on, the native spawner, and once a run (`once`: RUN.fished,
+-- its round); a test key's forced one always
+function FISH.ready(round, forced)
+    local c = cfg()
+    if c.enabled == false or not nativeReady() then return false end
+    if forced then return true end
+    return not (c.once ~= false and RUN and RUN.fished)
+end
+
+-- this game's player's boat penalty (FISH.boat: its kg and hits this round), a hit on this game's own copy of SAL's boat
+FISH.boat = { kg = 0, hits = 0, at = nil, last = nil, round = nil }
+local function boatObjs()
+    local u = cfg().boat_unit
+    local out, seen = {}, {}
+    for _, l in ipairs({ FISH.actors[u] or {}, (SPC and SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[u]) or {} }) do
+        for _, o in ipairs(l) do
+            local a = liveObj(o) and addrOf(o)
+            if a and not seen[a] then seen[a] = true; out[#out + 1] = o end
+        end
+    end
+    return out
+end
+-- (every check, the host's and a joiner's own) the boat's health against its last: a drop is this game's player's hit
+local function boatTick(now, round, host)
+    local B, c = FISH.boat, cfg()
+    if B.round ~= round then B.kg, B.hits, B.at, B.last, B.round = 0, 0, nil, nil, round end
+    local o = boatObjs()[1]
+    if not o then return end
+    local h, _, mn = FISH.hp(o)
+    if host and type(mn) == "number" and mn < n(c.boat_min_health, 1) then pcall(function() o.MinHealth = n(c.boat_min_health, 1) end) end
+    if type(h) ~= "number" then return end
+    if B.last and h < B.last - 0.01 and now - (B.at or -1e9) >= n(c.boat_hit_gap_s, 4) then
+        B.at, B.hits = now, B.hits + 1
+        B.kg = B.kg + math.floor(n(c.boat_penalty_kg, 25))
+        FISH.say("boat", nil, true)
+        log(string.format("fishing: SAL's boat hit here (%.0f -> %.0f): -%d kg off your haul (%d kg in %d hits)", B.last, h,
+            math.floor(n(c.boat_penalty_kg, 25)), B.kg, B.hits))
+    end
+    B.last = h
+end
+
+-- a slot's haul (the host's)
+local function haulOf(s, slot)
+    s.haul[slot] = s.haul[slot] or { kg = 0, hits = 0, empty = 0, junk = 0, best = nil, bestKg = 0, bigone = false }
+    return s.haul[slot]
+end
+local function credit(h, catch, kg)
+    h.hits = h.hits + 1
+    if catch == "none" then h.empty = h.empty + 1 elseif catch == "junk" then h.junk = h.junk + 1 end
+    h.kg = h.kg + kg
+    if kg > h.bestKg then h.best, h.bestKg = catch, kg end
+    if catch == "bigone" then h.bigone = true end
+end
+FISH.credit = credit
+local function teamKg(s)
+    local t = s.allyKg or 0
+    for _, h in pairs(s.haul or {}) do t = t + h.kg end
+    return t
+end
+
+local function spawnShoals(now, s)
+    local c = cfg()
+    pcall(SV_SetText, c.shoal_name_key, c.shoal_name)
+    FISH.splashAsset()
+    s.shoals, s.total = {}, 0
+    local grounds = { c.ground_a, c.ground_b, c.ground_c }
+    local said = {}
+    for gi, unit in ipairs(c.units or {}) do
+        local g = grounds[gi]
+        if type(g) == "table" then
+            local r = FISH.spawn(unit, g[1], g[2], c.shoal_z, math.random() * 360)
+            if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, unit, r) end
+            local objs = FISH.objs(unit)
+            if #objs == 0 and r > 0 then                  -- (the new-object feed missed them: by their class round the ground)
+                objs = FISH.findNear(FISH.SHOAL_CLASS, g[1], g[2])
+                FISH.actors[unit] = { open = false, table.unpack(objs) }
+            end
+            local sph = 0
+            for i, o in ipairs(objs) do
+                s.shoals[#s.shoals + 1] = { obj = o, addr = addrOf(o), unit = unit, i = i, name = (nameOf(o):match("([^%.:]+)$")) or "?" }
+                if c.sphere ~= false then
+                    local comp = FISH.addSphere(o, n(c.sphere_m, 8), c.sphere_profile or "EnemyPawn")
+                    if comp then sph = sph + 1 end
+                end
+            end
+            said[#said + 1] = string.format("%s %s (%d seen, %d spheres)", unit, r > 0 and (r .. " up") or ("NOT spawned: " .. tostring(SV_ERR and SV_ERR[r] or r)),
+                #objs, sph)
+        end
+    end
+    s.total = #s.shoals
+    s.deck = FISH.deck(s.total)
+    local counts = {}
+    for _, x in ipairs(s.deck) do counts[x] = (counts[x] or 0) + 1 end
+    local dk = {}
+    for _, x in ipairs(CATCHES) do if counts[x] then dk[#dk + 1] = x .. " " .. counts[x] end end
+    log(string.format("fishing: round %d: %d shoals on the grounds: %s; the deck: %s", D.round, s.total, table.concat(said, "; "),
+        table.concat(dk, ", ")))
+end
+
+function FISH.roundSpawn(now)
+    local c, s = cfg(), D.special
+    if not FISH.ready(D.round, true) then log("fishing: no GONE FISHIN' (" .. (c.enabled == false and "off" or "no native spawner") .. ")"); return false end
+    s.state, s.at, s.haul, s.allyKg, s.allyHits, s.catches, s.empties, s.lastCatch = "intro", now, {}, 0, 0, 0, 0, now
+    s.warned, s.said = {}, {}
+    RUN.fished = D.round
+    if SKY and SKY.arcSet then SKY.arcSet(D.round, "GONE FISHIN' starts") end
+    pcall(SV_SetText, c.boat_name_key, c.boat_name)
+    FISH.clearUnit(c.boat_unit, "SAL's boat")
+    local b = c.boat_at or {}
+    local br = FISH.spawn(c.boat_unit, b[1], b[2], c.boat_z, n(c.boat_yaw, 157))
+    if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, c.boat_unit, br) end
+    FISH.boat.round = nil
+    FISH.sayAll("intro")
+    s.introEnd = now + math.max(5, SUB.left(now))
+    log(string.format("fishing: round %d, GONE FISHIN': SAL on the radio (%.0f s), his boat %s; the day-night arc from here",
+        D.round, s.introEnd - now, br > 0 and "up" or ("NOT up (" .. tostring(SV_ERR and SV_ERR[br] or br) .. ")")))
+    return true
+end
+
+local function startFishing(now, s)
+    local c = cfg()
+    s.state, s.t0 = "fishing", now
+    s.endAt = now + n(c.time_s, 180)
+    s.lastCatch = now
+    spawnShoals(now, s)
+    FISH.sayAll("start")
+    hudCallout(tx().time_callout or "GONE FISHIN'", string.format(tx().time_callout_sub or "%s ON THE CLOCK", mmss(n(c.time_s, 180))))
+    if s.total == 0 then
+        log("fishing: no shoal came up: straight to the weigh-in")
+        s.endAt = now
+    end
+end
+
+local function shoalDown(now, s, sh)
+    local c = cfg()
+    sh.down = true
+    if liveObj(sh.obj) then pcall(KILL.read, sh) end
+    local okB, by = pcall(KILL.by, sh)
+    by = okB and by or "you"
+    local slot
+    if by == "you" then slot = mySlot()
+    elseif by == "wingmate" and type(sh.killer) == "number" then slot = sh.killer
+    else slot = coopOn() and -1 or 0 end
+    local catch = table.remove(s.deck, 1) or "none"
+    local kg = FISH.kgOf(catch)
+    if slot == -1 then s.allyKg, s.allyHits = s.allyKg + kg, s.allyHits + 1 else credit(haulOf(s, slot), catch, kg) end
+    s.catches = s.catches + 1
+    local at = sh.at or {}
+    local sc = n(c.splash_scale, 1) * (catch == "bigone" and n(c.splash_big_x, 2) or 1)
+    local splashed = at.X and FISH.splash({ X = at.X, Y = at.Y, Z = n(c.sea_z, 350) }, sc)
+    local t = tx()
+    local name = (t.names or {})[catch] or catch:upper()
+    local text = kg > 0 and string.format(t.catch_kg or "+%d KG %s", kg, name) or name
+    hudCallout(text, coopOn() and nameOfSlot(slot) or nil)
+    if COOP and COOP.fishCatch then COOP.fishCatch(slot, catch, kg, at.X, at.Y) end
+    -- SAL's word: the first catch; a gun kill of yours; an ally's (once); empties in a row; the catch itself (a small one
+    -- only when the strip isn't backed up)
+    local vals = { kg = kg, fish = name }
+    if catch == "none" or catch == "junk" then s.empties = s.empties + 1 else s.empties = 0 end
+    local g = nil
+    if by == "you" and slot == mySlot() then
+        local okG, gg = pcall(KILL.geom, sh, nil)
+        if okG then g = gg end
+    end
+    local busy = SUB.left(now) > 6
+    if s.catches == 1 then FISH.say("first")
+    elseif catch == "bigone" then
+        local who, line = FISH.line(t.bigone_first or "S|...", vals)
+        SUB.say(who, line, 2.5)
+        FISH.say("bigone", vals)
+    elseif type(g) == "table" and g.wpn == "gun" and not s.said.gun then s.said.gun = true; FISH.say("gun")
+    elseif slot == -1 and not s.said.ally then s.said.ally = true; FISH.say("ally")
+    elseif s.empties >= math.max(2, math.floor(n(c.empties_line, 3))) then s.empties = 0; FISH.sayAll("empties")
+    elseif BIG_FISH[catch] or not busy then FISH.say(catch, vals) end
+    s.lastCatch, s.quietSaid = now, nil
+    log(string.format("fishing: shoal %s #%d down at +%.0f s by %s%s: %s%s; %d of %d down, the deck %d left; %s haul %d kg%s",
+        sh.unit, sh.i, now - (s.t0 or now), tostring(by), slot >= 0 and (" (player " .. (slot + 1) .. ")") or " (the allies')",
+        catch, kg > 0 and (" " .. kg .. " kg") or "", s.catches, s.total, #s.deck, slot >= 0 and nameOfSlot(slot):lower() or "the allies'",
+        slot >= 0 and haulOf(s, slot).kg or s.allyKg, splashed and "" or "; the splash NOT played"))
+end
+
+-- the shoals still up taken off (the joiners' copies first), their units off the spawner's list after
+local function clearShoals(s, why)
+    local c = cfg()
+    local list = {}
+    for _, u in ipairs(c.units or {}) do
+        list[#list + 1] = u
+        if COOP and COOP.host and COOP.host() and COOP.removeNow then pcall(COOP.removeNow, u) end
+        local l = { at = os.clock() }
+        for _, sh in ipairs(s.shoals or {}) do if sh.unit == u and not sh.down and liveObj(sh.obj) then l[#l + 1] = sh.obj; sh.down = true end end
+        SPC.CLEAN_OBJ[u] = l
+    end
+    local nOff = SPC.cleanUp(list, why, true, D.now or 0)
+    SPC.recycleLater(list, "GONE FISHIN' over", 3, true)
+    return nOff
+end
+-- a unit of ours still on the spawner's list (an ally switched off before: SAL's boat, THE FESTIVAL's searchlights, when a
+-- test key brings its round again) taken off it first, or its spawn would be refused ("its last flight is still up")
+function FISH.clearUnit(unit, what)
+    local n0 = type(SV_UnitAlive) == "function" and SV_UnitAlive(unit) or 0
+    if n0 <= 0 or type(SV_Recycle) ~= "function" then return false end
+    if crumb then crumb("fishing: SV_Recycle " .. tostring(unit) .. " before its spawn") end
+    local okR, r = pcall(SV_Recycle, unit, 1)
+    log(string.format("fishing: %s (%s) still on the spawner's list (%d up, switched off): SV_Recycle %s before its spawn", tostring(what),
+        tostring(unit), n0, okR and tostring(r) or ("error " .. tostring(r))))
+    return okR
+end
+-- SAL's boat switched off here (hidden, out of the way: an ally, never finished off)
+function FISH.hide(o)
+    for f, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }) do
+        pcall(function() o[f] = v end)
+    end
+    pcall(function() o:SetActive(false, false, false) end)
+    pcall(function() o:SetActorHiddenInGame(true) end)
+    pcall(function() o:SetActorEnableCollision(false) end)
+    pcall(function() o:SetActorTickEnabled(false) end)
+end
+function FISH.boatOff(why)
+    local nOff = 0
+    for _, o in ipairs(boatObjs()) do FISH.hide(o); nOff = nOff + 1 end
+    if nOff > 0 then log(string.format("fishing: SAL's boat switched off here (%s)", tostring(why))) end
+    return nOff
+end
+
+-- each player's line of the weigh-in, from the host's numbers (`res`: { [slot] = { kg, hits, empty, best, bestKg, bigone } }):
+-- this game's own graded and paid here (its boat penalty off first); the card on screen. players: the room's.
+function FISH.weighHere(res, players, team, allyKg, round, total)
+    local c, t = cfg(), tx()
+    local me = mySlot()
+    local share = players > 1 and (allyKg or 0) / players or (allyKg or 0)
+    local mine = res[me] or { kg = 0, hits = 0, empty = 0, bestKg = 0 }
+    local boatKg = (FISH.boat.round == round) and FISH.boat.kg or 0
+    local kg = math.max(0, math.floor((mine.kg or 0) + share + 0.5) - boatKg)
+    local pay, grade, x = FISH.payFor(kg, players, round, mine.bigone)
+    local why = string.format("GONE FISHIN' weigh-in (%s, %d kg%s)", grade, kg, boatKg > 0 and string.format(", -%d kg the boat", boatKg) or "")
+    if pay > 0 then
+        if coopOn() and COOP.payOwn then COOP.payOwn(pay, why) else addCredits(pay, why) end
+        RUN.dirty = true
+    end
+    local names = t.names or {}
+    local lines = {
+        string.format(t.card_hits or "SHOALS HIT  %d / %d      EMPTY  %d", mine.hits or 0, total or 0, mine.empty or 0),
+        (mine.best and mine.bestKg and mine.bestKg > 0) and string.format(t.card_best or "BEST FISH  %s %d KG", names[mine.best] or tostring(mine.best):upper(), mine.bestKg)
+            or (t.card_best_none or "BEST FISH  NONE"),
+        string.format(t.card_total or "TOTAL HAUL  %d KG      GRADE  %s", kg, grade),
+    }
+    if boatKg > 0 then lines[#lines + 1] = string.format(t.card_boat or "SAL'S BOAT  -%d KG", boatKg) end
+    lines[#lines + 1] = string.format(t.card_pay or "PAYMENT  +%s Z", money(pay))
+    if players > 1 then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = string.format(t.card_team or "TEAM HAUL  %s KG FROM %d PILOTS", money(team), players)
+        local order = {}
+        for s, r in pairs(res) do if s >= 0 then order[#order + 1] = { s = s, kg = math.floor((r.kg or 0) + share + 0.5) } end end
+        table.sort(order, function(a, b) if a.kg ~= b.kg then return a.kg > b.kg end return a.s < b.s end)
+        for _, e in ipairs(order) do
+            local kgE = e.s == me and kg or e.kg
+            lines[#lines + 1] = string.format(t.card_player or "%s  %d KG  %s", nameOfSlot(e.s), kgE, (FISH.grade(kgE, players)))
+        end
+    end
+    SUB.card(t.card_title or "GONE FISHIN'  -  WEIGH-IN", lines, n(c.card_s, 14))
+    if RUN then RUN.fishKg = players > 1 and team or kg end   -- (THE FESTIVAL's thanks name it: sv_festival.lua)
+    log(string.format("fishing: the weigh-in here: %d kg (haul %d%s%s), grade %s, paid %d Z (x%.2f for round %d, %d player%s, the team %d kg)",
+        kg, mine.kg or 0, share > 0 and string.format(" + %d the allies'", math.floor(share + 0.5)) or "",
+        boatKg > 0 and string.format(" - %d the boat", boatKg) or "", grade, pay, x, round, players, players == 1 and "" or "s", team))
+    return pay, grade, kg
+end
+
+local function weighStart(now, s, why)
+    local c = cfg()
+    s.state, s.weighAt = "weigh", now
+    local nOff = clearShoals(s, "GONE FISHIN' over (" .. why .. ")")
+    if why == "time" then FISH.say("time_up") else FISH.sayAll("cleared") end
+    local players = 1
+    if coopOn() and COOP.slots then players = math.max(1, #COOP.slots()) end
+    local team = math.floor(teamKg(s) + 0.5)
+    s.players, s.team = players, team
+    FISH.sayAll("weigh", { kg = money(team) })
+    s.cardAt = now + SUB.left(now)
+    local g = FISH.grade(team, 1)
+    FISH.say("grade_" .. g:lower(), { kg = money(team), grade = g })
+    FISH.say("signoff")
+    s.team, s.teamGrade = team, g
+    log(string.format("fishing: round %d: the weigh-in (%s): %d of %d shoals down, %d left taken off; the team's %d kg (%s), the allies' %d kg",
+        D.round, why == "time" and "time's up" or "every shoal down", s.catches, s.total or 0, nOff, team, g, s.allyKg or 0))
+end
+local function weighCard(now, s)
+    s.carded = true
+    local res = {}
+    for slot, h in pairs(s.haul) do res[slot] = h end
+    if coopOn() and COOP.slots then for _, sl in ipairs(COOP.slots()) do res[sl] = res[sl] or { kg = 0, hits = 0, empty = 0, bestKg = 0 } end end
+    for slot, h in pairs(res) do
+        if COOP and COOP.fishWeigh then COOP.fishWeigh(slot, h.kg or 0, h.hits or 0, h.empty or 0, h.best or "", h.bestKg or 0, h.bigone) end
+    end
+    if COOP and COOP.fishWeighEnd then COOP.fishWeighEnd(s.players, s.team, math.floor((s.allyKg or 0) + 0.5), D.round, s.total or 0) end
+    FISH.weighHere(res, s.players or 1, s.team or 0, s.allyKg or 0, D.round, s.total or 0)
+end
+
+-- (SPC.kinds.fishing.tick: the host's or solo, every tick)
+function FISH.roundTick(now, s)
+    if levelGoing() then return end
+    local c = cfg()
+    if s.state == "intro" then
+        if now >= (s.introEnd or now) then startFishing(now, s) end
+    elseif s.state == "fishing" then
+        if now >= (s.checkAt or 0) then
+            s.checkAt = now + math.max(0.25, n(c.check_s, 0.5))
+            local up = 0
+            for _, sh in ipairs(s.shoals) do
+                if not sh.down then
+                    local live = liveObj(sh.obj)
+                    local h = nil
+                    if live then
+                        h = FISH.hp(sh.obj)
+                        pcall(function() local l = sh.obj:K2_GetActorLocation(); sh.at = { X = l.X, Y = l.Y, Z = l.Z } end)
+                        pcall(KILL.read, sh)
+                    end
+                    if not live or (type(h) == "number" and h <= 0) then shoalDown(now, s, sh) else up = up + 1 end
+                end
+            end
+            s.up = up
+            boatTick(now, D.round, true)
+            local left = s.endAt - now
+            for i, w in ipairs(c.warn_s or {}) do
+                if left <= n(w, 0) and not s.warned[i] and left > 0 then
+                    s.warned[i] = true
+                    local wl = (tx().warn or {})[i]
+                    if wl then local who, line = FISH.line(wl); SUB.say(who, line) end
+                    log(string.format("fishing: %d s left (%d shoals up)", math.floor(n(w, 0)), up))
+                end
+            end
+            if now - (s.lastCatch or now) >= n(c.quiet_s, 30) and not s.quietSaid then
+                s.quietSaid = true
+                FISH.say("quiet")
+            end
+            if playerOnAirfield() and not s.landedSaid then s.landedSaid = true; FISH.say("landed", nil, true) end
+            if up == 0 and s.total > 0 then weighStart(now, s, "cleared")
+            elseif now >= s.endAt then weighStart(now, s, "time") end
+        end
+    elseif s.state == "weigh" then
+        if not s.carded and now >= (s.cardAt or now) then weighCard(now, s) end
+        if s.carded and (not SUB.busy() or now - s.weighAt >= n(c.weigh_s, 26)) then
+            s.state = "done"
+            FISH.boatOff("GONE FISHIN' over")
+            if LB and LB.special then pcall(LB.special, "fishing", (s.team or 0) >= n(c.grade_c, 150), now - (s.at or now)) end
+            log(string.format("fishing: round %d over (%.0f s): the team's %d kg, %d catches", D.round, now - (s.at or now), s.team or 0, s.catches or 0))
+        end
+    end
+    if COOP and COOP.specialRow and now >= (s.rowAt or 0) then
+        s.rowAt = now + 1
+        COOP.specialRow("fishing", s.state, math.floor(math.max(0, (s.endAt or now) - now) + 0.5), s.up or 0, math.floor(teamKg(s) + 0.5))
+    end
+end
+function FISH.busy(s) return s.state ~= "done" end
+-- (the round's end: a forced end too) nothing of it left
+function FISH.roundOver(now, s)
+    if s.state == "intro" or s.state == "fishing" then weighStart(now, s, "the round ended") end
+    if s.state == "weigh" and not s.carded then weighCard(now, s) end
+    if s.state ~= "done" then
+        s.state = "done"
+        FISH.boatOff("the round ended")
+    end
+end
+-- the NEXT row (the host's or solo)
+function FISH.row(s, t)
+    local x = tx()
+    if s.state == "intro" then return x.row_intro end
+    if s.state == "weigh" then return x.row_weigh end
+    if s.state ~= "fishing" then return nil end
+    local mine = s.haul[mySlot()]
+    local kg = math.max(0, (mine and mine.kg or 0) - ((FISH.boat.round == D.round) and FISH.boat.kg or 0))
+    local row = string.format(x.row or "GONE FISHIN' %s  SHOALS %d  HAUL %d KG", mmss(s.endAt - (D.now or 0)), s.up or s.total or 0, kg)
+    if coopOn() and x.row_team then row = row .. string.format(x.row_team, math.floor(teamKg(s) + 0.5)) end
+    return row
+end
+
+-- A co-op joiner's: the host's messages (sv_coop.lua: guarded, then here), its own boat, the host's row
+FISH.cl = { haul = {}, weigh = {}, rows = {}, round = nil }
+function FISH.fromHost(k, f)
+    local L = FISH.cl
+    local function num(v, lo, hi) v = tonumber(v); if v and v == v and v >= lo and v <= hi then return v end return nil end
+    if k == "fh" then
+        local slot, catch, kg = num(f[2], -1, 23), tostring(f[3] or ""), num(f[4], 0, 5000)
+        if not (slot and CATCH_OK[catch] and kg) then return end
+        slot, kg = math.floor(slot), math.floor(kg)
+        local h = L.haul[slot] or { kg = 0, hits = 0, empty = 0, junk = 0, bestKg = 0 }
+        L.haul[slot] = h
+        credit(h, catch, kg)
+        local x, y = num(f[5], -1e8, 1e8), num(f[6], -1e8, 1e8)
+        if x and y and (x ~= 0 or y ~= 0) then
+            local c = cfg()
+            pcall(FISH.splash, { X = x, Y = y, Z = n(c.sea_z, 350) }, n(c.splash_scale, 1) * (catch == "bigone" and n(c.splash_big_x, 2) or 1))
+        end
+    elseif k == "fsx" then
+        local kind, state = tostring(f[2] or ""):match("^(%a+)$"), tostring(f[3] or ""):match("^(%a+)$")
+        if not (kind and state and #kind <= 16 and #state <= 16) then return end
+        L.rows[kind] = { state = state, a = num(f[4], 0, 1e6) or 0, b = num(f[5], 0, 1e6) or 0, c = num(f[6], 0, 1e7) or 0, at = os.clock() }
+    elseif k == "fw" then
+        local slot = num(f[2], -1, 23)
+        local kg, hits, empty, bestKg = num(f[3], 0, 1e5), num(f[4], 0, 1000), num(f[5], 0, 1000), num(f[7], 0, 5000)
+        local best = tostring(f[6] or "")
+        if not (slot and kg and hits and empty) then return end
+        L.weigh[math.floor(slot)] = { kg = kg, hits = hits, empty = empty, best = CATCH_OK[best] and best or nil, bestKg = bestKg or 0,
+                                      bigone = f[8] == "1" }
+    elseif k == "fwe" then
+        local players, team, ally, round, total = num(f[2], 1, 24), num(f[3], 0, 1e6), num(f[4], 0, 1e6), num(f[5], 0, 1e5), num(f[6], 0, 1000)
+        if not (players and team and round) or L.paidRound == round then return end
+        L.paidRound = round
+        local okW, errW = pcall(FISH.weighHere, L.weigh, math.floor(players), team, ally or 0, round, total or 0)
+        if not okW then log("fishing: the host's weigh-in not read here: " .. tostring(errW)) end
+        L.weigh, L.haul = {}, {}
+    end
+end
+-- (every tick of a joiner's run, sv_main.lua probeTickB) the host's GONE FISHIN' here: this game's boat watched, your
+-- landing nudge, a new round's slate clean; its end: the boat's copy switched off here
+function FISH.clientTick(now)
+    if not (COOP and COOP.client and COOP.client() and D) then return end
+    local hs, L = D.hostSpecial, FISH.cl
+    local on = hs and hs.kind == "fishing" and hs.state ~= "done"
+    if on then
+        if L.round ~= D.round then L.round, L.landed, L.haul, L.weigh, L.sphered = D.round, nil, {}, {}, {} end
+        if now >= (L.checkAt or 0) then
+            L.checkAt = now + 0.5
+            boatTick(now, D.round, false)
+            -- this game's copies of the shoals get their hit spheres too: your weapons hit your copies (their hits go to the host)
+            local c = cfg()
+            if c.sphere ~= false and hs.state == "fishing" then
+                L.sphered = L.sphered or {}
+                for _, u in ipairs(c.units or {}) do
+                    for _, o in ipairs((SPC and SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[u]) or {}) do
+                        local a = liveObj(o) and addrOf(o)
+                        if a and not L.sphered[a] then
+                            L.sphered[a] = true
+                            local comp, what = FISH.addSphere(o, n(c.sphere_m, 8), c.sphere_profile or "EnemyPawn")
+                            if not comp then logOnce("fish copy sphere", "fishing: a shoal's copy here got no sphere: " .. tostring(what)) end
+                        end
+                    end
+                end
+            end
+            if hs.state == "fishing" and playerOnAirfield() and not L.landed then L.landed = true; FISH.say("landed", nil, true) end
+        end
+        L.on = true
+    elseif L.on then
+        L.on = false
+        FISH.boatOff("the host's GONE FISHIN' is over")
+    end
+end
+-- (a joiner's NEXT row) the host's GONE FISHIN', your own haul in it
+function FISH.clientRow(t)
+    if not (COOP and COOP.client and COOP.client() and D) then return nil end
+    local hs, r = D.hostSpecial, FISH.cl.rows.fishing
+    if not (hs and hs.kind == "fishing" and hs.state ~= "done" and r and os.clock() - r.at < 5) then return nil end
+    local x = tx()
+    if r.state == "intro" then return x.row_intro end
+    if r.state == "weigh" then return x.row_weigh end
+    if r.state ~= "fishing" then return nil end
+    local mine = FISH.cl.haul[mySlot()]
+    local kg = math.max(0, (mine and mine.kg or 0) - ((FISH.boat.round == D.round) and FISH.boat.kg or 0))
+    local secs = math.max(0, r.a - (os.clock() - r.at))
+    return string.format(x.row or "GONE FISHIN' %s  SHOALS %d  HAUL %d KG", mmss(secs), r.b, kg)
+        .. (x.row_team and string.format(x.row_team, math.floor(r.c)) or "")
+end
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["the fishing round"] = function() FISH.boat = { kg = 0, hits = 0 }; FISH.cl = { haul = {}, weigh = {}, rows = {} } end
+end
+end
+
 -- TEST ONLY BEGIN
 -- Ctrl+F10 in a run (the host's or solo): the shoals and SAL's boat (tools/re/FISHING.md 7, tests 1-2). Each press:
 --   1 SV_Unit_FishA's 8 shoals at ground A (SV_Spawn(unit, x, y, shoal_z, a random yaw)) and SAL's boat at boat_at, a hit
@@ -172,25 +772,14 @@ FISH.test = T
 local function c() return CFG.specials.fishing end
 local function units() return { c().units[1], c().boat_unit } end
 local function reset() T.state, T.shoals, T.boat, T.run, T.removeAt, T.recycleAt, T.toggled = "idle", {}, nil, nil, nil, nil, nil end
--- (a spawn whose objects the new-object feed didn't catch) the live objects of class `cls` within 2 km of (x, y): a walk
-local function findNear(cls, x, y)
-    local out = {}
-    for _, o in ipairs(FindAllOf(cls) or {}) do
-        if liveObj(o) and inSurvival(o) then
-            local okL, l = pcall(function() return o:K2_GetActorLocation() end)
-            if okL and l and math.abs(l.X - x) < 200000 and math.abs(l.Y - y) < 200000 then out[#out + 1] = o end
-        end
-    end
-    return out
-end
-local SHOAL_CLASS, BOAT_CLASS = "BP_GR000_dummy_CP_C", "VE028_boat2_CP_C"   -- (the stock blueprints the rows name)
+local findNear, SHOAL_CLASS, BOAT_CLASS = FISH.findNear, FISH.SHOAL_CLASS, FISH.BOAT_CLASS
 local function at(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
 end
 local function spawnAll(now)
     local cf = c()
-    if not FISH.ready then log("fishing test: the shoal's rows aren't in (FISH.setup at the main menu): spawning anyway") end
+    if not FISH.rowsReady then log("fishing test: the shoal's rows aren't in (FISH.setup at the main menu): spawning anyway") end
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, cf.shoal_name_key, cf.shoal_name); pcall(SV_SetText, cf.boat_name_key, cf.boat_name)
     end
@@ -369,4 +958,18 @@ end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fishing test", fn = tick }
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the fishing test"] = function() reset(); T.toggled = nil end end
 end
+-- TEST ONLY END
+
+-- TEST ONLY BEGIN
+-- Ctrl+HOME in a run (the host's or solo): GONE FISHIN' now (in the break: it starts in 3 s; in a fight: the next round),
+-- whatever its once a run, its from_round or the dice; the arc starts again from it (`test: Ctrl+HOME, ...`)
+testKey("HOME", "sv_fishing.lua's GONE FISHIN' now", function()
+    if not (D and D.now) or not nativeReady() then log("test: Ctrl+HOME outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("test: Ctrl+HOME: the host starts the rounds (you're a joiner)"); return end
+    D.forceSpecial = "fishing"
+    local soon = D.state == "wait"
+    if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+    hudCallout("TEST: GONE FISHIN'", soon and "STARTING NOW" or "NEXT ROUND")
+    log(string.format("test: Ctrl+HOME, round %d is GONE FISHIN' (%s)", D.round + 1, soon and "starting in 3 s" or "after this round"))
+end)
 -- TEST ONLY END
