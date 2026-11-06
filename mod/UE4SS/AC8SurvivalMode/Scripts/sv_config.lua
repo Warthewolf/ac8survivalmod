@@ -1981,6 +1981,40 @@ CFG = {
                      launch_z = 200000, missiles = 4, impact_m = 400,
                      siren = "AKE_GEN_ENV_OBJ_AirRaid_Map17_Comona_Play", siren_s = 20, siren_up_m = 10,
                      test_s = 300 },
+        -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, tools/re/THUNDER.md)
+        -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against
+        -- you", "The Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with
+        -- the test key"): never in `rotation`; Ctrl+0 makes the next round its (sv_anomalies.lua THUNDER). Its A-10 flies
+        -- the plain campaign row `row` on MINDRIPPER's unit `unit` (SV_SetAircraft, as MINDRIPPER's F-4E: that unit's stock
+        -- records give it MINDRIPPER's orders, MISSION UPDATE beep, forced WARNING and crackle; no build data), spawn_km
+        -- from you, at AI level ai_level, health HP x (1 + health_per_round a round after specials.first, at most
+        -- health_max_x); `reward` (+ reward_per_round a round) when it's down. Its box's callsign line: name (on name_key,
+        -- the plane's CallsignId); its round's callout and warning (text.warn): tag, with start_sound (a Wwise event of the
+        -- game's SE bank; stop_sound at its end), and the focus camera `camera` ("": none). Its storm (`storm`): the stock
+        -- lightning volume (storm.class, Missions 12 and 16's) kept on it, radius_m round it; its strikes are the stock
+        -- ones (the HUD hidden 2 s, electronic noise 6-10 s, a camera shake, the engine's stall flag; never damage, and only
+        -- player planes), min / max_interval_s between its rolls (0: the volume's own 3-5 s), curve the strike chance curve
+        -- (the game's CUR_LightningWeight row; "": the volume's own); log_strikes: each strike Lua sees, logged. `fx`: the
+        -- game's cloud lightning crackling on it every every_s. `test`: the storm test's (Ctrl+HOME) radius on you, its time
+        -- and its second press's LS_StallTime (the stall flag's length on your plane; stock 0.7 s).
+        thunder  = { enabled = true, name = "DI..ANT TH..D..R", tag = "IFF FATAL ERROR", unit = "SV_Unit_Anomaly",
+                     row = "a10c_common", name_key = "SV_Thunder_Name",
+                     health = 1000, health_per_round = 0.05, health_max_x = 2.5, reward = 8000, reward_per_round = 300,
+                     ai_level = 5, spawn_km = { 8, 12 }, camera = "LookAt_Event_Camera_ms22-01",
+                     start_sound = "AKE_GEN_ENV_AMB_ThunderCloud_Outside_DistantThunder_Play",
+                     stop_sound = "AKE_GEN_ENV_AMB_ThunderCloud_Outside_DistantThunder_Stop",
+                     storm = { radius_m = 3000, min_interval_s = 0, max_interval_s = 0, curve = "MS_12", log_strikes = true,
+                               class = "/Game/Blueprints/System/Lightning/BP_LightninigVolume_MS12.BP_LightninigVolume_MS12_C",
+                               curve_table = "/Game/Blueprints/System/Lightning/CUR_LightningWeight.CUR_LightningWeight" },
+                     fx = { enabled = true, every_s = 2.5, scale = 4.0, life_s = 3.0,
+                            system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning" },
+                     test = { radius_m = 3000, seconds = 60, stall_s = 3.0 },
+                     text = { warn = "WARNING: %s", warn_sub = "%s: ITS STORM BLINDS YOU", down = "%s DOWN",
+                              down_sub = "+%d ZOLLARS", row = "%s: %.1f KM", row_storm = "%s: IN ITS STORM",
+                              key = "TEST: %s", key_now = "STARTING NOW", key_next = "NEXT ROUND",
+                              storm_on = "TEST: STORM ON YOU", storm_on_sub = "%d S, %.1f KM", storm_stall = "TEST: STALL %.1f S",
+                              storm_stall_sub = "LS_STALLTIME ON YOUR PLANE", storm_off = "TEST: STORM OFF" } },
+        -- TEST ONLY END
     },
     -- The sky (Scripts/sv_sky.lua; tools/re/FISHING.md 5): the day-night arc's owner (the arc itself comes later). It never
     -- writes the stock sky asset (Mission 4's CSP_ms04...), only the renderer's working copies of its params, the sun
@@ -2285,6 +2319,10 @@ local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bomber
                     ["ammo.casual"] = "ammo.presets.casual", ["ammo.standard"] = "ammo.presets.standard",
                     ["ammo.ace"] = "ammo.presets.ace",
                     fishing = "specials.fishing", festival = "specials.festival",      -- (0.74.0: sv_fishing / sv_festival)
+                    -- TEST ONLY BEGIN (the lightning Anomaly's sections: sv_anomalies.lua THUNDER, test builds only)
+                    thunder = "specials.thunder", ["thunder.storm"] = "specials.thunder.storm",
+                    ["thunder.fx"] = "specials.thunder.fx", ["thunder.test"] = "specials.thunder.test",
+                    -- TEST ONLY END
                     -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
                     ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }
 -- sections of things since taken out, still in older survival.ini files: skipped without a warning
