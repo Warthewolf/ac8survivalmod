@@ -559,6 +559,10 @@ def import_from(z, zs, ref):
     puts the package into the container header from this list."""
     assert ref[0] == 'obj' and ref[1] < 0, ref
     x = zs.imports[-ref[1] - 1]
+    if x >> 62 == 1:              # (2026-11-06) a script (native) class: the same global id in every package, no package
+        if x not in z.imports:    # to import (Mission 19's Spear shooter's TargetingDummy child names one)
+            z.imports.append(x)
+        return ('obj', -(z.imports.index(x) + 1))
     assert x >> 62 == 2, hex(x)                               # a package import
     pkg = zs.imp_pkgs[(x >> 32) & 0x3fffffff]
     h = zs.imp_hashes[x & 0xffffffff]
@@ -1350,6 +1354,267 @@ def festival_units(units, used_ids, z, top_number, v):
           f'{se.FEST_BEAM_ROW}), allied: ' + ', '.join(f'{u} ({p[0]:.0f}, {p[1]:.0f})' for u, _, p, _ in se.fest_lights()))
 
 
+# ---------------------------------------------------------------- THE ESCORT and THE DECOY (2026-11-06)
+def callsign(u, key, z):
+    """Every AI object of unit desc `u` with its target box and the callsign `key` shown for an ally (the desc's
+    GameObjectDisplayNameID02 with bShowCallSignForAlly: VOID WATCHER 1's and the co-op stand-ins' way); Lua sets the key's
+    text (SV_SetText)."""
+    for ob in objects_of(u):
+        put(ob[2], 'LiveAIObjectDesc', 'bShowHUDBox', ('raw', 'Bool', b'\x01'))
+        put(ob[2], 'LiveAIObjectDesc', 'bShowCallSignForAlly', ('raw', 'Bool', b'\x01'))
+        put(ob[2], 'LiveAIObjectDesc', 'GameObjectDisplayNameID02', ('name', key, 0))
+    z.nb.add(key)
+
+
+def set_faction(u, faction):
+    """Unit desc `u` on side `faction` (1 allied, 2 enemy: ELiveFaction)."""
+    assert field_of(u, 'Faction') is not None, 'no Faction on the unit'
+    put(u[2], 'LiveUnitDesc', 'Faction', ('enum', 'ELiveFaction', ('raw', 'Byte', bytes([faction]))))
+
+
+def comp_of(ch):
+    data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+    return [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
+
+
+def runway_clear_m(pt):
+    """The nearest building or prop box (m, 2D) round the runway (tools/checks/festival_lights_data.json's boxes)."""
+    import festival_lights_check as fl
+    d = json.load(open(fl.DATA))
+    boxes = [dict(zip(('x', 'y', 'yaw', 'hx', 'hy', 'zmax'), b)) for b in d['boxes']]
+    return min(fl.dist_to_box(pt[:2], e) for e in boxes) / 100.0
+
+
+ESC_PARK_CLEAR_M = 30.0        # each parking slot (and its stop path's end) this far from every building or prop box
+
+
+def escort_units(units, used_ids, z, top_number, v):
+    """THE ESCORT (survival_events.ESC_*): CHARLENE (Mission 14's escorted C-130 desc, its wing parts left out, on her row
+    sv_charlene, the Attention mark and her callsign), her four escorts (MOONCHILD's lead's desc on their rows, their
+    callsigns), every path: her route and each escort's (smooth, one path to the IAF: hard rules 35, 54), the final (the
+    3 deg glide slope from the IAF to touchdown), the rollout and the parking slots' taxi and stop paths on the runway's
+    7.5 m (MOONCHILD's runway paths' shape: its roll path the template, its taxi path run backwards), each escort's orbit."""
+    se = survival_events
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    tpl_air = desc_named(stock_wd(M16 + 'WD_Mission016_global'), 'AIPathDescList', se.LADON_SOURCE_PATH)
+    tpl_roll = desc_named(v, 'AIPathDescList', se.TAKEOFF_LEAD[1])
+    tpl_taxi = desc_named(v, 'AIPathDescList', se.TAKEOFF_LEAD[0])
+    route, route_after = se.esc_route_pts()
+    yaw = math.degrees(math.atan2(route[1][1] - route[0][1], route[1][0] - route[0][0]))
+    # CHARLENE
+    src = desc_named(stock_wd(se.ESC_CHAR_SOURCE[0]), 'UnitDescList', se.ESC_CHAR_SOURCE[1])
+    assert field_of(src, 'bIsEscortedUnit') == ('raw', 'Bool', b'\x01') and \
+        field_of(objects_of(src)[0], 'TargetMarkType') == ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x03')), 'Mission 14 C-130 changed'
+    names = port_unit(units, used_ids, z, src, se.ESC_CHAR_UNIT, se.ESC_CHAR_OBJ, se.ESC_CHAR_ROW, [route[0]], yaw, top_number)
+    assert names == [se.ESC_CHAR_OBJ], names
+    u = unit_named(units, se.ESC_CHAR_UNIT)
+    ob = objects_of(u)[0]
+    ob[2][:] = [(q[0], q[1], q[2], ('arr', [])) if q[1] == 'ChildAIObjectDescs' else q for q in ob[2]]   # (the C-130's wings)
+    callsign(u, se.ESC_CHAR_NAME_KEY, z)
+    unit_area(u, se.ESC_AREA_M, se.ESC_ALT_M)
+    place(u, route[0], yaw)
+    # her escorts
+    msrc = unit_named(units, se.ALLY_AIR_SOURCE)
+    for a in se.esc_aircraft()[1:]:
+        pts, after = se.esc_route_pts(a['right_km'], a['up_km'])
+        names = port_unit(units, used_ids, z, msrc, a['unit'], a['obj'], a['row'], [pts[0]], yaw, top_number)
+        assert names == [a['obj']], names
+        eu = unit_named(units, a['unit'])
+        clear_flags(eu, ('bIsInvincible',))
+        callsign(eu, a['name_key'], z)
+        unit_area(eu, se.ESC_AREA_M, se.ESC_ALT_M)
+        place(eu, pts[0], yaw)
+        paths.append(make_path(z, used_ids, tpl_air, a['route'], pts, smooth=True, after=after))
+        opts, before, oafter = se.esc_orbit_pts(a['key'])
+        paths.append(make_path(z, used_ids, tpl_air, a['orbit'], opts, smooth=True, before=before, after=oafter))
+    # the shared paths: her route, the final, the rollout
+    final, roll = se.esc_final_pts(), se.esc_roll_pts()
+    t_iaf = se.ESC_TOUCH_T - 1000.0 * se.ESC_FINAL_KM[0]
+    paths.append(make_path(z, used_ids, tpl_air, se.ESC_PATH_ROUTE, route, smooth=True, after=route_after))
+    paths.append(make_path(z, used_ids, tpl_air, se.ESC_PATH_FINAL, final, smooth=True,
+                           before=se.esc_rwy(t_iaf - 2000.0, 0.0, final[0][2]), after=roll[0]))
+    paths.append(make_path(z, used_ids, tpl_roll, se.ESC_PATH_ROLL, roll))
+    slope = math.degrees(math.atan2(final[0][2] - final[-1][2], math.dist(final[0][:2], final[-1][:2])))
+    assert abs(slope - se.ESC_GLIDE_DEG) < 0.05 and abs(final[0][2] - 84602.0) < 100.0, ('the glide slope', slope, final[0])
+    assert math.dist(final[-1][:2], se.esc_rwy(se.ESC_TOUCH_T)[:2]) < 1.0 and math.dist(se.esc_rwy(-742.0)[:2], (1541439, -406838)) < 100.0
+    # the taxi: from 22 m past the rollout's end, MOONCHILD's taxi path backwards (its U-turn off the east end onto the
+    # parallel taxiway), then west along the taxiway to the slot; a slot's stop path 18 m on from it
+    f = {p[1]: p[3] for p in tpl_taxi[2]}
+    mc = [struct.unpack('<3d', {q[1]: q[3] for q in f['BeginPointDesc'][2]}['Pos'][2])] + \
+         [struct.unpack('<3d', {q[1]: q[3] for q in p[2]}['Pos'][2]) for p in f['PathPointDescList'][1]]
+    back = list(reversed(mc))
+    rt = lambda p: ((p[0] - se.ESC_RWY_O[0]) * se.ESC_RWY_U[0] + (p[1] - se.ESC_RWY_O[1]) * se.ESC_RWY_U[1]) / 100.0
+    rs = lambda p: ((p[0] - se.ESC_RWY_O[0]) * se.ESC_RWY_S[0] + (p[1] - se.ESC_RWY_O[1]) * se.ESC_RWY_S[1]) / 100.0
+    assert abs(rs(back[0])) < 3.0 and rt(back[0]) > se.ESC_TAXI_FIRST_T + 20.0, ('MOONCHILD taxi start', rt(back[0]), rs(back[0]))
+    assert abs(rs(back[-1]) - se.ESC_TAXI_S) < 1.0, ('MOONCHILD hold spot', rt(back[-1]), rs(back[-1]))
+    hold_t = rt(back[-1])
+    clear = {}
+    for S, t in se.ESC_SLOTS:
+        line, d = [], hold_t - se.ESC_TAXI_STEP_M
+        while d > t + 1.0:
+            line.append(se.esc_rwy(d, se.ESC_TAXI_S))
+            d -= se.ESC_TAXI_STEP_M
+        pts = [se.esc_rwy(se.ESC_TAXI_FIRST_T)] + back + line + [se.esc_rwy(t, se.ESC_TAXI_S)]
+        stop = [se.esc_rwy(t - m, se.ESC_TAXI_S) for m in se.ESC_STOP_M]
+        clear[S] = min(runway_clear_m(p) for p in [pts[-1]] + stop)
+        assert clear[S] >= ESC_PARK_CLEAR_M, ('a parking slot near a building', S, clear[S])
+        paths.append(make_path(z, used_ids, tpl_taxi, f'SV_Path_TaxiSlot{S}', pts))
+        paths.append(make_path(z, used_ids, tpl_taxi, f'SV_Path_StopSlot{S}', stop))
+    o = se.esc_orbit()
+    print(f'  escort: {se.ESC_CHAR_UNIT} ({se.ESC_CHAR_OBJ}, {se.ESC_CHAR_ROW} -> {se.ESC_CHAR_NPC}) at {tuple(round(c) for c in route[0])} '
+          f'yaw {yaw:.1f}; route {len(route)} points to {se.ESC_ROUTE_SHORT_KM} km short of the IAF {tuple(round(c) for c in final[0])}; '
+          f'final {len(final)} points at {slope:.2f} deg to touchdown {tuple(round(c) for c in final[-1])}; rollout {len(roll)} points; '
+          f'escorts {", ".join(a["unit"] for a in se.esc_aircraft()[1:])}; orbit {se.ESC_ORBIT_KM:.0f} km round '
+          f'{tuple(round(c) for c in o["centre"])}, touching the centre line at {tuple(round(c) for c in o["touch"][:2])}; '
+          f'parking slots (t m: clear of buildings m) ' + ', '.join(f'{S} {t:.0f}: {clear[S]:.0f}' for S, t in se.ESC_SLOTS))
+
+
+def cargo_arms(component):
+    """[(n, unit)]: the container launcher class `component`'s spawner arms in its fire control's AllArms order (WN_WEAPON_n:
+    hard rule 40) and the world-data unit each one names (LiveFCSModule_ProjectileSpawnerFromWorldData Units[0].Name_WD,
+    as the engine stores it), read from the stock blueprint (build/stock)."""
+    zb = ZenPkg(stock(survival_events.CARGO_LAUNCHER_DIR + component))
+
+    def parse(i, st):
+        p = bytes(zb.payloads[i])
+        assert p[:4] == b'\0\0\0\0', (component, i)
+        val, _ = uprop.read_struct(uprop.Ctx(p, zb.names), 4, st)
+        return {q[1]: q[3] for q in val[2]}
+    fcs = [i for i in range(len(zb.payloads)) if zb.export_name(i).startswith('LiveAIFireControlSystemComponent')]
+    assert len(fcs) == 1, (component, fcs)
+    arms = parse(fcs[0], 'LiveAIFireControlSystemComponent')['AllArms'][1]
+    out = []
+    for n, ref in enumerate(arms, 1):
+        assert ref[0] == 'obj' and ref[1] > 0, ref
+        mod = parse(ref[1] - 1, 'LiveFireControlSystemSpawner')['ProjectileModule']
+        units = parse(mod[1] - 1, 'LiveFCSModule_ProjectileSpawnerFromWorldData')['Units'][1]
+        assert len(units) == 1, (component, n, units)
+        nm = [q for q in units[0][2] if q[1] == 'Name_WD'][0][3]
+        out.append((n, nm[1] if nm[2] == 0 else f'{nm[1]}_{nm[2] - 1}'))
+    return out
+
+
+def cargo_units(units, used_ids, z, top_number):
+    """The ZFA-44 cargo ships (survival_events.CARGO_* / ZFA_*): Mission 17's container ship, hull, its two container
+    launchers and its Stinger mount (their classes imported: retag_parts, hard rule 7), allied, its callsign; for each arm of
+    the launcher the ship fires, a unit of exactly the name the arm spawns (Mission 17's drone unit desc, allied, its
+    ZFA_PER_ARM objects on the ZFA-44 host's row, parked under the sea as Mission 17's drones are); and the pose-spawn
+    fallback 4-ships (MOONCHILD's desc) above each ship."""
+    se = survival_events
+    m17z = ZenPkg(stock(se.CARGO_SOURCE_WD))
+    m17, _ = props_of(m17z, m17z.export_index(se.CARGO_SOURCE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
+    drone = desc_named(m17, 'UnitDescList', se.ZFA_DRONE_SOURCE)
+    assert field_of(drone, 'bIsSpawnFromStart') is None and [field_of(ob, 'MissionNpcID')[1] for ob in objects_of(drone)][:1] == \
+        ['OP0019_uavcs_01'], 'Mission 17 drone unit changed'
+    se.CARGO_ARMS.clear()
+    fired = set()
+    for s, unit, obj, row, srow, src_unit, spot, yaw, launcher in se.CARGO_SHIPS:
+        src = desc_named(m17, 'UnitDescList', src_unit)
+        assert [field_of(ob, 'MissionNpcID')[1] for ob in objects_of(src)] == [srow], (src_unit, 'Mission 17 ship unit changed')
+        names = port_unit(units, used_ids, z, src, unit, obj, row, [spot], yaw, top_number, digit_ok=True, unit_digits=True)
+        assert names == [obj], names
+        u = unit_named(units, unit)
+        set_faction(u, 1)
+        put(u[2], 'LiveUnitDesc', 'RandomGroupIndex', ('raw', 'Int', struct.pack('<i', -1)))   # (Mission 17's random group 102)
+        callsign(u, se.CARGO_NAME_KEY, z)
+        unit_area(u, se.CARGO_AREA_M, se.CARGO_ALT_M)
+        place(u, spot, yaw)
+        kids = field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1]
+        comps = [comp_of(ch) for ch in kids]
+        assert launcher in comps and 'BP_VE021_stgr_Base' in comps and len(comps) == 3, (unit, comps)
+        assert retag_parts(kids, obj, used_ids, z, m17z) == 3, unit
+        arms = cargo_arms(launcher)
+        assert [x for _, x in arms] == se.CARGO_ARMS_EXPECTED[launcher], (launcher, arms)
+        assert not fired & {x for _, x in arms}, ('two ships fire the same arm units', fired & {x for _, x in arms})
+        fired |= {x for _, x in arms}
+        se.CARGO_ARMS[s] = []
+        for n, dunit in arms:
+            base = f'SV_Obj_ZfaShip{s}Arm{chr(64 + n)}'
+            park = (spot[0], spot[1], se.ZFA_PARK_Z)
+            pts = [(spot[0] + (k - (se.ZFA_PER_ARM - 1) / 2.0) * se.ZFA_GAP_CM, spot[1], se.ZFA_PARK_Z) for k in range(se.ZFA_PER_ARM)]
+            dn = port_unit(units, used_ids, z, drone, dunit, base, se.ZFA_ROW, pts, yaw, top_number, unit_digits=True)
+            assert dn == [f'{base}_{k}' for k in range(se.ZFA_PER_ARM)], dn
+            du = unit_named(units, dunit)
+            set_faction(du, 1)
+            callsign(du, se.ZFA_NAME_KEY, z)
+            unit_area(du, se.ZFA_AREA_M, se.ZFA_ALT_M)
+            place(du, park, yaw, pts)
+            se.CARGO_ARMS[s].append((n, dunit, dn))
+    msrc = unit_named(units, se.ALLY_AIR_SOURCE)
+    for L, unit, obj, s in se.ZFA_FALLBACK:
+        spot = se.cargo_ship(s)[6]
+        top = (spot[0], spot[1], spot[2] + se.ZFA_FALLBACK_UP_CM)
+        pts = [(top[0] - (k // 2) * se.ZFA_GAP_CM, top[1] + (k % 2) * se.ZFA_GAP_CM, top[2]) for k in range(se.ZFA_FALLBACK_N)]
+        names = port_unit(units, used_ids, z, msrc, unit, obj, se.ZFA_ROW, pts, se.cargo_ship(s)[7], top_number)
+        assert names == [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], names
+        u = unit_named(units, unit)
+        clear_flags(u, ('bIsInvincible',))
+        callsign(u, se.ZFA_NAME_KEY, z)
+        unit_area(u, se.ZFA_AREA_M, se.ZFA_ALT_M)
+        place(u, top, se.cargo_ship(s)[7], pts)
+        assert [field_of(ob, 'bGroupLead') == ('raw', 'Bool', b'\x01') for ob in objects_of(u)] == [True] + [False] * (se.ZFA_FALLBACK_N - 1)
+    print(f'  cargo ships: ' + '; '.join(f'{c[1]} ({c[3]} -> {c[4]}) at ({c[6][0]:.0f}, {c[6][1]:.0f}), fires {c[8]}: '
+          + ', '.join(f'WN_WEAPON_{n} {u_}' for n, u_, _ in se.CARGO_ARMS[c[0]]) for c in se.CARGO_SHIPS)
+          + f'; {se.ZFA_PER_ARM} ZFA-44s ({se.ZFA_ROW}) an arm; fallback {", ".join(f[1] for f in se.ZFA_FALLBACK)} of {se.ZFA_FALLBACK_N}')
+
+
+def decoy_units(units, used_ids, z, top_number):
+    """THE DECOY (survival_events.DECOY_*): the bait and the 35 trap UAVs (Mission 30's Marker UAV desc with its laser pod,
+    its class imported: retag_parts; a box and the TGT mark), the bait's mark and the 35 marks (Mission 22's dummy desc,
+    invincible, attack-target exceptions, no box), the four Spear shooters (Mission 19's God desc with its targeting dummy,
+    invincible, attack-target exceptions, 30 km up)."""
+    se = survival_events
+    m30z = ZenPkg(stock(se.DECOY_UAV_SOURCE[0]))
+    m30, _ = props_of(m30z, m30z.export_index(se.DECOY_UAV_SOURCE[0].rsplit('/', 1)[1]), 'LiveWorldData')
+    src = desc_named(m30, 'UnitDescList', se.DECOY_UAV_SOURCE[1])
+    assert field_of(objects_of(src)[0], 'MissionNpcID')[1] == se.DECOY_MISSION_SOURCE, 'Mission 30 UAV unit changed'
+    (ax, ay), safe = (se.AIRFIELD_KM[0] * 1e5, se.AIRFIELD_KM[1] * 1e5), ('bIsInvincible', 'bIsInvincibleFromAI', 'bIsAttackTargetsException')
+
+    def uav(unit, obj, row, spot, yaw, area, digits):
+        names = port_unit(units, used_ids, z, src, unit, obj, row, [spot], yaw, top_number, tgt=True, digit_ok=digits,
+                          unit_digits=digits)
+        assert names == [obj], names
+        u = unit_named(units, unit)
+        kids = field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1]
+        assert [comp_of(ch) for ch in kids] == [se.DECOY_POD] and retag_parts(kids, obj, used_ids, z, m30z) == 1, unit
+        unit_area(u, area, se.DECOY_UAV_ALT_M)
+        place(u, spot, yaw)
+    uav(se.DECOY_BAIT_UNIT, se.DECOY_BAIT_OBJ, se.DECOY_BAIT_ROW, se.DECOY_BAIT_SPOT, se.DECOY_BAIT_YAW, se.DECOY_BAIT_AREA_M, False)
+    msrc = unit_named(units, se.DECOY_MARK_SOURCE)
+    assert [field_of(ob, 'MissionNpcID')[1] for ob in objects_of(msrc)] == [se.DECOY_MARK_ROW], 'Unit_dummyN0 changed'
+
+    def mark(unit, obj, spot, digits):
+        names = port_unit(units, used_ids, z, msrc, unit, obj, se.DECOY_MARK_ROW, [spot], 0.0, top_number, digit_ok=digits,
+                          unit_digits=digits)
+        assert names == [obj], names
+        u = unit_named(units, unit)
+        set_bools(u, safe)
+        place(u, spot, 0.0)
+        assert not field_of(objects_of(u)[0], 'bShowHUDBox') and not field_of(objects_of(u)[0], 'TargetMarkType'), unit
+    mark(se.DECOY_BAIT_MARK_UNIT, se.DECOY_BAIT_MARK_OBJ, se.DECOY_BAIT_MARK_SPOT, False)
+    for k, unit, obj, munit, mobj in se.decoy_uavs():
+        a = math.radians(10.0 * k)
+        uav(unit, obj, se.DECOY_UAV_ROW, (ax + 600000.0 * math.cos(a), ay + 600000.0 * math.sin(a), 200000.0), 10.0 * k + 90.0,
+            se.DECOY_UAV_AREA_M, True)
+        mark(munit, mobj, (ax, ay, -10000.0), True)
+    m19z = ZenPkg(stock(se.DECOY_SPEAR_SOURCE[0]))
+    m19, _ = props_of(m19z, m19z.export_index(se.DECOY_SPEAR_SOURCE[0].rsplit('/', 1)[1]), 'LiveWorldData')
+    gsrc = desc_named(m19, 'UnitDescList', se.DECOY_SPEAR_SOURCE[1])
+    assert field_of(objects_of(gsrc)[0], 'MissionNpcID')[1] == se.DECOY_SPEAR_SOURCE_ROW, 'Mission 19 God unit changed'
+    for k, (unit, obj) in enumerate(se.DECOY_SPEARS):
+        spot = (ax + (k - 1.5) * se.DECOY_SPEAR_GAP_CM, ay, se.DECOY_SPEAR_Z)
+        names = port_unit(units, used_ids, z, gsrc, unit, obj, se.DECOY_SPEAR_ROW, [spot], 0.0, top_number, unit_digits=True)
+        assert names == [obj], names
+        u = unit_named(units, unit)
+        kids = field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1]
+        assert [comp_of(ch) for ch in kids] == ['TargetingDummy'] and retag_parts(kids, obj, used_ids, z, m19z) == 1, unit
+        set_bools(u, safe)
+        place(u, spot, 0.0)
+    print(f'  decoy: {se.DECOY_BAIT_UNIT} ({se.DECOY_BAIT_ROW}) at {se.DECOY_BAIT_SPOT}, its mark {se.DECOY_BAIT_MARK_UNIT}; '
+          f'{se.DECOY_N} trap UAVs SV_Unit_DecoyUav_01-{se.DECOY_N} ({se.DECOY_UAV_ROW} -> {se.DECOY_UAV_NPC}) and marks '
+          f'SV_Unit_DecoyMark_01-{se.DECOY_N}; {len(se.DECOY_SPEARS)} Spear shooters ({se.DECOY_SPEAR_ROW}) 30 km up')
+
+
 def build_wd_global():
     """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
     itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
@@ -1442,6 +1707,9 @@ def build_wd_global():
     valka_eml_unit(units, used_ids, z, top_number)
     fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
     festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)
+    escort_units(units, used_ids, z, top_number, v)        # THE ESCORT (survival_events.ESC_*)
+    cargo_units(units, used_ids, z, top_number)            # its unlock: the ZFA-44 cargo ships (CARGO_* / ZFA_*)
+    decoy_units(units, used_ids, z, top_number)            # THE DECOY (survival_events.DECOY_*)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
@@ -1637,12 +1905,28 @@ def build_radio():
         keep.append(((grp, 0), row))
         have.add(grp)
         tells += 1
+    # THE DECOY's lines (survival_events.DECOY_RADIO): the tells' way, each a group of its own
+    for grp, ev, tid, spk, opts in survival_events.decoy_radio():
+        assert grp not in have, f'{grp}: a group Mission 22 has, or twice'
+        assert tid + '_Play' in voice, f'{tid}: no voice in {VOICE_DB}'
+        row = copy.deepcopy(tpl)
+        setf(row, 'RadioGroupID', survival_events.fname(grp))
+        setf(row, 'TextID', survival_events.fname(tid))
+        setf(row, 'SpeakerID', ('str', spk))
+        setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+        if opts.get('now'):
+            setf(row, 'StartDelay', ('raw', 'Float', struct.pack('<f', survival_events.TELL_START_DELAY_S)))
+            setf(row, 'Channel', ('enum', 'ELiveRadioChannel', ('raw', 'Byte', bytes([survival_events.TELL_CHANNEL_INTERRUPT]))))
+        for n in (survival_events.fname(grp)[1], survival_events.fname(tid)[1], spk): z.nb.add(n)
+        keep.append(((grp, 0), row))
+        have.add(grp)
+        tells += 1
     dt['rows'] = keep
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
     assert chk['rows'] == dt['rows']
     save(z, RADIO)
-    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell lines)')
+    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell and decoy lines)')
 
 
 # The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).
@@ -2269,6 +2553,36 @@ def build_npc_rows():
                         ('GameObjectDisplayName02', s(se.FISH_NAME_KEY)), ('ModelId', ('name', se.FISH_MODEL, 0))):
         set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
     out.append(((se.FISH_NPC, 0), row))
+    # THE ESCORT's allied rows and the ZFA-44 host, THE DECOY's weaponless UAV (survival_events.ESCORT_DECOY_NPC_ROWS): copies
+    # of the campaign's plain rows; an allied model with no skin row (the model's own look), MOONCHILD's behaviour set
+    # (its row's LuaSet: hard rule 22, never NLID_0400_CP), the UAV's weapons emptied (its laser pod is its blueprint's)
+    zm = ZenPkg(stock(MODEL_CP))
+    models = {k[0] for k, _ in dtx.parse(uprop.Ctx(bytes(zm.payloads[0]), zm.names), 0, 'LiveModelDataTable')[0]['rows']}
+    f = survival_events.fname(survival_events.ALLY_AIR_SOURCE_NPC)
+    ally_set = dict((q[1], q[3]) for q in rows[(f[1], f[2])][2])['LuaSetId']
+    assert ally_set and ally_set[1] != 'NLID_0400_CP', ally_set
+    sidx = lambda n: [k for k, (nm, t) in schema.items() if nm == n][0]
+    for npc, src, model, fly_ally, unarmed, key, full in survival_events.ESCORT_DECOY_NPC_ROWS:
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        if model:
+            assert model in models, f'{npc}: no model row {model}'
+            set_prop(row[2], model_idx, 'ModelId', ('name', model, 0))
+            drop_prop(row[2], skin_idx)
+        if fly_ally:
+            set_prop(row[2], sidx('LuaSetId'), 'LuaSetId', ally_set)
+        if unarmed:
+            row[2][:] = [q for q in row[2] if not q[1].startswith('NpcFCSId')]
+        if key:
+            set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(key))
+        if full:                                             # (the plain Su-47 flies at x0.8; its hit spheres kept)
+            for q in [q for q in row[2] if q[1].endswith('Coefficient') and q[1] != 'SphereCollisionRadiusCoefficient']:
+                set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
+        assert survival_events.fname(npc)[2] == 0, npc
+        out.append(((npc, 0), row))
+    print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '
+          + ', '.join(f'{r[0]} ({r[1]}' + (f' on {r[2]}' if r[2] else '') + (', unarmed' if r[4] else '') + ')'
+                      for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}')
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -2368,7 +2682,8 @@ def check_no_certain_kill():
     allied = ({se.ALLY_AIR_ROW, se.ALLY_WINGMEN_ROW, se.AWACS_ROW, se.DEFENCE_CIWS_ROW[0], se.SHUTTLE_NPC_ROW}
               | {row for row, _ in se.DEFENCE_ROWS.values()}
               | {se.ally_ship_rows(k)[0] for k, _, _, _ in se.ALLY_SHIPS}
-              | {se.ally_turret_rows(t)[0] for k, _, _, _ in se.ALLY_SHIPS for t in se.ALLY_TURRETS[k]})
+              | {se.ally_turret_rows(t)[0] for k, _, _, _ in se.ALLY_SHIPS for t in se.ALLY_TURRETS[k]}
+              | se.ESCORT_ALLIED_ROWS)                     # (THE ESCORT's: CHARLENE, her escorts, the cargo ships, the ZFA-44s)
     bad = []
 
     def carries(row, path, seen):
@@ -2491,6 +2806,153 @@ def check_fishing_build():
     assert se.FEST_LIGHT_NPC in alc and 'GR053_seli_light_01' in alc and {'GR053_seli', 'GR053_seli_light'} <= set(alm), 'searchlight rows'
     print(f'  fishing / festival: {len(want)} units, {len(events)} events ({n_ex} execs) and their rows read back from the '
           f'packages: all there')
+
+
+def check_escort_decoy_build():
+    """(2026-11-06) THE ESCORT, its cargo ships and THE DECOY read back from the packages this build saved: every unit the
+    build contracts name, by the name SV_Spawn gives (a digit tail split as the engine splits it; the launch units exactly
+    as the container launchers' arms name them), with its objects, rows, side, callsign key and parts; every path the
+    records name (and its control type, as VOID WATCHER's proven orbit's); every remote event Lua fires, once each, and
+    every exec's objects / units / paths / flags / radio groups there; the rows (DT_SV_NpcMission, DT_SV_NpcRows,
+    DT_SV_Radio)."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    zw = load(MI + 'WD_SurvivalMode_global')
+    w, _ = props_of(zw, zw.export_index('WD_SurvivalMode_global'), 'LiveWorldData')
+    units = {plain([q for q in u[2] if q[1] == 'Name'][0][3]): u for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]}
+    paths = {plain([q for q in el[2] if q[1] == 'Name'][0][3]): el for el in [p for p in w[2] if p[1] == 'AIPathDescList'][0][3][1]}
+    objs = {}
+
+    def walk(ob, unit):
+        objs[plain([q for q in ob[2] if q[1] == 'Name'][0][3])] = unit
+        for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]:
+            walk(ch, unit)
+    for un, u in units.items():
+        for ob in objects_of(u): walk(ob, un)
+    faction = lambda u: field_of(u, 'Faction')[2][2][0]
+    kids = lambda ob: [plain([q for q in ch[2] if q[1] == 'Name'][0][3]) for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]]
+    want = []                      # (unit, [objects], row, faction or None, callsign key or None, [parts of the first object])
+    for a in se.esc_aircraft():
+        want.append((a['unit'], [a['obj']], a['row'], 1, a['name_key'], []))
+    for s_, unit, obj, row, _, _, _, _, launcher in se.CARGO_SHIPS:
+        want.append((unit, [obj], row, 1, se.CARGO_NAME_KEY,
+                     sorted(f'{obj}_{c}' for c in ('BP_VE021_ctslf_cntus_01_CP', 'BP_VE021_ctslf_cntus_02_CP',
+                                                   'BP_VE021_ctslf_cntus_03_CP', 'BP_VE021_stgr_Base')
+                            if c in (launcher, 'BP_VE021_stgr_Base', 'BP_VE021_ctslf_cntus_02_CP'))))
+        for n, dunit, dobjs in se.CARGO_ARMS[s_]:
+            want.append((dunit, dobjs, se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+    for L, unit, obj, _ in se.ZFA_FALLBACK:
+        want.append((unit, [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+    want.append((se.DECOY_BAIT_UNIT, [se.DECOY_BAIT_OBJ], se.DECOY_BAIT_ROW, 2, None, [f'{se.DECOY_BAIT_OBJ}_{se.DECOY_POD}']))
+    want.append((se.DECOY_BAIT_MARK_UNIT, [se.DECOY_BAIT_MARK_OBJ], se.DECOY_MARK_ROW, None, None, []))
+    for _, unit, obj, munit, mobj in se.decoy_uavs():
+        want.append((unit, [obj], se.DECOY_UAV_ROW, 2, None, [f'{obj}_{se.DECOY_POD}']))
+        want.append((munit, [mobj], se.DECOY_MARK_ROW, None, None, []))
+    for unit, obj in se.DECOY_SPEARS:
+        want.append((unit, [obj], se.DECOY_SPEAR_ROW, None, None, [f'{obj}_TargetingDummy']))
+    for unit, names, row, side, key, parts in want:
+        assert unit in units, f'{unit} not in the world data'
+        u = units[unit]
+        assert survival_events.fname(unit) == [q for q in u[2] if q[1] == 'Name'][0][3], unit
+        got = [plain(field_of(ob, 'Name')) for ob in objects_of(u)]
+        assert got == names, (unit, got)
+        assert all(field_of(ob, 'MissionNpcID') == ('name', row, 0) for ob in objects_of(u)), unit
+        assert (side is None or faction(u) == side) and not field_of(u, 'bIsSpawnFromStart'), unit
+        if key:
+            assert all(field_of(ob, 'GameObjectDisplayNameID02') == ('name', key, 0) and
+                       field_of(ob, 'bShowCallSignForAlly') == ('raw', 'Bool', b'\x01') for ob in objects_of(u)), (unit, key)
+        assert sorted(kids(objects_of(u)[0])) == sorted(parts), (unit, kids(objects_of(u)[0]), parts)
+    marks = [munit for _, _, _, munit, _ in se.decoy_uavs()] + [se.DECOY_BAIT_MARK_UNIT] + [u_ for u_, _ in se.DECOY_SPEARS]
+    assert all(field_of(ob, 'bIsInvincible') and field_of(ob, 'bIsAttackTargetsException') for m in marks for ob in objects_of(units[m]))
+    assert field_of(objects_of(units[se.ESC_CHAR_UNIT])[0], 'TargetMarkType') == ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x03'))
+    # the paths (ControlType as VOID WATCHER's arcs: no tube control, hard rule 35)
+    ct = field_of(paths[se.AWACS_ARC_A], 'ControlType')
+    want_paths = [se.ESC_PATH_ROUTE, se.ESC_PATH_FINAL, se.ESC_PATH_ROLL] + [a[k] for a in se.esc_aircraft()[1:] for k in ('route', 'orbit')]
+    want_paths += [f'SV_Path_{k}Slot{S}' for S, _ in se.ESC_SLOTS for k in ('Taxi', 'Stop')]
+    for name in want_paths:
+        assert name in paths and field_of(paths[name], 'ControlType') == ct, (name, ct)
+    # the records
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [show(ep_dump.fields(t)['EventName']) for t in T]
+    events = [ev for evs in se.ESC_EVENTS.values() for ev in evs] + ['RE_SV_EscortReset']
+    events += [se.cargo_launch_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
+    events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
+    events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
+    events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
+    events += [f'RE_SV_Decoy{x}_{nn:02d}' for nn, *_ in se.decoy_uavs() for x in ('LaserOn', 'LaserOff', 'MarkOnMe')]
+    events += [ev for _, ev, _, _, _ in se.decoy_radio()]
+    contract = (['RE_SV_CharGo', 'RE_SV_CharFinal', 'RE_SV_CharRoll', 'RE_SV_CharTaxi', 'RE_SV_CharStop']
+                + [f'RE_SV_Esc{n}{x}' for n, _, _, _ in se.ESC_ESCORTS for x in ('Go', 'Orbit', 'Final', 'Roll', 'Taxi', 'Stop')]
+                + ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyKill'] + [f'RE_SV_DecoyLaserOn_{k:02d}' for k in range(1, 36)]
+                + [f'RE_SV_DecoyLaserOff_{k:02d}' for k in range(1, 36)] + [f'RE_SV_DecoySpear_{k}' for k in range(1, 5)]
+                + [f'RE_SV_DecoyRadio_{x}' for x in ('Lock', 'Incoming', 'Imminent', 'Hit', 'Brief')])
+    assert set(contract) <= set(events), sorted(set(contract) - set(events))
+    for ev in events:
+        assert trig.count(ev) == 1, (ev, trig.count(ev))
+    zr = load(RADIO)
+    radio = {plain(('name',) + k) for k, _ in dtx.parse(uprop.Ctx(bytes(zr.payloads[0]), zr.names), 0, 'LiveRadioTable')[0]['rows']}
+    mine = set(events) | {t for t in trig if t.startswith(('SV_CharUp', 'SV_EscUp', 'SV_CargoUp', 'SV_ZfaUp', 'SV_DecoyBaitUp',
+                                                             'SV_DecoyUavUp_', 'SV_CharEnd')) or
+                          any(t.startswith(f'SV_{n}End') for n, _, _, _ in se.ESC_ESCORTS)}
+    flags = {se.fname(x) for x in se.INT_FLAGS}
+    n_ex, classes = 0, {}
+    for e in E:
+        f = ep_dump.fields(e)
+        ev = show(f['ConnectionEventName'])
+        if ev not in mine: continue
+        n_ex += 1
+        args = [show(ep_dump.fields(a)['Value']) for a in f['ArgsInfo'][1]]
+        cls = show(f['ExecutionClass'])
+        classes[cls] = classes.get(cls, 0) + 1
+        for c in f['ConditionalStatementTables'][1]:
+            cv = [show(ep_dump.fields(a)['Value']) for a in ep_dump.fields(c)['ArgsInfo'][1]]
+            assert se.fname(cv[0]) in flags, (ev, cv)
+        if cls == 'LiveAIPathExecution':
+            assert args[2] in paths and args[0] in objs, (ev, args[:3])
+        elif cls == 'LiveFireOneShotWeapon':
+            assert args[1] in objs and args[2] in ('Player', 'NoneSelect'), (ev, args[:3])
+        elif cls == 'LiveAirshipLaserDesignate':
+            assert args[0] in objs and args[2] in objs and args[8] == 'NoneSelect', (ev, args)
+        elif cls in ('LiveAirshipStopLaserDesignate', 'LiveEnableLandingGear', 'LiveAIPathExitExecution'):
+            assert args[0] in objs, (ev, cls, args[:2])
+        elif cls in ('LiveSetCommonAttribute', 'LiveActorTeleportExecution'):
+            assert args[1] in objs, (ev, cls, args[:3])
+        elif cls in ('LiveAIEngagementOrder', 'LiveAIChangeEnemySearchType'):
+            assert args[0] in objs or args[1] in units, (ev, cls, args[:3])
+        elif cls in ('LiveUnitMoveActor', 'LiveChangeUnitRadius'):
+            assert args[0] in units and (cls != 'LiveUnitMoveActor' or args[1] in objs), (ev, cls, args[:3])
+        elif cls in ('LiveSetActiveGameObjectExecution', 'LiveBattleNavigationExecution'):
+            assert args[1] in units, (ev, cls, args[:3])
+        elif cls == 'LiveFlagOperation_IntExecution':
+            assert se.fname(args[0]) in flags, (ev, args)
+        elif cls == 'LiveRadioPlayExecution':
+            assert args[0] in radio, (ev, args)
+        else:
+            assert cls == 'LiveDestroyPlayerPlaneExecution' and not args, (ev, cls, args)
+    impact = [t for t in T if show(ep_dump.fields(t)['EventName']) == 'SV_DecoySpearImpact'][0]
+    assert [show(ep_dump.fields(a)['Value']) for a in ep_dump.fields(impact)['ArgsInfo'][1]] == [se.DECOY_SPEAR_TAG]
+    # the rows
+    def table(path, st):
+        z = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    for row, _, src, nid, hp in se.ESCORT_DECOY_MISSION_ROWS:
+        assert row in mission, row
+        assert nid is None or plain(mission[row]['NpcId']) == nid, (row, mission[row]['NpcId'])
+        assert hp is None or struct.unpack('<f', mission[row]['MaxHealthDifference'][2])[0] == hp, (row, hp)
+    for row, src, model, fly_ally, unarmed, key, full in se.ESCORT_DECOY_NPC_ROWS:
+        r = npc[row]
+        assert model is None or plain(r['ModelId']) == model, (row, r['ModelId'])
+        assert not fly_ally or plain(r['LuaSetId']) == 'NLID_0003_CP', (row, r['LuaSetId'])
+        assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
+        assert plain(r['LuaSetId']) != 'NLID_0400_CP', row
+    print(f'  escort / decoy: {len(want)} units, {len(want_paths)} paths, {len(events)} events ({n_ex} execs: '
+          + ', '.join(f'{c} {n}' for c, n in sorted(classes.items())) + ') and their rows read back from the packages: all there')
 
 
 # ---------------------------------------------------------------- NPC mission table
@@ -2742,6 +3204,34 @@ def build_npc_table():
             for n in names_in(row) + [r]: z.nb.add(n)
             dt['rows'].append(((r, 0), row))
             extra.append((r, table.rsplit('/', 1)[1], None))
+    # THE ESCORT and THE DECOY (survival_events.ESCORT_DECOY_MISSION_ROWS): Mission 22's rows' shape or another mission's
+    # row whole (names and values only), under Survival's names (no digit split: hard rule 17), NpcId and health set
+    md_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'MaxHealthDifference'][0]
+    other = {}
+    for new_row, table, src, npc, hp in survival_events.ESCORT_DECOY_MISSION_ROWS:
+        assert (new_row, 0) not in rows and survival_events.fname(new_row)[2] == 0, new_row
+        if table is None:
+            row = copy.deepcopy(rows[(src, 0)])
+        else:
+            if table not in other:
+                zs = ZenPkg(stock(table))
+                other[table] = dict(dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')[0]['rows'])
+            f = survival_events.fname(src)
+            row = copy.deepcopy(other[table][(f[1], f[2])])
+            assert not any(p[3] and p[3][0] == 'obj' for p in row[2]), new_row              # names and values only
+        if npc:
+            nid = survival_events.fname(npc)
+            set_prop(row[2], npc_idx, 'NpcId', nid)
+            z.nb.add(nid[1])
+        if hp is not None:
+            set_prop(row[2], md_idx, 'MaxHealthDifference', ('raw', 'Float', struct.pack('<f', hp)))
+        for n in names_in(row) + [new_row]: z.nb.add(n)
+        rows[(new_row, 0)] = row
+        dt['rows'].append(((new_row, 0), row))
+        extra.append((new_row, (table or NPC_TABLE_STOCK).rsplit('/', 1)[1], npc))
+    print('  escort / decoy rows: ' + ', '.join(f'{r} ({(t or NPC_TABLE_STOCK).rsplit("_", 1)[-1]} {s_} -> {n or s_}'
+                                                + (f', +{h:.0f} HP' if h else '') + ')'
+                                                for r, t, s_, n, h in survival_events.ESCORT_DECOY_MISSION_ROWS))
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
     assert chk['rows'] == dt['rows']
@@ -2816,4 +3306,5 @@ if __name__ == '__main__':
     build_ep('phase01')
     build_ep('phase02')
     check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
+    check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)
