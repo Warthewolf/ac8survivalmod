@@ -205,7 +205,16 @@ function SPC.cleanUnitsOf(kind)
     elseif kind == "anomaly" then add(u(c.anomaly, "unit"))
     elseif kind == "glitch" then add(u(c.glitch, "unit"))
     elseif kind == "ladon" then for _, x in ipairs(LADON_UNITS) do add(x) end
-    elseif kind == "alicorn" then add(ALICORN_UNIT) end
+    elseif kind == "alicorn" then add(ALICORN_UNIT)
+    -- ((0.74.0) GONE FISHIN''s shoals, THE FESTIVAL's formations and missiles: finished off at their end; SAL's boat and
+    -- the searchlights are allies, switched off by their own parts, never finished off)
+    elseif kind == "fishing" and type(c.fishing) == "table" then for _, x in ipairs(c.fishing.units or {}) do add(str(x)) end
+    elseif kind == "festival" then
+        for _, g in ipairs({ "N", "W", "S" }) do
+            add("SV_Unit_Fest" .. g)
+            for k = 1, 3 do add("SV_Unit_FestCM_" .. g .. k) end
+        end
+    end
     return out
 end
 -- what a unit is called in the log
@@ -226,9 +235,14 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["specials' clean-up"] = function() SPC.CLEAN_OBJ, SPC.cleanQ, SPC.cl = {}, {}, { up = {}, due = {} } end
 end
 local watched = {}
-for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn" }) do
+for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn", "fishing", "festival" }) do
     local okU, list = pcall(SPC.cleanUnitsOf, k)
     for _, x in ipairs(okU and list or {}) do watched[x] = true end
+end
+do                                       -- ((0.74.0) the allies those rounds bring: their parts switch them off by these lists)
+    local sp = CFG.specials or {}
+    if type(sp.fishing) == "table" and str(sp.fishing.boat_unit) then watched[sp.fishing.boat_unit] = true end
+    for _, x in ipairs(type(sp.festival) == "table" and sp.festival.lights or {}) do if str(x) then watched[x] = true end end
 end
 -- every object made while SV_Spawn spawns a special's unit (the host's, a joiner's copies: sv_coop.lua sets spawningUnit
 -- too); a new spawn of the unit (more than 2 s after the last object) starts its list again
@@ -390,6 +404,8 @@ function SPC.recycleUnitsOf(kind)
             add("SV_Unit_Lcac" .. l)
             for _, k in ipairs(c.craft or {}) do add("SV_Unit_LcacTroops" .. l .. k) end
         end
+    elseif kind == "fishing" or kind == "festival" then      -- ((0.74.0) the shoals; the formations and missile units
+        for _, u in ipairs(SPC.cleanUnitsOf(kind)) do add(u) end
     end
     return out
 end
@@ -785,10 +801,11 @@ end
 -- one before it, killed and hidden at its liftoff, stayed on it, and the next shuttle round's spawn was refused, "its last
 -- flight is still up" (rounds 17 and 30 of the test of 2026-11-04): taken off here (SV_Recycle(unit, 1)) as the round is
 -- planned, its strike flights not yet picked.
-function SPC.canStart(kind)
+-- ((0.74.0) forced: a test key's (VALKA's gate and GONE FISHIN''s once a run let it through; ready(round, forced))
+function SPC.canStart(kind, forced)
     if kind == "amphibious" and not AMPH.ready() then return false, "no landing craft can come" end
     local rk = SPC.kinds and SPC.kinds[kind]
-    if rk and rk.ready and not rk.ready() then return false, "it can't come now" end
+    if rk and rk.ready and not rk.ready(D and D.round, forced) then return false, "it can't come now" end
     if kind == "shuttle" then
         local u = CFG.specials.shuttle.unit
         local n = ALIVE.fresh(u)
@@ -1073,7 +1090,7 @@ local function startRound()
     -- still on the spawner's list) swaps to another the dice can give that can (specialSwap, sv_spawn.lua), else a normal
     -- round; a forced one (a test key) or the retake: a normal round)
     if special then
-        local okS, why = SPC.canStart(special)
+        local okS, why = SPC.canStart(special, forced)
         if not okS then
             local alt = nil
             local roll = RUN.specialRoll                 -- (its gap before the roll: an ace round below doesn't count)

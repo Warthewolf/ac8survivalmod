@@ -62,6 +62,64 @@ function COOP.debit(n, why)
     send(true, "db", n, tostring(why or ""):sub(1, 80))
     log(string.format("coop: a penalty of %d (%s) sent to every joiner (%d linked)", n, tostring(why), M.linkedPeers or 0))
 end
+-- (0.74.0) GONE FISHIN' and THE FESTIVAL (sv_fishing.lua, sv_festival.lua): the host's round, its numbers to every joiner.
+--   "fh|<slot>|<catch>|<kg>|<x>|<y>"  a shoal's catch, credited to player <slot> (-1: the allies', shared out at the
+--                                     weigh-in), where it was (each game's splash)
+--   "fsx|<kind>|<state>|<a>|<b>|<c>"  the special's NEXT row numbers once a second (fishing: secs left, shoals left, the
+--                                     team's kg; festival: bombers up, missiles in the air), unreliable
+--   "fw|<slot>|<kg>|<hits>|<empty>|<best>|<bestKg>|<bigone>" one player's weigh-in (each game grades and pays its own)
+--   "fwe|<players>|<teamKg>|<allyKg>|<round>|<shoals>"  the weigh-in's card: each game pays its own player's haul
+--   "sb|<speaker>|<text>|<secs>"      a subtitle line (SUB.say in the host's round logic, as hudCallout's "co")
+-- Each game's own pay goes through COOP.payOwn: never split, never sent as "cr".
+function COOP.fishCatch(slot, catch, kg, x, y)
+    if COOP.host() then
+        send(true, "fh", slot, catch, string.format("%d", math.floor(tonumber(kg) or 0)), string.format("%.0f", tonumber(x) or 0),
+            string.format("%.0f", tonumber(y) or 0))
+    end
+end
+function COOP.specialRow(kind, state, a, b, c)
+    if COOP.host() then send(false, "fsx", kind, state, a or 0, b or 0, c or 0) end
+end
+function COOP.fishWeigh(slot, kg, hits, empty, best, bestKg, bigone)
+    if COOP.host() then send(true, "fw", slot, kg, hits, empty, best or "", bestKg or 0, bigone and 1 or 0) end
+end
+function COOP.fishWeighEnd(players, teamKg, allyKg, round, total)
+    if COOP.host() then send(true, "fwe", players, teamKg, allyKg, round, total) end
+end
+-- every player's slot in the room (the roster), this game's first; { 0 } solo
+function COOP.slots()
+    local out, me = {}, COOP.slot or 0
+    out[1] = me
+    if COOP.open then for s in pairs(M.roster) do if s ~= me then out[#out + 1] = s end end end
+    table.sort(out, function(a, b) if a == me then return true elseif b == me then return false end return a < b end)
+    return out
+end
+-- this game's own pay (GONE FISHIN''s haul): its addCredits whole, not a special's split, not sent to the joiners
+function COOP.payOwn(n, why)
+    M.ownPay = true
+    local ok, err = pcall(addCredits, n, why)
+    M.ownPay = false
+    if not ok then log("coop: own pay error " .. tostring(err)) end
+end
+-- (the host) one object taken off without a kill (THE FESTIVAL's missile on the runway): its copies down on every game
+-- first, unpaid ("dn|<id>|r"), as COOP.removeNow does a whole unit's. Whether it had an id.
+function COOP.removeObj(o)
+    if not (COOP.host() and o ~= nil) then return false end
+    local a = addrOf(o)
+    if not a then return false end
+    for id, e in pairs(M.byId) do
+        if e.addr == a and not e.dead then
+            e.dead, e.deadAt, e.killer = true, os.clock(), false
+            send(true, "dn", id, "r", "")
+            if not e.key and type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
+            local u = M.units[e.unit]
+            if u and e.ord and u.planes[e.ord] then u.planes[e.ord].dead = true end
+            if u and e.key and u.ground[e.key] then u.ground[e.key].dead = true end
+            return true
+        end
+    end
+    return false
+end
 -- (0.73.76) VALKA in co-op (user, 2026-11-03: "will the red sky sync in coop?" ... "do it"): her round runs on the host
 -- alone, so the host tells every joiner when her mood (the red sky, her song) starts and ends ("vm|1" / "vm|0") and when
 -- she shows ("vr|<unit>": each game puts her X-02S and paint on its own copy of her); a joiner who links mid-fight gets
@@ -460,6 +518,10 @@ local function allyUnit(u)
         if type(sh) == "table" then
             for _, k in ipairs({ "dummies", "pad" }) do if type(sh[k]) == "string" and sh[k] ~= "" then allySet[sh[k]] = true end end
         end
+        -- ((0.74.0) SAL's boat and THE FESTIVAL's searchlights: the host's allies, a hit on a copy never sent)
+        local fi, fe = CFG.specials and CFG.specials.fishing, CFG.specials and CFG.specials.festival
+        if type(fi) == "table" and type(fi.boat_unit) == "string" then allySet[fi.boat_unit] = true end
+        for _, x in ipairs(type(fe) == "table" and type(fe.lights) == "table" and fe.lights or {}) do allySet[x] = true end
     end
     return u ~= nil and allySet[u] == true
 end
@@ -773,8 +835,10 @@ local function hostTick()
             if type(kd) == "string" and kd:match("^%a+$") and n > 0 then db[#db + 1] = kd .. ":" .. math.min(999, n) end
         end
         table.sort(db)
+        -- ((0.74.0) field 15: the run's GONE FISHIN' round, F (0: none), the day-night arc's and THE FESTIVAL's: sv_sky.lua)
+        local arcF = math.floor(tonumber(RUN and RUN.arcF) or 0)
         send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al,
-            spk, ss, string.format("%d", vb), table.concat(rb, ",") .. ";" .. table.concat(db, ","))
+            spk, ss, string.format("%d", vb), table.concat(rb, ",") .. ";" .. table.concat(db, ","), string.format("%d", arcF))
     end
     -- ((0.73.77, the plan's I7: S12) the Spaceport (sv_spaceport.lua SPORT.coopCode): its NEXT row's numbers for the
     -- joiners' rows, and a retake due or in play, which each joiner keeps for a host migration ("spx"; as it changes,
@@ -4910,6 +4974,12 @@ local function onJoinerMessage(f)
         end
         -- ((0.73.78) the room's other allies and defences (f14, "<item>:<n>,...;<kind>:<n>,..."): this game's STORE
         -- prices them from the host's counts, as the host checks a joiner's ask (sv_shop.lua shopBuildFor)
+        -- ((0.74.0) field 15: the host's GONE FISHIN' round (the arc's F): kept in RUN, so a migration keeps it here)
+        local af = tonumber(f[15])
+        if af and af == math.floor(af) and af >= 0 and af <= 100000 and RUN and SKY and SKY.arcSet then
+            if af > 0 then SKY.arcSet(af, "the host's")
+            elseif RUN.arcF then RUN.arcF = nil; log("coop: the host's run has no GONE FISHIN' (rnd field 15): the arc off here") end
+        end
         local fa, fd = tostring(f[14] or ""):match("^([%w:,]*);([%a%d:,]*)$")
         if fa and RUN and RUN.bought then
             local seen = {}
@@ -5142,6 +5212,16 @@ local function onJoinerMessage(f)
         if finite(n, math.huge) and n > 0 and n <= CREDITS_MAX and SPORT and SPORT.debit then
             SPORT.debit(math.floor(n), short(f[3], 80), true)
         end
+    elseif k == "sb" and COOP.client() then              -- ((0.74.0) a subtitle line of the host's round: SUB.say)
+        local secs = tonumber(f[4])
+        if SUB and SUB.sayHere and f[3] and f[3] ~= "" and (secs == nil or finite(secs, 60)) and levelReady() then
+            SUB.sayHere(short(f[2], 32), short(f[3], 160), (secs and secs > 0) and math.max(1, math.min(20, secs)) or nil)
+        end
+    elseif (k == "fh" or k == "fsx" or k == "fw" or k == "fwe") and COOP.client() then   -- ((0.74.0) GONE FISHIN' and THE
+        if FISH and FISH.fromHost then                                                    -- FESTIVAL: sv_fishing.lua
+            local okF, errF = pcall(FISH.fromHost, k, f)
+            if not okF then once("fish" .. k, "coop: the host's " .. k .. " not read: " .. tostring(errF)) end
+        end
     elseif k == "spx" and COOP.client() then             -- ((0.73.77, I7: S12) the host's Spaceport: its row, a retake due)
         if SPORT and SPORT.fromHost then
             local okS, errS = pcall(SPORT.fromHost, short(f[2], 400))
@@ -5324,6 +5404,17 @@ hudCallout = function(text, sub, big)
     rawCallout(text, sub, big)
     if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
 end
+-- ((0.74.0) a subtitle line of the host's round logic goes to every joiner too, "sb", as a callout's "co"; SUB.sayHere never)
+if SUB and SUB.say then
+    local rawSay = SUB.say
+    SUB.say = function(speaker, text, secs)
+        local ok = rawSay(speaker, text, secs)
+        if ok and COOP.host() and M.mirror > 0 and not M.noMirror then
+            send(true, "sb", tostring(speaker or ""):sub(1, 32), tostring(text or ""):sub(1, 160), string.format("%.1f", tonumber(secs) or 0))
+        end
+        return ok
+    end
+end
 local rawAddCredits = addCredits
 -- (a round's bonus while you're DOWN, sv_down.lua: paid unless [coop.revive] down_round_bonus is off)
 function M.noDownBonus()
@@ -5331,6 +5422,7 @@ function M.noDownBonus()
     return DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true and type(rv) == "table" and rv.down_round_bonus == false
 end
 addCredits = function(n, why)
+    if M.ownPay then return rawAddCredits(n, why) end   -- ((0.74.0) COOP.payOwn: this game's own, whole, never sent)
     local bonus = M.mirror > 0 and type(why) == "string" and not why:find(" down %(") and n > 0
     -- ((0.73.78, economy C3) a special's pay split: the host pays and sends each player's share, so every game pays the
     -- same, the joiners from "cr" as before; specialPay (sv_ai.lua) shows the same on the special's callout)

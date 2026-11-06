@@ -1,4 +1,4 @@
--- sv_sky.lua: the sky Survival changes (CFG.sky; tools/re/FISHING.md 5): the day-night arc's owner (the arc comes later).
+-- sv_sky.lua: the sky Survival changes (CFG.sky; tools/re/FISHING.md 5): the day-night arc's owner (CFG.sky.arc, below).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local.
 --
@@ -13,7 +13,8 @@
 -- restore (liveObj on each), never kept between ticks. The level torn down (sv_core.lua levelGate) drops the originals
 -- untouched; a custom sun left on then is put back in the next level (SKY.pending, SKY.idleTick from sv_main.lua).
 --
---   SKY.apply(v, why)    writes sky values v (each field optional), returns how many were written:
+--   SKY.apply(v, why, opts)  writes sky values v (each field optional), returns how many were written (opts.V: a view
+--                        to write on, else found afresh; opts.quiet: no line a value, only what failed and why):
 --       v.sun = { el =, az =, factor =, rgb = { r, g, b }, disc = }   elevation, azimuth (a compass bearing, east 90)
 --       v.custom = true      the sun (and v.moon's spot) through the custom sun API too; false: the custom sun off
 --       v.copies = false     not into the renderer's working copies (default: in)
@@ -25,8 +26,10 @@
 --       v.mpc = { emissive =, vfx_ev =, vfx_amb = }
 --   SKY.restore(why)     every value Survival changed put back: how many, how many read back as they were
 --   SKY.read(V)          every value it can see: { keys = { key, ... }, val = { [key] = value }, ro = { [key] = true } }
---   SKY.view()           the level's sky objects, found afresh
--- VALKA's red sky (sv_hud.lua hudRed / RED) is hers: the sky test waits while it's on.
+--   SKY.view()           the level's sky objects, found afresh; SKY.viewCached(now, s) the last one while each of its
+--                        objects is live (liveObj) and it's under s old
+-- VALKA's red sky (sv_hud.lua hudRed / RED) is hers: the sky test waits while it's on, the arc leaves the colours to it.
+-- The day-night arc (SKY.arc*, below) GONE FISHIN' starts: its round F kept in RUN.arcF on every game.
 SKY = { orig = {}, order = {}, pending = nil, idleAt = 0, idleTries = 0 }
 do
 -- an FSkyParams field: the short name in a key -> its path in the struct
@@ -374,12 +377,16 @@ local function writeKey(V, k, value)
 end
 SKY.writeKey = writeKey
 
-function SKY.apply(v, why)
+function SKY.apply(v, why, opts)
     why = tostring(why or "?")
+    opts = opts or {}
     if type(v) ~= "table" then return 0 end
     if levelTorn and levelTorn() then log("sky: " .. why .. ": the level is going: nothing written"); return 0 end
-    local V = SKY.view()
-    if not V.actor then log("sky: " .. why .. ": no sky actor found" .. (V.held and (" (walks held: " .. V.held .. ")") or "") .. ": nothing written"); return 0 end
+    local V = opts.V or SKY.view()
+    if not V.actor then
+        if not opts.quiet then log("sky: " .. why .. ": no sky actor found" .. (V.held and (" (walks held: " .. V.held .. ")") or "") .. ": nothing written") end
+        return 0
+    end
     local want = wanted(V, v)
     local keys = {}
     for k in pairs(want) do keys[#keys + 1] = k end
@@ -392,35 +399,45 @@ function SKY.apply(v, why)
     end
     local written = {}
     for _, k in ipairs(keys) do if text[k] then written[#written + 1] = k end end
-    SKY.logGroups("sky: " .. why .. ": wrote", written, function(k) return text[k] end)
+    if not opts.quiet then SKY.logGroups("sky: " .. why .. ": wrote", written, function(k) return text[k] end) end
     -- the custom sun / moon (the API's own state: its use flags are kept as the originals)
     local s, m = v.sun or {}, v.moon or {}
     if v.custom == true and s.el and s.az and V.cdo and V.pc then
         writeKey(V, "custom|sun", true)                      -- (the original kept; the position call sets it anyway)
         local okC, errC = pcall(function() V.cdo:SetCustomSunPosition(V.pc, s.el, s.az, true) end)
-        log(string.format("sky: %s: SetCustomSunPosition(%s, %s, true): %s", why, fmt(s.el), fmt(s.az), okC and "called" or ("failed: " .. tostring(errC))))
+        if not (opts.quiet and okC) then
+            log(string.format("sky: %s: SetCustomSunPosition(%s, %s, true): %s", why, fmt(s.el), fmt(s.az), okC and "called" or ("failed: " .. tostring(errC))))
+        end
         if okC then done = done + 1 end
         if m.el and m.az then
             writeKey(V, "custom|moon", true)
             local okM, errM = pcall(function() V.cdo:SetCustomMoonPosition(V.pc, m.el, m.az, true) end)
-            log(string.format("sky: %s: SetCustomMoonPosition(%s, %s, true): %s", why, fmt(m.el), fmt(m.az), okM and "called" or ("failed: " .. tostring(errM))))
+            if not (opts.quiet and okM) then
+                log(string.format("sky: %s: SetCustomMoonPosition(%s, %s, true): %s", why, fmt(m.el), fmt(m.az), okM and "called" or ("failed: " .. tostring(errM))))
+            end
         end
     elseif v.custom == false and V.cdo and V.pc then
         local old, ok = writeKey(V, "custom|sun", false)
-        log(string.format("sky: %s: the custom sun off (it was %s): %s", why, fmt(old), ok and "done" or "FAILED"))
         local oldM, okM = writeKey(V, "custom|moon", false)
-        log(string.format("sky: %s: the custom moon off (it was %s): %s", why, fmt(oldM), okM and "done" or "FAILED"))
-    elseif v.custom ~= nil then
+        if not (opts.quiet and ok and okM) then
+            log(string.format("sky: %s: the custom sun off (it was %s): %s", why, fmt(old), ok and "done" or "FAILED"))
+            log(string.format("sky: %s: the custom moon off (it was %s): %s", why, fmt(oldM), okM and "done" or "FAILED"))
+        end
+    elseif v.custom ~= nil and not opts.quiet then
         log(string.format("sky: %s: the custom sun NOT set: %s", why, not V.cdo and "no Default__CloudlyActor" or "no player controller"))
     end
-    if (s.el or s.az) and V.cdo then
+    if (s.el or s.az) and V.cdo and opts.shadows ~= false then
         local okU = pcall(function() V.cdo:ForceUpdateShadows(8) end)
-        log("sky: " .. why .. ": ForceUpdateShadows(8) " .. (okU and "called" or "failed"))
+        if not (opts.quiet and okU) then log("sky: " .. why .. ": ForceUpdateShadows(8) " .. (okU and "called" or "failed")) end
     end
-    log(string.format("sky: %s: %d values written%s (sky actor %s by %s; %d renderer(s), %d sky light(s), %d post-process volume(s)%s)",
-        why, done, #failed > 0 and string.format(", %d NOT: %s", #failed, table.concat(failed, ", ")) or "", short(V.actor),
-        tostring(V.actorBy), #V.rend, #V.ctrl, #V.ppv, V.held and (", walks held: " .. V.held) or ""))
-    return done
+    local fkey = table.concat(failed, ",")
+    if not opts.quiet or (#failed > 0 and fkey ~= SKY.failedKey) then
+        log(string.format("sky: %s: %d values written%s (sky actor %s by %s; %d renderer(s), %d sky light(s), %d post-process volume(s)%s)",
+            why, done, #failed > 0 and string.format(", %d NOT: %s", #failed, table.concat(failed, ", ")) or "", short(V.actor),
+            tostring(V.actorBy), #V.rend, #V.ctrl, #V.ppv, V.held and (", walks held: " .. V.held) or ""))
+    end
+    if opts.quiet then SKY.failedKey = fkey end
+    return done, failed
 end
 
 -- the originals' custom flags, for a level torn down with them changed: put back in the next one (SKY.idleTick)
@@ -500,6 +517,420 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the sky"] = function()
         if #SKY.order > 0 then SKY.pending = pendingFrom() end
         SKY.orig, SKY.order = {}, {}
+    end
+end
+end
+
+-- The level's sky objects kept between applies (the arc writes every CFG.sky.arc.apply_s: four walks each was too many),
+-- each checked live (liveObj) before it's used again, found afresh past maxAge or when any is gone
+do
+local VC = { V = nil, at = -1e9 }
+local function live(o) return o ~= nil and liveObj(o) end
+local function viewLive(V)
+    if not (V and V.actor and live(V.actor)) then return false end
+    for _, k in ipairs({ "sun", "asset", "interp", "cskyl", "pc", "env", "vfx" }) do
+        if V[k] ~= nil and not live(V[k]) then return false end
+    end
+    for _, list in ipairs({ V.rend, V.ctrl, V.ppv }) do
+        for _, x in ipairs(list or {}) do if not live(x.obj) then return false end end
+    end
+    return true
+end
+function SKY.viewCached(now, maxAge)
+    if VC.V and now - VC.at < (maxAge or 30) and now >= VC.at and viewLive(VC.V) then return VC.V end
+    VC.V, VC.at = SKY.view(), now
+    return VC.V
+end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the sky's view"] = function() VC.V, VC.at = nil, -1e9 end end
+end
+
+---------------------------------------------------------------------------------------------------- the day-night arc
+-- (0.74.0; FISHING_ROUND_PLAN.md 0, tools/re/FISHING.md 5) GONE FISHIN' (round F, RUN.arcF) starts the run's sunset:
+--   k = round - F   0 the stock sky; 1-5 the sun sinks a step a round (sink_el / sink_az); 6 sunset (THE FESTIVAL);
+--                   7 night (the light at the moon's spot, the moon on); 8 dawn in the east, rising over
+--                   sunrise_rounds rounds; from 8 + sunrise_rounds midday, held for the rest of the run
+-- A round drifts from its own sky toward the next one's (within_x of the step over round_s of its fight; a step that
+-- swaps the sun for the moon or back only swap_within_x, so the swap comes at its darkest point in the break, the light
+-- at dark_factor then), and the break finishes the step by the next round's start. Brightness (the light's factor, the
+-- city's glow) moves in log space, the sun's bearing the short way round. Every game works out the same sky from the
+-- round, its state, its seconds and F (a joiner's from the host's "rnd", F from its field 15): a new level, a late
+-- joiner or a step of the test key blends in over blend_s. Written every apply_s on the kept view (SKY.viewCached), the
+-- MPC values every tick (the airfield's STORE may switch the graphics row back); the colours are left alone while
+-- VALKA's red sky is on (her red layers on the arc and fades back to it). Everything the arc changed is put back at the
+-- run's end (sv_main.lua runLeft: SKY.restore), at a restart (SKY.arcReset) and when a run has no F any more; a level
+-- torn down drops it untouched (LEVEL_DROPS).
+--   SKY.arcF()             the run's F, or nil
+--   SKY.arcSet(F, why)     F set (GONE FISHIN''s start on the host; a joiner from "rnd"; the test keys)
+--   SKY.arcAnchor(k, base) the sky at the start of round F + k (base: the stock sky's numbers)
+--   SKY.arcAt(k, u, base)  the sky u (0-1) of the way from round F + k's to F + k + 1's
+--   SKY.arcHoldsValka(r)   VALKA can't come in round r: from GONE FISHIN' to the arc's midday (valka_gate)
+--   SKY.arcEnd()           the last round of the arc (k): the round before midday is held
+--   SKY.arcTick(now)       every tick of a run, every game (sv_main.lua probeTickB)
+--   SKY.arcReset(why)      put back now and forgotten (a restart, the run's end)
+ARC = { on = false, base = nil, last = nil, roundAt = {}, said = {} }
+do
+local FIELDS = { "el", "az", "factor", "r", "g", "b", "disc", "moon", "mel", "maz", "stars", "ex_min", "ex_max", "ex_bias",
+                 "sl_x", "sl_r", "sl_g", "sl_b", "em", "vfx" }
+local LOG_FIELDS = { factor = true, em = true }        -- (brightness: log space)
+local MODE_FIELDS = { el = true, az = true, factor = true, r = true, g = true, b = true, disc = true, moon = true,
+                      mel = true, maz = true }
+local function acfg() return (CFG.sky or {}).arc or {} end
+local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local function lerp(a, b, t) return a + (b - a) * t end
+local function lerpLog(a, b, t)
+    if a > 0 and b > 0 then return 10 ^ lerp(math.log(a, 10), math.log(b, 10), t) end
+    return lerp(a, b, t)
+end
+local function lerpAz(a, b, t)
+    local d = ((b - a + 180) % 360) - 180
+    local x = a + d * t
+    x = ((x + 180) % 360) - 180
+    if x == -180 and b > 0 then x = 180 end
+    return x
+end
+local function copy(s) local t = {}; for k, v in pairs(s) do t[k] = v end; return t end
+local function trip(t, d) t = type(t) == "table" and t or d; return n(t[1], d[1]), n(t[2], d[2]), n(t[3], d[3]) end
+
+function SKY.arcF()
+    local F = RUN and RUN.arcF
+    if type(F) == "number" and F >= 1 and F == math.floor(F) then return F end
+    return nil
+end
+function SKY.arcEnd() return 8 + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
+function SKY.arcSet(F, why)
+    F = tonumber(F)
+    if not (RUN and F and F >= 1) then return false end
+    F = math.floor(F)
+    if RUN.arcF == F then return false end
+    local was = RUN.arcF
+    RUN.arcF, RUN.dirty = F, true
+    if ARC.on then ARC.blendFrom, ARC.blendAt = ARC.last and copy(ARC.last) or nil, nil end   -- (a step: blended in)
+    log(string.format("sky: arc: GONE FISHIN' at round %d%s (%s): the festival's round %d, midday from round %d", F,
+        was and string.format(" (was %d)", was) or "", tostring(why or "?"), F + math.floor(n((CFG.specials.festival or {}).round_after, 6)),
+        F + SKY.arcEnd() + 1))
+    return true
+end
+function SKY.arcHoldsValka(round)
+    local c = acfg()
+    if c.valka_gate == false then return false end
+    local F = SKY.arcF()
+    round = tonumber(round)
+    if not (F and round) then return false end
+    local last = (c.enabled ~= false and (CFG.sky or {}).enabled ~= false) and SKY.arcEnd()
+        or math.floor(n((CFG.specials.festival or {}).round_after, 6))
+    return round >= F and round <= F + last
+end
+
+-- The stock sky's numbers: the level's own (the stock asset's params, never written; the light, the sky lights, the
+-- exposure and the MPCs as they were before Survival changed them: SKY.orig), else CFG.sky.arc.stock (Mission 4's)
+function SKY.arcBase(V)
+    local st = acfg().stock or {}
+    local b = { el = n(st.el, 15), az = n(st.az, 142), factor = n(st.factor, 120000), r = 1, g = 1, b = 1, disc = n(st.disc, 0.5),
+                moon = 0, mel = n(st.el, 15), maz = n(st.az, 142), stars = 0, sl_x = 1, sl_r = 1, sl_g = 1, sl_b = 1,
+                em = n(st.emissive, 1), vfx = n(st.vfx_ev, 11), from = "CFG.sky.arc.stock" }
+    b.ex_min, b.ex_max, b.ex_bias = trip(st.exposure, { 13, 14, 0 })
+    if not V then return b end
+    local function rd(k)
+        if SKY.orig[k] ~= nil then return SKY.orig[k] end
+        local get = SKY.slot(V, k)
+        return get and get() or nil
+    end
+    local got = 0
+    local function take(field, key, f)
+        local v = rd(key)
+        if type(v) == "boolean" then v = v and 1 or 0 end
+        if type(v) == "number" then b[field] = f and f(v) or v; got = got + 1 end
+    end
+    if V.asset then
+        take("el", "asset|sun_el"); take("az", "asset|sun_az"); take("factor", "asset|sun_factor"); take("disc", "asset|sun_disc")
+        take("r", "asset|sun_r"); take("g", "asset|sun_g"); take("b", "asset|sun_b")
+        take("moon", "asset|moon_on"); take("mel", "asset|moon_el"); take("maz", "asset|moon_az")
+        b.stars_on = rd("asset|stars_on")
+        b.st = {}
+        for _, f in ipairs({ "stars_int", "stars_bg", "stars_radius", "stars_frac", "stars_rx", "stars_ry", "stars_rz", "stars_mask" }) do
+            local v = rd("asset|" .. f)
+            if type(v) == "number" then b.st[f] = v end
+        end
+    end
+    local c1 = V.ctrl and V.ctrl[1]
+    if c1 then
+        local function byte(v) return math.max(0, math.min(1, v / 255)) end
+        take("sl_r", "skyl|" .. c1.name .. "|r", byte); take("sl_g", "skyl|" .. c1.name .. "|g", byte); take("sl_b", "skyl|" .. c1.name .. "|b", byte)
+    end
+    for _, p in ipairs(V.ppv or {}) do
+        local on = false
+        pcall(function() on = p.obj.Settings.bOverride_AutoExposureMinBrightness == true end)
+        if on and not b.exFrom then
+            b.exFrom = p.name
+            take("ex_min", "ppv|" .. p.name .. "|min"); take("ex_max", "ppv|" .. p.name .. "|max"); take("ex_bias", "ppv|" .. p.name .. "|bias")
+        end
+    end
+    take("em", "mpc|env|Ctrl_Scene_EmissiveScale"); take("vfx", "mpc|vfx|VFXEmissiveEV")
+    if got > 0 then b.from = string.format("the level's (%d values)", got) end
+    return b
+end
+
+-- the sky at the start of round F + k, on the stock sky `base`
+function SKY.arcAnchor(k, base)
+    local c, ng = acfg(), (CFG.sky or {}).night or {}
+    local a = copy(base)
+    a.mode, a.set_el, a.stars = "sun", nil, 0
+    local R = math.max(1, math.floor(n(c.sunrise_rounds, 4)))
+    local function exp(t) a.ex_min, a.ex_max, a.ex_bias = trip(t, { base.ex_min, base.ex_max, base.ex_bias }) end
+    if k <= 0 then return a end
+    local sinkEl, sinkAz = c.sink_el or {}, c.sink_az or {}
+    if k <= 5 then
+        a.el, a.az = n(sinkEl[k], base.el), n(sinkAz[k], base.az)
+        local dx1, dx2, dx3 = trip(c.dusk_exposure, { 11, 14, -0.5 })
+        local t = k / 5
+        a.ex_min, a.ex_max, a.ex_bias = lerp(base.ex_min, dx1, t), lerp(base.ex_max, dx2, t), lerp(base.ex_bias, dx3, t)
+        a.stars = 1
+    elseif k == 6 then
+        a.el, a.az, a.set_el = n(c.sunset_el, 1), n(c.sunset_az, -105), n(c.set_el, -3)
+        exp(c.sunset_exposure)
+        a.sl_x, a.em, a.vfx, a.stars = n(c.sunset_skylight, 0.5), n(c.sunset_emissive, 100), n(c.sunset_vfx_ev, 8), 1
+    elseif k == 7 then
+        a.mode = "moon"
+        a.el, a.az, a.factor = n(ng.sun_el, 35), n(ng.sun_az, -130), n(ng.factor, 0.5)
+        a.r, a.g, a.b = trip(ng.rgb, { 0.89, 0.96, 1 })
+        a.disc, a.moon, a.mel, a.maz = n(ng.sun_disc, 0.57), 1, n(ng.moon_el, 35), n(ng.moon_az, -130)
+        exp(ng.exposure)
+        a.sl_x = n(ng.skylight_x, 0.1)
+        a.sl_r, a.sl_g, a.sl_b = trip(ng.skylight_rgb, { 0.55, 0.65, 1 })
+        a.em, a.vfx, a.stars = n(ng.emissive, 10000), n(ng.vfx_ev, -2), 1
+    else
+        local dawn = copy(base)
+        dawn.el, dawn.az = n(c.dawn_el, -4), n(c.dawn_az, 105)
+        dawn.ex_min, dawn.ex_max, dawn.ex_bias = trip(c.dawn_exposure, { 4, 14, -2 })
+        dawn.sl_x, dawn.em, dawn.vfx = n(c.dawn_skylight, 0.3), n(c.dawn_emissive, 10000), n(c.dawn_vfx_ev, 5)
+        local mid = copy(base)
+        mid.el, mid.az = n(c.midday_el, 52.9), n(c.midday_az, 180)
+        mid.ex_min, mid.ex_max, mid.ex_bias = trip(c.day_exposure, { 13, 14, 0 })
+        local t = math.min(1, (k - 8) / R)
+        for _, f in ipairs(FIELDS) do
+            local x, y = dawn[f], mid[f]
+            if type(x) == "number" and type(y) == "number" then
+                if f == "az" then a[f] = lerpAz(x, y, t) elseif LOG_FIELDS[f] then a[f] = lerpLog(x, y, t) else a[f] = lerp(x, y, t) end
+            end
+        end
+        a.stars = t < 1 and 1 or 0                    -- (the stars at their stock again with midday: unseen by day)
+    end
+    return a
+end
+
+-- u (0-1) of the way from round F + k's sky to F + k + 1's; a swap of the sun for the moon (or back) goes through the
+-- dark in the step's middle: the light at dark_factor (the sunset's sun at set_el first), the swap at u 0.5
+function SKY.arcAt(k, u, base)
+    local A, B = SKY.arcAnchor(k, base), SKY.arcAnchor(k + 1, base)
+    u = math.max(0, math.min(1, u))
+    local s = { mode = A.mode, k = k, u = u }
+    for _, f in ipairs(FIELDS) do
+        local x, y = A[f], B[f]
+        if type(x) == "number" and type(y) == "number" then
+            if f == "az" or f == "maz" then s[f] = lerpAz(x, y, u) elseif LOG_FIELDS[f] then s[f] = lerpLog(x, y, u) else s[f] = lerp(x, y, u) end
+        end
+    end
+    if A.mode ~= B.mode then
+        local dark = math.max(1e-3, n(acfg().dark_factor, 0.25))
+        local from, to, t
+        if u < 0.5 then
+            from, to, t = A, copy(A), u / 0.5
+            to.factor = dark
+            if A.set_el then to.el = A.set_el end
+            s.mode = A.mode
+        else
+            from, to, t = copy(B), B, (u - 0.5) / 0.5
+            from.factor = dark
+            s.mode = B.mode
+        end
+        for f in pairs(MODE_FIELDS) do
+            local x, y = from[f], to[f]
+            if type(x) == "number" and type(y) == "number" then
+                if f == "az" or f == "maz" then s[f] = lerpAz(x, y, t) elseif LOG_FIELDS[f] then s[f] = lerpLog(x, y, t) else s[f] = lerp(x, y, t) end
+            end
+        end
+    elseif A.set_el then
+        s.el = lerp(A.el, A.set_el, u)                  -- (the sunset round's sun sinks to set_el)
+    end
+    return s
+end
+
+-- the sky struct s as SKY.apply's v (colours left out with VALKA's red sky on)
+local function asV(s, base, red)
+    local c = acfg()
+    local st, mx = base.st or {}, (CFG.sky or {}).stars or {}
+    local v = { sun = { el = s.el, az = s.az, factor = s.factor, disc = s.disc } }
+    if not red then v.sun.rgb = { s.r, s.g, s.b } end
+    v.moon = { enable = s.moon >= 0.5, el = s.mel, az = s.maz }
+    if s.stars > 0 or base.stars_on ~= nil then
+        local function sv(f, m) local b0 = st[f]; if b0 == nil then return s.stars >= 0.5 and m or nil end; return lerp(b0, m, s.stars) end
+        local rot = type(mx.rotation) == "table" and mx.rotation or { 2.578, 0, 0 }
+        v.stars = { enable = (s.stars > 0) or (base.stars_on == true) or nil,
+                    intensity = sv("stars_int", n(mx.intensity, 7)), background = sv("stars_bg", n(mx.background, 22)),
+                    radius = sv("stars_radius", n(mx.radius, 2.5)), fraction = sv("stars_frac", n(mx.fraction, 0.73)),
+                    rotation = { sv("stars_rx", n(rot[1], 2.578)), sv("stars_ry", n(rot[2], 0)), sv("stars_rz", n(rot[3], 0)) },
+                    mask_start = sv("stars_mask", n(mx.mask_start, 0.263)) }
+        if s.stars <= 0 and base.stars_on ~= nil then v.stars.enable = base.stars_on end
+    end
+    v.exposure = { min = s.ex_min, max = s.ex_max, bias = s.ex_bias }
+    v.skylight = { x = s.sl_x }
+    if not red then v.skylight.rgb = { s.sl_r, s.sl_g, s.sl_b } end
+    v.mpc = { emissive = s.em, vfx_ev = s.vfx }
+    if c.path == "custom" then v.custom = true end
+    return v
+end
+SKY.arcV = asV
+
+-- where the arc is now: k (round - F), u (0-1 of the way to the next round's sky) and why
+local function arcPlace(now, F)
+    local c = acfg()
+    local r, st = D and tonumber(D.round) or 0, D and D.state
+    local k = r - F
+    if k < 0 then return 0, 0, "before GONE FISHIN'" end
+    local swap = SKY.arcAnchor(k, ARC.base).mode ~= SKY.arcAnchor(k + 1, ARC.base).mode
+    local cap = swap and n(c.swap_within_x, 0.45) or n(c.within_x, 0.75)
+    if st == "wait" then
+        local b = ARC.brk
+        if not (b and b.round == r) then
+            local at0 = ARC.roundAt[r]
+            local u0 = at0 and cap * math.min(1, math.max(0, now - at0) / math.max(1, n(c.round_s, 240))) or 0
+            b = { round = r, at = now, u0 = u0 }
+            ARC.brk = b
+        end
+        local due = D and tonumber(D.at) or (now + 20)
+        local span = math.max(1, due - b.at - 1)
+        local t = math.min(1, math.max(0, now - b.at) / span)
+        if swap and b.u0 < 0.5 then                     -- (the swap, the darkest point, in the break's middle)
+            if t < 0.5 then return k, b.u0 + (0.5 - b.u0) * t / 0.5, "the break, darkening" end
+            return k, 0.5 + 0.5 * (t - 0.5) / 0.5, "the break, lightening"
+        end
+        return k, b.u0 + (1 - b.u0) * t, "the break"
+    end
+    ARC.roundAt[r] = ARC.roundAt[r] or now
+    return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240))), "the fight"
+end
+
+local MPC_KEYS = { em = "mpc|env|Ctrl_Scene_EmissiveScale", vfx = "mpc|vfx|VFXEmissiveEV" }
+local mpcV = { }
+-- the MPC values written now (every tick: the game may put them back), on a small view of their own (no walks)
+local function mpcWrite(s)
+    local c = CFG.sky or {}
+    if not liveObj(survivalPC) then return 0 end
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    if not (kml and liveObj(kml)) then return 0 end
+    if not (mpcV.env and liveObj(mpcV.env)) and type(c.mpc_env) == "string" then mpcV.env = loadObject(c.mpc_env) end
+    if not (mpcV.vfx and liveObj(mpcV.vfx)) and type(c.mpc_vfx) == "string" then mpcV.vfx = loadObject(c.mpc_vfx) end
+    local V = { kml = kml, pc = survivalPC, env = mpcV.env, vfx = mpcV.vfx }
+    local nW = 0
+    for f, k in pairs(MPC_KEYS) do
+        if type(s[f]) == "number" then
+            local _, ok = SKY.writeKey(V, k, s[f])
+            if ok then nW = nW + 1 end
+        end
+    end
+    return nW
+end
+
+local function fmt1(v) return type(v) == "number" and string.format("%.1f", v) or tostring(v) end
+local function arcLine(s, why)
+    return string.format("k %d, u %.2f (%s): %s %s / %s, factor %s, exposure %s / %s / %s, sky light x%.2f, glow %s, EV %s, stars %.0f",
+        s.k, s.u, why, s.mode == "moon" and "the light at the moon" or "sun", fmt1(s.el), fmt1(s.az), string.format("%.4g", s.factor),
+        fmt1(s.ex_min), fmt1(s.ex_max), fmt1(s.ex_bias), s.sl_x, string.format("%.4g", s.em), fmt1(s.vfx), s.stars)
+end
+
+function SKY.arcReset(why)
+    local was = ARC.on
+    ARC.on, ARC.base, ARC.last, ARC.roundAt, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.nextApply = false, nil, nil, {}, nil, nil, nil, nil
+    ARC.lastK, ARC.mode = nil, nil
+    mpcV.env, mpcV.vfx = nil, nil
+    if was and #SKY.order > 0 then
+        local okR, put = pcall(SKY.restore, "the arc's over (" .. tostring(why) .. ")")
+        log(string.format("sky: arc: over (%s): %s", tostring(why), okR and (tostring(put) .. " values put back") or ("restore error " .. tostring(put))))
+    end
+end
+
+function SKY.arcTick(now)
+    local c, sc = acfg(), CFG.sky or {}
+    if sc.enabled == false or c.enabled == false or not D then return end
+    if levelTorn and levelTorn() then return end
+    local F = SKY.arcF()
+    if not F then
+        if ARC.on then SKY.arcReset("the run has no GONE FISHIN' now") end
+        return
+    end
+    -- TEST ONLY BEGIN (the sky test's steps 2-4 write the sky themselves: the arc waits)
+    if SKY.test and SKY.test.step and SKY.test.step >= 2 and SKY.test.step <= 4 then return end
+    -- TEST ONLY END
+    if walkHold and walkHold() then return end
+    local first = not ARC.on
+    if first then
+        ARC.on, ARC.roundAt, ARC.brk = true, {}, nil
+        ARC.nextApply = 0
+    end
+    if not ARC.base then
+        local V = SKY.viewCached(now, 30)
+        if not V.actor then
+            if not ARC.noActorSaid then ARC.noActorSaid = true; log("sky: arc: no sky actor found yet: waiting") end
+            return
+        end
+        ARC.base = SKY.arcBase(V)
+        log(string.format("sky: arc: the stock sky from %s: sun %s / %s, factor %s, exposure %s / %s / %s, glow %s, EV %s; "
+            .. "written through %s", ARC.base.from, fmt1(ARC.base.el), fmt1(ARC.base.az), string.format("%.4g", ARC.base.factor),
+            fmt1(ARC.base.ex_min), fmt1(ARC.base.ex_max), fmt1(ARC.base.ex_bias), string.format("%.4g", ARC.base.em),
+            fmt1(ARC.base.vfx), c.path == "custom" and "Cloudly's custom sun and the renderer's copies"
+                or "the renderer's copies and the light's rotation"))
+        if first then ARC.blendFrom, ARC.blendAt = copy(ARC.base), nil end
+    end
+    local k, u, why = arcPlace(now, F)
+    if k > SKY.arcEnd() + 1 then k, u, why = SKY.arcEnd() + 1, 0, "midday, held" end
+    local s = SKY.arcAt(k, u, ARC.base)
+    -- (a blend in: a new level, a late joiner, a step of the test key)
+    if ARC.blendFrom then
+        ARC.blendAt = ARC.blendAt or now
+        local t = math.min(1, (now - ARC.blendAt) / math.max(0.1, n(c.blend_s, 5)))
+        if t >= 1 then ARC.blendFrom, ARC.blendAt = nil, nil
+        else
+            local b = ARC.blendFrom
+            for _, f in ipairs(FIELDS) do
+                if not (b.mode and b.mode ~= s.mode and MODE_FIELDS[f]) and type(b[f]) == "number" and type(s[f]) == "number" then
+                    if f == "az" or f == "maz" then s[f] = lerpAz(b[f], s[f], t) elseif LOG_FIELDS[f] then s[f] = lerpLog(b[f], s[f], t)
+                    else s[f] = lerp(b[f], s[f], t) end
+                end
+            end
+            why = why .. string.format(", blending in %.0f%%", t * 100)
+        end
+    end
+    ARC.last = s
+    pcall(mpcWrite, s)                                    -- (every tick)
+    if ARC.mode ~= s.mode then
+        if ARC.mode then log(string.format("sky: arc: round %d: the %s swapped for the %s at the break's darkest point", D.round or 0,
+            ARC.mode == "moon" and "moon" or "sun", s.mode == "moon" and "moon" or "sun")) end
+        ARC.mode = s.mode
+    end
+    if now < (ARC.nextApply or 0) then return end
+    ARC.nextApply = now + math.max(0.25, n(c.apply_s, 2))
+    local V = SKY.viewCached(now, 30)
+    if not V.actor then return end
+    local red = RED and (RED.want or (tonumber(RED.k) or 0) > 0) or false
+    local shadows = not (ARC.shEl and math.abs(ARC.shEl - s.el) < 0.05 and math.abs(((ARC.shAz - s.az + 180) % 360) - 180) < 0.05)
+    if shadows then ARC.shEl, ARC.shAz = s.el, s.az end
+    local okA, nW, failed = pcall(SKY.apply, asV(s, ARC.base, red), "arc", { V = V, quiet = true, shadows = shadows })
+    if not okA then logOnce("sky arc apply", "sky: arc: write error " .. tostring(nW)); return end
+    if ARC.lastK ~= k or now >= (ARC.logAt or 0) then
+        ARC.logAt = now + 60
+        log(string.format("sky: arc: round %d (F+%d): %s; %d values written%s%s", D.round or 0, k, arcLine(s, why), nW or 0,
+            type(failed) == "table" and #failed > 0 and string.format(", %d not", #failed) or "", red and "; VALKA's red sky has the colours" or ""))
+        ARC.lastK = k
+    end
+end
+
+-- (the teardown gate's drop: the sky's objects and its originals are the level's; the arc's place comes again with the
+-- next level, blended in)
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["the sky's arc"] = function()
+        ARC.on, ARC.base, ARC.last, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.mode, ARC.lastK = false, nil, nil, nil, nil, nil, nil, nil
+        ARC.roundAt = {}
+        mpcV.env, mpcV.vfx = nil, nil
     end
 end
 end
@@ -742,4 +1173,19 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the sky test"] = function() T.step, T.readAt, T.base, T.wrote = 0, nil, nil, nil end
 end
 end
+-- TEST ONLY END
+
+-- TEST ONLY BEGIN
+-- Ctrl+PAGE_DOWN in a run (any game: each computes its own sky; a joiner's F comes back from the host's next "rnd"): the
+-- day-night arc one round on (F one less; none yet: from this round, F + 1 in), blended in over blend_s
+testKey("PAGE_DOWN", "sv_sky.lua's arc step", function()
+    if not (D and D.now and RUN) then log("test: Ctrl+PAGE_DOWN outside a Survival run"); return end
+    local F = SKY.arcF()
+    local to = F and (F - 1) or math.max(1, (D.round or 1) - 1)
+    if to < 1 then log("test: Ctrl+PAGE_DOWN: the arc can't step past round 1's start"); return end
+    SKY.arcSet(to, "test key Ctrl+PAGE_DOWN")
+    local k = (D.round or 0) - to
+    hudCallout("TEST: SKY ARC", string.format("ROUND %d IS F+%d", D.round or 0, k))
+    log(string.format("test: Ctrl+PAGE_DOWN, the arc stepped: F %s -> %d (round %d is F+%d)", tostring(F), to, D.round or 0, k))
+end)
 -- TEST ONLY END

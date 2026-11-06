@@ -43,7 +43,7 @@ function NotifyOnNewObject(cls, fn) notifies[cls] = notifies[cls] or {}; table.i
 function StaticFindObject(p) return statics[p] end
 function FindAllOf(cls) return all[cls] end
 function FindFirstOf(cls) local l = all[cls]; return l and l[1] end
-Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12" }
+Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12", PAGE_UP = "PAGE_UP", PAGE_DOWN = "PAGE_DOWN", HOME = "HOME" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -126,6 +126,7 @@ end
 COOP = { host = function() return false end, client = function() return false end,
          removeNow = function(u) removed[#removed + 1] = u; return 0 end }
 
+SPC.kinds = { spaceport = { ready = function() return true end } }   -- (THE FESTIVAL wraps its ready at load)
 part(MOD, "sv_festival.lua")
 local function press(k) assert(binds[k], "no bind for " .. k)(); KEYQ.drain() end
 local function tick(s) clock = clock + s; for _, t in ipairs(TEST_TICKS) do t.fn(clock) end end
@@ -231,6 +232,205 @@ tick(3)
 press("F12")
 LEVEL_DROPS["the festival"]("test"); LEVEL_DROPS["the festival test"]("test")
 check(FEST.sirenActor == nil and next(FEST.actors) == nil and T.state == "idle", "the level torn down: forgotten")
+
+print("the round: its round, readiness and pay")
+part(MOD, "sv_fishing.lua")
+part(MOD, "sv_subs.lua")
+part(MOD, "sv_sky.lua")
+levelGoing = function() return false end
+RUN = { arcF = 7 }
+check(FEST.roundIs(13) and not FEST.roundIs(12) and not FEST.roundIs(14), "THE FESTIVAL is F + 6 (round 13 after GONE FISHIN' in 7)")
+RUN = {}
+check(not FEST.roundIs(13), "no GONE FISHIN' this run: no festival")
+check(SPC.kinds.spaceport.ready(12) == true, "the Spaceport can come in round 12 with no festival due")
+RUN = { arcF = 7 }
+check(SPC.kinds.spaceport.ready(12) == false and SPC.kinds.spaceport.ready(11) == true, "not in the round before THE FESTIVAL (its retake would fall on it)")
+SPC.festRows = nil
+check(FEST.ready(13) == true and FEST.lightsReady() == false, "ready without the searchlights' rows (lights_required false)")
+C.lights_required = true
+check(FEST.ready(13) == false, "lights_required: not without them")
+SPC.festRows = { want = 5, have = 5, lost = {} }
+check(FEST.ready(13) == true and FEST.lightsReady() == true, "their rows in: ready, with searchlights")
+C.lights_required = false
+local fk, fb = FEST.killPay("SV_Unit_FestW")
+local mk, mb = FEST.killPay("SV_Unit_FestCM_S3")
+check(fk == "heavy" and fb == 400 and mk == "cruise missile" and mb == 150 and FEST.killPay("ERA_Unit_01_Dep_Air0") == nil,
+    "a Tu-160 pays pay_bomber, a cruise missile pay_missile, others their own")
+
+print("the round: the talk, the raid")
+local alive, queued, removedObj, paid, lbs = {}, {}, {}, {}, {}
+planes = {}
+local bombers = {}
+local lights = {}
+function SV_Spawn(...)
+    local unit, x, y, z, yaw = ...
+    spawns[#spawns + 1] = { unit = unit, x = x, y = y, z = z, yaw = yaw, su = spawningUnit, n = select("#", ...) }
+    local made = {}
+    local g = unit:match("^SV_Unit_Fest([NWS])$")
+    local nObj = (g and 4) or (unit:find("^SV_Unit_FestLight") and 2) or 4
+    for i = 1, nObj do
+        local o = obj("/Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. unit .. "_" .. i,
+            { HealthInternal = 250, loc = { X = (x or 0) + (i - 1) * 6000, Y = y or 0, Z = z or 230000 }, hits = {} })
+        function o:K2_GetActorLocation() return self.loc end
+        function o:TurnOff() self.off = true end
+        made[#made + 1] = o
+        for _, fn in ipairs(notifies["/Script/Live.LiveAIGameObject"] or {}) do fn(o) end
+        if not unit:find("^SV_Unit_FestLight") then planes[#planes + 1] = { obj = o, addr = o.addr, unit = unit, name = o.full } end
+    end
+    if g then bombers[g] = made end
+    if unit:find("^SV_Unit_FestLight") then lights[unit] = made; SPC.CLEAN_OBJ[unit] = made end
+    alive[unit] = #made
+    return #made
+end
+function SV_UnitAlive(u) return alive[u] or 0 end
+function queueEvent(at, name) queued[#queued + 1] = { at = at, name = name } end
+function addCredits(n, why) paid[#paid + 1] = { n = n, why = why } end
+specialPay = function(x) return x end
+LB = { special = function(k, won) lbs[#lbs + 1] = { k = k, won = won } end }
+ALIVE = { spawned = function() end }
+COOP.removeObj = function(o) removedObj[#removedObj + 1] = o; return true end
+CFG.airfield.enabled = true
+AF = { bomb = 0, down = false }
+RUN = { arcF = 7, fishKg = 712 }
+D = { now = 3000, round = 13, state = "spawning", up = {}, special = { kind = "festival", state = "pending" } }
+clock = 3000
+local s = D.special
+check(FEST.roundSpawn(3000) == true and s.state == "talk", "THE FESTIVAL: the talk first")
+local talk = {}
+for _, l in ipairs(SUB.q) do talk[#talk + 1] = l.who .. ": " .. l.text end
+check(#SUB.q == #C.text.talk and table.concat(talk, " | "):find("712 kilos you caught for us", 1, true), "the pilots thanked, GONE FISHIN''s 712 kg named")
+check(s.talkEnd - 3000 >= 25, string.format("about 30 s of it (%.0f s)", s.talkEnd - 3000))
+local longest = 0
+for _, k in ipairs({ "talk", "impact", "all_down", "timeout" }) do
+    for _, x in ipairs(C.text[k]) do local _, t = FISH.line(x, { kg = "9,999" }); longest = math.max(longest, #t) end
+end
+for _, k in ipairs({ "talk_nokg", "launch", "launch_again", "shot_first", "formation_down" }) do
+    local _, t = FISH.line(C.text[k], { dir = "north" }); longest = math.max(longest, #t)
+end
+check(longest <= 70, "the festival's lines under 70 characters (" .. longest .. ")")
+local function ftick(dt) clock = clock + dt; D.now = clock; FEST.roundTick(clock, s); SUB.hudTick(clock, true, false) end
+posts, stops, spawns = {}, {}, {}
+ftick(s.talkEnd - clock + 0.1)
+check(s.state == "raid" and posts[1] and posts[1].name == C.siren, "the raid: the air raid siren at the airfield")
+local formations = {}
+for _, sp in ipairs(spawns) do if sp.unit:match("^SV_Unit_Fest[NWS]$") then formations[#formations + 1] = sp end end
+check(#formations == 3 and formations[1].n == 1 and formations[1].x == nil, "three formations spawned with no pose (SV_Spawn(unit) alone)")
+check(lights.SV_Unit_FestLight_1 and lights.SV_Unit_FestLight_4, "the four searchlights (their rows in)")
+check(#queued == 3 and queued[1].name == "RE_SV_FestUp_N" and queued[1].at == clock + C.up_after_s, "each formation's orders (RE_SV_FestUp_<g>) up_after_s on")
+check(callouts[#callouts] == "AIR RAID / TU-160S FROM THE NORTH, WEST AND SOUTH", "the raid's callout")
+-- the north formation over its launch point: a salvo from SV_Unit_FestCM_N1
+local nx, ny = FEST.launchPoint("N")
+for _, p in ipairs(planes) do if p.unit == "SV_Unit_FestN" then p.at = { X = nx + 100000, Y = ny, Z = 230000 } end end
+spawns, events = {}, {}
+ftick(0.5)
+check(spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N1" and spawns[1].x == nx and spawns[1].y == ny and spawns[1].z == 200000 and spawns[1].yaw == 90,
+    "over its launch point: SV_Unit_FestCM_N1 there, 2 km up, yaw 90")
+check(#s.salvos == 1 and #s.salvos[1].ms == 4, "its four missiles recorded")
+local launchLine = false
+for _, l in ipairs(SUB.q) do if l.text:find("Missile launch from the north", 1, true) then launchLine = true end end
+check(launchLine or (SUB.cur and SUB.cur.text:find("north", 1, true)), "CONTROL calls the launch")
+ftick(0.5)
+check(events[1] == "RE_SV_FestCM_N1", "its flight record 0.5 s on")
+ftick(0.5)
+check(#s.salvos == 1, "no second salvo in launch_gap_s")
+-- an impact: missile 2 within 400 m of the runway
+local sl = s.salvos[1]
+local m2 = sl.ms[2]
+for _ = 1, 10 do ftick(0.5) end
+m2.obj.loc = { X = C.rwy[1] + 30000, Y = C.rwy[2], Z = 10000 }
+events = {}
+ftick(0.5)
+local mp = nil
+for _, p in ipairs(planes) do if p.obj == m2.obj then mp = p end end
+check(events[1] == "RE_SV_FestCMHit_N1_1" and mp.down and mp.cleaned and removedObj[1] == m2.obj, "on the runway: its impact record, off the list, down unpaid on every game")
+check(AF.bomb == C.impact_damage, "the airfield takes impact_damage (" .. AF.bomb .. ")")
+m2.obj.HealthInternal = 0
+-- missile 1 shot down: the first one's line
+sl.ms[1].obj.HealthInternal = 0
+ftick(0.5)
+check(s.missilesDown == 1, "one shot down counted")
+local shotLine = false
+for _, l in ipairs(SUB.q) do if l.text:find("grill is safe", 1, true) then shotLine = true end end
+if SUB.cur and SUB.cur.text:find("grill is safe", 1, true) then shotLine = true end
+check(shotLine, "SAL cheers the first one")
+check(s.bombers == 12 and s.inAir == 3, "the row's numbers: 12 bombers, 3 missiles still counted (one going down) (" .. tostring(s.bombers) .. ", " .. tostring(s.inAir) .. ")")
+check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  MISSILES IN THE AIR: 3", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
+-- the other two down: the salvo over, recycled 3 s on, its unit free again
+sl.ms[3].obj.HealthInternal, sl.ms[4].obj.HealthInternal = 0, 0
+recycled = {}
+ftick(0.5); ftick(0.5)
+check(sl.over and not sl.freed, "the salvo's over: its recycle 3 s on")
+alive.SV_Unit_FestCM_N1 = 0
+for _ = 1, 7 do ftick(0.5) end
+check(recycled[1] == "SV_Unit_FestCM_N1/1" and #s.salvos == 0, "SV_Recycle(SV_Unit_FestCM_N1, 1): free to spawn again")
+-- the west formation's clock: first_launch_w after the raid's start, its pass not seen
+spawns = {}
+for _, p in ipairs(planes) do if p.unit == "SV_Unit_FestN" then p.at = { X = nx, Y = ny - 900000, Z = 230000 } end end
+while clock < s.raidAt + C.first_launch_w + 0.5 do ftick(0.5) end
+local west = nil
+for _, sp in ipairs(spawns) do if sp.unit == "SV_Unit_FestCM_W1" then west = sp end end
+check(west and west.yaw == 0 and found("its clock (its pass not seen)"), "the west formation's salvo on its clock (yaw 0)")
+local south = nil
+for _, sp in ipairs(spawns) do if sp.unit == "SV_Unit_FestCM_S1" then south = sp end end
+check(south and south.yaw == -90, "the south formation's on its clock too (yaw -90)")
+-- the north formation again: its next unit (N2), N1's recycle still to come in this test's spawner
+alive.SV_Unit_FestCM_N1 = 4
+for _, p in ipairs(planes) do if p.unit == "SV_Unit_FestN" then p.at = { X = nx, Y = ny, Z = 230000 } end end
+spawns = {}
+while #spawns == 0 and clock < s.raidAt + 600 do ftick(0.5) end
+check(spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N2", "the next pass: the next unit (" .. tostring(spawns[1] and spawns[1].unit) .. ")")
+-- every bomber down, every missile down: the festival saved
+for u in pairs(alive) do alive[u] = 0 end
+for _, x in ipairs(s.salvos) do for _, m in ipairs(x.ms) do m.obj.HealthInternal = 0 end end
+local nStops = #stops
+for _ = 1, 4 do ftick(0.5) end
+check(s.state == "done" and FEST.busy(s) == false, "every bomber down and nothing in the air: done")
+local want = C.reward + C.reward_per_round * 13
+check(paid[#paid] and paid[#paid].n == want and paid[#paid].why == "the festival saved", "the reward (" .. want .. ")")
+check(#stops > nStops and FEST.sirenActor == nil, "the siren stopped")
+check(lights.SV_Unit_FestLight_2[1].off == true, "the searchlights turned off")
+check(lbs[#lbs].k == "festival" and lbs[#lbs].won == true, "the leaderboard's special: festival, won")
+check(found("formation is down") ~= nil, "each formation's end called")
+
+print("the round: the time limit")
+alive, planes, spawns = {}, {}, {}
+D = { now = 9000, round = 13, state = "spawning", up = {}, special = { kind = "festival", state = "pending" } }
+clock = 9000
+s = D.special
+COOP.host = function() return true end
+removed = {}
+FEST.roundSpawn(9000)
+ftick(s.talkEnd - clock + 0.1)
+while s.state == "raid" and clock < 9000 + 2000 do ftick(5) end
+check(s.state == "done" and found("the raid over (900 s: the time limit)") ~= nil, "time_limit_s: the raid ends whatever's left")
+check(#removed >= 12 and removed[1] == "SV_Unit_FestN", "the host takes the joiners' copies down first (COOP.removeNow)")
+check(lbs[#lbs].won == false, "not won")
+COOP.host = function() return false end
+
+print("the round: a joiner")
+COOP.client = function() return true end
+posts, stops = {}, {}
+D = { now = 9500, round = 13, state = "fighting", up = {}, hostSpecial = { kind = "festival", state = "talk" } }
+FEST.clientTick(9500)
+check(#posts == 0, "the host's talk: no siren yet")
+D.hostSpecial.state = "raid"
+FEST.clientTick(9501)
+check(#posts == 1 and posts[1].name == C.siren, "the host's raid: the siren here too")
+FISH.fromHost("fsx", { "fsx", "festival", "raid", "9", "3", "0" })
+check(FEST.clientRow(CFG.hud.text) == "THE FESTIVAL  BOMBERS: 9  MISSILES IN THE AIR: 3", "the host's row: " .. tostring(FEST.clientRow(CFG.hud.text)))
+lights.SV_Unit_FestLight_3[1].off = nil
+D.hostSpecial = { kind = "festival", state = "done" }
+FEST.clientTick(9502)
+check(#stops >= 1 and found("the host's raid is over: the siren off here"), "its end: the siren off here")
+check(found("searchlight copies off here") ~= nil and lights.SV_Unit_FestLight_3[1].off == true, "the searchlights' copies off here")
+COOP.client = function() return false end
+
+print("the test key: THE FESTIVAL now (Ctrl+PAGE_UP)")
+check(binds.PAGE_UP ~= nil, "Ctrl+PAGE_UP bound")
+RUN = {}
+D = { now = 100, round = 9, state = "wait", at = 130, up = {} }
+press("PAGE_UP")
+check(D.forceSpecial == "festival" and RUN.arcF == 4 and D.at == 103 and FEST.roundIs(10), "the next round (10) is THE FESTIVAL: F = 4, the sky at sunset")
 
 print("a release's copy")
 FEST, testKey, TEST_TICKS, TEST_KEYS = nil, nil, nil, nil

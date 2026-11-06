@@ -43,7 +43,7 @@ function NotifyOnNewObject(cls, fn) notifies[cls] = notifies[cls] or {}; table.i
 function StaticFindObject(p) return statics[p] end
 function FindAllOf(cls) return all[cls] end
 function FindFirstOf(cls) local l = all[cls]; return l and l[1] end
-Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12" }
+Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12", PAGE_DOWN = "PAGE_DOWN" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -260,6 +260,147 @@ tick(C.readback_s)
 LEVEL_DROPS["the sky test"]("test")
 check(SKY.test.step == 0 and SKY.test.readAt == nil, "the level torn down: the test forgotten")
 
+print("the day-night arc: its schedule")
+RED = { want = false, k = 0 }
+LEAVE.gone = false
+local A = CFG.sky.arc
+local base0 = SKY.arcBase(nil)
+local function near(a, b, e) return type(a) == "number" and math.abs(a - b) <= (e or 1e-6) end
+local a0, a1, a5 = SKY.arcAnchor(0, base0), SKY.arcAnchor(1, base0), SKY.arcAnchor(5, base0)
+check(a0.el == 15 and a0.az == 142 and a0.stars == 0, "F (GONE FISHIN'): the stock sky, 15 / 142")
+check(a1.el == 14 and a1.az == 160 and a1.stars == 1 and a5.el == 4 and a5.az == -120, "F+1 .. F+5: the sun sinks (14 / 160 .. 4 / -120), the stars at their maximum")
+check(near(a5.ex_min, 11) and near(a5.ex_bias, -0.5) and near(a1.ex_min, 12.6), "the exposure to dusk's 11 / 14 / -0.5 by F+5")
+local a6, a7, a8 = SKY.arcAnchor(6, base0), SKY.arcAnchor(7, base0), SKY.arcAnchor(8, base0)
+check(a6.el == 1 and a6.az == -105 and a6.set_el == -3 and a6.sl_x == 0.5 and a6.mode == "sun", "F+6 (THE FESTIVAL): sunset, 1 sinking to -3 / -105")
+check(a7.mode == "moon" and a7.el == 35 and a7.az == -130 and a7.factor == 0.5 and a7.moon == 1 and a7.em == 10000 and a7.vfx == -2
+    and near(a7.ex_min, 0.5) and a7.disc == 0.57, "F+7: night, the light at the moon (35 / -130, 0.5), the moon on, the city's glow")
+check(near(a8.el, -4) and near(a8.az, 105) and near(a8.factor, 120000, 1e-3) and a8.mode == "sun", "F+8: dawn in the east (-4 / 105)")
+local a9, a12, a30 = SKY.arcAnchor(9, base0), SKY.arcAnchor(12, base0), SKY.arcAnchor(30, base0)
+check(near(a9.el, 10.225) and near(a9.az, 123.75), string.format("F+9: rising (%.3f / %.2f)", a9.el, a9.az))
+check(a12.el == 52.9 and a12.az == 180 and a12.stars == 0 and near(a12.ex_min, 13) and a30.el == 52.9, "F+12 on: midday 52.9 / 180, held")
+check(SKY.arcEnd() == 11, "the arc's last round F+11 (sunrise over 4)")
+local m2 = SKY.arcAt(2, 0.5, base0)
+check(near(m2.el, 11) and near(m2.az, -170), string.format("F+2 half way to F+3: 11 / -170 the short way round (%.1f / %.1f)", m2.el, m2.az))
+local s25 = SKY.arcAt(6, 0.25, base0)
+check(s25.mode == "sun" and near(s25.el, -1) and near(s25.factor, 10 ^ ((math.log(120000, 10) + math.log(0.25, 10)) / 2), 1e-3),
+    string.format("sunset to night, a quarter way: the sun sinking (%.1f), its light down in log space (%.1f)", s25.el, s25.factor))
+local s50, s99 = SKY.arcAt(6, 0.5, base0), SKY.arcAt(6, 1, base0)
+check(s50.mode == "moon" and near(s50.factor, 0.25) and s50.el == 35 and s99.factor == 0.5, "the swap for the moon at the darkest point (0.25), then night's 0.5")
+local d75 = SKY.arcAt(7, 0.75, base0)
+check(d75.mode == "sun" and d75.el == -4 and near(d75.factor, 10 ^ ((math.log(0.25, 10) + math.log(120000, 10)) / 2), 1e-3), "night to dawn: the sun back after the dark")
+
+print("the day-night arc: VALKA's gate")
+RUN = { arcF = 7 }
+check(SKY.arcHoldsValka(7) and SKY.arcHoldsValka(13) and SKY.arcHoldsValka(18) and not SKY.arcHoldsValka(19) and not SKY.arcHoldsValka(6),
+    "no VALKA from GONE FISHIN' (7) to the arc's midday (18); from 19 she can come")
+check(not SKY.arcHoldsValka(nil), "a round not known (the bag's fill): no opinion")
+A.valka_gate = false
+check(not SKY.arcHoldsValka(10), "valka_gate off: no gate")
+A.valka_gate = true
+RUN = {}
+check(not SKY.arcHoldsValka(10), "no GONE FISHIN' this run: no gate")
+
+print("the day-night arc: on the level's sky")
+local base = state()
+RUN = { arcF = 7 }
+D = { now = 2000, round = 9, state = "fighting", up = {} }
+clock = 2000
+local function atick(dt) clock = clock + (dt or 0); D.now = clock; frame(); SKY.arcTick(clock) end
+atick(0)
+check(ARC.on and ARC.base and ARC.base.from:find("the level's", 1, true), "the stock sky read from the level: " .. tostring(ARC.base and ARC.base.from))
+check(found("sky: arc: the stock sky from the level's") and found("written through the renderer's copies and the light's rotation"), "logged, with the write path")
+for _ = 1, 4 do atick(2) end
+check(not ARC.blendFrom, "blended in over blend_s")
+for _ = 1, 120 do atick(2) end
+check(near(our.SunElevationAngleInDegrees, 10.5, 0.05) and near(ro.SunAzimuthAngleInDegrees, -165, 0.1) and near(sun.rot.Pitch, -10.5, 0.05),
+    string.format("F+2, 240 s in: three quarters of the way to F+3 (%.2f / %.2f, the light's pitch %.2f)", our.SunElevationAngleInDegrees,
+        ro.SunAzimuthAngleInDegrees, sun.rot.Pitch))
+check(asset.Data.SunElevationAngleInDegrees == 15, "the stock asset never written")
+mpcv[vfx.addr .. "VFXEmissiveEV"] = 99
+atick(0.25)
+check(mpcv[vfx.addr .. "VFXEmissiveEV"] == 11, "the MPCs written again the next tick (the game put one back)")
+D.state, D.at = "wait", clock + 20
+atick(0)
+for _ = 1, 10 do atick(2) end
+check(near(our.SunElevationAngleInDegrees, 10, 0.01) and near(our.SunAzimuthAngleInDegrees, -160, 0.01), "the break finishes the step: F+3's 10 / -160")
+-- the festival's round (F+6) into the night (F+7): the swap at the break's darkest point
+D.round, D.state = 13, "fighting"
+for _ = 1, 200 do atick(2) end
+check(ARC.last.mode == "sun" and near(ARC.last.u, A.swap_within_x, 1e-6), string.format("F+6's fight: the sun goes down, the swap held for the break (u %.2f)", ARC.last.u))
+D.state, D.at = "wait", clock + 20
+atick(0)
+atick(4)
+check(ARC.last.mode == "sun", "the break's start: still the sun, darkening")
+for _ = 1, 3 do atick(2) end
+check(ARC.last.mode == "moon" and found("the sun swapped for the moon at the break's darkest point"), "the break's middle: the moon")
+for _ = 1, 5 do atick(2) end
+check(our.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 227 and near(our.SunElevationAngleInDegrees, 35, 1e-6),
+    "night (F+7): the light at the moon, 0.5, bluish; the moon on")
+check(near(ppv1.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and our.StarsParams.StarsIntensity == 7,
+    "night's exposure on the volume with its override, the stars at their maximum")
+-- VALKA's red sky over the arc: the colours left to it
+RED = { want = true, k = 0.3 }
+sun.LightColor = { R = 255, G = 60, B = 40 }
+D.round, D.state = 14, "fighting"
+for _ = 1, 3 do atick(2) end
+check(sun.LightColor.G == 60 and near(sun.Intensity, 0.5, 0.02), "VALKA's red sky on: the arc leaves the colours to it, the rest goes on")
+RED = { want = false, k = 0 }
+for _ = 1, 2 do atick(2) end
+check(sun.LightColor.R == 227, "her sky gone: the arc's colours again")
+-- midday, held
+D.round = 19
+for _ = 1, 3 do atick(2) end
+check(near(our.SunElevationAngleInDegrees, 52.9, 1e-6) and near(our.SunAzimuthAngleInDegrees, 180, 1e-6) and our.EnableMoon == false,
+    "F+12 on: midday 52.9 / 180, the moon off")
+D.round = 40
+atick(2)
+check(near(our.SunElevationAngleInDegrees, 52.9, 1e-6), "held for the rest of the run")
+-- a new run with no GONE FISHIN': everything put back
+RUN = {}
+atick(2)
+check(not ARC.on and same(state(), base), "the run has no F: everything the arc changed put back exactly")
+
+print("the day-night arc: a late joiner, the custom sun, a restart")
+RUN = { arcF = 3 }
+D = { now = 3000, round = 10, state = "fighting", up = {} }
+clock = 3000
+atick(0)
+local el0 = our.SunElevationAngleInDegrees
+atick(2)
+check(el0 > 14 and ARC.blendFrom ~= nil, string.format("joining at F+7: blending in from the stock sky (%.1f)", el0))
+for _ = 1, 3 do atick(2) end
+check(near(our.SunElevationAngleInDegrees, 35, 0.5), "5 s on: the night's sky")
+SKY.arcReset("test: a restart")
+check(not ARC.on and same(state(), base), "SKY.arcReset: put back now")
+A.path = "custom"
+RUN = { arcF = 8 }
+D = { now = 4000, round = 9, state = "fighting", up = {} }
+clock = 4000
+custom.calls = {}
+for _ = 1, 4 do atick(2) end
+check(custom.calls[#custom.calls] and custom.calls[#custom.calls]:find("^pos 1[34]") and found("written through Cloudly's custom sun"),
+    "path custom: Cloudly's custom sun API too (" .. tostring(custom.calls[#custom.calls]) .. ")")
+SKY.arcReset("test")
+A.path = "copies"
+check(custom.sun == false and same(state(), base), "the custom sun off again with the rest")
+-- the co-op host's F to a joiner: SKY.arcSet
+RUN = {}
+check(SKY.arcSet(12, "the host's") == true and RUN.arcF == 12 and SKY.arcSet(12, "again") == false, "SKY.arcSet: F kept in RUN once")
+LEVEL_DROPS["the sky's arc"]("test")
+check(not ARC.on and ARC.base == nil, "the level torn down: the arc forgotten untouched")
+
+print("the day-night arc: the step key (Ctrl+PAGE_DOWN)")
+check(binds.PAGE_DOWN ~= nil, "Ctrl+PAGE_DOWN bound")
+D = { now = 5000, round = 10, state = "fighting", up = {} }
+RUN = { arcF = 8 }
+press("PAGE_DOWN")
+check(RUN.arcF == 7 and found("test: Ctrl+PAGE_DOWN, the arc stepped: F 8 -> 7 (round 10 is F+3)"), "F one less: one round on")
+RUN = {}
+press("PAGE_DOWN")
+check(RUN.arcF == 9, "no F yet: the arc from this round (F+1)")
+SKY.arcReset("test")
+RUN = nil
+
 print("a release's copy")
 SKY, testKey, TEST_TICKS, TEST_KEYS = nil, nil, nil, nil
 local src = readAll(STRIPPED .. "/Scripts/sv_sky.lua")
@@ -268,7 +409,8 @@ part(STRIPPED, "sv_sky.lua")
 check(SKY.test == nil and type(SKY.apply) == "function" and type(SKY.restore) == "function" and type(SKY.idleTick) == "function",
     "it loads with apply / restore / idleTick")
 local mainSrc = readAll(STRIPPED .. "/Scripts/sv_main.lua")
-check(mainSrc:find("SKY.restore", 1, true) ~= nil and mainSrc:find("SKY.idleTick", 1, true) ~= nil and not mainSrc:find("TEST_TICKS", 1, true),
+check(mainSrc:find("SKY.restore", 1, true) ~= nil and mainSrc:find("SKY.idleTick", 1, true) ~= nil and mainSrc:find("SKY.arcTick", 1, true) ~= nil
+    and mainSrc:find("SKY.arcReset", 1, true) ~= nil and not mainSrc:find("TEST_TICKS", 1, true),
     "sv_main.lua's release copy: the restore at a run's end and the idle tick kept, the test ticks gone")
 
 print(fails == 0 and "sky test: all passed" or ("sky test: " .. fails .. " FAILED"))
