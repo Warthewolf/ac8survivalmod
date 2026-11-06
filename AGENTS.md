@@ -16,6 +16,16 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - Survival Mode is built only from stock game files; nothing from Stonehenge Returns is used or shipped.
   One exception, at the user's request (2026-10-24): the VALKA special may use Ace Combat 7 assets (the X-02S model,
   Mihaly's railgun effects and sounds). Never AC7 voice lines. See tools/re/VALKA.md.
+- No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
+  commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
+  change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's
+  own tests.
+  One exception, the user's own work (2026-11-06: "Alicorn Special Raid IV is my own mod and I NEED the FA44 that is
+  within the files of the Alicorn Special Raid as the Model inside is edited"): the ZFA-44 from the user's AC7 mod
+  Alicorn Special Raid IV may be used for a Survival special round: its edited model (the mod's
+  Vehicles/Aircraft/uavs/uavs_SM, a CFA-44-based static mesh), its paint (fa44_00_D, fa44_00xMREC, fa44_00_Inst), its
+  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder
+  D:\Ace Combat PAKS\unrealpak\Engine\Binaries\Win64\Alicorn_Special_Raid_IV (unencrypted). Never AC7 voice lines.
 - Survival's own build: `tools/build_all.sh` (see tools/README.md). Packages are generated into `mod/Content`
   by `tools/build_survival.py`. Edit that script, not the binaries. The container is `SurvivalMode_P`, packages live under `/Game/Mods/SurvivalMode/`.
 - Survival Mode is its own mod: never repoint or override Stonehenge Returns' (or any other mod's) files or mission slot.
