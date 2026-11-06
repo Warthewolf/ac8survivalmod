@@ -505,6 +505,14 @@ local function probeTick(tick)
             local okFs, errFs = pcall(FISH.setup)
             if not okFs then log("fishing: setup error " .. tostring(errFs)); FISH.setupDone = true end
         end
+        if ESC and ESC.setup then                        -- (THE ESCORT's and the ZFA-44's rows and names: sv_escort.lua)
+            local okEs, errEs = pcall(ESC.setup)
+            if not okEs then log("escort: setup error " .. tostring(errEs)); ESC.setupDone = true end
+        end
+        if DECOY and DECOY.setup then                    -- (THE DECOY's trap UAVs' row: sv_decoy.lua)
+            local okDs, errDs = pcall(DECOY.setup)
+            if not okDs then log("decoy: setup error " .. tostring(errDs)); DECOY.setupDone = true end
+        end
         if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
             local okCs, errCs = pcall(COOP.syncSetup)
             if not okCs then log("coopfire: setup error " .. tostring(errCs)) end
@@ -1177,10 +1185,10 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- Ctrl+F1 in a run: THE ESCORT's landing test T0 (sv_escort.lua ESC.testT0, tools/re/ESCORT.md): CHARLENE alone at the
-    -- approach fix, her final, rollout, taxi and stop logged every 0.5 s; Ctrl+F2: the ZFA-44 carriers unlocked and one
-    -- sent now (ESC.testCarrier)
-    for _, tk in ipairs({ { "F1", "testT0" }, { "F2", "testCarrier" } }) do
+    -- Ctrl+F5 in a run: THE ESCORT's landing test T0 (sv_escort.lua ESC.testT0, tools/re/ESCORT.md): CHARLENE alone short
+    -- of the approach fix, her final, rollout, taxi and stop logged every 0.5 s; Ctrl+DEL: the ZFA-44 carriers unlocked and
+    -- one sent now (ESC.testCarrier). (Were Ctrl+F1 / F2, the tactical items' airstrike and ECM burst keys: sv_tactical.lua)
+    for _, tk in ipairs({ { "F5", "testT0" }, { "DEL", "testCarrier" } }) do
         if Key[tk[1]] then
             pcall(RegisterKeyBind, Key[tk[1]], mods, function()
                 ExecuteInGameThread(function()
@@ -1190,6 +1198,8 @@ if type(RegisterKeyBind) == "function" and Key then
                     if not ok then log("escort: test Ctrl+" .. tk[1] .. " error " .. tostring(err)) end
                 end)
             end)
+        else
+            log("test: Ctrl+" .. tk[1] .. " not bound (THE ESCORT's " .. tk[2] .. "): UE4SS's Key table has no " .. tk[1])
         end
     end
     end                            -- (the test keys' do: their RegisterKeyBind wrapper)

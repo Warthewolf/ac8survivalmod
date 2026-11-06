@@ -103,6 +103,24 @@ local function d3(a, b) return math.sqrt((a.X - b.X) ^ 2 + (a.Y - b.Y) ^ 2 + (a.
 local function bearing(from, to) return math.deg(math.atan(to.X - from.X, -(to.Y - from.Y))) % 360 end   -- (compass)
 local function angOff(a, b) return math.abs(((a - b + 540) % 360) - 180) end
 local function pt(g) return { X = g[1], Y = g[2], Z = g[3] or 0 } end
+-- (the build's flags, tools/re/ESCORT.md "Build names") each aircraft's leg (SV_CharLeg / SV_EscLeg<Name>) and taxi
+-- slot (SV_TaxiSlotChar / SV_TaxiSlot<Name>), named by its record prefix's tail; a leg's number as a step: hers 1 route,
+-- 2 final, 3 roll, 4 taxi, 5 stop; an escort's 1 route, 2 orbit (or its cover, <rec>Guard), 3 final, 4 roll, 5 taxi, 6 stop
+local function whoKey(A) return A.her and "Char" or (tostring(A.rec):match("^RE_SV_Esc(%a+)$") or "") end
+local function legFlag(A) return A.her and "SV_CharLeg" or ("SV_EscLeg" .. whoKey(A)) end
+local function slotFlag(A) return "SV_TaxiSlot" .. whoKey(A) end
+local LEGS = { her = { "route", "final", "roll", "taxi", "stop" }, escort = { "route", "orbit", "final", "roll", "taxi", "stop" } }
+local RANK = { spawn = 0, route = 1, orbit = 2, inbound = 2.5, final = 3, roll = 4, taxi = 5, stop = 6, landed = 7, lost = 8 }
+-- the event package's int flags as svFlags (sv_core.lua) read them, only from a read 2 s or more after this operation's
+-- RE_SV_EscortReset (one cached from before it may still hold the last escort's legs); nil: not known
+local function flagsNow(S)
+    if type(svFlags) ~= "function" then return nil end
+    local okF, t = pcall(svFlags)
+    if not (okF and type(t) == "table") then return nil end
+    local at = type(flagCache) == "table" and tonumber(flagCache.at) or nil
+    if not at or at < (S.resetClock or 0) + 2 then return nil end
+    return t
+end
 -- an object switched off without a kill (no pay, no explosion): no box, no lock-on, invincible, inactive, hidden, no
 -- collision, no tick (sv_rounds.lua takeDown's "off")
 local function offObj(o)
@@ -128,7 +146,7 @@ local function shipAt(i)
     local up = false
     if client() then up = ESC.host ~= nil and (tonumber(ESC.host.carriers) or 0) > 0
     else up = ESC.R ~= nil and ESC.R.D == D and ESC.R.carriers[i] ~= nil end
-    local sp = up and (cc().spots or {})[i]
+    local sp = up and (cc().ship_at or {})[i]
     return sp and { X = sp[1], Y = sp[2], Z = 0 } or nil
 end
 -- (logPlane, below) a plane of no unit, of a carrier's ship or of one of its flights, within capture_km of a carrier up
@@ -300,10 +318,18 @@ local function where(A)
     return string.format("t %.0f m, s %.0f m, %.0f m up, %.0f km/h, heading %03d, %.1f km from the airfield", t, s,
         (r.at.Z - num(g.runway_z, 750)) / 100, r.kmh, math.floor(r.hdg + 0.5), d2(r.at, AIRFIELD) / 1000)
 end
+-- its parking slot (geo.slots A-E in landing order, as the build's Taxi records count them in SV_EscortSlots): the next one
+-- as it begins its taxi here; the build's own (SV_TaxiSlot<Who>) once it can be read (stopSpot)
+local function taxiSlot(S, A)
+    if A.slotN then return end
+    S.taxiN = (S.taxiN or 0) + 1
+    A.slotN = math.min(math.max(1, #(ec().geo.slots or {})), S.taxiN)
+end
 local function goStep(S, A, st, why)
     local ev = A.rec .. STEP[st]
     local ok = fire(ev, A.name)
     A.st, A.since = st, S.t
+    if st == "taxi" then taxiSlot(S, A) end
     log(string.format("escort: %s %s (%s): %s %s; %s", A.name, st, tostring(why), ev, ok and "fired" or "NOT fired", where(A)))
     return ok
 end
@@ -466,8 +492,23 @@ local function guardTick(S, now)
     end
     table.sort(foes, function(a, b) return a.d < b.d end)
     local k, said = 0, {}
+    local H = her(S)
     for _, A in ipairs(S.ac) do
-        if A.escort and (A.st == "route" or A.st == "orbit") and #foes > 0 then
+        -- (before her final only: on its route, its cover, or an orbit its route's end began; at her final they go to
+        -- their wait orbits, where nothing takes them off before their release)
+        local leg = S.flags and tonumber(S.flags[legFlag(A)])
+        local before = A.escort and not S.orbitFired and (A.st == "route" or A.st == "orbit") and not (leg and leg >= 3)
+        -- the build's cover (<rec>Guard: off its route, Normal, air search, its unit area onto her at 3 km) from the
+        -- first enemy near her on, given again every record_every_s while she flies her route (its area follows her)
+        if before and g.records ~= false and H.st == "route" and (#foes > 0 or A.guardOn) and S.t >= (A.guardRecAt or 0) then
+            A.guardRecAt = S.t + num(g.record_every_s, 6)
+            if fire(A.rec .. "Guard", A.name) and not A.guardOn then
+                A.guardOn = true
+                log(string.format("escort: %s covers CHARLENE (%sGuard: off its route, its area on her at 3 km, again every %d s); %s",
+                    A.name, A.rec, math.floor(num(g.record_every_s, 6)), where(A)))
+            end
+        end
+        if before and #foes > 0 then
             k = k + 1
             local f = foes[(k - 1) % #foes + 1]
             local n = 0
@@ -483,9 +524,17 @@ local function guardTick(S, now)
 end
 
 ---------------------------------------------------------------------------------------------------- the landing
-local function stopSpot(A)
-    if A.escort then return rwPoint(num(A.escort.stop_t, 1200), num(A.escort.stop_s, 60)) end
-    return pt(ec().geo.hold)
+local function stopSpot(S, A)
+    local sl = ec().geo.slots or {}
+    local k = S.flags and tonumber(S.flags[slotFlag(A)])
+    if k and k >= 1 and k <= #sl and k == math.floor(k) and k ~= A.slotN then
+        log(string.format("escort: %s's parking slot %s (the build's %s %d; counted here: %s)", A.name, string.char(64 + k), slotFlag(A),
+            k, A.slotN and string.char(64 + A.slotN) or "none"))
+        A.slotN = k
+    end
+    local q = sl[A.slotN or 1] or sl[#sl]
+    if not q then return pt(ec().geo.roll_end) end
+    return rwPoint(num(q[1], 0), num(q[2], 62.5))
 end
 local function landed(S, A, how)
     A.st, A.how, A.since = "landed", how, S.t
@@ -505,6 +554,25 @@ local function landed(S, A, how)
         local t = ec().text
         hudCallout(t.landed, string.format(t.landed_sub, left))
     end
+end
+-- the build's backstops (each path's PathFinish starts the next step while its leg flag says Lua hasn't: hard rules 1,
+-- 26) move an aircraft on by themselves: its leg flag ahead of the step here is taken, with what Lua's own step does
+local function legSync(S, A, o)
+    local leg = S.flags and tonumber(S.flags[legFlag(A)])
+    if not leg or leg < 1 or A.st == "landed" or A.st == "lost" or A.st == "spawn" then return end
+    local st = (A.her and LEGS.her or LEGS.escort)[math.floor(leg)]
+    if not st or RANK[st] <= (RANK[A.st] or 0) then return end
+    if st == "orbit" and A.guardOn then return end             -- (an escort's leg 2 is its cover too: Lua's Guard)
+    local was = A.st
+    A.st, A.since, A.goFired = st, S.t, true
+    log(string.format("escort: %s %s (the build's backstop moved it on: %s %d; it was %s here); %s", A.name, st, legFlag(A), leg,
+        was, where(A)))
+    if RANK[st] >= RANK.final then
+        gear(A, o)
+        A.finalT = A.finalT or S.t
+    end
+    if RANK[st] >= RANK.roll and ec().landing.invincible_on_ground then pcall(function() o:SetIsInvincible(true) end) end
+    if RANK[st] >= RANK.taxi then taxiSlot(S, A) end
 end
 -- one aircraft's step: its plane read, lost, the next step by distance, the timeouts
 local function stepAc(S, A, now)
@@ -542,6 +610,7 @@ local function stepAc(S, A, now)
     if not r then return end
     local prevIaf = A.iafD
     A.r = r
+    legSync(S, A, o)
     local g = ec().geo
     local iaf, td, re = pt(g.iaf), pt(g.touchdown), pt(g.roll_end)
     A.iafD = d2(r.at, iaf)
@@ -557,6 +626,18 @@ local function stepAc(S, A, now)
         return
     end
     if A.st == "route" and A.her and A.goFired then
+        -- (her route at 450 km/h from cruise_slow_km of the touchdown: the route given again, Mission 14's speed control;
+        -- her escorts still on theirs with her)
+        local km = num(L.cruise_slow_km, 0)
+        if km > 0 and not S.slowFired and d2(r.at, td) <= km * 1000 then
+            S.slowFired = true
+            local ok, n = fire(A.rec .. "CruiseSlow", A.name), 0
+            for _, B in ipairs(S.ac) do
+                if B.escort and B.st == "route" and B.goFired and not B.guardOn and fire(B.rec .. "CruiseSlow", B.name) then n = n + 1 end
+            end
+            log(string.format("escort: %s %.1f km from the touchdown: her route at 450 km/h (%sCruiseSlow %s), %d escorts on their routes with her",
+                A.name, d2(r.at, td) / 1000, A.rec, ok and "fired" or "NOT fired", n))
+        end
         local passed = prevIaf and A.iafD > prevIaf + 1 and A.iafD <= 4000
         if A.iafD <= num(L.final_at_m, 2000) or passed or S.t - A.since >= num(L.route_max_s, 900) then
             goStep(S, A, "final", A.iafD <= num(L.final_at_m, 2000) and string.format("%.0f m from the approach fix", A.iafD)
@@ -580,6 +661,18 @@ local function stepAc(S, A, now)
             log(string.format("escort: %s %.1f km from the touchdown: obstacle avoidance off (%s)", A.name, d3(r.at, td) / 1000,
                 okV and "EnableAvoidObstacle(false)" or ("failed: " .. tostring(err))))
         end
+        -- (its final slower near the runway: 280 km/h from final_slow_km, 260 from final_short_km, the path given again)
+        local dtd = d2(r.at, td)
+        local fh, fs = num(L.final_short_km, 0), num(L.final_slow_km, 0)
+        if fh > 0 and not A.finalShort and dtd <= fh * 1000 then
+            A.finalShort, A.finalSlow = true, true
+            log(string.format("escort: %s %.1f km from the touchdown: its final at 260 km/h (%sFinalShort %s)", A.name, dtd / 1000, A.rec,
+                fire(A.rec .. "FinalShort", A.name) and "fired" or "NOT fired"))
+        elseif fs > 0 and not A.finalSlow and dtd <= fs * 1000 then
+            A.finalSlow = true
+            log(string.format("escort: %s %.1f km from the touchdown: its final at 280 km/h (%sFinalSlow %s)", A.name, dtd / 1000, A.rec,
+                fire(A.rec .. "FinalSlow", A.name) and "fired" or "NOT fired"))
+        end
         if d3(r.at, td) <= num(L.roll_at_m, 350) or (t >= rw(td) - 150 and above <= 20 and t <= rw(re)) then
             goStep(S, A, "roll", string.format("%.0f m from the touchdown point, %.0f m up", d3(r.at, td), above))
             gear(A, o)
@@ -594,9 +687,10 @@ local function stepAc(S, A, now)
     elseif A.st == "taxi" then
         local slow = r.kmh <= 3
         A.slowSince = slow and (A.slowSince or S.t) or nil
-        if d2(r.at, stopSpot(A)) <= num(L.stop_at_m, 60) or S.t - A.since >= num(L.taxi_max_s, 90)
+        local spot = stopSpot(S, A)
+        if d2(r.at, spot) <= num(L.stop_at_m, 60) or S.t - A.since >= num(L.taxi_max_s, 90)
             or (S.t - A.since >= 10 and A.slowSince and S.t - A.slowSince >= 3) then
-            goStep(S, A, "stop", string.format("%.0f m from its parking spot", d2(r.at, stopSpot(A))))
+            goStep(S, A, "stop", string.format("%.0f m from its parking slot %s", d2(r.at, spot), string.char(64 + (A.slotN or 1))))
         end
     elseif A.st == "stop" then
         local slow = r.kmh <= num(L.landed_kmh, 5)
@@ -609,12 +703,27 @@ local function stepAc(S, A, now)
         landed(S, A, "timeout")
     end
 end
--- the escorts: their orbit once she's on final, then one at a time once the runway's clear
+-- an escort on its wait orbit at the circle's touching point (geo.orbit_touch), heading the runway's way: its final's
+-- start, the approach fix, 4 km ahead (hard rule 2: a path is flown when it begins a little ahead); and how far off
+local function atTouch(B)
+    local g, L = ec().geo, ec().landing
+    if not (B.r and g.orbit_touch) then return false, nil end
+    local d = d2(B.r.at, pt(g.orbit_touch))
+    return d <= num(L.touch_m, 2500) and angOff(B.r.hdg, num(g.heading, 67)) <= num(L.touch_deg, 35), d
+end
+-- the escorts: their wait orbits once she's on final (SV_Path_EscOrbit_<Name>), then one at a time once the runway's
+-- clear, each released onto its final as it passes its orbit's touching point; none by in orbit_max_s: the next one
+-- inbound (its final once the approach fix is ahead of it)
 local function escortsTick(S)
     local A = her(S)
     if not S.orbitFired and (A.st ~= "route" and A.st ~= "spawn") then
         S.orbitFired = true
-        for _, B in ipairs(S.ac) do if B.escort and B.st == "route" then goStep(S, B, "orbit", "CHARLENE on final") end end
+        for _, B in ipairs(S.ac) do
+            if B.escort and (B.st == "route" or (B.st == "orbit" and B.guardOn)) then
+                B.guardOn = nil
+                goStep(S, B, "orbit", "CHARLENE on final")
+            end
+        end
     end
     if not S.orbitFired then return end
     local L = ec().landing
@@ -622,12 +731,31 @@ local function escortsTick(S)
     for _, B in ipairs(S.ac) do
         if B.st == "route" and B.her or B.st == "final" or B.st == "roll" or B.st == "inbound" then busy = true end
     end
-    if busy or S.t - S.lastRelease < num(L.release_gap_s, 45) then return end
+    if busy or S.t - S.lastRelease < num(L.release_gap_s, 45) then S.clearAt = nil; return end
+    S.clearAt = S.clearAt or S.t
+    for _, B in ipairs(S.ac) do
+        if B.escort and B.st == "orbit" then
+            local at, d = atTouch(B)
+            if at then
+                S.released, S.lastRelease, S.clearAt = S.released + 1, S.t, nil
+                log(string.format("escort: %s released for its landing (%d of %d; the runway's clear): at its orbit's touching point "
+                    .. "(%.0f m off, heading %03d), the approach fix 4 km ahead", B.name, S.released, #S.ac - 1, d, math.floor(B.r.hdg + 0.5)))
+                goStep(S, B, "final", "its orbit's touching point")
+                local o = planeOf(B.unit)
+                if o then gear(B, o) end
+                B.finalT = S.t
+                return
+            end
+        end
+    end
+    if S.t - S.clearAt < num(L.orbit_max_s, 330) then return end
     for _, B in ipairs(S.ac) do
         if B.escort and (B.st == "orbit" or B.st == "route") then
             B.st, B.since = "inbound", S.t
-            S.released, S.lastRelease = S.released + 1, S.t
-            log(string.format("escort: %s released for its landing (%d of %d; the runway's clear); %s", B.name, S.released, #S.ac - 1, where(B)))
+            S.released, S.lastRelease, S.clearAt = S.released + 1, S.t, nil
+            log(string.format("escort: %s released for its landing (%d of %d; the runway's clear; none by its orbit's touching point in "
+                .. "%d s: its final once the approach fix is ahead of it); %s", B.name, S.released, #S.ac - 1,
+                math.floor(num(L.orbit_max_s, 330)), where(B)))
             return
         end
     end
@@ -724,6 +852,7 @@ function ESC.step(S, now)
     local dt = math.max(0, math.min(1, now - (S.last or now)))
     S.last = now
     if not heldNow() then S.t = S.t + dt end
+    S.flags = flagsNow(S)                                  -- (the legs and slots the build's records set: legSync, stopSpot)
     local L = ec().landing
     local A = her(S)
     for _, B in ipairs(S.ac) do
@@ -798,13 +927,29 @@ function ESC.ready()
     local c = ec()
     if not (type(c) == "table" and c.enabled ~= false) then return false end
     if c.once ~= false and RUN.escort and RUN.escort.flown then return false end
+    if ESC.rowsOk ~= true then                             -- (its escorts' DT_NPC rows: ESC.setup at the main menu)
+        if not ESC.rowsSaid then
+            ESC.rowsSaid = true
+            log("escort: no ESCORT round: its escorts' DT_NPC rows aren't in (" .. (ESC.rowsOk == false and "not added at the main menu"
+                or "the main menu's setup hasn't run") .. ")")
+        end
+        return false
+    end
     return unitsThere()
+end
+-- (before an operation's spawns) every leg and slot flag back to 0 (RE_SV_EscortReset): the last escort's (or test's)
+-- flags never move this one on, and its parking slots count from A again
+local function reset(S)
+    local ok, r = fire("RE_SV_EscortReset", "a new escort")
+    S.resetClock = os.clock()
+    log("escort: RE_SV_EscortReset " .. (ok and "fired: every leg and slot flag back to 0" or ("NOT fired (" .. ERR(r) .. ")")))
 end
 function ESC.spawn(now)
     if not nativeReady() then return false end
     local c = ec()
     local S = newOp(now, nil)
     S.special, S.round = D.special, D.round
+    reset(S)
     local ok, r = spawnAc(S, her(S), startPose(0, 0))
     if not ok then
         log(string.format("escort: round %d: CHARLENE can't come (%s): no escort this round", D.round, ERR(r)))
@@ -841,6 +986,17 @@ end
 function ESC.holds(unit)
     local S = ESC.S
     return S ~= nil and unit ~= nil and S.state ~= "done" and S.attackers[unit] ~= nil
+end
+-- (sv_allies.lua's take-offs) THE ESCORT landing here (from her final until everyone left is down; the test T0 too):
+-- MOONCHILD, SNIPER and VOID WATCHER 1 take off from the hold spot its taxi passes, so they wait
+function ESC.runwayBusy()
+    local S = ESC.S
+    if not (S and S.D == D and S.state ~= "done") then return false end
+    if S.state == "landing" then return true end
+    for _, A in ipairs(S.ac) do
+        if A.st == "final" or A.st == "roll" or A.st == "taxi" or A.st == "stop" then return true end
+    end
+    return false
 end
 -- its NEXT row: her health, her distance, how many have landed
 local function hpPct(S)
@@ -920,7 +1076,7 @@ function ESC.offer(borrowed)
     local o = { label = borrowed and (it.row_label or it.label) or it.label }
     o.help = string.format(t.help, math.floor(num(c.service and c.service.rounds, 3)), up, math.floor(num(c.max_up, 2)))
     if borrowed and RUN.msg and RUN.msg.ZfaCarrier then o.help = RUN.msg.ZfaCarrier .. " " .. o.help end
-    if not (c.enabled and CFG.allies.enabled) then o.why = "NOT AVAILABLE."
+    if not (c.enabled and CFG.allies.enabled) or (c.dt_npc and ESC.zfaRowOk ~= true) then o.why = "NOT AVAILABLE."
     elseif not ESC.unlocked() then o.why = t.locked
     elseif not client() and not carrierUnitsOk() then o.why = "NOT AVAILABLE."
     elseif up >= num(c.max_up, 2) then o.why = string.format(t.full, up)
@@ -942,6 +1098,7 @@ end
 function ESC.buyCarrier(slot, price)
     local c, t = cc(), cc().text
     if client() then return false, "THE HOST SENDS IT." end
+    if c.dt_npc and ESC.zfaRowOk ~= true then return false, "NOT AVAILABLE." end
     if not ESC.unlocked() then return false, t.locked end
     if ESC.carriersUp() >= num(c.max_up, 2) then return false, string.format(t.full, ESC.carriersUp()) end
     local i, u = freeShip()
@@ -978,7 +1135,7 @@ local function hullPose(C)
         local ok, l, ro = pcall(function() return h.obj:K2_GetActorLocation(), h.obj:K2_GetActorRotation() end)
         if ok and l and ro then return { X = l.X, Y = l.Y, Z = l.Z }, ro.Yaw end
     end
-    local sp = (cc().spots or {})[C.idx]
+    local sp = (cc().ship_at or {})[C.idx]
     if not sp then return nil end
     local at = { X = sp[1], Y = sp[2], Z = 0 }
     return at, (bearing(at, AIRFIELD) - 90) % 360
@@ -987,9 +1144,21 @@ local function launch(C, now)
     local c = cc()
     local arms = (c.launchers or {})[C.idx] or {}
     if C.route == "container" and #arms > 0 then
-        C.armI = C.armI % #arms + 1
-        local arm = arms[C.armI]
-        if C.used[arm.unit] and type(SV_Recycle) == "function" and aliveOf(arm.unit) >= 0 then
+        -- (the next arm in turn whose unit has nothing alive: a flight still up isn't launched over)
+        local arm, n = nil, -5
+        for _ = 1, #arms do
+            C.armI = C.armI % #arms + 1
+            n = aliveOf(arms[C.armI].unit)
+            if n <= 0 then arm = arms[C.armI]; break end
+        end
+        if not arm then
+            C.nextLaunchAt = now + 10
+            log(string.format("carrier: %s: every launcher arm's flight is still up: again in 10 s", C.name))
+            return
+        end
+        -- (its unit still on the spawner's list, from this carrier's launch or an earlier one: taken off first, or the arm
+        -- spawns nothing, hard rule 16)
+        if n == 0 and type(SV_Recycle) == "function" then
             crumb("carrier SV_Recycle " .. arm.unit)
             local okR, rr = pcall(SV_Recycle, arm.unit, 1)
             log(string.format("carrier: %s: %s launched before: taken off the spawner's list first (SV_Recycle %s)", C.name, arm.unit,
@@ -1027,8 +1196,11 @@ local function launch(C, now)
         C.flight = { unit = u, at = now, route = "pose", up = true }
         C.launches = (C.launches or 0) + 1
         if C.launches == 1 then hudCallout(c.text.launch, string.format(c.text.launch_sub, C.name)) end
-        log(string.format("carrier: %s launches its ZFA-44s by pose: %s, %d aircraft %.0f m off its bow, %.0f m up", C.name, u, r,
-            ahead / 100, pose.z / 100))
+        -- (its orders: gear up, Normal, air search; its appearance's records too, which a spawn in the landing menu never fires)
+        local go = (c.pose_go or {})[C.idx]
+        local goOk = go and fire(go, C.name)
+        log(string.format("carrier: %s launches its ZFA-44s by pose: %s, %d aircraft %.0f m off its bow, %.0f m up%s", C.name, u, r,
+            ahead / 100, pose.z / 100, go and string.format("; %s %s", go, goOk and "fired" or "NOT fired") or ""))
     else
         C.nextLaunchAt = now + 10
         log(string.format("carrier: %s: %s NOT spawned (%s); again in 10 s", C.name, u, ERR(r)))
@@ -1085,7 +1257,7 @@ local function carrierTick(C, now)
             C.state, C.removeAt, C.why = "leaving", os.clock(), string.format("%d rounds served", C.served)
             local nf = C.flight and flightOff(C.flight, C.name .. " leaving") or 0
             if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
-            if c.remove_records then fire(string.format("RE_SV_Cargo%dRemove", C.idx), C.name) end
+            if c.remove_records then fire(string.format("RE_SV_CargoRemove_%d", C.idx), C.name) end
             local n = 0
             for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr and offObj(e.obj) then n = n + 1 end end
             RUN.dirty = true
@@ -1112,6 +1284,7 @@ local function carrierTick(C, now)
             for _, e in ipairs(planesOf(F.unit, F.at - 1)) do if (hp(e.obj) or 1) > 0 then live = live + 1 end end
             if live == 0 and noneUp(aliveOf(F.unit)) and now - F.at > 15 then
                 C.flight, C.nextLaunchAt = nil, now + num(c.relaunch_s, 30)
+                ESC.recycleQ[#ESC.recycleQ + 1] = { unit = F.unit, at = os.clock() + 2, why = C.name .. "'s flight down" }
                 log(string.format("carrier: %s's ZFA-44 flight %s is down: another in %d s", C.name, F.unit, math.floor(num(c.relaunch_s, 30))))
             end
         end
@@ -1207,6 +1380,45 @@ local function names()
     end
     log(string.format("escort: %d of %d name texts set (CHARLENE, her escorts, the carriers, the ZFA-44)", n, #list))
 end
+-- (the main menu, sv_main.lua's setup pass; every game) the escorts' and the ZFA-44 host's DT_NPC rows into the game's
+-- DT_NPC from DT_SV_NpcRows (before the level loads: a unit's behaviour is built from its row then, hard rule 20, and a
+-- unit whose row the game hasn't doesn't spawn), and the names on their boxes, as the shoal's (sv_fishing.lua
+-- FISH.setup). ESC.rowsOk: the escorts' rows in (else no ESCORT round); ESC.zfaRowOk: the ZFA-44's (else no carrier)
+function ESC.setup()
+    if ESC.setupDone or not gameInstance() then return end
+    ESC.setupTries = (ESC.setupTries or 0) + 1
+    local npc, mine = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
+    if not (npc and mine) then
+        if ESC.setupTries >= 20 then
+            ESC.setupDone, ESC.rowsOk, ESC.zfaRowOk = true, false, false
+            log("escort: the row tables didn't load: no ESCORT round and no ZFA-44 carriers this session")
+        end
+        return
+    end
+    ESC.setupDone = true
+    for _, t in ipairs({ npc, mine }) do pin(t, nameOf(t)) end
+    local function addRow(row)
+        local _, have = dtCall(npc, "FindRow", row)
+        if have == nil then
+            local _, r = dtCall(mine, "FindRow", row)
+            if r ~= nil then dtCall(npc, "AddRow", row, r); _, have = dtCall(npc, "FindRow", row) end
+        end
+        return have ~= nil
+    end
+    local parts, ok = {}, true
+    for _, row in ipairs(ec().dt_npc or {}) do
+        local got = addRow(row)
+        ok = ok and got
+        parts[#parts + 1] = row .. (got and " in DT_NPC" or " NOT added")
+    end
+    ESC.rowsOk = ok
+    local zr = cc().dt_npc
+    ESC.zfaRowOk = type(zr) ~= "string" or addRow(zr)
+    if type(zr) == "string" then parts[#parts + 1] = zr .. (ESC.zfaRowOk and " in DT_NPC" or " NOT added") end
+    log(string.format("escort: the escorts' and the ZFA-44's rows: %s%s%s", table.concat(parts, ", "),
+        ok and "" or "; no ESCORT round this session", ESC.zfaRowOk and "" or "; no ZFA-44 carriers this session"))
+    names()
+end
 local function dressTick()
     local q = ESC.dressQ
     if #q == 0 then return end
@@ -1281,30 +1493,36 @@ if type(LEVEL_DROPS) == "table" then
     end
 end
 
--- TEST ONLY BEGIN (Ctrl+F1: the landing test T0; Ctrl+F2: the carriers unlocked and one sent now; sv_main.lua's keys)
--- T0 (tools/re/ESCORT.md): CHARLENE alone at the approach fix (heading 067), her final, rollout, taxi and stop with no
--- enemies sent at her and no escorts, her place against the runway, height, speed and gear logged every log_s
--- (`escort: T0 +N s: ...`), the break held while it runs, taken off end_s after she's down
+-- TEST ONLY BEGIN (Ctrl+F5: the landing test T0; Ctrl+DEL: the carriers unlocked and one sent now; sv_main.lua's keys)
+-- T0 (tools/re/ESCORT.md): CHARLENE alone before_m short of the approach fix (heading 067: her final's start a little
+-- ahead, hard rule 2), her final, rollout, taxi and stop with no enemies sent at her and no escorts, her place against
+-- the runway, height, speed and gear logged every log_s (`escort: T0 +N s: ...`), the break held while it runs, taken
+-- off end_s after she's down
 function ESC.testT0()
-    if not (D and D.now) then log("test: Ctrl+F1 outside a Survival run"); return end
+    if not (D and D.now) then log("test: Ctrl+F5 outside a Survival run"); return end
     if ESC.S then hudCallout("TEST: ESCORT T0", "AN ESCORT IS ALREADY UP"); log("escort: T0: an escort is already up"); return end
     local c = ec()
     local S = newOp(D.now, "t0")
+    reset(S)
     local g = c.geo
-    local ok, r = spawnAc(S, her(S), { x = g.iaf[1], y = g.iaf[2], z = g.iaf[3], yaw = 67 - 90 })
+    local hd = num(g.heading, 67)
+    local back = num(c.test and c.test.before_m, 1500) * 100
+    local fx, fy = math.sin(math.rad(hd)), -math.cos(math.rad(hd))
+    local ok, r = spawnAc(S, her(S), { x = g.iaf[1] - fx * back, y = g.iaf[2] - fy * back, z = g.iaf[3], yaw = hd - 90 })
     if not ok then hudCallout("TEST: ESCORT T0", "CHARLENE NOT SPAWNED"); log("escort: T0: CHARLENE not spawned: " .. ERR(r)); return end
     S.state = "route"
     ESC.S = S
     hudCallout("TEST: ESCORT T0", "CHARLENE ON FINAL: WATCH HER LAND")
-    log("escort: T0: CHARLENE at the approach fix, heading 067, no enemies at her: her final, rollout, taxi and stop logged")
+    log(string.format("escort: T0: CHARLENE %.0f m short of the approach fix, heading %03d, no enemies at her: her final, rollout, taxi and stop logged",
+        back / 100, math.floor(hd)))
 end
 function ESC.testCarrier()
-    if not (D and D.now) then log("test: Ctrl+F2 outside a Survival run"); return end
+    if not (D and D.now) then log("test: Ctrl+DEL outside a Survival run"); return end
     RUN.zfa = { unlocked = true, test = true }
     RUN.dirty = true
     local ok, msg = ESC.buyCarrier(nil, 0)
     hudCallout("TEST: ZFA-44 CARRIER", ok and "UNLOCKED, ONE SENT" or ("UNLOCKED: " .. tostring(msg)))
-    log("escort: test: Ctrl+F2: the ZFA-44 carriers unlocked; " .. tostring(msg))
+    log("escort: test: Ctrl+DEL: the ZFA-44 carriers unlocked; " .. tostring(msg))
 end
 -- TEST ONLY END
 end

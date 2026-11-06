@@ -12,6 +12,8 @@
 --   the lead (the rod's PredictionTime from the feed; the led point's maths);
 --   the end: all down, everyone safe, the time; the reward and its x for safe; the leftovers taken off unpaid;
 --   the recycles, one a recycle_gap_s;
+--   the main menu: the trap UAVs' DT_NPC row (DECOY.setup), no round without it; the marks' last fallback, the build's
+--     teleport onto your plane (RE_SV_DecoyMarkOnMe_<nn>) when a move doesn't hold either;
 --   co-op: the host's "dk" (each lock's UAV and target slot; no strike on the host for a joiner's lock), a joiner's
 --     strike on its own locks only, a killing hit sent there cancelling it (COOP.killSent), the guards on "dk", the
 --     Spear and the sure kill never forwarded (sv_coop.lua KEEP_EVENTS) and skipped on a host who's DOWN.
@@ -35,7 +37,8 @@ local notify = {}
 function NotifyOnNewObject(cls, fn) notify[cls] = notify[cls] or {}; table.insert(notify[cls], fn) end
 function FindAllOf() return {} end
 function FindFirstOf() return nil end
-function StaticFindObject() return nil end
+local statics = {}
+function StaticFindObject(p) return statics[p] end
 local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
@@ -50,6 +53,28 @@ SPC = SPC or {}
 SPC.kinds, SPC.CLEAN_OBJ, SPC.cleanWatch, SPC.seenUnits = {}, {}, {}, {}
 part("sv_decoy.lua")
 local C = CFG.specials.decoy
+
+---------------------------------------------------------------------------------------------------- the main menu
+-- the trap UAVs' DT_NPC row (DT_SV_NpcRows' SV_DecoyUav) into DT_NPC, as the shoal's (sv_fishing.lua FISH.setup)
+print("the main menu")
+do
+    local GI = { name = "GameInstance", addr = 0x10 }
+    function gameInstance() return GI end
+    function pin() return true end
+    local function dt(name, rows)
+        local t = { name = name, addr = 0x20 + #name, rows = rows }
+        function t:FindRow(r) return self.rows[tostring(r)] end
+        function t:AddRow(r, v) self.rows[tostring(r)] = v end
+        return t
+    end
+    local npcT, mineT = dt("DT_NPC", {}), dt("DT_SV_NpcRows", { [C.dt_npc] = { row = "uav" } })
+    statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = npcT, mineT
+    DECOY.setup()
+    local said = false
+    for _, l in ipairs(logs) do if l:find("decoy: the trap UAVs' row SV_DecoyUav in DT_NPC", 1, true) then said = true end end
+    check(C.dt_npc == "SV_DecoyUav" and npcT.rows.SV_DecoyUav ~= nil and DECOY.rowOk == true and said,
+        "the trap UAVs' row SV_DecoyUav into DT_NPC at the main menu, logged")
+end
 
 ---------------------------------------------------------------------------------------------------- the game, stubbed
 local events, credits, callouts, specials, recycles = {}, {}, {}, {}, {}
@@ -66,7 +91,7 @@ local ON_AF = false
 function playerOnAirfield() return ON_AF end
 local HITS = 0
 function svFlags() return { [DECOY.HIT_FLAG] = HITS } end
-local ATTACH_WORKS = true
+local ATTACH_WORKS, MOVE_WORKS = true, true
 local nextAddr = 0x1000
 local function obj(name, hp, at)
     nextAddr = nextAddr + 0x10
@@ -81,7 +106,11 @@ local function obj(name, hp, at)
     function o:K2_AttachToActor(p) self.parent = p; return true end
     function o:GetAttachParentActor() return self.parent end
     function o:K2_DetachFromActor() self.parent = nil end
-    function o:K2_SetActorLocation(v) self.at = { X = v.X, Y = v.Y, Z = v.Z }; self.moved = (self.moved or 0) + 1; return true end
+    function o:K2_SetActorLocation(v)            -- (MOVE_WORKS false: the call answers, the game puts it back)
+        if MOVE_WORKS then self.at = { X = v.X, Y = v.Y, Z = v.Z } end
+        self.moved = (self.moved or 0) + 1
+        return true
+    end
     function o:SetActive() end
     function o:SetActorHiddenInGame(h) self.hidden = h end
     function o:SetActorEnableCollision() end
@@ -146,7 +175,7 @@ local function step(dt, host)
 end
 local function fresh(round)
     events, credits, callouts, specials, recycles, logs = {}, {}, {}, {}, {}, {}
-    world, HITS, ON_AF, ATTACH_WORKS = {}, 0, false, true
+    world, HITS, ON_AF, ATTACH_WORKS, MOVE_WORKS = {}, 0, false, true, true
     me.HealthInternal, me.at, me.vel, me.gone = 1000, { X = 1610476, Y = -3436142, Z = 300000 }, { X = 0, Y = 0, Z = 0 }, nil
     SPC.CLEAN_OBJ, SPC.seenUnits = {}, {}
     for _, f in pairs(LEVEL_DROPS) do pcall(f) end
@@ -169,6 +198,9 @@ local inDef = false
 for _, k in ipairs(CFG_DEFAULTS.specials.rotation) do if k == "decoy" then inDef = true end end
 check(inRot and inDef and C.from_round == 10 and C.once_per_run == true, "in the rotation (a shipped default) from round 10, once a run")
 check(K.budget(20) == 6 and K.budget(9) == 2, "its fighters: fighter_share of the round's, whole 2-ships (" .. K.budget(20) .. ")")
+DECOY.rowOk = false
+check(K.ready() == false and logged("no DECOY round: its UAVs' DT_NPC row SV_DecoyUav isn't in %(not added"), "not ready without its UAVs' row in DT_NPC, logged")
+DECOY.rowOk = true
 check(K.ready() == true and logged("units are in this build's world data"), "ready: its units in the world data")
 RUN.specialAt.decoy = 11
 check(K.ready() == false, "once a run: not again after its round")
@@ -389,8 +421,32 @@ local moved = mk2.moved or 0
 me.at = { X = me.at.X + 50000, Y = me.at.Y, Z = me.at.Z }
 step(0.25)
 check((mk2.moved or 0) > moved and mk2.at.X == me.at.X, "the mark moved onto your plane each tick")
+check(DECOY.moveHeld == true and logged("marks moved onto their planes each tick hold") and evs("^RE_SV_DecoyMarkOnMe_") == 0,
+    "the move held: logged, no teleport")
 step(C.lock_s + 3)
 check(evs("^RE_SV_DecoySpear_") == 1, "the Spear all the same")
+
+---------------------------------------------------------------------------------------------------- the teleport fallback
+print("the build's teleport when a move doesn't hold either")
+fresh()
+s = D.special
+ATTACH_WORKS, MOVE_WORKS = false, false
+C.max_up, C.per_player_max = 1, 1
+K.spawn(0); step(0.25); bodyOf(C.bait_unit).HealthInternal = 0
+step(1.5)
+check(world[DECOY.mark(1)] ~= nil, "UAV 1 and its mark up")
+me.at = { X = me.at.X + 50000, Y = me.at.Y, Z = me.at.Z }   -- (you 500 m on: a move that didn't hold leaves the mark behind)
+DECOY.markMode = "move"                                     -- (the attach already known not to hold this level)
+step(C.lock_after_s + 1.5)
+step(0.5)
+check(DECOY.markMode == "teleport" and logged("didn't hold either") and logged("by the build's teleport %(RE_SV_DecoyMarkOnMe_01 fired%)"),
+    "a move that doesn't hold either: the mark on your plane by RE_SV_DecoyMarkOnMe_01, logged")
+local tp = evs("^RE_SV_DecoyMarkOnMe_01$")
+step(0.5)
+check(tp >= 1 and evs("^RE_SV_DecoyMarkOnMe_01$") > tp, "... each tick while the lock is on (" .. evs("^RE_SV_DecoyMarkOnMe_01$") .. ")")
+step(C.lock_s + 3)
+check(evs("^RE_SV_DecoySpear_") == 1, "the Spear all the same")
+ATTACH_WORKS, MOVE_WORKS = true, true
 
 ---------------------------------------------------------------------------------------------------- the end
 print("the end")

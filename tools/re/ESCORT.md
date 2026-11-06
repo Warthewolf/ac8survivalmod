@@ -144,9 +144,12 @@ know "escort" yet and drops it before the score (add `escort: "The Escort"` and 
 ## 7. Keys (test builds only: TEST ONLY blocks, stripped from every zip; each press makes the run unranked)
 - **Ctrl+0**: the next round is THE ESCORT (in the break: in 3 s). A build without its units logs it and flies a normal
   round.
-- **Ctrl+F1**: the landing test T0: CHARLENE alone at the IAF (heading 067), invincible, her final at once, rollout, taxi
-  and stop; no enemies sent at her, no escorts; the break held while it runs; taken off test.end_s (30) after she's down.
-- **Ctrl+F2**: the ZFA-44 carriers unlocked and one sent now (free).
+- **Ctrl+F5**: the landing test T0: CHARLENE alone test.before_m (1500) short of the IAF on heading 067 (her final's
+  start a little ahead: hard rule 2), invincible, her final at once, rollout, taxi and stop; no enemies sent at her, no
+  escorts; the break held while it runs; taken off test.end_s (30) after she's down.
+- **Ctrl+DEL**: the ZFA-44 carriers unlocked and one sent now (free).
+- (Were Ctrl+F1 / F2 until 2026-11-07: the tactical items' airstrike and ECM burst keys, so both ran on a press. Every
+  Ctrl key: tools/README.md "Ctrl keys".)
 - (Ctrl+9 stays the ZFA-44's T0 dressing of the nearest enemy, tools/re/ZFA44.md 8.)
 
 ## 8. Log lines (AC8SurvivalMode_lua.log)
@@ -184,7 +187,7 @@ know "escort" yet and drops it before the score (add `escort: "The Escort"` and 
   `carrier: no ZFA-44 dressing in this build (sv_zfa44.lua cut ...)` (once).
 
 ## 9. Test checklist (in game)
-1. **T0 first (Ctrl+F1, in a break)**: no crash; `escort: T0 +...` lines every 0.5 s; she descends on the glide slope
+1. **T0 first (Ctrl+F5, in a break)**: no crash; `escort: T0 +...` lines every 0.5 s; she descends on the glide slope
    (height falling ~50 m a km), gear `down`, touches down 150-600 m past the west threshold (`her rollout began N m`), holds
    z 7.5 m (`... m over the runway` near 0) rolling, slows to the turn-off, taxis to the hold spot, stops (`T0 over (...):
    stopped`). Watch for a pull-up or bounce (avoidance off at 3 km), floating or sinking (RootHeight), the gear meshes.
@@ -320,3 +323,45 @@ Int flags: `SV_CharLeg`, `SV_EscLeg<Name>`, `SV_TaxiSlotChar`, `SV_TaxiSlot<Name
   while the escort round lands.
 - The STORE pages are build data and all six are full (6 rows each): a cargo ship row needs a build change (a page or a row
   given up), not done here.
+
+## Lua wired to the build (2026-11-07, branch feature/decoy; nothing run in game)
+The build agent's to-do list and the gaps between the two sides, done in Scripts/sv_escort.lua (and its CFG, sv_allies.lua,
+sv_main.lua); tools/checks/escort_test.sh covers each. Not a hard rule until a test confirms it.
+- **Rows and names at the main menu** (ESC.setup, sv_main.lua's setup pass after FISH.setup; every game): `SV_Esc_Su57`,
+  `SV_Esc_Su33`, `SV_Esc_Su35` (CFG.specials.escort.dt_npc) and `SV_Zfa_Ally` (CFG.allies.carrier.dt_npc) from
+  DT_SV_NpcRows into DT_NPC; the seven texts (SV_Charlene, SV_Yorke, SV_Rock, SV_Ali, SV_Danielle, SV_Cargo "ZFA-44 CARRIER",
+  SV_Zfa44). `escort: the escorts' and the ZFA-44's rows: ... in DT_NPC`. Without the escorts' rows no ESCORT round
+  (`escort: no ESCORT round: its escorts' DT_NPC rows aren't in (...)`); without SV_Zfa_Ally no carrier is sold.
+- **RE_SV_EscortReset** before each operation's spawns and before T0 (`escort: RE_SV_EscortReset fired: ...`); the build's
+  flags are read (svFlags) only from a read 2 s or more after it.
+- **The build's flags**: each tick the legs (SV_CharLeg / SV_EscLeg<Name>) are read; one ahead of the step Lua has (a
+  PathFinish backstop moved the aircraft on) is taken with Lua's own step's gear / invincibility / slot (`escort: <NAME>
+  <step> (the build's backstop moved it on: <flag> N; it was <step> here)`); an escort's leg 2 while Lua's Guard has it
+  is its cover, not its orbit. The parking slot is the build's: counted here in landing order as each taxi begins (A for
+  the first lander), SV_TaxiSlot<Who> taken once it can be read (`escort: <NAME>'s parking slot D (the build's ...)`);
+  the stop is called within stop_at_m of that slot's point (CFG geo.slots: the ends of SV_Path_TaxiSlotA-E, metres along
+  runway 07 from its west threshold, the build's t + 742). geo.hold and the escorts' stop_t / stop_s are gone.
+- **The escorts' cover**: from the first enemy within guard.km of her, each escort on its route (or an orbit its route's
+  end began) also gets `<rec>Guard` every guard.record_every_s (6) while she flies her route (`escort: <NAME> covers
+  CHARLENE (...Guard ...)`), so its area follows her; never once she's on final.
+- **Her slow-downs**: `RE_SV_CharCruiseSlow` within landing.cruise_slow_km (25) of the touchdown (and each escort still on
+  its own route, not covering her); every final's `<rec>FinalSlow` within final_slow_km (6), `<rec>FinalShort` within
+  final_short_km (2).
+- **The escorts' release** (escortsTick): at her final every escort not already waiting gets `<rec>Orbit` (its
+  SV_Path_EscOrbit_<Name>); with the runway clear and release_gap_s since the last, the first one within landing.touch_m
+  (2500) of geo.orbit_touch (-271946, 362900, 1.2 km up) heading within touch_deg (35) of geo.heading 067 gets its Final
+  there (`escort: <NAME> released for its landing (n of 4; the runway's clear): at its orbit's touching point (...), the
+  approach fix 4 km ahead`); none there in orbit_max_s (330, about a lap and a quarter) of a clear runway: the old way
+  (inbound, its final once the approach fix is within ahead_deg of its nose).
+- **The runway held**: ESC.runwayBusy() (her landing, from her final until everyone left is down; T0 too) holds MOONCHILD's,
+  SNIPER's and VOID WATCHER 1's take-offs (sv_allies.lua ALLY.escortHold: `allies: <name>'s take-off held: THE ESCORT is
+  landing ...`, then `allies: the runway's clear of THE ESCORT: the take-offs go on`).
+- **The carriers**: CFG.allies.carrier.launchers are the build's six arms a ship (ship 1 `RE_SV_CargoLaunch_1_1..6` ->
+  E_Unit_01_drone_5_0, 4_0, 0_0, 1_0, 7_0, 8_0; ship 2 `RE_SV_CargoLaunch_2_1..6` -> 3_1, 4_1, 1_1, 2_1, 6_1, 7_1); the next arm
+  in turn whose unit has nothing alive is fired, its unit taken off the spawner's list first when it's still on it (an
+  earlier carrier's launch too: hard rule 16); a downed flight's unit is recycled 2 s on. The pose fallback fires
+  `RE_SV_ZfaGoA` / `B` (pose_go) right after its SV_Spawn. ship_at (was `spots`, which build_valka's regex read as VALKA's
+  and failed the build: `main.lua CFG.specials.valka.spots != VALKA_SPOTS`) is the ships' world-data spots. remove_records
+  fires `RE_SV_CargoRemove_<n>` (was RE_SV_Cargo<n>Remove, not in the build).
+- Every unit, record and path name these parts use was checked against the saved packages of `ZFA=1 sh tools/build_all.sh`
+  (2026-11-07): all there.
