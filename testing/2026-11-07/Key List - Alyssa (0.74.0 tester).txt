@@ -1,0 +1,40 @@
+SURVIVAL MODE 0.74.0 - KEY LIST FOR ALYSSA (TESTER BUILD)
+Build: AC8SurvivalMode_COOP2MP_0.74.0_TESTER_Online_COOP_ZFA44.zip  (test keys in: for you only, please don't pass it on)
+
+TEST KEYS (TESTER build only; press them as HOST during a run, the joiners follow your round)
+Any of them makes that run unranked (it isn't sent to the leaderboard).
+
+NEW TONIGHT
+  Ctrl+HOME        GONE FISHIN' right now (the fishing round; starts the sunset)
+  Ctrl+PAGE_UP     THE FESTIVAL next round (the sky jumps to the arc's sunset for it)
+  Ctrl+PAGE_DOWN   move the day-night sky on by one round (sunset -> night -> sunrise -> midday)
+  Ctrl+0           next round: THE ESCORT (CHARLENE, the B-1, and her four escorts)
+  Ctrl+-  (minus)  next round: THE DECOY (the bait UAV in the far north, then the Spear UAVs)
+  Ctrl+.  (period) next round: IFF FATAL ERROR / DI..ANT TH..D..R (the lightning A-10; only this key brings it)
+
+  Ctrl+F10   fishing test: one fishing ground's 8 shoals + SAL's boat (press 2: hit spheres on / off for the next
+             spawn; press 3: take it all off)
+  Ctrl+F12   festival test: one cruise-missile salvo from the north at the runway + the air raid siren for 20 s
+  Ctrl+F6    sky test, one step a press: 1 read, 2 sunset, 3 sun only, 4 night, 5 put everything back
+  Ctrl+F5    escort landing test: CHARLENE alone on final, no enemies (watch her land)
+  Ctrl+DEL   ZFA-44 carriers unlocked + one sent now
+  Ctrl+9     ZFA-44 look test: the nearest enemy (or VALKA) dressed as the ZFA-44; press again to undo
+             (each new dressing tries the next of 4 paints: tell me which one looks right)
+  Ctrl+=     DECOY Spear test: the Tonitrus Spear called on you (fly straight once, then turning)
+  Ctrl+BACKSPACE   DECOY lock test: one Spear UAV 3 km ahead locks you; kill it inside 8 s, then let it strike
+  Ctrl+,  (comma)  storm test: AC8's lightning on you for 60 s; press 2: the "stall" made 3 s long; press 3: off
+
+AS BEFORE
+  Ctrl+1 shuttle, Ctrl+2 MINDRIPPER, Ctrl+3 amphibious, Ctrl+4 Ladons, Ctrl+5 Alicorn, Ctrl+7 AB.L..IN,
+  Ctrl+8 VALKA, Ctrl+END Spaceport Assault, Ctrl+INS Spaceport Retake  (next round)
+  Ctrl+6 a top-tier ace flight now, Ctrl+F9 +5,000 zollars, Ctrl+F11 bomber-raid crash test,
+  Ctrl+F8 open the Survival map from the main menu
+
+  In the break between rounds, a special key starts that special 3 s later. During a fight it becomes the next round.
+
+EVERYDAY KEYS (every build)
+  Ctrl+F1 / F2 / F3   use a bought tactical item: airstrike / ECM burst / decoy
+  Ctrl+F4             give your allies their next order
+  I                   show / hide the info wall
+  O                   while shot down in co-op: watch the next player
+  Ctrl+F7             save the HUD layout to hud_dump.txt (for bug reports)

@@ -1480,3 +1480,69 @@ None of it is a hard rule until a test confirms it.
 - Given out as patches (2026-11-05, Scripts + default ini over a 0.73.78 COOP2MP install, on runtime 0.32.23):
   testing/builds/AC8SurvivalMode_COOP2MP_0.73.84_TESTER_Patch.zip and AC8SurvivalMode_COOP2MP_0.73.84_Patch.zip,
   CHANGELOG_0.73.84.txt; they replace 0.73.83's. Register their hashes from the game's first log line.
+
+## 0.74.0-coop2mp.86: GONE FISHIN', the day-night arc, THE FESTIVAL, THE ESCORT, THE DECOY, the ZFA-44 and a lightning Anomaly (runtime 0.32.24; 2026-11-06/07; built, NOT yet run in game)
+One night's work (user, 2026-11-06: "start doing everything", then "finish everything off tonight, do a code review and a
+clean up, package a build, including one for Alyssa to test. I want all of our stuff we built tonight in this build").
+Branches: feature/fishing (research, the build data), feature/fishing-lua, feature/zfa44, feature/decoy (the integration
+branch every other was merged into), feature/thunder; worktrees E:\ACE8 SM fishing / fishing-lua / zfa44 / decoy /
+thunder (build\ inputs and tools\bin / llvm junctioned to the main tree's). None of it is a hard rule until a test
+confirms it. Design and research: FISHING_ROUND_PLAN.md (section 0: the user's decisions), tools/re/FISHING.md,
+ESCORT.md, DECOY.md, ZFA44.md, THUNDER.md, COMONA_MAP.md, LASER_INTERCEPTOR.md; build/research/{comona,escort,decoy,
+lightning,festival} hold the dumps and scripts (git-ignored).
+- Rule (user, 2026-11-06): no other mod's files, assets, tables, values or text in Survival (the Project section above),
+  with one exception: the ZFA-44 from the user's OWN AC7 mod Alicorn Special Raid IV ("my own mod and I NEED the FA44
+  ... the Model inside is edited": its uavs_SM, paint, actor and weapons).
+- GONE FISHIN' (sv_fishing.lua, SPC.kinds.fishing; from round 7, once a run): Comona's festival needs fish, SAL enlists the
+  air force; 24 invisible shoals (a Survival copy of the stock invisible turret pawn GR000_dummy, SV_Shoal, + an 8 m
+  EnemyPawn hit sphere added at spawn) at three grounds 7.5 km out (North Shoal, Lighthouse Bank, The Deep Hole), one
+  random 24-catch deck, 180 s, each catch credited to its shooter (co-op: the host draws, each player's own haul), SAL's
+  allied fishing boat (VE027_boat2) with a kg penalty on this game's own hits, a weigh-in card (grade, pay: ~6,000 Z an
+  A, ~9,000 Z an S at round 7), SAL's lines on Survival's new subtitle strip (sv_subs.lua SUB.say).
+- The day-night arc (sv_sky.lua; F = the fishing round): F+1..F+5 the sun sinks, F+6 sunset, F+7 night (moon, stars at
+  Mission 22's maximum), F+8..F+11 the sun rises in the east (+X; north is -Y) to midday, held after; written to the sky
+  renderer's working copies + the sun light (the stock CSP_ms04 asset never touched), MPC values each tick, restored on
+  run end / quit / restart; co-op "rnd" field 15 = F. The level's clock (10:10) is only a display. VALKA is not ready
+  from F until the arc is back at midday (user).
+- THE FESTIVAL (sv_festival.lua; round F+6, never drawn): thanks from SAL and COMONA CONTROL, the stock Comona air raid
+  siren at the airfield, four Online Mode searchlights (GR053_seli), Tu-160 formations from N / W / S on 15-lap stand-off
+  racetracks 25 km out, salvos of Mission 30's path-flown cruise missiles (slcmp, boxed, 25 HP) at the runway; an impact
+  costs the airfield 8.
+- THE ESCORT (sv_escort.lua; from round 9, once a run): the allied B-1B CHARLENE and YORKE / ROCK (Su-57), ALI (Su-33),
+  DANIELLE (Su-35) from the SW corner (-41.1, +31.4 km) to the airfield, enemies ordered onto her (out of the director
+  and the hunt), AI landing the stock way (Mission 14's C-130 / Mission 26's carrier landing: glide-slope final, a rollout
+  at 50 km/h, MOONCHILD's taxi path reversed to five parking slots), the escorts orbiting 4 km before the IAF and released
+  one at a time, safety timeouts; her loss fails the special (the run goes on); the win unlocks the ZFA-44 CARRIER in the
+  STORE for the run (the room's): Mission 17's cargo ship, allied, 15,000 Z, two at most, 3 rounds' service, launching
+  ZFA-44s from its container launchers (Mission 17's drone arms: E_Unit_01_drone_* units, user: "launch the ZFA-44 the
+  same way those drones launch"), a pose spawn as the fallback; the carrier borrows the AIRFIELD page's Revive row while
+  nobody's down (no free STORE row).
+- The ZFA-44 (tools/zfa44, sv_zfa44.lua): the user's uavs_SM (a CFA-44-based static mesh with Morgan / TLS parts, 24 m)
+  as one skeletal mesh SK_ZFA44 (a static mesh of ours crashed AC8 in SOLG's T0), the user's paint as ordinary textures
+  on the x40a's gear material instance, cooked versioned into SurvivalMode_ZFA44_P; ZFA.dress puts it on its host (an
+  allied Su-47 row SV_Zfa_Ally) at run time; dev and ZFA=1 zips only.
+- THE DECOY (sv_decoy.lua; from round 10, once a run): a Marker UAV (OP0033_uavst, its ALiveAIAirshipLaserPod) far north
+  as bait; then up to 35 trap UAVs round the players, each locking its closest player with the Tonitrus Spear guidance
+  laser; 8 s to kill it before the Spear (Mission 19's BP_RodsFromGod from its virtual shooter, fired at Player; 200 direct)
+  is called on that player; only the locked player's game runs the strike (KEEP_EVENTS ^RE_SV_Decoy).
+- IFF FATAL ERROR / DI..ANT TH..D..R (the THUNDER block in sv_anomalies.lua, TEST ONLY: only its test key brings it, user):
+  an A-10 (a10c_common on MINDRIPPER's unit) carrying AC8's stock lightning volume (BP_LightninigVolume_MS12): its strikes
+  only hide the HUD 2 s, play electronic noise 6-10 s, shake the camera and hold an engine flag 0.7 s (no damage, user);
+  AC8's lightning only ever strikes player planes; + a storm test key.
+- Keys: tools/README.md's "Ctrl keys" table (every Ctrl key bound once; the test keys stripped from friends' zips).
+- Packaging: novalka.py takes "valka" out of the rotation wherever it sits; package_release.sh ZFA=1 keeps the ZFA-44
+  (zip suffix _ZFA44) and strips the default ini's test-only sections too; four Lua tests made CRLF-safe.
+- Code review of 2026-11-07 (three reviewers, each finding verified; one fix agent): see the fix list below.
+  c0c56fd: co-op joiners' own container-launched ZFA-44s count for nobody (stand-in set, the arm recycled before a
+  forwarded launch, taken off with their ship by "es" field 10); THE ESCORT's escorts start on the build's sides (they'd
+  have crossed her track at Go); a pause-menu restart takes the festival's siren and searchlights, SAL's boat, the card,
+  the escort and the carriers off (the siren looped all next run); the arc keeps its sky view while live (it re-walked
+  ~100-350 ms every 30 s); GONE FISHIN' once a run across a host migration and only with its rows; SAL's boat out of the
+  host's hp batch (every joiner lost kg for the host's hit); a carrier sunk by its hull; a joiner's weigh-in keyed by run
+  and clamped; a festival impact record can't pay another missile (COOP.payHold, 1.5 s); kept sky values retried until
+  put back; ally copies switched off (not exploded) on "dn|id|r"; the ini rotation in CFG's order; the Worker's SPECIALS
+  gain escort / decoy / fishing / festival (REDEPLOY the Worker); package_test.sh's ZFA block and ini strip.
+- Still open: none of it run in game (each doc has its checklist; the riskiest: the shoals locked and hit, the renderer
+  copies holding the sky, the B-1's landing, a Su-47 launched from a drone rack, the guidance laser on a moving mark, the
+  Spear fired at Player, the Online searchlights, a Lua-spawned storm striking, the ZFA-44's paint route); the world data
+  is now 937 KB (the largest stock one is 615 KB); the carrier borrows the Revive row (no free STORE row: build data).

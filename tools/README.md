@@ -64,10 +64,15 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+- (`OEM_MINUS`) | THE DECOY next round (test) | sv_decoy.lua |
 | Ctrl+= (`OEM_PLUS`) | THE DECOY's Spear test: the Tonitrus Spear at you (test) | sv_decoy.lua |
 | Ctrl+BACKSPACE | THE DECOY's one-lock test: a Spear UAV 3 km ahead locks you (test) | sv_decoy.lua |
+| Ctrl+HOME | GONE FISHIN' now (test) | sv_fishing.lua |
+| Ctrl+PAGE_UP | THE FESTIVAL next round, the arc set so it's at sunset (test) | sv_festival.lua |
+| Ctrl+PAGE_DOWN | the day-night arc one round on (test) | sv_sky.lua |
+| Ctrl+, (`OEM_COMMA`) | the storm test: AC8's lightning on you 60 s; again: the stall flag 3 s; again: off (test) | sv_anomalies.lua |
+| Ctrl+. (`OEM_PERIOD`) | the next round is IFF FATAL ERROR / DI..ANT TH..D..R, the lightning Anomaly (test; never drawn) | sv_anomalies.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were
-Ctrl+PAGE_UP / PAGE_DOWN / HOME, which feature/fishing-lua gives THE FESTIVAL now, the day-night arc a step and GONE
-FISHIN' now: keep those three free here.
+Ctrl+PAGE_UP / PAGE_DOWN / HOME, now THE FESTIVAL's, the arc's step and GONE FISHIN''s; the lightning Anomaly's
+were Ctrl+HOME / Ctrl+0 (taken): Ctrl+, / Ctrl+. since the merge of 2026-11-07.
 
 ## Format notes (found while building Milestone 1)
 - A mission level's world settings import its MC, and the level imports every WD/EP (global + phases). The EP
