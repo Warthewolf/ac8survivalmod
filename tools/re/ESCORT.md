@@ -108,10 +108,10 @@ not yet run in game. None of it is a hard rule until a test confirms it.
 - NEXT row (`row`): `CHARLENE 85%  23.4 KM  LANDED 0/5`, then `CHARLENE LANDING  LANDED n/5`.
 
 **The ZFA-44 carriers** (the host's or solo; a joiner's STORE asks the host):
-- The STORE item `ZfaCarrier` ("ZFA-44 CARRIER", 15,000 Z, raise 1.0), only once unlocked; at most `max_up` 2 out.
+- The STORE item `ZfaCarrier` ("VAMPIRES": the user's name, 2026-11-07; 15,000 Z, raise 1.0), only once unlocked; at most `max_up` 2 out.
   STORE_PAGES has no free row (every page holds 6), so until the build gives it a row of its own it shares
-  `store_row` "Revive" (the AIRFIELD page's revive row, a dead row solo and in co-op while nobody's down; label "CALL A
-  ZFA-44 CARRIER"): sv_shop.lua `offer` asks ESC.rowItem; a revive to buy takes the row back.
+  `store_row` "Revive" (the AIRFIELD page's revive row, a dead row solo and in co-op while nobody's down; label
+  "VAMPIRES"): sv_shop.lua `offer` asks ESC.rowItem; a revive to buy takes the row back.
 - Bought: one of SV_Unit_Cargo1 / 2 spawned (its world-data spot); its hull recorded as it spawns (NotifyOnNewObject
   LiveAIGameObject while spawningUnit is a cargo unit, a "ctslf" name that isn't a "cntus").
 - Launch (`launch` "container"): first_s after it's on station its next launcher arm's record (`launchers[ship][n]`:
@@ -127,7 +127,7 @@ not yet run in game. None of it is a hard rule until a test confirms it.
 - Every game dresses its own planes of those flights as the ZFA-44 (`zfa`: sv_zfa44.lua ZFA.dress, paint 3, two a tick;
   ZFA.prodTick hides the host's meshes again every hide_s). Without SK_ZFA44 (every zip: the container is the user's dev
   builds only, and packaging cuts sv_zfa44.lua to its first line) they fly as their host airframe, said once.
-- The ALLIES row adds `ZFA-44 CARRIERS n`.
+- The ALLIES row adds `VAMPIRES n`. The ships keep "ZFA-44 CARRIER" on their boxes and callouts.
 
 **Co-op**: every unit is an ally (ALLY.unit; sv_coop.lua allyUnit: copies' hits aren't a joiner's). The host sends
 `es|<state>|<landed>|<of>|<her health %>|<km>|<unlocked>|<carriers out>|<landing closed>` on a change (once a second at
@@ -196,8 +196,8 @@ know "escort" yet and drops it before the score (add `escort: "The Escort"` and 
    for them in co-op); enemies spawning ahead of her; her health holding a while (health_x).
 3. Her final at the IAF (gear, orbit records, landing closed: the player can't land), the escorts circling, her landing
    as in T0, then each escort released and landing one at a time; the round not ending before.
-4. Win: ESCORT COMPLETE, the pay, her line in two callouts, landing open; the AIRFIELD page's revive row now `CALL A ZFA-44
-   CARRIER 15000 Z` (solo, or co-op with nobody down).
+4. Win: ESCORT COMPLETE, the pay, her line in two callouts, landing open; the AIRFIELD page's revive row now `VAMPIRES
+   15000 Z` (solo, or co-op with nobody down).
 5. Loss (let her die): CHARLENE IS DOWN, no unlock, the run goes on, the round ends with the enemies.
 6. A carrier: on station at its spot, its launcher arms firing (`RE_SV_CargoLaunch_1_1 fired`) and the planes coming
    off it (else `launched by pose`), dressed as the ZFA-44 in a dev build with ZFA=1, fighting; a flight shot down, the

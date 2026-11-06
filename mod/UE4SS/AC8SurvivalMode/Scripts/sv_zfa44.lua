@@ -32,10 +32,12 @@ ZFA.C = {
     missing_again_s = 60,                   -- no SK_ZFA44: tried again this long after
     skip = { "^SV_Unit_Ladon", "Alicorn", "^SV_Unit_Coop", "Eml", "SOLG" },   -- never a T0 host (big ones, stand-ins, dummies)
 }
--- each slot's textures by the cooked material it holds (tools/zfa44/ue_import.py PAINT); the canopy keeps AC8's
--- M_NPC_Canopy unless a variant tints it
-ZFA.SLOT_TEX = { Body = { "T_ZFA44_C", "T_ZFA44_N" }, Pod = { "T_ZFA44_Pod_C", "T_ZFA44_Pod_N" },
-                 Fairing = { "T_ZFA44_Fair_C", "T_ZFA44_Fair_N" } }
+-- each slot's textures by the cooked material it holds (tools/zfa44/ue_import.py PAINT): colour, normals, and the Livemap
+-- made from its own AC7 MREC (the TLS pod's from w_tls_x1_MREC; user, 2026-11-07); the canopy keeps AC8's M_NPC_Canopy
+-- unless a variant tints it
+ZFA.SLOT_TEX = { Body = { "T_ZFA44_C", "T_ZFA44_N", "T_ZFA44_LM_MREC" },
+                 Pod = { "T_ZFA44_Pod_C", "T_ZFA44_Pod_N", "T_ZFA44_Pod_LM_MREC" },
+                 Fairing = { "T_ZFA44_Fair_C", "T_ZFA44_Fair_N", "T_ZFA44_Fair_LM_MREC" } }
 ZFA.SCALARS = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
                 PlayerPlane_Damage = 0 }
 -- (3, the gear instance with a flat normal, is the route proven to draw: the Falken's exactly, VALKA's paint 16, SOLG
@@ -44,7 +46,7 @@ ZFA.PAINTS = {
     { name = "COOKED" },                                        -- MI_ZFA44_* as built, on the game's own gear instance
     { name = "GEAR, ITS NORMALS", mids = true },                -- the same at run time (VALKA's paint 15, SOLG T0b's way)
     { name = "GEAR, FLAT NORMAL", mids = true, flat = true },   -- the Falken's exactly (VALKA's paint 16)
-    { name = "GEAR, MREC LIVEMAP, CANOPY TINTED", mids = true, livemap = "T_ZFA44_LM_MREC",
+    { name = "GEAR, MREC LIVEMAPS, CANOPY TINTED", mids = true, mrec = true,     -- each part on its own AC7 MREC
       canopy = { Basecolor = "rt:0.05,0.045,0.03", Livemap = "rt:0.6,0.15,1" } },
 }
 -- the host's sockets an afterburner hangs on (VALKA's x40a aliases: DT_OP0016_x40a_FX_MapTable), looked up on each of its
@@ -158,7 +160,7 @@ do
         local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
         local gear, why = asset(C.gear)
         local dn = asset(C.default_normal)
-        local lm = asset(C.tex .. (pv.livemap or "T_ZFA44_LM"))
+        local lm = asset(C.tex .. "T_ZFA44_LM")
         if not (valid(kml) and gear) then return "NOT painted: " .. C.gear:match("[^/]+$") .. " " .. tostring(why) end
         local wc = liveObj(survivalPC) and survivalPC or s.host
         local said, bad = {}, {}
@@ -174,6 +176,7 @@ do
                         want.Basecolor = asset(C.tex .. tx[1])
                         want.Normalmap = pv.flat and dn or asset(C.tex .. tx[2])
                         want.Livemap = lm
+                        if pv.mrec and tx[3] then want.Livemap = asset(C.tex .. tx[3]) or lm end
                     else
                         want.Basecolor, want.Livemap, want.Normalmap = flatTex(tint.Basecolor), flatTex(tint.Livemap), dn
                     end
@@ -198,7 +201,8 @@ do
         end
         return string.format("instances of %s on %s%s, Normalmap %s, Livemap %s", short(gear),
             #said > 0 and table.concat(said, ", ") or "no slot", #bad > 0 and (", NOT on " .. table.concat(bad, ", ")) or "",
-            pv.flat and "DefaultNormal (NormalIntencity 0)" or "its own", pv.livemap or "T_ZFA44_LM (flat 0 / 0.75 / 1)")
+            pv.flat and "DefaultNormal (NormalIntencity 0)" or "its own",
+            pv.mrec and "each part's own from AC7's MREC (body, TLS pod, fairing)" or "T_ZFA44_LM (flat 0 / 0.75 / 1)")
     end
     local function paintIndex(k) k = math.floor(tonumber(k) or 1); return ((k - 1) % #ZFA.PAINTS) + 1 end
 

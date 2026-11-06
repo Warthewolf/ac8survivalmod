@@ -17,7 +17,7 @@ NEW TONIGHT
   Ctrl+F12   festival test: one cruise-missile salvo from the north at the runway + the air raid siren for 20 s
   Ctrl+F6    sky test, one step a press: 1 read, 2 sunset, 3 sun only, 4 night, 5 put everything back
   Ctrl+F5    escort landing test: CHARLENE alone on final, no enemies (watch her land)
-  Ctrl+DEL   ZFA-44 carriers unlocked + one sent now
+  Ctrl+DEL   VAMPIRES (the ZFA-44 carriers) unlocked + one sent now
   Ctrl+9     ZFA-44 look test: the nearest enemy (or VALKA) dressed as the ZFA-44; press again to undo
              (each new dressing tries the next of 4 paints: tell me which one looks right)
   Ctrl+=     DECOY Spear test: the Tonitrus Spear called on you (fly straight once, then turning)

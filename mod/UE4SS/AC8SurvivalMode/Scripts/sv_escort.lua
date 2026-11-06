@@ -1515,8 +1515,8 @@ do
             local s, news = rawLine(...)
             local okN, n = pcall(ESC.carriersUp)
             if okN and n and n > 0 then
-                s = (s and (s .. "   ") or "") .. string.format("ZFA-44 CARRIERS %d", n)
-                news = (news and (news .. " ") or "") .. "ZFA-44"
+                s = (s and (s .. "   ") or "") .. string.format("VAMPIRES %d", n)
+                news = (news and (news .. " ") or "") .. "VAMPIRES"
             end
             return s, news
         end
@@ -1718,7 +1718,7 @@ function ESC.testCarrier()
     RUN.zfa = { unlocked = true, test = true }
     RUN.dirty = true
     local ok, msg = ESC.buyCarrier(nil, 0)
-    hudCallout("TEST: ZFA-44 CARRIER", ok and "UNLOCKED, ONE SENT" or ("UNLOCKED: " .. tostring(msg)))
+    hudCallout("TEST: VAMPIRES", ok and "UNLOCKED, ONE SENT" or ("UNLOCKED: " .. tostring(msg)))
     log("escort: test: Ctrl+DEL: the ZFA-44 carriers unlocked; " .. tostring(msg))
 end
 -- TEST ONLY END

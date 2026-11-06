@@ -1512,7 +1512,7 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   DANIELLE (Su-35) from the SW corner (-41.1, +31.4 km) to the airfield, enemies ordered onto her (out of the director
   and the hunt), AI landing the stock way (Mission 14's C-130 / Mission 26's carrier landing: glide-slope final, a rollout
   at 50 km/h, MOONCHILD's taxi path reversed to five parking slots), the escorts orbiting 4 km before the IAF and released
-  one at a time, safety timeouts; her loss fails the special (the run goes on); the win unlocks the ZFA-44 CARRIER in the
+  one at a time, safety timeouts; her loss fails the special (the run goes on); the win unlocks VAMPIRES (the ZFA-44 carriers) in the
   STORE for the run (the room's): Mission 17's cargo ship, allied, 15,000 Z, two at most, 3 rounds' service, launching
   ZFA-44s from its container launchers (Mission 17's drone arms: E_Unit_01_drone_* units, user: "launch the ZFA-44 the
   same way those drones launch"), a pose spawn as the fallback; the carrier borrows the AIRFIELD page's Revive row while
@@ -1546,3 +1546,11 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   copies holding the sky, the B-1's landing, a Su-47 launched from a drone rack, the guidance laser on a moving mark, the
   Spear fired at Player, the Online searchlights, a Lua-spawned storm striking, the ZFA-44's paint route); the world data
   is now 937 KB (the largest stock one is 615 KB); the carrier borrows the Revive row (no free STORE row: build data).
+- The STORE item renamed VAMPIRES (user, 2026-11-07: "the ZFA-44's store item should be called VAMPIRES"): its row, THE
+  ESCORT's win callout ("VAMPIRES IN THE STORE") and the ALLIES row ("VAMPIRES n"); the ships keep "ZFA-44 CARRIER" on
+  their boxes and callouts, the item key ZfaCarrier and [shop.zfacarrier] as they were.
+- The ZFA-44's TLS pod (user, 2026-11-07: "make sure that the textures for the TLS on the ZFA-44 were ported over from
+  ACE7 too"): AC7's w_tls_x1_D / _N were in from the first build; its w_tls_x1_MREC now too (T_ZFA44_Pod_LM_MREC, and the
+  fairing's mrgn_00_MREC crop), used by paint 4, which had put the body's MREC on the pod. The default paint 3 (the proven
+  route: flat normal, flat Livemap) shows each part's colour map only; Ctrl+9 (test) cycles 1-4. The pod's lens stays on
+  AC8's canopy glass, as AC7 had it on glass (w_tls_x1_Glass_Inst: only the generic Glass_N, tiled).
