@@ -17,7 +17,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+-- (CRLF checkouts: the sources searched as git stores them, LF)
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
