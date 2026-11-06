@@ -8,7 +8,8 @@
 local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+-- (CRLF checkouts: the sources searched as git stores them, LF)
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
