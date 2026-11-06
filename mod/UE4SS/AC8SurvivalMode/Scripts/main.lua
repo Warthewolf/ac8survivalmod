@@ -34,6 +34,7 @@ local MODULES = {
     "sv_coop",
     "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
+    "sv_zfa44",                    -- the ZFA-44's test T0 (tools/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
 }
 
