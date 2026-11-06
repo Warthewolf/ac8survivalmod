@@ -8,8 +8,9 @@
 -- (g N / W / S, k 1-3) of 4 side by side 60 m apart, boxed and TGT; RE_SV_FestCM_<g><k> flies them from the launch point
 -- down to ~100 m and on to the runway at 600 km/h (path SV_Path_FestCM_<g>, engagement None, look-ahead 0); the impact
 -- record RE_SV_FestCMHit_<g><k>_<i> (i 0-3) destroys that one object (LiveDestroyUnitExecution). Lua spawns the unit at the
--- launch point (launch_z up, facing the runway), fires the launch record, and on the host fires the impact record when
--- that missile is within impact_m of the runway.
+-- launch point (launch_z up, at its group's exact yaw: FEST.LAUNCH_YAW), fires the launch record, and on the host fires
+-- the impact record when that missile is within impact_m of the runway, measured flat (they cruise ~100 m up and pass
+-- within 90 m of its centre).
 FEST = { actors = {}, sirenActor = nil }
 do
 local function cfg() return CFG.specials.festival end
@@ -25,6 +26,10 @@ function FEST.launchPoint(g)
 end
 -- the UE yaw (degrees, 0 = +X east, 90 = +Y south) from (x, y) to (tx, ty)
 function FEST.yawTo(x, y, tx, ty) return math.deg(math.atan(ty - y, tx - x)) end
+-- each group's spawn yaw, exactly as the build data's lanes want it (feature/fishing d0fc323: N 90, W 0, S -90; any other
+-- yaw turns the unit's four missiles off their lanes), not worked out with atan
+FEST.LAUNCH_YAW = { N = 90, W = 0, S = -90 }
+function FEST.launchYaw(g) return FEST.LAUNCH_YAW[tostring(g):upper()] end
 -- from a location to the runway: the horizontal distance (m) and the height over it (m)
 function FEST.toRunway(l)
     local r, c = cfg().rwy, cfg()
@@ -147,7 +152,7 @@ local function start(now)
     local unit = FEST.unit(G, K)
     local x, y, z = FEST.launchPoint(G)
     local r0 = c().rwy
-    local yaw = FEST.yawTo(x, y, r0[1], r0[2])
+    local yaw = FEST.launchYaw(G)
     local r = FEST.spawn(unit, x, y, z, yaw)
     local objs = {}
     for _, o in ipairs(FEST.actors[unit] or {}) do if liveObj(o) then objs[#objs + 1] = o end end
@@ -160,8 +165,8 @@ local function start(now)
         pcall(function() h = o.HealthInternal end)
         names[#names + 1] = string.format("%d %s (health %s)", m.i, m.name, tostring(h))
     end
-    log(string.format("festival test: %s at the north launch point (%d, %d), %d cm up, yaw %.1f (towards the runway, %.1f km): %s; "
-        .. "missiles in the spawner's order (the impact records' i, unconfirmed): %s", unit, x, y, z, yaw,
+    log(string.format("festival test: %s at the north launch point (%d, %d), %d cm up, yaw %d (the runway's bearing %.1f, %.1f km): %s; "
+        .. "missiles in the spawner's order (the impact records' i, unconfirmed): %s", unit, x, y, z, yaw, FEST.yawTo(x, y, r0[1], r0[2]),
         math.sqrt((x - r0[1]) ^ 2 + (y - r0[2]) ^ 2) / 100000, r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"),
         #names > 0 and table.concat(names, ", ") or "none seen"))
     local up = (tonumber(c().siren_up_m) or 10) * 100

@@ -138,6 +138,7 @@ for _, g in ipairs({ { "N", 0, -2500000, 90 }, { "W", -2500000, 0, 0 }, { "S", 0
     local x, y, z = FEST.launchPoint(g[1])
     check(x == rx + g[2] and y == ry + g[3] and z == 200000, g[1] .. ": 25 km out, 2 km up")
     check(near(FEST.yawTo(x, y, rx, ry), g[4]), g[1] .. ": yaw " .. g[4] .. " faces the runway (" .. FEST.yawTo(x, y, rx, ry) .. ")")
+    check(FEST.launchYaw(g[1]) == g[4] and math.type(FEST.launchYaw(g[1])) == "integer", g[1] .. ": its spawn yaw exactly " .. g[4])
 end
 local d, h = FEST.toRunway({ X = rx + 30000, Y = ry + 40000, Z = 10500 })
 check(near(d, 500) and near(h, 100), "toRunway: 500 m out, 100 m up")
@@ -158,7 +159,7 @@ COOP.client = function() return false end
 print("the launch")
 press("F12")
 local s = spawns[1]
-check(s and s.unit == "SV_Unit_FestCM_N1" and s.x == rx and s.y == ry - 2500000 and s.z == 200000 and near(s.yaw, 90), "SV_Unit_FestCM_N1 at N, 2 km up, yaw 90")
+check(s and s.unit == "SV_Unit_FestCM_N1" and s.x == rx and s.y == ry - 2500000 and s.z == 200000 and s.yaw == 90, "SV_Unit_FestCM_N1 at N, 2 km up, yaw exactly 90")
 check(s.su == "SV_Unit_FestCM_N1" and spawningUnit == nil, "spawningUnit around the spawn")
 local T = FEST.test
 check(#T.ms == 4 and T.ms[1].i == 0 and T.ms[4].i == 3, "4 missiles in the spawner's order, i 0-3")
