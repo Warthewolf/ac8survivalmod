@@ -383,3 +383,47 @@ up 1.5 s on: finished off here (logged: the record's i may not be the spawner's 
    (and a late joiner blending in); the siren on both; VALKA never drawn from GONE FISHIN' to F+11.
 9. Quit and restart mid-arc: the sky back to stock (`sky: ... put back`), nothing left playing.
 10. The Alicorn round still comes with the searchlights' rows missing (pull one from the build to try).
+
+## 10. Code review of 2026-11-07: fixes (branch feature/decoy; nothing run in game)
+Three reviewers checked each finding against the code; these are the ones in GONE FISHIN', THE FESTIVAL, the arc and the
+subtitle strip. Checks: fishing_test, festival_test, arc_rounds_test, sky_test, copy_floor_test (the co-op side).
+- **A restart mid-raid** (finding 3): the siren is our own actor, not the mission's, so a pause-menu Restart left it
+  looping all the next run. sv_main.lua's level-load block now also calls FEST.restart (the siren off, the searchlights
+  off, a joiner's raid watch forgotten: `festival: the run starts over: the siren off (...), N searchlights off`),
+  FISH.boatOff, SUB.cardOff and ESC.restart (tools/re/ESCORT.md). THE DECOY lets its locks go with the old D itself.
+- **The arc's view** (finding 4): SKY.viewCached kept a view 30 s, so the arc walked again (3-5 FindAllOf, ~100-350 ms)
+  every 30 s with everything live, and every tick half while no sky actor was found. Now the view is kept while every
+  object of it is live, however old (maxAge only when a caller asks for one), found afresh the moment one goes, and one
+  with no sky actor is looked for again at most every 10 s (SKY.NO_ACTOR_S; SKY.viewWalks() counts the walks).
+- **Host migration** (finding 5): only the host set RUN.fished, so a host by migration (the arc's F from "rnd" field 15,
+  no RUN.fished) could draw a second GONE FISHIN'. FISH.ready: `once` and (RUN.fished or SKY.arcF()).
+- **SAL's boat in co-op** (finding 6): the host's "hp" batch carried the boat, a joiner wrote it onto its copy, and that
+  joiner's boatTick took the drop as its own player's hit (every joiner -25 kg for the host's splash). The boat's unit is
+  left out of the host's batch (FISH.isBoat) and a joiner never writes "hp" onto its boat copy (an older host's): each
+  game's copy moves with its own player's hits only, and a hit still costs its shooter.
+- **A joiner unpaid after a restart** (finding 8): FISH.cl.paidRound was only reset with the level, so after the host's
+  restart (newRunHere, same level) the new run's round N weigh-in wasn't paid. It's keyed by the run now (L.paidRun = RUN).
+- **What the host sends, in bounds** (finding 9): "fw": a haul at most FISH.maxShoals() (8 a ground x the units, 24) x
+  FISH.maxKg() (the heaviest catch's top, 400), hits and empties at most the shoals, the best fish at most 400 kg; "fwe":
+  the round at most 1000, the shoals at most 24, the team and the allies' kg at most the round's most; one weigh-in's pay
+  at most FISH.PAY_MAX (1,000,000: sv_coop.lua's CREDITS_MAX), the host's own too.
+- **No round without its rows** (finding 10): FISH.ready is false while FISH.rowsReady isn't true (FISH.setup at the main
+  menu), but for a test key's forced round: `fishing: no GONE FISHIN' round: the shoal's rows aren't in the game's
+  tables (...)`, once.
+- **The festival's impact record** (finding 11): RE_SV_FestCMHit_<g><k>_<i>'s i is the spawner's order only if the build's
+  desc order and the spawn's agree (unconfirmed); one naming another missile j destroyed j, which then paid as a kill.
+  Now the impacting missile is finished off from Lua at once, and the salvo's other missiles still up are held unpaid
+  1.5 s (FEST.IMPACT_HOLD_S: off the sweep, down and cleaned; on the host COOP.payHold, so its "dn" is a removal, "r", on
+  every game); one that goes down in the hold was the record's (`festival: missile i of <unit> went down within 1.5 s of
+  its salvo's impact record: the record's (its i not the spawner's order), not paid`), one still up after it is let go.
+  The price: a missile you really shoot down in those 1.5 s doesn't pay either.
+- **The sky's originals** (finding 12): SKY.restore forgot a value whose object it couldn't find (it stayed as the arc
+  had left it). It's kept now, its original with it, and tried again every tick (SKY.retryTick from sv_main.lua's
+  probeTick: on the kept view, on a fresh one 10 s on, then 20, 40, ... at most every 5 minutes) until it's put back
+  (`sky: <why>: every kept value put back now (N tries)`), not while the arc writes the sky; the level torn down
+  forgets it untouched (LEVEL_DROPS). The custom sun's flags as before (SKY.idleTick).
+- **SAL's "your friend" line solo** (finding 17): it went by the slot (-1, the allies', only in co-op), so solo it never
+  played. It goes by who it was now (not you nor a teammate); solo the catch is still credited to you (your haul, the
+  card and the Big One's bonus unchanged), which was simpler and kinder than moving it to the allies' haul.
+- The rotation's commented ini line and the Worker's SPECIALS (findings 14, 15): tools/re/ESCORT.md.
+- rounds_test (failing on the base: 7) stubs FISH: it loads none of 0.74.0's parts and GONE FISHIN' is in the rotation.

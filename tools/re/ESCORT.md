@@ -365,3 +365,50 @@ sv_main.lua); tools/checks/escort_test.sh covers each. Not a hard rule until a t
   fires `RE_SV_CargoRemove_<n>` (was RE_SV_Cargo<n>Remove, not in the build).
 - Every unit, record and path name these parts use was checked against the saved packages of `ZFA=1 sh tools/build_all.sh`
   (2026-11-07): all there.
+
+## Code review of 2026-11-07: fixes (branch feature/decoy; nothing run in game)
+Three reviewers checked each finding against the code; these are the ones in THE ESCORT and the carriers. Checks:
+escort_test (each below), copy_floor_test (the co-op side), leaderboard_test's rotation mode, worker.test.mjs.
+- **The escorts' sides** (finding 2): CFG's side signs put YORKE and ALI on her left, ROCK and DANIELLE on her right, 250 /
+  500 m behind, all at her height, the opposite of the build's routes (survival_events.py ESC_ESCORTS: YORKE 0.6 km and ALI
+  1.2 km to her right, ROCK and DANIELLE to her left, 100 / 250 m up, none behind), so at Go each crossed her track at 600
+  km/h. Each escort's CFG entry now has `right_m` / `up_m` (600 / 100, -600 / 100, 1200 / 250, -1200 / 250) and startPose
+  puts it right_m across the exact start -> geo.iaf line (the build's esc_route_pts) and up_m above her (start.side_m /
+  back_m gone). escort_test reads ESC_START and ESC_ESCORTS from survival_events.py and checks each spawn within 1 m of
+  its route's start, on the right side, none behind.
+- **A sunk ship that stayed up** (finding 7): its unit's alive count holds its launchers and Stinger mount, so a ship whose
+  hull sank held its slot and the STORE's count. carrierTick counts it sunk when its hull (ESC.hulls, liveAddr) is at
+  HealthInternal 0, or gone after it was seen live: `carrier: <name> sunk N s after it came (its hull at 0 health; ...): N
+  of its parts still up finished off, its unit off the list 3 s on`; its slot is held (state "leaving") until that
+  recycle, so a ship bought meanwhile can't be taken off by it. A freed slot forgets its hull and objects (ESC.hulls /
+  ESC.shipObjs), so the next ship of that unit is recorded afresh, never the old switched-off or sunk hull.
+- **Co-op ZFA-44s on joiners** (finding 1; also ZFA44.md): the host's `RE_SV_CargoLaunch_<s>_<n>` stays forwarded (each
+  joiner sees the launches), and each joiner's copy of the ship launches ZFA-44s of its own (no co-op id). Now
+  ESC.localZfa() (every zfa-kind plane here: ESC.planes and the allies' list) goes into sv_coop.lua M.standInSet() as -1
+  (the host's allies' copies), so their damage on an enemy copy is never sent as that joiner's "ht" (and M.floorLoss sends
+  only what a copy's map doesn't explain when it shows another's hit: never the whole); before a forwarded launch fires
+  on a joiner, ESC.beforeHostEvent takes the arm's unit off that game's list (SV_Recycle(unit, 1): from a ship's 7th
+  launch its arm spawned nothing there) and switches that ship's last flight there off (`carrier: the host's
+  RE_SV_CargoLaunch_1_2 here: E_Unit_01_drone_4_0 first (...); N of this game's ZFA-44s of ship 1 before it switched
+  off`); "es" field 10 carries the ships up as bits, and a ship the host no longer has (left or sunk) takes the joiner's
+  own ZFA-44s of it off (ESC.localOff: `carrier: the host's ZFA-44 CARRIER 1 is gone (...): N of this game's own ZFA-44s
+  of it switched off, M of its arms' units off the list 2 s on`). An older host (no field 10): all of them once it has no
+  carrier out. A bound copy of the host's pose flight (COOP.copyAt) is left to the host's "dn".
+- **A restart mid-escort** (finding 3): ESC.restart(why), from sv_main.lua's level-load block before the new run's D: the
+  operation's aircraft taken off as its round's end does (switched off, joiners' copies down first, unpaid, units off
+  the list 2 s on), the players' landing opened again if she'd closed it, every carrier out taken off the same way, a
+  joiner's own ZFA-44s off (`escort: <why>: N of the escort's aircraft and M carriers taken off, K of this game's own
+  ZFA-44s off`). Before, ESC.tick dropped the old run's escort and carriers untouched: landing closed, CHARLENE and the
+  ships up with nobody minding them, a ship's STORE slot held.
+- **Parked allies exploding on joiners** (finding 13): at a won round's end, a carrier leaving, its flight (and VOID
+  WATCHER 1 going home) the host's COOP.removeNow sends "dn|id|r", and a joiner's killCopy finished each allied copy off.
+  Now an ally copy's "dn|id|r" switches it off there as the host does (no box or lock-on, invincible, inactive, hidden,
+  no collision, no tick) and takes its unit off that game's list 2 s on once no copy of it is left (`coop: the host took
+  an ally off (copy N, <unit>): switched off here, not finished off`, once).
+- **The rotation line** (finding 14): the default ini's commented rotation now lists the specials in CFG's order after
+  sv_config.lua's append (..., spaceport, escort, fishing, decoy), its note too; leaderboard_test's rotation mode
+  uncomments it as shipped and finds nothing edited (LB.edited, COOP.cfgDiff).
+- **The leaderboard** (finding 15): the Worker's SPECIALS has escort, decoy, fishing and festival (an unknown kind was
+  dropped before the score): redeploy it.
+- Open: the joiners' own ZFA-44s still fight the enemy copies there (for the look; nothing of it counts), and a forwarded
+  destroy record that takes a copy before the host's "dn" arrives can still be paid there by the raw rule (not new).

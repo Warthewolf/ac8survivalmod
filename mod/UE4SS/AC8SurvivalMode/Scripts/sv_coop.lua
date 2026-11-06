@@ -104,6 +104,17 @@ function COOP.payOwn(n, why)
 end
 -- (the host) one object taken off without a kill (THE FESTIVAL's missile on the runway): its copies down on every game
 -- first, unpaid ("dn|<id>|r"), as COOP.removeNow does a whole unit's. Whether it had an id.
+-- ((code review of 2026-11-07, finding 11) (the host) object o held unpaid (on) or let go (off): should it go down while
+-- held, its "dn" is a removal ("r": nobody's kill, on every game). Whether o is one of the host's mirrored objects
+function COOP.payHold(o, on)
+    if not (COOP.host() and o ~= nil) then return false end
+    local a = addrOf(o)
+    if not a then return false end
+    for _, e in pairs(M.byId) do
+        if e.addr == a and not e.dead then e.unpaid = on and true or nil; return true end
+    end
+    return false
+end
 function COOP.removeObj(o)
     if not (COOP.host() and o ~= nil) then return false end
     local a = addrOf(o)
@@ -421,7 +432,12 @@ local KEEP_EVENTS = {
     -- decoy can't let them through): the Spear and its sure kill at "Player" (only the locked player's game calls them),
     -- each game's own lasers on its own marks, its bait's ping and its radio lines (the host's locks come as "dk")
     "^RE_SV_DecoySpear_", "^RE_SV_DecoyKill$", "^RE_SV_DecoyLaser", "^RE_SV_DecoyBait", "^RE_SV_DecoyRadio_",
-}                              -- (holds and frees, RE_SV_WolfHold / WolfFree and RE_SV_DirHold / DirFree, are forwarded:
+}                              -- ((code review of 2026-11-07, finding 1) the carriers' RE_SV_CargoLaunch_<s>_<n> is
+                               -- forwarded for the look: each joiner's copy of the ship launches ZFA-44s of its own, which
+                               -- M.standInSet takes as the host's allies' (sv_escort.lua ESC.localZfa), hostEvent takes the
+                               -- arm's unit off that game's list first (ESC.beforeHostEvent) and "es" field 10 takes them
+                               -- off with their ship)
+                               -- (holds and frees, RE_SV_WolfHold / WolfFree and RE_SV_DirHold / DirFree, are forwarded:
                                -- a joiner's copies hold too; so is a Ladon's rage, RE_SV_LadonRage<Key>, P7: harmless,
                                -- the copies are moved by the stream. AB.L..IN's LastTGT, RE_SV_GlitchTurn, is the host's
                                -- by mirroredEvent's RE_SV_Glitch rule)
@@ -752,13 +768,19 @@ local function hostTick()
                 -- ((0.73.77, economy C1) "dn|<id>||<killer>": a player's slot, or a / s / d, or nothing (gone))
                 local okK, kl = pcall(hostKiller, e)
                 if not okK then once("killer", "coop: a kill's player couldn't be worked out: " .. tostring(kl)); kl = nil end
-                send(true, "dn", id, "", kl and (kl.slot and kl.slot or KILL_SIDE_CODE[kl.side]) or "")
+                -- ((code review of 2026-11-07, finding 11) one held unpaid here (COOP.payHold: THE FESTIVAL's missiles
+                -- round an impact record) goes down on every game as a removal, nobody's kill)
+                if e.unpaid then kl, e.killer = false, false end
+                send(true, "dn", id, e.unpaid and "r" or "", kl and (kl.slot and kl.slot or KILL_SIDE_CODE[kl.side]) or "")
                 tallyKill(e, kl)
                 if not e.key and type(SV_CoopTrack) == "function" then SV_CoopTrack(id, 0) end
                 local u = M.units[e.unit]
                 if u and e.ord and u.planes[e.ord] then u.planes[e.ord].dead = true end
                 if u and e.key and u.ground[e.key] then u.ground[e.key].dead = true end
-            elseif wantHp and h ~= e.sentHp then
+            -- ((code review of 2026-11-07, finding 6) SAL's boat left out: each game's copy of it moves only with its own
+            -- player's hits, and each game charges its own player for a hit it sees (sv_fishing.lua boatTick); the host's
+            -- health written there was taken as that joiner's hit, every joiner paying for the host's splash)
+            elseif wantHp and h ~= e.sentHp and not (FISH and FISH.isBoat and FISH.isBoat(e.unit)) then
                 e.sentHp = h
                 nb = nb + 1
                 batch[#batch + 1] = id .. ":" .. h
@@ -1138,8 +1160,44 @@ local KILL_HOW = { yours = "your plane as its cause (the game's DESTROYED should
                    ["yours refused"] = "your plane as its cause REFUSED by the game: with none",
                    host = "the host's plane (an AI stand-in here) as its cause", ["host refused"] = "the host's stand-in refused: with none",
                    none = "no cause (the host flies a real plane here)" }
+-- ((code review of 2026-11-07, finding 13) an allied copy the host took off without a kill ("dn|<id>|r": THE ESCORT's
+-- aircraft parked at a won round's end, a carrier leaving, its flight, VOID WATCHER 1 home): switched off here as the
+-- host switches its own off (no box or lock-on, invincible, inactive, hidden, no collision, no tick), not finished off
+-- (killCopy exploded the parked allies on every joiner); its unit off this game's spawner list 2 s on once no copy of it
+-- is left here (the host recycles its own then). "off"
+local function offCopy(id, c)
+    if type(SV_CoopBind) == "function" and type(id) == "number" and id > 0 then SV_CoopBind(id, 0) end
+    local o = c.obj
+    local a = live(o)
+    if not a then return nil end
+    M.downAt[a] = os.clock()
+    crumb(string.format("copy %s switched off (id %s: an ally the host took off)", nameOf(o), tostring(id)))
+    for fld, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }) do
+        pcall(function() o[fld] = v end)
+    end
+    pcall(function() o:SetActive(false, false, false) end)
+    pcall(function() o:SetActorHiddenInGame(true) end)
+    pcall(function() o:SetActorEnableCollision(false) end)
+    pcall(function() o:SetActorTickEnabled(false) end)
+    M.cnt.allyOff = (M.cnt.allyOff or 0) + 1
+    if c.unit then
+        local left = false
+        for oid, o2 in pairs(M.copies) do if oid ~= id and o2.unit == c.unit then left = true end end
+        if not left then
+            M.recycleDue = M.recycleDue or {}
+            local dup = false
+            for _, e in ipairs(M.recycleDue) do if e.unit == c.unit then dup = true end end
+            if not dup and #M.recycleDue < 64 then
+                M.recycleDue[#M.recycleDue + 1] = { unit = c.unit, at = os.clock() + 2, why = "ally taken off" }
+            end
+        end
+    end
+    once("allyoff", string.format("coop: the host took an ally off (copy %d, %s): switched off here, not finished off", id, tostring(c.unit)))
+    return "off"
+end
 function M.dnKill(id, c, f)
     local torn = f[3] == "r"
+    if torn and c.ally then return offCopy(id, c) end
     local mine = not torn and COOP.slot ~= nil and f[4] ~= nil and f[4] ~= "" and tonumber(f[4]) == COOP.slot
     local by = nil
     if mine then
@@ -1603,6 +1661,11 @@ local function hostEvent(name)                          -- (a joiner) one of the
         return
     end
     freeWaiting(name)
+    -- ((code review of 2026-11-07, finding 1) a carrier launch: its arm's unit off this game's list first, hard rule 16)
+    if ESC and ESC.beforeHostEvent then
+        local okB, errB = pcall(ESC.beforeHostEvent, name)
+        if not okB then once("esc before", "coop: the host's " .. tostring(name) .. ": the carrier's check here failed: " .. tostring(errB)) end
+    end
     local r = rawEvent(name)
     if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
     -- ((0.73.78, plan G4) a flight the host despawned (an ace break-off, the Spaceport's withdrawal): its copies here off,
@@ -1880,8 +1943,9 @@ local function shotsPrune(now)
     if n > 200 then M.shotTgt = {} end                     -- (missiles seen launched but never gone: a level change)
 end
 -- what the hit that took copy c to the floor is sent to the host as (x 10): own is your damage on it since the last look
--- from its map (nil: unread, or your plane not in any map yet), loss what it lost here (less the stand-ins' share)
-function M.floorLoss(c, own, loss, now)
+-- from its map (nil: unread, or your plane not in any map yet), loss what it lost here (less the stand-ins' share),
+-- others that share (x 10, the stand-ins', the host's allies' copies' and this game's own ZFA-44s' since the last look)
+function M.floorLoss(c, own, loss, now, others)
     if own and own >= c.exp then return own end           -- (the map has your whole hit)
     local f = M.firedAt(c.addr, now)
     if f == "msl" then                                     -- (your missile went for it: the hit is yours, whole)
@@ -1893,6 +1957,14 @@ function M.floorLoss(c, own, loss, now)
         return c.exp
     end
     if own and own > 0 then return own end                 -- (your gun's, from the map)
+    -- ((code review of 2026-11-07, finding 1) its map shows another's hit (a stand-in, the host's allies' copies, this
+    -- game's own ZFA-44s): never the whole as yours, only what its map doesn't explain)
+    if (others or 0) > 0 then
+        M.cnt.floorOthers = (M.cnt.floorOthers or 0) + 1
+        once("floorothers", string.format("coop: a copy taken to the floor with another's hit in its map (%.1f): not sent whole as "
+            .. "yours (%.1f of it sent)", others / 10, math.max(0, loss) / 10))
+        return math.max(0, loss)
+    end
     if own == nil and loss > 0 then return c.exp end       -- (as 0.73.76: unread, it's yours)
     if f == "gun" then return c.exp end                    -- (your gun on it this second)
     return 0                                               -- (not yours: an ally's copy, a ship's, a crash)
@@ -1946,7 +2018,7 @@ local function clientTick()
                 end
                 local newH = h
                 if h > 0 and h <= FLOOR_IN then            -- (down here, the floor not held: as before, never put back)
-                    loss = M.floorLoss(c, own, loss, os.clock())   -- ((0.73.79) your missiles too, not the map alone)
+                    loss = M.floorLoss(c, own, loss, os.clock(), inc > 0 and inc * 10 or 0)   -- ((0.73.79) your missiles too)
                     if loss < c.exp then                   -- (not lethal by what's sent: up to the host's after it)
                         local v = math.max(FLOOR_IN + 1, c.exp - loss)
                         if pcall(function() c.obj.HealthInternal = v end) then newH = v end
@@ -3376,7 +3448,21 @@ function M.standInSet()
     for s, P in pairs(M.peers) do if s ~= COOP.slot and P.addr then set[P.addr] = s end end
     for _, c in pairs(M.copies) do if c.ally and c.addr then set[c.addr] = -1 end end   -- (the host's allies' copies here:
                                                                                      -- their hits are the host's)
+    -- ((code review of 2026-11-07, finding 1) this game's own ZFA-44s: the host's carrier launches are forwarded, so
+    -- each copy of the ship here launches planes of its own (no co-op id, never bound). Their fight is the host's real
+    -- ZFA-44s' there: what they do to an enemy copy here is nobody's, never this player's hit (sv_escort.lua)
+    if ESC and ESC.localZfa then
+        local okZ, z = pcall(ESC.localZfa)
+        if okZ and type(z) == "table" then for a in pairs(z) do if set[a] == nil then set[a] = -1 end end end
+    end
     return set
+end
+-- ((code review of 2026-11-07) whether address a is one of the host's objects' copies here, bound to its id
+-- (sv_escort.lua: a carrier's ZFA-44s of this game's own are switched off, the host's pose flight's copies aren't)
+function COOP.copyAt(a)
+    if not a then return false end
+    for _, c in pairs(M.copies) do if c.addr == a then return true end end
+    return false
 end
 -- what the stand-ins in `set` have done to o so far (its DamageHistoryMap, in health: KILLS_HEALTH_DEATH.md 1)
 function M.standInDamage(o, set)
@@ -5173,6 +5259,8 @@ local function onJoinerMessage(f)
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
             h = tonumber(h)
+            -- ((code review of 2026-11-07, finding 6) never onto this game's copy of SAL's boat: an older host sends it)
+            if c and FISH and FISH.isBoat and FISH.isBoat(c.unit) then c = nil end
             if c and h and h > 0 and live(c.obj) then
                 local own = health(c.obj)
                 if own and own <= 0 then

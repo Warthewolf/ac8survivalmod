@@ -418,6 +418,16 @@ for _, l in ipairs(SUB.q) do if l.text:find("coffee", 1, true) then coffee = cof
 if SUB.cur and SUB.cur.text:find("coffee", 1, true) then coffee = coffee + 1 end
 check(coffee == 1, "you landed: the coffee line once (" .. coffee .. ")")
 onAirfield = false
+-- ((code review of 2026-11-07, finding 17) another ally's catch, solo: still yours, and SAL's "your friend" line (it went
+-- by the slot, -1 only in co-op, so solo it never played)
+check(not s.said.ally, "(The Big One's own lines came first: SAL's ally line not yet said)")
+s.shoals[7].obj.hits = { { obj("BP_Ally3"), 100 } }; s.shoals[7].obj.HealthInternal = 0
+SUB.clear("test")
+rtick(0.5)
+local friend = false
+for _, t in ipairs(strip()) do if t:find("Your friend is good too", 1, true) then friend = true end end
+check(friend and s.said.ally and s.haul[0].hits == 7, "solo: an ally's catch still yours, SAL's 'your friend' line said ("
+    .. table.concat(strip(), " | ") .. ")")
 -- the boat: a hit here costs you 25 kg (not twice in boat_hit_gap_s)
 local boatObj = all.VE028_boat2_CP_C[1]
 rtick(0.5)
@@ -437,7 +447,7 @@ check(warned == 4, "the four warnings (" .. warned .. ")")
 local cleanBefore = #cleaned
 rtick(1)
 check(s.state == "weigh", "the time's up: the weigh-in")
-check(#cleaned == cleanBefore + 1 and #cleaned[#cleaned].list == 3 and cleaned[#cleaned].n == 18, "the 18 shoals left taken off ("
+check(#cleaned == cleanBefore + 1 and #cleaned[#cleaned].list == 3 and cleaned[#cleaned].n == 17, "the 17 shoals left taken off ("
     .. tostring(cleaned[#cleaned] and cleaned[#cleaned].n) .. ")")
 check(#later >= 3 and later[1] == "SV_Unit_FishA", "their units off the spawner's list after")
 local kgBefore = s.haul[0].kg
@@ -446,7 +456,7 @@ local last = paid[#paid]
 local want = FISH.payFor(kgBefore - 25, 1, 7, true)
 check(last and last.n == want and last.why:find("GONE FISHIN' weigh-in", 1, true) and last.why:find("-25 kg the boat", 1, true),
     string.format("paid %s (%s), want %d", tostring(last and last.n), tostring(last and last.why), want))
-check(SUB.cardUp and SUB.cardUp.title:find("WEIGH%-IN") and SUB.cardUp.lines[1]:find("6 / 24", 1, true)
+check(SUB.cardUp and SUB.cardUp.title:find("WEIGH%-IN") and SUB.cardUp.lines[1]:find("7 / 24", 1, true)
     and SUB.cardUp.lines[2]:find("THE BIG ONE", 1, true) and SUB.cardUp.lines[4]:find("-25 KG", 1, true),
     "the card: " .. (SUB.cardUp and table.concat(SUB.cardUp.lines, " | ") or "none"))
 check(RUN.fishKg == kgBefore - 25, "the haul kept for THE FESTIVAL's thanks (" .. tostring(RUN.fishKg) .. ")")
@@ -533,6 +543,25 @@ check(#own == 1 and own[1].n == wantJ, string.format("the joiner paid its own ha
 check(SUB.cardUp and SUB.cardUp.lines[6]:find("400 KG FROM 2 PILOTS", 1, true), "its card: " .. table.concat(SUB.cardUp.lines, " | "))
 FISH.fromHost("fwe", { "fwe", "2", "400", "40", "9", "24" })
 check(#own == 1, "a second fwe for the round: not paid twice")
+-- ((code review of 2026-11-07, finding 8) the host's run started over (newRunHere here: a new RUN): its round 9 pays again
+RUN = { credits = 0 }
+FISH.fromHost("fw", { "fw", "2", "60", "1", "0", "tuna", "60", "0" })
+FISH.fromHost("fwe", { "fwe", "2", "400", "40", "9", "24" })
+check(#own == 2 and own[2].n == wantJ, "a new run here (the host's restart): its round 9's weigh-in paid again (" .. #own .. ")")
+-- ((code review of 2026-11-07, finding 9) what the host sends kept in bounds: a haul to every shoal's heaviest catch,
+-- the round to 1000, one weigh-in's pay to FISH.PAY_MAX
+local most = FISH.maxShoals() * FISH.maxKg()
+check(FISH.maxShoals() == 24 and FISH.maxKg() == 400, "the most a round holds: 24 shoals, 400 kg the heaviest catch")
+FISH.fromHost("fw", { "fw", "2", "99999", "999", "999", "bigone", "4000", "1" })
+local w2 = FISH.cl.weigh[2]
+check(w2 and w2.kg == most and w2.hits == 24 and w2.empty == 24 and w2.bestKg == 400,
+      string.format("fw: the haul clamped (%s kg, %s hits, best %s kg)", tostring(w2 and w2.kg), tostring(w2 and w2.hits), tostring(w2 and w2.bestKg)))
+local fromW = #logs + 1
+FISH.fromHost("fwe", { "fwe", "2", "999999", "999999", "99999", "999" })
+check(#own == 3 and own[3].n == FISH.PAY_MAX, "fwe: the pay at most FISH.PAY_MAX (" .. tostring(own[3] and own[3].n) .. ")")
+local wl = nil
+for i = fromW, #logs do if logs[i]:find("fishing: the weigh-in here", 1, true) then wl = logs[i] end end
+check(wl and wl:find("for round 1000,", 1, true), "fwe: the round clamped to 1000 (" .. tostring(wl) .. ")")
 D.hostSpecial = { kind = "fishing", state = "done" }
 FISH.clientTick(6001)
 check(found("SAL's boat switched off here (the host's GONE FISHIN' is over)") ~= nil, "the host's round over: the boat's copy off here")

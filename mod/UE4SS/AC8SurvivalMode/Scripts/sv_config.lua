@@ -1970,22 +1970,26 @@ CFG = {
                    -- the STORE's allied aircraft (CFG.allies.aircraft.scale)
                    health_x = 4.0,
                    -- (each escort: its unit, name key and record prefix <rec><Go|Orbit|Final|Roll|Taxi|Stop|...>, whose tail
-                   -- names its leg and slot flags, SV_EscLeg<Name> / SV_TaxiSlot<Name>; side / back: its start beside her,
-                   -- side_m x side to her right (-1 left), back_m x back behind. Where each parks is the build's: the next
-                   -- free slot in landing order, geo.slots)
+                   -- names its leg and slot flags, SV_EscLeg<Name> / SV_TaxiSlot<Name>; right_m / up_m: its start beside
+                   -- her, right_m to her right (negative: left) across her way to the approach fix and up_m above her, as
+                   -- the build's routes have it (tools/survival_events.py ESC_ESCORTS: km right, km up; none behind). Each
+                   -- one's route starts there, so a spawn anywhere else crosses her track at the route's speed (code review
+                   -- of 2026-11-07: the old side / back signs put each on the wrong side). Where each parks is the build's:
+                   -- the next free slot in landing order, geo.slots)
                    escorts = {
                        { name = "YORKE", airframe = "SU-57", unit = "SV_Unit_EscYorke", name_key = "SV_Yorke",
-                         rec = "RE_SV_EscYorke", side = -1, back = 1 },
+                         rec = "RE_SV_EscYorke", right_m = 600, up_m = 100 },
                        { name = "ROCK", airframe = "SU-57", unit = "SV_Unit_EscRock", name_key = "SV_Rock",
-                         rec = "RE_SV_EscRock", side = 1, back = 1 },
+                         rec = "RE_SV_EscRock", right_m = -600, up_m = 100 },
                        { name = "ALI", airframe = "SU-33", unit = "SV_Unit_EscAli", name_key = "SV_Ali",
-                         rec = "RE_SV_EscAli", side = -1, back = 2 },
+                         rec = "RE_SV_EscAli", right_m = 1200, up_m = 250 },
                        { name = "DANIELLE", airframe = "SU-35", unit = "SV_Unit_EscDanielle", name_key = "SV_Danielle",
-                         rec = "RE_SV_EscDanielle", side = 1, back = 2 },
+                         rec = "RE_SV_EscDanielle", right_m = -1200, up_m = 250 },
                    },
-                   -- where they appear: (x, y) cm, z cm, heading (compass) towards the approach fix; the escorts side_m
-                   -- beside and back_m behind her; each one's route record go_delay_s after its spawn
-                   start = { x = -4110000, y = 3140000, z = 300000, heading = 55, side_m = 250, back_m = 250, go_delay_s = 1.0 },
+                   -- where they appear: (x, y) cm, z cm, heading (compass) towards the approach fix (her yaw); the escorts
+                   -- at their right_m / up_m, across the exact way from here to geo.iaf; each one's route record
+                   -- go_delay_s after its spawn
+                   start = { x = -4110000, y = 3140000, z = 300000, heading = 55, go_delay_s = 1.0 },
                    reward = 8000, reward_per_round = 300,
                    -- the round's enemy aircraft x budget_x
                    budget_x = 1.0,

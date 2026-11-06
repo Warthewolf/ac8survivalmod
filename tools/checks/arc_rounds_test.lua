@@ -111,10 +111,23 @@ check(specialOn("fishing") and specialOn("festival"), "both kinds on")
 local inRot = false
 for _, k in ipairs(SP.rotation) do if k == "fishing" then inRot = true end; check(k ~= "festival", "THE FESTIVAL isn't in the rotation") end
 check(inRot, "GONE FISHIN' in the rotation")
+-- ((code review of 2026-11-07, finding 10) no round without the shoal's rows in the game's tables (FISH.setup at the main
+-- menu), but a test key's forced one
+FISH.rowsReady = nil
+check(SPC.kinds.fishing.ready(6) == false and SPC.kinds.fishing.ready(6, true) == true
+      and found("fishing: no GONE FISHIN' round: the shoal's rows aren't in the game's tables"),
+      "not ready without the shoal's rows (forced: still), logged")
+FISH.rowsReady = true
 check(SPC.kinds.fishing.ready(6) == true and SP.fishing.from_round == 7, "GONE FISHIN' ready, from round 7")
 RUN.fished = 7
 check(SPC.kinds.fishing.ready(20) == false and SPC.kinds.fishing.ready(20, true) == true, "once a run (forced: still)")
 RUN.fished = nil
+-- ((code review of 2026-11-07, finding 5) a host by migration has the arc's F (the old host's "rnd" field 15) and no
+-- RUN.fished: its run had its GONE FISHIN' too)
+RUN.arcF = 9
+check(SPC.kinds.fishing.ready(20) == false and SPC.kinds.fishing.ready(20, true) == true,
+      "once a run: the arc's F alone (a host by migration) counts it as had (forced: still)")
+RUN.arcF = nil
 RUN.arcF = 7
 check(specialFor(13) == "festival", "round 13 (F + 6) is THE FESTIVAL")
 check(RUN.specialPick[13] == nil, "never rolled: no dice for it")

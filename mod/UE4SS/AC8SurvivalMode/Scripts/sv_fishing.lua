@@ -17,6 +17,8 @@ local function isFishUnit(u)
     return false
 end
 FISH.isUnit = isFishUnit
+-- SAL's boat's unit (sv_coop.lua leaves it out of the host's health batch: each game's copy moves with its own hits)
+function FISH.isBoat(u) return u ~= nil and u == cfg().boat_unit end
 
 -- (the main menu, sv_main.lua's setup pass) the shoal's DT_NPC row and its model row into the game's tables, as VOID
 -- WATCHER 1's (sv_allies.lua): a row naming a model the game hasn't can't spawn. Its names' texts set (SV_SetText).
@@ -289,14 +291,37 @@ function FISH.payFor(kg, players, round, bigone)
     local pay = math.floor((kg * n(c.credits_per_kg, 0) + bonus + (bigone and n(c.bigone_bonus, 0) or 0)) * x + 0.5)
     return pay, g, x
 end
+-- ((code review of 2026-11-07, finding 9) the most a round can hold, for what the host sends: its shoals (the build's
+-- 8 a ground, tools/survival_events.py FISH_PER_GROUND, on each unit) and the heaviest catch's kg; one weigh-in's pay at
+-- most PAY_MAX (sv_coop.lua's CREDITS_MAX)
+FISH.PER_GROUND, FISH.PAY_MAX = 8, 1000000
+function FISH.maxShoals() return math.max(1, #(cfg().units or {})) * FISH.PER_GROUND end
+function FISH.maxKg()
+    local m = 0
+    for _, r in pairs(cfg().kg or {}) do
+        if type(r) == "table" then m = math.max(m, n(r[1], 0), n(r[2], 0)) end
+    end
+    return math.max(1, math.floor(m))
+end
 
--- whether a GONE FISHIN' round can come (SPC.kinds.fishing.ready): on, the native spawner, and once a run (`once`: RUN.fished,
--- its round); a test key's forced one always
+-- whether a GONE FISHIN' round can come (SPC.kinds.fishing.ready): on, the native spawner, its rows in the game's tables
+-- (FISH.setup at the main menu), and once a run (`once`: RUN.fished, its round, or the arc's F: a host by migration has
+-- only the arc's F, from the old host's "rnd" field 15, so its run had had GONE FISHIN' too); a test key's forced one always
+-- ((code review of 2026-11-07, findings 5 and 10) before, a host by migration drew a second GONE FISHIN' (the arc moved to
+-- it), and a run with the shoal's rows missing drew a round whose shoals couldn't spawn)
 function FISH.ready(round, forced)
     local c = cfg()
     if c.enabled == false or not nativeReady() then return false end
     if forced then return true end
-    return not (c.once ~= false and RUN and RUN.fished)
+    if FISH.rowsReady ~= true then
+        if not FISH.rowsSaid then
+            FISH.rowsSaid = true
+            log("fishing: no GONE FISHIN' round: the shoal's rows aren't in the game's tables (" .. (FISH.setupDone and "not added at the main menu"
+                or "the main menu's setup hasn't run") .. ")")
+        end
+        return false
+    end
+    return not (c.once ~= false and RUN and (RUN.fished or (SKY and SKY.arcF and SKY.arcF())))
 end
 
 -- this game's player's boat penalty (FISH.boat: its kg and hits this round), a hit on this game's own copy of SAL's boat
@@ -433,6 +458,10 @@ local function shoalDown(now, s, sh)
     if by == "you" then slot = mySlot()
     elseif by == "wingmate" and type(sh.killer) == "number" then slot = sh.killer
     else slot = coopOn() and -1 or 0 end
+    -- ((code review of 2026-11-07, finding 17) an ally's, a ship's, a defence's (not yours nor a teammate's): solo it's
+    -- still credited to you (your haul, the card and the Big One's bonus as before), but SAL's "your friend" line goes by
+    -- who it was, not by the slot: solo it never played)
+    local byAlly = not (by == "you" or by == "wingmate")
     local catch = table.remove(s.deck, 1) or "none"
     local kg = FISH.kgOf(catch)
     if slot == -1 then s.allyKg, s.allyHits = s.allyKg + kg, s.allyHits + 1 else credit(haulOf(s, slot), catch, kg) end
@@ -461,7 +490,7 @@ local function shoalDown(now, s, sh)
         SUB.say(who, line, 2.5)
         FISH.say("bigone", vals)
     elseif type(g) == "table" and g.wpn == "gun" and not s.said.gun then s.said.gun = true; FISH.say("gun")
-    elseif slot == -1 and not s.said.ally then s.said.ally = true; FISH.say("ally")
+    elseif byAlly and not s.said.ally then s.said.ally = true; FISH.say("ally")
     elseif s.empties >= math.max(2, math.floor(n(c.empties_line, 3))) then s.empties = 0; FISH.sayAll("empties")
     elseif BIG_FISH[catch] or not busy then FISH.say(catch, vals) end
     s.lastCatch, s.quietSaid = now, nil
@@ -524,6 +553,7 @@ function FISH.weighHere(res, players, team, allyKg, round, total)
     local boatKg = (FISH.boat.round == round) and FISH.boat.kg or 0
     local kg = math.max(0, math.floor((mine.kg or 0) + share + 0.5) - boatKg)
     local pay, grade, x = FISH.payFor(kg, players, round, mine.bigone)
+    pay = math.max(0, math.min(pay, FISH.PAY_MAX))          -- ((code review of 2026-11-07, finding 9) one weigh-in's most)
     local why = string.format("GONE FISHIN' weigh-in (%s, %d kg%s)", grade, kg, boatKg > 0 and string.format(", -%d kg the boat", boatKg) or "")
     if pay > 0 then
         if coopOn() and COOP.payOwn then COOP.payOwn(pay, why) else addCredits(pay, why) end
@@ -687,17 +717,29 @@ function FISH.fromHost(k, f)
         if not (kind and state and #kind <= 16 and #state <= 16) then return end
         L.rows[kind] = { state = state, a = num(f[4], 0, 1e6) or 0, b = num(f[5], 0, 1e6) or 0, c = num(f[6], 0, 1e7) or 0, at = os.clock() }
     elseif k == "fw" then
+        -- ((code review of 2026-11-07, finding 9) the most a round can hold: every shoal (FISH.maxShoals) its heaviest
+        -- catch (FISH.maxKg); a haul past it is the most, never more)
+        local most = FISH.maxShoals() * FISH.maxKg()
         local slot = num(f[2], -1, 23)
         local kg, hits, empty, bestKg = num(f[3], 0, 1e5), num(f[4], 0, 1000), num(f[5], 0, 1000), num(f[7], 0, 5000)
         local best = tostring(f[6] or "")
         if not (slot and kg and hits and empty) then return end
-        L.weigh[math.floor(slot)] = { kg = kg, hits = hits, empty = empty, best = CATCH_OK[best] and best or nil, bestKg = bestKg or 0,
+        local sh = FISH.maxShoals()
+        L.weigh[math.floor(slot)] = { kg = math.min(kg, most), hits = math.min(hits, sh), empty = math.min(empty, sh),
+                                      best = CATCH_OK[best] and best or nil, bestKg = math.min(bestKg or 0, FISH.maxKg()),
                                       bigone = f[8] == "1" }
     elseif k == "fwe" then
         local players, team, ally, round, total = num(f[2], 1, 24), num(f[3], 0, 1e6), num(f[4], 0, 1e6), num(f[5], 0, 1e5), num(f[6], 0, 1000)
-        if not (players and team and round) or L.paidRound == round then return end
-        L.paidRound = round
-        local okW, errW = pcall(FISH.weighHere, L.weigh, math.floor(players), team, ally or 0, round, total or 0)
+        -- ((code review of 2026-11-07, finding 8) once a round of this run: a run started over here (the host's restart:
+        -- newRunHere's new RUN) pays its own round N again, which the old round number alone had refused)
+        if not (players and team and round) or (L.paidRound == round and L.paidRun == RUN) then return end
+        L.paidRound, L.paidRun = round, RUN
+        local sh = FISH.maxShoals()
+        local most = sh * FISH.maxKg()
+        round = math.min(math.floor(round), 1000)                -- (finding 9: the pay's round factor, at most round 1000's)
+        total = math.min(math.floor(total or 0), sh)
+        team, ally = math.min(team, most), math.min(ally or 0, most)
+        local okW, errW = pcall(FISH.weighHere, L.weigh, math.floor(players), team, ally, round, total)
         if not okW then log("fishing: the host's weigh-in not read here: " .. tostring(errW)) end
         L.weigh, L.haul = {}, {}
     end

@@ -300,14 +300,51 @@ local function launch(now, s, G, g, why)
     return true
 end
 
--- one missile on the runway: off the round's list and down on every game unpaid, its impact record, the airfield's damage
-local function impact(now, s, sl, m, dist, hgt)
-    local c = cfg()
-    m.hitAt = now
+-- a missile finished off here (its record took another, or it's up too long): no pay
+local function finish(m)
     local p = planeOf(m.addr)
     if p and not p.down then p.down, p.cleaned = true, true end
     if COOP and COOP.removeObj then pcall(COOP.removeObj, m.obj) end
+    if not liveObj(m.obj) then return end
+    pcall(function() m.obj.MinHealth = 0.0 end)
+    pcall(function() m.obj:ModifyHealth(-1000, nil, true) end)
+end
+-- ((code review of 2026-11-07, finding 11) the impact record's i is the spawner's order only if the build's desc order and
+-- the spawn's agree (unconfirmed): one naming another missile j destroyed j, which paid as a kill. Now the impacting
+-- missile is finished off here at once (the record finds it gone, or takes another), and every other missile of its salvo
+-- still up is held unpaid IMPACT_HOLD_S: off the sweep (down and cleaned), its co-op kill sent as a removal (COOP.payHold);
+-- one that goes down in the hold was the record's (salvosTick: not counted, not paid), one still up after it is let go
+local IMPACT_HOLD_S = 1.5
+local function hold(sl, now)
+    local n = 0
+    for _, m2 in ipairs(sl.ms) do
+        if not m2.over and not m2.hitAt and liveObj(m2.obj) then
+            local p = planeOf(m2.addr)
+            if p and not p.down then p.down, p.cleaned, p.festHeld = true, true, true; m2.p = p end
+            if COOP and COOP.payHold then pcall(COOP.payHold, m2.obj, true) end
+            m2.holdUntil = now + IMPACT_HOLD_S
+            n = n + 1
+        end
+    end
+    return n
+end
+local function letGo(m)
+    m.holdUntil = nil
+    local p = m.p
+    m.p = nil
+    if p and p.festHeld then p.down, p.cleaned, p.festHeld, p.downSeen = false, false, nil, nil end
+    if COOP and COOP.payHold then pcall(COOP.payHold, m.obj, false) end
+end
+FEST.hold, FEST.letGo, FEST.IMPACT_HOLD_S = hold, letGo, IMPACT_HOLD_S
+-- one missile on the runway: off the round's list and down on every game unpaid, finished off here, its impact record,
+-- the airfield's damage
+local function impact(now, s, sl, m, dist, hgt)
+    local c = cfg()
+    m.hitAt = now
+    finish(m)
+    local nH = hold(sl, now)
     local ok, said = fire(FEST.hitEvent(sl.g, sl.k, m.i))
+    if nH > 0 then said = said .. string.format(" (%d more of its salvo held unpaid %.1f s)", nH, IMPACT_HOLD_S) end
     local dmg = math.floor(n(c.impact_damage, 8))
     if CFG.airfield.enabled and AF and not AF.down and AF.bomb then AF.bomb = AF.bomb + dmg end
     s.impacts = s.impacts + 1
@@ -318,15 +355,6 @@ local function impact(now, s, sl, m, dist, hgt)
     end
     log(string.format("festival: missile %d of %s within %.0f m of the runway (%.0f m up) %.0f s after its launch: %s %s, -%d airfield",
         m.i, sl.unit, dist, hgt, now - sl.at, FEST.hitEvent(sl.g, sl.k, m.i), said, dmg))
-end
--- a missile finished off here (its record took another, or it's up too long): no pay
-local function finish(m)
-    local p = planeOf(m.addr)
-    if p and not p.down then p.down, p.cleaned = true, true end
-    if COOP and COOP.removeObj then pcall(COOP.removeObj, m.obj) end
-    if not liveObj(m.obj) then return end
-    pcall(function() m.obj.MinHealth = 0.0 end)
-    pcall(function() m.obj:ModifyHealth(-1000, nil, true) end)
 end
 
 local function salvosTick(now, s)
@@ -353,6 +381,12 @@ local function salvosTick(now, s)
                                     .. "the spawner's order)", sl.unit, m.i))
                             end
                         else left = left + 1 end
+                    elseif m.holdUntil and (not up or (type(h) == "number" and h <= 0)) then
+                        -- (down in its salvo's impact hold: the record's, not a kill; its sweep entry stays down, unpaid)
+                        m.over, m.holdUntil, m.p = true, nil, nil
+                        s.recordTook = (s.recordTook or 0) + 1
+                        log(string.format("festival: missile %d of %s went down within %.1f s of its salvo's impact record: the record's "
+                            .. "(its i not the spawner's order), not paid", m.i, sl.unit, IMPACT_HOLD_S))
                     elseif not up or (type(h) == "number" and h <= 0) then
                         m.over = true
                         s.missilesDown = s.missilesDown + 1
@@ -360,9 +394,11 @@ local function salvosTick(now, s)
                         log(string.format("festival: missile %d of %s shot down %.0f s after its launch", m.i, sl.unit, now - sl.at))
                     elseif now - sl.at >= n(c.missile_s, 200) then
                         m.over = true
+                        if m.holdUntil then letGo(m) end
                         finish(m)
                         log(string.format("festival: missile %d of %s up %d s: taken off", m.i, sl.unit, math.floor(n(c.missile_s, 200))))
                     else
+                        if m.holdUntil and now >= m.holdUntil then letGo(m) end   -- (up after its salvo's hold: paid again)
                         local okL, l = pcall(function() local v = m.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
                         if okL and l then
                             local dist, hgt = FEST.toRunway(l)
@@ -534,6 +570,20 @@ function FEST.clientRow(t)
     return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d", math.floor(r.a), math.floor(r.b))
 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the festival round"] = function() CL.siren, CL.on = false, false end end
+-- ((code review of 2026-11-07, finding 3) a pause-menu restart (sv_main.lua's level-load block): the siren is our own
+-- actor, never the mission's, so a restart mid-raid left it looping all the next run, and the searchlights on; both off
+-- now, a joiner's watch of the host's raid forgotten. What it did
+function FEST.restart(why)
+    why = tostring(why or "the run starts over")
+    local nS, wS = FEST.sirenOff(why)
+    local nL = FEST.lightsOff(why)
+    local was = CL.siren or CL.on
+    CL.siren, CL.on = false, false
+    if wS ~= "no siren" or nL > 0 or was then
+        log(string.format("festival: %s: the siren off (%s, %d), %d searchlights off", why, tostring(wS), nS or 0, nL))
+    end
+    return nS, nL
+end
 end
 
 -- TEST ONLY BEGIN

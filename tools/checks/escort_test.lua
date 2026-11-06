@@ -236,13 +236,37 @@ local st = C.start
 check(sp.SV_Unit_Charlene and sp.SV_Unit_Charlene.x == st.x and sp.SV_Unit_Charlene.y == st.y and sp.SV_Unit_Charlene.z == st.z
       and near(sp.SV_Unit_Charlene.yaw, 55 - 90), "CHARLENE at the south-west start, 3 km up, heading 055 (yaw -35)")
 do
-    local fx, fy = fwd(55)
-    local rx, ry = math.cos(math.rad(55)), math.sin(math.rad(55))
-    local y = sp.SV_Unit_EscYorke
-    check(y and near(y.x, st.x - rx * 25000 - fx * 25000, 1) and near(y.y, st.y - ry * 25000 - fy * 25000, 1),
-          "YORKE 250 m to her left and 250 m behind")
-    local d = sp.SV_Unit_EscDanielle
-    check(d and near(d.x, st.x + rx * 25000 - fx * 50000, 1), "DANIELLE to her right, 500 m behind")
+    -- (code review of 2026-11-07, finding 2) each escort where the build's route starts: tools/survival_events.py's
+    -- ESC_START and ESC_ESCORTS (name, row, km to her right on the way in, km above her), across the start -> IAF line
+    -- (esc_route_pts: its right (-uy, ux), north being -y); none behind her
+    local se = readAll(MOD .. "/../../../tools/survival_events.py")
+    local sx, sy, sz = se:match("\nESC_START = %(([%-%d%.]+), ([%-%d%.]+), ([%-%d%.]+)%)")
+    sx, sy, sz = tonumber(sx), tonumber(sy), tonumber(sz)
+    local block = se:match("\nESC_ESCORTS = (%b[])")
+    local want = {}
+    for nm, right, upKm in (block or ""):gmatch("%('(%a+)', '[%w_]+', (%-?[%d%.]+), (%-?[%d%.]+)%)") do
+        want[#want + 1] = { unit = "SV_Unit_Esc" .. nm, right = tonumber(right), up = tonumber(upKm) }
+    end
+    check(sx == st.x and sy == st.y and sz == st.z and #want == 4,
+          "the build's start and its four escorts read from survival_events.py (" .. #want .. ")")
+    local g = C.geo.iaf
+    local dx, dy = g[1] - st.x, g[2] - st.y
+    local L = math.sqrt(dx * dx + dy * dy)
+    local ux, uy = dx / L, dy / L
+    local rx, ry = -uy, ux
+    for _, w in ipairs(want) do
+        local s = sp[w.unit]
+        local ex, ey, ez = st.x + rx * w.right * 1e5, st.y + ry * w.right * 1e5, st.z + w.up * 1e5
+        local off = s and math.sqrt((s.x - ex) ^ 2 + (s.y - ey) ^ 2) / 100 or -1
+        local along = s and ((s.x - st.x) * ux + (s.y - st.y) * uy) / 100 or -1
+        local side = s and ((s.x - st.x) * rx + (s.y - st.y) * ry) / 100 or 0
+        check(s and off >= 0 and off <= 1 and near(s.z, ez, 1) and math.abs(along) <= 1 and (side > 0) == (w.right > 0),
+              string.format("%s at its route's start: %.0f m to her %s (the build's %.1f km), %.0f m up (%.2f km), %.1f m along her way, %.1f m off",
+                  w.unit, math.abs(side), side > 0 and "right" or "left", w.right, s and (s.z - st.z) / 100 or -1, w.up, along, off))
+    end
+    local y, r = sp.SV_Unit_EscYorke, sp.SV_Unit_EscRock
+    check(y and r and ((y.x - st.x) * rx + (y.y - st.y) * ry) > 0 and ((r.x - st.x) * rx + (r.y - st.y) * ry) < 0,
+          "YORKE to her right, ROCK to her left (the old side signs had them the other way round, and behind her)")
 end
 check(callout(C.text.go), "the round's callout: " .. C.text.go)
 -- their planes come up (the tick's pending -> logPlane)
@@ -543,6 +567,33 @@ check(R.carriers[1] ~= nil, "another bought")
 alive.SV_Unit_Cargo1 = 0
 run(8)
 check(R.carriers[1] == nil and callout("ZFA-44 CARRIER 1 SUNK"), "a ship sunk: called out, gone")
+check(ESC.hulls.SV_Unit_Cargo1 == nil, "... its hull forgotten with its slot (the next ship's recorded afresh)")
+-- ((code review of 2026-11-07, finding 7) its hull sunk while its launchers and Stinger mount still count alive
+callouts = {}
+alive.SV_Unit_Cargo1 = 0
+press("ZfaCarrier")
+run(0.5)
+local c7, h7 = R.carriers[1], ESC.hulls.SV_Unit_Cargo1
+check(c7 and h7 and h7.obj, "another bought, its hull found")
+local part7 = { full = "BP_VE021_stgr_Base_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.Stinger_" .. addr(), addr = addr(),
+                HealthInternal = 800 }
+function part7:ModifyHealth(d) self.HealthInternal = math.max(0, self.HealthInternal + d * 10) end
+ESC.shipObjs.SV_Unit_Cargo1[#ESC.shipObjs.SV_Unit_Cargo1 + 1] = { obj = part7, addr = part7.addr, name = part7.full }
+alive.SV_Unit_Cargo1 = 3                             -- (its launchers and the Stinger: the unit still counts them)
+run(2.5)
+check(c7.state == "up", "(its hull up: up, whatever else)")
+h7.obj.HealthInternal = 0
+local nr7 = #recycled
+run(2.5)
+check(c7.state == "leaving" and ESC.carriersUp() == 0 and callout("ZFA-44 CARRIER 1 SUNK") and part7.HealthInternal <= 0
+      and has(line("carrier: ZFA-44 CARRIER 1 sunk"), "its hull at 0 health") and R.carriers[1] == c7,
+      "its hull at 0 health: sunk though its unit counts 3 alive, called out, its parts finished off, its slot held ("
+      .. tostring(line("carrier: ZFA-44 CARRIER 1 sunk")) .. ")")
+run(3.5)
+local gone7 = false
+for i = nr7 + 1, #recycled do if recycled[i] == "SV_Unit_Cargo1:1" then gone7 = true end end
+check(R.carriers[1] == nil and gone7 and ESC.hulls.SV_Unit_Cargo1 == nil, "... then off the spawner's list, its slot free, its hull forgotten")
+alive.SV_Unit_Cargo1 = 0
 
 ---------------------------------------------------------------------------------------------------- co-op
 print("co-op")
@@ -556,6 +607,16 @@ ESC.esKey = nil
 run(1.5)
 local es = msgs[#msgs]
 check(es and es[1] == "es" and es[7] == "1" and es[8] == "0", "the host's \"es\": unlocked, no carrier out (" .. table.concat(es or {}, "|") .. ")")
+check(es and es[10] == "0", "the host's \"es\": field 10 the ships up as bits, none (" .. tostring(es and es[10]) .. ")")
+do                                                  -- ((code review of 2026-11-07, finding 1) one ship up: bit 1
+    local Rh = ESC.R
+    Rh.carriers[2] = { idx = 2, unit = "SV_Unit_Cargo2", state = "up", at = now, served = 0, armI = 0, used = {}, nextLaunchAt = now + 999, name = "ZFA-44 CARRIER 2" }
+    ESC.esKey = nil
+    run(1.5)
+    local es2 = msgs[#msgs]
+    check(es2 and es2[10] == "2" and es2[8] == "1", "the host's \"es\" with ship 2 up: field 10 = 2 (" .. table.concat(es2 or {}, "|") .. ")")
+    Rh.carriers[2] = nil
+end
 client = true
 RUN.zfa = nil
 events = {}
@@ -567,6 +628,43 @@ ESC.onHost({ "es", "landing", "2", "5", "80", "1.0", "1", "1", "0" })
 check(evFired("RE_SV_AirfieldOpen") and not ESC.clientClosed, "... and open again")
 ESC.onHost({ "es", "route", "1.5", "5", "80.7", "x", "1", "1.2", "0" })
 check(ESC.clientRow(CFG.hud.text) == "CHARLENE 80%  0.0 KM  LANDED 1/5" and ESC.carriersUp() == 1, "a joiner: odd numbers from the host made whole, a bad one dropped")
+-- ((code review of 2026-11-07, finding 1) a joiner's own ZFA-44s: the host's forwarded launches fire its copy of the ship's
+-- launchers here, planes of no co-op id
+do
+    ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "2", "0", "3" })      -- (both ships up on the host's game)
+    local sp1 = K.ship_at[1]
+    local zA = plane(nil, sp1[1] + 20000, sp1[2], 5000, 90, 300)
+    logPlane(zA, nil, nil)
+    local armU = K.launchers[1][1].unit
+    local inList = false
+    for _, e in ipairs(ESC.planes[armU] or {}) do if e.obj == zA then inList = true end end
+    check(inList and ESC.localZfa()[zA.addr] == true,
+          "a joiner: a plane near its copy of ship 1 taken as that ship's ZFA-44s (ESC.localZfa: " .. armU .. ")")
+    -- the host's next launch of ship 1 (arm 2): the arm's unit off this game's list first, the last flight here off
+    local arm2 = K.launchers[1][2]
+    alive[arm2.unit] = 2
+    local nr = #recycled
+    local got = ESC.beforeHostEvent(arm2.record)
+    local rec = false
+    for i = nr + 1, #recycled do if recycled[i] == arm2.unit .. ":1" then rec = true end end
+    check(got == arm2.unit and rec and zA.active == false and zA.hidden == true
+          and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "of this game's ZFA-44s of ship 1 before it switched off"),
+          "a joiner: before the host's " .. arm2.record .. " fires here: " .. arm2.unit .. " off this game's list (force 1), ship 1's last flight here switched off")
+    check(ESC.beforeHostEvent("RE_SV_ValkaShot") == nil and ESC.beforeHostEvent("RE_SV_CargoLaunch_1_9") == nil, "... any other event: nothing")
+    alive[arm2.unit] = nil
+    -- ship 1 gone on the host (left or sunk): this game's own ZFA-44s of it off
+    local zB = plane(nil, sp1[1] - 10000, sp1[2] + 10000, 5000, 90, 300)
+    logPlane(zB, nil, nil)
+    alive[armU] = 2
+    local q0 = #ESC.recycleQ
+    ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "1", "0", "2" })
+    check(zB.active == false and zB.hidden == true and #ESC.recycleQ > q0
+          and has(line("carrier: the host's ZFA-44 CARRIER 1 is gone"), "of this game's own ZFA-44s of it switched off"),
+          "a joiner: ship 1 no longer up on the host's game (field 10): its own ZFA-44s of it off, its arms' units queued off the list")
+    alive[armU] = nil
+    ESC.recycleQ = {}
+    ESC.onHost({ "es", "route", "1", "5", "80", "23.4", "1", "1", "0" })   -- (an older host: no field 10, nothing more taken off)
+end
 RUN.credits, RUN.msg = 40000, {}
 RUN.offerShown = nil
 press("Revive")
@@ -647,6 +745,41 @@ pose(h2, slot(4).X, slot(4).Y, 750, 160, 0); run(3)
 check(T2.state == "done" and has(line("escort: T0 over"), "stopped"), "stopped on that slot: the test over")
 svFlags = rawFlags
 run(C.test.end_s + 1)
+
+---------------------------------------------------------------------------------------------------- a restart
+-- ((code review of 2026-11-07, finding 3) a pause-menu restart mid-escort with a carrier out (sv_main.lua's level-load
+-- block calls ESC.restart before the new run's D): everything of the old run taken off, the players' landing open again
+print("a restart (ESC.restart)")
+ESC.S, ESC.recycleQ = nil, {}
+for k2 in pairs(alive) do alive[k2] = nil end
+spawns, events = {}, {}
+RUN.escort = nil
+D.special = { kind = "escort", state = "pending" }
+check(k.spawn(now) == true and ESC.S ~= nil, "(an escort up again)")
+local rs = {}
+for _, s2 in ipairs(spawns) do
+    local p2 = plane(s2.u, s2.x, s2.y, s2.z, 55, 600)
+    logPlane(p2, s2.u, nil)
+    rs[#rs + 1] = p2
+end
+ESC.S.closed = true                                    -- (her final: the players' landing closed)
+RUN.zfa = { unlocked = true }
+RUN.credits, RUN.msg = 50000, {}
+D.state = "wait"
+press("ZfaCarrier")
+local S0, R0 = ESC.S, ESC.R
+check(R0 and next(R0.carriers) ~= nil, "(a carrier out)")
+events = {}
+ESC.restart("test restart")
+local allOff = #rs == 5
+for _, p2 in ipairs(rs) do if not (p2.active == false and p2.hidden == true) then allOff = false end end
+local q = {}
+for _, e in ipairs(ESC.recycleQ) do q[e.unit] = true end
+check(ESC.S == nil and ESC.R == nil and allOff and evFired("RE_SV_AirfieldOpen") and q.SV_Unit_Charlene and q.SV_Unit_EscYorke
+      and q.SV_Unit_Cargo1 and q.SV_Unit_Cargo2 and has(line("escort: test restart:"), "5 of the escort's aircraft and 2 carriers taken off"),
+      "a restart: the escort's five switched off, the carrier taken off, their units queued off the list, landing open again ("
+      .. tostring(line("escort: test restart:")) .. ")")
+D.special = nil
 
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")

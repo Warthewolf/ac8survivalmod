@@ -212,6 +212,32 @@ check(custom.sun == false and SKY.pending == nil, "then put back")
 frame()
 for _, p in ipairs({ our, ro }) do p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = 15, 142 end
 
+-- ((code review of 2026-11-07, finding 12) a value whose object isn't found at the restore is kept and tried again every
+-- tick until it's put back (it was forgotten, left as the arc had it)
+print("restore: a value not put back is tried again")
+SKY.apply({ sun = { el = 5, az = 100 } }, "test12")
+check(our.SunElevationAngleInDegrees == 5, "(the renderer's copies written)")
+all.CloudlyRenderer = {}
+SKY.restore("test12")
+local kept = #SKY.order
+check(kept > 0 and SKY.retry ~= nil and our.SunElevationAngleInDegrees == 5 and found("kept to be tried again every tick"),
+      "the renderer not found: its " .. kept .. " values kept, their originals with them, logged")
+SKY.retryTick()
+check(#SKY.order == kept and SKY.retry ~= nil, "still not found: still kept")
+all.CloudlyRenderer = { rend }
+clock = clock + 11
+SKY.retryTick()
+check(#SKY.order == 0 and SKY.retry == nil and our.SunElevationAngleInDegrees == 15 and ro.SunAzimuthAngleInDegrees == 142
+      and found("every kept value put back now"), "found again: put back (15 / 142), nothing kept, logged")
+SKY.apply({ sun = { el = 5 } }, "test12")
+all.CloudlyRenderer = {}
+SKY.restore("test12")
+LEVEL_DROPS["the sky"]("test")
+check(#SKY.order == 0 and SKY.retry == nil, "the level torn down: what's kept forgotten untouched")
+all.CloudlyRenderer = { rend }
+LEVEL_DROPS["the sky's view"]("test")                -- (the kept view was found with no renderer: a new level's has it)
+for _, p in ipairs({ our, ro }) do p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = 15, 142 end
+
 print("the test key")
 check(binds.F6 ~= nil and TEST_KEYS.F6 ~= nil, "Ctrl+F6 bound through testKey")
 local base = state()
@@ -388,6 +414,42 @@ RUN = {}
 check(SKY.arcSet(12, "the host's") == true and RUN.arcF == 12 and SKY.arcSet(12, "again") == false, "SKY.arcSet: F kept in RUN once")
 LEVEL_DROPS["the sky's arc"]("test")
 check(not ARC.on and ARC.base == nil, "the level torn down: the arc forgotten untouched")
+
+-- ((code review of 2026-11-07, finding 4) the arc's view kept while every object of it is live, however old (it walked
+-- 3-5 FindAllOf every 30 s), found afresh when one goes, and with no sky actor looked for at most every 10 s (each tick
+-- half before)
+print("the day-night arc: the kept view")
+local views = 0
+local rawFind = FindAllOf
+FindAllOf = function(cls) if cls == "CloudlyRenderer" then views = views + 1 end return rawFind(cls) end
+LEVEL_DROPS["the sky's view"]("test")
+RUN = { arcF = 8 }
+D = { now = 6000, round = 9, state = "fighting", up = {} }
+clock = 6000
+atick(0)
+local v0 = views
+for _ = 1, 60 do atick(2) end
+check(v0 >= 1 and views == v0, "120 s with every object live: the view kept, no walk (" .. (views - v0) .. " walks; one every 30 s before)")
+ppv2.gone = true
+atick(2)
+check(views == v0 + 1, "an object of it gone: found afresh at once")
+ppv2.gone = nil
+SKY.arcReset("test")
+LEVEL_DROPS["the sky's arc"]("test")
+LEVEL_DROPS["the sky's view"]("test")
+local dco = statics["/Script/Cloudly.Default__CloudlyActor"]
+local rawGet = dco.GetCachedCloudlyActor
+dco.GetCachedCloudlyActor = function() return nil end
+RUN = { arcF = 8 }
+local v1 = views
+for _ = 1, 40 do atick(0.25) end
+check(views - v1 >= 1 and views - v1 <= 2, "no sky actor: looked for again at most every 10 s (" .. (views - v1) .. " walks in 10 s of tick halves; one each before)")
+dco.GetCachedCloudlyActor = rawGet
+FindAllOf = rawFind
+SKY.arcReset("test")
+LEVEL_DROPS["the sky's arc"]("test")
+LEVEL_DROPS["the sky's view"]("test")
+for _, p in ipairs({ our, ro }) do p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = 15, 142 end
 
 print("the day-night arc: the step key (Ctrl+PAGE_DOWN)")
 check(binds.PAGE_DOWN ~= nil, "Ctrl+PAGE_DOWN bound")
