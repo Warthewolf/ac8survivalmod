@@ -1785,3 +1785,9 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   kept in build/old_worktrees. README's features and the player guide's special rounds brought up to date.
 - Packaged: friends' 2dac1757088b..., TESTER 01db8800f1da... (0.74.21-coop2mp.113), both registered. INSTALLED
   2026-11-08 from the TESTER zip (backup of 0.74.20: build/backup/install_before_0.74.21). Built in the main tree.
+- The repo cleanup finished (the user: "github has my go as long as nothing that we are currently using in 0.74.21 is
+  affected"): testing/logs and testing/builds purged from every commit (git filter-repo, run from a scratch install;
+  557 -> 547 commits, 10 that only held logs dropped; main's tree identical before and after, 6fe8b658), main force-pushed,
+  the archive/* tags pushed, the rewritten tags force-pushed, 18 old branches deleted on GitHub; the old worktrees removed
+  (their build folders kept in build/old_worktrees). GitHub's pull request #1 (refs/pull/1/head, read-only) still pins the
+  old commits: a GitHub Support request ("remove sensitive data": the PR's refs and cached views) finishes the purge.
