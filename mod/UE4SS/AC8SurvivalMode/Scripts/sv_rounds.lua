@@ -606,6 +606,10 @@ local function specialTick(now)
     end
     local sk = s and SPC.kinds[s.kind]
     if sk and sk.tick then return sk.tick(now, s) end
+    if s and s.kind == "shuttle" and KASKA and KASKA.tick then      -- ((2026-11-08) Kaska's intercepted channel: sv_kaska.lua)
+        local okK, errK = pcall(KASKA.tick, now, s)
+        if not okK and tostring(errK) ~= D.kaskaErr then D.kaskaErr = tostring(errK); log("kaska: error " .. D.kaskaErr) end
+    end
     if not s or s.state ~= "countdown" then return end
     local c, t = CFG.specials.shuttle, CFG.hud.text
     local f = svFlags() or {}

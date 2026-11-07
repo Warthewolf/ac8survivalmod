@@ -877,7 +877,47 @@ CFG.specials = {
                  pad_allies = true, dummies = "SV_Unit_PadDummies",
                  shop_closed_rounds = 1, unit = "SV_Unit_Shuttle", pad = "AA_Unit_01_Ground0",
                  name_key = "SV_Shuttle_Name", npc_row = "OP0057_sstb_01_SV",
-                 npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
+                 npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows",
+                 -- ((2026-11-08) the user: "Add enemy character subtitles in the Shuttle Launch Special Round", "Kaska is
+                 -- not allowed to talk to the players, make it seem that Kaska doesn't know that the players can see his
+                 -- conversations" (the user's own script, reviewed line by line) KASKA on an intercepted Emblem Direct
+                 -- channel with his launch controller (Scripts/sv_kaska.lua; "KASKA|" / "EMBDIR|": CFG.hud.subs.speakers):
+                 -- start as the countdown runs, strike as War's strike flights come up (strike_s at most), marks at
+                 -- those seconds left, hit as the shuttle's health falls under each hit_at mark, launched / lost at its
+                 -- end, after in the break (after_s on). Each moment one of its lists (an exchange said whole), each line
+                 -- once a run; a moment's lines left out while the strip has more than busy_s waiting (marks: mark_busy_s)
+                 subs = { enabled = true, strike_s = 30, busy_s = 8, mark_busy_s = 5, after_s = 8, hit_at = { 75, 50, 25 },
+                          start = { { "EMBDIR|Sir, the pad is green. Countdown's running.",
+                                      "KASKA|Good. Keep this channel closed. The locals don't need to hear us." },
+                                    { "KASKA|Is the payload sealed? ...Good. Nobody opens that crate." },
+                                    { "KASKA|Comona thinks it's hosting a weather satellite. Let it." } },
+                          strike = { { "EMBDIR|Bandits inbound. Not ours, sir.",
+                                       "KASKA|War's. Right on time. She was never going to let us fly." },
+                                     { "EMBDIR|Sir, those jets carry no markings. Nobody's claiming them.",
+                                       "KASKA|They're War's. A wolf in sheep's clothing never signs her work." },
+                                     { "KASKA|Of course she's here. She's wanted this launch dead for months." },
+                                     { "KASKA|Let Comona's pilots handle them. That's what they're for." },
+                                     { "KASKA|She knows what this launch means. She'd burn the island to stop it." } },
+                          marks = { { 120, { "KASKA|Tell Sudentor to be ready the moment we're up." } },
+                                    { 90, { "EMBDIR|Ninety seconds. Sir, the list from Sudentor came in.",
+                                            "KASKA|Read me the names later. I know who's on it." } },
+                                    { 60, { "KASKA|Sixty seconds. They've waited years. They can wait a minute." } },
+                                    { 30, { "EMBDIR|Thirty seconds.", "KASKA|No mistakes now." } },
+                                    { 10, { "KASKA|Ten. ...Open it." } } },
+                          hit = { { "EMBDIR|We're taking hits on the pad!",
+                                    "KASKA|Then Comona's pilots are slower than I was promised." },
+                                  { "KASKA|If the payload cracks, I want to know before anyone else does." },
+                                  { "KASKA|War will be watching this feed. Don't give her the data." } },
+                          launched = { { "EMBDIR|Clean separation. The satellite's on its way.",
+                                         "KASKA|Good. Tell Sudentor the door is on schedule." },
+                                       { "KASKA|Wipe the logs. As far as Comona knows, it was a weather bird." },
+                                       { "KASKA|Keep those pilots flying. Some of our guests will want a rematch." } },
+                          lost = { { "EMBDIR|We lost it, sir. The payload's gone.",
+                                     "KASKA|Then build another. The dead have waited this long." },
+                                   { "KASKA|Find out who War paid for this. Quietly.",
+                                     "EMBDIR|Sir, her people swear they had nothing to do with it.",
+                                     "KASKA|They always do. A wolf in sheep's clothing, that one." } },
+                          after = { { "KASKA|Close the channel. If anyone was listening, I want their names." } } } },
     -- "anomaly" = The Anomaly (tools/survival_events.py ANOMALY_*; user, 2026-10-22): the ace `name` in an F-4E
     -- (the campaign named-ace skin) with `guards` escorts under `guards_name`, both at the top skill tier and AI
     -- level ai_level. Within field_km of it the player's controls invert (`invert`: "both", "pitch" or "roll",
@@ -1547,9 +1587,13 @@ CFG.hud = {
                                     -- (THE FESTIVAL's town, 2026-11-07)
                                     VALKA = { 0.55, 0.80, 1.0 }, AUDREY = { 1.0, 0.68, 0.86 },
                                     ["CONCERT MC"] = { 0.98, 0.58, 0.30 }, ["FOOD TRUCK"] = { 0.70, 0.95, 0.50 },
-                                    ["MARKET STALL"] = { 0.90, 0.80, 0.60 } },
+                                    ["MARKET STALL"] = { 0.90, 0.80, 0.60 },
+                                    -- (2026-11-08: Kaska's channel, steel grey)
+                                    ["INTERCEPT: KASKA"] = { 0.70, 0.76, 0.84 }, ["INTERCEPT: EMBDIR LAUNCH"] = { 0.52, 0.60, 0.68 } },
                          -- a line's speaker code ("MC|...") to the name on the strip; a code not here is the name
-                         speakers = { MC = "CONCERT MC", FOOD = "FOOD TRUCK", MARKET = "MARKET STALL" },
+                         speakers = { MC = "CONCERT MC", FOOD = "FOOD TRUCK", MARKET = "MARKET STALL",
+                                      -- ((2026-11-08) the shuttle round's intercepted channel: Scripts/sv_kaska.lua)
+                                      KASKA = "INTERCEPT: KASKA", EMBDIR = "INTERCEPT: EMBDIR LAUNCH" },
                          -- ((2026-11-08) the user: "all of the Audrey and Valka subtitles must play One After Other, and
                          -- they can't be reused, and they take priority over everyone elses subtitles") priority: their
                          -- lines go before every other speaker's waiting line (after theirs already waiting: in the order

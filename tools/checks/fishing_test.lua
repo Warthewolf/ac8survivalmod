@@ -699,6 +699,98 @@ do
     RUN = keepRun
 end
 
+-- ((2026-11-08) the user's Shuttle Launch script: "Kaska is not allowed to talk to the players, make it seem that Kaska
+-- doesn't know that the players can see his conversations") sv_kaska.lua: INTERCEPT: KASKA and INTERCEPT: EMBDIR LAUNCH
+-- on the strip; each moment once (the countdown, War's strike flights, the marks, the hits, the end, the break), an
+-- exchange whole, never a line twice in a run, a mark passed while away not said late, every line under 70 characters
+print("the Shuttle Launch round: Kaska's intercepted channel")
+do
+    part(MOD, "sv_kaska.lua")
+    local K = CFG.specials.shuttle.subs
+    local keepRun, keepD, keepSH = RUN, D, shuttleHealth
+    RUN = { credits = 0 }
+    SUB.clear("test")
+    local hp = 100
+    shuttleHealth = function() return hp end
+    local s = { kind = "shuttle", state = "countdown", at = clock }
+    D = { now = clock, round = 4, state = "spawning", up = {}, special = s, strikeUnits = { SV_Unit_Strike1 = true },
+          shuttleClock = { cd = 0 } }
+    local function kt(dt)
+        clock = clock + dt; D.now = clock
+        if D.shuttleClock then D.shuttleClock.cd = D.shuttleClock.cd + dt end
+        KASKA.tick(clock, s); SUB.hudTick(clock, true, false)
+    end
+    local from = #logs + 1
+    local function said(pat) local n = 0; for i = from, #logs do if logs[i]:find(pat, 1, true) then n = n + 1 end end return n end
+    kt(1)
+    check(said("kaska: start (the countdown runs)") == 1 and (SUB.cur and SUB.cur.who:find("^INTERCEPT: ")),
+        "the countdown runs: an exchange on the intercepted channel (" .. tostring(SUB.cur and SUB.cur.who) .. ")")
+    kt(3)
+    check(said("kaska: strike") == 0, "War's strike flights not up yet: nothing about them")
+    D.up.SV_Unit_Strike1 = true
+    for _ = 1, 8 do kt(1) end
+    check(said("kaska: strike (War's strike flights up)") == 1, "War's strike flights up: their exchange, once")
+    for _ = 1, 20 do kt(1) end                         -- (to 120 s left: cd 30)
+    check(said("kaska: mark 120 (120 s left)") == 1, "120 s left: its line")
+    hp = 70
+    kt(1); kt(1)
+    check(said("kaska: hit (the shuttle at 70%)") == 1, "the shuttle under 75%: a hit exchange")
+    hp = 60
+    kt(1)
+    check(said("kaska: hit") == 1, "... once a mark (still above 50%)")
+    hp = 40
+    for _ = 1, 10 do kt(1) end
+    check(said("kaska: hit") == 2, "under 50%: the next hit exchange, another one")
+    for _ = 1, 140 do kt(1) end                        -- (to the countdown's end)
+    check(said("kaska: mark 90") == 1 and said("kaska: mark 60") == 1 and said("kaska: mark 30") == 1 and said("kaska: mark 10") == 1,
+        "every mark said once, in its time")
+    s.state = "done"; D.shuttleClock = nil
+    kt(1)
+    check(said("kaska: launched (the shuttle away)") == 1, "the shuttle away: its exchange")
+    D.state = "wait"
+    for _ = 1, 15 do kt(1) end
+    check(said("kaska: after (the break)") == 1, "the break: his last line")
+    -- every line on the strip under its intercept name, none twice
+    local seen, twice, names = {}, 0, {}
+    for i = from, #logs do
+        for _, who in ipairs({ "INTERCEPT: KASKA", "INTERCEPT: EMBDIR LAUNCH" }) do
+            local text = logs[i]:sub(1, #who + 8) == "subs: " .. who .. ": " and logs[i]:sub(#who + 9):match("^(.*) %(%d+%.%d s%)$")
+            if text then
+                names[who] = true
+                if seen[text] then twice = twice + 1 end
+                seen[text] = true
+            end
+        end
+    end
+    check(names["INTERCEPT: KASKA"] and names["INTERCEPT: EMBDIR LAUNCH"] and twice == 0,
+        "on the strip as INTERCEPT: KASKA / INTERCEPT: EMBDIR LAUNCH, no line twice (" .. twice .. " twice)")
+    -- a mark passed while away (the player down: the clock jumps) isn't said late
+    RUN = { credits = 0 }
+    SUB.clear("test")
+    local s2 = { kind = "shuttle", state = "countdown", at = clock }
+    D = { now = clock, round = 8, state = "spawning", up = {}, special = s2, strikeUnits = {}, shuttleClock = { cd = 0 } }
+    s = s2
+    from = #logs + 1
+    kt(1)
+    D.shuttleClock.cd = 100                             -- (50 s left: the 120 / 90 / 60 marks long passed)
+    kt(1)
+    check(said("kaska: mark 120") == 0 and said("kaska: mark 90") == 0 and said("kaska: mark 60") == 0, "marks passed while away: not said late")
+    -- the lines: under 70 characters, each speaker a name and a colour
+    local longest, noName = 0, {}
+    local function walk(l)
+        if type(l) == "string" then
+            local who, text = FISH.line(l)
+            longest = math.max(longest, #text)
+            if not CFG.hud.subs.colors[who] then noName[#noName + 1] = who end
+        elseif type(l) == "table" then for _, x in ipairs(l) do walk(x) end end
+    end
+    for _, k in ipairs({ "start", "strike", "hit", "launched", "lost", "after" }) do walk(K[k]) end
+    for _, m in ipairs(K.marks) do walk(m[2]) end
+    check(longest <= 70 and #noName == 0, string.format("every line under 70 characters (%d), each speaker its colour %s", longest, table.concat(noName, ", ")))
+    SUB.clear("test")
+    RUN, D, shuttleHealth = keepRun, keepD, keepSH
+end
+
 print("a release's copy")
 FISH, testKey, TEST_TICKS, TEST_KEYS = nil, nil, nil, nil
 local src = readAll(STRIPPED .. "/Scripts/sv_fishing.lua")

@@ -1754,3 +1754,17 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   festival_test.
 - Packaged: friends' 2e14d0713e6a..., TESTER 64a4e4ee225c... (0.74.19-coop2mp.111), both registered. INSTALLED 2026-11-08
   from the TESTER zip (backup of 0.74.17: build/backup/install_before_0.74.19; 0.74.18 was never installed).
+
+## 0.74.20 (2026-11-08, runtime 0.32.26; not yet run in game)
+- The Shuttle Launch round's subtitles (the user: "Add enemy character subtitles in the Shuttle Launch Special Round";
+  "Kaska is not allowed to talk to the players, make it seem that Kaska doesn't know that the players can see his
+  conversations"; the script the user's own, reviewed line by line, CFG.specials.shuttle.subs). KASKA (Emblem Direct,
+  launching the CORRIS shuttle the players defend; War's sponsored strike flights trying to stop it) talks with his launch
+  controller on an intercepted channel: INTERCEPT: KASKA / INTERCEPT: EMBDIR LAUNCH on the strip (CFG.hud.subs.speakers,
+  steel-grey colours). Scripts/sv_kaska.lua (KASKA.tick from sv_rounds.lua specialTick, the host's or solo): the
+  countdown's start, War's strike flights up (strike_s at most), the 120 / 90 / 60 / 30 / 10 s marks (one passed while
+  away not said late), the shuttle under 75 / 50 / 25 % health, launched or lost, and one line in the break; each moment
+  one exchange said whole, none twice in a run, left out while the strip is backed up. `kaska: <moment> (<why>)`.
+  fishing_test. Not a priority speaker; War stays offstage.
+- Packaged: friends' 58ddf990b3f4..., TESTER 06ea8ec0bd40... (0.74.20-coop2mp.112), both registered. INSTALLED
+  2026-11-08 from the TESTER zip (backup of 0.74.19: build/backup/install_before_0.74.20).

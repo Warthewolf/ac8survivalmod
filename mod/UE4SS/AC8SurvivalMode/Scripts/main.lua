@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.19"
+VERSION = "0.74.20"
 
 local MODULES = {
     "sv_core",
@@ -43,6 +43,7 @@ local MODULES = {
     "sv_escort_subs",              -- what CHARLENE, her KMG escorts and Comona say; the Anomalies' wait for her (2026-11-07)
     "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
     "sv_escort_li",                -- AC7's LaserInterceptor on the ZFA-44s (runtime laser.c, tools/laser7; 2026-11-07)
+    "sv_kaska",                    -- the Shuttle Launch round's intercepted channel: KASKA and his launch controller (2026-11-08)
     "sv_menu",
     "sv_coop",
     "sv_coop_joiner",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)
