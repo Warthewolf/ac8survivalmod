@@ -1102,6 +1102,8 @@ SPC.kinds = {
     -- ((2026-11-07) "Include more Enemy Aircraft in the Festival Mission": fighters with the raid, FEST.fighters)
     festival   = { sub = "festival_sub", alone = false, aircraft = 12,
                    budget = function(budget) return FEST.fighters(budget) end,
+                   -- ((2026-11-08) "they need to spawn WITH the TU-160's not beforehand": its fighters held through its talk)
+                   hold = function(now, s) return FEST.hold(now, s) end,
                    ready = function(round, forced) return FEST.ready(round, forced) end,
                    spawn = function(now) return FEST.roundSpawn(now) end, tick = function(now, s) return FEST.roundTick(now, s) end,
                    busy = function(s) return FEST.busy(s) end, over = function(now, s) return FEST.roundOver(now, s) end,

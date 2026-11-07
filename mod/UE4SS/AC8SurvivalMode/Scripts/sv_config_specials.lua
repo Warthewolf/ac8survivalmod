@@ -1183,6 +1183,14 @@ CFG.specials = {
                  -- 2-ships, fighters_min .. fighters_max; 0: none); break_after_s: the break after its round (at least that,
                  -- the menu's BREAK BETWEEN ROUNDS if longer)
                  fighters_share = 0.7, fighters_min = 6, fighters_max = 16, break_after_s = 60,
+                 -- ((2026-11-08) the user: "the Enemy Aircraft that spawn in during the Festival Special Round, they need
+                 -- to spawn WITH the TU-160's not beforehand, and the Festival isn't saved until all Enemy Aircraft are
+                 -- dealt with"; "Dialogue from Fesitival Round can run till the end of the 60 second timer") its fighters
+                 -- held through its talk (at most hold_max_s), coming with the raid; saved only once its bombers, their
+                 -- missiles and every enemy aircraft of the round are down (saved_needs_fighters; text.bombers_down when
+                 -- only fighters are left); the town talking on through the break (break_chatter: text.after_chatter,
+                 -- KMG's kmg_after, a line every break_chatter_s, the last one done before the next round)
+                 hold_max_s = 180, saved_needs_fighters = true, break_chatter = true, break_chatter_s = 10,
                  -- ((2026-11-07) the user: "Add some Allied Target Boxes in the town next to the airfield", VALKA and
                  -- AUDREY side by side, "Concert" "Market Stall" "Food Truck" and the like) the town's boxes: the build's
                  -- unit of invisible, invincible allied dummies just past the runway's WSW end (tools/survival_events.py
@@ -1330,7 +1338,27 @@ CFG.specials = {
                           raid_go = "AIR RAID", raid_go_sub = "TU-160S FROM THE NORTH, WEST AND SOUTH",
                           launch_callout = "CRUISE MISSILES", launch_callout_sub = "FROM THE %s: SHOOT THEM DOWN",
                           saved = "THE FESTIVAL IS SAVED", saved_sub = "+%d ZOLLARS", over = "THE RAID IS OVER",
-                          row_talk = "THE FESTIVAL", row = "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d" } },
+                          row_talk = "THE FESTIVAL", row = "THE FESTIVAL  BOMBERS: %d  FIGHTERS: %d  MISSILES IN THE AIR: %d",
+                          bombers_down = "THE BOMBERS ARE DOWN", bombers_down_sub = "SHOOT DOWN THE LAST %d FIGHTERS",
+                          -- ((2026-11-08) the town after its raid, through the break: one line at a time, none twice)
+                          after_chatter = { "MC|The band is back on! Give it up for the pilots!",
+                                            "FOOD|Grill's back on. First skewer's free for a flight suit.",
+                                            "MARKET|One lantern broken. I'll call that a good night.",
+                                            "S|I counted the fish twice. All there! The feast goes on!",
+                                            "T|Tower: runway's clear of debris. Thank you, all of you.",
+                                            "G|Crew Chief: refuel, rearm, then go eat. That's an order.",
+                                            "C|Comona Control: radar's quiet. Enjoy the festival.",
+                                            "AUDREY|Valka, the music's back. You promised me a dance.",
+                                            "VALKA|Audrey, the lanterns look like little missiles. Pretty ones.",
+                                            "AUDREY|Don't stare at the sky, Valka. Look at me. There you go.",
+                                            "VALKA|Can I have a skewer? And another skewer? Audrey, can I?",
+                                            "AUDREY|One skewer. Then we sit where I can see the exits.",
+                                            "VALKA|My head's quiet again, Audrey. I like it quiet.",
+                                            "AUDREY|Good. Keep it that way. Hold my hand and breathe." },
+                          kmg_after = { "YORKE|KMG, stand down. Enjoy the festival, you earned it.",
+                                        "ALI|First time I've seen Comona dance. I could get used to it.",
+                                        "DANIELLE|Somebody save me a seat by the stage. I'm landing hungry.",
+                                        "ROCK|Tell the band to play something loud. We're coming in." } } },
     -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, tools/re/THUNDER.md)
     -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against
     -- you", "The Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with

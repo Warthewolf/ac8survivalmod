@@ -1605,6 +1605,23 @@ function roundsTick(now)
             D.at = now + 1
             return
         end
+        -- ((2026-11-08) a special that holds the round's fighters until it's under way (its kind's hold: THE FESTIVAL's
+        -- come with its Tu-160s, not during its talk)
+        local hk = D.special and SPC.kinds[D.special.kind]
+        if type(nq) == "string" and nq:sub(1, 1) ~= "@" and hk and hk.hold then
+            local okH, held = pcall(hk.hold, now, D.special)
+            if okH and held then
+                if D.specialHeld ~= D.round then
+                    D.specialHeld = D.round
+                    log(string.format("round %d: its fighters held until the %s is under way", D.round, D.special.kind))
+                end
+                D.at = now + 0.5
+                return
+            elseif D.specialHeld == D.round then
+                D.specialHeld = -1
+                log(string.format("round %d: the %s is under way: its fighters come now", D.round, D.special.kind))
+            end
+        end
         local u = table.remove(D.queue, 1)
         local sk = type(u) == "string" and u:sub(1, 1) == "@" and SPC.kinds[u:sub(2)]
         if sk then

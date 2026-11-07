@@ -373,7 +373,8 @@ check(s.talkEnd - 3000 >= 25, string.format("about 30 s of it (%.0f s)", s.talkE
 local longest = 0
 local noColour = {}
 for _, k in ipairs({ "talk", "impact", "all_down", "timeout", "talk_nokg", "launch", "launch_again", "shot_first", "formation_down",
-                     "raid_town", "chatter", "saved_town", "kmg_talk", "kmg_raid", "kmg_chatter", "kmg_saved" }) do
+                     "raid_town", "chatter", "saved_town", "kmg_talk", "kmg_raid", "kmg_chatter", "kmg_saved", "after_chatter",
+                     "kmg_after" }) do
     for _, x in ipairs(flat(C.text[k])) do
         local who, t = FISH.line(x, { kg = "9,999", dir = "north" })
         longest = math.max(longest, #t)
@@ -389,8 +390,12 @@ do
 end
 local function ftick(dt) clock = clock + dt; D.now = clock; FEST.roundTick(clock, s); SUB.hudTick(clock, true, false) end
 posts, stops, spawns = {}, {}, {}
+-- ((2026-11-08) "they need to spawn WITH the TU-160's not beforehand": the round's fighters held through the talk)
+check(s.state == "talk" and FEST.hold(clock, s) == true, "the talk: the round's fighters held (FEST.hold, its kind's hold)")
+check(FEST.hold(s.at + C.hold_max_s + 1, s) == false, "... at most hold_max_s")
 ftick(s.talkEnd - clock + 0.1)
 check(s.state == "raid" and posts[1] and posts[1].name == C.siren, "the raid: the air raid siren at the airfield")
+check(FEST.hold(clock, s) == false, "the raid on: its fighters come with the Tu-160s")
 -- (the town's lines on the strip: sv_subs.lua's log, "subs: WHO: text (n s)")
 local function saidOf(key, vals)
     local n = 0
@@ -462,7 +467,7 @@ local shotLine = SUB.cur ~= nil and oneOf("shot_first", SUB.cur.text)
 for _, l in ipairs(SUB.q) do if oneOf("shot_first", l.text) then shotLine = true end end
 check(shotLine, "SAL cheers the first one")
 check(s.bombers == 12 and s.inAir == 1, "the row's numbers: 12 bombers, 1 missile still up (" .. tostring(s.bombers) .. ", " .. tostring(s.inAir) .. ")")
-check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  MISSILES IN THE AIR: 1", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
+check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  FIGHTERS: 0  MISSILES IN THE AIR: 1", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
 -- the last one down: the salvo over, recycled 3 s on, its unit free again
 sl.ms[4].obj.HealthInternal = 0
 recycled = {}
@@ -509,9 +514,21 @@ for _ = 1, 40 do
 end
 check(tFree and spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N2" and spawns[1].at - tFree <= C.retry_s + 0.6,
     "a unit free again: its next salvo within retry_s (" .. tostring(spawns[1] and spawns[1].unit) .. ")")
--- every bomber down, every missile down: the festival saved
+-- ((2026-11-08) "the Festival isn't saved until all Enemy Aircraft are dealt with") every bomber and missile down, two
+-- of the round's fighters up and a flight still to come: not saved, the row and a callout say what's left
 for u in pairs(alive) do alive[u] = 0 end
 for _, x in ipairs(s.salvos) do for _, m in ipairs(x.ms) do m.obj.HealthInternal = 0 end end
+local fighterUp = { SV_Unit_TestFighters = 2 }
+ALIVE.ask = function(u) return fighterUp[u] or 0 end
+D.up, D.wave, D.waves = { SV_Unit_TestFighters = true }, 1, { { "SV_Unit_TestLater" } }
+for _ = 1, 4 do ftick(0.5) end
+check(s.state == "raid" and s.fighters == 2 + 2 and FEST.busy(s) == true
+      and callouts[#callouts]:find("THE BOMBERS ARE DOWN / SHOOT DOWN THE LAST", 1, true)
+      and found("every bomber and missile down") ~= nil and (FEST.row(s) or ""):find("FIGHTERS: " .. s.fighters, 1, true),
+      "the bombers and missiles down, enemy aircraft left (up and to come): not saved yet, the row and a callout say so")
+D.waves = { {} }
+fighterUp.SV_Unit_TestFighters = 0
+-- every bomber, missile and enemy aircraft down: the festival saved
 local nStops = #stops
 for _ = 1, 4 do ftick(0.5) end
 check(s.state == "done" and FEST.busy(s) == false, "every bomber down and nothing in the air: done")
@@ -531,6 +548,21 @@ check(town[1].bShowHUDBox == false and town[15].bIsInvincible == true and found(
       "the town's boxes switched off at its end (hidden, no box), logged")
 check(lbs[#lbs].k == "festival" and lbs[#lbs].won == true, "the leaderboard's special: festival, won")
 check(found("formation is down") ~= nil, "each formation's end called")
+-- ((2026-11-08) "Dialogue from Fesitival Round can run till the end of the 60 second timer") the break after it: the town
+-- talks on (after_chatter, KMG's kmg_after), one line at a time, none starting too late to finish before the next round
+do
+    D.state, D.at = "wait", clock + C.break_after_s
+    local line = CFG.hud.subs.line_s
+    for _ = 1, math.floor((C.break_after_s - line - 2) / 0.5) do ftick(0.5) end
+    local mid = saidOf("after_chatter") + saidOf("kmg_after")
+    for _ = 1, math.floor((line + 2) / 0.5) do ftick(0.5) end
+    local all = saidOf("after_chatter") + saidOf("kmg_after")
+    check(mid >= 3 and all == mid, string.format("the break: the town talks on (%d lines), none started in its last %.0f s", all, line + 1))
+    local rock = 0
+    for _, l in ipairs(logs) do if l:match("^subs: ROCK: ") then rock = rock + 1 end end
+    check(rock == 0, "... never ROCK, shot down in THE ESCORT")
+    D.state = "spawning"
+end
 
 print("the round: the time limit")
 alive, planes, spawns = {}, {}, {}
@@ -582,8 +614,8 @@ check(#posts == 0, "the host's talk: no siren yet")
 D.hostSpecial.state = "raid"
 FEST.clientTick(9501)
 check(#posts == 1 and posts[1].name == C.siren, "the host's raid: the siren here too")
-FISH.fromHost("fsx", { "fsx", "festival", "raid", "9", "3", "0" })
-check(FEST.clientRow(CFG.hud.text) == "THE FESTIVAL  BOMBERS: 9  MISSILES IN THE AIR: 3", "the host's row: " .. tostring(FEST.clientRow(CFG.hud.text)))
+FISH.fromHost("fsx", { "fsx", "festival", "raid", "9", "3", "4" })
+check(FEST.clientRow(CFG.hud.text) == "THE FESTIVAL  BOMBERS: 9  FIGHTERS: 4  MISSILES IN THE AIR: 3", "the host's row: " .. tostring(FEST.clientRow(CFG.hud.text)))
 lights.SV_Unit_FestLight_3[1].off = nil
 D.hostSpecial = { kind = "festival", state = "done" }
 FEST.clientTick(9502)

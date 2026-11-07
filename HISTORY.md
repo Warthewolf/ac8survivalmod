@@ -1737,3 +1737,20 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   fishing_test.
 - The default ini documents 0.74.17's night, stars and AC7 laser settings.
 - Packaged: friends' 8eb7ded6dc27..., TESTER ca64c2555843... (0.74.18-coop2mp.110), both registered.
+
+## 0.74.19 (2026-11-08, runtime 0.32.26; not yet run in game)
+- THE FESTIVAL (the user: "the Enemy Aircraft that spawn in during the Festival Special Round, they need to spawn WITH the
+  TU-160's not beforehand, and the Festival isn't saved until all Enemy Aircraft are dealt with. Dialogue from Fesitival
+  Round can run till the end of the 60 second timer"):
+  - A special kind's `hold` (sv_rounds.lua's spawn loop): the round's fighter flights wait while it holds (`round N: its
+    fighters held until the festival is under way` / `... its fighters come now`). FEST.hold: through the festival's talk
+    (at most hold_max_s 180), so they come with the Tu-160s.
+  - Saved only once its bombers, their missiles and every enemy aircraft of the round are down (FEST.fightersLeft: the
+    round's flights up, ALIVE.ask, and every flight still waiting in its waves; saved_needs_fighters). The bombers down
+    with fighters left: `THE BOMBERS ARE DOWN / SHOOT DOWN THE LAST N FIGHTERS` once; the row (and a joiner's, "fsx" c)
+    `THE FESTIVAL  BOMBERS: n  FIGHTERS: n  MISSILES IN THE AIR: n`.
+  - The break after it: the town talks on (text.after_chatter, KMG's kmg_after once CHARLENE's landed, never one shot
+    down), a line every break_chatter_s 10 once the strip is clear, none starting too late to end before the next round.
+  festival_test.
+- Packaged: friends' 2e14d0713e6a..., TESTER 64a4e4ee225c... (0.74.19-coop2mp.111), both registered. INSTALLED 2026-11-08
+  from the TESTER zip (backup of 0.74.17: build/backup/install_before_0.74.19; 0.74.18 was never installed).

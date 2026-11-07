@@ -556,11 +556,56 @@ function FEST.townOff(why)
     return nOff
 end
 
+-- ((2026-11-08) the user: "the Enemy Aircraft that spawn in during the Festival Special Round, they need to spawn WITH the
+-- TU-160's not beforehand") the round's fighter flights held while the festival's talk is on (its special kind's hold,
+-- sv_rounds.lua's spawn loop): they come with the raid; at most hold_max_s, whatever happens
+function FEST.hold(now, s)
+    return s ~= nil and s.state == "talk" and now - (s.at or now) < n(cfg().hold_max_s, 180)
+end
+-- ((2026-11-08) "the Festival isn't saved until all Enemy Aircraft are dealt with") the round's enemy aircraft still to
+-- come or up: its flights up (D.up, ALIVE.ask) and every flight waiting in its waves (the festival's own units aren't
+-- the round's flights)
+local function fightersLeft(now)
+    local left = 0
+    for u in pairs((D and D.up) or {}) do
+        local okA, a = pcall(ALIVE.ask, u, now)
+        if okA and type(a) == "number" and a > 0 then left = left + a end
+    end
+    for i = (D and D.wave) or 1, #((D and D.waves) or {}) do
+        for _, q in ipairs(D.waves[i] or {}) do
+            if type(q) == "string" and q:sub(1, 1) ~= "@" then left = left + (type(flightSize) == "function" and flightSize(q) or 2) end
+        end
+    end
+    return left
+end
+FEST.fightersLeft = fightersLeft
+-- a line of the town's chatter (the raid's, or after it: after_chatter), KMG's among them once CHARLENE's landed
+local function chatter(key, kmgKey)
+    local pool = tx()[key]
+    local k = kmgList(kmgKey)
+    if k and type(pool) == "table" then
+        local all = {}
+        for _, x in ipairs(pool) do all[#all + 1] = x end
+        for _, x in ipairs(k) do all[#all + 1] = x end
+        pool = all
+    end
+    return say(pool, nil, key)
+end
 function FEST.roundTick(now, s)
     if levelGoing() then return end
     local c = cfg()
     if s.state == "talk" then
         if now >= (s.talkEnd or now) then raidStart(now, s) end
+    elseif s.state == "done" and D and D.state == "wait" and c.break_chatter ~= false then
+        -- ((2026-11-08) the user: "Dialogue from Fesitival Round can run till the end of the 60 second timer") the town
+        -- talks on through the break after its round (after_chatter): a line every break_chatter_s once the strip is
+        -- clear, the last one done before the next round's start
+        local left, busy = (tonumber(D.at) or now) - now, SUB.left(now)
+        local line = n((CFG.hud.subs or {}).line_s, 4)
+        if now >= (s.chatAt or 0) and busy <= 0.5 and left >= line + 1 then
+            s.chatAt = now + n(c.break_chatter_s, 10)
+            if chatter("after_chatter", "kmg_after") then s.breakLines = (s.breakLines or 0) + 1 end
+        end
     elseif s.state == "raid" and now >= (s.checkAt or 0) then
         s.checkAt = now + 0.5
         s.groups, s.salvos = s.groups or {}, s.salvos or {}
@@ -607,21 +652,21 @@ function FEST.roundTick(now, s)
         -- ((2026-11-07) the town now and then: a line of chatter every chatter_s, when the strip has room)
         if now >= (s.chatAt or 0) and SUB.left(now) <= 4 then
             s.chatAt = now + n(c.chatter_s, 35)
-            local pool = tx().chatter
-            local k = kmgList("kmg_chatter")                -- (KMG's among them, once CHARLENE's landed this run)
-            if k and type(pool) == "table" then
-                local all = {}
-                for _, x in ipairs(pool) do all[#all + 1] = x end
-                for _, x in ipairs(k) do all[#all + 1] = x end
-                pool = all
-            end
-            say(pool, nil, "chatter")
+            chatter("chatter", "kmg_chatter")
         end
         local inAir = salvosTick(now, s)
         local started = false
         for _, g in ipairs(GROUPS) do if s.groups[g] and s.groups[g].up then started = true end end
-        if (bombers == 0 and inAir == 0 and now - s.raidAt >= 5) or not started then
-            raidEnd(now, s, started and "every bomber down" or "no bomber came", started)
+        local fighters = c.saved_needs_fighters == false and 0 or fightersLeft(now)
+        s.fighters = fighters
+        if bombers == 0 and inAir == 0 and fighters > 0 and started and now - s.raidAt >= 5 and not s.fightersSaid then
+            s.fightersSaid = true                           -- (the bombers down, their fighters not: not saved yet)
+            local t = tx()
+            hudCallout(t.bombers_down or "THE BOMBERS ARE DOWN", string.format(t.bombers_down_sub or "SHOOT DOWN THE LAST %d FIGHTERS", fighters))
+            log(string.format("festival: round %d: every bomber and missile down, %d enemy aircraft left: not saved until they are", D.round, fighters))
+        end
+        if (bombers == 0 and inAir == 0 and fighters == 0 and now - s.raidAt >= 5) or not started then
+            raidEnd(now, s, started and "every bomber and every enemy aircraft down" or "no bomber came", started)
         elseif now - s.raidAt >= n(c.time_limit_s, 900) then
             local list = {}
             for _, g in ipairs(GROUPS) do
@@ -635,7 +680,7 @@ function FEST.roundTick(now, s)
     end
     if COOP and COOP.specialRow and now >= (s.rowAt or 0) then
         s.rowAt = now + 1
-        COOP.specialRow("festival", s.state, s.bombers or 0, s.inAir or 0, 0)
+        COOP.specialRow("festival", s.state, s.bombers or 0, s.inAir or 0, s.fighters or 0)
     end
 end
 function FEST.busy(s) return s.state ~= "done" end
@@ -646,7 +691,7 @@ function FEST.row(s, t)
     local x = tx()
     if s.state == "talk" then return x.row_talk end
     if s.state ~= "raid" then return nil end
-    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d", s.bombers or 0, s.inAir or 0)
+    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  FIGHTERS: %d  MISSILES IN THE AIR: %d", s.bombers or 0, s.fighters or 0, s.inAir or 0)
 end
 
 -- A co-op joiner's: the siren with the host's raid, the searchlights' copies off at its end, the host's row
@@ -680,7 +725,7 @@ function FEST.clientRow(t)
     local x = tx()
     if r.state == "talk" then return x.row_talk end
     if r.state ~= "raid" then return nil end
-    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  MISSILES IN THE AIR: %d", math.floor(r.a), math.floor(r.b))
+    return string.format(x.row or "THE FESTIVAL  BOMBERS: %d  FIGHTERS: %d  MISSILES IN THE AIR: %d", math.floor(r.a), math.floor(r.c), math.floor(r.b))
 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the festival round"] = function() CL.siren, CL.on = false, false end end
 -- ((code review of 2026-11-07, finding 3) a pause-menu restart (sv_main.lua's level-load block): the siren is our own
